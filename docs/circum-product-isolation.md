@@ -59,4 +59,4 @@ Backend is independent. Frontend changes must not deploy Functions, Firestore Ru
 
 ## Deployment Guard
 
-`deploy_guard.js` reads `deploy-manifest.json` and blocks deployments when a selected product includes files outside its ownership boundary.
+`scripts/deploy_guard.js` reads `deploy-manifest.json` and blocks deployments when a selected product includes files outside its ownership boundary.

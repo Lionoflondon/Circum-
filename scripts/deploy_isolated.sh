@@ -72,6 +72,7 @@ done
 
 case "$SURFACE" in
   website|public)
+    GUARD_PRODUCT="website"
     BUILD_SCRIPT="scripts/build_public_web.sh"
     HOSTING_TARGET="hosting:public"
     OUTPUT_DIR="build/public_web"
@@ -93,6 +94,7 @@ case "$SURFACE" in
     FORBIDDEN_IMPORT_REGEX="main_sender_web|main_rider_web|main_admin_web|app/sender_mobile|app/admin"
     ;;
   admin)
+    GUARD_PRODUCT="admin"
     BUILD_SCRIPT="scripts/build_admin_web.sh"
     HOSTING_TARGET="hosting:admin"
     OUTPUT_DIR="build/web_admin"
@@ -119,6 +121,8 @@ esac
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT_DIR"
+
+node "$ROOT_DIR/scripts/deploy_guard.self_test.js"
 
 if [[ -n "$(git status --porcelain=v1 --untracked-files=all)" ]]; then
   echo "Active working tree is dirty. That is allowed, but it will not be deployed."
@@ -171,6 +175,8 @@ HEAD_REV="$(git rev-parse HEAD)"
 if [[ -n "$(git status --porcelain=v1 --untracked-files=all)" ]]; then
   fail "deployment workspace has uncommitted changes after applying approved input"
 fi
+
+node "$WORKTREE/scripts/deploy_guard.js" --target="$GUARD_PRODUCT" --base "$BASE_REV"
 
 is_allowed_file() {
   local file="$1"

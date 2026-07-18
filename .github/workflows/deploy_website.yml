@@ -1,0 +1,26 @@
+name: Deploy Website
+
+on:
+  workflow_dispatch:
+
+jobs:
+  deploy-website:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - run: flutter pub get
+      - run: node scripts/deploy_guard.self_test.js
+      - run: node scripts/deploy_guard.js --target=website --base HEAD
+      - run: flutter test test/web_artifact_isolation_test.dart test/web_platform_routing_test.dart
+      - run: CIRCUM_WEB_RECAPTCHA_ENTERPRISE_SITE_KEY="${{ secrets.CIRCUM_WEB_RECAPTCHA_ENTERPRISE_SITE_KEY }}" scripts/build_public_web.sh
+      - run: node scripts/validate_web_artifacts.js --surface=public
+      - run: firebase deploy --only hosting:public --project circum-2797c

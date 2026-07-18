@@ -4,7 +4,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const cp = require('node:child_process');
 
-const root = __dirname;
+const root = path.resolve(__dirname, '..');
 const manifest = JSON.parse(
   fs.readFileSync(path.join(root, 'deploy-manifest.json'), 'utf8'),
 );
@@ -17,20 +17,23 @@ function fail(message, details = []) {
 }
 
 function usage() {
-  console.error('Usage: node deploy_guard.js --product <website|sender-app|admin|backend> [--base <ref>]');
+  console.error('Usage: node scripts/deploy_guard.js --product|--target <website|sender-app|admin|backend> [--base <ref>]');
   process.exit(64);
 }
 
 const args = process.argv.slice(2);
-const productIndex = args.indexOf('--product');
+let productIndex = args.indexOf('--product');
+if (productIndex === -1) productIndex = args.indexOf('--target');
 const baseIndex = args.indexOf('--base');
-if (productIndex === -1 || !args[productIndex + 1]) usage();
+const productArg = args.find((arg) => arg.startsWith('--product=') || arg.startsWith('--target='));
+const baseArg = args.find((arg) => arg.startsWith('--base='));
+if (productIndex === -1 && !productArg) usage();
 
-const productName = args[productIndex + 1];
+const productName = productArg ? productArg.split('=')[1] : args[productIndex + 1];
 const product = manifest.products[productName];
 if (!product) fail(`Unknown product: ${productName}`);
 
-const base = baseIndex === -1 ? 'HEAD' : args[baseIndex + 1];
+const base = baseArg ? baseArg.split('=')[1] : (baseIndex === -1 ? 'HEAD' : args[baseIndex + 1]);
 if (!base) usage();
 
 function git(args) {
@@ -60,10 +63,20 @@ function startsWithAny(file, prefixes) {
 }
 
 const changed = changedFiles();
+const blocked = changed.filter((file) => startsWithAny(file, manifest.blockedPrefixes || []));
+if (blocked.length > 0) {
+  fail('Blocked legacy deployment path changed.', blocked);
+}
+
 const offenders = changed.filter((file) => {
+  if (startsWithAny(file, manifest.ignoredPrefixes || [])) return false;
+  if (file.startsWith('.github/')) return false;
+  if (file === 'deploy_guard.js') return false;
   if (startsWithAny(file, product.forbiddenPrefixes)) return true;
   return !startsWithAny(file, product.ownedPrefixes) &&
-    !['pubspec.yaml', 'pubspec.lock', 'README.md', 'deploy_guard.js', 'deploy-manifest.json'].includes(file);
+    !manifest.sharedFiles.includes(file) &&
+    !file.startsWith('scripts/deploy_guard') &&
+    !['README.md', 'deploy-manifest.json'].includes(file);
 });
 
 if (offenders.length > 0) {

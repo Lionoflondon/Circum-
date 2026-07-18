@@ -1,0 +1,26 @@
+name: Deploy Admin
+
+on:
+  workflow_dispatch:
+
+jobs:
+  deploy-admin:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - run: flutter pub get
+      - run: node scripts/deploy_guard.self_test.js
+      - run: node scripts/deploy_guard.js --target=admin --base HEAD
+      - run: flutter test test/admin_operations_test.dart
+      - run: scripts/build_admin_web.sh
+      - run: node scripts/validate_web_artifacts.js --surface=admin
+      - run: firebase deploy --only hosting:admin --project circum-2797c
