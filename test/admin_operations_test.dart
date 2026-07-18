@@ -318,6 +318,55 @@ void main() {
       expect(patch['adminUpdatedAt'], isA<DateTime>());
     });
 
+    test('account status patches avoid destructive closure or deletion', () {
+      final patch = AdminAccountTools.accountStatusPatch(
+        status: 'closure_review',
+        updatedBy: 'ops@circumuk.com',
+        updatedAt: DateTime(2026, 5, 31),
+        reason: 'Customer requested closure.',
+      );
+
+      expect(patch['accountStatus'], 'closure_review');
+      expect(patch['closureReviewStatus'], 'requested');
+      expect(patch['adminStatusReason'], 'Customer requested closure.');
+      expect(patch.containsKey('deleted'), isFalse);
+      expect(patch.containsKey('balance'), isFalse);
+    });
+
+    test('business account status patches preserve account identity', () {
+      final patch = AdminAccountTools.businessStatusPatch(
+        status: 'approved',
+        updatedBy: 'ops@circumuk.com',
+        updatedAt: DateTime(2026, 5, 31),
+      );
+
+      expect(patch['status'], 'approved');
+      expect(patch['verificationStatus'], 'approved');
+      expect(patch.containsKey('businessId'), isFalse);
+      expect(patch.containsKey('ownerId'), isFalse);
+    });
+
+    test('merge review records require two distinct accounts', () {
+      final record = AdminAccountTools.mergeReviewRecord(
+        primaryAccountId: 'user-1',
+        duplicateAccountId: 'user-2',
+        requestedBy: 'ops@circumuk.com',
+        createdAt: DateTime(2026, 5, 31),
+      );
+
+      expect(record['status'], 'pending_review');
+      expect(record['source'], 'circum-admin');
+      expect(
+        () => AdminAccountTools.mergeReviewRecord(
+          primaryAccountId: 'user-1',
+          duplicateAccountId: 'user-1',
+          requestedBy: 'ops@circumuk.com',
+          createdAt: DateTime(2026, 5, 31),
+        ),
+        throwsArgumentError,
+      );
+    });
+
     test('finance workflow patches do not alter payment authority fields', () {
       final patch = AdminFinanceTools.workflowPatch(
         status: 'reconciled',

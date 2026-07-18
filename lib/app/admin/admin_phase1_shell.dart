@@ -56,6 +56,8 @@ class _AdminPhaseOneShellState extends State<AdminPhaseOneShell> {
   AdminMetricSnapshot _metrics = AdminMetricSnapshot.empty();
   AdminDataBundle _data = AdminDataBundle.empty();
   Map<String, dynamic>? _selectedRider;
+  Map<String, dynamic>? _selectedAccount;
+  String _selectedAccountType = 'sender';
   Map<String, dynamic>? _selectedChat;
   AdminRole _adminInviteRole = AdminRole.operationsAdmin;
   bool _loading = true;
@@ -291,6 +293,109 @@ class _AdminPhaseOneShellState extends State<AdminPhaseOneShell> {
     await _loadAdminData();
   }
 
+  Future<void> _setSenderAccountStatus(
+    Map<String, dynamic> account,
+    String status,
+  ) async {
+    if (!_can(AdminPermission.editCustomers)) {
+      setState(() => _message = 'Your role cannot manage sender accounts.');
+      return;
+    }
+    final id = _idFor(account);
+    if (id.isEmpty) return;
+    final patch = AdminAccountTools.accountStatusPatch(
+      status: status,
+      updatedBy: _user?.email ?? _user?.uid ?? 'admin',
+      updatedAt: FieldValue.serverTimestamp(),
+      reason: 'Updated from Circum Admin',
+    );
+    await _db.collection('users').doc(id).set(patch, SetOptions(merge: true));
+    await _writeAudit(AdminAuditEntry(
+      adminUserId: _user?.uid ?? 'unknown-admin',
+      actionType: 'sender_account_$status',
+      recordType: 'users',
+      recordId: id,
+      oldValue: {
+        'status': account['status'],
+        'accountStatus': account['accountStatus'],
+      },
+      newValue: patch,
+      reason: 'Sender account status updated from Admin',
+    ));
+    setState(() => _message = 'Sender account $id updated to $status.');
+    await _loadAdminData();
+  }
+
+  Future<void> _setBusinessAccountStatus(
+    Map<String, dynamic> account,
+    String status,
+  ) async {
+    if (!_can(AdminPermission.editCustomers)) {
+      setState(() => _message = 'Your role cannot manage Business accounts.');
+      return;
+    }
+    final id = _idFor(account);
+    if (id.isEmpty) return;
+    final patch = AdminAccountTools.businessStatusPatch(
+      status: status,
+      updatedBy: _user?.email ?? _user?.uid ?? 'admin',
+      updatedAt: FieldValue.serverTimestamp(),
+    );
+    await _db
+        .collection('businessAccounts')
+        .doc(id)
+        .set(patch, SetOptions(merge: true));
+    await _writeAudit(AdminAuditEntry(
+      adminUserId: _user?.uid ?? 'unknown-admin',
+      actionType: 'business_account_$status',
+      recordType: 'businessAccounts',
+      recordId: id,
+      oldValue: {
+        'status': account['status'],
+        'verificationStatus': account['verificationStatus'],
+      },
+      newValue: patch,
+      reason: 'Business account status updated from Admin',
+    ));
+    setState(() => _message = 'Business account $id updated to $status.');
+    await _loadAdminData();
+  }
+
+  Future<void> _requestDuplicateMerge(
+    Map<String, dynamic> account,
+    Map<String, dynamic> duplicate,
+  ) async {
+    if (!_can(AdminPermission.editCustomers)) {
+      setState(() => _message = 'Your role cannot request account merges.');
+      return;
+    }
+    final id = _idFor(account);
+    final duplicateId = _idFor(duplicate);
+    try {
+      final record = AdminAccountTools.mergeReviewRecord(
+        primaryAccountId: id,
+        duplicateAccountId: duplicateId,
+        requestedBy: _user?.email ?? _user?.uid ?? 'admin',
+        createdAt: FieldValue.serverTimestamp(),
+      );
+      await _db.collection('accountMergeReviews').add(record);
+      await _writeAudit(AdminAuditEntry(
+        adminUserId: _user?.uid ?? 'unknown-admin',
+        actionType: 'account_merge_review_requested',
+        recordType: 'accountMergeReviews',
+        recordId: '$id:$duplicateId',
+        newValue: {
+          'primaryAccountId': id,
+          'duplicateAccountId': duplicateId,
+        },
+        reason: 'Duplicate account merge review requested from Admin',
+      ));
+      setState(() => _message = 'Merge review requested for $duplicateId.');
+    } on ArgumentError catch (error) {
+      setState(() => _message = error.message);
+    }
+  }
+
   Future<void> _updateSupportTicket(
     Map<String, dynamic> ticket,
     String status,
@@ -518,7 +623,21 @@ class _AdminPhaseOneShellState extends State<AdminPhaseOneShell> {
   }
 
   void _openRiderProfile(Map<String, dynamic> rider) {
-    setState(() => _selectedRider = rider);
+    setState(() {
+      _selectedRider = rider;
+      _selectedAccount = null;
+    });
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _scaffoldKey.currentState?.openEndDrawer();
+    });
+  }
+
+  void _openAccountProfile(Map<String, dynamic> account, String type) {
+    setState(() {
+      _selectedAccount = account;
+      _selectedAccountType = type;
+      _selectedRider = null;
+    });
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _scaffoldKey.currentState?.openEndDrawer();
     });
@@ -617,6 +736,10 @@ class _AdminPhaseOneShellState extends State<AdminPhaseOneShell> {
                       onUpdateHealthPlusPickup: _updateHealthPlusPickup,
                       onUpdateFinanceWorkflow: _updateFinanceWorkflow,
                       onOpenRiderProfile: _openRiderProfile,
+                      onOpenAccountProfile: _openAccountProfile,
+                      onSetSenderAccountStatus: _setSenderAccountStatus,
+                      onSetBusinessAccountStatus: _setBusinessAccountStatus,
+                      onRequestDuplicateMerge: _requestDuplicateMerge,
                       adminInviteEmail: _adminInviteEmail,
                       adminInviteNote: _adminInviteNote,
                       adminInviteRole: _adminInviteRole,
@@ -642,7 +765,25 @@ class _AdminPhaseOneShellState extends State<AdminPhaseOneShell> {
         ),
       ),
       endDrawer: _selectedRider == null
-          ? null
+          ? _selectedAccount == null
+              ? null
+              : _AccountProfileDrawer(
+                  account: _selectedAccount!,
+                  accountType: _selectedAccountType,
+                  deliveries: _data.deliveries,
+                  payments: _data.payments,
+                  supportTickets: _data.supportTickets,
+                  giftOrders: _data.giftOrders,
+                  businessAccounts: _data.businessAccounts,
+                  users: _data.users,
+                  onClose: () => setState(() => _selectedAccount = null),
+                  onSetSenderStatus: (status) =>
+                      _setSenderAccountStatus(_selectedAccount!, status),
+                  onSetBusinessStatus: (status) =>
+                      _setBusinessAccountStatus(_selectedAccount!, status),
+                  onRequestDuplicateMerge: (duplicate) =>
+                      _requestDuplicateMerge(_selectedAccount!, duplicate),
+                )
           : _RiderProfileDrawer(
               rider: _selectedRider!,
               deliveries: _data.deliveries,
@@ -1065,6 +1206,10 @@ class _AdminModuleBody extends StatelessWidget {
     required this.onUpdateHealthPlusPickup,
     required this.onUpdateFinanceWorkflow,
     required this.onOpenRiderProfile,
+    required this.onOpenAccountProfile,
+    required this.onSetSenderAccountStatus,
+    required this.onSetBusinessAccountStatus,
+    required this.onRequestDuplicateMerge,
     required this.adminInviteEmail,
     required this.adminInviteNote,
     required this.adminInviteRole,
@@ -1097,6 +1242,13 @@ class _AdminModuleBody extends StatelessWidget {
   final Future<void> Function(Map<String, dynamic>, String)
       onUpdateFinanceWorkflow;
   final ValueChanged<Map<String, dynamic>> onOpenRiderProfile;
+  final void Function(Map<String, dynamic>, String) onOpenAccountProfile;
+  final Future<void> Function(Map<String, dynamic>, String)
+      onSetSenderAccountStatus;
+  final Future<void> Function(Map<String, dynamic>, String)
+      onSetBusinessAccountStatus;
+  final Future<void> Function(Map<String, dynamic>, Map<String, dynamic>)
+      onRequestDuplicateMerge;
   final TextEditingController adminInviteEmail;
   final TextEditingController adminInviteNote;
   final AdminRole adminInviteRole;
@@ -1159,14 +1311,31 @@ class _AdminModuleBody extends StatelessWidget {
               subtitle: 'Sender/customer accounts from backend records.',
               records: data.users,
               query: query,
-              fields: const ['id', 'fullName', 'name', 'email', 'phone'],
-              columns: const ['Name', 'Email', 'Phone', 'Status'],
+              fields: const [
+                'id',
+                'fullName',
+                'name',
+                'email',
+                'phone',
+                'status',
+                'accountStatus',
+                'verificationStatus'
+              ],
+              columns: const ['Name', 'Email', 'Status', 'Verification'],
               row: (record) => [
                 '${record['fullName'] ?? record['name'] ?? record['id']}',
                 '${record['email'] ?? 'Not recorded'}',
-                '${record['phone'] ?? record['phoneNumber'] ?? 'Not recorded'}',
                 '${record['status'] ?? record['accountStatus'] ?? 'active'}',
+                '${record['verificationStatus'] ?? record['kycStatus'] ?? 'not_required'}',
               ],
+              actions: (record) => _accountActions(
+                account: record,
+                accountType: 'sender',
+                allAccounts: data.users,
+                onOpen: onOpenAccountProfile,
+                onSetStatus: onSetSenderAccountStatus,
+                onRequestDuplicateMerge: onRequestDuplicateMerge,
+              ),
             ),
           AdminModule.riders => _RecordModule(
               title: 'Riders',
@@ -1350,14 +1519,29 @@ class _AdminModuleBody extends StatelessWidget {
                   'Business account applications and operational records.',
               records: data.businessAccounts,
               query: query,
-              fields: const ['id', 'businessName', 'email', 'status'],
-              columns: const ['Business', 'Email', 'Status', 'Updated'],
+              fields: const [
+                'id',
+                'businessName',
+                'companyName',
+                'email',
+                'status',
+                'verificationStatus'
+              ],
+              columns: const ['Business', 'Email', 'Status', 'Verification'],
               row: (record) => [
                 '${record['businessName'] ?? record['companyName'] ?? record['id']}',
                 '${record['email'] ?? 'Not recorded'}',
                 '${record['status'] ?? 'pending'}',
-                _date(record['updatedAt'] ?? record['createdAt']),
+                '${record['verificationStatus'] ?? 'pending'}',
               ],
+              actions: (record) => _accountActions(
+                account: record,
+                accountType: 'business',
+                allAccounts: data.businessAccounts,
+                onOpen: onOpenAccountProfile,
+                onSetStatus: onSetBusinessAccountStatus,
+                onRequestDuplicateMerge: onRequestDuplicateMerge,
+              ),
             ),
           AdminModule.gifts => _RecordModule(
               title: 'Gifts',
@@ -2176,6 +2360,76 @@ class _MiniActionButton extends StatelessWidget {
   }
 }
 
+List<Widget> _accountActions({
+  required Map<String, dynamic> account,
+  required String accountType,
+  required List<Map<String, dynamic>> allAccounts,
+  required void Function(Map<String, dynamic>, String) onOpen,
+  required Future<void> Function(Map<String, dynamic>, String) onSetStatus,
+  required Future<void> Function(Map<String, dynamic>, Map<String, dynamic>)
+      onRequestDuplicateMerge,
+}) {
+  final status =
+      '${account['accountStatus'] ?? account['status'] ?? ''}'.toLowerCase();
+  final duplicate = _firstLikelyDuplicate(account, allAccounts);
+  final isBusiness = accountType == 'business';
+  return [
+    _MiniAction(
+      label: 'Profile',
+      onPressed: () => onOpen(account, accountType),
+    ),
+    if (isBusiness && !status.contains('approved'))
+      _MiniAction(
+        label: 'Approve',
+        onPressed: () => unawaited(onSetStatus(account, 'approved')),
+      ),
+    if (isBusiness && !status.contains('reject'))
+      _MiniAction(
+        label: 'Reject',
+        onPressed: () => unawaited(onSetStatus(account, 'rejected')),
+      ),
+    if (status.contains('suspend'))
+      _MiniAction(
+        label: 'Reactivate',
+        onPressed: () => unawaited(onSetStatus(account, 'reactivated')),
+      )
+    else
+      _MiniAction(
+        label: 'Suspend',
+        onPressed: () => unawaited(onSetStatus(account, 'suspended')),
+      ),
+    if (!isBusiness)
+      _MiniAction(
+        label: 'Close review',
+        onPressed: () => unawaited(onSetStatus(account, 'closure_review')),
+      ),
+    if (duplicate != null)
+      _MiniAction(
+        label: 'Merge review',
+        onPressed: () => unawaited(onRequestDuplicateMerge(account, duplicate)),
+      ),
+  ];
+}
+
+Map<String, dynamic>? _firstLikelyDuplicate(
+  Map<String, dynamic> account,
+  List<Map<String, dynamic>> allAccounts,
+) {
+  final id = _recordId(account);
+  final email = '${account['email'] ?? ''}'.trim().toLowerCase();
+  final phone = '${account['phone'] ?? account['phoneNumber'] ?? ''}'.trim();
+  if (email.isEmpty && phone.isEmpty) return null;
+  for (final candidate in allAccounts) {
+    if (_recordId(candidate) == id) continue;
+    final candidateEmail = '${candidate['email'] ?? ''}'.trim().toLowerCase();
+    final candidatePhone =
+        '${candidate['phone'] ?? candidate['phoneNumber'] ?? ''}'.trim();
+    if (email.isNotEmpty && candidateEmail == email) return candidate;
+    if (phone.isNotEmpty && candidatePhone == phone) return candidate;
+  }
+  return null;
+}
+
 List<Widget> _riderActions(
   Map<String, dynamic> record,
   Future<void> Function(Map<String, dynamic>, String) onSetStatus,
@@ -2230,6 +2484,209 @@ List<Widget> _riderActions(
       onPressed: () => unawaited(onSetStatus(record, 'rejected')),
     ),
   ];
+}
+
+class _AccountProfileDrawer extends StatelessWidget {
+  const _AccountProfileDrawer({
+    required this.account,
+    required this.accountType,
+    required this.deliveries,
+    required this.payments,
+    required this.supportTickets,
+    required this.giftOrders,
+    required this.businessAccounts,
+    required this.users,
+    required this.onClose,
+    required this.onSetSenderStatus,
+    required this.onSetBusinessStatus,
+    required this.onRequestDuplicateMerge,
+  });
+
+  final Map<String, dynamic> account;
+  final String accountType;
+  final List<Map<String, dynamic>> deliveries;
+  final List<Map<String, dynamic>> payments;
+  final List<Map<String, dynamic>> supportTickets;
+  final List<Map<String, dynamic>> giftOrders;
+  final List<Map<String, dynamic>> businessAccounts;
+  final List<Map<String, dynamic>> users;
+  final VoidCallback onClose;
+  final Future<void> Function(String) onSetSenderStatus;
+  final Future<void> Function(String) onSetBusinessStatus;
+  final Future<void> Function(Map<String, dynamic>) onRequestDuplicateMerge;
+
+  @override
+  Widget build(BuildContext context) {
+    final accountId = _recordId(account);
+    final relatedDeliveries = deliveries
+        .where((item) => _recordReferencesAccount(item, accountId, account))
+        .toList();
+    final relatedPayments = payments
+        .where((item) => _recordReferencesAccount(item, accountId, account))
+        .toList();
+    final relatedTickets = supportTickets
+        .where((item) => _recordReferencesAccount(item, accountId, account))
+        .toList();
+    final relatedGifts = giftOrders
+        .where((item) => _recordReferencesAccount(item, accountId, account))
+        .toList();
+    final duplicate = _firstLikelyDuplicate(
+      account,
+      accountType == 'business' ? businessAccounts : users,
+    );
+    final title = accountType == 'business'
+        ? '${account['businessName'] ?? account['companyName'] ?? accountId}'
+        : '${account['fullName'] ?? account['name'] ?? account['email'] ?? accountId}';
+    return Drawer(
+      width: 460,
+      child: SafeArea(
+        child: ListView(
+          padding: const EdgeInsets.all(20),
+          children: [
+            Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    title,
+                    style: const TextStyle(
+                      fontSize: 24,
+                      fontWeight: FontWeight.w900,
+                    ),
+                  ),
+                ),
+                IconButton(
+                  tooltip: 'Close',
+                  onPressed: onClose,
+                  icon: const Icon(Icons.close_rounded),
+                ),
+              ],
+            ),
+            Text(
+              accountType == 'business' ? 'Business account' : 'Sender account',
+              style: TextStyle(color: Colors.white.withValues(alpha: .62)),
+            ),
+            const SizedBox(height: 18),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: [
+                _StatusPill(
+                    label:
+                        '${account['status'] ?? account['accountStatus'] ?? 'active'}'),
+                _StatusPill(
+                    label:
+                        '${account['verificationStatus'] ?? account['kycStatus'] ?? 'unverified'}'),
+              ],
+            ),
+            const SizedBox(height: 18),
+            _DrawerSection(
+              title: 'Profile',
+              rows: [
+                ('ID', accountId),
+                ('Email', '${account['email'] ?? 'Not recorded'}'),
+                (
+                  'Phone',
+                  '${account['phone'] ?? account['phoneNumber'] ?? 'Not recorded'}'
+                ),
+                ('Created', _date(account['createdAt'])),
+                ('Last login', _date(account['lastLoginAt'])),
+              ],
+            ),
+            _DrawerSection(
+              title: 'History',
+              rows: [
+                ('Deliveries', '${relatedDeliveries.length}'),
+                ('Wallet/payment records', '${relatedPayments.length}'),
+                ('Support/disputes', '${relatedTickets.length}'),
+                ('Gifts', '${relatedGifts.length}'),
+                (
+                  'Devices',
+                  _historyCount(account, const ['devices', 'deviceHistory'])
+                ),
+                (
+                  'Notifications',
+                  _historyCount(
+                      account, const ['notifications', 'notificationHistory'])
+                ),
+              ],
+            ),
+            _DrawerSection(
+              title: 'Recent delivery history',
+              rows: [
+                for (final delivery in relatedDeliveries.take(5))
+                  (
+                    _recordId(delivery),
+                    '${delivery['status'] ?? delivery['deliveryStatus'] ?? 'unknown'}'
+                  ),
+                if (relatedDeliveries.isEmpty) ('None', 'No records loaded'),
+              ],
+            ),
+            _DrawerSection(
+              title: 'Wallet and dispute history',
+              rows: [
+                for (final payment in relatedPayments.take(4))
+                  (
+                    _recordId(payment),
+                    '${payment['status'] ?? 'unknown'} ${_money(payment['amount'] ?? payment['total'])}'
+                  ),
+                for (final ticket in relatedTickets.take(4))
+                  (
+                    _recordId(ticket),
+                    '${ticket['type'] ?? 'support'} ${ticket['status'] ?? 'open'}'
+                  ),
+                if (relatedPayments.isEmpty && relatedTickets.isEmpty)
+                  ('None', 'No records loaded'),
+              ],
+            ),
+            const SizedBox(height: 10),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: [
+                if (accountType == 'business') ...[
+                  _MiniAction(
+                    label: 'Approve',
+                    onPressed: () => unawaited(onSetBusinessStatus('approved')),
+                  ),
+                  _MiniAction(
+                    label: 'Suspend',
+                    onPressed: () =>
+                        unawaited(onSetBusinessStatus('suspended')),
+                  ),
+                  _MiniAction(
+                    label: 'Reactivate',
+                    onPressed: () =>
+                        unawaited(onSetBusinessStatus('reactivated')),
+                  ),
+                ] else ...[
+                  _MiniAction(
+                    label: 'Suspend',
+                    onPressed: () => unawaited(onSetSenderStatus('suspended')),
+                  ),
+                  _MiniAction(
+                    label: 'Reactivate',
+                    onPressed: () =>
+                        unawaited(onSetSenderStatus('reactivated')),
+                  ),
+                  _MiniAction(
+                    label: 'Close review',
+                    onPressed: () =>
+                        unawaited(onSetSenderStatus('closure_review')),
+                  ),
+                ],
+                if (duplicate != null)
+                  _MiniAction(
+                    label: 'Request merge review',
+                    onPressed: () =>
+                        unawaited(onRequestDuplicateMerge(duplicate)),
+                  ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
 }
 
 class _RiderProfileDrawer extends StatelessWidget {
@@ -2606,6 +3063,39 @@ bool _documentBelongsToRider(Map<String, dynamic> document, String riderId) {
     document['driverId'],
     document['uid'],
   ].map((value) => '$value').contains(riderId);
+}
+
+bool _recordReferencesAccount(
+  Map<String, dynamic> record,
+  String accountId,
+  Map<String, dynamic> account,
+) {
+  final email = '${account['email'] ?? ''}'.trim().toLowerCase();
+  final values = [
+    record['senderId'],
+    record['userId'],
+    record['customerId'],
+    record['businessId'],
+    record['accountId'],
+    record['uid'],
+    record['ownerId'],
+    record['email'],
+    record['senderEmail'],
+    record['customerEmail'],
+  ].map((value) => '$value'.trim().toLowerCase());
+  return values.contains(accountId.toLowerCase()) ||
+      (email.isNotEmpty && values.contains(email));
+}
+
+String _historyCount(Map<String, dynamic> account, List<String> fields) {
+  var total = 0;
+  for (final field in fields) {
+    final value = account[field];
+    if (value is List) total += value.length;
+    if (value is Map) total += value.length;
+    if (value is num) total += value.toInt();
+  }
+  return total == 0 ? 'No records loaded' : '$total';
 }
 
 String _money(Object? value) {

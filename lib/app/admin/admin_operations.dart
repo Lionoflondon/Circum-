@@ -131,6 +131,74 @@ class AdminFinanceTools {
   }
 }
 
+class AdminAccountTools {
+  static const accountStatuses = [
+    'active',
+    'suspended',
+    'reactivated',
+    'closure_review',
+  ];
+
+  static Map<String, dynamic> accountStatusPatch({
+    required String status,
+    required String updatedBy,
+    required Object updatedAt,
+    String? reason,
+  }) {
+    if (!accountStatuses.contains(status)) {
+      throw ArgumentError('Unsupported account status.');
+    }
+    return {
+      'accountStatus': status,
+      'status': status == 'reactivated' ? 'active' : status,
+      'adminStatusUpdatedBy': updatedBy,
+      'adminStatusUpdatedAt': updatedAt,
+      if (reason?.trim().isNotEmpty == true)
+        'adminStatusReason': reason!.trim(),
+      if (status == 'closure_review') 'closureReviewStatus': 'requested',
+    };
+  }
+
+  static Map<String, dynamic> businessStatusPatch({
+    required String status,
+    required String updatedBy,
+    required Object updatedAt,
+  }) {
+    if (!['approved', 'rejected', 'suspended', 'reactivated']
+        .contains(status)) {
+      throw ArgumentError('Unsupported business account status.');
+    }
+    return {
+      'status': status == 'reactivated' ? 'approved' : status,
+      'verificationStatus': status == 'approved' ? 'approved' : status,
+      'adminStatusUpdatedBy': updatedBy,
+      'adminStatusUpdatedAt': updatedAt,
+    };
+  }
+
+  static Map<String, dynamic> mergeReviewRecord({
+    required String primaryAccountId,
+    required String duplicateAccountId,
+    required String requestedBy,
+    required Object createdAt,
+  }) {
+    if (primaryAccountId.trim().isEmpty || duplicateAccountId.trim().isEmpty) {
+      throw ArgumentError('Both accounts are required.');
+    }
+    if (primaryAccountId.trim() == duplicateAccountId.trim()) {
+      throw ArgumentError('Duplicate account must be different.');
+    }
+    return {
+      'primaryAccountId': primaryAccountId.trim(),
+      'duplicateAccountId': duplicateAccountId.trim(),
+      'status': 'pending_review',
+      'requestedBy': requestedBy,
+      'createdAt': createdAt,
+      'source': 'circum-admin',
+    };
+  }
+}
+
 class RiderRankPolicy {
   static const ranks = ['agent', 'sentinel', 'warden', 'knight', 'veteran'];
 
