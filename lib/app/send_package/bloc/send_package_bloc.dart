@@ -34,6 +34,9 @@ import '../repo/place_api.dart';
 part 'send_package_event.dart';
 part 'send_package_state.dart';
 
+const _googleMapsDirectionsApiKey =
+    String.fromEnvironment('GOOGLE_MAPS_DIRECTIONS_API_KEY');
+
 class SendPackageBloc extends Bloc<SendPackageEvent, SendPackageState> {
   FirebaseAuth auth = FirebaseAuth.instance;
   FirebaseFirestore db = FirebaseFirestore.instance;
@@ -199,7 +202,6 @@ class SendPackageBloc extends Bloc<SendPackageEvent, SendPackageState> {
         ),
       );
     } catch (e) {
-      print(e);
       emit(
         state.copyWith(
           suggestions: [],
@@ -251,8 +253,6 @@ class SendPackageBloc extends Bloc<SendPackageEvent, SendPackageState> {
         uuid,
       ).fetchPlaceDetails(event.placeId, event.lang);
 
-      print('Pickup coordinate: $coordinate');
-
       var address = await placemarkFromCoordinates(
         coordinate.lat,
         coordinate.lng,
@@ -264,9 +264,7 @@ class SendPackageBloc extends Bloc<SendPackageEvent, SendPackageState> {
           pickupLocality: address[0].locality,
         ),
       );
-    } catch (e) {
-      print(e);
-    }
+    } catch (e) {}
   }
 
   void _handleSetDeliveryAddress(SetDeliveryAddress event, Emitter emit) async {
@@ -291,8 +289,6 @@ class SendPackageBloc extends Bloc<SendPackageEvent, SendPackageState> {
       PlaceCoordinate coordinate = await PlaceApiProvider(
         uuid,
       ).fetchPlaceDetails(event.placeId, event.lang);
-
-      print('Destination coordinate: $coordinate');
       // var addresses = await Geocoder.google ( '<---------YOUR APIKEY-------->' ).findAddressesFromCoordinates(coordinates);
       var address = await placemarkFromCoordinates(
         coordinate.lat,
@@ -314,6 +310,13 @@ class SendPackageBloc extends Bloc<SendPackageEvent, SendPackageState> {
 
         PolylinePoints points = PolylinePoints();
 
+        if (_googleMapsDirectionsApiKey.isEmpty) {
+          emit(state.copyWith(
+            addressSearchError: 'Route preview is temporarily unavailable.',
+          ));
+          return;
+        }
+
         PolylineResult polylineResult = await points.getRouteBetweenCoordinates(
           request: PolylineRequest(
             origin: PointLatLng(
@@ -326,7 +329,7 @@ class SendPackageBloc extends Bloc<SendPackageEvent, SendPackageState> {
             ),
             mode: TravelMode.driving,
           ),
-          googleApiKey: 'AIzaSyDWH0L6pjdf2W_ZZrjfv6z5OvMZQ2TVNMI',
+          googleApiKey: _googleMapsDirectionsApiKey,
         );
 
         if (polylineResult.points.isNotEmpty) {
@@ -393,9 +396,7 @@ class SendPackageBloc extends Bloc<SendPackageEvent, SendPackageState> {
         }
         // add(CalculateDistance());
       }
-    } catch (e) {
-      print(e);
-    }
+    } catch (e) {}
   }
 
   void _handleSetDeliveryStatusEvent(
@@ -409,10 +410,6 @@ class SendPackageBloc extends Bloc<SendPackageEvent, SendPackageState> {
     CalculateDistance event,
     Emitter<SendPackageState> emit,
   ) async {
-    print('${state.pickupCoordinate!.lat}');
-    print('${state.pickupCoordinate!.lng}');
-    print('${state.desinationCoordinate!.lat}');
-    print('${state.desinationCoordinate!.lng}');
     try {
       final double distanceInMetres = Geolocator.distanceBetween(
         state.pickupCoordinate!.lat,
@@ -428,9 +425,7 @@ class SendPackageBloc extends Bloc<SendPackageEvent, SendPackageState> {
       emit(state.copyWith(distance: distanceInTwoDecimalPlaces));
 
       // print(distanceInKilometres);
-    } catch (e) {
-      print(e);
-    }
+    } catch (e) {}
   }
 
   void _handleSetDistance(SetDistance event, Emitter<SendPackageState> emit) {
@@ -890,7 +885,6 @@ class SendPackageBloc extends Bloc<SendPackageEvent, SendPackageState> {
   }
 
   void _handleDeliveryCompleted(DeliveryCompleted event, Emitter emit) {
-    print(event.data['historyId']);
     add(
       SetDrawerHeight(
         minDrawerHeight: state.minDrawerHeight,
@@ -976,9 +970,7 @@ class SendPackageBloc extends Bloc<SendPackageEvent, SendPackageState> {
           add(SetDrawerHeight(minDrawerHeight: 180, maxDrawerHeight: 0.7.sh));
         }
       }
-    } catch (e) {
-      print(e);
-    }
+    } catch (e) {}
   }
 
   void _handleWatchActiveDeliveryEvent(
@@ -1187,7 +1179,6 @@ class SendPackageBloc extends Bloc<SendPackageEvent, SendPackageState> {
 
       if (docResponse.exists) {
         _listenToActiveDeliveryLiveLocation(docResponse.id);
-        print('There is an active ride');
         final data = docResponse.data();
         String? pickupAddress = data!['pickupDetails']['address'];
         String? dropoffAddress = data['dropoffDetails']['address'];
@@ -1270,9 +1261,7 @@ class SendPackageBloc extends Bloc<SendPackageEvent, SendPackageState> {
 
         // emit(state.copyWith());
       }
-    } else {
-      print('There is no active ride 🏍️');
-    }
+    } else {}
   }
 
   void _handleSetPanelControlStatusEvent(
@@ -1335,7 +1324,6 @@ class SendPackageBloc extends Bloc<SendPackageEvent, SendPackageState> {
     if (activeRequest != null) {
       final jsonData = await ChatsHelper().loadChat(activeRequest);
       if (jsonData.isEmpty) return;
-      print('Loading chats');
 
       final messagesList = jsonData.map((e) => Message.fromJson(e)).toList();
       emit(

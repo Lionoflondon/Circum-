@@ -57,8 +57,6 @@ class SupportBloc extends Bloc<SupportEvent, SupportState> {
 
           ChatsHelper().storeChat(messageData);
         } catch (e) {
-          print('Sending messsage failed');
-          print(e);
         }
       },
     );
@@ -67,7 +65,6 @@ class SupportBloc extends Bloc<SupportEvent, SupportState> {
       (event, emit) async {
         final jsonData = await ChatsHelper().loadChat('support');
         if (jsonData.isNotEmpty) {
-          print('Loading chats');
           final messagesList =
               jsonData.map((e) => Message.fromJson(e)).toList();
           emit(state.copyWith(

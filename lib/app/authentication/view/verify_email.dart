@@ -28,7 +28,6 @@ class VerifyEmailViewState extends State<VerifyEmailView> {
 
   setTimerForAutoRedirect() {
     _timer = Timer.periodic(const Duration(seconds: 3), (timer) {
-      print('timer active');
       context.read<AuthBloc>().add(ConfirmEmailVerification());
     });
   }

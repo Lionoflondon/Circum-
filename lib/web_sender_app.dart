@@ -45,7 +45,6 @@ const _senderAppWebUrl = 'https://circum-app-2797c.web.app/';
 const _riderAppWebUrl = 'https://circum-rider-2797c.web.app/';
 const _googlePlacesApiKey = String.fromEnvironment(
   'GOOGLE_PLACES_API_KEY',
-  defaultValue: 'AIzaSyDWH0L6pjdf2W_ZZrjfv6z5OvMZQ2TVNMI',
 );
 const _spectrumGradient = [
   Color(0xffff8c00),

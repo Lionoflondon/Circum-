@@ -48,7 +48,6 @@ class EnterOTPViewState extends State<EnterOTPView> {
   void resetOTP() {
     if (!_isCountdownActive) {
       // Simulate OTP reset logic here
-      print('Resetting OTP...');
       startCountdown();
     }
   }
@@ -95,7 +94,6 @@ class EnterOTPViewState extends State<EnterOTPView> {
 
               if (state.currentState == AppState.unauthenticated &&
                   widget.deleteAccount == true) {
-                print('signing out');
                 Navigator.popUntil(context, (route) => route.isFirst);
                 // await Future.delayed(const Duration(milliseconds: 500));
                 // Navigator.pushReplacement(

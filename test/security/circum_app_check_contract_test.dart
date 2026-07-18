@@ -42,6 +42,8 @@ void main() {
   test('Circum production entrypoints initialize App Check after Firebase', () {
     for (final path in [
       'lib/main.dart',
+      'lib/main_sender_web.dart',
+      'lib/main_public_web.dart',
     ]) {
       final source = File(path).readAsStringSync();
       final firebaseInit = source.indexOf('Firebase.initializeApp');
@@ -90,5 +92,37 @@ void main() {
           reason: path);
       expect(executableLines, isNot(contains('Message data:')), reason: path);
     }
+  });
+
+  test('Circum runtime Maps keys are provided by configuration', () {
+    final hardcodedMapsKey = RegExp(r'AIza[0-9A-Za-z_-]+');
+    for (final path in [
+      'lib/web_sender_app.dart',
+      'lib/app/send_package/bloc/send_package_bloc.dart',
+      'android/app/src/main/AndroidManifest.xml',
+      'ios/Runner/AppDelegate.swift',
+      'ios/Runner/Info.plist',
+    ]) {
+      final source = File(path).readAsStringSync();
+      expect(source, isNot(matches(hardcodedMapsKey)), reason: path);
+    }
+
+    expect(
+      File('lib/web_sender_app.dart').readAsStringSync(),
+      contains("String.fromEnvironment(\n  'GOOGLE_PLACES_API_KEY'"),
+    );
+    expect(
+      File('lib/app/send_package/bloc/send_package_bloc.dart')
+          .readAsStringSync(),
+      contains("String.fromEnvironment('GOOGLE_MAPS_DIRECTIONS_API_KEY')"),
+    );
+    expect(
+      File('android/app/src/main/AndroidManifest.xml').readAsStringSync(),
+      contains(r'${googleMapsApiKey}'),
+    );
+    expect(
+      File('ios/Runner/Info.plist').readAsStringSync(),
+      contains(r'$(GOOGLE_MAPS_API_KEY)'),
+    );
   });
 }

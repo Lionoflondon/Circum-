@@ -18,7 +18,7 @@
         android:enableOnBackInvokedCallback="true">
 
         <meta-data android:name="com.google.android.geo.API_KEY"
-               android:value="AIzaSyAX5XrRbb81udAi-DnxtV_JyOoeOZ1Q1vk"/>
+               android:value="${googleMapsApiKey}"/>
 <!-- 
         <meta-data android:name="com.google.firebase.messaging.default_notification_icon" android:resource="@mipmap/ic_launcher" />
 

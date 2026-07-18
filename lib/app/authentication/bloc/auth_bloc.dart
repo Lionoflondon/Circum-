@@ -5,6 +5,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:equatable/equatable.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_storage/firebase_storage.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:circum/utils/app_state/app_state.dart';
@@ -33,8 +34,7 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
   LocationHelper locationHelper = LocationHelper();
   AuthBloc() : super(AuthState()) {
     void listenForPermissionStatus() async {
-      final permission = await permission_handler.Permission.location.status;
-      print(permission);
+      await permission_handler.Permission.location.status;
     }
 
     listenForPermissionStatus();
@@ -109,7 +109,6 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
         add(SignOut());
       }
     } else {
-      print('User not signed in');
       emit(state.copyWith(currentState: AppState.unauthenticated));
     }
   }
@@ -222,15 +221,12 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
               : AuthenticatedStatus.authenticated));
 
       if (appleCredential.givenName != null) {
-        print('New user, updating user data');
         add(UpdateUserProfile(
             username:
                 "${appleCredential.givenName} ${appleCredential.familyName}"));
       }
       await Future.delayed(const Duration(seconds: 2));
-    } catch (e) {
-      print(e);
-    }
+    } catch (e) {}
   }
 
   void _handleRequestForOTP(
@@ -240,29 +236,20 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
     String? _verificationId;
     int? _resendToken;
 
-    print('>>>>>>>>>> Trying to get code');
-
     try {
       emit(state.copyWith(status: Status.loading));
       await auth.verifyPhoneNumber(
         phoneNumber: state.phoneNumber,
         verificationCompleted: (_) {},
         verificationFailed: (_) {
-          print('Verification failed');
-          print(_.message);
-          print(_.code);
-          print(_.stackTrace);
           throw 'Verification failed';
         },
         codeSent: (String verificationId, int? resendToken) async {
           _verificationId = verificationId;
           _resendToken = resendToken;
-          print('code sent');
           completer.complete(true);
         },
         codeAutoRetrievalTimeout: (_) {
-          print('Code timed out');
-          print(_);
           throw 'Code timed out';
         },
       );
@@ -272,12 +259,7 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
           verificationId: _verificationId,
           resendToken: _resendToken,
           status: Status.success));
-      print('Gotten Verification ID');
-      print(_verificationId);
-      print(_resendToken);
     } catch (e) {
-      print('Error sending code');
-      print(e);
       emit(state.copyWith(
           errorMessage: e.toString().split(':').last.trim(),
           isLoading: false,
@@ -351,15 +333,6 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
                 currentState: AppState.authenticated));
           }
         } else {
-          print(_userCredential.additionalUserInfo);
-          print('>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>');
-          print(_userCredential);
-          print(_userCredential.credential?.accessToken);
-          print(_userCredential.credential?.providerId);
-          print(_userCredential.credential?.signInMethod);
-          print(_userCredential.credential?.token);
-          print('>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>');
-          print(_userCredential.user);
           emit(state.copyWith(
               status: Status.success,
               username: _userCredential.user?.displayName,
@@ -374,13 +347,10 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
       }
       // Sign the user in (or link) with the credential
     } on FirebaseException catch (e) {
-      print(e.code);
       if (e.code == 'invalid-verification-code') {
         emit(state.copyWith(errorMessage: 'Invalid verification code'));
       }
-    } catch (e) {
-      print(e);
-    }
+    } catch (e) {}
   }
 
   Future<void> _handleSubmitOTP(
@@ -437,7 +407,6 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
       storage.write(key: 'password', value: event.password);
 
       if (auth.currentUser?.emailVerified == false) {
-        print('Email not verified');
         await auth.currentUser?.sendEmailVerification();
         emit(state.copyWith(
           status: Status.unverifiedEmail,
@@ -448,15 +417,6 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
               authenticatedStatus: AuthenticatedStatus.incompleteData,
               currentState: AppState.authenticated));
         } else {
-          print(userCredential.additionalUserInfo);
-          print('>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>');
-          print(userCredential);
-          print(userCredential.credential?.accessToken);
-          print(userCredential.credential?.providerId);
-          print(userCredential.credential?.signInMethod);
-          print(userCredential.credential?.token);
-          print('>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>');
-          print(userCredential.user);
           emit(state.copyWith(
               status: Status.success,
               authenticatedStatus: AuthenticatedStatus.authenticated,
@@ -484,26 +444,20 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
         }
       }
     } on FirebaseAuthException catch (e) {
-      print(e.code);
       emit(state.copyWith(status: Status.failure));
       if (e.code == 'invalid-email') {
-        print('Email is invalid');
         emit(state.copyWith(errorMessage: 'Email is invalid'));
       }
       if (e.code == 'user-disabled') {
-        print('User disabled');
         emit(state.copyWith(errorMessage: 'User disabled'));
       }
       if (e.code == 'user-not-found') {
-        print('User not found');
         emit(state.copyWith(errorMessage: 'User not found'));
       }
       if (e.code == 'wrong-password') {
-        print('Wrong password');
         emit(state.copyWith(errorMessage: 'Password incorrect'));
       }
     } catch (e) {
-      print(e);
       emit(state.copyWith(status: Status.failure));
     }
   }
@@ -512,42 +466,32 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
       SignUpWithEmail event, Emitter<AuthState> emit) async {
     FlutterSecureStorage storage = const FlutterSecureStorage();
     try {
-      print('Signing up');
       emit(state.copyWith(status: Status.loading));
       await auth.createUserWithEmailAndPassword(
           email: event.email, password: event.password);
 
       storage.write(key: 'password', value: event.password);
-
-      print('done');
       if (auth.currentUser?.emailVerified == false) {
-        print('Email not verified');
         await auth.currentUser?.sendEmailVerification();
         emit(state.copyWith(
           status: Status.unverifiedEmail,
         ));
       }
     } on FirebaseAuthException catch (e) {
-      print(e.code);
       emit(state.copyWith(status: Status.failure));
       if (e.code == 'invalid-email') {
-        print('Email is invalid');
         emit(state.copyWith(errorMessage: 'Email is invalid'));
       }
       if (e.code == 'email-already-in-use') {
-        print('User already exists');
         emit(state.copyWith(errorMessage: 'User already exists'));
       }
       if (e.code == 'user-not-found') {
-        print('User not found');
         emit(state.copyWith(errorMessage: 'User not found'));
       }
       if (e.code == 'weak-password') {
-        print('Weak password');
         emit(state.copyWith(errorMessage: 'Use a strong password'));
       }
     } catch (e) {
-      print(e);
       emit(state.copyWith(status: Status.failure));
     }
   }
@@ -556,9 +500,7 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
       ConfirmEmailVerification event, Emitter<AuthState> emit) async {
     await auth.currentUser?.reload();
     if (auth.currentUser?.emailVerified == true) {
-      print('Email Verified');
       if (auth.currentUser?.displayName == null) {
-        print(auth.currentUser?.displayName);
         emit(state.copyWith(
           authenticatedStatus: AuthenticatedStatus.incompleteData,
           currentState: AppState.authenticated,
@@ -571,9 +513,7 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
           profilePhoto: auth.currentUser?.photoURL,
         ));
       }
-    } else {
-      print('Email not Verified');
-    }
+    } else {}
   }
 
   void _handleUpdatePhoneNumber(
@@ -581,7 +521,6 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
     try {
       User? user = auth.currentUser;
       FlutterSecureStorage storage = const FlutterSecureStorage();
-      print(event.value);
 
       final documentReference = db.collection('users').doc(user?.uid);
       // Get the document snapshot
@@ -598,9 +537,7 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
 
         emit(state.copyWith(phoneNumber: event.value));
       }
-    } catch (e) {
-      print(e);
-    }
+    } catch (e) {}
   }
 
   void _handleUpdateUserProfilePhoto(
@@ -617,13 +554,9 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
       final downloadUrl =
           await storageRef.ref('profile-photos/$fileName').getDownloadURL();
 
-      print(downloadUrl);
-
       await user.updatePhotoURL(downloadUrl);
       emit(state.copyWith(profilePhoto: downloadUrl));
-    } catch (e) {
-      print(e);
-    }
+    } catch (e) {}
   }
 
   void _handleSignOut(SignOut event, Emitter<AuthState> emit) async {
@@ -681,7 +614,6 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
       emit(state.copyWith(status: Status.passwordResetEmailSent));
     } on FirebaseAuthException catch (err) {
       emit(state.copyWith(status: Status.failure));
-      print(err.code);
       if (err.code == 'invalid-email') {
         emit(state.copyWith(errorMessage: 'Invalid email'));
       }
@@ -693,7 +625,6 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
       throw Exception(err.message.toString());
     } catch (err) {
       emit(state.copyWith(status: Status.failure));
-      print(err.toString());
       throw Exception(err.toString());
     }
   }
@@ -715,8 +646,6 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
 
       GeoFirePoint myLocation =
           GeoFirePoint(GeoPoint(locationData.latitude, locationData.longitude));
-      print('Latitude: ${locationData.latitude}');
-      print('Longitude: ${locationData.longitude}');
       emit(state.copyWith(
           locationData: locationData,
           hasLocationPermission: true,
@@ -726,11 +655,8 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
       await db
           .collection("users")
           .doc(user?.uid)
-          .update({'position': myLocation.data}).then(
-              (value) => print("DocumentSnapshot successfully updated!"),
-              onError: (e) => print("Error updating document $e"));
+          .update({'position': myLocation.data});
     } catch (e) {
-      print(e);
       if (e == 'Location permissions are permanently denied') {
         emit(state.copyWith(
             hasLocationPermission: false,
@@ -746,7 +672,6 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
       emit(state.copyWith(status: Status.loading));
       final User? user = auth.currentUser;
       await user?.updateDisplayName(event.username);
-      print(event.username);
 
       final documentReference = db.collection('users').doc(user?.uid);
 
@@ -763,8 +688,7 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
           'userType': 'sender',
           'phone': user?.phoneNumber,
           'email': user?.email
-        }).then((value) => print("DocumentSnapshot successfully updated!"),
-            onError: (e) => print("Error updating document $e"));
+        });
       } else {
         // Document does not exist
         // print('Document does not exist');
@@ -775,8 +699,7 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
           'userType': 'sender',
           'phone': user?.phoneNumber,
           'email': user?.email
-        }).then((value) => print("DocumentSnapshot successfully created!"),
-            onError: (e) => print("Error updating document $e"));
+        });
       }
 
       // print(user);
@@ -785,9 +708,7 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
           status: Status.success,
           authenticatedStatus: AuthenticatedStatus.authenticated,
           username: event.username));
-    } catch (e) {
-      print(e);
-    }
+    } catch (e) {}
   }
 
   void _handleOpenSettingsApp(
@@ -798,8 +719,6 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
 
       GeoFirePoint myLocation =
           GeoFirePoint(GeoPoint(locationData.latitude, locationData.longitude));
-      print('Latitude: ${locationData.latitude}');
-      print('Longitude: ${locationData.longitude}');
       emit(state.copyWith(
           locationData: locationData,
           hasLocationPermission: true,
@@ -808,18 +727,14 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
       await db
           .collection("users")
           .doc(user?.uid)
-          .update({'position': myLocation.data}).then(
-              (value) => print("DocumentSnapshot successfully updated!"),
-              onError: (e) => print("Error updating document $e"));
+          .update({'position': myLocation.data});
     } catch (e) {
-      print(e);
       if (e == 'Location permissions are permanently denied') {
-        final _openLocationSettings = await Geolocator.openLocationSettings();
+        await Geolocator.openLocationSettings();
       }
 
       if (e == 'Location services are disabled') {
-        final _openLocationSettings = await Geolocator.openAppSettings();
-        print(_openLocationSettings);
+        await Geolocator.openAppSettings();
       }
     }
   }
@@ -864,9 +779,7 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
           });
         }
       }
-    } catch (e) {
-      print(e);
-    }
+    } catch (e) {}
   }
 
   void _handleUpdateLastName(
@@ -908,9 +821,7 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
           });
         }
       }
-    } catch (e) {
-      print(e);
-    }
+    } catch (e) {}
   }
 
   void _handleSetErrorMessage(SetErrorMessage event, Emitter<AuthState> emit) {
