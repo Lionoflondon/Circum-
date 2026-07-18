@@ -1,4 +1,7 @@
+import 'dart:ui';
+
 import 'package:firebase_core/firebase_core.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
 import 'app/admin/admin_root.dart';
@@ -7,6 +10,7 @@ import 'app/admin/security/admin_app_check.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  _installAppCheckStartupBoundary();
   await Firebase.initializeApp(options: DefaultFirebaseOptions.web);
   final appCheckStartup = await initializeCircumAppCheck();
   if (appCheckStartup.blockStartup) {
@@ -14,6 +18,20 @@ Future<void> main() async {
     return;
   }
   runApp(const AdminRoot());
+}
+
+void _installAppCheckStartupBoundary() {
+  PlatformDispatcher.instance.onError = (error, stack) {
+    final message = error.toString();
+    final isAppCheckStartupError = message.contains('AppCheck') ||
+        message.contains('appCheck/recaptcha-error') ||
+        message.contains('app-check');
+    if (!isAppCheckStartupError) return false;
+    if (kDebugMode) {
+      debugPrint('Admin App Check startup warning: $message');
+    }
+    return true;
+  };
 }
 
 class _AdminStartupBlocked extends StatelessWidget {

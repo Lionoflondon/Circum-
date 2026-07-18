@@ -81,6 +81,18 @@ if (!index.includes('name="circum-web-surface"')) {
 }
 fs.writeFileSync(indexPath, index);
 
+const rootManifestCopies = [
+  ['assets/AssetManifest.bin.json', 'AssetManifest.bin.json'],
+  ['assets/FontManifest.json', 'FontManifest.json'],
+];
+for (const [source, destination] of rootManifestCopies) {
+  const sourcePath = path.join(absoluteOut, source);
+  if (!fs.existsSync(sourcePath)) {
+    fail(`Missing generated Flutter manifest ${source}`);
+  }
+  fs.copyFileSync(sourcePath, path.join(absoluteOut, destination));
+}
+
 fs.writeFileSync(
   path.join(absoluteOut, 'circum-surface.json'),
   `${JSON.stringify({

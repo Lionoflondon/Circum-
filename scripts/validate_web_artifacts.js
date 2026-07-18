@@ -24,20 +24,6 @@ const surfaces = {
       'SenderMobileHome',
     ],
   },
-  'sender-app': {
-    target: 'app',
-    output: 'build/sender_app_web',
-    identity: 'circum-sender-web',
-    manifestName: 'Circum Sender App',
-    must: ['circum-sender-web', 'Send a Parcel', 'Home', 'Wallet', 'Profile'],
-    forbidden: [
-      'circum-public-web',
-      'circum-rider-web',
-      'Earn as a Rider',
-      'Rider Application Centre',
-      'Admin surface',
-    ],
-  },
   admin: {
     target: 'admin',
     output: 'build/web_admin',
@@ -96,12 +82,14 @@ function assertFirebaseMapping(surface) {
 
 function assertScriptIsolation() {
   const deployPublic = readIfExists(path.join(root, 'scripts/deploy_public_web.sh'));
-  const deploySender = readIfExists(path.join(root, 'scripts/deploy_sender_app_web.sh'));
   if (!deployPublic.includes('hosting:public') || deployPublic.includes('hosting:app')) {
     fail('Public deploy script must target only hosting:public');
   }
-  if (!deploySender.includes('DEPLOYMENT BLOCKED')) {
-    fail('Sender App Web deploy script must be blocked; Sender Web belongs to Website');
+  if (fs.existsSync(path.join(root, 'scripts/deploy_sender_app_web.sh'))) {
+    fail('obsolete Sender App Web deploy script must not exist; Sender Web belongs to Website');
+  }
+  if (fs.existsSync(path.join(root, 'scripts/build_sender_app_web.sh'))) {
+    fail('obsolete Sender App Web build script must not exist; Sender Web belongs to Website');
   }
 }
 
@@ -111,6 +99,8 @@ function assertArtifact(surfaceName) {
   if (!fs.existsSync(outDir)) fail(`${surfaceName} output does not exist: ${spec.output}`);
 
   const manifestPath = path.join(outDir, 'manifest.json');
+  const assetManifestPath = path.join(outDir, 'AssetManifest.bin.json');
+  const fontManifestPath = path.join(outDir, 'FontManifest.json');
   const markerPath = path.join(outDir, 'circum-surface.json');
   const indexPath = path.join(outDir, 'index.html');
   const jsPath = path.join(outDir, 'main.dart.js');
@@ -125,6 +115,12 @@ function assertArtifact(surfaceName) {
 
   if (manifest.name !== spec.manifestName) {
     fail(`${surfaceName} manifest name ${manifest.name} != ${spec.manifestName}`);
+  }
+  if (!fs.existsSync(assetManifestPath)) {
+    fail(`${surfaceName} root AssetManifest.bin.json is missing`);
+  }
+  if (!fs.existsSync(fontManifestPath)) {
+    fail(`${surfaceName} root FontManifest.json is missing`);
   }
   if (manifest.scope !== '/') fail(`${surfaceName} manifest scope must be /`);
   if (manifest.start_url !== '/') fail(`${surfaceName} manifest start_url must be /`);
