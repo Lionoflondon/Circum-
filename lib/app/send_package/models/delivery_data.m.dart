@@ -9,7 +9,6 @@ class DeliveryData {
   final String rating;
   final String riderId;
   final String? photoURL;
-  final String? deliveryPin;
 
   DeliveryData(
       {required this.courierName,
@@ -21,16 +20,9 @@ class DeliveryData {
       required this.code,
       required this.rating,
       required this.riderId,
-      this.photoURL,
-      this.deliveryPin});
+      this.photoURL});
 
   factory DeliveryData.fromJson(data) {
-    final vanguardProtection = data['vanguardProtection'] is Map
-        ? data['vanguardProtection'] as Map
-        : null;
-    final collectionPin =
-        '${data['collectionPin'] ?? vanguardProtection?['collectionPin'] ?? data['code'] ?? ''}'
-            .trim();
     return DeliveryData(
         courierName:
             '${data['courierName'] ?? data['riderName'] ?? data['driverName'] ?? 'Your rider'}',
@@ -40,16 +32,13 @@ class DeliveryData {
             '${data['typeOfVehicle'] ?? data['driverVehicle'] ?? 'Rider'}',
         estimatedDeliveryTime:
             '${data['estimatedDeliveryTime'] ?? data['eta'] ?? ''}',
-        code: collectionPin,
+        code: '${data['code'] ?? ''}'.trim(),
         rating: '${data['rating'] ?? data['riderRating'] ?? ''}',
         plateNumber:
             '${data['plateNumber'] ?? data['driverPlateNumber'] ?? ''}',
         riderId:
             '${data['riderId'] ?? data['driverId'] ?? data['assignedRiderId'] ?? ''}',
-        photoURL: data['photoURL'] != 'null' ? data['photoURL'] : null,
-        deliveryPin:
-            '${data['deliveryPin'] ?? vanguardProtection?['deliveryPin'] ?? ''}'
-                .trim());
+        photoURL: data['photoURL'] != 'null' ? data['photoURL'] : null);
   }
 
   Map<String, dynamic> toJson() {
@@ -63,8 +52,6 @@ class DeliveryData {
       'rating': rating,
       'plateNumber': plateNumber,
       'riderId': riderId,
-      if (deliveryPin != null && deliveryPin!.isNotEmpty)
-        'deliveryPin': deliveryPin,
     };
   }
 }

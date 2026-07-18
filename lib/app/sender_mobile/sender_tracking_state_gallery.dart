@@ -32,7 +32,6 @@ class _SenderTrackingStateGalleryState
       estimatedDeliveryTime: '7 min',
       plateNumber: '',
       code: '427158',
-      deliveryPin: '835246',
       rating: '4.9',
       riderId: 'rider_1',
       photoURL: null,

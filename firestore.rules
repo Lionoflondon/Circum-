@@ -741,6 +741,10 @@ service cloud.firestore {
       }
     }
 
+    match /deliveryRequestsPrivate/{deliveryId} {
+      allow read, write: if false;
+    }
+
     match /activeDeliveries/{deliveryId} {
       allow read: if canReadDeliveryTracking(deliveryId);
       allow create, update: if canWriteActiveDelivery(deliveryId);

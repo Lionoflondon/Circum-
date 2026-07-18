@@ -529,20 +529,7 @@ bool senderVanguardCollectionPinVisible(SendPackageState engine) {
 }
 
 String? senderVanguardCollectionPinFor(SendPackageState engine) {
-  final data = engine.activeDeliveryData;
-  final protection = _mapFrom(data['vanguardProtection']);
-  final enabled = data['vanguardEnabled'] == true ||
-      data['vanguardRequired'] == true ||
-      protection['enabled'] == true ||
-      protection['required'] == true ||
-      '${data['deliveryType'] ?? data['serviceType'] ?? ''}'
-          .toLowerCase()
-          .contains('vanguard');
-  final pin = (engine.deliveryData?.code.trim().isNotEmpty == true
-          ? engine.deliveryData?.code
-          : '${data['collectionPin'] ?? data['pickupPin'] ?? protection['collectionPin'] ?? ''}')
-      ?.trim();
-  return enabled && pin != null && pin.isNotEmpty ? pin : null;
+  return null;
 }
 
 String _senderWaitingStateLabel({
@@ -1190,7 +1177,8 @@ class _TrackingPanelContent extends StatelessWidget {
   Widget build(BuildContext context) {
     if (state == SenderTrackingState.loading) return const _LoadingTracking();
     final waiting = SenderWaitingSnapshot.fromEngine(engine);
-    final hasVanguardCollectionPin = senderVanguardCollectionPinVisible(engine);
+    final hasProtectedVanguardCollection =
+        content.showVanguard && content.showCollectionPin;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -1246,7 +1234,7 @@ class _TrackingPanelContent extends StatelessWidget {
           const SizedBox(height: 12),
           SenderWaitingCard(waiting: waiting),
         ],
-        if (content.showCollectionPin && !hasVanguardCollectionPin) ...[
+        if (content.showCollectionPin && !hasProtectedVanguardCollection) ...[
           const SizedBox(height: 12),
           PINCard(
             pin: engine.deliveryData?.code,
@@ -1264,12 +1252,32 @@ class _TrackingPanelContent extends StatelessWidget {
             icon: Icons.inventory_2_outlined,
           ),
         ],
+        if (hasProtectedVanguardCollection) ...[
+          const SizedBox(height: 12),
+          PINCard(
+            pin: null,
+            label: 'Collection PIN',
+            hint:
+                'The collection PIN is protected and verified securely at pickup.',
+            statusLabel: senderCollectionPinStatusFor(
+              state,
+              verified: engine.collectionPinVerified,
+            ),
+            statusComplete: senderCollectionPinStatusFor(
+              state,
+              verified: engine.collectionPinVerified,
+            ).startsWith('✓'),
+            accent: const Color(0xFF3B82F6),
+            icon: Icons.inventory_2_outlined,
+          ),
+        ],
         if (content.showReceiverPin) ...[
           const SizedBox(height: 12),
           PINCard(
-            pin: engine.deliveryData?.deliveryPin,
+            pin: null,
             label: 'Receiver PIN',
-            hint: 'Give this to the receiver at delivery.',
+            hint:
+                'The receiver PIN is protected and verified securely at handover.',
             statusLabel: senderReceiverPinStatusFor(
               state,
               verified: engine.deliveryPinVerified,

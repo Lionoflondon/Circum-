@@ -319,3 +319,35 @@ test("Sender and Rider cannot directly mutate authoritative delivery fields", as
     trustPointsAwarded: 100,
   }, {merge: true}));
 });
+
+test("Vanguard PIN authority private documents are not client readable or writable", async () => {
+  const deliveryId = "delivery-vanguard-private";
+  await seedDelivery(deliveryId, {
+    vanguardProtocolEnabled: true,
+    collectionPinVerified: false,
+    deliveryPinVerified: false,
+  });
+  await testEnv.withSecurityRulesDisabled(async (context) => {
+    await setDoc(doc(context.firestore(), "deliveryRequestsPrivate", deliveryId), {
+      deliveryId,
+      senderId: "sender-1",
+      riderId: "rider-1",
+      collectionPin: "123456",
+      deliveryPin: "654321",
+      collectionPinAttemptCount: 0,
+      deliveryPinAttemptCount: 0,
+    });
+  });
+  const senderDb = testEnv.authenticatedContext("sender-1").firestore();
+  const riderDb = testEnv.authenticatedContext("rider-1").firestore();
+  await assertSucceeds(getDoc(doc(senderDb, "deliveryRequests", deliveryId)));
+  await assertSucceeds(getDoc(doc(riderDb, "deliveryRequests", deliveryId)));
+  await assertFails(getDoc(doc(senderDb, "deliveryRequestsPrivate", deliveryId)));
+  await assertFails(getDoc(doc(riderDb, "deliveryRequestsPrivate", deliveryId)));
+  await assertFails(setDoc(doc(senderDb, "deliveryRequestsPrivate", deliveryId), {
+    collectionPin: "111111",
+  }, {merge: true}));
+  await assertFails(setDoc(doc(riderDb, "deliveryRequestsPrivate", deliveryId), {
+    deliveryPinAttemptCount: 0,
+  }, {merge: true}));
+});

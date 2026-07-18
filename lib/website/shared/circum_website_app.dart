@@ -3521,42 +3521,6 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
       return null;
     }
 
-    final attemptField = stage == 'delivery'
-        ? 'deliveryPinAttemptCount'
-        : 'collectionPinAttemptCount';
-    final attemptCount = _numberValue(job[attemptField])?.toInt() ?? 0;
-    final expectedPin = stage == 'delivery'
-        ? VanguardProtection.deliveryPin(job)
-        : VanguardProtection.collectionPin(job);
-    final check = VanguardProtection.verifyPin(
-      enabled: true,
-      expectedPin: expectedPin,
-      enteredPin: enteredPin,
-      attemptCount: attemptCount,
-      stage: stage,
-    );
-    if (!check.passed) {
-      await FirebaseFirestore.instance
-          .collection('deliveryRequests')
-          .doc(requestId)
-          .set({
-        attemptField: check.attemptCount,
-        'vanguardReviewRequired': check.flagForReview,
-        'vanguardLastFailedStage': stage,
-        'updatedAt': FieldValue.serverTimestamp(),
-      }, SetOptions(merge: true));
-      if (!mounted) return null;
-      setState(() => _jobMessage = check.errorMessage);
-      return null;
-    }
-
-    final protection =
-        (job['vanguardProtection'] as Map?)?.cast<String, dynamic>() ??
-            const <String, dynamic>{};
-    final nextProtection = {
-      ...protection,
-      stage == 'delivery' ? 'deliveryPin' : 'collectionPin': null,
-    };
     final verifiedField =
         stage == 'delivery' ? 'deliveryPinVerified' : 'collectionPinVerified';
     final verifiedAtField = stage == 'delivery'
@@ -3570,14 +3534,11 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
       verifiedField: true,
       verifiedAtField: FieldValue.serverTimestamp(),
       verifiedByField: riderId,
-      attemptField: check.attemptCount,
-      'vanguardProtection': nextProtection,
       'vanguardVerification': {
         stage: {
           'status': 'passed',
           'riderId': riderId,
           'verifiedAt': FieldValue.serverTimestamp(),
-          'attemptCount': check.attemptCount,
         },
       },
     };
@@ -18654,14 +18615,9 @@ class _VanguardCustomerPanel extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final protection =
-        (data['vanguardProtection'] as Map?)?.cast<String, dynamic>() ??
-            const <String, dynamic>{};
     final collectionVerified = data['collectionPinVerified'] == true;
     final deliveryVerified = data['deliveryPinVerified'] == true;
     final handoffCompleted = collectionVerified && deliveryVerified;
-    final collectionPin = '${protection['collectionPin'] ?? ''}'.trim();
-    final deliveryPin = '${protection['deliveryPin'] ?? ''}'.trim();
     final collectionContact =
         (data['collectionContact'] as Map?)?.cast<String, dynamic>();
     final receiverDetails =
@@ -18708,7 +18664,7 @@ class _VanguardCustomerPanel extends StatelessWidget {
           _VanguardPinRow(
             colors: colors,
             label: 'Collection PIN',
-            pin: collectionVerified ? 'Verified' : collectionPin,
+            pin: collectionVerified ? 'Verified' : 'Protected',
             verified: collectionVerified,
           ),
           const SizedBox(height: 8),
@@ -18724,7 +18680,7 @@ class _VanguardCustomerPanel extends StatelessWidget {
           _VanguardPinRow(
             colors: colors,
             label: 'Delivery PIN',
-            pin: deliveryVerified ? 'Verified' : deliveryPin,
+            pin: deliveryVerified ? 'Verified' : 'Protected',
             verified: deliveryVerified,
           ),
         ],

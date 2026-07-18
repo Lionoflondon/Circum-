@@ -1,4 +1,4 @@
-/* eslint-disable max-len */
+/* eslint-disable max-len, require-jsdoc */
 "use strict";
 
 const functions = require("firebase-functions/v1");
@@ -13,12 +13,19 @@ function normalized(value) {
   return tracking.normalizeStatus(value);
 }
 
+function firstDefined(...values) {
+  for (const value of values) {
+    if (value !== undefined && value !== null) return value;
+  }
+  return undefined;
+}
+
 function liveLocationPatch(location) {
   if (!location || typeof location !== "object") return {};
-  const lat = Number(location.latitude ?? location.lat);
-  const lng = Number(location.longitude ?? location.lng);
+  const lat = Number(firstDefined(location.latitude, location.lat));
+  const lng = Number(firstDefined(location.longitude, location.lng));
   if (!Number.isFinite(lat) || !Number.isFinite(lng)) return {};
-  const heading = Number(location.heading ?? location.bearing);
+  const heading = Number(firstDefined(location.heading, location.bearing));
   const speed = Number(location.speed);
   return {
     riderLiveLocation: {
@@ -42,19 +49,19 @@ function signalQuality(accuracy) {
 
 function validatedLiveLocation(input) {
   const location = input && typeof input === "object" ? input : {};
-  const lat = Number(location.latitude ?? location.lat);
-  const lng = Number(location.longitude ?? location.lng);
+  const lat = Number(firstDefined(location.latitude, location.lat));
+  const lng = Number(firstDefined(location.longitude, location.lng));
   if (!Number.isFinite(lat) || !Number.isFinite(lng) ||
       lat < -90 || lat > 90 || lng < -180 || lng > 180) {
     throw new functions.https.HttpsError("invalid-argument", "A valid rider location is required.");
   }
-  const accuracy = Number(location.accuracyMeters ?? location.accuracy ?? 0);
+  const accuracy = Number(firstDefined(location.accuracyMeters, location.accuracy, 0));
   if (!Number.isFinite(accuracy) || accuracy <= 0 || accuracy > 250) {
     throw new functions.https.HttpsError("failed-precondition", "GPS accuracy is not reliable enough for live tracking.");
   }
-  const heading = Number(location.heading ?? location.bearing);
+  const heading = Number(firstDefined(location.heading, location.bearing));
   const speed = Number(location.speed);
-  const clientRecordedAt = Number(location.clientRecordedAt ?? location.updatedAt ?? Date.now());
+  const clientRecordedAt = Number(firstDefined(location.clientRecordedAt, location.updatedAt, Date.now()));
   return {
     latitude: lat,
     longitude: lng,
@@ -80,10 +87,10 @@ function timestampMs(value) {
 
 function distanceMeters(a, b) {
   if (!a || !b) return Number.POSITIVE_INFINITY;
-  const lat1 = Number(a.latitude ?? a.lat);
-  const lon1 = Number(a.longitude ?? a.lng);
-  const lat2 = Number(b.latitude ?? b.lat);
-  const lon2 = Number(b.longitude ?? b.lng);
+  const lat1 = Number(firstDefined(a.latitude, a.lat));
+  const lon1 = Number(firstDefined(a.longitude, a.lng));
+  const lat2 = Number(firstDefined(b.latitude, b.lat));
+  const lon2 = Number(firstDefined(b.longitude, b.lng));
   if (![lat1, lon1, lat2, lon2].every(Number.isFinite)) return Number.POSITIVE_INFINITY;
   const radians = (deg) => deg * Math.PI / 180;
   const dLat = radians(lat2 - lat1);
@@ -154,15 +161,24 @@ function assertRiderOperational(rider = {}) {
   }
 }
 
-function expectedPin(delivery, action) {
-  const protection = delivery.vanguardProtection || {};
+function expectedPin(privateDelivery, action) {
+  const protection = privateDelivery.vanguardProtection || {};
   if (action === "verify_collection_pin") {
-    return text(delivery.collectionPin || delivery.pickupPin || protection.collectionPin);
+    return text(privateDelivery.collectionPin || privateDelivery.pickupPin || protection.collectionPin);
   }
   if (action === "verify_receiver_pin") {
-    return text(delivery.deliveryPin || delivery.receiverPin || delivery.dropoffPin || protection.deliveryPin);
+    return text(privateDelivery.deliveryPin || privateDelivery.receiverPin || privateDelivery.dropoffPin || protection.deliveryPin);
   }
   return "";
+}
+
+function pinAuthorityRequired(delivery, action) {
+  if (action !== "verify_collection_pin" && action !== "verify_receiver_pin") return false;
+  const protection = delivery.vanguardProtection || {};
+  return delivery.vanguardProtocolEnabled === true ||
+    delivery.vanguardEnabled === true ||
+    delivery.requiresVanguard === true ||
+    protection.enabled === true;
 }
 
 function pinAttemptField(action) {
@@ -327,11 +343,20 @@ exports.updateDeliveryTrackingStatus = functions.https.onCall(async (data, conte
     }
 
 
-    const requiredPin = expectedPin(delivery, action);
+    const privateRef = db.collection("deliveryRequestsPrivate").doc(found.id);
+    const privateSnapshot = await transaction.get(privateRef);
+    const privateDelivery = privateSnapshot.exists ? privateSnapshot.data() || {} : {};
+    const requiredPin = expectedPin(privateDelivery, action);
+    if (!requiredPin && pinAuthorityRequired(delivery, action)) {
+      throw new functions.https.HttpsError(
+          "failed-precondition",
+          "Secure PIN authority is not available for this delivery.",
+      );
+    }
     if (requiredPin) {
       const suppliedPin = text(data && data.pin);
       const attemptField = pinAttemptField(action);
-      const attempts = Number(delivery[attemptField] || 0);
+      const attempts = Number(privateDelivery[attemptField] || 0);
       if (attempts >= 5) {
         throw new functions.https.HttpsError(
             "resource-exhausted",
@@ -339,9 +364,11 @@ exports.updateDeliveryTrackingStatus = functions.https.onCall(async (data, conte
         );
       }
       if (!/^\d{6}$/.test(suppliedPin) || suppliedPin !== requiredPin) {
-        transaction.set(found.ref, {
+        transaction.set(privateRef, {
           [attemptField]: attempts + 1,
           lastPinAttemptAt: FieldValue.serverTimestamp(),
+          vanguardReviewRequired: attempts + 1 >= 5,
+          vanguardLastFailedStage: action === "verify_receiver_pin" ? "delivery" : "collection",
           updatedAt: FieldValue.serverTimestamp(),
         }, {merge: true});
         return {verificationFailed: true, attemptsRemaining: 4 - attempts};
@@ -354,7 +381,7 @@ exports.updateDeliveryTrackingStatus = functions.https.onCall(async (data, conte
       riderId,
     });
     if (Object.keys(evidence).length > 0) {
-      patch[ action === "verify_receiver_pin" ? "handoverEvidence" : "pickupEvidence"] = {
+      patch[action === "verify_receiver_pin" ? "handoverEvidence" : "pickupEvidence"] = {
         ...evidence,
         recordedAt: FieldValue.serverTimestamp(),
         recordedBy: riderId,
@@ -573,6 +600,7 @@ exports._private = {
   validatedLiveLocation,
   patchForTransition,
   expectedPin,
+  pinAuthorityRequired,
   assertRiderOwnsDelivery,
   assertRiderOperational,
   evidenceRequirements,

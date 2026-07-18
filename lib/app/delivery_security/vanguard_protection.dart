@@ -333,7 +333,6 @@ class VanguardProtection {
         'vanguardEnabled': false,
       };
     }
-    final pins = generatePins(random: random);
     return {
       'vanguardEnabled': true,
       'vanguardProtection': {
@@ -346,10 +345,6 @@ class VanguardProtection {
         ),
         'matchedCategory': matchedCategory,
         'registryVersion': 1,
-        // TODO: Hash these values server-side when a backend PIN hashing helper
-        // is available. Keeping them isolated avoids spreading raw PIN fields.
-        'collectionPin': pins.collectionPin,
-        'deliveryPin': pins.deliveryPin,
       },
       'collectionPinVerified': false,
       'collectionPinVerifiedAt': null,
@@ -357,9 +352,6 @@ class VanguardProtection {
       'deliveryPinVerified': false,
       'deliveryPinVerifiedAt': null,
       'deliveryPinVerifiedBy': null,
-      'collectionPinAttemptCount': 0,
-      'deliveryPinAttemptCount': 0,
-      'vanguardReviewRequired': false,
     };
   }
 
@@ -411,15 +403,11 @@ class VanguardProtection {
   }
 
   static String? collectionPin(Map<String, dynamic> delivery) {
-    final protection =
-        (delivery['vanguardProtection'] as Map?)?.cast<String, dynamic>();
-    return '${protection?['collectionPin'] ?? ''}'.trim();
+    return null;
   }
 
   static String? deliveryPin(Map<String, dynamic> delivery) {
-    final protection =
-        (delivery['vanguardProtection'] as Map?)?.cast<String, dynamic>();
-    return '${protection?['deliveryPin'] ?? ''}'.trim();
+    return null;
   }
 
   static String _sixDigitPin(Random random) {

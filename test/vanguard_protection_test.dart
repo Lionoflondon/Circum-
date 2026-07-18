@@ -105,18 +105,10 @@ void main() {
       expect(check.attemptCount, 0);
     });
 
-    test('wrong collection PIN blocks completion and increments attempts', () {
+    test('initial public fields do not expose Vanguard PIN secrets', () {
       final fields = VanguardProtection.initialFields(
         description: 'iPhone 15',
         random: Random(2),
-      );
-      final pin = VanguardProtection.collectionPin(fields);
-      final check = VanguardProtection.verifyPin(
-        enabled: true,
-        expectedPin: pin,
-        enteredPin: '000000',
-        attemptCount: 0,
-        stage: 'collection',
       );
 
       expect(fields['vanguardEnabled'], isTrue);
@@ -124,21 +116,23 @@ void main() {
         (fields['vanguardProtection'] as Map)['matchedCategory'],
         'Consumer Electronics',
       );
-      expect(check.passed, isFalse);
-      expect(check.attemptCount, 1);
-      expect(check.errorMessage, contains('Incorrect collection PIN'));
+      expect(fields.containsKey('collectionPin'), isFalse);
+      expect(fields.containsKey('deliveryPin'), isFalse);
+      expect(fields.containsKey('collectionPinAttemptCount'), isFalse);
+      expect(fields.containsKey('deliveryPinAttemptCount'), isFalse);
+      expect((fields['vanguardProtection'] as Map).containsKey('collectionPin'),
+          isFalse);
+      expect((fields['vanguardProtection'] as Map).containsKey('deliveryPin'),
+          isFalse);
+      expect(VanguardProtection.collectionPin(fields), isNull);
+      expect(VanguardProtection.deliveryPin(fields), isNull);
     });
 
-    test('correct collection PIN updates verification outcome', () {
-      final fields = VanguardProtection.initialFields(
-        description: 'Camera body',
-        random: Random(3),
-      );
-      final pin = VanguardProtection.collectionPin(fields);
+    test('server-supplied expected PIN verifies collection outcome', () {
       final check = VanguardProtection.verifyPin(
         enabled: true,
-        expectedPin: pin,
-        enteredPin: pin!,
+        expectedPin: '345678',
+        enteredPin: '345678',
         attemptCount: 1,
         stage: 'collection',
       );
@@ -149,14 +143,9 @@ void main() {
     });
 
     test('wrong delivery PIN blocks delivery completion', () {
-      final fields = VanguardProtection.initialFields(
-        description: 'Jewellery parcel',
-        random: Random(5),
-      );
-      final pin = VanguardProtection.deliveryPin(fields);
       final check = VanguardProtection.verifyPin(
         enabled: true,
-        expectedPin: pin,
+        expectedPin: '654321',
         enteredPin: '123123',
         attemptCount: 0,
         stage: 'delivery',

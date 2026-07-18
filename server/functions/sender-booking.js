@@ -742,6 +742,32 @@ function stableId(value) {
   return crypto.createHash("sha256").update(`${value || ""}`).digest("hex").slice(0, 32);
 }
 
+function sixDigitPin() {
+  return `${crypto.randomInt(100000, 1000000)}`;
+}
+
+function privateVanguardPinFields(vanguardFields) {
+  if (vanguardFields.vanguardProtocolEnabled !== true) return null;
+  const collectionPin = sixDigitPin();
+  let deliveryPin = sixDigitPin();
+  while (deliveryPin === collectionPin) deliveryPin = sixDigitPin();
+  return {
+    vanguardProtocolEnabled: true,
+    vanguardProtection: {
+      enabled: true,
+      collectionPin,
+      deliveryPin,
+    },
+    collectionPin,
+    deliveryPin,
+    collectionPinAttemptCount: 0,
+    deliveryPinAttemptCount: 0,
+    vanguardReviewRequired: false,
+    createdAt: FieldValue.serverTimestamp(),
+    updatedAt: FieldValue.serverTimestamp(),
+  };
+}
+
 exports.createSenderPaidDelivery = (stripe) => functions.https.onCall(async (data, context) => {
   const sender = requireSender(context);
   const quoteId = text(data.quoteId);
@@ -801,6 +827,7 @@ exports.createSenderPaidDelivery = (stripe) => functions.https.onCall(async (dat
     description: parcel.description,
     category: iris.category,
   });
+  const privateVanguardFields = privateVanguardPinFields(vanguardFields);
   await db.runTransaction(async (transaction) => {
     const [existingDelivery, existingIdem] = await Promise.all([
       transaction.get(deliveryRef),
@@ -826,88 +853,96 @@ exports.createSenderPaidDelivery = (stripe) => functions.https.onCall(async (dat
       Number(iris.finalBillableWeightKg || iris.irisWeightKg || iris.totalWeightKg || parcel.weightKg || 0) || null;
 
     transaction.set(deliveryRef, {
-    requestId,
-    deliveryId: requestId,
-    role: "user",
-    userId: sender.uid,
-    senderId: sender.uid,
-    senderName: sender.name,
-    senderEmail: sender.email,
-    ...(quote.businessMode === true ? {
-      businessMode: true,
-      businessId: quote.businessId,
-      businessAccountId: quote.businessAccountId,
-      businessName: quote.businessName,
-      billingEmail: quote.billingEmail,
-      billingSource: quote.billingSource,
-      paymentProfileSource: quote.paymentProfileSource,
-    } : {}),
-    pickupDetails: {
-      fullname: pickup.fullname || sender.name || "Sender",
-      phone: pickup.phone || "",
-      position: geoData(pickup.coordinates),
-      moreInformation: pickup.instructions || "",
-      locality: pickup.locality || "",
-      address: pickup.address || "",
-      subAddress: pickup.subAddress || "",
-    },
-    dropoffDetails: {
-      fullname: dropoff.fullname || data.recipient && data.recipient.name || "",
-      phone: dropoff.phone || data.recipient && data.recipient.phone || "",
-      position: geoData(dropoff.coordinates),
-      moreInformation: dropoff.instructions || data.recipient && data.recipient.deliveryNotes || "",
-      locality: dropoff.locality || "",
-      address: dropoff.address || "",
-      subAddress: dropoff.subAddress || "",
-    },
-    pickupPosition: geoData(pickup.coordinates),
-    pickupAddress: pickup.address || "",
-    pickupLocality: pickup.locality || "",
-    dropoffAddress: dropoff.address || "",
-    dropoffLocality: dropoff.locality || "",
-    receiverName: data.recipient && data.recipient.name || dropoff.fullname || "",
-    receiverPhone: data.recipient && data.recipient.phone || dropoff.phone || "",
-    recipient: data.recipient || {},
-    deliveryTime: data.deliveryTime || {},
-    parcel,
-    packageDescription: parcelDescription,
-    originalDescription: parcelDescription,
-    normalizedItemName: parcel.itemName || parcelDescription,
-    iris,
-    irisDeliveryEstimateId: requestId,
-    irisDeliveryEstimate: iris,
-    irisEstimatedWeight: irisWeightKg,
-    selectedSpeed: quote.selectedSpeed,
-    selectedServiceLevel,
-    serviceLevel: selectedServiceLevel,
-    selectedTier: selectedServiceLevel,
-    quoteId,
-    paymentSessionId,
-    price: quote.total,
-    paidAmount: quote.total,
-    paymentStatus: "paid",
-    paymentMethod: payment.paymentMethod,
-    stripePaymentIntentId: payment.stripePaymentIntentId || null,
-    stripeCustomerId: payment.stripeCustomerId || null,
-    stripeLatestChargeId: payment.stripeLatestChargeId || null,
-    rothAppliedAmount: payment.rothAppliedAmount || 0,
-    remainingAmount: payment.remainingAmount || 0,
-    pricingBreakdown: quote,
-    currency: "GBP",
-    status: "requested",
-    deliveryStatus: "requested",
-    flowStatus: "requested",
-    currentStep: "tracking",
-    dispatchStatus: "requested",
-    matchingStatus: "available",
-    trackingUrl: `/?app=sender&deliveryId=${requestId}`,
-    ...vanguardFields,
-    dispatchProtocol: {
-      vanguard: vanguardFields.vanguardProtocolEnabled === true,
-    },
-    createdAt: FieldValue.serverTimestamp(),
-    updatedAt: FieldValue.serverTimestamp(),
+      requestId,
+      deliveryId: requestId,
+      role: "user",
+      userId: sender.uid,
+      senderId: sender.uid,
+      senderName: sender.name,
+      senderEmail: sender.email,
+      ...(quote.businessMode === true ? {
+        businessMode: true,
+        businessId: quote.businessId,
+        businessAccountId: quote.businessAccountId,
+        businessName: quote.businessName,
+        billingEmail: quote.billingEmail,
+        billingSource: quote.billingSource,
+        paymentProfileSource: quote.paymentProfileSource,
+      } : {}),
+      pickupDetails: {
+        fullname: pickup.fullname || sender.name || "Sender",
+        phone: pickup.phone || "",
+        position: geoData(pickup.coordinates),
+        moreInformation: pickup.instructions || "",
+        locality: pickup.locality || "",
+        address: pickup.address || "",
+        subAddress: pickup.subAddress || "",
+      },
+      dropoffDetails: {
+        fullname: dropoff.fullname || data.recipient && data.recipient.name || "",
+        phone: dropoff.phone || data.recipient && data.recipient.phone || "",
+        position: geoData(dropoff.coordinates),
+        moreInformation: dropoff.instructions || data.recipient && data.recipient.deliveryNotes || "",
+        locality: dropoff.locality || "",
+        address: dropoff.address || "",
+        subAddress: dropoff.subAddress || "",
+      },
+      pickupPosition: geoData(pickup.coordinates),
+      pickupAddress: pickup.address || "",
+      pickupLocality: pickup.locality || "",
+      dropoffAddress: dropoff.address || "",
+      dropoffLocality: dropoff.locality || "",
+      receiverName: data.recipient && data.recipient.name || dropoff.fullname || "",
+      receiverPhone: data.recipient && data.recipient.phone || dropoff.phone || "",
+      recipient: data.recipient || {},
+      deliveryTime: data.deliveryTime || {},
+      parcel,
+      packageDescription: parcelDescription,
+      originalDescription: parcelDescription,
+      normalizedItemName: parcel.itemName || parcelDescription,
+      iris,
+      irisDeliveryEstimateId: requestId,
+      irisDeliveryEstimate: iris,
+      irisEstimatedWeight: irisWeightKg,
+      selectedSpeed: quote.selectedSpeed,
+      selectedServiceLevel,
+      serviceLevel: selectedServiceLevel,
+      selectedTier: selectedServiceLevel,
+      quoteId,
+      paymentSessionId,
+      price: quote.total,
+      paidAmount: quote.total,
+      paymentStatus: "paid",
+      paymentMethod: payment.paymentMethod,
+      stripePaymentIntentId: payment.stripePaymentIntentId || null,
+      stripeCustomerId: payment.stripeCustomerId || null,
+      stripeLatestChargeId: payment.stripeLatestChargeId || null,
+      rothAppliedAmount: payment.rothAppliedAmount || 0,
+      remainingAmount: payment.remainingAmount || 0,
+      pricingBreakdown: quote,
+      currency: "GBP",
+      status: "requested",
+      deliveryStatus: "requested",
+      flowStatus: "requested",
+      currentStep: "tracking",
+      dispatchStatus: "requested",
+      matchingStatus: "available",
+      trackingUrl: `/?app=sender&deliveryId=${requestId}`,
+      ...vanguardFields,
+      dispatchProtocol: {
+        vanguard: vanguardFields.vanguardProtocolEnabled === true,
+      },
+      createdAt: FieldValue.serverTimestamp(),
+      updatedAt: FieldValue.serverTimestamp(),
     });
+    if (privateVanguardFields) {
+      transaction.set(db.collection("deliveryRequestsPrivate").doc(deliveryRef.id), {
+        deliveryId: deliveryRef.id,
+        requestId,
+        senderId: sender.uid,
+        ...privateVanguardFields,
+      }, {merge: false});
+    }
     transaction.set(idempotencyRef, {
       idempotencyKey,
       requestId,
