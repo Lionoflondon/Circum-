@@ -13,6 +13,7 @@ import 'package:url_launcher/url_launcher.dart';
 import '../sender_profile/sender_profile.dart';
 import 'design_system/sender_design_system.dart';
 import 'sender_saved_addresses.dart';
+import 'sender_wallet.dart';
 
 class SenderTrustActivity {
   final int points;
@@ -865,7 +866,13 @@ class _SenderMobileProfileViewState extends State<SenderMobileProfileView> {
               icon: Icons.group_add_outlined,
               title: 'Referrals',
               subtitle: 'Invite friends and view referral rewards.',
-              onTap: () => _showLocalMessage('Referrals are available soon.'),
+              onTap: () => Navigator.of(context).push(
+                MaterialPageRoute<void>(
+                  builder: (_) => const SenderReferralScreen(),
+                  settings:
+                      const RouteSettings(name: '/sender-mobile/wallet/earn'),
+                ),
+              ),
               showDivider: false,
             ),
           ],

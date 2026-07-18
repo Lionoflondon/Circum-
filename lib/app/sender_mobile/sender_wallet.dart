@@ -454,7 +454,7 @@ class _SenderWalletViewState extends State<SenderWalletView> {
 
   void _openEarnRoth() => Navigator.of(context).push(
         MaterialPageRoute<void>(
-          builder: (_) => const _EarnRothScreen(),
+          builder: (_) => const SenderReferralScreen(),
           settings: const RouteSettings(name: '/sender-mobile/wallet/earn'),
         ),
       );
@@ -921,14 +921,14 @@ class _ManagePaymentsScreenState extends State<_ManagePaymentsScreen> {
       );
 }
 
-class _EarnRothScreen extends StatefulWidget {
-  const _EarnRothScreen();
+class SenderReferralScreen extends StatefulWidget {
+  const SenderReferralScreen({super.key});
 
   @override
-  State<_EarnRothScreen> createState() => _EarnRothScreenState();
+  State<SenderReferralScreen> createState() => _SenderReferralScreenState();
 }
 
-class _EarnRothScreenState extends State<_EarnRothScreen> {
+class _SenderReferralScreenState extends State<SenderReferralScreen> {
   String _code = '';
   String _link = '';
   List<Map<String, dynamic>> _referrals = const [];
