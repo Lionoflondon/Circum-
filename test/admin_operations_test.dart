@@ -454,6 +454,27 @@ void main() {
       expect(patch.containsKey('price'), isFalse);
     });
 
+    test('IRIS evidence and learning actions remain review metadata only', () {
+      final evidencePatch = AdminIrisOperationsTools.reviewPatch(
+        status: 'evidence_approved',
+        updatedBy: 'iris@circumuk.com',
+        updatedAt: DateTime(2026, 6, 4),
+        reason: 'Photo evidence is sufficient.',
+      );
+      final promotedPatch = AdminIrisOperationsTools.reviewPatch(
+        status: 'learning_promoted',
+        updatedBy: 'iris@circumuk.com',
+        updatedAt: DateTime(2026, 6, 4),
+        reason: 'Consistent verified object profile.',
+      );
+
+      expect(evidencePatch['evidenceReviewStatus'], 'approved');
+      expect(promotedPatch['irisLearningQueueStatus'], 'promoted');
+      expect(evidencePatch.containsKey('finalAmount'), isFalse);
+      expect(promotedPatch.containsKey('deliveryStatus'), isFalse);
+      expect(promotedPatch.containsKey('canonicalWeight'), isFalse);
+    });
+
     test('finance workflow patches do not alter payment authority fields', () {
       final patch = AdminFinanceTools.workflowPatch(
         status: 'reconciled',

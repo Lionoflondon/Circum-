@@ -151,8 +151,16 @@ class AdminIrisOperationsTools {
     'category_override_review',
     'vehicle_override_review',
     'more_evidence_requested',
+    'evidence_approved',
+    'evidence_rejected',
+    'evidence_archived',
     'engineering_review',
     'learning_flagged',
+    'learning_promoted',
+    'learning_rejected',
+    'review_assigned',
+    'duplicate_merge_review',
+    'archived_review_restored',
     'closed',
   ];
 
@@ -174,9 +182,17 @@ class AdminIrisOperationsTools {
       'irisReviewedAt': updatedAt,
       'irisReviewReason': reason.trim(),
       if (status == 'learning_flagged') 'irisLearningQueueStatus': 'pending',
+      if (status == 'learning_promoted') 'irisLearningQueueStatus': 'promoted',
+      if (status == 'learning_rejected') 'irisLearningQueueStatus': 'rejected',
       if (status == 'engineering_review') 'engineeringReviewStatus': 'open',
       if (status == 'more_evidence_requested')
         'evidenceRequestStatus': 'requested',
+      if (status == 'evidence_approved') 'evidenceReviewStatus': 'approved',
+      if (status == 'evidence_rejected') 'evidenceReviewStatus': 'rejected',
+      if (status == 'evidence_archived') 'evidenceReviewStatus': 'archived',
+      if (status == 'review_assigned') 'irisAssignmentStatus': 'assigned',
+      if (status == 'duplicate_merge_review') 'irisMergeReviewStatus': 'open',
+      if (status == 'archived_review_restored') 'irisReviewArchived': false,
       if (status == 'closed') 'irisReviewClosed': true,
     };
   }

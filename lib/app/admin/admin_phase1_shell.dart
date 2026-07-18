@@ -985,6 +985,10 @@ class AdminDataBundle {
     required this.chats,
     required this.riderDocuments,
     required this.websiteVisitors,
+    required this.irisCanonicalObjects,
+    required this.irisLearningCases,
+    required this.irisPolicies,
+    required this.irisEvidence,
   });
 
   final List<Map<String, dynamic>> deliveries;
@@ -1002,6 +1006,10 @@ class AdminDataBundle {
   final List<Map<String, dynamic>> chats;
   final List<Map<String, dynamic>> riderDocuments;
   final List<Map<String, dynamic>> websiteVisitors;
+  final List<Map<String, dynamic>> irisCanonicalObjects;
+  final List<Map<String, dynamic>> irisLearningCases;
+  final List<Map<String, dynamic>> irisPolicies;
+  final List<Map<String, dynamic>> irisEvidence;
 
   static AdminDataBundle empty() => const AdminDataBundle(
         deliveries: [],
@@ -1019,6 +1027,10 @@ class AdminDataBundle {
         chats: [],
         riderDocuments: [],
         websiteVisitors: [],
+        irisCanonicalObjects: [],
+        irisLearningCases: [],
+        irisPolicies: [],
+        irisEvidence: [],
       );
 }
 
@@ -1068,6 +1080,10 @@ class AdminRepository {
           .collection('websiteVisitors')
           .orderBy('createdAt', descending: true)
           .limit(150)),
+      _read(_db.collection('irisCanonicalObjects').limit(150)),
+      _read(_db.collection('irisLearningCases').limit(150)),
+      _read(_db.collection('irisPolicies').limit(50)),
+      _read(_db.collection('irisEvidence').limit(150)),
     ]);
     return AdminDataBundle(
       deliveries: results[0],
@@ -1085,6 +1101,10 @@ class AdminRepository {
       chats: results[12],
       riderDocuments: results[13],
       websiteVisitors: results[14],
+      irisCanonicalObjects: results[15],
+      irisLearningCases: results[16],
+      irisPolicies: results[17],
+      irisEvidence: results[18],
     );
   }
 
@@ -1463,6 +1483,10 @@ class _AdminModuleBody extends StatelessWidget {
           AdminModule.discrepancyReview => _IrisOperationsModule(
               deliveries: data.deliveries,
               auditLogs: data.auditLogs,
+              canonicalObjects: data.irisCanonicalObjects,
+              learningCases: data.irisLearningCases,
+              policies: data.irisPolicies,
+              evidenceRecords: data.irisEvidence,
               query: query,
               canManageIris: canEditDeliveries,
               onOpenDelivery: onOpenDeliveryProfile,
@@ -2124,6 +2148,10 @@ class _IrisOperationsModule extends StatelessWidget {
   const _IrisOperationsModule({
     required this.deliveries,
     required this.auditLogs,
+    required this.canonicalObjects,
+    required this.learningCases,
+    required this.policies,
+    required this.evidenceRecords,
     required this.query,
     required this.canManageIris,
     required this.onOpenDelivery,
@@ -2132,6 +2160,10 @@ class _IrisOperationsModule extends StatelessWidget {
 
   final List<Map<String, dynamic>> deliveries;
   final List<Map<String, dynamic>> auditLogs;
+  final List<Map<String, dynamic>> canonicalObjects;
+  final List<Map<String, dynamic>> learningCases;
+  final List<Map<String, dynamic>> policies;
+  final List<Map<String, dynamic>> evidenceRecords;
   final String query;
   final bool canManageIris;
   final ValueChanged<Map<String, dynamic>> onOpenDelivery;
@@ -2147,6 +2179,16 @@ class _IrisOperationsModule extends StatelessWidget {
     final disputed = irisRecords.where(_hasWeightDispute).length;
     final learning = irisRecords.where(_isLearningCandidate).length;
     final averageConfidence = _averageIrisConfidence(irisRecords);
+    final completedToday = irisRecords
+        .where((record) =>
+            _isSameDay(record, DateTime.now()) && !_isIrisPending(record))
+        .length;
+    final engineering = irisRecords
+        .where((record) => _irisState(record).contains('engineering'))
+        .length;
+    final evidenceRequests = irisRecords
+        .where((record) => _irisState(record).contains('evidence'))
+        .length;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -2155,13 +2197,36 @@ class _IrisOperationsModule extends StatelessWidget {
           runSpacing: 14,
           children: [
             _MetricCard('Pending reviews', pending.toString(), 'IRIS queue'),
+            _MetricCard(
+                'Completed today', completedToday.toString(), 'reviews closed'),
+            _MetricCard('Avg review time', _averageIrisReviewTime(irisRecords),
+                'loaded records'),
             _MetricCard('High confidence', highConfidence.toString(), '>= 85%'),
             _MetricCard('Low confidence', lowConfidence.toString(), '< 60%'),
             _MetricCard('Weight disputes', disputed.toString(),
                 'sender, rider or IRIS mismatch'),
+            _MetricCard(
+                'Category disputes',
+                irisRecords.where(_hasCategoryDispute).length.toString(),
+                'category variance'),
+            _MetricCard(
+                'Vehicle disputes',
+                irisRecords.where(_hasVehicleDispute).length.toString(),
+                'vehicle variance'),
             _MetricCard('Admin overrides',
                 _countIrisOverrides(auditLogs).toString(), 'audit records'),
             _MetricCard('Learning queue', learning.toString(), 'candidates'),
+            _MetricCard(
+                'Failures',
+                irisRecords.where(_hasIrisFailure).length.toString(),
+                'processing'),
+            _MetricCard(
+                'Evidence requests', evidenceRequests.toString(), 'open'),
+            _MetricCard('Engineering', engineering.toString(), 'escalations'),
+            _MetricCard('Active reviewers',
+                _activeIrisReviewers(auditLogs).length.toString(), 'today'),
+            _MetricCard('Queue health',
+                _irisQueueHealth(pending, lowConfidence), 'command'),
             _MetricCard('Avg confidence',
                 '${averageConfidence.toStringAsFixed(0)}%', 'loaded records'),
             _MetricCard(
@@ -2171,12 +2236,18 @@ class _IrisOperationsModule extends StatelessWidget {
           ],
         ),
         const SizedBox(height: 18),
-        _IrisAnalyticsPanel(records: irisRecords),
+        _IrisHealthPanel(records: irisRecords, evidence: evidenceRecords),
+        const SizedBox(height: 18),
+        _IrisAnalyticsPanel(
+          records: irisRecords,
+          auditLogs: auditLogs,
+          learningCases: learningCases,
+        ),
         const SizedBox(height: 18),
         _RecordModule(
-          title: 'IRIS Review Queue',
+          title: 'Global IRIS Search and Review Queue',
           subtitle:
-              'Review delivery estimates, evidence, confidence, category, vehicle and learning flags.',
+              'Search delivery, booking, IRIS ID, sender, recipient, rider, business, canonical object, category, evidence, vehicle, weight and reviewer.',
           records: irisRecords,
           query: query,
           fields: const [
@@ -2192,7 +2263,12 @@ class _IrisOperationsModule extends StatelessWidget {
             'irisReviewStatus',
             'reviewType',
             'serviceType',
-            'vehicleType'
+            'vehicleType',
+            'recommendedVehicle',
+            'weight',
+            'verifiedWeight',
+            'reviewer',
+            'irisId'
           ],
           columns: const ['Delivery', 'Estimate', 'Confidence', 'Review'],
           row: (record) => [
@@ -2216,6 +2292,14 @@ class _IrisOperationsModule extends StatelessWidget {
                 ('More evidence', 'more_evidence_requested'),
                 ('Engineering', 'engineering_review'),
                 ('Learning', 'learning_flagged'),
+                ('Approve evidence', 'evidence_approved'),
+                ('Reject evidence', 'evidence_rejected'),
+                ('Archive evidence', 'evidence_archived'),
+                ('Assign reviewer', 'review_assigned'),
+                ('Merge duplicate', 'duplicate_merge_review'),
+                ('Promote learning', 'learning_promoted'),
+                ('Reject learning', 'learning_rejected'),
+                ('Restore archived', 'archived_review_restored'),
                 ('Close', 'closed'),
               ])
                 _MiniAction(
@@ -2226,15 +2310,287 @@ class _IrisOperationsModule extends StatelessWidget {
             ],
           ],
         ),
+        const SizedBox(height: 18),
+        _IrisCanonicalLibraryModule(
+          records: canonicalObjects,
+          query: query,
+          auditLogs: auditLogs,
+        ),
+        const SizedBox(height: 18),
+        _IrisEvidenceCentre(records: evidenceRecords, query: query),
+        const SizedBox(height: 18),
+        _IrisLearningCentre(
+          learningCases: learningCases,
+          reviewRecords: irisRecords,
+          query: query,
+        ),
+        const SizedBox(height: 18),
+        _IrisPolicyCentre(records: policies),
+        const SizedBox(height: 18),
+        _IrisExportCentre(records: irisRecords, auditLogs: auditLogs),
+      ],
+    );
+  }
+}
+
+class _IrisCanonicalLibraryModule extends StatelessWidget {
+  const _IrisCanonicalLibraryModule({
+    required this.records,
+    required this.query,
+    required this.auditLogs,
+  });
+
+  final List<Map<String, dynamic>> records;
+  final String query;
+  final List<Map<String, dynamic>> auditLogs;
+
+  @override
+  Widget build(BuildContext context) {
+    return _RecordModule(
+      title: 'Canonical Knowledge Base',
+      subtitle:
+          'Categories, objects, dimensions, weight bands, handling, fragility, dangerous goods and eligibility records.',
+      records: records,
+      query: query,
+      fields: const [
+        'id',
+        'category',
+        'subcategory',
+        'objectName',
+        'canonicalName',
+        'weightBand',
+        'vehicleRecommendation',
+        'handlingRequirements',
+        'marketplaceEligible',
+        'healthPlusEligible',
+        'giftEligible',
+        'businessEligible',
+        'adminNotes'
+      ],
+      columns: const ['Object', 'Category', 'Weight/Vehicle', 'Policy'],
+      row: (record) => [
+        '${record['objectName'] ?? record['canonicalName'] ?? _recordId(record)}',
+        '${record['category'] ?? 'Uncategorised'} / ${record['subcategory'] ?? 'none'}',
+        '${record['knownWeight'] ?? record['weightBand'] ?? 'unknown'} / ${record['vehicleRecommendation'] ?? 'vehicle n/a'}',
+        _canonicalPolicySummary(record),
+      ],
+    );
+  }
+}
+
+class _IrisEvidenceCentre extends StatelessWidget {
+  const _IrisEvidenceCentre({required this.records, required this.query});
+
+  final List<Map<String, dynamic>> records;
+  final String query;
+
+  @override
+  Widget build(BuildContext context) {
+    return _RecordModule(
+      title: 'Evidence Centre',
+      subtitle:
+          'Original capture, additional evidence, comparison metadata, device, orientation and quality indicators.',
+      records: records,
+      query: query,
+      fields: const [
+        'id',
+        'deliveryId',
+        'requestId',
+        'irisId',
+        'captureType',
+        'device',
+        'orientation',
+        'quality',
+        'status',
+        'metadata'
+      ],
+      columns: const ['Evidence', 'Capture', 'Quality', 'Status'],
+      row: (record) => [
+        _recordId(record),
+        '${record['captureType'] ?? record['imageType'] ?? 'image'} / ${record['device'] ?? 'device n/a'}',
+        '${record['quality'] ?? record['qualityScore'] ?? 'unknown'} / ${record['orientation'] ?? 'orientation n/a'}',
+        '${record['status'] ?? record['evidenceReviewStatus'] ?? 'pending'}',
+      ],
+    );
+  }
+}
+
+class _IrisLearningCentre extends StatelessWidget {
+  const _IrisLearningCentre({
+    required this.learningCases,
+    required this.reviewRecords,
+    required this.query,
+  });
+
+  final List<Map<String, dynamic>> learningCases;
+  final List<Map<String, dynamic>> reviewRecords;
+  final String query;
+
+  @override
+  Widget build(BuildContext context) {
+    final records = learningCases.isEmpty
+        ? reviewRecords.where(_isLearningCandidate).toList()
+        : learningCases;
+    return _RecordModule(
+      title: 'Learning Centre',
+      subtitle:
+          'Learning candidates, repeated mistakes, false positives, false negatives, drift, reviewer agreement and promotion history.',
+      records: records,
+      query: query,
+      fields: const [
+        'id',
+        'deliveryId',
+        'category',
+        'misclassification',
+        'learningStatus',
+        'driftType',
+        'reviewerAgreement',
+        'status'
+      ],
+      columns: const ['Case', 'Signal', 'Agreement', 'Status'],
+      row: (record) => [
+        _recordId(record),
+        '${record['misclassification'] ?? record['driftType'] ?? record['category'] ?? 'learning signal'}',
+        '${record['reviewerAgreement'] ?? record['agreementScore'] ?? 'not measured'}',
+        '${record['learningStatus'] ?? record['irisLearningQueueStatus'] ?? record['status'] ?? 'pending'}',
+      ],
+    );
+  }
+}
+
+class _IrisPolicyCentre extends StatelessWidget {
+  const _IrisPolicyCentre({required this.records});
+
+  final List<Map<String, dynamic>> records;
+
+  @override
+  Widget build(BuildContext context) {
+    return _RecordModule(
+      title: 'Policy Centre',
+      subtitle:
+          'Reviewed policy records for confidence, escalation, auto approval, tolerance, evidence, SLA and override permissions.',
+      records: records,
+      query: '',
+      fields: const [],
+      columns: const ['Policy', 'Thresholds', 'Evidence/SLA', 'Review'],
+      row: (record) => [
+        '${record['name'] ?? record['policyName'] ?? _recordId(record)}',
+        'confidence ${record['confidenceThreshold'] ?? 'n/a'} / weight ${record['weightTolerance'] ?? 'n/a'} / vehicle ${record['vehicleTolerance'] ?? 'n/a'}',
+        '${record['evidenceRequirement'] ?? 'evidence n/a'} / ${record['reviewSla'] ?? 'SLA n/a'}',
+        '${record['status'] ?? record['reviewStatus'] ?? 'draft'}',
+      ],
+    );
+  }
+}
+
+class _IrisHealthPanel extends StatelessWidget {
+  const _IrisHealthPanel({required this.records, required this.evidence});
+
+  final List<Map<String, dynamic>> records;
+  final List<Map<String, dynamic>> evidence;
+
+  @override
+  Widget build(BuildContext context) {
+    return DecoratedBox(
+      decoration: _panelDecoration(),
+      child: Padding(
+        padding: const EdgeInsets.all(18),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text('IRIS Health',
+                style: TextStyle(fontSize: 22, fontWeight: FontWeight.w800)),
+            const SizedBox(height: 14),
+            Wrap(
+              spacing: 10,
+              runSpacing: 10,
+              children: [
+                _HealthChip(
+                    'Queue depth', records.where(_isIrisPending).length),
+                _HealthChip('Failures', records.where(_hasIrisFailure).length),
+                _HealthChip(
+                    'Retries', _countRecordsContaining(records, 'retry')),
+                _HealthChip('Evidence growth', evidence.length),
+                _HealthChip(
+                    'Storage records',
+                    evidence
+                        .where((item) =>
+                            '${item['storagePath'] ?? item['url'] ?? ''}'
+                                .trim()
+                                .isNotEmpty)
+                        .length),
+                _HealthChip('Active model',
+                    _distinctValues(records, 'modelVersion').length),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _IrisExportCentre extends StatelessWidget {
+  const _IrisExportCentre({required this.records, required this.auditLogs});
+
+  final List<Map<String, dynamic>> records;
+  final List<Map<String, dynamic>> auditLogs;
+
+  @override
+  Widget build(BuildContext context) {
+    return _RecordModule(
+      title: 'Exports',
+      subtitle:
+          'Operational export scopes for CSV, PDF, accuracy, learning, reviewer and audit reports.',
+      records: [
+        {
+          'id': 'operational-summary',
+          'type': 'CSV/PDF',
+          'records': records.length,
+          'status': 'available'
+        },
+        {
+          'id': 'accuracy-report',
+          'type': 'CSV/PDF',
+          'records': records.where((item) => _irisConfidence(item) > 0).length,
+          'status': 'available'
+        },
+        {
+          'id': 'learning-report',
+          'type': 'CSV',
+          'records': records.where(_isLearningCandidate).length,
+          'status': 'available'
+        },
+        {
+          'id': 'audit-report',
+          'type': 'CSV/PDF',
+          'records': _countIrisOverrides(auditLogs),
+          'status': 'available'
+        },
+      ],
+      query: '',
+      fields: const [],
+      columns: const ['Export', 'Format', 'Records', 'Status'],
+      row: (record) => [
+        '${record['id']}',
+        '${record['type']}',
+        '${record['records']}',
+        '${record['status']}',
       ],
     );
   }
 }
 
 class _IrisAnalyticsPanel extends StatelessWidget {
-  const _IrisAnalyticsPanel({required this.records});
+  const _IrisAnalyticsPanel({
+    required this.records,
+    required this.auditLogs,
+    required this.learningCases,
+  });
 
   final List<Map<String, dynamic>> records;
+  final List<Map<String, dynamic>> auditLogs;
+  final List<Map<String, dynamic>> learningCases;
 
   @override
   Widget build(BuildContext context) {
@@ -2258,6 +2614,12 @@ class _IrisAnalyticsPanel extends StatelessWidget {
                   _HealthChip(entry.key, entry.value),
                 for (final entry in vehicles.entries.take(8))
                   _HealthChip('Vehicle ${entry.key}', entry.value),
+                _HealthChip('Overrides', _countIrisOverrides(auditLogs)),
+                _HealthChip('Reviewer productivity',
+                    _activeIrisReviewers(auditLogs).length),
+                _HealthChip('Learning performance', learningCases.length),
+                _HealthChip('Turnaround',
+                    records.where((item) => !_isIrisPending(item)).length),
               ],
             ),
           ],
@@ -4898,6 +5260,11 @@ bool _isIrisPending(Map<String, dynamic> record) {
       state.contains('disputed');
 }
 
+String _irisState(Map<String, dynamic> record) {
+  return '${record['irisReviewStatus'] ?? record['reviewType'] ?? record['evidenceRequestStatus'] ?? record['engineeringReviewStatus'] ?? ''}'
+      .toLowerCase();
+}
+
 bool _isLowConfidenceIris(Map<String, dynamic> record) =>
     _irisConfidence(record) > 0 && _irisConfidence(record) < 60;
 
@@ -4915,6 +5282,41 @@ bool _hasWeightDispute(Map<String, dynamic> record) {
   final state = '${record['irisReviewStatus'] ?? record['reviewType'] ?? ''}'
       .toLowerCase();
   return state.contains('dispute') || state.contains('weight');
+}
+
+bool _hasCategoryDispute(Map<String, dynamic> record) {
+  final irisCategory =
+      '${record['irisCategory'] ?? _mapValue(record['iris'], 'category') ?? ''}'
+          .trim()
+          .toLowerCase();
+  final category = '${record['category'] ?? record['verifiedCategory'] ?? ''}'
+      .trim()
+      .toLowerCase();
+  if (irisCategory.isNotEmpty && category.isNotEmpty) {
+    return irisCategory != category;
+  }
+  return _irisState(record).contains('category');
+}
+
+bool _hasVehicleDispute(Map<String, dynamic> record) {
+  final recommended =
+      '${record['recommendedVehicle'] ?? record['vehicleRecommendation'] ?? _mapValue(record['iris'], 'vehicleType') ?? ''}'
+          .trim()
+          .toLowerCase();
+  final actual = '${record['actualVehicle'] ?? record['vehicleType'] ?? ''}'
+      .trim()
+      .toLowerCase();
+  if (recommended.isNotEmpty && actual.isNotEmpty) return recommended != actual;
+  return _irisState(record).contains('vehicle');
+}
+
+bool _hasIrisFailure(Map<String, dynamic> record) {
+  final text = record.values.join(' ').toLowerCase();
+  return text.contains('iris') &&
+      (text.contains('fail') ||
+          text.contains('error') ||
+          text.contains('timeout') ||
+          text.contains('retry'));
 }
 
 bool _isLearningCandidate(Map<String, dynamic> record) {
@@ -4947,6 +5349,63 @@ int _countIrisOverrides(List<Map<String, dynamic>> auditLogs) {
   return auditLogs
       .where((log) => '${log['actionType'] ?? ''}'.contains('iris_review'))
       .length;
+}
+
+Set<String> _activeIrisReviewers(List<Map<String, dynamic>> auditLogs) {
+  final today = DateTime.now();
+  return auditLogs
+      .where((log) =>
+          '${log['actionType'] ?? ''}'.contains('iris') &&
+          _isSameDay(log, today))
+      .map((log) => '${log['adminUserId'] ?? log['reviewer'] ?? ''}'.trim())
+      .where((value) => value.isNotEmpty)
+      .toSet();
+}
+
+String _irisQueueHealth(int pending, int lowConfidence) {
+  if (pending > 25 || lowConfidence > 10) return 'Critical';
+  if (pending > 10 || lowConfidence > 3) return 'Watch';
+  return 'Healthy';
+}
+
+String _averageIrisReviewTime(List<Map<String, dynamic>> records) {
+  final durations = <Duration>[];
+  for (final record in records) {
+    final created = _dateTimeFrom(record['createdAt']);
+    final reviewed =
+        _dateTimeFrom(record['irisReviewedAt'] ?? record['updatedAt']);
+    if (created != null && reviewed != null && reviewed.isAfter(created)) {
+      durations.add(reviewed.difference(created));
+    }
+  }
+  if (durations.isEmpty) return 'Not recorded';
+  final minutes =
+      durations.fold<int>(0, (total, item) => total + item.inMinutes) ~/
+          durations.length;
+  if (minutes < 60) return '${minutes}m';
+  return '${(minutes / 60).toStringAsFixed(1)}h';
+}
+
+String _canonicalPolicySummary(Map<String, dynamic> record) {
+  final flags = <String>[];
+  if (record['fragile'] == true) flags.add('Fragile');
+  if (record['dangerousGoods'] == true) flags.add('Dangerous');
+  if (record['marketplaceEligible'] == true) flags.add('Marketplace');
+  if (record['healthPlusEligible'] == true) flags.add('Health+');
+  if (record['giftEligible'] == true) flags.add('Gift');
+  if (record['businessEligible'] == true) flags.add('Business');
+  final handling = record['handlingRequirements'];
+  if (handling != null && '$handling'.trim().isNotEmpty) {
+    flags.add('$handling');
+  }
+  return flags.isEmpty ? 'No policy flags' : flags.join(', ');
+}
+
+Set<String> _distinctValues(List<Map<String, dynamic>> records, String field) {
+  return records
+      .map((record) => '${record[field] ?? ''}'.trim())
+      .where((value) => value.isNotEmpty)
+      .toSet();
 }
 
 Map<String, int> _categoryDistribution(List<Map<String, dynamic>> records) {
@@ -5294,11 +5753,15 @@ double _numberFrom(Object? value) {
 }
 
 String _date(Object? value) {
-  DateTime? date;
-  if (value is Timestamp) date = value.toDate();
-  if (value is DateTime) date = value;
-  if (value is String) date = DateTime.tryParse(value);
-  if (value is int) date = DateTime.fromMillisecondsSinceEpoch(value);
+  final date = _dateTimeFrom(value);
   if (date == null) return 'Not recorded';
   return '${date.year}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}';
+}
+
+DateTime? _dateTimeFrom(Object? value) {
+  if (value is Timestamp) return value.toDate();
+  if (value is DateTime) return value;
+  if (value is String) return DateTime.tryParse(value);
+  if (value is int) return DateTime.fromMillisecondsSinceEpoch(value);
+  return null;
 }
