@@ -229,8 +229,9 @@ class _SenderNotificationsViewState extends State<SenderNotificationsView> {
                             notification: visible[index],
                             onOpen: () async {
                               await _repository.markRead(visible[index].id);
-                              if (mounted)
+                              if (mounted) {
                                 widget.onOpenNotification?.call(visible[index]);
+                              }
                             },
                             onArchive: () =>
                                 _repository.archive(visible[index].id),
@@ -275,10 +276,11 @@ class _NotificationCard extends StatelessWidget {
           child: const Icon(Icons.delete_outline),
         ),
         confirmDismiss: (direction) async {
-          if (direction == DismissDirection.startToEnd)
+          if (direction == DismissDirection.startToEnd) {
             onArchive();
-          else
+          } else {
             onDelete();
+          }
           return false;
         },
         child: AppCard(
@@ -290,40 +292,58 @@ class _NotificationCard extends StatelessWidget {
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Icon(_iconFor(notification.category),
-                    color: AppTokens.primaryLight),
-                const SizedBox(width: 12),
+                _NotificationTypeIcon(category: notification.category),
+                const SizedBox(width: 14),
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Row(children: [
-                        Expanded(
-                            child: Text(notification.title,
-                                style: const TextStyle(
-                                    fontWeight: FontWeight.w700))),
-                        if (!notification.read)
-                          const Padding(
-                            padding: EdgeInsets.only(left: 8),
-                            child: DecoratedBox(
-                              decoration: BoxDecoration(
-                                  color: AppTokens.primary,
-                                  shape: BoxShape.circle),
-                              child: SizedBox(width: 8, height: 8),
+                      Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Expanded(
+                            child: Text(
+                              notification.title,
+                              style: const TextStyle(
+                                fontWeight: FontWeight.w800,
+                                height: 1.15,
+                                letterSpacing: .1,
+                              ),
                             ),
                           ),
-                      ]),
+                          if (!notification.read)
+                            Container(
+                              margin: const EdgeInsets.only(left: 10, top: 3),
+                              width: 9,
+                              height: 9,
+                              decoration: BoxDecoration(
+                                color: AppTokens.primaryLight,
+                                shape: BoxShape.circle,
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: AppTokens.primary
+                                        .withValues(alpha: .28),
+                                    blurRadius: 10,
+                                  ),
+                                ],
+                              ),
+                            ),
+                        ],
+                      ),
                       if (notification.body.isNotEmpty) ...[
-                        const SizedBox(height: 4),
+                        const SizedBox(height: 7),
                         Text(notification.body,
                             style: const TextStyle(
-                                color: AppTokens.mutedText, height: 1.35)),
+                                color: AppTokens.mutedText, height: 1.4)),
                       ],
                       if (notification.createdAt != null) ...[
-                        const SizedBox(height: 8),
+                        const SizedBox(height: 10),
                         Text(_relativeDate(notification.createdAt!),
                             style: const TextStyle(
-                                color: AppTokens.mutedText, fontSize: 12)),
+                              color: AppTokens.mutedText,
+                              fontSize: 12,
+                              fontWeight: FontWeight.w600,
+                            )),
                       ],
                     ],
                   ),
@@ -336,9 +356,13 @@ class _NotificationCard extends StatelessWidget {
 
   static IconData _iconFor(String category) => switch (category) {
         'deliveries' => Icons.local_shipping_outlined,
+        'delivery' => Icons.local_shipping_outlined,
+        'parcel' => Icons.inventory_2_outlined,
         'wallet' => Icons.account_balance_wallet_outlined,
+        'trust' => Icons.verified_user_outlined,
         'health' => Icons.health_and_safety_outlined,
         'gifts' => Icons.card_giftcard_outlined,
+        'gift' => Icons.card_giftcard_outlined,
         'business' => Icons.business_outlined,
         _ => Icons.info_outline_rounded,
       };
@@ -346,10 +370,48 @@ class _NotificationCard extends StatelessWidget {
   static String _relativeDate(DateTime value) {
     final now = DateTime.now();
     final day = DateTime(value.year, value.month, value.day);
-    if (day == DateTime(now.year, now.month, now.day)) return 'Today';
+    if (day == DateTime(now.year, now.month, now.day)) {
+      return 'Today';
+    }
     if (day ==
         DateTime(now.year, now.month, now.day)
-            .subtract(const Duration(days: 1))) return 'Yesterday';
+            .subtract(const Duration(days: 1))) {
+      return 'Yesterday';
+    }
     return '${value.day}/${value.month}/${value.year}';
   }
+}
+
+class _NotificationTypeIcon extends StatelessWidget {
+  final String category;
+
+  const _NotificationTypeIcon({required this.category});
+
+  @override
+  Widget build(BuildContext context) {
+    final icon = _NotificationCard._iconFor(category);
+    final accent = _accentFor(category);
+    return Container(
+      width: 42,
+      height: 42,
+      decoration: BoxDecoration(
+        color: accent.withValues(alpha: .12),
+        borderRadius: BorderRadius.circular(15),
+        border: Border.all(color: accent.withValues(alpha: .22)),
+      ),
+      child: Icon(icon, color: accent, size: 22),
+    );
+  }
+
+  static Color _accentFor(String category) => switch (category) {
+        'deliveries' => AppTokens.primaryLight,
+        'delivery' => AppTokens.primaryLight,
+        'parcel' => AppTokens.primaryLight,
+        'wallet' => AppTokens.success,
+        'gifts' => AppTokens.warning,
+        'gift' => AppTokens.warning,
+        'business' => AppTokens.primary,
+        'trust' => AppTokens.warning,
+        _ => AppTokens.mutedText,
+      };
 }

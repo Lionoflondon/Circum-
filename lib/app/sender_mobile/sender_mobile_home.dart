@@ -2008,14 +2008,11 @@ class _SenderDashboardState extends State<_SenderDashboard> {
       children: [
         Row(
           children: [
-            const Text(
-              'CIRCUM',
-              style: TextStyle(
-                color: _SenderTokens.lightBlue,
-                fontSize: 14,
-                fontWeight: FontWeight.w900,
-                letterSpacing: 2.4,
-              ),
+            Image.asset(
+              'assets/images/circum_logo.png',
+              height: 30,
+              fit: BoxFit.contain,
+              filterQuality: FilterQuality.high,
             ),
             const Spacer(),
             _HomeNotificationBell(
@@ -2024,7 +2021,8 @@ class _SenderDashboardState extends State<_SenderDashboard> {
               onTap: _notifications == null ? null : _openNotifications,
             ),
             const SizedBox(width: 10),
-            const _SenderAvatar(initials: 'JA'),
+            _SenderAvatar(
+                imageUrl: FirebaseAuth.instance.currentUser?.photoURL),
           ],
         ),
         const SizedBox(height: 22),
@@ -2248,8 +2246,8 @@ class _HeroSendCard extends StatelessWidget {
         borderRadius: BorderRadius.circular(32),
         onTap: onTap,
         child: Container(
-          height: 236,
-          padding: const EdgeInsets.all(22),
+          constraints: const BoxConstraints(minHeight: 268),
+          padding: const EdgeInsets.fromLTRB(26, 30, 26, 28),
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(32),
             gradient: LinearGradient(
@@ -2303,11 +2301,11 @@ class _HeroSendCard extends StatelessWidget {
                   ),
                 ),
               ),
-              const Positioned(left: 0, top: 0, child: _IrisOrb(size: 58)),
+              const Positioned(left: 0, top: 2, child: _IrisOrb(size: 58)),
               Positioned(
                 left: 0,
                 right: 118,
-                bottom: 0,
+                bottom: 2,
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
@@ -2320,7 +2318,7 @@ class _HeroSendCard extends StatelessWidget {
                         height: 1,
                       ),
                     ),
-                    const SizedBox(height: 9),
+                    const SizedBox(height: 14),
                     RichText(
                       text: const TextSpan(
                         style: TextStyle(
@@ -2344,7 +2342,7 @@ class _HeroSendCard extends StatelessWidget {
                         ],
                       ),
                     ),
-                    const SizedBox(height: 8),
+                    const SizedBox(height: 13),
                     Text(
                       contextStatus,
                       style: const TextStyle(
@@ -2353,11 +2351,11 @@ class _HeroSendCard extends StatelessWidget {
                         fontWeight: FontWeight.w800,
                       ),
                     ),
-                    const SizedBox(height: 16),
+                    const SizedBox(height: 22),
                     Container(
                       padding: const EdgeInsets.symmetric(
-                        horizontal: 14,
-                        vertical: 11,
+                        horizontal: 18,
+                        vertical: 13,
                       ),
                       decoration: BoxDecoration(
                         color: Colors.white,
@@ -2420,6 +2418,12 @@ class _YourCircumHub extends StatelessWidget {
     return ready.isEmpty ? empty : ready;
   }
 
+  String _giftSummaryLabel(int count) {
+    if (count <= 0) return 'No active gifts';
+    if (count == 1) return '1 active gift';
+    return '$count active gifts';
+  }
+
   @override
   Widget build(BuildContext context) {
     return Column(
@@ -2467,12 +2471,11 @@ class _YourCircumHub extends StatelessWidget {
             Expanded(
               child: _ServiceCard(
                 title: 'Gifts',
-                subtitle: _detail(
-                  (summary?.giftCount ?? 0) > 0
-                      ? '${summary!.giftCount} active gift${summary!.giftCount == 1 ? '' : 's'}'
-                      : '',
-                  'No active gifts',
-                ),
+                subtitle: hasError
+                    ? 'Unavailable right now'
+                    : summary == null
+                        ? 'Loading…'
+                        : _giftSummaryLabel(summary!.giftCount),
                 icon: Icons.card_giftcard_rounded,
                 accent: _SenderTokens.gifts,
                 onTap: onOpenGifts,
@@ -2964,20 +2967,61 @@ class _NavItem extends StatelessWidget {
 }
 
 class _SenderAvatar extends StatelessWidget {
-  final String initials;
+  final String? imageUrl;
 
-  const _SenderAvatar({required this.initials});
+  const _SenderAvatar({this.imageUrl});
 
   @override
   Widget build(BuildContext context) {
-    return CircleAvatar(
-      radius: 24,
-      backgroundColor: _SenderTokens.blue,
-      child: Text(
-        initials,
-        style: const TextStyle(
-          color: Colors.white,
-          fontWeight: FontWeight.w900,
+    final url = imageUrl?.trim() ?? '';
+    return Container(
+      width: 48,
+      height: 48,
+      clipBehavior: Clip.antiAlias,
+      decoration: BoxDecoration(
+        shape: BoxShape.circle,
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [
+            Colors.white.withValues(alpha: .18),
+            _SenderTokens.blue.withValues(alpha: .12),
+          ],
+        ),
+        border: Border.all(color: Colors.white.withValues(alpha: .14)),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: .22),
+            blurRadius: 18,
+            offset: const Offset(0, 10),
+          ),
+        ],
+      ),
+      child: url.isNotEmpty
+          ? Image.network(
+              url,
+              fit: BoxFit.cover,
+              errorBuilder: (_, __, ___) => const _NeutralAvatarIcon(),
+            )
+          : const _NeutralAvatarIcon(),
+    );
+  }
+}
+
+class _NeutralAvatarIcon extends StatelessWidget {
+  const _NeutralAvatarIcon();
+
+  @override
+  Widget build(BuildContext context) {
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: _SenderTokens.midnight.withValues(alpha: .62),
+      ),
+      child: const Center(
+        child: Icon(
+          Icons.person_outline_rounded,
+          color: Color(0xFFD8E7FF),
+          size: 25,
         ),
       ),
     );
