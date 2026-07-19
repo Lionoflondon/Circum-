@@ -519,6 +519,7 @@ class _AdminPhaseOneShellState extends State<AdminPhaseOneShell> {
       assignedTo: status == 'assigned' ? _user?.email : null,
       resolutionNote:
           status == 'resolved' ? 'Resolved from Circum Admin' : null,
+      reason: 'Support workflow action confirmed from Admin',
       updatedAt: FieldValue.serverTimestamp(),
     );
     await _db
@@ -536,6 +537,46 @@ class _AdminPhaseOneShellState extends State<AdminPhaseOneShell> {
     ));
     setState(() => _message = 'Support ticket $id updated to $status.');
     await _loadAdminData();
+  }
+
+  Future<void> _updateGiftWorkflow(
+    Map<String, dynamic> gift,
+    String status,
+  ) async {
+    if (!_can(AdminPermission.manageIssues)) {
+      setState(() => _message = 'Your role cannot manage gift operations.');
+      return;
+    }
+    final id = _idFor(gift);
+    if (id.isEmpty) return;
+    try {
+      final patch = AdminGiftTools.workflowPatch(
+        status: status,
+        updatedBy: _user?.email ?? _user?.uid ?? 'admin',
+        updatedAt: FieldValue.serverTimestamp(),
+        reason: 'Gift workflow action confirmed from Admin',
+      );
+      await _db
+          .collection('giftOrders')
+          .doc(id)
+          .set(patch, SetOptions(merge: true));
+      await _writeAudit(AdminAuditEntry(
+        adminUserId: _user?.uid ?? 'unknown-admin',
+        actionType: 'gift_workflow_$status',
+        recordType: 'giftOrders',
+        recordId: id,
+        oldValue: {
+          'status': gift['status'],
+          'giftAdminStatus': gift['giftAdminStatus'],
+        },
+        newValue: patch,
+        reason: 'Gift workflow updated from Admin',
+      ));
+      setState(() => _message = 'Gift $id updated to $status.');
+      await _loadAdminData();
+    } on ArgumentError catch (error) {
+      setState(() => _message = error.message);
+    }
   }
 
   Future<void> _updateHealthPlusPickup(
@@ -874,6 +915,7 @@ class _AdminPhaseOneShellState extends State<AdminPhaseOneShell> {
                       onSetDeliveryOperationStatus: _setDeliveryOperationStatus,
                       onSetIrisReviewStatus: _setIrisReviewStatus,
                       onUpdateSupportTicket: _updateSupportTicket,
+                      onUpdateGiftWorkflow: _updateGiftWorkflow,
                       onUpdateHealthPlusPickup: _updateHealthPlusPickup,
                       onUpdateFinanceWorkflow: _updateFinanceWorkflow,
                       onSetBusinessOperationStatus: _setBusinessOperationStatus,
@@ -1399,6 +1441,7 @@ class _AdminModuleBody extends StatelessWidget {
     required this.onSetDeliveryOperationStatus,
     required this.onSetIrisReviewStatus,
     required this.onUpdateSupportTicket,
+    required this.onUpdateGiftWorkflow,
     required this.onUpdateHealthPlusPickup,
     required this.onUpdateFinanceWorkflow,
     required this.onSetBusinessOperationStatus,
@@ -1441,6 +1484,8 @@ class _AdminModuleBody extends StatelessWidget {
       onSetIrisReviewStatus;
   final Future<void> Function(Map<String, dynamic>, String)
       onUpdateSupportTicket;
+  final Future<void> Function(Map<String, dynamic>, String)
+      onUpdateGiftWorkflow;
   final Future<void> Function(Map<String, dynamic>, String)
       onUpdateHealthPlusPickup;
   final Future<void> Function(Map<String, dynamic>, String)
@@ -1570,45 +1615,15 @@ class _AdminModuleBody extends StatelessWidget {
                       )
                   : null,
             ),
-          AdminModule.support => _RecordModule(
-              title: 'Support',
-              subtitle: 'Support tickets and operational issue intake.',
-              records: data.supportTickets,
+          AdminModule.support => _SupportOperationsModule(
+              tickets: data.supportTickets,
+              deliveries: data.deliveries,
+              payments: data.payments,
+              chats: data.chats,
+              auditLogs: data.auditLogs,
               query: query,
-              fields: const [
-                'id',
-                'name',
-                'email',
-                'message',
-                'status',
-                'type'
-              ],
-              columns: const ['Ticket', 'Customer', 'Status', 'Message'],
-              row: (record) => [
-                _recordId(record),
-                '${record['name'] ?? record['email'] ?? 'Customer'}',
-                '${record['status'] ?? 'open'}',
-                '${record['message'] ?? record['type'] ?? ''}',
-              ],
-              actions: canManageIssues
-                  ? (record) => [
-                        _MiniAction(
-                          label: 'Assign',
-                          onPressed: () =>
-                              onUpdateSupportTicket(record, 'assigned'),
-                        ),
-                        _MiniAction(
-                          label: 'Resolve',
-                          onPressed: () =>
-                              onUpdateSupportTicket(record, 'resolved'),
-                        ),
-                        _MiniAction(
-                          label: 'Reopen',
-                          onPressed: () =>
-                              onUpdateSupportTicket(record, 'open'),
-                        ),
-                      ]
-                  : null,
+              canManageIssues: canManageIssues,
+              onUpdateSupportTicket: onUpdateSupportTicket,
             ),
           AdminModule.finance => _FinanceOperationsModule(
               payments: data.payments,
@@ -1640,33 +1655,27 @@ class _AdminModuleBody extends StatelessWidget {
               onSetBusinessOperationStatus: onSetBusinessOperationStatus,
               onRequestDuplicateMerge: onRequestDuplicateMerge,
             ),
-          AdminModule.gifts => _RecordModule(
-              title: 'Gifts',
-              subtitle: 'Gift orders and related fulfilment state.',
-              records: data.giftOrders,
+          AdminModule.gifts => _GiftsOperationsModule(
+              gifts: data.giftOrders,
+              deliveries: data.deliveries,
+              payments: data.payments,
+              supportTickets: data.supportTickets,
+              auditLogs: data.auditLogs,
               query: query,
-              fields: const ['id', 'giftName', 'recipientName', 'status'],
-              columns: const ['Gift', 'Recipient', 'Status', 'Created'],
-              row: (record) => [
-                '${record['giftName'] ?? record['title'] ?? record['id']}',
-                '${record['recipientName'] ?? 'Recipient'}',
-                '${record['status'] ?? 'pending'}',
-                _date(record['createdAt']),
-              ],
+              canManageIssues: canManageIssues,
+              onUpdateGiftWorkflow: onUpdateGiftWorkflow,
             ),
-          AdminModule.audit => _RecordModule(
-              title: 'Audit',
-              subtitle: 'Immutable Admin operational audit trail.',
-              records: data.auditLogs,
+          AdminModule.audit => _AuditCentreModule(
+              auditLogs: data.auditLogs,
+              users: data.users,
+              riders: data.riders,
+              businessAccounts: data.businessAccounts,
+              deliveries: data.deliveries,
+              gifts: data.giftOrders,
+              healthPlusPickups: data.healthPlusPickups,
+              supportTickets: data.supportTickets,
+              payments: data.payments,
               query: query,
-              fields: const ['actionType', 'recordType', 'recordId', 'reason'],
-              columns: const ['Action', 'Record', 'Admin', 'Reason'],
-              row: (record) => [
-                '${record['actionType'] ?? 'action'}',
-                '${record['recordType'] ?? ''}/${record['recordId'] ?? record['id']}',
-                '${record['adminUserId'] ?? 'admin'}',
-                '${record['reason'] ?? ''}',
-              ],
             ),
           AdminModule.chat => _ChatModule(
               records: data.chats,
@@ -3451,6 +3460,649 @@ class _ChatModule extends StatelessWidget {
   }
 }
 
+class _GiftsOperationsModule extends StatelessWidget {
+  const _GiftsOperationsModule({
+    required this.gifts,
+    required this.deliveries,
+    required this.payments,
+    required this.supportTickets,
+    required this.auditLogs,
+    required this.query,
+    required this.canManageIssues,
+    required this.onUpdateGiftWorkflow,
+  });
+
+  final List<Map<String, dynamic>> gifts;
+  final List<Map<String, dynamic>> deliveries;
+  final List<Map<String, dynamic>> payments;
+  final List<Map<String, dynamic>> supportTickets;
+  final List<Map<String, dynamic>> auditLogs;
+  final String query;
+  final bool canManageIssues;
+  final Future<void> Function(Map<String, dynamic>, String)
+      onUpdateGiftWorkflow;
+
+  @override
+  Widget build(BuildContext context) {
+    final filtered = adminSearch(gifts, query, const [
+      'id',
+      'giftId',
+      'giftName',
+      'title',
+      'senderName',
+      'senderEmail',
+      'recipientName',
+      'recipientEmail',
+      'businessName',
+      'campaign',
+      'campaignName',
+      'deliveryId',
+      'story',
+      'storyStatus',
+      'status',
+      'giftAdminStatus',
+    ]);
+    final active = gifts.where((gift) => _isGiftActive(gift)).length;
+    final pending = gifts
+        .where((gift) => _hasAnyText(gift, const [
+              'pending',
+              'preparing',
+              'review',
+            ]))
+        .length;
+    final delivered =
+        gifts.where((gift) => _hasAnyText(gift, const ['delivered'])).length;
+    final stories = gifts.where(_hasGiftStory).length;
+    final anonymous = gifts.where((gift) => gift['anonymous'] == true).length;
+    final failed = gifts
+        .where((gift) => _hasAnyText(gift, const [
+              'failed',
+              'cancelled',
+            ]))
+        .length;
+    final escalated =
+        gifts.where((gift) => _hasAnyText(gift, const ['escalated'])).length;
+    final campaigns = _distinctValues(gifts, 'campaignName')
+      ..addAll(_distinctValues(gifts, 'campaign'));
+    final revenue = payments
+        .where((payment) => _hasAnyText(payment, const ['gift']))
+        .fold<double>(
+          0,
+          (total, payment) =>
+              total + _numberFrom(payment['amount'] ?? payment['total']),
+        );
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Wrap(
+          spacing: 14,
+          runSpacing: 14,
+          children: [
+            _MetricCard('Active Gifts', '$active', 'in fulfilment'),
+            _MetricCard('Pending Gifts', '$pending', 'review/preparing'),
+            _MetricCard('Delivered', '$delivered', 'completed gifts'),
+            _MetricCard('Gift Stories', '$stories', 'story enabled'),
+            _MetricCard('Anonymous', '$anonymous', 'anonymous gifts'),
+            _MetricCard('Failed', '$failed', 'failed/cancelled'),
+            _MetricCard('Escalated', '$escalated', 'operator attention'),
+            _MetricCard('Gift Revenue', '£${revenue.toStringAsFixed(2)}',
+                'gift-linked payments'),
+            _MetricCard('Campaigns', '${campaigns.length}', 'active names'),
+          ],
+        ),
+        const SizedBox(height: 18),
+        _RecordModule(
+          title: 'Gift Search',
+          subtitle:
+              'Gift matching, fulfilment, story, anonymous and escalation state.',
+          records: filtered,
+          query: '',
+          fields: const [],
+          columns: const ['Gift', 'Sender', 'Recipient', 'State', 'Story'],
+          row: (record) => [
+            '${record['giftName'] ?? record['title'] ?? _recordId(record)}',
+            '${record['senderName'] ?? record['senderEmail'] ?? 'Sender'}',
+            '${record['recipientName'] ?? record['recipientEmail'] ?? 'Recipient'}',
+            '${record['giftAdminStatus'] ?? record['status'] ?? 'pending'}',
+            _giftStorySummary(record),
+          ],
+          actions: canManageIssues
+              ? (record) => _giftActions(record, onUpdateGiftWorkflow)
+              : null,
+        ),
+        const SizedBox(height: 18),
+        _OperationalDetailGrid(
+          title: 'Gift Drawer',
+          records: filtered,
+          emptyText: 'No gift records loaded.',
+          rowsFor: (record) => [
+            (
+              'Gift summary',
+              '${record['giftName'] ?? record['title'] ?? _recordId(record)}'
+            ),
+            (
+              'Sender',
+              '${record['senderName'] ?? record['senderEmail'] ?? record['senderId'] ?? 'Not recorded'}'
+            ),
+            (
+              'Recipient',
+              '${record['recipientName'] ?? record['recipientEmail'] ?? 'Not recorded'}'
+            ),
+            (
+              'Relationship',
+              '${record['relationship'] ?? record['occasion'] ?? 'Not recorded'}'
+            ),
+            (
+              'Budget',
+              '${record['budget'] ?? record['budgetBand'] ?? 'Not recorded'}'
+            ),
+            (
+              'Merchant',
+              '${record['merchant'] ?? record['merchantName'] ?? 'Not recorded'}'
+            ),
+            (
+              'Assigned Rider',
+              '${record['riderName'] ?? record['assignedRiderId'] ?? 'Unassigned'}'
+            ),
+            ('Delivery timeline', _relatedDeliverySummary(record, deliveries)),
+            ('Story status', _giftStorySummary(record)),
+            ('Anonymous', record['anonymous'] == true ? 'Yes' : 'No'),
+            (
+              'Gift notes',
+              '${record['notes'] ?? record['giftNotes'] ?? 'None'}'
+            ),
+            (
+              'Support history',
+              '${_relatedCount(record, supportTickets)} tickets'
+            ),
+            ('Audit history', '${_relatedCount(record, auditLogs)} entries'),
+          ],
+        ),
+      ],
+    );
+  }
+}
+
+class _SupportOperationsModule extends StatelessWidget {
+  const _SupportOperationsModule({
+    required this.tickets,
+    required this.deliveries,
+    required this.payments,
+    required this.chats,
+    required this.auditLogs,
+    required this.query,
+    required this.canManageIssues,
+    required this.onUpdateSupportTicket,
+  });
+
+  final List<Map<String, dynamic>> tickets;
+  final List<Map<String, dynamic>> deliveries;
+  final List<Map<String, dynamic>> payments;
+  final List<Map<String, dynamic>> chats;
+  final List<Map<String, dynamic>> auditLogs;
+  final String query;
+  final bool canManageIssues;
+  final Future<void> Function(Map<String, dynamic>, String)
+      onUpdateSupportTicket;
+
+  @override
+  Widget build(BuildContext context) {
+    final filtered = adminSearch(tickets, query, const [
+      'id',
+      'ticketId',
+      'name',
+      'email',
+      'phone',
+      'senderName',
+      'riderName',
+      'businessName',
+      'healthPlusId',
+      'giftId',
+      'deliveryId',
+      'message',
+      'status',
+      'type',
+    ]);
+    final open = tickets.where((ticket) => !_isSupportClosed(ticket)).length;
+    final assigned = tickets
+        .where((ticket) => _hasAnyText(ticket, const [
+              'assigned',
+            ]))
+        .length;
+    final escalated = tickets
+        .where((ticket) => _hasAnyText(ticket, const [
+              'escalated',
+            ]))
+        .length;
+    final waitingCustomer = tickets
+        .where((ticket) => _hasAnyText(ticket, const [
+              'waiting_customer',
+              'waiting customer',
+            ]))
+        .length;
+    final waitingAdmin = tickets
+        .where((ticket) => _hasAnyText(ticket, const [
+              'waiting_admin',
+              'waiting admin',
+            ]))
+        .length;
+    final resolvedToday = tickets
+        .where((ticket) =>
+            _isSupportClosed(ticket) && _isSameDay(ticket, DateTime.now()))
+        .length;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Wrap(
+          spacing: 14,
+          runSpacing: 14,
+          children: [
+            _MetricCard('Open tickets', '$open', 'unresolved'),
+            _MetricCard('Assigned', '$assigned', 'owned tickets'),
+            _MetricCard('Escalated', '$escalated', 'priority support'),
+            _MetricCard('Waiting customer', '$waitingCustomer', 'needs reply'),
+            _MetricCard('Waiting admin', '$waitingAdmin', 'needs operator'),
+            _MetricCard('Resolved today', '$resolvedToday', 'closed today'),
+            _MetricCard(
+                'Avg response', _averageSupportTime(tickets), 'first response'),
+            _MetricCard('Avg resolution', _averageSupportResolution(tickets),
+                'resolved cases'),
+          ],
+        ),
+        const SizedBox(height: 18),
+        _RecordModule(
+          title: 'Support Queue',
+          subtitle:
+              'Support queue with Sender, Rider, Business, Health+, Gift and Delivery context.',
+          records: filtered,
+          query: '',
+          fields: const [],
+          columns: const ['Ticket', 'Customer', 'State', 'Message'],
+          row: (record) => [
+            _recordId(record),
+            '${record['name'] ?? record['email'] ?? record['senderName'] ?? record['riderName'] ?? 'Customer'}',
+            '${record['supportWorkflowStatus'] ?? record['status'] ?? 'open'}',
+            '${record['message'] ?? record['type'] ?? ''}',
+          ],
+          actions: canManageIssues
+              ? (record) => _supportActions(record, onUpdateSupportTicket)
+              : null,
+        ),
+        const SizedBox(height: 18),
+        _OperationalDetailGrid(
+          title: 'Support Drawer',
+          records: filtered,
+          emptyText: 'No support tickets loaded.',
+          rowsFor: (record) => [
+            (
+              'Customer',
+              '${record['name'] ?? record['email'] ?? 'Not recorded'}'
+            ),
+            (
+              'Account',
+              '${record['accountId'] ?? record['userId'] ?? record['senderId'] ?? 'Not linked'}'
+            ),
+            (
+              'Delivery',
+              '${record['deliveryId'] ?? record['requestId'] ?? 'Not linked'}'
+            ),
+            (
+              'Business',
+              '${record['businessId'] ?? record['businessName'] ?? 'Not linked'}'
+            ),
+            (
+              'Health+',
+              '${record['healthPlusId'] ?? record['prescriptionPickupId'] ?? 'Not linked'}'
+            ),
+            (
+              'Gift',
+              '${record['giftId'] ?? record['giftOrderId'] ?? 'Not linked'}'
+            ),
+            (
+              'Ticket history',
+              '${record['history'] ?? record['statusHistory'] ?? 'No history field'}'
+            ),
+            (
+              'Internal notes',
+              '${record['internalNotes'] ?? record['adminNote'] ?? 'None'}'
+            ),
+            (
+              'Attachments',
+              '${record['attachments'] ?? record['evidenceUrls'] ?? 'None'}'
+            ),
+            ('Messages', '${_relatedCount(record, chats)} chat threads'),
+            ('Previous tickets', '${_relatedCount(record, tickets)} related'),
+            (
+              'Related deliveries',
+              '${_relatedCount(record, deliveries)} deliveries'
+            ),
+            ('Related payments', '${_relatedCount(record, payments)} payments'),
+            ('Audit history', '${_relatedCount(record, auditLogs)} entries'),
+          ],
+        ),
+      ],
+    );
+  }
+}
+
+class _AuditCentreModule extends StatelessWidget {
+  const _AuditCentreModule({
+    required this.auditLogs,
+    required this.users,
+    required this.riders,
+    required this.businessAccounts,
+    required this.deliveries,
+    required this.gifts,
+    required this.healthPlusPickups,
+    required this.supportTickets,
+    required this.payments,
+    required this.query,
+  });
+
+  final List<Map<String, dynamic>> auditLogs;
+  final List<Map<String, dynamic>> users;
+  final List<Map<String, dynamic>> riders;
+  final List<Map<String, dynamic>> businessAccounts;
+  final List<Map<String, dynamic>> deliveries;
+  final List<Map<String, dynamic>> gifts;
+  final List<Map<String, dynamic>> healthPlusPickups;
+  final List<Map<String, dynamic>> supportTickets;
+  final List<Map<String, dynamic>> payments;
+  final String query;
+
+  @override
+  Widget build(BuildContext context) {
+    final filtered = adminSearch(auditLogs, query, const [
+      'adminUserId',
+      'operator',
+      'actionType',
+      'recordType',
+      'recordId',
+      'reason',
+      'severity',
+      'outcome',
+    ]);
+    final today =
+        auditLogs.where((log) => _isSameDay(log, DateTime.now())).length;
+    final approvals = auditLogs
+        .where((log) => _hasAnyText(log, const ['approve', 'approved']))
+        .length;
+    final suspensions =
+        auditLogs.where((log) => _hasAnyText(log, const ['suspend'])).length;
+    final refunds =
+        auditLogs.where((log) => _hasAnyText(log, const ['refund'])).length;
+    final overrides =
+        auditLogs.where((log) => _hasAnyText(log, const ['override'])).length;
+    final escalations =
+        auditLogs.where((log) => _hasAnyText(log, const ['escalat'])).length;
+    final critical =
+        auditLogs.where((log) => _auditSeverity(log) == 'critical').length;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Wrap(
+          spacing: 14,
+          runSpacing: 14,
+          children: [
+            _MetricCard("Today's activity", '$today', 'admin actions'),
+            _MetricCard('Approvals', '$approvals', 'approval actions'),
+            _MetricCard('Suspensions', '$suspensions', 'account/rider'),
+            _MetricCard('Refunds', '$refunds', 'finance actions'),
+            _MetricCard('Overrides', '$overrides', 'manual overrides'),
+            _MetricCard('Escalations', '$escalations', 'priority events'),
+            _MetricCard('Critical', '$critical', 'critical actions'),
+            _MetricCard(
+                'Recent activity', '${auditLogs.length}', 'loaded logs'),
+          ],
+        ),
+        const SizedBox(height: 18),
+        _RecordModule(
+          title: 'Global Audit Search',
+          subtitle:
+              'Search Admin, Sender, Rider, Business, Gift, Health+, Delivery, Finance, Support, IRIS and object IDs.',
+          records: filtered,
+          query: '',
+          fields: const [],
+          columns: const [
+            'Timestamp',
+            'Operator',
+            'Action',
+            'Entity',
+            'Reason'
+          ],
+          row: (record) => [
+            _date(record['createdAt'] ?? record['timestamp']),
+            '${record['adminUserId'] ?? record['operator'] ?? 'admin'}',
+            '${record['actionType'] ?? 'action'}',
+            '${record['recordType'] ?? ''}/${record['recordId'] ?? _recordId(record)}',
+            '${record['reason'] ?? record['outcome'] ?? ''}',
+          ],
+        ),
+        const SizedBox(height: 18),
+        _OperationalDetailGrid(
+          title: 'Audit Detail',
+          records: filtered,
+          emptyText: 'No audit records loaded.',
+          rowsFor: (record) => [
+            ('Timestamp', _date(record['createdAt'] ?? record['timestamp'])),
+            (
+              'Operator',
+              '${record['adminUserId'] ?? record['operator'] ?? 'admin'}'
+            ),
+            ('Action', '${record['actionType'] ?? 'action'}'),
+            (
+              'Affected entity',
+              '${record['recordType'] ?? ''}/${record['recordId'] ?? _recordId(record)}'
+            ),
+            ('Previous value', '${record['oldValue'] ?? 'Not recorded'}'),
+            ('Current value', '${record['newValue'] ?? 'Not recorded'}'),
+            ('Reason', '${record['reason'] ?? 'No reason recorded'}'),
+            ('Source', '${record['source'] ?? 'circum-admin'}'),
+            ('Linked objects', _linkedAuditObjects(record)),
+            (
+              'Supporting notes',
+              '${record['notes'] ?? record['adminNote'] ?? 'None'}'
+            ),
+          ],
+        ),
+        const SizedBox(height: 18),
+        _AuditEntityCoverage(
+          users: users,
+          riders: riders,
+          businessAccounts: businessAccounts,
+          deliveries: deliveries,
+          gifts: gifts,
+          healthPlusPickups: healthPlusPickups,
+          supportTickets: supportTickets,
+          payments: payments,
+          auditLogs: auditLogs,
+        ),
+      ],
+    );
+  }
+}
+
+class _OperationalDetailGrid extends StatelessWidget {
+  const _OperationalDetailGrid({
+    required this.title,
+    required this.records,
+    required this.rowsFor,
+    required this.emptyText,
+  });
+
+  final String title;
+  final List<Map<String, dynamic>> records;
+  final List<(String, String)> Function(Map<String, dynamic>) rowsFor;
+  final String emptyText;
+
+  @override
+  Widget build(BuildContext context) {
+    return DecoratedBox(
+      decoration: _panelDecoration(),
+      child: Padding(
+        padding: const EdgeInsets.all(18),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(title,
+                style:
+                    const TextStyle(fontSize: 22, fontWeight: FontWeight.w800)),
+            const SizedBox(height: 6),
+            Text(
+              'Full operational context for the latest loaded records.',
+              style: TextStyle(color: Colors.white.withValues(alpha: .66)),
+            ),
+            const SizedBox(height: 18),
+            if (records.isEmpty)
+              Text(emptyText,
+                  style: TextStyle(color: Colors.white.withValues(alpha: .62)))
+            else
+              Wrap(
+                spacing: 14,
+                runSpacing: 14,
+                children: [
+                  for (final record in records.take(6))
+                    SizedBox(
+                      width: 360,
+                      child: DecoratedBox(
+                        decoration: BoxDecoration(
+                          borderRadius: BorderRadius.circular(16),
+                          border: Border.all(
+                            color: Colors.white.withValues(alpha: .1),
+                          ),
+                          color: Colors.white.withValues(alpha: .045),
+                        ),
+                        child: Padding(
+                          padding: const EdgeInsets.all(14),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                _recordId(record).isEmpty
+                                    ? 'Record'
+                                    : _recordId(record),
+                                style: const TextStyle(
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.w800,
+                                ),
+                              ),
+                              const SizedBox(height: 10),
+                              for (final row in rowsFor(record))
+                                Padding(
+                                  padding:
+                                      const EdgeInsets.symmetric(vertical: 4),
+                                  child: Row(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: [
+                                      SizedBox(
+                                        width: 118,
+                                        child: Text(
+                                          row.$1,
+                                          style: TextStyle(
+                                            color: Colors.white
+                                                .withValues(alpha: .62),
+                                          ),
+                                        ),
+                                      ),
+                                      Expanded(
+                                        child: Text(
+                                          row.$2,
+                                          maxLines: 3,
+                                          overflow: TextOverflow.ellipsis,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
+                ],
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _AuditEntityCoverage extends StatelessWidget {
+  const _AuditEntityCoverage({
+    required this.users,
+    required this.riders,
+    required this.businessAccounts,
+    required this.deliveries,
+    required this.gifts,
+    required this.healthPlusPickups,
+    required this.supportTickets,
+    required this.payments,
+    required this.auditLogs,
+  });
+
+  final List<Map<String, dynamic>> users;
+  final List<Map<String, dynamic>> riders;
+  final List<Map<String, dynamic>> businessAccounts;
+  final List<Map<String, dynamic>> deliveries;
+  final List<Map<String, dynamic>> gifts;
+  final List<Map<String, dynamic>> healthPlusPickups;
+  final List<Map<String, dynamic>> supportTickets;
+  final List<Map<String, dynamic>> payments;
+  final List<Map<String, dynamic>> auditLogs;
+
+  @override
+  Widget build(BuildContext context) {
+    final rows = [
+      ('Sender', users.length, _auditCount('sender')),
+      ('Rider', riders.length, _auditCount('rider')),
+      ('Business', businessAccounts.length, _auditCount('business')),
+      ('Delivery', deliveries.length, _auditCount('delivery')),
+      ('Gift', gifts.length, _auditCount('gift')),
+      ('Health+', healthPlusPickups.length, _auditCount('health')),
+      ('Support', supportTickets.length, _auditCount('support')),
+      ('Finance', payments.length, _auditCount('finance')),
+      ('IRIS', deliveries.where(_hasIrisSignal).length, _auditCount('iris')),
+      (
+        'Wallet',
+        payments.where((p) => _hasAnyText(p, const ['wallet'])).length,
+        _auditCount('wallet')
+      ),
+    ];
+    return _RecordModule(
+      title: 'Entity Audit',
+      subtitle:
+          'Audit coverage by operational entity: Sender, Rider, Business, Delivery, Gift, Health+, Support, Finance, IRIS and Wallet.',
+      records: [
+        for (final row in rows)
+          {
+            'entity': row.$1,
+            'records': row.$2,
+            'audit': row.$3,
+          }
+      ],
+      query: '',
+      fields: const [],
+      columns: const ['Entity', 'Loaded records', 'Audit records'],
+      row: (record) => [
+        '${record['entity']}',
+        '${record['records']}',
+        '${record['audit']}',
+      ],
+    );
+  }
+
+  int _auditCount(String needle) {
+    return auditLogs
+        .where((log) => _hasAnyText(log, [needle.toLowerCase()]))
+        .length;
+  }
+}
+
 class _VisitorAnalyticsModule extends StatelessWidget {
   const _VisitorAnalyticsModule({required this.records});
 
@@ -5170,6 +5822,236 @@ bool _needsClinicalReview(Map<String, dynamic> record) {
       text.contains('missing evidence') ||
       text.contains('rejected') ||
       text.contains('escalat');
+}
+
+bool _hasAnyText(Map<String, dynamic> record, List<String> needles) {
+  final text = record.entries
+      .where((entry) => entry.value is! Map && entry.value is! List)
+      .map((entry) => '${entry.key}:${entry.value}'.toLowerCase())
+      .join(' ');
+  return needles.any((needle) => text.contains(needle.toLowerCase()));
+}
+
+List<Widget> _giftActions(
+  Map<String, dynamic> record,
+  Future<void> Function(Map<String, dynamic>, String) onUpdateGiftWorkflow,
+) {
+  return [
+    for (final action in const [
+      ('Approve', 'approved'),
+      ('Reject', 'rejected'),
+      ('Assign', 'assigned'),
+      ('Reassign', 'reassigned'),
+      ('Escalate', 'escalated'),
+      ('Pause', 'paused'),
+      ('Resume', 'resumed'),
+      ('Close', 'closed'),
+      ('Request info', 'information_requested'),
+    ])
+      _MiniAction(
+        label: action.$1,
+        onPressed: () => unawaited(onUpdateGiftWorkflow(record, action.$2)),
+      ),
+  ];
+}
+
+List<Widget> _supportActions(
+  Map<String, dynamic> record,
+  Future<void> Function(Map<String, dynamic>, String) onUpdateSupportTicket,
+) {
+  return [
+    for (final action in const [
+      ('Assign', 'assigned'),
+      ('Reassign', 'reassigned'),
+      ('Escalate', 'escalated'),
+      ('Request info', 'waiting_customer'),
+      ('Waiting admin', 'waiting_admin'),
+      ('Resolve', 'resolved'),
+      ('Reopen', 'reopened'),
+      ('Close', 'closed'),
+    ])
+      _MiniAction(
+        label: action.$1,
+        onPressed: () => unawaited(onUpdateSupportTicket(record, action.$2)),
+      ),
+  ];
+}
+
+bool _isGiftActive(Map<String, dynamic> gift) {
+  final state =
+      '${gift['giftAdminStatus'] ?? gift['status'] ?? ''}'.trim().toLowerCase();
+  return state.isEmpty ||
+      (!state.contains('delivered') &&
+          !state.contains('cancel') &&
+          !state.contains('failed') &&
+          !state.contains('closed') &&
+          !state.contains('reject'));
+}
+
+bool _hasGiftStory(Map<String, dynamic> gift) {
+  return gift['storyEnabled'] == true ||
+      gift['giftStoryEnabled'] == true ||
+      '${gift['story'] ?? gift['storyStatus'] ?? ''}'.trim().isNotEmpty;
+}
+
+String _giftStorySummary(Map<String, dynamic> gift) {
+  final values = [
+    if (_hasGiftStory(gift)) 'available',
+    gift['storyStatus'],
+    gift['unlockStatus'],
+    gift['moderationState'],
+    gift['visibility'],
+    gift['archiveState'],
+  ]
+      .map((value) => '$value'.trim())
+      .where((value) => value.isNotEmpty && value != 'null')
+      .toList();
+  return values.isEmpty ? 'No story' : values.join(' / ');
+}
+
+String _relatedDeliverySummary(
+  Map<String, dynamic> record,
+  List<Map<String, dynamic>> deliveries,
+) {
+  final related =
+      deliveries.where((delivery) => _recordsRelated(record, delivery));
+  if (related.isEmpty) return 'No delivery linked';
+  final delivery = related.first;
+  return '${_recordId(delivery)} / ${delivery['status'] ?? delivery['deliveryStatus'] ?? 'status n/a'} / ${_date(delivery['updatedAt'] ?? delivery['createdAt'])}';
+}
+
+int _relatedCount(
+  Map<String, dynamic> record,
+  List<Map<String, dynamic>> candidates,
+) {
+  return candidates
+      .where((candidate) => _recordsRelated(record, candidate))
+      .length;
+}
+
+bool _recordsRelated(
+  Map<String, dynamic> a,
+  Map<String, dynamic> b,
+) {
+  final identifiers = <String>{
+    for (final key in const [
+      'id',
+      'requestId',
+      'deliveryId',
+      'giftId',
+      'giftOrderId',
+      'ticketId',
+      'supportTicketId',
+      'userId',
+      'senderId',
+      'riderId',
+      'businessId',
+      'email',
+      'senderEmail',
+      'riderEmail',
+      'businessEmail',
+    ])
+      '${a[key] ?? ''}'.trim().toLowerCase(),
+  }..removeWhere((value) => value.isEmpty || value == 'null');
+  if (identifiers.isEmpty) return false;
+  final other = [
+    for (final key in const [
+      'id',
+      'requestId',
+      'recordId',
+      'deliveryId',
+      'giftId',
+      'giftOrderId',
+      'ticketId',
+      'supportTicketId',
+      'userId',
+      'senderId',
+      'riderId',
+      'businessId',
+      'email',
+      'senderEmail',
+      'riderEmail',
+      'businessEmail',
+    ])
+      '${b[key] ?? ''}'.trim().toLowerCase(),
+  ];
+  return other.any(identifiers.contains);
+}
+
+bool _isSupportClosed(Map<String, dynamic> ticket) {
+  final state = '${ticket['supportWorkflowStatus'] ?? ticket['status'] ?? ''}'
+      .trim()
+      .toLowerCase();
+  return state == 'resolved' || state == 'closed';
+}
+
+String _averageSupportTime(List<Map<String, dynamic>> tickets) {
+  final durations = <Duration>[];
+  for (final ticket in tickets) {
+    final created = _dateTimeFrom(ticket['createdAt']);
+    final firstResponse =
+        _dateTimeFrom(ticket['firstResponseAt'] ?? ticket['assignedAt']);
+    if (created != null &&
+        firstResponse != null &&
+        firstResponse.isAfter(created)) {
+      durations.add(firstResponse.difference(created));
+    }
+  }
+  return _averageDurationLabel(durations);
+}
+
+String _averageSupportResolution(List<Map<String, dynamic>> tickets) {
+  final durations = <Duration>[];
+  for (final ticket in tickets.where(_isSupportClosed)) {
+    final created = _dateTimeFrom(ticket['createdAt']);
+    final resolved = _dateTimeFrom(
+        ticket['resolvedAt'] ?? ticket['closedAt'] ?? ticket['updatedAt']);
+    if (created != null && resolved != null && resolved.isAfter(created)) {
+      durations.add(resolved.difference(created));
+    }
+  }
+  return _averageDurationLabel(durations);
+}
+
+String _averageDurationLabel(List<Duration> durations) {
+  if (durations.isEmpty) return 'Not recorded';
+  final minutes =
+      durations.fold<int>(0, (total, item) => total + item.inMinutes) ~/
+          durations.length;
+  if (minutes < 60) return '${minutes}m';
+  return '${(minutes / 60).toStringAsFixed(1)}h';
+}
+
+String _auditSeverity(Map<String, dynamic> log) {
+  final text = '${log['severity'] ?? log['actionType'] ?? log['reason'] ?? ''}'
+      .toLowerCase();
+  if (text.contains('critical') ||
+      text.contains('delete') ||
+      text.contains('suspend') ||
+      text.contains('refund') ||
+      text.contains('override')) {
+    return 'critical';
+  }
+  if (text.contains('escalat') || text.contains('reject')) return 'warning';
+  return 'info';
+}
+
+String _linkedAuditObjects(Map<String, dynamic> log) {
+  final links = [
+    log['recordId'],
+    log['deliveryId'],
+    log['senderId'],
+    log['riderId'],
+    log['businessId'],
+    log['giftId'],
+    log['supportTicketId'],
+    log['paymentId'],
+    log['irisReviewId'],
+  ]
+      .map((value) => '$value'.trim())
+      .where((value) => value.isNotEmpty && value != 'null')
+      .toSet();
+  return links.isEmpty ? 'No linked objects' : links.join(', ');
 }
 
 double _healthRevenue(List<Map<String, dynamic>> payments) {

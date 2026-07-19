@@ -10,7 +10,13 @@ void main() {
     test('support ticket actions reflect resolved status', () {
       expect(
         AdminSupportTools.actionsForStatus('open'),
-        ['Assign', 'Resolve', 'Open Chat'],
+        [
+          'Assign',
+          'Escalate',
+          'Request Information',
+          'Resolve',
+          'Open Chat',
+        ],
       );
       expect(
         AdminSupportTools.actionsForStatus('resolved'),
@@ -473,6 +479,43 @@ void main() {
       expect(evidencePatch.containsKey('finalAmount'), isFalse);
       expect(promotedPatch.containsKey('deliveryStatus'), isFalse);
       expect(promotedPatch.containsKey('canonicalWeight'), isFalse);
+    });
+
+    test('Gift workflow actions remain Admin metadata only', () {
+      final patch = AdminGiftTools.workflowPatch(
+        status: 'information_requested',
+        updatedBy: 'gifts@circumuk.com',
+        updatedAt: DateTime(2026, 6, 5),
+        reason: 'Need merchant confirmation.',
+      );
+
+      expect(patch['giftAdminStatus'], 'information_requested');
+      expect(patch['informationRequestStatus'], 'requested');
+      expect(patch['giftReviewReason'], 'Need merchant confirmation.');
+      expect(patch.containsKey('price'), isFalse);
+      expect(patch.containsKey('paymentStatus'), isFalse);
+      expect(patch.containsKey('matchedGift'), isFalse);
+    });
+
+    test('Support workflow actions require supported statuses', () {
+      final patch = AdminSupportTools.statusPatch(
+        status: 'escalated',
+        assignedTo: 'support@circumuk.com',
+        reason: 'Urgent customer issue.',
+        updatedAt: DateTime(2026, 6, 5),
+      );
+
+      expect(patch['status'], 'escalated');
+      expect(patch['supportWorkflowStatus'], 'escalated');
+      expect(patch['assignedTo'], 'support@circumuk.com');
+      expect(patch['adminReviewReason'], 'Urgent customer issue.');
+      expect(
+        () => AdminSupportTools.statusPatch(
+          status: 'delete_payment',
+          updatedAt: DateTime(2026, 6, 5),
+        ),
+        throwsArgumentError,
+      );
     });
 
     test('finance workflow patches do not alter payment authority fields', () {

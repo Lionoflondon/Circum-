@@ -843,26 +843,95 @@ class AdminDeliveryTools {
 }
 
 class AdminSupportTools {
-  static bool isResolved(Object? status) =>
-      '${status ?? ''}'.trim().toLowerCase() == 'resolved';
+  static const workflowStatuses = [
+    'open',
+    'assigned',
+    'reassigned',
+    'escalated',
+    'waiting_customer',
+    'waiting_admin',
+    'resolved',
+    'reopened',
+    'closed',
+  ];
+
+  static bool isResolved(Object? status) {
+    final value = '${status ?? ''}'.trim().toLowerCase();
+    return value == 'resolved' || value == 'closed';
+  }
 
   static List<String> actionsForStatus(Object? status) => isResolved(status)
       ? const ['Reopen', 'View Chat']
-      : const ['Assign', 'Resolve', 'Open Chat'];
+      : const [
+          'Assign',
+          'Escalate',
+          'Request Information',
+          'Resolve',
+          'Open Chat'
+        ];
 
   static Map<String, dynamic> statusPatch({
     required String status,
     String? assignedTo,
     String? resolutionNote,
+    String? reason,
     required Object updatedAt,
   }) {
+    if (!workflowStatuses.contains(status)) {
+      throw ArgumentError('Unsupported support workflow status.');
+    }
     return {
       'status': status,
+      'supportWorkflowStatus': status,
       if (assignedTo != null && assignedTo.trim().isNotEmpty)
         'assignedTo': assignedTo.trim(),
       if (resolutionNote != null && resolutionNote.trim().isNotEmpty)
         'resolutionNote': resolutionNote.trim(),
+      if (reason != null && reason.trim().isNotEmpty)
+        'adminReviewReason': reason.trim(),
+      'supportUpdatedByAdmin': true,
       'updatedAt': updatedAt,
+    };
+  }
+}
+
+class AdminGiftTools {
+  static const workflowStatuses = [
+    'approved',
+    'rejected',
+    'assigned',
+    'reassigned',
+    'escalated',
+    'paused',
+    'resumed',
+    'closed',
+    'information_requested',
+  ];
+
+  static Map<String, dynamic> workflowPatch({
+    required String status,
+    required String updatedBy,
+    required Object updatedAt,
+    required String reason,
+  }) {
+    if (!workflowStatuses.contains(status)) {
+      throw ArgumentError('Unsupported gift workflow status.');
+    }
+    if (reason.trim().isEmpty) {
+      throw ArgumentError('A gift workflow reason is required.');
+    }
+    return {
+      'giftAdminStatus': status,
+      'giftReviewedBy': updatedBy,
+      'giftReviewedAt': updatedAt,
+      'giftReviewReason': reason.trim(),
+      'giftEscalated': status == 'escalated',
+      'giftPaused': status == 'paused',
+      'giftClosed': status == 'closed',
+      if (status == 'information_requested')
+        'informationRequestStatus': 'requested',
+      if (status == 'approved') 'moderationState': 'approved',
+      if (status == 'rejected') 'moderationState': 'rejected',
     };
   }
 }
