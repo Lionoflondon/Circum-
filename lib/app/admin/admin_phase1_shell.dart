@@ -23,10 +23,6 @@ enum AdminModule {
   healthPlus('Health+', Icons.local_hospital_rounded),
   business('Business', Icons.business_center_rounded),
   gifts('Gifts', Icons.card_giftcard_rounded),
-  giftBrandPartners('Gift Brand Partners', Icons.storefront_rounded),
-  giftWorkspace('Gift Team Workspace', Icons.groups_2_rounded),
-  giftStoryMedia('Gift Story Media', Icons.video_library_rounded),
-  giftCampaignMatches('Gift Campaign Matches', Icons.hub_rounded),
   troubleshooting('Troubleshooting', Icons.report_problem_rounded),
   analytics('Analytics', Icons.insights_rounded),
   audit('Audit', Icons.history_rounded),
@@ -4435,38 +4431,6 @@ class _AdminModuleBody extends StatelessWidget {
               onUpdateGiftStoryMedia: onUpdateGiftStoryMedia,
               onUpdateGiftWorkspace: onUpdateGiftWorkspace,
             ),
-          AdminModule.giftBrandPartners => _GiftBrandPartnersModule(
-              brands: data.giftBrands,
-              gifts: [...data.giftOrders, ...data.giftRequests],
-              auditLogs: data.auditLogs,
-              query: query,
-              canManageIssues: canManageIssues,
-              onSetGiftBrandStatus: onSetGiftBrandStatus,
-              onEditGiftBrandPartner: onEditGiftBrandPartner,
-            ),
-          AdminModule.giftWorkspace => _GiftTeamWorkspaceModule(
-              gifts: [...data.giftOrders, ...data.giftRequests],
-              query: query,
-              canManageIssues: canManageIssues,
-              onUpdateGiftWorkspace: onUpdateGiftWorkspace,
-              onUpdateGiftStoryMedia: onUpdateGiftStoryMedia,
-            ),
-          AdminModule.giftStoryMedia => _GiftStoryMediaModule(
-              gifts: [...data.giftOrders, ...data.giftRequests],
-              query: query,
-              canManageIssues: canManageIssues,
-              onUpdateGiftStoryMedia: onUpdateGiftStoryMedia,
-            ),
-          AdminModule.giftCampaignMatches => _GiftCampaignMatchesModule(
-              campaignMatches: data.giftCampaignMatches,
-              participants: data.giftCampaignParticipants,
-              query: query,
-              canManageIssues: canManageIssues,
-              onUpdateGiftCampaignParticipant: onUpdateGiftCampaignParticipant,
-              onSuggestGiftCampaignMatch: onSuggestGiftCampaignMatch,
-              onApproveGiftCampaignMatch: onApproveGiftCampaignMatch,
-              onBulkGiftCampaignAction: onBulkGiftCampaignAction,
-            ),
           AdminModule.troubleshooting => _TroubleshootingModule(
               deliveries: data.deliveries,
               payments: data.payments,
@@ -8543,7 +8507,21 @@ class _EmptyState extends StatelessWidget {
   }
 }
 
-class _GiftsOperationsModule extends StatelessWidget {
+enum _GiftsWorkspaceTab {
+  campaigns('Campaigns', Icons.campaign_rounded),
+  participants('Participants', Icons.diversity_3_rounded),
+  matches('Matches', Icons.hub_rounded),
+  stories('Stories', Icons.auto_stories_rounded),
+  brandPartners('Brand Partners', Icons.storefront_rounded),
+  workspace('Workspace', Icons.groups_2_rounded);
+
+  const _GiftsWorkspaceTab(this.label, this.icon);
+
+  final String label;
+  final IconData icon;
+}
+
+class _GiftsOperationsModule extends StatefulWidget {
   const _GiftsOperationsModule({
     required this.gifts,
     required this.brands,
@@ -8600,8 +8578,28 @@ class _GiftsOperationsModule extends StatelessWidget {
       onUpdateGiftWorkspace;
 
   @override
+  State<_GiftsOperationsModule> createState() => _GiftsOperationsModuleState();
+}
+
+class _GiftsOperationsModuleState extends State<_GiftsOperationsModule> {
+  final TextEditingController _searchController = TextEditingController();
+  _GiftsWorkspaceTab _tab = _GiftsWorkspaceTab.campaigns;
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
+  }
+
+  String get _query {
+    final local = _searchController.text.trim();
+    return local.isEmpty ? widget.query : local;
+  }
+
+  @override
   Widget build(BuildContext context) {
-    final filtered = adminSearch(gifts, query, const [
+    final query = _query;
+    final filtered = adminSearch(widget.gifts, query, const [
       'id',
       'giftId',
       'giftName',
@@ -8618,280 +8616,1227 @@ class _GiftsOperationsModule extends StatelessWidget {
       'storyStatus',
       'status',
       'giftAdminStatus',
+      'irisGiftRecommendation',
+      'procurementSupplier',
     ]);
-    final active = gifts.where((gift) => _isGiftActive(gift)).length;
-    final pending = gifts
+    final filteredParticipants = adminSearch(widget.participants, query, const [
+      'id',
+      'campaignId',
+      'campaignName',
+      'displayName',
+      'userId',
+      'recipientName',
+      'senderName',
+      'matchStatus',
+      'suggestedParticipantId',
+    ]);
+    final filteredMatches = adminSearch(widget.campaignMatches, query, const [
+      'id',
+      'campaignId',
+      'campaignName',
+      'brandName',
+      'giftName',
+      'recipientName',
+      'senderName',
+      'status',
+      'matchStatus',
+      'matchReason',
+    ]);
+    final filteredBrands = adminSearch(widget.brands, query, const [
+      'id',
+      'partnerId',
+      'partnerName',
+      'brandName',
+      'category',
+      'categories',
+      'status',
+      'partnershipStatus',
+      'contactName',
+      'contactEmail',
+      'approvedFor',
+      'internalNotes',
+    ]);
+    final campaigns = {
+      ..._distinctValues(widget.gifts, 'campaignName'),
+      ..._distinctValues(widget.gifts, 'campaign'),
+      ..._distinctValues(widget.participants, 'campaignName'),
+      ..._distinctValues(widget.campaignMatches, 'campaignName'),
+    };
+    final activeMatches = widget.campaignMatches
+        .where((match) => !_hasAnyText(match, const ['rejected', 'closed']))
+        .length;
+    final pending = widget.gifts
         .where((gift) => _hasAnyText(gift, const [
               'pending',
               'preparing',
               'review',
             ]))
         .length;
-    final delivered =
-        gifts.where((gift) => _hasAnyText(gift, const ['delivered'])).length;
-    final stories = gifts.where(_hasGiftStory).length;
-    final anonymous = gifts.where((gift) => gift['anonymous'] == true).length;
-    final failed = gifts
-        .where((gift) => _hasAnyText(gift, const [
-              'failed',
-              'cancelled',
-            ]))
-        .length;
-    final escalated =
-        gifts.where((gift) => _hasAnyText(gift, const ['escalated'])).length;
-    final campaigns = _distinctValues(gifts, 'campaignName')
-      ..addAll(_distinctValues(gifts, 'campaign'));
-    final revenue = payments
-        .where((payment) => _hasAnyText(payment, const ['gift']))
-        .fold<double>(
-          0,
-          (total, payment) =>
-              total + _numberFrom(payment['amount'] ?? payment['total']),
-        );
+    final pendingReviews = pending +
+        widget.participants
+            .where((record) => _hasAnyText(record, const ['pending', 'review']))
+            .length +
+        widget.brands
+            .where((record) => _hasAnyText(record, const ['pending', 'review']))
+            .length;
+    final stories = widget.gifts.where(_hasGiftStory).length;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
+        Container(
+          width: double.infinity,
+          padding: const EdgeInsets.all(24),
+          decoration: _panelDecoration(),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text(
+                'Gifts',
+                style: TextStyle(
+                  color: Colors.white,
+                  fontSize: 34,
+                  fontWeight: FontWeight.w900,
+                ),
+              ),
+              const SizedBox(height: 10),
+              Text(
+                'Search all gifts, campaigns, participants, brands, stories and matches.',
+                style: TextStyle(
+                  color: Colors.white.withValues(alpha: .68),
+                  fontSize: 15,
+                  height: 1.5,
+                ),
+              ),
+              const SizedBox(height: 20),
+              TextField(
+                controller: _searchController,
+                onChanged: (_) => setState(() {}),
+                style: const TextStyle(color: Colors.white),
+                decoration: InputDecoration(
+                  hintText:
+                      'Search all gifts, campaigns, participants, brands, stories and matches...',
+                  prefixIcon: const Icon(Icons.search_rounded),
+                  suffixIcon: _searchController.text.isEmpty
+                      ? null
+                      : IconButton(
+                          tooltip: 'Clear search',
+                          onPressed: () {
+                            _searchController.clear();
+                            setState(() {});
+                          },
+                          icon: const Icon(Icons.close_rounded),
+                        ),
+                ),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 18),
         Wrap(
           spacing: 14,
           runSpacing: 14,
           children: [
-            _MetricCard('Active Gifts', '$active', 'in fulfilment'),
-            _MetricCard('Pending Gifts', '$pending', 'review/preparing'),
-            _MetricCard('Delivered', '$delivered', 'completed gifts'),
-            _MetricCard('Gift Stories', '$stories', 'story enabled'),
-            _MetricCard('Anonymous', '$anonymous', 'anonymous gifts'),
-            _MetricCard('Failed', '$failed', 'failed/cancelled'),
-            _MetricCard('Escalated', '$escalated', 'operator attention'),
-            _MetricCard('Gift Revenue', '£${revenue.toStringAsFixed(2)}',
-                'gift-linked payments'),
             _MetricCard('Campaigns', '${campaigns.length}', 'active names'),
-            _MetricCard('Participants', '${participants.length}', 'campaign'),
-            _MetricCard('Matches', '${campaignMatches.length}', 'campaign'),
-            _MetricCard('Brands', '${brands.length}', 'partners'),
+            _MetricCard('Participants', '${widget.participants.length}',
+                'campaign records'),
+            _MetricCard('Active Matches', '$activeMatches', 'not closed'),
+            _MetricCard('Brand Partners', '${widget.brands.length}',
+                'directory records'),
+            _MetricCard('Stories', '$stories', 'media enabled'),
+            _MetricCard(
+                'Pending Reviews', '$pendingReviews', 'operator attention'),
           ],
         ),
         const SizedBox(height: 18),
-        _RecordModule(
-          title: 'Gift Search',
-          subtitle:
-              'Gift matching, fulfilment, story, anonymous and escalation state.',
-          records: filtered,
-          query: '',
-          fields: const [],
-          columns: const ['Gift', 'Sender', 'Recipient', 'State', 'Story'],
-          row: (record) => [
-            '${record['giftName'] ?? record['title'] ?? _recordId(record)}',
-            '${record['senderName'] ?? record['senderEmail'] ?? 'Sender'}',
-            '${record['recipientName'] ?? record['recipientEmail'] ?? 'Recipient'}',
-            '${record['giftAdminStatus'] ?? record['status'] ?? 'pending'}',
-            _giftStorySummary(record),
-          ],
-          actions: canManageIssues
-              ? (record) => [
-                    _MiniAction(
-                      label: 'Open editor',
-                      onPressed: () => unawaited(onEditGiftRequest(record)),
-                    ),
-                    ..._giftActions(record, onUpdateGiftWorkflow),
-                    if (_hasGiftStory(record)) ...[
-                      _MiniAction(
-                        label: 'Retry story',
-                        onPressed: () =>
-                            unawaited(onUpdateGiftStoryAccess(record, 'retry')),
-                      ),
-                      _MiniAction(
-                        label: 'Regenerate link',
-                        onPressed: () => unawaited(
-                            onUpdateGiftStoryAccess(record, 'regenerate')),
-                      ),
-                      _MiniAction(
-                        label: 'Extend',
-                        onPressed: () => unawaited(
-                            onUpdateGiftStoryAccess(record, 'extend')),
-                      ),
-                      _MiniAction(
-                        label: 'Revoke',
-                        onPressed: () => unawaited(
-                            onUpdateGiftStoryAccess(record, 'revoke')),
-                      ),
-                      _MiniAction(
-                        label: 'Video',
-                        onPressed: () => unawaited(
-                            onUpdateGiftStoryMedia(record, 'download_video')),
-                      ),
-                    ],
-                  ]
-              : null,
+        _GiftActionBar(
+          canManage: widget.canManageIssues,
+          onBulkApprove: () => unawaited(widget.onBulkGiftCampaignAction(
+              filteredParticipants, 'approved')),
+          onBulkReject: () => unawaited(widget.onBulkGiftCampaignAction(
+              filteredParticipants, 'rejected')),
+          onAssign: () => unawaited(widget.onBulkGiftCampaignAction(
+              filteredParticipants, 'assign_later')),
+          onExport: () => unawaited(widget.onBulkGiftCampaignAction(
+              filteredParticipants, 'exported')),
+          onNewCampaign: () => unawaited(widget.onEditGiftRequest({})),
+          onInviteBrand: () => unawaited(widget.onEditGiftBrandPartner(null)),
         ),
         const SizedBox(height: 18),
-        _GiftTeamWorkspaceModule(
-          gifts: filtered,
-          query: query,
-          canManageIssues: canManageIssues,
-          onUpdateGiftWorkspace: onUpdateGiftWorkspace,
-          onUpdateGiftStoryMedia: onUpdateGiftStoryMedia,
+        _GiftSegmentedTabs(
+          selected: _tab,
+          onSelected: (tab) => setState(() => _tab = tab),
         ),
         const SizedBox(height: 18),
-        _RecordModule(
-          title: 'Campaign Participants',
-          subtitle:
-              'Historical anonymous campaign participant review, matching and assignment management.',
-          records: adminSearch(participants, query, const [
-            'id',
-            'campaignId',
-            'campaignName',
-            'displayName',
-            'userId',
-            'matchStatus',
-            'suggestedParticipantId',
-          ]),
-          query: '',
-          fields: const [],
-          columns: const ['Participant', 'Campaign', 'Match', 'Reason'],
-          row: (record) => [
-            '${record['displayName'] ?? record['userId'] ?? _recordId(record)}',
+        AnimatedSwitcher(
+          duration: const Duration(milliseconds: 200),
+          child: KeyedSubtree(
+            key: ValueKey(_tab),
+            child: switch (_tab) {
+              _GiftsWorkspaceTab.campaigns => _giftCampaigns(filtered),
+              _GiftsWorkspaceTab.participants =>
+                _giftParticipants(filteredParticipants),
+              _GiftsWorkspaceTab.matches => _giftMatches(filteredMatches),
+              _GiftsWorkspaceTab.stories => _giftStories(filtered),
+              _GiftsWorkspaceTab.brandPartners =>
+                _giftBrandPartners(filteredBrands),
+              _GiftsWorkspaceTab.workspace => _giftWorkspace(filtered),
+            },
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _giftCampaigns(List<Map<String, dynamic>> records) {
+    return _GiftGlassTable(
+      title: 'Campaigns',
+      subtitle:
+          'Gift matching, fulfilment, story, anonymous and escalation state.',
+      emptyText: 'No gift campaigns match this search.',
+      records: records,
+      rowBuilder: (record) => _GiftTableRowData(
+        status: '${record['giftAdminStatus'] ?? record['status'] ?? 'pending'}',
+        title:
+            '${record['campaignName'] ?? record['campaign'] ?? record['giftName'] ?? record['title'] ?? _recordId(record)}',
+        owner:
+            '${record['senderName'] ?? record['senderEmail'] ?? record['senderId'] ?? 'Sender'}',
+        updated: _date(record['updatedAt'] ?? record['createdAt']),
+        metadata:
+            '${record['recipientName'] ?? record['recipientEmail'] ?? 'Recipient'} · ${_giftStorySummary(record)}',
+        onView: () => unawaited(widget.onEditGiftRequest(record)),
+        onEdit: () => unawaited(widget.onEditGiftRequest(record)),
+        menu: widget.canManageIssues
+            ? _giftActions(record, widget.onUpdateGiftWorkflow)
+                .whereType<_MiniAction>()
+                .toList()
+            : const [],
+      ),
+    );
+  }
+
+  Widget _giftParticipants(List<Map<String, dynamic>> records) {
+    return _GiftGlassTable(
+      title: 'Participants',
+      subtitle:
+          'Historical anonymous campaign participant review, matching and assignment management.',
+      emptyText: 'No campaign participants match this search.',
+      records: records,
+      rowBuilder: (record) => _GiftTableRowData(
+        status: '${record['matchStatus'] ?? record['status'] ?? 'pending'}',
+        title:
+            '${record['displayName'] ?? record['recipientName'] ?? record['userId'] ?? _recordId(record)}',
+        owner:
             '${record['campaignName'] ?? record['campaignId'] ?? 'Campaign'}',
-            '${record['matchStatus'] ?? 'unmatched'} -> ${record['suggestedParticipantId'] ?? 'none'}',
-            '${record['suggestedMatchReason'] ?? record['matchReason'] ?? ''}',
+        updated: _date(record['updatedAt'] ?? record['createdAt']),
+        metadata:
+            'Match: ${record['suggestedParticipantId'] ?? record['matchReason'] ?? 'Not assigned'}',
+        onView: null,
+        onEdit: null,
+        menu: widget.canManageIssues
+            ? [
+                _MiniAction(
+                  label: 'Suggest',
+                  onPressed: () => unawaited(widget.onSuggestGiftCampaignMatch(
+                      record, widget.participants)),
+                ),
+                _MiniAction(
+                  label: 'Approve match',
+                  onPressed: () => unawaited(widget.onApproveGiftCampaignMatch(
+                      record, widget.participants)),
+                ),
+                _MiniAction(
+                  label: 'Reject',
+                  onPressed: () => unawaited(widget
+                      .onUpdateGiftCampaignParticipant(record, 'rejected')),
+                ),
+                _MiniAction(
+                  label: 'Assign later',
+                  onPressed: () => unawaited(widget
+                      .onUpdateGiftCampaignParticipant(record, 'assign_later')),
+                ),
+              ]
+            : const [],
+      ),
+    );
+  }
+
+  Widget _giftMatches(List<Map<String, dynamic>> records) {
+    final groups = <String, List<Map<String, dynamic>>>{
+      'Pending': records
+          .where((record) => _giftMatchBucket(record) == 'pending')
+          .toList(),
+      'Approved': records
+          .where((record) => _giftMatchBucket(record) == 'approved')
+          .toList(),
+      'Rejected': records
+          .where((record) => _giftMatchBucket(record) == 'rejected')
+          .toList(),
+      'Needs Manual Review': records
+          .where((record) => _giftMatchBucket(record) == 'manual')
+          .toList(),
+    };
+    final visible = groups.entries.where((entry) => entry.value.isNotEmpty);
+    if (visible.isEmpty) {
+      return const _GiftEmptyState(
+        title: 'No pending matches.',
+        message:
+            'Campaign match records will appear here when a Gift workflow needs Admin review.',
+      );
+    }
+    return Column(
+      children: [
+        for (final group in visible) ...[
+          _GiftGlassTable(
+            title: group.key,
+            subtitle:
+                'Campaign, brand, gift, recipient, budget and operator state.',
+            emptyText: 'No ${group.key.toLowerCase()} matches.',
+            records: group.value,
+            rowBuilder: (record) => _GiftTableRowData(
+              status:
+                  '${record['status'] ?? record['matchStatus'] ?? 'pending'}',
+              title:
+                  '${record['campaignName'] ?? record['campaignId'] ?? _recordId(record)}',
+              owner: '${record['brandName'] ?? record['giftName'] ?? 'Brand'}',
+              updated: _date(record['updatedAt'] ?? record['createdAt']),
+              metadata:
+                  '${record['recipientName'] ?? record['senderName'] ?? 'Recipient'} · ${record['budget'] ?? record['matchingScore'] ?? record['matchReason'] ?? 'No score'}',
+              onView: null,
+              onEdit: null,
+              menu: const [],
+            ),
+          ),
+          const SizedBox(height: 18),
+        ],
+      ],
+    );
+  }
+
+  Widget _giftStories(List<Map<String, dynamic>> records) {
+    final stories = records.where(_hasGiftStory).toList(growable: false);
+    return _GiftGlassTable(
+      title: 'Stories',
+      subtitle:
+          'Gift Story Media and Video controls with preview-first row actions.',
+      emptyText: 'No Gift Story media records match this search.',
+      records: stories,
+      rowBuilder: (record) => _GiftTableRowData(
+        status:
+            '${record['giftStoryVideoStatus'] ?? record['videoStatus'] ?? record['storyStatus'] ?? 'review'}',
+        title: '${record['giftName'] ?? record['title'] ?? _recordId(record)}',
+        owner:
+            '${record['recipientName'] ?? record['senderName'] ?? 'Gift Story'}',
+        updated: _date(record['updatedAt'] ?? record['createdAt']),
+        metadata:
+            '${_giftStoryAudioSummary(record)} · ${record['giftStorySharePrivacy'] ?? record['contentUsageScope'] ?? 'private'}',
+        onView: () => unawaited(
+            widget.onUpdateGiftStoryMedia(record, 'record_preview_event')),
+        onEdit: () => unawaited(widget.onEditGiftRequest(record)),
+        menu: widget.canManageIssues
+            ? [
+                _MiniAction(
+                  label: 'Download',
+                  onPressed: () => unawaited(
+                      widget.onUpdateGiftStoryMedia(record, 'download_video')),
+                ),
+                _MiniAction(
+                  label: 'Retry Render',
+                  onPressed: () =>
+                      unawaited(widget.onUpdateGiftStoryMedia(record, 'retry')),
+                ),
+                _MiniAction(
+                  label: 'Regenerate Link',
+                  onPressed: () => unawaited(
+                      widget.onUpdateGiftStoryAccess(record, 'regenerate')),
+                ),
+                _MiniAction(
+                  label: 'Extend',
+                  onPressed: () => unawaited(
+                      widget.onUpdateGiftStoryMedia(record, 'extend')),
+                ),
+                _MiniAction(
+                  label: 'Revoke',
+                  onPressed: () => unawaited(
+                      widget.onUpdateGiftStoryMedia(record, 'revoke')),
+                ),
+              ]
+            : const [],
+      ),
+    );
+  }
+
+  Widget _giftBrandPartners(List<Map<String, dynamic>> records) {
+    if (records.isEmpty) {
+      return const _GiftEmptyState(
+        title: 'No Brand Partners found.',
+        message:
+            'Brand Partner directory cards will appear when partner records match the current search.',
+      );
+    }
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final columns = constraints.maxWidth >= 1500
+            ? 3
+            : constraints.maxWidth >= 980
+                ? 2
+                : 1;
+        final width = (constraints.maxWidth - ((columns - 1) * 16)) / columns;
+        return Wrap(
+          spacing: 16,
+          runSpacing: 16,
+          children: [
+            for (final record in records)
+              SizedBox(
+                width: width,
+                child: _GiftBrandCard(
+                  record: record,
+                  auditCount: _relatedCount(record, widget.auditLogs),
+                  canManage: widget.canManageIssues,
+                  onEdit: () =>
+                      unawaited(widget.onEditGiftBrandPartner(record)),
+                  onSetStatus: (status) =>
+                      unawaited(widget.onSetGiftBrandStatus(record, status)),
+                ),
+              ),
           ],
-          actions: canManageIssues
-              ? (record) => [
-                    _MiniAction(
-                      label: 'Suggest',
-                      onPressed: () => unawaited(
-                          onSuggestGiftCampaignMatch(record, participants)),
-                    ),
-                    _MiniAction(
-                      label: 'Approve match',
-                      onPressed: () => unawaited(
-                          onApproveGiftCampaignMatch(record, participants)),
-                    ),
-                    _MiniAction(
-                      label: 'Approve',
-                      onPressed: () => unawaited(
-                          onUpdateGiftCampaignParticipant(record, 'approved')),
-                    ),
-                    _MiniAction(
-                      label: 'Reject',
-                      onPressed: () => unawaited(
-                          onUpdateGiftCampaignParticipant(record, 'rejected')),
-                    ),
-                    _MiniAction(
-                      label: 'Assign later',
-                      onPressed: () => unawaited(
-                          onUpdateGiftCampaignParticipant(
-                              record, 'assign_later')),
-                    ),
-                  ]
-              : null,
+        );
+      },
+    );
+  }
+
+  Widget _giftWorkspace(List<Map<String, dynamic>> records) {
+    return _GiftGlassTable(
+      title: 'Workspace',
+      subtitle:
+          'Workspace status, IRIS recommendation, supplier, approval and progress.',
+      emptyText: 'No Gift Team workspace records match this search.',
+      records: records,
+      rowBuilder: (record) => _GiftTableRowData(
+        status: _giftWorkspaceStatus(record),
+        title: '${record['giftName'] ?? record['title'] ?? _recordId(record)}',
+        owner:
+            '${record['procurementSupplier'] ?? record['merchantName'] ?? 'Supplier pending'}',
+        updated: _date(record['updatedAt'] ?? record['createdAt']),
+        metadata:
+            '${_giftIrisSelectionSummary(record)} · ${_giftProcurementSummary(record)}',
+        progress: _giftWorkspaceProgress(record),
+        onView: () => unawaited(widget.onEditGiftRequest(record)),
+        onEdit: () => unawaited(widget.onEditGiftRequest(record)),
+        menu: widget.canManageIssues
+            ? [
+                for (final action in const [
+                  ('Assign', 'assigned'),
+                  ('Supplier Pending', 'supplier_pending'),
+                  ('Approval Pending', 'approval_pending'),
+                  ('Ready', 'ready_for_delivery'),
+                  ('Completed', 'completed'),
+                ])
+                  _MiniAction(
+                    label: action.$1,
+                    onPressed: () => unawaited(
+                        widget.onUpdateGiftWorkspace(record, action.$2)),
+                  ),
+              ]
+            : const [],
+      ),
+    );
+  }
+}
+
+class _GiftActionBar extends StatelessWidget {
+  const _GiftActionBar({
+    required this.canManage,
+    required this.onBulkApprove,
+    required this.onBulkReject,
+    required this.onAssign,
+    required this.onExport,
+    required this.onNewCampaign,
+    required this.onInviteBrand,
+  });
+
+  final bool canManage;
+  final VoidCallback onBulkApprove;
+  final VoidCallback onBulkReject;
+  final VoidCallback onAssign;
+  final VoidCallback onExport;
+  final VoidCallback onNewCampaign;
+  final VoidCallback onInviteBrand;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(16),
+      decoration: _panelDecoration(),
+      child: Wrap(
+        spacing: 10,
+        runSpacing: 10,
+        children: [
+          _GiftCommandButton(
+            label: 'Bulk Approve',
+            icon: Icons.check_circle_rounded,
+            tone: _GiftCommandTone.primary,
+            onPressed: canManage ? onBulkApprove : null,
+          ),
+          _GiftCommandButton(
+            label: 'Bulk Reject',
+            icon: Icons.block_rounded,
+            tone: _GiftCommandTone.danger,
+            onPressed: canManage ? onBulkReject : null,
+          ),
+          _GiftCommandButton(
+            label: 'Assign',
+            icon: Icons.assignment_ind_rounded,
+            tone: _GiftCommandTone.primary,
+            onPressed: canManage ? onAssign : null,
+          ),
+          _GiftCommandButton(
+            label: 'Export',
+            icon: Icons.download_rounded,
+            onPressed: canManage ? onExport : null,
+          ),
+          const _GiftCommandButton(
+            label: 'Refresh',
+            icon: Icons.refresh_rounded,
+            onPressed: null,
+          ),
+          const _GiftCommandButton(
+            label: 'Filter',
+            icon: Icons.tune_rounded,
+            onPressed: null,
+          ),
+          _GiftCommandButton(
+            label: 'New Campaign',
+            icon: Icons.add_rounded,
+            tone: _GiftCommandTone.primary,
+            onPressed: canManage ? onNewCampaign : null,
+          ),
+          _GiftCommandButton(
+            label: 'Invite Brand',
+            icon: Icons.storefront_rounded,
+            tone: _GiftCommandTone.primary,
+            onPressed: canManage ? onInviteBrand : null,
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+enum _GiftCommandTone { primary, danger, neutral }
+
+class _GiftCommandButton extends StatelessWidget {
+  const _GiftCommandButton({
+    required this.label,
+    required this.icon,
+    required this.onPressed,
+    this.tone = _GiftCommandTone.neutral,
+  });
+
+  final String label;
+  final IconData icon;
+  final VoidCallback? onPressed;
+  final _GiftCommandTone tone;
+
+  @override
+  Widget build(BuildContext context) {
+    final color = switch (tone) {
+      _GiftCommandTone.primary => const Color(0xFF7DD3FC),
+      _GiftCommandTone.danger => const Color(0xFFFF7A90),
+      _GiftCommandTone.neutral => Colors.white,
+    };
+    return ConstrainedBox(
+      constraints: const BoxConstraints(minHeight: 44),
+      child: OutlinedButton.icon(
+        onPressed: onPressed,
+        icon: Icon(icon, size: 18),
+        label: Text(label),
+        style: OutlinedButton.styleFrom(
+          foregroundColor: color,
+          disabledForegroundColor: Colors.white.withValues(alpha: .32),
+          side: BorderSide(color: color.withValues(alpha: .24)),
+          padding: const EdgeInsets.symmetric(horizontal: 15, vertical: 13),
+          shape:
+              RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
         ),
-        const SizedBox(height: 18),
-        _RecordModule(
-          title: 'Campaign Match Records',
-          subtitle:
-              'Historical approved, rejected and pending anonymous Gift campaign match records.',
-          records: adminSearch(campaignMatches, query, const [
-            'id',
-            'campaignId',
-            'campaignName',
-            'participantIds',
-            'status',
-            'matchReason',
-          ]),
-          query: '',
-          fields: const [],
-          columns: const ['Match', 'Campaign', 'Participants', 'Status'],
-          row: (record) => [
-            _recordId(record),
-            '${record['campaignName'] ?? record['campaignId'] ?? 'Campaign'}',
-            '${record['participantIds'] ?? record['matchedParticipantIds'] ?? 'participants n/a'}',
-            '${record['status'] ?? record['matchStatus'] ?? 'pending'}',
-          ],
-        ),
-        const SizedBox(height: 18),
-        _RecordModule(
-          title: 'Gift Brand and Campaign Review',
-          subtitle:
-              'Historical Gift brand, campaign approval and operational reporting records.',
-          records: adminSearch(brands, query, const [
-            'id',
-            'brandName',
-            'name',
-            'campaignName',
-            'approvalStatus',
-            'status',
-          ]),
-          query: '',
-          fields: const [],
-          columns: const ['Brand', 'Campaign', 'Status', 'Updated'],
-          row: (record) => [
-            '${record['brandName'] ?? record['name'] ?? _recordId(record)}',
-            '${record['campaignName'] ?? record['campaignId'] ?? 'Campaign'}',
-            '${record['approvalStatus'] ?? record['status'] ?? 'pending'}',
-            _date(record['updatedAt'] ?? record['createdAt']),
-          ],
-          actions: canManageIssues
-              ? (record) => _giftBrandPartnerActions(
-                    record,
-                    onSetGiftBrandStatus,
-                    onEditGiftBrandPartner,
+      ),
+    );
+  }
+}
+
+class _GiftSegmentedTabs extends StatelessWidget {
+  const _GiftSegmentedTabs({
+    required this.selected,
+    required this.onSelected,
+  });
+
+  final _GiftsWorkspaceTab selected;
+  final ValueChanged<_GiftsWorkspaceTab> onSelected;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(8),
+      decoration: _panelDecoration(),
+      child: Wrap(
+        spacing: 8,
+        runSpacing: 8,
+        children: [
+          for (final tab in _GiftsWorkspaceTab.values)
+            _GiftTabButton(
+              tab: tab,
+              selected: tab == selected,
+              onTap: () => onSelected(tab),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+class _GiftTabButton extends StatelessWidget {
+  const _GiftTabButton({
+    required this.tab,
+    required this.selected,
+    required this.onTap,
+  });
+
+  final _GiftsWorkspaceTab tab;
+  final bool selected;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Semantics(
+      button: true,
+      selected: selected,
+      child: InkWell(
+        borderRadius: BorderRadius.circular(18),
+        onTap: onTap,
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 200),
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(18),
+            gradient: selected
+                ? const LinearGradient(
+                    colors: [Color(0x665A7CFF), Color(0x665DE0E6)],
                   )
-              : null,
+                : null,
+            border: Border.all(
+              color: selected
+                  ? Colors.white.withValues(alpha: .26)
+                  : Colors.white.withValues(alpha: .08),
+            ),
+            color: selected ? null : Colors.white.withValues(alpha: .04),
+            boxShadow: selected
+                ? [
+                    BoxShadow(
+                      color: const Color(0xFF7C3AED).withValues(alpha: .18),
+                      blurRadius: 22,
+                      offset: const Offset(0, 10),
+                    ),
+                  ]
+                : null,
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(tab.icon, size: 18, color: Colors.white),
+              const SizedBox(width: 8),
+              Text(
+                tab.label,
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+            ],
+          ),
         ),
-        const SizedBox(height: 18),
-        _OperationalDetailGrid(
-          title: 'Gift Drawer',
-          records: filtered,
-          emptyText: 'No gift records loaded.',
-          rowsFor: (record) => [
-            (
-              'Gift summary',
-              '${record['giftName'] ?? record['title'] ?? _recordId(record)}'
+      ),
+    );
+  }
+}
+
+class _GiftTableRowData {
+  const _GiftTableRowData({
+    required this.status,
+    required this.title,
+    required this.owner,
+    required this.updated,
+    required this.metadata,
+    required this.onView,
+    required this.onEdit,
+    required this.menu,
+    this.progress = const [],
+  });
+
+  final String status;
+  final String title;
+  final String owner;
+  final String updated;
+  final String metadata;
+  final VoidCallback? onView;
+  final VoidCallback? onEdit;
+  final List<_MiniAction> menu;
+  final List<String> progress;
+}
+
+class _GiftGlassTable extends StatelessWidget {
+  const _GiftGlassTable({
+    required this.title,
+    required this.subtitle,
+    required this.emptyText,
+    required this.records,
+    required this.rowBuilder,
+  });
+
+  final String title;
+  final String subtitle;
+  final String emptyText;
+  final List<Map<String, dynamic>> records;
+  final _GiftTableRowData Function(Map<String, dynamic>) rowBuilder;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(18),
+      decoration: _panelDecoration(),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            title,
+            style: const TextStyle(
+              color: Colors.white,
+              fontSize: 20,
+              fontWeight: FontWeight.w900,
             ),
-            (
-              'Sender',
-              '${record['senderName'] ?? record['senderEmail'] ?? record['senderId'] ?? 'Not recorded'}'
+          ),
+          const SizedBox(height: 6),
+          Text(
+            subtitle,
+            style: TextStyle(
+              color: Colors.white.withValues(alpha: .62),
+              height: 1.45,
             ),
-            (
-              'Recipient',
-              '${record['recipientName'] ?? record['recipientEmail'] ?? 'Not recorded'}'
-            ),
-            (
-              'Relationship',
-              '${record['relationship'] ?? record['occasion'] ?? 'Not recorded'}'
-            ),
-            (
-              'Budget',
-              '${record['budget'] ?? record['budgetBand'] ?? 'Not recorded'}'
-            ),
-            (
-              'Merchant',
-              '${record['merchant'] ?? record['merchantName'] ?? 'Not recorded'}'
-            ),
-            (
-              'Assigned Rider',
-              '${record['riderName'] ?? record['assignedRiderId'] ?? 'Unassigned'}'
-            ),
-            ('Delivery timeline', _relatedDeliverySummary(record, deliveries)),
-            ('Story status', _giftStorySummary(record)),
-            ('Anonymous', record['anonymous'] == true ? 'Yes' : 'No'),
-            (
-              'Gift notes',
-              '${record['notes'] ?? record['giftNotes'] ?? 'None'}'
-            ),
-            (
-              'Support history',
-              '${_relatedCount(record, supportTickets)} tickets'
-            ),
-            ('Audit history', '${_relatedCount(record, auditLogs)} entries'),
+          ),
+          const SizedBox(height: 16),
+          if (records.isEmpty)
+            _GiftEmptyState(
+                title: emptyText,
+                message:
+                    'Try a broader search or refresh the Admin data stream.')
+          else ...[
+            _GiftTableHeader(),
+            const SizedBox(height: 8),
+            for (final record in records.take(80)) ...[
+              _GiftTableRow(data: rowBuilder(record)),
+              const SizedBox(height: 8),
+            ],
+            _GiftTableFooter(
+                showing: records.take(80).length, total: records.length),
           ],
+        ],
+      ),
+    );
+  }
+}
+
+class _GiftTableHeader extends StatelessWidget {
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+      decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: .06),
+        borderRadius: BorderRadius.circular(14),
+      ),
+      child: Row(
+        children: [
+          const SizedBox(width: 34),
+          Expanded(flex: 4, child: _giftHeaderText('Title')),
+          Expanded(flex: 3, child: _giftHeaderText('Owner')),
+          Expanded(flex: 2, child: _giftHeaderText('Updated')),
+          Expanded(flex: 3, child: _giftHeaderText('Actions')),
+        ],
+      ),
+    );
+  }
+}
+
+Widget _giftHeaderText(String value) {
+  return Text(
+    value,
+    style: TextStyle(
+      color: Colors.white.withValues(alpha: .54),
+      fontSize: 12,
+      fontWeight: FontWeight.w800,
+      letterSpacing: .2,
+    ),
+  );
+}
+
+class _GiftTableRow extends StatelessWidget {
+  const _GiftTableRow({required this.data});
+
+  final _GiftTableRowData data;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: .045),
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: Colors.white.withValues(alpha: .08)),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.center,
+        children: [
+          Checkbox(value: false, onChanged: (_) {}),
+          const SizedBox(width: 4),
+          Expanded(
+            flex: 4,
+            child: _GiftRowTitle(data: data),
+          ),
+          Expanded(
+            flex: 3,
+            child: Text(
+              data.owner,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(color: Colors.white.withValues(alpha: .74)),
+            ),
+          ),
+          Expanded(
+            flex: 2,
+            child: Text(
+              data.updated,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(color: Colors.white.withValues(alpha: .56)),
+            ),
+          ),
+          Expanded(
+            flex: 3,
+            child: Wrap(
+              alignment: WrapAlignment.end,
+              spacing: 8,
+              runSpacing: 8,
+              children: [
+                _GiftCompactAction(label: 'View', onPressed: data.onView),
+                _GiftCompactAction(label: 'Edit', onPressed: data.onEdit),
+                _GiftMoreMenu(actions: data.menu),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _GiftRowTitle extends StatelessWidget {
+  const _GiftRowTitle({required this.data});
+
+  final _GiftTableRowData data;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          crossAxisAlignment: WrapCrossAlignment.center,
+          children: [
+            _GiftStatusChip(data.status),
+            for (final progress in data.progress) _GiftStatusChip(progress),
+          ],
+        ),
+        const SizedBox(height: 8),
+        Text(
+          data.title,
+          overflow: TextOverflow.ellipsis,
+          style: const TextStyle(
+            color: Colors.white,
+            fontWeight: FontWeight.w900,
+          ),
+        ),
+        const SizedBox(height: 4),
+        Text(
+          data.metadata,
+          maxLines: 2,
+          overflow: TextOverflow.ellipsis,
+          style: TextStyle(
+            color: Colors.white.withValues(alpha: .56),
+            fontSize: 12,
+            height: 1.35,
+          ),
         ),
       ],
     );
   }
 }
 
+class _GiftCompactAction extends StatelessWidget {
+  const _GiftCompactAction({
+    required this.label,
+    required this.onPressed,
+  });
+
+  final String label;
+  final VoidCallback? onPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    return TextButton(
+      onPressed: onPressed,
+      style: TextButton.styleFrom(
+        foregroundColor: Colors.white,
+        disabledForegroundColor: Colors.white.withValues(alpha: .28),
+        minimumSize: const Size(64, 40),
+        padding: const EdgeInsets.symmetric(horizontal: 12),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+      ),
+      child: Text(label),
+    );
+  }
+}
+
+class _GiftMoreMenu extends StatelessWidget {
+  const _GiftMoreMenu({required this.actions});
+
+  final List<_MiniAction> actions;
+
+  @override
+  Widget build(BuildContext context) {
+    return PopupMenuButton<int>(
+      tooltip: 'More',
+      enabled: actions.isNotEmpty,
+      color: const Color(0xFF111827),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      itemBuilder: (context) => [
+        for (var i = 0; i < actions.length; i++)
+          PopupMenuItem<int>(
+            value: i,
+            child: Text(
+              actions[i].label,
+              style: const TextStyle(color: Colors.white),
+            ),
+          ),
+      ],
+      onSelected: (index) => actions[index].onPressed(),
+      child: Container(
+        width: 42,
+        height: 40,
+        alignment: Alignment.center,
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(color: Colors.white.withValues(alpha: .1)),
+          color: Colors.white.withValues(alpha: .05),
+        ),
+        child: const Icon(Icons.more_horiz_rounded, color: Colors.white),
+      ),
+    );
+  }
+}
+
+class _GiftTableFooter extends StatelessWidget {
+  const _GiftTableFooter({
+    required this.showing,
+    required this.total,
+  });
+
+  final int showing;
+  final int total;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(top: 8),
+      child: Text(
+        'Showing $showing of $total records',
+        style: TextStyle(
+          color: Colors.white.withValues(alpha: .48),
+          fontSize: 12,
+        ),
+      ),
+    );
+  }
+}
+
+class _GiftEmptyState extends StatelessWidget {
+  const _GiftEmptyState({
+    required this.title,
+    required this.message,
+  });
+
+  final String title;
+  final String message;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(24),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(24),
+        gradient: LinearGradient(
+          colors: [
+            const Color(0xFF7C3AED).withValues(alpha: .10),
+            const Color(0xFF22D3EE).withValues(alpha: .08),
+          ],
+        ),
+        border: Border.all(color: Colors.white.withValues(alpha: .10)),
+      ),
+      child: Row(
+        children: [
+          Container(
+            width: 54,
+            height: 54,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              color: Colors.white.withValues(alpha: .08),
+            ),
+            child: const Icon(Icons.auto_awesome_rounded, color: Colors.white),
+          ),
+          const SizedBox(width: 16),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  title,
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+                const SizedBox(height: 6),
+                Text(
+                  message,
+                  style: TextStyle(
+                    color: Colors.white.withValues(alpha: .62),
+                    height: 1.4,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _GiftStatusChip extends StatelessWidget {
+  const _GiftStatusChip(this.value);
+
+  final String value;
+
+  @override
+  Widget build(BuildContext context) {
+    final lower = value.toLowerCase();
+    final color = lower.contains('reject') || lower.contains('suspend')
+        ? const Color(0xFFFF6B7A)
+        : lower.contains('supplier') || lower.contains('await')
+            ? const Color(0xFFFBBF24)
+            : lower.contains('pending') || lower.contains('review')
+                ? const Color(0xFFC084FC)
+                : lower.contains('active') || lower.contains('publish')
+                    ? const Color(0xFF60A5FA)
+                    : lower.contains('approve') ||
+                            lower.contains('complete') ||
+                            lower.contains('ready')
+                        ? const Color(0xFF34D399)
+                        : Colors.white;
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: .13),
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(color: color.withValues(alpha: .30)),
+      ),
+      child: Text(
+        value,
+        style: TextStyle(
+          color: color,
+          fontSize: 11,
+          fontWeight: FontWeight.w800,
+        ),
+      ),
+    );
+  }
+}
+
+class _GiftBrandCard extends StatelessWidget {
+  const _GiftBrandCard({
+    required this.record,
+    required this.auditCount,
+    required this.canManage,
+    required this.onEdit,
+    required this.onSetStatus,
+  });
+
+  final Map<String, dynamic> record;
+  final int auditCount;
+  final bool canManage;
+  final VoidCallback onEdit;
+  final ValueChanged<String> onSetStatus;
+
+  @override
+  Widget build(BuildContext context) {
+    final status =
+        '${record['status'] ?? record['partnershipStatus'] ?? 'pending'}';
+    return Container(
+      constraints: const BoxConstraints(minHeight: 270),
+      padding: const EdgeInsets.all(18),
+      decoration: _panelDecoration(),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  '${record['partnerName'] ?? record['brandName'] ?? _recordId(record)}',
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 18,
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+              ),
+              _GiftStatusChip(status),
+            ],
+          ),
+          const SizedBox(height: 14),
+          _GiftCardMeta('Contact',
+              '${record['contactName'] ?? 'Not recorded'} · ${record['contactEmail'] ?? ''}'),
+          _GiftCardMeta('Categories',
+              '${record['category'] ?? record['categories'] ?? 'Uncategorised'}'),
+          _GiftCardMeta('Trust Score',
+              '${record['trustScore'] ?? record['recommendationScore'] ?? 'Not recorded'}'),
+          _GiftCardMeta('Campaigns',
+              '${record['approvedFor'] ?? record['campaignName'] ?? 'No campaign association'}'),
+          _GiftCardMeta('Recent Activity', '$auditCount audit entries'),
+          const Spacer(),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              _GiftCompactAction(label: 'View', onPressed: onEdit),
+              _GiftCompactAction(label: 'Edit', onPressed: onEdit),
+              _GiftMoreMenu(
+                actions: canManage
+                    ? [
+                        _MiniAction(
+                          label: 'Approve',
+                          onPressed: () => onSetStatus('approved'),
+                        ),
+                        _MiniAction(
+                          label: 'Suspend',
+                          onPressed: () => onSetStatus('suspended'),
+                        ),
+                        _MiniAction(
+                          label: 'Reactivate',
+                          onPressed: () => onSetStatus('active'),
+                        ),
+                        _MiniAction(label: 'View history', onPressed: onEdit),
+                      ]
+                    : const [],
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _GiftCardMeta extends StatelessWidget {
+  const _GiftCardMeta(this.label, this.value);
+
+  final String label;
+  final String value;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 10),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            label,
+            style: TextStyle(
+              color: Colors.white.withValues(alpha: .42),
+              fontSize: 11,
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+          const SizedBox(height: 3),
+          Text(
+            value.trim().isEmpty ? 'Not recorded' : value,
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(
+              color: Colors.white.withValues(alpha: .76),
+              height: 1.3,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+String _giftMatchBucket(Map<String, dynamic> record) {
+  final status =
+      '${record['status'] ?? record['matchStatus'] ?? ''}'.toLowerCase();
+  if (status.contains('approve')) return 'approved';
+  if (status.contains('reject')) return 'rejected';
+  if (status.contains('manual') || status.contains('review')) return 'manual';
+  return 'pending';
+}
+
+String _giftWorkspaceStatus(Map<String, dynamic> record) {
+  final raw =
+      '${record['giftsTeamWorkspaceStatus'] ?? record['workspaceStatus'] ?? record['giftAdminStatus'] ?? record['status'] ?? 'Awaiting Review'}';
+  return raw.replaceAll('_', ' ');
+}
+
+List<String> _giftWorkspaceProgress(Map<String, dynamic> record) {
+  final values = <String>[];
+  final supplier =
+      '${record['procurementSupplier'] ?? record['supplierStatus'] ?? ''}'
+          .toLowerCase();
+  final approval =
+      '${record['approvedGiftPlan'] ?? record['approvalStatus'] ?? ''}'
+          .toLowerCase();
+  final status = _giftWorkspaceStatus(record).toLowerCase();
+  if (supplier.isEmpty || supplier.contains('pending')) {
+    values.add('Supplier Pending');
+  }
+  if (approval.isEmpty || approval.contains('pending')) {
+    values.add('Approval Pending');
+  }
+  if (status.contains('ready')) values.add('Ready');
+  if (status.contains('review')) values.add('Awaiting Review');
+  if (status.contains('complete') || status.contains('delivered')) {
+    values.add('Completed');
+  }
+  return values.isEmpty ? const ['Awaiting Review'] : values;
+}
+
+// ignore: unused_element
 class _GiftBrandPartnersModule extends StatelessWidget {
   const _GiftBrandPartnersModule({
     required this.brands,
@@ -9019,6 +9964,7 @@ class _GiftBrandPartnersModule extends StatelessWidget {
   }
 }
 
+// ignore: unused_element
 class _GiftTeamWorkspaceModule extends StatelessWidget {
   const _GiftTeamWorkspaceModule({
     required this.gifts,
@@ -9411,6 +10357,7 @@ class _HistoricalAnalyticsModule extends StatelessWidget {
   }
 }
 
+// ignore: unused_element
 class _GiftStoryMediaModule extends StatelessWidget {
   const _GiftStoryMediaModule({
     required this.gifts,
@@ -9506,6 +10453,7 @@ class _GiftStoryMediaModule extends StatelessWidget {
   }
 }
 
+// ignore: unused_element
 class _GiftCampaignMatchesModule extends StatelessWidget {
   const _GiftCampaignMatchesModule({
     required this.campaignMatches,
@@ -12701,6 +13649,7 @@ String _platformEnvironment(List<Map<String, dynamic>> configRecords) {
   return values.join(', ');
 }
 
+// ignore: unused_element
 bool _isGiftActive(Map<String, dynamic> gift) {
   final state =
       '${gift['giftAdminStatus'] ?? gift['status'] ?? ''}'.trim().toLowerCase();
@@ -12804,6 +13753,7 @@ String _giftStoryAudioSummary(Map<String, dynamic> gift) {
   return values.isEmpty ? 'No audio mix' : values.join(' / ');
 }
 
+// ignore: unused_element
 String _relatedDeliverySummary(
   Map<String, dynamic> record,
   List<Map<String, dynamic>> deliveries,

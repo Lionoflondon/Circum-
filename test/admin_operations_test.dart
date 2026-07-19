@@ -776,10 +776,6 @@ void main() {
           'Health+',
           'Business',
           'Gifts',
-          'Gift Brand Partners',
-          'Gift Team Workspace',
-          'Gift Story Media',
-          'Gift Campaign Matches',
           'Audit',
           'Chat',
           'Settings',
@@ -788,10 +784,23 @@ void main() {
       expect(AdminModule.values, contains(AdminModule.discrepancyReview));
       expect(AdminModule.values, contains(AdminModule.irisRepository));
       expect(AdminModule.values, contains(AdminModule.irisCandidates));
-      expect(AdminModule.values, contains(AdminModule.giftBrandPartners));
-      expect(AdminModule.values, contains(AdminModule.giftWorkspace));
-      expect(AdminModule.values, contains(AdminModule.giftStoryMedia));
-      expect(AdminModule.values, contains(AdminModule.giftCampaignMatches));
+      expect(AdminModule.values, contains(AdminModule.gifts));
+      expect(
+        AdminModule.values.map((module) => module.label),
+        isNot(contains('Gift Brand Partners')),
+      );
+      expect(
+        AdminModule.values.map((module) => module.label),
+        isNot(contains('Gift Team Workspace')),
+      );
+      expect(
+        AdminModule.values.map((module) => module.label),
+        isNot(contains('Gift Story Media')),
+      );
+      expect(
+        AdminModule.values.map((module) => module.label),
+        isNot(contains('Gift Campaign Matches')),
+      );
     });
 
     test('restores historical IRIS and Gifts flow transitions', () {
