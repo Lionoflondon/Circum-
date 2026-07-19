@@ -6,8 +6,9 @@ const {
   resolveRiderPayoutBreakdown,
   stripeStatusFromAccount,
 } = require("./rider-connect");
+const fs = require("node:fs");
 
-test("deducts Stripe payout fees from rider share, not Circum commission", () => {
+test("deducts Stripe payout fees from rider share", () => {
   const breakdown = resolveRiderPayoutBreakdown({
     totalCustomerPaid: 20,
     circumPlatformCommission: 7,
@@ -33,7 +34,7 @@ test("derives Circum commission without reducing it for Stripe fees", () => {
   assert.equal(breakdown.riderNetPayout, 17.53);
 });
 
-test("blocks payout for admin review when estimated fees exceed rider share", () => {
+test("blocks payout when estimated fees exceed rider share", () => {
   const breakdown = resolveRiderPayoutBreakdown({
     totalCustomerPaid: 0.3,
     circumPlatformCommission: 0,
@@ -88,4 +89,16 @@ test("maps requirements to action_required", () => {
   });
 
   assert.equal(status, "action_required");
+});
+
+test("Admin payout review is backend authoritative and auditable", () => {
+  const source = fs.readFileSync("rider-connect.js", "utf8");
+  assert.match(source, /function adminReviewRiderWithdrawal\(\)/);
+  assert.match(source, /assertActor\(context, riderId, \{adminOnly: true\}\)/);
+  assert.match(source, /db\.runTransaction/);
+  assert.match(source, /status: "rejected"/);
+  assert.match(source, /payoutStatus: "rejected"/);
+  assert.match(source, /reviewStatus: "rejected"/);
+  assert.match(source, /riderPayoutAudit/);
+  assert.match(source, /idempotent: true/);
 });

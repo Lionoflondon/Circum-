@@ -160,6 +160,7 @@ exports.syncStripeConnectStatus = riderConnect.syncStripeConnectStatus(stripeCon
 exports.createRiderTransferOrPayout = riderConnect.createRiderTransferOrPayout(stripeConnectClient);
 exports.requestRiderWithdrawal = riderConnect.requestRiderWithdrawal();
 exports.cancelRiderWithdrawal = riderConnect.cancelRiderWithdrawal();
+exports.adminReviewRiderWithdrawal = riderConnect.adminReviewRiderWithdrawal();
 exports.resetRiderTestStripeAccount = riderConnect.resetRiderTestStripeAccount();
 exports.handleStripeConnectWebhook = riderConnect.handleStripeConnectWebhook(stripeConnectClient);
 exports.scheduledRiderStripeStatusSync = riderConnect.scheduledRiderStripeStatusSync(stripeConnectClient);

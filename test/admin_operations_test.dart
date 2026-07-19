@@ -626,8 +626,25 @@ void main() {
       expect(source, contains("httpsCallable('issueRothToWallets')"));
       expect(source, contains("httpsCallable('setWalletFrozen')"));
       expect(source, contains("httpsCallable('createRiderTransferOrPayout')"));
+      expect(source, contains("httpsCallable('adminReviewRiderWithdrawal')"));
       expect(source, isNot(contains('stripeSecretKey')));
       expect(source, isNot(contains('sk_live_')));
+    });
+
+    test('Admin payout rejection stays behind backend finance authority', () {
+      final source =
+          File('lib/app/admin/admin_phase1_shell.dart').readAsStringSync();
+      final methodStart =
+          source.indexOf('Future<void> _processPayoutRequestFromAdmin');
+      final methodEnd = source.indexOf('Future<void> _moderateRating');
+      expect(methodStart, isNonNegative);
+      expect(methodEnd, greaterThan(methodStart));
+      final method = source.substring(methodStart, methodEnd);
+
+      expect(method, contains("httpsCallable('adminReviewRiderWithdrawal')"));
+      expect(method, contains("httpsCallable('createRiderTransferOrPayout')"));
+      expect(method, isNot(contains("collection('payoutRequests').doc")));
+      expect(method, isNot(contains("'status': 'rejected'")));
     });
 
     test('Admin restores historical Rider Health Plus and Gift Admin parity',

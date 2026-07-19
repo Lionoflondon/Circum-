@@ -2447,12 +2447,14 @@ class _AdminPhaseOneShellState extends State<AdminPhaseOneShell> {
             .call(
                 {'requestId': requestId, 'riderId': riderId, 'amount': amount});
       } else {
-        await _db.collection('payoutRequests').doc(requestId).set({
-          'status': 'rejected',
-          'processedAt': FieldValue.serverTimestamp(),
-          'processedBy': _user?.uid,
-          'updatedAt': FieldValue.serverTimestamp(),
-        }, SetOptions(merge: true));
+        await FirebaseFunctions.instanceFor(region: 'us-central1')
+            .httpsCallable('adminReviewRiderWithdrawal')
+            .call({
+          'requestId': requestId,
+          'riderId': riderId,
+          'action': 'rejected',
+          'reason': 'Rider payout rejected from Admin finance review',
+        });
       }
       await _writeAudit(AdminAuditEntry(
         adminUserId: _user?.uid ?? 'unknown-admin',
