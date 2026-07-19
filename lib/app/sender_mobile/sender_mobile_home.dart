@@ -30,7 +30,7 @@ const senderMobileHeroSubtitle =
 const senderMobileDashboardServiceSubtitles = {
   'Health+': 'Trusted medical deliveries',
   'Business': 'Business deliveries',
-  'Gifts': 'Thoughtful gfts, delivered.',
+  'Gifts': 'Thoughtful gifts, delivered.',
 };
 const senderMobileRecentOrderTitles = ['Passport', 'Prescription collection'];
 const senderMobileBottomNavigationLabels = [
