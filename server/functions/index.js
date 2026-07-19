@@ -53,6 +53,7 @@ const accountClosure = require("./account-closure");
 const businessAccess = require("./business-access");
 const riderIrisAcknowledgement = require("./rider-iris-acknowledgement");
 const adminIrisReferenceImages = require("./admin-iris-reference-images");
+const adminRiderAuthority = require("./admin-rider-authority");
 const {routeCheckoutSessionCompleted} = require("./checkout-session-router");
 
 initializeApp();
@@ -162,6 +163,7 @@ exports.createRiderTransferOrPayout = riderConnect.createRiderTransferOrPayout(s
 exports.requestRiderWithdrawal = riderConnect.requestRiderWithdrawal();
 exports.cancelRiderWithdrawal = riderConnect.cancelRiderWithdrawal();
 exports.adminReviewRiderWithdrawal = riderConnect.adminReviewRiderWithdrawal();
+exports.adminReviewRider = adminRiderAuthority.adminReviewRider;
 exports.resetRiderTestStripeAccount = riderConnect.resetRiderTestStripeAccount();
 exports.handleStripeConnectWebhook = riderConnect.handleStripeConnectWebhook(stripeConnectClient);
 exports.scheduledRiderStripeStatusSync = riderConnect.scheduledRiderStripeStatusSync(stripeConnectClient);

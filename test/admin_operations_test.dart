@@ -669,10 +669,10 @@ void main() {
       final source =
           File('lib/app/admin/admin_phase1_shell.dart').readAsStringSync();
 
+      expect(source, contains("httpsCallable('adminReviewRider')"));
       expect(source, contains("httpsCallable('syncStripeConnectStatus')"));
       expect(source, contains("httpsCallable('resetRiderTestStripeAccount')"));
       expect(source, contains("collection('riderAdminEvents')"));
-      expect(source, contains("collection('riderDocuments')"));
       expect(source, contains("collection('recurringPickupSchedules')"));
       expect(source, contains("collection('healthPlusCustodyArchive')"));
       expect(source, contains("collection('giftRequests')"));
@@ -680,6 +680,40 @@ void main() {
       expect(source, contains("collection('giftCampaignParticipants')"));
       expect(source, contains("httpsCallable('retryGiftStoryAutomation')"));
       expect(source, contains("httpsCallable('manageGiftStoryAccess')"));
+    });
+
+    test('Admin Rider authority actions do not write Rider records directly',
+        () {
+      final source =
+          File('lib/app/admin/admin_phase1_shell.dart').readAsStringSync();
+      final methodStart = source.indexOf('Future<void> _setRiderStatus');
+      final methodEnd = source.indexOf('Future<void> _syncRiderStripeStatus');
+      expect(methodStart, isNonNegative);
+      expect(methodEnd, greaterThan(methodStart));
+      final statusMethod = source.substring(methodStart, methodEnd);
+
+      expect(source, contains("httpsCallable('adminReviewRider')"));
+      expect(statusMethod, contains('_callRiderAuthority'));
+      expect(statusMethod, isNot(contains("collection('riderProfiles')")));
+      expect(statusMethod, isNot(contains("collection('riders')")));
+
+      final documentStart = source.indexOf('Future<void> _reviewRiderDocument');
+      final documentEnd =
+          source.indexOf('Future<void> _removeRiderProfilePhoto');
+      expect(documentStart, isNonNegative);
+      expect(documentEnd, greaterThan(documentStart));
+      final documentMethod = source.substring(documentStart, documentEnd);
+      expect(documentMethod, contains('_callRiderAuthority'));
+      expect(documentMethod, isNot(contains("collection('riderDocuments')")));
+
+      final photoStart =
+          source.indexOf('Future<void> _removeRiderProfilePhoto');
+      final photoEnd = source.indexOf('Future<void> _writeRiderAdminEvent');
+      expect(photoStart, isNonNegative);
+      expect(photoEnd, greaterThan(photoStart));
+      final photoMethod = source.substring(photoStart, photoEnd);
+      expect(photoMethod, contains('_callRiderAuthority'));
+      expect(photoMethod, isNot(contains('FirebaseStorage.instance')));
     });
 
     test('finance workflow patches do not alter payment authority fields', () {

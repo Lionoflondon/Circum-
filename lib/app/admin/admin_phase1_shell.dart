@@ -3,7 +3,6 @@ import 'dart:async';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:cloud_functions/cloud_functions.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:firebase_storage/firebase_storage.dart';
 import 'package:flutter/material.dart';
 
 import 'admin_operations.dart';
@@ -243,6 +242,14 @@ class _AdminPhaseOneShellState extends State<AdminPhaseOneShell> {
         .trim();
   }
 
+  Future<Map<String, dynamic>> _callRiderAuthority(
+    Map<String, Object?> payload,
+  ) async {
+    final result =
+        await _functions.httpsCallable('adminReviewRider').call(payload);
+    return Map<String, dynamic>.from(result.data as Map? ?? {});
+  }
+
   Future<void> _duplicateDelivery(Map<String, dynamic> delivery) async {
     if (!_can(AdminPermission.duplicateDeliveries)) {
       setState(() => _message = 'Your role cannot duplicate deliveries.');
@@ -278,16 +285,24 @@ class _AdminPhaseOneShellState extends State<AdminPhaseOneShell> {
     }
     final id = _idFor(rider);
     if (id.isEmpty) return;
-    final patch = AdminRiderOperationsTools.statusPatch(
-      status: status,
-      updatedBy: _user?.email ?? _user?.uid ?? 'admin',
-      updatedAt: FieldValue.serverTimestamp(),
-      reason: 'Updated from Circum Admin Rider Operations',
-    );
-    await _db
-        .collection('riderProfiles')
-        .doc(id)
-        .set(patch, SetOptions(merge: true));
+    final action = switch (status) {
+      'approved' => 'approve',
+      'rejected' => 'reject',
+      'suspended' => 'suspend',
+      'reactivated' => 'reactivate',
+      _ => 'set_eligibility',
+    };
+    final eligibilityState = switch (status) {
+      'investigation_cleared' || 'documents_approved' => 'eligible',
+      'documents_requested' || 'under_investigation' => 'under_review',
+      _ => 'ineligible',
+    };
+    final result = await _callRiderAuthority({
+      'riderId': id,
+      'action': action,
+      if (action == 'set_eligibility') 'eligibilityState': eligibilityState,
+      'reason': 'Updated from Circum Admin Rider Operations',
+    });
     await _writeAudit(AdminAuditEntry(
       adminUserId: _user?.uid ?? 'unknown-admin',
       actionType: 'rider_status_$status',
@@ -297,7 +312,7 @@ class _AdminPhaseOneShellState extends State<AdminPhaseOneShell> {
         'approvalStatus': rider['approvalStatus'],
         'driverStatus': rider['driverStatus'],
       },
-      newValue: patch,
+      newValue: result,
       reason: 'Rider status updated from Admin',
     ));
     setState(() => _message = 'Rider $id updated to $status.');
@@ -352,23 +367,11 @@ class _AdminPhaseOneShellState extends State<AdminPhaseOneShell> {
     final riderId = _riderId(rider);
     if (riderId.isEmpty) return;
     const note = 'Additional information requested from Circum Admin.';
-    final patch = {
-      'approvalStatus': 'more_information_requested',
-      'verificationStatus': 'more_information_requested',
-      'adminReviewStatus': 'more_information_requested',
-      'informationRequestedAt': FieldValue.serverTimestamp(),
-      'informationRequestedBy': _user?.uid ?? _user?.email,
-      'informationRequestNote': note,
-      'updatedAt': FieldValue.serverTimestamp(),
-    };
-    await _db
-        .collection('riderProfiles')
-        .doc(riderId)
-        .set(patch, SetOptions(merge: true));
-    await _db
-        .collection('riders')
-        .doc(riderId)
-        .set(patch, SetOptions(merge: true));
+    await _callRiderAuthority({
+      'riderId': riderId,
+      'action': 'request_more_information',
+      'reason': note,
+    });
     await _writeRiderAdminEvent(
       riderId,
       'more_information_requested',
@@ -396,32 +399,13 @@ class _AdminPhaseOneShellState extends State<AdminPhaseOneShell> {
     if (documentId.isEmpty || riderId.isEmpty) return;
     final previous =
         '${document['status'] ?? document['verificationStatus'] ?? 'missing'}';
-    final patch = {
-      'status': nextStatus,
-      'verificationStatus': nextStatus,
-      'reviewedAt': FieldValue.serverTimestamp(),
-      'reviewTimestamp': FieldValue.serverTimestamp(),
-      'reviewedBy': _user?.uid ?? _user?.email,
-      'reviewer': _user?.email ?? _user?.uid,
-      if (nextStatus == 'approved') 'active': true,
-      if (nextStatus == 'approved') 'rejectionReason': FieldValue.delete(),
-      if (nextStatus != 'approved')
-        'rejectionReason': 'Document $nextStatus from isolated Circum Admin.',
-      'reviewNotes': 'Document $nextStatus from isolated Circum Admin.',
-      'statusHistory': FieldValue.arrayUnion([
-        {
-          'previousStatus': previous,
-          'status': nextStatus,
-          'timestamp': Timestamp.now(),
-          'reviewer': _user?.uid ?? _user?.email,
-        }
-      ]),
-      'updatedAt': FieldValue.serverTimestamp(),
-    };
-    await _db
-        .collection('riderDocuments')
-        .doc(documentId)
-        .set(patch, SetOptions(merge: true));
+    await _callRiderAuthority({
+      'riderId': riderId,
+      'action': 'review_document',
+      'documentId': documentId,
+      'documentStatus': nextStatus,
+      'reason': 'Document $nextStatus from isolated Circum Admin.',
+    });
     await _writeRiderAdminEvent(
       riderId,
       nextStatus == 'approved'
@@ -443,37 +427,13 @@ class _AdminPhaseOneShellState extends State<AdminPhaseOneShell> {
     }
     final riderId = _riderId(rider);
     if (riderId.isEmpty) return;
-    final photoPath =
-        '${rider['profilePhotoPath'] ?? rider['photoPath'] ?? 'rider-profiles/$riderId/profile.jpg'}';
-    final thumbnailPath =
-        '${rider['profileThumbnailPath'] ?? 'rider-profiles/$riderId/thumbnail.jpg'}';
-    await FirebaseStorage.instance.ref(photoPath).delete().catchError((_) {});
-    await FirebaseStorage.instance
-        .ref(thumbnailPath)
-        .delete()
-        .catchError((_) {});
-    final patch = {
-      'photoURL': FieldValue.delete(),
-      'photoUrl': FieldValue.delete(),
-      'photoPath': FieldValue.delete(),
-      'profilePhotoUrl': FieldValue.delete(),
-      'profileThumbnailUrl': FieldValue.delete(),
-      'profilePhotoPath': FieldValue.delete(),
-      'profileThumbnailPath': FieldValue.delete(),
-      'profilePhotoMetadata': FieldValue.delete(),
-      'profilePhotoVersion': FieldValue.increment(1),
-      'photoRemovedAt': FieldValue.serverTimestamp(),
-      'photoRemovedBy': _user?.uid ?? _user?.email,
-      'updatedAt': FieldValue.serverTimestamp(),
-    };
-    await _db
-        .collection('riders')
-        .doc(riderId)
-        .set(patch, SetOptions(merge: true));
-    await _db
-        .collection('riderProfiles')
-        .doc(riderId)
-        .set(patch, SetOptions(merge: true));
+    await _callRiderAuthority({
+      'riderId': riderId,
+      'action': 'remove_profile_photo',
+      'reason': 'Removed from isolated Circum Admin.',
+      'profilePhotoPath': rider['profilePhotoPath'] ?? rider['photoPath'],
+      'profileThumbnailPath': rider['profileThumbnailPath'],
+    });
     await _writeRiderAdminEvent(
       riderId,
       'profile_photo_removed',
