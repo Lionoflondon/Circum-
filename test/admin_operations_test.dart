@@ -630,6 +630,24 @@ void main() {
       expect(source, isNot(contains('sk_live_')));
     });
 
+    test('Admin restores historical Rider Health Plus and Gift Admin parity',
+        () {
+      final source =
+          File('lib/app/admin/admin_phase1_shell.dart').readAsStringSync();
+
+      expect(source, contains("httpsCallable('syncStripeConnectStatus')"));
+      expect(source, contains("httpsCallable('resetRiderTestStripeAccount')"));
+      expect(source, contains("collection('riderAdminEvents')"));
+      expect(source, contains("collection('riderDocuments')"));
+      expect(source, contains("collection('recurringPickupSchedules')"));
+      expect(source, contains("collection('healthPlusCustodyArchive')"));
+      expect(source, contains("collection('giftRequests')"));
+      expect(source, contains("collection('giftBrands')"));
+      expect(source, contains("collection('giftCampaignParticipants')"));
+      expect(source, contains("httpsCallable('retryGiftStoryAutomation')"));
+      expect(source, contains("httpsCallable('manageGiftStoryAccess')"));
+    });
+
     test('finance workflow patches do not alter payment authority fields', () {
       final patch = AdminFinanceTools.workflowPatch(
         status: 'reconciled',

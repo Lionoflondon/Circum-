@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:cloud_functions/cloud_functions.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:firebase_storage/firebase_storage.dart';
 import 'package:flutter/material.dart';
 
 import 'admin_operations.dart';
@@ -292,6 +293,206 @@ class _AdminPhaseOneShellState extends State<AdminPhaseOneShell> {
     await _loadAdminData();
   }
 
+  Future<void> _syncRiderStripeStatus(Map<String, dynamic> rider) async {
+    if (!_can(AdminPermission.approveDrivers)) {
+      setState(() => _message = 'Your role cannot sync Rider Stripe.');
+      return;
+    }
+    final riderId = _riderId(rider);
+    if (riderId.isEmpty) return;
+    try {
+      await FirebaseFunctions.instanceFor(region: 'us-central1')
+          .httpsCallable('syncStripeConnectStatus')
+          .call({'riderId': riderId});
+      await _writeRiderAdminEvent(riderId, 'stripe_status_synced');
+      setState(() => _message = 'Rider Stripe status synced.');
+      await _loadAdminData();
+    } on FirebaseFunctionsException catch (error) {
+      setState(
+          () => _message = error.message ?? 'Could not sync Rider Stripe.');
+    }
+  }
+
+  Future<void> _resetRiderStripe(Map<String, dynamic> rider) async {
+    if (!_can(AdminPermission.approveDrivers)) {
+      setState(() => _message = 'Your role cannot reset Rider Stripe.');
+      return;
+    }
+    final riderId = _riderId(rider);
+    if (riderId.isEmpty) return;
+    try {
+      await FirebaseFunctions.instanceFor(region: 'us-central1')
+          .httpsCallable('resetRiderTestStripeAccount')
+          .call({'riderId': riderId});
+      await _writeRiderAdminEvent(riderId, 'stripe_test_account_reset');
+      setState(() => _message = 'Rider test Stripe account reset.');
+      await _loadAdminData();
+    } on FirebaseFunctionsException catch (error) {
+      setState(
+          () => _message = error.message ?? 'Could not reset Rider Stripe.');
+    }
+  }
+
+  Future<void> _requestRiderMoreInformation(Map<String, dynamic> rider) async {
+    if (!_can(AdminPermission.approveDrivers)) {
+      setState(() => _message = 'Your role cannot request Rider information.');
+      return;
+    }
+    final riderId = _riderId(rider);
+    if (riderId.isEmpty) return;
+    const note = 'Additional information requested from Circum Admin.';
+    final patch = {
+      'approvalStatus': 'more_information_requested',
+      'verificationStatus': 'more_information_requested',
+      'adminReviewStatus': 'more_information_requested',
+      'informationRequestedAt': FieldValue.serverTimestamp(),
+      'informationRequestedBy': _user?.uid ?? _user?.email,
+      'informationRequestNote': note,
+      'updatedAt': FieldValue.serverTimestamp(),
+    };
+    await _db
+        .collection('riderProfiles')
+        .doc(riderId)
+        .set(patch, SetOptions(merge: true));
+    await _db
+        .collection('riders')
+        .doc(riderId)
+        .set(patch, SetOptions(merge: true));
+    await _writeRiderAdminEvent(
+      riderId,
+      'more_information_requested',
+      previousStatus:
+          '${rider['verificationStatus'] ?? rider['approvalStatus'] ?? ''}',
+      newStatus: 'more_information_requested',
+      note: note,
+    );
+    setState(() => _message = 'More information requested from Rider.');
+    await _loadAdminData();
+  }
+
+  Future<void> _reviewRiderDocument(
+    Map<String, dynamic> document,
+    String nextStatus,
+  ) async {
+    if (!_can(AdminPermission.approveDrivers)) {
+      setState(() => _message = 'Your role cannot review Rider documents.');
+      return;
+    }
+    final documentId = _idFor(document);
+    final riderId =
+        '${document['riderId'] ?? document['driverId'] ?? document['uid'] ?? ''}'
+            .trim();
+    if (documentId.isEmpty || riderId.isEmpty) return;
+    final previous =
+        '${document['status'] ?? document['verificationStatus'] ?? 'missing'}';
+    final patch = {
+      'status': nextStatus,
+      'verificationStatus': nextStatus,
+      'reviewedAt': FieldValue.serverTimestamp(),
+      'reviewTimestamp': FieldValue.serverTimestamp(),
+      'reviewedBy': _user?.uid ?? _user?.email,
+      'reviewer': _user?.email ?? _user?.uid,
+      if (nextStatus == 'approved') 'active': true,
+      if (nextStatus == 'approved') 'rejectionReason': FieldValue.delete(),
+      if (nextStatus != 'approved')
+        'rejectionReason': 'Document $nextStatus from isolated Circum Admin.',
+      'reviewNotes': 'Document $nextStatus from isolated Circum Admin.',
+      'statusHistory': FieldValue.arrayUnion([
+        {
+          'previousStatus': previous,
+          'status': nextStatus,
+          'timestamp': Timestamp.now(),
+          'reviewer': _user?.uid ?? _user?.email,
+        }
+      ]),
+      'updatedAt': FieldValue.serverTimestamp(),
+    };
+    await _db
+        .collection('riderDocuments')
+        .doc(documentId)
+        .set(patch, SetOptions(merge: true));
+    await _writeRiderAdminEvent(
+      riderId,
+      nextStatus == 'approved'
+          ? 'document_approved'
+          : nextStatus == 'rejected'
+              ? 'document_rejected'
+              : 'document_replacement_requested',
+      previousStatus: previous,
+      newStatus: nextStatus,
+    );
+    setState(() => _message = 'Rider document $documentId updated.');
+    await _loadAdminData();
+  }
+
+  Future<void> _removeRiderProfilePhoto(Map<String, dynamic> rider) async {
+    if (!_can(AdminPermission.approveDrivers)) {
+      setState(() => _message = 'Your role cannot remove Rider photos.');
+      return;
+    }
+    final riderId = _riderId(rider);
+    if (riderId.isEmpty) return;
+    final photoPath =
+        '${rider['profilePhotoPath'] ?? rider['photoPath'] ?? 'rider-profiles/$riderId/profile.jpg'}';
+    final thumbnailPath =
+        '${rider['profileThumbnailPath'] ?? 'rider-profiles/$riderId/thumbnail.jpg'}';
+    await FirebaseStorage.instance.ref(photoPath).delete().catchError((_) {});
+    await FirebaseStorage.instance
+        .ref(thumbnailPath)
+        .delete()
+        .catchError((_) {});
+    final patch = {
+      'photoURL': FieldValue.delete(),
+      'photoUrl': FieldValue.delete(),
+      'photoPath': FieldValue.delete(),
+      'profilePhotoUrl': FieldValue.delete(),
+      'profileThumbnailUrl': FieldValue.delete(),
+      'profilePhotoPath': FieldValue.delete(),
+      'profileThumbnailPath': FieldValue.delete(),
+      'profilePhotoMetadata': FieldValue.delete(),
+      'profilePhotoVersion': FieldValue.increment(1),
+      'photoRemovedAt': FieldValue.serverTimestamp(),
+      'photoRemovedBy': _user?.uid ?? _user?.email,
+      'updatedAt': FieldValue.serverTimestamp(),
+    };
+    await _db
+        .collection('riders')
+        .doc(riderId)
+        .set(patch, SetOptions(merge: true));
+    await _db
+        .collection('riderProfiles')
+        .doc(riderId)
+        .set(patch, SetOptions(merge: true));
+    await _writeRiderAdminEvent(
+      riderId,
+      'profile_photo_removed',
+      previousStatus: '${rider['photoURL'] ?? rider['photoUrl'] ?? ''}',
+      newStatus: 'removed',
+      note: 'Removed from isolated Circum Admin.',
+    );
+    setState(() => _message = 'Rider profile photo removed.');
+    await _loadAdminData();
+  }
+
+  Future<void> _writeRiderAdminEvent(
+    String riderId,
+    String action, {
+    String? previousStatus,
+    String? newStatus,
+    String? note,
+  }) async {
+    await _db.collection('riderAdminEvents').add({
+      'riderId': riderId,
+      'adminId': _user?.uid ?? 'unknown-admin',
+      'adminEmail': _user?.email,
+      'action': action,
+      'previousStatus': previousStatus,
+      'newStatus': newStatus,
+      'note': note,
+      'createdAt': FieldValue.serverTimestamp(),
+    });
+  }
+
   Future<void> _setDeliveryOperationStatus(
     Map<String, dynamic> delivery,
     String status,
@@ -557,13 +758,13 @@ class _AdminPhaseOneShellState extends State<AdminPhaseOneShell> {
         reason: 'Gift workflow action confirmed from Admin',
       );
       await _db
-          .collection('giftOrders')
+          .collection('${gift['_collection'] ?? 'giftOrders'}')
           .doc(id)
           .set(patch, SetOptions(merge: true));
       await _writeAudit(AdminAuditEntry(
         adminUserId: _user?.uid ?? 'unknown-admin',
         actionType: 'gift_workflow_$status',
-        recordType: 'giftOrders',
+        recordType: '${gift['_collection'] ?? 'giftOrders'}',
         recordId: id,
         oldValue: {
           'status': gift['status'],
@@ -576,6 +777,78 @@ class _AdminPhaseOneShellState extends State<AdminPhaseOneShell> {
       await _loadAdminData();
     } on ArgumentError catch (error) {
       setState(() => _message = error.message);
+    }
+  }
+
+  Future<void> _updateGiftCampaignParticipant(
+    Map<String, dynamic> participant,
+    String status,
+  ) async {
+    if (!_can(AdminPermission.manageIssues)) {
+      setState(() => _message = 'Your role cannot manage gift campaigns.');
+      return;
+    }
+    final id = _idFor(participant);
+    if (id.isEmpty) return;
+    await _db.collection('giftCampaignParticipants').doc(id).set({
+      'matchStatus': status,
+      'adminReviewStatus': status,
+      if (status == 'assign_later')
+        'assignmentDeferredAt': FieldValue.serverTimestamp(),
+      if (status == 'assign_later') 'assignmentDeferredBy': _user?.uid,
+      if (status == 'rejected') 'suggestedParticipantId': FieldValue.delete(),
+      if (status == 'rejected') 'suggestedMatchScore': FieldValue.delete(),
+      if (status == 'rejected') 'suggestedMatchReason': FieldValue.delete(),
+      'updatedAt': FieldValue.serverTimestamp(),
+    }, SetOptions(merge: true));
+    await _writeAudit(AdminAuditEntry(
+      adminUserId: _user?.uid ?? 'unknown-admin',
+      actionType: 'gift_campaign_participant_$status',
+      recordType: 'giftCampaignParticipants',
+      recordId: id,
+      oldValue: {'matchStatus': participant['matchStatus']},
+      newValue: {'matchStatus': status},
+      reason: 'Gift campaign participant reviewed from Admin',
+    ));
+    setState(() => _message = 'Gift campaign participant $id updated.');
+    await _loadAdminData();
+  }
+
+  Future<void> _updateGiftStoryAccess(
+    Map<String, dynamic> gift,
+    String action,
+  ) async {
+    if (!_can(AdminPermission.manageIssues)) {
+      setState(() => _message = 'Your role cannot manage Gift Stories.');
+      return;
+    }
+    final id = _idFor(gift);
+    if (id.isEmpty) return;
+    try {
+      if (action == 'retry' || action == 'regenerate') {
+        await FirebaseFunctions.instanceFor(region: 'us-central1')
+            .httpsCallable('retryGiftStoryAutomation')
+            .call({
+          'giftRequestId': id,
+          if (action == 'regenerate') 'regenerateToken': true,
+        });
+      } else {
+        await FirebaseFunctions.instanceFor(region: 'us-central1')
+            .httpsCallable('manageGiftStoryAccess')
+            .call({'giftRequestId': id, 'action': action});
+      }
+      await _writeAudit(AdminAuditEntry(
+        adminUserId: _user?.uid ?? 'unknown-admin',
+        actionType: 'gift_story_$action',
+        recordType: '${gift['_collection'] ?? 'giftRequests'}',
+        recordId: id,
+        newValue: {'action': action},
+        reason: 'Gift Story action submitted through existing backend callable',
+      ));
+      setState(() => _message = 'Gift Story $action submitted.');
+      await _loadAdminData();
+    } on FirebaseFunctionsException catch (error) {
+      setState(() => _message = error.message ?? 'Gift Story action failed.');
     }
   }
 
@@ -658,6 +931,50 @@ class _AdminPhaseOneShellState extends State<AdminPhaseOneShell> {
       reason: 'Health+ pickup updated from Admin',
     ));
     setState(() => _message = 'Health+ pickup $id updated to $status.');
+    await _loadAdminData();
+  }
+
+  Future<void> _updateHealthPlusSchedule(
+    Map<String, dynamic> schedule,
+    String status,
+  ) async {
+    if (!_can(AdminPermission.manageHealthPlus)) {
+      setState(() => _message = 'Your role cannot manage Health+ schedules.');
+      return;
+    }
+    final id = _idFor(schedule);
+    if (id.isEmpty) return;
+    await _db.collection('recurringPickupSchedules').doc(id).set({
+      'status': status,
+      'adminReviewStatus': status,
+      'updatedAt': FieldValue.serverTimestamp(),
+      'adminUpdatedBy': _user?.email ?? _user?.uid,
+      'adminReason': 'Health+ recurring schedule reviewed from Admin',
+    }, SetOptions(merge: true));
+    await _db.collection('healthPlusCustodyArchive').add({
+      'scheduleId': id,
+      'profileId': schedule['profileId'],
+      'userId': schedule['userId'] ?? schedule['senderId'],
+      'eventType': 'schedule_$status',
+      'timestamp': FieldValue.serverTimestamp(),
+      'actorType': 'admin',
+      'actorId': _user?.uid,
+      'actorName': _user?.displayName ?? _user?.email,
+      'publicMessage': 'Your Health+ recurring schedule has been reviewed.',
+      'internalNote': 'Schedule $status from isolated Circum Admin.',
+      'statusAfterEvent': status,
+      'createdAt': FieldValue.serverTimestamp(),
+    });
+    await _writeAudit(AdminAuditEntry(
+      adminUserId: _user?.uid ?? 'unknown-admin',
+      actionType: 'health_plus_schedule_$status',
+      recordType: 'recurringPickupSchedules',
+      recordId: id,
+      oldValue: {'status': schedule['status']},
+      newValue: {'status': status},
+      reason: 'Health+ recurring schedule reviewed from Admin',
+    ));
+    setState(() => _message = 'Health+ schedule $id updated.');
     await _loadAdminData();
   }
 
@@ -1124,6 +1441,16 @@ class _AdminPhaseOneShellState extends State<AdminPhaseOneShell> {
                       onSetWalletFrozen: _setWalletFrozenFromAdminRecord,
                       onProcessPayoutRequest: _processPayoutRequestFromAdmin,
                       onModerateRating: _moderateRating,
+                      onSyncRiderStripe: _syncRiderStripeStatus,
+                      onResetRiderStripe: _resetRiderStripe,
+                      onRequestRiderMoreInformation:
+                          _requestRiderMoreInformation,
+                      onReviewRiderDocument: _reviewRiderDocument,
+                      onRemoveRiderProfilePhoto: _removeRiderProfilePhoto,
+                      onUpdateHealthPlusSchedule: _updateHealthPlusSchedule,
+                      onUpdateGiftCampaignParticipant:
+                          _updateGiftCampaignParticipant,
+                      onUpdateGiftStoryAccess: _updateGiftStoryAccess,
                       onSetBusinessOperationStatus: _setBusinessOperationStatus,
                       onUpdatePlatformRecord: _updatePlatformRecord,
                       onOpenRiderProfile: _openRiderProfile,
@@ -1237,8 +1564,13 @@ class AdminDataBundle {
     required this.supportTickets,
     required this.healthPlusPayments,
     required this.healthPlusPickups,
+    required this.recurringPickupSchedules,
+    required this.healthPlusCustodyArchive,
     required this.businessAccounts,
     required this.giftOrders,
+    required this.giftRequests,
+    required this.giftBrands,
+    required this.giftCampaignParticipants,
     required this.auditLogs,
     required this.chats,
     required this.riderDocuments,
@@ -1271,8 +1603,13 @@ class AdminDataBundle {
   final List<Map<String, dynamic>> supportTickets;
   final List<Map<String, dynamic>> healthPlusPayments;
   final List<Map<String, dynamic>> healthPlusPickups;
+  final List<Map<String, dynamic>> recurringPickupSchedules;
+  final List<Map<String, dynamic>> healthPlusCustodyArchive;
   final List<Map<String, dynamic>> businessAccounts;
   final List<Map<String, dynamic>> giftOrders;
+  final List<Map<String, dynamic>> giftRequests;
+  final List<Map<String, dynamic>> giftBrands;
+  final List<Map<String, dynamic>> giftCampaignParticipants;
   final List<Map<String, dynamic>> auditLogs;
   final List<Map<String, dynamic>> chats;
   final List<Map<String, dynamic>> riderDocuments;
@@ -1305,8 +1642,13 @@ class AdminDataBundle {
         supportTickets: [],
         healthPlusPayments: [],
         healthPlusPickups: [],
+        recurringPickupSchedules: [],
+        healthPlusCustodyArchive: [],
         businessAccounts: [],
         giftOrders: [],
+        giftRequests: [],
+        giftBrands: [],
+        giftCampaignParticipants: [],
         auditLogs: [],
         chats: [],
         riderDocuments: [],
@@ -1390,8 +1732,20 @@ class AdminRepository {
       canViewHealthPlus
           ? _read(_db.collection('prescriptionPickups').limit(100))
           : Future.value(<Map<String, dynamic>>[]),
+      canViewHealthPlus
+          ? _read(_db.collection('recurringPickupSchedules').limit(100))
+          : Future.value(<Map<String, dynamic>>[]),
+      canViewHealthPlus
+          ? _read(_db
+              .collection('healthPlusCustodyArchive')
+              .orderBy('createdAt', descending: true)
+              .limit(150))
+          : Future.value(<Map<String, dynamic>>[]),
       _read(_db.collection('businessAccounts').limit(100)),
       _read(_db.collection('giftOrders').limit(100)),
+      _read(_db.collection('giftRequests').limit(150)),
+      _read(_db.collection('giftBrands').limit(100)),
+      _read(_db.collection('giftCampaignParticipants').limit(150)),
       _read(_db
           .collection('adminAuditLogs')
           .orderBy('createdAt', descending: true)
@@ -1437,20 +1791,25 @@ class AdminRepository {
       supportTickets: results[15],
       healthPlusPayments: results[16],
       healthPlusPickups: results[17],
-      businessAccounts: results[18],
-      giftOrders: results[19],
-      auditLogs: results[20],
-      chats: results[21],
-      riderDocuments: results[22],
-      websiteVisitors: results[23],
-      irisCanonicalObjects: results[24],
-      irisLearningCases: results[25],
-      irisPolicies: results[26],
-      irisEvidence: results[27],
-      platformConfig: results[28],
-      platformStatus: results[29],
-      platformNotices: results[30],
-      platformVersions: results[31],
+      recurringPickupSchedules: results[18],
+      healthPlusCustodyArchive: results[19],
+      businessAccounts: results[20],
+      giftOrders: results[21],
+      giftRequests: results[22],
+      giftBrands: results[23],
+      giftCampaignParticipants: results[24],
+      auditLogs: results[25],
+      chats: results[26],
+      riderDocuments: results[27],
+      websiteVisitors: results[28],
+      irisCanonicalObjects: results[29],
+      irisLearningCases: results[30],
+      irisPolicies: results[31],
+      irisEvidence: results[32],
+      platformConfig: results[33],
+      platformStatus: results[34],
+      platformNotices: results[35],
+      platformVersions: results[36],
     );
   }
 
@@ -1762,6 +2121,14 @@ class _AdminModuleBody extends StatelessWidget {
     required this.onSetWalletFrozen,
     required this.onProcessPayoutRequest,
     required this.onModerateRating,
+    required this.onSyncRiderStripe,
+    required this.onResetRiderStripe,
+    required this.onRequestRiderMoreInformation,
+    required this.onReviewRiderDocument,
+    required this.onRemoveRiderProfilePhoto,
+    required this.onUpdateHealthPlusSchedule,
+    required this.onUpdateGiftCampaignParticipant,
+    required this.onUpdateGiftStoryAccess,
     required this.onSetBusinessOperationStatus,
     required this.onUpdatePlatformRecord,
     required this.onOpenRiderProfile,
@@ -1814,6 +2181,19 @@ class _AdminModuleBody extends StatelessWidget {
   final Future<void> Function(Map<String, dynamic>, String)
       onProcessPayoutRequest;
   final Future<void> Function(Map<String, dynamic>, String) onModerateRating;
+  final Future<void> Function(Map<String, dynamic>) onSyncRiderStripe;
+  final Future<void> Function(Map<String, dynamic>) onResetRiderStripe;
+  final Future<void> Function(Map<String, dynamic>)
+      onRequestRiderMoreInformation;
+  final Future<void> Function(Map<String, dynamic>, String)
+      onReviewRiderDocument;
+  final Future<void> Function(Map<String, dynamic>) onRemoveRiderProfilePhoto;
+  final Future<void> Function(Map<String, dynamic>, String)
+      onUpdateHealthPlusSchedule;
+  final Future<void> Function(Map<String, dynamic>, String)
+      onUpdateGiftCampaignParticipant;
+  final Future<void> Function(Map<String, dynamic>, String)
+      onUpdateGiftStoryAccess;
   final Future<void> Function(Map<String, dynamic>, String)
       onSetBusinessOperationStatus;
   final Future<void> Function(Map<String, dynamic>, String)
@@ -1914,6 +2294,11 @@ class _AdminModuleBody extends StatelessWidget {
               canManageRiders: canManageRiders,
               onOpenRiderProfile: onOpenRiderProfile,
               onSetRiderStatus: onSetRiderStatus,
+              onSyncRiderStripe: onSyncRiderStripe,
+              onResetRiderStripe: onResetRiderStripe,
+              onRequestMoreInformation: onRequestRiderMoreInformation,
+              onReviewDocument: onReviewRiderDocument,
+              onRemoveProfilePhoto: onRemoveRiderProfilePhoto,
             ),
           AdminModule.verification => _RecordModule(
               title: 'Verification',
@@ -1938,6 +2323,10 @@ class _AdminModuleBody extends StatelessWidget {
                         record,
                         onSetRiderStatus,
                         onOpenRiderProfile,
+                        onSyncRiderStripe: onSyncRiderStripe,
+                        onResetRiderStripe: onResetRiderStripe,
+                        onRequestMoreInformation: onRequestRiderMoreInformation,
+                        onRemoveProfilePhoto: onRemoveRiderProfilePhoto,
                       )
                   : null,
             ),
@@ -1976,6 +2365,8 @@ class _AdminModuleBody extends StatelessWidget {
             ),
           AdminModule.healthPlus => _HealthPlusOperationsModule(
               pickups: data.healthPlusPickups,
+              schedules: data.recurringPickupSchedules,
+              custodyArchive: data.healthPlusCustodyArchive,
               payments: data.healthPlusPayments,
               deliveries: data.deliveries,
               supportTickets: data.supportTickets,
@@ -1983,6 +2374,7 @@ class _AdminModuleBody extends StatelessWidget {
               canManageHealthPlus: canManageHealthPlus,
               onOpen: onOpenHealthPlusProfile,
               onUpdateHealthPlusPickup: onUpdateHealthPlusPickup,
+              onUpdateHealthPlusSchedule: onUpdateHealthPlusSchedule,
             ),
           AdminModule.business => _BusinessOperationsModule(
               accounts: data.businessAccounts,
@@ -1996,7 +2388,9 @@ class _AdminModuleBody extends StatelessWidget {
               onRequestDuplicateMerge: onRequestDuplicateMerge,
             ),
           AdminModule.gifts => _GiftsOperationsModule(
-              gifts: data.giftOrders,
+              gifts: [...data.giftOrders, ...data.giftRequests],
+              brands: data.giftBrands,
+              participants: data.giftCampaignParticipants,
               deliveries: data.deliveries,
               payments: data.payments,
               supportTickets: data.supportTickets,
@@ -2004,6 +2398,8 @@ class _AdminModuleBody extends StatelessWidget {
               query: query,
               canManageIssues: canManageIssues,
               onUpdateGiftWorkflow: onUpdateGiftWorkflow,
+              onUpdateGiftCampaignParticipant: onUpdateGiftCampaignParticipant,
+              onUpdateGiftStoryAccess: onUpdateGiftStoryAccess,
             ),
           AdminModule.audit => _AuditCentreModule(
               auditLogs: data.auditLogs,
@@ -2011,7 +2407,7 @@ class _AdminModuleBody extends StatelessWidget {
               riders: data.riders,
               businessAccounts: data.businessAccounts,
               deliveries: data.deliveries,
-              gifts: data.giftOrders,
+              gifts: [...data.giftOrders, ...data.giftRequests],
               healthPlusPickups: data.healthPlusPickups,
               supportTickets: data.supportTickets,
               payments: data.payments,
@@ -2051,6 +2447,8 @@ class _AdminModuleBody extends StatelessWidget {
 class _HealthPlusOperationsModule extends StatelessWidget {
   const _HealthPlusOperationsModule({
     required this.pickups,
+    required this.schedules,
+    required this.custodyArchive,
     required this.payments,
     required this.deliveries,
     required this.supportTickets,
@@ -2058,9 +2456,12 @@ class _HealthPlusOperationsModule extends StatelessWidget {
     required this.canManageHealthPlus,
     required this.onOpen,
     required this.onUpdateHealthPlusPickup,
+    required this.onUpdateHealthPlusSchedule,
   });
 
   final List<Map<String, dynamic>> pickups;
+  final List<Map<String, dynamic>> schedules;
+  final List<Map<String, dynamic>> custodyArchive;
   final List<Map<String, dynamic>> payments;
   final List<Map<String, dynamic>> deliveries;
   final List<Map<String, dynamic>> supportTickets;
@@ -2069,10 +2470,12 @@ class _HealthPlusOperationsModule extends StatelessWidget {
   final ValueChanged<Map<String, dynamic>> onOpen;
   final Future<void> Function(Map<String, dynamic>, String)
       onUpdateHealthPlusPickup;
+  final Future<void> Function(Map<String, dynamic>, String)
+      onUpdateHealthPlusSchedule;
 
   @override
   Widget build(BuildContext context) {
-    final records = [...pickups, ...payments];
+    final records = [...pickups, ...schedules, ...payments];
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -2146,6 +2549,8 @@ class _HealthPlusOperationsModule extends StatelessWidget {
                 'loaded payments'),
             _MetricCard('Pharmacies',
                 _activePharmacies(records).length.toString(), 'active'),
+            _MetricCard('Recurring', schedules.length.toString(), 'schedules'),
+            _MetricCard('Custody', custodyArchive.length.toString(), 'events'),
           ],
         ),
         const SizedBox(height: 18),
@@ -2196,6 +2601,81 @@ class _HealthPlusOperationsModule extends StatelessWidget {
                   onPressed: () =>
                       unawaited(onUpdateHealthPlusPickup(record, action.$2)),
                 ),
+          ],
+        ),
+        const SizedBox(height: 18),
+        _RecordModule(
+          title: 'Recurring Schedule Review',
+          subtitle:
+              'Historical recurring pickup schedule management, review and lifecycle controls.',
+          records: adminSearch(schedules, query, const [
+            'id',
+            'scheduleId',
+            'profileId',
+            'userId',
+            'senderId',
+            'fullName',
+            'status',
+            'frequency',
+            'subscriptionPlan',
+            'preferredPickupTime',
+          ]),
+          query: '',
+          fields: const [],
+          columns: const ['Schedule', 'Customer', 'Plan', 'Status'],
+          row: (record) => [
+            _recordId(record),
+            '${record['fullName'] ?? record['senderName'] ?? record['userId'] ?? record['senderId'] ?? 'Customer'}',
+            '${record['subscriptionPlan'] ?? record['planType'] ?? 'core'} / ${record['frequency'] ?? 'recurring'}',
+            '${record['status'] ?? record['adminReviewStatus'] ?? 'scheduled'}',
+          ],
+          actions: canManageHealthPlus
+              ? (record) => [
+                    _MiniAction(
+                      label: 'Approve',
+                      onPressed: () => unawaited(
+                          onUpdateHealthPlusSchedule(record, 'approved')),
+                    ),
+                    _MiniAction(
+                      label: 'Pause',
+                      onPressed: () => unawaited(
+                          onUpdateHealthPlusSchedule(record, 'paused')),
+                    ),
+                    _MiniAction(
+                      label: 'Resume',
+                      onPressed: () => unawaited(
+                          onUpdateHealthPlusSchedule(record, 'active')),
+                    ),
+                    _MiniAction(
+                      label: 'Cancel',
+                      onPressed: () => unawaited(
+                          onUpdateHealthPlusSchedule(record, 'cancelled')),
+                    ),
+                  ]
+              : null,
+        ),
+        const SizedBox(height: 18),
+        _RecordModule(
+          title: 'Custody Timeline',
+          subtitle:
+              'Historical Health+ custody archive, evidence and status history.',
+          records: adminSearch(custodyArchive, query, const [
+            'id',
+            'pickupId',
+            'scheduleId',
+            'eventType',
+            'actorName',
+            'internalNote',
+            'publicMessage',
+          ]),
+          query: '',
+          fields: const [],
+          columns: const ['Event', 'Record', 'Actor', 'Evidence'],
+          row: (record) => [
+            '${record['eventType'] ?? record['type'] ?? 'custody_event'}',
+            '${record['pickupId'] ?? record['scheduleId'] ?? _recordId(record)}',
+            '${record['actorName'] ?? record['actorId'] ?? 'system'}',
+            '${record['evidenceUrl'] ?? record['internalNote'] ?? record['publicMessage'] ?? ''}',
           ],
         ),
         const SizedBox(height: 18),
@@ -3569,6 +4049,11 @@ class _RiderOperationsModule extends StatelessWidget {
     required this.canManageRiders,
     required this.onOpenRiderProfile,
     required this.onSetRiderStatus,
+    required this.onSyncRiderStripe,
+    required this.onResetRiderStripe,
+    required this.onRequestMoreInformation,
+    required this.onReviewDocument,
+    required this.onRemoveProfilePhoto,
   });
 
   final List<Map<String, dynamic>> riders;
@@ -3580,6 +4065,11 @@ class _RiderOperationsModule extends StatelessWidget {
   final bool canManageRiders;
   final ValueChanged<Map<String, dynamic>> onOpenRiderProfile;
   final Future<void> Function(Map<String, dynamic>, String) onSetRiderStatus;
+  final Future<void> Function(Map<String, dynamic>) onSyncRiderStripe;
+  final Future<void> Function(Map<String, dynamic>) onResetRiderStripe;
+  final Future<void> Function(Map<String, dynamic>) onRequestMoreInformation;
+  final Future<void> Function(Map<String, dynamic>, String) onReviewDocument;
+  final Future<void> Function(Map<String, dynamic>) onRemoveProfilePhoto;
 
   @override
   Widget build(BuildContext context) {
@@ -3649,6 +4139,10 @@ class _RiderOperationsModule extends StatelessWidget {
                     record,
                     onSetRiderStatus,
                     onOpenRiderProfile,
+                    onSyncRiderStripe: onSyncRiderStripe,
+                    onResetRiderStripe: onResetRiderStripe,
+                    onRequestMoreInformation: onRequestMoreInformation,
+                    onRemoveProfilePhoto: onRemoveProfilePhoto,
                   )
               : null,
         ),
@@ -3677,6 +4171,25 @@ class _RiderOperationsModule extends StatelessWidget {
             '${record['status'] ?? record['verificationStatus'] ?? 'pending'}',
             _date(record['updatedAt'] ?? record['createdAt']),
           ],
+          actions: canManageRiders
+              ? (record) => [
+                    _MiniAction(
+                      label: 'Approve',
+                      onPressed: () =>
+                          unawaited(onReviewDocument(record, 'approved')),
+                    ),
+                    _MiniAction(
+                      label: 'Reject',
+                      onPressed: () =>
+                          unawaited(onReviewDocument(record, 'rejected')),
+                    ),
+                    _MiniAction(
+                      label: 'Request replacement',
+                      onPressed: () => unawaited(
+                          onReviewDocument(record, 'replacement_requested')),
+                    ),
+                  ]
+              : null,
         ),
       ],
     );
@@ -4216,6 +4729,8 @@ class _ChatModule extends StatelessWidget {
 class _GiftsOperationsModule extends StatelessWidget {
   const _GiftsOperationsModule({
     required this.gifts,
+    required this.brands,
+    required this.participants,
     required this.deliveries,
     required this.payments,
     required this.supportTickets,
@@ -4223,9 +4738,13 @@ class _GiftsOperationsModule extends StatelessWidget {
     required this.query,
     required this.canManageIssues,
     required this.onUpdateGiftWorkflow,
+    required this.onUpdateGiftCampaignParticipant,
+    required this.onUpdateGiftStoryAccess,
   });
 
   final List<Map<String, dynamic>> gifts;
+  final List<Map<String, dynamic>> brands;
+  final List<Map<String, dynamic>> participants;
   final List<Map<String, dynamic>> deliveries;
   final List<Map<String, dynamic>> payments;
   final List<Map<String, dynamic>> supportTickets;
@@ -4234,6 +4753,10 @@ class _GiftsOperationsModule extends StatelessWidget {
   final bool canManageIssues;
   final Future<void> Function(Map<String, dynamic>, String)
       onUpdateGiftWorkflow;
+  final Future<void> Function(Map<String, dynamic>, String)
+      onUpdateGiftCampaignParticipant;
+  final Future<void> Function(Map<String, dynamic>, String)
+      onUpdateGiftStoryAccess;
 
   @override
   Widget build(BuildContext context) {
@@ -4302,6 +4825,8 @@ class _GiftsOperationsModule extends StatelessWidget {
             _MetricCard('Gift Revenue', '£${revenue.toStringAsFixed(2)}',
                 'gift-linked payments'),
             _MetricCard('Campaigns', '${campaigns.length}', 'active names'),
+            _MetricCard('Participants', '${participants.length}', 'campaign'),
+            _MetricCard('Brands', '${brands.length}', 'partners'),
           ],
         ),
         const SizedBox(height: 18),
@@ -4321,8 +4846,99 @@ class _GiftsOperationsModule extends StatelessWidget {
             _giftStorySummary(record),
           ],
           actions: canManageIssues
-              ? (record) => _giftActions(record, onUpdateGiftWorkflow)
+              ? (record) => [
+                    ..._giftActions(record, onUpdateGiftWorkflow),
+                    if (_hasGiftStory(record)) ...[
+                      _MiniAction(
+                        label: 'Retry story',
+                        onPressed: () =>
+                            unawaited(onUpdateGiftStoryAccess(record, 'retry')),
+                      ),
+                      _MiniAction(
+                        label: 'Regenerate link',
+                        onPressed: () => unawaited(
+                            onUpdateGiftStoryAccess(record, 'regenerate')),
+                      ),
+                      _MiniAction(
+                        label: 'Extend',
+                        onPressed: () => unawaited(
+                            onUpdateGiftStoryAccess(record, 'extend')),
+                      ),
+                      _MiniAction(
+                        label: 'Revoke',
+                        onPressed: () => unawaited(
+                            onUpdateGiftStoryAccess(record, 'revoke')),
+                      ),
+                    ],
+                  ]
               : null,
+        ),
+        const SizedBox(height: 18),
+        _RecordModule(
+          title: 'Campaign Participants',
+          subtitle:
+              'Historical anonymous campaign participant review, matching and assignment management.',
+          records: adminSearch(participants, query, const [
+            'id',
+            'campaignId',
+            'campaignName',
+            'displayName',
+            'userId',
+            'matchStatus',
+            'suggestedParticipantId',
+          ]),
+          query: '',
+          fields: const [],
+          columns: const ['Participant', 'Campaign', 'Match', 'Reason'],
+          row: (record) => [
+            '${record['displayName'] ?? record['userId'] ?? _recordId(record)}',
+            '${record['campaignName'] ?? record['campaignId'] ?? 'Campaign'}',
+            '${record['matchStatus'] ?? 'unmatched'} -> ${record['suggestedParticipantId'] ?? 'none'}',
+            '${record['suggestedMatchReason'] ?? record['matchReason'] ?? ''}',
+          ],
+          actions: canManageIssues
+              ? (record) => [
+                    _MiniAction(
+                      label: 'Approve',
+                      onPressed: () => unawaited(
+                          onUpdateGiftCampaignParticipant(record, 'approved')),
+                    ),
+                    _MiniAction(
+                      label: 'Reject',
+                      onPressed: () => unawaited(
+                          onUpdateGiftCampaignParticipant(record, 'rejected')),
+                    ),
+                    _MiniAction(
+                      label: 'Assign later',
+                      onPressed: () => unawaited(
+                          onUpdateGiftCampaignParticipant(
+                              record, 'assign_later')),
+                    ),
+                  ]
+              : null,
+        ),
+        const SizedBox(height: 18),
+        _RecordModule(
+          title: 'Gift Brand and Campaign Review',
+          subtitle:
+              'Historical Gift brand, campaign approval and operational reporting records.',
+          records: adminSearch(brands, query, const [
+            'id',
+            'brandName',
+            'name',
+            'campaignName',
+            'approvalStatus',
+            'status',
+          ]),
+          query: '',
+          fields: const [],
+          columns: const ['Brand', 'Campaign', 'Status', 'Updated'],
+          row: (record) => [
+            '${record['brandName'] ?? record['name'] ?? _recordId(record)}',
+            '${record['campaignName'] ?? record['campaignId'] ?? 'Campaign'}',
+            '${record['approvalStatus'] ?? record['status'] ?? 'pending'}',
+            _date(record['updatedAt'] ?? record['createdAt']),
+          ],
         ),
         const SizedBox(height: 18),
         _OperationalDetailGrid(
@@ -5481,8 +6097,12 @@ Map<String, dynamic>? _firstLikelyDuplicate(
 List<Widget> _riderActions(
   Map<String, dynamic> record,
   Future<void> Function(Map<String, dynamic>, String) onSetStatus,
-  ValueChanged<Map<String, dynamic>> onOpenProfile,
-) {
+  ValueChanged<Map<String, dynamic>> onOpenProfile, {
+  Future<void> Function(Map<String, dynamic>)? onSyncRiderStripe,
+  Future<void> Function(Map<String, dynamic>)? onResetRiderStripe,
+  Future<void> Function(Map<String, dynamic>)? onRequestMoreInformation,
+  Future<void> Function(Map<String, dynamic>)? onRemoveProfilePhoto,
+}) {
   final status =
       '${record['approvalStatus'] ?? record['driverStatus'] ?? record['status'] ?? ''}'
           .toLowerCase();
@@ -5491,6 +6111,26 @@ List<Widget> _riderActions(
       label: 'Profile',
       onPressed: () => onOpenProfile(record),
     ),
+    if (onSyncRiderStripe != null)
+      _MiniAction(
+        label: 'Sync Stripe',
+        onPressed: () => unawaited(onSyncRiderStripe(record)),
+      ),
+    if (onResetRiderStripe != null)
+      _MiniAction(
+        label: 'Reset Stripe',
+        onPressed: () => unawaited(onResetRiderStripe(record)),
+      ),
+    if (onRequestMoreInformation != null)
+      _MiniAction(
+        label: 'More info',
+        onPressed: () => unawaited(onRequestMoreInformation(record)),
+      ),
+    if (onRemoveProfilePhoto != null)
+      _MiniAction(
+        label: 'Remove photo',
+        onPressed: () => unawaited(onRemoveProfilePhoto(record)),
+      ),
   ];
   if (status.contains('suspend')) {
     return [
