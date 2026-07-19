@@ -63,12 +63,14 @@ class _AdminPhaseOneShellState extends State<AdminPhaseOneShell> {
   Map<String, dynamic>? _selectedAccount;
   String _selectedAccountType = 'sender';
   Map<String, dynamic>? _selectedChat;
+  List<Map<String, dynamic>> _selectedChatMessages = const [];
   AdminRole _adminInviteRole = AdminRole.operationsAdmin;
   bool _loading = true;
   bool _signingIn = false;
   bool _loadingData = false;
   String? _message;
   StreamSubscription<User?>? _authSub;
+  StreamSubscription<QuerySnapshot<Map<String, dynamic>>>? _chatMessagesSub;
 
   @override
   void initState() {
@@ -81,6 +83,7 @@ class _AdminPhaseOneShellState extends State<AdminPhaseOneShell> {
   @override
   void dispose() {
     _authSub?.cancel();
+    _chatMessagesSub?.cancel();
     _email.dispose();
     _password.dispose();
     _search.dispose();
@@ -876,29 +879,32 @@ class _AdminPhaseOneShellState extends State<AdminPhaseOneShell> {
     }
     final id = _idFor(ticket);
     if (id.isEmpty) return;
-    final patch = AdminSupportTools.statusPatch(
-      status: status,
-      assignedTo: status == 'assigned' ? _user?.email : null,
-      resolutionNote:
-          status == 'resolved' ? 'Resolved from Circum Admin' : null,
-      reason: 'Support workflow action confirmed from Admin',
-      updatedAt: FieldValue.serverTimestamp(),
-    );
-    await _db
-        .collection('supportTickets')
-        .doc(id)
-        .set(patch, SetOptions(merge: true));
-    await _writeAudit(AdminAuditEntry(
-      adminUserId: _user?.uid ?? 'unknown-admin',
-      actionType: 'support_ticket_$status',
-      recordType: 'supportTickets',
-      recordId: id,
-      oldValue: {'status': ticket['status']},
-      newValue: {'status': status},
-      reason: 'Support ticket updated from Admin',
-    ));
-    setState(() => _message = 'Support ticket $id updated to $status.');
-    await _loadAdminData();
+    try {
+      await _functions.httpsCallable('updateSupportConversationStatus').call({
+        'ticketId': id,
+        'conversationId': ticket['conversationId'] ?? ticket['chatId'],
+        'status': status,
+        'assignedTo': status == 'assigned' ? _user?.email : null,
+        'resolutionNote':
+            status == 'resolved' ? 'Resolved from Circum Admin' : null,
+        'reason': 'Support workflow action confirmed from Admin',
+      });
+      await _writeAudit(AdminAuditEntry(
+        adminUserId: _user?.uid ?? 'unknown-admin',
+        actionType: 'support_ticket_$status',
+        recordType: 'supportTickets',
+        recordId: id,
+        oldValue: {'status': ticket['status']},
+        newValue: {'status': status},
+        reason: 'Support ticket updated from Admin',
+      ));
+      setState(() => _message = 'Support ticket $id updated to $status.');
+      await _loadAdminData();
+    } on FirebaseFunctionsException catch (error) {
+      setState(() => _message = _functionsMessage(error));
+    } catch (_) {
+      setState(() => _message = 'Could not update support ticket $id.');
+    }
   }
 
   Future<void> _updateGiftWorkflow(
@@ -1491,6 +1497,354 @@ class _AdminPhaseOneShellState extends State<AdminPhaseOneShell> {
     }
   }
 
+  void _selectChat(Map<String, dynamic> chat) {
+    final chatId = _recordId(chat).trim();
+    _chatMessagesSub?.cancel();
+    setState(() {
+      _selectedChat = chat;
+      _selectedChatMessages = const [];
+      _module = AdminModule.chat;
+    });
+    if (chatId.isEmpty) return;
+    _chatMessagesSub = _db
+        .collection('chats')
+        .doc(chatId)
+        .collection('messages')
+        .orderBy('createdAt')
+        .limit(150)
+        .snapshots()
+        .listen((snapshot) {
+      if (!mounted) return;
+      setState(() {
+        _selectedChatMessages = snapshot.docs
+            .map((doc) => {'id': doc.id, ...doc.data()})
+            .toList(growable: false);
+      });
+    }, onError: (_) {
+      if (mounted) {
+        setState(() => _message = 'Could not load conversation history.');
+      }
+    });
+  }
+
+  Future<void> _openSupportConversation(Map<String, dynamic> ticket) async {
+    if (!_can(AdminPermission.manageIssues)) {
+      setState(() => _message = 'Your role cannot open support conversations.');
+      return;
+    }
+    final ticketId = _recordId(ticket).trim();
+    if (ticketId.isEmpty) return;
+    try {
+      final result = await _functions
+          .httpsCallable('getOrCreateSupportConversation')
+          .call({
+        'ticketId': ticketId,
+        'userId': ticket['userId'] ?? ticket['senderId'] ?? ticket['riderId'],
+        'deliveryId': ticket['deliveryId'] ?? ticket['requestId'],
+      });
+      final data = Map<String, dynamic>.from(result.data as Map? ?? {});
+      final chatId =
+          '${data['chatId'] ?? data['conversationId'] ?? ticket['chatId'] ?? ticket['conversationId'] ?? ''}'
+              .trim();
+      if (chatId.isEmpty) {
+        setState(() => _message = 'Support conversation was not returned.');
+        return;
+      }
+      _selectChat({
+        'id': chatId,
+        'threadId': chatId,
+        'type': 'support',
+        'ticketId': ticketId,
+      });
+      await _writeAudit(AdminAuditEntry(
+        adminUserId: _user?.uid ?? 'unknown-admin',
+        actionType: 'support_conversation_opened',
+        recordType: 'supportTickets',
+        recordId: ticketId,
+        newValue: {'chatId': chatId},
+        reason: 'Support ticket chat opened from Admin',
+      ));
+      setState(() => _message = 'Support conversation opened.');
+    } on FirebaseFunctionsException catch (error) {
+      setState(() => _message = _functionsMessage(error));
+    } catch (_) {
+      setState(() => _message = 'Could not open support conversation.');
+    }
+  }
+
+  Future<void> _startRiderConversation(Map<String, dynamic> rider) async {
+    if (!_can(AdminPermission.manageIssues)) {
+      setState(() => _message = 'Your role cannot message riders.');
+      return;
+    }
+    final riderId = _riderId(rider);
+    if (riderId.isEmpty) return;
+    try {
+      final result =
+          await _functions.httpsCallable('startAdminConversation').call({
+        'participantId': riderId,
+        'participantRole': 'rider',
+        'riderId': riderId,
+      });
+      final data = Map<String, dynamic>.from(result.data as Map? ?? {});
+      final chatId =
+          '${data['chatId'] ?? data['conversationId'] ?? data['id'] ?? ''}'
+              .trim();
+      if (chatId.isEmpty) {
+        setState(() => _message = 'Rider conversation was not returned.');
+        return;
+      }
+      _selectChat({
+        'id': chatId,
+        'threadId': chatId,
+        'type': 'admin_rider',
+        'riderId': riderId,
+      });
+      await _writeAudit(AdminAuditEntry(
+        adminUserId: _user?.uid ?? 'unknown-admin',
+        actionType: 'admin_rider_conversation_opened',
+        recordType: 'riderProfiles',
+        recordId: riderId,
+        newValue: {'chatId': chatId},
+        reason: 'Admin to Rider conversation opened',
+      ));
+      setState(() => _message = 'Rider conversation opened.');
+    } on FirebaseFunctionsException catch (error) {
+      setState(() => _message = _functionsMessage(error));
+    } catch (_) {
+      setState(() => _message = 'Could not open Rider conversation.');
+    }
+  }
+
+  Future<void> _addAdminNote(
+    Map<String, dynamic> record,
+    String recordType,
+  ) async {
+    if (!_can(AdminPermission.manageIssues)) {
+      setState(() => _message = 'Your role cannot add Admin notes.');
+      return;
+    }
+    final recordId = _recordId(record).trim();
+    if (recordId.isEmpty) return;
+    final note = TextEditingController();
+    var pinned = false;
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setDialogState) => AlertDialog(
+          title: const Text('Internal Admin Note'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextField(
+                controller: note,
+                maxLines: 4,
+                decoration: const InputDecoration(
+                  labelText: 'Note',
+                  border: OutlineInputBorder(),
+                ),
+              ),
+              const SizedBox(height: 12),
+              SwitchListTile.adaptive(
+                value: pinned,
+                onChanged: (value) => setDialogState(() => pinned = value),
+                title: const Text('Pin note'),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context, false),
+              child: const Text('Cancel'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.pop(context, true),
+              child: const Text('Save note'),
+            ),
+          ],
+        ),
+      ),
+    );
+    final body = note.text.trim();
+    note.dispose();
+    if (confirmed != true || body.isEmpty) return;
+    await _db.collection('adminNotes').add({
+      'recordType': recordType,
+      'recordId': recordId,
+      'body': body,
+      'note': body,
+      'pinned': pinned,
+      'operatorId': _user?.uid,
+      'operatorEmail': _user?.email,
+      'createdAt': FieldValue.serverTimestamp(),
+      'updatedAt': FieldValue.serverTimestamp(),
+    });
+    await _writeAudit(AdminAuditEntry(
+      adminUserId: _user?.uid ?? 'unknown-admin',
+      actionType: 'admin_note_added',
+      recordType: recordType,
+      recordId: recordId,
+      newValue: {'pinned': pinned},
+      reason: 'Internal Admin note added',
+    ));
+    setState(() => _message = 'Admin note added.');
+    await _loadAdminData();
+  }
+
+  Future<void> _updateSenderTrust(
+    Map<String, dynamic> account,
+    String action,
+  ) async {
+    if (!_can(AdminPermission.editCustomers)) {
+      setState(() => _message = 'Your role cannot update sender trust.');
+      return;
+    }
+    final senderId = _recordId(account).trim();
+    if (senderId.isEmpty) return;
+    final points = TextEditingController();
+    final reason = TextEditingController();
+    var selectedTier =
+        '${account['senderTier'] ?? account['trustTier'] ?? 'standard'}';
+    final needsPoints = action == 'award' || action == 'deduct';
+    final needsTier = action == 'promote' || action == 'demote';
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setDialogState) => AlertDialog(
+          title: Text('Sender trust: $action'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              if (needsPoints)
+                TextField(
+                  controller: points,
+                  keyboardType: TextInputType.number,
+                  decoration: const InputDecoration(
+                    labelText: 'Trust points',
+                    border: OutlineInputBorder(),
+                  ),
+                ),
+              if (needsTier)
+                DropdownButtonFormField<String>(
+                  initialValue: selectedTier,
+                  decoration: const InputDecoration(
+                    labelText: 'Trust tier',
+                    border: OutlineInputBorder(),
+                  ),
+                  items: const [
+                    DropdownMenuItem(
+                        value: 'standard', child: Text('Standard')),
+                    DropdownMenuItem(
+                        value: 'priority', child: Text('Priority')),
+                    DropdownMenuItem(
+                        value: 'vanguard', child: Text('Vanguard')),
+                  ],
+                  onChanged: (value) => setDialogState(
+                      () => selectedTier = value ?? selectedTier),
+                ),
+              const SizedBox(height: 12),
+              TextField(
+                controller: reason,
+                maxLines: 3,
+                decoration: const InputDecoration(
+                  labelText: 'Reason',
+                  border: OutlineInputBorder(),
+                ),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context, false),
+              child: const Text('Cancel'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.pop(context, true),
+              child: const Text('Apply'),
+            ),
+          ],
+        ),
+      ),
+    );
+    final reasonText = reason.text.trim();
+    final pointDelta =
+        needsPoints ? (int.tryParse(points.text.trim()) ?? 0).abs() : 0;
+    points.dispose();
+    reason.dispose();
+    if (confirmed != true) return;
+    if (needsPoints && pointDelta == 0) {
+      setState(() => _message = 'Enter a non-zero trust point amount.');
+      return;
+    }
+    await _db.runTransaction((transaction) async {
+      final ref = _db.collection('users').doc(senderId);
+      final snapshot = await transaction.get(ref);
+      final current = snapshot.data() ?? account;
+      final currentPoints =
+          (current['senderTrustPoints'] ?? current['trustPoints'] ?? 0) as num;
+      final currentTier =
+          '${current['senderTier'] ?? current['trustTier'] ?? 'standard'}';
+      final currentFrozen = current['senderTrustFrozen'] == true;
+      var nextPoints = currentPoints.toInt();
+      var nextTier = currentTier;
+      var nextFrozen = currentFrozen;
+      switch (action) {
+        case 'award':
+          nextPoints += pointDelta;
+          nextTier = _senderTrustTierForPoints(nextPoints);
+        case 'deduct':
+          nextPoints = (nextPoints - pointDelta).clamp(0, 1000000).toInt();
+          nextTier = _senderTrustTierForPoints(nextPoints);
+        case 'promote':
+        case 'demote':
+          nextTier = selectedTier;
+        case 'freeze':
+          nextFrozen = true;
+        case 'restore':
+          nextFrozen = false;
+          nextTier = _senderTrustTierForPoints(nextPoints);
+      }
+      final eventRef = _db.collection('senderTrustEvents').doc();
+      transaction.set(
+          ref,
+          {
+            'senderTrustPoints': nextPoints,
+            'senderTier': nextTier,
+            'senderTrustFrozen': nextFrozen,
+            'senderTrustUpdatedAt': FieldValue.serverTimestamp(),
+            'senderTrustUpdatedBy': _user?.uid ?? _user?.email,
+            'senderTrustLastReason': reasonText,
+          },
+          SetOptions(merge: true));
+      transaction.set(eventRef, {
+        'senderId': senderId,
+        'action': action,
+        'pointsDelta': action == 'deduct' ? -pointDelta : pointDelta,
+        'previousPoints': currentPoints,
+        'nextPoints': nextPoints,
+        'previousTier': currentTier,
+        'nextTier': nextTier,
+        'previousFrozen': currentFrozen,
+        'nextFrozen': nextFrozen,
+        'reason': reasonText,
+        'operatorId': _user?.uid,
+        'operatorEmail': _user?.email,
+        'createdAt': FieldValue.serverTimestamp(),
+      });
+    });
+    await _writeAudit(AdminAuditEntry(
+      adminUserId: _user?.uid ?? 'unknown-admin',
+      actionType: 'sender_trust_$action',
+      recordType: 'users',
+      recordId: senderId,
+      newValue: {'action': action, 'pointsDelta': pointDelta},
+      reason:
+          reasonText.isEmpty ? 'Sender trust updated from Admin' : reasonText,
+    ));
+    setState(() => _message = 'Sender trust $action applied.');
+    await _loadAdminData();
+  }
+
   Future<void> _resolveMessageReport(
     Map<String, dynamic> report,
     String status,
@@ -1711,10 +2065,14 @@ class _AdminPhaseOneShellState extends State<AdminPhaseOneShell> {
                       onSetAdminUserRole: _setAdminUserRole,
                       chatMessage: _chatMessage,
                       selectedChat: _selectedChat,
-                      onSelectChat: (chat) =>
-                          setState(() => _selectedChat = chat),
+                      selectedChatMessages: _selectedChatMessages,
+                      onSelectChat: _selectChat,
                       onSendChatMessage: _sendChatMessage,
                       onResolveMessageReport: _resolveMessageReport,
+                      onOpenSupportConversation: _openSupportConversation,
+                      onStartRiderConversation: _startRiderConversation,
+                      onAddAdminNote: _addAdminNote,
+                      onUpdateSenderTrust: _updateSenderTrust,
                     ),
                   ),
                 ],
@@ -1824,6 +2182,8 @@ class AdminDataBundle {
     required this.platformNotices,
     required this.platformVersions,
     required this.messageReports,
+    required this.adminNotes,
+    required this.senderTrustEvents,
   });
 
   final List<Map<String, dynamic>> deliveries;
@@ -1865,6 +2225,8 @@ class AdminDataBundle {
   final List<Map<String, dynamic>> platformNotices;
   final List<Map<String, dynamic>> platformVersions;
   final List<Map<String, dynamic>> messageReports;
+  final List<Map<String, dynamic>> adminNotes;
+  final List<Map<String, dynamic>> senderTrustEvents;
 
   static AdminDataBundle empty() => const AdminDataBundle(
         deliveries: [],
@@ -1906,6 +2268,8 @@ class AdminDataBundle {
         platformNotices: [],
         platformVersions: [],
         messageReports: [],
+        adminNotes: [],
+        senderTrustEvents: [],
       );
 }
 
@@ -2021,6 +2385,16 @@ class AdminRepository {
       canViewSupport
           ? _read(_db.collection('messageReports').limit(100))
           : Future.value(<Map<String, dynamic>>[]),
+      canViewSupport
+          ? _read(_db
+              .collection('adminNotes')
+              .orderBy('createdAt', descending: true)
+              .limit(150))
+          : Future.value(<Map<String, dynamic>>[]),
+      _read(_db
+          .collection('senderTrustEvents')
+          .orderBy('createdAt', descending: true)
+          .limit(150)),
     ]);
     return AdminDataBundle(
       deliveries: results[0],
@@ -2062,6 +2436,8 @@ class AdminRepository {
       platformNotices: results[36],
       platformVersions: results[37],
       messageReports: results[38],
+      adminNotes: results[39],
+      senderTrustEvents: results[40],
     );
   }
 
@@ -2407,9 +2783,14 @@ class _AdminModuleBody extends StatelessWidget {
     required this.onSendPlatformAnnouncement,
     required this.chatMessage,
     required this.selectedChat,
+    required this.selectedChatMessages,
     required this.onSelectChat,
     required this.onSendChatMessage,
     required this.onResolveMessageReport,
+    required this.onOpenSupportConversation,
+    required this.onStartRiderConversation,
+    required this.onAddAdminNote,
+    required this.onUpdateSenderTrust,
   });
 
   final AdminModule module;
@@ -2489,10 +2870,15 @@ class _AdminModuleBody extends StatelessWidget {
   final Future<void> Function(String) onSendPlatformAnnouncement;
   final TextEditingController chatMessage;
   final Map<String, dynamic>? selectedChat;
+  final List<Map<String, dynamic>> selectedChatMessages;
   final ValueChanged<Map<String, dynamic>> onSelectChat;
   final VoidCallback onSendChatMessage;
   final Future<void> Function(Map<String, dynamic>, String)
       onResolveMessageReport;
+  final Future<void> Function(Map<String, dynamic>) onOpenSupportConversation;
+  final Future<void> Function(Map<String, dynamic>) onStartRiderConversation;
+  final Future<void> Function(Map<String, dynamic>, String) onAddAdminNote;
+  final Future<void> Function(Map<String, dynamic>, String) onUpdateSenderTrust;
 
   @override
   Widget build(BuildContext context) {
@@ -2531,36 +2917,49 @@ class _AdminModuleBody extends StatelessWidget {
               onResolveStaleDeliveryLock: onResolveStaleDeliveryLock,
               onArchiveDelivery: onArchiveDelivery,
             ),
-          AdminModule.users => _RecordModule(
-              title: 'Users',
-              subtitle: 'Sender/customer accounts from backend records.',
-              records: data.users,
-              query: query,
-              fields: const [
-                'id',
-                'fullName',
-                'name',
-                'email',
-                'phone',
-                'status',
-                'accountStatus',
-                'verificationStatus'
+          AdminModule.users => Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                _RecordModule(
+                  title: 'Users',
+                  subtitle: 'Sender/customer accounts from backend records.',
+                  records: data.users,
+                  query: query,
+                  fields: const [
+                    'id',
+                    'fullName',
+                    'name',
+                    'email',
+                    'phone',
+                    'status',
+                    'accountStatus',
+                    'verificationStatus'
+                  ],
+                  columns: const ['Name', 'Email', 'Status', 'Verification'],
+                  row: (record) => [
+                    '${record['fullName'] ?? record['name'] ?? record['id']}',
+                    '${record['email'] ?? 'Not recorded'}',
+                    '${record['status'] ?? record['accountStatus'] ?? 'active'}',
+                    '${record['verificationStatus'] ?? record['kycStatus'] ?? 'not_required'}',
+                  ],
+                  actions: (record) => _accountActions(
+                    account: record,
+                    accountType: 'sender',
+                    allAccounts: data.users,
+                    onOpen: onOpenAccountProfile,
+                    onSetStatus: onSetSenderAccountStatus,
+                    onRequestDuplicateMerge: onRequestDuplicateMerge,
+                    onAddAdminNote: onAddAdminNote,
+                    onUpdateSenderTrust: onUpdateSenderTrust,
+                  ),
+                ),
+                const SizedBox(height: 18),
+                _SenderTrustTimelinePanel(
+                  records: data.senderTrustEvents,
+                  users: data.users,
+                  query: query,
+                ),
               ],
-              columns: const ['Name', 'Email', 'Status', 'Verification'],
-              row: (record) => [
-                '${record['fullName'] ?? record['name'] ?? record['id']}',
-                '${record['email'] ?? 'Not recorded'}',
-                '${record['status'] ?? record['accountStatus'] ?? 'active'}',
-                '${record['verificationStatus'] ?? record['kycStatus'] ?? 'not_required'}',
-              ],
-              actions: (record) => _accountActions(
-                account: record,
-                accountType: 'sender',
-                allAccounts: data.users,
-                onOpen: onOpenAccountProfile,
-                onSetStatus: onSetSenderAccountStatus,
-                onRequestDuplicateMerge: onRequestDuplicateMerge,
-              ),
             ),
           AdminModule.riders => _RiderOperationsModule(
               riders: data.riders,
@@ -2577,6 +2976,7 @@ class _AdminModuleBody extends StatelessWidget {
               onRequestMoreInformation: onRequestRiderMoreInformation,
               onReviewDocument: onReviewRiderDocument,
               onRemoveProfilePhoto: onRemoveRiderProfilePhoto,
+              onStartRiderConversation: onStartRiderConversation,
             ),
           AdminModule.verification => _RecordModule(
               title: 'Verification',
@@ -2613,10 +3013,13 @@ class _AdminModuleBody extends StatelessWidget {
               deliveries: data.deliveries,
               payments: data.payments,
               chats: data.chats,
+              adminNotes: data.adminNotes,
               auditLogs: data.auditLogs,
               query: query,
               canManageIssues: canManageIssues,
               onUpdateSupportTicket: onUpdateSupportTicket,
+              onOpenSupportConversation: onOpenSupportConversation,
+              onAddAdminNote: onAddAdminNote,
             ),
           AdminModule.finance => _FinanceOperationsModule(
               payments: data.payments,
@@ -2694,6 +3097,7 @@ class _AdminModuleBody extends StatelessWidget {
           AdminModule.chat => _ChatModule(
               records: data.chats,
               messageReports: data.messageReports,
+              selectedChatMessages: selectedChatMessages,
               query: query,
               message: chatMessage,
               selectedChat: selectedChat,
@@ -4456,6 +4860,7 @@ class _RiderOperationsModule extends StatelessWidget {
     required this.onRequestMoreInformation,
     required this.onReviewDocument,
     required this.onRemoveProfilePhoto,
+    required this.onStartRiderConversation,
   });
 
   final List<Map<String, dynamic>> riders;
@@ -4472,6 +4877,7 @@ class _RiderOperationsModule extends StatelessWidget {
   final Future<void> Function(Map<String, dynamic>) onRequestMoreInformation;
   final Future<void> Function(Map<String, dynamic>, String) onReviewDocument;
   final Future<void> Function(Map<String, dynamic>) onRemoveProfilePhoto;
+  final Future<void> Function(Map<String, dynamic>) onStartRiderConversation;
 
   @override
   Widget build(BuildContext context) {
@@ -4545,6 +4951,7 @@ class _RiderOperationsModule extends StatelessWidget {
                     onResetRiderStripe: onResetRiderStripe,
                     onRequestMoreInformation: onRequestMoreInformation,
                     onRemoveProfilePhoto: onRemoveProfilePhoto,
+                    onStartRiderConversation: onStartRiderConversation,
                   )
               : null,
         ),
@@ -5104,6 +5511,7 @@ class _ChatModule extends StatelessWidget {
   const _ChatModule({
     required this.records,
     required this.messageReports,
+    required this.selectedChatMessages,
     required this.query,
     required this.message,
     required this.selectedChat,
@@ -5114,6 +5522,7 @@ class _ChatModule extends StatelessWidget {
 
   final List<Map<String, dynamic>> records;
   final List<Map<String, dynamic>> messageReports;
+  final List<Map<String, dynamic>> selectedChatMessages;
   final String query;
   final TextEditingController message;
   final Map<String, dynamic>? selectedChat;
@@ -5199,6 +5608,12 @@ class _ChatModule extends StatelessWidget {
           ],
         ),
         const SizedBox(height: 18),
+        _ChatMessageHistoryPanel(
+          selectedChat: selectedChat,
+          messages: selectedChatMessages,
+          query: query,
+        ),
+        const SizedBox(height: 18),
         DecoratedBox(
           decoration: _panelDecoration(),
           child: Padding(
@@ -5259,6 +5674,331 @@ class _ChatModule extends StatelessWidget {
           ),
         ),
       ],
+    );
+  }
+}
+
+class _ChatMessageHistoryPanel extends StatelessWidget {
+  const _ChatMessageHistoryPanel({
+    required this.selectedChat,
+    required this.messages,
+    required this.query,
+  });
+
+  final Map<String, dynamic>? selectedChat;
+  final List<Map<String, dynamic>> messages;
+  final String query;
+
+  @override
+  Widget build(BuildContext context) {
+    final filtered = adminSearch(messages, query, const [
+      'id',
+      'text',
+      'message',
+      'body',
+      'senderName',
+      'senderEmail',
+      'senderId',
+      'authorId',
+      'attachmentUrl',
+      'imageUrl',
+      'fileUrl',
+    ]);
+    return DecoratedBox(
+      decoration: _panelDecoration(),
+      child: Padding(
+        padding: const EdgeInsets.all(18),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Row(
+              children: [
+                Icon(Icons.forum_rounded, color: Color(0xFF7DD3FC)),
+                SizedBox(width: 10),
+                Text(
+                  'Conversation History',
+                  style: TextStyle(fontSize: 20, fontWeight: FontWeight.w800),
+                ),
+              ],
+            ),
+            const SizedBox(height: 8),
+            Text(
+              selectedChat == null
+                  ? 'Select a conversation to inspect historical messages.'
+                  : 'Timeline for ${_recordId(selectedChat!)}',
+              style: TextStyle(color: Colors.white.withValues(alpha: .66)),
+            ),
+            const SizedBox(height: 14),
+            if (selectedChat == null)
+              const _EmptyState('No conversation selected.')
+            else if (filtered.isEmpty)
+              const _EmptyState('No message history loaded.')
+            else
+              for (final message in filtered.take(12))
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 10),
+                  child: _TimelineRow(
+                    title:
+                        '${message['senderName'] ?? message['senderEmail'] ?? message['senderId'] ?? message['authorId'] ?? 'Participant'}',
+                    subtitle:
+                        '${message['text'] ?? message['message'] ?? message['body'] ?? ''}',
+                    trailing: _date(message['createdAt'] ??
+                        message['sentAt'] ??
+                        message['timestamp']),
+                    footer:
+                        '${message['attachmentUrl'] ?? message['imageUrl'] ?? message['fileUrl'] ?? message['attachments'] ?? ''}',
+                  ),
+                ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _AdminNotesPanel extends StatelessWidget {
+  const _AdminNotesPanel({
+    required this.title,
+    required this.subtitle,
+    required this.records,
+    required this.query,
+    this.recordType,
+  });
+
+  final String title;
+  final String subtitle;
+  final List<Map<String, dynamic>> records;
+  final String query;
+  final String? recordType;
+
+  @override
+  Widget build(BuildContext context) {
+    final scoped = recordType == null
+        ? records
+        : records
+            .where((record) => '${record['recordType']}' == recordType)
+            .toList(growable: false);
+    final filtered = adminSearch(scoped, query, const [
+      'id',
+      'recordId',
+      'recordType',
+      'body',
+      'note',
+      'operatorEmail',
+      'operatorId',
+    ]);
+    final pinned =
+        filtered.where((record) => record['pinned'] == true).toList();
+    final ordered = [...pinned, ...filtered.where((r) => r['pinned'] != true)];
+    return DecoratedBox(
+      decoration: _panelDecoration(),
+      child: Padding(
+        padding: const EdgeInsets.all(18),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                const Icon(Icons.push_pin_rounded, color: Color(0xFFA78BFA)),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        title,
+                        style: const TextStyle(
+                          fontSize: 20,
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                      Text(
+                        subtitle,
+                        style: TextStyle(
+                          color: Colors.white.withValues(alpha: .66),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 14),
+            if (ordered.isEmpty)
+              const _EmptyState('No Admin notes loaded.')
+            else
+              for (final note in ordered.take(8))
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 10),
+                  child: _TimelineRow(
+                    title:
+                        '${note['pinned'] == true ? 'Pinned note' : 'Internal note'} - ${note['recordId'] ?? 'record'}',
+                    subtitle: '${note['body'] ?? note['note'] ?? ''}',
+                    trailing:
+                        '${note['operatorEmail'] ?? note['operatorId'] ?? 'Admin'}\n${_date(note['createdAt'])}',
+                  ),
+                ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _SenderTrustTimelinePanel extends StatelessWidget {
+  const _SenderTrustTimelinePanel({
+    required this.records,
+    required this.users,
+    required this.query,
+  });
+
+  final List<Map<String, dynamic>> records;
+  final List<Map<String, dynamic>> users;
+  final String query;
+
+  @override
+  Widget build(BuildContext context) {
+    final filtered = adminSearch(records, query, const [
+      'id',
+      'senderId',
+      'action',
+      'reason',
+      'operatorEmail',
+      'nextTier',
+      'previousTier',
+    ]);
+    return DecoratedBox(
+      decoration: _panelDecoration(),
+      child: Padding(
+        padding: const EdgeInsets.all(18),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Row(
+              children: [
+                Icon(Icons.workspace_premium_rounded, color: Color(0xFFFDE68A)),
+                SizedBox(width: 10),
+                Text(
+                  'Sender Trust Timeline',
+                  style: TextStyle(fontSize: 20, fontWeight: FontWeight.w800),
+                ),
+              ],
+            ),
+            const SizedBox(height: 8),
+            Text(
+              'Award, deduct, promote, demote, freeze and restore actions with operator audit context.',
+              style: TextStyle(color: Colors.white.withValues(alpha: .66)),
+            ),
+            const SizedBox(height: 14),
+            if (filtered.isEmpty)
+              const _EmptyState('No sender trust events loaded.')
+            else
+              for (final event in filtered.take(10))
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 10),
+                  child: _TimelineRow(
+                    title:
+                        '${event['action'] ?? 'trust'} - ${_senderName(event['senderId'], users)}',
+                    subtitle:
+                        '${event['previousTier'] ?? '-'} -> ${event['nextTier'] ?? '-'}\n${event['reason'] ?? ''}',
+                    trailing:
+                        '${event['pointsDelta'] ?? 0} pts\n${_date(event['createdAt'])}',
+                  ),
+                ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _TimelineRow extends StatelessWidget {
+  const _TimelineRow({
+    required this.title,
+    required this.subtitle,
+    this.trailing = '',
+    this.footer = '',
+  });
+
+  final String title;
+  final String subtitle;
+  final String trailing;
+  final String footer;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: .045),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: Colors.white.withValues(alpha: .08)),
+      ),
+      padding: const EdgeInsets.all(12),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(
+                child: Text(
+                  title,
+                  style: const TextStyle(fontWeight: FontWeight.w800),
+                ),
+              ),
+              if (trailing.trim().isNotEmpty)
+                Text(
+                  trailing,
+                  textAlign: TextAlign.right,
+                  style: TextStyle(
+                    color: Colors.white.withValues(alpha: .62),
+                    fontSize: 12,
+                  ),
+                ),
+            ],
+          ),
+          if (subtitle.trim().isNotEmpty) ...[
+            const SizedBox(height: 6),
+            Text(
+              subtitle,
+              style: TextStyle(color: Colors.white.withValues(alpha: .74)),
+            ),
+          ],
+          if (footer.trim().isNotEmpty) ...[
+            const SizedBox(height: 6),
+            Text(
+              footer,
+              style: TextStyle(
+                color: const Color(0xFF7DD3FC).withValues(alpha: .82),
+                fontSize: 12,
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+class _EmptyState extends StatelessWidget {
+  const _EmptyState(this.message);
+
+  final String message;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: .035),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: Colors.white.withValues(alpha: .08)),
+      ),
+      child: Text(
+        message,
+        style: TextStyle(color: Colors.white.withValues(alpha: .64)),
+      ),
     );
   }
 }
@@ -5536,21 +6276,27 @@ class _SupportOperationsModule extends StatelessWidget {
     required this.deliveries,
     required this.payments,
     required this.chats,
+    required this.adminNotes,
     required this.auditLogs,
     required this.query,
     required this.canManageIssues,
     required this.onUpdateSupportTicket,
+    required this.onOpenSupportConversation,
+    required this.onAddAdminNote,
   });
 
   final List<Map<String, dynamic>> tickets;
   final List<Map<String, dynamic>> deliveries;
   final List<Map<String, dynamic>> payments;
   final List<Map<String, dynamic>> chats;
+  final List<Map<String, dynamic>> adminNotes;
   final List<Map<String, dynamic>> auditLogs;
   final String query;
   final bool canManageIssues;
   final Future<void> Function(Map<String, dynamic>, String)
       onUpdateSupportTicket;
+  final Future<void> Function(Map<String, dynamic>) onOpenSupportConversation;
+  final Future<void> Function(Map<String, dynamic>, String) onAddAdminNote;
 
   @override
   Widget build(BuildContext context) {
@@ -5633,8 +6379,22 @@ class _SupportOperationsModule extends StatelessWidget {
             '${record['message'] ?? record['type'] ?? ''}',
           ],
           actions: canManageIssues
-              ? (record) => _supportActions(record, onUpdateSupportTicket)
+              ? (record) => _supportActions(
+                    record,
+                    onUpdateSupportTicket,
+                    onOpenSupportConversation,
+                    onAddAdminNote,
+                  )
               : null,
+        ),
+        const SizedBox(height: 18),
+        _AdminNotesPanel(
+          title: 'Internal Admin Notes',
+          subtitle:
+              'Pinned notes, operator notes, timestamps and support history visible only to Admin.',
+          records: adminNotes,
+          query: query,
+          recordType: 'supportTickets',
         ),
         const SizedBox(height: 18),
         _OperationalDetailGrid(
@@ -6684,6 +7444,8 @@ List<Widget> _accountActions({
   required Future<void> Function(Map<String, dynamic>, String) onSetStatus,
   required Future<void> Function(Map<String, dynamic>, Map<String, dynamic>)
       onRequestDuplicateMerge,
+  Future<void> Function(Map<String, dynamic>, String)? onAddAdminNote,
+  Future<void> Function(Map<String, dynamic>, String)? onUpdateSenderTrust,
 }) {
   final status =
       '${account['accountStatus'] ?? account['status'] ?? ''}'.toLowerCase();
@@ -6694,6 +7456,24 @@ List<Widget> _accountActions({
       label: 'Profile',
       onPressed: () => onOpen(account, accountType),
     ),
+    if (!isBusiness && onAddAdminNote != null)
+      _MiniAction(
+        label: 'Add note',
+        onPressed: () => unawaited(onAddAdminNote(account, 'users')),
+      ),
+    if (!isBusiness && onUpdateSenderTrust != null)
+      for (final action in const [
+        ('Award trust', 'award'),
+        ('Deduct trust', 'deduct'),
+        ('Promote', 'promote'),
+        ('Demote', 'demote'),
+        ('Freeze trust', 'freeze'),
+        ('Restore trust', 'restore'),
+      ])
+        _MiniAction(
+          label: action.$1,
+          onPressed: () => unawaited(onUpdateSenderTrust(account, action.$2)),
+        ),
     if (isBusiness && !status.contains('approved'))
       _MiniAction(
         label: 'Approve',
@@ -6754,6 +7534,7 @@ List<Widget> _riderActions(
   Future<void> Function(Map<String, dynamic>)? onResetRiderStripe,
   Future<void> Function(Map<String, dynamic>)? onRequestMoreInformation,
   Future<void> Function(Map<String, dynamic>)? onRemoveProfilePhoto,
+  Future<void> Function(Map<String, dynamic>)? onStartRiderConversation,
 }) {
   final status =
       '${record['approvalStatus'] ?? record['driverStatus'] ?? record['status'] ?? ''}'
@@ -6782,6 +7563,11 @@ List<Widget> _riderActions(
       _MiniAction(
         label: 'Remove photo',
         onPressed: () => unawaited(onRemoveProfilePhoto(record)),
+      ),
+    if (onStartRiderConversation != null)
+      _MiniAction(
+        label: 'Message Rider',
+        onPressed: () => unawaited(onStartRiderConversation(record)),
       ),
   ];
   if (status.contains('suspend')) {
@@ -7979,6 +8765,22 @@ String _riderId(Map<String, dynamic> rider) {
       .trim();
 }
 
+String _senderTrustTierForPoints(int points) {
+  if (points >= 1000) return 'vanguard';
+  if (points >= 250) return 'priority';
+  return 'standard';
+}
+
+String _senderName(Object? senderId, List<Map<String, dynamic>> users) {
+  final id = '$senderId'.trim();
+  if (id.isEmpty) return 'Unknown sender';
+  for (final user in users) {
+    if (_recordId(user) != id) continue;
+    return '${user['fullName'] ?? user['name'] ?? user['email'] ?? id}';
+  }
+  return id;
+}
+
 bool _deliveryBelongsToRider(Map<String, dynamic> delivery, String riderId) {
   if (riderId.isEmpty) return false;
   return [
@@ -8088,16 +8890,24 @@ List<Widget> _giftActions(
 List<Widget> _supportActions(
   Map<String, dynamic> record,
   Future<void> Function(Map<String, dynamic>, String) onUpdateSupportTicket,
+  Future<void> Function(Map<String, dynamic>) onOpenSupportConversation,
+  Future<void> Function(Map<String, dynamic>, String) onAddAdminNote,
 ) {
   return [
+    _MiniAction(
+      label: 'Open chat',
+      onPressed: () => unawaited(onOpenSupportConversation(record)),
+    ),
+    _MiniAction(
+      label: 'Add note',
+      onPressed: () => unawaited(onAddAdminNote(record, 'supportTickets')),
+    ),
     for (final action in const [
+      ('Open', 'open'),
       ('Assign', 'assigned'),
-      ('Reassign', 'reassigned'),
+      ('Waiting', 'waiting'),
       ('Escalate', 'escalated'),
-      ('Request info', 'waiting_customer'),
-      ('Waiting admin', 'waiting_admin'),
       ('Resolve', 'resolved'),
-      ('Reopen', 'reopened'),
       ('Close', 'closed'),
     ])
       _MiniAction(

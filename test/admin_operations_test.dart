@@ -731,7 +731,7 @@ void main() {
       final source =
           File('lib/app/admin/admin_phase1_shell.dart').readAsStringSync();
       final sendStart = source.indexOf('Future<void> _sendChatMessage()');
-      final sendEnd = source.indexOf('String _authMessage', sendStart);
+      final sendEnd = source.indexOf('void _selectChat', sendStart);
       expect(sendStart, isNonNegative);
       expect(sendEnd, greaterThan(sendStart));
       final sendSource = source.substring(sendStart, sendEnd);
@@ -775,6 +775,8 @@ void main() {
       expect(data.auditLogs, isEmpty);
       expect(data.websiteVisitors, isEmpty);
       expect(data.messageReports, isEmpty);
+      expect(data.adminNotes, isEmpty);
+      expect(data.senderTrustEvents, isEmpty);
       expect(data.irisReferenceImages, isEmpty);
     });
 
@@ -792,6 +794,27 @@ void main() {
       expect(source, contains('Message Report Queue'));
       expect(source, contains('Announcement Composer'));
       expect(source, contains('IRIS Reference Image Lifecycle'));
+    });
+
+    test('restores final historical Admin support and trust surfaces', () {
+      final source =
+          File('lib/app/admin/admin_phase1_shell.dart').readAsStringSync();
+
+      expect(
+          source, contains("httpsCallable('getOrCreateSupportConversation')"));
+      expect(source, contains("httpsCallable('startAdminConversation')"));
+      expect(
+          source, contains("httpsCallable('updateSupportConversationStatus')"));
+      expect(source, contains("collection('adminNotes')"));
+      expect(source, contains("collection('senderTrustEvents')"));
+      expect(source, contains(".collection('messages')"));
+      expect(source, contains('Message Rider'));
+      expect(source, contains('Open chat'));
+      expect(source, contains('Internal Admin Notes'));
+      expect(source, contains('Conversation History'));
+      expect(source, contains('Sender Trust Timeline'));
+      expect(source, contains('Award trust'));
+      expect(source, contains('Freeze trust'));
     });
   });
 }
