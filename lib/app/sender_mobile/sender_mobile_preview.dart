@@ -32,13 +32,27 @@ class SenderMobilePreviewApp extends StatelessWidget {
         debugShowCheckedModeBanner: false,
         theme: AppTheme.dark(),
         builder: (context, child) => SenderAccessibilityHost(
+          repository: const _PreviewSenderAccessibilityRepository(),
           child: child ?? const SizedBox.shrink(),
         ),
         home: SenderMobileHome(
-          previewAuthEnabled: true,
+          initialAuthenticated: true,
+          previewAuthEnabled: false,
           initialIndex: initialIndex,
         ),
       ),
     );
   }
+}
+
+class _PreviewSenderAccessibilityRepository
+    implements SenderAccessibilityRepository {
+  const _PreviewSenderAccessibilityRepository();
+
+  @override
+  Future<void> save(SenderAccessibilitySettings settings) async {}
+
+  @override
+  Stream<SenderAccessibilitySettings> watch() =>
+      Stream.value(const SenderAccessibilitySettings());
 }

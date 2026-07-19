@@ -38,24 +38,72 @@ void main() {
       expect(source, contains(label));
     }
 
-    expect(source, contains('return IndexedStack('));
-    expect(source, contains('_SenderDashboard('));
+    expect(source, contains('child: _selectedAppTab()'));
+    expect(source, isNot(contains('return IndexedStack(')));
+    expect(source, contains('_CanonicalSenderHome('));
+    expect(source, isNot(contains('_SenderStableHomeSurface(')));
     expect(source, contains('const SenderBookingCanvas()'));
     expect(source, contains('SenderActivityView('));
     expect(source, contains('const SenderWalletView()'));
     expect(source, contains('SenderMobileProfileView('));
 
-    final homeIndex = source.indexOf('_SenderDashboard(');
-    final sendIndex = source.indexOf('const SenderBookingCanvas()');
-    final activityIndex = source.indexOf('SenderActivityView(');
-    final walletIndex = source.indexOf('const SenderWalletView()');
-    final profileIndex = source.indexOf('SenderMobileProfileView(');
+    final selectedTabs =
+        source.substring(source.indexOf('Widget _selectedAppTab()'));
+    final homeIndex = selectedTabs.indexOf('_CanonicalSenderHome(');
+    final sendIndex = selectedTabs.indexOf('const SenderBookingCanvas()');
+    final activityIndex = selectedTabs.indexOf('SenderActivityView(');
+    final walletIndex = selectedTabs.indexOf('const SenderWalletView()');
+    final profileIndex = selectedTabs.indexOf('SenderMobileProfileView(');
 
     expect(homeIndex, greaterThan(0));
     expect(sendIndex, greaterThan(homeIndex));
     expect(activityIndex, greaterThan(sendIndex));
     expect(walletIndex, greaterThan(activityIndex));
     expect(profileIndex, greaterThan(walletIndex));
+  });
+
+  test('Sender app surface is forced to occupy the visible viewport', () {
+    final source = read('lib/app/sender_mobile/sender_mobile_home.dart');
+
+    expect(source, contains('Positioned.fill('));
+    expect(source, contains('SizedBox.expand(child: _activeSurface())'));
+    expect(source, contains("key: const Key('sender-home-canonical-content')"));
+  });
+
+  test('Sender Home contains the canonical premium consumer sections', () {
+    final source = read('lib/app/sender_mobile/sender_mobile_home.dart');
+    final canonicalHome = source.substring(
+      source.indexOf('class _CanonicalSenderHome'),
+      source.indexOf('class _SenderDashboard'),
+    );
+
+    for (final marker in const [
+      "Key('sender-home-canonical-content')",
+      'Where are we sending today?',
+      'Track Delivery',
+      'Send Parcel',
+      'Quick services',
+      'Health+',
+      'Business',
+      'Gifts',
+      'SenderWalletHomeSummary',
+      'Activity',
+      'Trust',
+      'Important updates',
+    ]) {
+      expect(canonicalHome, contains(marker));
+    }
+
+    for (final forbidden in const [
+      '_SenderStableHomeSurface',
+      '_StableHomePrimaryCard',
+      '_StableHomeActionGrid',
+      '_StableHomeInfoCard',
+      'Ready when you are.',
+      'Send something',
+    ]) {
+      expect(canonicalHome, isNot(contains(forbidden)));
+    }
   });
 
   test('Sender send flow remains the canonical mobile booking canvas', () {
