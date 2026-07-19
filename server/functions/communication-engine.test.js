@@ -49,3 +49,33 @@ test("platform announcements persist notification ids and audit", () => {
       /return \{ok: true, recipientCount: recipients\.length,/,
   );
 });
+
+test("closed support submissions create admin-visible read-only messages",
+    () => {
+      assert.match(
+          source,
+          /const initialMessage = maskContactDetails\(data\.initialMessage\)/,
+      );
+      assert.match(
+          source,
+          /const closeImmediately = data\.closeImmediately === true/,
+      );
+      assert.match(source, /if \(!closeImmediately\) \{/);
+      assert.match(
+          source,
+          /const status = closeImmediately \? "closed" : "open"/,
+      );
+      assert.match(source, /readOnly: closeImmediately/);
+      assert.match(source, /submittedBy/);
+      assert.match(
+          source,
+          /closedReason: closeImmediately \? "one_way_submission" : null/,
+      );
+      assert.match(
+          source,
+          /chatRef\.collection\("messages"\)\.doc\("ticket_initial"\)/,
+      );
+      assert.match(source, /initialSupportRequest: true/);
+      assert.match(source, /closedSubmission: closeImmediately/);
+      assert.match(source, /adminUnreadCount: initialMessage \? 1 : 0/);
+    });

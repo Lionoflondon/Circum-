@@ -137,8 +137,7 @@ void main() {
     for (final destination in const [
       'SenderNotificationsView',
       'RideChatPageView',
-      '_SenderFeedbackScreen',
-      '_SenderCommunityRequestsScreen',
+      '_SenderClosedSubmissionScreen',
       '_SenderSecuritySettingsScreen',
       '_SenderLanguageSettingsScreen',
       '_SenderAccessibilitySettingsScreen',
@@ -150,8 +149,11 @@ void main() {
 
     expect(source, contains("title: 'Help Shape Circum'"));
     expect(source, contains("title: 'Community Requests'"));
-    expect(source, contains('Share product feedback with the Circum team.'));
-    expect(source, contains('View the Circum community request centre.'));
+    expect(source, contains('closeImmediately'));
+    expect(source, contains('initialMessage'));
+    expect(source, contains('Message:'));
+    expect(source, contains('not trackable in-app'));
+    expect(source, isNot(contains('Track Circum community requests')));
     expect(
         source, contains("key: const Key('sender-profile-help-shape-circum')"));
     expect(source,

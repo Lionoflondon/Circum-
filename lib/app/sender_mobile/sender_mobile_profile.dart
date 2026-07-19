@@ -1026,7 +1026,37 @@ class _SenderMobileProfileViewState extends State<SenderMobileProfileView> {
 
   Future<void> _openFeedback() => Navigator.of(context).push(
         MaterialPageRoute<void>(
-          builder: (_) => const _SenderFeedbackScreen(),
+          builder: (_) => const _SenderClosedSubmissionScreen(
+            title: 'Help Shape Circum',
+            subtitle:
+                'Send feedback to Circum Admin. This creates a closed admin note, not a live chat.',
+            topic: 'sender_feedback',
+            messageLabel: 'What should the Circum team know?',
+            messageHint:
+                'Tell us what worked, what broke, or what would improve Circum.',
+            submitLabel: 'Send feedback',
+            successMessage: 'Feedback sent to Circum Admin.',
+            rows: [
+              _SenderSubmissionInfo(
+                icon: Icons.lightbulb_outline_rounded,
+                title: 'Product feedback',
+                subtitle:
+                    'Tell us what would make Circum booking, tracking or support better.',
+              ),
+              _SenderSubmissionInfo(
+                icon: Icons.bug_report_outlined,
+                title: 'Report a Circum issue',
+                subtitle:
+                    'Share broken flows, confusing moments or missing Circum details.',
+              ),
+              _SenderSubmissionInfo(
+                icon: Icons.favorite_border_rounded,
+                title: 'What worked well',
+                subtitle:
+                    'Positive feedback helps the Circum team protect the good parts.',
+              ),
+            ],
+          ),
           settings: const RouteSettings(
               name: '/sender-mobile/profile/help-shape-circum'),
         ),
@@ -1034,7 +1064,37 @@ class _SenderMobileProfileViewState extends State<SenderMobileProfileView> {
 
   Future<void> _openCommunityRequests() => Navigator.of(context).push(
         MaterialPageRoute<void>(
-          builder: (_) => const _SenderCommunityRequestsScreen(),
+          builder: (_) => const _SenderClosedSubmissionScreen(
+            title: 'Community Requests',
+            subtitle:
+                'Send a request to Circum Admin. Requests are reviewed internally and are not trackable in-app.',
+            topic: 'community_request',
+            messageLabel: 'What should Circum consider?',
+            messageHint:
+                'Describe the request, who it helps, and why it matters.',
+            submitLabel: 'Send request',
+            successMessage: 'Community request sent to Circum Admin.',
+            rows: [
+              _SenderSubmissionInfo(
+                icon: Icons.forum_outlined,
+                title: 'One-way submission',
+                subtitle:
+                    'Circum receives the request with your account details for review.',
+              ),
+              _SenderSubmissionInfo(
+                icon: Icons.lock_outline_rounded,
+                title: 'No tracking queue',
+                subtitle:
+                    'You will not need to monitor statuses or manage request history.',
+              ),
+              _SenderSubmissionInfo(
+                icon: Icons.admin_panel_settings_outlined,
+                title: 'Admin review',
+                subtitle:
+                    'The request appears in Admin as a closed message with sender context.',
+              ),
+            ],
+          ),
           settings: const RouteSettings(
               name: '/sender-mobile/profile/community-requests'),
         ),
@@ -2066,110 +2126,144 @@ class _SenderAccessibilitySettingsScreenState
   }
 }
 
-class _SenderFeedbackScreen extends StatelessWidget {
-  const _SenderFeedbackScreen();
+class _SenderSubmissionInfo {
+  final IconData icon;
+  final String title;
+  final String subtitle;
+
+  const _SenderSubmissionInfo({
+    required this.icon,
+    required this.title,
+    required this.subtitle,
+  });
+}
+
+class _SenderClosedSubmissionScreen extends StatefulWidget {
+  final String title;
+  final String subtitle;
+  final String topic;
+  final String messageLabel;
+  final String messageHint;
+  final String submitLabel;
+  final String successMessage;
+  final List<_SenderSubmissionInfo> rows;
+
+  const _SenderClosedSubmissionScreen({
+    required this.title,
+    required this.subtitle,
+    required this.topic,
+    required this.messageLabel,
+    required this.messageHint,
+    required this.submitLabel,
+    required this.successMessage,
+    required this.rows,
+  });
+
+  @override
+  State<_SenderClosedSubmissionScreen> createState() =>
+      _SenderClosedSubmissionScreenState();
+}
+
+class _SenderClosedSubmissionScreenState
+    extends State<_SenderClosedSubmissionScreen> {
+  final _controller = TextEditingController();
+  bool _sending = false;
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  Future<void> _submit() async {
+    final message = _controller.text.trim();
+    if (message.isEmpty || _sending) return;
+    setState(() => _sending = true);
+    final user = FirebaseAuth.instance.currentUser;
+    final identity = [
+      if ((user?.displayName ?? '').trim().isNotEmpty)
+        'Name: ${user!.displayName!.trim()}',
+      if ((user?.email ?? '').trim().isNotEmpty)
+        'Email: ${user!.email!.trim()}',
+      if ((user?.uid ?? '').trim().isNotEmpty) 'UID: ${user!.uid}',
+    ].join('\n');
+    final body = [
+      widget.title,
+      if (identity.isNotEmpty) identity,
+      'Message:',
+      message,
+    ].join('\n\n');
+    try {
+      await FirebaseFunctions.instance
+          .httpsCallable('getOrCreateSupportConversation')
+          .call({
+        'topic': widget.topic,
+        'title': widget.title,
+        'participantRole': 'sender',
+        'initialMessage': body,
+        'closeImmediately': true,
+        if ((user?.displayName ?? '').trim().isNotEmpty)
+          'displayName': user!.displayName!.trim(),
+      });
+      if (!mounted) return;
+      _controller.clear();
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(widget.successMessage)),
+      );
+      Navigator.of(context).pop();
+    } on FirebaseFunctionsException catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(error.message ?? 'Message could not be sent.')),
+      );
+    } finally {
+      if (mounted) setState(() => _sending = false);
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
     return _SenderSettingsShell(
-      title: 'Help Shape Circum',
-      subtitle:
-          'Send product feedback, feature ideas and experience notes to the Circum team.',
+      title: widget.title,
+      subtitle: widget.subtitle,
       children: [
         _ProfileGlassCard(
           padding: EdgeInsets.zero,
           child: Column(
-            children: [
-              _SettingsStaticRow(
-                icon: Icons.lightbulb_outline_rounded,
-                title: 'Product feedback',
-                subtitle:
-                    'Tell us what would make Circum booking, tracking or support better.',
-              ),
-              _SettingsStaticRow(
-                icon: Icons.bug_report_outlined,
-                title: 'Report a Circum issue',
-                subtitle:
-                    'Share broken flows, confusing moments or missing Circum details.',
-              ),
-              _SettingsStaticRow(
-                icon: Icons.favorite_border_rounded,
-                title: 'What worked well',
-                subtitle:
-                    'Positive feedback helps the Circum team protect the good parts.',
-              ),
-            ],
+            children: widget.rows
+                .map((row) => Padding(
+                      padding: const EdgeInsets.all(16),
+                      child: _SettingsStaticRow(
+                        icon: row.icon,
+                        title: row.title,
+                        subtitle: row.subtitle,
+                      ),
+                    ))
+                .toList(),
           ),
         ),
         const SizedBox(height: 20),
-        FilledButton.icon(
-          key: Key('sender-feedback-compose'),
-          onPressed: () => Navigator.of(context).push(
-            MaterialPageRoute<void>(
-              builder: (_) => const RideChatPageView(
-                title: 'Circum Feedback',
-                supportConversation: true,
-              ),
-              settings: const RouteSettings(
-                  name: '/sender-mobile/profile/help-shape-circum/chat'),
-            ),
-          ),
-          icon: const Icon(Icons.edit_note_rounded),
-          label: const Text('Write feedback'),
-        ),
-      ],
-    );
-  }
-}
-
-class _SenderCommunityRequestsScreen extends StatelessWidget {
-  const _SenderCommunityRequestsScreen();
-
-  @override
-  Widget build(BuildContext context) {
-    return _SenderSettingsShell(
-      title: 'Community Requests',
-      subtitle:
-          'Track Circum community requests, popular suggestions and reviewed ideas.',
-      children: [
-        const _ProfileGlassCard(
-          padding: EdgeInsets.zero,
-          child: Column(
-            children: [
-              _SettingsStaticRow(
-                icon: Icons.trending_up_rounded,
-                title: 'Popular requests',
-                subtitle: 'Circum ideas with the most community momentum.',
-              ),
-              _SettingsStaticRow(
-                icon: Icons.hourglass_top_rounded,
-                title: 'Under review',
-                subtitle: 'Requests being evaluated by the Circum team.',
-              ),
-              _SettingsStaticRow(
-                icon: Icons.task_alt_rounded,
-                title: 'Shipped',
-                subtitle:
-                    'Community requests already restored or released for Circum.',
-              ),
-            ],
+        TextField(
+          controller: _controller,
+          minLines: 5,
+          maxLines: 8,
+          style: const TextStyle(color: Colors.white),
+          decoration: _fieldDecoration(widget.messageLabel).copyWith(
+            hintText: widget.messageHint,
+            alignLabelWithHint: true,
           ),
         ),
-        const SizedBox(height: 20),
+        const SizedBox(height: 16),
         FilledButton.icon(
-          key: const Key('sender-community-request-compose'),
-          onPressed: () => Navigator.of(context).push(
-            MaterialPageRoute<void>(
-              builder: (_) => const RideChatPageView(
-                title: 'Community Request',
-                supportConversation: true,
-              ),
-              settings: const RouteSettings(
-                  name: '/sender-mobile/profile/community-requests/chat'),
-            ),
-          ),
-          icon: const Icon(Icons.forum_rounded),
-          label: const Text('Send a request'),
+          key: Key('sender-${widget.topic}-closed-submit'),
+          onPressed: _sending ? null : _submit,
+          icon: _sending
+              ? const SizedBox.square(
+                  dimension: 18,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                )
+              : const Icon(Icons.send_rounded),
+          label: Text(_sending ? 'Sending...' : widget.submitLabel),
         ),
       ],
     );

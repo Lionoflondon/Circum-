@@ -478,44 +478,60 @@ async function getOrCreateSupportConversation(data, context) {
   const uid = context.auth.uid;
   const topic = clean(data.topic || "support").slice(0, 80) || "support";
   const title = clean(data.title || "Circum Support").slice(0, 120) || "Circum Support";
+  const initialMessage = maskContactDetails(data.initialMessage).slice(0, 4000);
+  const closeImmediately = data.closeImmediately === true;
   const participantRole = clean(data.participantRole || "sender").toLowerCase() === "rider" ? "rider" : "sender";
+  const token = context.auth.token || {};
+  const submittedBy = {
+    uid,
+    role: participantRole,
+    email: clean(token.email).toLowerCase() || null,
+    displayName: clean(token.name || data.displayName).slice(0, 120) || null,
+  };
   const db = getFirestore();
   const ticketId = clean(data.ticketId);
   if (ticketId && isAdmin(context)) {
     const result = await ensureSupportConversationForTicket(db, ticketId);
     return {ok: true, ...result};
   }
-  const existing = await db.collection("supportTickets")
-      .where("userId", "==", uid)
-      .limit(20)
-      .get();
-  for (const doc of existing.docs) {
-    const ticket = doc.data();
-    const status = clean(ticket.status || "open").toLowerCase();
-    const chatId = clean(ticket.chatId);
-    if (chatId && status !== "resolved" && status !== "closed") {
-      return {ok: true, chatId, ticketId: doc.id, existing: true};
+  if (!closeImmediately) {
+    const existing = await db.collection("supportTickets")
+        .where("userId", "==", uid)
+        .limit(20)
+        .get();
+    for (const doc of existing.docs) {
+      const ticket = doc.data();
+      const status = clean(ticket.status || "open").toLowerCase();
+      const chatId = clean(ticket.chatId);
+      if (chatId && status !== "resolved" && status !== "closed") {
+        return {ok: true, chatId, ticketId: doc.id, existing: true};
+      }
     }
   }
 
   const ticketRef = db.collection("supportTickets").doc();
   const chatId = `support_${ticketRef.id}`;
   const chatRef = db.collection("chats").doc(chatId);
+  const status = closeImmediately ? "closed" : "open";
   await db.runTransaction(async (transaction) => {
     transaction.set(ticketRef, {
       channel: "sender_in_app_chat",
-      status: "open",
+      status,
       priority: "normal",
       type: topic,
       topic,
       title,
-      message: "",
-      lastMessage: "",
-      adminUnreadCount: 0,
+      message: initialMessage,
+      lastMessage: initialMessage,
+      adminUnreadCount: initialMessage ? 1 : 0,
       chatId,
       userId: uid,
       senderId: participantRole === "sender" ? uid : null,
       riderId: participantRole === "rider" ? uid : null,
+      submittedBy,
+      closedBy: closeImmediately ? "system" : null,
+      closedReason: closeImmediately ? "one_way_submission" : null,
+      closedAt: closeImmediately ? FieldValue.serverTimestamp() : null,
       createdAt: FieldValue.serverTimestamp(),
       updatedAt: FieldValue.serverTimestamp(),
     });
@@ -530,15 +546,36 @@ async function getOrCreateSupportConversation(data, context) {
         "circum-support": "admin",
       },
       title,
-      status: "open",
-      readOnly: false,
+      status,
+      readOnly: closeImmediately,
       source: "communication-engine",
+      submittedBy,
       createdAt: FieldValue.serverTimestamp(),
       updatedAt: FieldValue.serverTimestamp(),
-      lastMessage: "",
+      closedAt: closeImmediately ? FieldValue.serverTimestamp() : null,
+      closedReason: closeImmediately ? "one_way_submission" : null,
+      lastMessage: initialMessage,
     });
+    if (initialMessage) {
+      transaction.set(chatRef.collection("messages").doc("ticket_initial"), {
+        senderId: uid,
+        senderRole: participantRole,
+        senderType: participantRole,
+        senderEmail: submittedBy.email,
+        senderName: submittedBy.displayName,
+        messageText: initialMessage,
+        message: initialMessage,
+        messageType: "text",
+        initialSupportRequest: true,
+        closedSubmission: closeImmediately,
+        readBy: [uid],
+        createdAt: FieldValue.serverTimestamp(),
+        status: "sent",
+        audited: true,
+      });
+    }
   });
-  return {ok: true, chatId, ticketId: ticketRef.id, existing: false};
+  return {ok: true, chatId, ticketId: ticketRef.id, existing: false, status};
 }
 
 async function updateSupportConversationStatus(data, context) {
