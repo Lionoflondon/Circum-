@@ -24,6 +24,8 @@ class SenderMobilePreviewApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final initialIndex =
+        int.tryParse(Uri.base.queryParameters['tab'] ?? '')?.clamp(0, 4) ?? 0;
     return BlocProvider(
       create: (_) => SendPackageBloc(),
       child: MaterialApp(
@@ -32,7 +34,10 @@ class SenderMobilePreviewApp extends StatelessWidget {
         builder: (context, child) => SenderAccessibilityHost(
           child: child ?? const SizedBox.shrink(),
         ),
-        home: const SenderMobileHome(previewAuthEnabled: true),
+        home: SenderMobileHome(
+          previewAuthEnabled: true,
+          initialIndex: initialIndex,
+        ),
       ),
     );
   }
