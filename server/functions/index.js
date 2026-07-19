@@ -165,6 +165,7 @@ exports.handleStripeConnectWebhook = riderConnect.handleStripeConnectWebhook(str
 exports.scheduledRiderStripeStatusSync = riderConnect.scheduledRiderStripeStatusSync(stripeConnectClient);
 exports.redactLegacyPayoutBankFields = riderConnect.redactLegacyPayoutBankFields();
 exports.syncSenderTrustBaseline = senderTrust.syncSenderTrustBaseline;
+exports.adminUpdateSenderTrust = senderTrust.adminUpdateSenderTrust;
 exports.ensureReferralCode = referrals.ensureReferralCode;
 exports.attachReferralCode = referrals.attachReferralCode;
 exports.activateReferral = referrals.activateReferral;

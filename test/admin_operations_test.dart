@@ -911,6 +911,7 @@ void main() {
           source, contains("httpsCallable('updateSupportConversationStatus')"));
       expect(source, contains("collection('adminNotes')"));
       expect(source, contains("collection('senderTrustEvents')"));
+      expect(source, contains("httpsCallable('adminUpdateSenderTrust')"));
       expect(source, contains(".collection('messages')"));
       expect(source, contains('Message Rider'));
       expect(source, contains('Open chat'));
@@ -919,6 +920,21 @@ void main() {
       expect(source, contains('Sender Trust Timeline'));
       expect(source, contains('Award trust'));
       expect(source, contains('Freeze trust'));
+    });
+
+    test('keeps Sender trust authority behind backend callable', () {
+      final source =
+          File('lib/app/admin/admin_phase1_shell.dart').readAsStringSync();
+      final methodStart = source.indexOf('Future<void> _updateSenderTrust');
+      final methodEnd = source.indexOf('Future<void> _resolveMessageReport');
+      expect(methodStart, isNonNegative);
+      expect(methodEnd, greaterThan(methodStart));
+      final method = source.substring(methodStart, methodEnd);
+
+      expect(method, contains("httpsCallable('adminUpdateSenderTrust')"));
+      expect(method, isNot(contains('runTransaction')));
+      expect(method, isNot(contains("collection('users').doc(senderId)")));
+      expect(method, isNot(contains("collection('senderTrustEvents').doc()")));
     });
   });
 }

@@ -2941,8 +2941,8 @@ class _AdminPhaseOneShellState extends State<AdminPhaseOneShell> {
     if (senderId.isEmpty) return;
     final points = TextEditingController();
     final reason = TextEditingController();
-    var selectedTier =
-        '${account['senderTier'] ?? account['trustTier'] ?? 'standard'}';
+    var selectedTier = _canonicalSenderTrustTier(
+        account['senderTier'] ?? account['trustTier']);
     final needsPoints = action == 'award' || action == 'deduct';
     final needsTier = action == 'promote' || action == 'demote';
     final confirmed = await showDialog<bool>(
@@ -2971,11 +2971,17 @@ class _AdminPhaseOneShellState extends State<AdminPhaseOneShell> {
                   ),
                   items: const [
                     DropdownMenuItem(
-                        value: 'standard', child: Text('Standard')),
+                        value: 'new_sender', child: Text('New Sender')),
                     DropdownMenuItem(
-                        value: 'priority', child: Text('Priority')),
+                        value: 'active_sender', child: Text('Active Sender')),
                     DropdownMenuItem(
-                        value: 'vanguard', child: Text('Vanguard')),
+                        value: 'regular_sender', child: Text('Regular Sender')),
+                    DropdownMenuItem(
+                        value: 'priority_sender',
+                        child: Text('Priority Sender')),
+                    DropdownMenuItem(
+                        value: 'platinum_sender',
+                        child: Text('Platinum Sender')),
                   ],
                   onChanged: (value) => setDialogState(
                       () => selectedTier = value ?? selectedTier),
@@ -3014,73 +3020,34 @@ class _AdminPhaseOneShellState extends State<AdminPhaseOneShell> {
       setState(() => _message = 'Enter a non-zero trust point amount.');
       return;
     }
-    await _db.runTransaction((transaction) async {
-      final ref = _db.collection('users').doc(senderId);
-      final snapshot = await transaction.get(ref);
-      final current = snapshot.data() ?? account;
-      final currentPoints =
-          (current['senderTrustPoints'] ?? current['trustPoints'] ?? 0) as num;
-      final currentTier =
-          '${current['senderTier'] ?? current['trustTier'] ?? 'standard'}';
-      final currentFrozen = current['senderTrustFrozen'] == true;
-      var nextPoints = currentPoints.toInt();
-      var nextTier = currentTier;
-      var nextFrozen = currentFrozen;
-      switch (action) {
-        case 'award':
-          nextPoints += pointDelta;
-          nextTier = _senderTrustTierForPoints(nextPoints);
-        case 'deduct':
-          nextPoints = (nextPoints - pointDelta).clamp(0, 1000000).toInt();
-          nextTier = _senderTrustTierForPoints(nextPoints);
-        case 'promote':
-        case 'demote':
-          nextTier = selectedTier;
-        case 'freeze':
-          nextFrozen = true;
-        case 'restore':
-          nextFrozen = false;
-          nextTier = _senderTrustTierForPoints(nextPoints);
-      }
-      final eventRef = _db.collection('senderTrustEvents').doc();
-      transaction.set(
-          ref,
-          {
-            'senderTrustPoints': nextPoints,
-            'senderTier': nextTier,
-            'senderTrustFrozen': nextFrozen,
-            'senderTrustUpdatedAt': FieldValue.serverTimestamp(),
-            'senderTrustUpdatedBy': _user?.uid ?? _user?.email,
-            'senderTrustLastReason': reasonText,
-          },
-          SetOptions(merge: true));
-      transaction.set(eventRef, {
+    try {
+      final result =
+          await _functions.httpsCallable('adminUpdateSenderTrust').call({
         'senderId': senderId,
         'action': action,
-        'pointsDelta': action == 'deduct' ? -pointDelta : pointDelta,
-        'previousPoints': currentPoints,
-        'nextPoints': nextPoints,
-        'previousTier': currentTier,
-        'nextTier': nextTier,
-        'previousFrozen': currentFrozen,
-        'nextFrozen': nextFrozen,
+        if (needsPoints) 'points': pointDelta,
+        if (needsTier) 'tier': selectedTier,
         'reason': reasonText,
-        'operatorId': _user?.uid,
-        'operatorEmail': _user?.email,
-        'createdAt': FieldValue.serverTimestamp(),
       });
-    });
-    await _writeAudit(AdminAuditEntry(
-      adminUserId: _user?.uid ?? 'unknown-admin',
-      actionType: 'sender_trust_$action',
-      recordType: 'users',
-      recordId: senderId,
-      newValue: {'action': action, 'pointsDelta': pointDelta},
-      reason:
-          reasonText.isEmpty ? 'Sender trust updated from Admin' : reasonText,
-    ));
-    setState(() => _message = 'Sender trust $action applied.');
-    await _loadAdminData();
+      final data = Map<String, dynamic>.from(result.data as Map);
+      await _writeAudit(AdminAuditEntry(
+        adminUserId: _user?.uid ?? 'unknown-admin',
+        actionType: 'sender_trust_$action',
+        recordType: 'users',
+        recordId: senderId,
+        newValue: {
+          'action': action,
+          'pointsDelta': data['pointsChange'] ?? 0,
+          'nextTier': data['nextTier'],
+          'eventId': data['eventId'],
+        },
+        reason: reasonText,
+      ));
+      setState(() => _message = 'Sender trust $action applied.');
+      await _loadAdminData();
+    } on FirebaseFunctionsException catch (error) {
+      setState(() => _message = _functionsMessage(error));
+    }
   }
 
   Future<void> _resolveMessageReport(
@@ -12180,10 +12147,20 @@ String _riderId(Map<String, dynamic> rider) {
       .trim();
 }
 
-String _senderTrustTierForPoints(int points) {
-  if (points >= 1000) return 'vanguard';
-  if (points >= 250) return 'priority';
-  return 'standard';
+String _canonicalSenderTrustTier(Object? value) {
+  final raw = '$value'.trim().toLowerCase().replaceAll(RegExp(r'[-\s]+'), '_');
+  const tiers = {
+    'new_sender',
+    'active_sender',
+    'regular_sender',
+    'priority_sender',
+    'platinum_sender',
+  };
+  if (tiers.contains(raw)) return raw;
+  if (raw == 'standard') return 'new_sender';
+  if (raw == 'priority') return 'priority_sender';
+  if (raw == 'vanguard') return 'platinum_sender';
+  return 'new_sender';
 }
 
 String _senderName(Object? senderId, List<Map<String, dynamic>> users) {
