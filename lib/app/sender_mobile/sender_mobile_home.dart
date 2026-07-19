@@ -2063,8 +2063,6 @@ class _CanonicalSenderHomeState extends State<_CanonicalSenderHome> {
                         button: heroButton,
                         loading: _orders == null && _ordersError == null,
                         activeDelivery: activeDelivery != null,
-                        walletLabel: 'Wallet',
-                        walletValue: 'View balance',
                         onPrimaryTap: activeDelivery != null
                             ? widget.onOpenActivity
                             : scheduledDraft != null
@@ -2216,8 +2214,6 @@ class _RebuiltSenderHomeHeader extends StatelessWidget {
             hasError: hasNotificationError,
             onTap: onOpenNotifications,
           ),
-          const SizedBox(width: 12),
-          _SenderAvatar(imageUrl: FirebaseAuth.instance.currentUser?.photoURL),
         ],
       ),
     );
@@ -2230,8 +2226,6 @@ class _RebuiltSenderHomeHero extends StatelessWidget {
   final String button;
   final bool loading;
   final bool activeDelivery;
-  final String walletLabel;
-  final String walletValue;
   final VoidCallback onPrimaryTap;
 
   const _RebuiltSenderHomeHero({
@@ -2240,8 +2234,6 @@ class _RebuiltSenderHomeHero extends StatelessWidget {
     required this.button,
     required this.loading,
     required this.activeDelivery,
-    required this.walletLabel,
-    required this.walletValue,
     required this.onPrimaryTap,
   });
 
@@ -2299,14 +2291,6 @@ class _RebuiltSenderHomeHero extends StatelessWidget {
                     right: 38,
                     bottom: 36,
                     child: _RebuiltHeroParticles(),
-                  ),
-                  Positioned(
-                    top: 0,
-                    right: 0,
-                    child: _RebuiltWalletChip(
-                      label: walletLabel,
-                      value: walletValue,
-                    ),
                   ),
                   Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
@@ -2378,57 +2362,6 @@ class _RebuiltSenderHomeHero extends StatelessWidget {
             ),
           ),
         ),
-      ),
-    );
-  }
-}
-
-class _RebuiltWalletChip extends StatelessWidget {
-  final String label;
-  final String value;
-
-  const _RebuiltWalletChip({required this.label, required this.value});
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-      decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: .12),
-        borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: Colors.white.withValues(alpha: .20)),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          const Icon(
-            Icons.account_balance_wallet_outlined,
-            color: Colors.white,
-            size: 18,
-          ),
-          const SizedBox(width: 8),
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                label,
-                style: const TextStyle(
-                  color: Color(0xDFFFFFFF),
-                  fontSize: 11,
-                  fontWeight: FontWeight.w800,
-                ),
-              ),
-              Text(
-                value,
-                style: const TextStyle(
-                  color: Colors.white,
-                  fontSize: 13,
-                  fontWeight: FontWeight.w900,
-                ),
-              ),
-            ],
-          ),
-        ],
       ),
     );
   }
