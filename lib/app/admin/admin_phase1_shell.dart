@@ -696,6 +696,40 @@ class _AdminPhaseOneShellState extends State<AdminPhaseOneShell> {
     await _loadAdminData();
   }
 
+  Future<void> _moderateRating(
+    Map<String, dynamic> rating,
+    String action,
+  ) async {
+    if (!_can(AdminPermission.manageIssues)) {
+      setState(() => _message = 'Your role cannot moderate ratings.');
+      return;
+    }
+    try {
+      final ratingId = _idFor(rating);
+      final request = AdminRatingsTipsPolicy.moderationRequest(
+        ratingId: ratingId,
+        action: action,
+        reason: 'Rating moderation action confirmed from Admin',
+      );
+      await _functions.httpsCallable('reportRating').call(request);
+      await _writeAudit(AdminAuditEntry(
+        adminUserId: _user?.uid ?? 'unknown-admin',
+        actionType: 'rating_moderation_$action',
+        recordType: 'driverRatings',
+        recordId: ratingId,
+        oldValue: {'reportStatus': rating['reportStatus']},
+        newValue: request,
+        reason: 'Rating moderation updated from Admin',
+      ));
+      setState(() => _message = 'Rating $ratingId moderation saved.');
+      await _loadAdminData();
+    } on ArgumentError catch (error) {
+      setState(() => _message = error.message);
+    } on FirebaseFunctionsException catch (error) {
+      setState(() => _message = error.message ?? 'Rating moderation failed.');
+    }
+  }
+
   Future<void> _saveAdminUser({
     Map<String, dynamic>? existing,
     String? email,
@@ -959,6 +993,7 @@ class _AdminPhaseOneShellState extends State<AdminPhaseOneShell> {
                       onUpdateGiftWorkflow: _updateGiftWorkflow,
                       onUpdateHealthPlusPickup: _updateHealthPlusPickup,
                       onUpdateFinanceWorkflow: _updateFinanceWorkflow,
+                      onModerateRating: _moderateRating,
                       onSetBusinessOperationStatus: _setBusinessOperationStatus,
                       onUpdatePlatformRecord: _updatePlatformRecord,
                       onOpenRiderProfile: _openRiderProfile,
@@ -1059,6 +1094,15 @@ class AdminDataBundle {
     required this.riders,
     required this.adminUsers,
     required this.payments,
+    required this.payoutRequests,
+    required this.riderEarnings,
+    required this.riderWalletTransactions,
+    required this.wallets,
+    required this.walletTransactions,
+    required this.businessWallets,
+    required this.businessInvoices,
+    required this.businessRothPurchases,
+    required this.deliveryTips,
     required this.ratings,
     required this.supportTickets,
     required this.healthPlusPayments,
@@ -1084,6 +1128,15 @@ class AdminDataBundle {
   final List<Map<String, dynamic>> riders;
   final List<Map<String, dynamic>> adminUsers;
   final List<Map<String, dynamic>> payments;
+  final List<Map<String, dynamic>> payoutRequests;
+  final List<Map<String, dynamic>> riderEarnings;
+  final List<Map<String, dynamic>> riderWalletTransactions;
+  final List<Map<String, dynamic>> wallets;
+  final List<Map<String, dynamic>> walletTransactions;
+  final List<Map<String, dynamic>> businessWallets;
+  final List<Map<String, dynamic>> businessInvoices;
+  final List<Map<String, dynamic>> businessRothPurchases;
+  final List<Map<String, dynamic>> deliveryTips;
   final List<Map<String, dynamic>> ratings;
   final List<Map<String, dynamic>> supportTickets;
   final List<Map<String, dynamic>> healthPlusPayments;
@@ -1109,6 +1162,15 @@ class AdminDataBundle {
         riders: [],
         adminUsers: [],
         payments: [],
+        payoutRequests: [],
+        riderEarnings: [],
+        riderWalletTransactions: [],
+        wallets: [],
+        walletTransactions: [],
+        businessWallets: [],
+        businessInvoices: [],
+        businessRothPurchases: [],
+        deliveryTips: [],
         ratings: [],
         supportTickets: [],
         healthPlusPayments: [],
@@ -1151,7 +1213,44 @@ class AdminRepository {
       canViewFinance
           ? _read(_db.collection('payments').limit(100))
           : Future.value(<Map<String, dynamic>>[]),
+      canViewFinance
+          ? _read(_db.collection('payoutRequests').limit(100))
+          : Future.value(<Map<String, dynamic>>[]),
+      canViewFinance
+          ? _read(_db.collection('riderEarnings').limit(120))
+          : Future.value(<Map<String, dynamic>>[]),
+      canViewFinance
+          ? _read(_db
+              .collection('riderWalletTransactions')
+              .orderBy('createdAt', descending: true)
+              .limit(120))
+          : Future.value(<Map<String, dynamic>>[]),
+      canViewFinance
+          ? _read(_db.collection('wallets').limit(120))
+          : Future.value(<Map<String, dynamic>>[]),
+      canViewFinance
+          ? _read(_db
+              .collection('walletTransactions')
+              .orderBy('createdAt', descending: true)
+              .limit(160))
+          : Future.value(<Map<String, dynamic>>[]),
+      canViewFinance
+          ? _read(_db.collection('business_wallets').limit(100))
+          : Future.value(<Map<String, dynamic>>[]),
+      canViewFinance
+          ? _read(_db
+              .collection('businessInvoices')
+              .orderBy('createdAt', descending: true)
+              .limit(80))
+          : Future.value(<Map<String, dynamic>>[]),
+      canViewFinance
+          ? _read(_db
+              .collection('businessRothPurchases')
+              .orderBy('createdAt', descending: true)
+              .limit(80))
+          : Future.value(<Map<String, dynamic>>[]),
       _read(_db.collection('driverRatings').limit(100)),
+      _read(_db.collection('deliveryTips').limit(150)),
       canViewSupport
           ? _read(_db.collection('supportTickets').limit(100))
           : Future.value(<Map<String, dynamic>>[]),
@@ -1195,24 +1294,33 @@ class AdminRepository {
       riders: results[2],
       adminUsers: results[3],
       payments: results[4],
-      ratings: results[5],
-      supportTickets: results[6],
-      healthPlusPayments: results[7],
-      healthPlusPickups: results[8],
-      businessAccounts: results[9],
-      giftOrders: results[10],
-      auditLogs: results[11],
-      chats: results[12],
-      riderDocuments: results[13],
-      websiteVisitors: results[14],
-      irisCanonicalObjects: results[15],
-      irisLearningCases: results[16],
-      irisPolicies: results[17],
-      irisEvidence: results[18],
-      platformConfig: results[19],
-      platformStatus: results[20],
-      platformNotices: results[21],
-      platformVersions: results[22],
+      payoutRequests: results[5],
+      riderEarnings: results[6],
+      riderWalletTransactions: results[7],
+      wallets: results[8],
+      walletTransactions: results[9],
+      businessWallets: results[10],
+      businessInvoices: results[11],
+      businessRothPurchases: results[12],
+      ratings: results[13],
+      deliveryTips: results[14],
+      supportTickets: results[15],
+      healthPlusPayments: results[16],
+      healthPlusPickups: results[17],
+      businessAccounts: results[18],
+      giftOrders: results[19],
+      auditLogs: results[20],
+      chats: results[21],
+      riderDocuments: results[22],
+      websiteVisitors: results[23],
+      irisCanonicalObjects: results[24],
+      irisLearningCases: results[25],
+      irisPolicies: results[26],
+      irisEvidence: results[27],
+      platformConfig: results[28],
+      platformStatus: results[29],
+      platformNotices: results[30],
+      platformVersions: results[31],
     );
   }
 
@@ -1520,6 +1628,7 @@ class _AdminModuleBody extends StatelessWidget {
     required this.onUpdateGiftWorkflow,
     required this.onUpdateHealthPlusPickup,
     required this.onUpdateFinanceWorkflow,
+    required this.onModerateRating,
     required this.onSetBusinessOperationStatus,
     required this.onUpdatePlatformRecord,
     required this.onOpenRiderProfile,
@@ -1567,6 +1676,7 @@ class _AdminModuleBody extends StatelessWidget {
       onUpdateHealthPlusPickup;
   final Future<void> Function(Map<String, dynamic>, String)
       onUpdateFinanceWorkflow;
+  final Future<void> Function(Map<String, dynamic>, String) onModerateRating;
   final Future<void> Function(Map<String, dynamic>, String)
       onSetBusinessOperationStatus;
   final Future<void> Function(Map<String, dynamic>, String)
@@ -1706,12 +1816,23 @@ class _AdminModuleBody extends StatelessWidget {
             ),
           AdminModule.finance => _FinanceOperationsModule(
               payments: data.payments,
+              payoutRequests: data.payoutRequests,
+              riderEarnings: data.riderEarnings,
+              riderWalletTransactions: data.riderWalletTransactions,
+              wallets: data.wallets,
+              walletTransactions: data.walletTransactions,
+              businessWallets: data.businessWallets,
+              businessInvoices: data.businessInvoices,
+              businessRothPurchases: data.businessRothPurchases,
+              deliveryTips: data.deliveryTips,
+              ratings: data.ratings,
               deliveries: data.deliveries,
               supportTickets: data.supportTickets,
               auditLogs: data.auditLogs,
               query: query,
               canManageFinance: canManageFinance,
               onUpdateFinanceWorkflow: onUpdateFinanceWorkflow,
+              onModerateRating: onModerateRating,
             ),
           AdminModule.healthPlus => _HealthPlusOperationsModule(
               pickups: data.healthPlusPickups,
@@ -2726,15 +2847,36 @@ class _IrisAnalyticsPanel extends StatelessWidget {
 class _FinanceOperationsModule extends StatelessWidget {
   const _FinanceOperationsModule({
     required this.payments,
+    required this.payoutRequests,
+    required this.riderEarnings,
+    required this.riderWalletTransactions,
+    required this.wallets,
+    required this.walletTransactions,
+    required this.businessWallets,
+    required this.businessInvoices,
+    required this.businessRothPurchases,
+    required this.deliveryTips,
+    required this.ratings,
     required this.deliveries,
     required this.supportTickets,
     required this.auditLogs,
     required this.query,
     required this.canManageFinance,
     required this.onUpdateFinanceWorkflow,
+    required this.onModerateRating,
   });
 
   final List<Map<String, dynamic>> payments;
+  final List<Map<String, dynamic>> payoutRequests;
+  final List<Map<String, dynamic>> riderEarnings;
+  final List<Map<String, dynamic>> riderWalletTransactions;
+  final List<Map<String, dynamic>> wallets;
+  final List<Map<String, dynamic>> walletTransactions;
+  final List<Map<String, dynamic>> businessWallets;
+  final List<Map<String, dynamic>> businessInvoices;
+  final List<Map<String, dynamic>> businessRothPurchases;
+  final List<Map<String, dynamic>> deliveryTips;
+  final List<Map<String, dynamic>> ratings;
   final List<Map<String, dynamic>> deliveries;
   final List<Map<String, dynamic>> supportTickets;
   final List<Map<String, dynamic>> auditLogs;
@@ -2742,6 +2884,7 @@ class _FinanceOperationsModule extends StatelessWidget {
   final bool canManageFinance;
   final Future<void> Function(Map<String, dynamic>, String)
       onUpdateFinanceWorkflow;
+  final Future<void> Function(Map<String, dynamic>, String) onModerateRating;
 
   @override
   Widget build(BuildContext context) {
@@ -2751,6 +2894,18 @@ class _FinanceOperationsModule extends StatelessWidget {
     final pendingRefunds = payments.where(_isPendingRefund).length;
     final failedPayments = payments.where(_isFailedPayment).length;
     final investigations = payments.where(_isFinanceInvestigation).length;
+    final allFinanceRecords = [
+      ...payments,
+      ...payoutRequests,
+      ...riderEarnings,
+      ...riderWalletTransactions,
+      ...wallets,
+      ...walletTransactions,
+      ...businessWallets,
+      ...businessInvoices,
+      ...businessRothPurchases,
+      ...deliveryTips,
+    ];
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -2770,20 +2925,35 @@ class _FinanceOperationsModule extends StatelessWidget {
             _MetricCard('Investigations', investigations.toString(), 'open'),
             _MetricCard('Stripe reconciliation',
                 _stripeReconciliationStatus(payments), 'status'),
+            _MetricCard('Payout requests', '${payoutRequests.length}',
+                'rider withdrawals'),
+            _MetricCard('Rider earnings', '${riderEarnings.length}',
+                'earnings records'),
+            _MetricCard('Business invoices', '${businessInvoices.length}',
+                'invoice records'),
+            _MetricCard(
+                'Tips', _money(_tipsTotal(deliveryTips)), 'delivery tips'),
           ],
         ),
         const SizedBox(height: 18),
         _FinanceAnalyticsPanel(
           payments: payments,
+          payoutRequests: payoutRequests,
+          riderEarnings: riderEarnings,
+          walletTransactions: walletTransactions,
+          businessInvoices: businessInvoices,
+          businessRothPurchases: businessRothPurchases,
+          deliveryTips: deliveryTips,
+          ratings: ratings,
           deliveries: deliveries,
           supportTickets: supportTickets,
         ),
         const SizedBox(height: 18),
         _RecordModule(
-          title: 'Wallet Centre and Payment Investigations',
+          title: 'Wallet Explorer and Finance Review',
           subtitle:
-              'Search sender, rider, business, wallet id, transaction id, Stripe reference, delivery and status.',
-          records: payments,
+              'Wallets, ledgers, payments, payout requests, rider earnings, business invoices, Roth purchases and tips.',
+          records: allFinanceRecords,
           query: query,
           fields: const [
             'id',
@@ -2800,10 +2970,10 @@ class _FinanceOperationsModule extends StatelessWidget {
             'type',
             'financeReviewStatus'
           ],
-          columns: const ['Record', 'Wallet/Stripe', 'Amount', 'Review'],
+          columns: const ['Record', 'Source', 'Amount', 'Review'],
           row: (record) => [
             _recordId(record),
-            '${record['walletId'] ?? record['stripePaymentIntentId'] ?? record['paymentIntent'] ?? record['transactionId'] ?? 'Not recorded'}',
+            '${record['_collection'] ?? record['walletId'] ?? record['stripePaymentIntentId'] ?? record['paymentIntent'] ?? record['transactionId'] ?? 'Not recorded'}',
             _money(record['amount'] ?? record['total'] ?? record['price']),
             '${record['financeReviewStatus'] ?? record['refundReviewStatus'] ?? record['investigationStatus'] ?? 'unreviewed'}',
           ],
@@ -2830,6 +3000,31 @@ class _FinanceOperationsModule extends StatelessWidget {
                   ]
               : null,
         ),
+        const SizedBox(height: 18),
+        _FinanceLedgerPanel(
+          wallets: wallets,
+          walletTransactions: walletTransactions,
+          riderWalletTransactions: riderWalletTransactions,
+          businessWallets: businessWallets,
+          riderEarnings: riderEarnings,
+          payoutRequests: payoutRequests,
+          query: query,
+        ),
+        const SizedBox(height: 18),
+        _BusinessFinancePanel(
+          wallets: businessWallets,
+          invoices: businessInvoices,
+          rothPurchases: businessRothPurchases,
+          query: query,
+        ),
+        const SizedBox(height: 18),
+        _RatingsTipsModule(
+          ratings: ratings,
+          tips: deliveryTips,
+          auditLogs: auditLogs,
+          query: query,
+          onModerateRating: onModerateRating,
+        ),
       ],
     );
   }
@@ -2838,11 +3033,25 @@ class _FinanceOperationsModule extends StatelessWidget {
 class _FinanceAnalyticsPanel extends StatelessWidget {
   const _FinanceAnalyticsPanel({
     required this.payments,
+    required this.payoutRequests,
+    required this.riderEarnings,
+    required this.walletTransactions,
+    required this.businessInvoices,
+    required this.businessRothPurchases,
+    required this.deliveryTips,
+    required this.ratings,
     required this.deliveries,
     required this.supportTickets,
   });
 
   final List<Map<String, dynamic>> payments;
+  final List<Map<String, dynamic>> payoutRequests;
+  final List<Map<String, dynamic>> riderEarnings;
+  final List<Map<String, dynamic>> walletTransactions;
+  final List<Map<String, dynamic>> businessInvoices;
+  final List<Map<String, dynamic>> businessRothPurchases;
+  final List<Map<String, dynamic>> deliveryTips;
+  final List<Map<String, dynamic>> ratings;
   final List<Map<String, dynamic>> deliveries;
   final List<Map<String, dynamic>> supportTickets;
 
@@ -2875,6 +3084,14 @@ class _FinanceAnalyticsPanel extends StatelessWidget {
                     _countRecordsContaining(deliveries, 'health')),
                 _HealthChip('Gift revenue',
                     _countRecordsContaining(deliveries, 'gift')),
+                _HealthChip('Payout requests', payoutRequests.length),
+                _HealthChip('Rider earnings', riderEarnings.length),
+                _HealthChip('Wallet ledger', walletTransactions.length),
+                _HealthChip('Business invoices', businessInvoices.length),
+                _HealthChip('Business Roth', businessRothPurchases.length),
+                _HealthChip('Tips', deliveryTips.length),
+                _HealthChip('Reported ratings',
+                    ratings.where((rating) => _ratingReported(rating)).length),
                 _HealthChip(
                     'Refund tickets',
                     supportTickets
@@ -2886,6 +3103,254 @@ class _FinanceAnalyticsPanel extends StatelessWidget {
           ],
         ),
       ),
+    );
+  }
+}
+
+class _FinanceLedgerPanel extends StatelessWidget {
+  const _FinanceLedgerPanel({
+    required this.wallets,
+    required this.walletTransactions,
+    required this.riderWalletTransactions,
+    required this.businessWallets,
+    required this.riderEarnings,
+    required this.payoutRequests,
+    required this.query,
+  });
+
+  final List<Map<String, dynamic>> wallets;
+  final List<Map<String, dynamic>> walletTransactions;
+  final List<Map<String, dynamic>> riderWalletTransactions;
+  final List<Map<String, dynamic>> businessWallets;
+  final List<Map<String, dynamic>> riderEarnings;
+  final List<Map<String, dynamic>> payoutRequests;
+  final String query;
+
+  @override
+  Widget build(BuildContext context) {
+    final ledgers = [
+      ...walletTransactions,
+      ...riderWalletTransactions,
+      ...riderEarnings,
+      ...payoutRequests,
+    ];
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _RecordModule(
+          title: 'Wallet Ledgers',
+          subtitle:
+              'Historical wallet, Rider earnings, Rider payout and ledger transaction records.',
+          records: adminSearch(ledgers, query, const [
+            'id',
+            'walletId',
+            'userId',
+            'riderId',
+            'transactionId',
+            'type',
+            'status',
+          ]),
+          query: '',
+          fields: const [],
+          columns: const ['Ledger', 'Owner', 'Amount', 'Status'],
+          row: (record) => [
+            '${record['transactionId'] ?? record['id']}',
+            '${record['userId'] ?? record['riderId'] ?? record['walletId'] ?? 'Not recorded'}',
+            _money(record['amount'] ??
+                record['availableBalance'] ??
+                record['balance'] ??
+                record['pendingAmount']),
+            '${record['status'] ?? record['type'] ?? record['payoutStatus'] ?? 'recorded'}',
+          ],
+        ),
+        const SizedBox(height: 18),
+        _RecordModule(
+          title: 'Wallet Accounts',
+          subtitle: 'Sender, Rider and Business wallet records.',
+          records: adminSearch(
+              [...wallets, ...businessWallets],
+              query,
+              const [
+                'id',
+                'walletId',
+                'userId',
+                'businessId',
+                'email',
+                'walletType',
+              ]),
+          query: '',
+          fields: const [],
+          columns: const ['Wallet', 'Owner', 'Type', 'Balance'],
+          row: (record) => [
+            '${record['walletId'] ?? record['id']}',
+            '${record['userId'] ?? record['businessId'] ?? record['email'] ?? 'Not recorded'}',
+            '${record['walletType'] ?? record['type'] ?? 'wallet'}',
+            _money(record['balance'] ??
+                record['availableBalance'] ??
+                record['pendingBalance']),
+          ],
+        ),
+      ],
+    );
+  }
+}
+
+class _BusinessFinancePanel extends StatelessWidget {
+  const _BusinessFinancePanel({
+    required this.wallets,
+    required this.invoices,
+    required this.rothPurchases,
+    required this.query,
+  });
+
+  final List<Map<String, dynamic>> wallets;
+  final List<Map<String, dynamic>> invoices;
+  final List<Map<String, dynamic>> rothPurchases;
+  final String query;
+
+  @override
+  Widget build(BuildContext context) {
+    final records = [...wallets, ...invoices, ...rothPurchases];
+    return _RecordModule(
+      title: 'Business Finance',
+      subtitle:
+          'Historical Business wallets, invoices and Business Roth purchase records.',
+      records: adminSearch(records, query, const [
+        'id',
+        'businessId',
+        'businessName',
+        'invoiceStatus',
+        'billingEmail',
+        'walletType',
+        'reason',
+      ]),
+      query: '',
+      fields: const [],
+      columns: const ['Business record', 'Business', 'Amount', 'Status'],
+      row: (record) => [
+        '${record['invoiceId'] ?? record['walletId'] ?? record['id']}',
+        '${record['businessName'] ?? record['businessId'] ?? record['billingEmail'] ?? 'Business'}',
+        _money(record['amount'] ?? record['total'] ?? record['balance']),
+        '${record['invoiceStatus'] ?? record['status'] ?? record['walletType'] ?? 'recorded'}',
+      ],
+    );
+  }
+}
+
+class _RatingsTipsModule extends StatelessWidget {
+  const _RatingsTipsModule({
+    required this.ratings,
+    required this.tips,
+    required this.auditLogs,
+    required this.query,
+    required this.onModerateRating,
+  });
+
+  final List<Map<String, dynamic>> ratings;
+  final List<Map<String, dynamic>> tips;
+  final List<Map<String, dynamic>> auditLogs;
+  final String query;
+  final Future<void> Function(Map<String, dynamic>, String) onModerateRating;
+
+  @override
+  Widget build(BuildContext context) {
+    final tipByDelivery = {
+      for (final tip in tips) '${tip['deliveryId'] ?? tip['id']}': tip,
+    };
+    final records = ratings
+        .map((rating) => AdminRatingTipRecord.fromBackend(
+              ratingId: _recordId(rating),
+              rating: rating,
+              tip: tipByDelivery[
+                      '${rating['deliveryId'] ?? _recordId(rating)}'] ??
+                  const {},
+            ))
+        .toList(growable: false);
+    final visible = AdminRatingsTipsPolicy.filter(records, search: query);
+    final tipped = records.where((record) => record.tipped).length;
+    final reported = records.where((record) => record.reported).length;
+    final avgStars = records.isEmpty
+        ? 0.0
+        : records.fold<num>(0, (total, record) => total + record.stars) /
+            records.length;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Wrap(
+          spacing: 14,
+          runSpacing: 14,
+          children: [
+            _MetricCard('Ratings', '${records.length}', 'loaded reviews'),
+            _MetricCard(
+                'Average stars', avgStars.toStringAsFixed(1), 'driver ratings'),
+            _MetricCard('Tips', '$tipped', _money(_tipsTotal(tips))),
+            _MetricCard('Reported', '$reported', 'needs moderation'),
+          ],
+        ),
+        const SizedBox(height: 18),
+        _RecordModule(
+          title: 'Ratings & Tips Management',
+          subtitle:
+              'Historical review moderation, reported ratings, tip review, filters and audit visibility.',
+          records: [
+            for (final record in visible)
+              {
+                'id': record.ratingId,
+                'deliveryId': record.deliveryId,
+                'riderId': record.riderId,
+                'senderId': record.senderId,
+                'stars': record.stars,
+                'feedback': record.feedback,
+                'tipAmount': record.tipAmount,
+                'paymentMethod': record.paymentMethod,
+                'reportStatus': record.reportStatus,
+                'timestamp': record.timestamp,
+              }
+          ],
+          query: '',
+          fields: const [],
+          columns: const ['Rating', 'Rider/Sender', 'Tip', 'Report'],
+          row: (record) => [
+            '${record['stars']}★ / ${record['deliveryId']}',
+            '${record['riderId']} / ${record['senderId']}',
+            _money(record['tipAmount']),
+            '${record['reportStatus'] ?? 'clear'}',
+          ],
+          actions: (record) => [
+            _MiniAction(
+              label: 'Investigate',
+              onPressed: () =>
+                  unawaited(onModerateRating(record, 'investigate')),
+            ),
+            _MiniAction(
+              label: 'Hide',
+              onPressed: () => unawaited(onModerateRating(record, 'hide')),
+            ),
+            _MiniAction(
+              label: 'Unhide',
+              onPressed: () => unawaited(onModerateRating(record, 'unhide')),
+            ),
+          ],
+        ),
+        const SizedBox(height: 18),
+        _RecordModule(
+          title: 'Ratings Audit',
+          subtitle: 'Historical audit records linked to ratings and tips.',
+          records: auditLogs
+              .where((log) => _hasAnyText(log, const ['rating', 'tip']))
+              .toList(growable: false),
+          query: '',
+          fields: const [],
+          columns: const ['Action', 'Record', 'Operator', 'Reason'],
+          row: (record) => [
+            '${record['actionType'] ?? 'rating_action'}',
+            '${record['recordType'] ?? ''}/${record['recordId'] ?? record['id']}',
+            '${record['adminUserId'] ?? 'admin'}',
+            '${record['reason'] ?? ''}',
+          ],
+        ),
+      ],
     );
   }
 }
@@ -6704,6 +7169,20 @@ double _rothTotal(List<Map<String, dynamic>> payments) {
         (total, payment) =>
             total + _numberFrom(payment['roth'] ?? payment['amount']),
       );
+}
+
+double _tipsTotal(List<Map<String, dynamic>> tips) {
+  return tips.fold<double>(
+    0,
+    (total, tip) =>
+        total + _numberFrom(tip['amount'] ?? tip['tipAmount'] ?? tip['total']),
+  );
+}
+
+bool _ratingReported(Map<String, dynamic> rating) {
+  final status = '${rating['reportStatus'] ?? rating['moderationStatus'] ?? ''}'
+      .toLowerCase();
+  return status.isNotEmpty && status != 'clear' && status != 'none';
 }
 
 String _stripeReconciliationStatus(List<Map<String, dynamic>> payments) {

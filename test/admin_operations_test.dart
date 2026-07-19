@@ -543,6 +543,82 @@ void main() {
       );
     });
 
+    test('ratings and tips policy restores historical filters', () {
+      final records = [
+        AdminRatingTipRecord.fromBackend(
+          ratingId: 'rating-1',
+          rating: {
+            'deliveryId': 'CIR-1',
+            'riderId': 'rider-1',
+            'senderId': 'sender-1',
+            'starRating': 5,
+            'reportStatus': 'clear',
+          },
+          tip: {'amount': 4.5, 'paymentMethod': 'card'},
+        ),
+        AdminRatingTipRecord.fromBackend(
+          ratingId: 'rating-2',
+          rating: {
+            'deliveryId': 'CIR-2',
+            'riderId': 'rider-2',
+            'senderId': 'sender-2',
+            'starRating': 1,
+            'reportStatus': 'reported',
+          },
+        ),
+      ];
+
+      expect(
+          AdminRatingsTipsPolicy.filter(records,
+              filter: AdminRatingTipFilter.tipped),
+          hasLength(1));
+      expect(
+          AdminRatingsTipsPolicy.filter(records,
+              filter: AdminRatingTipFilter.reported),
+          hasLength(1));
+      expect(
+        AdminRatingsTipsPolicy.moderationRequest(
+          ratingId: 'rating-2',
+          action: 'investigate',
+          reason: 'Reported by Sender.',
+        ),
+        containsPair('action', 'investigate'),
+      );
+    });
+
+    test('Roth admin issue patch preserves ledger and audit authority', () {
+      final patch = AdminRothOperations.issueRothPatch(
+        walletId: 'wallet-1',
+        userId: 'user-1',
+        email: 'User@CircumUk.com',
+        balanceBefore: 10,
+        amount: 5,
+        adminUserId: 'admin-1',
+        adminEmail: 'Admin@CircumUk.com',
+        reason: 'Compensation approved.',
+        createdAt: DateTime(2026, 6, 7),
+      );
+
+      expect((patch['wallet'] as Map)['balance'], 15);
+      expect((patch['ledger'] as Map)['type'], 'admin_issue');
+      expect((patch['audit'] as Map)['adminEmail'], 'admin@circumuk.com');
+      expect(patch.containsKey('stripePaymentIntentId'), isFalse);
+      expect(
+        () => AdminRothOperations.issueRothPatch(
+          walletId: 'wallet-1',
+          userId: 'user-1',
+          email: 'user@circumuk.com',
+          balanceBefore: 10,
+          amount: 0,
+          adminUserId: 'admin-1',
+          adminEmail: 'admin@circumuk.com',
+          reason: 'Invalid.',
+          createdAt: DateTime(2026, 6, 7),
+        ),
+        throwsArgumentError,
+      );
+    });
+
     test('finance workflow patches do not alter payment authority fields', () {
       final patch = AdminFinanceTools.workflowPatch(
         status: 'reconciled',
