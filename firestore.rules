@@ -784,10 +784,7 @@ service cloud.firestore {
       match /messages/{messageId} {
         allow read: if isAdmin() ||
           (signedIn() && request.auth.uid in get(/databases/$(database)/documents/chats/$(chatId)).data.participants);
-        allow create: if isAdmin() ||
-          (signedIn() &&
-            request.resource.data.senderId == request.auth.uid &&
-            request.auth.uid in get(/databases/$(database)/documents/chats/$(chatId)).data.participants);
+        allow create: if false;
         allow update, delete: if false;
       }
     }
