@@ -120,6 +120,7 @@ void main() {
   test('Sender send flow remains the canonical mobile booking canvas', () {
     final canvas = read('lib/app/sender_mobile/sender_booking_canvas.dart');
     final state = read('lib/app/sender_mobile/sender_booking_state.dart');
+    final bloc = read('lib/app/send_package/bloc/send_package_bloc.dart');
 
     for (final step in const [
       'pickup',
@@ -162,6 +163,28 @@ void main() {
     ]) {
       expect(canvas, isNot(contains(forbidden)));
     }
+
+    expect(canvas, contains('_backendDraftRestoreTimeout'));
+    expect(canvas, contains('_localDraftRestoreTimeout'));
+    expect(canvas, contains('.timeout('));
+    expect(canvas, contains('finally'));
+    expect(canvas, contains('_clearQueuedLocalDraft();'));
+    expect(canvas, contains("Your previous draft couldn't be restored."));
+
+    final activeStatuses = RegExp(
+      r'static const Set<String> _activeRequestStatuses = \{([\s\S]*?)\};',
+    ).firstMatch(bloc)?.group(1);
+    expect(activeStatuses, isNotNull);
+    for (final terminalStatus in const [
+      'cancelled',
+      'canceled',
+      'cancelled_verified_discrepancy',
+      'sender_no_show_pickup',
+    ]) {
+      expect(activeStatuses, isNot(contains("'$terminalStatus'")));
+    }
+    expect(bloc, contains('_clearActiveRequestIfCurrent'));
+    expect(bloc, contains('_terminalRequestStatuses'));
   });
 
   test('Sender wallet actions stay inside Sender wallet destinations', () {

@@ -169,7 +169,12 @@ class WatchActiveDelivery extends SendPackageEvent {
 class ActiveDeliverySnapshotChanged extends SendPackageEvent {
   final Map<String, dynamic>? data;
   final String? errorMessage;
-  const ActiveDeliverySnapshotChanged({this.data, this.errorMessage});
+  final String? clearedRequestId;
+  const ActiveDeliverySnapshotChanged({
+    this.data,
+    this.errorMessage,
+    this.clearedRequestId,
+  });
 }
 
 class ActiveDeliveryLiveLocationChanged extends SendPackageEvent {

@@ -104,7 +104,8 @@ class SendPackageBloc extends Bloc<SendPackageEvent, SendPackageState> {
         .listen(
       (snapshot) {
         if (snapshot.docs.isEmpty) {
-          add(const ActiveDeliverySnapshotChanged());
+          unawaited(_clearActiveRequestIfCurrent(normalized));
+          add(ActiveDeliverySnapshotChanged(clearedRequestId: normalized));
           return;
         }
         final doc = snapshot.docs.first;
@@ -123,6 +124,13 @@ class SendPackageBloc extends Bloc<SendPackageEvent, SendPackageState> {
         );
       },
     );
+  }
+
+  Future<void> _clearActiveRequestIfCurrent(String requestId) async {
+    final prefs = await SharedPreferences.getInstance();
+    if (prefs.getString('activeRequest') == requestId) {
+      await prefs.remove('activeRequest');
+    }
   }
 
   void _listenToActiveDeliveryLiveLocation(String deliveryId) {
@@ -988,10 +996,28 @@ class SendPackageBloc extends Bloc<SendPackageEvent, SendPackageState> {
       emit(state.copyWith(senderDeliveryError: event.errorMessage));
       return;
     }
+    if (event.clearedRequestId != null) {
+      emit(
+        state.copyWith(
+          deliveryStatus: DeliveryStatus.inital,
+          deliveryRequestStatus: 'archived',
+          activeDeliveryData: const {},
+          senderDeliveryError: 'That delivery is no longer active.',
+        ),
+      );
+      return;
+    }
     final data = event.data;
     if (data == null) return;
 
     final requestStatus = '${data['status'] ?? ''}'.trim();
+    if (_terminalRequestStatuses
+        .contains(requestStatus.toLowerCase().replaceAll('-', '_'))) {
+      final requestId = '${data['requestId'] ?? data['id'] ?? ''}'.trim();
+      if (requestId.isNotEmpty) {
+        unawaited(_clearActiveRequestIfCurrent(requestId));
+      }
+    }
     final pickupDetails = _contactFromDelivery(
       data['pickupDetails'],
       fallback: state.pickupDetails,
@@ -1060,6 +1086,9 @@ class SendPackageBloc extends Bloc<SendPackageEvent, SendPackageState> {
         normalized == 'delivery_completed') {
       return DeliveryStatus.deliveryCompleted;
     }
+    if (_cancelledRequestStatuses.contains(normalized)) {
+      return DeliveryStatus.inital;
+    }
     if (_activeRequestStatuses.contains(normalized)) {
       return DeliveryStatus.reconnectingWithRider;
     }
@@ -1091,10 +1120,21 @@ class SendPackageBloc extends Bloc<SendPackageEvent, SendPackageState> {
     'arrived_at_dropoff',
     'pin_required',
     'issue_reported',
+  };
+
+  static const Set<String> _cancelledRequestStatuses = {
     'cancelled',
     'canceled',
     'cancelled_verified_discrepancy',
     'sender_no_show_pickup',
+    'archived',
+  };
+
+  static const Set<String> _terminalRequestStatuses = {
+    'delivered',
+    'completed',
+    'delivery_completed',
+    ..._cancelledRequestStatuses,
   };
 
   ContactInfo? _contactFromDelivery(

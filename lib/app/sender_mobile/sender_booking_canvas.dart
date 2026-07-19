@@ -27,6 +27,9 @@ class SenderBookingCanvas extends StatefulWidget {
 }
 
 class _SenderBookingCanvasState extends State<SenderBookingCanvas> {
+  static const Duration _backendDraftRestoreTimeout = Duration(seconds: 12);
+  static const Duration _localDraftRestoreTimeout = Duration(seconds: 4);
+
   SenderBookingDraft _draft = const SenderBookingDraft();
   final _pickup = TextEditingController();
   final _dropoff = TextEditingController();
@@ -112,9 +115,14 @@ class _SenderBookingCanvasState extends State<SenderBookingCanvas> {
   Future<Map<String, dynamic>> _callDraftFunction(
     String name, [
     Map<String, dynamic> payload = const {},
+    Duration? timeout,
   ]) async {
-    final result =
-        await FirebaseFunctions.instance.httpsCallable(name).call(payload);
+    final result = await FirebaseFunctions.instance
+        .httpsCallable(name)
+        .call(payload)
+        .timeout(
+          timeout ?? const Duration(seconds: 15),
+        );
     return result.data is Map
         ? Map<String, dynamic>.from(result.data as Map)
         : <String, dynamic>{};
@@ -123,20 +131,34 @@ class _SenderBookingCanvasState extends State<SenderBookingCanvas> {
   Future<void> _loadBackendDraft() async {
     setState(() => _draftLoading = true);
     try {
-      final data = await _callDraftFunction('loadSenderDraft');
-      if (data['exists'] == true && data['draft'] is Map) {
-        _draftRevision = _intFrom(data['revision']);
-        _draftId = '${data['draftId'] ?? ''}'.trim().isEmpty
-            ? null
-            : '${data['draftId']}';
-        final restored = SenderBookingDraft.fromBackendDraft(
-          Map<String, dynamic>.from(data['draft'] as Map),
+      try {
+        final data = await _callDraftFunction(
+          'loadSenderDraft',
+          const {},
+          _backendDraftRestoreTimeout,
         );
-        _restoringDraft = true;
-        _hydrateDraft(restored);
-        _restoringDraft = false;
+        if (data['exists'] == true && data['draft'] is Map) {
+          _draftRevision = _intFrom(data['revision']);
+          _draftId = '${data['draftId'] ?? ''}'.trim().isEmpty
+              ? null
+              : '${data['draftId']}';
+          final restored = SenderBookingDraft.fromBackendDraft(
+            Map<String, dynamic>.from(data['draft'] as Map),
+          );
+          _hydrateRestoredDraft(restored);
+        }
+      } on TimeoutException catch (error, stackTrace) {
+        FlutterError.reportError(
+          FlutterErrorDetails(
+            exception: error,
+            stack: stackTrace,
+            library: 'sender send route',
+            context: ErrorDescription('timed out loading Sender booking draft'),
+          ),
+        );
+        if (mounted) setState(() => _syncStatus = 'Saved offline');
       }
-      await _restoreQueuedLocalDraft();
+      await _restoreQueuedLocalDraft().timeout(_localDraftRestoreTimeout);
       if (mounted) setState(() => _draftLoading = false);
     } on FirebaseFunctionsException catch (error, stackTrace) {
       FlutterError.reportError(
@@ -153,6 +175,22 @@ class _SenderBookingCanvasState extends State<SenderBookingCanvas> {
         _initializationError =
             error.message ?? 'Your saved delivery draft could not be loaded.';
       });
+    } on TimeoutException catch (error, stackTrace) {
+      FlutterError.reportError(
+        FlutterErrorDetails(
+          exception: error,
+          stack: stackTrace,
+          library: 'sender send route',
+          context: ErrorDescription('restoring queued Sender booking draft'),
+        ),
+      );
+      await _clearQueuedLocalDraft();
+      if (!mounted) return;
+      setState(() {
+        _draftLoading = false;
+        _initializationError =
+            "Your previous draft couldn't be restored. Please start again.";
+      });
     } catch (error, stackTrace) {
       FlutterError.reportError(
         FlutterErrorDetails(
@@ -167,6 +205,15 @@ class _SenderBookingCanvasState extends State<SenderBookingCanvas> {
         _draftLoading = false;
         _initializationError = 'Your saved delivery draft could not be loaded.';
       });
+    }
+  }
+
+  void _hydrateRestoredDraft(SenderBookingDraft restored) {
+    _restoringDraft = true;
+    try {
+      _hydrateDraft(restored);
+    } finally {
+      _restoringDraft = false;
     }
   }
 
@@ -299,14 +346,50 @@ class _SenderBookingCanvasState extends State<SenderBookingCanvas> {
       if (mounted) setState(() => _syncStatus = 'Saved');
       return;
     }
-    final decoded = jsonDecode(raw);
-    if (decoded is! Map || decoded['draft'] is! Map) return;
-    final restored = SenderBookingDraft.fromBackendDraft(
-      Map<String, dynamic>.from(decoded['draft'] as Map),
-    );
-    _restoringDraft = true;
-    _hydrateDraft(restored);
-    _restoringDraft = false;
+    final Object? decoded;
+    try {
+      decoded = jsonDecode(raw);
+    } on FormatException {
+      await _clearQueuedLocalDraft();
+      if (mounted) {
+        setState(() {
+          _syncStatus = 'Saved';
+          _initializationError =
+              "Your previous draft couldn't be restored. Please start again.";
+        });
+      }
+      return;
+    }
+    if (decoded is! Map || decoded['draft'] is! Map) {
+      await _clearQueuedLocalDraft();
+      if (mounted) setState(() => _syncStatus = 'Saved');
+      return;
+    }
+    final SenderBookingDraft restored;
+    try {
+      restored = SenderBookingDraft.fromBackendDraft(
+        Map<String, dynamic>.from(decoded['draft'] as Map),
+      );
+    } catch (error, stackTrace) {
+      FlutterError.reportError(
+        FlutterErrorDetails(
+          exception: error,
+          stack: stackTrace,
+          library: 'sender send route',
+          context: ErrorDescription('parsing queued Sender booking draft'),
+        ),
+      );
+      await _clearQueuedLocalDraft();
+      if (mounted) {
+        setState(() {
+          _syncStatus = 'Saved';
+          _initializationError =
+              "Your previous draft couldn't be restored. Please start again.";
+        });
+      }
+      return;
+    }
+    _hydrateRestoredDraft(restored);
     if (mounted) setState(() => _syncStatus = 'Sync needed');
     _queueDraftSave(restored);
   }
