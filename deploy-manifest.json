@@ -36,10 +36,13 @@
     "sender-app": {
       "description": "Independent Circum Sender mobile application.",
       "entrypoints": [
-        "lib/main.dart"
+        "lib/main.dart",
+        "lib/app/sender_mobile/sender_mobile_preview.dart"
       ],
       "ownedPrefixes": [
         ".github/workflows/deploy_sender_web.yml",
+        "deploy-manifest.json",
+        "firebase.json",
         ".gitignore",
         ".metadata",
         "analysis_options.yaml",
@@ -77,6 +80,7 @@
         "lib/app/support/",
         "test/sender_",
         "test/sender_mobile/",
+        "test/web_artifact_isolation_test.dart",
         "test/widget_test.dart",
         "test/booking_cancellation_test.dart",
         "test/delivery_pricing_test.dart",
@@ -87,7 +91,10 @@
         "test/role_access_test.dart",
         "test/special_handling_engine_test.dart",
         "test/vanguard_protection_test.dart",
+        "scripts/build_sender_app_web.sh",
+        "scripts/deploy_sender_app_web.sh",
         "scripts/validate_sender_mobile_artifacts.js",
+        "scripts/validate_web_artifacts.js",
         "android/",
         "ios/",
         "lib/extension/"
@@ -102,8 +109,8 @@
         "firestore.rules",
         "storage.rules"
       ],
-      "hostingTarget": null,
-      "output": null
+      "hostingTarget": "app",
+      "output": "build/sender_app_web"
     },
     "admin": {
       "description": "Independent Circum Admin application.",
@@ -197,8 +204,6 @@
   "sharedFiles": [],
   "blockedPrefixes": [
     "lib/main_sender_web.dart",
-    "scripts/build_sender_app_web.sh",
-    "scripts/deploy_sender_app_web.sh",
     "scripts/deploy_main_web.sh"
   ],
   "ignoredPrefixes": []

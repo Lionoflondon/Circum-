@@ -24,6 +24,23 @@ const surfaces = {
       'SenderMobileHome',
     ],
   },
+  'sender-app': {
+    target: 'app',
+    output: 'build/sender_app_web',
+    identity: 'circum-sender-web',
+    manifestName: 'Circum Sender App',
+    must: [
+      'circum-sender-web',
+      'Send a parcel',
+      'Your Circum',
+    ],
+    forbidden: [
+      'circum-website',
+      'circum-admin-web',
+      'Admin surface',
+      'Circum Website',
+    ],
+  },
   admin: {
     target: 'admin',
     output: 'build/web_admin',
@@ -85,11 +102,16 @@ function assertScriptIsolation() {
   if (!deployPublic.includes('hosting:public') || deployPublic.includes('hosting:app')) {
     fail('Public deploy script must target only hosting:public');
   }
-  if (fs.existsSync(path.join(root, 'scripts/deploy_sender_app_web.sh'))) {
-    fail('obsolete Sender App Web deploy script must not exist; Sender Web belongs to Website');
+  const deploySender = readIfExists(path.join(root, 'scripts/deploy_sender_app_web.sh'));
+  if (!deploySender.includes('hosting:app') || deploySender.includes('hosting:public') ||
+      deploySender.includes('hosting:admin') || deploySender.includes('functions') ||
+      deploySender.includes('firestore') || deploySender.includes('storage')) {
+    fail('Sender deploy script must target only hosting:app');
   }
-  if (fs.existsSync(path.join(root, 'scripts/build_sender_app_web.sh'))) {
-    fail('obsolete Sender App Web build script must not exist; Sender Web belongs to Website');
+  const buildSender = readIfExists(path.join(root, 'scripts/build_sender_app_web.sh'));
+  if (!buildSender.includes('lib/app/sender_mobile/sender_mobile_preview.dart') ||
+      !buildSender.includes('build/sender_app_web')) {
+    fail('Sender build script must use the dedicated Sender web entrypoint and output');
   }
 }
 
