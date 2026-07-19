@@ -850,7 +850,7 @@ class _SenderMobileProfileViewState extends State<SenderMobileProfileView> {
         padding: EdgeInsets.zero,
         child: Column(
           children: [
-            const _ProfileSectionTitleRow(title: 'Sender tools'),
+            const _ProfileSectionTitleRow(title: 'Circum tools'),
             SenderSavedAddressesProfileShortcut(
               repository: widget.savedAddressesRepository ??
                   (widget.repository == null
@@ -960,14 +960,14 @@ class _SenderMobileProfileViewState extends State<SenderMobileProfileView> {
                   key: const Key('sender-profile-help-shape-circum'),
                   icon: Icons.auto_awesome_outlined,
                   title: 'Help Shape Circum',
-                  subtitle: 'Share product feedback with the Sender team.',
+                  subtitle: 'Share product feedback with the Circum team.',
                   onTap: _openFeedback,
                 ),
                 _ProfileShortcut(
                   key: const Key('sender-profile-community-requests'),
                   icon: Icons.forum_outlined,
                   title: 'Community Requests',
-                  subtitle: 'View the Sender community request centre.',
+                  subtitle: 'View the Circum community request centre.',
                   onTap: _openCommunityRequests,
                 ),
                 _ProfileShortcut(
@@ -2074,7 +2074,7 @@ class _SenderFeedbackScreen extends StatelessWidget {
     return _SenderSettingsShell(
       title: 'Help Shape Circum',
       subtitle:
-          'Send product feedback, feature ideas and experience notes to the Sender team.',
+          'Send product feedback, feature ideas and experience notes to the Circum team.',
       children: [
         _ProfileGlassCard(
           padding: EdgeInsets.zero,
@@ -2084,19 +2084,19 @@ class _SenderFeedbackScreen extends StatelessWidget {
                 icon: Icons.lightbulb_outline_rounded,
                 title: 'Product feedback',
                 subtitle:
-                    'Tell us what would make Sender booking, tracking or support better.',
+                    'Tell us what would make Circum booking, tracking or support better.',
               ),
               _SettingsStaticRow(
                 icon: Icons.bug_report_outlined,
-                title: 'Report a Sender issue',
+                title: 'Report a Circum issue',
                 subtitle:
-                    'Share broken flows, confusing moments or missing Sender details.',
+                    'Share broken flows, confusing moments or missing Circum details.',
               ),
               _SettingsStaticRow(
                 icon: Icons.favorite_border_rounded,
                 title: 'What worked well',
                 subtitle:
-                    'Positive feedback helps the Sender team protect the good parts.',
+                    'Positive feedback helps the Circum team protect the good parts.',
               ),
             ],
           ),
@@ -2107,7 +2107,7 @@ class _SenderFeedbackScreen extends StatelessWidget {
           onPressed: () => Navigator.of(context).push(
             MaterialPageRoute<void>(
               builder: (_) => const RideChatPageView(
-                title: 'Sender Feedback',
+                title: 'Circum Feedback',
                 supportConversation: true,
               ),
               settings: const RouteSettings(
@@ -2130,7 +2130,7 @@ class _SenderCommunityRequestsScreen extends StatelessWidget {
     return _SenderSettingsShell(
       title: 'Community Requests',
       subtitle:
-          'Track Sender community requests, popular suggestions and reviewed ideas.',
+          'Track Circum community requests, popular suggestions and reviewed ideas.',
       children: [
         const _ProfileGlassCard(
           padding: EdgeInsets.zero,
@@ -2139,7 +2139,7 @@ class _SenderCommunityRequestsScreen extends StatelessWidget {
               _SettingsStaticRow(
                 icon: Icons.trending_up_rounded,
                 title: 'Popular requests',
-                subtitle: 'Sender ideas with the most community momentum.',
+                subtitle: 'Circum ideas with the most community momentum.',
               ),
               _SettingsStaticRow(
                 icon: Icons.hourglass_top_rounded,
@@ -2150,7 +2150,7 @@ class _SenderCommunityRequestsScreen extends StatelessWidget {
                 icon: Icons.task_alt_rounded,
                 title: 'Shipped',
                 subtitle:
-                    'Community requests already restored or released for Sender.',
+                    'Community requests already restored or released for Circum.',
               ),
             ],
           ),

@@ -150,6 +150,8 @@ void main() {
 
     expect(source, contains("title: 'Help Shape Circum'"));
     expect(source, contains("title: 'Community Requests'"));
+    expect(source, contains('Share product feedback with the Circum team.'));
+    expect(source, contains('View the Circum community request centre.'));
     expect(
         source, contains("key: const Key('sender-profile-help-shape-circum')"));
     expect(source,
