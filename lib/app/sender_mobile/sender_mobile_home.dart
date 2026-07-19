@@ -2001,20 +2001,15 @@ class _CanonicalSenderHomeState extends State<_CanonicalSenderHome> {
   Widget build(BuildContext context) {
     final activeDelivery = _activeDelivery;
     final scheduledDraft = activeDelivery == null ? _scheduledDraft : null;
-    final reduceMotion =
-        SenderAccessibilityScope.maybeOf(context)?.settings.reduceMotion ??
-            false;
     return Stack(
       key: const Key('sender-home-canonical-content'),
       children: [
         const Positioned.fill(child: _SenderHomeAmbientBackdrop()),
-        ListView(
-          padding: const EdgeInsets.fromLTRB(22, 18, 22, 30),
-          children: [
-            _HomeFadeIn(
-              enabled: !reduceMotion,
-              delay: Duration.zero,
-              child: Row(
+        Positioned.fill(
+          child: ListView(
+            padding: const EdgeInsets.fromLTRB(22, 18, 22, 30),
+            children: [
+              Row(
                 crossAxisAlignment: CrossAxisAlignment.center,
                 children: [
                   Expanded(
@@ -2057,12 +2052,8 @@ class _CanonicalSenderHomeState extends State<_CanonicalSenderHome> {
                   ),
                 ],
               ),
-            ),
-            const SizedBox(height: 22),
-            _HomeSlideIn(
-              enabled: !reduceMotion,
-              delay: const Duration(milliseconds: 70),
-              child: _SenderHomeHero(
+              const SizedBox(height: 22),
+              _SenderHomeHero(
                 activeDelivery: activeDelivery,
                 scheduledDraft: scheduledDraft,
                 ordersLoading: _orders == null && _ordersError == null,
@@ -2073,49 +2064,41 @@ class _CanonicalSenderHomeState extends State<_CanonicalSenderHome> {
                         ? widget.onStartDelivery
                         : widget.onStartDelivery,
               ),
-            ),
-            const SizedBox(height: 28),
-            _HomeFadeIn(
-              enabled: !reduceMotion,
-              delay: const Duration(milliseconds: 130),
-              child: const _SenderHomeSectionTitle(title: 'Your Circum'),
-            ),
-            const SizedBox(height: 15),
-            _HomeSlideIn(
-              enabled: !reduceMotion,
-              delay: const Duration(milliseconds: 170),
-              child: _SenderQuickServicesRail(
+              const SizedBox(height: 28),
+              const _SenderHomeSectionTitle(title: 'Your Circum'),
+              const SizedBox(height: 15),
+              _SenderQuickServicesRail(
                 summary: _summary,
                 hasError: _summaryError != null,
                 onOpenHealth: widget.onOpenHealth,
                 onOpenBusiness: widget.onOpenBusiness,
                 onOpenGifts: widget.onOpenGifts,
               ),
-            ),
-            const SizedBox(height: 18),
-            _SenderWalletMoment(onOpenWallet: widget.onOpenWallet),
-            const SizedBox(height: 16),
-            _SenderHomeActivityMoment(
-              orders: _orders,
-              qualifyingOrders: _qualifyingOrders,
-              error: _ordersError,
-              onRetry: _load,
-              onOpenActivity: widget.onOpenActivity,
-              onStartDelivery: widget.onStartDelivery,
-            ),
-            const SizedBox(height: 16),
-            _SenderHomeTrustMoment(
-              summary: _summary,
-              hasError: _summaryError != null,
-            ),
-            const SizedBox(height: 16),
-            _SenderImportantNotifications(
-              notifications: _importantUnreadNotifications,
-              loading: _notifications == null && _notificationsError == null,
-              hasError: _notificationsError != null,
-              onOpenNotifications: widget.onOpenNotifications,
-            ),
-          ],
+              const SizedBox(height: 18),
+              _SenderWalletMoment(onOpenWallet: widget.onOpenWallet),
+              const SizedBox(height: 16),
+              _SenderHomeActivityMoment(
+                orders: _orders,
+                qualifyingOrders: _qualifyingOrders,
+                error: _ordersError,
+                onRetry: _load,
+                onOpenActivity: widget.onOpenActivity,
+                onStartDelivery: widget.onStartDelivery,
+              ),
+              const SizedBox(height: 16),
+              _SenderHomeTrustMoment(
+                summary: _summary,
+                hasError: _summaryError != null,
+              ),
+              const SizedBox(height: 16),
+              _SenderImportantNotifications(
+                notifications: _importantUnreadNotifications,
+                loading: _notifications == null && _notificationsError == null,
+                hasError: _notificationsError != null,
+                onOpenNotifications: widget.onOpenNotifications,
+              ),
+            ],
+          ),
         ),
       ],
     );
@@ -2200,73 +2183,6 @@ class _SenderHomeIrisMark extends StatelessWidget {
       ),
     );
   }
-}
-
-class _HomeFadeIn extends StatelessWidget {
-  final Widget child;
-  final Duration delay;
-  final bool enabled;
-
-  const _HomeFadeIn({
-    required this.child,
-    required this.delay,
-    required this.enabled,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    if (!enabled) return child;
-    return TweenAnimationBuilder<double>(
-      tween: Tween(begin: 0, end: 1),
-      duration: Duration(milliseconds: 220 + delay.inMilliseconds),
-      curve: Curves.easeOutCubic,
-      builder: (context, value, child) {
-        final delayed = _delayedValue(value, delay.inMilliseconds);
-        return Opacity(opacity: delayed, child: child);
-      },
-      child: child,
-    );
-  }
-}
-
-class _HomeSlideIn extends StatelessWidget {
-  final Widget child;
-  final Duration delay;
-  final bool enabled;
-
-  const _HomeSlideIn({
-    required this.child,
-    required this.delay,
-    required this.enabled,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    if (!enabled) return child;
-    return TweenAnimationBuilder<double>(
-      tween: Tween(begin: 0, end: 1),
-      duration: Duration(milliseconds: 240 + delay.inMilliseconds),
-      curve: Curves.easeOutCubic,
-      builder: (context, value, child) {
-        final delayed = _delayedValue(value, delay.inMilliseconds);
-        return Opacity(
-          opacity: delayed,
-          child: Transform.translate(
-            offset: Offset(0, (1 - delayed) * 16),
-            child: child,
-          ),
-        );
-      },
-      child: child,
-    );
-  }
-}
-
-double _delayedValue(double value, int delayMs) {
-  if (delayMs <= 0) return value.clamp(0, 1);
-  final delay = delayMs / (240 + delayMs);
-  if (value <= delay) return 0;
-  return ((value - delay) / (1 - delay)).clamp(0, 1);
 }
 
 class _SenderHomeHero extends StatelessWidget {
