@@ -3918,74 +3918,97 @@ class _AdminTopBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(20, 16, 20, 12),
-      child: Column(
+    return Container(
+      margin: const EdgeInsets.fromLTRB(20, 14, 20, 12),
+      padding: const EdgeInsets.fromLTRB(16, 12, 14, 12),
+      decoration: _panelDecoration(radius: 22),
+      child: Row(
         children: [
-          Row(
-            children: [
-              if (mobile)
-                PopupMenuButton<AdminModule>(
-                  icon: const Icon(Icons.menu_rounded),
-                  onSelected: onSelect,
-                  itemBuilder: (_) => [
-                    for (final module in AdminModule.values)
-                      PopupMenuItem(
-                        value: module,
-                        child: Text(module.label),
-                      ),
-                  ],
+          if (mobile)
+            PopupMenuButton<AdminModule>(
+              icon: const Icon(Icons.menu_rounded),
+              onSelected: onSelect,
+              itemBuilder: (_) => [
+                for (final module in AdminModule.values)
+                  PopupMenuItem(
+                    value: module,
+                    child: Text(module.label),
+                  ),
+              ],
+            ),
+          Icon(selected.icon, color: const Color(0xFF7DD3FC), size: 22),
+          const SizedBox(width: 12),
+          SizedBox(
+            width: mobile ? 122 : 220,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Circum / Admin',
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    color: const Color(0xFF7DD3FC).withValues(alpha: .82),
+                    fontSize: 11,
+                    fontWeight: FontWeight.w800,
+                  ),
                 ),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'Admin surface',
-                      style: TextStyle(
-                        color: const Color(0xFF7DD3FC).withValues(alpha: .86),
-                        fontSize: 13,
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
-                    const SizedBox(height: 3),
-                    Text(
-                      selected.label,
-                      style: const TextStyle(
-                        fontSize: 28,
-                        fontWeight: FontWeight.w800,
-                      ),
-                    ),
-                    Text(
-                      user?.email ?? 'Admin',
-                      style:
-                          TextStyle(color: Colors.white.withValues(alpha: .6)),
-                    ),
-                  ],
+                const SizedBox(height: 2),
+                Text(
+                  selected.label,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    fontSize: 20,
+                    fontWeight: FontWeight.w900,
+                  ),
                 ),
-              ),
-              IconButton(
-                tooltip: 'Refresh',
-                onPressed: loading ? null : onRefresh,
-                icon: loading
-                    ? const SizedBox.square(
-                        dimension: 20,
-                        child: CircularProgressIndicator(strokeWidth: 2),
-                      )
-                    : const Icon(Icons.refresh_rounded),
-              ),
-            ],
-          ),
-          const SizedBox(height: 14),
-          TextField(
-            controller: search,
-            onChanged: (_) => onSearchChanged(),
-            decoration: const InputDecoration(
-              prefixIcon: Icon(Icons.search_rounded),
-              hintText: 'Search current Admin module',
-              border: OutlineInputBorder(),
+              ],
             ),
           ),
+          const SizedBox(width: 14),
+          Expanded(
+            child: SizedBox(
+              height: 44,
+              child: TextField(
+                controller: search,
+                onChanged: (_) => onSearchChanged(),
+                decoration: InputDecoration(
+                  prefixIcon: const Icon(Icons.search_rounded, size: 20),
+                  hintText: 'Search ${selected.label}',
+                  contentPadding:
+                      const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(16),
+                    borderSide:
+                        BorderSide(color: Colors.white.withValues(alpha: .10)),
+                  ),
+                ),
+              ),
+            ),
+          ),
+          const SizedBox(width: 12),
+          _StatusPill(label: loading ? 'Syncing' : 'Live'),
+          const SizedBox(width: 8),
+          IconButton.filledTonal(
+            tooltip: 'Refresh',
+            onPressed: loading ? null : onRefresh,
+            icon: loading
+                ? const SizedBox.square(
+                    dimension: 18,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
+                : const Icon(Icons.refresh_rounded),
+          ),
+          if (!mobile) ...[
+            const SizedBox(width: 8),
+            CircleAvatar(
+              radius: 18,
+              backgroundColor: const Color(0xFF7C3AED).withValues(alpha: .22),
+              child: Text(
+                _adminInitials(user?.email),
+                style: const TextStyle(fontWeight: FontWeight.w900),
+              ),
+            ),
+          ],
         ],
       ),
     );
@@ -8598,12 +8621,13 @@ class _EmptyState extends StatelessWidget {
 }
 
 enum _GiftsWorkspaceTab {
+  overview('Overview', Icons.space_dashboard_rounded),
   campaigns('Campaigns', Icons.campaign_rounded),
   participants('Participants', Icons.diversity_3_rounded),
-  matches('Matches', Icons.hub_rounded),
+  matches('Matching', Icons.hub_rounded),
+  workspace('Workspace', Icons.groups_2_rounded),
   stories('Stories', Icons.auto_stories_rounded),
-  brandPartners('Brand Partners', Icons.storefront_rounded),
-  workspace('Workspace', Icons.groups_2_rounded);
+  brandPartners('Partners', Icons.storefront_rounded);
 
   const _GiftsWorkspaceTab(this.label, this.icon);
 
@@ -8672,23 +8696,11 @@ class _GiftsOperationsModule extends StatefulWidget {
 }
 
 class _GiftsOperationsModuleState extends State<_GiftsOperationsModule> {
-  final TextEditingController _searchController = TextEditingController();
-  _GiftsWorkspaceTab _tab = _GiftsWorkspaceTab.campaigns;
-
-  @override
-  void dispose() {
-    _searchController.dispose();
-    super.dispose();
-  }
-
-  String get _query {
-    final local = _searchController.text.trim();
-    return local.isEmpty ? widget.query : local;
-  }
+  _GiftsWorkspaceTab _tab = _GiftsWorkspaceTab.overview;
 
   @override
   Widget build(BuildContext context) {
-    final query = _query;
+    final query = widget.query.trim();
     final filtered = adminSearch(widget.gifts, query, const [
       'id',
       'giftId',
@@ -8774,58 +8786,9 @@ class _GiftsOperationsModuleState extends State<_GiftsOperationsModule> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Container(
-          width: double.infinity,
-          padding: const EdgeInsets.all(24),
-          decoration: _panelDecoration(),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const Text(
-                'Gifts',
-                style: TextStyle(
-                  color: Colors.white,
-                  fontSize: 34,
-                  fontWeight: FontWeight.w900,
-                ),
-              ),
-              const SizedBox(height: 10),
-              Text(
-                'Search all gifts, campaigns, participants, brands, stories and matches.',
-                style: TextStyle(
-                  color: Colors.white.withValues(alpha: .68),
-                  fontSize: 15,
-                  height: 1.5,
-                ),
-              ),
-              const SizedBox(height: 20),
-              TextField(
-                controller: _searchController,
-                onChanged: (_) => setState(() {}),
-                style: const TextStyle(color: Colors.white),
-                decoration: InputDecoration(
-                  hintText:
-                      'Search all gifts, campaigns, participants, brands, stories and matches...',
-                  prefixIcon: const Icon(Icons.search_rounded),
-                  suffixIcon: _searchController.text.isEmpty
-                      ? null
-                      : IconButton(
-                          tooltip: 'Clear search',
-                          onPressed: () {
-                            _searchController.clear();
-                            setState(() {});
-                          },
-                          icon: const Icon(Icons.close_rounded),
-                        ),
-                ),
-              ),
-            ],
-          ),
-        ),
-        const SizedBox(height: 18),
         Wrap(
-          spacing: 14,
-          runSpacing: 14,
+          spacing: 10,
+          runSpacing: 10,
           children: [
             _MetricCard('Campaigns', '${campaigns.length}', 'active names'),
             _MetricCard('Participants', '${widget.participants.length}',
@@ -8863,6 +8826,12 @@ class _GiftsOperationsModuleState extends State<_GiftsOperationsModule> {
           child: KeyedSubtree(
             key: ValueKey(_tab),
             child: switch (_tab) {
+              _GiftsWorkspaceTab.overview => _giftOverview(
+                  filtered,
+                  filteredParticipants,
+                  filteredMatches,
+                  filteredBrands,
+                ),
               _GiftsWorkspaceTab.campaigns => _giftCampaigns(filtered),
               _GiftsWorkspaceTab.participants =>
                 _giftParticipants(filteredParticipants),
@@ -8872,6 +8841,59 @@ class _GiftsOperationsModuleState extends State<_GiftsOperationsModule> {
                 _giftBrandPartners(filteredBrands),
               _GiftsWorkspaceTab.workspace => _giftWorkspace(filtered),
             },
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _giftOverview(
+    List<Map<String, dynamic>> gifts,
+    List<Map<String, dynamic>> participants,
+    List<Map<String, dynamic>> matches,
+    List<Map<String, dynamic>> brands,
+  ) {
+    return Column(
+      children: [
+        _GiftOperationsBoard(
+          gifts: gifts,
+          participants: participants,
+          matches: matches,
+          onEditGift: widget.onEditGiftRequest,
+          onUpdateWorkspace: widget.onUpdateGiftWorkspace,
+          canManage: widget.canManageIssues,
+        ),
+        const SizedBox(height: 18),
+        _GiftGlassTable(
+          title: 'Recent Gift Operations',
+          subtitle:
+              'Campaigns, participants, brand partners, story records and matching records in one operational stream.',
+          emptyText: 'No Gifts records match this search.',
+          records: [
+            ...gifts.take(18),
+            ...participants.take(8),
+            ...matches.take(8),
+            ...brands.take(6)
+          ],
+          rowBuilder: (record) => _GiftTableRowData(
+            status:
+                '${record['status'] ?? record['giftAdminStatus'] ?? record['matchStatus'] ?? record['partnershipStatus'] ?? 'review'}',
+            title:
+                '${record['giftName'] ?? record['campaignName'] ?? record['partnerName'] ?? record['brandName'] ?? record['displayName'] ?? _recordId(record)}',
+            owner:
+                '${record['senderName'] ?? record['recipientName'] ?? record['contactName'] ?? record['brandName'] ?? 'Circum'}',
+            updated: _date(record['updatedAt'] ?? record['createdAt']),
+            metadata:
+                '${record['matchReason'] ?? record['procurementSupplier'] ?? record['giftStorySharePrivacy'] ?? record['category'] ?? 'Operational record'}',
+            onView: record.containsKey('partnerName') ||
+                    record.containsKey('brandName')
+                ? null
+                : () => unawaited(widget.onEditGiftRequest(record)),
+            onEdit: record.containsKey('partnerName') ||
+                    record.containsKey('brandName')
+                ? null
+                : () => unawaited(widget.onEditGiftRequest(record)),
+            menu: const [],
           ),
         ),
       ],
@@ -9157,59 +9179,100 @@ class _GiftActionBar extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.all(16),
-      decoration: _panelDecoration(),
+      padding: const EdgeInsets.all(12),
+      decoration: _panelDecoration(radius: 22),
       child: Wrap(
-        spacing: 10,
-        runSpacing: 10,
+        spacing: 14,
+        runSpacing: 12,
+        crossAxisAlignment: WrapCrossAlignment.center,
         children: [
-          _GiftCommandButton(
-            label: 'Bulk Approve',
-            icon: Icons.check_circle_rounded,
-            tone: _GiftCommandTone.primary,
-            onPressed: canManage ? onBulkApprove : null,
+          _GiftActionGroup(
+            label: 'Primary',
+            children: [
+              _GiftCommandButton(
+                label: 'New Campaign',
+                icon: Icons.add_rounded,
+                tone: _GiftCommandTone.primary,
+                onPressed: canManage ? onNewCampaign : null,
+              ),
+              _GiftCommandButton(
+                label: 'Invite Brand',
+                icon: Icons.storefront_rounded,
+                tone: _GiftCommandTone.primary,
+                onPressed: canManage ? onInviteBrand : null,
+              ),
+            ],
           ),
-          _GiftCommandButton(
-            label: 'Bulk Reject',
-            icon: Icons.block_rounded,
-            tone: _GiftCommandTone.danger,
-            onPressed: canManage ? onBulkReject : null,
+          _GiftActionGroup(
+            label: 'Review',
+            children: [
+              _GiftCommandButton(
+                label: 'Approve',
+                icon: Icons.check_circle_rounded,
+                tone: _GiftCommandTone.primary,
+                onPressed: canManage ? onBulkApprove : null,
+              ),
+              _GiftCommandButton(
+                label: 'Reject',
+                icon: Icons.block_rounded,
+                tone: _GiftCommandTone.danger,
+                onPressed: canManage ? onBulkReject : null,
+              ),
+              _GiftCommandButton(
+                label: 'Assign',
+                icon: Icons.assignment_ind_rounded,
+                tone: _GiftCommandTone.primary,
+                onPressed: canManage ? onAssign : null,
+              ),
+            ],
           ),
-          _GiftCommandButton(
-            label: 'Assign',
-            icon: Icons.assignment_ind_rounded,
-            tone: _GiftCommandTone.primary,
-            onPressed: canManage ? onAssign : null,
-          ),
-          _GiftCommandButton(
-            label: 'Export',
-            icon: Icons.download_rounded,
-            onPressed: canManage ? onExport : null,
-          ),
-          const _GiftCommandButton(
-            label: 'Refresh',
-            icon: Icons.refresh_rounded,
-            onPressed: null,
-          ),
-          const _GiftCommandButton(
-            label: 'Filter',
-            icon: Icons.tune_rounded,
-            onPressed: null,
-          ),
-          _GiftCommandButton(
-            label: 'New Campaign',
-            icon: Icons.add_rounded,
-            tone: _GiftCommandTone.primary,
-            onPressed: canManage ? onNewCampaign : null,
-          ),
-          _GiftCommandButton(
-            label: 'Invite Brand',
-            icon: Icons.storefront_rounded,
-            tone: _GiftCommandTone.primary,
-            onPressed: canManage ? onInviteBrand : null,
+          _GiftActionGroup(
+            label: 'Utility',
+            children: [
+              _GiftCommandButton(
+                label: 'Export',
+                icon: Icons.download_rounded,
+                onPressed: canManage ? onExport : null,
+              ),
+              const _GiftCommandButton(
+                label: 'Filter',
+                icon: Icons.tune_rounded,
+                onPressed: null,
+              ),
+            ],
           ),
         ],
       ),
+    );
+  }
+}
+
+class _GiftActionGroup extends StatelessWidget {
+  const _GiftActionGroup({
+    required this.label,
+    required this.children,
+  });
+
+  final String label;
+  final List<Widget> children;
+
+  @override
+  Widget build(BuildContext context) {
+    return Wrap(
+      spacing: 8,
+      runSpacing: 8,
+      crossAxisAlignment: WrapCrossAlignment.center,
+      children: [
+        Text(
+          label.toUpperCase(),
+          style: TextStyle(
+            color: Colors.white.withValues(alpha: .44),
+            fontSize: 11,
+            fontWeight: FontWeight.w900,
+          ),
+        ),
+        ...children,
+      ],
     );
   }
 }
@@ -9280,6 +9343,224 @@ class _GiftSegmentedTabs extends StatelessWidget {
               selected: tab == selected,
               onTap: () => onSelected(tab),
             ),
+        ],
+      ),
+    );
+  }
+}
+
+class _GiftOperationsBoard extends StatelessWidget {
+  const _GiftOperationsBoard({
+    required this.gifts,
+    required this.participants,
+    required this.matches,
+    required this.onEditGift,
+    required this.onUpdateWorkspace,
+    required this.canManage,
+  });
+
+  final List<Map<String, dynamic>> gifts;
+  final List<Map<String, dynamic>> participants;
+  final List<Map<String, dynamic>> matches;
+  final Future<void> Function(Map<String, dynamic>) onEditGift;
+  final Future<void> Function(Map<String, dynamic>, String) onUpdateWorkspace;
+  final bool canManage;
+
+  @override
+  Widget build(BuildContext context) {
+    final lanes = <(String, List<Map<String, dynamic>>, String)>[
+      (
+        'Needs Procurement',
+        gifts
+            .where((record) =>
+                _giftProcurementSummary(record) == 'No procurement plan')
+            .toList(),
+        'supplier_pending'
+      ),
+      (
+        'Supplier Pending',
+        gifts
+            .where((record) =>
+                _giftWorkspaceProgress(record).contains('Supplier Pending'))
+            .toList(),
+        'supplier_pending'
+      ),
+      (
+        'IRIS Review',
+        gifts
+            .where((record) => _giftIrisSelectionSummary(record)
+                .toLowerCase()
+                .contains('iris'))
+            .toList(),
+        'iris_review'
+      ),
+      (
+        'Story Production',
+        gifts.where(_hasGiftStory).toList(),
+        'story_production'
+      ),
+      (
+        'Awaiting Approval',
+        [
+          ...gifts.where((record) =>
+              _giftWorkspaceProgress(record).contains('Approval Pending')),
+          ...participants
+              .where((record) => _giftMatchBucket(record) == 'pending'),
+          ...matches.where((record) => _giftMatchBucket(record) == 'manual'),
+        ],
+        'approval_pending'
+      ),
+      (
+        'Ready',
+        gifts
+            .where((record) => _giftWorkspaceProgress(record).contains('Ready'))
+            .toList(),
+        'ready_for_delivery'
+      ),
+      (
+        'Delivered',
+        gifts
+            .where((record) =>
+                _giftWorkspaceProgress(record).contains('Completed'))
+            .toList(),
+        'completed'
+      ),
+    ];
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(14),
+      decoration: _panelDecoration(radius: 22),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            'Workspace Board',
+            style: TextStyle(fontSize: 18, fontWeight: FontWeight.w900),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            'Gift Team queue organised by operational bottleneck.',
+            style: TextStyle(color: Colors.white.withValues(alpha: .62)),
+          ),
+          const SizedBox(height: 14),
+          SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                for (final lane in lanes)
+                  _GiftBoardLane(
+                    title: lane.$1,
+                    records: lane.$2.take(8).toList(),
+                    actionStatus: lane.$3,
+                    onEditGift: onEditGift,
+                    onUpdateWorkspace: onUpdateWorkspace,
+                    canManage: canManage,
+                  ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _GiftBoardLane extends StatelessWidget {
+  const _GiftBoardLane({
+    required this.title,
+    required this.records,
+    required this.actionStatus,
+    required this.onEditGift,
+    required this.onUpdateWorkspace,
+    required this.canManage,
+  });
+
+  final String title;
+  final List<Map<String, dynamic>> records;
+  final String actionStatus;
+  final Future<void> Function(Map<String, dynamic>) onEditGift;
+  final Future<void> Function(Map<String, dynamic>, String) onUpdateWorkspace;
+  final bool canManage;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: 236,
+      margin: const EdgeInsets.only(right: 12),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: .045),
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: Colors.white.withValues(alpha: .09)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  title,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(fontWeight: FontWeight.w900),
+                ),
+              ),
+              _GiftStatusChip('${records.length}'),
+            ],
+          ),
+          const SizedBox(height: 10),
+          if (records.isEmpty)
+            Text(
+              'Clear.',
+              style: TextStyle(color: Colors.white.withValues(alpha: .48)),
+            )
+          else
+            for (final record in records) ...[
+              InkWell(
+                borderRadius: BorderRadius.circular(14),
+                onTap: () => unawaited(onEditGift(record)),
+                child: Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(10),
+                  decoration: BoxDecoration(
+                    color: Colors.white.withValues(alpha: .055),
+                    borderRadius: BorderRadius.circular(14),
+                    border:
+                        Border.all(color: Colors.white.withValues(alpha: .08)),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        '${record['giftName'] ?? record['campaignName'] ?? record['displayName'] ?? _recordId(record)}',
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(fontWeight: FontWeight.w800),
+                      ),
+                      const SizedBox(height: 6),
+                      Text(
+                        '${record['recipientName'] ?? record['senderName'] ?? record['brandName'] ?? 'Gift operation'}',
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          color: Colors.white.withValues(alpha: .52),
+                          fontSize: 12,
+                        ),
+                      ),
+                      if (canManage) ...[
+                        const SizedBox(height: 8),
+                        _MiniAction(
+                          label: 'Move',
+                          onPressed: () => unawaited(
+                              onUpdateWorkspace(record, actionStatus)),
+                        ),
+                      ],
+                    ],
+                  ),
+                ),
+              ),
+              const SizedBox(height: 8),
+            ],
         ],
       ),
     );
@@ -11719,30 +12000,45 @@ class _RecordModule extends StatelessWidget {
     final filtered =
         fields.isEmpty ? records : adminSearch(records, query, fields);
     return DecoratedBox(
-      decoration: _panelDecoration(),
+      decoration: _panelDecoration(radius: 20),
       child: Padding(
-        padding: const EdgeInsets.all(18),
+        padding: const EdgeInsets.all(14),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(title,
-                style:
-                    const TextStyle(fontSize: 22, fontWeight: FontWeight.w800)),
-            const SizedBox(height: 6),
+            Row(
+              children: [
+                Expanded(
+                  child: Text(title,
+                      style: const TextStyle(
+                          fontSize: 18, fontWeight: FontWeight.w900)),
+                ),
+                _StatusPill(label: '${filtered.length} records'),
+              ],
+            ),
+            const SizedBox(height: 4),
             Text(subtitle,
                 style: TextStyle(color: Colors.white.withValues(alpha: .66))),
-            const SizedBox(height: 18),
+            const SizedBox(height: 12),
             if (filtered.isEmpty)
               Padding(
-                padding: const EdgeInsets.symmetric(vertical: 28),
-                child: Text('No records found.',
-                    style:
-                        TextStyle(color: Colors.white.withValues(alpha: .62))),
+                padding: const EdgeInsets.symmetric(vertical: 22),
+                child: _EmptyState('No records found.'),
               )
             else
               SingleChildScrollView(
                 scrollDirection: Axis.horizontal,
                 child: DataTable(
+                  headingRowHeight: 40,
+                  dataRowMinHeight: 52,
+                  dataRowMaxHeight: 64,
+                  columnSpacing: 24,
+                  horizontalMargin: 12,
+                  headingTextStyle: TextStyle(
+                    color: Colors.white.withValues(alpha: .58),
+                    fontSize: 12,
+                    fontWeight: FontWeight.w900,
+                  ),
                   columns: [
                     for (final column in columns)
                       DataColumn(label: Text(column)),
@@ -11793,26 +12089,32 @@ class _MetricCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return SizedBox(
-      width: 188,
+    return ConstrainedBox(
+      constraints: const BoxConstraints(minWidth: 142, maxWidth: 190),
       child: DecoratedBox(
-        decoration: _panelDecoration(),
+        decoration: _panelDecoration(radius: 999),
         child: Padding(
-          padding: const EdgeInsets.all(16),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
             children: [
-              Text(label,
-                  style: TextStyle(color: Colors.white.withValues(alpha: .64))),
-              const SizedBox(height: 12),
               Text(
                 value,
                 style:
-                    const TextStyle(fontSize: 28, fontWeight: FontWeight.w800),
+                    const TextStyle(fontSize: 18, fontWeight: FontWeight.w900),
               ),
-              const SizedBox(height: 4),
-              Text(detail,
-                  style: TextStyle(color: Colors.white.withValues(alpha: .68))),
+              const SizedBox(width: 8),
+              Flexible(
+                child: Text(
+                  label,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    color: Colors.white.withValues(alpha: .72),
+                    fontSize: 12,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+              ),
             ],
           ),
         ),
@@ -11870,7 +12172,11 @@ class _MiniAction extends StatelessWidget {
       onPressed: onPressed,
       style: OutlinedButton.styleFrom(
         visualDensity: VisualDensity.compact,
-        padding: const EdgeInsets.symmetric(horizontal: 10),
+        minimumSize: const Size(40, 34),
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 9),
+        textStyle: const TextStyle(fontSize: 12, fontWeight: FontWeight.w800),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        side: BorderSide(color: Colors.white.withValues(alpha: .14)),
       ),
       child: Text(label),
     );
@@ -13325,12 +13631,42 @@ class _AdminNotice extends StatelessWidget {
   }
 }
 
-BoxDecoration _panelDecoration() {
+BoxDecoration _panelDecoration({double radius = 18}) {
   return BoxDecoration(
-    color: Colors.white.withValues(alpha: .055),
-    borderRadius: BorderRadius.circular(18),
-    border: Border.all(color: Colors.white.withValues(alpha: .10)),
+    color: Colors.white.withValues(alpha: .06),
+    borderRadius: BorderRadius.circular(radius),
+    border: Border.all(color: Colors.white.withValues(alpha: .12)),
+    gradient: LinearGradient(
+      begin: Alignment.topLeft,
+      end: Alignment.bottomRight,
+      colors: [
+        Colors.white.withValues(alpha: .09),
+        const Color(0xFF7C3AED).withValues(alpha: .035),
+        const Color(0xFF22D3EE).withValues(alpha: .025),
+      ],
+    ),
+    boxShadow: [
+      BoxShadow(
+        color: const Color(0xFF0EA5E9).withValues(alpha: .08),
+        blurRadius: 24,
+        offset: const Offset(0, 12),
+      ),
+      BoxShadow(
+        color: Colors.black.withValues(alpha: .20),
+        blurRadius: 28,
+        offset: const Offset(0, 14),
+      ),
+    ],
   );
+}
+
+String _adminInitials(String? email) {
+  final clean = (email ?? 'A').trim();
+  if (clean.isEmpty) return 'A';
+  final name = clean.split('@').first;
+  final parts = name.split(RegExp(r'[._\-\s]+')).where((p) => p.isNotEmpty);
+  final initials = parts.take(2).map((p) => p[0].toUpperCase()).join();
+  return initials.isEmpty ? clean[0].toUpperCase() : initials;
 }
 
 String _recordId(Map<String, dynamic> record) {
