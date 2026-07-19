@@ -2001,154 +2001,111 @@ class _CanonicalSenderHomeState extends State<_CanonicalSenderHome> {
   Widget build(BuildContext context) {
     final activeDelivery = _activeDelivery;
     final scheduledDraft = activeDelivery == null ? _scheduledDraft : null;
-    return Stack(
+    return Container(
       key: const Key('sender-home-canonical-content'),
-      children: [
-        const Positioned.fill(child: _SenderHomeAmbientBackdrop()),
-        Positioned.fill(
-          child: ListView(
-            padding: const EdgeInsets.fromLTRB(22, 18, 22, 30),
+      decoration: BoxDecoration(
+        color: _SenderTokens.bg,
+        boxShadow: [
+          BoxShadow(
+            color: _SenderTokens.blue.withValues(alpha: .10),
+            blurRadius: 120,
+            spreadRadius: 40,
+            offset: const Offset(-120, 120),
+          ),
+        ],
+      ),
+      child: ListView(
+        padding: const EdgeInsets.fromLTRB(22, 18, 22, 30),
+        children: [
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.center,
             children: [
-              Row(
-                crossAxisAlignment: CrossAxisAlignment.center,
-                children: [
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          'Good morning,',
-                          style: GoogleFonts.inter(
-                            color: _SenderTokens.softText,
-                            fontSize: 15,
-                            fontWeight: FontWeight.w600,
-                            height: 1.15,
-                          ),
-                        ),
-                        const SizedBox(height: 5),
-                        Text(
-                          _firstName == 'there' ? 'Ayo' : _firstName,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: GoogleFonts.dmSerifDisplay(
-                            color: Colors.white,
-                            fontSize: 35,
-                            fontWeight: FontWeight.w800,
-                            height: .96,
-                          ),
-                        ),
-                      ],
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Good morning,',
+                      style: GoogleFonts.inter(
+                        color: _SenderTokens.softText,
+                        fontSize: 15,
+                        fontWeight: FontWeight.w600,
+                        height: 1.15,
+                      ),
                     ),
-                  ),
-                  const SizedBox(width: 14),
-                  _HomeNotificationBell(
-                    unreadCount: _unreadCount,
-                    hasError: _notificationsError != null,
-                    onTap: widget.onOpenNotifications,
-                  ),
-                  const SizedBox(width: 11),
-                  _SenderAvatar(
-                    imageUrl: FirebaseAuth.instance.currentUser?.photoURL,
-                  ),
-                ],
+                    const SizedBox(height: 5),
+                    Text(
+                      _firstName == 'there' ? 'Ayo' : _firstName,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: GoogleFonts.dmSerifDisplay(
+                        color: Colors.white,
+                        fontSize: 35,
+                        fontWeight: FontWeight.w800,
+                        height: .96,
+                      ),
+                    ),
+                  ],
+                ),
               ),
-              const SizedBox(height: 22),
-              _SenderHomeHero(
-                activeDelivery: activeDelivery,
-                scheduledDraft: scheduledDraft,
-                ordersLoading: _orders == null && _ordersError == null,
-                hasOrderError: _ordersError != null,
-                onPrimaryTap: activeDelivery != null
-                    ? widget.onOpenActivity
-                    : scheduledDraft != null
-                        ? widget.onStartDelivery
-                        : widget.onStartDelivery,
-              ),
-              const SizedBox(height: 28),
-              const _SenderHomeSectionTitle(title: 'Your Circum'),
-              const SizedBox(height: 15),
-              _SenderQuickServicesRail(
-                summary: _summary,
-                hasError: _summaryError != null,
-                onOpenHealth: widget.onOpenHealth,
-                onOpenBusiness: widget.onOpenBusiness,
-                onOpenGifts: widget.onOpenGifts,
-              ),
-              const SizedBox(height: 18),
-              _SenderWalletMoment(onOpenWallet: widget.onOpenWallet),
-              const SizedBox(height: 16),
-              _SenderHomeActivityMoment(
-                orders: _orders,
-                qualifyingOrders: _qualifyingOrders,
-                error: _ordersError,
-                onRetry: _load,
-                onOpenActivity: widget.onOpenActivity,
-                onStartDelivery: widget.onStartDelivery,
-              ),
-              const SizedBox(height: 16),
-              _SenderHomeTrustMoment(
-                summary: _summary,
-                hasError: _summaryError != null,
-              ),
-              const SizedBox(height: 16),
-              _SenderImportantNotifications(
-                notifications: _importantUnreadNotifications,
-                loading: _notifications == null && _notificationsError == null,
+              const SizedBox(width: 14),
+              _HomeNotificationBell(
+                unreadCount: _unreadCount,
                 hasError: _notificationsError != null,
-                onOpenNotifications: widget.onOpenNotifications,
+                onTap: widget.onOpenNotifications,
+              ),
+              const SizedBox(width: 11),
+              _SenderAvatar(
+                imageUrl: FirebaseAuth.instance.currentUser?.photoURL,
               ),
             ],
           ),
-        ),
-      ],
-    );
-  }
-}
-
-class _SenderHomeAmbientBackdrop extends StatelessWidget {
-  const _SenderHomeAmbientBackdrop();
-
-  @override
-  Widget build(BuildContext context) {
-    return IgnorePointer(
-      child: DecoratedBox(
-        decoration: BoxDecoration(
-          color: _SenderTokens.midnight.withValues(alpha: .16),
-        ),
-        child: Stack(
-          children: [
-            Positioned(
-              top: 92,
-              right: -84,
-              child: ImageFiltered(
-                imageFilter: ImageFilter.blur(sigmaX: 58, sigmaY: 58),
-                child: Container(
-                  width: 190,
-                  height: 190,
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    color: _SenderTokens.iris.withValues(alpha: .16),
-                  ),
-                ),
-              ),
-            ),
-            Positioned(
-              top: 280,
-              left: -96,
-              child: ImageFiltered(
-                imageFilter: ImageFilter.blur(sigmaX: 64, sigmaY: 64),
-                child: Container(
-                  width: 220,
-                  height: 220,
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    color: _SenderTokens.blue.withValues(alpha: .13),
-                  ),
-                ),
-              ),
-            ),
-          ],
-        ),
+          const SizedBox(height: 22),
+          _SenderHomeHero(
+            activeDelivery: activeDelivery,
+            scheduledDraft: scheduledDraft,
+            ordersLoading: _orders == null && _ordersError == null,
+            hasOrderError: _ordersError != null,
+            onPrimaryTap: activeDelivery != null
+                ? widget.onOpenActivity
+                : scheduledDraft != null
+                    ? widget.onStartDelivery
+                    : widget.onStartDelivery,
+          ),
+          const SizedBox(height: 28),
+          const _SenderHomeSectionTitle(title: 'Your Circum'),
+          const SizedBox(height: 15),
+          _SenderQuickServicesRail(
+            summary: _summary,
+            hasError: _summaryError != null,
+            onOpenHealth: widget.onOpenHealth,
+            onOpenBusiness: widget.onOpenBusiness,
+            onOpenGifts: widget.onOpenGifts,
+          ),
+          const SizedBox(height: 18),
+          _SenderWalletMoment(onOpenWallet: widget.onOpenWallet),
+          const SizedBox(height: 16),
+          _SenderHomeActivityMoment(
+            orders: _orders,
+            qualifyingOrders: _qualifyingOrders,
+            error: _ordersError,
+            onRetry: _load,
+            onOpenActivity: widget.onOpenActivity,
+            onStartDelivery: widget.onStartDelivery,
+          ),
+          const SizedBox(height: 16),
+          _SenderHomeTrustMoment(
+            summary: _summary,
+            hasError: _summaryError != null,
+          ),
+          const SizedBox(height: 16),
+          _SenderImportantNotifications(
+            notifications: _importantUnreadNotifications,
+            loading: _notifications == null && _notificationsError == null,
+            hasError: _notificationsError != null,
+            onOpenNotifications: widget.onOpenNotifications,
+          ),
+        ],
       ),
     );
   }
