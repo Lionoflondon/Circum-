@@ -11,8 +11,10 @@ import 'package:image_picker/image_picker.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../sender_profile/sender_profile.dart';
+import '../send_package/view/ride_chats.dart';
 import 'design_system/sender_design_system.dart';
 import 'sender_saved_addresses.dart';
+import 'sender_notifications.dart';
 import 'sender_wallet.dart';
 
 class SenderTrustActivity {
@@ -891,15 +893,14 @@ class _SenderMobileProfileViewState extends State<SenderMobileProfileView> {
                   icon: Icons.notifications_none_rounded,
                   title: 'Notifications',
                   subtitle: 'Choose how Circum keeps you informed.',
-                  onTap: () => _showLocalMessage(
-                      'Notification preferences will open here.'),
+                  onTap: _openNotifications,
                 ),
                 _ProfileShortcut(
                   icon: Icons.credit_card_rounded,
                   title: 'Payment methods',
                   subtitle: 'Manage saved payment methods.',
-                  onTap: () =>
-                      _showLocalMessage('Payment methods will open here.'),
+                  onTap: widget.onOpenWallet ??
+                      () => _showLocalMessage('Wallet is unavailable.'),
                 ),
                 _ProfileShortcut(
                   icon: Icons.lock_outline_rounded,
@@ -953,8 +954,21 @@ class _SenderMobileProfileViewState extends State<SenderMobileProfileView> {
                   icon: Icons.support_agent_rounded,
                   title: 'Help & Support',
                   subtitle: 'Get help with your Circum account.',
-                  onTap: () =>
-                      _showLocalMessage('Help & Support will open here.'),
+                  onTap: _openSupport,
+                ),
+                _ProfileShortcut(
+                  key: const Key('sender-profile-help-shape-circum'),
+                  icon: Icons.auto_awesome_outlined,
+                  title: 'Help Shape Circum',
+                  subtitle: 'Share product feedback with the Sender team.',
+                  onTap: _openFeedback,
+                ),
+                _ProfileShortcut(
+                  key: const Key('sender-profile-community-requests'),
+                  icon: Icons.forum_outlined,
+                  title: 'Community Requests',
+                  subtitle: 'View the Sender community request centre.',
+                  onTap: _openCommunityRequests,
                 ),
                 _ProfileShortcut(
                   key: const Key('sender-profile-terms'),
@@ -991,6 +1005,40 @@ class _SenderMobileProfileViewState extends State<SenderMobileProfileView> {
       settings: RouteSettings(name: routeName),
     ));
   }
+
+  Future<void> _openNotifications() => Navigator.of(context).push(
+        MaterialPageRoute<void>(
+          builder: (_) => const SenderNotificationsView(),
+          settings:
+              const RouteSettings(name: '/sender-mobile/profile/notifications'),
+        ),
+      );
+
+  Future<void> _openSupport() => Navigator.of(context).push(
+        MaterialPageRoute<void>(
+          builder: (_) => const RideChatPageView(
+            title: 'Circum Support',
+            supportConversation: true,
+          ),
+          settings: const RouteSettings(name: '/sender-mobile/profile/support'),
+        ),
+      );
+
+  Future<void> _openFeedback() => Navigator.of(context).push(
+        MaterialPageRoute<void>(
+          builder: (_) => const _SenderFeedbackScreen(),
+          settings: const RouteSettings(
+              name: '/sender-mobile/profile/help-shape-circum'),
+        ),
+      );
+
+  Future<void> _openCommunityRequests() => Navigator.of(context).push(
+        MaterialPageRoute<void>(
+          builder: (_) => const _SenderCommunityRequestsScreen(),
+          settings: const RouteSettings(
+              name: '/sender-mobile/profile/community-requests'),
+        ),
+      );
 
   void _showTrustDetails(SenderMobileProfileData profile) {
     showModalBottomSheet<void>(
@@ -2012,6 +2060,116 @@ class _SenderAccessibilitySettingsScreenState
               ),
             ],
           ),
+        ),
+      ],
+    );
+  }
+}
+
+class _SenderFeedbackScreen extends StatelessWidget {
+  const _SenderFeedbackScreen();
+
+  @override
+  Widget build(BuildContext context) {
+    return _SenderSettingsShell(
+      title: 'Help Shape Circum',
+      subtitle:
+          'Send product feedback, feature ideas and experience notes to the Sender team.',
+      children: [
+        _ProfileGlassCard(
+          padding: EdgeInsets.zero,
+          child: Column(
+            children: [
+              _SettingsStaticRow(
+                icon: Icons.lightbulb_outline_rounded,
+                title: 'Product feedback',
+                subtitle:
+                    'Tell us what would make Sender booking, tracking or support better.',
+              ),
+              _SettingsStaticRow(
+                icon: Icons.bug_report_outlined,
+                title: 'Report a Sender issue',
+                subtitle:
+                    'Share broken flows, confusing moments or missing Sender details.',
+              ),
+              _SettingsStaticRow(
+                icon: Icons.favorite_border_rounded,
+                title: 'What worked well',
+                subtitle:
+                    'Positive feedback helps the Sender team protect the good parts.',
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 20),
+        FilledButton.icon(
+          key: Key('sender-feedback-compose'),
+          onPressed: () => Navigator.of(context).push(
+            MaterialPageRoute<void>(
+              builder: (_) => const RideChatPageView(
+                title: 'Sender Feedback',
+                supportConversation: true,
+              ),
+              settings: const RouteSettings(
+                  name: '/sender-mobile/profile/help-shape-circum/chat'),
+            ),
+          ),
+          icon: const Icon(Icons.edit_note_rounded),
+          label: const Text('Write feedback'),
+        ),
+      ],
+    );
+  }
+}
+
+class _SenderCommunityRequestsScreen extends StatelessWidget {
+  const _SenderCommunityRequestsScreen();
+
+  @override
+  Widget build(BuildContext context) {
+    return _SenderSettingsShell(
+      title: 'Community Requests',
+      subtitle:
+          'Track Sender community requests, popular suggestions and reviewed ideas.',
+      children: [
+        const _ProfileGlassCard(
+          padding: EdgeInsets.zero,
+          child: Column(
+            children: [
+              _SettingsStaticRow(
+                icon: Icons.trending_up_rounded,
+                title: 'Popular requests',
+                subtitle: 'Sender ideas with the most community momentum.',
+              ),
+              _SettingsStaticRow(
+                icon: Icons.hourglass_top_rounded,
+                title: 'Under review',
+                subtitle: 'Requests being evaluated by the Circum team.',
+              ),
+              _SettingsStaticRow(
+                icon: Icons.task_alt_rounded,
+                title: 'Shipped',
+                subtitle:
+                    'Community requests already restored or released for Sender.',
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 20),
+        FilledButton.icon(
+          key: const Key('sender-community-request-compose'),
+          onPressed: () => Navigator.of(context).push(
+            MaterialPageRoute<void>(
+              builder: (_) => const RideChatPageView(
+                title: 'Community Request',
+                supportConversation: true,
+              ),
+              settings: const RouteSettings(
+                  name: '/sender-mobile/profile/community-requests/chat'),
+            ),
+          ),
+          icon: const Icon(Icons.forum_rounded),
+          label: const Text('Send a request'),
         ),
       ],
     );
