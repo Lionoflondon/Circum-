@@ -774,6 +774,24 @@ void main() {
       expect(data.supportTickets, isEmpty);
       expect(data.auditLogs, isEmpty);
       expect(data.websiteVisitors, isEmpty);
+      expect(data.messageReports, isEmpty);
+      expect(data.irisReferenceImages, isEmpty);
+    });
+
+    test('restores historical Admin final-gap backend surfaces', () {
+      final source =
+          File('lib/app/admin/admin_phase1_shell.dart').readAsStringSync();
+
+      expect(source, contains("httpsCallable('resolveStaleDeliveryLock')"));
+      expect(source, contains("httpsCallable('sendCircumAnnouncement')"));
+      expect(source, contains("collection('messageReports')"));
+      expect(source, contains("httpsCallable('getIrisReferenceImage')"));
+      expect(source, contains("httpsCallable('finalizeIrisReferenceImage')"));
+      expect(source, contains("httpsCallable('deleteIrisReferenceImage')"));
+      expect(source, contains('Stale Delivery Lock Queue'));
+      expect(source, contains('Message Report Queue'));
+      expect(source, contains('Announcement Composer'));
+      expect(source, contains('IRIS Reference Image Lifecycle'));
     });
   });
 }

@@ -45,6 +45,8 @@ class _AdminPhaseOneShellState extends State<AdminPhaseOneShell> {
   final _adminInviteEmail = TextEditingController();
   final _adminInviteNote = TextEditingController();
   final _chatMessage = TextEditingController();
+  final _announcementTitle = TextEditingController();
+  final _announcementBody = TextEditingController();
   final _scaffoldKey = GlobalKey<ScaffoldState>();
   final _auth = FirebaseAuth.instance;
   final _db = FirebaseFirestore.instance;
@@ -85,6 +87,8 @@ class _AdminPhaseOneShellState extends State<AdminPhaseOneShell> {
     _adminInviteEmail.dispose();
     _adminInviteNote.dispose();
     _chatMessage.dispose();
+    _announcementTitle.dispose();
+    _announcementBody.dispose();
     super.dispose();
   }
 
@@ -530,6 +534,73 @@ class _AdminPhaseOneShellState extends State<AdminPhaseOneShell> {
     await _loadAdminData();
   }
 
+  Future<void> _resolveStaleDeliveryLock(Map<String, dynamic> delivery) async {
+    if (!_can(AdminPermission.editDeliveries)) {
+      setState(() => _message = 'Your role cannot resolve stale deliveries.');
+      return;
+    }
+    final id = _idFor(delivery);
+    if (id.isEmpty) return;
+    try {
+      await _functions.httpsCallable('resolveStaleDeliveryLock').call({
+        'deliveryId': id,
+        'action': 'admin_removed_stale',
+        'reason': 'Resolved from isolated Circum Admin delivery operations',
+      });
+      await _writeAudit(AdminAuditEntry(
+        adminUserId: _user?.uid ?? 'unknown-admin',
+        actionType: 'delivery_stale_lock_resolved',
+        recordType: 'deliveryRequests',
+        recordId: id,
+        oldValue: {
+          'status': delivery['status'],
+          'deliveryStatus': delivery['deliveryStatus'],
+          'lockStatus': delivery['lockStatus'],
+        },
+        newValue: const {
+          'action': 'admin_removed_stale',
+        },
+        reason: 'Historical stale delivery lock workflow restored',
+      ));
+      setState(() => _message = 'Stale delivery lock resolved for $id.');
+      await _loadAdminData();
+    } on FirebaseFunctionsException catch (error) {
+      setState(() =>
+          _message = error.message ?? 'Could not resolve stale delivery lock.');
+    }
+  }
+
+  Future<void> _archiveDeliveryFromAdmin(Map<String, dynamic> delivery) async {
+    if (!_can(AdminPermission.editDeliveries)) {
+      setState(() => _message = 'Your role cannot archive deliveries.');
+      return;
+    }
+    final id = _idFor(delivery);
+    if (id.isEmpty) return;
+    await _db.collection('deliveryRequests').doc(id).set({
+      'adminArchiveStatus': 'archived',
+      'archivedByAdminId': _user?.uid,
+      'archivedByAdminEmail': _user?.email,
+      'archivedAt': FieldValue.serverTimestamp(),
+      'adminArchiveReason': 'Archived from isolated Circum Admin',
+      'updatedAt': FieldValue.serverTimestamp(),
+    }, SetOptions(merge: true));
+    await _writeAudit(AdminAuditEntry(
+      adminUserId: _user?.uid ?? 'unknown-admin',
+      actionType: 'delivery_archived',
+      recordType: 'deliveryRequests',
+      recordId: id,
+      oldValue: {
+        'adminArchiveStatus': delivery['adminArchiveStatus'],
+        'status': delivery['status'],
+      },
+      newValue: const {'adminArchiveStatus': 'archived'},
+      reason: 'Delivery archived from Admin operations',
+    ));
+    setState(() => _message = 'Delivery $id archived.');
+    await _loadAdminData();
+  }
+
   Future<void> _setIrisReviewStatus(
     Map<String, dynamic> delivery,
     String status,
@@ -564,6 +635,96 @@ class _AdminPhaseOneShellState extends State<AdminPhaseOneShell> {
     ));
     setState(() => _message = 'IRIS review for $id marked $status.');
     await _loadAdminData();
+  }
+
+  Future<void> _loadIrisReferenceImage(Map<String, dynamic> item) async {
+    if (!_can(AdminPermission.editDeliveries)) {
+      setState(() => _message = 'Your role cannot review IRIS images.');
+      return;
+    }
+    final itemId = _idFor(item);
+    if (itemId.isEmpty) return;
+    try {
+      await _functions.httpsCallable('getIrisReferenceImage').call({
+        'itemId': itemId,
+      });
+      await _writeAudit(AdminAuditEntry(
+        adminUserId: _user?.uid ?? 'unknown-admin',
+        actionType: 'iris_reference_image_loaded',
+        recordType: 'irisCanonicalObjects',
+        recordId: itemId,
+        reason: 'IRIS reference image opened from Admin',
+      ));
+      setState(() => _message = 'Reference image loaded for $itemId.');
+    } on FirebaseFunctionsException catch (error) {
+      setState(
+          () => _message = error.message ?? 'Reference image could not load.');
+    }
+  }
+
+  Future<void> _finalizeIrisReferenceImage(Map<String, dynamic> item) async {
+    if (!_can(AdminPermission.editDeliveries)) {
+      setState(() => _message = 'Your role cannot finalise IRIS images.');
+      return;
+    }
+    final itemId = _idFor(item);
+    final storagePath =
+        '${item['storagePath'] ?? item['referenceImageStoragePath'] ?? item['pendingStoragePath'] ?? ''}'
+            .trim();
+    if (itemId.isEmpty || storagePath.isEmpty) {
+      setState(() =>
+          _message = 'Reference finalisation needs an item and storage path.');
+      return;
+    }
+    try {
+      await _functions.httpsCallable('finalizeIrisReferenceImage').call({
+        'itemId': itemId,
+        'storagePath': storagePath,
+      });
+      await _writeAudit(AdminAuditEntry(
+        adminUserId: _user?.uid ?? 'unknown-admin',
+        actionType: 'iris_reference_image_finalized',
+        recordType: '${item['_collection'] ?? 'irisReferenceImages'}',
+        recordId: itemId,
+        newValue: {'storagePath': storagePath},
+        reason: 'Historical IRIS reference image finalisation restored',
+      ));
+      setState(() => _message = 'Reference image finalised for $itemId.');
+      await _loadAdminData();
+    } on FirebaseFunctionsException catch (error) {
+      setState(() => _message =
+          error.message ?? 'Reference image could not be finalised.');
+    }
+  }
+
+  Future<void> _deleteIrisReferenceImage(Map<String, dynamic> item) async {
+    if (!_can(AdminPermission.editDeliveries)) {
+      setState(() => _message = 'Your role cannot remove IRIS images.');
+      return;
+    }
+    final itemId = _idFor(item);
+    if (itemId.isEmpty) return;
+    try {
+      await _functions.httpsCallable('deleteIrisReferenceImage').call({
+        'itemId': itemId,
+      });
+      await _writeAudit(AdminAuditEntry(
+        adminUserId: _user?.uid ?? 'unknown-admin',
+        actionType: 'iris_reference_image_deleted',
+        recordType: '${item['_collection'] ?? 'irisReferenceImages'}',
+        recordId: itemId,
+        oldValue: {
+          'previewUrl': item['previewUrl'],
+          'referenceImageUrl': item['referenceImageUrl'],
+        },
+        reason: 'Historical IRIS reference image removal restored',
+      ));
+      setState(() => _message = 'Reference image removed for $itemId.');
+      await _loadAdminData();
+    } on FirebaseFunctionsException catch (error) {
+      setState(() =>
+          _message = error.message ?? 'Reference image could not be removed.');
+    }
   }
 
   Future<void> _setSenderAccountStatus(
@@ -890,6 +1051,44 @@ class _AdminPhaseOneShellState extends State<AdminPhaseOneShell> {
       await _loadAdminData();
     } on ArgumentError catch (error) {
       setState(() => _message = error.message);
+    }
+  }
+
+  Future<void> _sendPlatformAnnouncement(String audience) async {
+    if (!_can(AdminPermission.manageAdmins)) {
+      setState(
+          () => _message = 'Your role cannot send platform announcements.');
+      return;
+    }
+    final title = _announcementTitle.text.trim();
+    final body = _announcementBody.text.trim();
+    if (title.isEmpty || body.isEmpty) {
+      setState(() => _message = 'Announcement title and message are required.');
+      return;
+    }
+    try {
+      await _functions.httpsCallable('sendCircumAnnouncement').call({
+        'title': title,
+        'body': body,
+        'audience': audience,
+      });
+      await _writeAudit(AdminAuditEntry(
+        adminUserId: _user?.uid ?? 'unknown-admin',
+        actionType: 'platform_announcement_sent',
+        recordType: 'platformNotices',
+        recordId: audience,
+        newValue: {
+          'title': title,
+          'audience': audience,
+        },
+        reason: 'Historical announcement workflow restored',
+      ));
+      _announcementTitle.clear();
+      _announcementBody.clear();
+      setState(() => _message = 'Announcement queued for $audience.');
+      await _loadAdminData();
+    } on FirebaseFunctionsException catch (error) {
+      setState(() => _message = error.message ?? 'Announcement failed.');
     }
   }
 
@@ -1292,6 +1491,37 @@ class _AdminPhaseOneShellState extends State<AdminPhaseOneShell> {
     }
   }
 
+  Future<void> _resolveMessageReport(
+    Map<String, dynamic> report,
+    String status,
+  ) async {
+    if (!_can(AdminPermission.manageIssues)) {
+      setState(() => _message = 'Your role cannot resolve message reports.');
+      return;
+    }
+    final id = _idFor(report);
+    if (id.isEmpty) return;
+    await _db.collection('messageReports').doc(id).set({
+      'status': status,
+      'reviewStatus': status,
+      'resolvedAt': FieldValue.serverTimestamp(),
+      'resolvedBy': _user?.uid ?? _user?.email,
+      'adminResolution': status,
+      'updatedAt': FieldValue.serverTimestamp(),
+    }, SetOptions(merge: true));
+    await _writeAudit(AdminAuditEntry(
+      adminUserId: _user?.uid ?? 'unknown-admin',
+      actionType: 'message_report_$status',
+      recordType: 'messageReports',
+      recordId: id,
+      oldValue: {'status': report['status']},
+      newValue: {'status': status},
+      reason: 'Message report reviewed from Admin',
+    ));
+    setState(() => _message = 'Message report $id marked $status.');
+    await _loadAdminData();
+  }
+
   void _openRiderProfile(Map<String, dynamic> rider) {
     setState(() {
       _selectedRider = rider;
@@ -1432,7 +1662,12 @@ class _AdminPhaseOneShellState extends State<AdminPhaseOneShell> {
                       onDuplicateDelivery: _duplicateDelivery,
                       onSetRiderStatus: _setRiderStatus,
                       onSetDeliveryOperationStatus: _setDeliveryOperationStatus,
+                      onResolveStaleDeliveryLock: _resolveStaleDeliveryLock,
+                      onArchiveDelivery: _archiveDeliveryFromAdmin,
                       onSetIrisReviewStatus: _setIrisReviewStatus,
+                      onLoadIrisReferenceImage: _loadIrisReferenceImage,
+                      onFinalizeIrisReferenceImage: _finalizeIrisReferenceImage,
+                      onDeleteIrisReferenceImage: _deleteIrisReferenceImage,
                       onUpdateSupportTicket: _updateSupportTicket,
                       onUpdateGiftWorkflow: _updateGiftWorkflow,
                       onUpdateHealthPlusPickup: _updateHealthPlusPickup,
@@ -1453,6 +1688,9 @@ class _AdminPhaseOneShellState extends State<AdminPhaseOneShell> {
                       onUpdateGiftStoryAccess: _updateGiftStoryAccess,
                       onSetBusinessOperationStatus: _setBusinessOperationStatus,
                       onUpdatePlatformRecord: _updatePlatformRecord,
+                      announcementTitle: _announcementTitle,
+                      announcementBody: _announcementBody,
+                      onSendPlatformAnnouncement: _sendPlatformAnnouncement,
                       onOpenRiderProfile: _openRiderProfile,
                       onOpenDeliveryProfile: _openDeliveryProfile,
                       onOpenHealthPlusProfile: _openHealthPlusProfile,
@@ -1476,6 +1714,7 @@ class _AdminPhaseOneShellState extends State<AdminPhaseOneShell> {
                       onSelectChat: (chat) =>
                           setState(() => _selectedChat = chat),
                       onSendChatMessage: _sendChatMessage,
+                      onResolveMessageReport: _resolveMessageReport,
                     ),
                   ),
                 ],
@@ -1579,10 +1818,12 @@ class AdminDataBundle {
     required this.irisLearningCases,
     required this.irisPolicies,
     required this.irisEvidence,
+    required this.irisReferenceImages,
     required this.platformConfig,
     required this.platformStatus,
     required this.platformNotices,
     required this.platformVersions,
+    required this.messageReports,
   });
 
   final List<Map<String, dynamic>> deliveries;
@@ -1618,10 +1859,12 @@ class AdminDataBundle {
   final List<Map<String, dynamic>> irisLearningCases;
   final List<Map<String, dynamic>> irisPolicies;
   final List<Map<String, dynamic>> irisEvidence;
+  final List<Map<String, dynamic>> irisReferenceImages;
   final List<Map<String, dynamic>> platformConfig;
   final List<Map<String, dynamic>> platformStatus;
   final List<Map<String, dynamic>> platformNotices;
   final List<Map<String, dynamic>> platformVersions;
+  final List<Map<String, dynamic>> messageReports;
 
   static AdminDataBundle empty() => const AdminDataBundle(
         deliveries: [],
@@ -1657,10 +1900,12 @@ class AdminDataBundle {
         irisLearningCases: [],
         irisPolicies: [],
         irisEvidence: [],
+        irisReferenceImages: [],
         platformConfig: [],
         platformStatus: [],
         platformNotices: [],
         platformVersions: [],
+        messageReports: [],
       );
 }
 
@@ -1763,6 +2008,8 @@ class AdminRepository {
       _read(_db.collection('irisLearningCases').limit(150)),
       _read(_db.collection('irisPolicies').limit(50)),
       _read(_db.collection('irisEvidence').limit(150)),
+      _readTagged(_db.collection('irisReferenceImages').limit(150),
+          'irisReferenceImages'),
       _readTagged(
           _db.collection('platformConfig').limit(100), 'platformConfig'),
       _readTagged(
@@ -1771,6 +2018,9 @@ class AdminRepository {
           _db.collection('platformNotices').limit(100), 'platformNotices'),
       _readTagged(
           _db.collection('platformVersions').limit(100), 'platformVersions'),
+      canViewSupport
+          ? _read(_db.collection('messageReports').limit(100))
+          : Future.value(<Map<String, dynamic>>[]),
     ]);
     return AdminDataBundle(
       deliveries: results[0],
@@ -1806,10 +2056,12 @@ class AdminRepository {
       irisLearningCases: results[30],
       irisPolicies: results[31],
       irisEvidence: results[32],
-      platformConfig: results[33],
-      platformStatus: results[34],
-      platformNotices: results[35],
-      platformVersions: results[36],
+      irisReferenceImages: results[33],
+      platformConfig: results[34],
+      platformStatus: results[35],
+      platformNotices: results[36],
+      platformVersions: results[37],
+      messageReports: results[38],
     );
   }
 
@@ -2112,7 +2364,12 @@ class _AdminModuleBody extends StatelessWidget {
     required this.onDuplicateDelivery,
     required this.onSetRiderStatus,
     required this.onSetDeliveryOperationStatus,
+    required this.onResolveStaleDeliveryLock,
+    required this.onArchiveDelivery,
     required this.onSetIrisReviewStatus,
+    required this.onLoadIrisReferenceImage,
+    required this.onFinalizeIrisReferenceImage,
+    required this.onDeleteIrisReferenceImage,
     required this.onUpdateSupportTicket,
     required this.onUpdateGiftWorkflow,
     required this.onUpdateHealthPlusPickup,
@@ -2145,10 +2402,14 @@ class _AdminModuleBody extends StatelessWidget {
     required this.onCreateAdminUser,
     required this.onSetAdminUserStatus,
     required this.onSetAdminUserRole,
+    required this.announcementTitle,
+    required this.announcementBody,
+    required this.onSendPlatformAnnouncement,
     required this.chatMessage,
     required this.selectedChat,
     required this.onSelectChat,
     required this.onSendChatMessage,
+    required this.onResolveMessageReport,
   });
 
   final AdminModule module;
@@ -2166,8 +2427,14 @@ class _AdminModuleBody extends StatelessWidget {
   final Future<void> Function(Map<String, dynamic>, String) onSetRiderStatus;
   final Future<void> Function(Map<String, dynamic>, String)
       onSetDeliveryOperationStatus;
+  final Future<void> Function(Map<String, dynamic>) onResolveStaleDeliveryLock;
+  final Future<void> Function(Map<String, dynamic>) onArchiveDelivery;
   final Future<void> Function(Map<String, dynamic>, String)
       onSetIrisReviewStatus;
+  final Future<void> Function(Map<String, dynamic>) onLoadIrisReferenceImage;
+  final Future<void> Function(Map<String, dynamic>)
+      onFinalizeIrisReferenceImage;
+  final Future<void> Function(Map<String, dynamic>) onDeleteIrisReferenceImage;
   final Future<void> Function(Map<String, dynamic>, String)
       onUpdateSupportTicket;
   final Future<void> Function(Map<String, dynamic>, String)
@@ -2217,10 +2484,15 @@ class _AdminModuleBody extends StatelessWidget {
       onSetAdminUserStatus;
   final Future<void> Function(Map<String, dynamic>, AdminRole)
       onSetAdminUserRole;
+  final TextEditingController announcementTitle;
+  final TextEditingController announcementBody;
+  final Future<void> Function(String) onSendPlatformAnnouncement;
   final TextEditingController chatMessage;
   final Map<String, dynamic>? selectedChat;
   final ValueChanged<Map<String, dynamic>> onSelectChat;
   final VoidCallback onSendChatMessage;
+  final Future<void> Function(Map<String, dynamic>, String)
+      onResolveMessageReport;
 
   @override
   Widget build(BuildContext context) {
@@ -2238,10 +2510,14 @@ class _AdminModuleBody extends StatelessWidget {
               learningCases: data.irisLearningCases,
               policies: data.irisPolicies,
               evidenceRecords: data.irisEvidence,
+              referenceImages: data.irisReferenceImages,
               query: query,
               canManageIris: canEditDeliveries,
               onOpenDelivery: onOpenDeliveryProfile,
               onSetIrisReviewStatus: onSetIrisReviewStatus,
+              onLoadReferenceImage: onLoadIrisReferenceImage,
+              onFinalizeReferenceImage: onFinalizeIrisReferenceImage,
+              onDeleteReferenceImage: onDeleteIrisReferenceImage,
             ),
           AdminModule.deliveries => _DeliveryOperationsModule(
               deliveries: data.deliveries,
@@ -2252,6 +2528,8 @@ class _AdminModuleBody extends StatelessWidget {
               onOpenDelivery: onOpenDeliveryProfile,
               onDuplicateDelivery: onDuplicateDelivery,
               onSetDeliveryOperationStatus: onSetDeliveryOperationStatus,
+              onResolveStaleDeliveryLock: onResolveStaleDeliveryLock,
+              onArchiveDelivery: onArchiveDelivery,
             ),
           AdminModule.users => _RecordModule(
               title: 'Users',
@@ -2415,11 +2693,13 @@ class _AdminModuleBody extends StatelessWidget {
             ),
           AdminModule.chat => _ChatModule(
               records: data.chats,
+              messageReports: data.messageReports,
               query: query,
               message: chatMessage,
               selectedChat: selectedChat,
               onSelectChat: onSelectChat,
               onSendChatMessage: onSendChatMessage,
+              onResolveMessageReport: onResolveMessageReport,
             ),
           AdminModule.settings => _SettingsModule(
               canManageAdmins: canManageAdmins,
@@ -2436,6 +2716,9 @@ class _AdminModuleBody extends StatelessWidget {
               onCreateAdminUser: onCreateAdminUser,
               onSetAdminUserStatus: onSetAdminUserStatus,
               onSetAdminUserRole: onSetAdminUserRole,
+              announcementTitle: announcementTitle,
+              announcementBody: announcementBody,
+              onSendPlatformAnnouncement: onSendPlatformAnnouncement,
               onUpdatePlatformRecord: onUpdatePlatformRecord,
             ),
         },
@@ -2987,10 +3270,14 @@ class _IrisOperationsModule extends StatelessWidget {
     required this.learningCases,
     required this.policies,
     required this.evidenceRecords,
+    required this.referenceImages,
     required this.query,
     required this.canManageIris,
     required this.onOpenDelivery,
     required this.onSetIrisReviewStatus,
+    required this.onLoadReferenceImage,
+    required this.onFinalizeReferenceImage,
+    required this.onDeleteReferenceImage,
   });
 
   final List<Map<String, dynamic>> deliveries;
@@ -2999,11 +3286,15 @@ class _IrisOperationsModule extends StatelessWidget {
   final List<Map<String, dynamic>> learningCases;
   final List<Map<String, dynamic>> policies;
   final List<Map<String, dynamic>> evidenceRecords;
+  final List<Map<String, dynamic>> referenceImages;
   final String query;
   final bool canManageIris;
   final ValueChanged<Map<String, dynamic>> onOpenDelivery;
   final Future<void> Function(Map<String, dynamic>, String)
       onSetIrisReviewStatus;
+  final Future<void> Function(Map<String, dynamic>) onLoadReferenceImage;
+  final Future<void> Function(Map<String, dynamic>) onFinalizeReferenceImage;
+  final Future<void> Function(Map<String, dynamic>) onDeleteReferenceImage;
 
   @override
   Widget build(BuildContext context) {
@@ -3150,6 +3441,20 @@ class _IrisOperationsModule extends StatelessWidget {
           records: canonicalObjects,
           query: query,
           auditLogs: auditLogs,
+          canManageIris: canManageIris,
+          onLoadReferenceImage: onLoadReferenceImage,
+          onFinalizeReferenceImage: onFinalizeReferenceImage,
+          onDeleteReferenceImage: onDeleteReferenceImage,
+        ),
+        const SizedBox(height: 18),
+        _IrisReferenceImageLifecycleModule(
+          records: referenceImages,
+          canonicalObjects: canonicalObjects,
+          query: query,
+          canManageIris: canManageIris,
+          onLoadReferenceImage: onLoadReferenceImage,
+          onFinalizeReferenceImage: onFinalizeReferenceImage,
+          onDeleteReferenceImage: onDeleteReferenceImage,
         ),
         const SizedBox(height: 18),
         _IrisEvidenceCentre(records: evidenceRecords, query: query),
@@ -3173,11 +3478,19 @@ class _IrisCanonicalLibraryModule extends StatelessWidget {
     required this.records,
     required this.query,
     required this.auditLogs,
+    required this.canManageIris,
+    required this.onLoadReferenceImage,
+    required this.onFinalizeReferenceImage,
+    required this.onDeleteReferenceImage,
   });
 
   final List<Map<String, dynamic>> records;
   final String query;
   final List<Map<String, dynamic>> auditLogs;
+  final bool canManageIris;
+  final Future<void> Function(Map<String, dynamic>) onLoadReferenceImage;
+  final Future<void> Function(Map<String, dynamic>) onFinalizeReferenceImage;
+  final Future<void> Function(Map<String, dynamic>) onDeleteReferenceImage;
 
   @override
   Widget build(BuildContext context) {
@@ -3208,6 +3521,95 @@ class _IrisCanonicalLibraryModule extends StatelessWidget {
         '${record['category'] ?? 'Uncategorised'} / ${record['subcategory'] ?? 'none'}',
         '${record['knownWeight'] ?? record['weightBand'] ?? 'unknown'} / ${record['vehicleRecommendation'] ?? 'vehicle n/a'}',
         _canonicalPolicySummary(record),
+      ],
+      actions: canManageIris
+          ? (record) => _irisReferenceImageActions(
+                record,
+                onLoadReferenceImage: onLoadReferenceImage,
+                onFinalizeReferenceImage: onFinalizeReferenceImage,
+                onDeleteReferenceImage: onDeleteReferenceImage,
+              )
+          : null,
+    );
+  }
+}
+
+class _IrisReferenceImageLifecycleModule extends StatelessWidget {
+  const _IrisReferenceImageLifecycleModule({
+    required this.records,
+    required this.canonicalObjects,
+    required this.query,
+    required this.canManageIris,
+    required this.onLoadReferenceImage,
+    required this.onFinalizeReferenceImage,
+    required this.onDeleteReferenceImage,
+  });
+
+  final List<Map<String, dynamic>> records;
+  final List<Map<String, dynamic>> canonicalObjects;
+  final String query;
+  final bool canManageIris;
+  final Future<void> Function(Map<String, dynamic>) onLoadReferenceImage;
+  final Future<void> Function(Map<String, dynamic>) onFinalizeReferenceImage;
+  final Future<void> Function(Map<String, dynamic>) onDeleteReferenceImage;
+
+  @override
+  Widget build(BuildContext context) {
+    final pending = records.where(_isPendingReferenceImage).toList();
+    final approved = records.where(_isApprovedReferenceImage).toList();
+    final queue = records.isEmpty
+        ? canonicalObjects.where(_hasReferenceImageSignal).toList()
+        : records;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Wrap(
+          spacing: 14,
+          runSpacing: 14,
+          children: [
+            _MetricCard('Pending reference images', '${pending.length}',
+                'awaiting finalisation'),
+            _MetricCard('Approved images', '${approved.length}',
+                'available for IRIS review'),
+            _MetricCard('Lifecycle records', '${queue.length}',
+                'historical reference queue'),
+          ],
+        ),
+        const SizedBox(height: 18),
+        _RecordModule(
+          title: 'IRIS Reference Image Lifecycle',
+          subtitle:
+              'Pending and approved reference images using the historical Admin callables.',
+          records: queue,
+          query: query,
+          fields: const [
+            'id',
+            'itemId',
+            'canonicalName',
+            'objectName',
+            'status',
+            'referenceImageStatus',
+            'storagePath',
+            'referenceImageStoragePath',
+            'previewUrl',
+            'referenceImageUrl'
+          ],
+          columns: const ['Reference', 'Status', 'Storage', 'Updated'],
+          row: (record) => [
+            '${record['canonicalName'] ?? record['objectName'] ?? record['itemId'] ?? record['id']}',
+            '${record['referenceImageStatus'] ?? record['status'] ?? 'pending'}',
+            '${record['storagePath'] ?? record['referenceImageStoragePath'] ?? record['fileName'] ?? 'no storage path'}',
+            _date(record['updatedAt'] ?? record['createdAt']),
+          ],
+          actions: canManageIris
+              ? (record) => _irisReferenceImageActions(
+                    record,
+                    onLoadReferenceImage: onLoadReferenceImage,
+                    onFinalizeReferenceImage: onFinalizeReferenceImage,
+                    onDeleteReferenceImage: onDeleteReferenceImage,
+                  )
+              : null,
+        ),
       ],
     );
   }
@@ -4206,6 +4608,8 @@ class _DeliveryOperationsModule extends StatelessWidget {
     required this.onOpenDelivery,
     required this.onDuplicateDelivery,
     required this.onSetDeliveryOperationStatus,
+    required this.onResolveStaleDeliveryLock,
+    required this.onArchiveDelivery,
   });
 
   final List<Map<String, dynamic>> deliveries;
@@ -4217,6 +4621,8 @@ class _DeliveryOperationsModule extends StatelessWidget {
   final ValueChanged<Map<String, dynamic>> onDuplicateDelivery;
   final Future<void> Function(Map<String, dynamic>, String)
       onSetDeliveryOperationStatus;
+  final Future<void> Function(Map<String, dynamic>) onResolveStaleDeliveryLock;
+  final Future<void> Function(Map<String, dynamic>) onArchiveDelivery;
 
   @override
   Widget build(BuildContext context) {
@@ -4231,6 +4637,9 @@ class _DeliveryOperationsModule extends StatelessWidget {
         .where((item) => _isCancelledDelivery(item) && _isSameDay(item, today))
         .length;
     final delayed = deliveries.where(_isDelayedDelivery).length;
+    final stale = deliveries.where(_isStaleDelivery).toList();
+    final recoverable = deliveries.where(_isRecoverableDelivery).toList();
+    final archived = deliveries.where(_isArchivedDelivery).toList();
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -4246,6 +4655,10 @@ class _DeliveryOperationsModule extends StatelessWidget {
             _MetricCard(
                 'Cancelled today', cancelledToday.toString(), 'cancelled'),
             _MetricCard('Delayed', delayed.toString(), 'late or escalated'),
+            _MetricCard('Stale locks', stale.length.toString(),
+                'historical recovery queue'),
+            _MetricCard('Recoverable', recoverable.length.toString(),
+                'can re-enter operations'),
             _MetricCard('Health+', _countFlag(deliveries, 'health').toString(),
                 'medical'),
             _MetricCard('Business',
@@ -4260,6 +4673,75 @@ class _DeliveryOperationsModule extends StatelessWidget {
         ),
         const SizedBox(height: 18),
         _LiveDeliveryMapPanel(deliveries: deliveries, riders: riders),
+        const SizedBox(height: 18),
+        _RecordModule(
+          title: 'Stale Delivery Lock Queue',
+          subtitle:
+              'Historical stale-lock recovery workflow using resolveStaleDeliveryLock.',
+          records: stale,
+          query: query,
+          fields: const [
+            'id',
+            'requestId',
+            'trackingId',
+            'status',
+            'deliveryStatus',
+            'lockStatus',
+            'adminOperationStatus',
+            'senderName',
+            'riderId'
+          ],
+          columns: const ['Delivery', 'State', 'Lock', 'Updated'],
+          row: (record) => [
+            _recordId(record),
+            '${record['status'] ?? record['deliveryStatus'] ?? 'unknown'}',
+            '${record['lockStatus'] ?? record['staleLockStatus'] ?? record['adminOperationStatus'] ?? 'stale'}',
+            _date(record['updatedAt'] ?? record['createdAt']),
+          ],
+          actions: (record) => [
+            _MiniAction(
+                label: 'Details', onPressed: () => onOpenDelivery(record)),
+            if (canEditDeliveries)
+              _MiniAction(
+                label: 'Resolve lock',
+                onPressed: () => unawaited(onResolveStaleDeliveryLock(record)),
+              ),
+          ],
+        ),
+        const SizedBox(height: 18),
+        _RecordModule(
+          title: 'Recoverable and Archived Deliveries',
+          subtitle:
+              'Recoverable records and historical archive filters from delivery operations.',
+          records: [...recoverable, ...archived],
+          query: query,
+          fields: const [
+            'id',
+            'requestId',
+            'trackingId',
+            'status',
+            'deliveryStatus',
+            'adminArchiveStatus',
+            'archivedByAdminEmail',
+            'archiveReason'
+          ],
+          columns: const ['Delivery', 'State', 'Archive', 'Updated'],
+          row: (record) => [
+            _recordId(record),
+            '${record['status'] ?? record['deliveryStatus'] ?? 'unknown'}',
+            '${record['adminArchiveStatus'] ?? record['archiveStatus'] ?? 'recoverable'}',
+            _date(record['archivedAt'] ?? record['updatedAt']),
+          ],
+          actions: (record) => [
+            _MiniAction(
+                label: 'Details', onPressed: () => onOpenDelivery(record)),
+            if (canEditDeliveries && !_isArchivedDelivery(record))
+              _MiniAction(
+                label: 'Archive',
+                onPressed: () => unawaited(onArchiveDelivery(record)),
+              ),
+          ],
+        ),
         const SizedBox(height: 18),
         _RecordModule(
           title: 'Delivery Operations',
@@ -4302,6 +4784,8 @@ class _DeliveryOperationsModule extends StatelessWidget {
             onOpen: onOpenDelivery,
             onDuplicate: onDuplicateDelivery,
             onSetStatus: onSetDeliveryOperationStatus,
+            onResolveStaleDeliveryLock: onResolveStaleDeliveryLock,
+            onArchiveDelivery: onArchiveDelivery,
           ),
         ),
       ],
@@ -4619,19 +5103,24 @@ List<Map<String, dynamic>> _platformPulseRecords(AdminDataBundle data) {
 class _ChatModule extends StatelessWidget {
   const _ChatModule({
     required this.records,
+    required this.messageReports,
     required this.query,
     required this.message,
     required this.selectedChat,
     required this.onSelectChat,
     required this.onSendChatMessage,
+    required this.onResolveMessageReport,
   });
 
   final List<Map<String, dynamic>> records;
+  final List<Map<String, dynamic>> messageReports;
   final String query;
   final TextEditingController message;
   final Map<String, dynamic>? selectedChat;
   final ValueChanged<Map<String, dynamic>> onSelectChat;
   final VoidCallback onSendChatMessage;
+  final Future<void> Function(Map<String, dynamic>, String)
+      onResolveMessageReport;
 
   @override
   Widget build(BuildContext context) {
@@ -4659,6 +5148,54 @@ class _ChatModule extends StatelessWidget {
               label: selectedId == _recordId(record) ? 'Selected' : 'Reply',
               onPressed: () => onSelectChat(record),
             ),
+          ],
+        ),
+        const SizedBox(height: 18),
+        _RecordModule(
+          title: 'Message Report Queue',
+          subtitle:
+              'Historical reported-message review, message context and resolution workflow.',
+          records: messageReports,
+          query: query,
+          fields: const [
+            'id',
+            'chatId',
+            'conversationId',
+            'messageId',
+            'reporterId',
+            'reportedUserId',
+            'reason',
+            'status'
+          ],
+          columns: const ['Report', 'Context', 'Parties', 'Status'],
+          row: (record) => [
+            _recordId(record),
+            '${record['chatId'] ?? record['conversationId'] ?? ''}\n${record['messageId'] ?? record['messagePreview'] ?? ''}',
+            'Reporter: ${record['reporterId'] ?? 'unknown'}\nReported: ${record['reportedUserId'] ?? record['offenderId'] ?? 'unknown'}',
+            '${record['reviewStatus'] ?? record['status'] ?? 'open'}',
+          ],
+          actions: (record) => [
+            _MiniAction(
+              label: 'Select chat',
+              onPressed: () {
+                final chatId =
+                    '${record['chatId'] ?? record['conversationId'] ?? ''}'
+                        .trim();
+                if (chatId.isNotEmpty) {
+                  onSelectChat({'id': chatId, 'threadId': chatId});
+                }
+              },
+            ),
+            for (final action in const [
+              ('Resolve', 'resolved'),
+              ('Dismiss', 'dismissed'),
+              ('Escalate', 'escalated'),
+            ])
+              _MiniAction(
+                label: action.$1,
+                onPressed: () =>
+                    unawaited(onResolveMessageReport(record, action.$2)),
+              ),
           ],
         ),
         const SizedBox(height: 18),
@@ -5547,6 +6084,9 @@ class _SettingsModule extends StatelessWidget {
     required this.onCreateAdminUser,
     required this.onSetAdminUserStatus,
     required this.onSetAdminUserRole,
+    required this.announcementTitle,
+    required this.announcementBody,
+    required this.onSendPlatformAnnouncement,
     required this.onUpdatePlatformRecord,
   });
 
@@ -5566,6 +6106,9 @@ class _SettingsModule extends StatelessWidget {
       onSetAdminUserStatus;
   final Future<void> Function(Map<String, dynamic>, AdminRole)
       onSetAdminUserRole;
+  final TextEditingController announcementTitle;
+  final TextEditingController announcementBody;
+  final Future<void> Function(String) onSendPlatformAnnouncement;
   final Future<void> Function(Map<String, dynamic>, String)
       onUpdatePlatformRecord;
 
@@ -5663,6 +6206,14 @@ class _SettingsModule extends StatelessWidget {
           ],
         ),
         const SizedBox(height: 18),
+        if (canManageAdmins) ...[
+          _AnnouncementComposer(
+            title: announcementTitle,
+            body: announcementBody,
+            onSend: onSendPlatformAnnouncement,
+          ),
+          const SizedBox(height: 18),
+        ],
         _RecordModule(
           title: 'Platform Announcements',
           subtitle:
@@ -5813,6 +6364,107 @@ class _SettingsModule extends StatelessWidget {
               : null,
         ),
       ],
+    );
+  }
+}
+
+class _AnnouncementComposer extends StatefulWidget {
+  const _AnnouncementComposer({
+    required this.title,
+    required this.body,
+    required this.onSend,
+  });
+
+  final TextEditingController title;
+  final TextEditingController body;
+  final Future<void> Function(String) onSend;
+
+  @override
+  State<_AnnouncementComposer> createState() => _AnnouncementComposerState();
+}
+
+class _AnnouncementComposerState extends State<_AnnouncementComposer> {
+  String _audience = 'everyone';
+
+  @override
+  Widget build(BuildContext context) {
+    return DecoratedBox(
+      decoration: _panelDecoration(),
+      child: Padding(
+        padding: const EdgeInsets.all(18),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              'Announcement Composer',
+              style: TextStyle(fontSize: 22, fontWeight: FontWeight.w800),
+            ),
+            const SizedBox(height: 6),
+            Text(
+              'Historical broadcast workflow using the existing backend announcement callable.',
+              style: TextStyle(color: Colors.white.withValues(alpha: .66)),
+            ),
+            const SizedBox(height: 18),
+            Wrap(
+              spacing: 12,
+              runSpacing: 12,
+              children: [
+                SizedBox(
+                  width: 320,
+                  child: TextField(
+                    controller: widget.title,
+                    decoration: const InputDecoration(
+                      labelText: 'Announcement title',
+                      border: OutlineInputBorder(),
+                    ),
+                  ),
+                ),
+                SizedBox(
+                  width: 240,
+                  child: DropdownButtonFormField<String>(
+                    initialValue: _audience,
+                    decoration: const InputDecoration(
+                      labelText: 'Audience',
+                      border: OutlineInputBorder(),
+                    ),
+                    items: const [
+                      DropdownMenuItem(
+                          value: 'everyone', child: Text('Everyone')),
+                      DropdownMenuItem(
+                          value: 'senders', child: Text('Senders')),
+                      DropdownMenuItem(value: 'riders', child: Text('Riders')),
+                      DropdownMenuItem(
+                          value: 'business', child: Text('Business accounts')),
+                      DropdownMenuItem(value: 'health', child: Text('Health+')),
+                    ],
+                    onChanged: (value) =>
+                        setState(() => _audience = value ?? 'everyone'),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: widget.body,
+              minLines: 3,
+              maxLines: 5,
+              decoration: const InputDecoration(
+                labelText: 'Message',
+                border: OutlineInputBorder(),
+              ),
+            ),
+            const SizedBox(height: 12),
+            Align(
+              alignment: Alignment.centerRight,
+              child: FilledButton.icon(
+                onPressed: () => unawaited(widget.onSend(_audience)),
+                icon: const Icon(Icons.campaign_rounded),
+                label: const Text('Send announcement'),
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 }
@@ -6181,6 +6833,9 @@ List<Widget> _deliveryActions(
   required ValueChanged<Map<String, dynamic>> onOpen,
   required ValueChanged<Map<String, dynamic>> onDuplicate,
   required Future<void> Function(Map<String, dynamic>, String) onSetStatus,
+  required Future<void> Function(Map<String, dynamic>)
+      onResolveStaleDeliveryLock,
+  required Future<void> Function(Map<String, dynamic>) onArchiveDelivery,
 }) {
   return [
     _MiniAction(
@@ -6209,7 +6864,39 @@ List<Widget> _deliveryActions(
         label: 'Fraud',
         onPressed: () => unawaited(onSetStatus(record, 'fraud_flagged')),
       ),
+      if (_isStaleDelivery(record))
+        _MiniAction(
+          label: 'Resolve lock',
+          onPressed: () => unawaited(onResolveStaleDeliveryLock(record)),
+        ),
+      if (!_isArchivedDelivery(record))
+        _MiniAction(
+          label: 'Archive',
+          onPressed: () => unawaited(onArchiveDelivery(record)),
+        ),
     ],
+  ];
+}
+
+List<Widget> _irisReferenceImageActions(
+  Map<String, dynamic> record, {
+  required Future<void> Function(Map<String, dynamic>) onLoadReferenceImage,
+  required Future<void> Function(Map<String, dynamic>) onFinalizeReferenceImage,
+  required Future<void> Function(Map<String, dynamic>) onDeleteReferenceImage,
+}) {
+  return [
+    _MiniAction(
+      label: 'Open image',
+      onPressed: () => unawaited(onLoadReferenceImage(record)),
+    ),
+    _MiniAction(
+      label: 'Finalise',
+      onPressed: () => unawaited(onFinalizeReferenceImage(record)),
+    ),
+    _MiniAction(
+      label: 'Remove',
+      onPressed: () => unawaited(onDeleteReferenceImage(record)),
+    ),
   ];
 }
 
@@ -7912,6 +8599,35 @@ String _canonicalPolicySummary(Map<String, dynamic> record) {
   return flags.isEmpty ? 'No policy flags' : flags.join(', ');
 }
 
+bool _hasReferenceImageSignal(Map<String, dynamic> record) {
+  return [
+    record['referenceImageUrl'],
+    record['referenceImageStoragePath'],
+    record['referenceImageStatus'],
+    record['pendingStoragePath'],
+    record['storagePath'],
+    record['previewUrl'],
+  ].any((value) => '$value'.trim().isNotEmpty && '$value' != 'null');
+}
+
+bool _isPendingReferenceImage(Map<String, dynamic> record) {
+  final state =
+      '${record['referenceImageStatus'] ?? record['status'] ?? record['reviewStatus'] ?? ''}'
+          .toLowerCase();
+  return state.contains('pending') ||
+      state.contains('review') ||
+      state.contains('draft');
+}
+
+bool _isApprovedReferenceImage(Map<String, dynamic> record) {
+  final state =
+      '${record['referenceImageStatus'] ?? record['status'] ?? record['reviewStatus'] ?? ''}'
+          .toLowerCase();
+  return state.contains('approved') ||
+      state.contains('final') ||
+      state.contains('active');
+}
+
 Set<String> _distinctValues(List<Map<String, dynamic>> records, String field) {
   return records
       .map((record) => '${record[field] ?? ''}'.trim())
@@ -8077,6 +8793,44 @@ bool _isActiveDelivery(Map<String, dynamic> delivery) {
       !state.contains('cancel') &&
       !state.contains('archive') &&
       !state.contains('failed');
+}
+
+bool _isStaleDelivery(Map<String, dynamic> delivery) {
+  final haystack = [
+    delivery['status'],
+    delivery['deliveryStatus'],
+    delivery['adminOperationStatus'],
+    delivery['lockStatus'],
+    delivery['staleLockStatus'],
+    delivery['recoveryStatus'],
+    delivery['issueType'],
+  ].join(' ').toLowerCase();
+  return haystack.contains('stale') ||
+      haystack.contains('locked') ||
+      haystack.contains('orphaned');
+}
+
+bool _isRecoverableDelivery(Map<String, dynamic> delivery) {
+  final haystack = [
+    delivery['status'],
+    delivery['deliveryStatus'],
+    delivery['adminOperationStatus'],
+    delivery['recoveryStatus'],
+    delivery['archiveStatus'],
+  ].join(' ').toLowerCase();
+  return haystack.contains('recover') ||
+      haystack.contains('restore') ||
+      haystack.contains('stale');
+}
+
+bool _isArchivedDelivery(Map<String, dynamic> delivery) {
+  final haystack = [
+    delivery['adminArchiveStatus'],
+    delivery['archiveStatus'],
+    delivery['status'],
+    delivery['deliveryStatus'],
+  ].join(' ').toLowerCase();
+  return haystack.contains('archive') || delivery['archivedAt'] != null;
 }
 
 bool _isCompletedDelivery(Map<String, dynamic> delivery) {
