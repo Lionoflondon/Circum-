@@ -936,6 +936,48 @@ class AdminGiftTools {
   }
 }
 
+class AdminPlatformTools {
+  static const operationStatuses = [
+    'active',
+    'inactive',
+    'enabled',
+    'disabled',
+    'maintenance_enabled',
+    'maintenance_disabled',
+    'published',
+    'unpublished',
+    'acknowledged',
+    'resolved',
+  ];
+
+  static Map<String, dynamic> operationPatch({
+    required String status,
+    required String updatedBy,
+    required Object updatedAt,
+    required String reason,
+  }) {
+    if (!operationStatuses.contains(status)) {
+      throw ArgumentError('Unsupported platform operation status.');
+    }
+    if (reason.trim().isEmpty) {
+      throw ArgumentError('A platform operation reason is required.');
+    }
+    return {
+      'adminOperationStatus': status,
+      'adminUpdatedBy': updatedBy,
+      'adminUpdatedAt': updatedAt,
+      'adminReason': reason.trim(),
+      if (status == 'maintenance_enabled') 'maintenanceMode': true,
+      if (status == 'maintenance_disabled') 'maintenanceMode': false,
+      if (status == 'published') 'published': true,
+      if (status == 'unpublished') 'published': false,
+      if (status == 'enabled') 'enabled': true,
+      if (status == 'disabled') 'enabled': false,
+      if (status == 'resolved') 'resolved': true,
+    };
+  }
+}
+
 class AdminHealthPlusTools {
   static const operationStatuses = [
     'assigned',

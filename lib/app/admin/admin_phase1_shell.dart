@@ -579,6 +579,47 @@ class _AdminPhaseOneShellState extends State<AdminPhaseOneShell> {
     }
   }
 
+  Future<void> _updatePlatformRecord(
+    Map<String, dynamic> record,
+    String status,
+  ) async {
+    if (!_can(AdminPermission.manageAdmins)) {
+      setState(() => _message = 'Your role cannot manage platform settings.');
+      return;
+    }
+    final id = _idFor(record);
+    final collection = '${record['_collection'] ?? ''}'.trim();
+    if (id.isEmpty || collection.isEmpty) return;
+    try {
+      final patch = AdminPlatformTools.operationPatch(
+        status: status,
+        updatedBy: _user?.email ?? _user?.uid ?? 'admin',
+        updatedAt: FieldValue.serverTimestamp(),
+        reason: 'Platform operation confirmed from Admin',
+      );
+      await _db.collection(collection).doc(id).set(
+            patch,
+            SetOptions(merge: true),
+          );
+      await _writeAudit(AdminAuditEntry(
+        adminUserId: _user?.uid ?? 'unknown-admin',
+        actionType: 'platform_operation_$status',
+        recordType: collection,
+        recordId: id,
+        oldValue: {
+          'status': record['status'],
+          'adminOperationStatus': record['adminOperationStatus'],
+        },
+        newValue: patch,
+        reason: 'Platform operation updated from Admin',
+      ));
+      setState(() => _message = 'Platform record $id updated to $status.');
+      await _loadAdminData();
+    } on ArgumentError catch (error) {
+      setState(() => _message = error.message);
+    }
+  }
+
   Future<void> _updateHealthPlusPickup(
     Map<String, dynamic> pickup,
     String status,
@@ -919,6 +960,7 @@ class _AdminPhaseOneShellState extends State<AdminPhaseOneShell> {
                       onUpdateHealthPlusPickup: _updateHealthPlusPickup,
                       onUpdateFinanceWorkflow: _updateFinanceWorkflow,
                       onSetBusinessOperationStatus: _setBusinessOperationStatus,
+                      onUpdatePlatformRecord: _updatePlatformRecord,
                       onOpenRiderProfile: _openRiderProfile,
                       onOpenDeliveryProfile: _openDeliveryProfile,
                       onOpenHealthPlusProfile: _openHealthPlusProfile,
@@ -1031,6 +1073,10 @@ class AdminDataBundle {
     required this.irisLearningCases,
     required this.irisPolicies,
     required this.irisEvidence,
+    required this.platformConfig,
+    required this.platformStatus,
+    required this.platformNotices,
+    required this.platformVersions,
   });
 
   final List<Map<String, dynamic>> deliveries;
@@ -1052,6 +1098,10 @@ class AdminDataBundle {
   final List<Map<String, dynamic>> irisLearningCases;
   final List<Map<String, dynamic>> irisPolicies;
   final List<Map<String, dynamic>> irisEvidence;
+  final List<Map<String, dynamic>> platformConfig;
+  final List<Map<String, dynamic>> platformStatus;
+  final List<Map<String, dynamic>> platformNotices;
+  final List<Map<String, dynamic>> platformVersions;
 
   static AdminDataBundle empty() => const AdminDataBundle(
         deliveries: [],
@@ -1073,6 +1123,10 @@ class AdminDataBundle {
         irisLearningCases: [],
         irisPolicies: [],
         irisEvidence: [],
+        platformConfig: [],
+        platformStatus: [],
+        platformNotices: [],
+        platformVersions: [],
       );
 }
 
@@ -1126,6 +1180,14 @@ class AdminRepository {
       _read(_db.collection('irisLearningCases').limit(150)),
       _read(_db.collection('irisPolicies').limit(50)),
       _read(_db.collection('irisEvidence').limit(150)),
+      _readTagged(
+          _db.collection('platformConfig').limit(100), 'platformConfig'),
+      _readTagged(
+          _db.collection('platformStatus').limit(100), 'platformStatus'),
+      _readTagged(
+          _db.collection('platformNotices').limit(100), 'platformNotices'),
+      _readTagged(
+          _db.collection('platformVersions').limit(100), 'platformVersions'),
     ]);
     return AdminDataBundle(
       deliveries: results[0],
@@ -1147,6 +1209,10 @@ class AdminRepository {
       irisLearningCases: results[16],
       irisPolicies: results[17],
       irisEvidence: results[18],
+      platformConfig: results[19],
+      platformStatus: results[20],
+      platformNotices: results[21],
+      platformVersions: results[22],
     );
   }
 
@@ -1156,6 +1222,16 @@ class AdminRepository {
     final snapshot = await query.get();
     return snapshot.docs
         .map((doc) => {'id': doc.id, ...doc.data()})
+        .toList(growable: false);
+  }
+
+  Future<List<Map<String, dynamic>>> _readTagged(
+    Query<Map<String, dynamic>> query,
+    String collection,
+  ) async {
+    final records = await _read(query);
+    return records
+        .map((record) => {'_collection': collection, ...record})
         .toList(growable: false);
   }
 }
@@ -1445,6 +1521,7 @@ class _AdminModuleBody extends StatelessWidget {
     required this.onUpdateHealthPlusPickup,
     required this.onUpdateFinanceWorkflow,
     required this.onSetBusinessOperationStatus,
+    required this.onUpdatePlatformRecord,
     required this.onOpenRiderProfile,
     required this.onOpenDeliveryProfile,
     required this.onOpenHealthPlusProfile,
@@ -1492,6 +1569,8 @@ class _AdminModuleBody extends StatelessWidget {
       onUpdateFinanceWorkflow;
   final Future<void> Function(Map<String, dynamic>, String)
       onSetBusinessOperationStatus;
+  final Future<void> Function(Map<String, dynamic>, String)
+      onUpdatePlatformRecord;
   final ValueChanged<Map<String, dynamic>> onOpenRiderProfile;
   final ValueChanged<Map<String, dynamic>> onOpenDeliveryProfile;
   final ValueChanged<Map<String, dynamic>> onOpenHealthPlusProfile;
@@ -1688,6 +1767,11 @@ class _AdminModuleBody extends StatelessWidget {
           AdminModule.settings => _SettingsModule(
               canManageAdmins: canManageAdmins,
               adminUsers: data.adminUsers,
+              platformConfig: data.platformConfig,
+              platformStatus: data.platformStatus,
+              platformNotices: data.platformNotices,
+              platformVersions: data.platformVersions,
+              auditLogs: data.auditLogs,
               inviteEmail: adminInviteEmail,
               inviteNote: adminInviteNote,
               inviteRole: adminInviteRole,
@@ -1695,6 +1779,7 @@ class _AdminModuleBody extends StatelessWidget {
               onCreateAdminUser: onCreateAdminUser,
               onSetAdminUserStatus: onSetAdminUserStatus,
               onSetAdminUserRole: onSetAdminUserRole,
+              onUpdatePlatformRecord: onUpdatePlatformRecord,
             ),
         },
       ],
@@ -4166,6 +4251,11 @@ class _SettingsModule extends StatelessWidget {
   const _SettingsModule({
     required this.canManageAdmins,
     required this.adminUsers,
+    required this.platformConfig,
+    required this.platformStatus,
+    required this.platformNotices,
+    required this.platformVersions,
+    required this.auditLogs,
     required this.inviteEmail,
     required this.inviteNote,
     required this.inviteRole,
@@ -4173,10 +4263,16 @@ class _SettingsModule extends StatelessWidget {
     required this.onCreateAdminUser,
     required this.onSetAdminUserStatus,
     required this.onSetAdminUserRole,
+    required this.onUpdatePlatformRecord,
   });
 
   final bool canManageAdmins;
   final List<Map<String, dynamic>> adminUsers;
+  final List<Map<String, dynamic>> platformConfig;
+  final List<Map<String, dynamic>> platformStatus;
+  final List<Map<String, dynamic>> platformNotices;
+  final List<Map<String, dynamic>> platformVersions;
+  final List<Map<String, dynamic>> auditLogs;
   final TextEditingController inviteEmail;
   final TextEditingController inviteNote;
   final AdminRole inviteRole;
@@ -4186,12 +4282,151 @@ class _SettingsModule extends StatelessWidget {
       onSetAdminUserStatus;
   final Future<void> Function(Map<String, dynamic>, AdminRole)
       onSetAdminUserRole;
+  final Future<void> Function(Map<String, dynamic>, String)
+      onUpdatePlatformRecord;
 
   @override
   Widget build(BuildContext context) {
+    final platformRecords = [
+      ...platformConfig,
+      ...platformStatus,
+      ...platformNotices,
+      ...platformVersions,
+    ];
+    final activeServices =
+        platformStatus.where((record) => _platformEnabled(record)).length;
+    final maintenance = platformConfig
+        .where((record) => record['maintenanceMode'] == true)
+        .length;
+    final activeNotices =
+        platformNotices.where((record) => _platformPublished(record)).length;
+    final platformAudit = auditLogs
+        .where((log) =>
+            '${log['actionType'] ?? ''}'.toLowerCase().contains('platform') ||
+            '${log['recordType'] ?? ''}'.toLowerCase().contains('platform'))
+        .toList();
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
+        Wrap(
+          spacing: 14,
+          runSpacing: 14,
+          children: [
+            _MetricCard('Platform status', _platformStatusLabel(platformStatus),
+                'existing status records'),
+            _MetricCard('Environment', _platformEnvironment(platformConfig),
+                'loaded configuration'),
+            _MetricCard('Active services', '$activeServices',
+                '${platformStatus.length} status records'),
+            _MetricCard('Platform notices', '$activeNotices',
+                '${platformNotices.length} loaded'),
+            _MetricCard('Maintenance', maintenance > 0 ? 'Enabled' : 'Off',
+                'existing controls'),
+            _MetricCard('Versions', '${platformVersions.length}',
+                'build/version records'),
+          ],
+        ),
+        const SizedBox(height: 18),
+        _RecordModule(
+          title: 'Platform Configuration',
+          subtitle:
+              'Existing configuration records only. Backend remains authoritative.',
+          records: platformConfig,
+          query: '',
+          fields: const ['id', 'key', 'name', 'status', 'environment'],
+          columns: const ['Setting', 'Environment', 'Status', 'Updated'],
+          row: (record) => [
+            '${record['name'] ?? record['key'] ?? record['id']}',
+            '${record['environment'] ?? record['env'] ?? 'production'}',
+            '${record['adminOperationStatus'] ?? record['status'] ?? record['enabled'] ?? 'recorded'}',
+            _date(record['adminUpdatedAt'] ?? record['updatedAt']),
+          ],
+          actions: canManageAdmins
+              ? (record) => _platformActions(record, onUpdatePlatformRecord)
+              : null,
+        ),
+        const SizedBox(height: 18),
+        _RecordModule(
+          title: 'System Status',
+          subtitle: 'Existing platform service/status pages from backend data.',
+          records: platformStatus,
+          query: '',
+          fields: const ['id', 'service', 'name', 'status', 'incident'],
+          columns: const ['Service', 'Status', 'Incident', 'Updated'],
+          row: (record) => [
+            '${record['service'] ?? record['name'] ?? record['id']}',
+            '${record['status'] ?? record['adminOperationStatus'] ?? 'unknown'}',
+            '${record['incident'] ?? record['message'] ?? 'None'}',
+            _date(record['adminUpdatedAt'] ?? record['updatedAt']),
+          ],
+          actions: canManageAdmins
+              ? (record) => _platformActions(record, onUpdatePlatformRecord)
+              : null,
+        ),
+        const SizedBox(height: 18),
+        _RecordModule(
+          title: 'Version Information',
+          subtitle: 'Admin and platform build identifiers already recorded.',
+          records: platformVersions,
+          query: '',
+          fields: const ['id', 'version', 'build', 'environment', 'surface'],
+          columns: const ['Surface', 'Version', 'Build', 'Environment'],
+          row: (record) => [
+            '${record['surface'] ?? record['app'] ?? record['id']}',
+            '${record['version'] ?? record['versionName'] ?? 'Not recorded'}',
+            '${record['build'] ?? record['buildNumber'] ?? record['commit'] ?? 'Not recorded'}',
+            '${record['environment'] ?? record['env'] ?? 'production'}',
+          ],
+        ),
+        const SizedBox(height: 18),
+        _RecordModule(
+          title: 'Platform Announcements',
+          subtitle:
+              'Historical announcement/notices management where records exist.',
+          records: platformNotices,
+          query: '',
+          fields: const ['id', 'title', 'message', 'status', 'audience'],
+          columns: const ['Notice', 'Audience', 'Status', 'Updated'],
+          row: (record) => [
+            '${record['title'] ?? record['name'] ?? record['id']}',
+            '${record['audience'] ?? record['surface'] ?? 'platform'}',
+            '${record['adminOperationStatus'] ?? record['status'] ?? record['published'] ?? 'draft'}',
+            _date(record['adminUpdatedAt'] ?? record['updatedAt']),
+          ],
+          actions: canManageAdmins
+              ? (record) =>
+                  _platformNoticeActions(record, onUpdatePlatformRecord)
+              : null,
+        ),
+        const SizedBox(height: 18),
+        _RecordModule(
+          title: 'Platform Audit',
+          subtitle:
+              'Immutable audit entries for platform operations and setting changes.',
+          records: platformAudit,
+          query: '',
+          fields: const ['actionType', 'recordType', 'recordId', 'reason'],
+          columns: const ['Action', 'Record', 'Operator', 'Reason'],
+          row: (record) => [
+            '${record['actionType'] ?? 'platform_action'}',
+            '${record['recordType'] ?? ''}/${record['recordId'] ?? record['id']}',
+            '${record['adminUserId'] ?? 'admin'}',
+            '${record['reason'] ?? ''}',
+          ],
+        ),
+        const SizedBox(height: 18),
+        if (platformRecords.isEmpty)
+          DecoratedBox(
+            decoration: _panelDecoration(),
+            child: Padding(
+              padding: const EdgeInsets.all(18),
+              child: Text(
+                'No historical platform configuration, status, notice or version records are loaded.',
+                style: TextStyle(color: Colors.white.withValues(alpha: .68)),
+              ),
+            ),
+          ),
+        const SizedBox(height: 18),
         if (canManageAdmins) ...[
           DecoratedBox(
             decoration: _panelDecoration(),
@@ -5875,6 +6110,92 @@ List<Widget> _supportActions(
         onPressed: () => unawaited(onUpdateSupportTicket(record, action.$2)),
       ),
   ];
+}
+
+List<Widget> _platformActions(
+  Map<String, dynamic> record,
+  Future<void> Function(Map<String, dynamic>, String) onUpdatePlatformRecord,
+) {
+  return [
+    for (final action in const [
+      ('Enable', 'enabled'),
+      ('Disable', 'disabled'),
+      ('Maintenance on', 'maintenance_enabled'),
+      ('Maintenance off', 'maintenance_disabled'),
+      ('Acknowledge', 'acknowledged'),
+      ('Resolve', 'resolved'),
+    ])
+      _MiniAction(
+        label: action.$1,
+        onPressed: () => unawaited(onUpdatePlatformRecord(record, action.$2)),
+      ),
+  ];
+}
+
+List<Widget> _platformNoticeActions(
+  Map<String, dynamic> record,
+  Future<void> Function(Map<String, dynamic>, String) onUpdatePlatformRecord,
+) {
+  return [
+    for (final action in const [
+      ('Publish', 'published'),
+      ('Unpublish', 'unpublished'),
+      ('Enable', 'enabled'),
+      ('Disable', 'disabled'),
+      ('Resolve', 'resolved'),
+    ])
+      _MiniAction(
+        label: action.$1,
+        onPressed: () => unawaited(onUpdatePlatformRecord(record, action.$2)),
+      ),
+  ];
+}
+
+bool _platformEnabled(Map<String, dynamic> record) {
+  if (record['enabled'] == true) return true;
+  final status = '${record['adminOperationStatus'] ?? record['status'] ?? ''}'
+      .toLowerCase();
+  return status.contains('active') ||
+      status.contains('enabled') ||
+      status.contains('healthy') ||
+      status.contains('ok');
+}
+
+bool _platformPublished(Map<String, dynamic> record) {
+  if (record['published'] == true) return true;
+  final status = '${record['adminOperationStatus'] ?? record['status'] ?? ''}'
+      .toLowerCase();
+  return status.contains('published') ||
+      status.contains('active') ||
+      status.contains('enabled');
+}
+
+String _platformStatusLabel(List<Map<String, dynamic>> statusRecords) {
+  if (statusRecords.isEmpty) return 'Not recorded';
+  if (statusRecords.any((record) => _hasAnyText(record, const [
+        'critical',
+        'down',
+        'incident',
+      ]))) {
+    return 'Incident';
+  }
+  if (statusRecords.any((record) => _hasAnyText(record, const [
+        'degraded',
+        'warning',
+      ]))) {
+    return 'Watch';
+  }
+  return 'Operational';
+}
+
+String _platformEnvironment(List<Map<String, dynamic>> configRecords) {
+  final values = configRecords
+      .map((record) => '${record['environment'] ?? record['env'] ?? ''}'.trim())
+      .where((value) => value.isNotEmpty && value != 'null')
+      .toSet();
+  if (values.isEmpty) return 'production';
+  if (values.length == 1) return values.first;
+  return values.join(', ');
 }
 
 bool _isGiftActive(Map<String, dynamic> gift) {

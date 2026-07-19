@@ -518,6 +518,31 @@ void main() {
       );
     });
 
+    test('Platform operation patches preserve backend authority', () {
+      final patch = AdminPlatformTools.operationPatch(
+        status: 'maintenance_enabled',
+        updatedBy: 'platform@circumuk.com',
+        updatedAt: DateTime(2026, 6, 6),
+        reason: 'Historical maintenance control confirmed.',
+      );
+
+      expect(patch['adminOperationStatus'], 'maintenance_enabled');
+      expect(patch['maintenanceMode'], isTrue);
+      expect(patch['adminReason'], 'Historical maintenance control confirmed.');
+      expect(patch.containsKey('firebaseProject'), isFalse);
+      expect(patch.containsKey('hostingTarget'), isFalse);
+      expect(patch.containsKey('apiKey'), isFalse);
+      expect(
+        () => AdminPlatformTools.operationPatch(
+          status: 'deploy_all_products',
+          updatedBy: 'platform@circumuk.com',
+          updatedAt: DateTime(2026, 6, 6),
+          reason: 'Nope.',
+        ),
+        throwsArgumentError,
+      );
+    });
+
     test('finance workflow patches do not alter payment authority fields', () {
       final patch = AdminFinanceTools.workflowPatch(
         status: 'reconciled',
