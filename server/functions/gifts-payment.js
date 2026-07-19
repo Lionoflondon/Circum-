@@ -8,9 +8,86 @@ function requireAuth(context) {
   }
 }
 
+function cleanObject(value) {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return {};
+  return Object.fromEntries(
+      Object.entries(value).filter(([, entry]) => entry !== undefined),
+  );
+}
+
+function text(value, fallback = "") {
+  return String(value || fallback).trim();
+}
+
+async function createCampaignPaymentDraft({data, context}) {
+  const db = getFirestore();
+  const participantPayload = cleanObject(data.campaignParticipant);
+  const campaignId = text(participantPayload.campaignId);
+  const campaignName = text(participantPayload.campaignName);
+  const gross = Number(data.grossGiftBudget || participantPayload.grossGiftBudget || participantPayload.budget || 0);
+  if (!campaignId || !campaignName) {
+    throw new functions.https.HttpsError("invalid-argument", "Campaign details are required.");
+  }
+  if (gross < 50) {
+    throw new functions.https.HttpsError("failed-precondition", "Campaign gift budget is below the minimum.");
+  }
+  const participantRef = db.collection("giftCampaignParticipants").doc();
+  const draftRef = db.collection("giftPaymentDrafts").doc();
+  const senderEmail = text(context.auth.token && context.auth.token.email);
+  const now = FieldValue.serverTimestamp();
+  const participant = {
+    ...participantPayload,
+    userId: context.auth.uid,
+    senderId: context.auth.uid,
+    email: senderEmail || text(participantPayload.email),
+    campaignParticipantId: participantRef.id,
+    paymentDraftId: draftRef.id,
+    source: "sender_mobile_campaign",
+    status: "checkout_pending",
+    campaignStatus: "checkout_pending",
+    paymentStatus: "checkout_pending",
+    paymentMethod: text(data.paymentMethod || participantPayload.paymentMethod, "card"),
+    giftCampaignTotal: gross,
+    grossGiftBudget: gross,
+    updatedAt: now,
+    createdAt: now,
+  };
+  const draft = {
+    ...participant,
+    giftDraftId: draftRef.id,
+    senderId: context.auth.uid,
+    senderEmail: senderEmail || text(participantPayload.email),
+    campaignFlow: "anonymous",
+    giftStatus: "campaign_participation",
+    selectedBudgetGbp: gross,
+    grossBudget: gross,
+    grossGiftBudget: gross,
+    applyRoth: data.applyRoth === true,
+    returnOrigin: text(data.returnOrigin),
+  };
+  await db.runTransaction(async (transaction) => {
+    transaction.set(participantRef, participant, {merge: false});
+    transaction.set(draftRef, draft, {merge: false});
+    transaction.set(db.collection("giftCampaignParticipantEvents").doc(), {
+      participantId: participantRef.id,
+      giftDraftId: draftRef.id,
+      campaignId,
+      actorUid: context.auth.uid,
+      action: "sender_campaign_participation_requested",
+      source: "createGiftPayment",
+      createdAt: now,
+    }, {merge: false});
+  });
+  return {giftDraftId: draftRef.id, participantId: participantRef.id, gift: draft};
+}
+
 exports.createGiftPayment = (stripe) => functions.https.onCall(async (data, context) => {
   requireAuth(context);
-  const giftDraftId = String(data.giftDraftId || "");
+  const campaignRequest = data.source === "sender_mobile_campaign" && data.campaignParticipant;
+  const campaignDraft = campaignRequest ?
+    await createCampaignPaymentDraft({data, context}) :
+    null;
+  const giftDraftId = String((campaignDraft && campaignDraft.giftDraftId) || data.giftDraftId || "");
   const ref = getFirestore().collection("giftPaymentDrafts").doc(giftDraftId);
   const snap = await ref.get();
   if (!snap.exists || snap.data().senderId !== context.auth.uid) {
@@ -54,7 +131,20 @@ exports.createGiftPayment = (stripe) => functions.https.onCall(async (data, cont
     stripeCheckoutSessionId: session.id,
     updatedAt: FieldValue.serverTimestamp(),
   });
-  return {url: session.url, sessionId: session.id};
+  if (campaignDraft && campaignDraft.participantId) {
+    await getFirestore().collection("giftCampaignParticipants").doc(campaignDraft.participantId).set({
+      paymentStatus: "checkout_pending",
+      stripeCheckoutSessionId: session.id,
+      paymentDraftId: giftDraftId,
+      updatedAt: FieldValue.serverTimestamp(),
+    }, {merge: true});
+  }
+  return {
+    url: session.url,
+    sessionId: session.id,
+    giftDraftId,
+    campaignParticipantId: campaignDraft ? campaignDraft.participantId : data.campaignParticipantId,
+  };
 });
 
 async function finalizeGiftPaymentSession({
