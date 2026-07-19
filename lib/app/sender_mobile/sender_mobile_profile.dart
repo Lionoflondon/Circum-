@@ -409,26 +409,20 @@ class FirebaseSenderMobileProfileRepository
         'Sign in again before saving your profile.',
       );
     }
-    final reference = firestore.collection('users').doc(user.uid);
-    final existing = await reference.get();
     final normalizedUsername = username.trim().replaceFirst(RegExp(r'^@'), '');
-    await reference.set({
+    await functions.httpsCallable('updateSenderProfile').call({
       'displayName': displayName.trim(),
       'username': normalizedUsername,
-      'email': user.email?.trim() ?? '',
       'phone': phone.trim(),
-      'photoURL': user.photoURL?.trim() ?? '',
-      'accountType': 'sender',
-      if (!existing.exists) 'createdAt': FieldValue.serverTimestamp(),
-      'updatedAt': FieldValue.serverTimestamp(),
-    }, SetOptions(merge: true));
+    });
     if (user.displayName != displayName.trim()) {
       await user.updateDisplayName(displayName.trim());
     }
+    final updated = await firestore.collection('users').doc(user.uid).get();
     return SenderMobileProfileData.fromSources(
       user: user,
       data: {
-        ...?existing.data(),
+        ...?updated.data(),
         'displayName': displayName.trim(),
         'username': normalizedUsername,
         'email': user.email?.trim() ?? '',
@@ -469,11 +463,9 @@ class FirebaseSenderMobileProfileRepository
       ),
     );
     final downloadUrl = await reference.getDownloadURL();
-    await firestore.collection('users').doc(user.uid).set({
+    await functions.httpsCallable('updateSenderProfilePhoto').call({
       'photoURL': downloadUrl,
-      'accountType': 'sender',
-      'updatedAt': FieldValue.serverTimestamp(),
-    }, SetOptions(merge: true));
+    });
     await user.updatePhotoURL(downloadUrl);
     final current = await load();
     return SenderMobileProfileData(

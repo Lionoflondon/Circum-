@@ -128,6 +128,38 @@ class _SenderBookingCanvasState extends State<SenderBookingCanvas> {
         : <String, dynamic>{};
   }
 
+  bool _isExpectedRestoreFailure(Object error) {
+    if (error is TimeoutException) return true;
+    if (error is FirebaseFunctionsException) {
+      return switch (error.code) {
+        'unauthenticated' ||
+        'not-found' ||
+        'deadline-exceeded' ||
+        'unavailable' ||
+        'permission-denied' =>
+          true,
+        _ => false,
+      };
+    }
+    return false;
+  }
+
+  void _reportUnexpectedRestoreFailure(
+    Object error,
+    StackTrace stackTrace,
+    String context,
+  ) {
+    if (_isExpectedRestoreFailure(error)) return;
+    FlutterError.reportError(
+      FlutterErrorDetails(
+        exception: error,
+        stack: stackTrace,
+        library: 'sender send route',
+        context: ErrorDescription(context),
+      ),
+    );
+  }
+
   Future<void> _loadBackendDraft() async {
     setState(() => _draftLoading = true);
     try {
@@ -148,26 +180,20 @@ class _SenderBookingCanvasState extends State<SenderBookingCanvas> {
           _hydrateRestoredDraft(restored);
         }
       } on TimeoutException catch (error, stackTrace) {
-        FlutterError.reportError(
-          FlutterErrorDetails(
-            exception: error,
-            stack: stackTrace,
-            library: 'sender send route',
-            context: ErrorDescription('timed out loading Sender booking draft'),
-          ),
+        _reportUnexpectedRestoreFailure(
+          error,
+          stackTrace,
+          'timed out loading Sender booking draft',
         );
         if (mounted) setState(() => _syncStatus = 'Saved offline');
       }
       await _restoreQueuedLocalDraft().timeout(_localDraftRestoreTimeout);
       if (mounted) setState(() => _draftLoading = false);
     } on FirebaseFunctionsException catch (error, stackTrace) {
-      FlutterError.reportError(
-        FlutterErrorDetails(
-          exception: error,
-          stack: stackTrace,
-          library: 'sender send route',
-          context: ErrorDescription('loading Sender booking draft'),
-        ),
+      _reportUnexpectedRestoreFailure(
+        error,
+        stackTrace,
+        'loading Sender booking draft',
       );
       if (!mounted) return;
       setState(() {
@@ -176,13 +202,10 @@ class _SenderBookingCanvasState extends State<SenderBookingCanvas> {
             error.message ?? 'Your saved delivery draft could not be loaded.';
       });
     } on TimeoutException catch (error, stackTrace) {
-      FlutterError.reportError(
-        FlutterErrorDetails(
-          exception: error,
-          stack: stackTrace,
-          library: 'sender send route',
-          context: ErrorDescription('restoring queued Sender booking draft'),
-        ),
+      _reportUnexpectedRestoreFailure(
+        error,
+        stackTrace,
+        'restoring queued Sender booking draft',
       );
       await _clearQueuedLocalDraft();
       if (!mounted) return;
@@ -192,13 +215,10 @@ class _SenderBookingCanvasState extends State<SenderBookingCanvas> {
             "Your previous draft couldn't be restored. Please start again.";
       });
     } catch (error, stackTrace) {
-      FlutterError.reportError(
-        FlutterErrorDetails(
-          exception: error,
-          stack: stackTrace,
-          library: 'sender send route',
-          context: ErrorDescription('loading Sender booking draft'),
-        ),
+      _reportUnexpectedRestoreFailure(
+        error,
+        stackTrace,
+        'loading Sender booking draft',
       );
       if (!mounted) return;
       setState(() {
@@ -280,23 +300,17 @@ class _SenderBookingCanvasState extends State<SenderBookingCanvas> {
         await _handleDraftConflict(next, generation);
         return;
       }
-      FlutterError.reportError(
-        FlutterErrorDetails(
-          exception: error,
-          stack: stackTrace,
-          library: 'sender send route',
-          context: ErrorDescription('saving Sender booking draft'),
-        ),
+      _reportUnexpectedRestoreFailure(
+        error,
+        stackTrace,
+        'saving Sender booking draft',
       );
       if (mounted) setState(() => _syncStatus = 'Saved offline');
     } catch (error, stackTrace) {
-      FlutterError.reportError(
-        FlutterErrorDetails(
-          exception: error,
-          stack: stackTrace,
-          library: 'sender send route',
-          context: ErrorDescription('saving Sender booking draft'),
-        ),
+      _reportUnexpectedRestoreFailure(
+        error,
+        stackTrace,
+        'saving Sender booking draft',
       );
       if (mounted) setState(() => _syncStatus = 'Saved offline');
     }
@@ -370,15 +384,7 @@ class _SenderBookingCanvasState extends State<SenderBookingCanvas> {
       restored = SenderBookingDraft.fromBackendDraft(
         Map<String, dynamic>.from(decoded['draft'] as Map),
       );
-    } catch (error, stackTrace) {
-      FlutterError.reportError(
-        FlutterErrorDetails(
-          exception: error,
-          stack: stackTrace,
-          library: 'sender send route',
-          context: ErrorDescription('parsing queued Sender booking draft'),
-        ),
-      );
+    } catch (_) {
       await _clearQueuedLocalDraft();
       if (mounted) {
         setState(() {
@@ -402,13 +408,10 @@ class _SenderBookingCanvasState extends State<SenderBookingCanvas> {
       _draftRevision = 0;
       _draftId = null;
     } catch (error, stackTrace) {
-      FlutterError.reportError(
-        FlutterErrorDetails(
-          exception: error,
-          stack: stackTrace,
-          library: 'sender send route',
-          context: ErrorDescription('deleting completed Sender booking draft'),
-        ),
+      _reportUnexpectedRestoreFailure(
+        error,
+        stackTrace,
+        'deleting completed Sender booking draft',
       );
     }
   }

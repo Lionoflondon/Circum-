@@ -3,6 +3,7 @@ import 'dart:math' as math;
 import 'dart:ui';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:cloud_functions/cloud_functions.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
@@ -1677,12 +1678,15 @@ abstract class SenderHomeRepository {
 class FirebaseSenderHomeRepository implements SenderHomeRepository {
   final FirebaseAuth auth;
   final FirebaseFirestore firestore;
+  final FirebaseFunctions functions;
 
   FirebaseSenderHomeRepository({
     FirebaseAuth? auth,
     FirebaseFirestore? firestore,
+    FirebaseFunctions? functions,
   })  : auth = auth ?? FirebaseAuth.instance,
-        firestore = firestore ?? FirebaseFirestore.instance;
+        firestore = firestore ?? FirebaseFirestore.instance,
+        functions = functions ?? FirebaseFunctions.instance;
 
   User? get _maybeUser => auth.currentUser;
 
@@ -1815,15 +1819,13 @@ class FirebaseSenderHomeRepository implements SenderHomeRepository {
   @override
   Future<void> markNotificationsRead(Iterable<String> ids) async {
     if (_maybeUser == null) return;
-    final batch = firestore.batch();
-    for (final id in ids) {
-      batch.set(
-        firestore.collection('notifications').doc(id),
-        {'read': true, 'readAt': FieldValue.serverTimestamp()},
-        SetOptions(merge: true),
-      );
-    }
-    await batch.commit();
+    final cleanIds =
+        ids.map((id) => id.trim()).where((id) => id.isNotEmpty).toList();
+    if (cleanIds.isEmpty) return;
+    await functions.httpsCallable('updateSenderNotificationState').call({
+      'action': 'mark_read',
+      'notificationIds': cleanIds,
+    });
   }
 }
 

@@ -1,4 +1,5 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:cloud_functions/cloud_functions.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 
@@ -61,11 +62,15 @@ class CircumNotification {
 class SenderNotificationsRepository {
   final FirebaseAuth auth;
   final FirebaseFirestore firestore;
+  final FirebaseFunctions functions;
 
   SenderNotificationsRepository(
-      {FirebaseAuth? auth, FirebaseFirestore? firestore})
+      {FirebaseAuth? auth,
+      FirebaseFirestore? firestore,
+      FirebaseFunctions? functions})
       : auth = auth ?? FirebaseAuth.instance,
-        firestore = firestore ?? FirebaseFirestore.instance;
+        firestore = firestore ?? FirebaseFirestore.instance,
+        functions = functions ?? FirebaseFunctions.instance;
 
   Stream<List<CircumNotification>> watchNotifications() {
     final uid = auth.currentUser?.uid;
@@ -86,37 +91,38 @@ class SenderNotificationsRepository {
     });
   }
 
-  Future<void> markRead(String id) =>
-      firestore.collection('notifications').doc(id).set(
-        {'read': true, 'readAt': FieldValue.serverTimestamp()},
-        SetOptions(merge: true),
+  Future<void> markRead(String id) => _updateNotificationState(
+        action: 'mark_read',
+        ids: [id],
       );
 
-  Future<void> markAllRead(Iterable<String> ids) async {
-    final batch = firestore.batch();
-    for (final id in ids) {
-      batch.set(
-          firestore.collection('notifications').doc(id),
-          {
-            'read': true,
-            'readAt': FieldValue.serverTimestamp(),
-          },
-          SetOptions(merge: true));
-    }
-    await batch.commit();
+  Future<void> markAllRead(Iterable<String> ids) => _updateNotificationState(
+        action: 'mark_read',
+        ids: ids,
+      );
+
+  Future<void> archive(String id) => _updateNotificationState(
+        action: 'archive',
+        ids: [id],
+      );
+
+  Future<void> delete(String id) => _updateNotificationState(
+        action: 'delete',
+        ids: [id],
+      );
+
+  Future<void> _updateNotificationState({
+    required String action,
+    required Iterable<String> ids,
+  }) async {
+    final cleanIds =
+        ids.map((id) => id.trim()).where((id) => id.isNotEmpty).toList();
+    if (cleanIds.isEmpty) return;
+    await functions.httpsCallable('updateSenderNotificationState').call({
+      'action': action,
+      'notificationIds': cleanIds,
+    });
   }
-
-  Future<void> archive(String id) =>
-      firestore.collection('notifications').doc(id).set(
-        {'archived': true, 'archivedAt': FieldValue.serverTimestamp()},
-        SetOptions(merge: true),
-      );
-
-  Future<void> delete(String id) =>
-      firestore.collection('notifications').doc(id).set(
-        {'deletedAt': FieldValue.serverTimestamp()},
-        SetOptions(merge: true),
-      );
 }
 
 class SenderNotificationsView extends StatefulWidget {

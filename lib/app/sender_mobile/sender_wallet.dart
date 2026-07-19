@@ -243,6 +243,8 @@ class SenderWalletView extends StatefulWidget {
 }
 
 class _SenderWalletViewState extends State<SenderWalletView> {
+  static const _walletOperationTimeout = Duration(seconds: 15);
+
   late final SenderWalletRepository _repository;
   StreamSubscription<SenderWalletData>? _subscription;
   SenderWalletData? _wallet;
@@ -261,16 +263,19 @@ class _SenderWalletViewState extends State<SenderWalletView> {
   }
 
   Future<void> _load() async {
+    Future<T> withWalletTimeout<T>(Future<T> operation) =>
+        operation.timeout(_walletOperationTimeout);
+
     setState(() {
       _loading = true;
       _error = null;
     });
     try {
-      final wallet = await _repository.initialise();
+      final wallet = await withWalletTimeout(_repository.initialise());
       final results = await Future.wait([
-        _repository.transactions(),
-        _repository.paymentMethods(),
-      ]);
+        withWalletTimeout(_repository.transactions()),
+        withWalletTimeout(_repository.paymentMethods()),
+      ]).timeout(_walletOperationTimeout);
       final page = results[0] as SenderWalletPage;
       final methods = results[1] as SenderPaymentMethodsData;
       if (!mounted) return;
@@ -284,9 +289,20 @@ class _SenderWalletViewState extends State<SenderWalletView> {
         _loading = false;
       });
       await _subscription?.cancel();
-      _subscription = _repository.watch().listen((value) {
+      _subscription = _repository
+          .watch()
+          .timeout(_walletOperationTimeout, onTimeout: (sink) => sink.close())
+          .listen((value) {
         if (mounted) setState(() => _wallet = value);
       }, onError: (_) {});
+    } on TimeoutException {
+      if (mounted) {
+        setState(() {
+          _error =
+              'Wallet is taking longer than expected. Check your connection and try again.';
+          _loading = false;
+        });
+      }
     } catch (error) {
       if (mounted) {
         setState(() {

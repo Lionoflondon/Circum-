@@ -1028,16 +1028,7 @@ class _GiftCampaignViewState extends State<GiftCampaignView> {
     });
     try {
       final campaign = _campaign ?? _campaigns.first;
-      final participantRef = FirebaseFirestore.instance
-          .collection(senderGiftCampaignParticipantsCollectionName)
-          .doc(_participantId);
-      _participantId = participantRef.id;
       final participant = _participantPayload(user.uid, user.email ?? '');
-      await participantRef.set({
-        ...participant,
-        'createdAt': FieldValue.serverTimestamp(),
-        'updatedAt': FieldValue.serverTimestamp(),
-      }, SetOptions(merge: true));
       final result = GiftsSocialPolicy.scoreMatch(
         participant,
         _policyOnlyMatchEligibilityPreview(campaign),
@@ -1047,71 +1038,29 @@ class _GiftCampaignViewState extends State<GiftCampaignView> {
           'Your payment is ready. IRIS will recommend only gifts that satisfy all recorded safety requirements.',
         );
       }
-      final paymentDraftRef = FirebaseFirestore.instance
-          .collection(senderGiftPaymentDraftCollectionName)
-          .doc();
-      await paymentDraftRef.set({
-        ...participant,
-        'senderId': user.uid,
-        'senderEmail': user.email ?? '',
-        'giftDraftId': paymentDraftRef.id,
-        'campaignParticipantId': participantRef.id,
-        'campaignFlow': 'anonymous',
-        'source': senderGiftCampaignPaymentSource,
-        'status': 'draft',
-        'giftStatus': 'campaign_participation',
-        'paymentStatus': 'payment_pending',
-        'selectedBudgetGbp': _budget,
-        'grossBudget': _budget,
-        'grossGiftBudget': _budget,
-        'applyRoth': _wantsRoth,
-        'paymentMethod': 'card',
-        'rothApplied': 0,
-        'cardAmount': _budget,
-        'walletContributionGbp': 0,
-        'remainingStripeAmountGbp': _budget,
-        'returnOrigin': Uri.base.origin,
-        'createdAt': FieldValue.serverTimestamp(),
-        'updatedAt': FieldValue.serverTimestamp(),
-      });
       final payment = await FirebaseFunctions.instance
           .httpsCallable(senderGiftPaymentCallableName)
           .call({
-        'giftDraftId': paymentDraftRef.id,
-        'campaignParticipantId': participantRef.id,
         'source': senderGiftCampaignPaymentSource,
+        'campaignParticipant': participant,
         'applyRoth': _wantsRoth,
+        'paymentMethod': _verifiedPaymentMethod,
         'grossGiftBudget': _budget,
         'returnOrigin': Uri.base.origin,
       });
       final data = Map<String, dynamic>.from(payment.data as Map);
+      _participantId = '${data['campaignParticipantId'] ?? ''}'.trim().isEmpty
+          ? null
+          : '${data['campaignParticipantId']}';
       if (data['walletPaidInFull'] == true ||
           data['campaignParticipantPaid'] == true) {
-        await _markParticipantPaid(
-          participantRef,
-          paymentDraftId: paymentDraftRef.id,
-          stripeSessionId: null,
-        );
+        _listenForApprovedMatch();
+        _listenForParticipantStatus();
       } else {
         final checkoutUrl = Uri.tryParse('${data['url'] ?? ''}');
         if (checkoutUrl == null || checkoutUrl.host.isEmpty) {
           throw StateError('Secure checkout could not be opened.');
         }
-        await participantRef.set({
-          'paymentStatus': 'checkout_pending',
-          'paymentMethod': _verifiedPaymentMethod,
-          'giftCampaignTotal': _budget,
-          'rothApplied': (data['walletContributionGbp'] as num?)?.toDouble() ??
-              _rothApplied,
-          'remainingCardAmount':
-              (data['remainingStripeAmountGbp'] as num?)?.toDouble() ??
-                  _cardAmount,
-          'stripeCheckoutSessionId': data['sessionId'],
-          'paymentDraftId': paymentDraftRef.id,
-          'campaignFlow': 'anonymous',
-          'campaignStatus': 'checkout_pending',
-          'updatedAt': FieldValue.serverTimestamp(),
-        }, SetOptions(merge: true));
         final opened = await launchUrl(checkoutUrl, webOnlyWindowName: '_self');
         if (!opened) throw StateError('Secure checkout could not be opened.');
         return;
@@ -1134,35 +1083,6 @@ class _GiftCampaignViewState extends State<GiftCampaignView> {
 
   bool get _canBypassCampaignPaymentForLocalPreview {
     return _isLocalCampaignPaymentPreview();
-  }
-
-  Future<void> _markParticipantPaid(
-    DocumentReference<Map<String, dynamic>> participantRef, {
-    required String paymentDraftId,
-    required String? stripeSessionId,
-  }) async {
-    await participantRef.set({
-      'paymentStatus': 'paid',
-      'paymentMethod': _verifiedPaymentMethod,
-      'giftType': GiftSystemPolicy.campaignGiftType,
-      'flowStatus': 'paid_waiting_for_match',
-      'currentStep': 8,
-      'completedSteps': const [1, 2, 3, 4, 5, 6, 7],
-      'deliveryStatus': 'not_started',
-      'storyStatus': 'locked',
-      'giftCampaignTotal': _budget,
-      'rothApplied': _rothApplied,
-      'remainingCardAmount': _cardAmount,
-      'paidAt': FieldValue.serverTimestamp(),
-      'paymentDraftId': paymentDraftId,
-      'stripeCheckoutSessionId': stripeSessionId,
-      'campaignFlow': 'anonymous',
-      'status': 'paid_waiting_for_match',
-      'campaignStatus': 'paid_waiting_for_match',
-      'matchStatus': 'awaiting_admin_pairing',
-      'updatedAt': FieldValue.serverTimestamp(),
-      'lastActiveAt': FieldValue.serverTimestamp(),
-    }, SetOptions(merge: true));
   }
 
   void _listenForApprovedMatch() {

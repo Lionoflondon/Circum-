@@ -153,29 +153,19 @@ class SendPackageBloc extends Bloc<SendPackageEvent, SendPackageState> {
     CheckForPushToken event,
     Emitter<SendPackageState> emit,
   ) async {
-    final storage = FlutterSecureStorage();
-    final fcmToken = await firebaseMessaging.getToken();
-    if (fcmToken != null) {
-      try {
+    try {
+      final storage = FlutterSecureStorage();
+      final fcmToken = await firebaseMessaging.getToken();
+      if (fcmToken != null) {
         await storage.write(key: "pushToken", value: fcmToken);
-        final User? user = auth.currentUser;
-
-        final documentReference = db.collection('users').doc(user?.uid);
-
-        // Get the document snapshot
-        final documentSnapshot = await documentReference.get();
-        if (documentSnapshot.exists) {
-          await db
-              .collection("users")
-              .doc(user?.uid)
-              .update({'fcmToken': fcmToken}).then(
-            (value) {},
-            onError: (e) {},
-          );
+        if (auth.currentUser != null) {
+          await FirebaseFunctions.instance
+              .httpsCallable('updateSenderPushToken')
+              .call({'fcmToken': fcmToken});
         }
-      } catch (e) {
-        debugPrint('Push token update failed');
       }
+    } catch (e) {
+      debugPrint('Push token update failed');
     }
   }
 
