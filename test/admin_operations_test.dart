@@ -751,17 +751,28 @@ void main() {
           'Riders',
           'Verification',
           'Deliveries',
+          'IRIS Operations',
+          'IRIS Repository',
+          'IRIS Candidates',
           'Support',
           'Finance',
           'Health+',
           'Business',
           'Gifts',
+          'Gift Team Workspace',
+          'Gift Story Media',
+          'Gift Campaign Matches',
           'Audit',
           'Chat',
           'Settings',
         ]),
       );
       expect(AdminModule.values, contains(AdminModule.discrepancyReview));
+      expect(AdminModule.values, contains(AdminModule.irisRepository));
+      expect(AdminModule.values, contains(AdminModule.irisCandidates));
+      expect(AdminModule.values, contains(AdminModule.giftWorkspace));
+      expect(AdminModule.values, contains(AdminModule.giftStoryMedia));
+      expect(AdminModule.values, contains(AdminModule.giftCampaignMatches));
     });
 
     test('Admin data bundle starts empty before live loaders resolve', () {

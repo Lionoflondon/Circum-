@@ -12,7 +12,9 @@ enum AdminModule {
   dashboard('Dashboard', Icons.dashboard_rounded),
   visitorAnalytics('Visitor analytics', Icons.query_stats_rounded),
   deliveries('Deliveries', Icons.local_shipping_rounded),
-  discrepancyReview('Discrepancy review', Icons.fact_check_rounded),
+  discrepancyReview('IRIS Operations', Icons.fact_check_rounded),
+  irisRepository('IRIS Repository', Icons.inventory_2_rounded),
+  irisCandidates('IRIS Candidates', Icons.psychology_alt_rounded),
   users('Users', Icons.people_alt_rounded),
   riders('Riders', Icons.two_wheeler_rounded),
   verification('Verification', Icons.verified_user_rounded),
@@ -21,6 +23,9 @@ enum AdminModule {
   healthPlus('Health+', Icons.local_hospital_rounded),
   business('Business', Icons.business_center_rounded),
   gifts('Gifts', Icons.card_giftcard_rounded),
+  giftWorkspace('Gift Team Workspace', Icons.groups_2_rounded),
+  giftStoryMedia('Gift Story Media', Icons.video_library_rounded),
+  giftCampaignMatches('Gift Campaign Matches', Icons.hub_rounded),
   troubleshooting('Troubleshooting', Icons.report_problem_rounded),
   analytics('Analytics', Icons.insights_rounded),
   audit('Audit', Icons.history_rounded),
@@ -3119,6 +3124,25 @@ class _AdminModuleBody extends StatelessWidget {
               onUpdateRepositoryRecord: onUpdateIrisRepositoryRecord,
               onUpdateCandidateWorkflow: onUpdateIrisCandidateWorkflow,
             ),
+          AdminModule.irisRepository => _IrisRepositoryGovernanceModule(
+              canonicalObjects: data.irisCanonicalObjects,
+              referenceImages: data.irisReferenceImages,
+              auditLogs: data.auditLogs,
+              query: query,
+              canManageIris: canEditDeliveries,
+              onUpdateRepositoryRecord: onUpdateIrisRepositoryRecord,
+              onLoadReferenceImage: onLoadIrisReferenceImage,
+              onFinalizeReferenceImage: onFinalizeIrisReferenceImage,
+              onDeleteReferenceImage: onDeleteIrisReferenceImage,
+            ),
+          AdminModule.irisCandidates => _IrisCandidateWorkflowModule(
+              deliveries: data.deliveries,
+              learningCases: data.irisLearningCases,
+              evidenceRecords: data.irisEvidence,
+              query: query,
+              canManageIris: canEditDeliveries,
+              onUpdateCandidateWorkflow: onUpdateIrisCandidateWorkflow,
+            ),
           AdminModule.deliveries => _DeliveryOperationsModule(
               deliveries: data.deliveries,
               riders: data.riders,
@@ -3298,6 +3322,26 @@ class _AdminModuleBody extends StatelessWidget {
               onUpdateGiftStoryAccess: onUpdateGiftStoryAccess,
               onUpdateGiftStoryMedia: onUpdateGiftStoryMedia,
               onUpdateGiftWorkspace: onUpdateGiftWorkspace,
+            ),
+          AdminModule.giftWorkspace => _GiftTeamWorkspaceModule(
+              gifts: [...data.giftOrders, ...data.giftRequests],
+              query: query,
+              canManageIssues: canManageIssues,
+              onUpdateGiftWorkspace: onUpdateGiftWorkspace,
+              onUpdateGiftStoryMedia: onUpdateGiftStoryMedia,
+            ),
+          AdminModule.giftStoryMedia => _GiftStoryMediaModule(
+              gifts: [...data.giftOrders, ...data.giftRequests],
+              query: query,
+              canManageIssues: canManageIssues,
+              onUpdateGiftStoryMedia: onUpdateGiftStoryMedia,
+            ),
+          AdminModule.giftCampaignMatches => _GiftCampaignMatchesModule(
+              campaignMatches: data.giftCampaignMatches,
+              participants: data.giftCampaignParticipants,
+              query: query,
+              canManageIssues: canManageIssues,
+              onUpdateGiftCampaignParticipant: onUpdateGiftCampaignParticipant,
             ),
           AdminModule.troubleshooting => _TroubleshootingModule(
               deliveries: data.deliveries,
@@ -4216,6 +4260,111 @@ class _IrisCanonicalLibraryModule extends StatelessWidget {
                 ),
               ]
           : null,
+    );
+  }
+}
+
+class _IrisRepositoryGovernanceModule extends StatelessWidget {
+  const _IrisRepositoryGovernanceModule({
+    required this.canonicalObjects,
+    required this.referenceImages,
+    required this.auditLogs,
+    required this.query,
+    required this.canManageIris,
+    required this.onUpdateRepositoryRecord,
+    required this.onLoadReferenceImage,
+    required this.onFinalizeReferenceImage,
+    required this.onDeleteReferenceImage,
+  });
+
+  final List<Map<String, dynamic>> canonicalObjects;
+  final List<Map<String, dynamic>> referenceImages;
+  final List<Map<String, dynamic>> auditLogs;
+  final String query;
+  final bool canManageIris;
+  final Future<void> Function(Map<String, dynamic>, String)
+      onUpdateRepositoryRecord;
+  final Future<void> Function(Map<String, dynamic>) onLoadReferenceImage;
+  final Future<void> Function(Map<String, dynamic>) onFinalizeReferenceImage;
+  final Future<void> Function(Map<String, dynamic>) onDeleteReferenceImage;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const _AdminModuleIntro(
+          title: 'IRIS Repository Governance',
+          subtitle:
+              'Canonical repository review, administration, reference images and lifecycle history.',
+        ),
+        const SizedBox(height: 16),
+        _IrisCanonicalLibraryModule(
+          records: canonicalObjects,
+          query: query,
+          auditLogs: auditLogs,
+          canManageIris: canManageIris,
+          onLoadReferenceImage: onLoadReferenceImage,
+          onFinalizeReferenceImage: onFinalizeReferenceImage,
+          onDeleteReferenceImage: onDeleteReferenceImage,
+          onUpdateRepositoryRecord: onUpdateRepositoryRecord,
+        ),
+        const SizedBox(height: 18),
+        _IrisReferenceImageLifecycleModule(
+          records: referenceImages,
+          canonicalObjects: canonicalObjects,
+          query: query,
+          canManageIris: canManageIris,
+          onLoadReferenceImage: onLoadReferenceImage,
+          onFinalizeReferenceImage: onFinalizeReferenceImage,
+          onDeleteReferenceImage: onDeleteReferenceImage,
+        ),
+      ],
+    );
+  }
+}
+
+class _IrisCandidateWorkflowModule extends StatelessWidget {
+  const _IrisCandidateWorkflowModule({
+    required this.deliveries,
+    required this.learningCases,
+    required this.evidenceRecords,
+    required this.query,
+    required this.canManageIris,
+    required this.onUpdateCandidateWorkflow,
+  });
+
+  final List<Map<String, dynamic>> deliveries;
+  final List<Map<String, dynamic>> learningCases;
+  final List<Map<String, dynamic>> evidenceRecords;
+  final String query;
+  final bool canManageIris;
+  final Future<void> Function(Map<String, dynamic>, String)
+      onUpdateCandidateWorkflow;
+
+  @override
+  Widget build(BuildContext context) {
+    final deliveryCandidates =
+        deliveries.where(_isLearningCandidate).toList(growable: false);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const _AdminModuleIntro(
+          title: 'IRIS Candidate Workflows',
+          subtitle:
+              'Candidate review, approval, rejection, promotion and learning evidence.',
+        ),
+        const SizedBox(height: 16),
+        _IrisLearningCentre(
+          reviewRecords: deliveryCandidates,
+          learningCases: learningCases,
+          query: query,
+          canManageIris: canManageIris,
+          onUpdateCandidateWorkflow: onUpdateCandidateWorkflow,
+        ),
+        const SizedBox(height: 18),
+        _IrisEvidenceCentre(records: evidenceRecords, query: query),
+      ],
     );
   }
 }
@@ -7002,6 +7151,199 @@ class _HistoricalAnalyticsModule extends StatelessWidget {
   }
 }
 
+class _GiftStoryMediaModule extends StatelessWidget {
+  const _GiftStoryMediaModule({
+    required this.gifts,
+    required this.query,
+    required this.canManageIssues,
+    required this.onUpdateGiftStoryMedia,
+  });
+
+  final List<Map<String, dynamic>> gifts;
+  final String query;
+  final bool canManageIssues;
+  final Future<void> Function(Map<String, dynamic>, String)
+      onUpdateGiftStoryMedia;
+
+  @override
+  Widget build(BuildContext context) {
+    final records = adminSearch(gifts, query, const [
+      'id',
+      'giftId',
+      'giftName',
+      'title',
+      'giftStoryEnabled',
+      'giftStoryStatus',
+      'giftStoryVideoStatus',
+      'giftStoryAudioStatus',
+      'videoStatus',
+    ]);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const _AdminModuleIntro(
+          title: 'Gift Story Media',
+          subtitle:
+              'Historical Admin media and video workflow for Gift Story operations.',
+        ),
+        const SizedBox(height: 16),
+        _RecordModule(
+          title: 'Gift Story Media and Video',
+          subtitle:
+              'Video upload/download, preview readiness, audio status and access lifecycle.',
+          records: records,
+          query: '',
+          fields: const [],
+          columns: const ['Story', 'Audio', 'Video', 'Privacy'],
+          row: (record) => [
+            '${record['giftName'] ?? record['title'] ?? _recordId(record)}',
+            _giftStoryAudioSummary(record),
+            '${record['giftStoryVideoStatus'] ?? record['videoStatus'] ?? 'not rendered'}',
+            '${record['giftStorySharePrivacy'] ?? record['contentUsageScope'] ?? 'private'}',
+          ],
+          actions: canManageIssues
+              ? (record) => [
+                    _MiniAction(
+                      label: 'Download video',
+                      onPressed: () => unawaited(
+                          onUpdateGiftStoryMedia(record, 'download_video')),
+                    ),
+                    _MiniAction(
+                      label: 'Create upload',
+                      onPressed: () => unawaited(onUpdateGiftStoryMedia(
+                          record, 'create_video_upload')),
+                    ),
+                    _MiniAction(
+                      label: 'Finalize upload',
+                      onPressed: () => unawaited(onUpdateGiftStoryMedia(
+                          record, 'finalize_video_upload')),
+                    ),
+                    _MiniAction(
+                      label: 'Retry story',
+                      onPressed: () =>
+                          unawaited(onUpdateGiftStoryMedia(record, 'retry')),
+                    ),
+                    _MiniAction(
+                      label: 'Regenerate link',
+                      onPressed: () => unawaited(
+                          onUpdateGiftStoryMedia(record, 'regenerate')),
+                    ),
+                    _MiniAction(
+                      label: 'Extend',
+                      onPressed: () =>
+                          unawaited(onUpdateGiftStoryMedia(record, 'extend')),
+                    ),
+                    _MiniAction(
+                      label: 'Revoke',
+                      onPressed: () =>
+                          unawaited(onUpdateGiftStoryMedia(record, 'revoke')),
+                    ),
+                  ]
+              : null,
+        ),
+      ],
+    );
+  }
+}
+
+class _GiftCampaignMatchesModule extends StatelessWidget {
+  const _GiftCampaignMatchesModule({
+    required this.campaignMatches,
+    required this.participants,
+    required this.query,
+    required this.canManageIssues,
+    required this.onUpdateGiftCampaignParticipant,
+  });
+
+  final List<Map<String, dynamic>> campaignMatches;
+  final List<Map<String, dynamic>> participants;
+  final String query;
+  final bool canManageIssues;
+  final Future<void> Function(Map<String, dynamic>, String)
+      onUpdateGiftCampaignParticipant;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const _AdminModuleIntro(
+          title: 'Gift Campaign Matches',
+          subtitle:
+              'Historical campaign match records, participant review and assignment workflow.',
+        ),
+        const SizedBox(height: 16),
+        _RecordModule(
+          title: 'Campaign Match Records',
+          subtitle:
+              'Approved, rejected and pending anonymous Gift campaign matches.',
+          records: adminSearch(campaignMatches, query, const [
+            'id',
+            'campaignId',
+            'campaignName',
+            'participantIds',
+            'status',
+            'matchReason',
+          ]),
+          query: '',
+          fields: const [],
+          columns: const ['Match', 'Campaign', 'Participants', 'Status'],
+          row: (record) => [
+            _recordId(record),
+            '${record['campaignName'] ?? record['campaignId'] ?? 'Campaign'}',
+            '${record['participantIds'] ?? record['matchedParticipantIds'] ?? 'participants n/a'}',
+            '${record['status'] ?? record['matchStatus'] ?? 'pending'}',
+          ],
+        ),
+        const SizedBox(height: 18),
+        _RecordModule(
+          title: 'Campaign Participants',
+          subtitle:
+              'Historical participant review, matching and assignment controls.',
+          records: adminSearch(participants, query, const [
+            'id',
+            'campaignId',
+            'campaignName',
+            'displayName',
+            'userId',
+            'matchStatus',
+            'suggestedParticipantId',
+          ]),
+          query: '',
+          fields: const [],
+          columns: const ['Participant', 'Campaign', 'Match', 'Reason'],
+          row: (record) => [
+            '${record['displayName'] ?? record['userId'] ?? _recordId(record)}',
+            '${record['campaignName'] ?? record['campaignId'] ?? 'Campaign'}',
+            '${record['matchStatus'] ?? 'unmatched'} -> ${record['suggestedParticipantId'] ?? 'none'}',
+            '${record['suggestedMatchReason'] ?? record['matchReason'] ?? ''}',
+          ],
+          actions: canManageIssues
+              ? (record) => [
+                    _MiniAction(
+                      label: 'Approve',
+                      onPressed: () => unawaited(
+                          onUpdateGiftCampaignParticipant(record, 'approved')),
+                    ),
+                    _MiniAction(
+                      label: 'Reject',
+                      onPressed: () => unawaited(
+                          onUpdateGiftCampaignParticipant(record, 'rejected')),
+                    ),
+                    _MiniAction(
+                      label: 'Assign later',
+                      onPressed: () => unawaited(
+                          onUpdateGiftCampaignParticipant(
+                              record, 'assign_later')),
+                    ),
+                  ]
+              : null,
+        ),
+      ],
+    );
+  }
+}
+
 class _SupportOperationsModule extends StatelessWidget {
   const _SupportOperationsModule({
     required this.tickets,
@@ -8083,6 +8425,40 @@ class _MetricCard extends StatelessWidget {
                   style: TextStyle(color: Colors.white.withValues(alpha: .68))),
             ],
           ),
+        ),
+      ),
+    );
+  }
+}
+
+class _AdminModuleIntro extends StatelessWidget {
+  const _AdminModuleIntro({
+    required this.title,
+    required this.subtitle,
+  });
+
+  final String title;
+  final String subtitle;
+
+  @override
+  Widget build(BuildContext context) {
+    return DecoratedBox(
+      decoration: _panelDecoration(),
+      child: Padding(
+        padding: const EdgeInsets.all(20),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              title,
+              style: const TextStyle(fontSize: 24, fontWeight: FontWeight.w800),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              subtitle,
+              style: TextStyle(color: Colors.white.withValues(alpha: .68)),
+            ),
+          ],
         ),
       ),
     );
