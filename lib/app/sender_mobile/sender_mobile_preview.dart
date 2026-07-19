@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
 import '../../firebase_options.dart';
+import '../security/circum_app_check.dart';
 import '../send_package/bloc/send_package_bloc.dart';
 import 'design_system/sender_design_system.dart';
 import 'sender_accessibility.dart';
@@ -13,6 +14,11 @@ Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   if (kIsWeb) {
     await Firebase.initializeApp(options: DefaultFirebaseOptions.web);
+    final appCheckStartup = await initializeCircumAppCheck();
+    if (appCheckStartup.blockStartup) {
+      runApp(_SenderWebStartupBlocked(message: appCheckStartup.message));
+      return;
+    }
   } else {
     await Firebase.initializeApp();
   }
@@ -55,4 +61,37 @@ class _PreviewSenderAccessibilityRepository
   @override
   Stream<SenderAccessibilitySettings> watch() =>
       Stream.value(const SenderAccessibilitySettings());
+}
+
+class _SenderWebStartupBlocked extends StatelessWidget {
+  const _SenderWebStartupBlocked({required this.message});
+
+  final String message;
+
+  @override
+  Widget build(BuildContext context) {
+    return MaterialApp(
+      debugShowCheckedModeBanner: false,
+      title: 'Circum Sender',
+      home: Scaffold(
+        backgroundColor: const Color(0xFF07090F),
+        body: SafeArea(
+          child: Center(
+            child: Padding(
+              padding: const EdgeInsets.all(24),
+              child: Text(
+                message,
+                textAlign: TextAlign.center,
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 16,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
 }

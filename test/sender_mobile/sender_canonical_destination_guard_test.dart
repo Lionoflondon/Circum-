@@ -76,20 +76,27 @@ void main() {
       source.indexOf('class _CanonicalSenderHome'),
       source.indexOf('class _SenderDashboard'),
     );
+    final canonicalHomeBuild = canonicalHome.substring(
+      canonicalHome.indexOf('Widget build(BuildContext context)'),
+    );
 
     for (final marker in const [
       "Key('sender-home-canonical-content')",
-      'Where are we sending today?',
-      'Track Delivery',
-      'Send Parcel',
-      'Quick services',
+      'Send a parcel',
+      'Send now',
+      'Track delivery',
+      '_RebuiltSenderHomeHeader',
+      '_RebuiltSenderHomeHero',
+      '_RebuiltSenderServicesGrid',
+      '_RebuiltSenderRecentActivity',
+      '_RebuiltSenderNotificationStrip',
+      'Your Circum',
       'Health+',
       'Business',
       'Gifts',
-      'SenderWalletHomeSummary',
-      'Activity',
-      'Trust',
-      'Important updates',
+      'Recent Activity',
+      'No deliveries yet',
+      'Your completed deliveries will appear here.',
     ]) {
       expect(canonicalHome, contains(marker));
     }
@@ -101,8 +108,12 @@ void main() {
       '_StableHomeInfoCard',
       'Ready when you are.',
       'Send something',
+      'Where are we sending today?',
+      'Quick services',
+      'Send Parcel',
+      'Important updates',
     ]) {
-      expect(canonicalHome, isNot(contains(forbidden)));
+      expect(canonicalHomeBuild, isNot(contains(forbidden)));
     }
   });
 

@@ -459,6 +459,7 @@ class _SenderWalletViewState extends State<SenderWalletView> {
         ),
       );
 
+  // ignore: unused_element
   void _openSupport() => Navigator.of(context).push(
         MaterialPageRoute<void>(
           builder: (_) => const _WalletSupportScreen(),
@@ -538,122 +539,158 @@ class _SenderWalletViewState extends State<SenderWalletView> {
     if (!wallet.onboardingCompleted) {
       return _WalletOnboarding(onContinue: _continueOnboarding);
     }
-    return ListView(
-      padding: const EdgeInsets.fromLTRB(20, 20, 20, 28),
-      children: [
-        const Text('Wallet',
+    final recentTransactions = _transactions.take(5).toList(growable: false);
+    return _WalletPageShell(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          const Text(
+            'Wallet',
             style: TextStyle(
-                color: Colors.white,
-                fontSize: 28,
-                fontWeight: FontWeight.w900)),
-        const SizedBox(height: 6),
-        const Text('Circum Finance',
+              color: Colors.white,
+              fontSize: 34,
+              fontWeight: FontWeight.w900,
+              height: 1,
+            ),
+          ),
+          const SizedBox(height: 10),
+          const Text(
+            'Manage your Roth balance, payments and rewards.',
             style: TextStyle(
-                color: _WalletColors.muted, fontWeight: FontWeight.w600)),
-        const SizedBox(height: 18),
-        _PaymentMethodsSection(
-          data: _paymentMethods,
-          wallet: wallet,
-          busy: _paymentActionLoading,
-          onAdd: _addPaymentMethod,
-          onSetDefault: _setDefaultPaymentMethod,
-          onRemove: _removePaymentMethod,
-          onOpenMethod: _openPaymentInformation,
-          onOpenRoth: _openRothInformation,
-        ),
-        const SizedBox(height: 18),
-        _AvailableRothCard(wallet: wallet),
-        if (wallet.frozen) ...[
-          const SizedBox(height: 12),
-          const _WalletGlass(
-              child: Row(children: [
-            Icon(Icons.lock_outline, color: Color(0xFFFBBF24)),
-            SizedBox(width: 12),
-            Expanded(
-                child: Text(
-                    'This Wallet is frozen. You can view activity, but Roth cannot be spent.',
-                    style: TextStyle(color: Colors.white, height: 1.4)))
-          ])),
-        ],
-        const SizedBox(height: 18),
-        const _WalletSectionTitle('Recent Activity'),
-        const SizedBox(height: 10),
-        _WalletGlass(
-          padding: EdgeInsets.zero,
-          child: _transactions.isEmpty
-              ? const Padding(
-                  padding: EdgeInsets.all(18),
-                  child: Text(
+              color: _WalletColors.muted,
+              fontSize: 16,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+          const SizedBox(height: 26),
+          _AvailableRothCard(wallet: wallet),
+          if (wallet.frozen) ...[
+            const SizedBox(height: 12),
+            const _WalletGlass(
+              child: Row(
+                children: [
+                  Icon(Icons.lock_outline, color: Color(0xFFFBBF24)),
+                  SizedBox(width: 12),
+                  Expanded(
+                    child: Text(
+                      'This Wallet is frozen. You can view activity, but Roth cannot be spent.',
+                      style: TextStyle(color: Colors.white, height: 1.4),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+          const SizedBox(height: 22),
+          LayoutBuilder(
+            builder: (context, constraints) {
+              final wide = constraints.maxWidth >= 900;
+              final paymentMethods = _PaymentMethodsSection(
+                sectionTitle: 'Payment Methods',
+                data: _paymentMethods,
+                wallet: wallet,
+                busy: _paymentActionLoading,
+                onAdd: _addPaymentMethod,
+                onSetDefault: _setDefaultPaymentMethod,
+                onRemove: _removePaymentMethod,
+                onOpenMethod: _openPaymentInformation,
+                onOpenRoth: _openRothInformation,
+              );
+              final actions = _WalletActionGrid(
+                onRedeem: _redeemRothCard,
+                onAddCard: _addPaymentMethod,
+                onManagePayments: _openManagePayments,
+              );
+              if (!wide) {
+                return Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    paymentMethods,
+                    const SizedBox(height: 20),
+                    actions,
+                  ],
+                );
+              }
+              return Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Expanded(flex: 6, child: paymentMethods),
+                  const SizedBox(width: 20),
+                  Expanded(flex: 5, child: actions),
+                ],
+              );
+            },
+          ),
+          const SizedBox(height: 22),
+          const _WalletSectionTitle('Recent Activity'),
+          const SizedBox(height: 10),
+          _WalletGlass(
+            padding: EdgeInsets.zero,
+            child: recentTransactions.isEmpty
+                ? const Padding(
+                    padding: EdgeInsets.all(20),
+                    child: Text(
                       'No Roth activity yet. Rewards and eligible purchases will appear here.',
                       style:
-                          TextStyle(color: _WalletColors.muted, height: 1.45)))
-              : Column(
-                  children: _transactions
-                      .map((item) => InkWell(
-                            onTap: () => Navigator.of(context).push(
-                              MaterialPageRoute<void>(
-                                builder: (_) => _TransactionDetailsScreen(
-                                  transaction: item,
+                          TextStyle(color: _WalletColors.muted, height: 1.45),
+                    ),
+                  )
+                : Column(
+                    children: recentTransactions
+                        .map(
+                          (item) => Padding(
+                            padding: EdgeInsets.only(
+                              left: 12,
+                              right: 12,
+                              top: item == recentTransactions.first ? 12 : 0,
+                              bottom: 12,
+                            ),
+                            child: InkWell(
+                              borderRadius: BorderRadius.circular(20),
+                              onTap: () => Navigator.of(context).push(
+                                MaterialPageRoute<void>(
+                                  builder: (_) => _TransactionDetailsScreen(
+                                    transaction: item,
+                                  ),
                                 ),
                               ),
+                              child: _WalletTransactionCard(item),
                             ),
-                            child: _TransactionRow(item),
-                          ))
-                      .toList()),
-        ),
-        TextButton(
-          onPressed: () => Navigator.of(context).push(MaterialPageRoute<void>(
-            builder: (_) => _WalletActivityScreen(
-              repository: _repository,
-              initialTransactions: List.of(_transactions),
-              initialPageToken: _nextPage,
-            ),
-            settings:
-                const RouteSettings(name: '/sender-mobile/wallet/activity'),
-          )),
-          child: const Text('View all activity'),
-        ),
-        const SizedBox(height: 18),
-        const _WalletSectionTitle('Wallet Actions'),
-        const SizedBox(height: 10),
-        _WalletGlass(
-            child: Column(children: [
-          _WalletLink(
-              icon: Icons.credit_card_outlined,
-              title: 'Redeem Roth Card',
-              detail: 'Apply approved Roth rewards.',
-              onTap: _redeemRothCard),
-          const Divider(color: _WalletColors.hairline),
-          _WalletLink(
-              icon: Icons.group_add_outlined,
-              title: 'Earn Roth',
-              detail: 'Referral Code · Invite Friends · Rewards',
-              onTap: _openEarnRoth),
-          const Divider(color: _WalletColors.hairline),
-          _WalletLink(
-              icon: Icons.tune_rounded,
-              title: 'Manage Payments',
-              detail: 'Default method and checkout preferences',
-              onTap: _openManagePayments),
-          const Divider(color: _WalletColors.hairline),
-          _WalletLink(
-              icon: Icons.help_outline,
-              title: 'Support',
-              detail: 'Get help with payments and Roth.',
-              onTap: _openSupport),
-        ])),
-        const SizedBox(height: 18),
-        const _WalletSectionTitle('Offers'),
-        const SizedBox(height: 10),
-        _WalletGlass(
-          child: _OfferRow(
-            title: 'Earn 5 Roth',
-            detail:
-                'Refer friends and earn 5 Roth when they complete their first successful Circum delivery.',
-            onTap: _openEarnRoth,
+                          ),
+                        )
+                        .toList(),
+                  ),
           ),
-        ),
-      ],
+          Align(
+            alignment: Alignment.centerRight,
+            child: TextButton(
+              onPressed: () => Navigator.of(context).push(
+                MaterialPageRoute<void>(
+                  builder: (_) => _WalletActivityScreen(
+                    repository: _repository,
+                    initialTransactions: List.of(_transactions),
+                    initialPageToken: _nextPage,
+                  ),
+                  settings: const RouteSettings(
+                      name: '/sender-mobile/wallet/activity'),
+                ),
+              ),
+              child: const Text('View all activity'),
+            ),
+          ),
+          const SizedBox(height: 10),
+          const _WalletSectionTitle('Rewards & Offers'),
+          const SizedBox(height: 10),
+          _WalletGlass(
+            padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 16),
+            child: _OfferRow(
+              title: 'Rewards & Offers',
+              detail: 'Invite friends and earn 5 Roth.',
+              onTap: _openEarnRoth,
+            ),
+          ),
+        ],
+      ),
     );
   }
 
@@ -1431,52 +1468,45 @@ class _TransactionRow extends StatelessWidget {
   Widget build(BuildContext context) {
     final credit = transaction.direction == 'credit';
     final title = _walletTransactionDisplayTitle(transaction);
+    final status = _walletStatusLabel(transaction.status);
     return Semantics(
         label:
             '${credit ? 'Credit' : 'Debit'} ${transaction.amount} Roth. $title. ${transaction.status}',
         child: Container(
-            constraints: const BoxConstraints(minHeight: 66),
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 11),
+            constraints: const BoxConstraints(minHeight: 56),
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
             decoration: const BoxDecoration(
                 border:
                     Border(bottom: BorderSide(color: _WalletColors.hairline))),
             child: Row(children: [
-              Icon(_walletTransactionIcon(transaction.type),
-                  color: _walletStatusColor(transaction.status)),
+              Container(
+                width: 34,
+                height: 34,
+                decoration: BoxDecoration(
+                  color: _walletStatusColor(transaction.status)
+                      .withValues(alpha: .12),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Icon(
+                  _walletTransactionIcon(transaction.type),
+                  color: _walletStatusColor(transaction.status),
+                  size: 19,
+                ),
+              ),
               const SizedBox(width: 12),
               Expanded(
                   child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                    Row(children: [
-                      Expanded(
-                        child: Text(title,
-                            style: const TextStyle(
-                                color: Colors.white,
-                                fontWeight: FontWeight.w700)),
-                      ),
-                      if (_walletCategoryBadge(transaction.type)
-                          case final badge?)
-                        Container(
-                          padding: const EdgeInsets.symmetric(
-                              horizontal: 7, vertical: 3),
-                          decoration: BoxDecoration(
-                            color:
-                                _WalletColors.lightBlue.withValues(alpha: .12),
-                            borderRadius: BorderRadius.circular(999),
-                          ),
-                          child: Text(badge,
-                              style: const TextStyle(
-                                  color: _WalletColors.lightBlue,
-                                  fontSize: 9,
-                                  fontWeight: FontWeight.w800)),
-                        ),
-                    ]),
+                    Text(title,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                            color: Colors.white, fontWeight: FontWeight.w800)),
                     const SizedBox(height: 3),
                     Text(
                         [
-                          if (transaction.paymentMethodLabel.isNotEmpty)
-                            'Paid with ${transaction.paymentMethodLabel}',
+                          status,
                           _walletTransactionDate(transaction),
                         ].join(' · '),
                         style: TextStyle(
@@ -1484,10 +1514,14 @@ class _TransactionRow extends StatelessWidget {
                             fontSize: 11,
                             fontWeight: FontWeight.w600))
                   ])),
+              const SizedBox(width: 8),
               Text(
                   '${credit ? '+' : '-'}${transaction.amount.toStringAsFixed(transaction.amount % 1 == 0 ? 0 : 2)} Roth',
                   style: const TextStyle(
-                      color: Colors.white, fontWeight: FontWeight.w900))
+                      color: Colors.white, fontWeight: FontWeight.w900)),
+              const SizedBox(width: 6),
+              const Icon(Icons.chevron_right_rounded,
+                  color: _WalletColors.muted, size: 20),
             ])));
   }
 }
@@ -1553,18 +1587,24 @@ class _PaymentMethodsSection extends StatelessWidget {
         );
 
     final standardRows = <Widget>[
-      ...options.asMap().entries.expand((entry) => [
-            if (entry.key > 0) const Divider(color: _WalletColors.hairline),
-            optionRow(entry.value, entry.key),
-          ]),
-      if (options.isNotEmpty) const Divider(color: _WalletColors.hairline),
-      _RothPayWithRow(wallet: wallet, onTap: onOpenRoth),
-      const Divider(color: _WalletColors.hairline),
-      optionRow(
-        const SenderPaymentProfileOption(
-          SenderPaymentProfileOptionType.addPaymentMethod,
+      Padding(
+        padding: const EdgeInsets.only(bottom: 10),
+        child: _RothPayWithRow(wallet: wallet, onTap: onOpenRoth),
+      ),
+      ...options.asMap().entries.map(
+            (entry) => Padding(
+              padding: const EdgeInsets.only(bottom: 10),
+              child: optionRow(entry.value, entry.key),
+            ),
+          ),
+      Padding(
+        padding: const EdgeInsets.only(bottom: 2),
+        child: optionRow(
+          const SenderPaymentProfileOption(
+            SenderPaymentProfileOptionType.addPaymentMethod,
+          ),
+          options.length,
         ),
-        options.length,
       ),
       if (data.methods.isEmpty)
         const Align(
@@ -1584,7 +1624,11 @@ class _PaymentMethodsSection extends StatelessWidget {
       children: [
         _WalletSectionTitle(sectionTitle),
         const SizedBox(height: 10),
-        if (!premiumCards) _WalletGlass(child: Column(children: standardRows)),
+        if (!premiumCards)
+          _WalletGlass(
+            padding: const EdgeInsets.all(12),
+            child: Column(children: standardRows),
+          ),
         if (premiumCards) ...[
           ...cards.map((card) => Padding(
                 padding: const EdgeInsets.only(bottom: 10),
@@ -1845,6 +1889,52 @@ class _RothPayWithRow extends StatelessWidget {
       );
 }
 
+class _WalletPageShell extends StatelessWidget {
+  final Widget child;
+
+  const _WalletPageShell({required this.child});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      decoration: const BoxDecoration(
+        gradient: RadialGradient(
+          center: Alignment(-.75, -.95),
+          radius: 1.35,
+          colors: [
+            Color(0x302E7DF7),
+            Color(0x180D2A59),
+            Color(0xFF050913),
+          ],
+          stops: [0, .42, 1],
+        ),
+      ),
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final sidePadding = constraints.maxWidth < 720 ? 18.0 : 36.0;
+          return ListView(
+            padding: EdgeInsets.fromLTRB(
+              sidePadding,
+              constraints.maxWidth < 720 ? 24 : 32,
+              sidePadding,
+              28,
+            ),
+            children: [
+              Align(
+                alignment: Alignment.topCenter,
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(maxWidth: 1280),
+                  child: child,
+                ),
+              ),
+            ],
+          );
+        },
+      ),
+    );
+  }
+}
+
 class _AvailableRothCard extends StatelessWidget {
   final SenderWalletData wallet;
 
@@ -1852,62 +1942,416 @@ class _AvailableRothCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return _WalletGlass(
-        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-      Row(
-        children: [
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const Text('Available Roth',
-                    style: TextStyle(
-                        color: Colors.white,
-                        fontSize: 16,
-                        fontWeight: FontWeight.w900)),
-                const SizedBox(height: 3),
-                Text(
-                    wallet.updatedAt == null
-                        ? 'Ready'
-                        : 'Updated ${DateFormat('d MMM, HH:mm').format(wallet.updatedAt!)}',
-                    style: const TextStyle(
-                        color: _WalletColors.muted, fontSize: 12)),
-              ],
-            ),
+    final updated = wallet.updatedAt == null
+        ? 'Updated'
+        : 'Updated ${DateFormat('d MMM, HH:mm').format(wallet.updatedAt!)}';
+    final reduceMotion = MediaQuery.disableAnimationsOf(context);
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(30),
+        boxShadow: [
+          BoxShadow(
+            color: _WalletColors.lightBlue.withValues(alpha: .18),
+            blurRadius: 34,
+            spreadRadius: 1,
+            offset: const Offset(0, 20),
           ),
         ],
       ),
-      const SizedBox(height: 18),
-      Semantics(
-          label: '${wallet.balance.toStringAsFixed(0)} Roth available',
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.end,
-            children: [
-              Text(
-                  wallet.balance
-                      .toStringAsFixed(wallet.balance % 1 == 0 ? 0 : 2),
+      child: Container(
+        constraints: const BoxConstraints(minHeight: 238),
+        padding: const EdgeInsets.fromLTRB(26, 28, 26, 28),
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(30),
+          gradient: LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: [
+              _WalletColors.lightBlue.withValues(alpha: .20),
+              const Color(0xFF101A2F).withValues(alpha: .88),
+              const Color(0xFF071020).withValues(alpha: .96),
+            ],
+          ),
+          border: Border.all(color: Colors.white.withValues(alpha: .16)),
+        ),
+        child: Stack(
+          children: [
+            Positioned(
+              top: 8,
+              right: -42,
+              child: Transform.rotate(
+                angle: -.32,
+                child: Container(
+                  width: 210,
+                  height: 42,
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(999),
+                    gradient: LinearGradient(
+                      colors: [
+                        Colors.white.withValues(alpha: 0),
+                        Colors.white.withValues(alpha: .10),
+                        _WalletColors.lightBlue.withValues(alpha: .08),
+                        Colors.white.withValues(alpha: 0),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ),
+            Positioned(
+              right: 12,
+              bottom: 8,
+              child: Text(
+                'Roth',
+                style: TextStyle(
+                  color: Colors.white.withValues(alpha: .07),
+                  fontSize: 42,
+                  fontWeight: FontWeight.w900,
+                  letterSpacing: 1.5,
+                ),
+              ),
+            ),
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    const Expanded(
+                      child: Text(
+                        'Available Roth',
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontSize: 18,
+                          fontWeight: FontWeight.w900,
+                        ),
+                      ),
+                    ),
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 12,
+                        vertical: 7,
+                      ),
+                      decoration: BoxDecoration(
+                        color: Colors.white.withValues(alpha: .10),
+                        borderRadius: BorderRadius.circular(999),
+                        border: Border.all(
+                          color: Colors.white.withValues(alpha: .15),
+                        ),
+                      ),
+                      child: Text(
+                        updated,
+                        style: const TextStyle(
+                          color: Color(0xFFDDEBFF),
+                          fontSize: 12,
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 18),
+                Semantics(
+                  label: '${wallet.balance.toStringAsFixed(0)} Roth available',
+                  child: TweenAnimationBuilder<double>(
+                    tween: Tween(begin: 0, end: wallet.balance),
+                    duration: reduceMotion
+                        ? Duration.zero
+                        : const Duration(milliseconds: 260),
+                    curve: Curves.easeOutCubic,
+                    builder: (context, value, _) => Row(
+                      crossAxisAlignment: CrossAxisAlignment.end,
+                      children: [
+                        Flexible(
+                          child: Text(
+                            value.toStringAsFixed(
+                              wallet.balance % 1 == 0 ? 0 : 2,
+                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 62,
+                              fontWeight: FontWeight.w900,
+                              height: .94,
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 10),
+                        const Padding(
+                          padding: EdgeInsets.only(bottom: 8),
+                          child: Text(
+                            'ROTH',
+                            style: TextStyle(
+                              color: _WalletColors.lightBlue,
+                              fontSize: 13,
+                              fontWeight: FontWeight.w900,
+                              letterSpacing: 1.1,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 14),
+                const Text(
+                  'Use Roth to reduce the cost of eligible Circum services.',
                   style: TextStyle(
-                      color: Colors.white,
-                      fontSize: 40,
-                      fontWeight: FontWeight.w900)),
-              const SizedBox(width: 8),
-              const Padding(
-                padding: EdgeInsets.only(bottom: 7),
-                child: Text('ROTH',
-                    style: TextStyle(
-                        color: _WalletColors.lightBlue,
-                        fontSize: 12,
+                    color: Color(0xFFD1DDF1),
+                    fontSize: 15,
+                    fontWeight: FontWeight.w600,
+                    height: 1.4,
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _WalletActionGrid extends StatelessWidget {
+  final VoidCallback onRedeem;
+  final VoidCallback onAddCard;
+  final VoidCallback onManagePayments;
+
+  const _WalletActionGrid({
+    required this.onRedeem,
+    required this.onAddCard,
+    required this.onManagePayments,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const _WalletSectionTitle('Wallet Actions'),
+        const SizedBox(height: 10),
+        LayoutBuilder(
+          builder: (context, constraints) {
+            final columns = constraints.maxWidth >= 720
+                ? 3
+                : constraints.maxWidth >= 420
+                    ? 2
+                    : 1;
+            return GridView.count(
+              crossAxisCount: columns,
+              childAspectRatio: columns == 3
+                  ? 1.28
+                  : columns == 2
+                      ? 1.62
+                      : 3.8,
+              crossAxisSpacing: 12,
+              mainAxisSpacing: 12,
+              shrinkWrap: true,
+              physics: const NeverScrollableScrollPhysics(),
+              children: [
+                _WalletActionCard(
+                  icon: Icons.credit_card_outlined,
+                  title: 'Redeem Roth',
+                  detail: 'Apply approved Roth credit.',
+                  onTap: onRedeem,
+                ),
+                _WalletActionCard(
+                  icon: Icons.add_card_rounded,
+                  title: 'Add Card',
+                  detail: 'Save a payment card.',
+                  onTap: onAddCard,
+                ),
+                _WalletActionCard(
+                  icon: Icons.tune_rounded,
+                  title: 'Manage Payments',
+                  detail: 'Cards and checkout.',
+                  onTap: onManagePayments,
+                ),
+              ],
+            );
+          },
+        ),
+      ],
+    );
+  }
+}
+
+class _WalletActionCard extends StatelessWidget {
+  final IconData icon;
+  final String title;
+  final String detail;
+  final VoidCallback onTap;
+
+  const _WalletActionCard({
+    required this.icon,
+    required this.title,
+    required this.detail,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return _WalletGlass(
+      padding: EdgeInsets.zero,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(22),
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Row(
+            children: [
+              Container(
+                width: 42,
+                height: 42,
+                decoration: BoxDecoration(
+                  color: _WalletColors.lightBlue.withValues(alpha: .14),
+                  borderRadius: BorderRadius.circular(16),
+                  border:
+                      Border.all(color: Colors.white.withValues(alpha: .10)),
+                ),
+                child: Icon(icon, color: _WalletColors.lightBlue, size: 23),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      title,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 15,
                         fontWeight: FontWeight.w900,
-                        letterSpacing: 1.1)),
+                      ),
+                    ),
+                    const SizedBox(height: 5),
+                    Text(
+                      detail,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        color: _WalletColors.muted,
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                        height: 1.25,
+                      ),
+                    ),
+                  ],
+                ),
               ),
             ],
-          )),
-      const SizedBox(height: 10),
-      const Text(
-        'Use Roth to reduce the cost of eligible Circum services.',
-        style: TextStyle(color: _WalletColors.muted, height: 1.45),
+          ),
+        ),
       ),
-    ]));
+    );
+  }
+}
+
+class _WalletPaymentItem extends StatelessWidget {
+  final Widget child;
+
+  const _WalletPaymentItem({required this.child});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: .055),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: Colors.white.withValues(alpha: .10)),
+      ),
+      child: child,
+    );
+  }
+}
+
+class _WalletTransactionCard extends StatelessWidget {
+  final SenderWalletTransaction transaction;
+
+  const _WalletTransactionCard(this.transaction);
+
+  @override
+  Widget build(BuildContext context) {
+    final credit = transaction.direction == 'credit';
+    final title = _walletTransactionDisplayTitle(transaction);
+    final color = credit ? const Color(0xFF34D399) : const Color(0xFFF87171);
+    final date = _walletTransactionDate(transaction);
+    final amount =
+        '${credit ? '+' : '-'}${transaction.amount.toStringAsFixed(transaction.amount % 1 == 0 ? 0 : 2)}';
+    return Semantics(
+      label:
+          '${credit ? 'Credit' : 'Debit'} ${transaction.amount} Roth. $title. ${transaction.status}',
+      child: Container(
+        constraints: const BoxConstraints(minHeight: 76),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 13),
+        decoration: BoxDecoration(
+          color: Colors.white.withValues(alpha: .055),
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(color: Colors.white.withValues(alpha: .10)),
+        ),
+        child: Row(
+          children: [
+            Container(
+              width: 42,
+              height: 42,
+              decoration: BoxDecoration(
+                color: color.withValues(alpha: .13),
+                borderRadius: BorderRadius.circular(15),
+              ),
+              child: Icon(
+                _walletTransactionIcon(transaction.type),
+                color: color,
+                size: 21,
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Text(
+                    title,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    date,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      color: _WalletColors.muted,
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(width: 10),
+            Text(
+              '$amount Roth',
+              style: TextStyle(
+                color: color,
+                fontWeight: FontWeight.w900,
+                fontSize: 14,
+              ),
+            ),
+            const SizedBox(width: 5),
+            const Icon(Icons.chevron_right_rounded,
+                color: _WalletColors.muted, size: 20),
+          ],
+        ),
+      ),
+    );
   }
 }
 
@@ -1925,12 +2369,21 @@ class _OfferRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) => InkWell(
         onTap: onTap,
+        borderRadius: BorderRadius.circular(18),
         child: ConstrainedBox(
-          constraints: const BoxConstraints(minHeight: 54),
+          constraints: const BoxConstraints(minHeight: 64),
           child: Row(
             children: [
-              const Icon(Icons.local_offer_outlined,
-                  color: _WalletColors.lightBlue),
+              Container(
+                width: 42,
+                height: 42,
+                decoration: BoxDecoration(
+                  color: _WalletColors.lightBlue.withValues(alpha: .13),
+                  borderRadius: BorderRadius.circular(15),
+                ),
+                child: const Icon(Icons.local_offer_outlined,
+                    color: _WalletColors.lightBlue),
+              ),
               const SizedBox(width: 12),
               Expanded(
                 child: Column(
@@ -1947,7 +2400,15 @@ class _OfferRow extends StatelessWidget {
                   ],
                 ),
               ),
-              const Icon(Icons.chevron_right, color: _WalletColors.muted),
+              FilledButton(
+                onPressed: onTap,
+                style: FilledButton.styleFrom(
+                  backgroundColor: Colors.white,
+                  foregroundColor: const Color(0xFF0B1D48),
+                  minimumSize: const Size(78, 40),
+                ),
+                child: const Text('Invite'),
+              ),
             ],
           ),
         ),
@@ -2302,32 +2763,69 @@ class _WalletLink extends StatelessWidget {
   final String title;
   final String detail;
   final VoidCallback onTap;
-  const _WalletLink(
-      {required this.icon,
-      required this.title,
-      required this.detail,
-      required this.onTap});
+
+  const _WalletLink({
+    required this.icon,
+    required this.title,
+    required this.detail,
+    required this.onTap,
+  });
+
   @override
-  Widget build(BuildContext context) => InkWell(
-      onTap: onTap,
-      child: ConstrainedBox(
-          constraints: const BoxConstraints(minHeight: 58),
-          child: Row(children: [
-            Icon(icon, color: _WalletColors.lightBlue),
-            const SizedBox(width: 12),
-            Expanded(
-                child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                  Text(title,
-                      style: const TextStyle(
-                          color: Colors.white, fontWeight: FontWeight.w800)),
-                  Text(detail,
-                      style: const TextStyle(
-                          color: _WalletColors.muted, fontSize: 11))
-                ])),
-            const Icon(Icons.chevron_right, color: _WalletColors.muted)
-          ])));
+  Widget build(BuildContext context) => _WalletPaymentItem(
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(20),
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(minHeight: 62),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 10),
+              child: Row(
+                children: [
+                  Container(
+                    width: 38,
+                    height: 38,
+                    decoration: BoxDecoration(
+                      color: _WalletColors.lightBlue.withValues(alpha: .12),
+                      borderRadius: BorderRadius.circular(14),
+                    ),
+                    child: Icon(icon, color: _WalletColors.lightBlue, size: 21),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Text(
+                          title,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontWeight: FontWeight.w800,
+                          ),
+                        ),
+                        const SizedBox(height: 3),
+                        Text(
+                          detail,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                            color: _WalletColors.muted,
+                            fontSize: 11,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const Icon(Icons.chevron_right, color: _WalletColors.muted),
+                ],
+              ),
+            ),
+          ),
+        ),
+      );
 }
 
 class _WalletSectionTitle extends StatelessWidget {
@@ -2336,14 +2834,14 @@ class _WalletSectionTitle extends StatelessWidget {
   @override
   Widget build(BuildContext context) => Text(value,
       style: const TextStyle(
-          color: Colors.white, fontSize: 16, fontWeight: FontWeight.w900));
+          color: Colors.white, fontSize: 22, fontWeight: FontWeight.w800));
 }
 
 class _WalletGlass extends StatelessWidget {
   final Widget child;
   final EdgeInsetsGeometry padding;
   const _WalletGlass(
-      {required this.child, this.padding = const EdgeInsets.all(16)});
+      {required this.child, this.padding = const EdgeInsets.all(14)});
   @override
   Widget build(BuildContext context) => AppGlassContainer(
         padding: padding,
@@ -2477,11 +2975,6 @@ String _walletCategory(String value) {
     return 'Delivery payment';
   }
   return value.replaceAll('_', ' ');
-}
-
-String? _walletCategoryBadge(String type) {
-  final value = type.toLowerCase();
-  return _walletTransactionIssuedByCircum(value) ? 'Issued by Circum' : null;
 }
 
 String _walletCreatedBy(SenderWalletTransaction transaction) {

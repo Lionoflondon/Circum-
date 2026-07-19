@@ -2001,345 +2001,381 @@ class _CanonicalSenderHomeState extends State<_CanonicalSenderHome> {
   Widget build(BuildContext context) {
     final activeDelivery = _activeDelivery;
     final scheduledDraft = activeDelivery == null ? _scheduledDraft : null;
+    final heroTitle = activeDelivery != null
+        ? activeDelivery.status
+        : scheduledDraft != null
+            ? 'Continue ${scheduledDraft.title}'
+            : 'Send a parcel';
+    final heroBody = activeDelivery != null
+        ? activeDelivery.route
+        : scheduledDraft != null
+            ? scheduledDraft.route
+            : 'Fast, trusted delivery powered by IRIS and verified riders.';
+    final heroButton = activeDelivery != null
+        ? 'Track delivery'
+        : scheduledDraft != null
+            ? 'Continue'
+            : 'Send now';
     return Container(
       key: const Key('sender-home-canonical-content'),
-      decoration: BoxDecoration(
-        color: _SenderTokens.bg,
-        boxShadow: [
-          BoxShadow(
-            color: _SenderTokens.blue.withValues(alpha: .10),
-            blurRadius: 120,
-            spreadRadius: 40,
-            offset: const Offset(-120, 120),
-          ),
-        ],
+      decoration: const BoxDecoration(
+        gradient: RadialGradient(
+          center: Alignment(-.72, -.92),
+          radius: 1.25,
+          colors: [
+            Color(0x332E7DF7),
+            Color(0x220B1D42),
+            _SenderTokens.bg,
+          ],
+          stops: [0, .42, 1],
+        ),
       ),
-      child: ListView(
-        padding: const EdgeInsets.fromLTRB(22, 18, 22, 30),
-        children: [
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.center,
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final horizontalPadding = constraints.maxWidth < 720 ? 18.0 : 36.0;
+          return ListView(
+            padding: EdgeInsets.fromLTRB(
+              horizontalPadding,
+              constraints.maxWidth < 720 ? 24 : 34,
+              horizontalPadding,
+              26,
+            ),
             children: [
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'Good morning,',
-                      style: GoogleFonts.inter(
-                        color: _SenderTokens.softText,
-                        fontSize: 15,
-                        fontWeight: FontWeight.w600,
-                        height: 1.15,
+              Align(
+                alignment: Alignment.topCenter,
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(maxWidth: 1280),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      _RebuiltSenderHomeHeader(
+                        firstName: _firstName == 'there' ? 'Ayo' : _firstName,
+                        unreadCount: _unreadCount,
+                        hasNotificationError: _notificationsError != null,
+                        onOpenNotifications: widget.onOpenNotifications,
                       ),
-                    ),
-                    const SizedBox(height: 5),
-                    Text(
-                      _firstName == 'there' ? 'Ayo' : _firstName,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: GoogleFonts.dmSerifDisplay(
-                        color: Colors.white,
-                        fontSize: 35,
-                        fontWeight: FontWeight.w800,
-                        height: .96,
+                      const SizedBox(height: 28),
+                      _RebuiltSenderHomeHero(
+                        title: heroTitle,
+                        body: heroBody.isEmpty
+                            ? senderMobileHeroSubtitle
+                            : heroBody,
+                        button: heroButton,
+                        loading: _orders == null && _ordersError == null,
+                        activeDelivery: activeDelivery != null,
+                        walletLabel: 'Wallet',
+                        walletValue: 'View balance',
+                        onPrimaryTap: activeDelivery != null
+                            ? widget.onOpenActivity
+                            : scheduledDraft != null
+                                ? widget.onStartDelivery
+                                : widget.onStartDelivery,
                       ),
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(width: 14),
-              _HomeNotificationBell(
-                unreadCount: _unreadCount,
-                hasError: _notificationsError != null,
-                onTap: widget.onOpenNotifications,
-              ),
-              const SizedBox(width: 11),
-              _SenderAvatar(
-                imageUrl: FirebaseAuth.instance.currentUser?.photoURL,
-              ),
-            ],
-          ),
-          const SizedBox(height: 22),
-          _SenderHomeHero(
-            activeDelivery: activeDelivery,
-            scheduledDraft: scheduledDraft,
-            ordersLoading: _orders == null && _ordersError == null,
-            hasOrderError: _ordersError != null,
-            onPrimaryTap: activeDelivery != null
-                ? widget.onOpenActivity
-                : scheduledDraft != null
-                    ? widget.onStartDelivery
-                    : widget.onStartDelivery,
-          ),
-          const SizedBox(height: 28),
-          const _SenderHomeSectionTitle(title: 'Your Circum'),
-          const SizedBox(height: 15),
-          _SenderQuickServicesRail(
-            summary: _summary,
-            hasError: _summaryError != null,
-            onOpenHealth: widget.onOpenHealth,
-            onOpenBusiness: widget.onOpenBusiness,
-            onOpenGifts: widget.onOpenGifts,
-          ),
-          const SizedBox(height: 18),
-          _SenderWalletMoment(onOpenWallet: widget.onOpenWallet),
-          const SizedBox(height: 16),
-          _SenderHomeActivityMoment(
-            orders: _orders,
-            qualifyingOrders: _qualifyingOrders,
-            error: _ordersError,
-            onRetry: _load,
-            onOpenActivity: widget.onOpenActivity,
-            onStartDelivery: widget.onStartDelivery,
-          ),
-          const SizedBox(height: 16),
-          _SenderHomeTrustMoment(
-            summary: _summary,
-            hasError: _summaryError != null,
-          ),
-          const SizedBox(height: 16),
-          _SenderImportantNotifications(
-            notifications: _importantUnreadNotifications,
-            loading: _notifications == null && _notificationsError == null,
-            hasError: _notificationsError != null,
-            onOpenNotifications: widget.onOpenNotifications,
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _SenderHomeIrisMark extends StatelessWidget {
-  final double size;
-
-  const _SenderHomeIrisMark({required this.size});
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: size,
-      height: size,
-      decoration: BoxDecoration(
-        shape: BoxShape.circle,
-        color: _SenderTokens.midnight.withValues(alpha: .62),
-        border: Border.all(color: Colors.white.withValues(alpha: .20)),
-        boxShadow: [
-          BoxShadow(
-            color: _SenderTokens.iris.withValues(alpha: .22),
-            blurRadius: 28,
-            offset: const Offset(0, 14),
-          ),
-        ],
-      ),
-      child: Icon(
-        Icons.auto_awesome_rounded,
-        color: Colors.white,
-        size: size * .42,
-      ),
-    );
-  }
-}
-
-class _SenderHomeHero extends StatelessWidget {
-  final SenderHomeOrder? activeDelivery;
-  final SenderHomeOrder? scheduledDraft;
-  final bool ordersLoading;
-  final bool hasOrderError;
-  final VoidCallback onPrimaryTap;
-
-  const _SenderHomeHero({
-    required this.activeDelivery,
-    required this.scheduledDraft,
-    required this.ordersLoading,
-    required this.hasOrderError,
-    required this.onPrimaryTap,
-  });
-
-  double get _progress {
-    final status = activeDelivery?.rawStatus;
-    if (status == null) return scheduledDraft == null ? 0 : .42;
-    const progress = {
-      'requested': .12,
-      'broadcasting': .16,
-      'finding_rider': .18,
-      'accepted': .28,
-      'rider_assigned': .34,
-      'rider_en_route': .42,
-      'navigating_to_pickup': .48,
-      'arrived_at_pickup': .55,
-      'pickup_verified': .62,
-      'collected': .70,
-      'in_transit': .76,
-      'navigating_to_dropoff': .82,
-      'arrived_at_dropoff': .88,
-      'pin_required': .94,
-    };
-    return progress[status] ?? .25;
-  }
-
-  String get _eyebrow {
-    if (hasOrderError) return 'Home is online';
-    if (ordersLoading) return 'Checking your deliveries';
-    if (activeDelivery != null) return 'Live delivery';
-    if (scheduledDraft != null) return 'Continue delivery';
-    return 'Ready to send';
-  }
-
-  String get _title {
-    if (activeDelivery != null) return activeDelivery!.status;
-    if (scheduledDraft != null) return 'Continue ${scheduledDraft!.title}';
-    return 'Where are we sending today?';
-  }
-
-  String get _body {
-    if (activeDelivery != null) {
-      final route = activeDelivery!.route;
-      return route.isEmpty
-          ? 'Your rider and live delivery timeline are ready.'
-          : route;
-    }
-    if (scheduledDraft != null) {
-      return scheduledDraft!.route.isEmpty
-          ? 'Your saved delivery is waiting in the send flow.'
-          : scheduledDraft!.route;
-    }
-    return senderMobileHeroSubtitle;
-  }
-
-  String get _button {
-    if (activeDelivery != null) return 'Track Delivery';
-    if (scheduledDraft != null) return 'Continue';
-    return 'Send now';
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return _GlassCard(
-      radius: 32,
-      padding: EdgeInsets.zero,
-      child: InkWell(
-        borderRadius: BorderRadius.circular(32),
-        onTap: onPrimaryTap,
-        child: Container(
-          constraints: const BoxConstraints(minHeight: 318),
-          padding: const EdgeInsets.fromLTRB(25, 28, 25, 25),
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(32),
-            color: const Color(0xFF102A6B).withValues(alpha: .98),
-            border: Border.all(color: Colors.white.withValues(alpha: .24)),
-            boxShadow: [
-              BoxShadow(
-                color: _SenderTokens.blue.withValues(alpha: .38),
-                blurRadius: 42,
-                offset: const Offset(0, 24),
-              ),
-              BoxShadow(
-                color: Colors.black.withValues(alpha: .34),
-                blurRadius: 34,
-                offset: const Offset(0, 18),
-              ),
-            ],
-          ),
-          child: Stack(
-            children: [
-              const Positioned.fill(child: _HeroRouteArt()),
-              Positioned(
-                left: -22,
-                top: -28,
-                child: ImageFiltered(
-                  imageFilter: ImageFilter.blur(sigmaX: 24, sigmaY: 24),
-                  child: Container(
-                    width: 136,
-                    height: 136,
-                    decoration: BoxDecoration(
-                      shape: BoxShape.circle,
-                      color: Colors.white.withValues(alpha: .10),
-                    ),
-                  ),
-                ),
-              ),
-              Positioned(
-                right: -14,
-                top: 2,
-                child: Container(
-                  width: 128,
-                  height: 128,
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    color: Colors.white.withValues(alpha: .09),
-                    boxShadow: [
-                      BoxShadow(
-                        color: _SenderTokens.iris.withValues(alpha: .28),
-                        blurRadius: 42,
-                      ),
-                    ],
-                  ),
-                  child: const Center(child: _SenderHomeIrisMark(size: 74)),
-                ),
-              ),
-              Positioned.fill(
-                right: 98,
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  mainAxisAlignment: MainAxisAlignment.end,
-                  children: [
-                    _SenderStatusPill(
-                      label: _eyebrow,
-                      color: activeDelivery != null
-                          ? _SenderTokens.health
-                          : _SenderTokens.blue,
-                    ),
-                    const SizedBox(height: 18),
-                    Text(
-                      _title,
-                      style: TextStyle(
-                        color: Colors.white,
-                        fontSize: activeDelivery == null ? 33 : 29,
-                        fontWeight: FontWeight.w900,
-                        height: 1.02,
-                        shadows: [
-                          Shadow(
-                            color: Colors.black.withValues(alpha: .22),
-                            blurRadius: 14,
-                            offset: const Offset(0, 4),
+                      if (activeDelivery != null) ...[
+                        const SizedBox(height: 18),
+                        _RebuiltSenderActiveDeliveryCard(
+                          delivery: activeDelivery,
+                          onTap: widget.onOpenActivity,
+                        ),
+                      ],
+                      const SizedBox(height: 38),
+                      const _RebuiltSenderSectionTitle('Your Circum'),
+                      const SizedBox(height: 18),
+                      _RebuiltSenderServicesGrid(
+                        children: [
+                          _RebuiltSenderServiceCard(
+                            title: 'Health+',
+                            status: _summaryError != null
+                                ? 'Unable to refresh'
+                                : _summary?.healthProfileExists == true
+                                    ? 'Profile ready'
+                                    : 'Ready',
+                            description:
+                                'Medicine, testing and Health+ deliveries.',
+                            icon: Icons.medical_services_outlined,
+                            accent: _SenderTokens.health,
+                            onTap: widget.onOpenHealth,
+                          ),
+                          _RebuiltSenderServiceCard(
+                            title: 'Business',
+                            status: _summaryError != null
+                                ? 'Unable to refresh'
+                                : (_summary?.businessAccountCount ?? 0) > 0
+                                    ? '${_summary!.businessAccountCount} account'
+                                    : 'No account yet',
+                            description: 'Manage deliveries and invoices.',
+                            icon: Icons.business_center_outlined,
+                            accent: _SenderTokens.business,
+                            onTap: widget.onOpenBusiness,
+                          ),
+                          _RebuiltSenderServiceCard(
+                            title: 'Gifts',
+                            status: _summaryError != null
+                                ? 'Unable to refresh'
+                                : (_summary?.giftCount ?? 0) > 0
+                                    ? '${_summary!.giftCount} gift'
+                                    : 'Start gifting',
+                            description:
+                                'Thoughtful gifting powered by Circum.',
+                            icon: Icons.card_giftcard_rounded,
+                            accent: _SenderTokens.gifts,
+                            onTap: widget.onOpenGifts,
                           ),
                         ],
                       ),
-                    ),
-                    const SizedBox(height: 12),
-                    Text(
-                      _body,
-                      maxLines: 3,
-                      overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
-                        color: Color(0xFFD8E7FF),
-                        fontSize: 14,
-                        height: 1.35,
-                        fontWeight: FontWeight.w600,
+                      const SizedBox(height: 38),
+                      const _RebuiltSenderSectionTitle('Recent Activity'),
+                      const SizedBox(height: 16),
+                      _RebuiltSenderRecentActivity(
+                        orders: _orders,
+                        qualifyingOrders: _qualifyingOrders,
+                        error: _ordersError,
+                        onRetry: _load,
+                        onOpenActivity: widget.onOpenActivity,
+                        onStartDelivery: widget.onStartDelivery,
                       ),
+                      const SizedBox(height: 20),
+                      _RebuiltSenderNotificationStrip(
+                        notifications: _importantUnreadNotifications,
+                        loading: _notifications == null &&
+                            _notificationsError == null,
+                        hasError: _notificationsError != null,
+                        onOpenNotifications: widget.onOpenNotifications,
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ],
+          );
+        },
+      ),
+    );
+  }
+}
+
+class _RebuiltSenderHomeHeader extends StatelessWidget {
+  final String firstName;
+  final int unreadCount;
+  final bool hasNotificationError;
+  final VoidCallback onOpenNotifications;
+
+  const _RebuiltSenderHomeHeader({
+    required this.firstName,
+    required this.unreadCount,
+    required this.hasNotificationError,
+    required this.onOpenNotifications,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return TweenAnimationBuilder<double>(
+      tween: Tween(begin: 0, end: 1),
+      duration: const Duration(milliseconds: 240),
+      curve: Curves.easeOutCubic,
+      builder: (context, value, child) => Opacity(
+        opacity: value,
+        child: Transform.translate(
+          offset: Offset(0, (1 - value) * 8),
+          child: child,
+        ),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.center,
+        children: [
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'Good morning,',
+                  style: TextStyle(
+                    color: Color(0xB3FFFFFF),
+                    fontSize: 18,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+                const SizedBox(height: 6),
+                Text(
+                  firstName,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 38,
+                    fontWeight: FontWeight.w900,
+                    height: 1,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 16),
+          _HomeNotificationBell(
+            unreadCount: unreadCount,
+            hasError: hasNotificationError,
+            onTap: onOpenNotifications,
+          ),
+          const SizedBox(width: 12),
+          _SenderAvatar(imageUrl: FirebaseAuth.instance.currentUser?.photoURL),
+        ],
+      ),
+    );
+  }
+}
+
+class _RebuiltSenderHomeHero extends StatelessWidget {
+  final String title;
+  final String body;
+  final String button;
+  final bool loading;
+  final bool activeDelivery;
+  final String walletLabel;
+  final String walletValue;
+  final VoidCallback onPrimaryTap;
+
+  const _RebuiltSenderHomeHero({
+    required this.title,
+    required this.body,
+    required this.button,
+    required this.loading,
+    required this.activeDelivery,
+    required this.walletLabel,
+    required this.walletValue,
+    required this.onPrimaryTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return TweenAnimationBuilder<double>(
+      tween: Tween(begin: 0, end: 1),
+      duration: const Duration(milliseconds: 280),
+      curve: Curves.easeOutCubic,
+      builder: (context, value, child) => Opacity(
+        opacity: value,
+        child: Transform.translate(
+          offset: Offset(0, (1 - value) * 16),
+          child: child,
+        ),
+      ),
+      child: DecoratedBox(
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(34),
+          boxShadow: [
+            BoxShadow(
+              color: _SenderTokens.blue.withValues(alpha: .30),
+              blurRadius: 54,
+              spreadRadius: 3,
+              offset: const Offset(0, 26),
+            ),
+          ],
+        ),
+        child: Material(
+          color: Colors.transparent,
+          borderRadius: BorderRadius.circular(34),
+          child: InkWell(
+            borderRadius: BorderRadius.circular(34),
+            onTap: onPrimaryTap,
+            child: Container(
+              constraints: const BoxConstraints(minHeight: 292),
+              padding: const EdgeInsets.all(32),
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(34),
+                gradient: const LinearGradient(
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                  colors: [
+                    Color(0xFF1E5BBA),
+                    Color(0xFF123A77),
+                    Color(0xFF0B1D48),
+                  ],
+                ),
+                border: Border.all(color: Colors.white.withValues(alpha: .22)),
+              ),
+              child: Stack(
+                children: [
+                  const Positioned.fill(child: _RebuiltHeroLineArt()),
+                  const Positioned(
+                    right: 38,
+                    bottom: 36,
+                    child: _RebuiltHeroParticles(),
+                  ),
+                  Positioned(
+                    top: 0,
+                    right: 0,
+                    child: _RebuiltWalletChip(
+                      label: walletLabel,
+                      value: walletValue,
                     ),
-                    if (activeDelivery != null || scheduledDraft != null) ...[
+                  ),
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisAlignment: MainAxisAlignment.end,
+                    children: [
+                      Text(
+                        loading
+                            ? 'Checking your deliveries'
+                            : activeDelivery
+                                ? 'Live delivery'
+                                : 'Ready when you are',
+                        style: const TextStyle(
+                          color: Color(0xFFD5E8FF),
+                          fontSize: 14,
+                          fontWeight: FontWeight.w900,
+                          letterSpacing: .45,
+                        ),
+                      ),
                       const SizedBox(height: 18),
-                      ClipRRect(
-                        borderRadius: BorderRadius.circular(999),
-                        child: LinearProgressIndicator(
-                          value: _progress,
-                          minHeight: 7,
-                          backgroundColor: Colors.white.withValues(alpha: .12),
-                          valueColor: const AlwaysStoppedAnimation<Color>(
-                            _SenderTokens.health,
+                      ConstrainedBox(
+                        constraints: const BoxConstraints(maxWidth: 680),
+                        child: Text(
+                          title,
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 42,
+                            fontWeight: FontWeight.w900,
+                            height: 1.02,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                      ConstrainedBox(
+                        constraints: const BoxConstraints(maxWidth: 620),
+                        child: Text(
+                          body,
+                          maxLines: 3,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                            color: Color(0xFFE3F0FF),
+                            fontSize: 16,
+                            fontWeight: FontWeight.w700,
+                            height: 1.35,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 26),
+                      FilledButton.icon(
+                        onPressed: onPrimaryTap,
+                        icon: const Icon(Icons.arrow_forward_rounded),
+                        label: Text(button),
+                        style: FilledButton.styleFrom(
+                          backgroundColor: Colors.white,
+                          foregroundColor: const Color(0xFF123A77),
+                          minimumSize: const Size(152, 50),
+                          padding: const EdgeInsets.symmetric(horizontal: 24),
+                          textStyle: const TextStyle(
+                            fontWeight: FontWeight.w900,
+                            fontSize: 16,
                           ),
                         ),
                       ),
                     ],
-                    const SizedBox(height: 22),
-                    _SenderPrimaryHomeButton(label: _button),
-                  ],
-                ),
+                  ),
+                ],
               ),
-            ],
+            ),
           ),
         ),
       ),
@@ -2347,301 +2383,352 @@ class _SenderHomeHero extends StatelessWidget {
   }
 }
 
-class _SenderPrimaryHomeButton extends StatelessWidget {
+class _RebuiltWalletChip extends StatelessWidget {
   final String label;
+  final String value;
 
-  const _SenderPrimaryHomeButton({required this.label});
+  const _RebuiltWalletChip({required this.label, required this.value});
 
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 13),
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
       decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(999),
-        boxShadow: [
-          BoxShadow(
-            color: _SenderTokens.blue.withValues(alpha: .32),
-            blurRadius: 18,
-          ),
-        ],
+        color: Colors.white.withValues(alpha: .12),
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: Colors.white.withValues(alpha: .20)),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Text(
-            label,
-            style: const TextStyle(
-              color: _SenderTokens.bg,
-              fontWeight: FontWeight.w900,
-            ),
-          ),
-          const SizedBox(width: 8),
           const Icon(
-            Icons.arrow_forward_rounded,
-            color: _SenderTokens.blue,
+            Icons.account_balance_wallet_outlined,
+            color: Colors.white,
             size: 18,
           ),
-        ],
-      ),
-    );
-  }
-}
-
-class _SenderStatusPill extends StatelessWidget {
-  final String label;
-  final Color color;
-
-  const _SenderStatusPill({required this.label, required this.color});
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-      decoration: BoxDecoration(
-        color: color.withValues(alpha: .14),
-        borderRadius: BorderRadius.circular(999),
-        border: Border.all(color: color.withValues(alpha: .38)),
-      ),
-      child: Text(
-        label,
-        style: TextStyle(
-          color: color,
-          fontSize: 12,
-          fontWeight: FontWeight.w900,
-        ),
-      ),
-    );
-  }
-}
-
-class _SenderHomeSectionTitle extends StatelessWidget {
-  final String title;
-  final String? action;
-  final VoidCallback? onTap;
-
-  const _SenderHomeSectionTitle({
-    required this.title,
-    this.action,
-    this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Row(
-      children: [
-        Expanded(
-          child: Text(
-            title,
-            style: const TextStyle(
-              color: Colors.white,
-              fontSize: 18,
-              fontWeight: FontWeight.w900,
-            ),
-          ),
-        ),
-        if (action != null)
-          TextButton(
-            onPressed: onTap,
-            child: Text(action!),
-          ),
-      ],
-    );
-  }
-}
-
-class _SenderQuickServicesRail extends StatelessWidget {
-  final SenderHomeSummary? summary;
-  final bool hasError;
-  final VoidCallback onOpenHealth;
-  final VoidCallback onOpenBusiness;
-  final VoidCallback onOpenGifts;
-
-  const _SenderQuickServicesRail({
-    required this.summary,
-    required this.hasError,
-    required this.onOpenHealth,
-    required this.onOpenBusiness,
-    required this.onOpenGifts,
-  });
-
-  String _detail(String ready, String empty) {
-    if (hasError) return 'Unavailable right now';
-    if (summary == null) return 'Loading...';
-    return ready.isEmpty ? empty : ready;
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final gifts = summary?.giftCount ?? 0;
-    final services = [
-      _SenderQuickService(
-        title: 'Health+',
-        subtitle: _detail(
-          summary?.healthProfileExists == true ? 'Profile ready' : '',
-          'Medical delivery',
-        ),
-        icon: Icons.health_and_safety_rounded,
-        accent: _SenderTokens.health,
-        onTap: onOpenHealth,
-      ),
-      _SenderQuickService(
-        title: 'Business',
-        subtitle: _detail(
-          (summary?.businessAccountCount ?? 0) > 0
-              ? '${summary!.businessAccountCount} account${summary!.businessAccountCount == 1 ? '' : 's'}'
-              : '',
-          'Team deliveries',
-        ),
-        icon: Icons.business_center_rounded,
-        accent: _SenderTokens.business,
-        onTap: onOpenBusiness,
-      ),
-      _SenderQuickService(
-        title: 'Gifts',
-        subtitle: hasError
-            ? 'Unavailable right now'
-            : summary == null
-                ? 'Loading...'
-                : gifts == 0
-                    ? 'Thoughtful gifts'
-                    : '$gifts active gift${gifts == 1 ? '' : 's'}',
-        icon: Icons.card_giftcard_rounded,
-        accent: _SenderTokens.gifts,
-        onTap: onOpenGifts,
-      ),
-    ];
-    return SizedBox(
-      height: 156,
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          for (var i = 0; i < services.length; i++) ...[
-            Expanded(child: _SenderQuickServiceCard(service: services[i])),
-            if (i != services.length - 1) const SizedBox(width: 11),
-          ],
-        ],
-      ),
-    );
-  }
-}
-
-class _SenderQuickService {
-  final String title;
-  final String subtitle;
-  final IconData icon;
-  final Color accent;
-  final VoidCallback onTap;
-
-  const _SenderQuickService({
-    required this.title,
-    required this.subtitle,
-    required this.icon,
-    required this.accent,
-    required this.onTap,
-  });
-}
-
-class _SenderQuickServiceCard extends StatefulWidget {
-  final _SenderQuickService service;
-
-  const _SenderQuickServiceCard({required this.service});
-
-  @override
-  State<_SenderQuickServiceCard> createState() =>
-      _SenderQuickServiceCardState();
-}
-
-class _SenderQuickServiceCardState extends State<_SenderQuickServiceCard> {
-  var _pressed = false;
-
-  @override
-  Widget build(BuildContext context) {
-    return GestureDetector(
-      onTapDown: (_) => setState(() => _pressed = true),
-      onTapCancel: () => setState(() => _pressed = false),
-      onTapUp: (_) {
-        setState(() => _pressed = false);
-        widget.service.onTap();
-      },
-      child: AnimatedScale(
-        duration: const Duration(milliseconds: 160),
-        scale: _pressed ? .98 : 1,
-        child: _GlassCard(
-          radius: 24,
-          padding: const EdgeInsets.all(14),
-          child: Column(
+          const SizedBox(width: 8),
+          Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              widget.service.title == 'Gifts'
-                  ? const SenderGiftsIcon()
-                  : _ServiceIcon(
-                      icon: widget.service.icon,
-                      accent: widget.service.accent,
-                    ),
-              const Spacer(),
               Text(
-                widget.service.title,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
+                label,
+                style: const TextStyle(
+                  color: Color(0xDFFFFFFF),
+                  fontSize: 11,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+              Text(
+                value,
                 style: const TextStyle(
                   color: Colors.white,
-                  fontSize: 15.5,
+                  fontSize: 13,
                   fontWeight: FontWeight.w900,
-                ),
-              ),
-              const SizedBox(height: 5),
-              Text(
-                widget.service.subtitle,
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
-                style: const TextStyle(
-                  color: _SenderTokens.muted,
-                  fontSize: 11.5,
-                  height: 1.18,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-              const Spacer(),
-              Align(
-                alignment: Alignment.centerRight,
-                child: Icon(
-                  Icons.arrow_forward_rounded,
-                  color: widget.service.accent,
-                  size: 18,
                 ),
               ),
             ],
           ),
+        ],
+      ),
+    );
+  }
+}
+
+class _RebuiltHeroLineArt extends StatelessWidget {
+  const _RebuiltHeroLineArt();
+
+  @override
+  Widget build(BuildContext context) {
+    return Opacity(
+      opacity: .20,
+      child: CustomPaint(
+        painter: _RebuiltHeroLinePainter(),
+        child: const SizedBox.expand(),
+      ),
+    );
+  }
+}
+
+class _RebuiltHeroLinePainter extends CustomPainter {
+  @override
+  void paint(Canvas canvas, Size size) {
+    final paint = Paint()
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 2
+      ..color = Colors.white.withValues(alpha: .46);
+    final path = Path()
+      ..moveTo(size.width * .10, size.height * .74)
+      ..cubicTo(
+        size.width * .36,
+        size.height * .52,
+        size.width * .52,
+        size.height * .86,
+        size.width * .82,
+        size.height * .36,
+      );
+    canvas.drawPath(path, paint);
+    canvas.drawCircle(
+      Offset(size.width * .82, size.height * .36),
+      6,
+      Paint()..color = Colors.white.withValues(alpha: .62),
+    );
+  }
+
+  @override
+  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
+}
+
+class _RebuiltHeroParticles extends StatelessWidget {
+  const _RebuiltHeroParticles();
+
+  @override
+  Widget build(BuildContext context) {
+    return const SizedBox(
+      width: 180,
+      height: 120,
+      child: Stack(
+        children: [
+          Positioned(
+            left: 18,
+            top: 12,
+            child: _RebuiltParticle(size: 5, opacity: .60),
+          ),
+          Positioned(
+            right: 32,
+            top: 20,
+            child: _RebuiltParticle(size: 8, opacity: .42),
+          ),
+          Positioned(
+            left: 78,
+            bottom: 22,
+            child: _RebuiltParticle(size: 6, opacity: .52),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _RebuiltParticle extends StatelessWidget {
+  final double size;
+  final double opacity;
+
+  const _RebuiltParticle({required this.size, required this.opacity});
+
+  @override
+  Widget build(BuildContext context) {
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: opacity),
+        shape: BoxShape.circle,
+        boxShadow: [
+          BoxShadow(
+            color: _SenderTokens.iris.withValues(alpha: opacity),
+            blurRadius: 14,
+          ),
+        ],
+      ),
+      child: SizedBox(width: size, height: size),
+    );
+  }
+}
+
+class _RebuiltSenderServicesGrid extends StatelessWidget {
+  final List<Widget> children;
+
+  const _RebuiltSenderServicesGrid({required this.children});
+
+  @override
+  Widget build(BuildContext context) {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        if (constraints.maxWidth < 760) {
+          return Column(
+            children: [
+              for (var i = 0; i < children.length; i++) ...[
+                children[i],
+                if (i != children.length - 1) const SizedBox(height: 12),
+              ],
+            ],
+          );
+        }
+        return Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            for (var i = 0; i < children.length; i++) ...[
+              Expanded(child: children[i]),
+              if (i != children.length - 1) const SizedBox(width: 18),
+            ],
+          ],
+        );
+      },
+    );
+  }
+}
+
+class _RebuiltSenderActiveDeliveryCard extends StatelessWidget {
+  final SenderHomeOrder delivery;
+  final VoidCallback onTap;
+
+  const _RebuiltSenderActiveDeliveryCard({
+    required this.delivery,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return _RebuiltSenderPanel(
+      onTap: onTap,
+      child: Row(
+        children: [
+          const Icon(Icons.route_rounded, color: Color(0xFF7AB8FF), size: 28),
+          const SizedBox(width: 14),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  delivery.status,
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 16,
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  delivery.route.isEmpty ? delivery.title : delivery.route,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    color: Color(0xFFB8C6DD),
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const Icon(Icons.chevron_right_rounded, color: Colors.white70),
+        ],
+      ),
+    );
+  }
+}
+
+class _RebuiltSenderSectionTitle extends StatelessWidget {
+  final String title;
+
+  const _RebuiltSenderSectionTitle(this.title);
+
+  @override
+  Widget build(BuildContext context) {
+    return Text(
+      title,
+      style: const TextStyle(
+        color: Colors.white,
+        fontSize: 24,
+        fontWeight: FontWeight.w800,
+      ),
+    );
+  }
+}
+
+class _RebuiltSenderServiceCard extends StatelessWidget {
+  final String title;
+  final String status;
+  final String description;
+  final IconData icon;
+  final Color accent;
+  final VoidCallback onTap;
+
+  const _RebuiltSenderServiceCard({
+    required this.title,
+    required this.status,
+    required this.description,
+    required this.icon,
+    required this.accent,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return _RebuiltSenderPanel(
+      onTap: onTap,
+      padding: const EdgeInsets.all(20),
+      child: SizedBox(
+        height: 184,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Container(
+                  width: 48,
+                  height: 48,
+                  decoration: BoxDecoration(
+                    color: accent.withValues(alpha: .16),
+                    borderRadius: BorderRadius.circular(18),
+                    border: Border.all(color: accent.withValues(alpha: .24)),
+                    boxShadow: [
+                      BoxShadow(
+                        color: accent.withValues(alpha: .18),
+                        blurRadius: 22,
+                      ),
+                    ],
+                  ),
+                  child: Icon(icon, color: accent, size: 25),
+                ),
+                const Spacer(),
+                const Icon(
+                  Icons.chevron_right_rounded,
+                  color: Colors.white70,
+                  size: 25,
+                ),
+              ],
+            ),
+            const Spacer(),
+            Text(
+              title,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(
+                color: Colors.white,
+                fontSize: 20,
+                fontWeight: FontWeight.w900,
+              ),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              status,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                color: accent,
+                fontSize: 13,
+                fontWeight: FontWeight.w900,
+              ),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              description,
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(
+                color: Color(0xFFC0CEE5),
+                fontSize: 13,
+                fontWeight: FontWeight.w600,
+                height: 1.25,
+              ),
+            ),
+          ],
         ),
       ),
     );
   }
 }
 
-class _SenderWalletMoment extends StatelessWidget {
-  final VoidCallback onOpenWallet;
-
-  const _SenderWalletMoment({required this.onOpenWallet});
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        _SenderHomeSectionTitle(
-          title: 'Wallet',
-          action: 'Manage Wallet',
-          onTap: onOpenWallet,
-        ),
-        const SizedBox(height: 10),
-        SenderWalletHomeSummary(onOpenWallet: onOpenWallet),
-      ],
-    );
-  }
-}
-
-class _SenderHomeActivityMoment extends StatelessWidget {
+class _RebuiltSenderRecentActivity extends StatelessWidget {
   final List<SenderHomeOrder>? orders;
   final List<SenderHomeOrder> qualifyingOrders;
   final String? error;
@@ -2649,7 +2736,7 @@ class _SenderHomeActivityMoment extends StatelessWidget {
   final VoidCallback onOpenActivity;
   final VoidCallback onStartDelivery;
 
-  const _SenderHomeActivityMoment({
+  const _RebuiltSenderRecentActivity({
     required this.orders,
     required this.qualifyingOrders,
     required this.error,
@@ -2660,151 +2747,149 @@ class _SenderHomeActivityMoment extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return _GlassCard(
-      radius: 26,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          _SenderHomeSectionTitle(
-            title: 'Activity',
-            action: 'Open',
-            onTap: onOpenActivity,
-          ),
-          const SizedBox(height: 4),
-          const Text(
-            'Recent deliveries, gifts and Health+ movement.',
-            style: TextStyle(color: _SenderTokens.muted, height: 1.35),
-          ),
-          const SizedBox(height: 14),
-          if (error != null)
-            _HomeInlineState(
-              message: _RecentOrdersCard._isOffline(error!)
-                  ? 'Activity is unavailable offline.'
-                  : 'Activity could not load.',
-              action: onRetry,
-            )
-          else if (orders == null)
-            const _HomeInlineState(message: 'Loading activity...')
-          else if (qualifyingOrders.isEmpty)
-            _HomeInlineState(
-              message: 'No recent activity yet.',
-              action: onStartDelivery,
-              actionLabel: 'Send Parcel',
-            )
-          else
-            ...qualifyingOrders.take(3).map(
-                  (order) => _OrderLine(
-                    title: order.title,
-                    subtitle:
-                        order.route.isEmpty ? 'Circum delivery' : order.route,
-                    status: order.status,
-                    icon: Icons.local_shipping_outlined,
-                    accent: _SenderTokens.business,
-                  ),
-                ),
-        ],
-      ),
-    );
-  }
-}
-
-class _SenderHomeTrustMoment extends StatelessWidget {
-  final SenderHomeSummary? summary;
-  final bool hasError;
-
-  const _SenderHomeTrustMoment({
-    required this.summary,
-    required this.hasError,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final tier = summary == null
-        ? 'Loading'
-        : (SenderTrustPolicy.tierLabels[summary!.trustTier] ?? 'New Sender')
-            .replaceAll(' Sender', '');
-    final points = summary?.trustPoints ?? 0;
-    final progress = _trustProgress(summary);
-    final next = summary?.nextTrustTier == null
-        ? 'Top tier'
-        : '${summary!.pointsToNextTier} points to ${(SenderTrustPolicy.tierLabels[summary!.nextTrustTier] ?? '').replaceAll(' Sender', '')}';
-    return _GlassCard(
-      radius: 26,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          _SenderHomeSectionTitle(title: 'Trust'),
-          const SizedBox(height: 8),
-          Row(
-            children: [
-              _ServiceIcon(
-                icon: Icons.verified_user_outlined,
-                accent: _SenderTokens.health,
-              ),
-              const SizedBox(width: 14),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      hasError ? 'Trust unavailable' : tier,
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontSize: 20,
-                        fontWeight: FontWeight.w900,
-                      ),
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      summary == null && !hasError
-                          ? 'Loading trust progress...'
-                          : '$points Trust Points - $next',
-                      style: const TextStyle(
-                        color: _SenderTokens.muted,
-                        height: 1.3,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 16),
-          ClipRRect(
-            borderRadius: BorderRadius.circular(999),
-            child: LinearProgressIndicator(
-              value: hasError ? 0 : progress,
-              minHeight: 7,
-              backgroundColor: Colors.white.withValues(alpha: .10),
-              valueColor: const AlwaysStoppedAnimation<Color>(
-                _SenderTokens.health,
+    if (error != null) {
+      return _RebuiltSenderPanel(
+        child: Row(
+          children: [
+            const Expanded(
+              child: Text(
+                'Activity is taking longer than usual.',
+                style:
+                    TextStyle(color: Colors.white, fontWeight: FontWeight.w800),
               ),
             ),
+            TextButton(onPressed: onRetry, child: const Text('Retry')),
+          ],
+        ),
+      );
+    }
+    if (orders == null) {
+      return const _RebuiltSenderPanel(
+        child: Text(
+          'Loading recent activity...',
+          style:
+              TextStyle(color: Color(0xFFB8C6DD), fontWeight: FontWeight.w700),
+        ),
+      );
+    }
+    if (qualifyingOrders.isEmpty) {
+      return _RebuiltSenderPanel(
+        onTap: onStartDelivery,
+        padding: const EdgeInsets.all(24),
+        child: Row(
+          children: [
+            Container(
+              width: 58,
+              height: 58,
+              decoration: BoxDecoration(
+                color: _SenderTokens.blue.withValues(alpha: .14),
+                borderRadius: BorderRadius.circular(20),
+                border: Border.all(
+                  color: _SenderTokens.lightBlue.withValues(alpha: .25),
+                ),
+              ),
+              child: const Icon(
+                Icons.inventory_2_outlined,
+                color: _SenderTokens.lightBlue,
+                size: 28,
+              ),
+            ),
+            const SizedBox(width: 16),
+            const Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'No deliveries yet',
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontSize: 17,
+                      fontWeight: FontWeight.w900,
+                    ),
+                  ),
+                  SizedBox(height: 5),
+                  Text(
+                    'Your completed deliveries will appear here.',
+                    style: TextStyle(
+                      color: Color(0xFFB8C6DD),
+                      fontSize: 13,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(width: 12),
+            FilledButton(
+              onPressed: onStartDelivery,
+              style: FilledButton.styleFrom(
+                backgroundColor: Colors.white,
+                foregroundColor: _SenderTokens.midnight,
+              ),
+              child: const Text('Send a parcel'),
+            ),
+          ],
+        ),
+      );
+    }
+    final recent = qualifyingOrders.take(3).toList(growable: false);
+    return Column(
+      children: [
+        for (final order in recent) ...[
+          _RebuiltSenderPanel(
+            onTap: onOpenActivity,
+            child: Row(
+              children: [
+                const Icon(
+                  Icons.local_shipping_outlined,
+                  color: Color(0xFF7AB8FF),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        order.title,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontWeight: FontWeight.w900,
+                        ),
+                      ),
+                      const SizedBox(height: 3),
+                      Text(
+                        order.route.isEmpty ? order.status : order.route,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          color: Color(0xFFB8C6DD),
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const Icon(Icons.chevron_right_rounded, color: Colors.white60),
+              ],
+            ),
           ),
+          const SizedBox(height: 10),
         ],
-      ),
+      ],
     );
-  }
-
-  double _trustProgress(SenderHomeSummary? summary) {
-    if (summary == null) return 0;
-    final next = summary.nextTrustTier;
-    if (next == null) return 1;
-    final current = SenderTrustPolicy.thresholds[summary.trustTier] ?? 0;
-    final target = SenderTrustPolicy.thresholds[next] ?? summary.trustPoints;
-    final range = target - current;
-    if (range <= 0) return 1;
-    return ((summary.trustPoints - current) / range).clamp(0, 1).toDouble();
   }
 }
 
-class _SenderImportantNotifications extends StatelessWidget {
+class _RebuiltSenderNotificationStrip extends StatelessWidget {
   final List<SenderHomeNotification> notifications;
   final bool loading;
   final bool hasError;
   final VoidCallback onOpenNotifications;
 
-  const _SenderImportantNotifications({
+  const _RebuiltSenderNotificationStrip({
     required this.notifications,
     required this.loading,
     required this.hasError,
@@ -2813,73 +2898,102 @@ class _SenderImportantNotifications extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return _GlassCard(
-      radius: 26,
-      child: InkWell(
-        borderRadius: BorderRadius.circular(26),
-        onTap: onOpenNotifications,
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            _SenderHomeSectionTitle(
-              title: 'Important updates',
-              action: 'Notifications',
-              onTap: onOpenNotifications,
-            ),
-            const SizedBox(height: 10),
-            if (hasError)
-              const _HomeInlineState(message: 'Notifications are unavailable.')
-            else if (loading)
-              const _HomeInlineState(message: 'Checking notifications...')
-            else if (notifications.isEmpty)
-              const Text(
-                'No important unread updates.',
-                style: TextStyle(color: _SenderTokens.muted),
-              )
-            else
-              ...notifications.map(
-                (item) => Padding(
-                  padding: const EdgeInsets.only(bottom: 10),
-                  child: Row(
-                    children: [
-                      _ServiceIcon(
-                        icon: Icons.notifications_active_outlined,
-                        accent: _SenderTokens.blue,
-                      ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              item.title,
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: const TextStyle(
-                                color: Colors.white,
-                                fontWeight: FontWeight.w900,
-                              ),
-                            ),
-                            if (item.body.isNotEmpty) ...[
-                              const SizedBox(height: 3),
-                              Text(
-                                item.body,
-                                maxLines: 2,
-                                overflow: TextOverflow.ellipsis,
-                                style: const TextStyle(
-                                  color: _SenderTokens.muted,
-                                  height: 1.25,
-                                ),
-                              ),
-                            ],
-                          ],
-                        ),
-                      ),
-                    ],
+    if (hasError || loading || notifications.isEmpty) {
+      return const SizedBox.shrink();
+    }
+    final item = notifications.first;
+    return _RebuiltSenderPanel(
+      onTap: onOpenNotifications,
+      child: Row(
+        children: [
+          const Icon(Icons.notifications_active_outlined,
+              color: Color(0xFF7AB8FF)),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  item.title,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontWeight: FontWeight.w900,
                   ),
                 ),
-              ),
+                const SizedBox(height: 3),
+                Text(
+                  item.body,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    color: Color(0xFFB8C6DD),
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _RebuiltSenderPanel extends StatefulWidget {
+  final Widget child;
+  final EdgeInsetsGeometry padding;
+  final VoidCallback? onTap;
+
+  const _RebuiltSenderPanel({
+    required this.child,
+    this.padding = const EdgeInsets.all(16),
+    this.onTap,
+  });
+
+  @override
+  State<_RebuiltSenderPanel> createState() => _RebuiltSenderPanelState();
+}
+
+class _RebuiltSenderPanelState extends State<_RebuiltSenderPanel> {
+  bool _hovered = false;
+
+  @override
+  Widget build(BuildContext context) {
+    return MouseRegion(
+      onEnter: (_) => setState(() => _hovered = true),
+      onExit: (_) => setState(() => _hovered = false),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 220),
+        curve: Curves.easeOutCubic,
+        transform: Matrix4.translationValues(0, _hovered ? -3 : 0, 0),
+        decoration: BoxDecoration(
+          color: const Color(0xD4101A2E),
+          borderRadius: BorderRadius.circular(24),
+          border: Border.all(
+            color: Colors.white.withValues(alpha: _hovered ? .18 : .10),
+          ),
+          boxShadow: [
+            BoxShadow(
+              color: _SenderTokens.blue.withValues(alpha: _hovered ? .18 : .08),
+              blurRadius: _hovered ? 34 : 20,
+              offset: const Offset(0, 16),
+            ),
           ],
+        ),
+        child: Material(
+          color: Colors.transparent,
+          borderRadius: BorderRadius.circular(24),
+          child: InkWell(
+            borderRadius: BorderRadius.circular(24),
+            onTap: widget.onTap,
+            child: Padding(
+              padding: widget.padding,
+              child: widget.child,
+            ),
+          ),
         ),
       ),
     );
