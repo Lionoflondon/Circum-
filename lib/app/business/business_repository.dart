@@ -240,7 +240,8 @@ class FirebaseBusinessRepository implements BusinessRepository {
 
   @override
   Future<void> saveAccount(BusinessAccount account) async {
-    await firestore.collection('businessAccounts').doc(account.id).set({
+    await functions.httpsCallable('updateBusinessProfile').call({
+      'businessId': account.id,
       'businessName': account.name,
       'contactName': account.contactName,
       'contactEmail': account.contactEmail.toLowerCase(),
@@ -254,8 +255,7 @@ class FirebaseBusinessRepository implements BusinessRepository {
       ],
       'notificationPreferences': account.notificationPreferences,
       'paymentPreferences': account.paymentPreferences,
-      'updatedAt': FieldValue.serverTimestamp(),
-    }, SetOptions(merge: true));
+    });
   }
 
   @override
@@ -266,21 +266,11 @@ class FirebaseBusinessRepository implements BusinessRepository {
   }) async {
     final normalized = email.trim().toLowerCase();
     if (normalized.isEmpty) throw ArgumentError('Enter an email address.');
-    final member = {
-      'userId': normalized,
+    await functions.httpsCallable('inviteBusinessMember').call({
+      'businessId': account.id,
       'email': normalized,
-      'name': '',
       'role': role,
-      'status': 'invited',
-      'invitedAt': Timestamp.now(),
-    };
-    await firestore.collection('businessAccounts').doc(account.id).set({
-      'teamMemberIds': FieldValue.arrayUnion([normalized]),
-      if (role == 'owner' || role == 'admin')
-        'managerIds': FieldValue.arrayUnion([normalized]),
-      'teamMembers': FieldValue.arrayUnion([member]),
-      'updatedAt': FieldValue.serverTimestamp(),
-    }, SetOptions(merge: true));
+    });
   }
 
   @override
@@ -292,34 +282,27 @@ class FirebaseBusinessRepository implements BusinessRepository {
     bool remove = false,
   }) async {
     final memberId = '${member['userId'] ?? member['email'] ?? ''}'.trim();
-    final members = account.teamMembers
-        .where((item) =>
-            '${item['userId'] ?? item['email'] ?? ''}'.trim() != memberId)
-        .map(Map<String, dynamic>.from)
-        .toList(growable: true);
-    if (!remove) {
-      members.add({
-        ...member,
-        if (role != null) 'role': role,
-        if (status != null) 'status': status,
-        'updatedAt': Timestamp.now(),
+    if (remove) {
+      await functions.httpsCallable('removeBusinessMember').call({
+        'businessId': account.id,
+        'memberUserId': memberId,
+      });
+      return;
+    }
+    if (role != null) {
+      await functions.httpsCallable('updateBusinessMemberRole').call({
+        'businessId': account.id,
+        'memberUserId': memberId,
+        'role': role,
       });
     }
-    final ids = members
-        .map((item) => '${item['userId'] ?? item['email'] ?? ''}'.trim())
-        .where((item) => item.isNotEmpty)
-        .toList(growable: false);
-    final managers = members
-        .where((item) => item['role'] == 'owner' || item['role'] == 'admin')
-        .map((item) => '${item['userId'] ?? item['email'] ?? ''}'.trim())
-        .where((item) => item.isNotEmpty)
-        .toList(growable: false);
-    await firestore.collection('businessAccounts').doc(account.id).set({
-      'teamMembers': members,
-      'teamMemberIds': ids,
-      'managerIds': managers,
-      'updatedAt': FieldValue.serverTimestamp(),
-    }, SetOptions(merge: true));
+    if (status != null) {
+      await functions.httpsCallable('updateBusinessMemberStatus').call({
+        'businessId': account.id,
+        'memberUserId': memberId,
+        'status': status,
+      });
+    }
   }
 
   @override
@@ -327,10 +310,10 @@ class FirebaseBusinessRepository implements BusinessRepository {
     required BusinessAccount account,
     required Map<String, dynamic> moment,
   }) async {
-    await firestore.collection('businessAccounts').doc(account.id).set({
-      'irisMoments': FieldValue.arrayUnion([moment]),
-      'updatedAt': FieldValue.serverTimestamp(),
-    }, SetOptions(merge: true));
+    await functions.httpsCallable('recordBusinessIrisMoment').call({
+      'businessId': account.id,
+      'moment': moment,
+    });
   }
 
   @override

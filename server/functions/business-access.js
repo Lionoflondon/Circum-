@@ -394,6 +394,13 @@ exports.updateBusinessProfile = functions.region("us-central1").https.onCall(asy
       ...(account.notificationPreferences || {}),
       ...(data.notificationPreferences || {}),
     },
+    paymentPreferences: {
+      ...(account.paymentPreferences || {}),
+      ...(data.paymentPreferences || {}),
+    },
+    defaultPickupAddresses: Array.isArray(data.defaultPickupAddresses) ?
+      data.defaultPickupAddresses.map(clean).filter(Boolean).slice(0, 10) :
+      account.defaultPickupAddresses || [],
     updatedAt: FieldValue.serverTimestamp(),
     updatedByUserId: uid,
   };
@@ -412,6 +419,129 @@ exports.updateBusinessProfile = functions.region("us-central1").https.onCall(asy
     createdAt: FieldValue.serverTimestamp(),
   });
   return {status: "updated", businessId};
+});
+
+exports.inviteBusinessMember = functions.region("us-central1").https.onCall(async (data, context) => {
+  requireAuth(context);
+  const businessId = clean(data.businessId);
+  const email = cleanEmail(data.email);
+  const role = clean(data.role || "member");
+  if (!email || !email.includes("@")) {
+    throw new functions.https.HttpsError("invalid-argument", "Enter a valid email address.");
+  }
+  if (!BUSINESS_ROLES.has(role) || role === "owner") {
+    throw new functions.https.HttpsError("invalid-argument", "Choose a valid business role.");
+  }
+  const db = getFirestore();
+  const {uid, ref, account} = await requireBusinessAdmin(db, businessId, context);
+  const existing = Array.isArray(account.teamMembers) ? account.teamMembers : [];
+  const active = existing.filter((member) =>
+    cleanEmail(member.email || member.userId) !== email && clean(member.status) !== "removed",
+  );
+  const invited = {
+    userId: email,
+    email,
+    name: clean(data.name),
+    role,
+    status: "invited",
+    invitedAt: new Date(),
+    invitedByUserId: uid,
+  };
+  const members = [...active, invited];
+  const ids = members.flatMap((member) => [clean(member.userId), cleanEmail(member.email)].filter(Boolean));
+  const managers = members
+      .filter((member) => BUSINESS_ADMIN_ROLES.has(clean(member.role)) && clean(member.status) !== "removed")
+      .flatMap((member) => [clean(member.userId), cleanEmail(member.email)].filter(Boolean));
+  await ref.set({
+    teamMembers: members,
+    teamMemberIds: [...new Set(ids)],
+    managerIds: [...new Set(managers)],
+    updatedAt: FieldValue.serverTimestamp(),
+    updatedByUserId: uid,
+  }, {merge: true});
+  await db.collection("businessAuditLogs").add({
+    businessId,
+    actorUserId: uid,
+    targetEmail: email,
+    action: "business_member_invited",
+    role,
+    createdAt: FieldValue.serverTimestamp(),
+  });
+  await db.collection("notifications").doc().set({
+    userId: email,
+    category: "business",
+    title: "Business invitation",
+    body: `You have been invited to ${account.businessName || "Circum Business"}.`,
+    destination: {route: "business", businessId},
+    read: false,
+    createdAt: FieldValue.serverTimestamp(),
+  });
+  return {status: "invited", businessId, email, role};
+});
+
+exports.updateBusinessMemberStatus = functions.region("us-central1").https.onCall(async (data, context) => {
+  requireAuth(context);
+  const businessId = clean(data.businessId);
+  const memberUserId = clean(data.memberUserId);
+  const nextStatus = clean(data.status);
+  if (!memberUserId || !["active", "invited", "suspended", "removed"].includes(nextStatus)) {
+    throw new functions.https.HttpsError("invalid-argument", "Choose a valid team member and status.");
+  }
+  const db = getFirestore();
+  const {uid, ref, account} = await requireBusinessAdmin(db, businessId, context);
+  const members = Array.isArray(account.teamMembers) ? account.teamMembers : [];
+  const index = members.findIndex((member) =>
+    clean(member.userId) === memberUserId || cleanEmail(member.email) === memberUserId,
+  );
+  if (index < 0) {
+    throw new functions.https.HttpsError("not-found", "Team member not found.");
+  }
+  if (members[index].role === "owner") {
+    throw new functions.https.HttpsError("failed-precondition", "Owner status cannot be changed here.");
+  }
+  members[index] = {...members[index], status: nextStatus, updatedAt: new Date(), updatedByUserId: uid};
+  const activeIds = members
+      .filter((item) => clean(item.status) !== "removed")
+      .flatMap((item) => [clean(item.userId), cleanEmail(item.email)].filter(Boolean));
+  await ref.set({
+    teamMembers: members,
+    teamMemberIds: [...new Set(activeIds)],
+    updatedAt: FieldValue.serverTimestamp(),
+    updatedByUserId: uid,
+  }, {merge: true});
+  await db.collection("businessAuditLogs").add({
+    businessId,
+    actorUserId: uid,
+    targetUserId: memberUserId,
+    action: "business_member_status_updated",
+    status: nextStatus,
+    createdAt: FieldValue.serverTimestamp(),
+  });
+  return {status: nextStatus, businessId, memberUserId};
+});
+
+exports.recordBusinessIrisMoment = functions.region("us-central1").https.onCall(async (data, context) => {
+  const businessId = clean(data.businessId);
+  const moment = data.moment && typeof data.moment === "object" ? data.moment : {};
+  const db = getFirestore();
+  const {uid, ref} = await requireBusinessAdmin(db, businessId, context);
+  const record = {
+    ...moment,
+    recordedByUserId: uid,
+    recordedAt: new Date(),
+  };
+  await ref.set({
+    irisMoments: FieldValue.arrayUnion(record),
+    updatedAt: FieldValue.serverTimestamp(),
+    updatedByUserId: uid,
+  }, {merge: true});
+  await db.collection("businessAuditLogs").add({
+    businessId,
+    actorUserId: uid,
+    action: "business_iris_moment_recorded",
+    createdAt: FieldValue.serverTimestamp(),
+  });
+  return {status: "recorded", businessId};
 });
 
 exports.updateBusinessMemberRole = functions.region("us-central1").https.onCall(async (data, context) => {

@@ -1,7 +1,7 @@
 import 'dart:convert';
 
-import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:cloud_functions/cloud_functions.dart';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:url_launcher/url_launcher.dart';
@@ -78,26 +78,15 @@ class _HealthPlusViewState extends State<HealthPlusView> {
     }
 
     final quote = _quote;
-    final now = DateTime.now();
-    final id = FirebaseAuth.instance.currentUser?.uid ??
-        'HP-${now.millisecondsSinceEpoch.toString().substring(6)}';
-    final pickupId =
-        'HPP-${now.millisecondsSinceEpoch.toString().substring(6)}';
-    final scheduleId = _frequency == HealthPlusFrequency.oneOff
-        ? null
-        : 'HPS-${now.millisecondsSinceEpoch.toString().substring(6)}';
-
     setState(() {
       _submitting = true;
       _message = 'Creating your Health+ pickup and secure checkout...';
     });
 
     try {
-      final db = FirebaseFirestore.instance;
-      final batch = db.batch();
-
-      final profile = {
-        'id': id,
+      final result = await FirebaseFunctions.instanceFor(region: 'us-central1')
+          .httpsCallable('createHealthPlusBooking')
+          .call<Map<String, dynamic>>({
         'fullName': _fullName.text.trim(),
         'phoneNumber': _phone.text.trim(),
         'email': _email.text.trim(),
@@ -105,100 +94,49 @@ class _HealthPlusViewState extends State<HealthPlusView> {
         'deliveryAddress': _deliveryAddress.text.trim(),
         'notes': _notes.text.trim(),
         'consentConfirmed': _consent,
-        'source': 'circum-mobile',
-        'platform': Theme.of(context).platform.name,
-        'createdAt': FieldValue.serverTimestamp(),
-        'updatedAt': FieldValue.serverTimestamp(),
-      };
-      final pickup = {
-        'id': pickupId,
-        'profileId': id,
-        'scheduleId': scheduleId,
-        'fullName': _fullName.text.trim(),
-        'phoneNumber': _phone.text.trim(),
-        'pharmacyAddress': _pharmacyAddress.text.trim(),
-        'deliveryAddress': _deliveryAddress.text.trim(),
-        'notes': _notes.text.trim(),
         'preferredPickupTime': _preferredTime.text.trim(),
         'frequency': _frequency.value,
-        'status': PickupStatus.scheduled.value,
-        'price': quote.total,
-        'currency': 'GBP',
-        'pricingBreakdown': quote.toJson(),
+        'customSchedule': _customSchedule.text.trim(),
+        'savedPaymentMethod': _savePaymentMethod,
         'pricingInputs': {
           'distanceMiles': HealthPlusPricing.defaultDistanceMiles,
           'medicationWeightKg': HealthPlusPricing.defaultMedicationWeightKg,
         },
-        'type': 'health_plus_prescription_pickup',
-        'source': 'circum-mobile',
-        'createdAt': FieldValue.serverTimestamp(),
-        'updatedAt': FieldValue.serverTimestamp(),
-      };
-
-      batch.set(db.collection('healthPlusProfiles').doc(id), profile,
-          SetOptions(merge: true));
-      batch.set(db.collection('prescriptionPickups').doc(pickupId), pickup,
-          SetOptions(merge: true));
-
-      if (scheduleId != null) {
-        batch.set(db.collection('recurringPickupSchedules').doc(scheduleId), {
-          'id': scheduleId,
-          'profileId': id,
-          'frequency': _frequency.value,
-          'preferredDayTime': _preferredTime.text.trim(),
-          'customSchedule': _customSchedule.text.trim(),
-          'paused': false,
-          'nextPickupAt': _preferredTime.text.trim(),
-          'createdAt': FieldValue.serverTimestamp(),
-          'updatedAt': FieldValue.serverTimestamp(),
-        });
-      }
-
-      batch.set(db.collection('healthPlusPayments').doc(pickupId), {
-        'id': pickupId,
-        'profileId': id,
-        'pickupId': pickupId,
-        'amount': quote.total,
-        'currency': 'GBP',
-        'status': 'pending_secure_checkout',
-        'savedPaymentMethod': _savePaymentMethod,
-        'createdAt': FieldValue.serverTimestamp(),
+        'idempotencyKey':
+            'healthplus:${FirebaseAuth.instance.currentUser?.uid}:${_frequency.value}:${_preferredTime.text.trim()}',
       });
-      batch.set(db.collection('healthPlusNotifications').doc(), {
-        'profileId': id,
-        'pickupId': pickupId,
-        'type': 'pickup_scheduled',
-        'title': 'Health+ pickup scheduled',
-        'body': 'Your prescription pickup has been scheduled.',
-        'createdAt': FieldValue.serverTimestamp(),
-      });
-      _logUsageEvent(
-        batch: batch,
-        db: db,
-        type: 'pickup_created',
-        profileId: id,
-        pickupId: pickupId,
-        scheduleId: scheduleId,
-        status: PickupStatus.scheduled.value,
-        amount: quote.total,
-      );
-
-      await batch.commit();
+      final data = Map<String, dynamic>.from(result.data);
+      final profileId = '${data['profileId'] ?? ''}'.trim();
+      final pickupId = '${data['pickupId'] ?? ''}'.trim();
+      final scheduleId = '${data['scheduleId'] ?? ''}'.trim();
+      final amount = (data['amount'] as num?)?.toDouble() ?? quote.total;
       final checkoutUrl = await _createCheckoutSession(
         pickupId: pickupId,
-        profileId: id,
+        profileId: profileId,
         quote: quote,
       );
 
       if (!mounted) return;
       setState(() {
-        _profileId = id;
-        _scheduleId = scheduleId;
-        _latestPickup = pickup;
+        _profileId = profileId;
+        _scheduleId = scheduleId.isEmpty ? null : scheduleId;
+        _latestPickup = {
+          'id': pickupId,
+          'profileId': profileId,
+          'scheduleId': scheduleId.isEmpty ? null : scheduleId,
+          'fullName': _fullName.text.trim(),
+          'pharmacyAddress': _pharmacyAddress.text.trim(),
+          'deliveryAddress': _deliveryAddress.text.trim(),
+          'preferredPickupTime': _preferredTime.text.trim(),
+          'frequency': _frequency.value,
+          'status': PickupStatus.scheduled.value,
+          'price': amount,
+          'currency': 'GBP',
+        };
         _checkoutUrl = checkoutUrl;
         _payments.insert(0, {
           'pickupId': pickupId,
-          'amount': quote.total,
+          'amount': amount,
           'status': checkoutUrl == null
               ? 'pending_secure_checkout'
               : 'checkout_created',
@@ -212,11 +150,16 @@ class _HealthPlusViewState extends State<HealthPlusView> {
         await launchUrl(Uri.parse(checkoutUrl),
             mode: LaunchMode.externalApplication);
       }
+    } on FirebaseFunctionsException catch (error) {
+      if (!mounted) return;
+      setState(() {
+        _message = error.message ??
+            'Health+ could not be saved. Please check the details and try again.';
+      });
     } catch (_) {
       if (!mounted) return;
       setState(() {
-        _message =
-            'Health+ could not be saved. Check Firestore rules and payment config.';
+        _message = 'Health+ could not be saved. Please try again.';
       });
     } finally {
       if (mounted) setState(() => _submitting = false);
@@ -276,102 +219,47 @@ class _HealthPlusViewState extends State<HealthPlusView> {
       setState(() => _message = 'This Health+ pickup is one-off.');
       return;
     }
-    await FirebaseFirestore.instance
-        .collection('recurringPickupSchedules')
-        .doc(_scheduleId)
-        .set({'paused': true, 'updatedAt': FieldValue.serverTimestamp()},
-            SetOptions(merge: true));
-    await _writeUsageEvent(
-      type: 'recurring_pickup_paused',
-      scheduleId: _scheduleId,
-      status: 'paused',
-    );
+    await FirebaseFunctions.instanceFor(region: 'us-central1')
+        .httpsCallable('updateSenderHealthPlusBooking')
+        .call({
+      'action': 'pause_schedule',
+      'scheduleId': _scheduleId,
+      'idempotencyKey': 'healthplus:pause:$_scheduleId',
+    });
     setState(() => _message = 'Recurring Health+ pickup paused.');
+  }
+
+  Future<void> _resumeSchedule() async {
+    if (_scheduleId == null) {
+      setState(() => _message = 'This Health+ pickup is one-off.');
+      return;
+    }
+    await FirebaseFunctions.instanceFor(region: 'us-central1')
+        .httpsCallable('updateSenderHealthPlusBooking')
+        .call({
+      'action': 'resume_schedule',
+      'scheduleId': _scheduleId,
+      'idempotencyKey': 'healthplus:resume:$_scheduleId',
+    });
+    setState(() => _message = 'Recurring Health+ pickup resumed.');
   }
 
   Future<void> _cancelPickup() async {
     final pickupId = _latestPickup?['id']?.toString();
     if (pickupId == null) return;
-    await FirebaseFirestore.instance
-        .collection('prescriptionPickups')
-        .doc(pickupId)
-        .set({
-      'status': PickupStatus.cancelled.value,
-      'updatedAt': FieldValue.serverTimestamp(),
-    }, SetOptions(merge: true));
-    await _writeUsageEvent(
-      type: 'pickup_cancelled',
-      pickupId: pickupId,
-      status: PickupStatus.cancelled.value,
-    );
+    await FirebaseFunctions.instanceFor(region: 'us-central1')
+        .httpsCallable('updateSenderHealthPlusBooking')
+        .call({
+      'action': 'cancel_pickup',
+      'pickupId': pickupId,
+      'idempotencyKey': 'healthplus:cancel:$pickupId',
+    });
     setState(() {
       _latestPickup = {
         ...?_latestPickup,
         'status': PickupStatus.cancelled.value
       };
       _message = 'Next Health+ pickup cancelled.';
-    });
-  }
-
-  Future<void> _adminStatus(String status) async {
-    final pickupId = _latestPickup?['id']?.toString();
-    if (pickupId == null) return;
-    final response = await http.post(
-      Uri.parse(
-        'https://us-central1-circum-2797c.cloudfunctions.net/updateHealthPlusPickupStatus',
-      ),
-      headers: {'Content-Type': 'application/json'},
-      body: jsonEncode({'pickupId': pickupId, 'status': status}),
-    );
-    if (response.statusCode >= 200 && response.statusCode < 300) {
-      setState(() {
-        _latestPickup = {...?_latestPickup, 'status': status};
-        _message = 'Health+ status updated to $status.';
-      });
-    }
-  }
-
-  void _logUsageEvent({
-    required WriteBatch batch,
-    required FirebaseFirestore db,
-    required String type,
-    String? profileId,
-    String? pickupId,
-    String? scheduleId,
-    String? status,
-    double? amount,
-  }) {
-    batch.set(db.collection('healthPlusUsageEvents').doc(), {
-      'type': type,
-      'profileId': profileId,
-      'pickupId': pickupId,
-      'scheduleId': scheduleId,
-      'status': status,
-      'amount': amount,
-      'currency': amount == null ? null : 'GBP',
-      'source': 'circum-mobile',
-      'platform': Theme.of(context).platform.name,
-      'userId': FirebaseAuth.instance.currentUser?.uid,
-      'createdAt': FieldValue.serverTimestamp(),
-    });
-  }
-
-  Future<void> _writeUsageEvent({
-    required String type,
-    String? pickupId,
-    String? scheduleId,
-    String? status,
-  }) async {
-    await FirebaseFirestore.instance.collection('healthPlusUsageEvents').add({
-      'type': type,
-      'profileId': _profileId,
-      'pickupId': pickupId ?? _latestPickup?['id']?.toString(),
-      'scheduleId': scheduleId ?? _scheduleId,
-      'status': status,
-      'source': 'circum-mobile',
-      'platform': Theme.of(context).platform.name,
-      'userId': FirebaseAuth.instance.currentUser?.uid,
-      'createdAt': FieldValue.serverTimestamp(),
     });
   }
 
@@ -515,11 +403,10 @@ class _HealthPlusViewState extends State<HealthPlusView> {
               pickup: _latestPickup,
               payments: _payments,
               onPauseSchedule: _pauseSchedule,
+              onResumeSchedule: _resumeSchedule,
               onCancelPickup: _cancelPickup,
               onUpdatePayment: _openCheckout,
             ),
-            const SizedBox(height: 14),
-            _AdminPanel(pickup: _latestPickup, onStatus: _adminStatus),
           ],
         ),
       ),
@@ -750,6 +637,7 @@ class _Dashboard extends StatelessWidget {
   final Map<String, dynamic>? pickup;
   final List<Map<String, dynamic>> payments;
   final VoidCallback onPauseSchedule;
+  final VoidCallback onResumeSchedule;
   final VoidCallback onCancelPickup;
   final VoidCallback onUpdatePayment;
 
@@ -757,6 +645,7 @@ class _Dashboard extends StatelessWidget {
     required this.pickup,
     required this.payments,
     required this.onPauseSchedule,
+    required this.onResumeSchedule,
     required this.onCancelPickup,
     required this.onUpdatePayment,
   });
@@ -798,6 +687,11 @@ class _Dashboard extends StatelessWidget {
                   label: const Text('Pause recurring'),
                 ),
                 OutlinedButton.icon(
+                  onPressed: onResumeSchedule,
+                  icon: const Icon(Icons.play_arrow),
+                  label: const Text('Resume recurring'),
+                ),
+                OutlinedButton.icon(
                   onPressed: onCancelPickup,
                   icon: const Icon(Icons.cancel_outlined),
                   label: const Text('Cancel pickup'),
@@ -834,59 +728,6 @@ class _DashboardRow extends StatelessWidget {
           Flexible(
               child: AppText.text(value,
                   textAlign: TextAlign.right, fontWeight: FontWeight.w900)),
-        ],
-      ),
-    );
-  }
-}
-
-class _AdminPanel extends StatelessWidget {
-  final Map<String, dynamic>? pickup;
-  final ValueChanged<String> onStatus;
-
-  const _AdminPanel({required this.pickup, required this.onStatus});
-
-  @override
-  Widget build(BuildContext context) {
-    final statuses = [
-      PickupStatus.assigned.value,
-      PickupStatus.awaitingPharmacyCollection.value,
-      PickupStatus.collected.value,
-      PickupStatus.outForDelivery.value,
-      PickupStatus.delivered.value,
-      PickupStatus.failed.value,
-    ];
-    return _Panel(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          AppText.text('Admin operations',
-              fontSize: 18, fontWeight: FontWeight.w800),
-          const SizedBox(height: 8),
-          AppText.text(
-            pickup == null
-                ? 'Create a Health+ booking to expose admin status actions.'
-                : 'Assign drivers, mark collection/delivery, flag failed pickups, and contact the user when there is an issue.',
-            color: AppColors.textGrey,
-            fontWeight: FontWeight.w600,
-          ),
-          const SizedBox(height: 10),
-          Wrap(
-            spacing: 8,
-            runSpacing: 8,
-            children: statuses.map((status) {
-              return ActionChip(
-                label: Text(status.replaceAll('_', ' ')),
-                onPressed: pickup == null ? null : () => onStatus(status),
-                backgroundColor: AppColors.input,
-                labelStyle: const TextStyle(
-                  color: Colors.white,
-                  fontFamily: 'Helvetica',
-                  fontWeight: FontWeight.w700,
-                ),
-              );
-            }).toList(),
-          ),
         ],
       ),
     );
