@@ -1355,6 +1355,9 @@ class AdminBusinessOperationsTools {
     'subscription_upgrade_review',
     'subscription_downgrade_review',
     'business_close_review',
+    'roth_credit_review',
+    'roth_debit_review',
+    'roth_freeze_review',
   ];
 
   static Map<String, dynamic> operationPatch({
@@ -1378,6 +1381,7 @@ class AdminBusinessOperationsTools {
       if (status == 'manager_assigned') 'accountManagerStatus': 'assigned',
       if (status.contains('invoice')) 'invoiceReviewStatus': status,
       if (status.contains('subscription')) 'subscriptionReviewStatus': status,
+      if (status.contains('roth')) 'rothReviewStatus': status,
       if (status == 'business_close_review') 'closureReviewStatus': 'requested',
     };
   }

@@ -840,6 +840,48 @@ void main() {
       expect(data.adminNotes, isEmpty);
       expect(data.senderTrustEvents, isEmpty);
       expect(data.irisReferenceImages, isEmpty);
+      expect(data.healthPlusProfiles, isEmpty);
+      expect(data.driverPerformanceMetrics, isEmpty);
+    });
+
+    test('restores historical operational depth for Business Rider and Health+',
+        () {
+      final source =
+          File('lib/app/admin/admin_phase1_shell.dart').readAsStringSync();
+      final operations =
+          File('lib/app/admin/admin_operations.dart').readAsStringSync();
+
+      expect(source, contains("collection('healthPlusProfiles')"));
+      expect(source, contains('Health+ Profile Workspace'));
+      expect(source, contains('Future<void> _updateHealthPlusProfile'));
+      expect(source, contains('medical profile viewer'));
+      expect(source, contains('operational history'));
+
+      for (final section in const [
+        'Business Companies',
+        'Business Members',
+        'Business Deliveries',
+        'Business Health+',
+        'Business Gifts',
+        'Business Vanguard',
+        'Business Invoices',
+        'Business Roth',
+        'Business Analytics',
+        'Business Audit Log',
+      ]) {
+        expect(source, contains(section));
+      }
+      expect(source, contains('Future<void> _changeBusinessMemberRole'));
+      expect(source, contains('Future<void> _removeBusinessMember'));
+      expect(source, contains('roth_credit_review'));
+      expect(operations, contains('rothReviewStatus'));
+
+      expect(source, contains('Rider Performance Metrics'));
+      expect(source, contains('driverPerformanceMetrics'));
+      expect(source, contains('acceptance'));
+      expect(source, contains('Rider operational history'));
+      expect(source, contains('performance_review'));
+      expect(source, contains('warning_issued'));
     });
 
     test('restores historical Admin final-gap backend surfaces', () {

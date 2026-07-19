@@ -842,6 +842,86 @@ class _AdminPhaseOneShellState extends State<AdminPhaseOneShell> {
     await _loadAdminData();
   }
 
+  Future<void> _changeBusinessMemberRole(
+    Map<String, dynamic> member,
+    String role,
+  ) async {
+    if (!_can(AdminPermission.editCustomers)) {
+      setState(() => _message = 'Your role cannot manage Business members.');
+      return;
+    }
+    final businessId = '${member['businessId'] ?? member['id'] ?? ''}'.trim();
+    final index =
+        member['memberIndex'] is int ? member['memberIndex'] as int : -1;
+    if (businessId.isEmpty || index < 0) return;
+    final snapshot =
+        await _db.collection('businessAccounts').doc(businessId).get();
+    final data = snapshot.data() ?? const <String, dynamic>{};
+    final members = ((data['teamMembers'] as List?) ?? const [])
+        .map((item) =>
+            item is Map ? Map<String, dynamic>.from(item) : <String, dynamic>{})
+        .toList();
+    if (index >= members.length) return;
+    final previousRole = members[index]['role'];
+    members[index]['role'] = role;
+    members[index]['updatedAt'] = Timestamp.now();
+    members[index]['updatedByAdmin'] = _user?.email ?? _user?.uid;
+    await _db.collection('businessAccounts').doc(businessId).set({
+      'teamMembers': members,
+      'updatedAt': FieldValue.serverTimestamp(),
+      'updatedBy': _user?.uid,
+      'updatedByEmail': _user?.email,
+    }, SetOptions(merge: true));
+    await _writeAudit(AdminAuditEntry(
+      adminUserId: _user?.uid ?? 'unknown-admin',
+      actionType: 'business_member_role_updated',
+      recordType: 'businessAccounts',
+      recordId: businessId,
+      oldValue: {'role': previousRole},
+      newValue: {'role': role, 'member': member['email'] ?? member['userId']},
+      reason: 'Business member role updated from Admin',
+    ));
+    setState(() => _message = 'Business member role updated to $role.');
+    await _loadAdminData();
+  }
+
+  Future<void> _removeBusinessMember(Map<String, dynamic> member) async {
+    if (!_can(AdminPermission.editCustomers)) {
+      setState(() => _message = 'Your role cannot manage Business members.');
+      return;
+    }
+    final businessId = '${member['businessId'] ?? member['id'] ?? ''}'.trim();
+    final index =
+        member['memberIndex'] is int ? member['memberIndex'] as int : -1;
+    if (businessId.isEmpty || index < 0) return;
+    final snapshot =
+        await _db.collection('businessAccounts').doc(businessId).get();
+    final data = snapshot.data() ?? const <String, dynamic>{};
+    final members = ((data['teamMembers'] as List?) ?? const [])
+        .map((item) =>
+            item is Map ? Map<String, dynamic>.from(item) : <String, dynamic>{})
+        .toList();
+    if (index >= members.length) return;
+    final removed = members.removeAt(index);
+    await _db.collection('businessAccounts').doc(businessId).set({
+      'teamMembers': members,
+      'updatedAt': FieldValue.serverTimestamp(),
+      'updatedBy': _user?.uid,
+      'updatedByEmail': _user?.email,
+    }, SetOptions(merge: true));
+    await _writeAudit(AdminAuditEntry(
+      adminUserId: _user?.uid ?? 'unknown-admin',
+      actionType: 'business_member_removed',
+      recordType: 'businessAccounts',
+      recordId: businessId,
+      oldValue: removed,
+      newValue: {'memberRemoved': true},
+      reason: 'Business member removed from Admin',
+    ));
+    setState(() => _message = 'Business member removed.');
+    await _loadAdminData();
+  }
+
   Future<void> _requestDuplicateMerge(
     Map<String, dynamic> account,
     Map<String, dynamic> duplicate,
@@ -2187,6 +2267,48 @@ class _AdminPhaseOneShellState extends State<AdminPhaseOneShell> {
     await _loadAdminData();
   }
 
+  Future<void> _updateHealthPlusProfile(
+    Map<String, dynamic> profile,
+    String status,
+  ) async {
+    if (!_can(AdminPermission.manageHealthPlus)) {
+      setState(() => _message = 'Your role cannot manage Health+ profiles.');
+      return;
+    }
+    final id = _idFor(profile);
+    if (id.isEmpty) return;
+    await _db.collection('healthPlusProfiles').doc(id).set({
+      'status': status,
+      'adminReviewStatus': status,
+      'updatedAt': FieldValue.serverTimestamp(),
+      'adminUpdatedBy': _user?.email ?? _user?.uid,
+      'adminReason': 'Health+ profile reviewed from Admin',
+    }, SetOptions(merge: true));
+    await _db.collection('healthPlusCustodyArchive').add({
+      'profileId': id,
+      'userId': profile['userId'] ?? profile['senderId'],
+      'eventType': 'profile_$status',
+      'timestamp': FieldValue.serverTimestamp(),
+      'actorType': 'admin',
+      'actorId': _user?.uid,
+      'actorName': _user?.displayName ?? _user?.email,
+      'internalNote': 'Profile $status from isolated Circum Admin.',
+      'statusAfterEvent': status,
+      'createdAt': FieldValue.serverTimestamp(),
+    });
+    await _writeAudit(AdminAuditEntry(
+      adminUserId: _user?.uid ?? 'unknown-admin',
+      actionType: 'health_plus_profile_$status',
+      recordType: 'healthPlusProfiles',
+      recordId: id,
+      oldValue: {'status': profile['status']},
+      newValue: {'status': status},
+      reason: 'Health+ profile reviewed from Admin',
+    ));
+    setState(() => _message = 'Health+ profile $id updated.');
+    await _loadAdminData();
+  }
+
   Future<void> _updateFinanceWorkflow(
     Map<String, dynamic> financeRecord,
     String status,
@@ -3152,6 +3274,7 @@ class _AdminPhaseOneShellState extends State<AdminPhaseOneShell> {
                           _requestRiderMoreInformation,
                       onReviewRiderDocument: _reviewRiderDocument,
                       onRemoveRiderProfilePhoto: _removeRiderProfilePhoto,
+                      onUpdateHealthPlusProfile: _updateHealthPlusProfile,
                       onUpdateHealthPlusSchedule: _updateHealthPlusSchedule,
                       onUpdateGiftCampaignParticipant:
                           _updateGiftCampaignParticipant,
@@ -3168,6 +3291,8 @@ class _AdminPhaseOneShellState extends State<AdminPhaseOneShell> {
                       onUpdateIrisCandidateWorkflow:
                           _updateIrisCandidateWorkflow,
                       onSetBusinessOperationStatus: _setBusinessOperationStatus,
+                      onChangeBusinessMemberRole: _changeBusinessMemberRole,
+                      onRemoveBusinessMember: _removeBusinessMember,
                       onUpdatePlatformRecord: _updatePlatformRecord,
                       announcementTitle: _announcementTitle,
                       announcementBody: _announcementBody,
@@ -3288,6 +3413,7 @@ class AdminDataBundle {
     required this.supportTickets,
     required this.healthPlusPayments,
     required this.healthPlusPickups,
+    required this.healthPlusProfiles,
     required this.recurringPickupSchedules,
     required this.healthPlusCustodyArchive,
     required this.businessAccounts,
@@ -3334,6 +3460,7 @@ class AdminDataBundle {
   final List<Map<String, dynamic>> supportTickets;
   final List<Map<String, dynamic>> healthPlusPayments;
   final List<Map<String, dynamic>> healthPlusPickups;
+  final List<Map<String, dynamic>> healthPlusProfiles;
   final List<Map<String, dynamic>> recurringPickupSchedules;
   final List<Map<String, dynamic>> healthPlusCustodyArchive;
   final List<Map<String, dynamic>> businessAccounts;
@@ -3380,6 +3507,7 @@ class AdminDataBundle {
         supportTickets: [],
         healthPlusPayments: [],
         healthPlusPickups: [],
+        healthPlusProfiles: [],
         recurringPickupSchedules: [],
         healthPlusCustodyArchive: [],
         businessAccounts: [],
@@ -3478,6 +3606,9 @@ class AdminRepository {
           ? _read(_db.collection('prescriptionPickups').limit(100))
           : Future.value(<Map<String, dynamic>>[]),
       canViewHealthPlus
+          ? _read(_db.collection('healthPlusProfiles').limit(120))
+          : Future.value(<Map<String, dynamic>>[]),
+      canViewHealthPlus
           ? _read(_db.collection('recurringPickupSchedules').limit(100))
           : Future.value(<Map<String, dynamic>>[]),
       canViewHealthPlus
@@ -3554,32 +3685,33 @@ class AdminRepository {
       supportTickets: results[15],
       healthPlusPayments: results[16],
       healthPlusPickups: results[17],
-      recurringPickupSchedules: results[18],
-      healthPlusCustodyArchive: results[19],
-      businessAccounts: results[20],
-      giftOrders: results[21],
-      giftRequests: results[22],
-      giftBrands: results[23],
-      giftCampaignParticipants: results[24],
-      giftCampaignMatches: results[25],
-      auditLogs: results[26],
-      chats: results[27],
-      riderDocuments: results[28],
-      driverPerformanceMetrics: results[29],
-      websiteVisitors: results[30],
-      irisCanonicalObjects: results[31],
-      irisLearningCases: results[32],
-      irisLearningOutliers: results[33],
-      irisPolicies: results[34],
-      irisEvidence: results[35],
-      irisReferenceImages: results[36],
-      platformConfig: results[37],
-      platformStatus: results[38],
-      platformNotices: results[39],
-      platformVersions: results[40],
-      messageReports: results[41],
-      adminNotes: results[42],
-      senderTrustEvents: results[43],
+      healthPlusProfiles: results[18],
+      recurringPickupSchedules: results[19],
+      healthPlusCustodyArchive: results[20],
+      businessAccounts: results[21],
+      giftOrders: results[22],
+      giftRequests: results[23],
+      giftBrands: results[24],
+      giftCampaignParticipants: results[25],
+      giftCampaignMatches: results[26],
+      auditLogs: results[27],
+      chats: results[28],
+      riderDocuments: results[29],
+      driverPerformanceMetrics: results[30],
+      websiteVisitors: results[31],
+      irisCanonicalObjects: results[32],
+      irisLearningCases: results[33],
+      irisLearningOutliers: results[34],
+      irisPolicies: results[35],
+      irisEvidence: results[36],
+      irisReferenceImages: results[37],
+      platformConfig: results[38],
+      platformStatus: results[39],
+      platformNotices: results[40],
+      platformVersions: results[41],
+      messageReports: results[42],
+      adminNotes: results[43],
+      senderTrustEvents: results[44],
     );
   }
 
@@ -3901,6 +4033,7 @@ class _AdminModuleBody extends StatelessWidget {
     required this.onRequestRiderMoreInformation,
     required this.onReviewRiderDocument,
     required this.onRemoveRiderProfilePhoto,
+    required this.onUpdateHealthPlusProfile,
     required this.onUpdateHealthPlusSchedule,
     required this.onUpdateGiftCampaignParticipant,
     required this.onSetGiftBrandStatus,
@@ -3915,6 +4048,8 @@ class _AdminModuleBody extends StatelessWidget {
     required this.onUpdateIrisRepositoryRecord,
     required this.onUpdateIrisCandidateWorkflow,
     required this.onSetBusinessOperationStatus,
+    required this.onChangeBusinessMemberRole,
+    required this.onRemoveBusinessMember,
     required this.onUpdatePlatformRecord,
     required this.onOpenRiderProfile,
     required this.onOpenDeliveryProfile,
@@ -3989,6 +4124,8 @@ class _AdminModuleBody extends StatelessWidget {
       onReviewRiderDocument;
   final Future<void> Function(Map<String, dynamic>) onRemoveRiderProfilePhoto;
   final Future<void> Function(Map<String, dynamic>, String)
+      onUpdateHealthPlusProfile;
+  final Future<void> Function(Map<String, dynamic>, String)
       onUpdateHealthPlusSchedule;
   final Future<void> Function(Map<String, dynamic>, String)
       onUpdateGiftCampaignParticipant;
@@ -4014,6 +4151,9 @@ class _AdminModuleBody extends StatelessWidget {
       onUpdateIrisCandidateWorkflow;
   final Future<void> Function(Map<String, dynamic>, String)
       onSetBusinessOperationStatus;
+  final Future<void> Function(Map<String, dynamic>, String)
+      onChangeBusinessMemberRole;
+  final Future<void> Function(Map<String, dynamic>) onRemoveBusinessMember;
   final Future<void> Function(Map<String, dynamic>, String)
       onUpdatePlatformRecord;
   final ValueChanged<Map<String, dynamic>> onOpenRiderProfile;
@@ -4156,6 +4296,9 @@ class _AdminModuleBody extends StatelessWidget {
               riders: data.riders,
               deliveries: data.deliveries,
               documents: data.riderDocuments,
+              driverPerformanceMetrics: data.driverPerformanceMetrics,
+              auditLogs: data.auditLogs,
+              adminNotes: data.adminNotes,
               ratings: data.ratings,
               payments: data.payments,
               query: query,
@@ -4237,6 +4380,7 @@ class _AdminModuleBody extends StatelessWidget {
             ),
           AdminModule.healthPlus => _HealthPlusOperationsModule(
               pickups: data.healthPlusPickups,
+              profiles: data.healthPlusProfiles,
               schedules: data.recurringPickupSchedules,
               custodyArchive: data.healthPlusCustodyArchive,
               payments: data.healthPlusPayments,
@@ -4246,17 +4390,26 @@ class _AdminModuleBody extends StatelessWidget {
               canManageHealthPlus: canManageHealthPlus,
               onOpen: onOpenHealthPlusProfile,
               onUpdateHealthPlusPickup: onUpdateHealthPlusPickup,
+              onUpdateHealthPlusProfile: onUpdateHealthPlusProfile,
               onUpdateHealthPlusSchedule: onUpdateHealthPlusSchedule,
             ),
           AdminModule.business => _BusinessOperationsModule(
               accounts: data.businessAccounts,
               deliveries: data.deliveries,
+              healthPlusPickups: data.healthPlusPickups,
+              giftRecords: [...data.giftOrders, ...data.giftRequests],
+              businessWallets: data.businessWallets,
+              businessInvoices: data.businessInvoices,
+              businessRothPurchases: data.businessRothPurchases,
+              auditLogs: data.auditLogs,
               payments: data.payments,
               supportTickets: data.supportTickets,
               query: query,
               onOpenAccountProfile: onOpenAccountProfile,
               onSetBusinessAccountStatus: onSetBusinessAccountStatus,
               onSetBusinessOperationStatus: onSetBusinessOperationStatus,
+              onChangeBusinessMemberRole: onChangeBusinessMemberRole,
+              onRemoveBusinessMember: onRemoveBusinessMember,
               onRequestDuplicateMerge: onRequestDuplicateMerge,
             ),
           AdminModule.gifts => _GiftsOperationsModule(
@@ -4392,6 +4545,7 @@ class _AdminModuleBody extends StatelessWidget {
 class _HealthPlusOperationsModule extends StatelessWidget {
   const _HealthPlusOperationsModule({
     required this.pickups,
+    required this.profiles,
     required this.schedules,
     required this.custodyArchive,
     required this.payments,
@@ -4401,10 +4555,12 @@ class _HealthPlusOperationsModule extends StatelessWidget {
     required this.canManageHealthPlus,
     required this.onOpen,
     required this.onUpdateHealthPlusPickup,
+    required this.onUpdateHealthPlusProfile,
     required this.onUpdateHealthPlusSchedule,
   });
 
   final List<Map<String, dynamic>> pickups;
+  final List<Map<String, dynamic>> profiles;
   final List<Map<String, dynamic>> schedules;
   final List<Map<String, dynamic>> custodyArchive;
   final List<Map<String, dynamic>> payments;
@@ -4416,11 +4572,13 @@ class _HealthPlusOperationsModule extends StatelessWidget {
   final Future<void> Function(Map<String, dynamic>, String)
       onUpdateHealthPlusPickup;
   final Future<void> Function(Map<String, dynamic>, String)
+      onUpdateHealthPlusProfile;
+  final Future<void> Function(Map<String, dynamic>, String)
       onUpdateHealthPlusSchedule;
 
   @override
   Widget build(BuildContext context) {
-    final records = [...pickups, ...schedules, ...payments];
+    final records = [...pickups, ...schedules, ...profiles, ...payments];
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -4495,6 +4653,7 @@ class _HealthPlusOperationsModule extends StatelessWidget {
             _MetricCard('Pharmacies',
                 _activePharmacies(records).length.toString(), 'active'),
             _MetricCard('Recurring', schedules.length.toString(), 'schedules'),
+            _MetricCard('Profiles', profiles.length.toString(), 'patients'),
             _MetricCard('Custody', custodyArchive.length.toString(), 'events'),
           ],
         ),
@@ -4540,6 +4699,53 @@ class _HealthPlusOperationsModule extends StatelessWidget {
                 ('Pause', 'paused'),
                 ('Resume', 'resumed'),
                 ('Close', 'closed'),
+              ])
+                _MiniAction(
+                  label: action.$1,
+                  onPressed: () =>
+                      unawaited(onUpdateHealthPlusProfile(record, action.$2)),
+                ),
+          ],
+        ),
+        const SizedBox(height: 18),
+        _RecordModule(
+          title: 'Health+ Profile Workspace',
+          subtitle:
+              'Historical Health+ profile administration, medical profile viewer, operational history and audit-linked records.',
+          records: adminSearch(profiles, query, const [
+            'id',
+            'profileId',
+            'userId',
+            'senderId',
+            'patientName',
+            'fullName',
+            'email',
+            'phoneNumber',
+            'nhsNumberLast4',
+            'medication',
+            'pharmacyName',
+            'pharmacyAddress',
+            'status',
+            'reviewStatus',
+            'riskStatus',
+          ]),
+          query: '',
+          fields: const [],
+          columns: const ['Profile', 'Medical', 'Pharmacy', 'Operational'],
+          row: (record) => [
+            '${record['patientName'] ?? record['fullName'] ?? record['name'] ?? _recordId(record)}\n${record['email'] ?? record['phoneNumber'] ?? record['userId'] ?? record['senderId'] ?? ''}',
+            '${record['medication'] ?? record['medicationName'] ?? record['prescriptionSummary'] ?? 'Medication profile'}\n${record['allergySummary'] ?? record['handlingNotes'] ?? record['clinicalNotes'] ?? ''}',
+            '${record['pharmacyName'] ?? 'Pharmacy'}\n${record['pharmacyAddress'] ?? record['preferredPharmacyAddress'] ?? ''}',
+            '${record['status'] ?? record['reviewStatus'] ?? 'active'} / ${record['riskStatus'] ?? record['clinicalReviewStatus'] ?? 'standard'}',
+          ],
+          actions: (record) => [
+            _MiniAction(label: 'Open', onPressed: () => onOpen(record)),
+            if (canManageHealthPlus)
+              for (final action in const [
+                ('Approve', 'profile_approved'),
+                ('Review', 'profile_review_requested'),
+                ('Escalate', 'profile_escalated'),
+                ('Pause', 'profile_paused'),
               ])
                 _MiniAction(
                   label: action.$1,
@@ -4634,17 +4840,31 @@ class _BusinessOperationsModule extends StatelessWidget {
   const _BusinessOperationsModule({
     required this.accounts,
     required this.deliveries,
+    required this.healthPlusPickups,
+    required this.giftRecords,
+    required this.businessWallets,
+    required this.businessInvoices,
+    required this.businessRothPurchases,
+    required this.auditLogs,
     required this.payments,
     required this.supportTickets,
     required this.query,
     required this.onOpenAccountProfile,
     required this.onSetBusinessAccountStatus,
     required this.onSetBusinessOperationStatus,
+    required this.onChangeBusinessMemberRole,
+    required this.onRemoveBusinessMember,
     required this.onRequestDuplicateMerge,
   });
 
   final List<Map<String, dynamic>> accounts;
   final List<Map<String, dynamic>> deliveries;
+  final List<Map<String, dynamic>> healthPlusPickups;
+  final List<Map<String, dynamic>> giftRecords;
+  final List<Map<String, dynamic>> businessWallets;
+  final List<Map<String, dynamic>> businessInvoices;
+  final List<Map<String, dynamic>> businessRothPurchases;
+  final List<Map<String, dynamic>> auditLogs;
   final List<Map<String, dynamic>> payments;
   final List<Map<String, dynamic>> supportTickets;
   final String query;
@@ -4653,11 +4873,23 @@ class _BusinessOperationsModule extends StatelessWidget {
       onSetBusinessAccountStatus;
   final Future<void> Function(Map<String, dynamic>, String)
       onSetBusinessOperationStatus;
+  final Future<void> Function(Map<String, dynamic>, String)
+      onChangeBusinessMemberRole;
+  final Future<void> Function(Map<String, dynamic>) onRemoveBusinessMember;
   final Future<void> Function(Map<String, dynamic>, Map<String, dynamic>)
       onRequestDuplicateMerge;
 
   @override
   Widget build(BuildContext context) {
+    final members = _businessMemberRows();
+    final businessDeliveries = _businessDeliveryRows();
+    final health = _businessHealthPlusRows(businessDeliveries);
+    final gifts = _businessGiftRows(businessDeliveries);
+    final vanguard = businessDeliveries.where(_hasVanguardProtection).toList();
+    final invoices = _businessInvoiceRows(businessDeliveries);
+    final roth = [...businessWallets, ...businessRothPurchases];
+    final analytics = _businessAnalyticsRows(businessDeliveries);
+    final audit = _businessAuditRows();
     final active = accounts
         .where((item) => _businessStatus(item).contains('approved'))
         .length;
@@ -4722,10 +4954,58 @@ class _BusinessOperationsModule extends StatelessWidget {
           ],
         ),
         const SizedBox(height: 18),
-        _RecordModule(
-          title: 'Business Operations',
+        DefaultTabController(
+          length: 10,
+          child: DecoratedBox(
+            decoration: _panelDecoration(),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const TabBar(
+                  isScrollable: true,
+                  tabs: [
+                    Tab(text: 'Companies'),
+                    Tab(text: 'Members'),
+                    Tab(text: 'Deliveries'),
+                    Tab(text: 'Health+'),
+                    Tab(text: 'Gifts'),
+                    Tab(text: 'Vanguard'),
+                    Tab(text: 'Invoices'),
+                    Tab(text: 'Roth'),
+                    Tab(text: 'Analytics'),
+                    Tab(text: 'Audit Log'),
+                  ],
+                ),
+                SizedBox(
+                  height: 640,
+                  child: TabBarView(
+                    children: [
+                      _businessCompaniesWorkspace(),
+                      _businessMembersWorkspace(members),
+                      _businessDeliveriesWorkspace(businessDeliveries),
+                      _businessHealthWorkspace(health),
+                      _businessGiftsWorkspace(gifts),
+                      _businessVanguardWorkspace(vanguard),
+                      _businessInvoicesWorkspace(invoices),
+                      _businessRothWorkspace(roth),
+                      _businessAnalyticsWorkspace(analytics),
+                      _businessAuditWorkspace(audit),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _businessCompaniesWorkspace() => _tabWorkspace(
+        child: _RecordModule(
+          title: 'Business Companies',
           subtitle:
-              'Search business name, owner, email, business id, invoices, subscriptions and enablement flags.',
+              'Company profiles, approval status, team members and linked business deliveries.',
           records: accounts,
           query: query,
           fields: const [
@@ -4735,20 +5015,22 @@ class _BusinessOperationsModule extends StatelessWidget {
             'companyName',
             'ownerName',
             'ownerEmail',
-            'email',
-            'invoiceId',
-            'subscriptionId',
-            'subscriptionStatus',
+            'contactName',
+            'contactEmail',
+            'billingEmail',
             'status',
-            'verificationStatus'
+            'verificationStatus',
           ],
-          columns: const ['Business', 'Owner', 'Status', 'Billing'],
-          row: (record) => [
-            '${record['businessName'] ?? record['companyName'] ?? _recordId(record)}',
-            '${record['ownerName'] ?? record['ownerEmail'] ?? record['email'] ?? 'Owner'}',
-            '${record['status'] ?? 'pending'} / ${record['verificationStatus'] ?? 'pending'}',
-            '${record['subscriptionStatus'] ?? record['plan'] ?? 'No subscription'} / ${record['invoiceStatus'] ?? 'invoice n/a'}',
-          ],
+          columns: const ['Business', 'Contact', 'Team', 'Status'],
+          row: (record) {
+            final id = _businessAccountId(record);
+            return [
+              '${record['businessName'] ?? record['companyName'] ?? id}\n$id',
+              '${record['contactName'] ?? record['ownerName'] ?? ''}\n${record['contactEmail'] ?? record['billingEmail'] ?? record['ownerEmail'] ?? ''}',
+              '${_membersFor(id).length} members\n${_deliveriesFor(id).length} deliveries',
+              '${record['status'] ?? 'pending'} / ${record['verificationStatus'] ?? 'pending'}',
+            ];
+          },
           actions: (record) => [
             ..._accountActions(
               account: record,
@@ -4761,11 +5043,6 @@ class _BusinessOperationsModule extends StatelessWidget {
             for (final action in const [
               ('Verify', 'verified'),
               ('Manager', 'manager_assigned'),
-              ('Issue invoice', 'invoice_issue_review'),
-              ('Cancel invoice', 'invoice_cancel_review'),
-              ('Adjust sub', 'subscription_adjust_review'),
-              ('Upgrade', 'subscription_upgrade_review'),
-              ('Downgrade', 'subscription_downgrade_review'),
               ('Close review', 'business_close_review'),
             ])
               _MiniAction(
@@ -4775,16 +5052,490 @@ class _BusinessOperationsModule extends StatelessWidget {
               ),
           ],
         ),
-        const SizedBox(height: 18),
-        _BusinessAnalyticsPanel(
-          accounts: accounts,
-          deliveries: deliveries,
-          payments: payments,
-          supportTickets: supportTickets,
+      );
+
+  Widget _businessMembersWorkspace(List<Map<String, dynamic>> members) =>
+      _tabWorkspace(
+        child: _RecordModule(
+          title: 'Business Members',
+          subtitle:
+              'Owners, invites, permissions, roles, removal, history and audit.',
+          records: members,
+          query: query,
+          fields: const [
+            'businessName',
+            'businessId',
+            'name',
+            'email',
+            'userId',
+            'role',
+            'status',
+            'inviteStatus',
+          ],
+          columns: const ['Member', 'Email / UID', 'Role', 'Status'],
+          row: (record) => [
+            '${record['name'] ?? record['email'] ?? 'Member'}\n${record['businessName'] ?? record['businessId'] ?? ''}',
+            '${record['email'] ?? record['userId'] ?? record['uid'] ?? ''}',
+            '${record['role'] ?? record['permission'] ?? 'member'}',
+            '${record['status'] ?? record['inviteStatus'] ?? 'active'}',
+          ],
+          actions: (record) {
+            final editable = (record['memberIndex'] is int) &&
+                (record['memberIndex'] as int) >= 0;
+            return [
+              if (editable)
+                for (final role in const [
+                  'owner',
+                  'admin',
+                  'operations',
+                  'finance',
+                  'viewer',
+                ])
+                  _MiniAction(
+                    label: role,
+                    onPressed: () =>
+                        unawaited(onChangeBusinessMemberRole(record, role)),
+                  ),
+              if (editable)
+                _MiniAction(
+                  label: 'Remove',
+                  onPressed: () => unawaited(onRemoveBusinessMember(record)),
+                ),
+            ];
+          },
         ),
-      ],
+      );
+
+  Widget _businessDeliveriesWorkspace(List<Map<String, dynamic>> records) =>
+      _tabWorkspace(
+        child: _RecordModule(
+          title: 'Business Deliveries',
+          subtitle:
+              'Business-created deliveries with tracking, exceptions, IRIS, Health+, Gifts, Vanguard and history.',
+          records: records,
+          query: query,
+          fields: const [
+            'id',
+            'requestId',
+            'trackingId',
+            'businessId',
+            'businessName',
+            'senderName',
+            'recipientName',
+            'status',
+            'deliveryStatus',
+            'serviceType',
+            'irisReviewStatus',
+          ],
+          columns: const ['Delivery', 'Business', 'Route', 'Status'],
+          row: (record) => [
+            '${_recordId(record)}\n${record['trackingId'] ?? ''}',
+            _businessNameFor(record),
+            '${record['pickupAddress'] ?? record['pickup'] ?? 'Pickup'} -> ${record['dropoffAddress'] ?? record['dropoff'] ?? 'Dropoff'}',
+            '${record['status'] ?? record['deliveryStatus'] ?? 'unknown'} / ${record['irisReviewStatus'] ?? record['paymentStatus'] ?? 'review n/a'}',
+          ],
+        ),
+      );
+
+  Widget _businessHealthWorkspace(List<Map<String, dynamic>> records) =>
+      _tabWorkspace(
+        child: _RecordModule(
+          title: 'Business Health+',
+          subtitle:
+              'Health+ jobs created under Business accounts with intervention kept in Health+ authority.',
+          records: records,
+          query: query,
+          fields: const [
+            'id',
+            'businessId',
+            'businessName',
+            'patientName',
+            'customerName',
+            'senderName',
+            'pharmacyName',
+            'status',
+          ],
+          columns: const ['Record', 'Customer', 'Pharmacy', 'Status'],
+          row: (record) => [
+            '${_recordId(record)}\n${_businessNameFor(record)}',
+            '${record['patientName'] ?? record['customerName'] ?? record['senderName'] ?? ''}',
+            '${record['pharmacyName'] ?? record['pharmacyAddress'] ?? ''}',
+            '${record['status'] ?? 'scheduled'}',
+          ],
+        ),
+      );
+
+  Widget _businessGiftsWorkspace(List<Map<String, dynamic>> records) =>
+      _tabWorkspace(
+        child: _RecordModule(
+          title: 'Business Gifts',
+          subtitle: 'Corporate gift requests and linked gift delivery records.',
+          records: records,
+          query: query,
+          fields: const [
+            'id',
+            'giftOrderId',
+            'businessId',
+            'businessName',
+            'senderName',
+            'recipientName',
+            'occasion',
+            'status',
+          ],
+          columns: const ['Gift', 'Sender / Recipient', 'Occasion', 'Status'],
+          row: (record) => [
+            '${_recordId(record)}\n${_businessNameFor(record)}',
+            '${record['senderName'] ?? ''} -> ${record['recipientName'] ?? ''}',
+            '${record['occasion'] ?? record['relationship'] ?? 'Gift'}',
+            '${record['status'] ?? 'pending'}',
+          ],
+        ),
+      );
+
+  Widget _businessVanguardWorkspace(List<Map<String, dynamic>> records) =>
+      _tabWorkspace(
+        child: _RecordModule(
+          title: 'Business Vanguard',
+          subtitle:
+              'Vanguard status across business deliveries, selected, policy-applied and required handling.',
+          records: records,
+          query: query,
+          fields: const [
+            'id',
+            'requestId',
+            'businessId',
+            'businessName',
+            'status',
+            'serviceType',
+            'vanguardSource',
+            'vanguardPolicySource',
+          ],
+          columns: const ['Delivery', 'Service', 'Status', 'Vanguard Source'],
+          row: (record) => [
+            '${_recordId(record)}\n${_businessNameFor(record)}',
+            '${record['serviceType'] ?? record['service'] ?? 'business'}',
+            '${record['status'] ?? record['deliveryStatus'] ?? 'active'}',
+            '${record['vanguardSource'] ?? record['vanguardPolicySource'] ?? (record['vanguardRequired'] == true ? 'required' : 'selected')}',
+          ],
+        ),
+      );
+
+  Widget _businessInvoicesWorkspace(List<Map<String, dynamic>> invoices) =>
+      _tabWorkspace(
+        child: _RecordModule(
+          title: 'Business Invoices',
+          subtitle: 'Invoice generation, review, history, editing and audit.',
+          records: invoices,
+          query: query,
+          fields: const [
+            'id',
+            'invoiceId',
+            'invoiceNumber',
+            'businessId',
+            'businessName',
+            'status',
+            'invoiceStatus',
+            'billingEmail',
+          ],
+          columns: const ['Invoice', 'Breakdown', 'Status', 'Amount'],
+          row: (record) => [
+            '${record['invoiceNumber'] ?? record['invoiceId'] ?? _recordId(record)}\n${_businessNameFor(record)}',
+            '${record['billingPeriodStart'] ?? 'Period'} -> ${record['billingPeriodEnd'] ?? ''}\n${(record['lineItems'] as List?)?.length ?? record['invoiceDeliveryCount'] ?? 0} line item(s)',
+            '${record['status'] ?? record['invoiceStatus'] ?? 'draft'}',
+            _money(record['total'] ??
+                record['invoiceAmount'] ??
+                record['balanceDue']),
+          ],
+          actions: (record) => [
+            for (final action in const [
+              ('Issue', 'invoice_issue_review'),
+              ('Cancel', 'invoice_cancel_review'),
+              ('Adjust', 'subscription_adjust_review'),
+            ])
+              _MiniAction(
+                label: action.$1,
+                onPressed: () =>
+                    unawaited(onSetBusinessOperationStatus(record, action.$2)),
+              ),
+          ],
+        ),
+      );
+
+  Widget _businessRothWorkspace(List<Map<String, dynamic>> roth) =>
+      _tabWorkspace(
+        child: _RecordModule(
+          title: 'Business Roth',
+          subtitle:
+              'Business Roth purchases, usage, ledger, history and audit.',
+          records: roth,
+          query: query,
+          fields: const [
+            'id',
+            'businessId',
+            'businessName',
+            'purchaseId',
+            'status',
+            'direction',
+            'type',
+            'source',
+          ],
+          columns: const ['Business', 'Source', 'Status', 'Amount'],
+          row: (record) => [
+            '${_businessNameFor(record)}\n${record['purchaseId'] ?? record['businessId'] ?? _recordId(record)}',
+            '${record['type'] ?? record['source'] ?? 'business_roth'}\n${record['note'] ?? record['reason'] ?? ''}',
+            '${record['status'] ?? record['direction'] ?? 'active'}',
+            _money(
+                record['amount'] ?? record['amountGbp'] ?? record['balance']),
+          ],
+          actions: (record) => [
+            for (final action in const [
+              ('Credit', 'roth_credit_review'),
+              ('Debit', 'roth_debit_review'),
+              ('Freeze', 'roth_freeze_review'),
+            ])
+              _MiniAction(
+                label: action.$1,
+                onPressed: () =>
+                    unawaited(onSetBusinessOperationStatus(record, action.$2)),
+              ),
+          ],
+        ),
+      );
+
+  Widget _businessAnalyticsWorkspace(List<Map<String, dynamic>> analytics) =>
+      _tabWorkspace(
+        child: _RecordModule(
+          title: 'Business Analytics',
+          subtitle:
+              'Per-business delivery volume, spend, service mix, Vanguard usage, Health+ and Gifts volume.',
+          records: analytics,
+          query: query,
+          fields: const ['businessName', 'businessId'],
+          columns: const [
+            'Business',
+            'Volume / Spend',
+            'On-time',
+            'Service Mix'
+          ],
+          row: (record) => [
+            '${record['businessName'] ?? 'Business'}',
+            '${record['monthlyDeliveries'] ?? 0} deliveries\n${_money(record['spend'])} spend',
+            '${(_numberFrom(record['onTimeRate'])).toStringAsFixed(1)}% complete/on-time proxy',
+            'Vanguard ${record['vanguardUsage'] ?? 0}\nHealth+ ${record['healthUsage'] ?? 0}\nGifts ${record['giftsUsage'] ?? 0}',
+          ],
+        ),
+      );
+
+  Widget _businessAuditWorkspace(List<Map<String, dynamic>> audit) =>
+      _tabWorkspace(
+        child: _RecordModule(
+          title: 'Business Audit Log',
+          subtitle:
+              'Company, member, delivery, invoice, Roth and admin intervention events tied to Business accounts.',
+          records: audit,
+          query: query,
+          fields: const [
+            'businessId',
+            'businessName',
+            'action',
+            'actionType',
+            'recordType',
+            'recordId',
+            'adminEmail',
+            'reason',
+          ],
+          columns: const ['Action', 'Record', 'Admin', 'Reason / Time'],
+          row: (record) => [
+            '${record['actionType'] ?? record['action'] ?? 'Business action'}\n${_businessNameFor(record)}',
+            '${record['recordType'] ?? ''}\n${record['recordId'] ?? record['businessId'] ?? ''}',
+            '${record['adminEmail'] ?? record['adminId'] ?? 'admin'}',
+            '${record['reason'] ?? ''}\n${_date(record['createdAt'] ?? record['timestamp'])}',
+          ],
+        ),
+      );
+
+  Widget _tabWorkspace({required Widget child}) {
+    return ListView(
+      padding: const EdgeInsets.all(16),
+      children: [child],
     );
   }
+
+  List<Map<String, dynamic>> _businessDeliveryRows() =>
+      deliveries.where(_isBusinessRecord).toList(growable: false);
+
+  List<Map<String, dynamic>> _businessHealthPlusRows(
+    List<Map<String, dynamic>> businessDeliveries,
+  ) =>
+      [
+        ...businessDeliveries.where((item) =>
+            _serviceType(item).contains('health') ||
+            '${item['sourceModule'] ?? ''}'.toLowerCase().contains('health')),
+        ...healthPlusPickups.where(_isBusinessRecord),
+      ].toList(growable: false);
+
+  List<Map<String, dynamic>> _businessGiftRows(
+    List<Map<String, dynamic>> businessDeliveries,
+  ) =>
+      [
+        ...businessDeliveries.where((item) =>
+            _serviceType(item).contains('gift') ||
+            '${item['sourceModule'] ?? ''}'.toLowerCase().contains('gift')),
+        ...giftRecords.where(_isBusinessRecord),
+      ].toList(growable: false);
+
+  List<Map<String, dynamic>> _businessInvoiceRows(
+    List<Map<String, dynamic>> businessDeliveries,
+  ) {
+    if (businessInvoices.isNotEmpty) return businessInvoices;
+    return accounts.map((account) {
+      final id = _businessAccountId(account);
+      final scoped = businessDeliveries
+          .where((delivery) => _businessRecordId(delivery) == id)
+          .toList(growable: false);
+      final amount = scoped.fold<double>(
+        0,
+        (total, delivery) =>
+            total +
+            _numberFrom(delivery['finalAmount'] ??
+                delivery['price'] ??
+                delivery['quote']),
+      );
+      return {
+        ...account,
+        'id': id,
+        'businessId': id,
+        'invoiceAmount': account['outstandingInvoiceAmount'] ?? amount,
+        'invoiceStatus': account['invoiceStatus'] ?? 'draft',
+        'invoiceDeliveryCount': scoped.length,
+      };
+    }).toList(growable: false);
+  }
+
+  List<Map<String, dynamic>> _businessAnalyticsRows(
+    List<Map<String, dynamic>> businessDeliveries,
+  ) =>
+      accounts.map((account) {
+        final id = _businessAccountId(account);
+        final scoped = businessDeliveries
+            .where((delivery) => _businessRecordId(delivery) == id)
+            .toList(growable: false);
+        final completed = scoped
+            .where((item) =>
+                '${item['status'] ?? item['deliveryStatus'] ?? ''}'
+                    .toLowerCase()
+                    .contains('complete') ||
+                '${item['status'] ?? item['deliveryStatus'] ?? ''}'
+                    .toLowerCase()
+                    .contains('deliver'))
+            .length;
+        final spend = scoped.fold<double>(
+          0,
+          (total, item) =>
+              total +
+              _numberFrom(
+                  item['finalAmount'] ?? item['price'] ?? item['quote']),
+        );
+        return {
+          ...account,
+          'businessId': id,
+          'monthlyDeliveries': scoped.length,
+          'onTimeRate': scoped.isEmpty ? 0 : (completed / scoped.length) * 100,
+          'spend': spend,
+          'vanguardUsage': scoped.where(_hasVanguardProtection).length,
+          'healthUsage': scoped
+              .where((item) => _serviceType(item).contains('health'))
+              .length,
+          'giftsUsage': scoped
+              .where((item) => _serviceType(item).contains('gift'))
+              .length,
+        };
+      }).toList(growable: false);
+
+  List<Map<String, dynamic>> _businessMemberRows() {
+    final rows = <Map<String, dynamic>>[];
+    for (final account in accounts) {
+      final id = _businessAccountId(account);
+      final members = account['teamMembers'];
+      if (members is List) {
+        for (var index = 0; index < members.length; index++) {
+          final member = members[index];
+          if (member is Map) {
+            rows.add({
+              ...member.cast<String, dynamic>(),
+              'id': id,
+              'businessId': id,
+              'businessName': account['businessName'] ?? account['companyName'],
+              'memberIndex': index,
+            });
+          }
+        }
+      }
+      final ownerId =
+          '${account['createdByUserId'] ?? account['ownerId'] ?? ''}';
+      if (ownerId.isNotEmpty) {
+        rows.add({
+          'id': id,
+          'businessId': id,
+          'businessName': account['businessName'] ?? account['companyName'],
+          'userId': ownerId,
+          'email': account['contactEmail'] ?? account['billingEmail'],
+          'name': account['contactName'] ?? account['ownerName'],
+          'role': 'owner',
+          'status': 'active',
+          'memberIndex': -1,
+        });
+      }
+    }
+    return rows;
+  }
+
+  List<Map<String, dynamic>> _membersFor(String businessId) =>
+      _businessMemberRows()
+          .where((member) => _businessRecordId(member) == businessId)
+          .toList(growable: false);
+
+  List<Map<String, dynamic>> _deliveriesFor(String businessId) => deliveries
+      .where((delivery) => _businessRecordId(delivery) == businessId)
+      .toList(growable: false);
+
+  List<Map<String, dynamic>> _businessAuditRows() => auditLogs
+      .where((item) =>
+          _isBusinessRecord(item) ||
+          '${item['action'] ?? item['actionType'] ?? ''}'
+              .toLowerCase()
+              .contains('business'))
+      .toList(growable: false);
+
+  bool _isBusinessRecord(Map<String, dynamic> item) =>
+      item['isBusinessDelivery'] == true ||
+      item['businessDelivery'] == true ||
+      '${item['sourceModule'] ?? ''}'.toLowerCase() == 'business' ||
+      _businessRecordId(item).isNotEmpty;
+
+  String _businessRecordId(Map<String, dynamic> item) =>
+      '${item['businessId'] ?? item['businessAccountId'] ?? item['companyId'] ?? ''}'
+          .trim();
+
+  String _businessAccountId(Map<String, dynamic> item) =>
+      '${item['businessId'] ?? item['businessAccountId'] ?? item['companyId'] ?? item['id'] ?? ''}'
+          .trim();
+
+  String _businessNameFor(Map<String, dynamic> item) {
+    final direct =
+        '${item['businessName'] ?? item['companyName'] ?? ''}'.trim();
+    if (direct.isNotEmpty) return direct;
+    final businessId = _businessRecordId(item);
+    final account = accounts.firstWhere(
+      (candidate) => _businessAccountId(candidate) == businessId,
+      orElse: () => const {},
+    );
+    return '${account['businessName'] ?? account['companyName'] ?? businessId}';
+  }
+
+  String _serviceType(Map<String, dynamic> item) =>
+      '${item['serviceType'] ?? item['service'] ?? item['category'] ?? ''}'
+          .toLowerCase();
 }
 
 class _HealthPlusAnalyticsPanel extends StatelessWidget {
@@ -4835,86 +5586,6 @@ class _HealthPlusAnalyticsPanel extends StatelessWidget {
                               '${item['pharmacyName'] ?? item['pharmacyAddress'] ?? ''}' ==
                               pharmacy)
                           .length),
-              ],
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _BusinessAnalyticsPanel extends StatelessWidget {
-  const _BusinessAnalyticsPanel({
-    required this.accounts,
-    required this.deliveries,
-    required this.payments,
-    required this.supportTickets,
-  });
-
-  final List<Map<String, dynamic>> accounts;
-  final List<Map<String, dynamic>> deliveries;
-  final List<Map<String, dynamic>> payments;
-  final List<Map<String, dynamic>> supportTickets;
-
-  @override
-  Widget build(BuildContext context) {
-    return DecoratedBox(
-      decoration: _panelDecoration(),
-      child: Padding(
-        padding: const EdgeInsets.all(18),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Text('Business analytics',
-                style: TextStyle(fontSize: 22, fontWeight: FontWeight.w800)),
-            const SizedBox(height: 14),
-            Wrap(
-              spacing: 10,
-              runSpacing: 10,
-              children: [
-                _HealthChip(
-                    'Growth',
-                    accounts
-                        .where((item) =>
-                            _businessStatus(item).contains('approved'))
-                        .length),
-                _HealthChip(
-                    'Retention',
-                    accounts
-                        .where((item) => '${item['subscriptionStatus'] ?? ''}'
-                            .toLowerCase()
-                            .contains('active'))
-                        .length),
-                _HealthChip('Order volume',
-                    _countRecordsContaining(deliveries, 'business')),
-                _HealthChip(
-                    'Invoice performance',
-                    accounts
-                        .where((item) => '${item['invoiceStatus'] ?? ''}'
-                            .toLowerCase()
-                            .contains('paid'))
-                        .length),
-                _HealthChip(
-                    'Subscriptions',
-                    accounts
-                        .where((item) =>
-                            '${item['subscriptionId'] ?? item['plan'] ?? ''}'
-                                .trim()
-                                .isNotEmpty)
-                        .length),
-                _HealthChip('Health+ usage',
-                    _countRecordsContaining(deliveries, 'health')),
-                _HealthChip(
-                    'Gift usage', _countRecordsContaining(deliveries, 'gift')),
-                _HealthChip(
-                    'Support',
-                    supportTickets
-                        .where((item) =>
-                            '${item['businessId'] ?? item['businessName'] ?? ''}'
-                                .trim()
-                                .isNotEmpty)
-                        .length),
               ],
             ),
           ],
@@ -6523,6 +7194,9 @@ class _RiderOperationsModule extends StatelessWidget {
     required this.riders,
     required this.deliveries,
     required this.documents,
+    required this.driverPerformanceMetrics,
+    required this.auditLogs,
+    required this.adminNotes,
     required this.ratings,
     required this.payments,
     required this.query,
@@ -6540,6 +7214,9 @@ class _RiderOperationsModule extends StatelessWidget {
   final List<Map<String, dynamic>> riders;
   final List<Map<String, dynamic>> deliveries;
   final List<Map<String, dynamic>> documents;
+  final List<Map<String, dynamic>> driverPerformanceMetrics;
+  final List<Map<String, dynamic>> auditLogs;
+  final List<Map<String, dynamic>> adminNotes;
   final List<Map<String, dynamic>> ratings;
   final List<Map<String, dynamic>> payments;
   final String query;
@@ -6674,7 +7351,194 @@ class _RiderOperationsModule extends StatelessWidget {
                   ]
               : null,
         ),
+        const SizedBox(height: 18),
+        _RecordModule(
+          title: 'Rider Performance Metrics',
+          subtitle:
+              'Historical driverPerformanceMetrics workspace with acceptance, completion, cancellation, late arrival, trust, rank, warnings, history and audit.',
+          records: driverPerformanceMetrics,
+          query: query,
+          fields: const [
+            'id',
+            'riderId',
+            'driverId',
+            'uid',
+            'fullName',
+            'acceptanceRate',
+            'completionRate',
+            'cancellationRate',
+            'lateArrivals',
+            'trustHistory',
+            'rankHistory',
+            'rank',
+            'riderRank',
+            'lowRatingFlag',
+            'operationalWarnings',
+          ],
+          columns: const ['Rider', 'Performance', 'Trust / Rank', 'Warnings'],
+          row: (record) => [
+            '${_riderNameForMetric(record)}\n${_metricRiderId(record)}',
+            'Accept ${_percent(record['acceptanceRate'])} / Complete ${_percent(record['completionRate'])}\nCancel ${_percent(record['cancellationRate'])} / Late ${record['lateArrivals'] ?? record['lateArrivalCount'] ?? 0}',
+            '${record['trustTier'] ?? record['trustLevel'] ?? 'standard'} / ${record['rank'] ?? record['riderRank'] ?? 'unranked'}\nHistory ${_historyCount(record['trustHistory']) + _historyCount(record['rankHistory'])}',
+            _riderWarningSummary(record),
+          ],
+          actions: canManageRiders
+              ? (record) => [
+                    _MiniAction(
+                      label: 'Review',
+                      onPressed: () => unawaited(
+                        onSetRiderStatus(
+                            _riderForMetric(record), 'performance_review'),
+                      ),
+                    ),
+                    _MiniAction(
+                      label: 'Warn',
+                      onPressed: () => unawaited(
+                        onSetRiderStatus(
+                            _riderForMetric(record), 'warning_issued'),
+                      ),
+                    ),
+                    _MiniAction(
+                      label: 'Suspend',
+                      onPressed: () => unawaited(
+                        onSetRiderStatus(_riderForMetric(record), 'suspended'),
+                      ),
+                    ),
+                  ]
+              : null,
+        ),
+        const SizedBox(height: 18),
+        _RiderOperationsHistoryPanel(
+          auditLogs: auditLogs,
+          adminNotes: adminNotes,
+          query: query,
+        ),
       ],
+    );
+  }
+
+  String _metricRiderId(Map<String, dynamic> record) =>
+      '${record['riderId'] ?? record['driverId'] ?? record['uid'] ?? record['id'] ?? ''}'
+          .trim();
+
+  Map<String, dynamic> _riderForMetric(Map<String, dynamic> metric) {
+    final id = _metricRiderId(metric);
+    return riders.firstWhere(
+      (rider) => _riderId(rider) == id,
+      orElse: () => {'id': id, ...metric},
+    );
+  }
+
+  String _riderNameForMetric(Map<String, dynamic> metric) {
+    final rider = _riderForMetric(metric);
+    return '${rider['fullName'] ?? rider['name'] ?? metric['fullName'] ?? 'Rider'}';
+  }
+
+  int _historyCount(Object? value) => value is List ? value.length : 0;
+
+  String _riderWarningSummary(Map<String, dynamic> record) {
+    final warnings = <String>[];
+    if (record['lowRatingFlag'] == true) warnings.add('Low rating');
+    if (record['trustReviewRequired'] == true) warnings.add('Trust review');
+    final operational = record['operationalWarnings'];
+    if (operational is List && operational.isNotEmpty) {
+      warnings.add('${operational.length} operational');
+    }
+    if (warnings.isEmpty) return 'No active warnings';
+    return warnings.join(' / ');
+  }
+}
+
+class _RiderOperationsHistoryPanel extends StatelessWidget {
+  const _RiderOperationsHistoryPanel({
+    required this.auditLogs,
+    required this.adminNotes,
+    required this.query,
+  });
+
+  final List<Map<String, dynamic>> auditLogs;
+  final List<Map<String, dynamic>> adminNotes;
+  final String query;
+
+  @override
+  Widget build(BuildContext context) {
+    final riderAudit = auditLogs
+        .where((record) =>
+            '${record['recordType'] ?? record['actionType'] ?? record['action'] ?? ''}'
+                .toLowerCase()
+                .contains('rider') ||
+            '${record['recordType'] ?? record['actionType'] ?? record['action'] ?? ''}'
+                .toLowerCase()
+                .contains('driver'))
+        .toList(growable: false);
+    final riderNotes = adminNotes
+        .where((record) =>
+            '${record['subjectType'] ?? record['recordType'] ?? ''}'
+                .toLowerCase()
+                .contains('rider') ||
+            '${record['subjectType'] ?? record['recordType'] ?? ''}'
+                .toLowerCase()
+                .contains('driver'))
+        .toList(growable: false);
+    return DecoratedBox(
+      decoration: _panelDecoration(),
+      child: Padding(
+        padding: const EdgeInsets.all(18),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              'Rider operational history',
+              style: TextStyle(fontSize: 22, fontWeight: FontWeight.w800),
+            ),
+            const SizedBox(height: 12),
+            Wrap(
+              spacing: 10,
+              runSpacing: 10,
+              children: [
+                _HealthChip('Audit events', riderAudit.length),
+                _HealthChip('Operational notes', riderNotes.length),
+                _HealthChip(
+                    'Warnings',
+                    riderAudit
+                        .where((record) =>
+                            '${record['actionType'] ?? record['action'] ?? ''}'
+                                .toLowerCase()
+                                .contains('warning'))
+                        .length),
+              ],
+            ),
+            const SizedBox(height: 14),
+            _RecordModule(
+              title: 'Rider audit and notes',
+              subtitle:
+                  'Performance reviews, operational notes, warnings, status changes and historical Rider management.',
+              records: [...riderAudit, ...riderNotes],
+              query: query,
+              fields: const [
+                'id',
+                'recordId',
+                'riderId',
+                'driverId',
+                'subjectId',
+                'action',
+                'actionType',
+                'note',
+                'body',
+                'reason',
+                'adminEmail',
+              ],
+              columns: const ['Type', 'Rider', 'Operator', 'Time'],
+              row: (record) => [
+                '${record['actionType'] ?? record['action'] ?? record['noteType'] ?? 'operational_note'}\n${record['reason'] ?? record['note'] ?? record['body'] ?? ''}',
+                '${record['recordId'] ?? record['riderId'] ?? record['driverId'] ?? record['subjectId'] ?? ''}',
+                '${record['adminEmail'] ?? record['operatorEmail'] ?? record['adminId'] ?? 'admin'}',
+                _date(record['createdAt'] ?? record['timestamp']),
+              ],
+            ),
+          ],
+        ),
+      ),
     );
   }
 }
@@ -12674,6 +13538,12 @@ String _money(Object? value) {
   final parsed = double.tryParse('$value');
   if (parsed == null) return '£0.00';
   return '£${parsed.toStringAsFixed(2)}';
+}
+
+String _percent(Object? value) {
+  final amount = _numberFrom(value);
+  final normalized = amount <= 1 && amount > 0 ? amount * 100 : amount;
+  return '${normalized.toStringAsFixed(1)}%';
 }
 
 double _numberFrom(Object? value) {
