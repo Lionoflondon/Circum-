@@ -619,6 +619,17 @@ void main() {
       );
     });
 
+    test('Admin finance UI restores historical backend finance actions', () {
+      final source =
+          File('lib/app/admin/admin_phase1_shell.dart').readAsStringSync();
+
+      expect(source, contains("httpsCallable('issueRothToWallets')"));
+      expect(source, contains("httpsCallable('setWalletFrozen')"));
+      expect(source, contains("httpsCallable('createRiderTransferOrPayout')"));
+      expect(source, isNot(contains('stripeSecretKey')));
+      expect(source, isNot(contains('sk_live_')));
+    });
+
     test('finance workflow patches do not alter payment authority fields', () {
       final patch = AdminFinanceTools.workflowPatch(
         status: 'reconciled',

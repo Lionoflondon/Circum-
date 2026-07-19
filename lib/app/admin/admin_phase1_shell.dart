@@ -696,6 +696,133 @@ class _AdminPhaseOneShellState extends State<AdminPhaseOneShell> {
     await _loadAdminData();
   }
 
+  Future<void> _issueRothFromAdminRecord(Map<String, dynamic> record) async {
+    if (!_can(AdminPermission.manageFinance)) {
+      setState(() => _message = 'Your role cannot issue Roth.');
+      return;
+    }
+    final recipient =
+        '${record['userId'] ?? record['uid'] ?? record['email'] ?? record['riderId'] ?? record['senderId'] ?? ''}'
+            .trim();
+    final amount = _numberFrom(
+        record['amount'] ?? record['rothAmount'] ?? record['balance']);
+    if (recipient.isEmpty || amount <= 0) {
+      setState(() => _message = 'Roth issue needs a recipient and amount.');
+      return;
+    }
+    try {
+      final idempotencyKey =
+          'admin_${_user?.uid ?? _user?.email}_${_idFor(record)}_${DateTime.now().microsecondsSinceEpoch}';
+      await _functions.httpsCallable('issueRothToWallets').call({
+        recipient.contains('@') ? 'recipientEmail' : 'recipientUid': recipient,
+        'walletTarget':
+            '${record['walletType'] ?? record['walletTarget'] ?? 'sender'}',
+        'amount': amount,
+        'reason': 'Historical Admin Roth issue restored in isolated Admin',
+        'idempotencyKey': idempotencyKey,
+      });
+      await _writeAudit(AdminAuditEntry(
+        adminUserId: _user?.uid ?? 'unknown-admin',
+        actionType: 'admin_roth_issue_requested',
+        recordType: '${record['_collection'] ?? 'wallets'}',
+        recordId: _idFor(record),
+        newValue: {'recipient': recipient, 'amount': amount},
+        reason: 'Roth issued through backend callable',
+      ));
+      setState(() => _message = 'Roth issue submitted for $recipient.');
+      await _loadAdminData();
+    } on FirebaseFunctionsException catch (error) {
+      setState(() => _message = error.message ?? 'Roth issue failed.');
+    }
+  }
+
+  Future<void> _setWalletFrozenFromAdminRecord(
+    Map<String, dynamic> record,
+    bool frozen,
+  ) async {
+    if (!_can(AdminPermission.manageFinance)) {
+      setState(() => _message = 'Your role cannot freeze wallets.');
+      return;
+    }
+    final userId =
+        '${record['userId'] ?? record['uid'] ?? record['riderId'] ?? record['senderId'] ?? record['email'] ?? ''}'
+            .trim();
+    if (userId.isEmpty) {
+      setState(() => _message = 'Wallet freeze needs a user id or email.');
+      return;
+    }
+    try {
+      await _functions.httpsCallable('setWalletFrozen').call({
+        'userId': userId,
+        'isFrozen': frozen,
+        'reason': frozen
+            ? 'Admin wallet freeze restored in isolated Admin'
+            : 'Admin wallet unfreeze restored in isolated Admin',
+      });
+      await _writeAudit(AdminAuditEntry(
+        adminUserId: _user?.uid ?? 'unknown-admin',
+        actionType: frozen ? 'wallet_frozen' : 'wallet_unfrozen',
+        recordType: '${record['_collection'] ?? 'wallets'}',
+        recordId: _idFor(record),
+        oldValue: {'isFrozen': record['isFrozen'] ?? record['frozen']},
+        newValue: {'isFrozen': frozen, 'userId': userId},
+        reason: 'Wallet freeze status updated through backend callable',
+      ));
+      setState(() => _message = frozen ? 'Wallet frozen.' : 'Wallet unfrozen.');
+      await _loadAdminData();
+    } on FirebaseFunctionsException catch (error) {
+      setState(
+          () => _message = error.message ?? 'Wallet freeze action failed.');
+    }
+  }
+
+  Future<void> _processPayoutRequestFromAdmin(
+    Map<String, dynamic> record,
+    String nextStatus,
+  ) async {
+    if (!_can(AdminPermission.manageFinance)) {
+      setState(() => _message = 'Your role cannot process payouts.');
+      return;
+    }
+    final requestId = _idFor(record);
+    final riderId = '${record['riderId'] ?? record['driverId'] ?? ''}'.trim();
+    final amount = _numberFrom(record['amount'] ?? record['pendingAmount']);
+    if (requestId.isEmpty || riderId.isEmpty || amount <= 0) {
+      setState(
+          () => _message = 'Payout action needs request, rider and amount.');
+      return;
+    }
+    try {
+      if (nextStatus == 'approved') {
+        await FirebaseFunctions.instanceFor(region: 'us-central1')
+            .httpsCallable('createRiderTransferOrPayout')
+            .call(
+                {'requestId': requestId, 'riderId': riderId, 'amount': amount});
+      } else {
+        await _db.collection('payoutRequests').doc(requestId).set({
+          'status': 'rejected',
+          'processedAt': FieldValue.serverTimestamp(),
+          'processedBy': _user?.uid,
+          'updatedAt': FieldValue.serverTimestamp(),
+        }, SetOptions(merge: true));
+      }
+      await _writeAudit(AdminAuditEntry(
+        adminUserId: _user?.uid ?? 'unknown-admin',
+        actionType: nextStatus == 'approved'
+            ? 'rider_stripe_payout_started'
+            : 'rider_withdrawal_rejected',
+        recordType: 'payoutRequests',
+        recordId: requestId,
+        newValue: {'riderId': riderId, 'amount': amount, 'status': nextStatus},
+        reason: 'Rider payout processed from Admin',
+      ));
+      setState(() => _message = 'Payout $requestId marked $nextStatus.');
+      await _loadAdminData();
+    } on FirebaseFunctionsException catch (error) {
+      setState(() => _message = error.message ?? 'Payout action failed.');
+    }
+  }
+
   Future<void> _moderateRating(
     Map<String, dynamic> rating,
     String action,
@@ -993,6 +1120,9 @@ class _AdminPhaseOneShellState extends State<AdminPhaseOneShell> {
                       onUpdateGiftWorkflow: _updateGiftWorkflow,
                       onUpdateHealthPlusPickup: _updateHealthPlusPickup,
                       onUpdateFinanceWorkflow: _updateFinanceWorkflow,
+                      onIssueRoth: _issueRothFromAdminRecord,
+                      onSetWalletFrozen: _setWalletFrozenFromAdminRecord,
+                      onProcessPayoutRequest: _processPayoutRequestFromAdmin,
                       onModerateRating: _moderateRating,
                       onSetBusinessOperationStatus: _setBusinessOperationStatus,
                       onUpdatePlatformRecord: _updatePlatformRecord,
@@ -1628,6 +1758,9 @@ class _AdminModuleBody extends StatelessWidget {
     required this.onUpdateGiftWorkflow,
     required this.onUpdateHealthPlusPickup,
     required this.onUpdateFinanceWorkflow,
+    required this.onIssueRoth,
+    required this.onSetWalletFrozen,
+    required this.onProcessPayoutRequest,
     required this.onModerateRating,
     required this.onSetBusinessOperationStatus,
     required this.onUpdatePlatformRecord,
@@ -1676,6 +1809,10 @@ class _AdminModuleBody extends StatelessWidget {
       onUpdateHealthPlusPickup;
   final Future<void> Function(Map<String, dynamic>, String)
       onUpdateFinanceWorkflow;
+  final Future<void> Function(Map<String, dynamic>) onIssueRoth;
+  final Future<void> Function(Map<String, dynamic>, bool) onSetWalletFrozen;
+  final Future<void> Function(Map<String, dynamic>, String)
+      onProcessPayoutRequest;
   final Future<void> Function(Map<String, dynamic>, String) onModerateRating;
   final Future<void> Function(Map<String, dynamic>, String)
       onSetBusinessOperationStatus;
@@ -1832,6 +1969,9 @@ class _AdminModuleBody extends StatelessWidget {
               query: query,
               canManageFinance: canManageFinance,
               onUpdateFinanceWorkflow: onUpdateFinanceWorkflow,
+              onIssueRoth: onIssueRoth,
+              onSetWalletFrozen: onSetWalletFrozen,
+              onProcessPayoutRequest: onProcessPayoutRequest,
               onModerateRating: onModerateRating,
             ),
           AdminModule.healthPlus => _HealthPlusOperationsModule(
@@ -2863,6 +3003,9 @@ class _FinanceOperationsModule extends StatelessWidget {
     required this.query,
     required this.canManageFinance,
     required this.onUpdateFinanceWorkflow,
+    required this.onIssueRoth,
+    required this.onSetWalletFrozen,
+    required this.onProcessPayoutRequest,
     required this.onModerateRating,
   });
 
@@ -2884,6 +3027,10 @@ class _FinanceOperationsModule extends StatelessWidget {
   final bool canManageFinance;
   final Future<void> Function(Map<String, dynamic>, String)
       onUpdateFinanceWorkflow;
+  final Future<void> Function(Map<String, dynamic>) onIssueRoth;
+  final Future<void> Function(Map<String, dynamic>, bool) onSetWalletFrozen;
+  final Future<void> Function(Map<String, dynamic>, String)
+      onProcessPayoutRequest;
   final Future<void> Function(Map<String, dynamic>, String) onModerateRating;
 
   @override
@@ -3009,6 +3156,10 @@ class _FinanceOperationsModule extends StatelessWidget {
           riderEarnings: riderEarnings,
           payoutRequests: payoutRequests,
           query: query,
+          canManageFinance: canManageFinance,
+          onIssueRoth: onIssueRoth,
+          onSetWalletFrozen: onSetWalletFrozen,
+          onProcessPayoutRequest: onProcessPayoutRequest,
         ),
         const SizedBox(height: 18),
         _BusinessFinancePanel(
@@ -3116,6 +3267,10 @@ class _FinanceLedgerPanel extends StatelessWidget {
     required this.riderEarnings,
     required this.payoutRequests,
     required this.query,
+    required this.canManageFinance,
+    required this.onIssueRoth,
+    required this.onSetWalletFrozen,
+    required this.onProcessPayoutRequest,
   });
 
   final List<Map<String, dynamic>> wallets;
@@ -3125,6 +3280,11 @@ class _FinanceLedgerPanel extends StatelessWidget {
   final List<Map<String, dynamic>> riderEarnings;
   final List<Map<String, dynamic>> payoutRequests;
   final String query;
+  final bool canManageFinance;
+  final Future<void> Function(Map<String, dynamic>) onIssueRoth;
+  final Future<void> Function(Map<String, dynamic>, bool) onSetWalletFrozen;
+  final Future<void> Function(Map<String, dynamic>, String)
+      onProcessPayoutRequest;
 
   @override
   Widget build(BuildContext context) {
@@ -3162,6 +3322,31 @@ class _FinanceLedgerPanel extends StatelessWidget {
                 record['pendingAmount']),
             '${record['status'] ?? record['type'] ?? record['payoutStatus'] ?? 'recorded'}',
           ],
+          actions: canManageFinance
+              ? (record) {
+                  final source = '${record['_collection'] ?? ''}';
+                  if (source == 'payoutRequests') {
+                    return [
+                      _MiniAction(
+                        label: 'Approve payout',
+                        onPressed: () => unawaited(
+                            onProcessPayoutRequest(record, 'approved')),
+                      ),
+                      _MiniAction(
+                        label: 'Reject payout',
+                        onPressed: () => unawaited(
+                            onProcessPayoutRequest(record, 'rejected')),
+                      ),
+                    ];
+                  }
+                  return [
+                    _MiniAction(
+                      label: 'Issue Roth',
+                      onPressed: () => unawaited(onIssueRoth(record)),
+                    ),
+                  ];
+                }
+              : null,
         ),
         const SizedBox(height: 18),
         _RecordModule(
@@ -3189,6 +3374,24 @@ class _FinanceLedgerPanel extends StatelessWidget {
                 record['availableBalance'] ??
                 record['pendingBalance']),
           ],
+          actions: canManageFinance
+              ? (record) => [
+                    _MiniAction(
+                      label: 'Issue Roth',
+                      onPressed: () => unawaited(onIssueRoth(record)),
+                    ),
+                    _MiniAction(
+                      label: 'Freeze',
+                      onPressed: () =>
+                          unawaited(onSetWalletFrozen(record, true)),
+                    ),
+                    _MiniAction(
+                      label: 'Unfreeze',
+                      onPressed: () =>
+                          unawaited(onSetWalletFrozen(record, false)),
+                    ),
+                  ]
+              : null,
         ),
       ],
     );
