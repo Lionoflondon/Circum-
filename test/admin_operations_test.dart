@@ -953,5 +953,18 @@ void main() {
       expect(method, isNot(contains("collection('users').doc(senderId)")));
       expect(method, isNot(contains("collection('senderTrustEvents').doc()")));
     });
+
+    test('restores Admin notification delivery operations', () {
+      final source =
+          File('lib/app/admin/admin_phase1_shell.dart').readAsStringSync();
+
+      expect(source, contains("collection('notifications')"));
+      expect(source, contains("httpsCallable('retryNotificationDelivery')"));
+      expect(source, contains('Notification Operations'));
+      expect(source, contains('pushDeliveryStatus'));
+      expect(source, contains('failureReason'));
+      expect(source, contains('bool _notificationNeedsRetry'));
+      expect(source, contains('Retry'));
+    });
   });
 }

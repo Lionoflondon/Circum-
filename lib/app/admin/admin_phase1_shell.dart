@@ -2182,6 +2182,26 @@ class _AdminPhaseOneShellState extends State<AdminPhaseOneShell> {
     }
   }
 
+  Future<void> _retryNotificationDelivery(
+    Map<String, dynamic> notification,
+  ) async {
+    if (!_can(AdminPermission.manageAdmins)) {
+      setState(() => _message = 'Your role cannot retry notifications.');
+      return;
+    }
+    final id = _idFor(notification);
+    if (id.isEmpty) return;
+    try {
+      await _functions.httpsCallable('retryNotificationDelivery').call({
+        'notificationId': id,
+      });
+      setState(() => _message = 'Notification retry sent for $id.');
+      await _loadAdminData();
+    } on FirebaseFunctionsException catch (error) {
+      setState(() => _message = error.message ?? 'Notification retry failed.');
+    }
+  }
+
   Future<void> _updateHealthPlusPickup(
     Map<String, dynamic> pickup,
     String status,
@@ -3266,6 +3286,7 @@ class _AdminPhaseOneShellState extends State<AdminPhaseOneShell> {
                       announcementTitle: _announcementTitle,
                       announcementBody: _announcementBody,
                       onSendPlatformAnnouncement: _sendPlatformAnnouncement,
+                      onRetryNotificationDelivery: _retryNotificationDelivery,
                       onOpenRiderProfile: _openRiderProfile,
                       onOpenDeliveryProfile: _openDeliveryProfile,
                       onOpenHealthPlusProfile: _openHealthPlusProfile,
@@ -3406,6 +3427,7 @@ class AdminDataBundle {
     required this.platformStatus,
     required this.platformNotices,
     required this.platformVersions,
+    required this.notifications,
     required this.messageReports,
     required this.adminNotes,
     required this.senderTrustEvents,
@@ -3453,6 +3475,7 @@ class AdminDataBundle {
   final List<Map<String, dynamic>> platformStatus;
   final List<Map<String, dynamic>> platformNotices;
   final List<Map<String, dynamic>> platformVersions;
+  final List<Map<String, dynamic>> notifications;
   final List<Map<String, dynamic>> messageReports;
   final List<Map<String, dynamic>> adminNotes;
   final List<Map<String, dynamic>> senderTrustEvents;
@@ -3500,6 +3523,7 @@ class AdminDataBundle {
         platformStatus: [],
         platformNotices: [],
         platformVersions: [],
+        notifications: [],
         messageReports: [],
         adminNotes: [],
         senderTrustEvents: [],
@@ -3621,6 +3645,10 @@ class AdminRepository {
           _db.collection('platformNotices').limit(100), 'platformNotices'),
       _readTagged(
           _db.collection('platformVersions').limit(100), 'platformVersions'),
+      _read(_db
+          .collection('notifications')
+          .orderBy('createdAt', descending: true)
+          .limit(150)),
       canViewSupport
           ? _read(_db.collection('messageReports').limit(100))
           : Future.value(<Map<String, dynamic>>[]),
@@ -3678,9 +3706,10 @@ class AdminRepository {
       platformStatus: results[39],
       platformNotices: results[40],
       platformVersions: results[41],
-      messageReports: results[42],
-      adminNotes: results[43],
-      senderTrustEvents: results[44],
+      notifications: results[42],
+      messageReports: results[43],
+      adminNotes: results[44],
+      senderTrustEvents: results[45],
     );
   }
 
@@ -4047,6 +4076,7 @@ class _AdminModuleBody extends StatelessWidget {
     required this.onStartRiderConversation,
     required this.onAddAdminNote,
     required this.onUpdateSenderTrust,
+    required this.onRetryNotificationDelivery,
   });
 
   final AdminModule module;
@@ -4158,6 +4188,7 @@ class _AdminModuleBody extends StatelessWidget {
   final Future<void> Function(Map<String, dynamic>) onStartRiderConversation;
   final Future<void> Function(Map<String, dynamic>, String) onAddAdminNote;
   final Future<void> Function(Map<String, dynamic>, String) onUpdateSenderTrust;
+  final Future<void> Function(Map<String, dynamic>) onRetryNotificationDelivery;
 
   @override
   Widget build(BuildContext context) {
@@ -4492,6 +4523,7 @@ class _AdminModuleBody extends StatelessWidget {
               platformStatus: data.platformStatus,
               platformNotices: data.platformNotices,
               platformVersions: data.platformVersions,
+              notifications: data.notifications,
               auditLogs: data.auditLogs,
               inviteEmail: adminInviteEmail,
               inviteNote: adminInviteNote,
@@ -4504,6 +4536,7 @@ class _AdminModuleBody extends StatelessWidget {
               announcementBody: announcementBody,
               onSendPlatformAnnouncement: onSendPlatformAnnouncement,
               onUpdatePlatformRecord: onUpdatePlatformRecord,
+              onRetryNotificationDelivery: onRetryNotificationDelivery,
             ),
         },
       ],
@@ -10186,6 +10219,7 @@ class _SettingsModule extends StatelessWidget {
     required this.platformStatus,
     required this.platformNotices,
     required this.platformVersions,
+    required this.notifications,
     required this.auditLogs,
     required this.inviteEmail,
     required this.inviteNote,
@@ -10198,6 +10232,7 @@ class _SettingsModule extends StatelessWidget {
     required this.announcementBody,
     required this.onSendPlatformAnnouncement,
     required this.onUpdatePlatformRecord,
+    required this.onRetryNotificationDelivery,
   });
 
   final bool canManageAdmins;
@@ -10206,6 +10241,7 @@ class _SettingsModule extends StatelessWidget {
   final List<Map<String, dynamic>> platformStatus;
   final List<Map<String, dynamic>> platformNotices;
   final List<Map<String, dynamic>> platformVersions;
+  final List<Map<String, dynamic>> notifications;
   final List<Map<String, dynamic>> auditLogs;
   final TextEditingController inviteEmail;
   final TextEditingController inviteNote;
@@ -10221,6 +10257,7 @@ class _SettingsModule extends StatelessWidget {
   final Future<void> Function(String) onSendPlatformAnnouncement;
   final Future<void> Function(Map<String, dynamic>, String)
       onUpdatePlatformRecord;
+  final Future<void> Function(Map<String, dynamic>) onRetryNotificationDelivery;
 
   @override
   Widget build(BuildContext context) {
@@ -10237,6 +10274,8 @@ class _SettingsModule extends StatelessWidget {
         .length;
     final activeNotices =
         platformNotices.where((record) => _platformPublished(record)).length;
+    final failedNotifications =
+        notifications.where(_notificationNeedsRetry).length;
     final platformAudit = auditLogs
         .where((log) =>
             '${log['actionType'] ?? ''}'.toLowerCase().contains('platform') ||
@@ -10261,6 +10300,8 @@ class _SettingsModule extends StatelessWidget {
                 'existing controls'),
             _MetricCard('Versions', '${platformVersions.length}',
                 'build/version records'),
+            _MetricCard('Notifications', '$failedNotifications',
+                '${notifications.length} loaded / retryable'),
           ],
         ),
         const SizedBox(height: 18),
@@ -10341,6 +10382,41 @@ class _SettingsModule extends StatelessWidget {
           actions: canManageAdmins
               ? (record) =>
                   _platformNoticeActions(record, onUpdatePlatformRecord)
+              : null,
+        ),
+        const SizedBox(height: 18),
+        _RecordModule(
+          title: 'Notification Operations',
+          subtitle:
+              'Backend-authored notification history, push delivery status, failure handling and Admin retry.',
+          records: notifications,
+          query: '',
+          fields: const [
+            'id',
+            'recipientId',
+            'recipientRole',
+            'type',
+            'category',
+            'deliveryStatus',
+            'pushDeliveryStatus',
+            'failureReason'
+          ],
+          columns: const ['Notification', 'Recipient', 'Status', 'Updated'],
+          row: (record) => [
+            '${record['title'] ?? record['type'] ?? record['id']}',
+            '${record['recipientRole'] ?? 'role'} / ${record['recipientId'] ?? 'broadcast'}',
+            '${record['deliveryStatus'] ?? 'persisted'} / ${record['pushDeliveryStatus'] ?? 'unknown'}',
+            _date(record['updatedAt'] ?? record['createdAt']),
+          ],
+          actions: canManageAdmins
+              ? (record) => [
+                    if (_notificationNeedsRetry(record))
+                      _MiniAction(
+                        label: 'Retry',
+                        onPressed: () =>
+                            unawaited(onRetryNotificationDelivery(record)),
+                      ),
+                  ]
               : null,
         ),
         const SizedBox(height: 18),
@@ -12585,6 +12661,16 @@ bool _platformPublished(Map<String, dynamic> record) {
   return status.contains('published') ||
       status.contains('active') ||
       status.contains('enabled');
+}
+
+bool _notificationNeedsRetry(Map<String, dynamic> record) {
+  final status =
+      '${record['pushDeliveryStatus'] ?? record['deliveryStatus'] ?? ''}'
+          .toLowerCase();
+  return record['retryable'] == true ||
+      status == 'failed' ||
+      status == 'skipped' ||
+      status == 'retry';
 }
 
 String _platformStatusLabel(List<Map<String, dynamic>> statusRecords) {
