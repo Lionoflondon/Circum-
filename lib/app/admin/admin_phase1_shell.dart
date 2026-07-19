@@ -23,6 +23,7 @@ enum AdminModule {
   healthPlus('Health+', Icons.local_hospital_rounded),
   business('Business', Icons.business_center_rounded),
   gifts('Gifts', Icons.card_giftcard_rounded),
+  giftBrandPartners('Gift Brand Partners', Icons.storefront_rounded),
   giftWorkspace('Gift Team Workspace', Icons.groups_2_rounded),
   giftStoryMedia('Gift Story Media', Icons.video_library_rounded),
   giftCampaignMatches('Gift Campaign Matches', Icons.hub_rounded),
@@ -988,6 +989,719 @@ class _AdminPhaseOneShellState extends State<AdminPhaseOneShell> {
     await _loadAdminData();
   }
 
+  Future<void> _setGiftBrandStatus(
+    Map<String, dynamic> brand,
+    String status,
+  ) async {
+    if (!_can(AdminPermission.manageIssues)) {
+      setState(() => _message = 'Your role cannot manage Gift Brand Partners.');
+      return;
+    }
+    final id = _brandId(brand);
+    if (id.isEmpty) return;
+    final confirmed = await _confirmAdminAction(
+      'Confirm Brand Partner action',
+      'Set ${brand['partnerName'] ?? brand['brandName'] ?? id} to $status?',
+    );
+    if (!confirmed) return;
+    final patch = AdminGiftTools.brandPartnerPatch(
+      status: status,
+      updatedBy: _user?.email ?? _user?.uid ?? 'admin',
+      updatedAt: FieldValue.serverTimestamp(),
+    );
+    await _db
+        .collection('giftBrands')
+        .doc(id)
+        .set(patch, SetOptions(merge: true));
+    await _writeAudit(AdminAuditEntry(
+      adminUserId: _user?.uid ?? 'unknown-admin',
+      actionType: 'gift_brand_partner_$status',
+      recordType: 'giftBrands',
+      recordId: id,
+      oldValue: {
+        'status': brand['status'],
+        'partnershipStatus': brand['partnershipStatus']
+      },
+      newValue: patch,
+      reason: 'Historical Gift Brand Partner workflow restored',
+    ));
+    setState(() => _message = 'Gift Brand Partner $id marked $status.');
+    await _loadAdminData();
+  }
+
+  Future<void> _editGiftBrandPartner(Map<String, dynamic>? brand) async {
+    if (!_can(AdminPermission.manageIssues)) {
+      setState(() => _message = 'Your role cannot manage Gift Brand Partners.');
+      return;
+    }
+    final existing = brand ?? const <String, dynamic>{};
+    final partnerName = TextEditingController(
+        text: '${existing['partnerName'] ?? existing['brandName'] ?? ''}');
+    final category =
+        TextEditingController(text: '${existing['category'] ?? ''}');
+    final contactName =
+        TextEditingController(text: '${existing['contactName'] ?? ''}');
+    final contactEmail =
+        TextEditingController(text: '${existing['contactEmail'] ?? ''}');
+    final phone = TextEditingController(text: '${existing['phone'] ?? ''}');
+    final website = TextEditingController(text: '${existing['website'] ?? ''}');
+    final approvedFor = TextEditingController(
+        text: _adminStringList(existing['approvedFor']).join(', '));
+    final notes = TextEditingController(
+        text: '${existing['internalNotes'] ?? existing['brandNotes'] ?? ''}');
+    var status =
+        '${existing['status'] ?? existing['partnershipStatus'] ?? 'pending'}';
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setDialogState) => AlertDialog(
+          title:
+              Text(brand == null ? 'New Brand Partner' : 'Edit Brand Partner'),
+          content: SizedBox(
+            width: 620,
+            child: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  TextField(
+                      controller: partnerName,
+                      decoration: const InputDecoration(
+                          labelText: 'Brand / partner name')),
+                  TextField(
+                      controller: category,
+                      decoration: const InputDecoration(labelText: 'Category')),
+                  TextField(
+                      controller: contactName,
+                      decoration:
+                          const InputDecoration(labelText: 'Contact name')),
+                  TextField(
+                      controller: contactEmail,
+                      decoration:
+                          const InputDecoration(labelText: 'Contact email')),
+                  TextField(
+                      controller: phone,
+                      decoration: const InputDecoration(labelText: 'Phone')),
+                  TextField(
+                      controller: website,
+                      decoration: const InputDecoration(labelText: 'Website')),
+                  TextField(
+                      controller: approvedFor,
+                      decoration: const InputDecoration(
+                          labelText: 'Campaign / catalogue association')),
+                  DropdownButtonFormField<String>(
+                    initialValue: status,
+                    decoration: const InputDecoration(labelText: 'Status'),
+                    items: const [
+                      'pending',
+                      'approved',
+                      'paused',
+                      'suspended',
+                      'inactive'
+                    ]
+                        .map((value) =>
+                            DropdownMenuItem(value: value, child: Text(value)))
+                        .toList(),
+                    onChanged: (value) =>
+                        setDialogState(() => status = value ?? status),
+                  ),
+                  TextField(
+                      controller: notes,
+                      maxLines: 4,
+                      decoration:
+                          const InputDecoration(labelText: 'Brand notes')),
+                ],
+              ),
+            ),
+          ),
+          actions: [
+            TextButton(
+                onPressed: () => Navigator.pop(context, false),
+                child: const Text('Cancel')),
+            FilledButton(
+                onPressed: () => Navigator.pop(context, true),
+                child: const Text('Save')),
+          ],
+        ),
+      ),
+    );
+    final patch = AdminGiftTools.brandPartnerPatch(
+      status: status,
+      updatedBy: _user?.email ?? _user?.uid ?? 'admin',
+      updatedAt: FieldValue.serverTimestamp(),
+      partnerName: partnerName.text,
+      brandName: partnerName.text,
+      category: category.text,
+      contactName: contactName.text,
+      contactEmail: contactEmail.text,
+      phone: phone.text,
+      website: website.text,
+      notes: notes.text,
+      approvedFor: _csvValues(approvedFor.text),
+    );
+    final name = partnerName.text.trim();
+    partnerName.dispose();
+    category.dispose();
+    contactName.dispose();
+    contactEmail.dispose();
+    phone.dispose();
+    website.dispose();
+    approvedFor.dispose();
+    notes.dispose();
+    if (confirmed != true || name.isEmpty) return;
+    final id = _brandId(existing).isEmpty ? _slugId(name) : _brandId(existing);
+    await _db.collection('giftBrands').doc(id).set({
+      'partnerId': id,
+      if (brand == null) 'createdAt': FieldValue.serverTimestamp(),
+      if (brand == null) 'createdBy': _user?.email ?? _user?.uid,
+      ...patch,
+    }, SetOptions(merge: true));
+    await _writeAudit(AdminAuditEntry(
+      adminUserId: _user?.uid ?? 'unknown-admin',
+      actionType: 'gift_brand_partner_saved',
+      recordType: 'giftBrands',
+      recordId: id,
+      newValue: patch,
+      reason: 'Historical Brand Partner profile saved',
+    ));
+    setState(() => _message = 'Gift Brand Partner $id saved.');
+    await _loadAdminData();
+  }
+
+  Future<void> _suggestGiftCampaignMatch(
+    Map<String, dynamic> participant,
+    List<Map<String, dynamic>> participants,
+  ) async {
+    if (!_can(AdminPermission.manageIssues)) {
+      setState(() => _message = 'Your role cannot manage gift campaigns.');
+      return;
+    }
+    final id = _idFor(participant);
+    if (id.isEmpty) return;
+    Map<String, dynamic>? best;
+    double bestScore = 0;
+    String bestReason = '';
+    for (final candidate in participants) {
+      if (_idFor(candidate) == id ||
+          '${candidate['matchStatus']}' != 'unmatched') {
+        continue;
+      }
+      final result = AdminGiftTools.campaignMatchScore(participant, candidate);
+      if (result.score > bestScore) {
+        best = candidate;
+        bestScore = result.score;
+        bestReason = result.reason;
+      }
+    }
+    if (best == null || bestScore <= 0) {
+      setState(() => _message = 'No safe eligible campaign match found.');
+      return;
+    }
+    final confirmed = await _confirmAdminAction(
+      'Suggest Campaign Match',
+      'Suggest ${best['displayName'] ?? best['userId'] ?? _idFor(best)} for ${participant['displayName'] ?? participant['userId'] ?? id}?',
+    );
+    if (!confirmed) return;
+    await _db.collection('giftCampaignParticipants').doc(id).set({
+      'suggestedParticipantId': _idFor(best),
+      'suggestedMatchScore': bestScore,
+      'suggestedMatchReason': bestReason,
+      'updatedAt': FieldValue.serverTimestamp(),
+      'updatedBy': _user?.email ?? _user?.uid,
+    }, SetOptions(merge: true));
+    await _writeAudit(AdminAuditEntry(
+      adminUserId: _user?.uid ?? 'unknown-admin',
+      actionType: 'gift_campaign_match_suggested',
+      recordType: 'giftCampaignParticipants',
+      recordId: id,
+      newValue: {'suggestedParticipantId': _idFor(best), 'score': bestScore},
+      reason: bestReason,
+    ));
+    setState(() => _message = 'Campaign match suggestion saved.');
+    await _loadAdminData();
+  }
+
+  Future<void> _approveGiftCampaignMatch(
+    Map<String, dynamic> participant,
+    List<Map<String, dynamic>> participants,
+  ) async {
+    if (!_can(AdminPermission.manageIssues)) {
+      setState(() => _message = 'Your role cannot manage gift campaigns.');
+      return;
+    }
+    final id = _idFor(participant);
+    final otherId = '${participant['suggestedParticipantId'] ?? ''}'.trim();
+    if (id.isEmpty || otherId.isEmpty) {
+      setState(() => _message = 'Generate a campaign match suggestion first.');
+      return;
+    }
+    Map<String, dynamic>? other;
+    for (final record in participants) {
+      if (_idFor(record) == otherId) {
+        other = record;
+        break;
+      }
+    }
+    if (other == null) {
+      setState(() => _message = 'Suggested participant was not found.');
+      return;
+    }
+    final confirmed = await _confirmAdminAction(
+      'Approve Campaign Match',
+      'Approve this match and create the historical draft Gift Requests?',
+    );
+    if (!confirmed) return;
+    final matchId = _db.collection('giftCampaignMatches').doc().id;
+    final batch = _db.batch();
+    final reason = '${participant['suggestedMatchReason'] ?? ''}';
+    final score = participant['suggestedMatchScore'] ?? 0;
+    for (final pair in [(participant, other), (other, participant)]) {
+      batch.set(
+          _db.collection('giftCampaignParticipants').doc(_idFor(pair.$1)),
+          {
+            'matchStatus': 'matched',
+            'adminReviewStatus': 'approved',
+            'matchedParticipantId': _idFor(pair.$2),
+            'matchId': matchId,
+            'matchScore': score,
+            'matchReason': reason,
+            'matchLockedAt': FieldValue.serverTimestamp(),
+            'matchApprovedBy': _user?.uid,
+            'updatedAt': FieldValue.serverTimestamp(),
+          },
+          SetOptions(merge: true));
+      final gift = _db.collection('giftRequests').doc();
+      batch.set(gift, {
+        'senderId': pair.$1['userId'],
+        'senderName': pair.$1['displayName'],
+        'recipientName': pair.$2['displayName'],
+        'giftMode': 'anonymous_gift',
+        'anonymousGiftType': 'campaign',
+        'senderRevealMode': 'anonymous_until_consent',
+        'senderRevealConsent': 'not_requested',
+        'recipientRevealRequestStatus': 'none',
+        'campaignId': participant['campaignId'],
+        'campaignName': participant['campaignName'] ?? 'Bringing London Closer',
+        'campaignTagline': participant['campaignTagline'] ??
+            '100 Londoners. 100 gifts. 100 stories.',
+        'campaignType': 'anonymous_gifting',
+        'matchId': matchId,
+        'status': 'draft',
+        'budgetStatus': 'pending_allocation',
+        'recipientContentConsent': 'pending',
+        'senderContentConsent': 'pending',
+        'allowCircumSocialUse': false,
+        'allowBrandTagging': false,
+        'allowReactionRecording': false,
+        'allowPublicPosting': false,
+        'allowAnonymousPosting': false,
+        'contentUsageScope': 'private',
+        'anonymousByDefault': true,
+        'createdAt': FieldValue.serverTimestamp(),
+        'updatedAt': FieldValue.serverTimestamp(),
+      });
+    }
+    batch.set(_db.collection('giftCampaignMatches').doc(matchId), {
+      'campaignId': participant['campaignId'],
+      'campaignName': participant['campaignName'],
+      'participantIds': [id, otherId],
+      'matchScore': score,
+      'matchReason': reason,
+      'status': 'approved',
+      'approvedBy': _user?.uid,
+      'approvedByEmail': _user?.email,
+      'createdAt': FieldValue.serverTimestamp(),
+      'updatedAt': FieldValue.serverTimestamp(),
+    });
+    await batch.commit();
+    await _writeAudit(AdminAuditEntry(
+      adminUserId: _user?.uid ?? 'unknown-admin',
+      actionType: 'gift_campaign_match_approved',
+      recordType: 'giftCampaignMatches',
+      recordId: matchId,
+      newValue: {
+        'participantIds': [id, otherId],
+        'score': score
+      },
+      reason: 'Historical Campaign Matching approval restored',
+    ));
+    setState(
+        () => _message = 'Campaign match approved and draft gifts created.');
+    await _loadAdminData();
+  }
+
+  Future<void> _bulkGiftCampaignAction(
+    List<Map<String, dynamic>> participants,
+    String action,
+  ) async {
+    if (!_can(AdminPermission.manageIssues)) {
+      setState(() => _message = 'Your role cannot manage gift campaigns.');
+      return;
+    }
+    final selected = participants
+        .where((participant) =>
+            '${participant['matchStatus'] ?? 'unmatched'}' != 'matched')
+        .take(25)
+        .toList(growable: false);
+    if (selected.isEmpty) return;
+    final confirmed = await _confirmAdminAction(
+      'Bulk Campaign Matching',
+      'Apply $action to ${selected.length} campaign participant records?',
+    );
+    if (!confirmed) return;
+    final batch = _db.batch();
+    for (final participant in selected) {
+      final id = _idFor(participant);
+      if (id.isEmpty) continue;
+      batch.set(
+          _db.collection('giftCampaignParticipants').doc(id),
+          {
+            if (action != 'exported') 'matchStatus': action,
+            if (action != 'exported') 'adminReviewStatus': action,
+            if (action == 'assign_later')
+              'assignmentDeferredAt': FieldValue.serverTimestamp(),
+            if (action == 'assign_later') 'assignmentDeferredBy': _user?.uid,
+            if (action == 'exported')
+              'lastExportedAt': FieldValue.serverTimestamp(),
+            if (action == 'exported')
+              'lastExportedBy': _user?.email ?? _user?.uid,
+            'updatedAt': FieldValue.serverTimestamp(),
+          },
+          SetOptions(merge: true));
+    }
+    await batch.commit();
+    await _writeAudit(AdminAuditEntry(
+      adminUserId: _user?.uid ?? 'unknown-admin',
+      actionType: 'gift_campaign_match_bulk_$action',
+      recordType: 'giftCampaignParticipants',
+      recordId: 'bulk',
+      newValue: {'count': selected.length, 'action': action},
+      reason: 'Historical bulk Campaign Matching workflow restored',
+    ));
+    setState(() => _message = 'Campaign matching bulk $action complete.');
+    await _loadAdminData();
+  }
+
+  Future<void> _editGiftRequestWorkflow(Map<String, dynamic> gift) async {
+    if (!_can(AdminPermission.manageIssues)) {
+      setState(() => _message = 'Your role cannot edit Gift requests.');
+      return;
+    }
+    final id = _idFor(gift);
+    if (id.isEmpty) return;
+    final status =
+        TextEditingController(text: '${gift['status'] ?? 'submitted'}');
+    final plan = TextEditingController(text: '${gift['manualGiftPlan'] ?? ''}');
+    final decision =
+        TextEditingController(text: '${gift['adminDecision'] ?? ''}');
+    final notes = TextEditingController(text: '${gift['internalNotes'] ?? ''}');
+    final procurementTitle =
+        TextEditingController(text: '${gift['procurementItemTitle'] ?? ''}');
+    final procurementSupplier =
+        TextEditingController(text: '${gift['procurementSupplier'] ?? ''}');
+    final procurementCost = TextEditingController(
+        text:
+            '${gift['procurementEstimatedCost'] ?? gift['procurementActualCost'] ?? ''}');
+    final procurementOrder = TextEditingController(
+        text: '${gift['procurementOrderReference'] ?? ''}');
+    final procurementEta =
+        TextEditingController(text: '${gift['procurementDeliveryEta'] ?? ''}');
+    final procurementNotes =
+        TextEditingController(text: '${gift['procurementNotes'] ?? ''}');
+    final irisAccepted = TextEditingController(
+        text: _adminStringList(gift['giftsTeamWorkspace'] is Map
+                ? (gift['giftsTeamWorkspace'] as Map)['irisCollaboration']
+                        is Map
+                    ? ((gift['giftsTeamWorkspace'] as Map)['irisCollaboration']
+                        as Map)['acceptedSignals']
+                    : gift['irisAcceptedSignals']
+                : gift['irisAcceptedSignals'])
+            .join(', '));
+    final irisRejected = TextEditingController(
+        text:
+            _adminStringList(gift['rejectedIrisGiftSuggestionIds']).join(', '));
+    final storyMessage =
+        TextEditingController(text: '${gift['giftStoryCircumMessage'] ?? ''}');
+    final storyPhotos = TextEditingController(
+        text: _adminStringList(
+                gift['giftStoryPhotoUrls'] ?? gift['giftStoryPhotos'])
+            .join(', '));
+    final storyAudio =
+        TextEditingController(text: '${gift['giftStoryCustomAudioUrl'] ?? ''}');
+    final caption =
+        TextEditingController(text: '${gift['captionDraft'] ?? ''}');
+    final approvedCaption =
+        TextEditingController(text: '${gift['approvedCaption'] ?? ''}');
+    final tiktok =
+        TextEditingController(text: '${gift['postedTikTokUrl'] ?? ''}');
+    final instagram =
+        TextEditingController(text: '${gift['postedInstagramUrl'] ?? ''}');
+    final youtube =
+        TextEditingController(text: '${gift['postedYouTubeShortsUrl'] ?? ''}');
+    var contentStatus = '${gift['contentStatus'] ?? 'not_started'}';
+    var privacy =
+        '${gift['giftStorySharePrivacy'] ?? gift['contentUsageScope'] ?? 'private'}';
+    var storyEnabled = gift['giftStoryEnabled'] != false;
+    var storyApproved = gift['giftStoryApproved'] == true;
+    var allowSocial = gift['allowCircumSocialUse'] == true;
+    var allowPublic = gift['allowPublicPosting'] == true;
+    var allowBrand = gift['allowBrandTagging'] == true;
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setDialogState) => AlertDialog(
+          title: Text('Gift Request Editor · $id'),
+          content: SizedBox(
+            width: 760,
+            child: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  TextField(
+                      controller: status,
+                      decoration:
+                          const InputDecoration(labelText: 'Workflow status')),
+                  TextField(
+                      controller: plan,
+                      maxLines: 2,
+                      decoration: const InputDecoration(
+                          labelText: 'Recommended experience / gift plan')),
+                  TextField(
+                      controller: decision,
+                      maxLines: 2,
+                      decoration:
+                          const InputDecoration(labelText: 'Admin decision')),
+                  TextField(
+                      controller: notes,
+                      maxLines: 3,
+                      decoration:
+                          const InputDecoration(labelText: 'Internal notes')),
+                  const SizedBox(height: 12),
+                  TextField(
+                      controller: procurementTitle,
+                      decoration:
+                          const InputDecoration(labelText: 'Procurement item')),
+                  TextField(
+                      controller: procurementSupplier,
+                      decoration: const InputDecoration(labelText: 'Supplier')),
+                  TextField(
+                      controller: procurementCost,
+                      decoration: const InputDecoration(labelText: 'Cost')),
+                  TextField(
+                      controller: procurementOrder,
+                      decoration:
+                          const InputDecoration(labelText: 'Order reference')),
+                  TextField(
+                      controller: procurementEta,
+                      decoration: const InputDecoration(labelText: 'ETA')),
+                  TextField(
+                      controller: procurementNotes,
+                      maxLines: 2,
+                      decoration: const InputDecoration(
+                          labelText: 'Procurement notes')),
+                  const SizedBox(height: 12),
+                  TextField(
+                      controller: irisAccepted,
+                      decoration: const InputDecoration(
+                          labelText: 'Approved IRIS gift ideas')),
+                  TextField(
+                      controller: irisRejected,
+                      decoration: const InputDecoration(
+                          labelText: 'Rejected IRIS gift ideas')),
+                  const SizedBox(height: 12),
+                  SwitchListTile.adaptive(
+                      value: storyEnabled,
+                      onChanged: (value) =>
+                          setDialogState(() => storyEnabled = value),
+                      title: const Text('Enable Gift Story')),
+                  SwitchListTile.adaptive(
+                      value: storyApproved,
+                      onChanged: (value) =>
+                          setDialogState(() => storyApproved = value),
+                      title: const Text('Story approved')),
+                  TextField(
+                      controller: storyMessage,
+                      maxLines: 2,
+                      decoration: const InputDecoration(
+                          labelText: 'Message from Circum')),
+                  TextField(
+                      controller: storyPhotos,
+                      decoration:
+                          const InputDecoration(labelText: 'Story photo URLs')),
+                  TextField(
+                      controller: storyAudio,
+                      decoration:
+                          const InputDecoration(labelText: 'Story audio URL')),
+                  DropdownButtonFormField<String>(
+                    initialValue: privacy,
+                    decoration: const InputDecoration(labelText: 'Privacy'),
+                    items: const [
+                      'private',
+                      'unlisted',
+                      'public',
+                      'social_media',
+                      'circum_marketing'
+                    ]
+                        .map((value) =>
+                            DropdownMenuItem(value: value, child: Text(value)))
+                        .toList(),
+                    onChanged: (value) =>
+                        setDialogState(() => privacy = value ?? privacy),
+                  ),
+                  DropdownButtonFormField<String>(
+                    initialValue: contentStatus,
+                    decoration:
+                        const InputDecoration(labelText: 'Content status'),
+                    items: const [
+                      'not_started',
+                      'consent_pending',
+                      'ready_to_edit',
+                      'approved',
+                      'posted',
+                      'archived'
+                    ]
+                        .map((value) =>
+                            DropdownMenuItem(value: value, child: Text(value)))
+                        .toList(),
+                    onChanged: (value) => setDialogState(
+                        () => contentStatus = value ?? contentStatus),
+                  ),
+                  SwitchListTile.adaptive(
+                      value: allowSocial,
+                      onChanged: (value) =>
+                          setDialogState(() => allowSocial = value),
+                      title: const Text('Allow Circum social use')),
+                  SwitchListTile.adaptive(
+                      value: allowPublic,
+                      onChanged: (value) =>
+                          setDialogState(() => allowPublic = value),
+                      title: const Text('Allow public posting')),
+                  SwitchListTile.adaptive(
+                      value: allowBrand,
+                      onChanged: (value) =>
+                          setDialogState(() => allowBrand = value),
+                      title: const Text('Allow brand tagging')),
+                  TextField(
+                      controller: caption,
+                      maxLines: 2,
+                      decoration:
+                          const InputDecoration(labelText: 'Caption draft')),
+                  TextField(
+                      controller: approvedCaption,
+                      maxLines: 2,
+                      decoration:
+                          const InputDecoration(labelText: 'Approved caption')),
+                  TextField(
+                      controller: tiktok,
+                      decoration:
+                          const InputDecoration(labelText: 'TikTok URL')),
+                  TextField(
+                      controller: instagram,
+                      decoration:
+                          const InputDecoration(labelText: 'Instagram URL')),
+                  TextField(
+                      controller: youtube,
+                      decoration: const InputDecoration(
+                          labelText: 'YouTube Shorts URL')),
+                ],
+              ),
+            ),
+          ),
+          actions: [
+            TextButton(
+                onPressed: () => Navigator.pop(context, false),
+                child: const Text('Cancel')),
+            FilledButton(
+                onPressed: () => Navigator.pop(context, true),
+                child: const Text('Save')),
+          ],
+        ),
+      ),
+    );
+    final collection = '${gift['_collection'] ?? 'giftRequests'}';
+    final patch = <String, Object?>{
+      'status': status.text.trim(),
+      'manualGiftPlan': plan.text.trim(),
+      'adminDecision': decision.text.trim(),
+      'internalNotes': notes.text.trim(),
+      'procurementItemTitle': procurementTitle.text.trim(),
+      'procurementSupplier': procurementSupplier.text.trim(),
+      'procurementEstimatedCost': double.tryParse(procurementCost.text.trim()),
+      'procurementActualCost': double.tryParse(procurementCost.text.trim()),
+      'procurementOrderReference': procurementOrder.text.trim(),
+      'procurementDeliveryEta': procurementEta.text.trim(),
+      'procurementNotes': procurementNotes.text.trim(),
+      'giftsTeamWorkspace.irisCollaboration.acceptedSignals':
+          _csvValues(irisAccepted.text),
+      'rejectedIrisGiftSuggestionIds': _csvValues(irisRejected.text),
+      'giftStoryEnabled': storyEnabled,
+      'giftStoryApproved': storyApproved,
+      'giftStoryCircumMessage': storyMessage.text.trim(),
+      'giftStoryPhotoUrls': _csvValues(storyPhotos.text),
+      'giftStoryPhotos': _csvValues(storyPhotos.text),
+      'giftStoryCustomAudioUrl':
+          storyAudio.text.trim().isEmpty ? null : storyAudio.text.trim(),
+      'giftStorySharePrivacy': privacy,
+      'contentUsageScope': privacy,
+      'contentStatus': contentStatus,
+      'allowCircumSocialUse': allowSocial,
+      'allowPublicPosting': allowPublic,
+      'allowBrandTagging': allowBrand,
+      'captionDraft': caption.text.trim(),
+      'approvedCaption': approvedCaption.text.trim(),
+      'postedTikTokUrl': tiktok.text.trim(),
+      'postedInstagramUrl': instagram.text.trim(),
+      'postedYouTubeShortsUrl': youtube.text.trim(),
+      'giftWorkspaceAuditTrail': FieldValue.arrayUnion([
+        {
+          'event': 'gift_request_editor_saved',
+          'updatedBy': _user?.email ?? _user?.uid,
+          'updatedAt': DateTime.now().toIso8601String(),
+        }
+      ]),
+      'updatedAt': FieldValue.serverTimestamp(),
+      'updatedBy': _user?.email ?? _user?.uid,
+    };
+    for (final controller in [
+      status,
+      plan,
+      decision,
+      notes,
+      procurementTitle,
+      procurementSupplier,
+      procurementCost,
+      procurementOrder,
+      procurementEta,
+      procurementNotes,
+      irisAccepted,
+      irisRejected,
+      storyMessage,
+      storyPhotos,
+      storyAudio,
+      caption,
+      approvedCaption,
+      tiktok,
+      instagram,
+      youtube,
+    ]) {
+      controller.dispose();
+    }
+    if (confirmed != true) return;
+    await _db
+        .collection(collection)
+        .doc(id)
+        .set(patch, SetOptions(merge: true));
+    await _writeAudit(AdminAuditEntry(
+      adminUserId: _user?.uid ?? 'unknown-admin',
+      actionType: 'gift_request_editor_saved',
+      recordType: collection,
+      recordId: id,
+      newValue: patch,
+      reason: 'Historical Gift Request editor workflow restored',
+    ));
+    setState(() => _message = 'Gift Request $id saved.');
+    await _loadAdminData();
+  }
+
   Future<void> _updateGiftStoryAccess(
     Map<String, dynamic> gift,
     String action,
@@ -1037,6 +1751,37 @@ class _AdminPhaseOneShellState extends State<AdminPhaseOneShell> {
     final id = _idFor(record);
     final collection = '${record['_collection'] ?? 'irisCanonicalObjects'}';
     if (id.isEmpty) return;
+    if (action == 'edited' || action == 'duplicate_review') {
+      final patch = await _irisRepositoryEditPatch(record,
+          duplicate: action == 'duplicate_review');
+      if (patch == null) return;
+      final targetId = action == 'duplicate_review'
+          ? _slugId(
+              '${patch['canonicalName'] ?? patch['objectName'] ?? id}-copy')
+          : id;
+      await _db.collection(collection).doc(targetId).set({
+        ...patch,
+        'adminRepositoryAction': action,
+        'repositoryReviewStatus': action,
+        if (action == 'duplicate_review') 'duplicatedFrom': id,
+        if (action == 'duplicate_review')
+          'createdAt': FieldValue.serverTimestamp(),
+        'updatedAt': FieldValue.serverTimestamp(),
+        'updatedBy': _user?.email ?? _user?.uid,
+      }, SetOptions(merge: true));
+      await _writeAudit(AdminAuditEntry(
+        adminUserId: _user?.uid ?? 'unknown-admin',
+        actionType: 'iris_repository_$action',
+        recordType: collection,
+        recordId: targetId,
+        oldValue: record,
+        newValue: patch,
+        reason: 'Historical IRIS canonical editor restored',
+      ));
+      setState(() => _message = 'IRIS repository record $targetId saved.');
+      await _loadAdminData();
+      return;
+    }
     final patch = <String, Object?>{
       'adminRepositoryAction': action,
       'repositoryReviewStatus': action,
@@ -1078,6 +1823,68 @@ class _AdminPhaseOneShellState extends State<AdminPhaseOneShell> {
     final id = _idFor(record);
     final collection = '${record['_collection'] ?? 'irisLearningCases'}';
     if (id.isEmpty) return;
+    if (action == 'promoted') {
+      final canonicalId = _slugId(
+        '${record['canonicalName'] ?? record['objectName'] ?? record['enteredText'] ?? record['category'] ?? id}',
+      );
+      if (canonicalId.isEmpty) return;
+      final batch = _db.batch();
+      batch.set(
+          _db.collection('irisCanonicalObjects').doc(canonicalId),
+          {
+            'canonicalId': canonicalId,
+            'objectName': record['objectName'] ??
+                record['enteredText'] ??
+                record['category'] ??
+                id,
+            'canonicalName': record['canonicalName'] ??
+                record['enteredText'] ??
+                record['objectName'] ??
+                id,
+            'category': record['category'] ?? record['irisCategory'],
+            'subcategory': record['subcategory'],
+            'knownWeight': record['knownWeight'] ??
+                record['estimatedWeight'] ??
+                record['irisEstimatedWeight'],
+            'weightBand': record['weightBand'],
+            'vehicleRecommendation':
+                record['vehicleRecommendation'] ?? record['recommendedVehicle'],
+            'handlingRequirements':
+                record['handlingRequirements'] ?? record['handlingNotes'],
+            'sourceCandidateId': id,
+            'status': 'active',
+            'repositoryReviewStatus': 'promoted',
+            'createdAt': FieldValue.serverTimestamp(),
+            'updatedAt': FieldValue.serverTimestamp(),
+            'updatedBy': _user?.email ?? _user?.uid,
+          },
+          SetOptions(merge: true));
+      batch.set(
+          _db.collection(collection).doc(id),
+          {
+            'learningStatus': 'promoted',
+            'reviewStatus': 'promoted',
+            'repositoryPromotionStatus': 'committed',
+            'promotedCanonicalId': canonicalId,
+            'reviewedAt': FieldValue.serverTimestamp(),
+            'reviewedBy': _user?.email ?? _user?.uid,
+            'updatedAt': FieldValue.serverTimestamp(),
+          },
+          SetOptions(merge: true));
+      await batch.commit();
+      await _writeAudit(AdminAuditEntry(
+        adminUserId: _user?.uid ?? 'unknown-admin',
+        actionType: 'iris_candidate_promoted',
+        recordType: collection,
+        recordId: id,
+        newValue: {'promotedCanonicalId': canonicalId},
+        reason:
+            'Historical Candidate to Canonical Repository transition restored',
+      ));
+      setState(() => _message = 'IRIS candidate promoted to $canonicalId.');
+      await _loadAdminData();
+      return;
+    }
     final patch = <String, Object?>{
       'learningStatus': action,
       'reviewStatus': action,
@@ -1183,6 +1990,18 @@ class _AdminPhaseOneShellState extends State<AdminPhaseOneShell> {
           'giftRequestId': id,
           'storagePath':
               '${gift['giftStoryVideoStoragePath'] ?? gift['videoStoragePath'] ?? ''}',
+        });
+      } else if (action == 'record_preview_event') {
+        await _functions.httpsCallable('recordGiftStoryEvent').call({
+          'giftRequestId': id,
+          'eventType': 'admin_preview',
+        });
+      } else if (action == 'update_privacy') {
+        await _functions.httpsCallable('updateGiftStoryPrivacy').call({
+          'giftRequestId': id,
+          'privacy': gift['giftStorySharePrivacy'] ??
+              gift['contentUsageScope'] ??
+              'private',
         });
       } else {
         await _updateGiftStoryAccess(gift, action);
@@ -1876,6 +2695,118 @@ class _AdminPhaseOneShellState extends State<AdminPhaseOneShell> {
     await _loadAdminData();
   }
 
+  Future<bool> _confirmAdminAction(String title, String body) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text(title),
+        content: Text(body),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Confirm'),
+          ),
+        ],
+      ),
+    );
+    return confirmed == true;
+  }
+
+  Future<Map<String, Object?>?> _irisRepositoryEditPatch(
+    Map<String, dynamic> record, {
+    required bool duplicate,
+  }) async {
+    final objectName = TextEditingController(
+        text: '${record['objectName'] ?? record['canonicalName'] ?? ''}');
+    final category = TextEditingController(text: '${record['category'] ?? ''}');
+    final subcategory =
+        TextEditingController(text: '${record['subcategory'] ?? ''}');
+    final weight = TextEditingController(
+        text: '${record['knownWeight'] ?? record['weightBand'] ?? ''}');
+    final vehicle = TextEditingController(
+        text:
+            '${record['vehicleRecommendation'] ?? record['recommendedVehicle'] ?? ''}');
+    final handling = TextEditingController(
+        text:
+            '${record['handlingRequirements'] ?? record['handlingNotes'] ?? ''}');
+    final aliases = TextEditingController(
+        text: _adminStringList(record['aliases']).join(', '));
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text(
+            duplicate ? 'Duplicate Canonical Item' : 'Edit Canonical Item'),
+        content: SizedBox(
+          width: 620,
+          child: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                TextField(
+                    controller: objectName,
+                    decoration:
+                        const InputDecoration(labelText: 'Canonical item')),
+                TextField(
+                    controller: category,
+                    decoration: const InputDecoration(labelText: 'Category')),
+                TextField(
+                    controller: subcategory,
+                    decoration:
+                        const InputDecoration(labelText: 'Subcategory')),
+                TextField(
+                    controller: weight,
+                    decoration:
+                        const InputDecoration(labelText: 'Weight / band')),
+                TextField(
+                    controller: vehicle,
+                    decoration: const InputDecoration(
+                        labelText: 'Vehicle recommendation')),
+                TextField(
+                    controller: handling,
+                    decoration: const InputDecoration(
+                        labelText: 'Handling requirements')),
+                TextField(
+                    controller: aliases,
+                    decoration: const InputDecoration(labelText: 'Aliases')),
+              ],
+            ),
+          ),
+        ),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(context, false),
+              child: const Text('Cancel')),
+          FilledButton(
+              onPressed: () => Navigator.pop(context, true),
+              child: const Text('Save')),
+        ],
+      ),
+    );
+    final patch = <String, Object?>{
+      'objectName': objectName.text.trim(),
+      'canonicalName': objectName.text.trim(),
+      'category': category.text.trim(),
+      'subcategory': subcategory.text.trim(),
+      'knownWeight': weight.text.trim(),
+      'weightBand': weight.text.trim(),
+      'vehicleRecommendation': vehicle.text.trim(),
+      'handlingRequirements': handling.text.trim(),
+      'aliases': _csvValues(aliases.text),
+    };
+    objectName.dispose();
+    category.dispose();
+    subcategory.dispose();
+    weight.dispose();
+    vehicle.dispose();
+    handling.dispose();
+    aliases.dispose();
+    return confirmed == true ? patch : null;
+  }
+
   Future<void> _updateSenderTrust(
     Map<String, dynamic> account,
     String action,
@@ -2224,6 +3155,12 @@ class _AdminPhaseOneShellState extends State<AdminPhaseOneShell> {
                       onUpdateHealthPlusSchedule: _updateHealthPlusSchedule,
                       onUpdateGiftCampaignParticipant:
                           _updateGiftCampaignParticipant,
+                      onSetGiftBrandStatus: _setGiftBrandStatus,
+                      onEditGiftBrandPartner: _editGiftBrandPartner,
+                      onSuggestGiftCampaignMatch: _suggestGiftCampaignMatch,
+                      onApproveGiftCampaignMatch: _approveGiftCampaignMatch,
+                      onBulkGiftCampaignAction: _bulkGiftCampaignAction,
+                      onEditGiftRequest: _editGiftRequestWorkflow,
                       onUpdateGiftStoryAccess: _updateGiftStoryAccess,
                       onUpdateGiftStoryMedia: _updateGiftStoryMedia,
                       onUpdateGiftWorkspace: _updateGiftWorkspace,
@@ -2966,6 +3903,12 @@ class _AdminModuleBody extends StatelessWidget {
     required this.onRemoveRiderProfilePhoto,
     required this.onUpdateHealthPlusSchedule,
     required this.onUpdateGiftCampaignParticipant,
+    required this.onSetGiftBrandStatus,
+    required this.onEditGiftBrandPartner,
+    required this.onSuggestGiftCampaignMatch,
+    required this.onApproveGiftCampaignMatch,
+    required this.onBulkGiftCampaignAction,
+    required this.onEditGiftRequest,
     required this.onUpdateGiftStoryAccess,
     required this.onUpdateGiftStoryMedia,
     required this.onUpdateGiftWorkspace,
@@ -3049,6 +3992,16 @@ class _AdminModuleBody extends StatelessWidget {
       onUpdateHealthPlusSchedule;
   final Future<void> Function(Map<String, dynamic>, String)
       onUpdateGiftCampaignParticipant;
+  final Future<void> Function(Map<String, dynamic>, String)
+      onSetGiftBrandStatus;
+  final Future<void> Function(Map<String, dynamic>?) onEditGiftBrandPartner;
+  final Future<void> Function(Map<String, dynamic>, List<Map<String, dynamic>>)
+      onSuggestGiftCampaignMatch;
+  final Future<void> Function(Map<String, dynamic>, List<Map<String, dynamic>>)
+      onApproveGiftCampaignMatch;
+  final Future<void> Function(List<Map<String, dynamic>>, String)
+      onBulkGiftCampaignAction;
+  final Future<void> Function(Map<String, dynamic>) onEditGiftRequest;
   final Future<void> Function(Map<String, dynamic>, String)
       onUpdateGiftStoryAccess;
   final Future<void> Function(Map<String, dynamic>, String)
@@ -3319,9 +4272,24 @@ class _AdminModuleBody extends StatelessWidget {
               canManageIssues: canManageIssues,
               onUpdateGiftWorkflow: onUpdateGiftWorkflow,
               onUpdateGiftCampaignParticipant: onUpdateGiftCampaignParticipant,
+              onSetGiftBrandStatus: onSetGiftBrandStatus,
+              onEditGiftBrandPartner: onEditGiftBrandPartner,
+              onSuggestGiftCampaignMatch: onSuggestGiftCampaignMatch,
+              onApproveGiftCampaignMatch: onApproveGiftCampaignMatch,
+              onBulkGiftCampaignAction: onBulkGiftCampaignAction,
+              onEditGiftRequest: onEditGiftRequest,
               onUpdateGiftStoryAccess: onUpdateGiftStoryAccess,
               onUpdateGiftStoryMedia: onUpdateGiftStoryMedia,
               onUpdateGiftWorkspace: onUpdateGiftWorkspace,
+            ),
+          AdminModule.giftBrandPartners => _GiftBrandPartnersModule(
+              brands: data.giftBrands,
+              gifts: [...data.giftOrders, ...data.giftRequests],
+              auditLogs: data.auditLogs,
+              query: query,
+              canManageIssues: canManageIssues,
+              onSetGiftBrandStatus: onSetGiftBrandStatus,
+              onEditGiftBrandPartner: onEditGiftBrandPartner,
             ),
           AdminModule.giftWorkspace => _GiftTeamWorkspaceModule(
               gifts: [...data.giftOrders, ...data.giftRequests],
@@ -3342,6 +4310,9 @@ class _AdminModuleBody extends StatelessWidget {
               query: query,
               canManageIssues: canManageIssues,
               onUpdateGiftCampaignParticipant: onUpdateGiftCampaignParticipant,
+              onSuggestGiftCampaignMatch: onSuggestGiftCampaignMatch,
+              onApproveGiftCampaignMatch: onApproveGiftCampaignMatch,
+              onBulkGiftCampaignAction: onBulkGiftCampaignAction,
             ),
           AdminModule.troubleshooting => _TroubleshootingModule(
               deliveries: data.deliveries,
@@ -4145,6 +5116,27 @@ class _IrisOperationsModule extends StatelessWidget {
           onUpdateRepositoryRecord: onUpdateRepositoryRecord,
         ),
         const SizedBox(height: 18),
+        _IrisAliasManagerModule(
+          records: canonicalObjects,
+          query: query,
+          canManageIris: canManageIris,
+          onUpdateRepositoryRecord: onUpdateRepositoryRecord,
+        ),
+        const SizedBox(height: 18),
+        _IrisCategoryGovernanceModule(
+          records: canonicalObjects,
+          query: query,
+          canManageIris: canManageIris,
+          onUpdateRepositoryRecord: onUpdateRepositoryRecord,
+        ),
+        const SizedBox(height: 18),
+        _IrisImportSettingsModule(
+          records: canonicalObjects,
+          auditLogs: auditLogs,
+          canManageIris: canManageIris,
+          onUpdateRepositoryRecord: onUpdateRepositoryRecord,
+        ),
+        const SizedBox(height: 18),
         _IrisReferenceImageLifecycleModule(
           records: referenceImages,
           canonicalObjects: canonicalObjects,
@@ -4197,69 +5189,107 @@ class _IrisCanonicalLibraryModule extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return _RecordModule(
-      title: 'Canonical Knowledge Base',
-      subtitle:
-          'Categories, objects, dimensions, weight bands, handling, fragility, dangerous goods and eligibility records.',
-      records: records,
-      query: query,
-      fields: const [
-        'id',
-        'category',
-        'subcategory',
-        'objectName',
-        'canonicalName',
-        'weightBand',
-        'vehicleRecommendation',
-        'handlingRequirements',
-        'marketplaceEligible',
-        'healthPlusEligible',
-        'giftEligible',
-        'businessEligible',
-        'adminNotes'
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        if (canManageIris)
+          Padding(
+            padding: const EdgeInsets.only(bottom: 14),
+            child: Wrap(
+              spacing: 10,
+              runSpacing: 10,
+              children: [
+                _MiniAction(
+                  label: 'New Canonical Item',
+                  onPressed: () => unawaited(onUpdateRepositoryRecord({
+                    'id': 'canonical-${DateTime.now().millisecondsSinceEpoch}',
+                    '_collection': 'irisCanonicalObjects',
+                  }, 'edited')),
+                ),
+                for (final action in const [
+                  ('Bulk edit', 'bulk_edited'),
+                  ('Bulk merge', 'bulk_merged'),
+                  ('Bulk category', 'bulk_category_changed'),
+                  ('Bulk vehicle', 'bulk_vehicle_changed'),
+                  ('Bulk activate', 'activated'),
+                  ('Bulk deactivate', 'deactivated'),
+                  ('Export', 'bulk_exported'),
+                ])
+                  _MiniAction(
+                    label: action.$1,
+                    onPressed: records.isEmpty
+                        ? () {}
+                        : () => unawaited(
+                            onUpdateRepositoryRecord(records.first, action.$2)),
+                  ),
+              ],
+            ),
+          ),
+        _RecordModule(
+          title: 'Canonical Knowledge Base',
+          subtitle:
+              'Categories, objects, dimensions, weight bands, handling, fragility, dangerous goods and eligibility records.',
+          records: records,
+          query: query,
+          fields: const [
+            'id',
+            'category',
+            'subcategory',
+            'objectName',
+            'canonicalName',
+            'weightBand',
+            'vehicleRecommendation',
+            'handlingRequirements',
+            'marketplaceEligible',
+            'healthPlusEligible',
+            'giftEligible',
+            'businessEligible',
+            'adminNotes'
+          ],
+          columns: const ['Object', 'Category', 'Weight/Vehicle', 'Policy'],
+          row: (record) => [
+            '${record['objectName'] ?? record['canonicalName'] ?? _recordId(record)}',
+            '${record['category'] ?? 'Uncategorised'} / ${record['subcategory'] ?? 'none'}',
+            '${record['knownWeight'] ?? record['weightBand'] ?? 'unknown'} / ${record['vehicleRecommendation'] ?? 'vehicle n/a'}',
+            _canonicalPolicySummary(record),
+          ],
+          actions: canManageIris
+              ? (record) => [
+                    _MiniAction(
+                      label: 'Edit',
+                      onPressed: () =>
+                          unawaited(onUpdateRepositoryRecord(record, 'edited')),
+                    ),
+                    _MiniAction(
+                      label: 'Duplicate',
+                      onPressed: () => unawaited(
+                          onUpdateRepositoryRecord(record, 'duplicate_review')),
+                    ),
+                    _MiniAction(
+                      label: 'Deactivate',
+                      onPressed: () => unawaited(
+                          onUpdateRepositoryRecord(record, 'deactivated')),
+                    ),
+                    _MiniAction(
+                      label: 'History',
+                      onPressed: () => unawaited(
+                          onUpdateRepositoryRecord(record, 'history_reviewed')),
+                    ),
+                    _MiniAction(
+                      label: 'Bulk export',
+                      onPressed: () => unawaited(
+                          onUpdateRepositoryRecord(record, 'bulk_exported')),
+                    ),
+                    ..._irisReferenceImageActions(
+                      record,
+                      onLoadReferenceImage: onLoadReferenceImage,
+                      onFinalizeReferenceImage: onFinalizeReferenceImage,
+                      onDeleteReferenceImage: onDeleteReferenceImage,
+                    ),
+                  ]
+              : null,
+        ),
       ],
-      columns: const ['Object', 'Category', 'Weight/Vehicle', 'Policy'],
-      row: (record) => [
-        '${record['objectName'] ?? record['canonicalName'] ?? _recordId(record)}',
-        '${record['category'] ?? 'Uncategorised'} / ${record['subcategory'] ?? 'none'}',
-        '${record['knownWeight'] ?? record['weightBand'] ?? 'unknown'} / ${record['vehicleRecommendation'] ?? 'vehicle n/a'}',
-        _canonicalPolicySummary(record),
-      ],
-      actions: canManageIris
-          ? (record) => [
-                _MiniAction(
-                  label: 'Edit',
-                  onPressed: () =>
-                      unawaited(onUpdateRepositoryRecord(record, 'edited')),
-                ),
-                _MiniAction(
-                  label: 'Duplicate',
-                  onPressed: () => unawaited(
-                      onUpdateRepositoryRecord(record, 'duplicate_review')),
-                ),
-                _MiniAction(
-                  label: 'Deactivate',
-                  onPressed: () => unawaited(
-                      onUpdateRepositoryRecord(record, 'deactivated')),
-                ),
-                _MiniAction(
-                  label: 'History',
-                  onPressed: () => unawaited(
-                      onUpdateRepositoryRecord(record, 'history_reviewed')),
-                ),
-                _MiniAction(
-                  label: 'Bulk export',
-                  onPressed: () => unawaited(
-                      onUpdateRepositoryRecord(record, 'bulk_exported')),
-                ),
-                ..._irisReferenceImageActions(
-                  record,
-                  onLoadReferenceImage: onLoadReferenceImage,
-                  onFinalizeReferenceImage: onFinalizeReferenceImage,
-                  onDeleteReferenceImage: onDeleteReferenceImage,
-                ),
-              ]
-          : null,
     );
   }
 }
@@ -4365,6 +5395,196 @@ class _IrisCandidateWorkflowModule extends StatelessWidget {
         const SizedBox(height: 18),
         _IrisEvidenceCentre(records: evidenceRecords, query: query),
       ],
+    );
+  }
+}
+
+class _IrisAliasManagerModule extends StatelessWidget {
+  const _IrisAliasManagerModule({
+    required this.records,
+    required this.query,
+    required this.canManageIris,
+    required this.onUpdateRepositoryRecord,
+  });
+
+  final List<Map<String, dynamic>> records;
+  final String query;
+  final bool canManageIris;
+  final Future<void> Function(Map<String, dynamic>, String)
+      onUpdateRepositoryRecord;
+
+  @override
+  Widget build(BuildContext context) {
+    final aliases = <Map<String, dynamic>>[];
+    for (final record in records) {
+      for (final alias in _adminStringList(record['aliases'])) {
+        aliases.add({
+          ...record,
+          'alias': alias,
+          'aliasStatus': record['aliasStatus'] ?? 'active',
+        });
+      }
+    }
+    return _RecordModule(
+      title: 'Alias Manager',
+      subtitle:
+          'Historical alias browser, alias editor, merge, deletion and audit workflow.',
+      records: aliases,
+      query: query,
+      fields: const ['alias', 'canonicalName', 'objectName', 'category'],
+      columns: const ['Alias', 'Canonical Item', 'Status', 'History'],
+      row: (record) => [
+        '${record['alias']}',
+        '${record['canonicalName'] ?? record['objectName'] ?? _recordId(record)}',
+        '${record['aliasStatus'] ?? 'active'}',
+        '${record['lastHistoryReviewedAt'] ?? record['updatedAt'] ?? 'No review'}',
+      ],
+      actions: canManageIris
+          ? (record) => [
+                for (final action in const [
+                  ('Edit', 'alias_edited'),
+                  ('Merge', 'alias_merged'),
+                  ('Delete', 'alias_deleted'),
+                  ('Audit', 'alias_history_reviewed'),
+                ])
+                  _MiniAction(
+                    label: action.$1,
+                    onPressed: () =>
+                        unawaited(onUpdateRepositoryRecord(record, action.$2)),
+                  ),
+              ]
+          : null,
+    );
+  }
+}
+
+class _IrisCategoryGovernanceModule extends StatelessWidget {
+  const _IrisCategoryGovernanceModule({
+    required this.records,
+    required this.query,
+    required this.canManageIris,
+    required this.onUpdateRepositoryRecord,
+  });
+
+  final List<Map<String, dynamic>> records;
+  final String query;
+  final bool canManageIris;
+  final Future<void> Function(Map<String, dynamic>, String)
+      onUpdateRepositoryRecord;
+
+  @override
+  Widget build(BuildContext context) {
+    final categories = <String, Map<String, dynamic>>{};
+    for (final record in records) {
+      final category = '${record['category'] ?? 'Uncategorised'}';
+      categories.putIfAbsent(
+          category,
+          () => {
+                'id': _slugId(category),
+                '_collection': record['_collection'] ?? 'irisCanonicalObjects',
+                'category': category,
+                'count': 0,
+                'status': record['categoryStatus'] ?? 'active',
+              });
+      categories[category]!['count'] =
+          (categories[category]!['count'] as int) + 1;
+    }
+    return _RecordModule(
+      title: 'Category Management',
+      subtitle:
+          'Historical categories, category editor, merge, activation and history workflow.',
+      records: categories.values.toList(growable: false),
+      query: query,
+      fields: const ['category', 'status'],
+      columns: const ['Category', 'Records', 'Status', 'History'],
+      row: (record) => [
+        '${record['category']}',
+        '${record['count']}',
+        '${record['status']}',
+        '${record['lastHistoryReviewedAt'] ?? 'No review'}',
+      ],
+      actions: canManageIris
+          ? (record) => [
+                for (final action in const [
+                  ('Edit', 'category_edited'),
+                  ('Merge', 'category_merged'),
+                  ('Activate', 'activated'),
+                  ('History', 'category_history_reviewed'),
+                ])
+                  _MiniAction(
+                    label: action.$1,
+                    onPressed: () =>
+                        unawaited(onUpdateRepositoryRecord(record, action.$2)),
+                  ),
+              ]
+          : null,
+    );
+  }
+}
+
+class _IrisImportSettingsModule extends StatelessWidget {
+  const _IrisImportSettingsModule({
+    required this.records,
+    required this.auditLogs,
+    required this.canManageIris,
+    required this.onUpdateRepositoryRecord,
+  });
+
+  final List<Map<String, dynamic>> records;
+  final List<Map<String, dynamic>> auditLogs;
+  final bool canManageIris;
+  final Future<void> Function(Map<String, dynamic>, String)
+      onUpdateRepositoryRecord;
+
+  @override
+  Widget build(BuildContext context) {
+    final importRows = [
+      {
+        'id': 'repository-import-review',
+        '_collection': 'irisCanonicalObjects',
+        'name': 'Repository import review',
+        'status': 'pending_validation',
+        'records': records.length,
+      },
+      {
+        'id': 'repository-governance-settings',
+        '_collection': 'irisCanonicalObjects',
+        'name': 'Repository governance configuration',
+        'status': 'guarded',
+        'records': auditLogs
+            .where((log) => '${log['actionType']}'.contains('iris'))
+            .length,
+      },
+    ];
+    return _RecordModule(
+      title: 'Imports and Repository Settings',
+      subtitle:
+          'Historical import review, validation, approval and governance configuration.',
+      records: importRows,
+      query: '',
+      fields: const [],
+      columns: const ['Workspace', 'Status', 'Records', 'Governance'],
+      row: (record) => [
+        '${record['name']}',
+        '${record['status']}',
+        '${record['records']}',
+        'Admin governed',
+      ],
+      actions: canManageIris
+          ? (record) => [
+                for (final action in const [
+                  ('Review import', 'import_reviewed'),
+                  ('Validate', 'import_validated'),
+                  ('Approve import', 'import_approved'),
+                  ('Settings', 'settings_reviewed'),
+                ])
+                  _MiniAction(
+                    label: action.$1,
+                    onPressed: () =>
+                        unawaited(onUpdateRepositoryRecord(record, action.$2)),
+                  ),
+              ]
+          : null,
     );
   }
 }
@@ -6471,6 +7691,12 @@ class _GiftsOperationsModule extends StatelessWidget {
     required this.canManageIssues,
     required this.onUpdateGiftWorkflow,
     required this.onUpdateGiftCampaignParticipant,
+    required this.onSetGiftBrandStatus,
+    required this.onEditGiftBrandPartner,
+    required this.onSuggestGiftCampaignMatch,
+    required this.onApproveGiftCampaignMatch,
+    required this.onBulkGiftCampaignAction,
+    required this.onEditGiftRequest,
     required this.onUpdateGiftStoryAccess,
     required this.onUpdateGiftStoryMedia,
     required this.onUpdateGiftWorkspace,
@@ -6490,6 +7716,16 @@ class _GiftsOperationsModule extends StatelessWidget {
       onUpdateGiftWorkflow;
   final Future<void> Function(Map<String, dynamic>, String)
       onUpdateGiftCampaignParticipant;
+  final Future<void> Function(Map<String, dynamic>, String)
+      onSetGiftBrandStatus;
+  final Future<void> Function(Map<String, dynamic>?) onEditGiftBrandPartner;
+  final Future<void> Function(Map<String, dynamic>, List<Map<String, dynamic>>)
+      onSuggestGiftCampaignMatch;
+  final Future<void> Function(Map<String, dynamic>, List<Map<String, dynamic>>)
+      onApproveGiftCampaignMatch;
+  final Future<void> Function(List<Map<String, dynamic>>, String)
+      onBulkGiftCampaignAction;
+  final Future<void> Function(Map<String, dynamic>) onEditGiftRequest;
   final Future<void> Function(Map<String, dynamic>, String)
       onUpdateGiftStoryAccess;
   final Future<void> Function(Map<String, dynamic>, String)
@@ -6587,6 +7823,10 @@ class _GiftsOperationsModule extends StatelessWidget {
           ],
           actions: canManageIssues
               ? (record) => [
+                    _MiniAction(
+                      label: 'Open editor',
+                      onPressed: () => unawaited(onEditGiftRequest(record)),
+                    ),
                     ..._giftActions(record, onUpdateGiftWorkflow),
                     if (_hasGiftStory(record)) ...[
                       _MiniAction(
@@ -6652,6 +7892,16 @@ class _GiftsOperationsModule extends StatelessWidget {
           actions: canManageIssues
               ? (record) => [
                     _MiniAction(
+                      label: 'Suggest',
+                      onPressed: () => unawaited(
+                          onSuggestGiftCampaignMatch(record, participants)),
+                    ),
+                    _MiniAction(
+                      label: 'Approve match',
+                      onPressed: () => unawaited(
+                          onApproveGiftCampaignMatch(record, participants)),
+                    ),
+                    _MiniAction(
                       label: 'Approve',
                       onPressed: () => unawaited(
                           onUpdateGiftCampaignParticipant(record, 'approved')),
@@ -6715,6 +7965,13 @@ class _GiftsOperationsModule extends StatelessWidget {
             '${record['approvalStatus'] ?? record['status'] ?? 'pending'}',
             _date(record['updatedAt'] ?? record['createdAt']),
           ],
+          actions: canManageIssues
+              ? (record) => _giftBrandPartnerActions(
+                    record,
+                    onSetGiftBrandStatus,
+                    onEditGiftBrandPartner,
+                  )
+              : null,
         ),
         const SizedBox(height: 18),
         _OperationalDetailGrid(
@@ -6760,6 +8017,133 @@ class _GiftsOperationsModule extends StatelessWidget {
             (
               'Support history',
               '${_relatedCount(record, supportTickets)} tickets'
+            ),
+            ('Audit history', '${_relatedCount(record, auditLogs)} entries'),
+          ],
+        ),
+      ],
+    );
+  }
+}
+
+class _GiftBrandPartnersModule extends StatelessWidget {
+  const _GiftBrandPartnersModule({
+    required this.brands,
+    required this.gifts,
+    required this.auditLogs,
+    required this.query,
+    required this.canManageIssues,
+    required this.onSetGiftBrandStatus,
+    required this.onEditGiftBrandPartner,
+  });
+
+  final List<Map<String, dynamic>> brands;
+  final List<Map<String, dynamic>> gifts;
+  final List<Map<String, dynamic>> auditLogs;
+  final String query;
+  final bool canManageIssues;
+  final Future<void> Function(Map<String, dynamic>, String)
+      onSetGiftBrandStatus;
+  final Future<void> Function(Map<String, dynamic>?) onEditGiftBrandPartner;
+
+  @override
+  Widget build(BuildContext context) {
+    final filtered = adminSearch(brands, query, const [
+      'id',
+      'partnerId',
+      'partnerName',
+      'brandName',
+      'category',
+      'status',
+      'partnershipStatus',
+      'contactName',
+      'contactEmail',
+      'approvedFor',
+      'internalNotes',
+    ]);
+    final active = brands
+        .where((brand) =>
+            '${brand['status'] ?? brand['partnershipStatus'] ?? ''}' ==
+            'approved')
+        .length;
+    final pending = brands
+        .where((brand) =>
+            '${brand['status'] ?? brand['partnershipStatus'] ?? ''}' ==
+            'pending')
+        .length;
+    final suspended = brands.where((brand) {
+      final status = '${brand['status'] ?? brand['partnershipStatus'] ?? ''}';
+      return status == 'paused' || status == 'suspended';
+    }).length;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const _AdminModuleIntro(
+          title: 'Gift Brand Partners',
+          subtitle:
+              'Historical Brand Partner directory, verification, catalogue association, contact records, campaign participation and audit history.',
+        ),
+        const SizedBox(height: 16),
+        Wrap(
+          spacing: 14,
+          runSpacing: 14,
+          children: [
+            _MetricCard('Active partners', '$active', 'approved'),
+            _MetricCard('Pending', '$pending', 'verification'),
+            _MetricCard('Suspended', '$suspended', 'paused/inactive'),
+            _MetricCard('Gift links', '${_brandGiftLinks(brands, gifts)}',
+                'catalogue/campaign'),
+          ],
+        ),
+        const SizedBox(height: 18),
+        _RecordModule(
+          title: 'Brand Partner Directory',
+          subtitle:
+              'Search by Brand, Category and Status. Actions require confirmation and write Admin audit records.',
+          records: filtered,
+          query: '',
+          fields: const [],
+          columns: const ['Brand', 'Category', 'Status', 'Campaigns'],
+          row: (record) => [
+            '${record['partnerName'] ?? record['brandName'] ?? _recordId(record)}\n${record['contactName'] ?? ''} ${record['contactEmail'] ?? ''}',
+            '${record['category'] ?? 'Uncategorised'}',
+            '${record['status'] ?? record['partnershipStatus'] ?? 'pending'}',
+            '${record['approvedFor'] ?? record['campaignName'] ?? 'No campaign association'}',
+          ],
+          actions: canManageIssues
+              ? (record) => _giftBrandPartnerActions(
+                    record,
+                    onSetGiftBrandStatus,
+                    onEditGiftBrandPartner,
+                  )
+              : null,
+        ),
+        const SizedBox(height: 18),
+        _OperationalDetailGrid(
+          title: 'Partner Profiles and History',
+          records: filtered,
+          emptyText: 'No Brand Partner profiles loaded.',
+          rowsFor: (record) => [
+            (
+              'Partner',
+              '${record['partnerName'] ?? record['brandName'] ?? ''}'
+            ),
+            (
+              'Contact',
+              '${record['contactName'] ?? ''} · ${record['contactEmail'] ?? ''} · ${record['phone'] ?? ''}'
+            ),
+            ('Website', '${record['website'] ?? 'Not recorded'}'),
+            (
+              'Catalogue',
+              '${record['productGroups'] ?? record['approvedFor'] ?? 'No catalogue association'}'
+            ),
+            (
+              'Notes',
+              '${record['internalNotes'] ?? record['brandNotes'] ?? 'No notes'}'
+            ),
+            (
+              'Performance',
+              '${record['performanceMetrics'] ?? record['recommendationScore'] ?? 'No historical metrics loaded'}'
             ),
             ('Audit history', '${_relatedCount(record, auditLogs)} entries'),
           ],
@@ -6870,6 +8254,16 @@ class _GiftTeamWorkspaceModule extends StatelessWidget {
                       label: 'Finalize upload',
                       onPressed: () => unawaited(onUpdateGiftStoryMedia(
                           record, 'finalize_video_upload')),
+                    ),
+                    _MiniAction(
+                      label: 'Record preview',
+                      onPressed: () => unawaited(onUpdateGiftStoryMedia(
+                          record, 'record_preview_event')),
+                    ),
+                    _MiniAction(
+                      label: 'Update privacy',
+                      onPressed: () => unawaited(
+                          onUpdateGiftStoryMedia(record, 'update_privacy')),
                     ),
                     _MiniAction(
                       label: 'Extend',
@@ -7253,6 +8647,9 @@ class _GiftCampaignMatchesModule extends StatelessWidget {
     required this.query,
     required this.canManageIssues,
     required this.onUpdateGiftCampaignParticipant,
+    required this.onSuggestGiftCampaignMatch,
+    required this.onApproveGiftCampaignMatch,
+    required this.onBulkGiftCampaignAction,
   });
 
   final List<Map<String, dynamic>> campaignMatches;
@@ -7261,6 +8658,12 @@ class _GiftCampaignMatchesModule extends StatelessWidget {
   final bool canManageIssues;
   final Future<void> Function(Map<String, dynamic>, String)
       onUpdateGiftCampaignParticipant;
+  final Future<void> Function(Map<String, dynamic>, List<Map<String, dynamic>>)
+      onSuggestGiftCampaignMatch;
+  final Future<void> Function(Map<String, dynamic>, List<Map<String, dynamic>>)
+      onApproveGiftCampaignMatch;
+  final Future<void> Function(List<Map<String, dynamic>>, String)
+      onBulkGiftCampaignAction;
 
   @override
   Widget build(BuildContext context) {
@@ -7273,6 +8676,36 @@ class _GiftCampaignMatchesModule extends StatelessWidget {
               'Historical campaign match records, participant review and assignment workflow.',
         ),
         const SizedBox(height: 16),
+        if (canManageIssues)
+          Padding(
+            padding: const EdgeInsets.only(bottom: 16),
+            child: Wrap(
+              spacing: 10,
+              runSpacing: 10,
+              children: [
+                _MiniAction(
+                  label: 'Bulk approve',
+                  onPressed: () => unawaited(
+                      onBulkGiftCampaignAction(participants, 'approved')),
+                ),
+                _MiniAction(
+                  label: 'Bulk reject',
+                  onPressed: () => unawaited(
+                      onBulkGiftCampaignAction(participants, 'rejected')),
+                ),
+                _MiniAction(
+                  label: 'Bulk assign later',
+                  onPressed: () => unawaited(
+                      onBulkGiftCampaignAction(participants, 'assign_later')),
+                ),
+                _MiniAction(
+                  label: 'Export selected',
+                  onPressed: () => unawaited(
+                      onBulkGiftCampaignAction(participants, 'exported')),
+                ),
+              ],
+            ),
+          ),
         _RecordModule(
           title: 'Campaign Match Records',
           subtitle:
@@ -7320,6 +8753,16 @@ class _GiftCampaignMatchesModule extends StatelessWidget {
           ],
           actions: canManageIssues
               ? (record) => [
+                    _MiniAction(
+                      label: 'Suggest',
+                      onPressed: () => unawaited(
+                          onSuggestGiftCampaignMatch(record, participants)),
+                    ),
+                    _MiniAction(
+                      label: 'Approve match',
+                      onPressed: () => unawaited(
+                          onApproveGiftCampaignMatch(record, participants)),
+                    ),
                     _MiniAction(
                       label: 'Approve',
                       onPressed: () => unawaited(
@@ -9993,6 +11436,87 @@ List<Widget> _giftActions(
         onPressed: () => unawaited(onUpdateGiftWorkflow(record, action.$2)),
       ),
   ];
+}
+
+List<Widget> _giftBrandPartnerActions(
+  Map<String, dynamic> record,
+  Future<void> Function(Map<String, dynamic>, String) onSetStatus,
+  Future<void> Function(Map<String, dynamic>?) onEdit,
+) {
+  return [
+    _MiniAction(
+      label: 'Edit',
+      onPressed: () => unawaited(onEdit(record)),
+    ),
+    for (final action in const [
+      ('Approve', 'approved'),
+      ('Suspend', 'suspended'),
+      ('Reactivate', 'approved'),
+      ('Inactive', 'inactive'),
+      ('History', 'history_reviewed'),
+    ])
+      _MiniAction(
+        label: action.$1,
+        onPressed: () => unawaited(onSetStatus(record, action.$2)),
+      ),
+  ];
+}
+
+String _brandId(Map<String, dynamic> brand) {
+  return '${brand['id'] ?? brand['partnerId'] ?? brand['brandId'] ?? ''}'
+      .trim();
+}
+
+String _slugId(String value) {
+  return value
+      .toLowerCase()
+      .replaceAll(RegExp(r'[^a-z0-9]+'), '-')
+      .replaceAll(RegExp(r'^-|-$'), '');
+}
+
+List<String> _csvValues(String value) {
+  return value
+      .split(',')
+      .map((item) => item.trim())
+      .where((item) => item.isNotEmpty)
+      .toList();
+}
+
+List<String> _adminStringList(Object? value) {
+  if (value is Iterable) {
+    return value
+        .map((item) => '$item'.trim())
+        .where((item) => item.isNotEmpty)
+        .toList();
+  }
+  final text = '$value'.trim();
+  if (text.isEmpty || text == 'null') return const [];
+  return [text];
+}
+
+int _brandGiftLinks(
+  List<Map<String, dynamic>> brands,
+  List<Map<String, dynamic>> gifts,
+) {
+  final brandNames = brands
+      .expand((brand) => [
+            brand['partnerName'],
+            brand['brandName'],
+            brand['partnerId'],
+          ])
+      .map((value) => '$value'.trim().toLowerCase())
+      .where((value) => value.isNotEmpty && value != 'null')
+      .toSet();
+  return gifts.where((gift) {
+    final text = [
+      gift['brandName'],
+      gift['partnerName'],
+      gift['brandId'],
+      gift['supplier'],
+      gift['procurementSupplier'],
+    ].join(' ').toLowerCase();
+    return brandNames.any(text.contains);
+  }).length;
 }
 
 bool _isTroubleshootingDelivery(Map<String, dynamic> delivery) {

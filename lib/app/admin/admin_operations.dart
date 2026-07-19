@@ -1022,6 +1022,126 @@ class AdminGiftTools {
       if (status == 'rejected') 'moderationState': 'rejected',
     };
   }
+
+  static Map<String, dynamic> brandPartnerPatch({
+    required String status,
+    required String updatedBy,
+    required Object updatedAt,
+    String? partnerName,
+    String? brandName,
+    String? category,
+    String? contactName,
+    String? contactEmail,
+    String? phone,
+    String? website,
+    String? notes,
+    List<String> approvedFor = const [],
+  }) {
+    if (!const [
+      'approved',
+      'pending',
+      'paused',
+      'suspended',
+      'inactive',
+      'history_reviewed'
+    ].contains(status)) {
+      throw ArgumentError('Unsupported brand partner status.');
+    }
+    final active = status == 'approved';
+    return {
+      if (partnerName != null) 'partnerName': partnerName.trim(),
+      if (brandName != null) 'brandName': brandName.trim(),
+      if (category != null) 'category': category.trim(),
+      if (contactName != null) 'contactName': contactName.trim(),
+      if (contactEmail != null) 'contactEmail': contactEmail.trim(),
+      if (phone != null) 'phone': phone.trim(),
+      if (website != null) 'website': website.trim(),
+      if (notes != null) 'internalNotes': notes.trim(),
+      if (approvedFor.isNotEmpty) 'approvedFor': approvedFor,
+      if (status != 'history_reviewed') 'status': status,
+      if (status != 'history_reviewed') 'partnershipStatus': status,
+      if (status != 'history_reviewed') 'active': active,
+      if (status == 'history_reviewed') 'lastHistoryReviewedAt': updatedAt,
+      if (status == 'history_reviewed') 'lastHistoryReviewedBy': updatedBy,
+      'updatedAt': updatedAt,
+      'updatedBy': updatedBy,
+      if (status == 'approved') 'verifiedAt': updatedAt,
+      if (status == 'approved') 'verifiedBy': updatedBy,
+      if (status == 'suspended' || status == 'paused') 'suspendedAt': updatedAt,
+      if (status == 'suspended' || status == 'paused') 'suspendedBy': updatedBy,
+      if (status == 'inactive') 'deactivatedAt': updatedAt,
+      if (status == 'inactive') 'deactivatedBy': updatedBy,
+    };
+  }
+
+  static ({double score, String reason}) campaignMatchScore(
+    Map<String, dynamic> first,
+    Map<String, dynamic> second,
+  ) {
+    if (first['matchConsent'] != true || second['matchConsent'] != true) {
+      return (score: 0, reason: 'Both participants must consent to matching.');
+    }
+    final firstBlocked = first['blockedUserIds'] is List &&
+        (first['blockedUserIds'] as List).contains(second['userId']);
+    final secondBlocked = second['blockedUserIds'] is List &&
+        (second['blockedUserIds'] as List).contains(first['userId']);
+    if (first['matchStatus'] == 'withdrawn' ||
+        second['matchStatus'] == 'withdrawn' ||
+        firstBlocked ||
+        secondBlocked) {
+      return (
+        score: 0,
+        reason: 'This match is not eligible for safety reasons.'
+      );
+    }
+    final firstTerms = _campaignTerms(first);
+    final secondTerms = _campaignTerms(second);
+    final overlap = firstTerms.intersection(secondTerms).toList()..sort();
+    final conflict = _campaignAllergyConflict(first, second);
+    if (conflict != null) return (score: 0, reason: conflict);
+    final score = overlap.isEmpty
+        ? 25.0
+        : (45 + overlap.length * 12).clamp(0, 100).toDouble();
+    final reason = overlap.isEmpty
+        ? 'A broad campaign match with no obvious preference conflict.'
+        : 'Matched because both selected ${overlap.take(3).join(', ')}.';
+    return (score: score, reason: reason);
+  }
+
+  static Set<String> _campaignTerms(Map<String, dynamic> participant) {
+    final values = <dynamic>[
+      ...?participant['interests'] as List?,
+      ...?participant['hobbies'] as List?,
+      ...?participant['preferredGiftCategories'] as List?,
+      ...?participant['favouriteFoodsDrinks'] as List?,
+      ...?participant['musicTaste'] as List?,
+      ...?participant['booksFilms'] as List?,
+    ];
+    return values
+        .map((value) => '$value'.trim().toLowerCase())
+        .where((value) => value.isNotEmpty)
+        .toSet();
+  }
+
+  static String? _campaignAllergyConflict(
+    Map<String, dynamic> first,
+    Map<String, dynamic> second,
+  ) {
+    final allergies = <String>{
+      ...?((first['allergies'] as List?)
+          ?.map((value) => '$value'.toLowerCase())),
+      ...?((second['allergies'] as List?)
+          ?.map((value) => '$value'.toLowerCase())),
+    };
+    final preferences = {..._campaignTerms(first), ..._campaignTerms(second)};
+    for (final allergy in allergies) {
+      if (allergy.isNotEmpty &&
+          preferences.any((term) => term.contains(allergy))) {
+        return 'Not matched because a selected gift preference conflicts with an allergy.';
+      }
+    }
+    return null;
+  }
 }
 
 class AdminPlatformTools {

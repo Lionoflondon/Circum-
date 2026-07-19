@@ -759,6 +759,7 @@ void main() {
           'Health+',
           'Business',
           'Gifts',
+          'Gift Brand Partners',
           'Gift Team Workspace',
           'Gift Story Media',
           'Gift Campaign Matches',
@@ -770,9 +771,59 @@ void main() {
       expect(AdminModule.values, contains(AdminModule.discrepancyReview));
       expect(AdminModule.values, contains(AdminModule.irisRepository));
       expect(AdminModule.values, contains(AdminModule.irisCandidates));
+      expect(AdminModule.values, contains(AdminModule.giftBrandPartners));
       expect(AdminModule.values, contains(AdminModule.giftWorkspace));
       expect(AdminModule.values, contains(AdminModule.giftStoryMedia));
       expect(AdminModule.values, contains(AdminModule.giftCampaignMatches));
+    });
+
+    test('restores historical IRIS and Gifts flow transitions', () {
+      final source =
+          File('lib/app/admin/admin_phase1_shell.dart').readAsStringSync();
+
+      expect(source, contains('New Canonical Item'));
+      expect(source,
+          contains('Future<Map<String, Object?>?> _irisRepositoryEditPatch'));
+      expect(source, contains('Alias Manager'));
+      expect(source, contains('Category Management'));
+      expect(source, contains('Imports and Repository Settings'));
+      expect(source,
+          contains("collection('irisCanonicalObjects').doc(canonicalId)"));
+      expect(source, contains("'repositoryPromotionStatus': 'committed'"));
+      expect(
+        source,
+        contains(
+            'Historical Candidate to Canonical Repository transition restored'),
+      );
+
+      expect(source, contains('Gift Brand Partners'));
+      expect(source, contains('Brand Partner Directory'));
+      expect(source, contains('Partner Profiles and History'));
+      expect(source, contains('Future<void> _setGiftBrandStatus'));
+      expect(source, contains('Future<void> _editGiftBrandPartner'));
+
+      expect(source, contains('Future<void> _suggestGiftCampaignMatch'));
+      expect(source, contains('Future<void> _approveGiftCampaignMatch'));
+      expect(source, contains('Future<void> _bulkGiftCampaignAction'));
+      expect(
+        source,
+        contains("collection('giftCampaignMatches').doc(matchId)"),
+      );
+      expect(source, contains("collection('giftRequests').doc()"));
+      expect(source, contains('gift_campaign_match_approved'));
+      expect(source, contains('Export selected'));
+
+      expect(source, contains('Future<void> _editGiftRequestWorkflow'));
+      expect(source, contains('Gift Request Editor'));
+      expect(source, contains('procurementOrderReference'));
+      expect(source, contains('giftStoryPhotoUrls'));
+      expect(source, contains('giftStoryCustomAudioUrl'));
+      expect(source, contains("httpsCallable('recordGiftStoryEvent')"));
+      expect(source, contains("httpsCallable('updateGiftStoryPrivacy')"));
+      expect(source, contains('contentStatus'));
+      expect(source, contains('captionDraft'));
+      expect(source, contains('postedTikTokUrl'));
+      expect(source, contains('gift_request_editor_saved'));
     });
 
     test('Admin data bundle starts empty before live loaders resolve', () {

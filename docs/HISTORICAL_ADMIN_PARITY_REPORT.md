@@ -459,17 +459,19 @@ Current restored evidence:
 
 - IRIS Repository Governance:
   - `lib/app/admin/admin_phase1_shell.dart`
-  - Restored canonical record actions: Edit, Duplicate, Deactivate, History, Bulk export
+  - Restored canonical record actions: New Canonical Item, Edit, Duplicate, Deactivate, History, Bulk edit, Bulk merge, Bulk category, Bulk vehicle, Bulk activate, Bulk deactivate, Bulk export
+  - Restored Alias Manager, Category Management, Imports and Repository Settings panels
   - Restored backend-backed reference image actions remain present
 
 - IRIS Candidate Workflows:
   - `lib/app/admin/admin_phase1_shell.dart`
   - Restored candidate actions: Approve, Reject, Promote, Merge existing, Save alias, Suspicious, History
-  - Actions write Admin review metadata/audit only; pricing and lifecycle authority are unchanged
+  - Candidate promotion now creates/updates a canonical `irisCanonicalObjects` record and marks the candidate as committed
 
 - Gift Story Media / Video:
   - `lib/app/admin/admin_phase1_shell.dart`
   - Restored Admin access to `getGiftStoryVideoDownload`, `createGiftStoryVideoUpload`, `finalizeGiftStoryVideoUpload`
+  - Restored Admin access to `recordGiftStoryEvent` and `updateGiftStoryPrivacy`
   - Existing access actions for retry, regenerate, extend and revoke remain present
 
 - Gift Team Workspace:
@@ -477,9 +479,19 @@ Current restored evidence:
   - Restored workspace visibility for assignment, curation, supplier, experience, budget, IRIS review, approval and readiness state
   - Restored Admin workspace actions: Assign, Curating, Supplier pending, Approval pending, Ready procurement, Ready rider, Ready scheduling, Ready delivery
 
+- Gift Brand Partners:
+  - `lib/app/admin/admin_phase1_shell.dart`
+  - Restored Brand Partner directory, partner profile editor, verification/status actions, campaign/catalogue association, contact information, notes, performance fields and audit history
+
 - Gift Campaign Match Records:
   - `lib/app/admin/admin_phase1_shell.dart`
   - Restored `giftCampaignMatches` collection loading and Campaign Match Records module
+  - Restored suggestion generation, match approval, match rejection, assign later, bulk approve, bulk reject, bulk assign later and export selected
+  - Match approval now creates `giftCampaignMatches` and draft campaign `giftRequests`
+
+- Gift Request End-to-End Editor:
+  - `lib/app/admin/admin_phase1_shell.dart`
+  - Restored editable procurement, supplier, order reference, cost, ETA, notes, IRIS gift review, Gift Story, media URL, audio URL, privacy, consent, publishing, captions, social links, content status and archive fields
 
 - Troubleshooting:
   - `lib/app/admin/admin_phase1_shell.dart`
