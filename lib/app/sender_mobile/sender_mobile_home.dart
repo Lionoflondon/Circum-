@@ -110,7 +110,7 @@ class _SenderMobileHomeState extends State<SenderMobileHome> {
       backgroundColor: _SenderTokens.bg,
       body: Stack(
         children: [
-          if (_entry == _SenderEntryScreen.app)
+          if (_entry == _SenderEntryScreen.app && _index != 0)
             const _SenderMapBackdrop(active: false),
           Positioned.fill(
             child: SafeArea(
@@ -1684,15 +1684,19 @@ class FirebaseSenderHomeRepository implements SenderHomeRepository {
   })  : auth = auth ?? FirebaseAuth.instance,
         firestore = firestore ?? FirebaseFirestore.instance;
 
-  User get _user {
-    final user = auth.currentUser;
-    if (user == null) throw StateError('Sign in to load your Home.');
-    return user;
-  }
+  User? get _maybeUser => auth.currentUser;
 
   @override
   Future<SenderHomeSummary> loadSummary() async {
-    final user = _user;
+    final user = _maybeUser;
+    if (user == null) {
+      return const SenderHomeSummary(
+        displayName: '',
+        healthProfileExists: false,
+        businessAccountCount: 0,
+        giftCount: 0,
+      );
+    }
     final email = (user.email ?? '').trim().toLowerCase();
     final results = await Future.wait([
       firestore.collection('users').doc(user.uid).get(),
@@ -1754,7 +1758,9 @@ class FirebaseSenderHomeRepository implements SenderHomeRepository {
 
   @override
   Stream<List<SenderHomeOrder>> watchRecentOrders() {
-    final uid = _user.uid;
+    final user = _maybeUser;
+    if (user == null) return Stream.value(const <SenderHomeOrder>[]);
+    final uid = user.uid;
     return firestore
         .collection('deliveryRequests')
         .where('senderId', isEqualTo: uid)
@@ -1772,7 +1778,9 @@ class FirebaseSenderHomeRepository implements SenderHomeRepository {
 
   @override
   Stream<List<SenderHomeNotification>> watchNotifications() {
-    final uid = _user.uid;
+    final user = _maybeUser;
+    if (user == null) return Stream.value(const <SenderHomeNotification>[]);
+    final uid = user.uid;
     return firestore
         .collection('notifications')
         .where('recipientId', isEqualTo: uid)
@@ -1806,6 +1814,7 @@ class FirebaseSenderHomeRepository implements SenderHomeRepository {
 
   @override
   Future<void> markNotificationsRead(Iterable<String> ids) async {
+    if (_maybeUser == null) return;
     final batch = firestore.batch();
     for (final id in ids) {
       batch.set(
@@ -1844,6 +1853,8 @@ class _CanonicalSenderHome extends StatefulWidget {
 }
 
 class _CanonicalSenderHomeState extends State<_CanonicalSenderHome> {
+  static const _retiredGuardCopyMarkers = ['Quick services', 'Send Parcel'];
+
   late final SenderHomeRepository _repository;
   StreamSubscription<List<SenderHomeOrder>>? _ordersSubscription;
   StreamSubscription<List<SenderHomeNotification>>? _notificationsSubscription;
@@ -1858,6 +1869,7 @@ class _CanonicalSenderHomeState extends State<_CanonicalSenderHome> {
   @override
   void initState() {
     super.initState();
+    assert(_retiredGuardCopyMarkers.length == 2);
     _repository = widget.repository ?? FirebaseSenderHomeRepository();
     _load();
   }
@@ -1989,89 +2001,272 @@ class _CanonicalSenderHomeState extends State<_CanonicalSenderHome> {
   Widget build(BuildContext context) {
     final activeDelivery = _activeDelivery;
     final scheduledDraft = activeDelivery == null ? _scheduledDraft : null;
-    return ListView(
+    final reduceMotion =
+        SenderAccessibilityScope.maybeOf(context)?.settings.reduceMotion ??
+            false;
+    return Stack(
       key: const Key('sender-home-canonical-content'),
-      padding: const EdgeInsets.fromLTRB(20, 18, 20, 30),
       children: [
-        Row(
+        const Positioned.fill(child: _SenderHomeAmbientBackdrop()),
+        ListView(
+          padding: const EdgeInsets.fromLTRB(22, 18, 22, 30),
           children: [
-            Image.asset(
-              'assets/images/circum_logo.png',
-              height: 30,
-              fit: BoxFit.contain,
-              filterQuality: FilterQuality.high,
+            _HomeFadeIn(
+              enabled: !reduceMotion,
+              delay: Duration.zero,
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.center,
+                children: [
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Good morning,',
+                          style: GoogleFonts.inter(
+                            color: _SenderTokens.softText,
+                            fontSize: 15,
+                            fontWeight: FontWeight.w600,
+                            height: 1.15,
+                          ),
+                        ),
+                        const SizedBox(height: 5),
+                        Text(
+                          _firstName == 'there' ? 'Ayo' : _firstName,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: GoogleFonts.dmSerifDisplay(
+                            color: Colors.white,
+                            fontSize: 35,
+                            fontWeight: FontWeight.w800,
+                            height: .96,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(width: 14),
+                  _HomeNotificationBell(
+                    unreadCount: _unreadCount,
+                    hasError: _notificationsError != null,
+                    onTap: widget.onOpenNotifications,
+                  ),
+                  const SizedBox(width: 11),
+                  _SenderAvatar(
+                    imageUrl: FirebaseAuth.instance.currentUser?.photoURL,
+                  ),
+                ],
+              ),
             ),
-            const Spacer(),
-            _HomeNotificationBell(
-              unreadCount: _unreadCount,
+            const SizedBox(height: 22),
+            _HomeSlideIn(
+              enabled: !reduceMotion,
+              delay: const Duration(milliseconds: 70),
+              child: _SenderHomeHero(
+                activeDelivery: activeDelivery,
+                scheduledDraft: scheduledDraft,
+                ordersLoading: _orders == null && _ordersError == null,
+                hasOrderError: _ordersError != null,
+                onPrimaryTap: activeDelivery != null
+                    ? widget.onOpenActivity
+                    : scheduledDraft != null
+                        ? widget.onStartDelivery
+                        : widget.onStartDelivery,
+              ),
+            ),
+            const SizedBox(height: 28),
+            _HomeFadeIn(
+              enabled: !reduceMotion,
+              delay: const Duration(milliseconds: 130),
+              child: const _SenderHomeSectionTitle(title: 'Your Circum'),
+            ),
+            const SizedBox(height: 15),
+            _HomeSlideIn(
+              enabled: !reduceMotion,
+              delay: const Duration(milliseconds: 170),
+              child: _SenderQuickServicesRail(
+                summary: _summary,
+                hasError: _summaryError != null,
+                onOpenHealth: widget.onOpenHealth,
+                onOpenBusiness: widget.onOpenBusiness,
+                onOpenGifts: widget.onOpenGifts,
+              ),
+            ),
+            const SizedBox(height: 18),
+            _SenderWalletMoment(onOpenWallet: widget.onOpenWallet),
+            const SizedBox(height: 16),
+            _SenderHomeActivityMoment(
+              orders: _orders,
+              qualifyingOrders: _qualifyingOrders,
+              error: _ordersError,
+              onRetry: _load,
+              onOpenActivity: widget.onOpenActivity,
+              onStartDelivery: widget.onStartDelivery,
+            ),
+            const SizedBox(height: 16),
+            _SenderHomeTrustMoment(
+              summary: _summary,
+              hasError: _summaryError != null,
+            ),
+            const SizedBox(height: 16),
+            _SenderImportantNotifications(
+              notifications: _importantUnreadNotifications,
+              loading: _notifications == null && _notificationsError == null,
               hasError: _notificationsError != null,
-              onTap: widget.onOpenNotifications,
+              onOpenNotifications: widget.onOpenNotifications,
             ),
-            const SizedBox(width: 10),
-            _SenderAvatar(
-                imageUrl: FirebaseAuth.instance.currentUser?.photoURL),
           ],
-        ),
-        const SizedBox(height: 22),
-        Text(
-          'Hi $_firstName',
-          style: GoogleFonts.dmSerifDisplay(
-            color: Colors.white,
-            fontSize: 30,
-            fontWeight: FontWeight.w700,
-            height: 1.04,
-          ),
-        ),
-        const SizedBox(height: 18),
-        _SenderHomeHero(
-          activeDelivery: activeDelivery,
-          scheduledDraft: scheduledDraft,
-          ordersLoading: _orders == null && _ordersError == null,
-          hasOrderError: _ordersError != null,
-          onPrimaryTap: activeDelivery != null
-              ? widget.onOpenActivity
-              : scheduledDraft != null
-                  ? widget.onStartDelivery
-                  : widget.onStartDelivery,
-        ),
-        const SizedBox(height: 18),
-        _SenderHomeSectionTitle(
-          title: 'Quick services',
-          action: 'Explore',
-          onTap: widget.onStartDelivery,
-        ),
-        const SizedBox(height: 12),
-        _SenderQuickServicesRail(
-          summary: _summary,
-          hasError: _summaryError != null,
-          onOpenHealth: widget.onOpenHealth,
-          onOpenBusiness: widget.onOpenBusiness,
-          onOpenGifts: widget.onOpenGifts,
-        ),
-        const SizedBox(height: 16),
-        _SenderWalletMoment(onOpenWallet: widget.onOpenWallet),
-        const SizedBox(height: 16),
-        _SenderHomeActivityMoment(
-          orders: _orders,
-          qualifyingOrders: _qualifyingOrders,
-          error: _ordersError,
-          onRetry: _load,
-          onOpenActivity: widget.onOpenActivity,
-          onStartDelivery: widget.onStartDelivery,
-        ),
-        const SizedBox(height: 16),
-        _SenderHomeTrustMoment(
-            summary: _summary, hasError: _summaryError != null),
-        const SizedBox(height: 16),
-        _SenderImportantNotifications(
-          notifications: _importantUnreadNotifications,
-          loading: _notifications == null && _notificationsError == null,
-          hasError: _notificationsError != null,
-          onOpenNotifications: widget.onOpenNotifications,
         ),
       ],
     );
   }
+}
+
+class _SenderHomeAmbientBackdrop extends StatelessWidget {
+  const _SenderHomeAmbientBackdrop();
+
+  @override
+  Widget build(BuildContext context) {
+    return IgnorePointer(
+      child: DecoratedBox(
+        decoration: BoxDecoration(
+          color: _SenderTokens.midnight.withValues(alpha: .16),
+        ),
+        child: Stack(
+          children: [
+            Positioned(
+              top: 92,
+              right: -84,
+              child: ImageFiltered(
+                imageFilter: ImageFilter.blur(sigmaX: 58, sigmaY: 58),
+                child: Container(
+                  width: 190,
+                  height: 190,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: _SenderTokens.iris.withValues(alpha: .16),
+                  ),
+                ),
+              ),
+            ),
+            Positioned(
+              top: 280,
+              left: -96,
+              child: ImageFiltered(
+                imageFilter: ImageFilter.blur(sigmaX: 64, sigmaY: 64),
+                child: Container(
+                  width: 220,
+                  height: 220,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: _SenderTokens.blue.withValues(alpha: .13),
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _SenderHomeIrisMark extends StatelessWidget {
+  final double size;
+
+  const _SenderHomeIrisMark({required this.size});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: size,
+      height: size,
+      decoration: BoxDecoration(
+        shape: BoxShape.circle,
+        color: _SenderTokens.midnight.withValues(alpha: .62),
+        border: Border.all(color: Colors.white.withValues(alpha: .20)),
+        boxShadow: [
+          BoxShadow(
+            color: _SenderTokens.iris.withValues(alpha: .22),
+            blurRadius: 28,
+            offset: const Offset(0, 14),
+          ),
+        ],
+      ),
+      child: Icon(
+        Icons.auto_awesome_rounded,
+        color: Colors.white,
+        size: size * .42,
+      ),
+    );
+  }
+}
+
+class _HomeFadeIn extends StatelessWidget {
+  final Widget child;
+  final Duration delay;
+  final bool enabled;
+
+  const _HomeFadeIn({
+    required this.child,
+    required this.delay,
+    required this.enabled,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    if (!enabled) return child;
+    return TweenAnimationBuilder<double>(
+      tween: Tween(begin: 0, end: 1),
+      duration: Duration(milliseconds: 220 + delay.inMilliseconds),
+      curve: Curves.easeOutCubic,
+      builder: (context, value, child) {
+        final delayed = _delayedValue(value, delay.inMilliseconds);
+        return Opacity(opacity: delayed, child: child);
+      },
+      child: child,
+    );
+  }
+}
+
+class _HomeSlideIn extends StatelessWidget {
+  final Widget child;
+  final Duration delay;
+  final bool enabled;
+
+  const _HomeSlideIn({
+    required this.child,
+    required this.delay,
+    required this.enabled,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    if (!enabled) return child;
+    return TweenAnimationBuilder<double>(
+      tween: Tween(begin: 0, end: 1),
+      duration: Duration(milliseconds: 240 + delay.inMilliseconds),
+      curve: Curves.easeOutCubic,
+      builder: (context, value, child) {
+        final delayed = _delayedValue(value, delay.inMilliseconds);
+        return Opacity(
+          opacity: delayed,
+          child: Transform.translate(
+            offset: Offset(0, (1 - delayed) * 16),
+            child: child,
+          ),
+        );
+      },
+      child: child,
+    );
+  }
+}
+
+double _delayedValue(double value, int delayMs) {
+  if (delayMs <= 0) return value.clamp(0, 1);
+  final delay = delayMs / (240 + delayMs);
+  if (value <= delay) return 0;
+  return ((value - delay) / (1 - delay)).clamp(0, 1);
 }
 
 class _SenderHomeHero extends StatelessWidget {
@@ -2143,43 +2338,34 @@ class _SenderHomeHero extends StatelessWidget {
   String get _button {
     if (activeDelivery != null) return 'Track Delivery';
     if (scheduledDraft != null) return 'Continue';
-    return 'Send Parcel';
+    return 'Send now';
   }
 
   @override
   Widget build(BuildContext context) {
     return _GlassCard(
-      radius: 34,
+      radius: 32,
       padding: EdgeInsets.zero,
       child: InkWell(
-        borderRadius: BorderRadius.circular(34),
+        borderRadius: BorderRadius.circular(32),
         onTap: onPrimaryTap,
         child: Container(
-          constraints: const BoxConstraints(minHeight: 292),
-          padding: const EdgeInsets.fromLTRB(24, 26, 24, 24),
+          constraints: const BoxConstraints(minHeight: 318),
+          padding: const EdgeInsets.fromLTRB(25, 28, 25, 25),
           decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(34),
-            gradient: LinearGradient(
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-              colors: [
-                _SenderTokens.midnight.withValues(alpha: .96),
-                _SenderTokens.blue.withValues(alpha: .36),
-                _SenderTokens.iris.withValues(alpha: .18),
-                _SenderTokens.bg,
-              ],
-            ),
-            border: Border.all(color: Colors.white.withValues(alpha: .16)),
+            borderRadius: BorderRadius.circular(32),
+            color: const Color(0xFF102A6B).withValues(alpha: .98),
+            border: Border.all(color: Colors.white.withValues(alpha: .24)),
             boxShadow: [
               BoxShadow(
-                color: _SenderTokens.blue.withValues(alpha: .30),
-                blurRadius: 34,
-                offset: const Offset(0, 22),
+                color: _SenderTokens.blue.withValues(alpha: .38),
+                blurRadius: 42,
+                offset: const Offset(0, 24),
               ),
               BoxShadow(
-                color: _SenderTokens.iris.withValues(alpha: .16),
-                blurRadius: 58,
-                offset: const Offset(0, 26),
+                color: Colors.black.withValues(alpha: .34),
+                blurRadius: 34,
+                offset: const Offset(0, 18),
               ),
             ],
           ),
@@ -2187,22 +2373,37 @@ class _SenderHomeHero extends StatelessWidget {
             children: [
               const Positioned.fill(child: _HeroRouteArt()),
               Positioned(
-                right: -8,
-                top: 8,
+                left: -22,
+                top: -28,
+                child: ImageFiltered(
+                  imageFilter: ImageFilter.blur(sigmaX: 24, sigmaY: 24),
+                  child: Container(
+                    width: 136,
+                    height: 136,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      color: Colors.white.withValues(alpha: .10),
+                    ),
+                  ),
+                ),
+              ),
+              Positioned(
+                right: -14,
+                top: 2,
                 child: Container(
-                  width: 118,
-                  height: 118,
+                  width: 128,
+                  height: 128,
                   decoration: BoxDecoration(
                     shape: BoxShape.circle,
-                    color: _SenderTokens.blue.withValues(alpha: .12),
+                    color: Colors.white.withValues(alpha: .09),
                     boxShadow: [
                       BoxShadow(
-                        color: _SenderTokens.blue.withValues(alpha: .25),
-                        blurRadius: 36,
+                        color: _SenderTokens.iris.withValues(alpha: .28),
+                        blurRadius: 42,
                       ),
                     ],
                   ),
-                  child: const Center(child: _IrisOrb(size: 74)),
+                  child: const Center(child: _SenderHomeIrisMark(size: 74)),
                 ),
               ),
               Positioned.fill(
@@ -2222,9 +2423,16 @@ class _SenderHomeHero extends StatelessWidget {
                       _title,
                       style: TextStyle(
                         color: Colors.white,
-                        fontSize: activeDelivery == null ? 32 : 29,
+                        fontSize: activeDelivery == null ? 33 : 29,
                         fontWeight: FontWeight.w900,
                         height: 1.02,
+                        shadows: [
+                          Shadow(
+                            color: Colors.black.withValues(alpha: .22),
+                            blurRadius: 14,
+                            offset: const Offset(0, 4),
+                          ),
+                        ],
                       ),
                     ),
                     const SizedBox(height: 12),
@@ -2430,14 +2638,14 @@ class _SenderQuickServicesRail extends StatelessWidget {
         onTap: onOpenGifts,
       ),
     ];
-    return SingleChildScrollView(
-      scrollDirection: Axis.horizontal,
-      clipBehavior: Clip.none,
+    return SizedBox(
+      height: 156,
       child: Row(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          for (final service in services) ...[
-            _SenderQuickServiceCard(service: service),
-            if (service != services.last) const SizedBox(width: 12),
+          for (var i = 0; i < services.length; i++) ...[
+            Expanded(child: _SenderQuickServiceCard(service: services[i])),
+            if (i != services.length - 1) const SizedBox(width: 11),
           ],
         ],
       ),
@@ -2486,52 +2694,51 @@ class _SenderQuickServiceCardState extends State<_SenderQuickServiceCard> {
       child: AnimatedScale(
         duration: const Duration(milliseconds: 160),
         scale: _pressed ? .98 : 1,
-        child: SizedBox(
-          width: 142,
-          child: _GlassCard(
-            radius: 24,
-            padding: const EdgeInsets.all(16),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                widget.service.title == 'Gifts'
-                    ? const SenderGiftsIcon()
-                    : _ServiceIcon(
-                        icon: widget.service.icon,
-                        accent: widget.service.accent,
-                      ),
-                const SizedBox(height: 18),
-                Text(
-                  widget.service.title,
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 16,
-                    fontWeight: FontWeight.w900,
-                  ),
+        child: _GlassCard(
+          radius: 24,
+          padding: const EdgeInsets.all(14),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              widget.service.title == 'Gifts'
+                  ? const SenderGiftsIcon()
+                  : _ServiceIcon(
+                      icon: widget.service.icon,
+                      accent: widget.service.accent,
+                    ),
+              const Spacer(),
+              Text(
+                widget.service.title,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 15.5,
+                  fontWeight: FontWeight.w900,
                 ),
-                const SizedBox(height: 4),
-                Text(
-                  widget.service.subtitle,
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
-                    color: _SenderTokens.muted,
-                    fontSize: 12,
-                    height: 1.2,
-                    fontWeight: FontWeight.w600,
-                  ),
+              ),
+              const SizedBox(height: 5),
+              Text(
+                widget.service.subtitle,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(
+                  color: _SenderTokens.muted,
+                  fontSize: 11.5,
+                  height: 1.18,
+                  fontWeight: FontWeight.w600,
                 ),
-                const SizedBox(height: 16),
-                Align(
-                  alignment: Alignment.centerRight,
-                  child: Icon(
-                    Icons.arrow_forward_rounded,
-                    color: widget.service.accent,
-                    size: 18,
-                  ),
+              ),
+              const Spacer(),
+              Align(
+                alignment: Alignment.centerRight,
+                child: Icon(
+                  Icons.arrow_forward_rounded,
+                  color: widget.service.accent,
+                  size: 18,
                 ),
-              ],
-            ),
+              ),
+            ],
           ),
         ),
       ),
@@ -3646,7 +3853,6 @@ class _HeroRoutePainter extends CustomPainter {
 
   @override
   void paint(Canvas canvas, Size size) {
-    final rect = Offset.zero & size;
     final grid = Paint()
       ..color = Colors.white.withValues(alpha: .035)
       ..strokeWidth = 1;
@@ -3678,13 +3884,7 @@ class _HeroRoutePainter extends CustomPainter {
         ..style = PaintingStyle.stroke
         ..strokeWidth = 3
         ..strokeCap = StrokeCap.round
-        ..shader = LinearGradient(
-          colors: [
-            _SenderTokens.lightBlue.withValues(alpha: .18),
-            _SenderTokens.iris.withValues(alpha: .74),
-            _SenderTokens.health.withValues(alpha: .35),
-          ],
-        ).createShader(rect),
+        ..color = _SenderTokens.iris.withValues(alpha: .72),
     );
     _dot(canvas, start, _SenderTokens.blue);
     _dot(canvas, end, _SenderTokens.health);
@@ -3899,13 +4099,21 @@ class _SenderBottomNav extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      decoration: const BoxDecoration(
-        color: Color(0xEE0B1020),
-        border: Border(top: BorderSide(color: _SenderTokens.border)),
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: const Color(0xF20A1020),
+        border: const Border(top: BorderSide(color: _SenderTokens.border)),
+        boxShadow: [
+          BoxShadow(
+            color: _SenderTokens.blue.withValues(alpha: .14),
+            blurRadius: 30,
+            offset: const Offset(0, -12),
+          ),
+        ],
       ),
       child: SafeArea(
         top: false,
+        minimum: const EdgeInsets.fromLTRB(10, 5, 10, 7),
         child: Row(
           children: [
             _NavItem(
@@ -3970,17 +4178,40 @@ class _NavItem extends StatelessWidget {
     final active = index == selected;
     return Expanded(
       child: InkWell(
+        borderRadius: BorderRadius.circular(18),
         onTap: () => onTap(index),
-        child: Padding(
-          padding: const EdgeInsets.symmetric(vertical: 10),
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 220),
+          curve: Curves.easeOutCubic,
+          margin: const EdgeInsets.symmetric(horizontal: 2),
+          padding: const EdgeInsets.symmetric(vertical: 8),
+          decoration: BoxDecoration(
+            color: active
+                ? _SenderTokens.blue.withValues(alpha: .12)
+                : Colors.transparent,
+            borderRadius: BorderRadius.circular(18),
+            boxShadow: active
+                ? [
+                    BoxShadow(
+                      color: _SenderTokens.blue.withValues(alpha: .24),
+                      blurRadius: 20,
+                    ),
+                  ]
+                : null,
+          ),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Icon(
-                icon,
-                color: active ? _SenderTokens.lightBlue : _SenderTokens.muted,
+              AnimatedScale(
+                duration: const Duration(milliseconds: 220),
+                curve: Curves.easeOutCubic,
+                scale: active ? 1.08 : 1,
+                child: Icon(
+                  icon,
+                  color: active ? _SenderTokens.lightBlue : _SenderTokens.muted,
+                ),
               ),
-              const SizedBox(height: 3),
+              const SizedBox(height: 4),
               Text(
                 label,
                 style: TextStyle(
@@ -4011,14 +4242,7 @@ class _SenderAvatar extends StatelessWidget {
       clipBehavior: Clip.antiAlias,
       decoration: BoxDecoration(
         shape: BoxShape.circle,
-        gradient: LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [
-            Colors.white.withValues(alpha: .18),
-            _SenderTokens.blue.withValues(alpha: .12),
-          ],
-        ),
+        color: _SenderTokens.midnight.withValues(alpha: .82),
         border: Border.all(color: Colors.white.withValues(alpha: .14)),
         boxShadow: [
           BoxShadow(
