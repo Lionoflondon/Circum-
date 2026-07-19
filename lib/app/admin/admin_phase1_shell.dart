@@ -7551,6 +7551,8 @@ class _DeliveryOperationsModule extends StatelessWidget {
     final stale = deliveries.where(_isStaleDelivery).toList();
     final recoverable = deliveries.where(_isRecoverableDelivery).toList();
     final archived = deliveries.where(_isArchivedDelivery).toList();
+    final enhancedCustody =
+        deliveries.where(_needsEnhancedCustodyReview).toList();
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -7580,10 +7582,20 @@ class _DeliveryOperationsModule extends StatelessWidget {
                 'Vanguard',
                 deliveries.where(_hasVanguardProtection).length.toString(),
                 'protected'),
+            _MetricCard('Enhanced custody', enhancedCustody.length.toString(),
+                'review path'),
           ],
         ),
         const SizedBox(height: 18),
         _LiveDeliveryMapPanel(deliveries: deliveries, riders: riders),
+        const SizedBox(height: 18),
+        _EnhancedCustodyReviewPanel(
+          records: enhancedCustody,
+          query: query,
+          canEditDeliveries: canEditDeliveries,
+          onOpenDelivery: onOpenDelivery,
+          onSetStatus: onSetDeliveryOperationStatus,
+        ),
         const SizedBox(height: 18),
         _RecordModule(
           title: 'Stale Delivery Lock Queue',
@@ -7699,6 +7711,84 @@ class _DeliveryOperationsModule extends StatelessWidget {
             onArchiveDelivery: onArchiveDelivery,
           ),
         ),
+      ],
+    );
+  }
+}
+
+class _EnhancedCustodyReviewPanel extends StatelessWidget {
+  const _EnhancedCustodyReviewPanel({
+    required this.records,
+    required this.query,
+    required this.canEditDeliveries,
+    required this.onOpenDelivery,
+    required this.onSetStatus,
+  });
+
+  final List<Map<String, dynamic>> records;
+  final String query;
+  final bool canEditDeliveries;
+  final ValueChanged<Map<String, dynamic>> onOpenDelivery;
+  final Future<void> Function(Map<String, dynamic>, String) onSetStatus;
+
+  @override
+  Widget build(BuildContext context) {
+    return _RecordModule(
+      title: 'Enhanced Custody Review',
+      subtitle:
+          'Vanguard custody chain, checkpoint evidence, transfer history, exceptions and Admin review status.',
+      records: records,
+      query: query,
+      fields: const [
+        'id',
+        'requestId',
+        'trackingId',
+        'senderName',
+        'recipientName',
+        'riderId',
+        'assignedRiderId',
+        'vanguardCustodyReviewStatus',
+        'vanguardCustodyEvidenceStatus',
+        'custodyIntegrityStatus',
+        'chainOfCustodyStatus',
+        'proofTimelineStatus'
+      ],
+      columns: const ['Delivery', 'Custody', 'Evidence', 'Checkpoint'],
+      row: (record) => [
+        _recordId(record),
+        _enhancedCustodyStatus(record),
+        _enhancedCustodyEvidenceSummary(record),
+        _enhancedCustodyCheckpointSummary(record),
+      ],
+      actions: (record) => [
+        _MiniAction(label: 'Details', onPressed: () => onOpenDelivery(record)),
+        if (canEditDeliveries) ...[
+          _MiniAction(
+            label: 'Flag concern',
+            onPressed: () =>
+                unawaited(onSetStatus(record, 'vanguard_custody_flagged')),
+          ),
+          _MiniAction(
+            label: 'Escalate',
+            onPressed: () =>
+                unawaited(onSetStatus(record, 'vanguard_custody_escalated')),
+          ),
+          _MiniAction(
+            label: 'Request evidence',
+            onPressed: () =>
+                unawaited(onSetStatus(record, 'vanguard_evidence_requested')),
+          ),
+          _MiniAction(
+            label: 'Assign reviewer',
+            onPressed: () =>
+                unawaited(onSetStatus(record, 'vanguard_reviewer_assigned')),
+          ),
+          _MiniAction(
+            label: 'Close review',
+            onPressed: () =>
+                unawaited(onSetStatus(record, 'vanguard_custody_closed')),
+          ),
+        ],
       ],
     );
   }
@@ -12943,6 +13033,59 @@ class _DeliveryOperationsDrawer extends StatelessWidget {
                 ),
               ],
             ),
+            if (_hasVanguardProtection(delivery))
+              _DrawerSection(
+                title: 'Enhanced Custody Review',
+                rows: [
+                  ('Review status', _enhancedCustodyStatus(delivery)),
+                  (
+                    'Custody integrity',
+                    delivery['custodyIntegrityStatus'] ??
+                        delivery['chainOfCustodyStatus'] ??
+                        delivery['enhancedCustodyStatus']
+                  ),
+                  (
+                    'Chain of custody',
+                    _historyCount(delivery, const [
+                      'chainOfCustody',
+                      'custodyTimeline',
+                      'custodyEvents'
+                    ])
+                  ),
+                  (
+                    'Collection evidence',
+                    _historyCount(delivery, const [
+                      'collectionEvidence',
+                      'pickupEvidence',
+                      'collectionPhotos'
+                    ])
+                  ),
+                  (
+                    'Transfer evidence',
+                    _historyCount(delivery, const [
+                      'transferEvidence',
+                      'handoffEvidence',
+                      'custodyTransfers'
+                    ])
+                  ),
+                  (
+                    'Drop-off evidence',
+                    _historyCount(delivery, const [
+                      'dropoffEvidence',
+                      'deliveryEvidence',
+                      'proofOfDelivery'
+                    ])
+                  ),
+                  (
+                    'Proof timeline',
+                    _enhancedCustodyCheckpointSummary(delivery)
+                  ),
+                  (
+                    'Evidence history',
+                    _enhancedCustodyEvidenceSummary(delivery)
+                  ),
+                ],
+              ),
             _DrawerSection(
               title: 'Evidence, messages and support',
               rows: [
@@ -13003,6 +13146,32 @@ class _DeliveryOperationsDrawer extends StatelessWidget {
                             label: action.$1,
                             onPressed: () => unawaited(onSetStatus(action.$2)),
                           ),
+                        if (_hasVanguardProtection(delivery))
+                          for (final action in const [
+                            (
+                              'Flag custody concern',
+                              'vanguard_custody_flagged'
+                            ),
+                            ('Escalate custody', 'vanguard_custody_escalated'),
+                            (
+                              'Request custody evidence',
+                              'vanguard_evidence_requested'
+                            ),
+                            (
+                              'Reopen custody review',
+                              'vanguard_custody_reopened'
+                            ),
+                            ('Close custody review', 'vanguard_custody_closed'),
+                            (
+                              'Assign custody reviewer',
+                              'vanguard_reviewer_assigned'
+                            ),
+                          ])
+                            _MiniAction(
+                              label: action.$1,
+                              onPressed: () =>
+                                  unawaited(onSetStatus(action.$2)),
+                            ),
                       ],
                     ),
                   ],
@@ -14406,6 +14575,103 @@ bool _hasVanguardProtection(Map<String, dynamic> delivery) {
   }
   return '$value'.toLowerCase().contains('true') ||
       '$value'.toLowerCase().contains('enabled');
+}
+
+bool _needsEnhancedCustodyReview(Map<String, dynamic> delivery) {
+  if (!_hasVanguardProtection(delivery)) return false;
+  final haystack = [
+    delivery['vanguardCustodyReviewStatus'],
+    delivery['vanguardCustodyEvidenceStatus'],
+    delivery['custodyIntegrityStatus'],
+    delivery['chainOfCustodyStatus'],
+    delivery['enhancedCustodyStatus'],
+    delivery['proofTimelineStatus'],
+    delivery['exceptionStatus'],
+    delivery['supportStatus'],
+    delivery['adminOperationStatus'],
+  ].join(' ').toLowerCase();
+  if (haystack.contains('closed') || haystack.contains('resolved')) {
+    return false;
+  }
+  if (haystack.contains('review') ||
+      haystack.contains('flag') ||
+      haystack.contains('concern') ||
+      haystack.contains('missing') ||
+      haystack.contains('exception') ||
+      haystack.contains('escalat') ||
+      haystack.contains('request')) {
+    return true;
+  }
+  return _historyCountValue(delivery, const [
+        'chainOfCustody',
+        'custodyTimeline',
+        'custodyEvents',
+        'collectionEvidence',
+        'pickupEvidence',
+        'transferEvidence',
+        'handoffEvidence',
+        'dropoffEvidence',
+        'deliveryEvidence',
+        'proofOfDelivery',
+      ]) >
+      0;
+}
+
+String _enhancedCustodyStatus(Map<String, dynamic> delivery) {
+  final values = [
+    delivery['vanguardCustodyReviewStatus'],
+    delivery['custodyIntegrityStatus'],
+    delivery['chainOfCustodyStatus'],
+    delivery['enhancedCustodyStatus'],
+  ].where((value) => '$value'.trim().isNotEmpty).toList();
+  return values.isEmpty ? 'Review not opened' : values.join(' / ');
+}
+
+String _enhancedCustodyEvidenceSummary(Map<String, dynamic> delivery) {
+  final collection = _historyCount(delivery, const [
+    'collectionEvidence',
+    'pickupEvidence',
+    'collectionPhotos',
+  ]);
+  final transfer = _historyCount(delivery, const [
+    'transferEvidence',
+    'handoffEvidence',
+    'custodyTransfers',
+  ]);
+  final dropoff = _historyCount(delivery, const [
+    'dropoffEvidence',
+    'deliveryEvidence',
+    'proofOfDelivery',
+  ]);
+  final status = '${delivery['vanguardCustodyEvidenceStatus'] ?? ''}'.trim();
+  final summary =
+      'Collection $collection / Transfer $transfer / Drop-off $dropoff';
+  return status.isEmpty ? summary : '$summary / $status';
+}
+
+String _enhancedCustodyCheckpointSummary(Map<String, dynamic> delivery) {
+  final checkpoints = _historyCount(delivery, const [
+    'vanguardCheckpoints',
+    'proofTimeline',
+    'custodyTimeline',
+    'custodyEvents',
+    'chainOfCustody',
+  ]);
+  final status = '${delivery['proofTimelineStatus'] ?? ''}'.trim();
+  return status.isEmpty
+      ? '$checkpoints checkpoint(s)'
+      : '$checkpoints checkpoint(s) / $status';
+}
+
+int _historyCountValue(Map<String, dynamic> record, List<String> fields) {
+  var total = 0;
+  for (final field in fields) {
+    final value = record[field];
+    if (value is List) total += value.length;
+    if (value is Map) total += value.length;
+    if (value is String && value.trim().isNotEmpty) total += 1;
+  }
+  return total;
 }
 
 bool _isSameDay(Map<String, dynamic> record, DateTime day) {

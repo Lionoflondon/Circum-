@@ -444,6 +444,23 @@ void main() {
       expect(patch.containsKey('paymentStatus'), isFalse);
     });
 
+    test('Vanguard custody review patches remain Admin metadata only', () {
+      final patch = AdminDeliveryOperationsTools.operationPatch(
+        status: 'vanguard_custody_escalated',
+        updatedBy: 'ops@circumuk.com',
+        updatedAt: DateTime(2026, 6, 1),
+        reason: 'Collection evidence is incomplete.',
+      );
+
+      expect(patch['adminOperationStatus'], 'vanguard_custody_escalated');
+      expect(patch['vanguardCustodyReviewStatus'], 'escalated');
+      expect(patch.containsKey('status'), isFalse);
+      expect(patch.containsKey('deliveryStatus'), isFalse);
+      expect(patch.containsKey('assignedRiderId'), isFalse);
+      expect(patch.containsKey('price'), isFalse);
+      expect(patch.containsKey('trustScore'), isFalse);
+    });
+
     test('IRIS review patches preserve pricing and lifecycle authority', () {
       final patch = AdminIrisOperationsTools.reviewPatch(
         status: 'learning_flagged',
@@ -924,6 +941,20 @@ void main() {
       expect(source, contains('Message Report Queue'));
       expect(source, contains('Announcement Composer'));
       expect(source, contains('IRIS Reference Image Lifecycle'));
+    });
+
+    test('restores Vanguard enhanced custody Admin review path', () {
+      final source =
+          File('lib/app/admin/admin_phase1_shell.dart').readAsStringSync();
+
+      expect(source, contains('Enhanced Custody Review'));
+      expect(source, contains('Chain of custody'));
+      expect(source, contains('Collection evidence'));
+      expect(source, contains('Transfer evidence'));
+      expect(source, contains('Drop-off evidence'));
+      expect(source, contains('Flag custody concern'));
+      expect(source, contains('Request custody evidence'));
+      expect(source, contains('vanguard_custody_closed'));
     });
 
     test('restores final historical Admin support and trust surfaces', () {

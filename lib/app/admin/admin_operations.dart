@@ -415,6 +415,12 @@ class AdminDeliveryOperationsTools {
     'archive_review',
     'waiting_review',
     'no_show_review',
+    'vanguard_custody_flagged',
+    'vanguard_custody_escalated',
+    'vanguard_evidence_requested',
+    'vanguard_custody_reopened',
+    'vanguard_custody_closed',
+    'vanguard_reviewer_assigned',
     'iris_review_override',
     'fraud_flagged',
   ];
@@ -441,6 +447,18 @@ class AdminDeliveryOperationsTools {
       if (status == 'escalated') 'escalationStatus': 'open',
       if (status == 'waiting_review') 'waitingReviewStatus': 'open',
       if (status == 'no_show_review') 'noShowReviewStatus': 'open',
+      if (status == 'vanguard_custody_flagged')
+        'vanguardCustodyReviewStatus': 'concern_flagged',
+      if (status == 'vanguard_custody_escalated')
+        'vanguardCustodyReviewStatus': 'escalated',
+      if (status == 'vanguard_evidence_requested')
+        'vanguardCustodyEvidenceStatus': 'requested',
+      if (status == 'vanguard_custody_reopened')
+        'vanguardCustodyReviewStatus': 'open',
+      if (status == 'vanguard_custody_closed')
+        'vanguardCustodyReviewStatus': 'closed',
+      if (status == 'vanguard_reviewer_assigned')
+        'vanguardCustodyReviewerStatus': 'assigned',
       if (status == 'iris_review_override') 'irisReviewStatus': 'admin_review',
       if (status == 'fraud_flagged') 'fraudReviewStatus': 'flagged',
     };
