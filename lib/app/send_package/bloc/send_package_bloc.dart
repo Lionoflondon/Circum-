@@ -1196,9 +1196,20 @@ class SendPackageBloc extends Bloc<SendPackageEvent, SendPackageState> {
     final String? activeRequest = prefs.getString('activeRequest');
 
     if (activeRequest != null) {
+      if (user == null) {
+        await prefs.remove('activeRequest');
+        emit(
+          state.copyWith(
+            deliveryStatus: DeliveryStatus.inital,
+            deliveryRequestStatus: 'signed_out',
+            senderDeliveryError: '',
+          ),
+        );
+        return;
+      }
       add(WatchActiveDelivery(requestId: activeRequest));
       final userDocumentReference =
-          db.collection('deliveryRequests').doc(user!.uid);
+          db.collection('deliveryRequests').doc(user.uid);
       final requestDocumentReference =
           db.collection('deliveryRequests').doc(activeRequest);
 

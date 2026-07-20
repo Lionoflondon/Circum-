@@ -127,17 +127,18 @@ class FirebaseSenderActivityRepository implements SenderActivityRepository {
         firestore = firestore ?? FirebaseFirestore.instance,
         walletRepository = walletRepository ?? FirebaseSenderWalletRepository();
 
-  String get _uid {
+  String? get _uid {
     final user = auth.currentUser;
-    if (user == null) throw StateError('Sign in to view Activity.');
-    return user.uid;
+    return user?.uid;
   }
 
   @override
   Stream<List<SenderActivityItem>> watchActive() {
+    final uid = _uid;
+    if (uid == null) return Stream.value(const <SenderActivityItem>[]);
     return firestore
         .collection('deliveryRequests')
-        .where('senderId', isEqualTo: _uid)
+        .where('senderId', isEqualTo: uid)
         .limit(20)
         .snapshots()
         .map((snapshot) {
@@ -153,22 +154,24 @@ class FirebaseSenderActivityRepository implements SenderActivityRepository {
 
   @override
   Future<SenderActivityPage> history({String? pageToken}) async {
+    final uid = _uid;
+    if (uid == null) return const SenderActivityPage([], null);
     final page = int.tryParse(pageToken ?? '0') ?? 0;
     final sourceLimit = (page + 1) * 12;
     final results = await Future.wait([
       firestore
           .collection('deliveryRequests')
-          .where('senderId', isEqualTo: _uid)
+          .where('senderId', isEqualTo: uid)
           .limit(sourceLimit)
           .get(),
       firestore
           .collection('giftRequests')
-          .where('senderId', isEqualTo: _uid)
+          .where('senderId', isEqualTo: uid)
           .limit(sourceLimit)
           .get(),
       firestore
           .collection('prescriptionPickups')
-          .where('profileId', isEqualTo: _uid)
+          .where('profileId', isEqualTo: uid)
           .limit(sourceLimit)
           .get(),
       walletRepository.transactions(),
