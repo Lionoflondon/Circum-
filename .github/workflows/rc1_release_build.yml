@@ -2,6 +2,9 @@ name: RC1 Release Build
 
 on:
   workflow_dispatch:
+  push:
+    branches:
+      - 'rc1-release-*'
 
 jobs:
   web:
