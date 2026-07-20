@@ -77,7 +77,7 @@ case "$SURFACE" in
     HOSTING_TARGET="hosting:public"
     OUTPUT_DIR="build/public_web"
     ENTRYPOINT="lib/main_public_web.dart"
-    EXPECTED_IDENTITY="circum-website"
+    EXPECTED_IDENTITY="circum-public-web"
     ALLOWED_PREFIXES=(
       "lib/main_public_web.dart"
       "lib/app/security/"

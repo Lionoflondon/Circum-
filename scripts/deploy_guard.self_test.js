@@ -32,6 +32,29 @@ if (sharedFiles.length !== 0) {
 const productNames = Object.keys(products);
 if (productNames.length === 0) fail('manifest has no products');
 
+const requiredProductFields = [
+  'description',
+  'identity',
+  'surface',
+  'hostingTarget',
+  'buildDirectory',
+  'entrypoints',
+  'ownedPrefixes',
+  'forbiddenPrefixes',
+  'output',
+];
+const missingProductFields = [];
+for (const [name, product] of Object.entries(products)) {
+  for (const field of requiredProductFields) {
+    if (!(field in product) || product[field] == null || product[field] === '') {
+      missingProductFields.push(`${name}.${field}`);
+    }
+  }
+}
+if (missingProductFields.length > 0) {
+  fail('manifest products are missing non-null deployment metadata', missingProductFields);
+}
+
 const duplicatePrefixes = [];
 for (let i = 0; i < productNames.length; i += 1) {
   for (let j = i + 1; j < productNames.length; j += 1) {

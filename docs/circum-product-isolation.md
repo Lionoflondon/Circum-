@@ -1,16 +1,18 @@
 # Circum Product Isolation
 
-Circum is partitioned into five products:
+Circum is partitioned into independent products:
 
 1. Circum Website
-2. Sender App
-3. Rider App
-4. Admin
-5. Backend
+2. Sender Mobile App
+3. Sender Web
+4. Rider Mobile App
+5. Rider Web
+6. Admin
+7. Backend
 
 ## Circum Website
 
-Owns Sender Web and Rider Web as one website product.
+Owns only the public website. It may link to Sender Web and Rider Web, but it does not own their startup paths, routers, build outputs, hosting targets or deployment identities.
 
 Allowed:
 
@@ -29,12 +31,13 @@ Forbidden:
 
 ## Sender App
 
-Owns the independent Sender mobile application.
+Owns the independent Sender mobile application and the dedicated Sender Web hosting entrypoint.
 
 Allowed:
 
 - `lib/main.dart`
 - `lib/app/sender_mobile/**`
+- `lib/app/sender_mobile/sender_mobile_preview.dart`
 - Sender booking, wallet, activity, profile and tracking presentation
 
 Forbidden:

@@ -6,10 +6,10 @@ const cp = require('node:child_process');
 
 const surfaces = {
   website: {
-    identity: 'circum-website',
+    identity: 'circum-public-web',
     name: 'Circum Website',
     shortName: 'Circum',
-    description: 'Circum website, including Sender Web and Rider Web.',
+    description: 'Circum public website. Sender Web and Rider Web are independent products.',
     startUrl: '/',
     themeColor: '#0f172a',
     title: 'Circum',

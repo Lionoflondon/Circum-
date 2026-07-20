@@ -1,0 +1,44 @@
+name: RC1 Release Build
+
+on:
+  workflow_dispatch:
+
+jobs:
+  web:
+    name: Build Public Website and Sender Web
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - run: flutter pub get
+      - run: node scripts/deploy_guard.self_test.js
+      - run: PUBLIC_WEB_RECAPTCHA_ENTERPRISE_SITE_KEY="${{ secrets.PUBLIC_WEB_RECAPTCHA_ENTERPRISE_SITE_KEY }}" scripts/build_public_web.sh
+      - run: CIRCUM_WEB_RECAPTCHA_ENTERPRISE_SITE_KEY="${{ secrets.CIRCUM_WEB_RECAPTCHA_ENTERPRISE_SITE_KEY }}" scripts/build_sender_app_web.sh
+      - uses: actions/upload-artifact@v4
+        with:
+          name: circum-rc1-web-artifacts
+          path: |
+            build/public_web
+            build/sender_app_web
+
+  sender-mobile:
+    name: Build Sender Android
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+      - run: flutter pub get
+      - run: flutter build apk --release --target=lib/main.dart
+      - uses: actions/upload-artifact@v4
+        with:
+          name: sender-android-release
+          path: build/app/outputs/flutter-apk/app-release.apk
