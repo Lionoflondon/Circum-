@@ -18,6 +18,7 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: read
+      issues: read
       pull-requests: read
     steps:
       - uses: actions/github-script@v7
@@ -30,6 +31,9 @@ jobs:
               'scripts/deploy_guard.self_test.js',
               'scripts/absolute_product_ownership.js',
             ];
+            const architectureOwners = ['Lionoflondon'];
+            const requiredApprovals = 1;
+            const approvalLabel = 'architecture-approved';
 
             const { owner, repo } = context.repo;
             const pull_number = context.payload.pull_request.number;
@@ -61,12 +65,31 @@ jobs:
             const latest = new Map();
             for (const review of reviews) latest.set(review.user.login, review.state);
             const approvals = [...latest.entries()]
-              .filter(([login, state]) => state === 'APPROVED' && login !== author)
+              .filter(([login, state]) =>
+                state === 'APPROVED' &&
+                login !== author &&
+                architectureOwners.includes(login))
               .map(([login]) => login);
 
-            if (approvals.length < 2) {
+            const events = await github.paginate(github.rest.issues.listEvents, {
+              owner,
+              repo,
+              issue_number: pull_number,
+              per_page: 100,
+            });
+            const ownerApprovedLabel = events.some((event) =>
+              event.event === 'labeled' &&
+              event.label &&
+              event.label.name === approvalLabel &&
+              event.actor &&
+              architectureOwners.includes(event.actor.login));
+
+            if (approvals.length < requiredApprovals && !ownerApprovedLabel) {
               core.setFailed(
                 `Protected architecture files changed: ${touched.join(', ')}. ` +
-                `Two non-author approvals are required; found ${approvals.length}.`,
+                `One architecture owner approval is required. ` +
+                `Found ${approvals.length} non-author owner approvals and ` +
+                `${ownerApprovedLabel ? 'an' : 'no'} ${approvalLabel} label ` +
+                `from an architecture owner.`,
               );
             }
