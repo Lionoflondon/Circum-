@@ -44,7 +44,7 @@ jobs:
       - name: Create CI release keystore
         run: |
           keytool -genkeypair -v \
-            -keystore android/rc1-ci-keystore.jks \
+            -keystore android/app/rc1-ci-keystore.jks \
             -storepass rc1release \
             -keypass rc1release \
             -alias rc1-ci \
