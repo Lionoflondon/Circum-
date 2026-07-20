@@ -8657,11 +8657,20 @@ class _GiftsOperationsModule extends StatefulWidget {
 
 class _GiftsOperationsModuleState extends State<_GiftsOperationsModule> {
   _GiftsWorkspaceTab _tab = _GiftsWorkspaceTab.overview;
+  String _campaignFilter = '';
+  String _priorityFilter = '';
+  String _partnerFilter = '';
+  String _staffFilter = '';
+  String _storyFilter = '';
+  String _stageFilter = '';
+  String _matchFilter = '';
+  bool _filtersVisible = true;
+  Map<String, dynamic>? _selectedGift;
 
   @override
   Widget build(BuildContext context) {
     final query = widget.query.trim();
-    final filtered = adminSearch(widget.gifts, query, const [
+    final searchedGifts = adminSearch(widget.gifts, query, const [
       'id',
       'giftId',
       'giftName',
@@ -8681,7 +8690,7 @@ class _GiftsOperationsModuleState extends State<_GiftsOperationsModule> {
       'irisGiftRecommendation',
       'procurementSupplier',
     ]);
-    final filteredParticipants = adminSearch(widget.participants, query, const [
+    final searchedParticipants = adminSearch(widget.participants, query, const [
       'id',
       'campaignId',
       'campaignName',
@@ -8692,7 +8701,7 @@ class _GiftsOperationsModuleState extends State<_GiftsOperationsModule> {
       'matchStatus',
       'suggestedParticipantId',
     ]);
-    final filteredMatches = adminSearch(widget.campaignMatches, query, const [
+    final searchedMatches = adminSearch(widget.campaignMatches, query, const [
       'id',
       'campaignId',
       'campaignName',
@@ -8704,7 +8713,7 @@ class _GiftsOperationsModuleState extends State<_GiftsOperationsModule> {
       'matchStatus',
       'matchReason',
     ]);
-    final filteredBrands = adminSearch(widget.brands, query, const [
+    final searchedBrands = adminSearch(widget.brands, query, const [
       'id',
       'partnerId',
       'partnerName',
@@ -8718,6 +8727,52 @@ class _GiftsOperationsModuleState extends State<_GiftsOperationsModule> {
       'approvedFor',
       'internalNotes',
     ]);
+    final filterOptions = _GiftFilterOptions.from(
+      gifts: searchedGifts,
+      participants: searchedParticipants,
+      matches: searchedMatches,
+      brands: searchedBrands,
+    );
+    final filtered = _applyGiftOperationalFilters(
+      searchedGifts,
+      campaign: _campaignFilter,
+      priority: _priorityFilter,
+      partner: _partnerFilter,
+      staff: _staffFilter,
+      story: _storyFilter,
+      stage: _stageFilter,
+      match: _matchFilter,
+    );
+    final filteredParticipants = _applyGiftOperationalFilters(
+      searchedParticipants,
+      campaign: _campaignFilter,
+      priority: _priorityFilter,
+      partner: _partnerFilter,
+      staff: _staffFilter,
+      story: _storyFilter,
+      stage: _stageFilter,
+      match: _matchFilter,
+    );
+    final filteredMatches = _applyGiftOperationalFilters(
+      searchedMatches,
+      campaign: _campaignFilter,
+      priority: _priorityFilter,
+      partner: _partnerFilter,
+      staff: _staffFilter,
+      story: _storyFilter,
+      stage: _stageFilter,
+      match: _matchFilter,
+    );
+    final filteredBrands = _applyGiftOperationalFilters(
+      searchedBrands,
+      campaign: _campaignFilter,
+      priority: _priorityFilter,
+      partner: _partnerFilter,
+      staff: _staffFilter,
+      story: _storyFilter,
+      stage: _stageFilter,
+      match: _matchFilter,
+    );
     final campaigns = {
       ..._distinctValues(widget.gifts, 'campaignName'),
       ..._distinctValues(widget.gifts, 'campaign'),
@@ -8746,19 +8801,56 @@ class _GiftsOperationsModuleState extends State<_GiftsOperationsModule> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Wrap(
-          spacing: 10,
-          runSpacing: 10,
+        GridView.count(
+          crossAxisCount: MediaQuery.sizeOf(context).width >= 1500
+              ? 6
+              : MediaQuery.sizeOf(context).width >= 980
+                  ? 3
+                  : 2,
+          childAspectRatio:
+              MediaQuery.sizeOf(context).width >= 1500 ? 1.55 : 2.15,
+          shrinkWrap: true,
+          physics: const NeverScrollableScrollPhysics(),
+          mainAxisSpacing: 12,
+          crossAxisSpacing: 12,
           children: [
-            _MetricCard('Campaigns', '${campaigns.length}', 'active names'),
-            _MetricCard('Participants', '${widget.participants.length}',
-                'campaign records'),
-            _MetricCard('Active Matches', '$activeMatches', 'not closed'),
-            _MetricCard('Brand Partners', '${widget.brands.length}',
-                'directory records'),
-            _MetricCard('Stories', '$stories', 'media enabled'),
-            _MetricCard(
-                'Pending Reviews', '$pendingReviews', 'operator attention'),
+            _GiftKpiCard(
+              label: 'Active Campaigns',
+              value: '${campaigns.length}',
+              icon: Icons.campaign_rounded,
+              trend: 'Open programmes',
+            ),
+            _GiftKpiCard(
+              label: 'Participants',
+              value: '${widget.participants.length}',
+              icon: Icons.diversity_3_rounded,
+              trend: 'Campaign records',
+            ),
+            _GiftKpiCard(
+              label: 'Successful Matches',
+              value:
+                  '${widget.campaignMatches.where((m) => _giftMatchBucket(m) == 'approved').length}',
+              icon: Icons.verified_rounded,
+              trend: '$activeMatches active',
+            ),
+            _GiftKpiCard(
+              label: 'Brand Partners',
+              value: '${widget.brands.length}',
+              icon: Icons.storefront_rounded,
+              trend: 'Directory',
+            ),
+            _GiftKpiCard(
+              label: 'Stories In Progress',
+              value: '$stories',
+              icon: Icons.auto_stories_rounded,
+              trend: 'Media enabled',
+            ),
+            _GiftKpiCard(
+              label: 'Awaiting Approval',
+              value: '$pendingReviews',
+              icon: Icons.rate_review_rounded,
+              trend: 'Operator attention',
+            ),
           ],
         ),
         const SizedBox(height: 18),
@@ -8772,6 +8864,7 @@ class _GiftsOperationsModuleState extends State<_GiftsOperationsModule> {
               filteredParticipants, 'assign_later')),
           onExport: () => unawaited(widget.onBulkGiftCampaignAction(
               filteredParticipants, 'exported')),
+          onFilter: () => setState(() => _filtersVisible = !_filtersVisible),
           onNewCampaign: () => unawaited(widget.onEditGiftRequest({})),
           onInviteBrand: () => unawaited(widget.onEditGiftBrandPartner(null)),
         ),
@@ -8780,6 +8873,37 @@ class _GiftsOperationsModuleState extends State<_GiftsOperationsModule> {
           selected: _tab,
           onSelected: (tab) => setState(() => _tab = tab),
         ),
+        if (_filtersVisible) ...[
+          const SizedBox(height: 18),
+          _GiftFilterPanel(
+            options: filterOptions,
+            campaign: _campaignFilter,
+            priority: _priorityFilter,
+            partner: _partnerFilter,
+            staff: _staffFilter,
+            story: _storyFilter,
+            stage: _stageFilter,
+            match: _matchFilter,
+            onCampaignChanged: (value) =>
+                setState(() => _campaignFilter = value),
+            onPriorityChanged: (value) =>
+                setState(() => _priorityFilter = value),
+            onPartnerChanged: (value) => setState(() => _partnerFilter = value),
+            onStaffChanged: (value) => setState(() => _staffFilter = value),
+            onStoryChanged: (value) => setState(() => _storyFilter = value),
+            onStageChanged: (value) => setState(() => _stageFilter = value),
+            onMatchChanged: (value) => setState(() => _matchFilter = value),
+            onClear: () => setState(() {
+              _campaignFilter = '';
+              _priorityFilter = '';
+              _partnerFilter = '';
+              _staffFilter = '';
+              _storyFilter = '';
+              _stageFilter = '';
+              _matchFilter = '';
+            }),
+          ),
+        ],
         const SizedBox(height: 18),
         AnimatedSwitcher(
           duration: const Duration(milliseconds: 200),
@@ -8820,8 +8944,10 @@ class _GiftsOperationsModuleState extends State<_GiftsOperationsModule> {
           participants: participants,
           matches: matches,
           onEditGift: widget.onEditGiftRequest,
+          onSelectGift: (gift) => setState(() => _selectedGift = gift),
           onUpdateWorkspace: widget.onUpdateGiftWorkspace,
           canManage: widget.canManageIssues,
+          selectedGift: _selectedGift,
         ),
         const SizedBox(height: 18),
         _GiftGlassTable(
@@ -9123,6 +9249,7 @@ class _GiftActionBar extends StatelessWidget {
     required this.onBulkReject,
     required this.onAssign,
     required this.onExport,
+    required this.onFilter,
     required this.onNewCampaign,
     required this.onInviteBrand,
   });
@@ -9132,6 +9259,7 @@ class _GiftActionBar extends StatelessWidget {
   final VoidCallback onBulkReject;
   final VoidCallback onAssign;
   final VoidCallback onExport;
+  final VoidCallback onFilter;
   final VoidCallback onNewCampaign;
   final VoidCallback onInviteBrand;
 
@@ -9194,10 +9322,10 @@ class _GiftActionBar extends StatelessWidget {
                 icon: Icons.download_rounded,
                 onPressed: canManage ? onExport : null,
               ),
-              const _GiftCommandButton(
+              _GiftCommandButton(
                 label: 'Filter',
                 icon: Icons.tune_rounded,
-                onPressed: null,
+                onPressed: onFilter,
               ),
             ],
           ),
@@ -9233,6 +9361,323 @@ class _GiftActionGroup extends StatelessWidget {
         ),
         ...children,
       ],
+    );
+  }
+}
+
+class _GiftKpiCard extends StatelessWidget {
+  const _GiftKpiCard({
+    required this.label,
+    required this.value,
+    required this.icon,
+    required this.trend,
+  });
+
+  final String label;
+  final String value;
+  final IconData icon;
+  final String trend;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(18),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(24),
+        gradient: LinearGradient(
+          colors: [
+            Colors.white.withValues(alpha: .105),
+            Colors.white.withValues(alpha: .042),
+          ],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        border: Border.all(color: Colors.white.withValues(alpha: .13)),
+        boxShadow: [
+          BoxShadow(
+            color: const Color(0xFF2563EB).withValues(alpha: .12),
+            blurRadius: 26,
+            offset: const Offset(0, 16),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Row(
+            children: [
+              Container(
+                width: 38,
+                height: 38,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: const Color(0xFF7DD3FC).withValues(alpha: .14),
+                  border: Border.all(
+                    color: const Color(0xFF7DD3FC).withValues(alpha: .24),
+                  ),
+                ),
+                child: Icon(icon, color: const Color(0xFFBAE6FD), size: 20),
+              ),
+              const Spacer(),
+              _GiftStatusChip(trend),
+            ],
+          ),
+          const SizedBox(height: 16),
+          Text(
+            value,
+            style: const TextStyle(
+              color: Colors.white,
+              fontSize: 30,
+              fontWeight: FontWeight.w900,
+              height: 1,
+            ),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            label,
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(
+              color: Colors.white.withValues(alpha: .72),
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _GiftFilterOptions {
+  const _GiftFilterOptions({
+    required this.campaigns,
+    required this.priorities,
+    required this.partners,
+    required this.staff,
+    required this.stories,
+    required this.stages,
+    required this.matches,
+  });
+
+  final List<String> campaigns;
+  final List<String> priorities;
+  final List<String> partners;
+  final List<String> staff;
+  final List<String> stories;
+  final List<String> stages;
+  final List<String> matches;
+
+  static _GiftFilterOptions from({
+    required List<Map<String, dynamic>> gifts,
+    required List<Map<String, dynamic>> participants,
+    required List<Map<String, dynamic>> matches,
+    required List<Map<String, dynamic>> brands,
+  }) {
+    final all = [...gifts, ...participants, ...matches, ...brands];
+    return _GiftFilterOptions(
+      campaigns: _giftFilterValues(all, const [
+        'campaignName',
+        'campaign',
+        'campaignId',
+      ]),
+      priorities: _giftFilterValues(all, const ['priority', 'urgency']),
+      partners: _giftFilterValues(all, const [
+        'brandName',
+        'partnerName',
+        'procurementSupplier',
+        'merchantName',
+      ]),
+      staff: _giftFilterValues(all, const [
+        'assignedStaff',
+        'assignedCurator',
+        'operatorEmail',
+      ]),
+      stories: const [
+        'Story available',
+        'No story',
+        'Draft',
+        'Approved',
+        'Published',
+        'Archived',
+      ],
+      stages: const [
+        'Campaign Created',
+        'Participants',
+        'Matches Found',
+        'Needs Procurement',
+        'Supplier Pending',
+        'Gift Review',
+        'Story Production',
+        'Awaiting Approval',
+        'Ready',
+        'Delivered',
+      ],
+      matches: const ['Matched', 'Unmatched'],
+    );
+  }
+}
+
+class _GiftFilterPanel extends StatelessWidget {
+  const _GiftFilterPanel({
+    required this.options,
+    required this.campaign,
+    required this.priority,
+    required this.partner,
+    required this.staff,
+    required this.story,
+    required this.stage,
+    required this.match,
+    required this.onCampaignChanged,
+    required this.onPriorityChanged,
+    required this.onPartnerChanged,
+    required this.onStaffChanged,
+    required this.onStoryChanged,
+    required this.onStageChanged,
+    required this.onMatchChanged,
+    required this.onClear,
+  });
+
+  final _GiftFilterOptions options;
+  final String campaign;
+  final String priority;
+  final String partner;
+  final String staff;
+  final String story;
+  final String stage;
+  final String match;
+  final ValueChanged<String> onCampaignChanged;
+  final ValueChanged<String> onPriorityChanged;
+  final ValueChanged<String> onPartnerChanged;
+  final ValueChanged<String> onStaffChanged;
+  final ValueChanged<String> onStoryChanged;
+  final ValueChanged<String> onStageChanged;
+  final ValueChanged<String> onMatchChanged;
+  final VoidCallback onClear;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(14),
+      decoration: _panelDecoration(radius: 22),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Icon(Icons.tune_rounded, color: Color(0xFF7DD3FC)),
+              const SizedBox(width: 10),
+              const Expanded(
+                child: Text(
+                  'Operational filters',
+                  style: TextStyle(fontWeight: FontWeight.w900),
+                ),
+              ),
+              TextButton.icon(
+                onPressed: onClear,
+                icon: const Icon(Icons.clear_all_rounded, size: 18),
+                label: const Text('Clear'),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          Wrap(
+            spacing: 10,
+            runSpacing: 10,
+            children: [
+              _GiftFilterDropdown(
+                label: 'Campaign',
+                value: campaign,
+                options: options.campaigns,
+                onChanged: onCampaignChanged,
+              ),
+              _GiftFilterDropdown(
+                label: 'Priority',
+                value: priority,
+                options: options.priorities,
+                onChanged: onPriorityChanged,
+              ),
+              _GiftFilterDropdown(
+                label: 'Partner',
+                value: partner,
+                options: options.partners,
+                onChanged: onPartnerChanged,
+              ),
+              _GiftFilterDropdown(
+                label: 'Assigned Staff',
+                value: staff,
+                options: options.staff,
+                onChanged: onStaffChanged,
+              ),
+              _GiftFilterDropdown(
+                label: 'Story Status',
+                value: story,
+                options: options.stories,
+                onChanged: onStoryChanged,
+              ),
+              _GiftFilterDropdown(
+                label: 'Current Stage',
+                value: stage,
+                options: options.stages,
+                onChanged: onStageChanged,
+              ),
+              _GiftFilterDropdown(
+                label: 'Matched / Unmatched',
+                value: match,
+                options: options.matches,
+                onChanged: onMatchChanged,
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _GiftFilterDropdown extends StatelessWidget {
+  const _GiftFilterDropdown({
+    required this.label,
+    required this.value,
+    required this.options,
+    required this.onChanged,
+  });
+
+  final String label;
+  final String value;
+  final List<String> options;
+  final ValueChanged<String> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    final unique = options.toSet().toList()..sort();
+    final items = ['', ...unique.take(40)];
+    return SizedBox(
+      width: 206,
+      child: DropdownButtonFormField<String>(
+        initialValue: items.contains(value) ? value : '',
+        isExpanded: true,
+        dropdownColor: const Color(0xFF111827),
+        decoration: InputDecoration(
+          labelText: label,
+          isDense: true,
+          filled: true,
+          fillColor: Colors.white.withValues(alpha: .045),
+          border: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(16),
+            borderSide: BorderSide(color: Colors.white.withValues(alpha: .12)),
+          ),
+        ),
+        items: [
+          for (final item in items)
+            DropdownMenuItem<String>(
+              value: item,
+              child: Text(item.isEmpty ? 'Any' : item),
+            ),
+        ],
+        onChanged: (next) => onChanged(next ?? ''),
+      ),
     );
   }
 }
@@ -9315,20 +9760,47 @@ class _GiftOperationsBoard extends StatelessWidget {
     required this.participants,
     required this.matches,
     required this.onEditGift,
+    required this.onSelectGift,
     required this.onUpdateWorkspace,
     required this.canManage,
+    required this.selectedGift,
   });
 
   final List<Map<String, dynamic>> gifts;
   final List<Map<String, dynamic>> participants;
   final List<Map<String, dynamic>> matches;
   final Future<void> Function(Map<String, dynamic>) onEditGift;
+  final ValueChanged<Map<String, dynamic>> onSelectGift;
   final Future<void> Function(Map<String, dynamic>, String) onUpdateWorkspace;
   final bool canManage;
+  final Map<String, dynamic>? selectedGift;
 
   @override
   Widget build(BuildContext context) {
     final lanes = <(String, List<Map<String, dynamic>>, String)>[
+      (
+        'Campaign Created',
+        gifts
+            .where((record) => _hasAnyText(record, const [
+                  'draft',
+                  'campaign',
+                  'created',
+                ]))
+            .toList(),
+        'campaign_created'
+      ),
+      ('Participants', participants, 'participants'),
+      (
+        'Matches Found',
+        [
+          ...matches.where((record) => _giftMatchBucket(record) == 'approved'),
+          ...participants.where((record) =>
+              '${record['suggestedParticipantId'] ?? record['matchedGiftId'] ?? ''}'
+                  .trim()
+                  .isNotEmpty),
+        ],
+        'matches_found'
+      ),
       (
         'Needs Procurement',
         gifts
@@ -9346,7 +9818,7 @@ class _GiftOperationsBoard extends StatelessWidget {
         'supplier_pending'
       ),
       (
-        'IRIS Review',
+        'Gift Review',
         gifts
             .where((record) => _giftIrisSelectionSummary(record)
                 .toLowerCase()
@@ -9403,21 +9875,56 @@ class _GiftOperationsBoard extends StatelessWidget {
             style: TextStyle(color: Colors.white.withValues(alpha: .62)),
           ),
           const SizedBox(height: 14),
-          SingleChildScrollView(
-            scrollDirection: Axis.horizontal,
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                for (final lane in lanes)
-                  _GiftBoardLane(
-                    title: lane.$1,
-                    records: lane.$2.take(8).toList(),
-                    actionStatus: lane.$3,
-                    onEditGift: onEditGift,
-                    onUpdateWorkspace: onUpdateWorkspace,
-                    canManage: canManage,
-                  ),
-              ],
+          LayoutBuilder(
+            builder: (context, constraints) {
+              final board = SingleChildScrollView(
+                scrollDirection: Axis.horizontal,
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    for (final lane in lanes)
+                      _GiftBoardLane(
+                        title: lane.$1,
+                        records: lane.$2.take(8).toList(),
+                        actionStatus: lane.$3,
+                        onEditGift: onEditGift,
+                        onSelectGift: onSelectGift,
+                        onUpdateWorkspace: onUpdateWorkspace,
+                        canManage: canManage,
+                      ),
+                  ],
+                ),
+              );
+              final detail = _GiftDetailPanel(
+                record: selectedGift,
+                onEditGift: onEditGift,
+              );
+              if (constraints.maxWidth < 980) {
+                return Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    board,
+                    const SizedBox(height: 14),
+                    detail,
+                  ],
+                );
+              }
+              return Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Expanded(child: board),
+                  const SizedBox(width: 14),
+                  SizedBox(width: 340, child: detail),
+                ],
+              );
+            },
+          ),
+          const SizedBox(height: 10),
+          Text(
+            'Gift Review: IRIS recommendations reviewed before approval.',
+            style: TextStyle(
+              color: Colors.white.withValues(alpha: .58),
+              fontSize: 12,
             ),
           ),
         ],
@@ -9432,6 +9939,7 @@ class _GiftBoardLane extends StatelessWidget {
     required this.records,
     required this.actionStatus,
     required this.onEditGift,
+    required this.onSelectGift,
     required this.onUpdateWorkspace,
     required this.canManage,
   });
@@ -9440,15 +9948,16 @@ class _GiftBoardLane extends StatelessWidget {
   final List<Map<String, dynamic>> records;
   final String actionStatus;
   final Future<void> Function(Map<String, dynamic>) onEditGift;
+  final ValueChanged<Map<String, dynamic>> onSelectGift;
   final Future<void> Function(Map<String, dynamic>, String) onUpdateWorkspace;
   final bool canManage;
 
   @override
   Widget build(BuildContext context) {
     return Container(
-      width: 236,
-      margin: const EdgeInsets.only(right: 12),
-      padding: const EdgeInsets.all(12),
+      width: 268,
+      margin: const EdgeInsets.only(right: 14),
+      padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
         color: Colors.white.withValues(alpha: .045),
         borderRadius: BorderRadius.circular(18),
@@ -9479,10 +9988,10 @@ class _GiftBoardLane extends StatelessWidget {
             for (final record in records) ...[
               InkWell(
                 borderRadius: BorderRadius.circular(14),
-                onTap: () => unawaited(onEditGift(record)),
+                onTap: () => onSelectGift(record),
                 child: Container(
                   width: double.infinity,
-                  padding: const EdgeInsets.all(10),
+                  padding: const EdgeInsets.all(12),
                   decoration: BoxDecoration(
                     color: Colors.white.withValues(alpha: .055),
                     borderRadius: BorderRadius.circular(14),
@@ -9493,26 +10002,76 @@ class _GiftBoardLane extends StatelessWidget {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        '${record['giftName'] ?? record['campaignName'] ?? record['displayName'] ?? _recordId(record)}',
+                        '${record['giftName'] ?? record['giftTitle'] ?? record['title'] ?? record['campaignName'] ?? record['displayName'] ?? _recordId(record)}',
                         maxLines: 2,
                         overflow: TextOverflow.ellipsis,
                         style: const TextStyle(fontWeight: FontWeight.w800),
                       ),
                       const SizedBox(height: 6),
+                      _GiftBoardMeta(
+                        label: 'Recipient',
+                        value:
+                            '${record['recipientName'] ?? record['recipientEmail'] ?? 'Not recorded'}',
+                      ),
+                      _GiftBoardMeta(
+                        label: 'Campaign',
+                        value:
+                            '${record['campaignName'] ?? record['campaignId'] ?? record['campaign'] ?? 'Unassigned'}',
+                      ),
+                      _GiftBoardMeta(
+                        label: 'Assigned staff',
+                        value:
+                            '${record['assignedStaff'] ?? record['assignedCurator'] ?? _mapValue(record['giftsTeamWorkspace'], 'assignedCurator') ?? 'Unassigned'}',
+                      ),
+                      const SizedBox(height: 8),
+                      Wrap(
+                        spacing: 6,
+                        runSpacing: 6,
+                        children: [
+                          _GiftStatusChip(
+                              '${record['priority'] ?? record['urgency'] ?? 'Standard'}'),
+                          _GiftStatusChip(_giftStorySummary(record)),
+                          if ('${record['brandName'] ?? record['partnerName'] ?? ''}'
+                              .trim()
+                              .isNotEmpty)
+                            _GiftStatusChip(
+                                '${record['brandName'] ?? record['partnerName']}'),
+                        ],
+                      ),
+                      const SizedBox(height: 8),
                       Text(
-                        '${record['recipientName'] ?? record['senderName'] ?? record['brandName'] ?? 'Gift operation'}',
+                        'Updated ${_date(record['updatedAt'] ?? record['createdAt'])}',
+                        style: TextStyle(
+                          color: Colors.white.withValues(alpha: .44),
+                          fontSize: 11,
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      Text(
+                        'ID ${_recordId(record)}',
+                        maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                         style: TextStyle(
-                          color: Colors.white.withValues(alpha: .52),
-                          fontSize: 12,
+                          color: Colors.white.withValues(alpha: .34),
+                          fontSize: 10,
+                          fontFeatures: const [FontFeature.tabularFigures()],
                         ),
                       ),
                       if (canManage) ...[
                         const SizedBox(height: 8),
-                        _MiniAction(
-                          label: 'Move',
-                          onPressed: () => unawaited(
-                              onUpdateWorkspace(record, actionStatus)),
+                        Row(
+                          children: [
+                            _MiniAction(
+                              label: 'Move',
+                              onPressed: () => unawaited(
+                                  onUpdateWorkspace(record, actionStatus)),
+                            ),
+                            const SizedBox(width: 6),
+                            _MiniAction(
+                              label: 'Edit',
+                              onPressed: () => unawaited(onEditGift(record)),
+                            ),
+                          ],
                         ),
                       ],
                     ],
@@ -9521,6 +10080,189 @@ class _GiftBoardLane extends StatelessWidget {
               ),
               const SizedBox(height: 8),
             ],
+        ],
+      ),
+    );
+  }
+}
+
+class _GiftBoardMeta extends StatelessWidget {
+  const _GiftBoardMeta({required this.label, required this.value});
+
+  final String label;
+  final String value;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 4),
+      child: RichText(
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
+        text: TextSpan(
+          children: [
+            TextSpan(
+              text: '$label ',
+              style: TextStyle(
+                color: Colors.white.withValues(alpha: .40),
+                fontSize: 11,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+            TextSpan(
+              text: value.trim().isEmpty ? 'Not recorded' : value,
+              style: TextStyle(
+                color: Colors.white.withValues(alpha: .68),
+                fontSize: 12,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _GiftDetailPanel extends StatelessWidget {
+  const _GiftDetailPanel({
+    required this.record,
+    required this.onEditGift,
+  });
+
+  final Map<String, dynamic>? record;
+  final Future<void> Function(Map<String, dynamic>) onEditGift;
+
+  @override
+  Widget build(BuildContext context) {
+    if (record == null) {
+      return Container(
+        padding: const EdgeInsets.all(18),
+        decoration: _panelDecoration(radius: 22),
+        child: const _GiftEmptyState(
+          title: 'Select a gift',
+          message:
+              'Choose a card from the workflow board to review operational detail without leaving the workspace.',
+        ),
+      );
+    }
+    final gift = record!;
+    return Container(
+      padding: const EdgeInsets.all(18),
+      decoration: _panelDecoration(radius: 22),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  '${gift['giftName'] ?? gift['title'] ?? gift['campaignName'] ?? _recordId(gift)}',
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 18,
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+              ),
+              _GiftStatusChip(_giftWorkspaceStatus(gift)),
+            ],
+          ),
+          const SizedBox(height: 14),
+          _GiftDetailSection(
+            title: 'Overview',
+            lines: [
+              'Recipient: ${gift['recipientName'] ?? gift['recipientEmail'] ?? 'Not recorded'}',
+              'Campaign: ${gift['campaignName'] ?? gift['campaignId'] ?? gift['campaign'] ?? 'Unassigned'}',
+              'Assigned: ${gift['assignedStaff'] ?? gift['assignedCurator'] ?? 'Unassigned'}',
+            ],
+          ),
+          _GiftDetailSection(
+            title: 'Story',
+            lines: [
+              _giftStorySummary(gift),
+              'Audio: ${_giftStoryAudioSummary(gift)}',
+              'Visibility: ${gift['giftStorySharePrivacy'] ?? gift['contentUsageScope'] ?? 'private'}',
+            ],
+          ),
+          _GiftDetailSection(
+            title: 'Matching',
+            lines: [
+              'Brand: ${gift['brandName'] ?? gift['partnerName'] ?? 'Not matched'}',
+              'Score: ${gift['matchingScore'] ?? gift['matchScore'] ?? 'Not recorded'}',
+            ],
+          ),
+          _GiftDetailSection(
+            title: 'Procurement',
+            lines: [_giftProcurementSummary(gift)],
+          ),
+          _GiftDetailSection(
+            title: 'Delivery',
+            lines: [
+              'Delivery: ${gift['deliveryId'] ?? 'Not scheduled'}',
+              'Status: ${gift['deliveryStatus'] ?? gift['status'] ?? 'Not recorded'}',
+            ],
+          ),
+          _GiftDetailSection(
+            title: 'Timeline',
+            lines: [
+              'Created: ${_date(gift['createdAt'])}',
+              'Updated: ${_date(gift['updatedAt'] ?? gift['createdAt'])}',
+              'Audit: ${gift['giftWorkspaceAuditTrail'] is List ? (gift['giftWorkspaceAuditTrail'] as List).length : 0} entries',
+            ],
+          ),
+          const SizedBox(height: 10),
+          Align(
+            alignment: Alignment.centerRight,
+            child: _GiftCompactAction(
+              label: 'Edit',
+              onPressed: () => unawaited(onEditGift(gift)),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _GiftDetailSection extends StatelessWidget {
+  const _GiftDetailSection({required this.title, required this.lines});
+
+  final String title;
+  final List<String> lines;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 14),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            title,
+            style: TextStyle(
+              color: Colors.white.withValues(alpha: .46),
+              fontSize: 11,
+              fontWeight: FontWeight.w900,
+              letterSpacing: .2,
+            ),
+          ),
+          const SizedBox(height: 6),
+          for (final line in lines)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 4),
+              child: Text(
+                line,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  color: Colors.white.withValues(alpha: .72),
+                  height: 1.35,
+                ),
+              ),
+            ),
         ],
       ),
     );
@@ -10165,6 +10907,129 @@ List<String> _giftWorkspaceProgress(Map<String, dynamic> record) {
     values.add('Completed');
   }
   return values.isEmpty ? const ['Awaiting Review'] : values;
+}
+
+List<String> _giftFilterValues(
+  List<Map<String, dynamic>> records,
+  List<String> fields,
+) {
+  return records
+      .expand((record) => fields.map((field) => '${record[field] ?? ''}'))
+      .expand((value) => value.split(','))
+      .map((value) => value.trim())
+      .where((value) => value.isNotEmpty && value != 'null')
+      .toSet()
+      .toList()
+    ..sort();
+}
+
+List<Map<String, dynamic>> _applyGiftOperationalFilters(
+  List<Map<String, dynamic>> records, {
+  required String campaign,
+  required String priority,
+  required String partner,
+  required String staff,
+  required String story,
+  required String stage,
+  required String match,
+}) {
+  return records
+      .where((record) => _giftRecordMatchesFilter(record, campaign, const [
+            'campaignName',
+            'campaign',
+            'campaignId',
+          ]))
+      .where((record) => _giftRecordMatchesFilter(record, priority, const [
+            'priority',
+            'urgency',
+          ]))
+      .where((record) => _giftRecordMatchesFilter(record, partner, const [
+            'brandName',
+            'partnerName',
+            'procurementSupplier',
+            'merchantName',
+          ]))
+      .where((record) => _giftRecordMatchesFilter(record, staff, const [
+            'assignedStaff',
+            'assignedCurator',
+            'operatorEmail',
+          ]))
+      .where((record) {
+    if (story.isEmpty) return true;
+    final lower = story.toLowerCase();
+    final summary = _giftStorySummary(record).toLowerCase();
+    if (lower == 'story available') return _hasGiftStory(record);
+    if (lower == 'no story') return !_hasGiftStory(record);
+    return summary.contains(lower) ||
+        '${record['storyStatus'] ?? record['giftStoryVideoStatus'] ?? ''}'
+            .toLowerCase()
+            .contains(lower);
+  }).where((record) {
+    if (stage.isEmpty) return true;
+    return _giftOperationalStage(record).toLowerCase() == stage.toLowerCase();
+  }).where((record) {
+    if (match.isEmpty) return true;
+    final matched =
+        '${record['suggestedParticipantId'] ?? record['matchedGiftId'] ?? record['brandName'] ?? record['partnerName'] ?? ''}'
+                .trim()
+                .isNotEmpty ||
+            _giftMatchBucket(record) == 'approved';
+    return match == 'Matched' ? matched : !matched;
+  }).toList(growable: false);
+}
+
+bool _giftRecordMatchesFilter(
+  Map<String, dynamic> record,
+  String filter,
+  List<String> fields,
+) {
+  if (filter.isEmpty) return true;
+  final lower = filter.toLowerCase();
+  return fields.any((field) => '${record[field] ?? ''}'
+      .toLowerCase()
+      .split(',')
+      .map((value) => value.trim())
+      .contains(lower));
+}
+
+String _giftOperationalStage(Map<String, dynamic> record) {
+  final text = record.values.join(' ').toLowerCase();
+  final participantRecord =
+      record.containsKey('userId') || record.containsKey('displayName');
+  if (participantRecord) {
+    if (_giftMatchBucket(record) == 'approved' ||
+        '${record['suggestedParticipantId'] ?? record['matchedGiftId'] ?? ''}'
+            .trim()
+            .isNotEmpty) {
+      return 'Matches Found';
+    }
+    return 'Participants';
+  }
+  if (_giftWorkspaceProgress(record).contains('Completed') ||
+      text.contains('delivered')) {
+    return 'Delivered';
+  }
+  if (_giftWorkspaceProgress(record).contains('Ready')) return 'Ready';
+  if (_giftWorkspaceProgress(record).contains('Approval Pending')) {
+    return 'Awaiting Approval';
+  }
+  if (_hasGiftStory(record)) return 'Story Production';
+  if (_giftIrisSelectionSummary(record).toLowerCase().contains('iris')) {
+    return 'Gift Review';
+  }
+  if (_giftWorkspaceProgress(record).contains('Supplier Pending')) {
+    return 'Supplier Pending';
+  }
+  if (_giftProcurementSummary(record) == 'No procurement plan') {
+    return 'Needs Procurement';
+  }
+  if (_giftMatchBucket(record) == 'approved' ||
+      '${record['suggestedParticipantId'] ?? record['matchedGiftId'] ?? ''}'
+          .trim()
+          .isNotEmpty) {
+    return 'Matches Found';
+  }
+  return 'Campaign Created';
 }
 
 // ignore: unused_element
