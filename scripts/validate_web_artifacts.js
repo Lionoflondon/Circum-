@@ -149,6 +149,9 @@ function assertArtifact(surfaceName) {
   if (marker.identity !== spec.identity) {
     fail(`${surfaceName} marker identity ${marker.identity} != ${spec.identity}`);
   }
+  if (surfaceName === 'sender-app' && !marker.gitCommit) {
+    fail('sender-app artifact is missing gitCommit metadata');
+  }
   for (const token of spec.must) {
     if (!haystack.includes(token)) fail(`${surfaceName} artifact missing marker ${token}`);
   }

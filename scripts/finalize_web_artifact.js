@@ -2,6 +2,7 @@
 /* eslint-disable no-console */
 const fs = require('node:fs');
 const path = require('node:path');
+const cp = require('node:child_process');
 
 const surfaces = {
   website: {
@@ -36,6 +37,18 @@ const surfaces = {
 function fail(message) {
   console.error(message);
   process.exit(1);
+}
+
+function git(args) {
+  try {
+    return cp.execFileSync('git', args, {
+      cwd: process.cwd(),
+      encoding: 'utf8',
+      stdio: ['ignore', 'pipe', 'ignore'],
+    }).trim();
+  } catch (_) {
+    return null;
+  }
 }
 
 const surfaceName = process.argv[2];
@@ -99,6 +112,8 @@ fs.writeFileSync(
     identity: surface.identity,
     surface: surfaceName,
     generatedAt: new Date().toISOString(),
+    gitCommit: git(['rev-parse', 'HEAD']),
+    gitCommitTimestamp: git(['show', '-s', '--format=%cI', 'HEAD']),
   }, null, 2)}\n`,
 );
 
