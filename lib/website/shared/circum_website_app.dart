@@ -297,6 +297,8 @@ class _PlatformNotificationCenterState
     _authSubscription = FirebaseAuth.instance.authStateChanges().listen((_) {
       _listen();
       if (mounted) setState(() {});
+    }, onError: (_) {
+      if (mounted) setState(() => _items = const []);
     });
   }
 
