@@ -229,6 +229,7 @@ class _SenderBookingCanvasState extends State<SenderBookingCanvas> {
   }
 
   void _hydrateRestoredDraft(SenderBookingDraft restored) {
+    if (!mounted) return;
     _restoringDraft = true;
     try {
       _hydrateDraft(restored);
@@ -238,6 +239,7 @@ class _SenderBookingCanvasState extends State<SenderBookingCanvas> {
   }
 
   void _hydrateDraft(SenderBookingDraft restored) {
+    if (!mounted) return;
     _pickup.text = restored.pickupAddress;
     _dropoff.text = restored.dropoffAddress;
     _receiverName.text = restored.receiverName;
