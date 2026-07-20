@@ -16,6 +16,15 @@ const senderHealthSource = fs.readFileSync(path.join(
     "view",
     "health_plus.dart",
 ), "utf8");
+const websiteSource = fs.readFileSync(path.join(
+    __dirname,
+    "..",
+    "..",
+    "lib",
+    "website",
+    "shared",
+    "circum_website_app.dart",
+), "utf8");
 
 test("Health+ checkout requires authenticated Sender ownership", () => {
   assert.match(source, /verifySenderRequest\(req\)/);
@@ -69,4 +78,16 @@ test("Sender Health+ UI does not write authoritative Health+ records directly", 
   assert.doesNotMatch(senderHealthSource, /collection\('healthPlusPayments'\)/);
   assert.doesNotMatch(senderHealthSource, /Admin operations/);
   assert.doesNotMatch(senderHealthSource, /updateHealthPlusPickupStatus/);
+});
+
+test("Website Health+ UI does not write authoritative Health+ records directly", () => {
+  assert.match(websiteSource, /httpsCallable\('createHealthPlusBooking'\)/);
+  assert.match(websiteSource, /httpsCallable\('updateSenderHealthPlusBooking'\)/);
+  assert.match(websiteSource, /updateHealthPlusPickupStatus/);
+  assert.doesNotMatch(websiteSource, /collection\('healthPlusProfiles'\)/);
+  assert.doesNotMatch(websiteSource, /collection\('prescriptionPickups'\)[\s\S]{0,160}\.(?:set|update|add|delete)\(/);
+  assert.doesNotMatch(websiteSource, /collection\('recurringPickupSchedules'\)/);
+  assert.doesNotMatch(websiteSource, /collection\('healthPlusPayments'\)/);
+  assert.doesNotMatch(websiteSource, /collection\('healthPlusNotifications'\)/);
+  assert.doesNotMatch(websiteSource, /collection\('healthPlusUsageEvents'\)/);
 });

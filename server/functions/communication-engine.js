@@ -578,6 +578,78 @@ async function getOrCreateSupportConversation(data, context) {
   return {ok: true, chatId, ticketId: ticketRef.id, existing: false, status};
 }
 
+async function submitWebsiteSupportRequest(data, context) {
+  const message = clean(data.message).slice(0, 4000);
+  const email = clean(data.email).slice(0, 180).toLowerCase();
+  if (!message || !email || !email.includes("@")) {
+    throw new functions.https.HttpsError("invalid-argument", "Contact email and message are required.");
+  }
+  const db = getFirestore();
+  const uid = context.auth ? context.auth.uid : null;
+  const ticketRef = db.collection("supportTickets").doc();
+  const chatId = `support_${ticketRef.id}`;
+  const chatRef = db.collection("chats").doc(chatId);
+  const now = FieldValue.serverTimestamp();
+  const participantRole = clean(data.participantRole || "sender").toLowerCase() === "rider" ? "rider" : "sender";
+  const name = clean(data.name || data.displayName).slice(0, 160);
+
+  await db.runTransaction(async (transaction) => {
+    transaction.set(ticketRef, {
+      channel: "web_live_chat",
+      status: "open",
+      priority: "normal",
+      name,
+      email,
+      message,
+      lastMessage: message,
+      lastMessageAt: now,
+      adminUnreadCount: 1,
+      pageUrl: clean(data.pageUrl).slice(0, 2048),
+      chatId,
+      userId: uid,
+      source: "submitWebsiteSupportRequest",
+      createdAt: now,
+      updatedAt: now,
+    });
+    if (!uid) return;
+    transaction.set(chatRef, {
+      threadId: chatId,
+      conversationType: "support",
+      type: "support",
+      ticketId: ticketRef.id,
+      participants: [uid, "circum-support"],
+      participantRoles: {
+        [uid]: participantRole,
+        "circum-support": "admin",
+      },
+      status: "open",
+      source: "communication-engine",
+      createdAt: now,
+      updatedAt: now,
+      lastMessage: message,
+    }, {merge: true});
+    transaction.set(chatRef.collection("messages").doc("ticket_initial"), {
+      threadId: chatId,
+      ticketId: ticketRef.id,
+      senderId: uid,
+      senderRole: participantRole,
+      senderType: participantRole,
+      senderEmail: email,
+      senderName: name || null,
+      messageText: message,
+      message,
+      attachments: [],
+      initialSupportRequest: true,
+      readBy: [uid],
+      createdAt: now,
+      status: "sent",
+      audited: true,
+    });
+  });
+
+  return {ok: true, ticketId: ticketRef.id, chatId};
+}
+
 async function updateSupportConversationStatus(data, context) {
   if (!context.auth || !isAdmin(context)) throw new functions.https.HttpsError("permission-denied", "Admin access is required.");
   const ticketId = clean(data.ticketId);
@@ -625,6 +697,7 @@ exports.destinationFor = destinationFor;
 exports.sendCircumMessage = functions.https.onCall(sendMessage);
 exports.startAdminConversation = functions.https.onCall(startAdminConversation);
 exports.getOrCreateSupportConversation = functions.https.onCall(getOrCreateSupportConversation);
+exports.submitWebsiteSupportRequest = functions.https.onCall(submitWebsiteSupportRequest);
 exports.updateSupportConversationStatus = functions.https.onCall(updateSupportConversationStatus);
 exports.markConversationRead = functions.https.onCall(markConversationRead);
 exports.setConversationTyping = functions.https.onCall(setConversationTyping);

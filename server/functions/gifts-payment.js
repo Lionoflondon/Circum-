@@ -81,13 +81,72 @@ async function createCampaignPaymentDraft({data, context}) {
   return {giftDraftId: draftRef.id, participantId: participantRef.id, gift: draft};
 }
 
+async function createStandardPaymentDraft({data, context}) {
+  const db = getFirestore();
+  const payload = cleanObject(data.giftDraft);
+  const requestedId = text(data.giftDraftId || payload.giftDraftId).replace(/[/.#[\]]/g, "_");
+  const draftRef = requestedId ?
+    db.collection("giftPaymentDrafts").doc(requestedId) :
+    db.collection("giftPaymentDrafts").doc();
+  const gross = Number(payload.grossGiftBudget || payload.grossBudget || payload.budget || 0);
+  if (gross < 50) {
+    throw new functions.https.HttpsError("failed-precondition", "Gift payment cannot be started.");
+  }
+  if (!text(payload.recipientName) || !text(payload.deliveryAddress)) {
+    throw new functions.https.HttpsError("invalid-argument", "Gift recipient and delivery details are required.");
+  }
+  const senderEmail = text(context.auth.token && context.auth.token.email) || text(payload.senderEmail);
+  const now = FieldValue.serverTimestamp();
+  const draft = {
+    ...payload,
+    giftDraftId: draftRef.id,
+    senderId: context.auth.uid,
+    senderEmail,
+    grossGiftBudget: gross,
+    grossBudget: gross,
+    budget: gross,
+    paymentStatus: "payment_pending",
+    giftStatus: text(payload.giftStatus || "draft"),
+    status: text(payload.status || "draft"),
+    source: "createGiftPayment",
+    createdAt: now,
+    updatedAt: now,
+  };
+  await db.runTransaction(async (transaction) => {
+    const existing = await transaction.get(draftRef);
+    if (existing.exists) {
+      const existingData = existing.data() || {};
+      if (existingData.senderId !== context.auth.uid || existingData.paymentStatus === "paid") {
+        throw new functions.https.HttpsError("failed-precondition", "Gift payment cannot be started.");
+      }
+    }
+    transaction.set(draftRef, draft, {merge: false});
+    transaction.set(db.collection("giftPaymentEvents").doc(), {
+      giftDraftId: draftRef.id,
+      actorUid: context.auth.uid,
+      action: "gift_payment_draft_created",
+      source: "createGiftPayment",
+      createdAt: now,
+    }, {merge: false});
+  });
+  return {giftDraftId: draftRef.id, gift: draft};
+}
+
 exports.createGiftPayment = (stripe) => functions.https.onCall(async (data, context) => {
   requireAuth(context);
   const campaignRequest = data.source === "sender_mobile_campaign" && data.campaignParticipant;
   const campaignDraft = campaignRequest ?
     await createCampaignPaymentDraft({data, context}) :
     null;
-  const giftDraftId = String((campaignDraft && campaignDraft.giftDraftId) || data.giftDraftId || "");
+  const standardDraft = !campaignDraft && data.giftDraft ?
+    await createStandardPaymentDraft({data, context}) :
+    null;
+  const giftDraftId = String(
+      (standardDraft && standardDraft.giftDraftId) ||
+      (campaignDraft && campaignDraft.giftDraftId) ||
+      data.giftDraftId ||
+      "",
+  );
   const ref = getFirestore().collection("giftPaymentDrafts").doc(giftDraftId);
   const snap = await ref.get();
   if (!snap.exists || snap.data().senderId !== context.auth.uid) {

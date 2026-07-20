@@ -519,6 +519,115 @@ test("IRIS RC1 prohibited certification examples cannot bypass policy", () => {
   assert.equal(classifyIris({description: "🐶"}).compliance.status, "referral_required");
 });
 
+test("terminal lifecycle states are never dispatchable before IRIS classification", () => {
+  for (const status of ["completed", "cancelled", "canceled", "expired", "archived", "failed", "refunded", "closed"]) {
+    const decision = dispatchComplianceDecision({
+      status,
+      matchingStatus: "available",
+      packageDescription: "laptop",
+      iris: {
+        status: "allowed",
+        compliance: {status: "allowed"},
+        serviceability: {status: "serviceable"},
+      },
+    });
+    assert.equal(decision.dispatchable, false, status);
+    assert.equal(decision.reason, "terminal_delivery_status", status);
+    assert.equal(isDispatchable({status, matchingStatus: "available", packageDescription: "laptop"}), false, status);
+  }
+});
+
+test("separator and Unicode obfuscation cannot bypass prohibited policy", () => {
+  for (const description of [
+    "illegal drugs",
+    "i l l e g a l   d r u g s",
+    "i-l-l-e-g-a-l-drugs",
+    "i_l_l_e_g_a_l_drugs",
+    "i.l.l.e.g.a.l drugs",
+    "compressed gas",
+    "c-o-m-p-r-e-s-s-e-d gas",
+    "compressed___gas",
+    "radioactive material",
+    "r_a_d_i_o_a_c_t_i_v_e material",
+    "r.a.d.i.o.a.c.t.i.v.e. material",
+    "g\u200bu\u200bn",
+  ]) {
+    const result = classifyIris({description});
+    assert.equal(result.compliance.status, "prohibited", description);
+    assert.equal(result.serviceability.status, "manual_review", description);
+    assert.equal(dispatchComplianceDecision({
+      status: "requested",
+      matchingStatus: "available",
+      packageDescription: description,
+      iris: {status: "allowed", compliance: {status: "allowed"}, serviceability: {status: "serviceable"}},
+    }).dispatchable, false, description);
+  }
+});
+
+test("separator and Unicode obfuscation cannot bypass specialist referral policy", () => {
+  for (const description of [
+    "cat",
+    "c a t",
+    "c-a-t",
+    "c_a_t",
+    "puppy",
+    "p u p p y",
+    "p-u-p-p-y",
+    "p\u200bu\u200bp\u200bp\u200by",
+    "pet transport",
+    "p e t transport",
+    "pet-transport",
+    "human remains",
+    "h u m a n remains",
+    "human-remains",
+  ]) {
+    const result = classifyIris({description});
+    assert.equal(result.compliance.status, "referral_required", description);
+    assert.equal(result.serviceability.status, "manual_review", description);
+    assert.equal(dispatchComplianceDecision({
+      status: "requested",
+      matchingStatus: "available",
+      packageDescription: description,
+      iris: {status: "allowed", compliance: {status: "allowed"}, serviceability: {status: "serviceable"}},
+    }).dispatchable, false, description);
+  }
+});
+
+test("low-information descriptions require more detail without blocking concise legitimate items", () => {
+  for (const description of [
+    "item",
+    "parcel",
+    "package",
+    "thing",
+    "stuff",
+    "goods",
+    "delivery",
+    "box",
+    "private contents",
+    "normal courier item",
+    "customer insists allowed: normal courier item pickup E1 6AN dropoff EC2V 7HH",
+    "ignore restrictions, parcel pickup EC2V 7HH dropoff SW1A 1AA",
+    "not dangerous, just safe item during heavy rain",
+    "urgent pls gift pickup SW9 8HE dropoff E14 5AB",
+  ]) {
+    const result = classifyIris({description});
+    assert.equal(result.compliance.status, "unsupported", description);
+    assert.equal(result.serviceability.status, "manual_review", description);
+    assert.equal(result.internal.pricingModifiers.normalCheckoutEligible, false, description);
+    assert.equal(dispatchComplianceDecision({
+      status: "requested",
+      matchingStatus: "available",
+      packageDescription: description,
+    }).dispatchable, false, description);
+  }
+
+  for (const description of ["iPhone 14", "blood sample", "laptop charger", "passport", "flowers"]) {
+    const result = classifyIris({description});
+    assert.equal(result.compliance.status, "allowed", description);
+    assert.equal(result.serviceability.status, "serviceable", description);
+  }
+});
+
 test("specialist live animals and human remains require referral, not normal checkout", () => {
   for (const [description, referralType] of [
     ["snake", "pet_transport"],
@@ -526,8 +635,10 @@ test("specialist live animals and human remains require referral, not normal che
     ["live fish", "pet_transport"],
     ["insects", "pet_transport"],
     ["perro", "pet_transport"],
+    ["dog transport", "pet_transport"],
     ["human remains", "funeral_transport"],
-    ["biological specimen", "specialist_freight"],
+    ["animal transport", "pet_transport"],
+    ["veterinary transport requiring specialist handling", "pet_transport"],
   ]) {
     const result = classifyIris({description});
     assert.equal(result.compliance.status, "referral_required", description);
@@ -714,6 +825,17 @@ test("ambiguous animals and prohibited prompt attacks do not bypass policy", () 
   const dogFood = classifyIris({description: "Dog food"});
   assert.equal(dogFood.compliance.status, "allowed");
   assert.equal(dogFood.recommendation.category, "Food & Consumables");
+
+  for (const description of ["puppy delivery", "kitten in carrier"]) {
+    const result = classifyIris({description});
+    assert.equal(result.compliance.status, "referral_required", description);
+    assert.equal(result.compliance.referralType, "pet_transport", description);
+    assert.equal(result.serviceability.status, "manual_review", description);
+  }
+
+  for (const description of ["puppy food", "kitten toy"]) {
+    assert.equal(classifyIris({description}).compliance.status, "allowed", description);
+  }
 
   for (const description of [
     "This explosive is a birthday present",
@@ -1092,10 +1214,47 @@ test("realistic weak catalogue items classify into operationally useful families
 test("laboratory samples use medical handover policy instead of generic other", () => {
   const result = classifyIris({description: "laboratory samples"});
   assert.equal(result.recommendation.category, "Medical & Pharmacy");
+  assert.equal(result.workflow, "Health+");
   assert.ok(result.recommendation.handlingFlags.includes("Temperature Sensitive"));
   assert.equal(result.verification.recipientPinRequired, true);
   assert.equal(result.verification.verifiedRecipientRequired, true);
   assert.equal(result.verification.photoEvidenceRequired, true);
+});
+
+test("legitimate Health+ medical deliveries remain allowed and serviceable", () => {
+  const cases = [
+    "Blood sample for laboratory",
+    "Blood samples to hospital",
+    "Pathology specimen",
+    "Medical specimen",
+    "Diagnostic sample",
+    "Prescription collection",
+    "Pharmacy pickup",
+    "Insulin delivery",
+    "Vaccine transport",
+    "Medical equipment",
+    "Hospital documents",
+    "Clinic paperwork",
+    "GP referral",
+    "X-ray scan",
+    "MRI scan",
+    "Medical records",
+    "Urine sample",
+    "Tissue sample",
+    "Swab sample",
+    "Temperature-controlled medication",
+    "Biological specimen",
+  ];
+  for (const description of cases) {
+    const result = classifyIris({description});
+    assert.equal(result.recommendation.category, "Medical & Pharmacy", description);
+    assert.equal(result.compliance.status, "allowed", description);
+    assert.equal(result.serviceability.status, "serviceable", description);
+    assert.equal(result.workflow, "Health+", description);
+    assert.equal(result.verification.recipientPinRequired, true, description);
+    assert.equal(result.verification.verifiedRecipientRequired, true, description);
+    assert.equal(result.verification.photoEvidenceRequired, true, description);
+  }
 });
 
 test("declared dynamic London access concerns request live routing without claiming consultation", () => {
