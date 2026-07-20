@@ -1,8 +1,8 @@
 /* eslint-disable max-len, require-jsdoc */
 const functions = require("firebase-functions/v1");
-const {getFirestore} = require("firebase-admin/firestore");
+const {getFirestore, FieldValue} = require("firebase-admin/firestore");
 const {getMessaging} = require("firebase-admin/messaging");
-const {dispatchPriority, isDispatchable, riderMatchesIris} = require("./iris-core");
+const {dispatchComplianceDecision, dispatchPriority, riderMatchesIris} = require("./iris-core");
 const {hasAdminClaim} = require("./admin-auth");
 
 function senderOwnsRequest(delivery, uid) {
@@ -43,11 +43,25 @@ const sendPackage = functions.https.onCall(async (data, context) => {
       );
     }
 
-    if (!isDispatchable(deliveryRequest[0])) {
+    const dispatchDecision = dispatchComplianceDecision(deliveryRequest[0]);
+    if (!dispatchDecision.dispatchable) {
+      await getFirestore().collection("adminAuditLogs").add({
+        actionType: "iris_dispatch_blocked",
+        recordType: "deliveryRequests",
+        recordId: deliveryRequest[0].id,
+        requestId: requestId,
+        performedBy: uid,
+        source: "sendPackage",
+        reason: dispatchDecision.reason || "server_iris_blocked",
+        compliance: dispatchDecision.compliance || null,
+        serviceability: dispatchDecision.serviceability || null,
+        storedIrisMismatch: dispatchDecision.storedIrisMismatch === true,
+        createdAt: FieldValue.serverTimestamp(),
+      });
       return {
         message: "Delivery request is not dispatchable by Iris.",
         requestId: requestId,
-        irisStatus: deliveryRequest[0].iris && deliveryRequest[0].iris.status,
+        irisStatus: dispatchDecision.compliance || deliveryRequest[0].iris && deliveryRequest[0].iris.status,
       };
     }
     const privateDoc = await getFirestore()

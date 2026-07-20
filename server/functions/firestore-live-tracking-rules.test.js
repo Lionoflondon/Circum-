@@ -320,6 +320,40 @@ test("Sender and Rider cannot directly mutate authoritative delivery fields", as
   }, {merge: true}));
 });
 
+test("Sender cannot inject IRIS during direct delivery creation", async () => {
+  const senderDb = testEnv.authenticatedContext("sender-1").firestore();
+  await assertFails(setDoc(doc(senderDb, "deliveryRequests", "direct-forged-iris"), {
+    senderId: "sender-1",
+    userId: "sender-1",
+    packageDescription: "knife",
+    iris: {
+      status: "allowed",
+      compliance: {status: "allowed"},
+      serviceability: {status: "serviceable"},
+    },
+  }));
+  await assertSucceeds(setDoc(doc(senderDb, "deliveryRequests", "direct-no-iris"), {
+    senderId: "sender-1",
+    userId: "sender-1",
+    packageDescription: "book",
+  }));
+  await assertFails(setDoc(doc(senderDb, "webSenderRequests", "web-forged-iris"), {
+    senderId: "sender-1",
+    userId: "sender-1",
+    packageDescription: "knife",
+    iris: {
+      status: "allowed",
+      compliance: {status: "allowed"},
+      serviceability: {status: "serviceable"},
+    },
+  }));
+  await assertSucceeds(setDoc(doc(senderDb, "webSenderRequests", "web-no-iris"), {
+    senderId: "sender-1",
+    userId: "sender-1",
+    packageDescription: "book",
+  }));
+});
+
 test("Vanguard PIN authority private documents are not client readable or writable", async () => {
   const deliveryId = "delivery-vanguard-private";
   await seedDelivery(deliveryId, {

@@ -7,6 +7,7 @@ const {getFirestore, FieldValue, GeoPoint, Timestamp} = require("firebase-admin/
 const {calculateWalletCheckout, roundMoney, minorUnits} = require("./wallet-core");
 const rothLedger = require("./roth-ledger");
 const vanguardProtocol = require("./vanguard-protocol-core");
+const {classifyIris} = require("./iris-core");
 
 const BASE_FARE_GBP = 5;
 const ADDITIONAL_FARE_PER_MILE_GBP = 1.5;
@@ -392,6 +393,7 @@ function quotePayload(data, uid) {
     userId: uid,
     currency: "GBP",
     selectedSpeed,
+    distanceMiles: Number(data.distanceMiles || 0),
     weightKg,
     vanguardProtocolEnabled: vanguard > 0,
     vanguardRequired,
@@ -817,7 +819,7 @@ exports.createSenderPaidDelivery = (stripe) => functions.https.onCall(async (dat
   const pickup = data.pickup || {};
   const dropoff = data.dropoff || {};
   const parcel = data.parcel || {};
-  const iris = data.iris || {};
+  const clientIris = data.iris || {};
   const vanguardFields = vanguardProtocol.initialProtocolFields({
     selected: quote.vanguardProtocolEnabled === true,
     required: quote.vanguardRequired === true,
@@ -825,7 +827,7 @@ exports.createSenderPaidDelivery = (stripe) => functions.https.onCall(async (dat
     irisRequiredReason: quote.vanguardRequiredReason,
     itemName: parcel.itemName,
     description: parcel.description,
-    category: iris.category,
+    category: clientIris.category,
   });
   const privateVanguardFields = privateVanguardPinFields(vanguardFields);
   await db.runTransaction(async (transaction) => {
@@ -849,8 +851,20 @@ exports.createSenderPaidDelivery = (stripe) => functions.https.onCall(async (dat
     }
     const selectedServiceLevel = `${quote.selectedSpeed || "standard"}`.toLowerCase();
     const parcelDescription = parcel.description || parcel.itemName || "Parcel";
+    const iris = {
+      ...classifyIris({
+        description: parcelDescription,
+        declaredWeightText: parcel.weightLabel || parcel.weightKg || quote.weightKg || "",
+        distanceMiles: quote.distanceMiles || data.distanceMiles || 0,
+        speed: selectedServiceLevel,
+        vehicleType: clientIris.recommendedVehicle || clientIris.vehicleType || null,
+      }),
+      serverAuthored: true,
+      authority: "backend",
+      source: "createSenderPaidDelivery",
+    };
     const irisWeightKg =
-      Number(iris.finalBillableWeightKg || iris.irisWeightKg || iris.totalWeightKg || parcel.weightKg || 0) || null;
+      Number(iris.recommendation && iris.recommendation.estimatedWeightKg || parcel.weightKg || 0) || null;
 
     transaction.set(deliveryRef, {
       requestId,

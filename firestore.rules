@@ -189,6 +189,7 @@ service cloud.firestore {
 
     function isSafeDeliveryCreate() {
       return isCreatingOwnDelivery() &&
+        !request.resource.data.keys().hasAny(['iris']) &&
         !request.resource.data.keys().hasAny(protectedFinancialCreateFields());
     }
 
@@ -758,7 +759,10 @@ service cloud.firestore {
           resource.data.senderId == request.auth.uid &&
           !request.resource.data.diff(resource.data).changedKeys().hasAny(['iris'])
         );
-      allow create: if isAdmin() || isCreatingOwnDelivery();
+      allow create: if isAdmin() || (
+        isCreatingOwnDelivery() &&
+        !request.resource.data.keys().hasAny(['iris'])
+      );
       allow delete: if hasRole('super_admin');
     }
 
