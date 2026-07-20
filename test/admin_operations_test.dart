@@ -1,4 +1,7 @@
+import 'dart:io';
+
 import 'package:circum/app/admin/admin_operations.dart';
+import 'package:circum/app/admin/admin_phase1_shell.dart';
 import 'package:circum/app/rider_profiles/driver_performance.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -7,7 +10,13 @@ void main() {
     test('support ticket actions reflect resolved status', () {
       expect(
         AdminSupportTools.actionsForStatus('open'),
-        ['Assign', 'Resolve', 'Open Chat'],
+        [
+          'Assign',
+          'Escalate',
+          'Request Information',
+          'Resolve',
+          'Open Chat',
+        ],
       );
       expect(
         AdminSupportTools.actionsForStatus('resolved'),
@@ -28,6 +37,10 @@ void main() {
       );
       expect(
         AdminAccessPolicy.can(['super_admin'], AdminPermission.viewFinance),
+        isTrue,
+      );
+      expect(
+        AdminAccessPolicy.can(['finance_admin'], AdminPermission.manageFinance),
         isTrue,
       );
       expect(
@@ -141,6 +154,56 @@ void main() {
       expect(metrics.refundRequests, 1);
       expect(metrics.unresolvedSupportIssues, 1);
       expect(metrics.healthPlusRecurringRevenue, 11);
+    });
+
+    test('derives platform health and alerts from live records', () {
+      final health = AdminPlatformHealthSnapshot.fromData(
+        deliveries: [
+          {
+            'requestId': 'active-1',
+            'status': 'in_transit',
+            'vanguardProtection': true,
+          },
+          {
+            'requestId': 'wait-1',
+            'status': 'waiting',
+          },
+          {
+            'requestId': 'iris-1',
+            'status': 'awaiting_review',
+            'reviewType': 'iris_discrepancy',
+          },
+          {
+            'requestId': 'done-1',
+            'status': 'completed',
+          },
+        ],
+        payments: [
+          {'id': 'pay-1', 'financeReviewStatus': 'escalated'},
+        ],
+        supportTickets: [
+          {'id': 'ticket-1', 'status': 'open'},
+        ],
+        healthPlusPickups: [
+          {'id': 'health-1', 'status': 'assigned'},
+        ],
+        businessAccounts: [
+          {'id': 'business-1', 'status': 'pending'},
+        ],
+        giftOrders: [
+          {'id': 'gift-1', 'status': 'review'},
+        ],
+      );
+
+      expect(health.activeJobs, 3);
+      expect(health.waitingJobs, 1);
+      expect(health.vanguardJobs, 1);
+      expect(health.discrepancyReviews, 1);
+      expect(health.walletReviewItems, 1);
+      expect(health.supportOpen, 1);
+      expect(health.status, 'Watch');
+      expect(health.alerts.map((alert) => alert.title),
+          containsAll(['Support queue', 'Finance review']));
     });
 
     test('searches customers and drivers', () {
@@ -261,6 +324,443 @@ void main() {
       expect(patch['adminUpdatedAt'], isA<DateTime>());
     });
 
+    test('Health+ operation patches preserve medical authority fields', () {
+      final patch = AdminHealthPlusTools.statusPatch(
+        status: 'review_approved',
+        updatedBy: 'health@circumuk.com',
+        reason: 'Prescription evidence checked.',
+        updatedAt: DateTime(2026, 6, 3),
+      );
+
+      expect(patch['clinicalReviewStatus'], 'approved');
+      expect(patch['adminReason'], 'Prescription evidence checked.');
+      expect(patch.containsKey('medication'), isFalse);
+      expect(patch.containsKey('prescription'), isFalse);
+      expect(patch.containsKey('finalAmount'), isFalse);
+    });
+
+    test('account status patches avoid destructive closure or deletion', () {
+      final patch = AdminAccountTools.accountStatusPatch(
+        status: 'closure_review',
+        updatedBy: 'ops@circumuk.com',
+        updatedAt: DateTime(2026, 5, 31),
+        reason: 'Customer requested closure.',
+      );
+
+      expect(patch['accountStatus'], 'closure_review');
+      expect(patch['closureReviewStatus'], 'requested');
+      expect(patch['adminStatusReason'], 'Customer requested closure.');
+      expect(patch.containsKey('deleted'), isFalse);
+      expect(patch.containsKey('balance'), isFalse);
+    });
+
+    test('business account status patches preserve account identity', () {
+      final patch = AdminAccountTools.businessStatusPatch(
+        status: 'approved',
+        updatedBy: 'ops@circumuk.com',
+        updatedAt: DateTime(2026, 5, 31),
+      );
+
+      expect(patch['status'], 'approved');
+      expect(patch['verificationStatus'], 'approved');
+      expect(patch.containsKey('businessId'), isFalse);
+      expect(patch.containsKey('ownerId'), isFalse);
+    });
+
+    test('Business operation patches preserve billing authority', () {
+      final patch = AdminBusinessOperationsTools.operationPatch(
+        status: 'invoice_issue_review',
+        updatedBy: 'business@circumuk.com',
+        updatedAt: DateTime(2026, 6, 3),
+        reason: 'Monthly invoice requested.',
+      );
+
+      expect(patch['businessOperationStatus'], 'invoice_issue_review');
+      expect(patch['invoiceReviewStatus'], 'invoice_issue_review');
+      expect(patch.containsKey('amount'), isFalse);
+      expect(patch.containsKey('stripeSubscriptionId'), isFalse);
+      expect(patch.containsKey('subscriptionPrice'), isFalse);
+    });
+
+    test('merge review records require two distinct accounts', () {
+      final record = AdminAccountTools.mergeReviewRecord(
+        primaryAccountId: 'user-1',
+        duplicateAccountId: 'user-2',
+        requestedBy: 'ops@circumuk.com',
+        createdAt: DateTime(2026, 5, 31),
+      );
+
+      expect(record['status'], 'pending_review');
+      expect(record['source'], 'circum-admin');
+      expect(
+        () => AdminAccountTools.mergeReviewRecord(
+          primaryAccountId: 'user-1',
+          duplicateAccountId: 'user-1',
+          requestedBy: 'ops@circumuk.com',
+          createdAt: DateTime(2026, 5, 31),
+        ),
+        throwsArgumentError,
+      );
+    });
+
+    test('rider operation patches require reasons and avoid wallet changes',
+        () {
+      final patch = AdminRiderOperationsTools.statusPatch(
+        status: 'under_investigation',
+        updatedBy: 'ops@circumuk.com',
+        updatedAt: DateTime(2026, 6, 1),
+        reason: 'Insurance discrepancy.',
+      );
+
+      expect(patch['adminOperationStatus'], 'under_investigation');
+      expect(patch['driverStatus'], 'under_investigation');
+      expect(patch['investigationStatus'], 'open');
+      expect(patch.containsKey('walletBalance'), isFalse);
+      expect(patch.containsKey('earnings'), isFalse);
+      expect(
+        () => AdminRiderOperationsTools.statusPatch(
+          status: 'suspended',
+          updatedBy: 'ops@circumuk.com',
+          updatedAt: DateTime(2026, 6, 1),
+          reason: '',
+        ),
+        throwsArgumentError,
+      );
+    });
+
+    test('delivery operation patches preserve backend lifecycle authority', () {
+      final patch = AdminDeliveryOperationsTools.operationPatch(
+        status: 'waiting_review',
+        updatedBy: 'ops@circumuk.com',
+        updatedAt: DateTime(2026, 6, 1),
+        reason: 'Rider waiting evidence submitted.',
+      );
+
+      expect(patch['adminOperationStatus'], 'waiting_review');
+      expect(patch['waitingReviewStatus'], 'open');
+      expect(patch.containsKey('status'), isFalse);
+      expect(patch.containsKey('deliveryStatus'), isFalse);
+      expect(patch.containsKey('finalAmount'), isFalse);
+      expect(patch.containsKey('paymentStatus'), isFalse);
+    });
+
+    test('Vanguard custody review patches remain Admin metadata only', () {
+      final patch = AdminDeliveryOperationsTools.operationPatch(
+        status: 'vanguard_custody_escalated',
+        updatedBy: 'ops@circumuk.com',
+        updatedAt: DateTime(2026, 6, 1),
+        reason: 'Collection evidence is incomplete.',
+      );
+
+      expect(patch['adminOperationStatus'], 'vanguard_custody_escalated');
+      expect(patch['vanguardCustodyReviewStatus'], 'escalated');
+      expect(patch.containsKey('status'), isFalse);
+      expect(patch.containsKey('deliveryStatus'), isFalse);
+      expect(patch.containsKey('assignedRiderId'), isFalse);
+      expect(patch.containsKey('price'), isFalse);
+      expect(patch.containsKey('trustScore'), isFalse);
+    });
+
+    test('IRIS review patches preserve pricing and lifecycle authority', () {
+      final patch = AdminIrisOperationsTools.reviewPatch(
+        status: 'learning_flagged',
+        updatedBy: 'iris@circumuk.com',
+        updatedAt: DateTime(2026, 6, 2),
+        reason: 'Recurring category mismatch.',
+      );
+
+      expect(patch['irisReviewStatus'], 'learning_flagged');
+      expect(patch['irisLearningQueueStatus'], 'pending');
+      expect(patch.containsKey('status'), isFalse);
+      expect(patch.containsKey('deliveryStatus'), isFalse);
+      expect(patch.containsKey('finalAmount'), isFalse);
+      expect(patch.containsKey('price'), isFalse);
+    });
+
+    test('IRIS evidence and learning actions remain review metadata only', () {
+      final evidencePatch = AdminIrisOperationsTools.reviewPatch(
+        status: 'evidence_approved',
+        updatedBy: 'iris@circumuk.com',
+        updatedAt: DateTime(2026, 6, 4),
+        reason: 'Photo evidence is sufficient.',
+      );
+      final promotedPatch = AdminIrisOperationsTools.reviewPatch(
+        status: 'learning_promoted',
+        updatedBy: 'iris@circumuk.com',
+        updatedAt: DateTime(2026, 6, 4),
+        reason: 'Consistent verified object profile.',
+      );
+
+      expect(evidencePatch['evidenceReviewStatus'], 'approved');
+      expect(promotedPatch['irisLearningQueueStatus'], 'promoted');
+      expect(evidencePatch.containsKey('finalAmount'), isFalse);
+      expect(promotedPatch.containsKey('deliveryStatus'), isFalse);
+      expect(promotedPatch.containsKey('canonicalWeight'), isFalse);
+    });
+
+    test('Gift workflow actions remain Admin metadata only', () {
+      final patch = AdminGiftTools.workflowPatch(
+        status: 'information_requested',
+        updatedBy: 'gifts@circumuk.com',
+        updatedAt: DateTime(2026, 6, 5),
+        reason: 'Need merchant confirmation.',
+      );
+
+      expect(patch['giftAdminStatus'], 'information_requested');
+      expect(patch['informationRequestStatus'], 'requested');
+      expect(patch['giftReviewReason'], 'Need merchant confirmation.');
+      expect(patch.containsKey('price'), isFalse);
+      expect(patch.containsKey('paymentStatus'), isFalse);
+      expect(patch.containsKey('matchedGift'), isFalse);
+    });
+
+    test('Support workflow actions require supported statuses', () {
+      final patch = AdminSupportTools.statusPatch(
+        status: 'escalated',
+        assignedTo: 'support@circumuk.com',
+        reason: 'Urgent customer issue.',
+        updatedAt: DateTime(2026, 6, 5),
+      );
+
+      expect(patch['status'], 'escalated');
+      expect(patch['supportWorkflowStatus'], 'escalated');
+      expect(patch['assignedTo'], 'support@circumuk.com');
+      expect(patch['adminReviewReason'], 'Urgent customer issue.');
+      expect(
+        () => AdminSupportTools.statusPatch(
+          status: 'delete_payment',
+          updatedAt: DateTime(2026, 6, 5),
+        ),
+        throwsArgumentError,
+      );
+    });
+
+    test('Platform operation patches preserve backend authority', () {
+      final patch = AdminPlatformTools.operationPatch(
+        status: 'maintenance_enabled',
+        updatedBy: 'platform@circumuk.com',
+        updatedAt: DateTime(2026, 6, 6),
+        reason: 'Historical maintenance control confirmed.',
+      );
+
+      expect(patch['adminOperationStatus'], 'maintenance_enabled');
+      expect(patch['maintenanceMode'], isTrue);
+      expect(patch['adminReason'], 'Historical maintenance control confirmed.');
+      expect(patch.containsKey('firebaseProject'), isFalse);
+      expect(patch.containsKey('hostingTarget'), isFalse);
+      expect(patch.containsKey('apiKey'), isFalse);
+      expect(
+        () => AdminPlatformTools.operationPatch(
+          status: 'deploy_all_products',
+          updatedBy: 'platform@circumuk.com',
+          updatedAt: DateTime(2026, 6, 6),
+          reason: 'Nope.',
+        ),
+        throwsArgumentError,
+      );
+    });
+
+    test('ratings and tips policy restores historical filters', () {
+      final records = [
+        AdminRatingTipRecord.fromBackend(
+          ratingId: 'rating-1',
+          rating: {
+            'deliveryId': 'CIR-1',
+            'riderId': 'rider-1',
+            'senderId': 'sender-1',
+            'starRating': 5,
+            'reportStatus': 'clear',
+          },
+          tip: {'amount': 4.5, 'paymentMethod': 'card'},
+        ),
+        AdminRatingTipRecord.fromBackend(
+          ratingId: 'rating-2',
+          rating: {
+            'deliveryId': 'CIR-2',
+            'riderId': 'rider-2',
+            'senderId': 'sender-2',
+            'starRating': 1,
+            'reportStatus': 'reported',
+          },
+        ),
+      ];
+
+      expect(
+          AdminRatingsTipsPolicy.filter(records,
+              filter: AdminRatingTipFilter.tipped),
+          hasLength(1));
+      expect(
+          AdminRatingsTipsPolicy.filter(records,
+              filter: AdminRatingTipFilter.reported),
+          hasLength(1));
+      expect(
+        AdminRatingsTipsPolicy.moderationRequest(
+          ratingId: 'rating-2',
+          action: 'investigate',
+          reason: 'Reported by Sender.',
+        ),
+        containsPair('action', 'investigate'),
+      );
+    });
+
+    test('Roth admin issue patch preserves ledger and audit authority', () {
+      final patch = AdminRothOperations.issueRothPatch(
+        walletId: 'wallet-1',
+        userId: 'user-1',
+        email: 'User@CircumUk.com',
+        balanceBefore: 10,
+        amount: 5,
+        adminUserId: 'admin-1',
+        adminEmail: 'Admin@CircumUk.com',
+        reason: 'Compensation approved.',
+        createdAt: DateTime(2026, 6, 7),
+      );
+
+      expect((patch['wallet'] as Map)['balance'], 15);
+      expect((patch['ledger'] as Map)['type'], 'admin_issue');
+      expect((patch['audit'] as Map)['adminEmail'], 'admin@circumuk.com');
+      expect(patch.containsKey('stripePaymentIntentId'), isFalse);
+      expect(
+        () => AdminRothOperations.issueRothPatch(
+          walletId: 'wallet-1',
+          userId: 'user-1',
+          email: 'user@circumuk.com',
+          balanceBefore: 10,
+          amount: 0,
+          adminUserId: 'admin-1',
+          adminEmail: 'admin@circumuk.com',
+          reason: 'Invalid.',
+          createdAt: DateTime(2026, 6, 7),
+        ),
+        throwsArgumentError,
+      );
+    });
+
+    test('Admin finance UI restores historical backend finance actions', () {
+      final source =
+          File('lib/app/admin/admin_phase1_shell.dart').readAsStringSync();
+
+      expect(source, contains("httpsCallable('issueRothToWallets')"));
+      expect(source, contains("httpsCallable('setWalletFrozen')"));
+      expect(source, contains("httpsCallable('createRiderTransferOrPayout')"));
+      expect(source, contains("httpsCallable('adminReviewRiderWithdrawal')"));
+      expect(source, isNot(contains('stripeSecretKey')));
+      expect(source, isNot(contains('sk_live_')));
+    });
+
+    test('Admin payout rejection stays behind backend finance authority', () {
+      final source =
+          File('lib/app/admin/admin_phase1_shell.dart').readAsStringSync();
+      final methodStart =
+          source.indexOf('Future<void> _processPayoutRequestFromAdmin');
+      final methodEnd = source.indexOf('Future<void> _moderateRating');
+      expect(methodStart, isNonNegative);
+      expect(methodEnd, greaterThan(methodStart));
+      final method = source.substring(methodStart, methodEnd);
+
+      expect(method, contains("httpsCallable('adminReviewRiderWithdrawal')"));
+      expect(method, contains("httpsCallable('createRiderTransferOrPayout')"));
+      expect(method, isNot(contains("collection('payoutRequests').doc")));
+      expect(method, isNot(contains("'status': 'rejected'")));
+    });
+
+    test('Admin restores historical Rider Health Plus and Gift Admin parity',
+        () {
+      final source =
+          File('lib/app/admin/admin_phase1_shell.dart').readAsStringSync();
+
+      expect(source, contains("httpsCallable('adminReviewRider')"));
+      expect(source, contains("httpsCallable('syncStripeConnectStatus')"));
+      expect(source, contains("httpsCallable('resetRiderTestStripeAccount')"));
+      expect(source, contains("collection('riderAdminEvents')"));
+      expect(source, contains("collection('recurringPickupSchedules')"));
+      expect(source, contains("collection('healthPlusCustodyArchive')"));
+      expect(source, contains("collection('giftRequests')"));
+      expect(source, contains("collection('giftBrands')"));
+      expect(source, contains("collection('giftCampaignParticipants')"));
+      expect(source, contains("httpsCallable('retryGiftStoryAutomation')"));
+      expect(source, contains("httpsCallable('manageGiftStoryAccess')"));
+    });
+
+    test('Admin Rider authority actions do not write Rider records directly',
+        () {
+      final source =
+          File('lib/app/admin/admin_phase1_shell.dart').readAsStringSync();
+      final methodStart = source.indexOf('Future<void> _setRiderStatus');
+      final methodEnd = source.indexOf('Future<void> _syncRiderStripeStatus');
+      expect(methodStart, isNonNegative);
+      expect(methodEnd, greaterThan(methodStart));
+      final statusMethod = source.substring(methodStart, methodEnd);
+
+      expect(source, contains("httpsCallable('adminReviewRider')"));
+      expect(statusMethod, contains('_callRiderAuthority'));
+      expect(statusMethod, isNot(contains("collection('riderProfiles')")));
+      expect(statusMethod, isNot(contains("collection('riders')")));
+
+      final documentStart = source.indexOf('Future<void> _reviewRiderDocument');
+      final documentEnd =
+          source.indexOf('Future<void> _removeRiderProfilePhoto');
+      expect(documentStart, isNonNegative);
+      expect(documentEnd, greaterThan(documentStart));
+      final documentMethod = source.substring(documentStart, documentEnd);
+      expect(documentMethod, contains('_callRiderAuthority'));
+      expect(documentMethod, isNot(contains("collection('riderDocuments')")));
+
+      final photoStart =
+          source.indexOf('Future<void> _removeRiderProfilePhoto');
+      final photoEnd = source.indexOf('Future<void> _writeRiderAdminEvent');
+      expect(photoStart, isNonNegative);
+      expect(photoEnd, greaterThan(photoStart));
+      final photoMethod = source.substring(photoStart, photoEnd);
+      expect(photoMethod, contains('_callRiderAuthority'));
+      expect(photoMethod, isNot(contains('FirebaseStorage.instance')));
+    });
+
+    test('finance workflow patches do not alter payment authority fields', () {
+      final patch = AdminFinanceTools.workflowPatch(
+        status: 'reconciled',
+        updatedBy: 'finance@circumuk.com',
+        updatedAt: DateTime(2026, 5, 31),
+        note: 'Stripe dashboard checked.',
+      );
+
+      expect(patch['financeReviewStatus'], 'reconciled');
+      expect(patch['financeReviewedBy'], 'finance@circumuk.com');
+      expect(patch['financeEscalated'], isFalse);
+      expect(patch['financeNote'], 'Stripe dashboard checked.');
+      expect(patch.containsKey('status'), isFalse);
+      expect(patch.containsKey('amount'), isFalse);
+      expect(patch.containsKey('paymentIntent'), isFalse);
+      expect(patch.containsKey('stripePaymentIntentId'), isFalse);
+    });
+
+    test('finance operation review patches preserve payment authority', () {
+      final patch = AdminFinanceTools.workflowPatch(
+        status: 'refund_approved',
+        updatedBy: 'finance@circumuk.com',
+        updatedAt: DateTime(2026, 6, 2),
+        note: 'Eligible goodwill refund.',
+      );
+
+      expect(patch['financeReviewStatus'], 'refund_approved');
+      expect(patch['refundReviewStatus'], 'refund_approved');
+      expect(patch['financeNote'], 'Eligible goodwill refund.');
+      expect(patch.containsKey('amount'), isFalse);
+      expect(patch.containsKey('status'), isFalse);
+      expect(patch.containsKey('paymentIntent'), isFalse);
+    });
+
+    test('finance workflow patches reject unsupported statuses', () {
+      expect(
+        () => AdminFinanceTools.workflowPatch(
+          status: 'paid',
+          updatedBy: 'finance@circumuk.com',
+          updatedAt: DateTime(2026, 5, 31),
+        ),
+        throwsArgumentError,
+      );
+    });
+
     test('creates admin user access patches without passwords', () {
       final patch = AdminUserAccess.adminUserPatch(
         email: 'Ops@CircumUK.com',
@@ -276,6 +776,269 @@ void main() {
       expect(patch['roles'], ['operations_admin']);
       expect(patch['status'], 'active');
       expect(patch.containsKey('password'), isFalse);
+    });
+
+    test('updates admin user access records with one active role', () {
+      final patch = AdminUserAccess.adminUserPatch(
+        email: 'finance@circumuk.com',
+        role: AdminRole.financeAdmin.value,
+        status: 'inactive',
+        invitedBy: 'owner@circumuk.com',
+        updatedAt: DateTime(2026, 5, 31),
+        lastLoginAt: DateTime(2026, 5, 30),
+      );
+
+      expect(patch['role'], 'finance_admin');
+      expect(patch['roles'], ['finance_admin']);
+      expect(patch['status'], 'inactive');
+      expect(patch['lastLoginAt'], DateTime(2026, 5, 30));
+      expect(patch.containsKey('createdAt'), isFalse);
+    });
+
+    test('Admin chat composer uses the backend message callable', () {
+      final source =
+          File('lib/app/admin/admin_phase1_shell.dart').readAsStringSync();
+      final sendStart = source.indexOf('Future<void> _sendChatMessage()');
+      final sendEnd = source.indexOf('void _selectChat', sendStart);
+      expect(sendStart, isNonNegative);
+      expect(sendEnd, greaterThan(sendStart));
+      final sendSource = source.substring(sendStart, sendEnd);
+
+      expect(sendSource, contains("httpsCallable('sendCircumMessage')"));
+      expect(sendSource, isNot(contains(".collection('messages')")));
+      expect(sendSource, isNot(contains('.collection("messages")')));
+    });
+
+    test('restored Admin shell exposes every required operations module', () {
+      expect(
+        AdminModule.values.map((module) => module.label),
+        containsAll(const [
+          'Dashboard',
+          'Visitor analytics',
+          'Users',
+          'Riders',
+          'Verification',
+          'Deliveries',
+          'IRIS Operations',
+          'IRIS Repository',
+          'IRIS Candidates',
+          'Support',
+          'Finance',
+          'Health+',
+          'Business',
+          'Gifts',
+          'Audit',
+          'Chat',
+          'Settings',
+        ]),
+      );
+      expect(AdminModule.values, contains(AdminModule.discrepancyReview));
+      expect(AdminModule.values, contains(AdminModule.irisRepository));
+      expect(AdminModule.values, contains(AdminModule.irisCandidates));
+      expect(AdminModule.values, contains(AdminModule.gifts));
+      expect(
+        AdminModule.values.map((module) => module.label),
+        isNot(contains('Gift Brand Partners')),
+      );
+      expect(
+        AdminModule.values.map((module) => module.label),
+        isNot(contains('Gift Team Workspace')),
+      );
+      expect(
+        AdminModule.values.map((module) => module.label),
+        isNot(contains('Gift Story Media')),
+      );
+      expect(
+        AdminModule.values.map((module) => module.label),
+        isNot(contains('Gift Campaign Matches')),
+      );
+    });
+
+    test('restores historical IRIS and Gifts flow transitions', () {
+      final source =
+          File('lib/app/admin/admin_phase1_shell.dart').readAsStringSync();
+
+      expect(source, contains('New Canonical Item'));
+      expect(source,
+          contains('Future<Map<String, Object?>?> _irisRepositoryEditPatch'));
+      expect(source, contains('Alias Manager'));
+      expect(source, contains('Category Management'));
+      expect(source, contains('Imports and Repository Settings'));
+      expect(source,
+          contains("collection('irisCanonicalObjects').doc(canonicalId)"));
+      expect(source, contains("'repositoryPromotionStatus': 'committed'"));
+      expect(
+        source,
+        contains(
+            'Historical Candidate to Canonical Repository transition restored'),
+      );
+
+      expect(source, contains('Gift Brand Partners'));
+      expect(source, contains('Brand Partner Directory'));
+      expect(source, contains('Partner Profiles and History'));
+      expect(source, contains('Future<void> _setGiftBrandStatus'));
+      expect(source, contains('Future<void> _editGiftBrandPartner'));
+
+      expect(source, contains('Future<void> _suggestGiftCampaignMatch'));
+      expect(source, contains('Future<void> _approveGiftCampaignMatch'));
+      expect(source, contains('Future<void> _bulkGiftCampaignAction'));
+      expect(
+        source,
+        contains("collection('giftCampaignMatches').doc(matchId)"),
+      );
+      expect(source, contains("collection('giftRequests').doc()"));
+      expect(source, contains('gift_campaign_match_approved'));
+      expect(source, contains('Export selected'));
+
+      expect(source, contains('Future<void> _editGiftRequestWorkflow'));
+      expect(source, contains('Gift Request Editor'));
+      expect(source, contains('procurementOrderReference'));
+      expect(source, contains('giftStoryPhotoUrls'));
+      expect(source, contains('giftStoryCustomAudioUrl'));
+      expect(source, contains("httpsCallable('recordGiftStoryEvent')"));
+      expect(source, contains("httpsCallable('updateGiftStoryPrivacy')"));
+      expect(source, contains('contentStatus'));
+      expect(source, contains('captionDraft'));
+      expect(source, contains('postedTikTokUrl'));
+      expect(source, contains('gift_request_editor_saved'));
+    });
+
+    test('Admin data bundle starts empty before live loaders resolve', () {
+      final data = AdminDataBundle.empty();
+
+      expect(data.deliveries, isEmpty);
+      expect(data.users, isEmpty);
+      expect(data.riders, isEmpty);
+      expect(data.payments, isEmpty);
+      expect(data.supportTickets, isEmpty);
+      expect(data.auditLogs, isEmpty);
+      expect(data.websiteVisitors, isEmpty);
+      expect(data.messageReports, isEmpty);
+      expect(data.adminNotes, isEmpty);
+      expect(data.senderTrustEvents, isEmpty);
+      expect(data.irisReferenceImages, isEmpty);
+      expect(data.healthPlusProfiles, isEmpty);
+      expect(data.driverPerformanceMetrics, isEmpty);
+    });
+
+    test('restores historical operational depth for Business Rider and Health+',
+        () {
+      final source =
+          File('lib/app/admin/admin_phase1_shell.dart').readAsStringSync();
+      final operations =
+          File('lib/app/admin/admin_operations.dart').readAsStringSync();
+
+      expect(source, contains("collection('healthPlusProfiles')"));
+      expect(source, contains('Health+ Profile Workspace'));
+      expect(source, contains('Future<void> _updateHealthPlusProfile'));
+      expect(source, contains('medical profile viewer'));
+      expect(source, contains('operational history'));
+
+      for (final section in const [
+        'Business Companies',
+        'Business Members',
+        'Business Deliveries',
+        'Business Health+',
+        'Business Gifts',
+        'Business Vanguard',
+        'Business Invoices',
+        'Business Roth',
+        'Business Analytics',
+        'Business Audit Log',
+      ]) {
+        expect(source, contains(section));
+      }
+      expect(source, contains('Future<void> _changeBusinessMemberRole'));
+      expect(source, contains('Future<void> _removeBusinessMember'));
+      expect(source, contains('roth_credit_review'));
+      expect(operations, contains('rothReviewStatus'));
+
+      expect(source, contains('Rider Performance Metrics'));
+      expect(source, contains('driverPerformanceMetrics'));
+      expect(source, contains('acceptance'));
+      expect(source, contains('Rider operational history'));
+      expect(source, contains('performance_review'));
+      expect(source, contains('warning_issued'));
+    });
+
+    test('restores historical Admin final-gap backend surfaces', () {
+      final source =
+          File('lib/app/admin/admin_phase1_shell.dart').readAsStringSync();
+
+      expect(source, contains("httpsCallable('resolveStaleDeliveryLock')"));
+      expect(source, contains("httpsCallable('sendCircumAnnouncement')"));
+      expect(source, contains("collection('messageReports')"));
+      expect(source, contains("httpsCallable('getIrisReferenceImage')"));
+      expect(source, contains("httpsCallable('finalizeIrisReferenceImage')"));
+      expect(source, contains("httpsCallable('deleteIrisReferenceImage')"));
+      expect(source, contains('Stale Delivery Lock Queue'));
+      expect(source, contains('Message Report Queue'));
+      expect(source, contains('Announcement Composer'));
+      expect(source, contains('IRIS Reference Image Lifecycle'));
+    });
+
+    test('restores Vanguard enhanced custody Admin review path', () {
+      final source =
+          File('lib/app/admin/admin_phase1_shell.dart').readAsStringSync();
+
+      expect(source, contains('Enhanced Custody Review'));
+      expect(source, contains('Chain of custody'));
+      expect(source, contains('Collection evidence'));
+      expect(source, contains('Transfer evidence'));
+      expect(source, contains('Drop-off evidence'));
+      expect(source, contains('Flag custody concern'));
+      expect(source, contains('Request custody evidence'));
+      expect(source, contains('vanguard_custody_closed'));
+    });
+
+    test('restores final historical Admin support and trust surfaces', () {
+      final source =
+          File('lib/app/admin/admin_phase1_shell.dart').readAsStringSync();
+
+      expect(
+          source, contains("httpsCallable('getOrCreateSupportConversation')"));
+      expect(source, contains("httpsCallable('startAdminConversation')"));
+      expect(
+          source, contains("httpsCallable('updateSupportConversationStatus')"));
+      expect(source, contains("collection('adminNotes')"));
+      expect(source, contains("collection('senderTrustEvents')"));
+      expect(source, contains("httpsCallable('adminUpdateSenderTrust')"));
+      expect(source, contains(".collection('messages')"));
+      expect(source, contains('Message Rider'));
+      expect(source, contains('Open chat'));
+      expect(source, contains('Internal Admin Notes'));
+      expect(source, contains('Conversation History'));
+      expect(source, contains('Sender Trust Timeline'));
+      expect(source, contains('Award trust'));
+      expect(source, contains('Freeze trust'));
+    });
+
+    test('keeps Sender trust authority behind backend callable', () {
+      final source =
+          File('lib/app/admin/admin_phase1_shell.dart').readAsStringSync();
+      final methodStart = source.indexOf('Future<void> _updateSenderTrust');
+      final methodEnd = source.indexOf('Future<void> _resolveMessageReport');
+      expect(methodStart, isNonNegative);
+      expect(methodEnd, greaterThan(methodStart));
+      final method = source.substring(methodStart, methodEnd);
+
+      expect(method, contains("httpsCallable('adminUpdateSenderTrust')"));
+      expect(method, isNot(contains('runTransaction')));
+      expect(method, isNot(contains("collection('users').doc(senderId)")));
+      expect(method, isNot(contains("collection('senderTrustEvents').doc()")));
+    });
+
+    test('restores Admin notification delivery operations', () {
+      final source =
+          File('lib/app/admin/admin_phase1_shell.dart').readAsStringSync();
+
+      expect(source, contains("collection('notifications')"));
+      expect(source, contains("httpsCallable('retryNotificationDelivery')"));
+      expect(source, contains('Notification Operations'));
+      expect(source, contains('pushDeliveryStatus'));
+      expect(source, contains('failureReason'));
+      expect(source, contains('bool _notificationNeedsRetry'));
+      expect(source, contains('Retry'));
     });
   });
 }

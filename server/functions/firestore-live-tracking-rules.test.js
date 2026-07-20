@@ -230,6 +230,74 @@ test("Rider earnings remain readable by owner but never client writable", async 
   }));
 });
 
+test("Rider profile self-writes are explicitly allowlisted", async () => {
+  const riderDb = testEnv.authenticatedContext("rider-1").firestore();
+  await assertSucceeds(setDoc(doc(riderDb, "riders", "rider-1"), {
+    uid: "rider-1",
+    name: "Rider One",
+    email: "rider@example.com",
+    phone: "+447700900000",
+    status: "offline",
+    profileCompletionStatus: "complete",
+    onboardingStatus: "profile_complete",
+    updatedAt: serverTimestamp(),
+  }));
+  await assertSucceeds(setDoc(doc(riderDb, "riders", "rider-1"), {
+    photoURL: "https://example.com/rider.jpg",
+    username: "riderone",
+    vehicleType: "bike",
+    updatedAt: serverTimestamp(),
+  }, {merge: true}));
+});
+
+test("Rider profile self-writes cannot alter admin payment or trust authority", async () => {
+  await testEnv.withSecurityRulesDisabled(async (context) => {
+    await setDoc(doc(context.firestore(), "riders", "rider-1"), {
+      uid: "rider-1",
+      name: "Rider One",
+      approvalStatus: "pending",
+    });
+  });
+  const riderDb = testEnv.authenticatedContext("rider-1").firestore();
+  for (const field of [
+    "approvalStatus",
+    "verificationStatus",
+    "role",
+    "roles",
+    "driverStatus",
+    "riderRank",
+    "rating",
+    "availableBalance",
+    "stripeConnectAccountId",
+    "admin",
+  ]) {
+    await assertFails(setDoc(doc(riderDb, "riders", "rider-1"), {
+      [field]: field === "roles" ? ["driver_manager"] : "forged",
+      updatedAt: serverTimestamp(),
+    }, {merge: true}));
+  }
+});
+
+test("Driver manager can update Rider admin fields", async () => {
+  await testEnv.withSecurityRulesDisabled(async (context) => {
+    await setDoc(doc(context.firestore(), "riders", "rider-1"), {
+      uid: "rider-1",
+      name: "Rider One",
+      approvalStatus: "pending",
+    });
+  });
+  const adminDb = testEnv.authenticatedContext("admin-1", {
+    roles: ["driver_manager"],
+  }).firestore();
+  await assertSucceeds(setDoc(doc(adminDb, "riders", "rider-1"), {
+    approvalStatus: "approved",
+    verificationStatus: "approved",
+    driverStatus: "active",
+    riderRank: "sentinel",
+    updatedAt: serverTimestamp(),
+  }, {merge: true}));
+});
+
 test("Sender and Rider cannot directly mutate authoritative delivery fields", async () => {
   const deliveryId = "delivery-authority";
   await seedDelivery(deliveryId);
@@ -249,5 +317,71 @@ test("Sender and Rider cannot directly mutate authoritative delivery fields", as
   }, {merge: true}));
   await assertFails(setDoc(doc(riderDb, "deliveryRequests", deliveryId), {
     trustPointsAwarded: 100,
+  }, {merge: true}));
+});
+
+test("Sender cannot inject IRIS during direct delivery creation", async () => {
+  const senderDb = testEnv.authenticatedContext("sender-1").firestore();
+  await assertFails(setDoc(doc(senderDb, "deliveryRequests", "direct-forged-iris"), {
+    senderId: "sender-1",
+    userId: "sender-1",
+    packageDescription: "knife",
+    iris: {
+      status: "allowed",
+      compliance: {status: "allowed"},
+      serviceability: {status: "serviceable"},
+    },
+  }));
+  await assertSucceeds(setDoc(doc(senderDb, "deliveryRequests", "direct-no-iris"), {
+    senderId: "sender-1",
+    userId: "sender-1",
+    packageDescription: "book",
+  }));
+  await assertFails(setDoc(doc(senderDb, "webSenderRequests", "web-forged-iris"), {
+    senderId: "sender-1",
+    userId: "sender-1",
+    packageDescription: "knife",
+    iris: {
+      status: "allowed",
+      compliance: {status: "allowed"},
+      serviceability: {status: "serviceable"},
+    },
+  }));
+  await assertSucceeds(setDoc(doc(senderDb, "webSenderRequests", "web-no-iris"), {
+    senderId: "sender-1",
+    userId: "sender-1",
+    packageDescription: "book",
+  }));
+});
+
+test("Vanguard PIN authority private documents are not client readable or writable", async () => {
+  const deliveryId = "delivery-vanguard-private";
+  await seedDelivery(deliveryId, {
+    vanguardProtocolEnabled: true,
+    collectionPinVerified: false,
+    deliveryPinVerified: false,
+  });
+  await testEnv.withSecurityRulesDisabled(async (context) => {
+    await setDoc(doc(context.firestore(), "deliveryRequestsPrivate", deliveryId), {
+      deliveryId,
+      senderId: "sender-1",
+      riderId: "rider-1",
+      collectionPin: "123456",
+      deliveryPin: "654321",
+      collectionPinAttemptCount: 0,
+      deliveryPinAttemptCount: 0,
+    });
+  });
+  const senderDb = testEnv.authenticatedContext("sender-1").firestore();
+  const riderDb = testEnv.authenticatedContext("rider-1").firestore();
+  await assertSucceeds(getDoc(doc(senderDb, "deliveryRequests", deliveryId)));
+  await assertSucceeds(getDoc(doc(riderDb, "deliveryRequests", deliveryId)));
+  await assertFails(getDoc(doc(senderDb, "deliveryRequestsPrivate", deliveryId)));
+  await assertFails(getDoc(doc(riderDb, "deliveryRequestsPrivate", deliveryId)));
+  await assertFails(setDoc(doc(senderDb, "deliveryRequestsPrivate", deliveryId), {
+    collectionPin: "111111",
+  }, {merge: true}));
+  await assertFails(setDoc(doc(riderDb, "deliveryRequestsPrivate", deliveryId), {
+    deliveryPinAttemptCount: 0,
   }, {merge: true}));
 });

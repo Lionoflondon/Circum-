@@ -18,7 +18,6 @@ class AuthRepository {
     try {
       return true;
     } catch (e) {
-      print(e);
     }
     throw Exception("Something went wrong");
     // SubmissionFailed(Exception());
@@ -67,7 +66,6 @@ class AuthRepository {
     try {
       return true;
     } catch (e) {
-      print(e);
       throw Exception("Something went wrong");
     }
   }

@@ -6,31 +6,39 @@ const path = require('node:path');
 const root = path.resolve(__dirname, '..');
 
 const surfaces = {
-  public: {
+  website: {
     target: 'public',
     output: 'build/public_web',
-    identity: 'circum-public-web',
-    manifestName: 'Circum Public Web',
-    must: ['circum-public-web', 'Earn as a Rider'],
-    forbidden: [
+    identity: 'circum-website',
+    manifestName: 'Circum Website',
+    must: [
+      'circum-website',
       'circum-sender-web',
       'circum-rider-web',
+      'Earn as a Rider',
+      'Send a Parcel',
+    ],
+    forbidden: [
       'Rider Application Centre',
-      'Admin Portal',
+      'Admin surface',
+      'SenderMobileHome',
     ],
   },
-  sender: {
+  'sender-app': {
     target: 'app',
     output: 'build/sender_app_web',
     identity: 'circum-sender-web',
     manifestName: 'Circum Sender App',
-    must: ['circum-sender-web', 'Book a parcel'],
+    must: [
+      'circum-sender-web',
+      'Send a parcel',
+      'Your Circum',
+    ],
     forbidden: [
-      'circum-public-web',
-      'circum-rider-web',
-      'Earn as a Rider',
-      'Rider Application Centre',
-      'Admin Portal',
+      'circum-website',
+      'circum-admin-web',
+      'Admin surface',
+      'Circum Website',
     ],
   },
   admin: {
@@ -38,7 +46,7 @@ const surfaces = {
     output: 'build/web_admin',
     identity: 'circum-admin-web',
     manifestName: 'Circum Admin',
-    must: ['Admin Portal'],
+    must: ['Admin surface'],
     forbidden: ['circum-public-web', 'circum-sender-web', 'circum-rider-web'],
   },
 };
@@ -91,12 +99,19 @@ function assertFirebaseMapping(surface) {
 
 function assertScriptIsolation() {
   const deployPublic = readIfExists(path.join(root, 'scripts/deploy_public_web.sh'));
-  const deploySender = readIfExists(path.join(root, 'scripts/deploy_sender_app_web.sh'));
   if (!deployPublic.includes('hosting:public') || deployPublic.includes('hosting:app')) {
     fail('Public deploy script must target only hosting:public');
   }
-  if (!deploySender.includes('hosting:app') || deploySender.includes('hosting:public')) {
+  const deploySender = readIfExists(path.join(root, 'scripts/deploy_sender_app_web.sh'));
+  if (!deploySender.includes('hosting:app') || deploySender.includes('hosting:public') ||
+      deploySender.includes('hosting:admin') || deploySender.includes('functions') ||
+      deploySender.includes('firestore') || deploySender.includes('storage')) {
     fail('Sender deploy script must target only hosting:app');
+  }
+  const buildSender = readIfExists(path.join(root, 'scripts/build_sender_app_web.sh'));
+  if (!buildSender.includes('lib/app/sender_mobile/sender_mobile_preview.dart') ||
+      !buildSender.includes('build/sender_app_web')) {
+    fail('Sender build script must use the dedicated Sender web entrypoint and output');
   }
 }
 
@@ -106,6 +121,8 @@ function assertArtifact(surfaceName) {
   if (!fs.existsSync(outDir)) fail(`${surfaceName} output does not exist: ${spec.output}`);
 
   const manifestPath = path.join(outDir, 'manifest.json');
+  const assetManifestPath = path.join(outDir, 'AssetManifest.bin.json');
+  const fontManifestPath = path.join(outDir, 'FontManifest.json');
   const markerPath = path.join(outDir, 'circum-surface.json');
   const indexPath = path.join(outDir, 'index.html');
   const jsPath = path.join(outDir, 'main.dart.js');
@@ -121,10 +138,19 @@ function assertArtifact(surfaceName) {
   if (manifest.name !== spec.manifestName) {
     fail(`${surfaceName} manifest name ${manifest.name} != ${spec.manifestName}`);
   }
+  if (!fs.existsSync(assetManifestPath)) {
+    fail(`${surfaceName} root AssetManifest.bin.json is missing`);
+  }
+  if (!fs.existsSync(fontManifestPath)) {
+    fail(`${surfaceName} root FontManifest.json is missing`);
+  }
   if (manifest.scope !== '/') fail(`${surfaceName} manifest scope must be /`);
   if (manifest.start_url !== '/') fail(`${surfaceName} manifest start_url must be /`);
   if (marker.identity !== spec.identity) {
     fail(`${surfaceName} marker identity ${marker.identity} != ${spec.identity}`);
+  }
+  if (surfaceName === 'sender-app' && !marker.gitCommit) {
+    fail('sender-app artifact is missing gitCommit metadata');
   }
   for (const token of spec.must) {
     if (!haystack.includes(token)) fail(`${surfaceName} artifact missing marker ${token}`);
@@ -136,17 +162,20 @@ function assertArtifact(surfaceName) {
 
 function parseArgs() {
   const surfaceArg = process.argv.find((arg) => arg.startsWith('--surface='));
-  if (!surfaceArg) return null;
+  const configOnly = process.argv.includes('--config-only');
+  if (!surfaceArg) return { surface: null, configOnly };
   const value = surfaceArg.split('=').slice(1).join('=');
   if (!surfaces[value]) fail(`unknown surface ${value}`);
-  return value;
+  return { surface: value, configOnly };
 }
 
-const surface = parseArgs();
+const { surface, configOnly } = parseArgs();
 assertUniqueHostingOutputs();
 assertFirebaseMapping(surface);
 assertScriptIsolation();
-if (surface) {
+if (configOnly) {
+  // Configuration-only mode intentionally skips generated build outputs.
+} else if (surface) {
   assertArtifact(surface);
 } else {
   for (const surfaceName of Object.keys(surfaces)) {

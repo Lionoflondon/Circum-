@@ -1,3 +1,4 @@
+/* eslint-disable max-len */
 "use strict";
 
 const test = require("node:test");
@@ -46,13 +47,13 @@ test("rider location patch preserves live GPS contract", () => {
 });
 
 test("rider live location writes are throttled for low Firestore cost", () => {
-  const now = 60_000;
+  const now = 60000;
   const previous = {
     riderLiveLocation: {
       latitude: 51.5074,
       longitude: -0.1278,
       heading: 90,
-      updatedAt: now - 9_000,
+      updatedAt: now - 9000,
     },
   };
   const nearby = deliveryTracking.liveLocationPatch({
@@ -71,7 +72,7 @@ test("rider live location writes are throttled for low Firestore cost", () => {
     heading: 92,
   });
   assert.equal(
-      deliveryTracking.shouldWriteLiveLocation(previous, moved, now + 10_000),
+      deliveryTracking.shouldWriteLiveLocation(previous, moved, now + 10000),
       true,
   );
 
@@ -81,7 +82,7 @@ test("rider live location writes are throttled for low Firestore cost", () => {
     heading: 92,
   });
   assert.equal(
-      deliveryTracking.shouldWriteLiveLocation(previous, stationary, now + 31_000),
+      deliveryTracking.shouldWriteLiveLocation(previous, stationary, now + 31000),
       true,
   );
 });
@@ -123,11 +124,54 @@ test("live location callable validation rejects invalid or unreliable fixes", ()
   assert.equal(mocked.mocked, true);
 });
 
-test("PIN lookup reuses canonical and Vanguard fields", () => {
+test("PIN lookup uses private Vanguard document fields only", () => {
   assert.equal(deliveryTracking.expectedPin({pickupPin: "123456"}, "verify_collection_pin"), "123456");
   assert.equal(deliveryTracking.expectedPin({
     vanguardProtection: {deliveryPin: "654321"},
   }, "verify_receiver_pin"), "654321");
+  assert.equal(deliveryTracking.expectedPin({}, "verify_collection_pin"), "");
+});
+
+test("Vanguard PIN actions require private PIN authority", () => {
+  assert.equal(deliveryTracking.pinAuthorityRequired(
+      {vanguardProtocolEnabled: true},
+      "verify_collection_pin",
+  ), true);
+  assert.equal(deliveryTracking.pinAuthorityRequired(
+      {vanguardProtection: {enabled: true}},
+      "verify_receiver_pin",
+  ), true);
+  assert.equal(deliveryTracking.pinAuthorityRequired(
+      {vanguardProtocolEnabled: true},
+      "navigate_to_pickup",
+  ), false);
+  assert.equal(deliveryTracking.pinAuthorityRequired(
+      {},
+      "verify_collection_pin",
+  ), false);
+});
+
+test("public verification patches never expose or clear PIN secrets", () => {
+  const collectionPatch = deliveryTracking.patchForTransition({
+    action: "verify_collection_pin",
+    nextStatus: "pickup_verified",
+    riderId: "rider-1",
+  });
+  const deliveryPatch = deliveryTracking.patchForTransition({
+    action: "verify_receiver_pin",
+    nextStatus: "delivered",
+    riderId: "rider-1",
+  });
+  for (const patch of [collectionPatch, deliveryPatch]) {
+    assert.equal(Object.prototype.hasOwnProperty.call(patch, "collectionPin"), false);
+    assert.equal(Object.prototype.hasOwnProperty.call(patch, "pickupPin"), false);
+    assert.equal(Object.prototype.hasOwnProperty.call(patch, "deliveryPin"), false);
+    assert.equal(Object.prototype.hasOwnProperty.call(patch, "receiverPin"), false);
+    assert.equal(Object.prototype.hasOwnProperty.call(patch, "dropoffPin"), false);
+    assert.equal(Object.prototype.hasOwnProperty.call(patch, "vanguardProtection"), false);
+    assert.equal(Object.prototype.hasOwnProperty.call(patch, "collectionPinAttemptCount"), false);
+    assert.equal(Object.prototype.hasOwnProperty.call(patch, "deliveryPinAttemptCount"), false);
+  }
 });
 
 test("blocked rider account states cannot transition deliveries", () => {

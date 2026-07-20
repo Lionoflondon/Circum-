@@ -38,7 +38,6 @@ class HistoryBloc extends Bloc<HistoryEvent, HistoryState> {
 
         emit(state.copyWith(ridesHistory: ridesHistory));
       } catch (e) {
-        print(e);
       }
     }));
   }

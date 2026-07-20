@@ -7,6 +7,8 @@ const {
   customerSafeIris,
   privateIris,
   weightBandFor,
+  dispatchComplianceDecision,
+  isDispatchable,
   dispatchPriority,
   normalizeRiderRank,
   riderCanViewDispatch,
@@ -56,6 +58,77 @@ test("unsupported referrals and prohibited items do not dispatch normally", () =
   const weapon = classifyIris({description: "weapon and explosives"});
   assert.equal(weapon.compliance.status, "prohibited");
   assert.equal(weapon.serviceability.status, "manual_review");
+});
+
+test("dispatch recomputes IRIS and rejects create-time forged compliance", () => {
+  const forged = {
+    status: "requested",
+    matchingStatus: "available",
+    packageDescription: "kitchen knife",
+    iris: {
+      status: "allowed",
+      compliance: {status: "allowed"},
+      serviceability: {status: "serviceable"},
+    },
+  };
+
+  const decision = dispatchComplianceDecision(forged);
+  assert.equal(decision.dispatchable, false);
+  assert.equal(decision.compliance, "prohibited");
+  assert.equal(decision.storedIrisMismatch, true);
+  assert.equal(isDispatchable(forged), false);
+});
+
+test("dispatch rejects missing IRIS when server recomputation blocks the item", () => {
+  const missingIris = {
+    status: "requested",
+    matchingStatus: "available",
+    packageDescription: "explosives",
+  };
+
+  const decision = dispatchComplianceDecision(missingIris);
+  assert.equal(decision.dispatchable, false);
+  assert.equal(decision.compliance, "prohibited");
+  assert.equal(isDispatchable(missingIris), false);
+});
+
+test("dispatch rejects forged serviceability and referral state", () => {
+  const forgedServiceability = {
+    status: "requested",
+    matchingStatus: "available",
+    packageDescription: "pet transport for my dog",
+    iris: {
+      status: "allowed",
+      compliance: {status: "allowed", referralType: null},
+      serviceability: {status: "serviceable"},
+    },
+  };
+
+  const decision = dispatchComplianceDecision(forgedServiceability);
+  assert.equal(decision.dispatchable, false);
+  assert.equal(decision.compliance, "referral_required");
+  assert.equal(decision.serviceability, "manual_review");
+  assert.equal(decision.storedIrisMismatch, true);
+});
+
+test("dispatch allows server-generated compliant IRIS", () => {
+  const serverIris = classifyIris({description: "laptop in sleeve"});
+  const request = {
+    status: "requested",
+    matchingStatus: "available",
+    packageDescription: "laptop in sleeve",
+    iris: {
+      ...serverIris,
+      serverAuthored: true,
+      authority: "backend",
+    },
+  };
+
+  const decision = dispatchComplianceDecision(request);
+  assert.equal(decision.dispatchable, true);
+  assert.equal(decision.compliance, "allowed");
+  assert.equal(decision.serviceability, "serviceable");
+  assert.equal(isDispatchable(request), true);
 });
 
 test("required object validation scenarios classify deterministically", () => {

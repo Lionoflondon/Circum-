@@ -189,6 +189,7 @@ service cloud.firestore {
 
     function isSafeDeliveryCreate() {
       return isCreatingOwnDelivery() &&
+        !request.resource.data.keys().hasAny(['iris']) &&
         !request.resource.data.keys().hasAny(protectedFinancialCreateFields());
     }
 
@@ -207,6 +208,111 @@ service cloud.firestore {
           'ignoredAt',
           'updatedAt'
         ]);
+    }
+
+    function riderAdminOnlyFields() {
+      return [
+        'approvalStatus',
+        'verificationStatus',
+        'adminApprovalStatus',
+        'adminReviewStatus',
+        'approvedAt',
+        'approvedBy',
+        'rejectedAt',
+        'rejectedBy',
+        'rejectionReason',
+        'driverStatus',
+        'role',
+        'roles',
+        'rank',
+        'riderRank',
+        'trustPoints',
+        'trustScore',
+        'rating',
+        'averageRating',
+        'completedDeliveries',
+        'availableBalance',
+        'lifetimeEarnings',
+        'totalAmountEarned',
+        'stripeConnectAccountId',
+        'stripeAccountId',
+        'stripePayoutsEnabled',
+        'payoutPaused',
+        'internalAccess',
+        'founderRider',
+        'isAdmin',
+        'admin'
+      ];
+    }
+
+    function riderSelfWritableFields() {
+      return [
+        'name',
+        'uid',
+        'email',
+        'emailVerified',
+        'emailVerifiedAt',
+        'fullName',
+        'firstName',
+        'lastName',
+        'handle',
+        'username',
+        'dateOfBirth',
+        'gender',
+        'homeAddress',
+        'phone',
+        'phoneNumber',
+        'phoneVerified',
+        'phoneVerifiedAt',
+        'locationEnabled',
+        'position',
+        'status',
+        'availabilityStatus',
+        'fcmToken',
+        'photoURL',
+        'photoUrl',
+        'photoPath',
+        'profilePhoto',
+        'profilePhotoUrl',
+        'profileThumbnailUrl',
+        'profilePhotoPath',
+        'profileThumbnailPath',
+        'profilePhotoVersion',
+        'profilePhotoMetadata',
+        'photoUpdatedAt',
+        'profilePhotoUpdatedAt',
+        'profilePhotoUploadedAt',
+        'vehicle',
+        'vehicles',
+        'vehicleType',
+        'vehicleMakeModel',
+        'vehicleColour',
+        'vehicleRegistration',
+        'vehicleRegistrationDocument',
+        'vehicleRegistrationDocumentStatus',
+        'plateNumber',
+        'typeOfVehicle',
+        'verificationData',
+        'documentChecklist',
+        'profileCompletionStatus',
+        'onboardingStatus',
+        'applicationSubmittedAt',
+        'submittedAt',
+        'activeDelivery',
+        'updatedAt'
+      ];
+    }
+
+    function isSafeRiderSelfCreate(driverId) {
+      return signedIn() && request.auth.uid == driverId &&
+        !request.resource.data.keys().hasAny(riderAdminOnlyFields()) &&
+        request.resource.data.keys().hasOnly(riderSelfWritableFields());
+    }
+
+    function isSafeRiderSelfUpdate(driverId) {
+      return signedIn() && request.auth.uid == driverId &&
+        !request.resource.data.diff(resource.data).affectedKeys().hasAny(riderAdminOnlyFields()) &&
+        request.resource.data.diff(resource.data).affectedKeys().hasOnly(riderSelfWritableFields());
     }
 
     function deliveryFor(deliveryId) {
@@ -596,8 +702,8 @@ service cloud.firestore {
 
     match /riders/{driverId} {
       allow read: if isAdmin() || (signedIn() && request.auth.uid == driverId);
-      allow create, update: if isDriverManager() ||
-        (signedIn() && request.auth.uid == driverId);
+      allow create: if isDriverManager() || isSafeRiderSelfCreate(driverId);
+      allow update: if isDriverManager() || isSafeRiderSelfUpdate(driverId);
       allow delete: if hasRole('super_admin');
     }
 
@@ -636,6 +742,10 @@ service cloud.firestore {
       }
     }
 
+    match /deliveryRequestsPrivate/{deliveryId} {
+      allow read, write: if false;
+    }
+
     match /activeDeliveries/{deliveryId} {
       allow read: if canReadDeliveryTracking(deliveryId);
       allow create, update: if canWriteActiveDelivery(deliveryId);
@@ -649,7 +759,10 @@ service cloud.firestore {
           resource.data.senderId == request.auth.uid &&
           !request.resource.data.diff(resource.data).changedKeys().hasAny(['iris'])
         );
-      allow create: if isAdmin() || isCreatingOwnDelivery();
+      allow create: if isAdmin() || (
+        isCreatingOwnDelivery() &&
+        !request.resource.data.keys().hasAny(['iris'])
+      );
       allow delete: if hasRole('super_admin');
     }
 
@@ -675,10 +788,7 @@ service cloud.firestore {
       match /messages/{messageId} {
         allow read: if isAdmin() ||
           (signedIn() && request.auth.uid in get(/databases/$(database)/documents/chats/$(chatId)).data.participants);
-        allow create: if isAdmin() ||
-          (signedIn() &&
-            request.resource.data.senderId == request.auth.uid &&
-            request.auth.uid in get(/databases/$(database)/documents/chats/$(chatId)).data.participants);
+        allow create: if false;
         allow update, delete: if false;
       }
     }

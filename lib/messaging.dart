@@ -3,19 +3,16 @@ part of './main.dart';
 foregoundMessage() {
   // chatBloc.add(event);
   FirebaseMessaging.onMessage.listen((RemoteMessage message) async {
-    print('Got a message whilst in the foreground!');
     // print('Message data: ${message.data}');
 
     if (message.data['type'] == 'connection') {
       if (message.data['status'] == 'accepted') {
-        print('accepted');
         try {
           // Remove leading and trailing whitespace
           String jsonString = message.data['data'].trim();
 
           // Replace single quotes with double quotes to make it valid JSON
           jsonString = jsonString.replaceAll("'", '"');
-          print(jsonString);
 
           // Parse the modified string into a map
           Map<String, dynamic> mapData = jsonDecode(jsonString);
@@ -26,9 +23,7 @@ foregoundMessage() {
               title: 'Rider on the way!',
               body:
                   '${mapData['courierName'].split(' ').first.trim()} will be picking up your parcel soon.');
-        } catch (e) {
-          print(e);
-        }
+        } catch (_) {}
       }
     }
 
@@ -45,9 +40,7 @@ foregoundMessage() {
         Map<String, dynamic> mapData = jsonDecode(jsonString);
 
         sendPackageBloc.add(SetRiderLocation(data: mapData));
-      } catch (e) {
-        print(e);
-      }
+      } catch (_) {}
     }
 
     if (message.data['type'] == 'payment') {
@@ -66,25 +59,36 @@ foregoundMessage() {
     }
 
     if (message.data['type'] == 'delivery-completed') {
-      print('Delivery completed');
       try {
         // Remove leading and trailing whitespace
         String jsonString = message.data['data'].trim();
 
         // Replace single quotes with double quotes to make it valid JSON
         jsonString = jsonString.replaceAll("'", '"');
-        print(jsonString);
 
         // Parse the modified string into a map
         Map<String, dynamic> mapData = jsonDecode(jsonString);
 
         sendPackageBloc.add(DeliveryCompleted(data: mapData));
         notifyUser(title: 'Delivery completed!', body: '');
-      } catch (e) {
-        print(e);
-      }
+      } catch (_) {}
     }
   });
+}
+
+Future<void> configureNotificationOpenRouting() async {
+  final initialMessage = await FirebaseMessaging.instance.getInitialMessage();
+  if (initialMessage != null) {
+    _openSenderNotification(initialMessage);
+  }
+
+  FirebaseMessaging.onMessageOpenedApp.listen(_openSenderNotification);
+}
+
+void _openSenderNotification(RemoteMessage message) {
+  SenderNotificationOpenBridge.instance.enqueue(
+    SenderNotificationOpenRequest.fromPushData(message.data),
+  );
 }
 
 Future<void> _firebaseMessagingBackgroundHandler(RemoteMessage message) async {
@@ -92,19 +96,16 @@ Future<void> _firebaseMessagingBackgroundHandler(RemoteMessage message) async {
     await Firebase.initializeApp();
   }
 
-  print('Got a message whilst in the background!');
   // print('Message data: ${message.data}');
 
   if (message.data['type'] == 'connection') {
     if (message.data['status'] == 'accepted') {
-      print('accepted');
       try {
         // Remove leading and trailing whitespace
         String jsonString = message.data['data'].trim();
 
         // Replace single quotes with double quotes to make it valid JSON
         jsonString = jsonString.replaceAll("'", '"');
-        print(jsonString);
 
         // Parse the modified string into a map
         Map<String, dynamic> mapData = jsonDecode(jsonString);
@@ -115,9 +116,7 @@ Future<void> _firebaseMessagingBackgroundHandler(RemoteMessage message) async {
             title: 'Rider on the way!',
             body:
                 '${mapData['courierName'].split(' ').first.trim()} will be picking up your parcel soon.');
-      } catch (e) {
-        print(e);
-      }
+      } catch (_) {}
     }
   }
 
@@ -152,14 +151,12 @@ Future<void> _firebaseMessagingBackgroundHandler(RemoteMessage message) async {
   // }
 
   if (message.data['type'] == 'delivery-completed') {
-    print('Delivery completed');
     try {
       // Remove leading and trailing whitespace
       String jsonString = message.data['data'].trim();
 
       // Replace single quotes with double quotes to make it valid JSON
       jsonString = jsonString.replaceAll("'", '"');
-      print(jsonString);
 
       // Parse the modified string into a map
       Map<String, dynamic> mapData = jsonDecode(jsonString);
@@ -167,9 +164,7 @@ Future<void> _firebaseMessagingBackgroundHandler(RemoteMessage message) async {
       sendPackageBloc.add(DeliveryCompleted(data: mapData));
 
       notifyUser(title: 'Delivery completed!', body: '');
-    } catch (e) {
-      print(e);
-    }
+    } catch (_) {}
   }
 
   return Future<void>.value();

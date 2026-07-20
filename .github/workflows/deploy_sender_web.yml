@@ -1,0 +1,14 @@
+name: Deploy Sender Web
+
+on:
+  workflow_dispatch:
+
+jobs:
+  blocked:
+    runs-on: ubuntu-latest
+    steps:
+      - run: |
+          echo "DEPLOYMENT BLOCKED"
+          echo "Sender Web is part of the Circum Website product."
+          echo "Use the Deploy Website workflow."
+          exit 1

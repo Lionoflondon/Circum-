@@ -93,12 +93,16 @@ void main() {
 
   group('Circum Web Platform source guards', () {
     test(
-      'web bootstrap uses path resolver instead of query root selection',
+      'Website bootstrap uses path resolver instead of product switching',
       () {
-        final source = File('lib/web_sender_app.dart').readAsStringSync();
+        expect(File('lib/web_sender_app.dart').existsSync(), isFalse);
+        final source = File('lib/website/shared/circum_website_app.dart')
+            .readAsStringSync();
 
         expect(source, contains('resolveCircumWebRoute'));
         expect(source, contains('Uri.base'));
+        expect(source, isNot(contains('CIRCUM_WEB_SURFACE')));
+        expect(source, isNot(contains('bool.fromEnvironment')));
         expect(
           source,
           isNot(contains("switch (Uri.base.queryParameters['app'])")),
@@ -108,14 +112,16 @@ void main() {
     );
 
     test('Rider Web does not mount the standalone Rider App shell', () {
-      final source = File('lib/web_sender_app.dart').readAsStringSync();
+      final source =
+          File('lib/website/shared/circum_website_app.dart').readAsStringSync();
 
       expect(source, contains('_RiderEnrollmentPortal'));
       expect(source, isNot(contains('CircumRiderApp')));
     });
 
     test('stable build identity markers are present', () {
-      final source = File('lib/web_sender_app.dart').readAsStringSync();
+      final source =
+          File('lib/website/shared/circum_website_app.dart').readAsStringSync();
       final routing = File('lib/web_platform_routing.dart').readAsStringSync();
 
       expect(routing, contains(circumPublicWebIdentity));
@@ -124,6 +130,18 @@ void main() {
       expect(source, contains('ValueKey(circumPublicWebIdentity)'));
       expect(source, contains('ValueKey(circumSenderWebIdentity)'));
       expect(source, contains('ValueKey(circumRiderWebIdentity)'));
+    });
+
+    test('Website does not compile mobile app or Admin console entrypoints',
+        () {
+      final source =
+          File('lib/website/shared/circum_website_app.dart').readAsStringSync();
+
+      expect(source,
+          isNot(contains("package:circum/app/admin/admin_operations.dart")));
+      expect(source, isNot(contains("package:circum/app/sender_mobile/")));
+      expect(source, isNot(contains('SenderMobileHome')));
+      expect(source, isNot(contains('_AdminOperationsPanel')));
     });
   });
 }

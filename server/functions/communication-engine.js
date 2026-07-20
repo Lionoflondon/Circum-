@@ -88,11 +88,23 @@ async function emitNotification({recipientId, recipientRole = "sender", type, ti
     destination,
     read: false,
     archived: false,
+    deliveryStatus: "persisted",
+    pushDeliveryStatus: "pending",
+    deliveryAttempts: 0,
+    retryable: false,
     createdAt: FieldValue.serverTimestamp(),
   };
   await ref.set(payload);
   const token = await profileToken(recipientId, recipientRole);
-  if (token) {
+  if (!token) {
+    await ref.set({
+      pushDeliveryStatus: "skipped",
+      deliveryStatus: "persisted",
+      failureReason: "push_token_missing",
+      retryable: true,
+      updatedAt: FieldValue.serverTimestamp(),
+    }, {merge: true});
+  } else {
     await getMessaging().send({
       token,
       notification: {title: payload.title, body: payload.body},
@@ -106,7 +118,22 @@ async function emitNotification({recipientId, recipientRole = "sender", type, ti
         healthPickupId: clean(destination.healthPickupId),
         businessId: clean(destination.businessId),
       },
-    }).catch((error) => console.error("Communication push failed", error));
+    }).then((messageId) => ref.set({
+      pushDeliveryStatus: "sent",
+      deliveryStatus: "sent",
+      messagingId: messageId,
+      deliveryAttempts: FieldValue.increment(1),
+      sentAt: FieldValue.serverTimestamp(),
+      retryable: false,
+      updatedAt: FieldValue.serverTimestamp(),
+    }, {merge: true})).catch((error) => ref.set({
+      pushDeliveryStatus: "failed",
+      deliveryStatus: "failed",
+      failureReason: clean(error && (error.code || error.message)) || "push_failed",
+      deliveryAttempts: FieldValue.increment(1),
+      retryable: true,
+      updatedAt: FieldValue.serverTimestamp(),
+    }, {merge: true}));
   }
   return ref.id;
 }
@@ -317,10 +344,10 @@ async function sendAnnouncement(data, context) {
       (audience === "riders" ? Promise.resolve(null) : db.collection("users").limit(500).get()),
       (audience === "senders" || audience === "business" || audience === "health" ? Promise.resolve(null) : db.collection("riderProfiles").limit(500).get()),
     ]);
-    if (users) recipients.add(...users.docs.map((doc) => ({id: doc.id, role: "sender"})));
-    if (riders) recipients.add(...riders.docs.map((doc) => ({id: doc.id, role: "rider"})));
+    if (users) recipients.push(...users.docs.map((doc) => ({id: doc.id, role: "sender"})));
+    if (riders) recipients.push(...riders.docs.map((doc) => ({id: doc.id, role: "rider"})));
   }
-  await Promise.all(recipients.map((recipient) => emitNotification({
+  const notificationIds = await Promise.all(recipients.map((recipient) => emitNotification({
     recipientId: recipient.id,
     recipientRole: recipient.role,
     type: "system_announcement",
@@ -328,7 +355,98 @@ async function sendAnnouncement(data, context) {
     body,
     data: {category: "system", announcement: true},
   })));
-  return {ok: true, recipientCount: recipients.length};
+  await db.collection("adminAuditLogs").doc().set({
+    adminUserId: context.auth.uid,
+    actionType: "platform_announcement_sent",
+    recordType: "notifications",
+    recordId: clean(data.announcementId) || "system_announcement",
+    newValue: {audience, recipientCount: recipients.length, notificationIds},
+    reason: "Announcement sent through backend notification engine",
+    createdAt: FieldValue.serverTimestamp(),
+  });
+  return {ok: true, recipientCount: recipients.length, notificationIds};
+}
+
+async function retryNotificationDelivery(data, context) {
+  if (!context.auth || !isAdmin(context)) throw new functions.https.HttpsError("permission-denied", "Admin access is required.");
+  const notificationId = clean(data.notificationId);
+  if (!notificationId) throw new functions.https.HttpsError("invalid-argument", "A notification id is required.");
+  const db = getFirestore();
+  const ref = db.collection("notifications").doc(notificationId);
+  const snap = await ref.get();
+  if (!snap.exists) throw new functions.https.HttpsError("not-found", "Notification not found.");
+  const notification = snap.data() || {};
+  const token = await profileToken(clean(notification.recipientId), clean(notification.recipientRole));
+  if (!token) {
+    await ref.set({
+      pushDeliveryStatus: "skipped",
+      deliveryStatus: "persisted",
+      failureReason: "push_token_missing",
+      retryable: true,
+      lastRetriedAt: FieldValue.serverTimestamp(),
+      updatedAt: FieldValue.serverTimestamp(),
+    }, {merge: true});
+    throw new functions.https.HttpsError("failed-precondition", "Recipient has no push token.");
+  }
+  const destination = notification.destination || {};
+  try {
+    const messageId = await getMessaging().send({
+      token,
+      notification: {
+        title: clean(notification.title) || "Circum update",
+        body: clean(notification.body || notification.message),
+      },
+      data: {
+        type: clean(notification.type) || "system",
+        notificationId,
+        route: clean(destination.route) || "notifications",
+        bookingId: clean(destination.bookingId),
+        chatId: clean(destination.chatId),
+        giftId: clean(destination.giftId),
+        healthPickupId: clean(destination.healthPickupId),
+        businessId: clean(destination.businessId),
+      },
+    });
+    await ref.set({
+      pushDeliveryStatus: "sent",
+      deliveryStatus: "sent",
+      messagingId: messageId,
+      deliveryAttempts: FieldValue.increment(1),
+      lastRetriedAt: FieldValue.serverTimestamp(),
+      sentAt: FieldValue.serverTimestamp(),
+      retryable: false,
+      updatedAt: FieldValue.serverTimestamp(),
+    }, {merge: true});
+    await db.collection("adminAuditLogs").doc().set({
+      adminUserId: context.auth.uid,
+      actionType: "notification_retry_sent",
+      recordType: "notifications",
+      recordId: notificationId,
+      reason: "Notification push retry sent through backend",
+      createdAt: FieldValue.serverTimestamp(),
+    });
+    return {ok: true, notificationId, status: "sent"};
+  } catch (error) {
+    const reason = clean(error && (error.code || error.message)) || "push_failed";
+    await ref.set({
+      pushDeliveryStatus: "failed",
+      deliveryStatus: "failed",
+      failureReason: reason,
+      deliveryAttempts: FieldValue.increment(1),
+      lastRetriedAt: FieldValue.serverTimestamp(),
+      retryable: true,
+      updatedAt: FieldValue.serverTimestamp(),
+    }, {merge: true});
+    await db.collection("adminAuditLogs").doc().set({
+      adminUserId: context.auth.uid,
+      actionType: "notification_retry_failed",
+      recordType: "notifications",
+      recordId: notificationId,
+      reason,
+      createdAt: FieldValue.serverTimestamp(),
+    });
+    throw new functions.https.HttpsError("internal", "Notification retry failed.");
+  }
 }
 
 async function startAdminConversation(data, context) {
@@ -360,44 +478,60 @@ async function getOrCreateSupportConversation(data, context) {
   const uid = context.auth.uid;
   const topic = clean(data.topic || "support").slice(0, 80) || "support";
   const title = clean(data.title || "Circum Support").slice(0, 120) || "Circum Support";
+  const initialMessage = maskContactDetails(data.initialMessage).slice(0, 4000);
+  const closeImmediately = data.closeImmediately === true;
   const participantRole = clean(data.participantRole || "sender").toLowerCase() === "rider" ? "rider" : "sender";
+  const token = context.auth.token || {};
+  const submittedBy = {
+    uid,
+    role: participantRole,
+    email: clean(token.email).toLowerCase() || null,
+    displayName: clean(token.name || data.displayName).slice(0, 120) || null,
+  };
   const db = getFirestore();
   const ticketId = clean(data.ticketId);
   if (ticketId && isAdmin(context)) {
     const result = await ensureSupportConversationForTicket(db, ticketId);
     return {ok: true, ...result};
   }
-  const existing = await db.collection("supportTickets")
-      .where("userId", "==", uid)
-      .limit(20)
-      .get();
-  for (const doc of existing.docs) {
-    const ticket = doc.data();
-    const status = clean(ticket.status || "open").toLowerCase();
-    const chatId = clean(ticket.chatId);
-    if (chatId && status !== "resolved" && status !== "closed") {
-      return {ok: true, chatId, ticketId: doc.id, existing: true};
+  if (!closeImmediately) {
+    const existing = await db.collection("supportTickets")
+        .where("userId", "==", uid)
+        .limit(20)
+        .get();
+    for (const doc of existing.docs) {
+      const ticket = doc.data();
+      const status = clean(ticket.status || "open").toLowerCase();
+      const chatId = clean(ticket.chatId);
+      if (chatId && status !== "resolved" && status !== "closed") {
+        return {ok: true, chatId, ticketId: doc.id, existing: true};
+      }
     }
   }
 
   const ticketRef = db.collection("supportTickets").doc();
   const chatId = `support_${ticketRef.id}`;
   const chatRef = db.collection("chats").doc(chatId);
+  const status = closeImmediately ? "closed" : "open";
   await db.runTransaction(async (transaction) => {
     transaction.set(ticketRef, {
       channel: "sender_in_app_chat",
-      status: "open",
+      status,
       priority: "normal",
       type: topic,
       topic,
       title,
-      message: "",
-      lastMessage: "",
-      adminUnreadCount: 0,
+      message: initialMessage,
+      lastMessage: initialMessage,
+      adminUnreadCount: initialMessage ? 1 : 0,
       chatId,
       userId: uid,
       senderId: participantRole === "sender" ? uid : null,
       riderId: participantRole === "rider" ? uid : null,
+      submittedBy,
+      closedBy: closeImmediately ? "system" : null,
+      closedReason: closeImmediately ? "one_way_submission" : null,
+      closedAt: closeImmediately ? FieldValue.serverTimestamp() : null,
       createdAt: FieldValue.serverTimestamp(),
       updatedAt: FieldValue.serverTimestamp(),
     });
@@ -412,15 +546,36 @@ async function getOrCreateSupportConversation(data, context) {
         "circum-support": "admin",
       },
       title,
-      status: "open",
-      readOnly: false,
+      status,
+      readOnly: closeImmediately,
       source: "communication-engine",
+      submittedBy,
       createdAt: FieldValue.serverTimestamp(),
       updatedAt: FieldValue.serverTimestamp(),
-      lastMessage: "",
+      closedAt: closeImmediately ? FieldValue.serverTimestamp() : null,
+      closedReason: closeImmediately ? "one_way_submission" : null,
+      lastMessage: initialMessage,
     });
+    if (initialMessage) {
+      transaction.set(chatRef.collection("messages").doc("ticket_initial"), {
+        senderId: uid,
+        senderRole: participantRole,
+        senderType: participantRole,
+        senderEmail: submittedBy.email,
+        senderName: submittedBy.displayName,
+        messageText: initialMessage,
+        message: initialMessage,
+        messageType: "text",
+        initialSupportRequest: true,
+        closedSubmission: closeImmediately,
+        readBy: [uid],
+        createdAt: FieldValue.serverTimestamp(),
+        status: "sent",
+        audited: true,
+      });
+    }
   });
-  return {ok: true, chatId, ticketId: ticketRef.id, existing: false};
+  return {ok: true, chatId, ticketId: ticketRef.id, existing: false, status};
 }
 
 async function updateSupportConversationStatus(data, context) {
@@ -475,6 +630,7 @@ exports.markConversationRead = functions.https.onCall(markConversationRead);
 exports.setConversationTyping = functions.https.onCall(setConversationTyping);
 exports.reportCircumMessage = functions.https.onCall(reportMessage);
 exports.sendCircumAnnouncement = functions.https.onCall(sendAnnouncement);
+exports.retryNotificationDelivery = functions.https.onCall(retryNotificationDelivery);
 exports.closeDeliveryConversation = async (deliveryId, status) => {
   if (!terminalDeliveryStatuses.has(clean(status).toLowerCase())) return;
   await getFirestore().collection("chats").doc(clean(deliveryId)).set({

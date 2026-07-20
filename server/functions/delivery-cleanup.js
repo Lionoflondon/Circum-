@@ -83,21 +83,6 @@ function missingCanonicalFields(delivery) {
   ]);
   requireAny("payment status", [delivery.paymentStatus]);
   requireAny("tracking URL", [delivery.trackingUrl]);
-  const vanguardEnabled = delivery.vanguardEnabled === true ||
-    delivery.vanguardProtocolEnabled === true ||
-    delivery.vanguardRequired === true;
-  if (vanguardEnabled) {
-    requireAny("pickup PIN", [
-      delivery.pickupPin,
-      delivery.collectionPin,
-      delivery.vanguardProtection && delivery.vanguardProtection.collectionPin,
-    ]);
-    requireAny("drop-off PIN", [
-      delivery.dropoffPin,
-      delivery.deliveryPin,
-      delivery.vanguardProtection && delivery.vanguardProtection.deliveryPin,
-    ]);
-  }
   return [...new Set(missing)];
 }
 

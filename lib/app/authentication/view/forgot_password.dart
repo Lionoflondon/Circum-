@@ -133,7 +133,6 @@ class _ForgotPasswordViewState extends State<ForgotPasswordView> {
                 // context.read<AuthBloc>().add(RequestForOTP());
                 // context.read<AuthBloc>().add(RequestForOTP());
                 if (state.isEmailValid == false) {
-                  print('Email error');
                   // print(state.isEmailValid);
                   context.read<AuthBloc>().add(const SetErrorMessage(
                       errorMessage: 'Invalid email address'));

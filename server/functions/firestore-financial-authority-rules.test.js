@@ -9,8 +9,8 @@ const rules = fs.readFileSync(
     "utf8",
 );
 const index = fs.readFileSync(path.join(__dirname, "index.js"), "utf8");
-const webSender = fs.readFileSync(
-    path.join(__dirname, "..", "..", "lib", "web_sender_app.dart"),
+const websiteApp = fs.readFileSync(
+    path.join(__dirname, "..", "..", "lib", "website", "shared", "circum_website_app.dart"),
     "utf8",
 );
 
@@ -69,9 +69,32 @@ test("rider earnings, wallet ledger, payout requests, and bank data are not clie
   );
 });
 
+test("rider self updates are field allowlisted and cannot alter admin authority", () => {
+  assert.match(rules, /function riderAdminOnlyFields\(\)/);
+  assert.match(rules, /function riderSelfWritableFields\(\)/);
+  assert.match(rules, /function isSafeRiderSelfCreate\(driverId\)/);
+  assert.match(rules, /function isSafeRiderSelfUpdate\(driverId\)/);
+  for (const field of [
+    "approvalStatus",
+    "verificationStatus",
+    "role",
+    "roles",
+    "riderRank",
+    "trustPoints",
+    "availableBalance",
+    "stripeConnectAccountId",
+  ]) {
+    assert.match(rules, new RegExp(`'${field}'`));
+  }
+  assert.match(
+      rules,
+      /match \/riders\/\{driverId\}[\s\S]*allow create: if isDriverManager\(\) \|\| isSafeRiderSelfCreate\(driverId\);[\s\S]*allow update: if isDriverManager\(\) \|\| isSafeRiderSelfUpdate\(driverId\);/,
+  );
+});
+
 test("Rider withdrawal requests are routed through the backend callable", () => {
   assert.match(index, /exports\.requestRiderWithdrawal = riderConnect\.requestRiderWithdrawal\(\);/);
-  assert.match(webSender, /httpsCallable\('requestRiderWithdrawal'\)/);
-  assert.doesNotMatch(webSender, /collection\('payoutRequests'\)\.doc\(\)[\s\S]*batch\.set\(requestRef/);
-  assert.doesNotMatch(webSender, /collection\('riderBankAccounts'\)\.doc\(user\.uid\)/);
+  assert.match(websiteApp, /httpsCallable\('requestRiderWithdrawal'\)/);
+  assert.doesNotMatch(websiteApp, /collection\('payoutRequests'\)\.doc\(\)[\s\S]*batch\.set\(requestRef/);
+  assert.doesNotMatch(websiteApp, /collection\('riderBankAccounts'\)\.doc\(user\.uid\)/);
 });

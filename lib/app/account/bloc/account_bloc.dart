@@ -55,8 +55,6 @@ class AccountBloc extends Bloc<AccountEvent, AccountState> {
           paymentRequestId: event.paymentRequestId,
           saveCard: event.saveCard);
 
-      print(paymentIntentResult);
-
       if (paymentIntentResult['error'] != null) {
         // Error creating or confirming the payment intent.
         // print(paymentIntentResult['error']);
@@ -82,17 +80,13 @@ class AccountBloc extends Bloc<AccountEvent, AccountState> {
             authoritativeAmount:
                 (paymentIntentResult['amountDue'] as num?)?.toDouble()));
       }
-    } catch (e) {
-      print('_onPaymentCreateIntent');
-      print(e);
+    } catch (_) {
       emit(state.copyWith(status: PaymentStatus.failure));
     }
   }
 
   void _updatePaymentStatus(
       UpdatePaymentStatus event, Emitter<AccountState> emit) {
-    print('Confirmation from backend');
-    print(event.data);
     if (event.data['success'] == true) {
       emit(state.copyWith(status: PaymentStatus.success));
     }

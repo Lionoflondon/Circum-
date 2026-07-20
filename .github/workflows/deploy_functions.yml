@@ -1,0 +1,21 @@
+name: Deploy Functions
+
+on:
+  workflow_dispatch:
+
+jobs:
+  deploy-functions:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - run: node scripts/deploy_guard.self_test.js
+      - run: node scripts/deploy_guard.js --target=backend --base HEAD
+      - run: npm --prefix server/functions ci
+      - run: npm --prefix server/functions test -- --runInBand
+      - run: firebase deploy --only functions --project circum-2797c

@@ -105,7 +105,6 @@ class SignupFormState extends State<SignupForm> {
             ),
             initialCountryCode: _initialCountryCode,
             onCountryChanged: (country) {
-              print(country.name);
               _country = country;
               if (state.phoneNumber != null) {
                 if (state.phoneNumber!.length - country.dialCode.length - 1 >=
@@ -115,12 +114,10 @@ class SignupFormState extends State<SignupForm> {
                   context
                       .read<AuthBloc>()
                       .add(const ValidatePhoneNumber(val: true));
-                  print('valid');
                 } else {
                   context
                       .read<AuthBloc>()
                       .add(const ValidatePhoneNumber(val: false));
-                  print('invalid');
                 }
               }
             },
@@ -242,7 +239,6 @@ class SignupFormState extends State<SignupForm> {
               //   context.read<AuthBloc>().add(RequestForOTP());
               // }
               if (state.isEmailValid == false) {
-                print('Email error');
                 // print(state.isEmailValid);
                 context.read<AuthBloc>().add(const SetErrorMessage(
                     errorMessage: 'Invalid email address'));

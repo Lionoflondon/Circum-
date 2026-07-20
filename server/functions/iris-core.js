@@ -1981,13 +1981,67 @@ function inferCustomerUnderDeclared(declaredWeightText, estimatedWeightKg) {
   return declared + 2 < estimatedWeightKg;
 }
 
+function requestIrisDescription(request = {}) {
+  const parcel = request.parcel && typeof request.parcel === "object" ? request.parcel : {};
+  const declaration = request.iris && request.iris.customerDeclaration || {};
+  return safeText(
+      request.packageDescription ||
+      request.originalDescription ||
+      parcel.description ||
+      parcel.itemName ||
+      request.normalizedItemName ||
+      declaration.description ||
+      request.description ||
+      "",
+  );
+}
+
+function serverIrisForDispatch(request = {}) {
+  const parcel = request.parcel && typeof request.parcel === "object" ? request.parcel : {};
+  const description = requestIrisDescription(request);
+  if (!description) return null;
+  return classifyIris({
+    description,
+    declaredWeightText: request.weight || request.weightLabel || parcel.weightLabel || parcel.weightKg || "",
+    distanceMiles: request.distanceMiles || request.routeDistanceMiles || 0,
+    speed: request.selectedSpeed || request.selectedServiceLevel || request.serviceLevel || request.speed || "",
+    vehicleType: request.vehicleType || request.recommendedVehicle || null,
+  });
+}
+
+function dispatchComplianceDecision(request = {}) {
+  if (["prohibited", "referral_required", "unsupported"].includes(normalize(request.status))) {
+    return {dispatchable: false, reason: "blocked_request_status"};
+  }
+  if (normalize(request.matchingStatus) === "blocked") {
+    return {dispatchable: false, reason: "blocked_matching_status"};
+  }
+  const serverIris = serverIrisForDispatch(request);
+  if (!serverIris) {
+    return {dispatchable: false, reason: "missing_server_iris"};
+  }
+  const compliance = serverIris.compliance && serverIris.compliance.status || serverIris.status || "prohibited";
+  const serviceability = serverIris.serviceability && serverIris.serviceability.status || "manual_review";
+  const storedIris = request.iris || {};
+  const storedCompliance = storedIris.compliance && storedIris.compliance.status || storedIris.status || null;
+  const storedServiceability = storedIris.serviceability && storedIris.serviceability.status || null;
+  return {
+    dispatchable: compliance === "allowed" && serviceability === "serviceable",
+    reason: compliance === "allowed" && serviceability === "serviceable" ?
+      "server_iris_allowed" :
+      "server_iris_blocked",
+    compliance,
+    serviceability,
+    serverIris,
+    storedIrisMismatch: Boolean(
+        storedCompliance && storedCompliance !== compliance ||
+        storedServiceability && storedServiceability !== serviceability,
+    ),
+  };
+}
+
 function isDispatchable(request) {
-  if (["prohibited", "referral_required", "unsupported"].includes(normalize(request.status))) return false;
-  if (normalize(request.matchingStatus) === "blocked") return false;
-  const iris = request.iris || {};
-  const compliance = iris.compliance && iris.compliance.status || iris.status || "allowed";
-  const serviceability = iris.serviceability && iris.serviceability.status || "serviceable";
-  return compliance === "allowed" && serviceability === "serviceable";
+  return dispatchComplianceDecision(request).dispatchable === true;
 }
 
 function riderMatchesIris(rider, request) {
@@ -2055,7 +2109,10 @@ module.exports = {
   calculatePrice,
   weightBandFor,
   createLearningSnapshot,
+  dispatchComplianceDecision,
   isDispatchable,
+  requestIrisDescription,
+  serverIrisForDispatch,
   riderMatchesIris,
   dispatchPriority,
   normalizeRiderRank,

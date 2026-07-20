@@ -5,6 +5,17 @@ const path = require("node:path");
 const test = require("node:test");
 
 const source = fs.readFileSync(path.join(__dirname, "health-plus.js"), "utf8");
+const indexSource = fs.readFileSync(path.join(__dirname, "index.js"), "utf8");
+const senderHealthSource = fs.readFileSync(path.join(
+    __dirname,
+    "..",
+    "..",
+    "lib",
+    "app",
+    "health_plus",
+    "view",
+    "health_plus.dart",
+), "utf8");
 
 test("Health+ checkout requires authenticated Sender ownership", () => {
   assert.match(source, /verifySenderRequest\(req\)/);
@@ -37,4 +48,25 @@ test("Health+ receipt stores server-calculated pricing and discrepancies", () =>
   assert.match(source, /submittedQuoteAmountPence/);
   assert.match(source, /pricingDiscrepancyPence/);
   assert.match(source, /checkout_price_discrepancy/);
+});
+
+test("Health+ booking and Sender actions are backend-authoritative callables", () => {
+  assert.match(source, /exports\.createHealthPlusBooking\s*=\s*functions\.https\.onCall/);
+  assert.match(source, /exports\.updateSenderHealthPlusBooking\s*=\s*functions\.https\.onCall/);
+  assert.match(indexSource, /exports\.createHealthPlusBooking\s*=\s*healthPlus\.createHealthPlusBooking/);
+  assert.match(indexSource, /exports\.updateSenderHealthPlusBooking\s*=\s*healthPlus\.updateSenderHealthPlusBooking/);
+  assert.match(source, /db\.runTransaction/);
+  assert.match(source, /healthPlusBookingIdempotency/);
+  assert.match(source, /auditHistory/);
+});
+
+test("Sender Health+ UI does not write authoritative Health+ records directly", () => {
+  assert.match(senderHealthSource, /httpsCallable\('createHealthPlusBooking'\)/);
+  assert.match(senderHealthSource, /httpsCallable\('updateSenderHealthPlusBooking'\)/);
+  assert.doesNotMatch(senderHealthSource, /collection\('healthPlusProfiles'\)/);
+  assert.doesNotMatch(senderHealthSource, /collection\('prescriptionPickups'\)/);
+  assert.doesNotMatch(senderHealthSource, /collection\('recurringPickupSchedules'\)/);
+  assert.doesNotMatch(senderHealthSource, /collection\('healthPlusPayments'\)/);
+  assert.doesNotMatch(senderHealthSource, /Admin operations/);
+  assert.doesNotMatch(senderHealthSource, /updateHealthPlusPickupStatus/);
 });

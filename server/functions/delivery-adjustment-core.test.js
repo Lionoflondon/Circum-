@@ -1,7 +1,9 @@
 /* eslint-disable max-len */
 const test = require("node:test");
 const assert = require("node:assert/strict");
-const {additionalAmount, isMaterialDiscrepancy} = require("./delivery-adjustment-core");
+const fs = require("node:fs");
+const path = require("node:path");
+const {additionalAmount, buildAdjustment, isMaterialDiscrepancy} = require("./delivery-adjustment-core");
 
 test("weight discrepancy requires at least a 20 percent increase", () => {
   assert.equal(isMaterialDiscrepancy({reason: "weight_exceeded", originalWeightKg: 10, observedWeightKg: 11.9}), false);
@@ -16,4 +18,49 @@ test("undeclared items and vehicle suitability changes are material", () => {
 test("additional amount cannot be negative", () => {
   assert.equal(additionalAmount(20, 27.456), 7.46);
   assert.equal(additionalAmount(20, 18), 0);
+});
+
+test("new adjustments keep sender payment pending until Admin review", () => {
+  const adjustment = buildAdjustment({
+    bookingId: "booking-1",
+    bookingRequestId: "request-1",
+    senderId: "sender-1",
+    riderId: "rider-1",
+    originalQuote: 10,
+    revisedQuote: 14,
+    riderReason: "weight_exceeded",
+  });
+  assert.equal(adjustment.status, "awaiting_sender_payment");
+  assert.equal(adjustment.senderDecision, "pending");
+  assert.equal(adjustment.additionalAmount, 4);
+});
+
+test("delivery adjustment callable requires Admin review before sender payment", () => {
+  const source = fs.readFileSync(path.join(__dirname, "delivery-adjustments.js"), "utf8");
+  assert.match(source, /exports\.reviewDeliveryAdjustment/);
+  assert.match(source, /status: "awaiting_admin_review"/);
+  assert.match(source, /status: "awaiting_adjustment_review"/);
+  assert.match(source, /status: "awaiting_sender_payment"/);
+  assert.match(source, /adminDecision !== "approve"/);
+  assert.match(source, /request_more_evidence/);
+});
+
+test("Admin review UX exposes production review controls and audit fields", () => {
+  const adminSource = fs.readFileSync(
+      path.join(__dirname, "..", "..", "lib", "app", "admin", "admin_root.dart"),
+      "utf8",
+  );
+  for (const marker of [
+    "ChoiceChip",
+    "Evidence preview",
+    "Decision notes",
+    "adminReviewedBy",
+    "adminReviewedAt",
+    "Sender statement",
+    "Rider statement",
+    "reviewDeliveryAdjustment",
+    "request_more_evidence",
+  ]) {
+    assert.match(adminSource, new RegExp(marker));
+  }
 });

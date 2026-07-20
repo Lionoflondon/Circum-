@@ -881,6 +881,79 @@ function cancelRiderWithdrawal() {
   });
 }
 
+function adminReviewRiderWithdrawal() {
+  return functions.https.onCall(async (data, context) => {
+    const riderId = text(data && data.riderId);
+    const requestId = text(data && data.requestId);
+    const action = text(data && data.action).toLowerCase();
+    const reason = text(data && data.reason);
+    await assertActor(context, riderId, {adminOnly: true});
+    if (!riderId || !requestId || action !== "rejected") {
+      throw new functions.https.HttpsError(
+          "invalid-argument",
+          "Rider, payout request and a supported review action are required.",
+      );
+    }
+    if (!reason) {
+      throw new functions.https.HttpsError(
+          "invalid-argument",
+          "A payout review reason is required.",
+      );
+    }
+    const db = getFirestore();
+    const requestRef = db.collection("payoutRequests").doc(requestId);
+    const result = await db.runTransaction(async (transaction) => {
+      const requestDoc = await transaction.get(requestRef);
+      if (!requestDoc.exists) {
+        throw new functions.https.HttpsError(
+            "not-found",
+            "Payout request was not found.",
+        );
+      }
+      const request = requestDoc.data() || {};
+      if (text(request.riderId) !== riderId) {
+        throw new functions.https.HttpsError(
+            "permission-denied",
+            "Payout request does not belong to this rider.",
+        );
+      }
+      const status = text(request.status || request.payoutStatus).toLowerCase();
+      if (status === "rejected") {
+        return {requestId, status: "rejected", idempotent: true};
+      }
+      if (!["requested", "pending", "admin_review_required", "blocked_admin_review"].includes(status)) {
+        throw new functions.https.HttpsError(
+            "failed-precondition",
+            "This payout request can no longer be rejected.",
+        );
+      }
+      transaction.set(requestRef, {
+        status: "rejected",
+        payoutStatus: "rejected",
+        reviewStatus: "rejected",
+        rejectedAt: FieldValue.serverTimestamp(),
+        processedAt: FieldValue.serverTimestamp(),
+        processedBy: context.auth.uid,
+        rejectionReason: reason,
+        reviewReason: reason,
+        updatedAt: FieldValue.serverTimestamp(),
+      }, {merge: true});
+      return {requestId, status: "rejected", idempotent: false};
+    });
+    if (!result.idempotent) {
+      await db.collection("riderPayoutAudit").add({
+        riderId,
+        payoutRequestId: requestId,
+        action: "withdrawal_rejected",
+        reason,
+        actorId: context.auth.uid,
+        createdAt: FieldValue.serverTimestamp(),
+      });
+    }
+    return result;
+  });
+}
+
 function handleStripeConnectWebhook(stripeOrFactory) {
   return stripeWebhookRuntime.https.onRequest(async (req, res) => {
     const stripe = stripeFrom(stripeOrFactory);
@@ -1054,6 +1127,7 @@ module.exports = {
   createRiderTransferOrPayout,
   requestRiderWithdrawal,
   cancelRiderWithdrawal,
+  adminReviewRiderWithdrawal,
   resetRiderTestStripeAccount,
   handleStripeConnectWebhook,
   scheduledRiderStripeStatusSync,

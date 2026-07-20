@@ -23,6 +23,11 @@ test("Firestore rules prevent senders from mutating public Iris", () => {
   assert.match(rules, /match \/webSenderRequests\/\{requestId\}[\s\S]*changedKeys\(\)\.hasAny\(\['iris'\]\)/);
 });
 
+test("Firestore rules reject create-time Iris injection from clients", () => {
+  assert.match(rules, /function isSafeDeliveryCreate\(\)[\s\S]*!request\.resource\.data\.keys\(\)\.hasAny\(\['iris'\]\)/);
+  assert.match(rules, /match \/webSenderRequests\/\{requestId\}[\s\S]*allow create: if isAdmin\(\) \|\| \(\s*isCreatingOwnDelivery\(\) &&\s*!request\.resource\.data\.keys\(\)\.hasAny\(\['iris'\]\)\s*\);/);
+});
+
 test("Firestore rules restrict rider private writes to verification.rider", () => {
   assert.match(rules, /function isAssignedRiderPrivateCreate\(\)[\s\S]*request\.resource\.data\.verification\.keys\(\)\.hasOnly\(\['rider'\]\)/);
   assert.match(rules, /function isAssignedRiderPrivateUpdate\(\)[\s\S]*request\.resource\.data\.verification\.keys\(\)\.hasOnly\(\['rider'\]\)/);
@@ -40,6 +45,12 @@ test("IRIS dispatch callable requires delivery owner or admin", () => {
   assert.match(sendPackage, /!hasAdminClaim\(context\.auth\.token \|\| \{\}\)/);
   assert.match(sendPackage, /Only the Sender or an administrator can dispatch this delivery/);
   assert.match(sendPackage, /e instanceof functions\.https\.HttpsError/);
+});
+
+test("IRIS dispatch records audit when server recomputation blocks dispatch", () => {
+  assert.match(sendPackage, /dispatchComplianceDecision\(deliveryRequest\[0\]\)/);
+  assert.match(sendPackage, /actionType: "iris_dispatch_blocked"/);
+  assert.match(sendPackage, /storedIrisMismatch: dispatchDecision\.storedIrisMismatch === true/);
 });
 
 test("Firestore rules reserve rider rank changes for driver managers", () => {

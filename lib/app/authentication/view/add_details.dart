@@ -17,7 +17,6 @@ class AddDetailsView extends StatelessWidget {
         body: BlocListener<AuthBloc, AuthState>(
             listener: (context, state) {
               if (state.status == Status.success) {
-                print('Ssuccess');
                 context.read<AuthBloc>().add(ResetStatus());
 
                 // Navigator.popUntil(context, (route) => route.isFirst);
