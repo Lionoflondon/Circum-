@@ -40,6 +40,11 @@ jobs:
         with:
           channel: stable
       - run: flutter pub get
+      - name: Align keyboard visibility plugin compile SDK
+        run: |
+          plugin_build="$(find "$PUB_CACHE/hosted/pub.dev" -path "*/flutter_keyboard_visibility-*/android/build.gradle" -print -quit)"
+          test -n "$plugin_build"
+          perl -0pi -e 's/compileSdkVersion\\s+\\d+/compileSdkVersion 36/g; s/compileSdk\\s*=\\s*\\d+/compileSdk = 36/g; s/compileSdk\\s+\\d+/compileSdk 36/g' "$plugin_build"
       - run: echo "org.gradle.jvmargs=-Xmx4096m -XX:MaxMetaspaceSize=1024m -Dfile.encoding=UTF-8" >> android/gradle.properties
       - name: Create CI release keystore
         run: |
