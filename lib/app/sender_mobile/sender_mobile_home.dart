@@ -288,12 +288,11 @@ class _SenderMobileHomeState extends State<SenderMobileHome> {
               : _SenderEntryScreen.app;
         });
       }, onError: (Object error, StackTrace stackTrace) {
-        FlutterError.reportError(FlutterErrorDetails(
-          exception: error,
-          stack: stackTrace,
-          library: 'sender auth',
-          context: ErrorDescription('restoring Sender Firebase Auth session'),
-        ));
+        _reportUnexpectedAuthRestoreError(
+          error,
+          stackTrace,
+          'restoring Sender Firebase Auth session',
+        );
         if (!mounted) return;
         setState(() {
           _authRestoring = false;
@@ -301,18 +300,68 @@ class _SenderMobileHomeState extends State<SenderMobileHome> {
         });
       });
     } catch (error, stackTrace) {
-      FlutterError.reportError(FlutterErrorDetails(
-        exception: error,
-        stack: stackTrace,
-        library: 'sender auth',
-        context: ErrorDescription('configuring Sender Firebase Auth session'),
-      ));
+      _reportUnexpectedAuthRestoreError(
+        error,
+        stackTrace,
+        'configuring Sender Firebase Auth session',
+      );
       if (!mounted) return;
       setState(() {
         _authRestoring = false;
         _entry = _SenderEntryScreen.landing;
       });
     }
+  }
+
+  void _reportUnexpectedAuthRestoreError(
+    Object error,
+    StackTrace stackTrace,
+    String context,
+  ) {
+    if (_isExpectedAuthRestoreFailure(error)) {
+      debugPrint('Sender auth restore recovered: $error');
+      return;
+    }
+    FlutterError.reportError(FlutterErrorDetails(
+      exception: error,
+      stack: stackTrace,
+      library: 'sender auth',
+      context: ErrorDescription(context),
+    ));
+  }
+
+  bool _isExpectedAuthRestoreFailure(Object error) {
+    if (error is FirebaseAuthException) {
+      return const {
+        'app-deleted',
+        'app-not-authorized',
+        'invalid-api-key',
+        'invalid-app-credential',
+        'network-request-failed',
+        'operation-not-supported-in-this-environment',
+        'timeout',
+        'unauthorized-domain',
+        'user-disabled',
+        'web-storage-unsupported',
+      }.contains(error.code);
+    }
+    if (error is FirebaseException) {
+      return error.plugin == 'firebase_auth' &&
+          const {
+            'network-request-failed',
+            'operation-not-supported-in-this-environment',
+            'timeout',
+            'web-storage-unsupported',
+          }.contains(error.code);
+    }
+    final message = error.toString().toLowerCase();
+    return message.contains('network') ||
+        message.contains('offline') ||
+        message.contains('storage') ||
+        message.contains('persistence') ||
+        message.contains('auth/network-request-failed') ||
+        message.contains('auth/operation-not-supported-in-this-environment') ||
+        message.contains('auth/web-storage-unsupported');
   }
 }
 

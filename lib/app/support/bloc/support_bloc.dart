@@ -1,8 +1,5 @@
-import 'dart:convert';
-
 import 'package:bloc/bloc.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:equatable/equatable.dart';
+import 'package:cloud_functions/cloud_functions.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 
 import '../../../helper/chats_help.dart';
@@ -14,7 +11,7 @@ part 'support_state.dart';
 class SupportBloc extends Bloc<SupportEvent, SupportState> {
   SupportBloc() : super(SupportState()) {
     FirebaseAuth auth = FirebaseAuth.instance;
-    FirebaseFirestore db = FirebaseFirestore.instance;
+    final functions = FirebaseFunctions.instanceFor(region: 'us-central1');
     on<SupportEvent>((event, emit) {
       // TODO: implement event handler
     });
@@ -51,13 +48,17 @@ class SupportBloc extends Bloc<SupportEvent, SupportState> {
             'timeStamp': '${DateTime.now()}'
           };
 
-          await db.collection('messages').doc().set(messageData);
+          await functions.httpsCallable('getOrCreateSupportConversation').call({
+            'topic': 'support',
+            'title': 'Circum Support',
+            'initialMessage': msg,
+            'participantRole': 'sender',
+          });
 
           add(IncomingSupportMessage(data: messageData));
 
           ChatsHelper().storeChat(messageData);
-        } catch (e) {
-        }
+        } catch (e) {}
       },
     );
 

@@ -1,9 +1,12 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:cloud_functions/cloud_functions.dart';
 
 import 'iris_weight_estimator.dart';
 
 class IrisLearningBridge {
   static final FirebaseFirestore _db = FirebaseFirestore.instance;
+  static final FirebaseFunctions _functions =
+      FirebaseFunctions.instanceFor(region: 'us-central1');
 
   static Future<IrisTrustedPricingDecision> resolveWithHistory({
     required String description,
@@ -54,16 +57,17 @@ class IrisLearningBridge {
       final payload = {
         'matchedItemName': matchedItemName,
         'description': description,
-        'weightKg': verifiedWeightKg,
+        'userCorrectedWeightKg': verifiedWeightKg,
         'source': source,
         'riderVerified': riderVerified,
         'disputeOccurred': disputeOccurred,
         'adminOverrode': adminOverrode,
         'learningApplied': false,
         'reviewReasons': ['canonical_review_required'],
-        'timestamp': FieldValue.serverTimestamp(),
       };
-      await _db.collection('iris_learning_review_candidates').add(payload);
+      await _functions
+          .httpsCallable('recordIrisLearningCandidate')
+          .call(payload);
     } catch (_) {
       // Learning records are append-only and best-effort.
     }
