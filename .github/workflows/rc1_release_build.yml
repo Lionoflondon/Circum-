@@ -23,13 +23,15 @@ jobs:
       - run: flutter pub get
       - run: node scripts/deploy_guard.self_test.js
       - run: PUBLIC_WEB_RECAPTCHA_ENTERPRISE_SITE_KEY="${{ secrets.PUBLIC_WEB_RECAPTCHA_ENTERPRISE_SITE_KEY }}" scripts/build_public_web.sh
+      - uses: actions/upload-artifact@v4
+        with:
+          name: public-web-release
+          path: build/public_web
       - run: CIRCUM_WEB_RECAPTCHA_ENTERPRISE_SITE_KEY="${{ secrets.CIRCUM_WEB_RECAPTCHA_ENTERPRISE_SITE_KEY }}" scripts/build_sender_app_web.sh
       - uses: actions/upload-artifact@v4
         with:
-          name: circum-rc1-web-artifacts
-          path: |
-            build/public_web
-            build/sender_app_web
+          name: sender-web-release
+          path: build/sender_app_web
 
   sender-mobile:
     name: Build Sender Android
