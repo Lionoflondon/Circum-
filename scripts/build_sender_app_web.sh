@@ -19,6 +19,7 @@ echo "Entrypoint: lib/app/sender_mobile/sender_mobile_preview.dart"
 echo "Output: $OUTPUT_DIR"
 echo "Identity: circum-sender-web"
 
+"$FLUTTER_BIN" clean
 rm -rf "$OUTPUT_DIR"
 "$FLUTTER_BIN" build web \
   --release \
