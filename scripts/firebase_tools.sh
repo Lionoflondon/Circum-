@@ -4,6 +4,10 @@ resolve_tool() {
   local name="$1"
   local candidate
   for candidate in "$ROOT_DIR/../$name" "$ROOT_DIR/../../$name"; do
+    if [[ -d "$candidate" && -x "$candidate/bin/$name" ]]; then
+      printf '%s\n' "$candidate"
+      return 0
+    fi
     if [[ -x "$candidate" ]]; then
       printf '%s\n' "$candidate"
       return 0
