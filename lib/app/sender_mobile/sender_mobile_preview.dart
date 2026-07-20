@@ -7,6 +7,7 @@ import '../../firebase_options.dart';
 import '../security/circum_app_check.dart';
 import '../send_package/bloc/send_package_bloc.dart';
 import 'design_system/sender_design_system.dart';
+import 'gift_mode_view.dart';
 import 'sender_accessibility.dart';
 import 'sender_mobile_home.dart';
 
@@ -30,25 +31,44 @@ class SenderMobilePreviewApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final initialRouteName = _initialSenderRouteName(Uri.base);
     final initialIndex =
         int.tryParse(Uri.base.queryParameters['tab'] ?? '')?.clamp(0, 4) ?? 0;
+    final home = SenderMobileHome(
+      initialAuthenticated: true,
+      previewAuthEnabled: false,
+      initialIndex: initialIndex,
+      initialRouteName: initialRouteName,
+    );
     return BlocProvider(
       create: (_) => SendPackageBloc(),
       child: MaterialApp(
         debugShowCheckedModeBanner: false,
+        initialRoute: Navigator.defaultRouteName,
+        routes: {Navigator.defaultRouteName: (_) => home},
+        onGenerateInitialRoutes: (_) => [
+          MaterialPageRoute<void>(
+            builder: (_) => home,
+            settings: const RouteSettings(name: Navigator.defaultRouteName),
+          ),
+        ],
         theme: AppTheme.dark(),
         builder: (context, child) => SenderAccessibilityHost(
           repository: const _PreviewSenderAccessibilityRepository(),
           child: child ?? const SizedBox.shrink(),
         ),
-        home: SenderMobileHome(
-          initialAuthenticated: true,
-          previewAuthEnabled: false,
-          initialIndex: initialIndex,
-        ),
       ),
     );
   }
+}
+
+String? _initialSenderRouteName(Uri uri) {
+  final fragment = uri.fragment.trim();
+  if (fragment == GiftModeView.routeName ||
+      fragment == '#${GiftModeView.routeName}') {
+    return GiftModeView.routeName;
+  }
+  return null;
 }
 
 class _PreviewSenderAccessibilityRepository
@@ -70,28 +90,36 @@ class _SenderWebStartupBlocked extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return MaterialApp(
-      debugShowCheckedModeBanner: false,
-      title: 'Circum Sender',
-      home: Scaffold(
-        backgroundColor: const Color(0xFF07090F),
-        body: SafeArea(
-          child: Center(
-            child: Padding(
-              padding: const EdgeInsets.all(24),
-              child: Text(
-                message,
-                textAlign: TextAlign.center,
-                style: const TextStyle(
-                  color: Colors.white,
-                  fontSize: 16,
-                  fontWeight: FontWeight.w700,
-                ),
+    final blocked = Scaffold(
+      backgroundColor: const Color(0xFF07090F),
+      body: SafeArea(
+        child: Center(
+          child: Padding(
+            padding: const EdgeInsets.all(24),
+            child: Text(
+              message,
+              textAlign: TextAlign.center,
+              style: const TextStyle(
+                color: Colors.white,
+                fontSize: 16,
+                fontWeight: FontWeight.w700,
               ),
             ),
           ),
         ),
       ),
+    );
+    return MaterialApp(
+      debugShowCheckedModeBanner: false,
+      initialRoute: Navigator.defaultRouteName,
+      routes: {Navigator.defaultRouteName: (_) => blocked},
+      onGenerateInitialRoutes: (_) => [
+        MaterialPageRoute<void>(
+          builder: (_) => blocked,
+          settings: const RouteSettings(name: Navigator.defaultRouteName),
+        ),
+      ],
+      title: 'Circum Sender',
     );
   }
 }

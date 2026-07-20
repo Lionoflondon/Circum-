@@ -60,6 +60,7 @@ class SenderMobileHome extends StatefulWidget {
   final bool previewAuthEnabled;
   final bool initialAuthenticated;
   final int initialIndex;
+  final String? initialRouteName;
   final ValueChanged<int>? onTabChanged;
   final SenderHomeRepository? homeRepository;
 
@@ -68,6 +69,7 @@ class SenderMobileHome extends StatefulWidget {
     this.previewAuthEnabled = false,
     this.initialAuthenticated = false,
     this.initialIndex = 0,
+    this.initialRouteName,
     this.onTabChanged,
     this.homeRepository,
   });
@@ -95,6 +97,7 @@ class _SenderMobileHomeState extends State<SenderMobileHome> {
     _standaloneSendPackageBloc = SendPackageBloc();
     SenderNotificationOpenBridge.instance.register(_handleNotificationOpen);
     _restoreAuthenticatedSenderSession();
+    _openInitialSenderRoute();
   }
 
   @override
@@ -225,6 +228,23 @@ class _SenderMobileHomeState extends State<SenderMobileHome> {
     final index = next.clamp(0, senderMobileBottomNavigationLabels.length - 1);
     setState(() => _index = index);
     widget.onTabChanged?.call(index);
+  }
+
+  void _openInitialSenderRoute() {
+    final routeName = widget.initialRouteName?.trim();
+    if (routeName == null || routeName.isEmpty) return;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || _entry != _SenderEntryScreen.app) return;
+      switch (routeName) {
+        case GiftModeView.routeName:
+          Navigator.of(context).push(
+            MaterialPageRoute<void>(
+              builder: (_) => const GiftModeView(),
+              settings: const RouteSettings(name: GiftModeView.routeName),
+            ),
+          );
+      }
+    });
   }
 
   bool _handleNotificationOpen(SenderNotificationOpenRequest request) {
@@ -2709,7 +2729,7 @@ class _RebuiltSenderRecentActivity extends StatelessWidget {
     }
     if (qualifyingOrders.isEmpty) {
       return _RebuiltSenderPanel(
-        onTap: onStartDelivery,
+        onTap: onOpenActivity,
         padding: const EdgeInsets.all(24),
         child: Row(
           children: [
@@ -2753,15 +2773,6 @@ class _RebuiltSenderRecentActivity extends StatelessWidget {
                   ),
                 ],
               ),
-            ),
-            const SizedBox(width: 12),
-            FilledButton(
-              onPressed: onStartDelivery,
-              style: FilledButton.styleFrom(
-                backgroundColor: Colors.white,
-                foregroundColor: _SenderTokens.midnight,
-              ),
-              child: const Text('Send a parcel'),
             ),
           ],
         ),

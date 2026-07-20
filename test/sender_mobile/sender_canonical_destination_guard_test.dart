@@ -117,6 +117,23 @@ void main() {
     }
   });
 
+  test('Sender web deep link opens the canonical Gifts flow', () {
+    final preview = read('lib/app/sender_mobile/sender_mobile_preview.dart');
+    final home = read('lib/app/sender_mobile/sender_mobile_home.dart');
+
+    expect(preview, contains('String? _initialSenderRouteName(Uri uri)'));
+    expect(preview, contains('initialRoute: Navigator.defaultRouteName'));
+    expect(
+        preview, contains('routes: {Navigator.defaultRouteName: (_) => home}'));
+    expect(preview, contains('onGenerateInitialRoutes: (_) => ['));
+    expect(preview, contains('fragment == GiftModeView.routeName'));
+    expect(preview, contains('initialRouteName: initialRouteName'));
+    expect(home, contains('final String? initialRouteName;'));
+    expect(home, contains('void _openInitialSenderRoute()'));
+    expect(home, contains('case GiftModeView.routeName:'));
+    expect(home, contains('builder: (_) => const GiftModeView()'));
+  });
+
   test('Sender send flow remains the canonical mobile booking canvas', () {
     final canvas = read('lib/app/sender_mobile/sender_booking_canvas.dart');
     final state = read('lib/app/sender_mobile/sender_booking_state.dart');
