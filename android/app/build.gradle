@@ -69,6 +69,7 @@ android {
         versionName flutterVersionName
         multiDexEnabled true
         manifestPlaceholders = [
+            applicationName: "android.app.Application",
             googleMapsApiKey: project.findProperty("GOOGLE_MAPS_API_KEY") ?: System.getenv("GOOGLE_MAPS_API_KEY") ?: ""
         ]
     }
