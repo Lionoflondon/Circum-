@@ -8891,13 +8891,22 @@ class _CustomerPortalState extends State<_CustomerPortal> {
         setState(() => _senderAuthLoading = false);
         return;
       }
-      if (!await _allowSenderUser(user)) {
+      var senderRestoreTimedOut = false;
+      final senderAllowed = await _allowSenderUser(user).timeout(
+        const Duration(seconds: 8),
+        onTimeout: () {
+          senderRestoreTimedOut = true;
+          return false;
+        },
+      );
+      if (!senderAllowed) {
         await FirebaseAuth.instance.signOut();
         if (!mounted) return;
         setState(() {
           _senderAuthLoading = false;
-          _senderProfileMessage =
-              'Use a sender account here. Rider and admin accounts have their own sign-in.';
+          _senderProfileMessage = senderRestoreTimedOut
+              ? 'We could not restore your session. Sign in again to continue.'
+              : 'Use a sender account here. Rider and admin accounts have their own sign-in.';
         });
         return;
       }
