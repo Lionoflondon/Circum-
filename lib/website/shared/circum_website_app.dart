@@ -27,6 +27,7 @@ import 'package:geolocator/geolocator.dart';
 import 'package:http/http.dart' as http;
 import 'package:image_picker/image_picker.dart';
 import 'package:flutter_stripe/flutter_stripe.dart';
+import 'package:url_launcher/link.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import 'firebase/website_firebase_options.dart';
@@ -108,15 +109,19 @@ class _CircumWebsiteAppState extends State<CircumWebsiteApp> {
   }
 
   Future<void> _openCanonicalPath(String path) async {
-    final target = Uri.base.replace(
-      path: path,
-      queryParameters: {},
-      fragment: '',
-    );
+    final target = _canonicalWebUri(path);
     final opened = await launchUrl(target, webOnlyWindowName: '_self');
     if (!opened) {
       debugPrint('Could not navigate to ${target.path}');
     }
+  }
+
+  static Uri _canonicalWebUri(String path) {
+    return Uri.base.replace(
+      path: path,
+      queryParameters: {},
+      fragment: '',
+    );
   }
 
   Future<void> _openSurface(
@@ -688,18 +693,23 @@ class _LandingPage extends StatelessWidget {
                     children: [
                       _PillButton(
                         label: 'Send a Parcel',
+                        uri: _CircumWebsiteAppState._canonicalWebUri('/send'),
                         icon: Icons.arrow_forward,
                         dark: true,
                         onPressed: onStart,
                       ),
                       _PillButton(
                         label: 'Earn as a Rider',
+                        uri: _CircumWebsiteAppState._canonicalWebUri('/rider'),
                         icon: Icons.two_wheeler,
                         dark: false,
                         onPressed: onRider,
                       ),
                       _PillButton(
                         label: 'Get started with Health+',
+                        uri: _CircumWebsiteAppState._canonicalWebUri(
+                          '/send/health',
+                        ),
                         icon: Icons.health_and_safety,
                         dark: false,
                         onPressed: onHealthPlus,
@@ -898,52 +908,75 @@ class _LandingNav extends StatelessWidget {
               if (MediaQuery.sizeOf(context).width >= 560)
                 _LandingNavLink(
                   label: 'Rider',
+                  uri: _CircumWebsiteAppState._canonicalWebUri('/rider'),
                   colors: colors,
                   onPressed: onRider,
                 ),
               if (MediaQuery.sizeOf(context).width >= 680)
                 _LandingNavLink(
                   label: 'Health+',
+                  uri: _CircumWebsiteAppState._canonicalWebUri('/send/health'),
                   colors: colors,
                   onPressed: onHealthPlus,
                 ),
               if (MediaQuery.sizeOf(context).width >= 760)
                 _LandingNavLink(
                   label: 'Business',
+                  uri: _CircumWebsiteAppState._canonicalWebUri(
+                    '/send/business',
+                  ),
                   colors: colors,
                   onPressed: onBusiness,
                 ),
               if (onGifts != null && MediaQuery.sizeOf(context).width >= 760)
-                TextButton.icon(
-                  onPressed: onGifts,
-                  icon: const Icon(Icons.card_giftcard, size: 18),
-                  label: Text(
-                    'Gifts',
-                    style: TextStyle(
-                      color: colors.text,
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
+                Link(
+                  uri: _CircumWebsiteAppState._canonicalWebUri('/gifts'),
+                  target: LinkTarget.self,
+                  builder: (context, followLink) {
+                    return TextButton.icon(
+                      onPressed: followLink ?? onGifts,
+                      icon: const Icon(Icons.card_giftcard, size: 18),
+                      label: Text(
+                        'Gifts',
+                        style: TextStyle(
+                          color: colors.text,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                    );
+                  },
                 )
               else if (onGifts != null)
-                IconButton(
-                  tooltip: 'Gifts',
-                  onPressed: onGifts,
-                  icon: Icon(Icons.card_giftcard, color: colors.text),
+                Link(
+                  uri: _CircumWebsiteAppState._canonicalWebUri('/gifts'),
+                  target: LinkTarget.self,
+                  builder: (context, followLink) {
+                    return IconButton(
+                      tooltip: 'Gifts',
+                      onPressed: followLink ?? onGifts,
+                      icon: Icon(Icons.card_giftcard, color: colors.text),
+                    );
+                  },
                 ),
               const SizedBox(width: 8),
-              FilledButton(
-                onPressed: onStart,
-                style: FilledButton.styleFrom(
-                  backgroundColor: colors.text,
-                  foregroundColor: colors.inverseText,
-                  shape: const StadiumBorder(),
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 20,
-                    vertical: 14,
-                  ),
-                ),
-                child: const Text('Send a Parcel'),
+              Link(
+                uri: _CircumWebsiteAppState._canonicalWebUri('/send'),
+                target: LinkTarget.self,
+                builder: (context, followLink) {
+                  return FilledButton(
+                    onPressed: followLink ?? onStart,
+                    style: FilledButton.styleFrom(
+                      backgroundColor: colors.text,
+                      foregroundColor: colors.inverseText,
+                      shape: const StadiumBorder(),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 20,
+                        vertical: 14,
+                      ),
+                    ),
+                    child: const Text('Send a Parcel'),
+                  );
+                },
               ),
             ],
           ),
@@ -1007,26 +1040,34 @@ class _SpectrumSweepPainter extends CustomPainter {
 
 class _LandingNavLink extends StatelessWidget {
   final String label;
+  final Uri uri;
   final _CircumColors colors;
   final VoidCallback onPressed;
 
   const _LandingNavLink({
     required this.label,
+    required this.uri,
     required this.colors,
     required this.onPressed,
   });
 
   @override
   Widget build(BuildContext context) {
-    return TextButton(
-      onPressed: onPressed,
-      child: Text(
-        label,
-        style: TextStyle(
-          color: colors.text,
-          fontWeight: FontWeight.w700,
-        ),
-      ),
+    return Link(
+      uri: uri,
+      target: LinkTarget.self,
+      builder: (context, followLink) {
+        return TextButton(
+          onPressed: followLink ?? onPressed,
+          child: Text(
+            label,
+            style: TextStyle(
+              color: colors.text,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+        );
+      },
     );
   }
 }
@@ -1105,18 +1146,24 @@ class _HeroMockup extends StatelessWidget {
               const SizedBox(height: 18),
               SizedBox(
                 width: double.infinity,
-                child: FilledButton.icon(
-                  onPressed: onStart,
-                  icon: const Icon(Icons.send_rounded),
-                  label: const Text('Start a delivery'),
-                  style: FilledButton.styleFrom(
-                    backgroundColor: colors.text,
-                    foregroundColor: colors.inverseText,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(16),
-                    ),
-                    padding: const EdgeInsets.symmetric(vertical: 16),
-                  ),
+                child: Link(
+                  uri: _CircumWebsiteAppState._canonicalWebUri('/send'),
+                  target: LinkTarget.self,
+                  builder: (context, followLink) {
+                    return FilledButton.icon(
+                      onPressed: followLink ?? onStart,
+                      icon: const Icon(Icons.send_rounded),
+                      label: const Text('Start a delivery'),
+                      style: FilledButton.styleFrom(
+                        backgroundColor: colors.text,
+                        foregroundColor: colors.inverseText,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(16),
+                        ),
+                        padding: const EdgeInsets.symmetric(vertical: 16),
+                      ),
+                    );
+                  },
                 ),
               ),
             ],
@@ -1186,6 +1233,7 @@ class _ServiceTrustBand extends StatelessWidget {
                 body:
                     'Prescription pickups, recurring reminders, sealed handling, and the same trusted custody layer built into important deliveries.',
                 actionLabel: 'Open Health+',
+                uri: _CircumWebsiteAppState._canonicalWebUri('/send/health'),
                 badge: 'Vanguard Included',
                 highlights: const [
                   'Prescription pickups',
@@ -1204,6 +1252,7 @@ class _ServiceTrustBand extends StatelessWidget {
                 body:
                     'Manage company deliveries, invoices, Health+, Gifts, Roth, and recurring work from one Circum workspace.',
                 actionLabel: 'Open Business',
+                uri: _CircumWebsiteAppState._canonicalWebUri('/send/business'),
                 badge: 'Corporate Gifts · Vanguard Included',
                 highlights: const [
                   'Company deliveries',
@@ -1216,6 +1265,7 @@ class _ServiceTrustBand extends StatelessWidget {
               const SizedBox(height: 24),
               _VanguardHomepageSection(
                 colors: colors,
+                uri: _CircumWebsiteAppState._canonicalWebUri('/vanguard'),
                 onLearnMore: onVanguard,
               ),
             ],
@@ -1233,6 +1283,7 @@ class _ServiceIntroCard extends StatelessWidget {
   final String headline;
   final String body;
   final String actionLabel;
+  final Uri uri;
   final String badge;
   final List<String> highlights;
   final VoidCallback onPressed;
@@ -1244,6 +1295,7 @@ class _ServiceIntroCard extends StatelessWidget {
     required this.headline,
     required this.body,
     required this.actionLabel,
+    required this.uri,
     required this.badge,
     required this.highlights,
     required this.onPressed,
@@ -1283,6 +1335,7 @@ class _ServiceIntroCard extends StatelessWidget {
 
         final action = _VanguardBlueActionButton(
           label: actionLabel,
+          uri: uri,
           onPressed: onPressed,
         );
 
@@ -1417,10 +1470,12 @@ class _VanguardBlueChip extends StatelessWidget {
 
 class _VanguardBlueActionButton extends StatelessWidget {
   final String label;
+  final Uri uri;
   final VoidCallback onPressed;
 
   const _VanguardBlueActionButton({
     required this.label,
+    required this.uri,
     required this.onPressed,
   });
 
@@ -1437,23 +1492,29 @@ class _VanguardBlueActionButton extends StatelessWidget {
           ),
         ],
       ),
-      child: FilledButton.icon(
-        onPressed: onPressed,
-        icon: const Icon(Icons.arrow_forward, size: 18),
-        label: Text(label),
-        style: FilledButton.styleFrom(
-          backgroundColor: const Color(0xff0a84ff),
-          foregroundColor: Colors.white,
-          minimumSize: const Size(0, 50),
-          padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 15),
-          textStyle: const TextStyle(
-            fontFamily: 'Georgia',
-            fontSize: 16,
-            fontWeight: FontWeight.w700,
-            letterSpacing: 0,
-          ),
-          shape: const StadiumBorder(),
-        ),
+      child: Link(
+        uri: uri,
+        target: LinkTarget.self,
+        builder: (context, followLink) {
+          return FilledButton.icon(
+            onPressed: followLink ?? onPressed,
+            icon: const Icon(Icons.arrow_forward, size: 18),
+            label: Text(label),
+            style: FilledButton.styleFrom(
+              backgroundColor: const Color(0xff0a84ff),
+              foregroundColor: Colors.white,
+              minimumSize: const Size(0, 50),
+              padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 15),
+              textStyle: const TextStyle(
+                fontFamily: 'Georgia',
+                fontSize: 16,
+                fontWeight: FontWeight.w700,
+                letterSpacing: 0,
+              ),
+              shape: const StadiumBorder(),
+            ),
+          );
+        },
       ),
     );
   }
@@ -1497,10 +1558,12 @@ class _ServiceHighlightPill extends StatelessWidget {
 
 class _VanguardHomepageSection extends StatelessWidget {
   final _CircumColors colors;
+  final Uri uri;
   final VoidCallback onLearnMore;
 
   const _VanguardHomepageSection({
     required this.colors,
+    required this.uri,
     required this.onLearnMore,
   });
 
@@ -1624,6 +1687,7 @@ class _VanguardHomepageSection extends StatelessWidget {
             children: [
               _VanguardBlueActionButton(
                 label: 'Learn more',
+                uri: uri,
                 onPressed: onLearnMore,
               ),
             ],
@@ -22591,12 +22655,14 @@ class _LogoTile extends StatelessWidget {
 
 class _PillButton extends StatelessWidget {
   final String label;
+  final Uri uri;
   final IconData icon;
   final bool dark;
   final VoidCallback onPressed;
 
   const _PillButton({
     required this.label,
+    required this.uri,
     required this.icon,
     required this.dark,
     required this.onPressed,
@@ -22604,17 +22670,26 @@ class _PillButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return FilledButton.icon(
-      onPressed: onPressed,
-      icon: Icon(icon),
-      label: Text(label),
-      style: FilledButton.styleFrom(
-        backgroundColor: dark ? Colors.black : const Color(0xfff3f4f6),
-        foregroundColor: dark ? Colors.white : Colors.black,
-        shape: const StadiumBorder(),
-        padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 18),
-        textStyle: const TextStyle(fontSize: 17, fontWeight: FontWeight.w900),
-      ),
+    return Link(
+      uri: uri,
+      target: LinkTarget.self,
+      builder: (context, followLink) {
+        return FilledButton.icon(
+          onPressed: followLink ?? onPressed,
+          icon: Icon(icon),
+          label: Text(label),
+          style: FilledButton.styleFrom(
+            backgroundColor: dark ? Colors.black : const Color(0xfff3f4f6),
+            foregroundColor: dark ? Colors.white : Colors.black,
+            shape: const StadiumBorder(),
+            padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 18),
+            textStyle: const TextStyle(
+              fontSize: 17,
+              fontWeight: FontWeight.w900,
+            ),
+          ),
+        );
+      },
     );
   }
 }
@@ -23150,12 +23225,23 @@ class _LandingFooter extends StatelessWidget {
                     height: 28,
                     fit: BoxFit.contain,
                   ),
-                  Text(
-                    'Privacy Policy   Terms of Service',
-                    style: TextStyle(
-                      color: colors.mutedText,
-                      fontWeight: FontWeight.w700,
-                    ),
+                  Wrap(
+                    spacing: 14,
+                    runSpacing: 8,
+                    children: [
+                      _FooterServiceLink(
+                        label: 'Privacy Policy',
+                        uri: _CircumWebsiteAppState._canonicalWebUri(
+                          '/privacy',
+                        ),
+                        onPressed: () {},
+                      ),
+                      _FooterServiceLink(
+                        label: 'Terms of Service',
+                        uri: _CircumWebsiteAppState._canonicalWebUri('/terms'),
+                        onPressed: () {},
+                      ),
+                    ],
                   ),
                   Text(
                     '© ${DateTime.now().year} Circum Technologies Ltd.',
@@ -23178,15 +23264,35 @@ class _LandingFooter extends StatelessWidget {
                 runSpacing: 8,
                 children: [
                   _FooterServiceLink(
-                      label: 'Deliveries', onPressed: onDeliveries),
-                  _FooterServiceLink(label: 'Health+', onPressed: onHealthPlus),
+                    label: 'Deliveries',
+                    uri: _CircumWebsiteAppState._canonicalWebUri('/send'),
+                    onPressed: onDeliveries,
+                  ),
+                  _FooterServiceLink(
+                    label: 'Health+',
+                    uri: _CircumWebsiteAppState._canonicalWebUri(
+                      '/send/health',
+                    ),
+                    onPressed: onHealthPlus,
+                  ),
                   if (onGifts != null)
                     _FooterServiceLink(
                       label: 'Gifts by Circum',
+                      uri: _CircumWebsiteAppState._canonicalWebUri('/gifts'),
                       onPressed: onGifts!,
                     ),
-                  _FooterServiceLink(label: 'Business', onPressed: onBusiness),
-                  _FooterServiceLink(label: 'Vanguard', onPressed: onVanguard),
+                  _FooterServiceLink(
+                    label: 'Business',
+                    uri: _CircumWebsiteAppState._canonicalWebUri(
+                      '/send/business',
+                    ),
+                    onPressed: onBusiness,
+                  ),
+                  _FooterServiceLink(
+                    label: 'Vanguard',
+                    uri: _CircumWebsiteAppState._canonicalWebUri('/vanguard'),
+                    onPressed: onVanguard,
+                  ),
                 ],
               ),
             ],
@@ -23199,20 +23305,31 @@ class _LandingFooter extends StatelessWidget {
 
 class _FooterServiceLink extends StatelessWidget {
   final String label;
+  final Uri uri;
   final VoidCallback onPressed;
 
-  const _FooterServiceLink({required this.label, required this.onPressed});
+  const _FooterServiceLink({
+    required this.label,
+    required this.uri,
+    required this.onPressed,
+  });
 
   @override
   Widget build(BuildContext context) {
-    return TextButton(
-      onPressed: onPressed,
-      style: TextButton.styleFrom(
-        padding: EdgeInsets.zero,
-        minimumSize: const Size(0, 36),
-        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-      ),
-      child: Text(label),
+    return Link(
+      uri: uri,
+      target: LinkTarget.self,
+      builder: (context, followLink) {
+        return TextButton(
+          onPressed: followLink ?? onPressed,
+          style: TextButton.styleFrom(
+            padding: EdgeInsets.zero,
+            minimumSize: const Size(0, 36),
+            tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+          ),
+          child: Text(label),
+        );
+      },
     );
   }
 }
