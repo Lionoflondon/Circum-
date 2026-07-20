@@ -161,6 +161,7 @@
         ".github/workflows/architecture_review_gate.yml",
         ".github/workflows/ci.yml",
         ".github/workflows/deploy_functions.yml",
+        ".github/workflows/repository_flutter_ci.yml",
         "BREAK_GLASS_DEPLOY.md",
         "README.md",
         "ROOT_CAUSE_AUDIT.md",
