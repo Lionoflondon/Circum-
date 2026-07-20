@@ -179,7 +179,7 @@ function assertCleanCloneReproduces(referenceHashes) {
   }
   const env = {
     ...process.env,
-    FLUTTER_BIN: process.env.FLUTTER_BIN,
+    CIRCUM_FLUTTER_BIN: process.env.FLUTTER_BIN,
     CIRCUM_WEB_RECAPTCHA_ENTERPRISE_SITE_KEY:
       process.env.CIRCUM_WEB_RECAPTCHA_ENTERPRISE_SITE_KEY,
   };

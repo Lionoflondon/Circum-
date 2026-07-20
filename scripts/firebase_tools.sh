@@ -16,7 +16,9 @@ resolve_tool() {
   printf '%s\n' "$name"
 }
 
-if [[ -z "${FLUTTER_BIN:-}" ]]; then
+if [[ -n "${CIRCUM_FLUTTER_BIN:-}" ]]; then
+  FLUTTER_BIN="$CIRCUM_FLUTTER_BIN"
+else
   FLUTTER_ROOT="$(resolve_tool flutter)"
   if [[ -d "$FLUTTER_ROOT" && -x "$FLUTTER_ROOT/bin/flutter" ]]; then
     FLUTTER_BIN="$FLUTTER_ROOT/bin/flutter"
@@ -24,7 +26,9 @@ if [[ -z "${FLUTTER_BIN:-}" ]]; then
     FLUTTER_BIN="$FLUTTER_ROOT"
   fi
 fi
-if [[ -z "${FIREBASE_BIN:-}" ]]; then
+if [[ -n "${CIRCUM_FIREBASE_BIN:-}" ]]; then
+  FIREBASE_BIN="$CIRCUM_FIREBASE_BIN"
+else
   FIREBASE_BIN="$(resolve_tool firebase)"
 fi
 export FLUTTER_BIN
