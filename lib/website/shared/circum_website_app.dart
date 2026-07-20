@@ -334,6 +334,8 @@ class _PlatformNotificationCenterState
           return rightDate.compareTo(leftDate);
         });
       if (mounted) setState(() => _items = docs);
+    }, onError: (_) {
+      if (mounted) setState(() => _items = const []);
     });
     await _registerToken(user);
   }
