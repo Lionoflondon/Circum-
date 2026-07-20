@@ -48,7 +48,7 @@ const _spectrumGradient = [
   Color(0xff19a0ff),
 ];
 
-enum _WebAppMode { landing, sender, rider, gifts }
+enum _WebAppMode { landing, sender, rider, gifts, vanguard }
 
 Future<void> _ensureCircumFirebaseReady() async {
   if (Firebase.apps.isEmpty) {
@@ -87,6 +87,7 @@ class _CircumWebsiteAppState extends State<CircumWebsiteApp> {
       CircumWebSurface.sender => _WebAppMode.sender,
       CircumWebSurface.rider => _WebAppMode.rider,
       CircumWebSurface.gifts => _WebAppMode.gifts,
+      CircumWebSurface.vanguard => _WebAppMode.vanguard,
       CircumWebSurface.admin => _WebAppMode.landing,
     };
   }
@@ -107,7 +108,11 @@ class _CircumWebsiteAppState extends State<CircumWebsiteApp> {
   }
 
   Future<void> _openCanonicalPath(String path) async {
-    final target = Uri.base.replace(path: path, queryParameters: {});
+    final target = Uri.base.replace(
+      path: path,
+      queryParameters: {},
+      fragment: '',
+    );
     final opened = await launchUrl(target, webOnlyWindowName: '_self');
     if (!opened) {
       debugPrint('Could not navigate to ${target.path}');
@@ -128,6 +133,7 @@ class _CircumWebsiteAppState extends State<CircumWebsiteApp> {
         },
       _WebAppMode.rider => '/rider',
       _WebAppMode.gifts => '/gifts',
+      _WebAppMode.vanguard => '/vanguard',
     };
     if (kIsWeb) {
       await _openCanonicalPath(path);
@@ -221,6 +227,11 @@ class _CircumWebsiteAppState extends State<CircumWebsiteApp> {
           colors: colors,
           onBack: () => _openSurface(_WebAppMode.landing),
         ),
+      _WebAppMode.vanguard => _VanguardLandingPage(
+          key: const ValueKey('vanguard-page'),
+          colors: colors,
+          onBack: () => _openSurface(_WebAppMode.landing),
+        ),
       _WebAppMode.landing => _LandingPage(
           key: const ValueKey(circumPublicWebIdentity),
           colors: colors,
@@ -231,6 +242,11 @@ class _CircumWebsiteAppState extends State<CircumWebsiteApp> {
             _WebAppMode.sender,
             senderStep: _SenderStep.healthPlus,
           ),
+          onBusiness: () => _openSurface(
+            _WebAppMode.sender,
+            senderStep: _SenderStep.business,
+          ),
+          onVanguard: () => _openSurface(_WebAppMode.vanguard),
           onGifts: () => _openSurface(_WebAppMode.gifts),
           onToggleTheme: () => setState(() => _darkMode = !_darkMode),
         ),
@@ -550,6 +566,8 @@ class _LandingPage extends StatelessWidget {
   final VoidCallback onStart;
   final VoidCallback onRider;
   final VoidCallback onHealthPlus;
+  final VoidCallback onBusiness;
+  final VoidCallback onVanguard;
   final VoidCallback? onGifts;
   final VoidCallback onToggleTheme;
 
@@ -560,6 +578,8 @@ class _LandingPage extends StatelessWidget {
     required this.onStart,
     required this.onRider,
     required this.onHealthPlus,
+    required this.onBusiness,
+    required this.onVanguard,
     this.onGifts,
     required this.onToggleTheme,
   });
@@ -575,6 +595,7 @@ class _LandingPage extends StatelessWidget {
             onStart: onStart,
             onRider: onRider,
             onHealthPlus: onHealthPlus,
+            onBusiness: onBusiness,
             onGifts: onGifts,
             onToggleTheme: onToggleTheme,
           ),
@@ -691,8 +712,20 @@ class _LandingPage extends StatelessWidget {
               ),
             ),
           ),
-          _FeatureBand(colors: colors),
-          _LandingFooter(colors: colors),
+          _ServiceTrustBand(
+            colors: colors,
+            onHealthPlus: onHealthPlus,
+            onBusiness: onBusiness,
+            onVanguard: onVanguard,
+          ),
+          _LandingFooter(
+            colors: colors,
+            onDeliveries: onStart,
+            onHealthPlus: onHealthPlus,
+            onGifts: onGifts,
+            onBusiness: onBusiness,
+            onVanguard: onVanguard,
+          ),
         ],
       ),
     );
@@ -821,6 +854,7 @@ class _LandingNav extends StatelessWidget {
   final VoidCallback onStart;
   final VoidCallback onRider;
   final VoidCallback onHealthPlus;
+  final VoidCallback onBusiness;
   final VoidCallback? onGifts;
   final VoidCallback onToggleTheme;
 
@@ -830,6 +864,7 @@ class _LandingNav extends StatelessWidget {
     required this.onStart,
     required this.onRider,
     required this.onHealthPlus,
+    required this.onBusiness,
     this.onGifts,
     required this.onToggleTheme,
   });
@@ -861,26 +896,22 @@ class _LandingNav extends StatelessWidget {
               ),
               const SizedBox(width: 8),
               if (MediaQuery.sizeOf(context).width >= 560)
-                TextButton(
+                _LandingNavLink(
+                  label: 'Rider',
+                  colors: colors,
                   onPressed: onRider,
-                  child: Text(
-                    'Rider',
-                    style: TextStyle(
-                      color: colors.text,
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
                 ),
               if (MediaQuery.sizeOf(context).width >= 680)
-                TextButton(
+                _LandingNavLink(
+                  label: 'Health+',
+                  colors: colors,
                   onPressed: onHealthPlus,
-                  child: Text(
-                    'Health+',
-                    style: TextStyle(
-                      color: colors.text,
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
+                ),
+              if (MediaQuery.sizeOf(context).width >= 760)
+                _LandingNavLink(
+                  label: 'Business',
+                  colors: colors,
+                  onPressed: onBusiness,
                 ),
               if (onGifts != null && MediaQuery.sizeOf(context).width >= 760)
                 TextButton.icon(
@@ -971,6 +1002,32 @@ class _SpectrumSweepPainter extends CustomPainter {
   @override
   bool shouldRepaint(covariant _SpectrumSweepPainter oldDelegate) {
     return oldDelegate.dark != dark;
+  }
+}
+
+class _LandingNavLink extends StatelessWidget {
+  final String label;
+  final _CircumColors colors;
+  final VoidCallback onPressed;
+
+  const _LandingNavLink({
+    required this.label,
+    required this.colors,
+    required this.onPressed,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return TextButton(
+      onPressed: onPressed,
+      child: Text(
+        label,
+        style: TextStyle(
+          color: colors.text,
+          fontWeight: FontWeight.w700,
+        ),
+      ),
+    );
   }
 }
 
@@ -1096,60 +1153,584 @@ class _HeroMockup extends StatelessWidget {
   }
 }
 
-class _FeatureBand extends StatelessWidget {
+class _ServiceTrustBand extends StatelessWidget {
   final _CircumColors colors;
+  final VoidCallback onHealthPlus;
+  final VoidCallback onBusiness;
+  final VoidCallback onVanguard;
 
-  const _FeatureBand({required this.colors});
+  const _ServiceTrustBand({
+    required this.colors,
+    required this.onHealthPlus,
+    required this.onBusiness,
+    required this.onVanguard,
+  });
 
   @override
   Widget build(BuildContext context) {
     return Container(
       width: double.infinity,
       color: colors.band,
-      padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 70),
+      padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 76),
       child: Center(
         child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 1180),
-          child: LayoutBuilder(
+          constraints: const BoxConstraints(maxWidth: 1120),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              _ServiceIntroCard(
+                colors: colors,
+                icon: Icons.health_and_safety,
+                title: 'Health+',
+                headline: 'Care logistics without the loose ends.',
+                body:
+                    'Prescription pickups, recurring reminders, sealed handling, and the same trusted custody layer built into important deliveries.',
+                actionLabel: 'Open Health+',
+                badge: 'Vanguard Included',
+                highlights: const [
+                  'Prescription pickups',
+                  'Recurring reminders',
+                  'Sealed custody',
+                  'Priority handling',
+                ],
+                onPressed: onHealthPlus,
+              ),
+              const SizedBox(height: 24),
+              _ServiceIntroCard(
+                colors: colors,
+                icon: Icons.business_center,
+                title: 'Business',
+                headline: 'Operational delivery for teams.',
+                body:
+                    'Manage company deliveries, invoices, Health+, Gifts, Roth, and recurring work from one Circum workspace.',
+                actionLabel: 'Open Business',
+                badge: 'Corporate Gifts · Vanguard Included',
+                highlights: const [
+                  'Company deliveries',
+                  'Team access',
+                  'Invoices',
+                  'Recurring work',
+                ],
+                onPressed: onBusiness,
+              ),
+              const SizedBox(height: 24),
+              _VanguardHomepageSection(
+                colors: colors,
+                onLearnMore: onVanguard,
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _ServiceIntroCard extends StatelessWidget {
+  final _CircumColors colors;
+  final IconData icon;
+  final String title;
+  final String headline;
+  final String body;
+  final String actionLabel;
+  final String badge;
+  final List<String> highlights;
+  final VoidCallback onPressed;
+
+  const _ServiceIntroCard({
+    required this.colors,
+    required this.icon,
+    required this.title,
+    required this.headline,
+    required this.body,
+    required this.actionLabel,
+    required this.badge,
+    required this.highlights,
+    required this.onPressed,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final compact = constraints.maxWidth < 760;
+        final iconMark = Container(
+          width: compact ? 74 : 88,
+          height: compact ? 74 : 88,
+          decoration: BoxDecoration(
+            shape: BoxShape.circle,
+            gradient: RadialGradient(
+              colors: [
+                const Color(0xff1d4ed8).withValues(alpha: 0.34),
+                const Color(0xff0b2340).withValues(alpha: 0.8),
+              ],
+            ),
+            border: Border.all(
+              color: const Color(0xff3b82f6).withValues(alpha: 0.48),
+              width: 1.4,
+            ),
+            boxShadow: [
+              BoxShadow(
+                color: const Color(0xff0a84ff).withValues(alpha: 0.13),
+                blurRadius: 24,
+                offset: const Offset(0, 14),
+              ),
+            ],
+          ),
+          child: Icon(icon,
+              color: const Color(0xff0a84ff), size: compact ? 30 : 34),
+        );
+
+        final action = _VanguardBlueActionButton(
+          label: actionLabel,
+          onPressed: onPressed,
+        );
+
+        return Container(
+          width: double.infinity,
+          padding: EdgeInsets.all(compact ? 24 : 32),
+          decoration: BoxDecoration(
+            gradient: RadialGradient(
+              center: const Alignment(-0.78, -0.95),
+              radius: 1.35,
+              colors: [
+                const Color(0xff123d6f).withValues(alpha: 0.58),
+                const Color(0xff07192f).withValues(alpha: 0.94),
+                const Color(0xff040811).withValues(alpha: 0.98),
+              ],
+            ),
+            borderRadius: BorderRadius.circular(30),
+            border: Border.all(
+              color: const Color(0xff5b7fa8).withValues(alpha: 0.34),
+              width: 1.35,
+            ),
+            boxShadow: [
+              BoxShadow(
+                color: const Color(0xff0a84ff).withValues(alpha: 0.09),
+                blurRadius: 34,
+                offset: const Offset(0, 18),
+              ),
+              BoxShadow(
+                color: Colors.black.withValues(alpha: 0.26),
+                blurRadius: 28,
+                offset: const Offset(0, 16),
+              ),
+            ],
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  iconMark,
+                  const SizedBox(width: 18),
+                  Expanded(
+                    child: Wrap(
+                      spacing: 10,
+                      runSpacing: 8,
+                      crossAxisAlignment: WrapCrossAlignment.center,
+                      children: [
+                        _VanguardBlueChip(label: title),
+                        _VanguardBlueChip(label: badge),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+              SizedBox(height: compact ? 22 : 26),
+              Text(
+                headline,
+                style: TextStyle(
+                  color: Colors.white,
+                  fontFamily: 'Georgia',
+                  fontSize: compact ? 34 : 48,
+                  height: 1.08,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+              const SizedBox(height: 14),
+              Text(
+                body,
+                style: TextStyle(
+                  color: Colors.white.withValues(alpha: 0.72),
+                  fontSize: compact ? 16 : 18,
+                  height: 1.48,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+              const SizedBox(height: 22),
+              Wrap(
+                spacing: 12,
+                runSpacing: 12,
+                children: [
+                  for (final highlight in highlights)
+                    _ServiceHighlightPill(label: highlight),
+                ],
+              ),
+              const SizedBox(height: 24),
+              action,
+            ],
+          ),
+        );
+      },
+    );
+  }
+}
+
+class _VanguardBlueChip extends StatelessWidget {
+  final String label;
+
+  const _VanguardBlueChip({required this.label});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
+      decoration: BoxDecoration(
+        color: const Color(0xff0a84ff).withValues(alpha: 0.11),
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(
+          color: const Color(0xff3b82f6).withValues(alpha: 0.38),
+          width: 1.1,
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: const Color(0xff0a84ff).withValues(alpha: 0.1),
+            blurRadius: 18,
+            offset: const Offset(0, 8),
+          ),
+        ],
+      ),
+      child: Text(
+        label,
+        style: const TextStyle(
+          color: Color(0xffdbeafe),
+          fontSize: 12,
+          fontWeight: FontWeight.w900,
+          letterSpacing: 0.2,
+        ),
+      ),
+    );
+  }
+}
+
+class _VanguardBlueActionButton extends StatelessWidget {
+  final String label;
+  final VoidCallback onPressed;
+
+  const _VanguardBlueActionButton({
+    required this.label,
+    required this.onPressed,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(999),
+        boxShadow: [
+          BoxShadow(
+            color: const Color(0xff0a84ff).withValues(alpha: 0.24),
+            blurRadius: 24,
+            offset: const Offset(0, 12),
+          ),
+        ],
+      ),
+      child: FilledButton.icon(
+        onPressed: onPressed,
+        icon: const Icon(Icons.arrow_forward, size: 18),
+        label: Text(label),
+        style: FilledButton.styleFrom(
+          backgroundColor: const Color(0xff0a84ff),
+          foregroundColor: Colors.white,
+          minimumSize: const Size(0, 50),
+          padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 15),
+          textStyle: const TextStyle(
+            fontFamily: 'Georgia',
+            fontSize: 16,
+            fontWeight: FontWeight.w700,
+            letterSpacing: 0,
+          ),
+          shape: const StadiumBorder(),
+        ),
+      ),
+    );
+  }
+}
+
+class _ServiceHighlightPill extends StatelessWidget {
+  final String label;
+
+  const _ServiceHighlightPill({required this.label});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
+      decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: 0.052),
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(
+          color: const Color(0xff5b7fa8).withValues(alpha: 0.26),
+        ),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const Icon(Icons.check_circle_outline,
+              color: Color(0xff0a84ff), size: 17),
+          const SizedBox(width: 8),
+          Text(
+            label,
+            style: TextStyle(
+              color: Colors.white.withValues(alpha: 0.82),
+              fontSize: 13,
+              fontWeight: FontWeight.w900,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _VanguardHomepageSection extends StatelessWidget {
+  final _CircumColors colors;
+  final VoidCallback onLearnMore;
+
+  const _VanguardHomepageSection({
+    required this.colors,
+    required this.onLearnMore,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final narrow = MediaQuery.sizeOf(context).width < 720;
+    return Container(
+      width: double.infinity,
+      padding: EdgeInsets.fromLTRB(
+        narrow ? 24 : 34,
+        narrow ? 36 : 42,
+        narrow ? 24 : 34,
+        narrow ? 30 : 36,
+      ),
+      decoration: BoxDecoration(
+        gradient: RadialGradient(
+          center: const Alignment(0, -0.72),
+          radius: 1.15,
+          colors: [
+            const Color(0xff0b3764).withValues(alpha: 0.72),
+            const Color(0xff07192f).withValues(alpha: 0.94),
+            const Color(0xff030812).withValues(alpha: 0.98),
+          ],
+        ),
+        borderRadius: BorderRadius.circular(30),
+        border: Border.all(
+          color: const Color(0xff5b7fa8).withValues(alpha: 0.36),
+          width: 1.4,
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: const Color(0xff0a84ff).withValues(alpha: 0.1),
+            blurRadius: 38,
+            offset: const Offset(0, 20),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.center,
+        children: [
+          const _VanguardShieldFallback(size: 94),
+          const SizedBox(height: 28),
+          Wrap(
+            spacing: 10,
+            runSpacing: 8,
+            crossAxisAlignment: WrapCrossAlignment.center,
+            alignment: WrapAlignment.center,
+            children: const [
+              _VanguardBlueChip(label: 'Vanguard'),
+              _VanguardBlueChip(label: 'Optional add-on at checkout — £1.99'),
+            ],
+          ),
+          const SizedBox(height: 18),
+          Text(
+            'Trust matters more than speed.',
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              color: Colors.white,
+              fontFamily: 'Georgia',
+              fontSize: narrow ? 34 : 50,
+              height: 1.12,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+          const SizedBox(height: 18),
+          Text(
+            'Add Vanguard for £1.99 and receive enhanced custody tracking, trusted rider prioritisation, priority support, and better handling for important deliveries.',
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              color: Colors.white.withValues(alpha: 0.72),
+              fontSize: narrow ? 17 : 19,
+              height: 1.48,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+          const SizedBox(height: 26),
+          LayoutBuilder(
             builder: (context, constraints) {
-              final cols = constraints.maxWidth < 760 ? 1 : 3;
+              final cols = constraints.maxWidth < 640 ? 1 : 4;
               return GridView.count(
                 shrinkWrap: true,
                 physics: const NeverScrollableScrollPhysics(),
                 crossAxisCount: cols,
-                mainAxisSpacing: 18,
-                crossAxisSpacing: 18,
-                childAspectRatio: cols == 1 ? 2.1 : 1.05,
-                children: [
-                  _FeatureCard(
-                    colors: colors,
-                    icon: Icons.tune,
-                    tint: const Color(0xffdbeafe),
-                    title: 'Iris matching',
-                    body:
-                        'Tell Iris what you are sending and it helps choose the right rider, vehicle, route, and price.',
-                  ),
-                  _FeatureCard(
-                    colors: colors,
+                mainAxisSpacing: 16,
+                crossAxisSpacing: 16,
+                childAspectRatio: cols == 1 ? 2.45 : 0.95,
+                children: const [
+                  _VanguardMiniCard(
                     icon: Icons.verified_user_outlined,
-                    tint: const Color(0xffdcfce7),
-                    title: 'Built-in reassurance',
+                    title: 'Trusted Rider Prioritisation',
                     body:
-                        'Follow the journey with live location, rider details, status updates, and delivery proof.',
+                        'Circum prioritises experienced and highly trusted riders during assignment. Customers do not choose riders.',
                   ),
-                  _FeatureCard(
-                    colors: colors,
-                    icon: Icons.bolt,
-                    tint: const Color(0xffede9fe),
-                    title: 'Ready when you are',
+                  _VanguardMiniCard(
+                    icon: Icons.timeline_outlined,
+                    title: 'Enhanced Custody Tracking',
                     body:
-                        'Send the job to nearby riders and choose the option that fits the delivery.',
+                        'Clear delivery milestones from assignment to delivery.',
+                  ),
+                  _VanguardMiniCard(
+                    icon: Icons.support_agent,
+                    title: 'Priority Support',
+                    body: 'Priority support and faster dispute review.',
+                  ),
+                  _VanguardMiniCard(
+                    icon: Icons.gavel_outlined,
+                    title: 'Priority Dispute Review',
+                    body: 'Priority review for Vanguard deliveries.',
                   ),
                 ],
               );
             },
           ),
-        ),
+          const SizedBox(height: 24),
+          const _VanguardHomepageTimeline(),
+          const SizedBox(height: 24),
+          Wrap(
+            spacing: 12,
+            runSpacing: 12,
+            alignment: WrapAlignment.center,
+            children: [
+              _VanguardBlueActionButton(
+                label: 'Learn more',
+                onPressed: onLearnMore,
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _VanguardMiniCard extends StatelessWidget {
+  final IconData icon;
+  final String title;
+  final String body;
+
+  const _VanguardMiniCard({
+    required this.icon,
+    required this.title,
+    required this.body,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(20),
+      decoration: _vanguardCardDecoration(),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(icon, color: const Color(0xff0a84ff), size: 24),
+          const Spacer(),
+          Text(
+            title,
+            style: const TextStyle(
+              color: Colors.white,
+              height: 1.2,
+              fontWeight: FontWeight.w900,
+            ),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            body,
+            maxLines: 4,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(
+              color: Colors.white.withValues(alpha: 0.68),
+              height: 1.32,
+              fontSize: 13,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _VanguardHomepageTimeline extends StatelessWidget {
+  const _VanguardHomepageTimeline();
+
+  @override
+  Widget build(BuildContext context) {
+    final compact = MediaQuery.sizeOf(context).width < 720;
+    final steps = compact
+        ? const ['Assigned', 'Collected', 'In transit', 'Delivered']
+        : const ['Rider assigned', 'Item collected', 'In transit', 'Delivered'];
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 16),
+      decoration: _vanguardCardDecoration(darker: true),
+      child: Wrap(
+        alignment: WrapAlignment.center,
+        crossAxisAlignment: WrapCrossAlignment.center,
+        spacing: 12,
+        runSpacing: 12,
+        children: [
+          for (var index = 0; index < steps.length; index++) ...[
+            Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Container(
+                  width: 12,
+                  height: 12,
+                  decoration: const BoxDecoration(
+                    color: Color(0xff0a84ff),
+                    shape: BoxShape.circle,
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Text(
+                  steps[index],
+                  style: TextStyle(
+                    color: Colors.white.withValues(alpha: 0.86),
+                    fontWeight: FontWeight.w900,
+                    fontSize: 13,
+                  ),
+                ),
+              ],
+            ),
+            if (index != steps.length - 1 && !compact)
+              Container(
+                width: 28,
+                height: 1.2,
+                color: const Color(0xff5b7fa8).withValues(alpha: 0.48),
+              ),
+          ],
+        ],
       ),
     );
   }
@@ -6518,9 +7099,9 @@ class _DriverJobCard extends StatelessWidget {
             _JobInfoLine(
               colors: colors,
               icon: Icons.security,
-              label: 'Vanguard',
+              label: 'Vanguard Handling',
               value:
-                  'PIN verification required at collection and final delivery.',
+                  'Enhanced custody tracking and trusted rider prioritisation.',
             ),
           ],
           const SizedBox(height: 12),
@@ -7545,6 +8126,7 @@ class _CustomerPortalState extends State<_CustomerPortal> {
           priceReady: _quoteTotal > 0,
           weightReady: _deliveryClassification.finalWeightKg > 0,
           specialHandling: _specialHandling,
+          vanguardRequired: _webVanguardRequired,
           pickupAccess: _pickupAccess,
           dropoffAccess: _dropoffAccess,
           onPickupAccess: (value) => setState(() => _pickupAccess = value),
@@ -16120,6 +16702,7 @@ class _HealthPlusStep extends StatelessWidget {
                   _HealthChip(label: 'Recurring reminders'),
                   _HealthChip(label: 'Secure checkout'),
                   _HealthChip(label: 'Sealed packages only'),
+                  _HealthChip(label: 'Vanguard Included'),
                 ],
               ),
             ],
@@ -17510,6 +18093,7 @@ class _VehicleStep extends StatelessWidget {
   final bool priceReady;
   final bool weightReady;
   final SpecialHandlingResult specialHandling;
+  final bool vanguardRequired;
   final DeliveryAccess pickupAccess;
   final DeliveryAccess dropoffAccess;
   final ValueChanged<DeliveryAccess> onPickupAccess;
@@ -17532,6 +18116,7 @@ class _VehicleStep extends StatelessWidget {
     required this.priceReady,
     required this.weightReady,
     required this.specialHandling,
+    required this.vanguardRequired,
     required this.pickupAccess,
     required this.dropoffAccess,
     required this.onPickupAccess,
@@ -17672,6 +18257,10 @@ class _VehicleStep extends StatelessWidget {
           selected: selectedSpeed,
           onChanged: onSpeed,
         ),
+        if (vanguardRequired) ...[
+          const SizedBox(height: 14),
+          _VanguardBookingNotice(colors: colors),
+        ],
         if (specialHandling.requiresAccessQuestions) ...[
           const SizedBox(height: 14),
           _GlassPanel(
@@ -17794,6 +18383,92 @@ class _AccessDropdown extends StatelessWidget {
       onChanged: (next) {
         if (next != null) onChanged(next);
       },
+    );
+  }
+}
+
+class _VanguardBookingNotice extends StatelessWidget {
+  final _CircumColors colors;
+
+  const _VanguardBookingNotice({required this.colors});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(18),
+      decoration: BoxDecoration(
+        color: const Color(0xff0b1530)
+            .withValues(alpha: colors.dark ? 0.82 : 0.08),
+        borderRadius: BorderRadius.circular(22),
+        border: Border.all(
+          color: const Color(0xff38bdf8).withValues(alpha: 0.28),
+          width: 1.2,
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: const Color(0xff2563eb).withValues(alpha: 0.14),
+            blurRadius: 26,
+            offset: const Offset(0, 16),
+          ),
+        ],
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            width: 46,
+            height: 46,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              border: Border.all(
+                color: const Color(0xff38bdf8).withValues(alpha: 0.24),
+              ),
+            ),
+            child: const Icon(Icons.security, color: Color(0xff93c5fd)),
+          ),
+          const SizedBox(width: 14),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  crossAxisAlignment: WrapCrossAlignment.center,
+                  children: const [
+                    Text(
+                      'Vanguard',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 20,
+                        fontWeight: FontWeight.w900,
+                      ),
+                    ),
+                    _HealthChip(label: 'Vanguard Required'),
+                  ],
+                ),
+                const SizedBox(height: 5),
+                Text(
+                  'Trust matters more than speed.',
+                  style: TextStyle(
+                    color: colors.text,
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  'Circum prioritises experienced and highly trusted riders during assignment. Customers do not choose riders.',
+                  style: TextStyle(
+                    color: colors.mutedText,
+                    height: 1.42,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
     );
   }
 }
@@ -21851,61 +22526,6 @@ class _GlassPanel extends StatelessWidget {
   }
 }
 
-class _FeatureCard extends StatelessWidget {
-  final _CircumColors colors;
-  final IconData icon;
-  final Color tint;
-  final String title;
-  final String body;
-
-  const _FeatureCard({
-    required this.colors,
-    required this.icon,
-    required this.tint,
-    required this.title,
-    required this.body,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return _GlassPanel(
-      colors: colors,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Container(
-            width: 54,
-            height: 54,
-            decoration: BoxDecoration(
-              color: tint,
-              borderRadius: BorderRadius.circular(18),
-            ),
-            child: Icon(icon, color: const Color(0xff2563eb)),
-          ),
-          const SizedBox(height: 18),
-          Text(
-            title,
-            style: TextStyle(
-              color: colors.text,
-              fontSize: 22,
-              fontWeight: FontWeight.w900,
-            ),
-          ),
-          const SizedBox(height: 8),
-          Text(
-            body,
-            style: TextStyle(
-              color: colors.mutedText,
-              height: 1.45,
-              fontWeight: FontWeight.w600,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
 class _MetricPill extends StatelessWidget {
   final _CircumColors colors;
   final String label;
@@ -21999,10 +22619,509 @@ class _PillButton extends StatelessWidget {
   }
 }
 
+class _VanguardLandingPage extends StatelessWidget {
+  final _CircumColors colors;
+  final VoidCallback onBack;
+
+  const _VanguardLandingPage({
+    super.key,
+    required this.colors,
+    required this.onBack,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final narrow = MediaQuery.sizeOf(context).width < 760;
+    return Scaffold(
+      backgroundColor: const Color(0xff030812),
+      body: SafeArea(
+        child: Stack(
+          children: [
+            Positioned.fill(
+              child: DecoratedBox(
+                decoration: BoxDecoration(
+                  gradient: RadialGradient(
+                    center: const Alignment(0, -0.78),
+                    radius: 1.08,
+                    colors: [
+                      const Color(0xff0b3764).withValues(alpha: 0.74),
+                      const Color(0xff07192f).withValues(alpha: 0.93),
+                      const Color(0xff030812),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+            ListView(
+              padding: EdgeInsets.fromLTRB(
+                narrow ? 22 : 40,
+                narrow ? 42 : 30,
+                narrow ? 22 : 40,
+                72,
+              ),
+              children: [
+                Row(
+                  children: [
+                    if (!narrow) ...[
+                      IconButton(
+                        tooltip: 'Back',
+                        onPressed: onBack,
+                        icon: const Icon(Icons.arrow_back, color: Colors.white),
+                      ),
+                      const SizedBox(width: 6),
+                    ],
+                    Image.asset(
+                      'assets/images/circum_wordmark.png',
+                      width: narrow ? 142 : 154,
+                      errorBuilder: (context, error, stackTrace) => const Text(
+                        'CIRCUM',
+                        style: TextStyle(
+                          color: Color(0xff0a84ff),
+                          fontWeight: FontWeight.w900,
+                          letterSpacing: 3,
+                          fontSize: 24,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                SizedBox(height: narrow ? 118 : 64),
+                Center(
+                  child: ConstrainedBox(
+                    constraints: const BoxConstraints(maxWidth: 860),
+                    child: Column(
+                      children: [
+                        const _VanguardShieldFallback(size: 148),
+                        const SizedBox(height: 54),
+                        Text(
+                          'Vanguard',
+                          textAlign: TextAlign.center,
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontFamily: 'Georgia',
+                            fontSize: narrow ? 68 : 88,
+                            height: 0.96,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                        const SizedBox(height: 24),
+                        Text(
+                          'Vanguard gives your delivery enhanced\nhandling, priority support, trusted rider\nprioritisation, and stronger custody tracking\nfor important items.',
+                          textAlign: TextAlign.center,
+                          style: TextStyle(
+                            color: Colors.white.withValues(alpha: 0.73),
+                            fontSize: narrow ? 26 : 30,
+                            height: 1.55,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                        const SizedBox(height: 22),
+                        Text(
+                          'Optional add-on at checkout — £1.99',
+                          textAlign: TextAlign.center,
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontSize: narrow ? 20 : 23,
+                            fontWeight: FontWeight.w900,
+                          ),
+                        ),
+                        SizedBox(height: narrow ? 88 : 78),
+                        Text(
+                          'Vanguard exists for\ndeliveries where trust\nmatters more than speed.',
+                          textAlign: TextAlign.center,
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontFamily: 'Georgia',
+                            fontSize: narrow ? 45 : 62,
+                            height: 1.18,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                        const SizedBox(height: 46),
+                        _VanguardFeatureCard(
+                          icon: Icons.verified_user_outlined,
+                          title: 'Trusted Rider Prioritisation',
+                          body:
+                              'Circum prioritises experienced and highly trusted riders during assignment. Customers do not choose riders.',
+                        ),
+                        const SizedBox(height: 24),
+                        _VanguardFeatureCard(
+                          icon: Icons.support_agent,
+                          title: 'Priority support',
+                          body:
+                              'Vanguard deliveries receive priority support and dispute review.',
+                        ),
+                        const SizedBox(height: 24),
+                        _VanguardFeatureCard(
+                          icon: Icons.timeline_outlined,
+                          title: 'Enhanced custody tracking',
+                          body:
+                              'Clearer delivery milestones create stronger visibility from assignment to delivery.',
+                        ),
+                        const SizedBox(height: 40),
+                        const _VanguardTimelineCard(),
+                        const SizedBox(height: 40),
+                        const _VanguardChecklistCard(
+                          title: 'When to use it',
+                          items: [
+                            'Gifts and keepsakes',
+                            'Signed documents',
+                            'Passports and travel documents',
+                            'Electronics and valuable items',
+                            'Fragile items',
+                            'Sentimental items',
+                          ],
+                        ),
+                        const SizedBox(height: 32),
+                        const _VanguardChecklistCard(
+                          title: 'What £1.99 adds',
+                          items: [
+                            'Trusted Rider Prioritisation',
+                            'Priority support',
+                            'Enhanced custody tracking',
+                            'Priority dispute review',
+                            'Better handling for important items',
+                          ],
+                        ),
+                        const SizedBox(height: 32),
+                        const _VanguardImportantCard(),
+                      ],
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _VanguardShieldFallback extends StatelessWidget {
+  final double size;
+
+  const _VanguardShieldFallback({this.size = 170});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: size,
+      height: size,
+      decoration: BoxDecoration(
+        shape: BoxShape.circle,
+        gradient: RadialGradient(
+          colors: [
+            const Color(0xff1e88ff).withValues(alpha: 0.22),
+            const Color(0xff1e3a8a).withValues(alpha: 0.12),
+            const Color(0xff0a84ff).withValues(alpha: 0.03),
+          ],
+        ),
+        border: Border.all(
+          color: const Color(0xff0a84ff).withValues(alpha: 0.5),
+          width: 1.4,
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: const Color(0xff0a84ff).withValues(alpha: 0.13),
+            blurRadius: 48,
+          ),
+        ],
+      ),
+      child: Center(
+        child: Icon(
+          Icons.shield_outlined,
+          size: size * 0.48,
+          color: const Color(0xff0a84ff),
+        ),
+      ),
+    );
+  }
+}
+
+class _VanguardFeatureCard extends StatelessWidget {
+  final IconData icon;
+  final String title;
+  final String body;
+
+  const _VanguardFeatureCard({
+    required this.icon,
+    required this.title,
+    required this.body,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final narrow = MediaQuery.sizeOf(context).width < 760;
+    return Container(
+      width: double.infinity,
+      constraints: BoxConstraints(minHeight: narrow ? 216 : 190),
+      padding: EdgeInsets.all(narrow ? 30 : 34),
+      decoration: _vanguardCardDecoration(),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(icon, color: const Color(0xff0a84ff), size: 34),
+          const SizedBox(height: 28),
+          Text(
+            title,
+            style: TextStyle(
+              color: Colors.white,
+              fontSize: narrow ? 26 : 30,
+              height: 1.14,
+              fontWeight: FontWeight.w900,
+            ),
+          ),
+          const SizedBox(height: 18),
+          Text(
+            body,
+            style: TextStyle(
+              color: Colors.white.withValues(alpha: 0.68),
+              fontSize: narrow ? 21 : 24,
+              height: 1.42,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _VanguardTimelineCard extends StatelessWidget {
+  const _VanguardTimelineCard();
+
+  @override
+  Widget build(BuildContext context) {
+    final narrow = MediaQuery.sizeOf(context).width < 760;
+    const steps = [
+      'Rider assigned',
+      'Item collected',
+      'In transit',
+      'Delivery attempt',
+      'Delivered',
+    ];
+    return Container(
+      width: double.infinity,
+      padding: EdgeInsets.fromLTRB(
+        narrow ? 34 : 42,
+        narrow ? 44 : 48,
+        narrow ? 34 : 42,
+        narrow ? 44 : 48,
+      ),
+      decoration: _vanguardCardDecoration(darker: true),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Custody preview',
+            style: TextStyle(
+              color: Colors.white,
+              fontFamily: 'Georgia',
+              fontSize: narrow ? 42 : 52,
+              height: 1.02,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+          const SizedBox(height: 34),
+          ...List.generate(steps.length, (index) {
+            final last = index == steps.length - 1;
+            return Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Column(
+                  children: [
+                    Container(
+                      width: 28,
+                      height: 28,
+                      decoration: const BoxDecoration(
+                        shape: BoxShape.circle,
+                        color: Color(0xff0a84ff),
+                      ),
+                    ),
+                    if (!last)
+                      Container(
+                        width: 2,
+                        height: 48,
+                        color: const Color(0xff475569).withValues(alpha: 0.5),
+                      ),
+                  ],
+                ),
+                const SizedBox(width: 24),
+                Padding(
+                  padding: const EdgeInsets.only(top: 1),
+                  child: Text(
+                    steps[index],
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontSize: narrow ? 22 : 26,
+                      fontWeight: FontWeight.w900,
+                    ),
+                  ),
+                ),
+              ],
+            );
+          }),
+        ],
+      ),
+    );
+  }
+}
+
+class _VanguardChecklistCard extends StatelessWidget {
+  final String title;
+  final List<String> items;
+
+  const _VanguardChecklistCard({
+    required this.title,
+    required this.items,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final narrow = MediaQuery.sizeOf(context).width < 760;
+    return Container(
+      width: double.infinity,
+      padding: EdgeInsets.fromLTRB(
+        narrow ? 34 : 42,
+        narrow ? 44 : 48,
+        narrow ? 34 : 42,
+        narrow ? 44 : 48,
+      ),
+      decoration: _vanguardCardDecoration(),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            title,
+            style: TextStyle(
+              color: Colors.white,
+              fontFamily: 'Georgia',
+              fontSize: narrow ? 42 : 52,
+              height: 1.04,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+          const SizedBox(height: 34),
+          ...items.map(
+            (item) => Padding(
+              padding: const EdgeInsets.only(bottom: 18),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Icon(
+                    Icons.check_circle_outline,
+                    color: Color(0xff0a84ff),
+                    size: 28,
+                  ),
+                  const SizedBox(width: 18),
+                  Expanded(
+                    child: Text(
+                      item,
+                      style: TextStyle(
+                        color: Colors.white.withValues(alpha: 0.74),
+                        fontSize: narrow ? 23 : 27,
+                        height: 1.18,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _VanguardImportantCard extends StatelessWidget {
+  const _VanguardImportantCard();
+
+  @override
+  Widget build(BuildContext context) {
+    final narrow = MediaQuery.sizeOf(context).width < 760;
+    return Container(
+      width: double.infinity,
+      padding: EdgeInsets.fromLTRB(
+        narrow ? 34 : 42,
+        narrow ? 44 : 48,
+        narrow ? 34 : 42,
+        narrow ? 44 : 48,
+      ),
+      decoration: _vanguardCardDecoration(darker: true),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Important',
+            style: TextStyle(
+              color: Colors.white,
+              fontFamily: 'Georgia',
+              fontSize: narrow ? 42 : 52,
+              height: 1.04,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+          const SizedBox(height: 28),
+          Text(
+            'Vanguard is not insurance. It does not provide reimbursement, financial cover, or guarantees.\n\nVanguard provides a higher standard of handling, visibility, verification, rider prioritisation, and support.',
+            style: TextStyle(
+              color: Colors.white.withValues(alpha: 0.72),
+              fontSize: narrow ? 22 : 27,
+              height: 1.45,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+BoxDecoration _vanguardCardDecoration({bool darker = false}) {
+  return BoxDecoration(
+    gradient: LinearGradient(
+      begin: Alignment.topLeft,
+      end: Alignment.bottomRight,
+      colors: [
+        Color(darker ? 0xff101722 : 0xff102845).withValues(alpha: 0.86),
+        Color(darker ? 0xff0b1019 : 0xff0b1a2c).withValues(alpha: 0.92),
+      ],
+    ),
+    borderRadius: BorderRadius.circular(28),
+    border: Border.all(
+      color: const Color(0xff5b7fa8).withValues(alpha: 0.34),
+      width: 1.4,
+    ),
+    boxShadow: [
+      BoxShadow(
+        color: const Color(0xff0a84ff).withValues(alpha: 0.08),
+        blurRadius: 34,
+        offset: const Offset(0, 18),
+      ),
+    ],
+  );
+}
+
 class _LandingFooter extends StatelessWidget {
   final _CircumColors colors;
+  final VoidCallback onDeliveries;
+  final VoidCallback onHealthPlus;
+  final VoidCallback? onGifts;
+  final VoidCallback onBusiness;
+  final VoidCallback onVanguard;
 
-  const _LandingFooter({required this.colors});
+  const _LandingFooter({
+    required this.colors,
+    required this.onDeliveries,
+    required this.onHealthPlus,
+    required this.onGifts,
+    required this.onBusiness,
+    required this.onVanguard,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -22016,33 +23135,84 @@ class _LandingFooter extends StatelessWidget {
       child: Center(
         child: ConstrainedBox(
           constraints: const BoxConstraints(maxWidth: 1180),
-          child: Wrap(
-            alignment: WrapAlignment.spaceBetween,
-            crossAxisAlignment: WrapCrossAlignment.center,
-            spacing: 24,
-            runSpacing: 18,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Image.asset(
-                'assets/images/circum_wordmark.png',
-                width: 118,
-                height: 28,
-                fit: BoxFit.contain,
+              Wrap(
+                alignment: WrapAlignment.spaceBetween,
+                crossAxisAlignment: WrapCrossAlignment.center,
+                spacing: 24,
+                runSpacing: 18,
+                children: [
+                  Image.asset(
+                    'assets/images/circum_wordmark.png',
+                    width: 118,
+                    height: 28,
+                    fit: BoxFit.contain,
+                  ),
+                  Text(
+                    'Privacy Policy   Terms of Service',
+                    style: TextStyle(
+                      color: colors.mutedText,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                  Text(
+                    '© ${DateTime.now().year} Circum Technologies Ltd.',
+                    style: TextStyle(color: colors.mutedText),
+                  ),
+                ],
               ),
+              const SizedBox(height: 22),
               Text(
-                'Privacy Policy   Terms of Service',
+                'Services',
                 style: TextStyle(
-                  color: colors.mutedText,
-                  fontWeight: FontWeight.w700,
+                  color: colors.text,
+                  fontWeight: FontWeight.w900,
+                  fontSize: 14,
                 ),
               ),
-              Text(
-                '© ${DateTime.now().year} Circum Technologies Ltd.',
-                style: TextStyle(color: colors.mutedText),
+              const SizedBox(height: 8),
+              Wrap(
+                spacing: 16,
+                runSpacing: 8,
+                children: [
+                  _FooterServiceLink(
+                      label: 'Deliveries', onPressed: onDeliveries),
+                  _FooterServiceLink(label: 'Health+', onPressed: onHealthPlus),
+                  if (onGifts != null)
+                    _FooterServiceLink(
+                      label: 'Gifts by Circum',
+                      onPressed: onGifts!,
+                    ),
+                  _FooterServiceLink(label: 'Business', onPressed: onBusiness),
+                  _FooterServiceLink(label: 'Vanguard', onPressed: onVanguard),
+                ],
               ),
             ],
           ),
         ),
       ),
+    );
+  }
+}
+
+class _FooterServiceLink extends StatelessWidget {
+  final String label;
+  final VoidCallback onPressed;
+
+  const _FooterServiceLink({required this.label, required this.onPressed});
+
+  @override
+  Widget build(BuildContext context) {
+    return TextButton(
+      onPressed: onPressed,
+      style: TextButton.styleFrom(
+        padding: EdgeInsets.zero,
+        minimumSize: const Size(0, 36),
+        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+      ),
+      child: Text(label),
     );
   }
 }
@@ -22576,6 +23746,10 @@ class _GiftsRequestPageState extends State<_GiftsRequestPage> {
                           backgroundColor:
                               colors.adminAccent.withValues(alpha: 0.16),
                         ),
+                      ),
+                      const SizedBox(height: 10),
+                      const Center(
+                        child: _HealthChip(label: 'Vanguard Included'),
                       ),
                       const SizedBox(height: 16),
                       if (!signedIn)

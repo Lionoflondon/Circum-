@@ -83,6 +83,7 @@ case "$SURFACE" in
       "lib/app/security/"
       "lib/web_platform_routing.dart"
       "lib/website/"
+      "web/"
       "test/security/"
       "test/web_platform_routing_test.dart"
       "scripts/"
