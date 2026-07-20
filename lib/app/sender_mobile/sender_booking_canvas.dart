@@ -66,14 +66,10 @@ class _SenderBookingCanvasState extends State<SenderBookingCanvas> {
       bloc.add(CheckForActiveRequest());
       _loadBackendDraft();
     } catch (error, stackTrace) {
-      FlutterError.reportError(
-        FlutterErrorDetails(
-          exception: error,
-          stack: stackTrace,
-          library: 'sender send route',
-          context: ErrorDescription('initialising SenderBookingCanvas'),
-        ),
-      );
+      if (kDebugMode) {
+        debugPrint('Sender booking route could not initialise: $error');
+        debugPrintStack(stackTrace: stackTrace);
+      }
       _draftLoading = false;
       _initializationError =
           'Send could not start because its booking engine was unavailable.';
@@ -150,18 +146,23 @@ class _SenderBookingCanvasState extends State<SenderBookingCanvas> {
     String context,
   ) {
     if (_isExpectedRestoreFailure(error)) return;
-    FlutterError.reportError(
-      FlutterErrorDetails(
-        exception: error,
-        stack: stackTrace,
-        library: 'sender send route',
-        context: ErrorDescription(context),
-      ),
-    );
+    if (kDebugMode) {
+      debugPrint('Sender draft recovery issue while $context: $error');
+      debugPrintStack(stackTrace: stackTrace);
+    }
   }
 
   Future<void> _loadBackendDraft() async {
     setState(() => _draftLoading = true);
+    if (_uid == null) {
+      await _clearQueuedLocalDraft();
+      if (!mounted) return;
+      setState(() {
+        _draftLoading = false;
+        _syncStatus = 'Saved';
+      });
+      return;
+    }
     try {
       try {
         final data = await _callDraftFunction(
@@ -271,6 +272,7 @@ class _SenderBookingCanvasState extends State<SenderBookingCanvas> {
     int generation, {
     bool retryConflict = true,
   }) async {
+    if (_uid == null) return;
     if (next.step == SenderBookingStep.findingRider ||
         next.step == SenderBookingStep.liveTracking ||
         next.bookingConfirmed) {
@@ -404,6 +406,12 @@ class _SenderBookingCanvasState extends State<SenderBookingCanvas> {
 
   Future<void> _deleteBackendDraft() async {
     _draftSaveDebounce?.cancel();
+    if (_uid == null) {
+      await _clearQueuedLocalDraft();
+      _draftRevision = 0;
+      _draftId = null;
+      return;
+    }
     try {
       await _callDraftFunction('deleteSenderDraft');
       await _clearQueuedLocalDraft();

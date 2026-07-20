@@ -123,17 +123,15 @@ class FirebaseSenderSavedAddressesRepository
         firestore = firestore ?? FirebaseFirestore.instance,
         functions = functions ?? FirebaseFunctions.instance;
 
-  User get _user {
-    final user = auth.currentUser;
-    if (user == null) throw StateError('Sign in to manage saved addresses.');
-    return user;
-  }
+  User? get _maybeUser => auth.currentUser;
 
   @override
   Stream<List<SenderSavedAddress>> watch() {
+    final user = _maybeUser;
+    if (user == null) return Stream.value(const <SenderSavedAddress>[]);
     return firestore
         .collection('users')
-        .doc(_user.uid)
+        .doc(user.uid)
         .collection('savedAddresses')
         .orderBy('updatedAt', descending: true)
         .snapshots()
@@ -166,6 +164,9 @@ class FirebaseSenderSavedAddressesRepository
     required bool isDefaultPickup,
     required bool isDefaultDropoff,
   }) async {
+    if (_maybeUser == null) {
+      throw StateError('Sign in to manage saved addresses.');
+    }
     if (!AddressEngine.isValid(address)) {
       throw StateError('Complete address line 1, city, postcode and country.');
     }
@@ -182,6 +183,9 @@ class FirebaseSenderSavedAddressesRepository
 
   @override
   Future<void> delete(String addressId) async {
+    if (_maybeUser == null) {
+      throw StateError('Sign in to manage saved addresses.');
+    }
     await functions
         .httpsCallable('deleteSenderSavedAddress')
         .call({'addressId': addressId});
