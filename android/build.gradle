@@ -32,15 +32,13 @@ subprojects {
 }
 
 subprojects { subproject ->
-    subproject.afterEvaluate {
-        if (subproject.plugins.hasPlugin("com.android.library")) {
-            subproject.android {
-                compileSdkVersion 36
-                compileSdk = 36
-                lint {
-                    checkReleaseBuilds false
-                    abortOnError false
-                }
+    subproject.plugins.withId("com.android.library") {
+        subproject.android {
+            compileSdkVersion 36
+            compileSdk = 36
+            lint {
+                checkReleaseBuilds false
+                abortOnError false
             }
         }
     }
