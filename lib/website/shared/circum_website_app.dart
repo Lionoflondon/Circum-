@@ -344,17 +344,12 @@ class _PlatformNotificationCenterState
       await messaging.requestPermission(provisional: true);
       final token = await messaging.getToken();
       if (token == null) return;
-      final collection = switch (widget.mode) {
-        _WebAppMode.rider => 'riderProfiles',
-        _ => 'users',
-      };
-      await FirebaseFirestore.instance
-          .collection(collection)
-          .doc(user.uid)
-          .set({
-        'fcmToken': token,
-        'notificationTokenUpdatedAt': FieldValue.serverTimestamp(),
-      }, SetOptions(merge: true));
+      final callable = widget.mode == _WebAppMode.rider
+          ? 'updateRiderPushToken'
+          : 'updateSenderPushToken';
+      await FirebaseFunctions.instanceFor(region: 'us-central1')
+          .httpsCallable(callable)
+          .call({'fcmToken': token});
     } catch (_) {
       // In-app notification history remains available if push is unavailable.
     }
@@ -364,26 +359,27 @@ class _PlatformNotificationCenterState
     QueryDocumentSnapshot<Map<String, dynamic>> item,
   ) async {
     if (item.data()['read'] == true) return;
-    await item.reference.set({
-      'read': true,
-      'readAt': FieldValue.serverTimestamp(),
-    }, SetOptions(merge: true));
+    await FirebaseFunctions.instanceFor(region: 'us-central1')
+        .httpsCallable(widget.mode == _WebAppMode.rider
+            ? 'updateRiderNotificationState'
+            : 'updateSenderNotificationState')
+        .call({
+      'notificationId': item.id,
+      'action': 'mark_read',
+    });
   }
 
   Future<void> _markAllRead() async {
     final unread = _items.where((item) => item.data()['read'] != true).toList();
     if (unread.isEmpty) return;
-    final batch = FirebaseFirestore.instance.batch();
-    for (final item in unread) {
-      batch.set(
-          item.reference,
-          {
-            'read': true,
-            'readAt': FieldValue.serverTimestamp(),
-          },
-          SetOptions(merge: true));
-    }
-    await batch.commit();
+    await FirebaseFunctions.instanceFor(region: 'us-central1')
+        .httpsCallable(widget.mode == _WebAppMode.rider
+            ? 'updateRiderNotificationState'
+            : 'updateSenderNotificationState')
+        .call({
+      'notificationIds': unread.map((item) => item.id).toList(),
+      'action': 'mark_read',
+    });
   }
 
   @override
@@ -3436,13 +3432,9 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
         throw FirebaseAuthException(code: 'requires-recent-login');
       }
       await user.verifyBeforeUpdateEmail(nextEmail);
-      await FirebaseFirestore.instance
-          .collection('riderProfiles')
-          .doc(user.uid)
-          .set({
-        'pendingEmail': nextEmail,
-        'updatedAt': FieldValue.serverTimestamp(),
-      }, SetOptions(merge: true));
+      await FirebaseFunctions.instanceFor(region: 'us-central1')
+          .httpsCallable('requestRiderEmailChange')
+          .call({'pendingEmail': nextEmail});
       _newEmail.clear();
       _emailChangePassword.clear();
       if (!mounted) return;
@@ -3503,10 +3495,9 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
   }
 
   Future<void> _saveRiderProfile(User user) async {
-    final db = FirebaseFirestore.instance;
-    await db.collection('riderProfiles').doc(user.uid).set({
-      'uid': user.uid,
-      'riderId': user.uid,
+    await FirebaseFunctions.instanceFor(region: 'us-central1')
+        .httpsCallable('updateRiderProfile')
+        .call({
       'fullName': _fullName.text.trim().isEmpty
           ? user.displayName
           : _fullName.text.trim(),
@@ -3518,45 +3509,8 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
       'vehicleColour': _vehicleColour.text.trim(),
       'plateNumber': _plateNumber.text.trim(),
       'vehicleRegistration': _plateNumber.text.trim(),
-      'profilePhotoUrl': '',
-      'vehicle': DriverVehicle(
-        type: _vehicle.text.trim(),
-        makeModel: _vehicleMakeModel.text.trim(),
-        colour: _vehicleColour.text.trim(),
-        plateNumber: _plateNumber.text.trim(),
-      ).toJson(),
       'availability': _availability.text.trim(),
-      'approvalStatus': 'pending',
-      'onboardingStatus': 'not_started',
-      'verificationStatus': 'pending',
-      'riderRank': 'agent',
-      'driverStatus': 'active',
-      'role': 'rider',
-      'roles': ['rider'],
-      'source': 'circum-web',
-      'updatedAt': FieldValue.serverTimestamp(),
-      'createdAt': FieldValue.serverTimestamp(),
-    }, SetOptions(merge: true));
-    await db.collection('riders').doc(user.uid).set({
-      'name': _fullName.text.trim().isEmpty
-          ? user.displayName
-          : _fullName.text.trim(),
-      'phone': _phone.text.trim(),
-      'role': 'delivery',
-      'status': 'offline',
-      'rating': _performance.averageRating.toStringAsFixed(2),
-      'plateNumber': _plateNumber.text.trim(),
-      'typeOfVehicle': _vehicle.text.trim(),
-      'vehicleMakeModel': _vehicleMakeModel.text.trim(),
-      'vehicleColour': _vehicleColour.text.trim(),
-      'verificationStatus': 'pending',
-      'updatedAt': FieldValue.serverTimestamp(),
-    }, SetOptions(merge: true));
-    await db.collection('driverPerformanceMetrics').doc(user.uid).set(
-          DriverPerformanceMetric.empty(user.uid).toJson()
-            ..addAll({'updatedAt': FieldValue.serverTimestamp()}),
-          SetOptions(merge: true),
-        );
+    });
   }
 
   void _listenToRiderEarnings(String riderId) {
@@ -3896,17 +3850,13 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
     }
     final requestId = '${job['requestId'] ?? job['id'] ?? ''}'.trim();
     if (requestId.isEmpty) return;
-    final field = action == 'reject' ? 'rejectedByRiders' : 'ignoredByRiders';
-    final timestampField = action == 'reject' ? 'rejectedAt' : 'ignoredAt';
     try {
-      await FirebaseFirestore.instance
-          .collection('deliveryRequests')
-          .doc(requestId)
-          .set({
-        field: FieldValue.arrayUnion([user.uid]),
-        timestampField: FieldValue.serverTimestamp(),
-        'updatedAt': FieldValue.serverTimestamp(),
-      }, SetOptions(merge: true));
+      await FirebaseFunctions.instanceFor(region: 'us-central1')
+          .httpsCallable('recordRiderJobDecision')
+          .call({
+        'requestId': requestId,
+        'action': action,
+      });
       if (!mounted) return;
       setState(
         () => _jobMessage =
@@ -4392,17 +4342,9 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
             const <String, dynamic>{};
 
     if (heavier) {
-      await FirebaseFirestore.instance.collection('notifications').add({
-        'recipientId': job['senderId'] ?? job['userId'],
-        'requestId': requestId,
-        'type': 'weight_adjusted',
-        'title': 'Parcel weight updated',
-        'message':
-            'Parcel weight differs from original declaration. Pricing has been adjusted.',
-        'createdAt': FieldValue.serverTimestamp(),
-        'read': false,
-        'source': 'circum-web',
-      });
+      await FirebaseFunctions.instanceFor(region: 'us-central1')
+          .httpsCallable('createWeightAdjustedNotification')
+          .call({'requestId': requestId});
     }
 
     return {
@@ -4943,46 +4885,16 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
 
       await _ensureCircumFirebaseReady();
       final bytes = await picked.readAsBytes();
-      final safeName = picked.name.replaceAll(RegExp(r'[^A-Za-z0-9._-]'), '_');
-      final path =
-          'rider_documents/${user.uid}/${DateTime.now().millisecondsSinceEpoch}_$safeName';
-      final storageRef = FirebaseStorage.instance.ref(path);
-      await storageRef.putData(bytes);
-      final downloadUrl = await storageRef.getDownloadURL();
-
-      final documentRef =
-          FirebaseFirestore.instance.collection('riderDocuments').doc();
       final documentType = _riderDocumentType(_documentType.text);
-      await documentRef.set({
-        'documentId': documentRef.id,
-        'riderId': user.uid,
-        'riderEmail': user.email,
-        'type': documentType,
+      final contentType = picked.mimeType ?? 'image/jpeg';
+      await FirebaseFunctions.instanceFor(region: 'us-central1')
+          .httpsCallable('submitRiderDocument')
+          .call({
+        'documentType': documentType,
         'notes': _documentNotes.text.trim(),
         'fileName': picked.name,
-        'storagePath': path,
-        'downloadUrl': downloadUrl,
-        'fileUrl': downloadUrl,
-        'uploadedAt': FieldValue.serverTimestamp(),
-        'status': 'pending',
-        'verificationStatus': 'pending',
-        'source': 'circum-web',
-        'createdAt': FieldValue.serverTimestamp(),
-        'updatedAt': FieldValue.serverTimestamp(),
-      });
-      await FirebaseFirestore.instance
-          .collection('riderProfiles')
-          .doc(user.uid)
-          .update({
-        'verificationStatus': 'pending',
-        'verificationDocuments.$documentType': {
-          'type': documentType,
-          'fileUrl': downloadUrl,
-          'uploadedAt': FieldValue.serverTimestamp(),
-          'status': 'pending',
-        },
-        'lastDocumentUploadedAt': FieldValue.serverTimestamp(),
-        'updatedAt': FieldValue.serverTimestamp(),
+        'contentType': contentType,
+        'fileBase64': base64Encode(bytes),
       });
       _riderProfile = await _loadRiderProfile(user.uid);
       if (!mounted) return;
@@ -5042,8 +4954,6 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
       return;
     }
 
-    final now = DateTime.now();
-    final id = 'RWEB-${now.millisecondsSinceEpoch.toString().substring(6)}';
     setState(() {
       _submitting = true;
       _message = 'Sending your rider application...';
@@ -5051,59 +4961,28 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
 
     try {
       await _ensureCircumFirebaseReady();
-      final db = FirebaseFirestore.instance;
-      final batch = db.batch();
-      final application = {
-        'id': id,
-        'riderId': _riderUser?.uid,
+      final result = await FirebaseFunctions.instanceFor(region: 'us-central1')
+          .httpsCallable('submitRiderApplication')
+          .call<Map<String, dynamic>>({
         'fullName': _fullName.text.trim(),
         'phoneNumber': _phone.text.trim(),
         'email': _email.text.trim(),
         'postcode': _postcode.text.trim(),
         'vehicleType': _vehicle.text.trim(),
+        'vehicleRegistration': _plateNumber.text.trim(),
         'availability': _availability.text.trim(),
         'notes': _notes.text.trim(),
         'rightToWorkConfirmed': _rightToWork,
         'sealedPackageConsent': _sealedPackageConsent,
-        'status': 'submitted',
-        'source': 'circum-web',
-        'createdAt': FieldValue.serverTimestamp(),
-        'updatedAt': FieldValue.serverTimestamp(),
-      };
-      batch.set(db.collection('riderApplications').doc(id), application);
-      if (_riderUser != null) {
-        batch.set(
-          db.collection('riderProfiles').doc(_riderUser!.uid),
-          {
-            'fullName': _fullName.text.trim(),
-            'email': _riderUser!.email ?? _email.text.trim(),
-            'phoneNumber': _phone.text.trim(),
-            'vehicleType': _vehicle.text.trim().toLowerCase(),
-            'vehicleRegistration': _plateNumber.text.trim(),
-            'onboardingStatus': 'pending_review',
-            'approvalStatus': 'pending',
-            'riderRank': 'agent',
-            'onboardingSubmittedAt': FieldValue.serverTimestamp(),
-            'termsAcceptedAt': FieldValue.serverTimestamp(),
-            'updatedAt': FieldValue.serverTimestamp(),
-          },
-          SetOptions(merge: true),
-        );
-      }
-      batch.set(db.collection('riderOnboardingEvents').doc(), {
-        'applicationId': id,
-        'type': 'rider_application_submitted',
-        'status': 'submitted',
-        'source': 'circum-web',
-        'createdAt': FieldValue.serverTimestamp(),
+        'idempotencyKey': 'web-rider-application:${_riderUser?.uid}',
       });
-      await batch.commit();
+      final applicationId = '${result.data['applicationId'] ?? ''}'.trim();
       if (_riderUser != null) {
         _riderProfile = await _loadRiderProfile(_riderUser!.uid);
       }
       if (!mounted) return;
       setState(() {
-        _applicationId = id;
+        _applicationId = applicationId;
         _message =
             'Thanks. Your rider application has been sent to the Circum team.';
       });
@@ -7821,7 +7700,6 @@ class _CustomerPortalState extends State<_CustomerPortal> {
   String? _activeOrderId;
   String? _activeRequestDocId;
   String? _assignedDriverId;
-  String? _healthProfileId;
   String? _healthScheduleId;
   String? _healthMessage;
   String? _healthCheckoutUrl;
@@ -9297,19 +9175,12 @@ class _CustomerPortalState extends State<_CustomerPortal> {
         password: _senderPassword.text.trim(),
       );
       final user = credential.user!;
-      await FirebaseFirestore.instance.collection('users').doc(user.uid).set({
-        'fullName': _senderName.text.trim(),
-        'fullname': _senderName.text.trim(),
-        'email': user.email,
-        'phoneNumber': _senderPhone.text.trim(),
-        'role': 'user',
-        'roles': ['sender'],
-        'userType': 'sender',
-        'status': 'active',
-        'verificationStatus': user.emailVerified ? 'verified' : 'unverified',
-        'createdAt': FieldValue.serverTimestamp(),
-        'updatedAt': FieldValue.serverTimestamp(),
-      }, SetOptions(merge: true));
+      await FirebaseFunctions.instanceFor(region: 'us-central1')
+          .httpsCallable('updateSenderProfile')
+          .call({
+        'displayName': _senderName.text.trim(),
+        'phone': _senderPhone.text.trim(),
+      });
       _availableRoles = {CircumRole.sender};
       _attachSender(user);
       await _loadSenderDeliveries(user.uid);
@@ -9431,10 +9302,9 @@ class _CustomerPortalState extends State<_CustomerPortal> {
         throw FirebaseAuthException(code: 'requires-recent-login');
       }
       await user.verifyBeforeUpdateEmail(nextEmail);
-      await FirebaseFirestore.instance.collection('users').doc(user.uid).set({
-        'pendingEmail': nextEmail,
-        'updatedAt': FieldValue.serverTimestamp(),
-      }, SetOptions(merge: true));
+      await FirebaseFunctions.instanceFor(region: 'us-central1')
+          .httpsCallable('requestSenderEmailChange')
+          .call({'pendingEmail': nextEmail});
       _senderNewEmail.clear();
       _senderEmailChangePassword.clear();
       if (!mounted) return;
@@ -9460,23 +9330,16 @@ class _CustomerPortalState extends State<_CustomerPortal> {
     if (!mounted) return false;
     setState(() => _availableRoles = roles);
     if (RoleAccessPolicy.rolesCanAccessSender(roles)) return true;
-    final db = FirebaseFirestore.instance;
-    final riderDoc = await db.collection('riderProfiles').doc(user.uid).get();
-    final adminDoc = await db.collection('adminUsers').doc(user.uid).get();
     if (!roles.contains(CircumRole.rider) &&
-        !roles.contains(CircumRole.admin) &&
-        !riderDoc.exists &&
-        !adminDoc.exists) {
-      await db.collection('users').doc(user.uid).set({
-        'email': user.email,
-        'role': 'user',
-        'roles': ['sender'],
-        'userType': 'sender',
-        'status': 'active',
-        'updatedAt': FieldValue.serverTimestamp(),
-      }, SetOptions(merge: true));
-      setState(() => _availableRoles = {CircumRole.sender});
-      return true;
+        !roles.contains(CircumRole.admin)) {
+      final result = await FirebaseFunctions.instanceFor(region: 'us-central1')
+          .httpsCallable('ensureSenderAccount')
+          .call();
+      final data = Map<String, dynamic>.from(result.data as Map);
+      if (data['allowed'] == true) {
+        setState(() => _availableRoles = {CircumRole.sender});
+        return true;
+      }
     }
     return false;
   }
@@ -9525,17 +9388,15 @@ class _CustomerPortalState extends State<_CustomerPortal> {
             'fullName': _senderName.text.trim(),
             'phoneNumber': _senderPhone.text.trim(),
           });
-      await FirebaseFirestore.instance.collection('users').doc(user.uid).set(
-            profile.safeUpdatePatch(
-              fullName: _senderName.text.trim(),
-              phoneNumber: _senderPhone.text.trim(),
-              savedAddresses: profile.savedAddresses,
-              communicationPreferences: profile.communicationPreferences.isEmpty
-                  ? const {'email': true, 'sms': true}
-                  : profile.communicationPreferences,
-            ),
-            SetOptions(merge: true),
-          );
+      await FirebaseFunctions.instanceFor(region: 'us-central1')
+          .httpsCallable('updateSenderProfile')
+          .call({
+        'displayName': _senderName.text.trim(),
+        'phone': _senderPhone.text.trim(),
+        'communicationPreferences': profile.communicationPreferences.isEmpty
+            ? const {'email': true, 'sms': true}
+            : profile.communicationPreferences,
+      });
       setState(() => _senderProfileMessage = 'Profile saved.');
     } catch (_) {
       setState(() => _senderProfileMessage = 'Could not save the profile.');
@@ -10705,17 +10566,14 @@ class _CustomerPortalState extends State<_CustomerPortal> {
             .where((weight) => weight > base.weightKg * 5)
             .toList(growable: false);
         if (outliers.isNotEmpty) {
-          await FirebaseFirestore.instance
-              .collection('irisLearningOutliers')
-              .add({
-            'senderId': user.uid,
+          await FirebaseFunctions.instanceFor(region: 'us-central1')
+              .httpsCallable('recordIrisLearningOutlier')
+              .call({
             'description': _description.text.trim(),
             'matchedItemName': base.matchedItemName,
             'trustedWeightKg': base.weightKg,
             'outlierWeightsKg': outliers,
             'reason': 'historical_weight_above_5x_catalogue_weight',
-            'status': 'pending_review',
-            'createdAt': FieldValue.serverTimestamp(),
           });
         }
         return base.copyWith(
@@ -11205,14 +11063,6 @@ class _CustomerPortalState extends State<_CustomerPortal> {
       return;
     }
 
-    final now = DateTime.now();
-    final senderId = _senderUser?.uid ?? FirebaseAuth.instance.currentUser?.uid;
-    final id = 'HP-${now.millisecondsSinceEpoch.toString().substring(6)}';
-    final scheduleId = _healthFrequency == HealthPlusFrequency.oneOff
-        ? null
-        : 'HPS-${now.millisecondsSinceEpoch.toString().substring(6)}';
-    final pickupId =
-        'HPP-${now.millisecondsSinceEpoch.toString().substring(6)}';
     final quote = _healthQuote;
 
     setState(() {
@@ -11223,15 +11073,9 @@ class _CustomerPortalState extends State<_CustomerPortal> {
 
     try {
       await _ensureFirebaseReady();
-      final db = FirebaseFirestore.instance;
-      final batch = db.batch();
-      final profileRef = db.collection('healthPlusProfiles').doc(id);
-      final pickupRef = db.collection('prescriptionPickups').doc(pickupId);
-
-      final profile = {
-        'id': id,
-        'senderId': senderId,
-        'userId': senderId,
+      final result = await FirebaseFunctions.instanceFor(region: 'us-central1')
+          .httpsCallable('createHealthPlusBooking')
+          .call<Map<String, dynamic>>({
         'fullName': _healthName.text.trim(),
         'phoneNumber': _healthPhone.text.trim(),
         'email': _healthEmail.text.trim(),
@@ -11239,31 +11083,31 @@ class _CustomerPortalState extends State<_CustomerPortal> {
         'pharmacyAddress': _healthPharmacy.text.trim(),
         'deliveryAddress': _healthDelivery.text.trim(),
         'notes': _healthNotes.text.trim(),
-        'prescriptionNotes': _healthNotes.text.trim(),
         'prescriptionType': _healthPrescriptionType,
         'subscriptionPlan': _healthSubscriptionPlan,
         'healthPlusPlan': _healthSubscriptionPlan,
         'preferredDay': _healthPreferredDay.text.trim(),
-        'preferredTime': _healthPreferredTime.text.trim(),
         'preferredPickupDay': _healthPreferredDay.text.trim(),
         'preferredPickupTime': _healthPreferredTime.text.trim(),
-        'frequency': _healthFrequency.value,
-        'recurring': scheduleId != null,
-        'customSchedule': _healthCustomSchedule.text.trim(),
-        'priorityRiderMatching': _healthSubscriptionPlan == 'priority',
         'consentConfirmed': _healthConsent,
-        'consentAccepted': _healthConsent,
-        'status': scheduleId == null ? 'one_off' : 'active',
-        'source': 'circum-web',
-        'createdAt': FieldValue.serverTimestamp(),
-        'updatedAt': FieldValue.serverTimestamp(),
-      };
+        'frequency': _healthFrequency.value,
+        'customSchedule': _healthCustomSchedule.text.trim(),
+        'savedPaymentMethod': _healthSavePayment,
+        'pricingInputs': {
+          'distanceMiles': HealthPlusPricing.defaultDistanceMiles,
+          'medicationWeightKg': HealthPlusPricing.defaultMedicationWeightKg,
+        },
+        'idempotencyKey':
+            'web-healthplus:${FirebaseAuth.instance.currentUser?.uid}:${_healthFrequency.value}:${_healthPreferredTime.text.trim()}:$_healthSubscriptionPlan',
+      });
+      final data = Map<String, dynamic>.from(result.data);
+      final id = '${data['profileId'] ?? ''}'.trim();
+      final scheduleId = '${data['scheduleId'] ?? ''}'.trim();
+      final pickupId = '${data['pickupId'] ?? ''}'.trim();
+      final amount = (data['amount'] as num?)?.toDouble() ?? quote.total;
       final pickup = {
         'id': pickupId,
-        'senderId': senderId,
-        'userId': senderId,
         'profileId': id,
-        'scheduleId': scheduleId,
         'fullName': _healthName.text.trim(),
         'phoneNumber': _healthPhone.text.trim(),
         'pharmacyName': _healthPharmacyName.text.trim(),
@@ -11284,106 +11128,16 @@ class _CustomerPortalState extends State<_CustomerPortal> {
         'scheduledDropoffDate': _healthPreferredDay.text.trim(),
         'scheduledDropoffWindow': _healthPreferredTime.text.trim(),
         'frequency': _healthFrequency.value,
-        'recurring': scheduleId != null,
+        'recurring': scheduleId.isNotEmpty,
         'customSchedule': _healthCustomSchedule.text.trim(),
         'priorityRiderMatching': _healthSubscriptionPlan == 'priority',
         'status': PickupStatus.scheduled.value,
-        'price': quote.total,
+        'price': amount,
         'currency': 'GBP',
         'pricingBreakdown': quote.toJson(),
-        'pricingInputs': {
-          'distanceMiles': HealthPlusPricing.defaultDistanceMiles,
-          'medicationWeightKg': HealthPlusPricing.defaultMedicationWeightKg,
-        },
         'type': 'health_plus_prescription_pickup',
         'source': 'circum-web',
-        'createdAt': FieldValue.serverTimestamp(),
-        'updatedAt': FieldValue.serverTimestamp(),
       };
-      batch.set(profileRef, profile, SetOptions(merge: true));
-      batch.set(pickupRef, pickup, SetOptions(merge: true));
-
-      if (scheduleId != null) {
-        batch.set(db.collection('recurringPickupSchedules').doc(scheduleId), {
-          'id': scheduleId,
-          'senderId': senderId,
-          'userId': senderId,
-          'profileId': id,
-          'frequency': _healthFrequency.value,
-          'pharmacyName': _healthPharmacyName.text.trim(),
-          'pharmacyAddress': _healthPharmacy.text.trim(),
-          'deliveryAddress': _healthDelivery.text.trim(),
-          'prescriptionType': _healthPrescriptionType,
-          'subscriptionPlan': _healthSubscriptionPlan,
-          'healthPlusPlan': _healthSubscriptionPlan,
-          'preferredDay': _healthPreferredDay.text.trim(),
-          'preferredTime': _healthPreferredTime.text.trim(),
-          'prescriptionNotes': _healthNotes.text.trim(),
-          'consentAccepted': _healthConsent,
-          'status': 'active',
-          'preferredDayTime':
-              '${_healthPreferredDay.text.trim()} ${_healthPreferredTime.text.trim()}'
-                  .trim(),
-          'scheduledPickupDate': _healthPreferredDay.text.trim(),
-          'scheduledPickupWindow': _healthPreferredTime.text.trim(),
-          'scheduledDropoffDate': _healthPreferredDay.text.trim(),
-          'scheduledDropoffWindow': _healthPreferredTime.text.trim(),
-          'customSchedule': _healthCustomSchedule.text.trim(),
-          'paused': false,
-          'nextPickupAt':
-              '${_healthPreferredDay.text.trim()} ${_healthPreferredTime.text.trim()}'
-                  .trim(),
-          'stripeCustomerId': null,
-          'stripeSubscriptionId': null,
-          'createdAt': FieldValue.serverTimestamp(),
-          'updatedAt': FieldValue.serverTimestamp(),
-        });
-      }
-
-      batch.set(db.collection('healthPlusPayments').doc(pickupId), {
-        'id': pickupId,
-        'senderId': senderId,
-        'userId': senderId,
-        'profileId': id,
-        'pickupId': pickupId,
-        'amount': quote.total,
-        'currency': 'GBP',
-        'status': 'pending_secure_checkout',
-        'savedPaymentMethod': _healthSavePayment,
-        'frequency': _healthFrequency.value,
-        'subscriptionPlan': _healthSubscriptionPlan,
-        'paymentType':
-            scheduleId == null ? 'one_time_checkout' : 'subscription_checkout',
-        'createdAt': FieldValue.serverTimestamp(),
-      });
-      batch.set(db.collection('healthPlusNotifications').doc(), {
-        'senderId': senderId,
-        'userId': senderId,
-        'profileId': id,
-        'pickupId': pickupId,
-        'type': 'pickup_scheduled',
-        'title': 'Health+ pickup scheduled',
-        'body': 'Your prescription pickup has been scheduled.',
-        'createdAt': FieldValue.serverTimestamp(),
-      });
-      batch.set(db.collection('healthPlusUsageEvents').doc(), {
-        'type': 'pickup_created',
-        'senderId': senderId,
-        'userId': senderId,
-        'profileId': id,
-        'pickupId': pickupId,
-        'scheduleId': scheduleId,
-        'frequency': _healthFrequency.value,
-        'prescriptionType': _healthPrescriptionType,
-        'subscriptionPlan': _healthSubscriptionPlan,
-        'status': PickupStatus.scheduled.value,
-        'amount': quote.total,
-        'currency': 'GBP',
-        'source': 'circum-web',
-        'createdAt': FieldValue.serverTimestamp(),
-      });
-
-      await batch.commit();
       final checkoutUrl = await _createHealthPlusCheckoutSession(
         pickupId: pickupId,
         profileId: id,
@@ -11392,13 +11146,12 @@ class _CustomerPortalState extends State<_CustomerPortal> {
 
       if (!mounted) return;
       setState(() {
-        _healthProfileId = id;
-        _healthScheduleId = scheduleId;
+        _healthScheduleId = scheduleId.isEmpty ? null : scheduleId;
         _healthCheckoutUrl = checkoutUrl;
         _healthPickups.insert(0, pickup);
         _healthPayments.insert(0, {
           'pickupId': pickupId,
-          'amount': quote.total,
+          'amount': amount,
           'status': checkoutUrl == null
               ? 'pending_secure_checkout'
               : 'checkout_created',
@@ -11487,21 +11240,12 @@ class _CustomerPortalState extends State<_CustomerPortal> {
       return;
     }
     await _ensureFirebaseReady();
-    await FirebaseFirestore.instance
-        .collection('recurringPickupSchedules')
-        .doc(scheduleId)
-        .set({
-      'paused': true,
-      'status': 'paused',
-      'updatedAt': FieldValue.serverTimestamp(),
-    }, SetOptions(merge: true));
-    await FirebaseFirestore.instance.collection('healthPlusUsageEvents').add({
-      'type': 'recurring_pickup_paused',
-      'profileId': _healthProfileId,
+    await FirebaseFunctions.instanceFor(region: 'us-central1')
+        .httpsCallable('updateSenderHealthPlusBooking')
+        .call({
+      'action': 'pause_schedule',
       'scheduleId': scheduleId,
-      'status': 'paused',
-      'source': 'circum-web',
-      'createdAt': FieldValue.serverTimestamp(),
+      'idempotencyKey': 'web-healthplus:pause:$scheduleId',
     });
     setState(() => _healthMessage = 'Your repeat Health+ pickup is paused.');
   }
@@ -11513,21 +11257,12 @@ class _CustomerPortalState extends State<_CustomerPortal> {
       return;
     }
     await _ensureFirebaseReady();
-    await FirebaseFirestore.instance
-        .collection('recurringPickupSchedules')
-        .doc(scheduleId)
-        .set({
-      'paused': false,
-      'status': 'active',
-      'updatedAt': FieldValue.serverTimestamp(),
-    }, SetOptions(merge: true));
-    await FirebaseFirestore.instance.collection('healthPlusUsageEvents').add({
-      'type': 'recurring_pickup_resumed',
-      'profileId': _healthProfileId,
+    await FirebaseFunctions.instanceFor(region: 'us-central1')
+        .httpsCallable('updateSenderHealthPlusBooking')
+        .call({
+      'action': 'resume_schedule',
       'scheduleId': scheduleId,
-      'status': 'active',
-      'source': 'circum-web',
-      'createdAt': FieldValue.serverTimestamp(),
+      'idempotencyKey': 'web-healthplus:resume:$scheduleId',
     });
     setState(() => _healthMessage = 'Your repeat Health+ pickup is active.');
   }
@@ -11539,22 +11274,12 @@ class _CustomerPortalState extends State<_CustomerPortal> {
       return;
     }
     await _ensureFirebaseReady();
-    await FirebaseFirestore.instance
-        .collection('recurringPickupSchedules')
-        .doc(scheduleId)
-        .set({
-      'paused': true,
-      'status': 'cancelled',
-      'cancelledAt': FieldValue.serverTimestamp(),
-      'updatedAt': FieldValue.serverTimestamp(),
-    }, SetOptions(merge: true));
-    await FirebaseFirestore.instance.collection('healthPlusUsageEvents').add({
-      'type': 'recurring_pickup_cancelled',
-      'profileId': _healthProfileId,
+    await FirebaseFunctions.instanceFor(region: 'us-central1')
+        .httpsCallable('updateSenderHealthPlusBooking')
+        .call({
+      'action': 'cancel_schedule',
       'scheduleId': scheduleId,
-      'status': 'cancelled',
-      'source': 'circum-web',
-      'createdAt': FieldValue.serverTimestamp(),
+      'idempotencyKey': 'web-healthplus:cancel-schedule:$scheduleId',
     });
     setState(() => _healthMessage = 'Your repeat Health+ pickup is cancelled.');
   }
@@ -11564,21 +11289,12 @@ class _CustomerPortalState extends State<_CustomerPortal> {
     final pickupId = _healthPickups.first['id'] as String?;
     if (pickupId == null) return;
     await _ensureFirebaseReady();
-    await FirebaseFirestore.instance
-        .collection('prescriptionPickups')
-        .doc(pickupId)
-        .set({
-      'status': PickupStatus.cancelled.value,
-      'updatedAt': FieldValue.serverTimestamp(),
-    }, SetOptions(merge: true));
-    await FirebaseFirestore.instance.collection('healthPlusUsageEvents').add({
-      'type': 'pickup_cancelled',
-      'profileId': _healthProfileId,
+    await FirebaseFunctions.instanceFor(region: 'us-central1')
+        .httpsCallable('updateSenderHealthPlusBooking')
+        .call({
+      'action': 'cancel_pickup',
       'pickupId': pickupId,
-      'scheduleId': _healthScheduleId,
-      'status': PickupStatus.cancelled.value,
-      'source': 'circum-web',
-      'createdAt': FieldValue.serverTimestamp(),
+      'idempotencyKey': 'web-healthplus:cancel-pickup:$pickupId',
     });
     setState(() {
       _healthPickups.first['status'] = PickupStatus.cancelled.value;
@@ -11591,23 +11307,25 @@ class _CustomerPortalState extends State<_CustomerPortal> {
     final pickupId = _healthPickups.first['id'] as String?;
     if (pickupId == null) return;
     await _ensureFirebaseReady();
-    await FirebaseFirestore.instance
-        .collection('prescriptionPickups')
-        .doc(pickupId)
-        .set({
-      'status': status,
-      'adminUpdatedAt': FieldValue.serverTimestamp(),
-      'updatedAt': FieldValue.serverTimestamp(),
-    }, SetOptions(merge: true));
-    await FirebaseFirestore.instance.collection('healthPlusUsageEvents').add({
-      'type': 'admin_status_updated',
-      'profileId': _healthProfileId,
-      'pickupId': pickupId,
-      'scheduleId': _healthScheduleId,
-      'status': status,
-      'source': 'circum-web',
-      'createdAt': FieldValue.serverTimestamp(),
-    });
+    final token = await FirebaseAuth.instance.currentUser?.getIdToken();
+    final response = await http.post(
+      Uri.parse(
+        'https://us-central1-circum-2797c.cloudfunctions.net/updateHealthPlusPickupStatus',
+      ),
+      headers: {
+        'Content-Type': 'application/json',
+        if (token != null) 'Authorization': 'Bearer $token',
+      },
+      body: jsonEncode({
+        'pickupId': pickupId,
+        'status': status,
+        'note': 'Updated from Circum Website Health+ operations.',
+      }),
+    );
+    if (response.statusCode < 200 || response.statusCode >= 300) {
+      setState(() => _healthMessage = 'Admin status update failed.');
+      return;
+    }
     setState(() {
       _healthPickups.first['status'] = status;
       _healthMessage = 'Admin status updated to $status.';
@@ -23684,8 +23402,8 @@ class _GiftsRequestPageState extends State<_GiftsRequestPage> {
       _message = null;
     });
     try {
-      final doc =
-          FirebaseFirestore.instance.collection('giftPaymentDrafts').doc();
+      final giftDraftId =
+          FirebaseFirestore.instance.collection('giftPaymentDrafts').doc().id;
       final photoUrls = <String>[];
       if (_photo != null) {
         final bytes = await _photo!.readAsBytes();
@@ -23693,11 +23411,11 @@ class _GiftsRequestPageState extends State<_GiftsRequestPage> {
           throw StateError('Photo must be smaller than 8 MB.');
         }
         final ref = FirebaseStorage.instance
-            .ref('gift_requests/${user.uid}/${doc.id}.jpg');
+            .ref('gift_requests/${user.uid}/$giftDraftId.jpg');
         await ref.putData(bytes, SettableMetadata(contentType: 'image/jpeg'));
         photoUrls.add(await ref.getDownloadURL());
       }
-      await doc.set({
+      final giftDraft = {
         'senderId': user.uid,
         'senderName': _senderName.text.trim(),
         'senderEmail': _senderEmail.text.trim().toLowerCase(),
@@ -23787,12 +23505,10 @@ class _GiftsRequestPageState extends State<_GiftsRequestPage> {
         'recordingConsentRequired': _anonymousGiftType == 'campaign',
         'mutualRevealAllowed': _anonymousGiftType == 'campaign',
         'anonymousByDefault': _giftMode == 'anonymous_gift',
-        'createdAt': FieldValue.serverTimestamp(),
-        'updatedAt': FieldValue.serverTimestamp(),
-      });
+      };
       final payment = await FirebaseFunctions.instance
           .httpsCallable('createGiftPayment')
-          .call({'giftDraftId': doc.id});
+          .call({'giftDraftId': giftDraftId, 'giftDraft': giftDraft});
       final paymentData = Map<String, dynamic>.from(payment.data as Map);
       final checkoutUrl = Uri.tryParse('${paymentData['url'] ?? ''}');
       if (checkoutUrl == null || checkoutUrl.host.isEmpty) {
@@ -24931,55 +24647,15 @@ class _CompanyLiveChatButtonState extends State<_CompanyLiveChatButton> {
     });
     try {
       await _ensureCircumFirebaseReady();
-      final db = FirebaseFirestore.instance;
-      final ticketRef = db.collection('supportTickets').doc();
-      final user = FirebaseAuth.instance.currentUser;
-      final chatId = 'support_${ticketRef.id}';
-      await ticketRef.set({
-        'channel': 'web_live_chat',
-        'status': 'open',
-        'priority': 'normal',
+      await FirebaseFunctions.instanceFor(region: 'us-central1')
+          .httpsCallable('submitWebsiteSupportRequest')
+          .call({
         'name': _name.text.trim(),
         'email': contact,
         'message': message,
-        'lastMessage': message,
-        'lastMessageAt': FieldValue.serverTimestamp(),
-        'adminUnreadCount': 1,
         'pageUrl': Uri.base.toString(),
-        'chatId': chatId,
-        if (user != null) 'userId': user.uid,
-        'createdAt': FieldValue.serverTimestamp(),
-        'updatedAt': FieldValue.serverTimestamp(),
+        'participantRole': 'sender',
       });
-      if (user != null) {
-        final chatRef = db.collection('chats').doc(chatId);
-        await chatRef.set({
-          'threadId': chatId,
-          'type': 'support',
-          'ticketId': ticketRef.id,
-          'participants': [user.uid, 'circum-support'],
-          'participantRoles': {
-            user.uid: 'shipper',
-            'circum-support': 'admin',
-          },
-          'status': 'open',
-          'createdAt': FieldValue.serverTimestamp(),
-          'updatedAt': FieldValue.serverTimestamp(),
-          'lastMessage': message,
-        });
-        await chatRef.collection('messages').add({
-          'threadId': chatId,
-          'ticketId': ticketRef.id,
-          'senderId': user.uid,
-          'senderRole': 'shipper',
-          'messageText': message,
-          'message': message,
-          'attachments': const [],
-          'initialSupportRequest': true,
-          'readBy': [user.uid],
-          'createdAt': FieldValue.serverTimestamp(),
-        });
-      }
       _message.clear();
       setState(() => _note = 'Sent. Circum support has your message.');
     } catch (_) {

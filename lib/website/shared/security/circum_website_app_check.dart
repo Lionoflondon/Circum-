@@ -2,7 +2,7 @@ import 'package:firebase_app_check/firebase_app_check.dart';
 import 'package:flutter/foundation.dart';
 
 const circumWebRecaptchaEnterpriseSiteKey =
-    String.fromEnvironment('CIRCUM_WEB_RECAPTCHA_ENTERPRISE_SITE_KEY');
+    String.fromEnvironment('PUBLIC_WEB_RECAPTCHA_ENTERPRISE_SITE_KEY');
 
 class CircumAppCheckStartup {
   const CircumAppCheckStartup._({
