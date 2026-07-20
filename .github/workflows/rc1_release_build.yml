@@ -41,6 +41,23 @@ jobs:
           channel: stable
       - run: flutter pub get
       - run: echo "org.gradle.jvmargs=-Xmx4096m -XX:MaxMetaspaceSize=1024m -Dfile.encoding=UTF-8" >> android/gradle.properties
+      - name: Create CI release keystore
+        run: |
+          keytool -genkeypair -v \
+            -keystore android/rc1-ci-keystore.jks \
+            -storepass rc1release \
+            -keypass rc1release \
+            -alias rc1-ci \
+            -keyalg RSA \
+            -keysize 2048 \
+            -validity 10000 \
+            -dname "CN=RC1 CI,O=Circum,C=GB"
+          cat > android/key.properties <<'EOF'
+          storePassword=rc1release
+          keyPassword=rc1release
+          keyAlias=rc1-ci
+          storeFile=rc1-ci-keystore.jks
+          EOF
       - run: flutter build apk --release --target=lib/main.dart
       - uses: actions/upload-artifact@v4
         with:
