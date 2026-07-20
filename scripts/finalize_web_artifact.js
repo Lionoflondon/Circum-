@@ -51,6 +51,18 @@ function git(args) {
   }
 }
 
+function command(args) {
+  try {
+    return cp.execFileSync(args[0], args.slice(1), {
+      cwd: process.cwd(),
+      encoding: 'utf8',
+      stdio: ['ignore', 'pipe', 'ignore'],
+    }).trim();
+  } catch (_) {
+    return null;
+  }
+}
+
 const surfaceName = process.argv[2];
 const outDir = process.argv[3];
 const surface = surfaces[surfaceName];
@@ -114,6 +126,9 @@ fs.writeFileSync(
     generatedAt: new Date().toISOString(),
     gitCommit: git(['rev-parse', 'HEAD']),
     gitCommitTimestamp: git(['show', '-s', '--format=%cI', 'HEAD']),
+    flutterVersion: process.env.FLUTTER_BIN
+      ? command([process.env.FLUTTER_BIN, '--version', '--machine'])
+      : null,
   }, null, 2)}\n`,
 );
 

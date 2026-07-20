@@ -139,6 +139,7 @@ function assertArtifact() {
     ]);
   }
   if (!marker.generatedAt) fail('generatedAt missing from build metadata');
+  if (!marker.flutterVersion) fail('flutterVersion missing from build metadata');
   if (new Date(marker.generatedAt).getTime() < new Date(commitTimestamp).getTime()) {
     fail('build timestamp is older than latest commit', [
       `generatedAt: ${marker.generatedAt}`,
@@ -178,6 +179,7 @@ function assertCleanCloneReproduces(referenceHashes) {
   }
   const env = {
     ...process.env,
+    FLUTTER_BIN: process.env.FLUTTER_BIN,
     CIRCUM_WEB_RECAPTCHA_ENTERPRISE_SITE_KEY:
       process.env.CIRCUM_WEB_RECAPTCHA_ENTERPRISE_SITE_KEY,
   };
