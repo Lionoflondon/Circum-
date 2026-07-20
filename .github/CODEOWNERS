@@ -1,4 +1,6 @@
 # Deployment isolation controls require independent review.
+* @Lionoflondon
+
 /docs/PERMANENT_ARCHITECTURE_CHARTER.md @Lionoflondon
 /deploy-manifest.json @Lionoflondon
 /scripts/deploy_guard.js @Lionoflondon
