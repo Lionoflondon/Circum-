@@ -44,7 +44,8 @@ jobs:
         run: |
           find "$PUB_CACHE/hosted/pub.dev" -path "*/android/build.gradle" -not -path "*/example/*" -print0 \
             | xargs -0 perl -0pi -e 's/compileSdkVersion\s+\d+/compileSdkVersion 36/g; s/compileSdk\s*=\s*\d+/compileSdk = 36/g; s/compileSdk\s+\d+/compileSdk 36/g'
-          if grep -R "compileSdkVersion 31" "$PUB_CACHE/hosted/pub.dev" --include build.gradle; then
+          if find "$PUB_CACHE/hosted/pub.dev" -path "*/android/build.gradle" -not -path "*/example/*" -print0 \
+            | xargs -0 grep -H "compileSdkVersion 31"; then
             exit 1
           fi
       - run: echo "org.gradle.jvmargs=-Xmx4096m -XX:MaxMetaspaceSize=1024m -Dfile.encoding=UTF-8" >> android/gradle.properties
