@@ -891,7 +891,9 @@ void main() {
       expect(source, contains('Export selected'));
 
       expect(source, contains('Future<void> _editGiftRequestWorkflow'));
-      expect(source, contains('Gift Request Editor'));
+      expect(source, contains('Gift Assessment'));
+      expect(source, contains('Sourcing item'));
+      expect(source, contains('Approved item recommendations'));
       expect(source, contains('procurementOrderReference'));
       expect(source, contains('giftStoryPhotoUrls'));
       expect(source, contains('giftStoryCustomAudioUrl'));
