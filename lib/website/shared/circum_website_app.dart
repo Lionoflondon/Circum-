@@ -36,9 +36,7 @@ import 'pricing/website_special_handling_engine.dart';
 const _companyName = 'Circum';
 const _webQuoteDistanceMiles = 4.8;
 const _desktopWebBreakpoint = 760.0;
-const _googlePlacesApiKey = String.fromEnvironment(
-  'GOOGLE_PLACES_API_KEY',
-);
+const _googlePlacesApiKey = String.fromEnvironment('GOOGLE_PLACES_API_KEY');
 const _spectrumGradient = [
   Color(0xffff8c00),
   Color(0xfff80032),
@@ -1219,10 +1217,7 @@ class _ServiceTrustBand extends StatelessWidget {
                 onPressed: onBusiness,
               ),
               const SizedBox(height: 24),
-              _VanguardHomepageSection(
-                colors: colors,
-                onLearnMore: onVanguard,
-              ),
+              _VanguardHomepageSection(colors: colors, onLearnMore: onVanguard),
             ],
           ),
         ),
@@ -5375,7 +5370,13 @@ class _RiderAccessPanel extends StatelessWidget {
           ),
           if (!signedIn) ...[
             const SizedBox(height: 12),
-            _InputBox(colors: colors, controller: email, hint: 'Email'),
+            _InputBox(
+              colors: colors,
+              controller: email,
+              hint: 'Email',
+              semanticLabel: 'Rider email address',
+              showAccessibleLabel: true,
+            ),
             const SizedBox(height: 10),
             _InputBox(
               colors: colors,
@@ -20713,6 +20714,8 @@ class _InputBox extends StatelessWidget {
   final _CircumColors colors;
   final TextEditingController controller;
   final String hint;
+  final String? semanticLabel;
+  final bool showAccessibleLabel;
   final int maxLines;
   final bool obscureText;
   final bool enabled;
@@ -20721,6 +20724,8 @@ class _InputBox extends StatelessWidget {
     required this.colors,
     required this.controller,
     required this.hint,
+    this.semanticLabel,
+    this.showAccessibleLabel = false,
     this.maxLines = 1,
     this.obscureText = false,
     this.enabled = true,
@@ -20728,24 +20733,30 @@ class _InputBox extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return TextField(
-      controller: controller,
-      maxLines: maxLines,
-      obscureText: obscureText,
-      enabled: enabled,
-      style: TextStyle(color: colors.text, fontWeight: FontWeight.w700),
-      decoration: InputDecoration(
-        hintText: hint,
-        hintStyle: TextStyle(color: colors.mutedText),
-        filled: true,
-        fillColor: colors.field,
-        contentPadding: const EdgeInsets.symmetric(
-          horizontal: 14,
-          vertical: 14,
-        ),
-        border: OutlineInputBorder(
-          borderSide: BorderSide.none,
-          borderRadius: BorderRadius.circular(16),
+    return Semantics(
+      label: semanticLabel ?? hint,
+      textField: true,
+      child: TextField(
+        controller: controller,
+        maxLines: maxLines,
+        obscureText: obscureText,
+        enabled: enabled,
+        style: TextStyle(color: colors.text, fontWeight: FontWeight.w700),
+        decoration: InputDecoration(
+          labelText: showAccessibleLabel ? semanticLabel ?? hint : null,
+          labelStyle: TextStyle(color: colors.mutedText),
+          hintText: hint,
+          hintStyle: TextStyle(color: colors.mutedText),
+          filled: true,
+          fillColor: colors.field,
+          contentPadding: const EdgeInsets.symmetric(
+            horizontal: 14,
+            vertical: 14,
+          ),
+          border: OutlineInputBorder(
+            borderSide: BorderSide.none,
+            borderRadius: BorderRadius.circular(16),
+          ),
         ),
       ),
     );
@@ -22507,10 +22518,7 @@ class _PillButton extends StatelessWidget {
           foregroundColor: dark ? Colors.white : Colors.black,
           shape: const StadiumBorder(),
           padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 18),
-          textStyle: const TextStyle(
-            fontSize: 17,
-            fontWeight: FontWeight.w900,
-          ),
+          textStyle: const TextStyle(fontSize: 17, fontWeight: FontWeight.w900),
         ),
       ),
     );
@@ -23083,23 +23091,14 @@ class _LandingFooter extends StatelessWidget {
                     label: 'Deliveries',
                     onPressed: onDeliveries,
                   ),
-                  _FooterServiceLink(
-                    label: 'Health+',
-                    onPressed: onHealthPlus,
-                  ),
+                  _FooterServiceLink(label: 'Health+', onPressed: onHealthPlus),
                   if (onGifts != null)
                     _FooterServiceLink(
                       label: 'Gifts by Circum',
                       onPressed: onGifts!,
                     ),
-                  _FooterServiceLink(
-                    label: 'Business',
-                    onPressed: onBusiness,
-                  ),
-                  _FooterServiceLink(
-                    label: 'Vanguard',
-                    onPressed: onVanguard,
-                  ),
+                  _FooterServiceLink(label: 'Business', onPressed: onBusiness),
+                  _FooterServiceLink(label: 'Vanguard', onPressed: onVanguard),
                 ],
               ),
             ],
@@ -23114,10 +23113,7 @@ class _FooterServiceLink extends StatelessWidget {
   final String label;
   final VoidCallback onPressed;
 
-  const _FooterServiceLink({
-    required this.label,
-    required this.onPressed,
-  });
+  const _FooterServiceLink({required this.label, required this.onPressed});
 
   @override
   Widget build(BuildContext context) {
@@ -23658,6 +23654,7 @@ class _GiftsRequestPageState extends State<_GiftsRequestPage> {
               children: [
                 IconButton(
                   onPressed: widget.onBack,
+                  tooltip: 'Back to homepage',
                   icon: const Icon(Icons.arrow_back),
                 ),
                 Image.asset('assets/images/circum_wordmark.png', width: 126),
