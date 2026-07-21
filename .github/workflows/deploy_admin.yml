@@ -23,7 +23,7 @@ jobs:
       - run: flutter test test/admin_operations_test.dart
       - run: CIRCUM_WEB_RECAPTCHA_ENTERPRISE_SITE_KEY="${{ secrets.CIRCUM_WEB_RECAPTCHA_ENTERPRISE_SITE_KEY }}" scripts/build_admin_web.sh
       - run: node scripts/validate_web_artifacts.js --surface=admin
-      - run: npm install -g firebase-tools
-      - run: |
-          source scripts/firebase_tools.sh
-          "$FIREBASE_BIN" deploy --only hosting:admin --project circum-2797c
+      - uses: actions/upload-artifact@v4
+        with:
+          name: admin-web-release
+          path: build/web_admin
