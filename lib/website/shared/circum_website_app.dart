@@ -146,23 +146,8 @@ class _CircumWebsiteAppState extends State<CircumWebsiteApp> {
   }
 
   Future<void> _logWebsiteVisit() async {
-    try {
-      await _ensureCircumFirebaseReady();
-      final user = FirebaseAuth.instance.currentUser;
-      await FirebaseFirestore.instance.collection('websiteVisitors').add({
-        'url': Uri.base.toString(),
-        'path': Uri.base.path,
-        'query': Uri.base.queryParameters,
-        'appMode': _mode.name,
-        'userId': user?.uid,
-        'email': user?.email,
-        'signedIn': user != null,
-        'source': 'circum-web',
-        'createdAt': FieldValue.serverTimestamp(),
-      });
-    } catch (_) {
-      // Visitor analytics must never block the app.
-    }
+    // Website visitor analytics are backend-owned. The previous client write
+    // was denied by Firestore Rules and surfaced as startup console errors.
   }
 
   @override
