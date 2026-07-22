@@ -185,8 +185,12 @@ exports.createHealthPlusBooking = functions.https.onCall(async (data, context) =
   const fullName = text(data.fullName || context.auth.token.name);
   const email = text(data.email || sender.email).toLowerCase();
   const phoneNumber = text(data.phoneNumber);
+  const pharmacyName = text(data.pharmacyName);
   const pharmacyAddress = text(data.pharmacyAddress);
   const deliveryAddress = text(data.deliveryAddress);
+  const prescriptionType = text(data.prescriptionType);
+  const subscriptionPlan = text(data.subscriptionPlan || data.healthPlusPlan);
+  const preferredDay = text(data.preferredDay || data.preferredPickupDay);
   const preferredPickupTime = text(data.preferredPickupTime);
   const frequency = text(data.frequency || "one_off");
   if (!fullName || !email || !email.includes("@") || !phoneNumber || !pharmacyAddress || !deliveryAddress || !preferredPickupTime) {
@@ -224,10 +228,20 @@ exports.createHealthPlusBooking = functions.https.onCall(async (data, context) =
       fullName,
       phoneNumber,
       email,
+      pharmacyName,
       pharmacyAddress,
       deliveryAddress,
       notes: text(data.notes),
+      prescriptionNotes: text(data.notes),
+      prescriptionType,
+      subscriptionPlan,
+      healthPlusPlan: subscriptionPlan,
+      preferredDay,
+      preferredPickupDay: preferredDay,
+      preferredPickupTime,
+      frequency,
       consentConfirmed: true,
+      consentAccepted: true,
       source: "cloud-functions",
       updatedAt: now,
     };
@@ -240,11 +254,27 @@ exports.createHealthPlusBooking = functions.https.onCall(async (data, context) =
       fullName,
       phoneNumber,
       email,
+      pharmacyName,
       pharmacyAddress,
       deliveryAddress,
       notes: text(data.notes),
+      prescriptionNotes: text(data.notes),
+      prescriptionType,
+      subscriptionPlan,
+      healthPlusPlan: subscriptionPlan,
+      preferredDay,
+      preferredTime: preferredPickupTime,
+      preferredPickupDay: preferredDay,
       preferredPickupTime,
+      scheduledPickupDate: preferredDay,
+      scheduledPickupWindow: preferredPickupTime,
+      scheduledDropoffDate: preferredDay,
+      scheduledDropoffWindow: preferredPickupTime,
       frequency,
+      recurring: scheduleRef != null,
+      customSchedule: text(data.customSchedule),
+      priorityRiderMatching: subscriptionPlan === "priority",
+      consentAccepted: true,
       status: "scheduled",
       price: authoritative.amountPence / 100,
       amountPence: authoritative.amountPence,
@@ -286,7 +316,23 @@ exports.createHealthPlusBooking = functions.https.onCall(async (data, context) =
         senderId: sender.uid,
         userId: sender.uid,
         frequency,
+        pharmacyName,
+        pharmacyAddress,
+        deliveryAddress,
+        prescriptionType,
+        subscriptionPlan,
+        healthPlusPlan: subscriptionPlan,
+        preferredDay,
+        preferredTime: preferredPickupTime,
+        preferredPickupDay: preferredDay,
+        preferredPickupTime,
         preferredDayTime: preferredPickupTime,
+        prescriptionNotes: text(data.notes),
+        consentAccepted: true,
+        scheduledPickupDate: preferredDay,
+        scheduledPickupWindow: preferredPickupTime,
+        scheduledDropoffDate: preferredDay,
+        scheduledDropoffWindow: preferredPickupTime,
         customSchedule: text(data.customSchedule),
         paused: false,
         status: "active",
@@ -348,7 +394,7 @@ exports.updateSenderHealthPlusBooking = functions.https.onCall(async (data, cont
     if (replay.exists) return {...replay.data(), idempotent: true};
 
     const now = FieldValue.serverTimestamp();
-    if (action === "pause_schedule" || action === "resume_schedule") {
+    if (action === "pause_schedule" || action === "resume_schedule" || action === "cancel_schedule") {
       const scheduleId = text(data.scheduleId);
       if (!scheduleId) throw new functions.https.HttpsError("invalid-argument", "Schedule is required.");
       const scheduleRef = db.collection("recurringPickupSchedules").doc(scheduleId);
@@ -356,21 +402,26 @@ exports.updateSenderHealthPlusBooking = functions.https.onCall(async (data, cont
       if (!scheduleSnap.exists || !senderOwnsHealthRecord(sender, scheduleSnap.data())) {
         throw new functions.https.HttpsError("permission-denied", "Health+ schedule not found.");
       }
-      const paused = action === "pause_schedule";
+      const paused = action === "pause_schedule" || action === "cancel_schedule";
+      const status = action === "cancel_schedule" ? "cancelled" : paused ? "paused" : "active";
+      const eventType = action === "cancel_schedule" ? "recurring_pickup_cancelled" :
+        paused ? "recurring_pickup_paused" : "recurring_pickup_resumed";
       transaction.set(scheduleRef, {
         paused,
+        status,
+        ...(action === "cancel_schedule" ? {cancelledAt: now} : {}),
         updatedAt: now,
-        auditHistory: FieldValue.arrayUnion(healthPlusAudit(paused ? "recurring_pickup_paused" : "recurring_pickup_resumed", sender, {
+        auditHistory: FieldValue.arrayUnion(healthPlusAudit(eventType, sender, {
           scheduleId,
-          status: paused ? "paused" : "active",
+          status,
         })),
       }, {merge: true});
-      transaction.set(db.collection("healthPlusUsageEvents").doc(), healthPlusAudit(paused ? "recurring_pickup_paused" : "recurring_pickup_resumed", sender, {
+      transaction.set(db.collection("healthPlusUsageEvents").doc(), healthPlusAudit(eventType, sender, {
         scheduleId,
-        status: paused ? "paused" : "active",
+        status,
       }));
-      transaction.set(idempotencyRef, {status: paused ? "paused" : "active", scheduleId, senderId: sender.uid, createdAt: now}, {merge: true});
-      return {status: paused ? "paused" : "active", scheduleId, idempotent: false};
+      transaction.set(idempotencyRef, {status, scheduleId, senderId: sender.uid, createdAt: now}, {merge: true});
+      return {status, scheduleId, idempotent: false};
     }
 
     if (action === "cancel_pickup") {

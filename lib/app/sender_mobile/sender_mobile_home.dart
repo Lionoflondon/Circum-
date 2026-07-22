@@ -16,7 +16,9 @@ import '../sender_profile/sender_profile.dart';
 import '../send_package/bloc/send_package_bloc.dart';
 import '../send_package/view/ride_chats.dart';
 import 'design_system/sender_design_system.dart';
+import 'gift_journey_draft.dart';
 import 'gift_mode_view.dart';
+import 'gift_story_view.dart';
 import 'sender_accessibility.dart';
 import 'sender_activity.dart';
 import 'sender_booking_canvas.dart';
@@ -50,7 +52,7 @@ const senderMobileAuthCreateHeadline = 'Join Circum';
 const senderMobileAuthFinePrint =
     "By continuing, you agree to Circum's Terms and Privacy Policy.";
 const senderMobilePreviewAuthEnabledContract =
-    'Sender Mobile preview uses real Firebase Auth before booking.';
+    'Sender opens with secure sign-in before booking.';
 
 enum _SenderEntryScreen { landing, auth, app }
 
@@ -243,6 +245,23 @@ class _SenderMobileHomeState extends State<SenderMobileHome> {
               settings: const RouteSettings(name: GiftModeView.routeName),
             ),
           );
+          break;
+        case GiftStoryView.routeName:
+          Navigator.of(context).push(
+            MaterialPageRoute<void>(
+              builder: (_) => GiftStoryView(
+                draft:
+                    GiftJourneyDraft.forMode(SenderGiftMode.someone).copyWith(
+                  linkedGiftDeliveryStatus: 'delivered',
+                  riderCompletionAccepted: true,
+                  deliveryVerificationCompleted: true,
+                  deliveryAuditSuccessful: true,
+                ),
+              ),
+              settings: const RouteSettings(name: GiftStoryView.routeName),
+            ),
+          );
+          break;
       }
     });
   }
@@ -288,12 +307,11 @@ class _SenderMobileHomeState extends State<SenderMobileHome> {
               : _SenderEntryScreen.app;
         });
       }, onError: (Object error, StackTrace stackTrace) {
-        FlutterError.reportError(FlutterErrorDetails(
-          exception: error,
-          stack: stackTrace,
-          library: 'sender auth',
-          context: ErrorDescription('restoring Sender Firebase Auth session'),
-        ));
+        _reportUnexpectedAuthRestoreError(
+          error,
+          stackTrace,
+          'restoring Sender session',
+        );
         if (!mounted) return;
         setState(() {
           _authRestoring = false;
@@ -301,18 +319,68 @@ class _SenderMobileHomeState extends State<SenderMobileHome> {
         });
       });
     } catch (error, stackTrace) {
-      FlutterError.reportError(FlutterErrorDetails(
-        exception: error,
-        stack: stackTrace,
-        library: 'sender auth',
-        context: ErrorDescription('configuring Sender Firebase Auth session'),
-      ));
+      _reportUnexpectedAuthRestoreError(
+        error,
+        stackTrace,
+        'configuring Sender session',
+      );
       if (!mounted) return;
       setState(() {
         _authRestoring = false;
         _entry = _SenderEntryScreen.landing;
       });
     }
+  }
+
+  void _reportUnexpectedAuthRestoreError(
+    Object error,
+    StackTrace stackTrace,
+    String context,
+  ) {
+    if (_isExpectedAuthRestoreFailure(error)) {
+      debugPrint('Sender auth restore recovered: $error');
+      return;
+    }
+    FlutterError.reportError(FlutterErrorDetails(
+      exception: error,
+      stack: stackTrace,
+      library: 'sender auth',
+      context: ErrorDescription(context),
+    ));
+  }
+
+  bool _isExpectedAuthRestoreFailure(Object error) {
+    if (error is FirebaseAuthException) {
+      return const {
+        'app-deleted',
+        'app-not-authorized',
+        'invalid-api-key',
+        'invalid-app-credential',
+        'network-request-failed',
+        'operation-not-supported-in-this-environment',
+        'timeout',
+        'unauthorized-domain',
+        'user-disabled',
+        'web-storage-unsupported',
+      }.contains(error.code);
+    }
+    if (error is FirebaseException) {
+      return error.plugin == 'firebase_auth' &&
+          const {
+            'network-request-failed',
+            'operation-not-supported-in-this-environment',
+            'timeout',
+            'web-storage-unsupported',
+          }.contains(error.code);
+    }
+    final message = error.toString().toLowerCase();
+    return message.contains('network') ||
+        message.contains('offline') ||
+        message.contains('storage') ||
+        message.contains('persistence') ||
+        message.contains('auth/network-request-failed') ||
+        message.contains('auth/operation-not-supported-in-this-environment') ||
+        message.contains('auth/web-storage-unsupported');
   }
 }
 

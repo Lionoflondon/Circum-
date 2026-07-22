@@ -1,3 +1,8 @@
+import 'dart:async';
+
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:cloud_functions/cloud_functions.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
@@ -8,22 +13,116 @@ import '../security/circum_app_check.dart';
 import '../send_package/bloc/send_package_bloc.dart';
 import 'design_system/sender_design_system.dart';
 import 'gift_mode_view.dart';
+import 'gift_story_view.dart';
 import 'sender_accessibility.dart';
 import 'sender_mobile_home.dart';
+import 'sender_startup_diagnostics.dart';
 
 Future<void> main() async {
+  SenderStartupDiagnostics.installGlobalHandlers();
+  await runZonedGuarded<Future<void>>(
+    _startSenderWeb,
+    (error, stackTrace) {
+      SenderStartupDiagnostics.instance.fail(
+        'runZonedGuarded',
+        error,
+        stackTrace,
+      );
+      if (!_senderAppStarted) {
+        _runSenderApp(const _SenderWebStartupRecovery());
+      }
+    },
+  );
+}
+
+var _senderAppStarted = false;
+var _firebaseInitialized = false;
+var _authInitialized = false;
+var _firestoreConnected = false;
+var _functionsConnected = false;
+var _appCheckState = 'Not started';
+
+Future<void> _startSenderWeb() async {
+  final diagnostics = SenderStartupDiagnostics.instance;
+  diagnostics.start('Flutter initialization');
   WidgetsFlutterBinding.ensureInitialized();
+  diagnostics.complete('Flutter initialization');
+
   if (kIsWeb) {
+    diagnostics.start('Firebase.initializeApp()');
     await Firebase.initializeApp(options: DefaultFirebaseOptions.web);
+    _firebaseInitialized = true;
+    diagnostics.complete('Firebase.initializeApp()');
+    _refreshRuntimeHealth();
+
+    diagnostics.start('Firebase Auth initialization');
+    FirebaseAuth.instance;
+    _authInitialized = true;
+    diagnostics.complete('Firebase Auth initialization');
+    _refreshRuntimeHealth();
+
+    diagnostics.start('Firestore initialization');
+    FirebaseFirestore.instance;
+    _firestoreConnected = true;
+    diagnostics.complete('Firestore initialization');
+    _refreshRuntimeHealth();
+
+    diagnostics.start('Callable initialization');
+    FirebaseFunctions.instance;
+    _functionsConnected = true;
+    diagnostics.complete('Callable initialization');
+    _refreshRuntimeHealth();
+
+    diagnostics.start('App Check initialization');
     final appCheckStartup = await initializeCircumAppCheck();
     if (appCheckStartup.blockStartup) {
-      runApp(_SenderWebStartupBlocked(message: appCheckStartup.message));
+      _appCheckState = 'Blocking failure';
+      diagnostics.fail(
+        'App Check initialization',
+        appCheckStartup.message,
+        StackTrace.current,
+      );
+      _refreshRuntimeHealth();
+      _runSenderApp(const _SenderWebStartupRecovery());
       return;
     }
+    _appCheckState = 'Ready';
+    diagnostics.complete('App Check initialization');
+    _refreshRuntimeHealth();
   } else {
+    diagnostics.start('Firebase.initializeApp()');
     await Firebase.initializeApp();
+    _firebaseInitialized = true;
+    diagnostics.complete('Firebase.initializeApp()');
+    _refreshRuntimeHealth();
   }
-  runApp(const SenderMobilePreviewApp());
+  diagnostics.start('runApp()');
+  _runSenderApp(const SenderMobilePreviewApp());
+  diagnostics.complete('runApp()');
+  WidgetsBinding.instance.addPostFrameCallback((_) {
+    diagnostics.completeOnce('First frame rendered');
+    _refreshRuntimeHealth();
+  });
+}
+
+void _runSenderApp(Widget app) {
+  _senderAppStarted = true;
+  runApp(app);
+}
+
+void _refreshRuntimeHealth() {
+  SenderStartupDiagnostics.instance.updateHealth(SenderRuntimeHealthSnapshot(
+    buildHash: senderBuildHash,
+    releaseTag: senderReleaseTag,
+    firebaseInitialized: _firebaseInitialized,
+    appCheckState: _appCheckState,
+    authInitialized: _authInitialized,
+    firestoreConnected: _firestoreConnected,
+    functionsConnected: _functionsConnected,
+    mapsReady: false,
+    stripeReady: false,
+    authenticated: FirebaseAuth.instance.currentUser != null,
+  ));
 }
 
 class SenderMobilePreviewApp extends StatelessWidget {
@@ -31,6 +130,7 @@ class SenderMobilePreviewApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    SenderStartupDiagnostics.instance.start('Router construction');
     final initialRouteName = _initialSenderRouteName(Uri.base);
     final initialIndex =
         int.tryParse(Uri.base.queryParameters['tab'] ?? '')?.clamp(0, 4) ?? 0;
@@ -40,6 +140,7 @@ class SenderMobilePreviewApp extends StatelessWidget {
       initialIndex: initialIndex,
       initialRouteName: initialRouteName,
     );
+    SenderStartupDiagnostics.instance.completeOnce('Router construction');
     return BlocProvider(
       create: (_) => SendPackageBloc(),
       child: MaterialApp(
@@ -53,10 +154,17 @@ class SenderMobilePreviewApp extends StatelessWidget {
           ),
         ],
         theme: AppTheme.dark(),
-        builder: (context, child) => SenderAccessibilityHost(
-          repository: const _PreviewSenderAccessibilityRepository(),
-          child: child ?? const SizedBox.shrink(),
-        ),
+        builder: (context, child) {
+          return Stack(
+            children: [
+              SenderAccessibilityHost(
+                repository: const _PreviewSenderAccessibilityRepository(),
+                child: child ?? const SizedBox.shrink(),
+              ),
+              const SenderRuntimeHealthPanel(),
+            ],
+          );
+        },
       ),
     );
   }
@@ -67,6 +175,10 @@ String? _initialSenderRouteName(Uri uri) {
   if (fragment == GiftModeView.routeName ||
       fragment == '#${GiftModeView.routeName}') {
     return GiftModeView.routeName;
+  }
+  if (fragment == GiftStoryView.routeName ||
+      fragment == '#${GiftStoryView.routeName}') {
+    return GiftStoryView.routeName;
   }
   return null;
 }
@@ -83,43 +195,59 @@ class _PreviewSenderAccessibilityRepository
       Stream.value(const SenderAccessibilitySettings());
 }
 
-class _SenderWebStartupBlocked extends StatelessWidget {
-  const _SenderWebStartupBlocked({required this.message});
-
-  final String message;
+class _SenderWebStartupRecovery extends StatelessWidget {
+  const _SenderWebStartupRecovery();
 
   @override
   Widget build(BuildContext context) {
-    final blocked = Scaffold(
-      backgroundColor: const Color(0xFF07090F),
-      body: SafeArea(
-        child: Center(
-          child: Padding(
-            padding: const EdgeInsets.all(24),
-            child: Text(
-              message,
-              textAlign: TextAlign.center,
-              style: const TextStyle(
-                color: Colors.white,
-                fontSize: 16,
-                fontWeight: FontWeight.w700,
+    return MaterialApp(
+      debugShowCheckedModeBanner: false,
+      title: 'Circum Sender',
+      home: Scaffold(
+        backgroundColor: const Color(0xFF07090F),
+        body: SafeArea(
+          child: Center(
+            child: Padding(
+              padding: const EdgeInsets.all(24),
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 420),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Text(
+                      "We're having trouble starting Circum.",
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 22,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    const Text(
+                      'Please try again.\n\nIf the problem continues,\ncontact support.',
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                        color: Color(0xFFD6E4FF),
+                        fontSize: 16,
+                        height: 1.35,
+                      ),
+                    ),
+                    const SizedBox(height: 24),
+                    FilledButton(
+                      onPressed: () {
+                        _senderAppStarted = false;
+                        unawaited(_startSenderWeb());
+                      },
+                      child: const Text('Retry'),
+                    ),
+                  ],
+                ),
               ),
             ),
           ),
         ),
       ),
-    );
-    return MaterialApp(
-      debugShowCheckedModeBanner: false,
-      initialRoute: Navigator.defaultRouteName,
-      routes: {Navigator.defaultRouteName: (_) => blocked},
-      onGenerateInitialRoutes: (_) => [
-        MaterialPageRoute<void>(
-          builder: (_) => blocked,
-          settings: const RouteSettings(name: Navigator.defaultRouteName),
-        ),
-      ],
-      title: 'Circum Sender',
     );
   }
 }

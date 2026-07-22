@@ -37,6 +37,16 @@ part 'send_package_state.dart';
 const _googleMapsDirectionsApiKey =
     String.fromEnvironment('GOOGLE_MAPS_DIRECTIONS_API_KEY');
 
+void _logRecoverableSenderError(
+  String context,
+  Object error,
+  StackTrace stackTrace,
+) {
+  if (!kDebugMode) return;
+  debugPrint('Sender booking recoverable error: $context: $error');
+  debugPrintStack(stackTrace: stackTrace);
+}
+
 class SendPackageBloc extends Bloc<SendPackageEvent, SendPackageState> {
   FirebaseAuth auth = FirebaseAuth.instance;
   FirebaseFirestore db = FirebaseFirestore.instance;
@@ -262,7 +272,13 @@ class SendPackageBloc extends Bloc<SendPackageEvent, SendPackageState> {
           pickupLocality: address[0].locality,
         ),
       );
-    } catch (e) {}
+    } catch (error, stackTrace) {
+      _logRecoverableSenderError(
+        'pickup place details lookup failed',
+        error,
+        stackTrace,
+      );
+    }
   }
 
   void _handleSetDeliveryAddress(SetDeliveryAddress event, Emitter emit) async {
@@ -310,7 +326,7 @@ class SendPackageBloc extends Bloc<SendPackageEvent, SendPackageState> {
 
         if (_googleMapsDirectionsApiKey.isEmpty) {
           emit(state.copyWith(
-            addressSearchError: 'Route preview is temporarily unavailable.',
+            addressSearchError: 'Route preview could not be prepared.',
           ));
           return;
         }
@@ -336,9 +352,9 @@ class SendPackageBloc extends Bloc<SendPackageEvent, SendPackageState> {
           // print(polylineResult.distance);
           // print(polylineResult.distanceText);
           // print(polylineResult.distanceValue);
-          polylineResult.points.forEach((ele) {
-            latLngList.add(LatLng(ele.latitude, ele.longitude));
-          });
+          for (final point in polylineResult.points) {
+            latLngList.add(LatLng(point.latitude, point.longitude));
+          }
 
           List<Polyline> polyLines = [];
           polyLines.add(
@@ -394,7 +410,13 @@ class SendPackageBloc extends Bloc<SendPackageEvent, SendPackageState> {
         }
         // add(CalculateDistance());
       }
-    } catch (e) {}
+    } catch (error, stackTrace) {
+      _logRecoverableSenderError(
+        'delivery route lookup failed',
+        error,
+        stackTrace,
+      );
+    }
   }
 
   void _handleSetDeliveryStatusEvent(
@@ -423,7 +445,13 @@ class SendPackageBloc extends Bloc<SendPackageEvent, SendPackageState> {
       emit(state.copyWith(distance: distanceInTwoDecimalPlaces));
 
       // print(distanceInKilometres);
-    } catch (e) {}
+    } catch (error, stackTrace) {
+      _logRecoverableSenderError(
+        'distance calculation failed',
+        error,
+        stackTrace,
+      );
+    }
   }
 
   void _handleSetDistance(SetDistance event, Emitter<SendPackageState> emit) {
@@ -968,7 +996,13 @@ class SendPackageBloc extends Bloc<SendPackageEvent, SendPackageState> {
           add(SetDrawerHeight(minDrawerHeight: 180, maxDrawerHeight: 0.7.sh));
         }
       }
-    } catch (e) {}
+    } catch (error, stackTrace) {
+      _logRecoverableSenderError(
+        'active delivery setup failed',
+        error,
+        stackTrace,
+      );
+    }
   }
 
   void _handleWatchActiveDeliveryEvent(

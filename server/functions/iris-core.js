@@ -35,6 +35,16 @@ const HANDLING_FLAGS = Object.freeze([
 ]);
 
 const COMPLIANCE_STATUSES = Object.freeze(["allowed", "unsupported", "prohibited"]);
+const TERMINAL_DELIVERY_STATUSES = new Set([
+  "completed",
+  "cancelled",
+  "canceled",
+  "expired",
+  "archived",
+  "failed",
+  "refunded",
+  "closed",
+]);
 const REFERRAL_TYPES = Object.freeze([
   "vehicle_transport",
   "pet_transport",
@@ -91,6 +101,14 @@ const OBJECT_MAPPINGS = Object.freeze([
     weightKg: 40,
     handlingFlags: ["High Value", "Bulky", "Van Required", "Two Person Lift"],
     vehicleRequired: "van",
+  },
+  {
+    id: "medical_documents",
+    patterns: [/\bhospital documents?\b/, /\bclinic paperwork\b/, /\bgp referrals?\b/, /\bx[- ]?rays?\b/, /\bmri scans?\b/, /\bmedical records?\b/],
+    category: "Medical & Pharmacy",
+    weightKg: 0.5,
+    handlingFlags: ["Keep Upright"],
+    vehicleRequired: "any",
   },
   {
     id: "passport_documents",
@@ -182,7 +200,7 @@ const OBJECT_MAPPINGS = Object.freeze([
   },
   {
     id: "medication",
-    patterns: [/\bmedication\b/, /\bmedicine\b/, /\bprescription\b/, /\bpharmacy\b/],
+    patterns: [/\bmedication\b/, /\bmedicine\b/, /\bprescription\b/, /\bprescriptions?\b/, /\bpharmacy\b/, /\bpharmacy collections?\b/, /\binsulin\b/, /\bvaccines?\b/, /\btemperature[- ]controlled medication\b/],
     category: "Medical & Pharmacy",
     weightKg: 0.5,
     handlingFlags: ["Temperature Sensitive"],
@@ -606,10 +624,18 @@ const OBJECT_MAPPINGS = Object.freeze([
   },
   {
     id: "blood_samples",
-    patterns: [/\bblood samples?\b/, /\bmedical samples?\b/, /\blab samples?\b/, /\blaboratory samples?\b/],
+    patterns: [/\bblood samples?\b/, /\bpathology specimens?\b/, /\bmedical specimens?\b/, /\bmedical samples?\b/, /\bdiagnostic samples?\b/, /\burine samples?\b/, /\btissue samples?\b/, /\bswab samples?\b/, /\blab samples?\b/, /\blaboratory samples?\b/, /\bbiological specimens?\b/],
     category: "Medical & Pharmacy",
     weightKg: 0.5,
     handlingFlags: ["Temperature Sensitive", "Keep Upright"],
+    vehicleRequired: "any",
+  },
+  {
+    id: "medical_equipment",
+    patterns: [/\bmedical equipment\b/, /\bdiagnostic equipment\b/],
+    category: "Medical & Pharmacy",
+    weightKg: 4,
+    handlingFlags: ["Fragile"],
     vehicleRequired: "any",
   },
   {
@@ -780,7 +806,16 @@ const PRICING = Object.freeze({
 });
 
 function normalize(value) {
-  return `${value || ""}`.toLowerCase().replace(/[^a-z0-9.+\s-]/g, " ").replace(/\s+/g, " ").trim();
+  return `${value || ""}`
+      .normalize("NFKC")
+      .replace(/(?:[\u200b-\u200d]|\uFE0E|\uFE0F|\uFEFF)/g, "")
+      .toLowerCase()
+      .replace(/(\d)\.(\d)/g, "$1decimalpoint$2")
+      .replace(/[._,\-/\\]+/g, " ")
+      .replace(/[^a-z0-9+\s]/g, " ")
+      .replace(/decimalpoint/g, ".")
+      .replace(/\s+/g, " ")
+      .trim();
 }
 
 function safeText(value, seen = new WeakSet(), depth = 0) {
@@ -798,6 +833,25 @@ function safeText(value, seen = new WeakSet(), depth = 0) {
       .map(([key, item]) => `${key} ${safeText(item, seen, depth + 1)}`)
       .filter(Boolean)
       .join(" ");
+}
+
+function safetyCanonicalText(value) {
+  return safeText(value).normalize("NFKD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .normalize("NFKC")
+      .replace(/\u0430/g, "a")
+      .replace(/\u0435/g, "e")
+      .replace(/\u0456/g, "i")
+      .replace(/\u03bf/g, "o")
+      .replace(/\u03c5/g, "u")
+      .replace(/@/g, "a")
+      .replace(/\$/g, "s")
+      .replace(/0/g, "o")
+      .replace(/1/g, "i")
+      .replace(/3/g, "e")
+      .replace(/5/g, "s")
+      .replace(/7/g, "t")
+      .replace(/ph/g, "f");
 }
 
 function includesAny(text, terms) {
@@ -1319,7 +1373,7 @@ function classifyCategory(text, shipmentSummary = null) {
   if (includesAny(text, ["food", "groceries", "meal", "cake", "drink", "consumable"])) return "Food & Consumables";
   if (includesAny(text, ["sofa", "chair", "table", "wardrobe", "mattress", "furniture", "fridge", "washing machine"])) return "Furniture & Home";
   if (includesAny(text, ["tool", "drill", "machinery", "machine", "engine"])) return "Tools & Machinery";
-  if (includesAny(text, ["prescription", "medicine", "medication", "pharmacy", "medical"])) return "Medical & Pharmacy";
+  if (includesAny(text, ["prescription", "medicine", "medication", "pharmacy", "medical", "pathology", "diagnostic sample", "urine sample", "tissue sample", "swab sample", "hospital", "clinic", "gp referral", "x-ray", "xray", "mri"])) return "Medical & Pharmacy";
   if (includesAny(text, ["stock", "invoice", "business", "commercial", "office equipment"])) return "Business & Commercial";
   if (includesAny(text, ["jewellery", "jewelry", "artwork", "antique", "glass", "fragile", "valuable"])) return "Fragile & Valuable";
   return "Other";
@@ -1332,7 +1386,7 @@ function handlingFlagsFor(text, category, weightKg, shipmentSummary = null) {
   if (category === "Food & Consumables" || includesAny(text, ["food", "meal", "cake", "groceries"])) flags.add("Perishable");
   if (includesAny(text, ["upright", "keep upright", "tv", "fridge", "glass cabinet", "display cabinet", "glass table"])) flags.add("Keep Upright");
   if (category === "Fragile & Valuable" || includesAny(text, ["iphone", "laptop", "jewellery", "jewelry", "valuable", "expensive", "designer", "luxury"])) flags.add("High Value");
-  if (includesAny(text, ["cold", "frozen", "temperature", "medicine", "insulin"])) flags.add("Temperature Sensitive");
+  if (includesAny(text, ["cold", "frozen", "temperature", "medicine", "insulin", "vaccine", "blood sample", "pathology", "diagnostic sample", "urine sample", "tissue sample", "swab sample", "specimen"])) flags.add("Temperature Sensitive");
   if (weightKg > 10 || includesAny(text, ["large", "65 inch", "65-inch", "sofa", "wardrobe", "mattress", "pallet"])) flags.add("Bulky");
   if (includesAny(text, ["awkward", "odd shape", "long", "ladder"])) flags.add("Awkward Shape");
   if (weightKg > 25 || flags.has("Bulky") || includesAny(text, ["van", "sofa", "wardrobe", "mattress", "65 inch", "65-inch"])) flags.add("Van Required");
@@ -1341,7 +1395,7 @@ function handlingFlagsFor(text, category, weightKg, shipmentSummary = null) {
 }
 
 function multilingualProhibitedMatch(rawText) {
-  const source = `${rawText || ""}`.toLowerCase().normalize("NFKC");
+  const source = safetyCanonicalText(rawText).toLowerCase();
   const compact = source.replace(/[\s\u200b-\u200d\uFEFF._-]+/g, "");
   const highRiskPatterns = [
     /炸药|爆炸物|爆竹|枪|枪支|弹药|汽油|毒品/,
@@ -1354,7 +1408,7 @@ function multilingualProhibitedMatch(rawText) {
 }
 
 function compactEmojiText(rawText) {
-  return `${rawText || ""}`.normalize("NFKC")
+  return safeText(rawText).normalize("NFKC")
       .replace(/\s/g, "")
       .replace(/\u200b/g, "")
       .replace(/\u200c/g, "")
@@ -1377,10 +1431,11 @@ function containsLiveAnimalEmoji(rawText) {
 }
 
 function safetyScanFor(rawText) {
-  const source = safeText(rawText).normalize("NFKC")
+  const source = safetyCanonicalText(rawText)
       .replace(/\u200b|\u200c|\u200d|\uFE0E|\uFE0F|\uFEFF/g, "")
       .toLowerCase();
   const spaced = source
+      .replace(/[._,\-/\\]+/g, " ")
       .replace(/[^a-z0-9\s]/g, " ")
       .replace(/\s+/g, " ")
       .trim();
@@ -1389,7 +1444,7 @@ function safetyScanFor(rawText) {
 }
 
 function spacedLetterPattern(term) {
-  return new RegExp(`(?:^|\\b)${term.split("").join("\\s*")}(?:\\b|$)`);
+  return new RegExp(`(?:^|\\b)${term.split("").join("[\\s._,\\-/\\\\\\u200b-\\u200d\\uFEFF]*")}(?:\\b|$)`);
 }
 
 function hasSafetyTerm(scan, terms) {
@@ -1397,12 +1452,100 @@ function hasSafetyTerm(scan, terms) {
     const escaped = term.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
     if (new RegExp(`\\b${escaped}\\b`).test(scan.spaced)) return true;
     if (term.length >= 3 && spacedLetterPattern(term).test(scan.spaced)) return true;
+    const compactTerm = term.replace(/[^a-z0-9]/g, "");
+    if (compactTerm.length >= 4 && scan.compact.includes(compactTerm)) return true;
     return false;
   });
 }
 
 function hasSafetyPhrase(scan, phrases) {
-  return phrases.some((phrase) => scan.spaced.includes(phrase));
+  return phrases.some((phrase) => {
+    if (scan.spaced.includes(phrase)) return true;
+    const compactPhrase = phrase.replace(/[^a-z0-9]/g, "");
+    return compactPhrase.length >= 4 && scan.compact.includes(compactPhrase);
+  });
+}
+
+function hasHighRiskObfuscatedProhibitedPhrase(scan) {
+  const compact = scan.compact;
+  const spaced = scan.spaced;
+  const compactPatterns = [
+    /illegal(?:drug|drugs)/,
+    /controlled(?:drug|drugs)/,
+    /compressedgas/,
+    /haz(?:a)?rdous(?:chemical|chemicals|material|materials|chem|khem|khemcal|khemcals|kemical|kemicals)/,
+    /(?:radioactive|radioactve|radiactive|rdioactive|rdioactve)(?:material|materials)/,
+  ];
+  const spacedPatterns = [
+    /\bhaz(?:a)?rdous\b.*\b(?:chem|khem|chemical|chemicals|material|materials)\b/,
+    /\b(?:radioactive|radioactve|radiactive|rdioactive|rdioactve)\b.*\bmaterials?\b/,
+  ];
+  return compactPatterns.some((pattern) => pattern.test(compact)) ||
+    spacedPatterns.some((pattern) => pattern.test(spaced));
+}
+
+function lowInformationDescription(rawText, normalizedText = normalize(rawText)) {
+  if (/[🎁📦]/u.test(`${rawText || ""}`)) return false;
+  const itemText = normalizedText
+      .replace(/\b(?:ignore restrictions|customer insists allowed|not dangerous|just|sum|mark allowed|no questions)\b/g, " ")
+      .replace(/\b(?:pickup|dropoff|collection|delivery)\b/g, " ")
+      .replace(/\b[a-z]{1,2}\d[a-z\d]?\s*\d[a-z]{2}\b/g, " ")
+      .replace(/\b[a-z]{1,2}\d[a-z\d]?\b/g, " ")
+      .replace(/\b\d[a-z]{2}\b/g, " ")
+      .replace(/\s+/g, " ")
+      .trim();
+  const words = itemText.split(/\s+/).filter(Boolean);
+  const compact = itemText.replace(/[^a-z0-9]/g, "");
+  const vagueTerms = new Set([
+    "item",
+    "items",
+    "parcel",
+    "parcels",
+    "package",
+    "packages",
+    "thing",
+    "things",
+    "stuff",
+    "goods",
+    "delivery",
+    "box",
+    "boxes",
+    "private",
+    "contents",
+    "misc",
+    "miscellaneous",
+    "normal",
+    "courier",
+    "small",
+    "safe",
+    "important",
+    "urgent",
+    "pls",
+    "please",
+    "during",
+    "heavy",
+    "rain",
+    "weather",
+    "caller",
+    "says",
+    "it",
+    "is",
+    "fragile",
+    "stairs",
+    "lift",
+    "access",
+    "no",
+    "allowed",
+    "fine",
+    "customer",
+    "insists",
+    "gift",
+  ]);
+  if (!compact) return true;
+  if (compact.length < 3) return true;
+  if (words.length <= 2 && words.every((word) => vagueTerms.has(word))) return true;
+  const informative = words.filter((word) => word.length >= 3 && !vagueTerms.has(word));
+  return informative.length === 0;
 }
 
 function complianceFor(text, rawText = text) {
@@ -1460,6 +1603,8 @@ function complianceFor(text, rawText = text) {
     "insects",
     "livestock",
     "perro",
+    "piano",
+    "pianos",
   ];
   const specialistPhrases = [
     "live animal",
@@ -1468,17 +1613,22 @@ function complianceFor(text, rawText = text) {
     "pet transport",
     "dog transport",
     "cat transport",
+    "animal transport",
+    "veterinary transport",
     "human remains",
     "body transport",
     "funeral",
     "deceased",
-    "biological specimen",
-    "biological specimens",
+    "car transport",
+    "vehicle transport",
+    "motorbike transport",
+    "industrial machinery",
+    "specialist freight",
   ];
   if (containsDangerousEmoji(rawText)) {
     return {status: "prohibited", reasonCodes: ["dangerous_symbol"], referralType: null, customerMessage: "This item cannot be carried by Circum."};
   }
-  if (hasSafetyTerm(safetyScan, prohibitedTerms) || hasSafetyPhrase(safetyScan, prohibitedPhrases)) {
+  if (hasSafetyTerm(safetyScan, prohibitedTerms) || hasSafetyPhrase(safetyScan, prohibitedPhrases) || hasHighRiskObfuscatedProhibitedPhrase(safetyScan)) {
     return {status: "prohibited", reasonCodes: ["prohibited_item"], referralType: null, customerMessage: "This item cannot be carried by Circum."};
   }
   if (multilingualProhibitedMatch(rawText)) {
@@ -1487,14 +1637,19 @@ function complianceFor(text, rawText = text) {
   if (containsLiveAnimalEmoji(rawText) && !includesAny(text, ["dog food", "cat food", "pet food", "food", "lead", "collar", "toy"])) {
     return {status: "referral_required", reasonCodes: ["specialist_transport_required"], referralType: "pet_transport", customerMessage: "This request needs a specialist referral rather than normal rider dispatch."};
   }
+  const petTermDetected = hasSafetyTerm(safetyScan, ["dog", "cat", "puppy", "puppies", "kitten", "kittens"]);
   if (hasSafetyTerm(safetyScan, specialistTerms) || hasSafetyPhrase(safetyScan, specialistPhrases) ||
-    includesAny(text, ["live animal", "livestock", "pet transport", "dog transport", "cat transport", "funeral", "deceased", "body transport", "human remains", "car transport", "vehicle transport", "motorbike transport", "industrial machinery", "specialist freight", "piano", "pianos"]) ||
-    /\b(dog|cat)\b/.test(text) && !includesAny(text, ["dog food", "cat food", "cat litter", "dog lead", "cat lead", "dog collar", "cat collar", "dog toy", "cat toy"])) {
+    includesAny(text, ["live animal", "livestock", "pet transport", "dog transport", "cat transport", "animal transport", "veterinary transport", "funeral", "deceased", "body transport", "human remains", "car transport", "vehicle transport", "motorbike transport", "industrial machinery", "specialist freight", "piano", "pianos"]) ||
+    petTermDetected &&
+    !includesAny(text, ["dog food", "cat food", "cat litter", "dog lead", "cat lead", "dog collar", "cat collar", "dog toy", "cat toy", "puppy food", "kitten food", "puppy toy", "kitten toy"])) {
     let referralType = "specialist_freight";
-    if (hasSafetyTerm(safetyScan, ["snake", "goat", "insect", "insects", "perro"]) || includesAny(text, ["pet", "dog", "cat", "live animal", "livestock", "live fish"])) referralType = "pet_transport";
+    if (hasSafetyTerm(safetyScan, ["snake", "goat", "insect", "insects", "perro", "dog", "cat", "puppy", "puppies", "kitten", "kittens"]) || includesAny(text, ["pet", "dog", "cat", "puppy", "puppies", "kitten", "kittens", "live animal", "livestock", "live fish", "animal transport", "veterinary transport"])) referralType = "pet_transport";
     if (includesAny(text, ["funeral", "deceased", "body transport", "human remains"])) referralType = "funeral_transport";
     if (includesAny(text, ["car transport", "vehicle transport", "motorbike transport"])) referralType = "vehicle_transport";
     return {status: "referral_required", reasonCodes: ["specialist_transport_required"], referralType, customerMessage: "This request needs a specialist referral rather than normal rider dispatch."};
+  }
+  if (lowInformationDescription(rawText, text)) {
+    return {status: "unsupported", reasonCodes: ["insufficient_item_description"], referralType: null, customerMessage: "Please describe the item before normal dispatch can continue."};
   }
   return {status: "allowed", reasonCodes: [], referralType: null, customerMessage: null};
 }
@@ -1604,6 +1759,11 @@ function valueProtectionFor({text, category, handlingFlags, complianceStatus}) {
   return {level: "standard_protection", reasons: ["normal_delivery_risk"]};
 }
 
+function workflowFor({category}) {
+  if (category === "Medical & Pharmacy") return "Health+";
+  return "Standard";
+}
+
 function verificationPolicyFor({text, category, handlingFlags, complianceStatus, serviceability}) {
   const reasons = [];
   const policy = {
@@ -1694,6 +1854,7 @@ function customerSafeIris(iris) {
   const recommendation = iris.recommendation || {};
   return {
     version: iris.version || "v1",
+    workflow: iris.workflow || "Standard",
     recommendation: {
       category: recommendation.category || null,
       weightBand: recommendation.weightBand || null,
@@ -1867,6 +2028,7 @@ function classifyIris(input = {}) {
   const iris = {
     version: "v1",
     status: compliance.status,
+    workflow: workflowFor({category: authoritativeRecommendation.category}),
     customerDeclaration: {
       description: description.trim(),
       declaredWeightText: `${declaredWeightText || ""}`.trim() || null,
@@ -2010,6 +2172,9 @@ function serverIrisForDispatch(request = {}) {
 }
 
 function dispatchComplianceDecision(request = {}) {
+  if (TERMINAL_DELIVERY_STATUSES.has(normalize(request.status))) {
+    return {dispatchable: false, reason: "terminal_delivery_status"};
+  }
   if (["prohibited", "referral_required", "unsupported"].includes(normalize(request.status))) {
     return {dispatchable: false, reason: "blocked_request_status"};
   }

@@ -1,7 +1,11 @@
+/* eslint-disable max-len */
 const test = require("node:test");
 const assert = require("node:assert/strict");
+const fs = require("node:fs");
+const path = require("node:path");
 
 const accountClosure = require("./account-closure");
+const source = fs.readFileSync(path.join(__dirname, "account-closure.js"), "utf8");
 
 test("account closure exposes one shared callable for sender and rider", () => {
   assert.equal(typeof accountClosure.closeAccount, "function");
@@ -17,4 +21,9 @@ test("rider operational blocker uses canonical account closure copy", () => {
 test("active delivery states include accepted delivery lifecycle", () => {
   assert.ok(accountClosure._test.ACTIVE_DELIVERY_STATUSES.includes("accepted"));
   assert.ok(accountClosure._test.ACTIVE_DELIVERY_STATUSES.includes("awaiting_pin"));
+});
+
+test("sender account closure cleans owned Gift voice media", () => {
+  assert.match(source, /cleanupGiftVoiceMediaForAccount/);
+  assert.match(source, /accountType === "sender"/);
 });

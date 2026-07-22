@@ -2,7 +2,7 @@ import 'package:firebase_app_check/firebase_app_check.dart';
 import 'package:flutter/foundation.dart';
 
 const circumWebRecaptchaEnterpriseSiteKey =
-    String.fromEnvironment('CIRCUM_WEB_RECAPTCHA_ENTERPRISE_SITE_KEY');
+    String.fromEnvironment('PUBLIC_WEB_RECAPTCHA_ENTERPRISE_SITE_KEY');
 
 class CircumAppCheckStartup {
   const CircumAppCheckStartup._({
@@ -63,7 +63,7 @@ Future<CircumAppCheckStartup> initializeCircumAppCheck({
 
   if (isWeb && webProvider == null) {
     return const CircumAppCheckStartup.blocked(
-      'Circum security verification is not configured for this web build.',
+      'Circum security verification is not configured for this version.',
     );
   }
 
@@ -76,7 +76,7 @@ Future<CircumAppCheckStartup> initializeCircumAppCheck({
     return const CircumAppCheckStartup.enabled();
   } catch (_) {
     return const CircumAppCheckStartup.blocked(
-      'Circum security verification is temporarily unavailable.',
+      'Circum security verification could not start. Please try again.',
     );
   }
 }

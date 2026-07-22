@@ -1,6 +1,8 @@
 /* eslint-disable max-len, require-jsdoc */
 const functions = require("firebase-functions/v1");
 const {getFirestore, FieldValue} = require("firebase-admin/firestore");
+const {getStorage} = require("firebase-admin/storage");
+const giftVoiceMedia = require("./gift-voice-media");
 
 function requireAuth(context) {
   if (!context.auth) {
@@ -81,13 +83,72 @@ async function createCampaignPaymentDraft({data, context}) {
   return {giftDraftId: draftRef.id, participantId: participantRef.id, gift: draft};
 }
 
+async function createStandardPaymentDraft({data, context}) {
+  const db = getFirestore();
+  const payload = cleanObject(data.giftDraft);
+  const requestedId = text(data.giftDraftId || payload.giftDraftId).replace(/[/.#[\]]/g, "_");
+  const draftRef = requestedId ?
+    db.collection("giftPaymentDrafts").doc(requestedId) :
+    db.collection("giftPaymentDrafts").doc();
+  const gross = Number(payload.grossGiftBudget || payload.grossBudget || payload.budget || 0);
+  if (gross < 50) {
+    throw new functions.https.HttpsError("failed-precondition", "Gift payment cannot be started.");
+  }
+  if (!text(payload.recipientName) || !text(payload.deliveryAddress)) {
+    throw new functions.https.HttpsError("invalid-argument", "Gift recipient and delivery details are required.");
+  }
+  const senderEmail = text(context.auth.token && context.auth.token.email) || text(payload.senderEmail);
+  const now = FieldValue.serverTimestamp();
+  const draft = {
+    ...payload,
+    giftDraftId: draftRef.id,
+    senderId: context.auth.uid,
+    senderEmail,
+    grossGiftBudget: gross,
+    grossBudget: gross,
+    budget: gross,
+    paymentStatus: "payment_pending",
+    giftStatus: text(payload.giftStatus || "draft"),
+    status: text(payload.status || "draft"),
+    source: "createGiftPayment",
+    createdAt: now,
+    updatedAt: now,
+  };
+  await db.runTransaction(async (transaction) => {
+    const existing = await transaction.get(draftRef);
+    if (existing.exists) {
+      const existingData = existing.data() || {};
+      if (existingData.senderId !== context.auth.uid || existingData.paymentStatus === "paid") {
+        throw new functions.https.HttpsError("failed-precondition", "Gift payment cannot be started.");
+      }
+    }
+    transaction.set(draftRef, draft, {merge: false});
+    transaction.set(db.collection("giftPaymentEvents").doc(), {
+      giftDraftId: draftRef.id,
+      actorUid: context.auth.uid,
+      action: "gift_payment_draft_created",
+      source: "createGiftPayment",
+      createdAt: now,
+    }, {merge: false});
+  });
+  return {giftDraftId: draftRef.id, gift: draft};
+}
+
 exports.createGiftPayment = (stripe) => functions.https.onCall(async (data, context) => {
   requireAuth(context);
   const campaignRequest = data.source === "sender_mobile_campaign" && data.campaignParticipant;
   const campaignDraft = campaignRequest ?
     await createCampaignPaymentDraft({data, context}) :
     null;
-  const giftDraftId = String((campaignDraft && campaignDraft.giftDraftId) || data.giftDraftId || "");
+  const standardDraft = !campaignDraft && data.giftDraft ?
+    await createStandardPaymentDraft({data, context}) :
+    null;
+  const giftDraftId = String(
+      (standardDraft && standardDraft.giftDraftId) ||
+      (campaignDraft && campaignDraft.giftDraftId) ||
+      data.giftDraftId ||
+      "",
+  );
   const ref = getFirestore().collection("giftPaymentDrafts").doc(giftDraftId);
   const snap = await ref.get();
   if (!snap.exists || snap.data().senderId !== context.auth.uid) {
@@ -159,6 +220,14 @@ async function finalizeGiftPaymentSession({
   if (!session || session.payment_status !== "paid") {
     throw new functions.https.HttpsError("failed-precondition", "Payment has not completed.");
   }
+  const preflightDraft = await draftRef.get();
+  const verifiedVoiceNote = preflightDraft.exists ?
+    await giftVoiceMedia.verifyGiftVoiceStorageObject({
+      bucket: getStorage().bucket(),
+      voiceNote: preflightDraft.data() && preflightDraft.data().voiceNote,
+      senderId: preflightDraft.data() && preflightDraft.data().senderId,
+    }) :
+    null;
   return db.runTransaction(async (transaction) => {
     const [draftSnap, existingGiftSnap] = await Promise.all([
       transaction.get(draftRef),
@@ -181,6 +250,11 @@ async function finalizeGiftPaymentSession({
     if (session.id !== gift.stripeCheckoutSessionId) {
       throw new functions.https.HttpsError("invalid-argument", "Invalid checkout session.");
     }
+    const transactionVoiceNote = giftVoiceMedia.sanitizeGiftVoiceNoteMetadata(gift.voiceNote, gift.senderId);
+    if ((transactionVoiceNote && !verifiedVoiceNote) ||
+        (verifiedVoiceNote && (!transactionVoiceNote || transactionVoiceNote.storagePath !== verifiedVoiceNote.storagePath))) {
+      throw new functions.https.HttpsError("failed-precondition", "Gift voice note changed during checkout.");
+    }
     const gross = Number(gift.grossGiftBudget || gift.grossBudget || 0);
     const expectedAmount = Math.round(gross * 100);
     if (session.currency !== "gbp" || Number(session.amount_total || 0) !== expectedAmount) {
@@ -188,6 +262,7 @@ async function finalizeGiftPaymentSession({
     }
     transaction.set(giftRef, {
       ...gift,
+      ...(verifiedVoiceNote ? {voiceNote: verifiedVoiceNote} : {}),
       paymentStatus: "paid",
       giftStatus: "submitted_for_review",
       status: "submitted_for_review",
@@ -207,6 +282,16 @@ async function finalizeGiftPaymentSession({
       source: eventId ? "stripe_webhook" : "client_recovery",
       createdAt: FieldValue.serverTimestamp(),
     }, {merge: false});
+    if (verifiedVoiceNote) {
+      transaction.set(db.collection("giftVoiceMediaAudit").doc(), giftVoiceMedia.giftVoiceLifecycleAudit({
+        action: "gift_voice_media_attached",
+        actorUid: gift.senderId,
+        giftDraftId,
+        giftRequestId: giftDraftId,
+        storagePath: verifiedVoiceNote.storagePath,
+        reason: eventId ? "stripe_webhook_finalization" : "client_payment_recovery",
+      }), {merge: false});
+    }
     transaction.delete(draftRef);
     return {paymentStatus: "paid", giftStatus: "submitted_for_review", giftRequestId: giftDraftId};
   });
@@ -237,3 +322,5 @@ exports.finalizeGiftPayment = (stripe) => functions.https.onCall(async (data, co
 });
 
 exports.finalizeGiftPaymentFromCheckoutSession = finalizeGiftPaymentSession;
+exports.cleanupExpiredGiftVoiceDrafts = giftVoiceMedia.cleanupExpiredGiftVoiceDrafts;
+exports.onGiftRequestVoiceMediaDeleted = giftVoiceMedia.onGiftRequestVoiceMediaDeleted;

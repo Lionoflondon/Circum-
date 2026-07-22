@@ -1,13 +1,15 @@
+import 'dart:convert';
 import 'dart:math' as math;
 
 import 'package:cloud_functions/cloud_functions.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:http/http.dart' as http;
 
 import '../gifts/gift_story_studio_policy.dart';
 import 'gift_journey_draft.dart';
-import 'gift_voice_recorder.dart';
+import '../media/circum_media.dart';
 import 'gift_relationship_view.dart';
 
 class GiftStoryView extends StatefulWidget {
@@ -24,33 +26,22 @@ class GiftStoryView extends StatefulWidget {
 class _GiftStoryViewState extends State<GiftStoryView>
     with SingleTickerProviderStateMixin {
   late final AnimationController _progress;
-  late final List<GiftStorySlide> _slides;
+  late List<GiftStorySlide> _slides;
   var _index = 0;
   var _paused = false;
   var _soundOn = true;
   var _actionBusy = false;
   var _thankYouSent = false;
   var _storySaved = false;
+  var _viewerAuthenticated = FirebaseAuth.instance.currentUser != null;
+  var _showJoinPrompt = false;
+  var _storyLoading = false;
+  String? _storyError;
 
   @override
   void initState() {
     super.initState();
-    _slides = GiftStoryStudioPolicy.buildSlides(
-      recipientName: widget.draft.recipientName ?? 'you',
-      senderName: 'Someone special',
-      senderNote: widget.draft.personalMessage ?? '',
-      senderVoiceNoteUrl: widget.draft.voiceNote?.downloadUrl,
-      giftItems: [
-        {
-          'name': widget.draft.mode == SenderGiftMode.campaign
-              ? 'Your campaign gift'
-              : 'Your gift',
-          'why': widget.draft.irisGiftBrief?.experienceDirection ??
-              'Because this moment deserved something thoughtful.',
-        },
-      ],
-      canRevealSender: false,
-    );
+    _slides = _slidesFromDraft(widget.draft);
     _progress = AnimationController(
       vsync: this,
       duration: Duration(milliseconds: _slides.first.durationMs),
@@ -58,7 +49,10 @@ class _GiftStoryViewState extends State<GiftStoryView>
         if (status == AnimationStatus.completed) _next();
       });
     if (widget.draft.giftStoryUnlocked) _run();
-    WidgetsBinding.instance.addPostFrameCallback((_) => _loadActionState());
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      await _resolveStoryFromBackend();
+      await _loadActionState();
+    });
   }
 
   @override
@@ -87,9 +81,16 @@ class _GiftStoryViewState extends State<GiftStoryView>
 
   void _next() {
     if (!mounted || !widget.draft.giftStoryUnlocked) return;
-    if (_index >= _slides.length - 1) return;
+    if (_index >= _slides.length - 1) {
+      if (_isGuestViewer) setState(() => _showJoinPrompt = true);
+      return;
+    }
     setState(() => _index += 1);
     _run();
+    if (_index == _slides.length - 1 && _isGuestViewer) {
+      setState(() => _showJoinPrompt = true);
+      _recordGuestEvent('guest_completed_video');
+    }
   }
 
   void _previous() {
@@ -103,8 +104,108 @@ class _GiftStoryViewState extends State<GiftStoryView>
   }
 
   void _replay() {
-    setState(() => _index = 0);
+    setState(() {
+      _index = 0;
+      _showJoinPrompt = false;
+    });
     _run();
+  }
+
+  bool get _hasToken => _actionPayload.containsKey('token');
+
+  bool get _isGuestViewer => _hasToken && !_viewerAuthenticated;
+
+  List<GiftStorySlide> _slidesFromDraft(GiftJourneyDraft draft) {
+    return GiftStoryStudioPolicy.buildSlides(
+      recipientName: draft.recipientName ?? 'you',
+      senderName: 'Someone special',
+      senderNote: draft.personalMessage ?? '',
+      senderVoiceNoteUrl: draft.voiceNote?.downloadUrl,
+      giftItems: [
+        {
+          'name': draft.mode == SenderGiftMode.campaign
+              ? 'Your campaign gift'
+              : 'Your gift',
+          'why': draft.irisGiftBrief?.experienceDirection ??
+              'Because this moment deserved something thoughtful.',
+        },
+      ],
+      canRevealSender: false,
+    );
+  }
+
+  List<GiftStorySlide> _slidesFromStory(Map<String, dynamic> story) {
+    final slides = story['giftStorySlides'];
+    if (slides is List && slides.isNotEmpty) {
+      return slides
+          .whereType<Map>()
+          .map((slide) => _slideFromMap(Map<String, dynamic>.from(slide)))
+          .toList(growable: false);
+    }
+    final voice = story['voiceNote'];
+    final voiceUrl = voice is Map
+        ? '${voice['downloadUrl'] ?? story['giftStorySenderVoiceNoteUrl'] ?? ''}'
+        : '${story['giftStorySenderVoiceNoteUrl'] ?? ''}';
+    return GiftStoryStudioPolicy.buildSlides(
+      recipientName: '${story['recipientName'] ?? 'you'}',
+      senderName: '${story['senderName'] ?? 'Someone special'}',
+      senderNote:
+          '${story['personalMessage'] ?? story['senderMessageText'] ?? ''}',
+      senderVoiceNoteUrl: voiceUrl.trim().isEmpty ? null : voiceUrl,
+      giftItems: [
+        {
+          'name': '${story['giftItemsSummary'] ?? 'Your gift'}',
+          'why': '${story['giftStoryCircumMessage'] ?? 'Chosen with care.'}',
+        },
+      ],
+      canRevealSender: false,
+    );
+  }
+
+  GiftStorySlide _slideFromMap(Map<String, dynamic> slide) {
+    final typeValue = '${slide['type'] ?? ''}'.trim();
+    final type = GiftStorySlideType.values.firstWhere(
+      (candidate) => candidate.value == typeValue,
+      orElse: () => GiftStorySlideType.whyChosen,
+    );
+    return GiftStorySlide(
+      type: type,
+      eyebrow: '${slide['eyebrow'] ?? ''}',
+      headline: '${slide['headline'] ?? ''}',
+      body: '${slide['body'] ?? ''}',
+      mediaUrl: '${slide['mediaUrl'] ?? slide['imageUrl'] ?? ''}'.trim(),
+      durationMs: int.tryParse('${slide['durationMs'] ?? ''}') ?? 5200,
+    );
+  }
+
+  Future<void> _resolveStoryFromBackend() async {
+    final token = _actionPayload['token'];
+    if (token == null || token.isEmpty) return;
+    setState(() {
+      _storyLoading = true;
+      _storyError = null;
+    });
+    try {
+      final result = await FirebaseFunctions.instance
+          .httpsCallable('resolveGiftStoryAccess')
+          .call<Map<String, dynamic>>({'token': token});
+      final data = Map<String, dynamic>.from(result.data);
+      final story = Map<String, dynamic>.from(data['story'] as Map);
+      if (!mounted) return;
+      setState(() {
+        _slides = _slidesFromStory(story);
+        _index = 0;
+        _storyLoading = false;
+      });
+      _recordGuestEvent('guest_viewed_story');
+      _run();
+    } catch (error) {
+      if (!mounted) return;
+      setState(() {
+        _storyLoading = false;
+        _storyError = _actionError(error);
+      });
+    }
   }
 
   Map<String, String> get _actionPayload {
@@ -136,6 +237,7 @@ class _GiftStoryViewState extends State<GiftStoryView>
       setState(() {
         _thankYouSent = data['thanked'] == true;
         _storySaved = data['saved'] == true;
+        _viewerAuthenticated = data['authenticated'] == true;
       });
     } catch (_) {
       // The action buttons retain their own retry and error handling.
@@ -144,6 +246,7 @@ class _GiftStoryViewState extends State<GiftStoryView>
 
   Future<void> _sendThankYou() async {
     if (_actionBusy || _thankYouSent) return;
+    if (!await _ensureAccountForOwnership()) return;
     setState(() => _actionBusy = true);
     try {
       await _callAction('acknowledgeGiftStory');
@@ -159,17 +262,11 @@ class _GiftStoryViewState extends State<GiftStoryView>
 
   Future<void> _keepStory() async {
     if (_actionBusy || _storySaved) return;
-    if (FirebaseAuth.instance.currentUser == null) {
-      final authenticated = await showDialog<bool>(
-        context: context,
-        barrierDismissible: false,
-        builder: (_) => const _GiftStoryAuthDialog(),
-      );
-      if (authenticated != true || !mounted) return;
-    }
+    if (!await _ensureAccountForOwnership()) return;
     setState(() => _actionBusy = true);
     try {
       await _callAction('saveGiftStoryToVault');
+      await _recordGuestEvent('guest_claimed_gift_story');
       if (!mounted) return;
       setState(() => _storySaved = true);
       _showConfirmation('This Gift Story is saved to your Vault.');
@@ -177,6 +274,39 @@ class _GiftStoryViewState extends State<GiftStoryView>
       if (mounted) _showConfirmation(_actionError(error));
     } finally {
       if (mounted) setState(() => _actionBusy = false);
+    }
+  }
+
+  Future<bool> _ensureAccountForOwnership() async {
+    if (_viewerAuthenticated) return true;
+    setState(() => _showJoinPrompt = true);
+    if (FirebaseAuth.instance.currentUser == null) {
+      final authenticated = await showDialog<bool>(
+        context: context,
+        barrierDismissible: false,
+        builder: (_) => const _GiftStoryAuthDialog(),
+      );
+      if (authenticated != true || !mounted) return false;
+    }
+    await _loadActionState();
+    await _recordGuestEvent('guest_registered');
+    return _viewerAuthenticated;
+  }
+
+  Future<void> _recordGuestEvent(String event) async {
+    final token = _actionPayload['token'];
+    if (token == null || token.isEmpty) return;
+    try {
+      await http.post(
+        Uri.parse(
+          'https://us-central1-circum-2797c.cloudfunctions.net/'
+          'recordGiftStoryGuestEvent',
+        ),
+        headers: const {'content-type': 'application/json'},
+        body: jsonEncode({'token': token, 'event': event}),
+      );
+    } catch (_) {
+      // Guest analytics must never interrupt Gift Story playback.
     }
   }
 
@@ -222,7 +352,13 @@ class _GiftStoryViewState extends State<GiftStoryView>
       body: SafeArea(
         child: Semantics(
           label: 'Your Gift Story is ready',
-          child: Center(child: _buildStoryPlayer()),
+          child: Center(
+            child: _storyLoading
+                ? const CircularProgressIndicator()
+                : _storyError != null
+                    ? _StoryLoadError(message: _storyError!)
+                    : _buildStoryPlayer(),
+          ),
         ),
       ),
     );
@@ -338,6 +474,16 @@ class _GiftStoryViewState extends State<GiftStoryView>
                     ),
                   ),
                 ),
+              if (_showJoinPrompt && _isGuestViewer)
+                Positioned(
+                  left: 16,
+                  right: 16,
+                  bottom: 18,
+                  child: _GiftStoryJoinPrompt(
+                    onJoin: _keepStory,
+                    onMaybeLater: () => setState(() => _showJoinPrompt = false),
+                  ),
+                ),
             ],
           ),
         ),
@@ -389,6 +535,96 @@ class _LockedStoryCard extends StatelessWidget {
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+class _StoryLoadError extends StatelessWidget {
+  final String message;
+
+  const _StoryLoadError({required this.message});
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.all(28),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const Icon(
+            Icons.card_giftcard_outlined,
+            color: Color(0xFFC9B8FF),
+            size: 38,
+          ),
+          const SizedBox(height: 16),
+          Text(
+            'Gift Story unavailable',
+            textAlign: TextAlign.center,
+            style: GoogleFonts.dmSerifDisplay(
+              color: Colors.white,
+              fontSize: 30,
+            ),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            message,
+            textAlign: TextAlign.center,
+            style: GoogleFonts.inter(
+              color: Colors.white.withValues(alpha: .64),
+              height: 1.45,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _GiftStoryJoinPrompt extends StatelessWidget {
+  final VoidCallback onJoin;
+  final VoidCallback onMaybeLater;
+
+  const _GiftStoryJoinPrompt({
+    required this.onJoin,
+    required this.onMaybeLater,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: const Color(0xDD10122A),
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: Colors.white.withValues(alpha: .14)),
+        boxShadow: [
+          BoxShadow(
+            color: const Color(0xFFC9B8FF).withValues(alpha: .16),
+            blurRadius: 28,
+          ),
+        ],
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(14),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            _SlideEyebrow('Your Gift Story is ready.'),
+            _SlideBody(
+              'Create your free Circum account to save this Gift Story forever in your Vault, rewatch it anytime, send your own Gift Stories, thank the sender, leave a message, and build your own collection of memories.',
+            ),
+            const SizedBox(height: 10),
+            _StoryButton(label: 'Join Circum', onTap: onJoin),
+            const SizedBox(height: 8),
+            _StoryButton(
+              label: 'Maybe later',
+              onTap: onMaybeLater,
+              secondary: true,
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -521,13 +757,13 @@ class _VoiceNoteSlide extends StatefulWidget {
 }
 
 class _VoiceNoteSlideState extends State<_VoiceNoteSlide> {
-  late final SenderGiftVoicePlayback _playback;
+  late final CircumVoicePlayback _playback;
   bool _playing = false;
 
   @override
   void initState() {
     super.initState();
-    _playback = SenderGiftVoicePlayback();
+    _playback = CircumVoicePlayback();
   }
 
   @override

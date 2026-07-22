@@ -63,7 +63,7 @@ Future<CircumAppCheckStartup> initializeCircumAppCheck({
 
   if (isWeb && webProvider == null) {
     return const CircumAppCheckStartup.blocked(
-      'Circum security verification is not configured for this web build.',
+      'Circum security verification is not configured for this version.',
     );
   }
 
@@ -76,7 +76,7 @@ Future<CircumAppCheckStartup> initializeCircumAppCheck({
     return const CircumAppCheckStartup.enabled();
   } catch (_) {
     return const CircumAppCheckStartup.blocked(
-      'Circum security verification is temporarily unavailable.',
+      'Circum security verification could not start. Please try again.',
     );
   }
 }

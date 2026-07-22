@@ -46,7 +46,11 @@ void main() {
       expect(publicBuild, contains('--target=lib/main_public_web.dart'));
       expect(publicBuild, isNot(contains('CIRCUM_WEB_SURFACE')));
       expect(publicBuild,
-          contains('--dart-define=CIRCUM_WEB_RECAPTCHA_ENTERPRISE_SITE_KEY='));
+          contains('--dart-define=PUBLIC_WEB_RECAPTCHA_ENTERPRISE_SITE_KEY='));
+      expect(
+          publicBuild,
+          isNot(contains(
+              '--dart-define=CIRCUM_WEB_RECAPTCHA_ENTERPRISE_SITE_KEY=')));
       expect(publicBuild, contains('build/public_web'));
       expect(
           senderBuild,
@@ -55,6 +59,10 @@ void main() {
       expect(senderBuild, isNot(contains('CIRCUM_WEB_SURFACE')));
       expect(senderBuild,
           contains('--dart-define=CIRCUM_WEB_RECAPTCHA_ENTERPRISE_SITE_KEY='));
+      expect(
+          senderBuild,
+          isNot(contains(
+              '--dart-define=PUBLIC_WEB_RECAPTCHA_ENTERPRISE_SITE_KEY=')));
       expect(senderBuild, contains('build/sender_app_web'));
     });
 

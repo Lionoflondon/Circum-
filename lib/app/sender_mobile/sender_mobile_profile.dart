@@ -585,7 +585,7 @@ class _SenderMobileProfileViewState extends State<SenderMobileProfileView> {
       }, onError: (_) {
         if (!mounted) return;
         setState(() {
-          _error = 'Live profile updates are temporarily unavailable.';
+          _error = 'Live profile updates could not connect. Please try again.';
         });
       });
     } catch (_) {

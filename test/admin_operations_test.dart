@@ -809,6 +809,22 @@ void main() {
       expect(sendSource, isNot(contains('.collection("messages")')));
     });
 
+    test('Admin chat history shows sender names instead of raw ids', () {
+      final source =
+          File('lib/app/admin/admin_phase1_shell.dart').readAsStringSync();
+      final panelStart = source.indexOf('class _ChatMessageHistoryPanel');
+      final panelEnd = source.indexOf('class _AdminNotesPanel', panelStart);
+      expect(panelStart, isNonNegative);
+      expect(panelEnd, greaterThan(panelStart));
+      final panelSource = source.substring(panelStart, panelEnd);
+
+      expect(panelSource, contains('_chatSenderLabel(message)'));
+      expect(panelSource, contains('senderDisplayName'));
+      expect(panelSource, contains('Circum Support'));
+      expect(panelSource, contains("return 'Sender';"));
+      expect(panelSource, isNot(contains("message['senderId'] ??")));
+    });
+
     test('restored Admin shell exposes every required operations module', () {
       expect(
         AdminModule.values.map((module) => module.label),
@@ -819,9 +835,10 @@ void main() {
           'Riders',
           'Verification',
           'Deliveries',
-          'IRIS Operations',
-          'IRIS Repository',
-          'IRIS Candidates',
+          'Parcel Intelligence',
+          'Item Library',
+          'Parcel Reviews',
+          'Operations Centre',
           'Support',
           'Finance',
           'Health+',
@@ -833,6 +850,13 @@ void main() {
         ]),
       );
       expect(AdminModule.values, contains(AdminModule.discrepancyReview));
+      final source =
+          File('lib/app/admin/admin_phase1_shell.dart').readAsStringSync();
+      expect(source, contains('Recovery Matrix'));
+      expect(source, contains('Super Admin callable with audit'));
+      expect(source, contains('No raw record editing or user impersonation'));
+      expect(source, contains('force_logout'));
+      expect(source, contains('Reconcile'));
       expect(AdminModule.values, contains(AdminModule.irisRepository));
       expect(AdminModule.values, contains(AdminModule.irisCandidates));
       expect(AdminModule.values, contains(AdminModule.gifts));

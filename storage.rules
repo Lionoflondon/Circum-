@@ -117,7 +117,7 @@ service firebase.storage {
     match /gift_requests/{requestId}/voice/{fileName} {
       allow read: if isAdmin() || isGiftVoiceNoteOwner(requestId);
       allow create, update: if isGiftVoiceNoteOwner(requestId) && isSafeGiftVoiceNoteUpload();
-      allow delete: if isSuperAdmin();
+      allow delete: if isSuperAdmin() || isGiftVoiceNoteOwner(requestId);
     }
 
     match /{allPaths=**} {

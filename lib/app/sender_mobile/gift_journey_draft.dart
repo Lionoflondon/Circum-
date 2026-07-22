@@ -128,6 +128,10 @@ class SenderGiftVoiceNote {
   final DateTime createdAt;
   final String? transcript;
   final String? language;
+  final String uploadStatus;
+  final String retryState;
+  final int version;
+  final String? ownerId;
 
   const SenderGiftVoiceNote({
     required this.hasVoiceNote,
@@ -140,6 +144,10 @@ class SenderGiftVoiceNote {
     required this.createdAt,
     this.transcript,
     this.language,
+    this.uploadStatus = 'uploaded',
+    this.retryState = 'none',
+    this.version = 1,
+    this.ownerId,
   });
 
   Map<String, Object?> toMap() => {
@@ -153,6 +161,10 @@ class SenderGiftVoiceNote {
         'createdAt': createdAt.toIso8601String(),
         'transcript': transcript,
         'language': language,
+        'uploadStatus': uploadStatus,
+        'retryState': retryState,
+        'version': version,
+        'ownerId': ownerId,
       };
 }
 

@@ -1,3 +1,4 @@
+/* eslint-disable max-len, indent */
 "use strict";
 
 const test = require("node:test");
@@ -73,6 +74,22 @@ test("safe story payload includes sender voice-note playback metadata", () => {
     "https://storage.example/voice.webm",
   );
   assert.equal(Object.hasOwn(safe.voiceNote, "storagePath"), false);
+});
+
+test("Gift Story slides never use raw voice Storage paths as playback URLs", () => {
+  const slides = story.buildGiftStorySlides({
+    recipientName: "Ada",
+    voiceNote: {
+      storagePath: "gift_requests/sender_123/voice/original.webm",
+      durationSeconds: 9,
+      mimeType: "audio/webm",
+    },
+  });
+  assert.equal(slides.some((slide) => slide.type === "voice_note"), false);
+  assert.equal(
+      slides.some((slide) => `${slide.mediaUrl || ""}`.includes("gift_requests/")),
+      false,
+  );
 });
 
 const consentedA = {
@@ -227,7 +244,7 @@ test("Gift Story skins include safe fallback and storage paths are canonical", (
   });
 });
 
-test("Gift Story notification records support email primary and WhatsApp fallback", () => {
+test("Gift Story notification records support sender app plus recipient email, WhatsApp, and iMessage delivery", () => {
   const email = story.storyNotificationRecord({
     notificationId: "n-email",
     giftStoryId: "gift-1",
@@ -248,11 +265,65 @@ test("Gift Story notification records support email primary and WhatsApp fallbac
     failedReason: "email_failed",
     secureStoryUrl: "https://circumuk.com/story/token",
   });
+  const imessage = story.storyNotificationRecord({
+    notificationId: "n-imessage",
+    giftStoryId: "gift-1",
+    phone: "+447700900000",
+    channel: "imessage",
+    status: "queued",
+    priority: 2,
+    failedReason: "email_failed",
+    secureStoryUrl: "https://circumuk.com/story/token",
+  });
+  const senderApp = story.storyNotificationRecord({
+    notificationId: "n-sender-app",
+    giftStoryId: "gift-1",
+    userId: "sender-1",
+    channel: "sender_app",
+    status: "queued",
+    priority: 1,
+    secureStoryUrl: "https://circumuk.com/story/token",
+  });
   assert.equal(email.channel, "email");
   assert.equal(email.priority, 1);
   assert.equal(whatsapp.channel, "whatsapp");
   assert.equal(whatsapp.priority, 2);
   assert.equal(whatsapp.failedReason, "email_failed");
+  assert.equal(imessage.channel, "imessage");
+  assert.equal(imessage.priority, 2);
+  assert.equal(imessage.failedReason, "email_failed");
+  assert.equal(senderApp.channel, "sender_app");
+  assert.equal(senderApp.priority, 1);
+});
+
+test("Gift Story selects one recipient phone channel instead of duplicating WhatsApp and iMessage", () => {
+  assert.equal(story.chooseRecipientLinkChannel({
+    recipientAvailableMessagingChannels: ["whatsapp"],
+  }), "whatsapp");
+  assert.equal(story.chooseRecipientLinkChannel({
+    recipientAvailableMessagingChannels: ["imessage"],
+  }), "imessage");
+  assert.equal(story.chooseRecipientLinkChannel({
+    recipientAvailableMessagingChannels: ["whatsapp", "imessage"],
+  }), "whatsapp");
+  assert.equal(story.chooseRecipientLinkChannel({
+    recipientAvailableMessagingChannels: ["whatsapp", "imessage"],
+    recipientPreferredMessagingChannel: "imessage",
+  }), "imessage");
+  const source = require("node:fs").readFileSync(
+      require("node:path").join(__dirname, "gift-story-automation.js"),
+      "utf8",
+  );
+  assert.match(source, /imessageQueue/);
+  assert.match(source, /normalizedChannel === "imessage"/);
+  assert.match(source, /channel: normalizedChannel/);
+  assert.match(source, /chooseRecipientLinkChannel/);
+  assert.match(source, /const queue = normalizedChannel === "imessage" \? "imessageQueue" : "whatsappQueue"/);
+  assert.match(source, /queueSenderStoryAppNotification/);
+  assert.match(source, /channel: "sender_app"/);
+  assert.match(source, /storyNotificationId\(giftId, "sender_app"/);
+  assert.doesNotMatch(source, /role: "recipient", userId: text\(gift\.recipientUserId\)/);
+  assert.doesNotMatch(source, /whatsappQueue[\s\S]*imessageQueue[\s\S]*return null;\n}\);/);
 });
 
 test("recipient web story renders final app CTA and avoids private fields", () => {
@@ -278,6 +349,66 @@ test("recipient web story renders final app CTA and avoids private fields", () =
   assert.doesNotMatch(html, /Private Sender/);
 });
 
+test("recipient web story lets non-members view and prompts Circum join as an enhancement", () => {
+  const html = story.renderGiftStoryHtml({
+    token: "secure-token",
+    giftId: "gift-1",
+    role: "recipient",
+    gift: {
+      recipientName: "Ada",
+      recipientUserId: "",
+      giftItems: [{name: "Candle", why: "It felt calm."}],
+    },
+  });
+  assert.match(html, /Your Gift Story is ready\./);
+  assert.match(html, /Save this Gift Story forever in your Vault/i);
+  assert.match(html, /Join Circum/);
+  assert.match(html, /Maybe later/);
+  assert.doesNotMatch(html, /Join Circum to see video/);
+  assert.doesNotMatch(html, /Join Circum to see the video version/);
+});
+
+test("recipient web story does not prompt linked Circum recipients to join", () => {
+  const html = story.renderGiftStoryHtml({
+    token: "secure-token",
+    giftId: "gift-1",
+    role: "recipient",
+    gift: {
+      recipientName: "Ada",
+      recipientUserId: "recipient-1",
+      giftItems: [{name: "Candle", why: "It felt calm."}],
+    },
+  });
+  assert.doesNotMatch(html, /Your Gift Story is ready\./);
+});
+
+test("recipient token-only video download remains available while ownership actions require account", () => {
+  const source = require("node:fs").readFileSync(
+      require("node:path").join(__dirname, "gift-story-automation.js"),
+      "utf8",
+  );
+  assert.doesNotMatch(source, /Join Circum to see this Gift Story video/);
+  assert.match(source, /participantAuthorized\(context, gift, suppliedToken\)/);
+  assert.match(source, /exports\.acknowledgeGiftStory[\s\S]*requireAccount: true/);
+  assert.match(source, /exports\.saveGiftStoryToVault[\s\S]*requireAccount: true/);
+  assert.match(source, /recordGiftStoryGuestAnalytics\(db, \{[\s\S]*event: "guest_watched_video"/);
+});
+
+test("Gift Story guest analytics records viewing, video, join, registration, and claim events", () => {
+  const source = require("node:fs").readFileSync(
+      require("node:path").join(__dirname, "gift-story-automation.js"),
+      "utf8",
+  );
+  assert.match(source, /recordGiftStoryGuestEvent/);
+  assert.match(source, /guest_viewed_story/);
+  assert.match(source, /guest_watched_video/);
+  assert.match(source, /guest_completed_video/);
+  assert.match(source, /guest_clicked_join_circum/);
+  assert.match(source, /guest_registered/);
+  assert.match(source, /guest_claimed_gift_story/);
+  assert.match(source, /source: "gift_story_guest_access"/);
+});
+
 test("recipient web story renders sender voice note as playable audio", () => {
   const html = story.renderGiftStoryHtml({
     token: "secure-token",
@@ -295,4 +426,35 @@ test("recipient web story renders sender voice note as playable audio", () => {
   assert.match(html, /type":"voice_note"/);
   assert.match(html, /<audio class="voice" controls preload="metadata"/);
   assert.match(html, /https:\/\/storage\.example\/voice\.webm/);
+});
+
+test("Gift Story lifecycle revokes and extends sender and recipient tokens", () => {
+  const source = require("node:fs").readFileSync(
+      require("node:path").join(__dirname, "gift-story-automation.js"),
+      "utf8",
+  );
+  assert.match(source, /recipientStoryTokenHash/);
+  assert.match(source, /tokenHashes/);
+  assert.match(source, /status: "revoked"/);
+  assert.match(source, /expiresAt, status: "active"/);
+});
+
+test("Gift Story landing blocks disabled and unapproved stories", () => {
+  const source = require("node:fs").readFileSync(
+      require("node:path").join(__dirname, "gift-story-automation.js"),
+      "utf8",
+  );
+  assert.match(source, /gift\.giftStoryEnabled === false/);
+  assert.match(source, /gift\.giftStoryApproved === false/);
+});
+
+test("Gift Story thank-you message is preserved and requires a Circum account", () => {
+  const source = require("node:fs").readFileSync(
+      require("node:path").join(__dirname, "gift-story-automation.js"),
+      "utf8",
+  );
+  assert.match(source, /thankYouMessage/);
+  assert.match(source, /giftStoryThankYouMessage/);
+  assert.match(source, /account_required/);
+  assert.match(source, /Sign in to keep this Gift Story/);
 });

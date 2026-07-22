@@ -21,7 +21,7 @@ Future<void> _startAdmin() async {
     runApp(
       const _AdminStartupBlocked(
         message:
-            'Circum security verification is not configured for this web build.',
+            'Circum security verification is not configured for this version.',
       ),
     );
     return;

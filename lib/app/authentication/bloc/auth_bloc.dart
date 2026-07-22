@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:typed_data';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:cloud_functions/cloud_functions.dart';
 import 'package:equatable/equatable.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_storage/firebase_storage.dart';
@@ -29,6 +30,8 @@ part 'signup_event.dart';
 class AuthBloc extends Bloc<AuthEvent, AuthState> {
   FirebaseAuth auth = FirebaseAuth.instance;
   FirebaseFirestore db = FirebaseFirestore.instance;
+  FirebaseFunctions functions =
+      FirebaseFunctions.instanceFor(region: 'us-central1');
   // Init firestore and geoFlutterFire
   // final geo = GeoFlutterFire();
   LocationHelper locationHelper = LocationHelper();
@@ -78,6 +81,34 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
     on<UpdateUserProfilePhoto>(_handleUpdateUserProfilePhoto);
     on<SignOut>(_handleSignOut);
     on<DeleteAccount>(_handleDeleteAccount);
+  }
+
+  Future<void> _updateSenderProfile({
+    String? displayName,
+    String? username,
+    String? phone,
+  }) async {
+    final payload = <String, dynamic>{
+      if (displayName != null && displayName.trim().isNotEmpty)
+        'displayName': displayName.trim(),
+      if (username != null && username.trim().isNotEmpty)
+        'username': username.trim(),
+      if (phone != null && phone.trim().isNotEmpty) 'phone': phone.trim(),
+    };
+    await functions.httpsCallable('updateSenderProfile').call(payload);
+  }
+
+  Future<void> _updateSenderLocation(Position locationData) async {
+    final point =
+        GeoFirePoint(GeoPoint(locationData.latitude, locationData.longitude));
+    final raw = point.data;
+    await functions.httpsCallable('updateSenderLocation').call({
+      'position': {
+        'latitude': locationData.latitude,
+        'longitude': locationData.longitude,
+        'geohash': raw['geohash'],
+      },
+    });
   }
 
   Future<void> _handleSortSessionState(
@@ -522,16 +553,8 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
       User? user = auth.currentUser;
       FlutterSecureStorage storage = const FlutterSecureStorage();
 
-      final documentReference = db.collection('users').doc(user?.uid);
-      // Get the document snapshot
-      final documentSnapshot = await documentReference.get();
-
-      if (documentSnapshot.exists) {
-        // Document exists
-        // print('Document exists');
-        await db.collection("users").doc(user!.uid).update({
-          'phone': event.value,
-        });
+      if (user != null) {
+        await _updateSenderProfile(phone: event.value);
 
         await storage.write(key: 'phone', value: event.value);
 
@@ -587,7 +610,9 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
       // Reauthenticate user with phone credential
       await user.reauthenticateWithCredential(credential);
 
-      await db.collection('users').doc(user.uid).update({'deleted': true});
+      await functions.httpsCallable('closeCircumAccount').call({
+        'accountType': 'sender',
+      });
       // Reauthentication successful, proceed with account deletion
       await user.delete();
       await storage.deleteAll();
@@ -644,18 +669,15 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
       final User? user = auth.currentUser;
       Position locationData = await locationHelper.enableLocation();
 
-      GeoFirePoint myLocation =
-          GeoFirePoint(GeoPoint(locationData.latitude, locationData.longitude));
       emit(state.copyWith(
           locationData: locationData,
           hasLocationPermission: true,
           isLocationEnabled: true,
           status: Status.locationRequested,
           appLocationStatus: AppLocationStatus.available));
-      await db
-          .collection("users")
-          .doc(user?.uid)
-          .update({'position': myLocation.data});
+      if (user != null) {
+        await _updateSenderLocation(locationData);
+      }
     } catch (e) {
       if (e == 'Location permissions are permanently denied') {
         emit(state.copyWith(
@@ -673,34 +695,10 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
       final User? user = auth.currentUser;
       await user?.updateDisplayName(event.username);
 
-      final documentReference = db.collection('users').doc(user?.uid);
-
-      // Get the document snapshot
-      final documentSnapshot = await documentReference.get();
-
-      if (documentSnapshot.exists) {
-        // Document exists
-        // print('Document exists');
-        await db.collection("users").doc(user?.uid).update({
-          'name': event.username,
-          'role': 'user',
-          'roles': ['sender'],
-          'userType': 'sender',
-          'phone': user?.phoneNumber,
-          'email': user?.email
-        });
-      } else {
-        // Document does not exist
-        // print('Document does not exist');
-        await db.collection("users").doc(user?.uid).set({
-          'name': event.username,
-          "role": 'user',
-          'roles': ['sender'],
-          'userType': 'sender',
-          'phone': user?.phoneNumber,
-          'email': user?.email
-        });
-      }
+      await _updateSenderProfile(
+        displayName: event.username,
+        phone: user?.phoneNumber,
+      );
 
       // print(user);
 
@@ -717,17 +715,14 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
       final User? user = auth.currentUser;
       Position locationData = await locationHelper.enableLocation();
 
-      GeoFirePoint myLocation =
-          GeoFirePoint(GeoPoint(locationData.latitude, locationData.longitude));
       emit(state.copyWith(
           locationData: locationData,
           hasLocationPermission: true,
           isLocationEnabled: true,
           status: Status.locationRequested));
-      await db
-          .collection("users")
-          .doc(user?.uid)
-          .update({'position': myLocation.data});
+      if (user != null) {
+        await _updateSenderLocation(locationData);
+      }
     } catch (e) {
       if (e == 'Location permissions are permanently denied') {
         await Geolocator.openLocationSettings();
@@ -749,35 +744,12 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
         await user?.updateDisplayName('${event.value} $lastName');
         // print('${event.value} $lastName');
         emit(state.copyWith(username: '${event.value} $lastName'));
-
-        final documentReference = db.collection('users').doc(user?.uid);
-        // Get the document snapshot
-        final documentSnapshot = await documentReference.get();
-
-        if (documentSnapshot.exists) {
-          // Document exists
-          // print('Document exists');
-          await db
-              .collection("users")
-              .doc(user?.uid)
-              .update({'name': '${event.value} $lastName'});
-        }
+        await _updateSenderProfile(displayName: '${event.value} $lastName');
       } else {
         await user?.updateDisplayName(event.value);
         // print(user?.displayName);
         emit(state.copyWith(username: event.value));
-
-        final documentReference = db.collection('users').doc(user?.uid);
-        // Get the document snapshot
-        final documentSnapshot = await documentReference.get();
-
-        if (documentSnapshot.exists) {
-          // Document exists
-          // print('Document exists');
-          await db.collection("users").doc(user?.uid).update({
-            'name': event.value,
-          });
-        }
+        await _updateSenderProfile(displayName: event.value);
       }
     } catch (e) {}
   }
@@ -792,34 +764,12 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
         await user?.updateDisplayName('$firstName ${event.value}');
         // print(user?.displayName);
         emit(state.copyWith(username: '$firstName ${event.value}'));
-
-        final documentReference = db.collection('users').doc(user?.uid);
-        // Get the document snapshot
-        final documentSnapshot = await documentReference.get();
-
-        if (documentSnapshot.exists) {
-          // Document exists
-          // print('Document exists');
-          await db.collection("users").doc(user?.uid).update({
-            'name': '$firstName ${event.value}',
-          });
-        }
+        await _updateSenderProfile(displayName: '$firstName ${event.value}');
       } else {
         await user?.updateDisplayName(event.value);
         // print(user?.displayName);
         emit(state.copyWith(username: event.value));
-
-        final documentReference = db.collection('users').doc(user?.uid);
-        // Get the document snapshot
-        final documentSnapshot = await documentReference.get();
-
-        if (documentSnapshot.exists) {
-          // Document exists
-          // print('Document exists');
-          await db.collection("users").doc(user?.uid).update({
-            'name': event.value,
-          });
-        }
+        await _updateSenderProfile(displayName: event.value);
       }
     } catch (e) {}
   }

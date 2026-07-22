@@ -50,13 +50,13 @@ Sender mobile initializes Firebase App Check through
 - iOS production provider: App Attest with DeviceCheck fallback.
 - Web provider: reCAPTCHA Enterprise.
 
-Web builds must receive the shared web App Check key as a build-time
-environment value. Never commit or print the key.
+Web builds must receive their product-specific App Check key as a build-time
+environment value. Never commit or print the keys.
 
 ```sh
-CIRCUM_WEB_RECAPTCHA_ENTERPRISE_SITE_KEY=<site-key> scripts/build_public_web.sh
-CIRCUM_WEB_RECAPTCHA_ENTERPRISE_SITE_KEY=<site-key> scripts/build_sender_app_web.sh
-CIRCUM_WEB_RECAPTCHA_ENTERPRISE_SITE_KEY=<site-key> scripts/build_admin_web.sh
+PUBLIC_WEB_RECAPTCHA_ENTERPRISE_SITE_KEY=<website-site-key> scripts/build_public_web.sh
+CIRCUM_WEB_RECAPTCHA_ENTERPRISE_SITE_KEY=<sender-site-key> scripts/build_sender_app_web.sh
+CIRCUM_WEB_RECAPTCHA_ENTERPRISE_SITE_KEY=<admin-site-key> scripts/build_admin_web.sh
 ```
 
 Firebase Console App Check enforcement is a manual rollout decision and is not

@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:circum/app/sender_mobile/sender_notification_routing.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -44,5 +46,33 @@ void main() {
     });
 
     expect(destination, {'route': 'notifications'});
+  });
+
+  test('Sender support opens the canonical backend conversation surface', () {
+    final supportView =
+        File('lib/app/support/view/support.dart').readAsStringSync();
+    final supportBloc =
+        File('lib/app/support/bloc/support_bloc.dart').readAsStringSync();
+
+    expect(supportView, contains('RideChatPageView'));
+    expect(supportView, contains('supportConversation: true'));
+    expect(supportView, isNot(contains("import 'chat.dart'")));
+    expect(supportView, isNot(contains('const ChatPageView')));
+    expect(supportBloc,
+        contains("httpsCallable('getOrCreateSupportConversation')"));
+    expect(supportBloc, isNot(contains('ChatsHelper')));
+    expect(supportBloc, isNot(contains('storeChat')));
+  });
+
+  test('Sender push payload parsing is recoverable and diagnostic', () {
+    final messaging = File('lib/messaging.dart').readAsStringSync();
+
+    expect(messaging, contains('_decodeCommunicationPayload'));
+    expect(messaging, contains('_logRecoverablePushPayload'));
+    expect(messaging, contains('Recoverable Sender push payload discarded'));
+    expect(
+        messaging,
+        isNot(contains(
+            "Map<String, dynamic> msg = jsonDecode(message.data['data'])")));
   });
 }

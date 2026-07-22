@@ -1,14 +1,12 @@
 import 'dart:async';
 
-import 'package:firebase_auth/firebase_auth.dart';
-import 'package:firebase_storage/firebase_storage.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 
+import '../media/circum_media.dart';
 import 'gift_journey_draft.dart';
 import 'gift_relationship_view.dart';
 import 'gift_themes_view.dart';
-import 'gift_voice_recorder.dart';
 
 enum GiftVoiceNoteState {
   idle,
@@ -32,19 +30,11 @@ class GiftVoiceNoteView extends StatefulWidget {
 
 class _GiftVoiceNoteViewState extends State<GiftVoiceNoteView> {
   static const _maxDurationSeconds = 60;
-  static const _maxUploadBytes = 60 * 1024 * 1024;
-  static const _allowedMimeTypes = {
-    'audio/webm',
-    'audio/mpeg',
-    'audio/mp4',
-    'audio/aac',
-    'audio/ogg',
-  };
-
   Timer? _timer;
   Timer? _playbackTimer;
-  late final SenderGiftVoiceRecorder _recorder;
-  late final SenderGiftVoicePlayback _playback;
+  late final CircumVoiceRecorder _recorder;
+  late final CircumVoicePlayback _playback;
+  late final CircumMediaStorage _mediaStorage;
   GiftVoiceNoteState _state = GiftVoiceNoteState.idle;
   int _seconds = 0;
   SenderGiftVoiceNote? _voiceNote;
@@ -53,8 +43,9 @@ class _GiftVoiceNoteViewState extends State<GiftVoiceNoteView> {
   @override
   void initState() {
     super.initState();
-    _recorder = SenderGiftVoiceRecorder();
-    _playback = SenderGiftVoicePlayback();
+    _recorder = CircumVoiceRecorder();
+    _playback = CircumVoicePlayback();
+    _mediaStorage = CircumMediaStorage();
     _voiceNote = widget.draft.voiceNote;
     _seconds = _voiceNote?.durationSeconds ?? 0;
     if (_voiceNote?.hasVoiceNote == true) {
@@ -173,7 +164,7 @@ class _GiftVoiceNoteViewState extends State<GiftVoiceNoteView> {
     final duration = _seconds.clamp(1, _maxDurationSeconds);
     try {
       final audio = await _recorder.stop();
-      final uploaded = await _uploadRecording(audio);
+      final uploaded = await _mediaStorage.uploadGiftVoiceNote(audio);
       final uploadedAt = DateTime.now();
       setState(() {
         _state = GiftVoiceNoteState.recorded;
@@ -189,6 +180,10 @@ class _GiftVoiceNoteViewState extends State<GiftVoiceNoteView> {
           createdAt: uploadedAt,
           transcript: null,
           language: null,
+          uploadStatus: uploaded.uploadStatus,
+          retryState: uploaded.retryState,
+          version: uploaded.version,
+          ownerId: uploaded.ownerId,
         );
       });
     } catch (_) {
@@ -198,40 +193,6 @@ class _GiftVoiceNoteViewState extends State<GiftVoiceNoteView> {
             'We could not upload that recording. Please try again or skip this step.';
       });
     }
-  }
-
-  Future<_UploadedVoiceNote> _uploadRecording(
-    SenderGiftRecordedAudio audio,
-  ) async {
-    final user = FirebaseAuth.instance.currentUser;
-    if (user == null) {
-      throw StateError('Sign in before saving a voice note.');
-    }
-    final now = DateTime.now().millisecondsSinceEpoch;
-    final mimeType = audio.mimeType ?? 'audio/webm';
-    if (!_allowedMimeTypes.contains(mimeType)) {
-      throw StateError('Unsupported voice note format.');
-    }
-    if (audio.bytes.lengthInBytes > _maxUploadBytes) {
-      throw StateError('Voice note is too large.');
-    }
-    final path = 'gift_requests/${user.uid}_$now/voice/original.webm';
-    final ref = FirebaseStorage.instance.ref(path);
-    await ref.putData(
-      audio.bytes,
-      SettableMetadata(
-        contentType: mimeType,
-        customMetadata: {
-          'purpose': 'sender_mobile_gift_voice_note',
-          'uploadedBy': user.uid,
-        },
-      ),
-    );
-    return _UploadedVoiceNote(
-      storagePath: path,
-      downloadUrl: await ref.getDownloadURL(),
-      mimeType: mimeType,
-    );
   }
 
   void _cancelRecording() {
@@ -272,10 +233,12 @@ class _GiftVoiceNoteViewState extends State<GiftVoiceNoteView> {
   }
 
   void _delete() {
+    final path = _voiceNote?.storagePath;
     _timer?.cancel();
     _playbackTimer?.cancel();
     _playback.pause();
     _recorder.cancel();
+    unawaited(_mediaStorage.deleteMedia(path).catchError((_) {}));
     setState(() {
       _state = GiftVoiceNoteState.idle;
       _statusMessage = null;
@@ -295,6 +258,11 @@ class _GiftVoiceNoteViewState extends State<GiftVoiceNoteView> {
   }
 
   void _continue(GiftJourneyDraft draft) {
+    if (draft.voiceNote == null && _voiceNote?.storagePath != null) {
+      unawaited(_mediaStorage
+          .deleteMedia(_voiceNote?.storagePath)
+          .catchError((_) {}));
+    }
     Navigator.of(context).push(
       MaterialPageRoute<void>(
         builder: (_) => GiftThemesView(draft: draft),
@@ -302,18 +270,6 @@ class _GiftVoiceNoteViewState extends State<GiftVoiceNoteView> {
       ),
     );
   }
-}
-
-class _UploadedVoiceNote {
-  final String storagePath;
-  final String downloadUrl;
-  final String mimeType;
-
-  const _UploadedVoiceNote({
-    required this.storagePath,
-    required this.downloadUrl,
-    required this.mimeType,
-  });
 }
 
 class _VoiceNoteCard extends StatelessWidget {

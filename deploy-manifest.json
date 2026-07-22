@@ -1,7 +1,12 @@
 {
   "products": {
     "website": {
-      "description": "Circum Website, including Sender Web and Rider Web.",
+      "description": "Independent public Circum Website. It links to product entrypoints but does not own Sender Web or Rider Web.",
+      "identity": "circum-public-web",
+      "surface": "website",
+      "hostingTarget": "public",
+      "buildDirectory": "build/public_web",
+      "appCheckSecret": "PUBLIC_WEB_RECAPTCHA_ENTERPRISE_SITE_KEY",
       "entrypoints": [
         "lib/main_public_web.dart"
       ],
@@ -27,11 +32,15 @@
         "android/",
         "ios/"
       ],
-      "hostingTarget": "public",
       "output": "build/public_web"
     },
     "sender-app": {
-      "description": "Independent Circum Sender mobile application.",
+      "description": "Independent Circum Sender product. Native mobile starts from lib/main.dart; Sender Web hosting starts from the dedicated preview entrypoint.",
+      "identity": "circum-sender-web",
+      "surface": "sender-web",
+      "hostingTarget": "app",
+      "buildDirectory": "build/sender_app_web",
+      "appCheckSecret": "CIRCUM_WEB_RECAPTCHA_ENTERPRISE_SITE_KEY",
       "entrypoints": [
         "lib/main.dart",
         "lib/app/sender_mobile/sender_mobile_preview.dart"
@@ -65,6 +74,7 @@
         "lib/app/health_plus/",
         "lib/app/history/",
         "lib/app/iris/",
+        "lib/app/media/",
         "lib/app/onboarding/",
         "lib/app/platform/",
         "lib/app/security/",
@@ -101,11 +111,14 @@
         "firestore.rules",
         "storage.rules"
       ],
-      "hostingTarget": "app",
       "output": "build/sender_app_web"
     },
     "admin": {
       "description": "Independent Circum Admin application.",
+      "identity": "circum-admin-web",
+      "surface": "admin",
+      "hostingTarget": "admin",
+      "buildDirectory": "build/web_admin",
       "entrypoints": [
         "lib/main_admin_web.dart"
       ],
@@ -124,11 +137,14 @@
         "firestore.rules",
         "storage.rules"
       ],
-      "hostingTarget": "admin",
       "output": "build/web_admin"
     },
     "rider-app": {
       "description": "Independent Circum Rider application. The deployable Rider app lives in the Circum-Rider repository; Rider-facing compatibility files in this repository must be owned only by Rider.",
+      "identity": "circum-rider-mobile",
+      "surface": "rider-mobile",
+      "hostingTarget": "external:Circum-Rider",
+      "buildDirectory": "external:Circum-Rider",
       "entrypoints": [],
       "ownedPrefixes": [
         "lib/app/rider_marketplace/",
@@ -146,11 +162,14 @@
         "android/",
         "ios/"
       ],
-      "hostingTarget": null,
-      "output": null
+      "output": "external:Circum-Rider"
     },
     "backend": {
       "description": "Independent Firebase backend.",
+      "identity": "circum-backend",
+      "surface": "backend",
+      "hostingTarget": "not-hosting",
+      "buildDirectory": "server/functions",
       "entrypoints": [
         "server/functions/index.js"
       ],
@@ -161,15 +180,19 @@
         ".github/workflows/architecture_review_gate.yml",
         ".github/workflows/ci.yml",
         ".github/workflows/deploy_functions.yml",
+        ".github/workflows/rc1_release_build.yml",
         ".github/workflows/repository_flutter_ci.yml",
         "BREAK_GLASS_DEPLOY.md",
+        "PRODUCTION_DIAGNOSTICS.md",
         "README.md",
         "ROOT_CAUSE_AUDIT.md",
         "codex_prompt_product_isolation_architecture.md",
         "data/",
         "deploy-manifest.json",
+        "deployment_report.md",
         "docs/",
         "firebase.json",
+        "safe_release.sh",
         "server/",
         "firestore.rules",
         "storage.rules",
@@ -185,6 +208,7 @@
         "scripts/deploy_isolated.sh",
         "scripts/finalize_web_artifact.js",
         "scripts/firebase_tools.sh",
+        "scripts/release_orchestrator.js",
         "scripts/validate_web_artifacts.js",
         "scripts/verify_sender_deployment_governance.js"
       ],
@@ -194,8 +218,7 @@
         "android/",
         "ios/"
       ],
-      "hostingTarget": null,
-      "output": null
+      "output": "server/functions"
     }
   },
   "sharedFiles": [],
