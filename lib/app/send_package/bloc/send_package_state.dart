@@ -71,6 +71,7 @@ class SendPackageState {
   final String? itemDescription;
   final bool isIrisResolving;
   final String irisErrorMessage;
+  final String irisWeightReviewMessage;
   final bool isSenderQuoteLoading;
   final String senderQuoteError;
   final String? senderQuoteId;
@@ -136,6 +137,7 @@ class SendPackageState {
     this.itemDescription,
     this.isIrisResolving = false,
     this.irisErrorMessage = '',
+    this.irisWeightReviewMessage = '',
     this.isSenderQuoteLoading = false,
     this.senderQuoteError = '',
     this.senderQuoteId,
@@ -203,6 +205,7 @@ class SendPackageState {
     String? itemDescription,
     bool? isIrisResolving,
     String? irisErrorMessage,
+    String? irisWeightReviewMessage,
     bool? isSenderQuoteLoading,
     String? senderQuoteError,
     String? senderQuoteId,
@@ -276,6 +279,8 @@ class SendPackageState {
       itemDescription: itemDescription ?? this.itemDescription,
       isIrisResolving: isIrisResolving ?? this.isIrisResolving,
       irisErrorMessage: irisErrorMessage ?? this.irisErrorMessage,
+      irisWeightReviewMessage:
+          irisWeightReviewMessage ?? this.irisWeightReviewMessage,
       isSenderQuoteLoading: isSenderQuoteLoading ?? this.isSenderQuoteLoading,
       senderQuoteError: senderQuoteError ?? this.senderQuoteError,
       senderQuoteId: senderQuoteId ?? this.senderQuoteId,
@@ -297,7 +302,8 @@ class SendPackageState {
           senderPaymentIntentId ?? this.senderPaymentIntentId,
       senderPaymentCustomerId:
           senderPaymentCustomerId ?? this.senderPaymentCustomerId,
-      senderPaymentEphemeralKeySecret: senderPaymentEphemeralKeySecret ??
+      senderPaymentEphemeralKeySecret:
+          senderPaymentEphemeralKeySecret ??
           this.senderPaymentEphemeralKeySecret,
       isSenderDeliveryCreating:
           isSenderDeliveryCreating ?? this.isSenderDeliveryCreating,

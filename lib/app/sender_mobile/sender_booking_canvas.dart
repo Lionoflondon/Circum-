@@ -116,9 +116,7 @@ class _SenderBookingCanvasState extends State<SenderBookingCanvas> {
     final result = await FirebaseFunctions.instance
         .httpsCallable(name)
         .call(payload)
-        .timeout(
-          timeout ?? const Duration(seconds: 15),
-        );
+        .timeout(timeout ?? const Duration(seconds: 15));
     return result.data is Map
         ? Map<String, dynamic>.from(result.data as Map)
         : <String, dynamic>{};
@@ -132,8 +130,7 @@ class _SenderBookingCanvasState extends State<SenderBookingCanvas> {
         'not-found' ||
         'deadline-exceeded' ||
         'unavailable' ||
-        'permission-denied' =>
-          true,
+        'permission-denied' => true,
         _ => false,
       };
     }
@@ -430,15 +427,15 @@ class _SenderBookingCanvasState extends State<SenderBookingCanvas> {
     if (_draft.step == SenderBookingStep.payment) return;
     if (_draft.step == SenderBookingStep.parcel) {
       context.read<SendPackageBloc>().add(
-            RequestCanonicalIrisEstimate(
-              itemName: _item.text,
-              quantity: senderQuantityFromItemName(_item.text),
-              description: _description.text,
-              declaredWeightText: _weight.text,
-              fragile: _draft.fragile,
-              highValue: _draft.highValue,
-            ),
-          );
+        RequestCanonicalIrisEstimate(
+          itemName: _item.text,
+          quantity: senderQuantityFromItemName(_item.text),
+          description: _description.text,
+          declaredWeightText: _weight.text,
+          fragile: _draft.fragile,
+          highValue: _draft.highValue,
+        ),
+      );
     }
     if (_draft.step == SenderBookingStep.iris ||
         _draft.step == SenderBookingStep.options ||
@@ -454,17 +451,17 @@ class _SenderBookingCanvasState extends State<SenderBookingCanvas> {
   void _requestBackendQuote(SenderBookingDraft draft) {
     final business = BusinessJourneyScope.maybeOf(context);
     context.read<SendPackageBloc>().add(
-          RequestSenderBookingQuote(
-            selectedSpeed: draft.selectedOption,
-            vanguardProtocolEnabled: draft.vanguard,
-            itemName: draft.itemName,
-            description: draft.itemDescription,
-            weightKg: _manualWeightKg(_weight.text) ?? 0,
-            fragile: draft.fragile,
-            highValue: draft.highValue,
-            businessContext: business?.toMap(),
-          ),
-        );
+      RequestSenderBookingQuote(
+        selectedSpeed: draft.selectedOption,
+        vanguardProtocolEnabled: draft.vanguard,
+        itemName: draft.itemName,
+        description: draft.itemDescription,
+        weightKg: _manualWeightKg(_weight.text) ?? 0,
+        fragile: draft.fragile,
+        highValue: draft.highValue,
+        businessContext: business?.toMap(),
+      ),
+    );
   }
 
   void _back() {
@@ -529,7 +526,8 @@ class _SenderBookingCanvasState extends State<SenderBookingCanvas> {
             children: [
               _SenderMobileMap(
                 active: true,
-                showDestination: engine.desinationCoordinate != null ||
+                showDestination:
+                    engine.desinationCoordinate != null ||
                     _dropoff.text.trim().isNotEmpty,
                 showVanguardShield: _draft.vanguard,
                 distanceKm: engine.distance,
@@ -823,13 +821,13 @@ class _BookingPanel extends StatelessWidget {
           },
           onSuggestion: (suggestion) {
             context.read<SendPackageBloc>().add(
-                  SetPickupAddress(
-                    val: suggestion.description,
-                    pickupLocationSubAddress: suggestion.subText,
-                    placeId: suggestion.placeId,
-                    lang: Localizations.localeOf(context).languageCode,
-                  ),
-                );
+              SetPickupAddress(
+                val: suggestion.description,
+                pickupLocationSubAddress: suggestion.subText,
+                placeId: suggestion.placeId,
+                lang: Localizations.localeOf(context).languageCode,
+              ),
+            );
             pickup.text = suggestion.description;
             onDraft(draft.copyWith(pickupAddress: suggestion.description));
           },
@@ -853,13 +851,13 @@ class _BookingPanel extends StatelessWidget {
           },
           onSuggestion: (suggestion) {
             context.read<SendPackageBloc>().add(
-                  SetDeliveryAddress(
-                    val: suggestion.description,
-                    destinationLocationSubAddress: suggestion.subText,
-                    placeId: suggestion.placeId,
-                    lang: Localizations.localeOf(context).languageCode,
-                  ),
-                );
+              SetDeliveryAddress(
+                val: suggestion.description,
+                destinationLocationSubAddress: suggestion.subText,
+                placeId: suggestion.placeId,
+                lang: Localizations.localeOf(context).languageCode,
+              ),
+            );
             dropoff.text = suggestion.description;
             onDraft(draft.copyWith(dropoffAddress: suggestion.description));
           },
@@ -905,8 +903,9 @@ class _BookingPanel extends StatelessWidget {
               draft.copyWith(
                 itemName: item.text,
                 itemDescription: description.text,
-                weightLabel:
-                    parsed == null ? '' : '${parsed.toStringAsFixed(1)}kg',
+                weightLabel: parsed == null
+                    ? ''
+                    : '${parsed.toStringAsFixed(1)}kg',
               ),
             );
           },
@@ -946,11 +945,11 @@ class _BookingPanel extends StatelessWidget {
       return;
     }
     context.read<SendPackageBloc>().add(
-          SearchAPlaceEvent(
-            query: value,
-            lang: Localizations.localeOf(context).languageCode,
-          ),
-        );
+      SearchAPlaceEvent(
+        query: value,
+        lang: Localizations.localeOf(context).languageCode,
+      ),
+    );
   }
 }
 
@@ -1079,8 +1078,9 @@ class _RecipientPanel extends StatelessWidget {
         _TextInput(
           controller: name,
           hint: 'Recipient name',
-          errorText:
-              name.text.trim().isEmpty ? 'Recipient name is required' : null,
+          errorText: name.text.trim().isEmpty
+              ? 'Recipient name is required'
+              : null,
           onChanged: (_) => onChanged(),
         ),
         const SizedBox(height: 10),
@@ -1089,8 +1089,9 @@ class _RecipientPanel extends StatelessWidget {
           hint: 'Recipient phone',
           keyboardType: TextInputType.phone,
           helperText: 'Used only if the rider needs to contact the recipient.',
-          errorText:
-              phone.text.trim().isEmpty ? 'Recipient phone is required' : null,
+          errorText: phone.text.trim().isEmpty
+              ? 'Recipient phone is required'
+              : null,
           onChanged: (_) => onChanged(),
         ),
         const SizedBox(height: 10),
@@ -1133,7 +1134,8 @@ class _DeliveryTimePanel extends StatelessWidget {
   Widget build(BuildContext context) {
     final scheduled =
         draft.deliveryTimingType == SenderDeliveryTimingType.scheduled;
-    final pastDate = scheduled &&
+    final pastDate =
+        scheduled &&
         scheduledDate.text.trim().isNotEmpty &&
         !isSenderScheduledDateValid(scheduledDate.text);
     final custom = scheduled && draft.scheduledWindow == 'Custom';
@@ -1213,7 +1215,8 @@ class _DeliveryTimePanel extends StatelessWidget {
                     controller: customWindowStart,
                     hint: 'Start HH:MM',
                     keyboardType: TextInputType.datetime,
-                    errorText: customWindowStart.text.trim().isNotEmpty &&
+                    errorText:
+                        customWindowStart.text.trim().isNotEmpty &&
                             !RegExp(
                               r'^\d{2}:\d{2}$',
                             ).hasMatch(customWindowStart.text.trim())
@@ -1229,7 +1232,8 @@ class _DeliveryTimePanel extends StatelessWidget {
                     controller: customWindowEnd,
                     hint: 'End HH:MM',
                     keyboardType: TextInputType.datetime,
-                    errorText: customWindowEnd.text.trim().isNotEmpty &&
+                    errorText:
+                        customWindowEnd.text.trim().isNotEmpty &&
                             !isSenderCustomWindowValid(
                               customWindowStart.text,
                               customWindowEnd.text,
@@ -1465,15 +1469,15 @@ class _IrisPanel extends StatelessWidget {
             label: 'Retry',
             enabled: true,
             onTap: () => context.read<SendPackageBloc>().add(
-                  RequestCanonicalIrisEstimate(
-                    itemName: draft.itemName,
-                    quantity: senderQuantityFromItemName(draft.itemName),
-                    description: draft.itemDescription,
-                    declaredWeightText: draft.weightLabel,
-                    fragile: draft.fragile,
-                    highValue: draft.highValue,
-                  ),
-                ),
+              RequestCanonicalIrisEstimate(
+                itemName: draft.itemName,
+                quantity: senderQuantityFromItemName(draft.itemName),
+                description: draft.itemDescription,
+                declaredWeightText: draft.weightLabel,
+                fragile: draft.fragile,
+                highValue: draft.highValue,
+              ),
+            ),
           ),
         ] else ...[
           if (iris != null) const _IrisSuccessPulse(),
@@ -1485,6 +1489,10 @@ class _IrisPanel extends StatelessWidget {
                 style: TextStyle(color: _Tokens.muted, height: 1.35),
               ),
             ),
+          if (engine.irisWeightReviewMessage.isNotEmpty) ...[
+            _InfoNote(text: engine.irisWeightReviewMessage),
+            const SizedBox(height: 10),
+          ],
           _IrisResultRow(
             label: 'Item recognised',
             value: iris?.itemName.isNotEmpty == true
@@ -1518,9 +1526,7 @@ class _IrisPanel extends StatelessWidget {
             'How IRIS reached this estimate',
             style: TextStyle(color: Colors.white, fontWeight: FontWeight.w800),
           ),
-          children: [
-            ..._customerIrisReasons(iris, draft).map(_ReasonLine.new),
-          ],
+          children: [..._customerIrisReasons(iris, draft).map(_ReasonLine.new)],
         ),
         _PrimaryButton(
           label: 'Choose options',
@@ -1573,9 +1579,10 @@ class _IrisAnalysisProgressState extends State<_IrisAnalysisProgress>
     return AnimatedBuilder(
       animation: _controller,
       builder: (context, _) {
-        final index = (_controller.value * _stages.length)
-            .floor()
-            .clamp(0, _stages.length - 1);
+        final index = (_controller.value * _stages.length).floor().clamp(
+          0,
+          _stages.length - 1,
+        );
         return Column(
           children: [
             ClipRRect(
@@ -1659,14 +1666,14 @@ class _IrisResultRow extends StatelessWidget {
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Icon(Icons.check_circle_rounded,
-              color: Color(0xFF86EFAC), size: 18),
+          const Icon(
+            Icons.check_circle_rounded,
+            color: Color(0xFF86EFAC),
+            size: 18,
+          ),
           const SizedBox(width: 10),
           Expanded(
-            child: Text(
-              label,
-              style: const TextStyle(color: _Tokens.muted),
-            ),
+            child: Text(label, style: const TextStyle(color: _Tokens.muted)),
           ),
           const SizedBox(width: 12),
           Flexible(
@@ -1708,10 +1715,7 @@ String _customerVehicleLabel(String? raw) {
   return raw!.trim();
 }
 
-String _handlingRequirements(
-  dynamic iris,
-  SenderBookingDraft draft,
-) {
+String _handlingRequirements(dynamic iris, SenderBookingDraft draft) {
   final requirements = <String>[
     if (draft.fragile) 'Fragile handling',
     if (draft.highValue) 'High-value care',
@@ -1830,16 +1834,16 @@ class _OptionsPanel extends StatelessWidget {
 
   void _requestQuote(BuildContext context, SenderBookingDraft draft) {
     context.read<SendPackageBloc>().add(
-          RequestSenderBookingQuote(
-            selectedSpeed: draft.selectedOption,
-            vanguardProtocolEnabled: draft.vanguard,
-            itemName: draft.itemName,
-            description: draft.itemDescription,
-            weightKg: _manualWeightKg(draft.weightLabel) ?? 0,
-            fragile: draft.fragile,
-            highValue: draft.highValue,
-          ),
-        );
+      RequestSenderBookingQuote(
+        selectedSpeed: draft.selectedOption,
+        vanguardProtocolEnabled: draft.vanguard,
+        itemName: draft.itemName,
+        description: draft.itemDescription,
+        weightKg: _manualWeightKg(draft.weightLabel) ?? 0,
+        fragile: draft.fragile,
+        highValue: draft.highValue,
+      ),
+    );
   }
 }
 
@@ -1960,6 +1964,16 @@ class _SenderReviewDeliveryScreenState
                                     ? const _VanguardReviewBadge()
                                     : null,
                               ),
+                              if (widget
+                                  .engine
+                                  .irisWeightReviewMessage
+                                  .isNotEmpty)
+                                Padding(
+                                  padding: const EdgeInsets.only(top: 10),
+                                  child: _InfoNote(
+                                    text: widget.engine.irisWeightReviewMessage,
+                                  ),
+                                ),
                               _ReviewListRow(
                                 icon: Icons.schedule_rounded,
                                 label: 'Delivery time',
@@ -2121,7 +2135,8 @@ class _ReviewRoutePanelState extends State<_ReviewRoutePanel>
 
   @override
   Widget build(BuildContext context) {
-    final routeConfirmed = widget.engine.polylineCoordinates.isNotEmpty ||
+    final routeConfirmed =
+        widget.engine.polylineCoordinates.isNotEmpty ||
         widget.engine.polylines.isNotEmpty ||
         widget.engine.distance != null;
     final pickup = _compactAddress(
@@ -2177,8 +2192,10 @@ class _ReviewRoutePanelState extends State<_ReviewRoutePanel>
               Positioned(
                 right: 22,
                 bottom: 30,
-                child:
-                    _ReviewPinLabel(label: dropoff, color: Color(0xFF34D399)),
+                child: _ReviewPinLabel(
+                  label: dropoff,
+                  color: Color(0xFF34D399),
+                ),
               ),
               const Positioned(top: 14, right: 14, child: _ReviewIrisBadge()),
               Positioned(
@@ -2222,10 +2239,7 @@ class _ReviewMapGridPainter extends CustomPainter {
     }
     final shade = Paint()
       ..shader = RadialGradient(
-        colors: [
-          Colors.transparent,
-          _Tokens.bg.withValues(alpha: .28),
-        ],
+        colors: [Colors.transparent, _Tokens.bg.withValues(alpha: .28)],
         stops: const [.40, 1],
       ).createShader(Offset.zero & size);
     canvas.drawRect(Offset.zero & size, shade);
@@ -2422,8 +2436,8 @@ class _ReviewEtaChip extends StatelessWidget {
   Widget build(BuildContext context) {
     final routeLabel = routeConfirmed
         ? distanceKm == null
-            ? 'Route confirmed'
-            : '${distanceKm!.toStringAsFixed(1)} km · $speed'
+              ? 'Route confirmed'
+              : '${distanceKm!.toStringAsFixed(1)} km · $speed'
         : 'Route calculating · $speed';
     return ClipRRect(
       borderRadius: BorderRadius.circular(14),
@@ -2577,10 +2591,7 @@ class _ReviewListRow extends StatelessWidget {
                     ),
                   ),
                 ],
-                if (badge != null) ...[
-                  const SizedBox(height: 7),
-                  badge!,
-                ],
+                if (badge != null) ...[const SizedBox(height: 7), badge!],
               ],
             ),
           ),
@@ -2804,8 +2815,8 @@ class _ReviewBottomBar extends StatelessWidget {
                               error.isNotEmpty
                                   ? 'Quote needed'
                                   : total == null
-                                      ? 'Pending'
-                                      : _formatQuoteAmount(total!),
+                                  ? 'Pending'
+                                  : _formatQuoteAmount(total!),
                               key: ValueKey('$total$error$loading'),
                               style: const TextStyle(
                                 color: Colors.white,
@@ -2894,12 +2905,10 @@ String _maskSenderPhoneForReview(String phone) {
   return '$prefix•••• •••$suffix';
 }
 
-String _reviewIrisEstimate(
-  SendPackageState engine,
-  SenderBookingDraft draft,
-) {
+String _reviewIrisEstimate(SendPackageState engine, SenderBookingDraft draft) {
   final result = engine.canonicalIrisResult;
-  final weight = result?.totalWeightLabel ??
+  final weight =
+      result?.totalWeightLabel ??
       (draft.weightLabel.trim().isEmpty
           ? 'Estimated after IRIS analysis'
           : draft.weightLabel.trim());
@@ -3097,14 +3106,16 @@ class _PaymentPanel extends StatelessWidget {
               );
               return Column(
                 children: options
-                    .map((option) => Padding(
-                          padding: const EdgeInsets.only(bottom: 8),
-                          child: _checkoutOptionTile(
-                            option,
-                            total,
-                            availableRoth,
-                          ),
-                        ))
+                    .map(
+                      (option) => Padding(
+                        padding: const EdgeInsets.only(bottom: 8),
+                        child: _checkoutOptionTile(
+                          option,
+                          total,
+                          availableRoth,
+                        ),
+                      ),
+                    )
                     .toList(growable: false),
               );
             },
@@ -3252,30 +3263,32 @@ class _PaymentPanel extends StatelessWidget {
           title: 'Apple Pay${option.isDefault ? ' · Default' : ''}',
           subtitle: 'Fast checkout on supported iOS devices.',
           icon: Icons.apple_rounded,
-          selected: draft.selectedPaymentMethod ==
+          selected:
+              draft.selectedPaymentMethod ==
               SenderFallbackPaymentMethod.applePay,
           onTap: total == null
               ? null
               : () => _selectMethod(
-                    total,
-                    availableRoth,
-                    SenderFallbackPaymentMethod.applePay,
-                  ),
+                  total,
+                  availableRoth,
+                  SenderFallbackPaymentMethod.applePay,
+                ),
         );
       case SenderPaymentProfileOptionType.googlePay:
         return _PaymentMethodTile(
           title: 'Google Pay${option.isDefault ? ' · Default' : ''}',
           subtitle: 'Fast checkout on supported Android devices.',
           icon: Icons.android_rounded,
-          selected: draft.selectedPaymentMethod ==
+          selected:
+              draft.selectedPaymentMethod ==
               SenderFallbackPaymentMethod.googlePay,
           onTap: total == null
               ? null
               : () => _selectMethod(
-                    total,
-                    availableRoth,
-                    SenderFallbackPaymentMethod.googlePay,
-                  ),
+                  total,
+                  availableRoth,
+                  SenderFallbackPaymentMethod.googlePay,
+                ),
         );
       case SenderPaymentProfileOptionType.savedCard:
         final method = option.method;
@@ -3288,12 +3301,12 @@ class _PaymentPanel extends StatelessWidget {
           onTap: total == null
               ? null
               : () => _selectMethod(
-                    total,
-                    availableRoth,
-                    SenderFallbackPaymentMethod.card,
-                    paymentMethodId: method.id,
-                    paymentMethodLabel: method.title,
-                  ),
+                  total,
+                  availableRoth,
+                  SenderFallbackPaymentMethod.card,
+                  paymentMethodId: method.id,
+                  paymentMethodLabel: method.title,
+                ),
         );
       case SenderPaymentProfileOptionType.addPaymentMethod:
         return _PaymentMethodTile(
@@ -3302,14 +3315,14 @@ class _PaymentPanel extends StatelessWidget {
           icon: Icons.add_card_outlined,
           selected:
               draft.selectedPaymentMethod == SenderFallbackPaymentMethod.card &&
-                  draft.selectedPaymentMethodId.isEmpty,
+              draft.selectedPaymentMethodId.isEmpty,
           onTap: total == null
               ? null
               : () => _selectMethod(
-                    total,
-                    availableRoth,
-                    SenderFallbackPaymentMethod.card,
-                  ),
+                  total,
+                  availableRoth,
+                  SenderFallbackPaymentMethod.card,
+                ),
         );
     }
   }
@@ -3323,8 +3336,8 @@ class _PaymentPanel extends StatelessWidget {
     final method = split.fullyCoveredByRoth
         ? 'Roth'
         : draft.selectedPaymentMethodLabel.isNotEmpty
-            ? draft.selectedPaymentMethodLabel
-            : senderPaymentMethodLabel(split.fallbackMethod!);
+        ? draft.selectedPaymentMethodLabel
+        : senderPaymentMethodLabel(split.fallbackMethod!);
     final confirmed = await confirmSenderPaymentIfRequired(
       context,
       paymentMethod: method,
@@ -3342,16 +3355,16 @@ class _PaymentPanel extends StatelessWidget {
       ),
     );
     context.read<SendPackageBloc>().add(
-          StartSenderPaymentSession(
-            rothEnabled: split.rothEnabled,
-            fallbackMethod: split.fallbackMethod == null
-                ? 'roth'
-                : draft.selectedPaymentMethodLabel.isNotEmpty
-                    ? 'saved_card'
-                    : senderPaymentMethodLabel(split.fallbackMethod!),
-            paymentMethodId: draft.selectedPaymentMethodId,
-          ),
-        );
+      StartSenderPaymentSession(
+        rothEnabled: split.rothEnabled,
+        fallbackMethod: split.fallbackMethod == null
+            ? 'roth'
+            : draft.selectedPaymentMethodLabel.isNotEmpty
+            ? 'saved_card'
+            : senderPaymentMethodLabel(split.fallbackMethod!),
+        paymentMethodId: draft.selectedPaymentMethodId,
+      ),
+    );
   }
 
   Future<void> _confirmCardPayment(
@@ -3382,8 +3395,9 @@ class _PaymentPanel extends StatelessWidget {
       if (!context.mounted) return;
       onDraft(draft.copyWith(paymentStatus: SenderPaymentStatus.paid));
       _createPaidDelivery(context, engine);
-      SenderAccessibilityScope.maybeOf(context)
-          ?.haptic(SenderFeedbackEvent.paymentCompleted);
+      SenderAccessibilityScope.maybeOf(
+        context,
+      )?.haptic(SenderFeedbackEvent.paymentCompleted);
     } on StripeException catch (error) {
       debugPrint('Sender mobile Stripe confirmation failed: $error');
       if (!context.mounted) return;
@@ -3397,69 +3411,67 @@ class _PaymentPanel extends StatelessWidget {
 
   void _createPaidDelivery(BuildContext context, SendPackageState engine) {
     context.read<SendPackageBloc>().add(
-          CreatePaidSenderDelivery(
-            bookingPayload: _bookingPayload(engine),
-          ),
-        );
+      CreatePaidSenderDelivery(bookingPayload: _bookingPayload(engine)),
+    );
   }
 
   Map<String, dynamic> _bookingPayload(SendPackageState engine) => {
-        'draftId': draftId,
-        'idempotencyKey':
-            'sender-${senderUid ?? 'anonymous'}-${draftId ?? 'draft'}-${engine.senderPaymentSessionId ?? 'session'}',
-        'pickup': {
-          'address': engine.pickupLocation ?? draft.pickupAddress,
-          'subAddress': engine.pickupLocationSubAddress ?? '',
-          'locality': engine.pickupLocality ?? '',
-          'coordinates': {
-            'lat': engine.pickupCoordinate?.lat ?? 0,
-            'lng': engine.pickupCoordinate?.lng ?? 0,
-          },
-        },
-        'dropoff': {
-          'address': engine.destinationLocation ?? draft.dropoffAddress,
-          'subAddress': engine.destinationLocationSubAddress ?? '',
-          'locality': engine.destinationLocality ?? '',
-          'coordinates': {
-            'lat': engine.desinationCoordinate?.lat ?? 0,
-            'lng': engine.desinationCoordinate?.lng ?? 0,
-          },
-        },
-        'recipient': {
-          'name': draft.receiverName,
-          'phone': draft.receiverPhone,
-          'deliveryNotes': draft.deliveryNotes,
-        },
-        'deliveryTime': {
-          'type': draft.deliveryTimingType == SenderDeliveryTimingType.now
-              ? 'now'
-              : 'scheduled',
-          'scheduledDate': draft.scheduledDate,
-          'scheduledWindow': draft.scheduledWindow,
-          'customWindowStart': draft.customWindowStart,
-          'customWindowEnd': draft.customWindowEnd,
-          'summary': draft.deliveryTimeSummary,
-        },
-        'parcel': {
-          'itemName': draft.itemName,
-          'description': draft.itemDescription,
-          'weightLabel': draft.weightLabel,
-          'weightKg': engine.parcelWeightKg,
-          'fragile': draft.fragile,
-          'highValue': draft.highValue,
-        },
-        'iris': {
-          'itemName': engine.canonicalIrisResult?.itemName,
-          'quantity': engine.canonicalIrisResult?.quantity,
-          'totalWeightKg': engine.canonicalIrisResult?.totalWeightKg,
-          'recommendedVehicle': engine.canonicalIrisResult?.recommendedVehicle,
-          'confidence': engine.canonicalIrisResult?.confidenceLabel,
-          'category': engine.canonicalIrisResult?.category,
-          'vanguardRequired': engine.canonicalIrisResult?.vanguardRequired,
-          'vanguardRequiredReason':
-              engine.canonicalIrisResult?.vanguardRequiredReason,
-        },
-      };
+    'draftId': draftId,
+    'idempotencyKey':
+        'sender-${senderUid ?? 'anonymous'}-${draftId ?? 'draft'}-${engine.senderPaymentSessionId ?? 'session'}',
+    'pickup': {
+      'address': engine.pickupLocation ?? draft.pickupAddress,
+      'subAddress': engine.pickupLocationSubAddress ?? '',
+      'locality': engine.pickupLocality ?? '',
+      'coordinates': {
+        'lat': engine.pickupCoordinate?.lat ?? 0,
+        'lng': engine.pickupCoordinate?.lng ?? 0,
+      },
+    },
+    'dropoff': {
+      'address': engine.destinationLocation ?? draft.dropoffAddress,
+      'subAddress': engine.destinationLocationSubAddress ?? '',
+      'locality': engine.destinationLocality ?? '',
+      'coordinates': {
+        'lat': engine.desinationCoordinate?.lat ?? 0,
+        'lng': engine.desinationCoordinate?.lng ?? 0,
+      },
+    },
+    'recipient': {
+      'name': draft.receiverName,
+      'phone': draft.receiverPhone,
+      'deliveryNotes': draft.deliveryNotes,
+    },
+    'deliveryTime': {
+      'type': draft.deliveryTimingType == SenderDeliveryTimingType.now
+          ? 'now'
+          : 'scheduled',
+      'scheduledDate': draft.scheduledDate,
+      'scheduledWindow': draft.scheduledWindow,
+      'customWindowStart': draft.customWindowStart,
+      'customWindowEnd': draft.customWindowEnd,
+      'summary': draft.deliveryTimeSummary,
+    },
+    'parcel': {
+      'itemName': draft.itemName,
+      'description': draft.itemDescription,
+      'weightLabel': draft.weightLabel,
+      'weightKg': engine.parcelWeightKg,
+      'fragile': draft.fragile,
+      'highValue': draft.highValue,
+    },
+    'iris': {
+      'itemName': engine.canonicalIrisResult?.itemName,
+      'quantity': engine.canonicalIrisResult?.quantity,
+      'totalWeightKg': engine.canonicalIrisResult?.totalWeightKg,
+      'recommendedVehicle': engine.canonicalIrisResult?.recommendedVehicle,
+      'confidence': engine.canonicalIrisResult?.confidenceLabel,
+      'category': engine.canonicalIrisResult?.category,
+      'vanguardRequired': engine.canonicalIrisResult?.vanguardRequired,
+      'vanguardRequiredReason':
+          engine.canonicalIrisResult?.vanguardRequiredReason,
+    },
+  };
 }
 
 class _RadioGlassTile extends StatelessWidget {
@@ -4144,10 +4156,7 @@ class _QuoteErrorText extends StatelessWidget {
   Widget build(BuildContext context) {
     return const Text(
       'Unable to retrieve your quote.',
-      style: TextStyle(
-        color: Color(0xFFFCA5A5),
-        fontWeight: FontWeight.w800,
-      ),
+      style: TextStyle(color: Color(0xFFFCA5A5), fontWeight: FontWeight.w800),
     );
   }
 }
@@ -4407,11 +4416,12 @@ class _SenderMobileMapState extends State<_SenderMobileMap>
   @override
   Widget build(BuildContext context) {
     final distance = widget.distanceKm;
-    final etaMinutes =
-        distance == null ? null : math.max(6, distance * 4).round();
+    final etaMinutes = distance == null
+        ? null
+        : math.max(6, distance * 4).round();
     final highContrast =
         SenderAccessibilityScope.maybeOf(context)?.settings.highContrast ??
-            false;
+        false;
     return Stack(
       children: [
         AnimatedBuilder(
