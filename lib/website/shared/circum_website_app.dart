@@ -2175,31 +2175,16 @@ String _pdfTextEscape(String value) {
       .replaceAll(')', r'\)');
 }
 
-Uri _circumOrderPdfUri() {
-  final rawLines = <String>[
-    'THE CIRCUM ORDER',
-    'Every Veteran Was Once An Agent.',
-    '',
-    'Founding Charter of the Driver Network',
-    '',
-    'Agent - I Have Joined The Network',
-    'Sentinel - I Have Proven Myself',
-    'Warden - Circum Trusts Me',
-    'Knight - I Defend The Network',
-    'Veteran - I Helped Build This',
-    '',
-    'Circum rewards contribution.',
-    'Those who create value, protect the network, serve customers and',
-    'help build the platform will be recognised and rewarded.',
-    '',
-    ..._circumOrderCharterSections.expand(
-      (section) => [
-        '',
-        section.title,
-        ...section.paragraphs.expand((paragraph) => [paragraph, '']),
-      ],
-    ),
-  ];
+String _pdfMoney(Object? value) {
+  final parsed = value is num ? value.toDouble() : double.tryParse('$value');
+  return (parsed ?? 0).toStringAsFixed(2);
+}
+
+Uri _pdfUriFromLines(
+  List<String> rawLines, {
+  String? title,
+  Set<String> sectionTitles = const {},
+}) {
   final lines = <String>[];
   for (final line in rawLines) {
     if (line.length <= 72) {
@@ -2239,10 +2224,8 @@ Uri _circumOrderPdfUri() {
     var y = 742;
     final stream = StringBuffer();
     for (final line in pageLines) {
-      final isTitle = line == 'THE CIRCUM ORDER';
-      final isSectionTitle = _circumOrderCharterSections.any(
-        (section) => section.title == line,
-      );
+      final isTitle = title != null && line == title;
+      final isSectionTitle = sectionTitles.contains(line);
       final size = isTitle ? 22 : (isSectionTitle ? 15 : 11);
       stream.writeln(
         'BT /F1 $size Tf 72 $y Td (${_pdfTextEscape(line)}) Tj ET',
@@ -2283,6 +2266,86 @@ Uri _circumOrderPdfUri() {
     ..writeln('%%EOF');
   return Uri.parse(
     'data:application/pdf;base64,${base64Encode(ascii.encode(buffer.toString()))}',
+  );
+}
+
+Uri _circumOrderPdfUri() {
+  final rawLines = <String>[
+    'THE CIRCUM ORDER',
+    'Every Veteran Was Once An Agent.',
+    '',
+    'Founding Charter of the Driver Network',
+    '',
+    'Agent - I Have Joined The Network',
+    'Sentinel - I Have Proven Myself',
+    'Warden - Circum Trusts Me',
+    'Knight - I Defend The Network',
+    'Veteran - I Helped Build This',
+    '',
+    'Circum rewards contribution.',
+    'Those who create value, protect the network, serve customers and',
+    'help build the platform will be recognised and rewarded.',
+    '',
+    ..._circumOrderCharterSections.expand(
+      (section) => [
+        '',
+        section.title,
+        ...section.paragraphs.expand((paragraph) => [paragraph, '']),
+      ],
+    ),
+  ];
+  return _pdfUriFromLines(
+    rawLines,
+    title: 'THE CIRCUM ORDER',
+    sectionTitles:
+        _circumOrderCharterSections.map((section) => section.title).toSet(),
+  );
+}
+
+Uri _businessInvoicePdfUri(Map<String, dynamic> invoice) {
+  final id = '${invoice['id'] ?? ''}'.trim();
+  final invoiceNumber = '${invoice['invoiceNumber'] ?? id}'.trim();
+  final displayNumber =
+      invoiceNumber.isEmpty ? 'Business invoice' : invoiceNumber;
+  final status = _displayStatusLabel(
+    '${invoice['status'] ?? invoice['paymentStatus'] ?? 'open'}',
+  );
+  final total = _pdfMoney(invoice['total'] ?? invoice['subtotal']);
+  final paid = _pdfMoney(invoice['amountPaid']);
+  final balance = _pdfMoney(invoice['balanceDue'] ?? invoice['total']);
+  final roth = _pdfMoney(invoice['rothApplied'] ?? invoice['rothAmount']);
+  final deliveryCount = invoice['deliveryCount'] ??
+      (invoice['deliveryIds'] is List
+          ? (invoice['deliveryIds'] as List).length
+          : null);
+  final issued = _adminDateText(invoice['issuedAt'] ?? invoice['createdAt']);
+  final due = _adminDateText(invoice['dueAt'] ?? invoice['dueDate']);
+
+  return _pdfUriFromLines(
+    [
+      'CIRCUM BUSINESS INVOICE',
+      displayNumber,
+      '',
+      'Status: $status',
+      'Issued: $issued',
+      'Due: $due',
+      '',
+      'Summary',
+      'Total: GBP $total',
+      'Paid: GBP $paid',
+      'Roth applied: GBP $roth',
+      'Balance due: GBP $balance',
+      if (deliveryCount != null) 'Deliveries: $deliveryCount',
+      '',
+      'Payment',
+      'Business invoices are created by Circum Operations.',
+      'Use Stripe or Business Roth in the Business Centre to settle this invoice.',
+      '',
+      'Records',
+      'This copy is provided for business records and may be printed or saved as PDF.',
+    ],
+    title: 'CIRCUM BUSINESS INVOICE',
+    sectionTitles: const {'Summary', 'Payment', 'Records'},
   );
 }
 
@@ -8283,6 +8346,7 @@ class _CustomerPortalState extends State<_CustomerPortal> {
           onPayInvoice: (invoiceId) => _openBusinessInvoiceCheckout(invoiceId),
           onPayInvoiceWithRoth: (invoiceId) =>
               _openBusinessInvoiceCheckout(invoiceId, useRoth: true),
+          onDownloadInvoice: _downloadBusinessInvoice,
           onBuyRoth: _openBusinessRothCheckout,
           onCreateDelivery: () => setState(() => _step = _SenderStep.details),
           onHealthPlus: () => setState(() => _step = _SenderStep.healthPlus),
@@ -9797,6 +9861,11 @@ class _CustomerPortalState extends State<_CustomerPortal> {
     } finally {
       if (mounted) setState(() => _businessBusy = false);
     }
+  }
+
+  Future<void> _downloadBusinessInvoice(Map<String, dynamic> invoice) async {
+    await launchUrl(_businessInvoicePdfUri(invoice),
+        webOnlyWindowName: '_blank');
   }
 
   Future<void> _openBusinessRothCheckout() async {
@@ -13689,6 +13758,7 @@ class _BusinessCentreStep extends StatelessWidget {
   final ValueChanged<String> onRemoveMember;
   final ValueChanged<String> onPayInvoice;
   final ValueChanged<String> onPayInvoiceWithRoth;
+  final ValueChanged<Map<String, dynamic>> onDownloadInvoice;
   final VoidCallback onBuyRoth;
   final VoidCallback onCreateDelivery;
   final VoidCallback onHealthPlus;
@@ -13728,6 +13798,7 @@ class _BusinessCentreStep extends StatelessWidget {
     required this.onRemoveMember,
     required this.onPayInvoice,
     required this.onPayInvoiceWithRoth,
+    required this.onDownloadInvoice,
     required this.onBuyRoth,
     required this.onCreateDelivery,
     required this.onHealthPlus,
@@ -13884,6 +13955,7 @@ class _BusinessCentreStep extends StatelessWidget {
               invoices: invoices,
               onPayInvoice: onPayInvoice,
               onPayInvoiceWithRoth: onPayInvoiceWithRoth,
+              onDownloadInvoice: onDownloadInvoice,
             ),
             const SizedBox(height: 14),
             _BusinessTeamPanel(
@@ -14306,12 +14378,14 @@ class _BusinessInvoicesPanel extends StatelessWidget {
   final List<Map<String, dynamic>> invoices;
   final ValueChanged<String> onPayInvoice;
   final ValueChanged<String> onPayInvoiceWithRoth;
+  final ValueChanged<Map<String, dynamic>> onDownloadInvoice;
 
   const _BusinessInvoicesPanel({
     required this.colors,
     required this.invoices,
     required this.onPayInvoice,
     required this.onPayInvoiceWithRoth,
+    required this.onDownloadInvoice,
   });
 
   @override
@@ -14345,16 +14419,22 @@ class _BusinessInvoicesPanel extends StatelessWidget {
                   subtitle:
                       'Balance £${total.toStringAsFixed(2)} · ${_displayStatusLabel(status)}',
                   trailing: paid ? 'Paid' : 'Pay',
-                  actions: paid
-                      ? const []
-                      : [
-                          TextButton(
-                              onPressed: () => onPayInvoice(id),
-                              child: const Text('Stripe')),
-                          TextButton(
-                              onPressed: () => onPayInvoiceWithRoth(id),
-                              child: const Text('Roth')),
-                        ],
+                  actions: [
+                    TextButton(
+                      onPressed: () => onDownloadInvoice(invoice),
+                      child: const Text('Print / PDF'),
+                    ),
+                    if (!paid) ...[
+                      TextButton(
+                        onPressed: () => onPayInvoice(id),
+                        child: const Text('Stripe'),
+                      ),
+                      TextButton(
+                        onPressed: () => onPayInvoiceWithRoth(id),
+                        child: const Text('Roth'),
+                      ),
+                    ],
+                  ],
                 );
               }),
           ],

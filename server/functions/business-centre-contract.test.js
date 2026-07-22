@@ -94,3 +94,35 @@ test("Sender Web exposes the Business Centre without placeholder routes", () => 
   assert.match(senderWebSource, /httpsCallable\('createBusinessRothCheckout'\)/);
   assert.doesNotMatch(senderWebSource, /Business Centre[\s\S]{0,4000}Coming Soon/);
 });
+
+test("Business invoice payment supports partial Roth plus remaining card payment", () => {
+  assert.match(businessPaymentsSource, /calculateWalletCheckout\(\{[\s\S]*?orderTotalGbp: paymentAmount,[\s\S]*?walletBalanceGbp: walletBalance,[\s\S]*?selectedCurrency: "gbp"/);
+  assert.match(businessPaymentsSource, /const rothAmount = split\.walletContributionGbp;/);
+  assert.match(businessPaymentsSource, /const cardAmount = split\.remainingGbp;/);
+  assert.match(businessPaymentsSource, /unit_amount: Math\.round\(cardAmount \* 100\)/);
+  assert.match(businessPaymentsSource, /cardAmountGbp: `\$\{cardAmount\}`/);
+  assert.match(businessPaymentsSource, /rothAmountGbp: `\$\{rothAmount\}`/);
+  assert.match(businessPaymentsSource, /method: rothAmount > 0 \? `roth_\$\{requestedMethod\}` : requestedMethod/);
+});
+
+test("Business invoice Stripe payment without Roth charges the full balance by card", () => {
+  assert.match(businessPaymentsSource, /const useRoth = data\.useRoth === true;/);
+  assert.match(businessPaymentsSource, /const walletBalance = useRoth && `\$\{wallet\.status \|\| "active"\}` === "active" \? money\(wallet\.balance \|\| wallet\.availableBalance\) : 0;/);
+  assert.match(businessPaymentsSource, /const cardAmount = split\.remainingGbp;/);
+  assert.match(businessPaymentsSource, /unit_amount: Math\.round\(cardAmount \* 100\)/);
+  assert.match(businessPaymentsSource, /rothAmountGbp: `\$\{rothAmount\}`/);
+  assert.match(businessPaymentsSource, /method: rothAmount > 0 \? `roth_\$\{requestedMethod\}` : requestedMethod/);
+  assert.match(businessPaymentsSource, /const requestedMethod = \["apple_pay", "google_pay", "saved_card", "card"\]\.includes\(`\$\{data\.paymentMethod \|\| ""\}`\) \? `\$\{data\.paymentMethod\}` : "card";/);
+});
+
+test("Business invoices expose printable PDF records without client-side invoice generation", () => {
+  assert.match(senderWebSource, /Uri _businessInvoicePdfUri\(Map<String, dynamic> invoice\)/);
+  assert.match(senderWebSource, /Business invoices are created by Circum Operations\./);
+  assert.match(senderWebSource, /This copy is provided for business records and may be printed or saved as PDF\./);
+  assert.match(senderWebSource, /onDownloadInvoice/);
+  assert.match(senderWebSource, /Print \/ PDF/);
+  assert.match(senderWebSource, /data:application\/pdf;base64/);
+  assert.doesNotMatch(senderWebSource, /httpsCallable\('createBusinessInvoice'\)/);
+  assert.doesNotMatch(senderWebSource, /\.collection\('businessInvoices'\)\.add/);
+  assert.doesNotMatch(senderWebSource, /\.collection\('businessInvoices'\)\.doc\([^)]*\)\.set/);
+});
