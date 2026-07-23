@@ -68,30 +68,21 @@ class GiftModeView extends StatelessWidget {
                   iconKind: SenderGiftsIconKind.gift,
                   title: 'Gift someone',
                   subtitle: 'Send to a person you know.',
-                  onTap: () => _openMode(
-                    context,
-                    SenderGiftMode.someone,
-                  ),
+                  onTap: () => _openMode(context, SenderGiftMode.someone),
                 ),
                 const SizedBox(height: 12),
                 _GiftModeCard(
                   iconKind: SenderGiftsIconKind.self,
                   title: 'Gift myself',
                   subtitle: 'Recurring self-treat.',
-                  onTap: () => _openMode(
-                    context,
-                    SenderGiftMode.myself,
-                  ),
+                  onTap: () => _openMode(context, SenderGiftMode.myself),
                 ),
                 const SizedBox(height: 12),
                 _GiftModeCard(
                   iconKind: SenderGiftsIconKind.mask,
                   title: 'Anonymous gift',
                   subtitle: 'Direct, name withheld.',
-                  onTap: () => _openMode(
-                    context,
-                    SenderGiftMode.anonymous,
-                  ),
+                  onTap: () => _openMode(context, SenderGiftMode.anonymous),
                 ),
                 const SizedBox(height: 12),
                 _GiftModeCard(
@@ -118,9 +109,7 @@ class GiftModeView extends StatelessWidget {
             businessContext: business?.toMap() ?? const {},
           ),
         ),
-        settings: const RouteSettings(
-          name: GiftRelationshipView.routeName,
-        ),
+        settings: const RouteSettings(name: GiftRelationshipView.routeName),
       ),
     );
   }

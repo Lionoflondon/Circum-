@@ -9,14 +9,15 @@ class RideContactInfo {
   final String? address;
   final String? subAddress;
 
-  RideContactInfo(
-      {this.fullname,
-      required this.position,
-      this.phoneNumber,
-      this.moreInformation,
-      this.locality,
-      this.address,
-      this.subAddress});
+  RideContactInfo({
+    this.fullname,
+    required this.position,
+    this.phoneNumber,
+    this.moreInformation,
+    this.locality,
+    this.address,
+    this.subAddress,
+  });
 
   factory RideContactInfo.fromJson(dynamic json) {
     return RideContactInfo(
@@ -38,7 +39,7 @@ class RideContactInfo {
       'moreInformation': moreInformation,
       'locality': locality,
       'address': address,
-      'subAddress': subAddress
+      'subAddress': subAddress,
     };
   }
 }
@@ -47,10 +48,7 @@ class PositionData {
   final String geohash;
   final GeoPoint geopoint;
 
-  PositionData({
-    required this.geohash,
-    required this.geopoint,
-  });
+  PositionData({required this.geohash, required this.geopoint});
 
   factory PositionData.fromJson(dynamic json) {
     return PositionData(geohash: json['geohash'], geopoint: json['geopoint']);

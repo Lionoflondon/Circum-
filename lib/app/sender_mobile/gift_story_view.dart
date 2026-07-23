@@ -42,12 +42,13 @@ class _GiftStoryViewState extends State<GiftStoryView>
   void initState() {
     super.initState();
     _slides = _slidesFromDraft(widget.draft);
-    _progress = AnimationController(
-      vsync: this,
-      duration: Duration(milliseconds: _slides.first.durationMs),
-    )..addStatusListener((status) {
-        if (status == AnimationStatus.completed) _next();
-      });
+    _progress =
+        AnimationController(
+          vsync: this,
+          duration: Duration(milliseconds: _slides.first.durationMs),
+        )..addStatusListener((status) {
+          if (status == AnimationStatus.completed) _next();
+        });
     if (widget.draft.giftStoryUnlocked) _run();
     WidgetsBinding.instance.addPostFrameCallback((_) async {
       await _resolveStoryFromBackend();
@@ -126,7 +127,8 @@ class _GiftStoryViewState extends State<GiftStoryView>
           'name': draft.mode == SenderGiftMode.campaign
               ? 'Your campaign gift'
               : 'Your gift',
-          'why': draft.irisGiftBrief?.experienceDirection ??
+          'why':
+              draft.irisGiftBrief?.experienceDirection ??
               'Because this moment deserved something thoughtful.',
         },
       ],
@@ -336,9 +338,7 @@ class _GiftStoryViewState extends State<GiftStoryView>
             ? 'This story is currently under review.'
             : 'Your story will unlock after delivery is confirmed.',
         onBack: () => Navigator.of(context).maybePop(),
-        children: const [
-          _LockedStoryCard(),
-        ],
+        children: const [_LockedStoryCard()],
         footer: GiftJourneyWidgets.primaryButton(
           enabled: true,
           label: 'Back to status',
@@ -356,8 +356,8 @@ class _GiftStoryViewState extends State<GiftStoryView>
             child: _storyLoading
                 ? const CircularProgressIndicator()
                 : _storyError != null
-                    ? _StoryLoadError(message: _storyError!)
-                    : _buildStoryPlayer(),
+                ? _StoryLoadError(message: _storyError!)
+                : _buildStoryPlayer(),
           ),
         ),
       ),
@@ -660,16 +660,14 @@ class _StoryProgress extends StatelessWidget {
                   child: i < index
                       ? Container(color: Colors.white)
                       : i == index
-                          ? AnimatedBuilder(
-                              animation: progress,
-                              builder: (_, __) => FractionallySizedBox(
-                                widthFactor: progress.value,
-                                child: Container(
-                                  color: const Color(0xFFC9B8FF),
-                                ),
-                              ),
-                            )
-                          : const SizedBox.shrink(),
+                      ? AnimatedBuilder(
+                          animation: progress,
+                          builder: (_, __) => FractionallySizedBox(
+                            widthFactor: progress.value,
+                            child: Container(color: const Color(0xFFC9B8FF)),
+                          ),
+                        )
+                      : const SizedBox.shrink(),
                 ),
               ),
             ),
@@ -707,20 +705,18 @@ class _StorySlideView extends StatelessWidget {
   Widget build(BuildContext context) {
     return switch (slide.type) {
       GiftStorySlideType.arrival => _ArrivalSlide(slide: slide),
-      GiftStorySlideType.note => _NoteSlide(
-          slide: slide,
-        ),
+      GiftStorySlideType.note => _NoteSlide(slide: slide),
       GiftStorySlideType.voiceNote => _VoiceNoteSlide(slide: slide),
       GiftStorySlideType.giftReveal => _RevealSlide(slide: slide),
       GiftStorySlideType.whyChosen => _TextSlide(slide: slide),
       GiftStorySlideType.finale => _FinaleSlide(
-          onReplay: onReplay,
-          onThankYou: onThankYou,
-          onKeepStory: onKeepStory,
-          thankYouSent: thankYouSent,
-          storySaved: storySaved,
-          actionBusy: actionBusy,
-        ),
+        onReplay: onReplay,
+        onThankYou: onThankYou,
+        onKeepStory: onKeepStory,
+        thankYouSent: thankYouSent,
+        storySaved: storySaved,
+        actionBusy: actionBusy,
+      ),
     };
   }
 }
@@ -830,7 +826,9 @@ class _VoiceNoteSlideState extends State<_VoiceNoteSlide> {
                   onTap: hasAudio ? _toggle : null,
                   child: Container(
                     padding: const EdgeInsets.symmetric(
-                        horizontal: 16, vertical: 12),
+                      horizontal: 16,
+                      vertical: 12,
+                    ),
                     decoration: BoxDecoration(
                       color: const Color(0xFFC9B8FF).withValues(alpha: .14),
                       borderRadius: BorderRadius.circular(16),
@@ -851,8 +849,8 @@ class _VoiceNoteSlideState extends State<_VoiceNoteSlide> {
                         Text(
                           hasAudio
                               ? (_playing
-                                  ? 'Pause voice note'
-                                  : 'Play voice note')
+                                    ? 'Pause voice note'
+                                    : 'Play voice note')
                               : 'Voice note unavailable',
                           style: GoogleFonts.inter(
                             color: Colors.white,
@@ -1027,8 +1025,9 @@ class _StoryButton extends StatelessWidget {
   Widget build(BuildContext context) {
     return FilledButton(
       style: FilledButton.styleFrom(
-        backgroundColor:
-            secondary ? Colors.white.withValues(alpha: .08) : Colors.white,
+        backgroundColor: secondary
+            ? Colors.white.withValues(alpha: .08)
+            : Colors.white,
         foregroundColor: secondary ? Colors.white : const Color(0xFF090B1D),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
         padding: const EdgeInsets.symmetric(vertical: 14),
@@ -1132,11 +1131,13 @@ class _GiftStoryAuthDialogState extends State<_GiftStoryAuthDialog> {
         ),
         FilledButton(
           onPressed: _busy ? null : _submit,
-          child: Text(_busy
-              ? 'Please wait...'
-              : _createAccount
-                  ? 'Create Account'
-                  : 'Sign In'),
+          child: Text(
+            _busy
+                ? 'Please wait...'
+                : _createAccount
+                ? 'Create Account'
+                : 'Sign In',
+          ),
         ),
       ],
     );
@@ -1214,11 +1215,7 @@ class _StorySkinBackground extends StatelessWidget {
         gradient: RadialGradient(
           center: Alignment(-.35, -.88),
           radius: 1.1,
-          colors: [
-            Color(0x3328EDE5),
-            Color(0x1AFFD6E8),
-            Color(0xFF090B1D),
-          ],
+          colors: [Color(0x3328EDE5), Color(0x1AFFD6E8), Color(0xFF090B1D)],
           stops: [0, .42, 1],
         ),
       ),
@@ -1279,10 +1276,8 @@ class _OrbState extends State<_Orb> with SingleTickerProviderStateMixin {
   Widget build(BuildContext context) {
     return AnimatedBuilder(
       animation: _spin,
-      builder: (_, child) => Transform.rotate(
-        angle: _spin.value * math.pi * 2,
-        child: child,
-      ),
+      builder: (_, child) =>
+          Transform.rotate(angle: _spin.value * math.pi * 2, child: child),
       child: Container(
         width: 104,
         height: 104,
@@ -1357,8 +1352,11 @@ class _Candle extends StatelessWidget {
           ),
           Positioned(
             bottom: 44,
-            child:
-                Container(width: 2, height: 14, color: const Color(0xFF3A2C22)),
+            child: Container(
+              width: 2,
+              height: 14,
+              color: const Color(0xFF3A2C22),
+            ),
           ),
           const Positioned(bottom: 56, child: _Flame()),
         ],

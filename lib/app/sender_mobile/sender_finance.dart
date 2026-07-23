@@ -109,7 +109,10 @@ SenderCheckoutPreference senderEffectiveCheckoutPreference(
   TargetPlatform platform,
 ) {
   if (senderCheckoutPreferenceSupportedOnPlatform(
-      preference, profile, platform)) {
+    preference,
+    profile,
+    platform,
+  )) {
     return preference;
   }
   if (profile.methods.isNotEmpty) return SenderCheckoutPreference.defaultCard;
@@ -169,19 +172,23 @@ class SenderPaymentProfile {
   });
 
   factory SenderPaymentProfile.empty() => const SenderPaymentProfile(
-        methods: [],
-        preference: SenderCheckoutPreference.askEveryCheckout,
-      );
+    methods: [],
+    preference: SenderCheckoutPreference.askEveryCheckout,
+  );
 
   factory SenderPaymentProfile.fromMap(Map<String, dynamic> map) {
     return SenderPaymentProfile(
       methods: (map['paymentMethods'] as List? ?? const [])
-          .map((item) => SenderPaymentMethod.fromMap(
-              Map<String, dynamic>.from(item as Map)))
+          .map(
+            (item) => SenderPaymentMethod.fromMap(
+              Map<String, dynamic>.from(item as Map),
+            ),
+          )
           .where((item) => item.id.isNotEmpty)
           .toList(growable: false),
-      preference:
-          senderCheckoutPreferenceFromValue('${map['preference'] ?? ''}'),
+      preference: senderCheckoutPreferenceFromValue(
+        '${map['preference'] ?? ''}',
+      ),
       defaultPaymentMethodId: map['defaultPaymentMethodId'] as String?,
       applePaySupported: map['applePaySupported'] != false,
       googlePaySupported: map['googlePaySupported'] != false,
@@ -227,22 +234,27 @@ List<SenderPaymentProfileOption> senderOrderedPaymentOptions(
 }) {
   final target = platform ?? defaultTargetPlatform;
   final saved = profile.methods
-      .map((method) => SenderPaymentProfileOption(
+      .map(
+        (method) => SenderPaymentProfileOption(
           SenderPaymentProfileOptionType.savedCard,
-          method: method))
+          method: method,
+        ),
+      )
       .toList(growable: false);
   final defaultCards = saved.where((item) => item.isDefault).toList();
   final otherCards = saved.where((item) => !item.isDefault).toList();
   final apple =
       profile.applePaySupported && senderPlatformSupportsApplePay(target)
-          ? const SenderPaymentProfileOption(
-              SenderPaymentProfileOptionType.applePay)
-          : null;
+      ? const SenderPaymentProfileOption(
+          SenderPaymentProfileOptionType.applePay,
+        )
+      : null;
   final google =
       profile.googlePaySupported && senderPlatformSupportsGooglePay(target)
-          ? const SenderPaymentProfileOption(
-              SenderPaymentProfileOptionType.googlePay)
-          : null;
+      ? const SenderPaymentProfileOption(
+          SenderPaymentProfileOptionType.googlePay,
+        )
+      : null;
   final ordered = <SenderPaymentProfileOption>[];
   if (target == TargetPlatform.iOS) {
     if (apple != null) ordered.add(apple);
@@ -257,8 +269,11 @@ List<SenderPaymentProfileOption> senderOrderedPaymentOptions(
     ordered.addAll(otherCards);
   }
   if (includeAddMethod) {
-    ordered.add(const SenderPaymentProfileOption(
-        SenderPaymentProfileOptionType.addPaymentMethod));
+    ordered.add(
+      const SenderPaymentProfileOption(
+        SenderPaymentProfileOptionType.addPaymentMethod,
+      ),
+    );
   }
   return ordered;
 }
@@ -296,41 +311,46 @@ class FirebaseSenderPaymentProfileRepository
   final FirebaseFunctions functions;
 
   FirebaseSenderPaymentProfileRepository({FirebaseFunctions? functions})
-      : functions = functions ?? FirebaseFunctions.instance;
+    : functions = functions ?? FirebaseFunctions.instance;
 
   @override
   Future<SenderPaymentProfile> paymentMethods() async {
-    final result =
-        await functions.httpsCallable('listSenderPaymentMethods').call();
+    final result = await functions
+        .httpsCallable('listSenderPaymentMethods')
+        .call();
     return SenderPaymentProfile.fromMap(
-        Map<String, dynamic>.from(result.data as Map));
+      Map<String, dynamic>.from(result.data as Map),
+    );
   }
 
   @override
   Future<SenderSetupIntentData> createSetupIntent() async {
-    final result =
-        await functions.httpsCallable('createSenderSetupIntent').call();
+    final result = await functions
+        .httpsCallable('createSenderSetupIntent')
+        .call();
     return SenderSetupIntentData.fromMap(
-        Map<String, dynamic>.from(result.data as Map));
+      Map<String, dynamic>.from(result.data as Map),
+    );
   }
 
   @override
   Future<void> detachPaymentMethod(String paymentMethodId) async {
-    await functions
-        .httpsCallable('detachSenderPaymentMethod')
-        .call({'paymentMethodId': paymentMethodId});
+    await functions.httpsCallable('detachSenderPaymentMethod').call({
+      'paymentMethodId': paymentMethodId,
+    });
   }
 
   @override
   Future<void> setDefaultPaymentMethod(String paymentMethodId) async {
-    await functions
-        .httpsCallable('setDefaultSenderPaymentMethod')
-        .call({'paymentMethodId': paymentMethodId});
+    await functions.httpsCallable('setDefaultSenderPaymentMethod').call({
+      'paymentMethodId': paymentMethodId,
+    });
   }
 
   @override
   Future<void> saveCheckoutPreference(
-      SenderCheckoutPreference preference) async {
+    SenderCheckoutPreference preference,
+  ) async {
     await functions.httpsCallable('saveSenderCheckoutPreference').call({
       'preference': senderCheckoutPreferenceValue(preference),
     });

@@ -3,41 +3,41 @@ part of 'auth_bloc.dart';
 class FirstNameChanged extends AuthEvent {
   final String firstName;
 
-  FirstNameChanged({required this.firstName});
+  const FirstNameChanged({required this.firstName});
 }
 
 class LastNameChanged extends AuthEvent {
   final String lastName;
 
-  LastNameChanged({required this.lastName});
+  const LastNameChanged({required this.lastName});
 }
 
 class UsernameChanged extends AuthEvent {
   final String username;
-  UsernameChanged({required this.username});
+  const UsernameChanged({required this.username});
 }
 
 class GenderChanged extends AuthEvent {
   final String gender;
-  GenderChanged({required this.gender});
+  const GenderChanged({required this.gender});
 }
 
 class SignupEmailChanged extends AuthEvent {
   final String? email;
 
-  SignupEmailChanged({this.email});
+  const SignupEmailChanged({this.email});
 }
 
 class SignupPhoneNumberChanged extends AuthEvent {
   final String? phoneNumber;
 
-  SignupPhoneNumberChanged({this.phoneNumber});
+  const SignupPhoneNumberChanged({this.phoneNumber});
 }
 
 class SignupPasswordChanged extends AuthEvent {
   final String? password;
 
-  SignupPasswordChanged({this.password});
+  const SignupPasswordChanged({this.password});
 }
 
 class SignupSubmitted extends AuthEvent {}
@@ -46,12 +46,12 @@ class GotAnAccount extends AuthEvent {}
 
 class ChangedAccountType extends AuthEvent {
   final String account;
-  ChangedAccountType({required this.account});
+  const ChangedAccountType({required this.account});
 }
 
 class CountryChanged extends AuthEvent {
-  final value;
-  CountryChanged({this.value});
+  final Object? value;
+  const CountryChanged({this.value});
 }
 
 class ToggleObscure extends AuthEvent {}

@@ -5,19 +5,20 @@ class Message extends Equatable {
   final String senderId;
   final String message;
   final String timeStamp;
-  const Message(
-      {required this.requestId,
-      required this.senderId,
-      required this.message,
-      required this.timeStamp});
+  const Message({
+    required this.requestId,
+    required this.senderId,
+    required this.message,
+    required this.timeStamp,
+  });
 
   @override
   List<Object> get props => [
-        {requestId},
-        {senderId},
-        {message},
-        {timeStamp},
-      ];
+    {requestId},
+    {senderId},
+    {message},
+    {timeStamp},
+  ];
 
   static Message fromJson(dynamic json) {
     return Message(
@@ -29,7 +30,8 @@ class Message extends Equatable {
   }
 
   @override
-  String toString() => '''Message { 
+  String toString() =>
+      '''Message { 
       requestId: $requestId, 
       senderId: $senderId,
       message: $message,

@@ -13,30 +13,31 @@ class DispatchRequest extends Equatable {
   final String? riderName;
   final double? userRating;
   final double? riderRating;
-  const DispatchRequest(
-      {required this.pickupData,
-      required this.dropoffData,
-      required this.requestId,
-      required this.code,
-      required this.price,
-      required this.currency,
-      this.createdAt,
-      this.riderName,
-      this.userRating,
-      this.riderRating});
+  const DispatchRequest({
+    required this.pickupData,
+    required this.dropoffData,
+    required this.requestId,
+    required this.code,
+    required this.price,
+    required this.currency,
+    this.createdAt,
+    this.riderName,
+    this.userRating,
+    this.riderRating,
+  });
 
   @override
   List<Object> get props => [
-        {pickupData},
-        {dropoffData},
-        {requestId},
-        {code},
-        {price},
-        {createdAt},
-        {riderName},
-        {userRating},
-        {riderRating},
-      ];
+    {pickupData},
+    {dropoffData},
+    {requestId},
+    {code},
+    {price},
+    {createdAt},
+    {riderName},
+    {userRating},
+    {riderRating},
+  ];
 
   static DispatchRequest fromJson(dynamic json) {
     return DispatchRequest(
@@ -54,7 +55,8 @@ class DispatchRequest extends Equatable {
   }
 
   @override
-  String toString() => '''DispatchRequests { 
+  String toString() =>
+      '''DispatchRequests { 
       pickupData: $pickupData, 
       dropoffData: $dropoffData,
       price: $price

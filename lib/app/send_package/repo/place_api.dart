@@ -20,8 +20,9 @@ class PlaceApiProvider {
     final data = response.data is Map
         ? Map<String, dynamic>.from(response.data as Map)
         : <String, dynamic>{};
-    final results =
-        data['results'] is Iterable ? data['results'] as Iterable : const [];
+    final results = data['results'] is Iterable
+        ? data['results'] as Iterable
+        : const [];
     final suggestions = results
         .map((item) {
           final map = Map<String, dynamic>.from(item as Map);

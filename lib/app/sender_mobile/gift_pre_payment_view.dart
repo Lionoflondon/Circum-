@@ -60,9 +60,8 @@ class GiftPrePaymentView extends StatelessWidget {
         label: 'Continue',
         onTap: () => Navigator.of(context).push(
           MaterialPageRoute<void>(
-            builder: (_) => GiftPaymentView(
-              draft: draft.copyWith(irisGiftBrief: brief),
-            ),
+            builder: (_) =>
+                GiftPaymentView(draft: draft.copyWith(irisGiftBrief: brief)),
             settings: const RouteSettings(name: GiftPaymentView.routeName),
           ),
         ),

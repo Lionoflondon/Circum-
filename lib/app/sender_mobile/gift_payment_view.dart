@@ -61,7 +61,8 @@ class _GiftPaymentViewState extends State<GiftPaymentView> {
   void initState() {
     super.initState();
     final uri = Uri.base;
-    final cancelled = uri.queryParameters['payment'] == 'cancelled' ||
+    final cancelled =
+        uri.queryParameters['payment'] == 'cancelled' ||
         uri.fragment.contains('payment=cancelled');
     if (cancelled) {
       _message =
@@ -250,8 +251,8 @@ class _GiftPaymentViewState extends State<GiftPaymentView> {
       paymentMethod: _verifiedPaymentMethod == 'roth'
           ? 'Roth'
           : _verifiedPaymentMethod == 'roth_card'
-              ? 'Roth and card'
-              : (_paymentMethod ?? 'card'),
+          ? 'Roth and card'
+          : (_paymentMethod ?? 'card'),
       amount: '£${widget.draft.budget.toStringAsFixed(2)}',
     );
     if (!confirmed || !mounted) return;
@@ -263,11 +264,13 @@ class _GiftPaymentViewState extends State<GiftPaymentView> {
       final draftRef = FirebaseFirestore.instance
           .collection(senderGiftPaymentDraftCollectionName)
           .doc();
-      final payload = Map<String, Object?>.from(widget.draft.adminReviewPayload(
-        senderId: user.uid,
-        senderEmail: user.email ?? '',
-        senderName: user.displayName,
-      ));
+      final payload = Map<String, Object?>.from(
+        widget.draft.adminReviewPayload(
+          senderId: user.uid,
+          senderEmail: user.email ?? '',
+          senderName: user.displayName,
+        ),
+      );
       payload.addAll({
         'applyRoth': _applyRoth && _rothBalance > 0,
         'paymentMethod': 'card',
@@ -292,11 +295,11 @@ class _GiftPaymentViewState extends State<GiftPaymentView> {
       final payment = await FirebaseFunctions.instance
           .httpsCallable(senderGiftPaymentCallableName)
           .call({
-        'giftDraftId': draftRef.id,
-        'source': 'sender_mobile',
-        'applyRoth': _applyRoth && _rothBalance > 0,
-        'returnOrigin': Uri.base.origin,
-      });
+            'giftDraftId': draftRef.id,
+            'source': 'sender_mobile',
+            'applyRoth': _applyRoth && _rothBalance > 0,
+            'returnOrigin': Uri.base.origin,
+          });
       final paymentData = Map<String, dynamic>.from(payment.data as Map);
       if (paymentData['walletPaidInFull'] == true) {
         if (!mounted) return;
@@ -372,8 +375,9 @@ class _PaymentMethodTile extends StatelessWidget {
               selected
                   ? Icons.radio_button_checked_rounded
                   : Icons.radio_button_off_rounded,
-              color:
-                  selected ? const Color(0xFFC9B8FF) : const Color(0xFFB8AAB8),
+              color: selected
+                  ? const Color(0xFFC9B8FF)
+                  : const Color(0xFFB8AAB8),
               size: 18,
             ),
           ],
@@ -466,8 +470,8 @@ class _RothBalanceSummary extends StatelessWidget {
     final balanceText = loading
         ? 'Loading...'
         : unavailable
-            ? 'Unavailable'
-            : '£${balance.toStringAsFixed(0)}';
+        ? 'Unavailable'
+        : '£${balance.toStringAsFixed(0)}';
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.all(16),
@@ -479,7 +483,9 @@ class _RothBalanceSummary extends StatelessWidget {
       child: Column(
         children: [
           _PaymentSummaryRow(
-              label: 'Available Roth balance', value: balanceText),
+            label: 'Available Roth balance',
+            value: balanceText,
+          ),
           const SizedBox(height: 8),
           _PaymentSummaryRow(
             label: 'Amount covered by Roth',

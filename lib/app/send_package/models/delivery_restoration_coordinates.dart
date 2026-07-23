@@ -27,10 +27,7 @@ PlaceCoordinate _coordinateFor(
       : null;
 
   if (geopoint is GeoPoint) {
-    return PlaceCoordinate(
-      lat: geopoint.latitude,
-      lng: geopoint.longitude,
-    );
+    return PlaceCoordinate(lat: geopoint.latitude, lng: geopoint.longitude);
   }
 
   if (geopoint is Map) {

@@ -4,12 +4,14 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
 import 'sender_startup_diagnostics_web.dart'
-    if (dart.library.io) 'sender_startup_diagnostics_stub.dart' as web_hooks;
+    if (dart.library.io) 'sender_startup_diagnostics_stub.dart'
+    as web_hooks;
 
 const senderBuildHash = String.fromEnvironment('CIRCUM_BUILD_HASH');
 const senderReleaseTag = String.fromEnvironment('CIRCUM_RELEASE_TAG');
-const senderDiagnosticsPanelEnabled =
-    bool.fromEnvironment('CIRCUM_WEB_DIAGNOSTICS_PANEL');
+const senderDiagnosticsPanelEnabled = bool.fromEnvironment(
+  'CIRCUM_WEB_DIAGNOSTICS_PANEL',
+);
 
 enum SenderStartupStageStatus { started, completed, failed }
 
@@ -95,11 +97,7 @@ class SenderStartupDiagnostics extends ChangeNotifier {
 
   static void installGlobalHandlers() {
     FlutterError.onError = (details) {
-      instance.fail(
-        'FlutterError.onError',
-        details.exception,
-        details.stack,
-      );
+      instance.fail('FlutterError.onError', details.exception, details.stack);
       FlutterError.presentError(details);
     };
 
@@ -147,17 +145,19 @@ class SenderStartupDiagnostics extends ChangeNotifier {
     Object? exception,
     String? stackTrace,
   }) {
-    _records.add(SenderStartupDiagnosticRecord(
-      stage: stage,
-      status: status,
-      timestamp: DateTime.now().toUtc(),
-      buildHash: senderBuildHash,
-      releaseTag: senderReleaseTag,
-      browser: web_hooks.senderBrowserDescription(),
-      platform: defaultTargetPlatform.name,
-      exception: exception?.toString(),
-      stackTrace: stackTrace,
-    ));
+    _records.add(
+      SenderStartupDiagnosticRecord(
+        stage: stage,
+        status: status,
+        timestamp: DateTime.now().toUtc(),
+        buildHash: senderBuildHash,
+        releaseTag: senderReleaseTag,
+        browser: web_hooks.senderBrowserDescription(),
+        platform: defaultTargetPlatform.name,
+        exception: exception?.toString(),
+        stackTrace: stackTrace,
+      ),
+    );
     notifyListeners();
     if (kDebugMode && status == SenderStartupStageStatus.failed) {
       debugPrint('Sender startup diagnostic failed at $stage: $exception');
@@ -216,14 +216,20 @@ class SenderRuntimeHealthPanel extends StatelessWidget {
                       _HealthLine('Build', _short(health.buildHash)),
                       _HealthLine('Release', _value(health.releaseTag)),
                       _HealthLine(
-                          'Firebase', _yesNo(health.firebaseInitialized)),
+                        'Firebase',
+                        _yesNo(health.firebaseInitialized),
+                      ),
                       _HealthLine('App Check', health.appCheckState),
                       _HealthLine('Auth', _yesNo(health.authInitialized)),
                       _HealthLine('Signed in', _yesNo(health.authenticated)),
                       _HealthLine(
-                          'Firestore', _yesNo(health.firestoreConnected)),
+                        'Firestore',
+                        _yesNo(health.firestoreConnected),
+                      ),
                       _HealthLine(
-                          'Functions', _yesNo(health.functionsConnected)),
+                        'Functions',
+                        _yesNo(health.functionsConnected),
+                      ),
                       _HealthLine('Maps', _yesNo(health.mapsReady)),
                       _HealthLine('Stripe', _yesNo(health.stripeReady)),
                       _HealthLine('Startup failures', '$failures'),

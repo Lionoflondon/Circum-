@@ -6,6 +6,7 @@ import 'package:cloud_functions/cloud_functions.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import '../delivery/proof_of_delivery.dart';
 import '../send_package/bloc/send_package_bloc.dart';
 import '../send_package/view/ride_chats.dart';
 import 'design_system/sender_design_system.dart';
@@ -115,8 +116,7 @@ bool senderPaymentCompleteForLiveMap(Object? status) {
     'payment_completed' ||
     'succeeded' ||
     'success' ||
-    'complete' =>
-      true,
+    'complete' => true,
     _ => false,
   };
 }
@@ -130,8 +130,7 @@ bool senderRiderAcceptedForLiveMap(SenderTrackingState state) {
     SenderTrackingState.inTransit ||
     SenderTrackingState.riderArrivingAtDropoff ||
     SenderTrackingState.delivered ||
-    SenderTrackingState.issue =>
-      true,
+    SenderTrackingState.issue => true,
     _ => false,
   };
 }
@@ -185,58 +184,45 @@ SenderTrackingState? senderTrackingStateForBackendStatus(Object? status) {
     'finding_rider' ||
     'awaiting_rider' ||
     'broadcast' ||
-    'broadcasted' =>
-      SenderTrackingState.findingRider,
+    'broadcasted' => SenderTrackingState.findingRider,
     'accepted' || 'rider_assigned' => SenderTrackingState.riderAssigned,
     'navigating_to_pickup' ||
-    'en_route_to_pickup' =>
-      SenderTrackingState.riderEnRouteToPickup,
+    'en_route_to_pickup' => SenderTrackingState.riderEnRouteToPickup,
     'arrived_at_pickup' ||
     'waiting' ||
     'waiting_for_collection' ||
     'waiting_charge_active' ||
     'waiting_charges_active' ||
-    'no_show_review' =>
-      SenderTrackingState.riderArrivedAtPickup,
+    'no_show_review' => SenderTrackingState.riderArrivedAtPickup,
     'pickup_verification' ||
     'pickup_verified' ||
-    'collected' =>
-      SenderTrackingState.pickupComplete,
+    'collected' => SenderTrackingState.pickupComplete,
     'delivery_on_going' ||
     'outfordelivery' ||
     'out_for_delivery' ||
-    'navigating_to_dropoff' =>
-      SenderTrackingState.inTransit,
+    'navigating_to_dropoff' => SenderTrackingState.inTransit,
     'arrived_at_dropoff' ||
     'pin_required' ||
-    'handover_pending' =>
-      SenderTrackingState.riderArrivingAtDropoff,
+    'handover_pending' => SenderTrackingState.riderArrivingAtDropoff,
     'awaiting_adjustment_review' ||
-    'awaiting_admin_review' =>
-      SenderTrackingState.adjustmentUnderReview,
-    'more_evidence_requested' ||
-    'adjustment_more_evidence_requested' =>
+    'awaiting_admin_review' => SenderTrackingState.adjustmentUnderReview,
+    'more_evidence_requested' || 'adjustment_more_evidence_requested' =>
       SenderTrackingState.adjustmentMoreEvidence,
     'awaiting_sender_adjustment' ||
-    'awaiting_sender_payment' =>
-      SenderTrackingState.adjustmentApproved,
+    'awaiting_sender_payment' => SenderTrackingState.adjustmentApproved,
     'rejected_by_admin' ||
-    'adjustment_rejected' =>
-      SenderTrackingState.adjustmentRejected,
+    'adjustment_rejected' => SenderTrackingState.adjustmentRejected,
     'delivered' ||
     'completed' ||
-    'delivery_completed' =>
-      SenderTrackingState.delivered,
+    'delivery_completed' => SenderTrackingState.delivered,
     'cancelled' ||
     'canceled' ||
     'cancelled_verified_discrepancy' ||
-    'sender_no_show_pickup' =>
-      SenderTrackingState.cancelled,
+    'sender_no_show_pickup' => SenderTrackingState.cancelled,
     'issue' ||
     'issue_reported' ||
     'failed' ||
-    'failed_delivery' =>
-      SenderTrackingState.issue,
+    'failed_delivery' => SenderTrackingState.issue,
     'error' => SenderTrackingState.error,
     _ => SenderTrackingState.inTransit,
   };
@@ -511,8 +497,7 @@ String senderCollectionPinStatusFor(
     SenderTrackingState.pickupComplete ||
     SenderTrackingState.inTransit ||
     SenderTrackingState.riderArrivingAtDropoff ||
-    SenderTrackingState.issue =>
-      '✓ Pickup verified',
+    SenderTrackingState.issue => '✓ Pickup verified',
     _ => 'Ready for pickup',
   };
 }
@@ -633,8 +618,7 @@ bool senderCanCancelBeforeCollection(SenderTrackingState state) {
     SenderTrackingState.findingRider ||
     SenderTrackingState.riderAssigned ||
     SenderTrackingState.riderEnRouteToPickup ||
-    SenderTrackingState.riderArrivedAtPickup =>
-      true,
+    SenderTrackingState.riderArrivedAtPickup => true,
     _ => false,
   };
 }
@@ -670,10 +654,7 @@ String senderVehicleMarkerKindFor(String? vehicle) {
   return 'unknown';
 }
 
-String? senderLiveLocationStaleLabel(
-  DateTime? updatedAt, {
-  DateTime? now,
-}) {
+String? senderLiveLocationStaleLabel(DateTime? updatedAt, {DateTime? now}) {
   if (updatedAt == null) return null;
   final age = (now ?? DateTime.now()).difference(updatedAt);
   if (age.inMinutes >= 2) return 'Last seen ${age.inMinutes} min ago';
@@ -725,7 +706,7 @@ class _SenderMobileTrackingScreenState extends State<SenderMobileTrackingScreen>
     super.didChangeDependencies();
     final reduced =
         SenderAccessibilityScope.maybeOf(context)?.settings.reduceMotion ==
-            true;
+        true;
     if (reduced == _motionReduced) return;
     _motionReduced = reduced;
     if (reduced) {
@@ -753,19 +734,23 @@ class _SenderMobileTrackingScreenState extends State<SenderMobileTrackingScreen>
     switch (state) {
       case SenderTrackingState.riderAssigned:
         await controller?.haptic(SenderFeedbackEvent.riderAccepted);
-        await controller
-            ?.announceDelivery(SenderDeliveryAnnouncement.riderAccepted);
+        await controller?.announceDelivery(
+          SenderDeliveryAnnouncement.riderAccepted,
+        );
       case SenderTrackingState.riderArrivedAtPickup:
         await controller?.haptic(SenderFeedbackEvent.riderArrived);
-        await controller
-            ?.announceDelivery(SenderDeliveryAnnouncement.riderArrived);
+        await controller?.announceDelivery(
+          SenderDeliveryAnnouncement.riderArrived,
+        );
       case SenderTrackingState.pickupComplete:
-        await controller
-            ?.announceDelivery(SenderDeliveryAnnouncement.pickupComplete);
+        await controller?.announceDelivery(
+          SenderDeliveryAnnouncement.pickupComplete,
+        );
       case SenderTrackingState.delivered:
         await controller?.haptic(SenderFeedbackEvent.deliveryCompleted);
-        await controller
-            ?.announceDelivery(SenderDeliveryAnnouncement.deliveryCompleted);
+        await controller?.announceDelivery(
+          SenderDeliveryAnnouncement.deliveryCompleted,
+        );
       case SenderTrackingState.error:
       case SenderTrackingState.issue:
         await controller?.haptic(SenderFeedbackEvent.error);
@@ -806,15 +791,12 @@ class _SenderMobileTrackingScreenState extends State<SenderMobileTrackingScreen>
     final visibleContent = mapMode == SenderDeliveryMapMode.liveTracking
         ? content.copyWith(showAnonymousRiders: false)
         : state == SenderTrackingState.findingRider
-            ? content.copyWith(
-                showRider: false,
-                showRiderCard: false,
-              )
-            : content.copyWith(
-                showRider: false,
-                showAnonymousRiders: false,
-                showRiderCard: false,
-              );
+        ? content.copyWith(showRider: false, showRiderCard: false)
+        : content.copyWith(
+            showRider: false,
+            showAnonymousRiders: false,
+            showRiderCard: false,
+          );
     final riderPosition = _riderPositionForEngine(widget.engine, content);
     final staleLabel = visibleContent.showRider
         ? senderLiveLocationStaleLabel(widget.engine.riderLiveLocationUpdatedAt)
@@ -849,11 +831,10 @@ class _SenderMobileTrackingScreenState extends State<SenderMobileTrackingScreen>
             child: Align(
               alignment: Alignment.topCenter,
               child: Padding(
-                padding:
-                    EdgeInsets.only(top: content.pill.isNotEmpty ? 56 : 16),
-                child: VanguardCollectionPinCard(
-                  pin: vanguardPin,
+                padding: EdgeInsets.only(
+                  top: content.pill.isNotEmpty ? 56 : 16,
                 ),
+                child: VanguardCollectionPinCard(pin: vanguardPin),
               ),
             ),
           ),
@@ -910,10 +891,10 @@ class _SenderMobileTrackingScreenState extends State<SenderMobileTrackingScreen>
     }
     Map<String, dynamic> quote;
     try {
-      quote = await _callFunction(
-        'previewSenderCancellation',
-        {'deliveryId': deliveryId, 'requestId': deliveryId},
-      );
+      quote = await _callFunction('previewSenderCancellation', {
+        'deliveryId': deliveryId,
+        'requestId': deliveryId,
+      });
     } catch (error) {
       _showActionMessage(
         _firebaseFunctionMessage(
@@ -931,10 +912,10 @@ class _SenderMobileTrackingScreenState extends State<SenderMobileTrackingScreen>
     );
     if (confirmed != true) return;
     try {
-      await _callFunction(
-        'requestSenderCancellation',
-        {'deliveryId': deliveryId, 'requestId': deliveryId},
-      );
+      await _callFunction('requestSenderCancellation', {
+        'deliveryId': deliveryId,
+        'requestId': deliveryId,
+      });
       if (!mounted) return;
       _showActionMessage('Delivery cancellation sent.');
     } catch (error) {
@@ -947,9 +928,9 @@ class _SenderMobileTrackingScreenState extends State<SenderMobileTrackingScreen>
 
   void _showActionMessage(String message) {
     if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(message)),
-    );
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text(message)));
   }
 }
 
@@ -1001,7 +982,7 @@ class SenderTrackingMapLayer extends StatelessWidget {
   Widget build(BuildContext context) {
     final highContrast =
         SenderAccessibilityScope.maybeOf(context)?.settings.highContrast ??
-            false;
+        false;
     return AnimatedBuilder(
       animation: Listenable.merge([mapDrift, pulse]),
       builder: (context, _) {
@@ -1217,9 +1198,7 @@ class _TrackingPanelContent extends StatelessWidget {
         ),
         if (state == SenderTrackingState.findingRider) ...[
           const SizedBox(height: 12),
-          MatchingSearchCard(
-            vanguardEnabled: content.showVanguard,
-          ),
+          MatchingSearchCard(vanguardEnabled: content.showVanguard),
         ],
         if (mapMode == SenderDeliveryMapMode.bookingPlanning &&
             senderRiderAcceptedForLiveMap(state)) ...[
@@ -1308,6 +1287,13 @@ class _TrackingPanelContent extends StatelessWidget {
         if (state == SenderTrackingState.delivered) ...[
           const SizedBox(height: 8),
           const _DeliveredChipSequence(),
+          const SizedBox(height: 12),
+          _ProofOfDeliverySection(
+            proof: proofOfDeliveryFromRecord(
+              engine.activeDeliveryData,
+              fallbackReference: engine.deliveryData?.code,
+            ),
+          ),
         ],
         const SizedBox(height: 16),
         _TrackingActions(
@@ -1407,6 +1393,179 @@ class _DeliveredChipSequence extends StatelessWidget {
           color: Color(0xFF34D399),
         ),
       ],
+    );
+  }
+}
+
+class _ProofOfDeliverySection extends StatelessWidget {
+  final ProofOfDeliveryDetails proof;
+
+  const _ProofOfDeliverySection({required this.proof});
+
+  @override
+  Widget build(BuildContext context) {
+    final rows = proof.visibleRows;
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(14),
+      decoration: _cardDecoration(),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(
+                proof.hasAnyProof
+                    ? Icons.verified_outlined
+                    : Icons.info_outline_rounded,
+                color: proof.hasAnyProof
+                    ? const Color(0xFF34D399)
+                    : _TrackingTokens.muted,
+                size: 20,
+              ),
+              const SizedBox(width: 8),
+              const Expanded(
+                child: Text(
+                  'Proof of Delivery',
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontWeight: FontWeight.w800,
+                    fontSize: 15,
+                  ),
+                ),
+              ),
+              _ProofStatusPill(label: proof.statusLabel),
+            ],
+          ),
+          const SizedBox(height: 10),
+          if (!proof.hasAnyProof)
+            const Text(
+              'Proof of delivery is not available for this delivery.',
+              style: TextStyle(color: _TrackingTokens.muted, height: 1.45),
+            )
+          else ...[
+            if (proof.vanguardIncomplete) ...[
+              const Text(
+                'Vanguard proof is incomplete and should be reviewed by Circum.',
+                style: TextStyle(
+                  color: Color(0xFFFBBF24),
+                  fontWeight: FontWeight.w700,
+                  height: 1.35,
+                ),
+              ),
+              const SizedBox(height: 10),
+            ],
+            if (proof.hasPhoto) ...[
+              ClipRRect(
+                borderRadius: BorderRadius.circular(14),
+                child: AspectRatio(
+                  aspectRatio: 16 / 9,
+                  child: Image.network(
+                    proof.photoUrl,
+                    fit: BoxFit.cover,
+                    errorBuilder: (_, __, ___) => Container(
+                      color: Colors.white.withValues(alpha: .06),
+                      alignment: Alignment.center,
+                      child: const Icon(
+                        Icons.broken_image_outlined,
+                        color: _TrackingTokens.muted,
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 10),
+              OutlinedButton.icon(
+                onPressed: () => showDialog<void>(
+                  context: context,
+                  builder: (_) => Dialog(
+                    backgroundColor: const Color(0xFF07111F),
+                    child: ClipRRect(
+                      borderRadius: BorderRadius.circular(18),
+                      child: Image.network(
+                        proof.photoUrl,
+                        fit: BoxFit.contain,
+                        errorBuilder: (_, __, ___) => const Padding(
+                          padding: EdgeInsets.all(24),
+                          child: Text(
+                            'Proof photo could not be loaded.',
+                            style: TextStyle(color: Colors.white),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+                icon: const Icon(Icons.open_in_full_rounded, size: 16),
+                label: const Text('View full proof'),
+              ),
+              const SizedBox(height: 10),
+            ],
+            for (final row in rows)
+              Padding(
+                padding: const EdgeInsets.only(bottom: 6),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    SizedBox(
+                      width: 132,
+                      child: Text(
+                        row.$1,
+                        style: const TextStyle(
+                          color: _TrackingTokens.muted,
+                          fontSize: 12,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                    ),
+                    Expanded(
+                      child: Text(
+                        row.$2,
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 12,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+class _ProofStatusPill extends StatelessWidget {
+  final String label;
+
+  const _ProofStatusPill({required this.label});
+
+  @override
+  Widget build(BuildContext context) {
+    final lower = label.toLowerCase();
+    final color = lower.contains('available')
+        ? const Color(0xFF34D399)
+        : lower.contains('review')
+        ? const Color(0xFFFBBF24)
+        : const Color(0xFFF87171);
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: .12),
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(color: color.withValues(alpha: .28)),
+      ),
+      child: Text(
+        label,
+        style: TextStyle(
+          color: color,
+          fontSize: 11,
+          fontWeight: FontWeight.w800,
+        ),
+      ),
     );
   }
 }
@@ -1514,7 +1673,8 @@ class SenderWaitingSnapshot {
     final status = _normalizeTrackingStatus(
       data['status'] ?? data['deliveryStatus'] ?? engine.deliveryRequestStatus,
     );
-    final visible = waiting['active'] == true ||
+    final visible =
+        waiting['active'] == true ||
         status == 'arrived_at_pickup' ||
         status == 'waiting' ||
         status == 'waiting_for_collection' ||
@@ -1544,28 +1704,34 @@ class SenderWaitingSnapshot {
         : math.max(0, DateTime.now().difference(startedAt).inSeconds);
     final progress = remainingSeconds == null
         ? elapsedSeconds == null
-            ? 0.0
-            : (elapsedSeconds / totalSeconds).clamp(0.0, 1.0)
+              ? 0.0
+              : (elapsedSeconds / totalSeconds).clamp(0.0, 1.0)
         : ((totalSeconds - remainingSeconds) / totalSeconds).clamp(0.0, 1.0);
-    final waitingContext =
-        _normalizeTrackingStatus(data['waitingContextState']);
-    final customerResponded = waitingContext == 'customer_responded' ||
+    final waitingContext = _normalizeTrackingStatus(
+      data['waitingContextState'],
+    );
+    final customerResponded =
+        waitingContext == 'customer_responded' ||
         data['customerResponded'] == true ||
         waiting['customerResponded'] == true;
-    final noShowAvailable = status == 'no_show_review' ||
+    final noShowAvailable =
+        status == 'no_show_review' ||
         status == 'sender_no_show_pickup' ||
         data['noShowAvailable'] == true ||
         waiting['noShowAvailable'] == true;
-    final waitingChargesActive = status == 'waiting_charge_active' ||
+    final waitingChargesActive =
+        status == 'waiting_charge_active' ||
         status == 'waiting_charges_active' ||
         data['waitingChargesActive'] == true ||
         waiting['waitingChargesActive'] == true;
-    final finalMinute = status == 'final_minute' ||
+    final finalMinute =
+        status == 'final_minute' ||
         data['waitingFinalMinute'] == true ||
         waiting['finalMinute'] == true;
     final charge = _customerWaitingCharge(data, waiting);
-    final chargeLabel =
-        charge == null ? null : _moneyText(charge.amount, charge.currency);
+    final chargeLabel = charge == null
+        ? null
+        : _moneyText(charge.amount, charge.currency);
     final stateLabel = _senderWaitingStateLabel(
       status: status,
       noShowAvailable: noShowAvailable,
@@ -1576,8 +1742,8 @@ class SenderWaitingSnapshot {
     final countdown = noShowAvailable
         ? 'No-show eligible'
         : remainingSeconds == null
-            ? 'Live countdown active'
-            : _durationLabel(remainingSeconds);
+        ? 'Live countdown active'
+        : _durationLabel(remainingSeconds);
     return SenderWaitingSnapshot(
       visible: true,
       stateLabel: stateLabel,
@@ -1589,8 +1755,8 @@ class SenderWaitingSnapshot {
       message: customerResponded
           ? 'Customer response received. Collection time continues.'
           : noShowAvailable
-              ? 'Your rider has completed the required waiting period. Contact your rider immediately if you still require this delivery.'
-              : 'Sender notified on arrival. Collection countdown is live.',
+          ? 'Your rider has completed the required waiting period. Contact your rider immediately if you still require this delivery.'
+          : 'Sender notified on arrival. Collection countdown is live.',
     );
   }
 }
@@ -1609,10 +1775,11 @@ class SenderWaitingCard extends StatelessWidget {
           ? const Color(0xFFF5A623)
           : const Color(0xFF3B82F6),
       surfaceColor: Colors.white.withValues(alpha: .052),
-      borderColor: (waiting.noShowAvailable
-              ? const Color(0xFFF5A623)
-              : const Color(0xFF3B82F6))
-          .withValues(alpha: .26),
+      borderColor:
+          (waiting.noShowAvailable
+                  ? const Color(0xFFF5A623)
+                  : const Color(0xFF3B82F6))
+              .withValues(alpha: .26),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -1773,10 +1940,7 @@ class _CancellationQuoteLine extends StatelessWidget {
   final String label;
   final String value;
 
-  const _CancellationQuoteLine({
-    required this.label,
-    required this.value,
-  });
+  const _CancellationQuoteLine({required this.label, required this.value});
 
   @override
   Widget build(BuildContext context) {
@@ -2093,7 +2257,9 @@ class IRISChip extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return const _StatusChip(
-        label: 'IRIS parcel confirmed', color: Color(0xFF3B82F6));
+      label: 'IRIS parcel confirmed',
+      color: Color(0xFF3B82F6),
+    );
   }
 }
 
@@ -2114,13 +2280,13 @@ class VanguardChip extends StatelessWidget {
     final label = issue
         ? 'Vanguard reviewing'
         : completed
-            ? 'Vanguard completed'
-            : 'Vanguard active';
+        ? 'Vanguard completed'
+        : 'Vanguard active';
     final color = issue
         ? const Color(0xFFF5A623)
         : quiet
-            ? const Color(0xFF8B93A7)
-            : const Color(0xFF34D399);
+        ? const Color(0xFF8B93A7)
+        : const Color(0xFF34D399);
     return _StatusChip(label: label, color: color);
   }
 }
@@ -2174,8 +2340,8 @@ class _PINCardState extends State<PINCard> {
     final digits = pin == null || pin.isEmpty
         ? '••••••'
         : _revealed
-            ? _formatPin(pin)
-            : '••••••';
+        ? _formatPin(pin)
+        : '••••••';
     return GestureDetector(
       onTap: _reveal,
       onLongPress: _reveal,
@@ -2184,9 +2350,7 @@ class _PINCardState extends State<PINCard> {
         decoration: BoxDecoration(
           color: widget.accent.withValues(alpha: .08),
           borderRadius: BorderRadius.circular(16),
-          border: Border.all(
-            color: widget.accent.withValues(alpha: .34),
-          ),
+          border: Border.all(color: widget.accent.withValues(alpha: .34)),
           boxShadow: [
             BoxShadow(
               color: widget.accent.withValues(alpha: .10),
@@ -2262,8 +2426,8 @@ class _PINCardState extends State<PINCard> {
                   pin == null || pin.isEmpty
                       ? 'Awaiting PIN'
                       : _revealed
-                          ? 'Auto-hides'
-                          : 'Tap to reveal',
+                      ? 'Auto-hides'
+                      : 'Tap to reveal',
                   style: const TextStyle(
                     color: _TrackingTokens.muted,
                     fontSize: 9.5,
@@ -2316,17 +2480,19 @@ class ProgressStepper extends StatelessWidget {
   final bool issue;
   final bool completed;
 
-  const ProgressStepper(
-      {super.key,
-      required this.progress,
-      this.issue = false,
-      this.completed = false});
+  const ProgressStepper({
+    super.key,
+    required this.progress,
+    this.issue = false,
+    this.completed = false,
+  });
 
   @override
   Widget build(BuildContext context) {
     const labels = ['Assigned', 'Pickup', 'Transit', 'Delivered'];
-    final completeColor =
-        completed ? const Color(0xFF34D399) : const Color(0xFF3B82F6);
+    final completeColor = completed
+        ? const Color(0xFF34D399)
+        : const Color(0xFF3B82F6);
     return Column(
       children: [
         Row(
@@ -2344,8 +2510,8 @@ class ProgressStepper extends StatelessWidget {
                   color: issue && progress == step
                       ? const Color(0xFFF5A623)
                       : filled
-                          ? completeColor
-                          : Colors.white.withValues(alpha: .08),
+                      ? completeColor
+                      : Colors.white.withValues(alpha: .08),
                   borderRadius: BorderRadius.circular(99),
                   boxShadow: active
                       ? [
@@ -2410,13 +2576,11 @@ class LiveDeliveryTimeline extends StatelessWidget {
       SenderTrackingState.findingRider => 1,
       SenderTrackingState.riderAssigned => 3,
       SenderTrackingState.riderEnRouteToPickup ||
-      SenderTrackingState.riderArrivedAtPickup =>
-        4,
+      SenderTrackingState.riderArrivedAtPickup => 4,
       SenderTrackingState.pickupComplete => 5,
       SenderTrackingState.inTransit ||
       SenderTrackingState.riderArrivingAtDropoff ||
-      SenderTrackingState.issue =>
-        6,
+      SenderTrackingState.issue => 6,
       SenderTrackingState.delivered => 7,
       SenderTrackingState.cancelled => 2,
       _ => 0,
@@ -2429,8 +2593,8 @@ class LiveDeliveryTimeline extends StatelessWidget {
     final activeColor = issue
         ? const Color(0xFFF5A623)
         : completed
-            ? const Color(0xFF34D399)
-            : const Color(0xFF3B82F6);
+        ? const Color(0xFF34D399)
+        : const Color(0xFF3B82F6);
     return Semantics(
       label: 'Delivery timeline, current step ${_labels[activeIndex]}',
       child: AppGlassContainer(
@@ -2513,10 +2677,7 @@ class LiveDeliveryTimeline extends StatelessWidget {
 class MatchingSearchCard extends StatelessWidget {
   final bool vanguardEnabled;
 
-  const MatchingSearchCard({
-    super.key,
-    required this.vanguardEnabled,
-  });
+  const MatchingSearchCard({super.key, required this.vanguardEnabled});
 
   @override
   Widget build(BuildContext context) {
@@ -2664,13 +2825,15 @@ class _SearchingOrbState extends State<_SearchingOrb>
             shape: BoxShape.circle,
             color: const Color(0xFF3B82F6).withValues(alpha: .13),
             border: Border.all(
-              color:
-                  const Color(0xFF3B82F6).withValues(alpha: .25 + pulse * .20),
+              color: const Color(
+                0xFF3B82F6,
+              ).withValues(alpha: .25 + pulse * .20),
             ),
             boxShadow: [
               BoxShadow(
-                color: const Color(0xFF3B82F6)
-                    .withValues(alpha: .14 + pulse * .12),
+                color: const Color(
+                  0xFF3B82F6,
+                ).withValues(alpha: .14 + pulse * .12),
                 blurRadius: 16 + pulse * 10,
               ),
             ],
@@ -2717,8 +2880,9 @@ class _ProgressiveMatchChecklistState extends State<ProgressiveMatchChecklist> {
     _timer = Timer(const Duration(milliseconds: 750), () {
       if (!mounted) return;
       setState(() {
-        _visibleCount =
-            _visibleCount >= _items.length ? _items.length : _visibleCount + 1;
+        _visibleCount = _visibleCount >= _items.length
+            ? _items.length
+            : _visibleCount + 1;
       });
       if (_visibleCount < _items.length) _scheduleNext();
     });
@@ -2738,8 +2902,9 @@ class _ProgressiveMatchChecklistState extends State<ProgressiveMatchChecklist> {
           duration: const Duration(milliseconds: 250),
           opacity: 1,
           child: Padding(
-            padding:
-                EdgeInsets.only(bottom: index == _visibleCount - 1 ? 0 : 8),
+            padding: EdgeInsets.only(
+              bottom: index == _visibleCount - 1 ? 0 : 8,
+            ),
             child: Row(
               children: [
                 const Icon(
@@ -2778,23 +2943,23 @@ class _MatchAssuranceGrid extends StatelessWidget {
       (
         'Your parcel is secured.',
         Icons.lock_outline_rounded,
-        const Color(0xFF60A5FA)
+        const Color(0xFF60A5FA),
       ),
       (
         'IRIS estimate confirmed.',
         Icons.auto_awesome_rounded,
-        const Color(0xFF3B82F6)
+        const Color(0xFF3B82F6),
       ),
       (
         'Vehicle recommendation ready.',
         Icons.pedal_bike_rounded,
-        const Color(0xFF34D399)
+        const Color(0xFF34D399),
       ),
       if (vanguardEnabled)
         (
           'Vanguard protection active.',
           Icons.shield_outlined,
-          const Color(0xFF34D399)
+          const Color(0xFF34D399),
         ),
     ];
     return Wrap(
@@ -2880,16 +3045,16 @@ class _TrackingActions extends StatelessWidget {
             label: empty
                 ? 'Send a parcel'
                 : finding
-                    ? 'Message Support'
-                    : delivered
-                        ? 'View receipt'
-                        : 'Message',
+                ? 'Message Support'
+                : delivered
+                ? 'View receipt'
+                : 'Message',
             primary: empty,
             onTap: finding
                 ? onOpenSupport
                 : empty || delivered
-                    ? null
-                    : onOpenMessage,
+                ? null
+                : onOpenMessage,
           ),
         ),
         const SizedBox(width: 8),
@@ -2898,15 +3063,15 @@ class _TrackingActions extends StatelessWidget {
             label: finding
                 ? 'Cancel Delivery'
                 : delivered
-                    ? 'Done'
-                    : 'Support',
+                ? 'Done'
+                : 'Support',
             primary: delivered || state == SenderTrackingState.issue,
             success: delivered,
             onTap: finding
                 ? onCancelDelivery
                 : delivered
-                    ? null
-                    : onOpenSupport,
+                ? null
+                : onOpenSupport,
           ),
         ),
       ],
@@ -2954,8 +3119,9 @@ class _TrackingButton extends StatelessWidget {
                   boxShadow: success
                       ? [
                           BoxShadow(
-                            color:
-                                const Color(0xFF34D399).withValues(alpha: .20),
+                            color: const Color(
+                              0xFF34D399,
+                            ).withValues(alpha: .20),
                             blurRadius: 18,
                             offset: const Offset(0, 8),
                           ),
@@ -2975,8 +3141,9 @@ class _TrackingButton extends StatelessWidget {
                         widthFactor: value,
                         child: Container(
                           decoration: BoxDecoration(
-                            color: const Color(0xFF34D399)
-                                .withValues(alpha: .92 + value * .08),
+                            color: const Color(
+                              0xFF34D399,
+                            ).withValues(alpha: .92 + value * .08),
                           ),
                         ),
                       );
@@ -3170,8 +3337,10 @@ class _StaleLocationPill extends StatelessWidget {
             child: BackdropFilter(
               filter: ImageFilter.blur(sigmaX: 12, sigmaY: 12),
               child: Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 12,
+                  vertical: 6,
+                ),
                 decoration: BoxDecoration(
                   color: const Color(0xFFF5A623).withValues(alpha: .12),
                   borderRadius: BorderRadius.circular(999),
@@ -3217,7 +3386,7 @@ class _RecenterButton extends StatelessWidget {
   Widget build(BuildContext context) {
     final leftHanded =
         SenderAccessibilityScope.maybeOf(context)?.settings.leftHandedMode ==
-            true;
+        true;
     return Positioned(
       right: leftHanded ? null : 16,
       left: leftHanded ? 16 : null,
@@ -3360,11 +3529,7 @@ class _LiveMapPendingPaymentNote extends StatelessWidget {
       ),
       child: const Row(
         children: [
-          Icon(
-            Icons.lock_clock_outlined,
-            color: Color(0xFF60A5FA),
-            size: 18,
-          ),
+          Icon(Icons.lock_clock_outlined, color: Color(0xFF60A5FA), size: 18),
           SizedBox(width: 10),
           Expanded(
             child: Text(
@@ -3491,9 +3656,10 @@ class _AnonymousRiderDotState extends State<_AnonymousRiderDot>
     return Align(
       alignment: widget.alignment,
       child: FadeTransition(
-        opacity: Tween<double>(begin: .15, end: .72).animate(
-          CurvedAnimation(parent: _controller, curve: Curves.easeOut),
-        ),
+        opacity: Tween<double>(
+          begin: .15,
+          end: .72,
+        ).animate(CurvedAnimation(parent: _controller, curve: Curves.easeOut)),
         child: Container(
           width: 8,
           height: 8,
@@ -3679,14 +3845,19 @@ class _VehicleIconPainter extends CustomPainter {
         const Radius.circular(3),
       );
       canvas.drawRRect(
-          glass, accent..color = accent.color.withValues(alpha: .55));
+        glass,
+        accent..color = accent.color.withValues(alpha: .55),
+      );
       canvas.drawCircle(
         Offset(size.width * .30, size.height * .78),
         2.2,
         accent..color = const Color(0xFF3B82F6),
       );
       canvas.drawCircle(
-          Offset(size.width * .70, size.height * .78), 2.2, accent);
+        Offset(size.width * .70, size.height * .78),
+        2.2,
+        accent,
+      );
       return;
     }
 
@@ -3708,14 +3879,19 @@ class _VehicleIconPainter extends CustomPainter {
         size.height * .28,
       );
       canvas.drawRect(
-          glass, accent..color = accent.color.withValues(alpha: .55));
+        glass,
+        accent..color = accent.color.withValues(alpha: .55),
+      );
       canvas.drawCircle(
         Offset(size.width * .30, size.height * .78),
         2.3,
         accent..color = const Color(0xFF3B82F6),
       );
       canvas.drawCircle(
-          Offset(size.width * .72, size.height * .78), 2.3, accent);
+        Offset(size.width * .72, size.height * .78),
+        2.3,
+        accent,
+      );
       return;
     }
 
@@ -3801,21 +3977,25 @@ class _TrackingGridPainter extends CustomPainter {
       canvas.drawLine(Offset(0, y), Offset(size.width, y), grid);
     }
     final glow = Paint()
-      ..shader = RadialGradient(
-        colors: [
-          const Color(0xFF3B82F6).withValues(
-            alpha: searching
-                ? (highContrast ? .30 : .16)
-                : (highContrast ? .22 : .10),
-          ),
-          Colors.transparent,
-        ],
-      ).createShader(
-        Rect.fromCircle(
-          center: Offset(size.width * (.35 + shimmer * .12), size.height * .25),
-          radius: size.width * .55,
-        ),
-      );
+      ..shader =
+          RadialGradient(
+            colors: [
+              const Color(0xFF3B82F6).withValues(
+                alpha: searching
+                    ? (highContrast ? .30 : .16)
+                    : (highContrast ? .22 : .10),
+              ),
+              Colors.transparent,
+            ],
+          ).createShader(
+            Rect.fromCircle(
+              center: Offset(
+                size.width * (.35 + shimmer * .12),
+                size.height * .25,
+              ),
+              radius: size.width * .55,
+            ),
+          );
     canvas.drawRect(Offset.zero & size, glow);
   }
 
@@ -3845,9 +4025,9 @@ class _SearchRingsPainter extends CustomPainter {
       final paint = Paint()
         ..style = PaintingStyle.stroke
         ..strokeWidth = highContrast ? 1.6 : 1.1
-        ..color = const Color(0xFF3B82F6).withValues(
-          alpha: (1 - phase) * (highContrast ? .34 : .20),
-        );
+        ..color = const Color(
+          0xFF3B82F6,
+        ).withValues(alpha: (1 - phase) * (highContrast ? .34 : .20));
       canvas.drawCircle(center, radius, paint);
     }
 
@@ -3855,9 +4035,9 @@ class _SearchRingsPainter extends CustomPainter {
       ..style = PaintingStyle.stroke
       ..strokeWidth = highContrast ? 2.2 : 1.5
       ..strokeCap = StrokeCap.round
-      ..color = const Color(0xFF60A5FA).withValues(
-        alpha: highContrast ? .46 : .28,
-      );
+      ..color = const Color(
+        0xFF60A5FA,
+      ).withValues(alpha: highContrast ? .46 : .28);
     final rect = Rect.fromCircle(
       center: center,
       radius: size.shortestSide * .32,
@@ -3912,16 +4092,8 @@ class _RouteLinePainter extends CustomPainter {
       ..strokeCap = StrokeCap.round
       ..shader = LinearGradient(
         colors: highContrast
-            ? const [
-                Color(0xFF34D399),
-                Color(0xFF60A5FA),
-                Color(0xFF34D399),
-              ]
-            : const [
-                Color(0x2234D399),
-                Color(0xFF3B82F6),
-                Color(0xFF34D399),
-              ],
+            ? const [Color(0xFF34D399), Color(0xFF60A5FA), Color(0xFF34D399)]
+            : const [Color(0x2234D399), Color(0xFF3B82F6), Color(0xFF34D399)],
       ).createShader(Offset.zero & size);
     canvas.drawPath(visiblePath, paint);
   }
@@ -3934,10 +4106,10 @@ class _RouteLinePainter extends CustomPainter {
 }
 
 BoxDecoration _cardDecoration() => BoxDecoration(
-      color: Colors.white.withValues(alpha: .035),
-      borderRadius: BorderRadius.circular(16),
-      border: Border.all(color: Colors.white.withValues(alpha: .07)),
-    );
+  color: Colors.white.withValues(alpha: .035),
+  borderRadius: BorderRadius.circular(16),
+  border: Border.all(color: Colors.white.withValues(alpha: .07)),
+);
 
 String? _firstName(String? value) {
   final trimmed = value?.trim();

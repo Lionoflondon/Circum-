@@ -40,11 +40,11 @@ class _GiftCampaignViewState extends State<GiftCampaignView> {
   String? _participantId;
   Map<String, dynamic>? _participantStatusData =
       _isLocalCampaignPaymentPreview()
-          ? const {
-              'status': 'paid_waiting_for_match',
-              'campaignStatus': 'paid_waiting_for_match',
-            }
-          : null;
+      ? const {
+          'status': 'paid_waiting_for_match',
+          'campaignStatus': 'paid_waiting_for_match',
+        }
+      : null;
   Map<String, dynamic>? _approvedMatch;
   Map<String, dynamic>? _visibleRevealedMatch;
   StreamSubscription<DocumentSnapshot<Map<String, dynamic>>>? _participantSub;
@@ -85,8 +85,9 @@ class _GiftCampaignViewState extends State<GiftCampaignView> {
   String? _message;
 
   bool get _hasAboutSignal {
-    final hasSelectedSignal =
-        _selected.values.any((values) => values.isNotEmpty);
+    final hasSelectedSignal = _selected.values.any(
+      (values) => values.isNotEmpty,
+    );
     final hasCustomSignal = _customInspirationController.text.trim().isNotEmpty;
     return _displayNameController.text.trim().isNotEmpty &&
         (hasSelectedSignal || hasCustomSignal);
@@ -117,70 +118,69 @@ class _GiftCampaignViewState extends State<GiftCampaignView> {
   _CampaignStatusCopy get _campaignStatusCopy {
     return switch (_campaignParticipantStatus) {
       'match_found' => const _CampaignStatusCopy(
-          title: 'Anonymous match found',
-          subtitle:
-              'A compatible anonymous match is ready. Private identity remains protected.',
-          body:
-              'Your match has been found from shared interests and safety checks. We only show what the policy allows.',
-          privacyNote:
-              'Names, photos, addresses and private details remain hidden unless GiftsSocialPolicy allows reveal.',
-          showAnonymousMatchSummary: true,
-        ),
+        title: 'Anonymous match found',
+        subtitle:
+            'A compatible anonymous match is ready. Private identity remains protected.',
+        body:
+            'Your match has been found from shared interests and safety checks. We only show what the policy allows.',
+        privacyNote:
+            'Names, photos, addresses and private details remain hidden unless GiftsSocialPolicy allows reveal.',
+        showAnonymousMatchSummary: true,
+      ),
       'admin_pairing_pending' => const _CampaignStatusCopy(
-          title: 'Pairing under review',
-          subtitle:
-              'The Gifts Team is reviewing the safe anonymous pairing before anything moves forward.',
-          body:
-              'Admin is checking compatibility, consent and restrictions. You do not need to do anything yet.',
-          privacyNote: 'The match stays anonymous while review is pending.',
-        ),
+        title: 'Pairing under review',
+        subtitle:
+            'The Gifts Team is reviewing the safe anonymous pairing before anything moves forward.',
+        body:
+            'Admin is checking compatibility, consent and restrictions. You do not need to do anything yet.',
+        privacyNote: 'The match stays anonymous while review is pending.',
+      ),
       'admin_pairing_approved' => const _CampaignStatusCopy(
-          title: 'Pairing approved',
-          subtitle: 'The Gifts Team approved the safe anonymous match.',
-          body:
-              'The pairing has passed policy review and can move into the internal Gifts workflow.',
-          privacyNote:
-              'Identity remains protected. Reveal timing is still governed by consent settings.',
-          showAnonymousMatchSummary: true,
-        ),
+        title: 'Pairing approved',
+        subtitle: 'The Gifts Team approved the safe anonymous match.',
+        body:
+            'The pairing has passed policy review and can move into the internal Gifts workflow.',
+        privacyNote:
+            'Identity remains protected. Reveal timing is still governed by consent settings.',
+        showAnonymousMatchSummary: true,
+      ),
       'gift_request_linked' => const _CampaignStatusCopy(
-          title: 'Gift journey linked',
-          subtitle: 'The operational Gifts request is now linked internally.',
-          body:
-              'Campaign context, safety notes and anonymous compatibility now travel with the internal request.',
-          privacyNote:
-              'No known-recipient form is shown in Campaign. Details stay controlled by Admin and policy.',
-        ),
+        title: 'Gift journey linked',
+        subtitle: 'The operational Gifts request is now linked internally.',
+        body:
+            'Campaign context, safety notes and anonymous compatibility now travel with the internal request.',
+        privacyNote:
+            'No known-recipient form is shown in Campaign. Details stay controlled by Admin and policy.',
+      ),
       'gifts_team_curating' => const _CampaignStatusCopy(
-          title: 'Gifts Team is curating',
-          subtitle:
-              'The concierge team is shaping the anonymous gift experience.',
-          body:
-              'The team is using compatibility, safety and consent notes to plan the next operational step.',
-          privacyNote:
-              'Private identity and handover details remain hidden from the sender.',
-        ),
+        title: 'Gifts Team is curating',
+        subtitle:
+            'The concierge team is shaping the anonymous gift experience.',
+        body:
+            'The team is using compatibility, safety and consent notes to plan the next operational step.',
+        privacyNote:
+            'Private identity and handover details remain hidden from the sender.',
+      ),
       'ready_for_gift_delivery' ||
-      'ready_for_delivery_planning' =>
-        const _CampaignStatusCopy(
-          title: 'Ready for Gift Delivery',
-          subtitle:
-              'Your campaign journey is complete. Your gift is now moving into the standard Circum Gifts delivery workflow.',
-          body:
-              'Track fulfilment from the normal Gifts delivery experience. Campaign will stay here as the handoff record.',
-          privacyNote:
-              'Campaign does not show delivery tracking or delivered status. Delivery completion comes only from the linked Gift Delivery workflow.',
-          showHandoff: true,
-        ),
+      'ready_for_delivery_planning' => const _CampaignStatusCopy(
+        title: 'Ready for Gift Delivery',
+        subtitle:
+            'Your campaign journey is complete. Your gift is now moving into the standard Circum Gifts delivery workflow.',
+        body:
+            'Track fulfilment from the normal Gifts delivery experience. Campaign will stay here as the handoff record.',
+        privacyNote:
+            'Campaign does not show delivery tracking or delivered status. Delivery completion comes only from the linked Gift Delivery workflow.',
+        showHandoff: true,
+      ),
       _ => const _CampaignStatusCopy(
-          title: 'Waiting for your match',
-          subtitle:
-              "We'll protect everyone's privacy until a safe match has been approved.",
-          body:
-              'Your campaign participation is paid and waiting for a compatible, policy-safe match.',
-          privacyNote:
-              'No recipient name, photo, address or private details are shown at this stage.',
-        ),
+        title: 'Waiting for your match',
+        subtitle:
+            "We'll protect everyone's privacy until a safe match has been approved.",
+        body:
+            'Your campaign participation is paid and waiting for a compatible, policy-safe match.',
+        privacyNote:
+            'No recipient name, photo, address or private details are shown at this stage.',
+      ),
     };
   }
 
@@ -228,17 +228,20 @@ class _GiftCampaignViewState extends State<GiftCampaignView> {
           '${data['giftDeliveryId'] ?? data['linkedGiftDeliveryId'] ?? ''}',
       linkedGiftDeliveryStatus:
           '${data['linkedGiftDeliveryStatus'] ?? data['giftDeliveryStatus'] ?? ''}',
-      riderCompletionAccepted: _truthy(data['riderCompletionAccepted']) ||
+      riderCompletionAccepted:
+          _truthy(data['riderCompletionAccepted']) ||
           _truthy(data['riderCompletionAcceptedAt']),
       deliveryVerificationCompleted:
           _truthy(data['deliveryVerificationCompleted']) ||
-              _truthy(data['requiredDeliveryVerificationCompleted']) ||
-              _truthy(data['deliveryPinVerified']) ||
-              _truthy(data['photoProofAccepted']) ||
-              _truthy(data['signatureAccepted']),
-      deliveryAuditSuccessful: _truthy(data['deliveryAuditSuccessful']) ||
+          _truthy(data['requiredDeliveryVerificationCompleted']) ||
+          _truthy(data['deliveryPinVerified']) ||
+          _truthy(data['photoProofAccepted']) ||
+          _truthy(data['signatureAccepted']),
+      deliveryAuditSuccessful:
+          _truthy(data['deliveryAuditSuccessful']) ||
           _truthy(data['backendDeliveryAuditSuccessful']),
-      activeDeliveryDispute: _truthy(data['activeDeliveryDispute']) ||
+      activeDeliveryDispute:
+          _truthy(data['activeDeliveryDispute']) ||
           _truthy(data['hasActiveDeliveryDispute']) ||
           _truthy(data['deliveryInvestigationActive']) ||
           _truthy(data['activeDeliveryInvestigation']),
@@ -247,8 +250,9 @@ class _GiftCampaignViewState extends State<GiftCampaignView> {
           '${data['giftStoryAdminUserId'] ?? data['adminUserId'] ?? ''}',
       giftStoryAdminOverrideReason:
           '${data['giftStoryAdminOverrideReason'] ?? data['overrideReason'] ?? ''}',
-      giftStoryAdminOverrideAt:
-          _stringValue(data['giftStoryAdminOverrideAt'] ?? data['overrideAt']),
+      giftStoryAdminOverrideAt: _stringValue(
+        data['giftStoryAdminOverrideAt'] ?? data['overrideAt'],
+      ),
       giftStoryPreviousStatus:
           '${data['giftStoryPreviousStatus'] ?? data['previousStoryStatus'] ?? ''}',
       giftStoryOverrideType:
@@ -359,244 +363,243 @@ class _GiftCampaignViewState extends State<GiftCampaignView> {
   VoidCallback? get _footerAction {
     if (_step == 8 && _linkedGiftStoryUnlocked) {
       return () => Navigator.of(context).push(
-            MaterialPageRoute<void>(
-              builder: (_) => GiftStoryView(draft: _campaignStoryDraft),
-              settings: const RouteSettings(name: GiftStoryView.routeName),
-            ),
-          );
+        MaterialPageRoute<void>(
+          builder: (_) => GiftStoryView(draft: _campaignStoryDraft),
+          settings: const RouteSettings(name: GiftStoryView.routeName),
+        ),
+      );
     }
     return _canContinue ? _goNext : null;
   }
 
   String get _eyebrow => switch (_step) {
-        0 => 'CAMPAIGN',
-        1 => 'STEP 01 — JOIN CAMPAIGN',
-        2 => 'STEP 02 — ABOUT YOU',
-        3 => 'STEP 03 — SAFETY',
-        4 => 'STEP 04 — PRIVACY',
-        5 => 'STEP 05 — BUDGET',
-        6 => 'STEP 06 — REVIEW',
-        7 => 'STEP 07 — PAYMENT',
-        8 => 'CAMPAIGN STATUS',
-        _ => 'CAMPAIGN',
-      };
+    0 => 'CAMPAIGN',
+    1 => 'STEP 01 — JOIN CAMPAIGN',
+    2 => 'STEP 02 — ABOUT YOU',
+    3 => 'STEP 03 — SAFETY',
+    4 => 'STEP 04 — PRIVACY',
+    5 => 'STEP 05 — BUDGET',
+    6 => 'STEP 06 — REVIEW',
+    7 => 'STEP 07 — PAYMENT',
+    8 => 'CAMPAIGN STATUS',
+    _ => 'CAMPAIGN',
+  };
 
   String get _title => switch (_step) {
-        0 => 'Bring London Closer',
-        1 => 'Choose campaign',
-        2 => 'About you',
-        3 => 'Safety',
-        4 => 'Privacy',
-        5 => 'Campaign gift budget',
-        6 => 'Review your campaign participation',
-        7 => 'Secure participation',
-        8 => _campaignStatusCopy.title,
-        _ => 'Campaign',
-      };
+    0 => 'Bring London Closer',
+    1 => 'Choose campaign',
+    2 => 'About you',
+    3 => 'Safety',
+    4 => 'Privacy',
+    5 => 'Campaign gift budget',
+    6 => 'Review your campaign participation',
+    7 => 'Secure participation',
+    8 => _campaignStatusCopy.title,
+    _ => 'Campaign',
+  };
 
   String get _subtitle => switch (_step) {
-        0 =>
-          'Join an anonymous gift exchange shaped around shared interests, safety and consent.',
-        1 => 'Choose the campaign you want to join.',
-        2 =>
-          'Share the participant signals used for anonymous matching. No recipient fields here.',
-        3 =>
-          'These notes help IRIS recommend only gifts that satisfy recorded safety requirements.',
-        4 => 'Your identity stays private unless the reveal policy allows it.',
-        5 => 'Set the budget for your anonymous campaign gift.',
-        6 =>
-          'No recipient, delivery address or delivery date is collected yet.',
-        7 => 'Pay with Roth, card, or Roth plus card.',
-        8 => _campaignStatusCopy.subtitle,
-        _ => '',
-      };
+    0 =>
+      'Join an anonymous gift exchange shaped around shared interests, safety and consent.',
+    1 => 'Choose the campaign you want to join.',
+    2 =>
+      'Share the participant signals used for anonymous matching. No recipient fields here.',
+    3 =>
+      'These notes help IRIS recommend only gifts that satisfy recorded safety requirements.',
+    4 => 'Your identity stays private unless the reveal policy allows it.',
+    5 => 'Set the budget for your anonymous campaign gift.',
+    6 => 'No recipient, delivery address or delivery date is collected yet.',
+    7 => 'Pay with Roth, card, or Roth plus card.',
+    8 => _campaignStatusCopy.subtitle,
+    _ => '',
+  };
 
   String get _primaryLabel => switch (_step) {
-        0 => 'Join Campaign',
-        7 => _submitting ? 'Processing...' : 'Continue to Secure Payment',
-        8 => 'Status updates automatically',
-        _ => 'Continue',
-      };
+    0 => 'Join Campaign',
+    7 => _submitting ? 'Processing...' : 'Continue to Secure Payment',
+    8 => 'Status updates automatically',
+    _ => 'Continue',
+  };
 
   List<Widget> get _children => switch (_step) {
-        0 => _homeChildren,
-        1 => _campaignChildren,
-        2 => _aboutChildren,
-        3 => _safetyChildren,
-        4 => _privacyChildren,
-        5 => _budgetChildren,
-        6 => _reviewChildren,
-        7 => _paymentChildren,
-        8 => _campaignStatusChildren,
-        _ => const <Widget>[],
-      };
+    0 => _homeChildren,
+    1 => _campaignChildren,
+    2 => _aboutChildren,
+    3 => _safetyChildren,
+    4 => _privacyChildren,
+    5 => _budgetChildren,
+    6 => _reviewChildren,
+    7 => _paymentChildren,
+    8 => _campaignStatusChildren,
+    _ => const <Widget>[],
+  };
 
   List<Widget> get _homeChildren => [
-        const _CampaignGlassCard(
-          title: 'Anonymous exchange',
-          body:
-              'People anonymously exchange thoughtful gifts with others who share similar interests.',
+    const _CampaignGlassCard(
+      title: 'Anonymous exchange',
+      body:
+          'People anonymously exchange thoughtful gifts with others who share similar interests.',
+    ),
+    const SizedBox(height: 12),
+    const _CampaignGlassCard(
+      title: 'Policy protected',
+      body:
+          'Circum never reveals identities until GiftsSocialPolicy allows it.',
+    ),
+    const SizedBox(height: 8),
+    Align(
+      alignment: Alignment.centerLeft,
+      child: TextButton(
+        onPressed: () => showModalBottomSheet<void>(
+          context: context,
+          backgroundColor: const Color(0xFF12101B),
+          shape: const RoundedRectangleBorder(
+            borderRadius: BorderRadius.vertical(top: Radius.circular(26)),
+          ),
+          builder: (_) => const _HowItWorksSheet(),
         ),
-        const SizedBox(height: 12),
-        const _CampaignGlassCard(
-          title: 'Policy protected',
-          body:
-              'Circum never reveals identities until GiftsSocialPolicy allows it.',
-        ),
-        const SizedBox(height: 8),
-        Align(
-          alignment: Alignment.centerLeft,
-          child: TextButton(
-            onPressed: () => showModalBottomSheet<void>(
-              context: context,
-              backgroundColor: const Color(0xFF12101B),
-              shape: const RoundedRectangleBorder(
-                borderRadius: BorderRadius.vertical(top: Radius.circular(26)),
-              ),
-              builder: (_) => const _HowItWorksSheet(),
-            ),
-            child: Text(
-              'How it works',
-              style: GoogleFonts.inter(
-                color: const Color(0xFFC9B8FF),
-                fontSize: 13,
-                fontWeight: FontWeight.w800,
-              ),
-            ),
+        child: Text(
+          'How it works',
+          style: GoogleFonts.inter(
+            color: const Color(0xFFC9B8FF),
+            fontSize: 13,
+            fontWeight: FontWeight.w800,
           ),
         ),
-      ];
+      ),
+    ),
+  ];
 
   List<Widget> get _campaignChildren => [
-        for (final campaign in _campaigns) ...[
-          _CampaignOptionCard(
-            campaign: campaign,
-            selected: _campaign?.id == campaign.id,
-            onTap: () => setState(() => _campaign = campaign),
-          ),
-          const SizedBox(height: 10),
-        ],
-      ];
+    for (final campaign in _campaigns) ...[
+      _CampaignOptionCard(
+        campaign: campaign,
+        selected: _campaign?.id == campaign.id,
+        onTap: () => setState(() => _campaign = campaign),
+      ),
+      const SizedBox(height: 10),
+    ],
+  ];
 
   List<Widget> get _aboutChildren => [
-        GiftJourneyWidgets.inputCard(
-          controller: _displayNameController,
-          label: 'ANONYMOUS HANDLE',
-          placeholder: 'What should the Gifts Team call you?',
-          helper: 'This is not shown to your match.',
-          onChanged: (_) => setState(() {}),
-        ),
-        const SizedBox(height: 14),
-        _chipSection('Interests', 'interests', const [
-          'Travel',
-          'Architecture',
-          'Coffee',
-          'Art',
-          'Fashion',
-        ]),
-        _chipSection('Hobbies', 'hobbies', const [
-          'Reading',
-          'Running',
-          'Photography',
-          'Cooking',
-          'Cycling',
-        ]),
-        _chipSection('Music', 'musicTaste', const [
-          'Jazz',
-          'Afrobeats',
-          'Classical',
-          'Indie',
-          'Gospel',
-        ]),
-        _chipSection('Books', 'booksFilms', const [
-          'Fiction',
-          'Poetry',
-          'Design',
-          'History',
-          'Biographies',
-        ]),
-        _chipSection('Food preferences', 'favouriteFoodsDrinks', const [
-          'Tea',
-          'Coffee',
-          'Chocolate',
-          'Baking',
-          'Fine Dining',
-        ]),
-        _chipSection('Lifestyle', 'lifestyle', const [
-          'Wellness',
-          'Sustainability',
-          'Home',
-          'Fitness',
-          'Creativity',
-        ]),
-        _chipSection('Favourite categories', 'preferredGiftCategories', const [
-          'Beauty',
-          'Books',
-          'Experiences',
-          'Home Fragrance',
-          'Accessories',
-        ]),
-        const SizedBox(height: 4),
-        GiftJourneyWidgets.inputCard(
-          controller: _customInspirationController,
-          label: 'ADD YOUR OWN INSPIRATION',
-          placeholder: 'Write your own inspiration...',
-          helper:
-              'Choose from the ideas above, then add anything personal: memories, inside jokes, colours, places, dreams, style, dislikes, or the kind of person you want to meet.',
-          onChanged: (_) => setState(() {}),
-          maxLines: 4,
-        ),
-      ];
+    GiftJourneyWidgets.inputCard(
+      controller: _displayNameController,
+      label: 'ANONYMOUS HANDLE',
+      placeholder: 'What should the Gifts Team call you?',
+      helper: 'This is not shown to your match.',
+      onChanged: (_) => setState(() {}),
+    ),
+    const SizedBox(height: 14),
+    _chipSection('Interests', 'interests', const [
+      'Travel',
+      'Architecture',
+      'Coffee',
+      'Art',
+      'Fashion',
+    ]),
+    _chipSection('Hobbies', 'hobbies', const [
+      'Reading',
+      'Running',
+      'Photography',
+      'Cooking',
+      'Cycling',
+    ]),
+    _chipSection('Music', 'musicTaste', const [
+      'Jazz',
+      'Afrobeats',
+      'Classical',
+      'Indie',
+      'Gospel',
+    ]),
+    _chipSection('Books', 'booksFilms', const [
+      'Fiction',
+      'Poetry',
+      'Design',
+      'History',
+      'Biographies',
+    ]),
+    _chipSection('Food preferences', 'favouriteFoodsDrinks', const [
+      'Tea',
+      'Coffee',
+      'Chocolate',
+      'Baking',
+      'Fine Dining',
+    ]),
+    _chipSection('Lifestyle', 'lifestyle', const [
+      'Wellness',
+      'Sustainability',
+      'Home',
+      'Fitness',
+      'Creativity',
+    ]),
+    _chipSection('Favourite categories', 'preferredGiftCategories', const [
+      'Beauty',
+      'Books',
+      'Experiences',
+      'Home Fragrance',
+      'Accessories',
+    ]),
+    const SizedBox(height: 4),
+    GiftJourneyWidgets.inputCard(
+      controller: _customInspirationController,
+      label: 'ADD YOUR OWN INSPIRATION',
+      placeholder: 'Write your own inspiration...',
+      helper:
+          'Choose from the ideas above, then add anything personal: memories, inside jokes, colours, places, dreams, style, dislikes, or the kind of person you want to meet.',
+      onChanged: (_) => setState(() {}),
+      maxLines: 4,
+    ),
+  ];
 
   List<Widget> get _safetyChildren => [
-        GiftJourneyWidgets.inputCard(
-          controller: _allergiesController,
-          label: 'ALLERGIES',
-          placeholder: 'Nuts, dairy, gluten...',
-          helper: 'Used for automatic exclusion.',
-          onChanged: (_) => setState(() {}),
-        ),
-        const SizedBox(height: 12),
-        GiftJourneyWidgets.inputCard(
-          controller: _dietaryController,
-          label: 'DIETARY RESTRICTIONS',
-          placeholder: 'Vegan, halal, no alcohol...',
-          onChanged: (_) => setState(() {}),
-        ),
-        const SizedBox(height: 12),
-        GiftJourneyWidgets.inputCard(
-          controller: _medicalController,
-          label: 'MEDICAL RESTRICTIONS',
-          placeholder: 'Anything relevant to gifts',
-          onChanged: (_) => setState(() {}),
-          maxLines: 3,
-        ),
-        const SizedBox(height: 12),
-        GiftJourneyWidgets.inputCard(
-          controller: _culturalController,
-          label: 'CULTURAL OR RELIGIOUS CONSIDERATIONS',
-          placeholder: 'Anything the Gifts Team should respect',
-          onChanged: (_) => setState(() {}),
-          maxLines: 3,
-        ),
-        const SizedBox(height: 12),
-        GiftJourneyWidgets.inputCard(
-          controller: _avoidController,
-          label: 'THINGS TO AVOID',
-          placeholder: 'Perfume, flowers, jewellery...',
-          onChanged: (_) => setState(() {}),
-          maxLines: 3,
-        ),
-        const SizedBox(height: 12),
-        GiftJourneyWidgets.inputCard(
-          controller: _blockedController,
-          label: 'PEOPLE TO AVOID',
-          placeholder: 'Name, handle, phone, or email if known',
-          helper:
-              'Optional. Add anyone you do not want to be matched with, if applicable.',
-          onChanged: (_) => setState(() {}),
-        ),
-      ];
+    GiftJourneyWidgets.inputCard(
+      controller: _allergiesController,
+      label: 'ALLERGIES',
+      placeholder: 'Nuts, dairy, gluten...',
+      helper: 'Used for automatic exclusion.',
+      onChanged: (_) => setState(() {}),
+    ),
+    const SizedBox(height: 12),
+    GiftJourneyWidgets.inputCard(
+      controller: _dietaryController,
+      label: 'DIETARY RESTRICTIONS',
+      placeholder: 'Vegan, halal, no alcohol...',
+      onChanged: (_) => setState(() {}),
+    ),
+    const SizedBox(height: 12),
+    GiftJourneyWidgets.inputCard(
+      controller: _medicalController,
+      label: 'MEDICAL RESTRICTIONS',
+      placeholder: 'Anything relevant to gifts',
+      onChanged: (_) => setState(() {}),
+      maxLines: 3,
+    ),
+    const SizedBox(height: 12),
+    GiftJourneyWidgets.inputCard(
+      controller: _culturalController,
+      label: 'CULTURAL OR RELIGIOUS CONSIDERATIONS',
+      placeholder: 'Anything the Gifts Team should respect',
+      onChanged: (_) => setState(() {}),
+      maxLines: 3,
+    ),
+    const SizedBox(height: 12),
+    GiftJourneyWidgets.inputCard(
+      controller: _avoidController,
+      label: 'THINGS TO AVOID',
+      placeholder: 'Perfume, flowers, jewellery...',
+      onChanged: (_) => setState(() {}),
+      maxLines: 3,
+    ),
+    const SizedBox(height: 12),
+    GiftJourneyWidgets.inputCard(
+      controller: _blockedController,
+      label: 'PEOPLE TO AVOID',
+      placeholder: 'Name, handle, phone, or email if known',
+      helper:
+          'Optional. Add anyone you do not want to be matched with, if applicable.',
+      onChanged: (_) => setState(() {}),
+    ),
+  ];
 
   List<Widget> get _privacyChildren {
     final policyGift = _policyGiftPreview;
@@ -639,121 +642,118 @@ class _GiftCampaignViewState extends State<GiftCampaignView> {
   }
 
   List<Widget> get _budgetChildren => [
-        _CampaignGlassCard(
-          title: 'Experience Budget',
-          body: '£${_budget.toStringAsFixed(0)}',
-        ),
-        Slider(
-          value: _budget,
-          min: 50,
-          max: 1500,
-          divisions: 29,
-          activeColor: const Color(0xFFC9B8FF),
-          inactiveColor: Colors.white.withValues(alpha: .12),
-          label: '£${_budget.toStringAsFixed(0)}',
-          onChanged: (value) => setState(() => _budget = value.roundToDouble()),
-        ),
-        Wrap(
-          spacing: 8,
-          runSpacing: 8,
-          children: [
-            for (final value in const [50, 100, 250, 500, 1000, 1500])
-              GiftJourneyWidgets.choiceChip(
-                label: '£$value',
-                selected: _budget == value,
-                onTap: () => setState(() => _budget = value.toDouble()),
-              ),
-          ],
-        ),
-      ];
+    _CampaignGlassCard(
+      title: 'Experience Budget',
+      body: '£${_budget.toStringAsFixed(0)}',
+    ),
+    Slider(
+      value: _budget,
+      min: 50,
+      max: 1500,
+      divisions: 29,
+      activeColor: const Color(0xFFC9B8FF),
+      inactiveColor: Colors.white.withValues(alpha: .12),
+      label: '£${_budget.toStringAsFixed(0)}',
+      onChanged: (value) => setState(() => _budget = value.roundToDouble()),
+    ),
+    Wrap(
+      spacing: 8,
+      runSpacing: 8,
+      children: [
+        for (final value in const [50, 100, 250, 500, 1000, 1500])
+          GiftJourneyWidgets.choiceChip(
+            label: '£$value',
+            selected: _budget == value,
+            onTap: () => setState(() => _budget = value.toDouble()),
+          ),
+      ],
+    ),
+  ];
 
   List<Widget> get _reviewChildren => [
-        _CampaignGlassCard(
-          title: 'Campaign',
-          body: _campaign?.name ?? 'Choose campaign',
-        ),
-        const SizedBox(height: 12),
-        _CampaignGlassCard(
-          title: 'Participant interests',
-          body: _reviewList([
-            ..._selected['interests']!,
-            ..._selected['hobbies']!,
-            ..._selected['musicTaste']!,
-            ..._selected['booksFilms']!,
-          ]),
-        ),
-        const SizedBox(height: 12),
-        _CampaignGlassCard(
-          title: 'Safety notes',
-          body: _reviewList([
-            _allergiesController.text,
-            _dietaryController.text,
-            _medicalController.text,
-            _culturalController.text,
-            _avoidController.text,
-          ]),
-        ),
-        const SizedBox(height: 12),
-        _CampaignGlassCard(title: 'Privacy mode', body: _senderRevealModeLabel),
-        const SizedBox(height: 12),
-        _CampaignGlassCard(
-          title: 'Budget',
-          body: '£${_budget.toStringAsFixed(0)}',
-        ),
-        const SizedBox(height: 12),
-        const _CampaignGlassCard(
-          title: 'No recipient yet',
-          body:
-              'Delivery address, recipient identity and handover details are handled after admin pairing approval.',
-        ),
-      ];
+    _CampaignGlassCard(
+      title: 'Campaign',
+      body: _campaign?.name ?? 'Choose campaign',
+    ),
+    const SizedBox(height: 12),
+    _CampaignGlassCard(
+      title: 'Participant interests',
+      body: _reviewList([
+        ..._selected['interests']!,
+        ..._selected['hobbies']!,
+        ..._selected['musicTaste']!,
+        ..._selected['booksFilms']!,
+      ]),
+    ),
+    const SizedBox(height: 12),
+    _CampaignGlassCard(
+      title: 'Safety notes',
+      body: _reviewList([
+        _allergiesController.text,
+        _dietaryController.text,
+        _medicalController.text,
+        _culturalController.text,
+        _avoidController.text,
+      ]),
+    ),
+    const SizedBox(height: 12),
+    _CampaignGlassCard(title: 'Privacy mode', body: _senderRevealModeLabel),
+    const SizedBox(height: 12),
+    _CampaignGlassCard(title: 'Budget', body: '£${_budget.toStringAsFixed(0)}'),
+    const SizedBox(height: 12),
+    const _CampaignGlassCard(
+      title: 'No recipient yet',
+      body:
+          'Delivery address, recipient identity and handover details are handled after admin pairing approval.',
+    ),
+  ];
 
   List<Widget> get _paymentChildren => [
-        _CampaignGlassCard(
-          title: 'Gift Total',
-          body: '£${_budget.toStringAsFixed(0)}',
-        ),
-        const SizedBox(height: 10),
-        _CampaignGlassCard(
-          title: 'Available Roth',
-          body: _rothLoading
-              ? 'Checking Roth balance...'
-              : _rothUnavailable
-                  ? 'Roth unavailable'
-                  : '£${_rothBalance.toStringAsFixed(0)}',
-        ),
-        const SizedBox(height: 14),
-        _chipSection('Payment method', 'paymentMethod', const [
-          'Card',
-          'Roth',
-          'Roth + Card',
-        ]),
-        if (_paymentMethod != 'Card' && _rothBalance > 0) ...[
-          const SizedBox(height: 12),
-          _CampaignToggle(
-            label: 'Apply Roth balance',
-            value: _applyRoth,
-            onChanged: (value) => setState(() => _applyRoth = value),
-          ),
-          const SizedBox(height: 10),
-          _CampaignGlassCard(
-            title: 'Roth applied',
-            body: '£${_rothApplied.toStringAsFixed(0)}',
-          ),
-        ],
-        const SizedBox(height: 10),
-        _CampaignGlassCard(
-          title: 'Remaining card amount',
-          body: '£${_cardAmount.toStringAsFixed(0)}',
-        ),
-        const SizedBox(height: 12),
-        _CampaignGlassCard(
-          title: 'Payment',
-          body: _submitting
-              ? 'Processing payment...'
-              : (_message ?? 'Payment ready'),
-        ),
-      ];
+    _CampaignGlassCard(
+      title: 'Gift Total',
+      body: '£${_budget.toStringAsFixed(0)}',
+    ),
+    const SizedBox(height: 10),
+    _CampaignGlassCard(
+      title: 'Available Roth',
+      body: _rothLoading
+          ? 'Checking Roth balance...'
+          : _rothUnavailable
+          ? 'Roth unavailable'
+          : '£${_rothBalance.toStringAsFixed(0)}',
+    ),
+    const SizedBox(height: 14),
+    _chipSection('Payment method', 'paymentMethod', const [
+      'Card',
+      'Roth',
+      'Roth + Card',
+    ]),
+    if (_paymentMethod != 'Card' && _rothBalance > 0) ...[
+      const SizedBox(height: 12),
+      _CampaignToggle(
+        label: 'Apply Roth balance',
+        value: _applyRoth,
+        onChanged: (value) => setState(() => _applyRoth = value),
+      ),
+      const SizedBox(height: 10),
+      _CampaignGlassCard(
+        title: 'Roth applied',
+        body: '£${_rothApplied.toStringAsFixed(0)}',
+      ),
+    ],
+    const SizedBox(height: 10),
+    _CampaignGlassCard(
+      title: 'Remaining card amount',
+      body: '£${_cardAmount.toStringAsFixed(0)}',
+    ),
+    const SizedBox(height: 12),
+    _CampaignGlassCard(
+      title: 'Payment',
+      body: _submitting
+          ? 'Processing payment...'
+          : (_message ?? 'Payment ready'),
+    ),
+  ];
 
   List<Widget> get _campaignStatusChildren {
     final copy = _campaignStatusCopy;
@@ -801,10 +801,7 @@ class _GiftCampaignViewState extends State<GiftCampaignView> {
         ),
       ),
       SizedBox(height: 12),
-      _CampaignGlassCard(
-        title: 'Privacy and safety',
-        body: copy.privacyNote,
-      ),
+      _CampaignGlassCard(title: 'Privacy and safety', body: copy.privacyNote),
       if (timestamp != null) ...[
         const SizedBox(height: 12),
         _CampaignGlassCard(title: 'Last updated', body: timestamp),
@@ -831,8 +828,8 @@ class _GiftCampaignViewState extends State<GiftCampaignView> {
           body: _linkedGiftStoryUnlocked
               ? 'View Gift Story'
               : _campaignStoryDraft.giftStoryManuallyLocked
-                  ? 'This story is currently under review.'
-                  : 'Your story will unlock after delivery is confirmed.',
+              ? 'This story is currently under review.'
+              : 'Your story will unlock after delivery is confirmed.',
         ),
       ],
       if (_visibleRevealedMatch != null) ...[
@@ -1041,13 +1038,13 @@ class _GiftCampaignViewState extends State<GiftCampaignView> {
       final payment = await FirebaseFunctions.instance
           .httpsCallable(senderGiftPaymentCallableName)
           .call({
-        'source': senderGiftCampaignPaymentSource,
-        'campaignParticipant': participant,
-        'applyRoth': _wantsRoth,
-        'paymentMethod': _verifiedPaymentMethod,
-        'grossGiftBudget': _budget,
-        'returnOrigin': Uri.base.origin,
-      });
+            'source': senderGiftCampaignPaymentSource,
+            'campaignParticipant': participant,
+            'applyRoth': _wantsRoth,
+            'paymentMethod': _verifiedPaymentMethod,
+            'grossGiftBudget': _budget,
+            'returnOrigin': Uri.base.origin,
+          });
       final data = Map<String, dynamic>.from(payment.data as Map);
       _participantId = '${data['campaignParticipantId'] ?? ''}'.trim().isEmpty
           ? null
@@ -1096,11 +1093,11 @@ class _GiftCampaignViewState extends State<GiftCampaignView> {
         .limit(1)
         .snapshots()
         .listen((snapshot) {
-      if (!mounted || snapshot.docs.isEmpty) return;
-      setState(() {
-        _approvedMatch = snapshot.docs.first.data();
-      });
-    });
+          if (!mounted || snapshot.docs.isEmpty) return;
+          setState(() {
+            _approvedMatch = snapshot.docs.first.data();
+          });
+        });
   }
 
   void _listenForVisibleMatch() {
@@ -1121,12 +1118,13 @@ class _GiftCampaignViewState extends State<GiftCampaignView> {
         .limit(1)
         .snapshots()
         .listen((snapshot) {
-      if (!mounted) return;
-      setState(() {
-        _visibleRevealedMatch =
-            snapshot.docs.isEmpty ? null : snapshot.docs.first.data();
-      });
-    });
+          if (!mounted) return;
+          setState(() {
+            _visibleRevealedMatch = snapshot.docs.isEmpty
+                ? null
+                : snapshot.docs.first.data();
+          });
+        });
   }
 
   void _listenForParticipantStatus() {
@@ -1138,9 +1136,9 @@ class _GiftCampaignViewState extends State<GiftCampaignView> {
         .doc(participantId)
         .snapshots()
         .listen((snapshot) {
-      if (!mounted || !snapshot.exists) return;
-      setState(() => _participantStatusData = snapshot.data());
-    });
+          if (!mounted || !snapshot.exists) return;
+          setState(() => _participantStatusData = snapshot.data());
+        });
     _listenForVisibleMatch();
   }
 
@@ -1186,8 +1184,9 @@ class _GiftCampaignViewState extends State<GiftCampaignView> {
       'senderRevealMode': _senderRevealMode,
       'senderRevealConsent': 'pending',
       'recipientRevealRequestStatus': 'pending',
-      'recipientContentConsent':
-          _recipientContentConsent ? 'granted' : 'not_requested',
+      'recipientContentConsent': _recipientContentConsent
+          ? 'granted'
+          : 'not_requested',
       'allowCircumSocialUse': _allowCircumSocialUse,
       'allowPublicPosting': _allowPublicPosting,
       'allowBrandTagging': _allowBrandTagging,
@@ -1217,39 +1216,38 @@ class _GiftCampaignViewState extends State<GiftCampaignView> {
 
   Map<String, dynamic> _policyOnlyMatchEligibilityPreview(
     _CampaignOption campaign,
-  ) =>
-      {
-        'userId': 'admin-approved-${campaign.id}',
-        'matchConsent': true,
-        'matchStatus': 'active',
-        'interests': _selected['interests']!.toList(),
-        'hobbies': _selected['hobbies']!.toList(),
-        'musicTaste': _selected['musicTaste']!.toList(),
-        'booksFilms': _selected['booksFilms']!.toList(),
-        'favouriteFoodsDrinks': _selected['favouriteFoodsDrinks']!.toList(),
-        'preferredGiftCategories':
-            _selected['preferredGiftCategories']!.toList(),
-        'allergies': const <String>[],
-        'blockedUserIds': const <String>[],
-      };
+  ) => {
+    'userId': 'admin-approved-${campaign.id}',
+    'matchConsent': true,
+    'matchStatus': 'active',
+    'interests': _selected['interests']!.toList(),
+    'hobbies': _selected['hobbies']!.toList(),
+    'musicTaste': _selected['musicTaste']!.toList(),
+    'booksFilms': _selected['booksFilms']!.toList(),
+    'favouriteFoodsDrinks': _selected['favouriteFoodsDrinks']!.toList(),
+    'preferredGiftCategories': _selected['preferredGiftCategories']!.toList(),
+    'allergies': const <String>[],
+    'blockedUserIds': const <String>[],
+  };
 
   Map<String, dynamic> get _policyGiftPreview => {
-        'senderRevealMode': _senderRevealMode,
-        'senderRevealConsent': 'pending',
-        'recipientRevealRequestStatus': 'pending',
-        'recipientContentConsent':
-            _recipientContentConsent ? 'granted' : 'not_requested',
-        'allowCircumSocialUse': _allowCircumSocialUse,
-        'allowPublicPosting': _allowPublicPosting,
-        'allowBrandTagging': _allowBrandTagging,
-        'status': 'matching',
-      };
+    'senderRevealMode': _senderRevealMode,
+    'senderRevealConsent': 'pending',
+    'recipientRevealRequestStatus': 'pending',
+    'recipientContentConsent': _recipientContentConsent
+        ? 'granted'
+        : 'not_requested',
+    'allowCircumSocialUse': _allowCircumSocialUse,
+    'allowPublicPosting': _allowPublicPosting,
+    'allowBrandTagging': _allowBrandTagging,
+    'status': 'matching',
+  };
 
   String get _senderRevealModeLabel => switch (_senderRevealMode) {
-        'reveal_immediately' => 'Reveal immediately',
-        'reveal_after_delivery' => 'Reveal after delivery',
-        _ => 'Anonymous until mutual consent',
-      };
+    'reveal_immediately' => 'Reveal immediately',
+    'reveal_after_delivery' => 'Reveal after delivery',
+    _ => 'Anonymous until mutual consent',
+  };
 
   static String _reviewList(Iterable<String> values) {
     final clean = values
@@ -1387,45 +1385,43 @@ class _CampaignGlassCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => AppGlassContainer(
-      padding: const EdgeInsets.all(18),
-      radius: 20,
-      accent: const Color(0xFFC9B8FF),
-      surfaceColor: Colors.white.withValues(alpha: .052),
-      borderColor: Colors.white.withValues(alpha: .10),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  title,
-                  style: GoogleFonts.inter(
-                    color: Colors.white,
-                    fontSize: 14,
-                    fontWeight: FontWeight.w800,
-                  ),
+    padding: const EdgeInsets.all(18),
+    radius: 20,
+    accent: const Color(0xFFC9B8FF),
+    surfaceColor: Colors.white.withValues(alpha: .052),
+    borderColor: Colors.white.withValues(alpha: .10),
+    child: Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                title,
+                style: GoogleFonts.inter(
+                  color: Colors.white,
+                  fontSize: 14,
+                  fontWeight: FontWeight.w800,
                 ),
-                const SizedBox(height: 7),
-                Text(
-                  body,
-                  style: GoogleFonts.inter(
-                    color: const Color(0xFFB8AAB8),
-                    fontSize: 12.5,
-                    height: 1.42,
-                    fontWeight: FontWeight.w600,
-                  ),
+              ),
+              const SizedBox(height: 7),
+              Text(
+                body,
+                style: GoogleFonts.inter(
+                  color: const Color(0xFFB8AAB8),
+                  fontSize: 12.5,
+                  height: 1.42,
+                  fontWeight: FontWeight.w600,
                 ),
-              ],
-            ),
+              ),
+            ],
           ),
-          if (trailing != null) ...[
-            const SizedBox(width: 12),
-            trailing!,
-          ],
-        ],
-      ));
+        ),
+        if (trailing != null) ...[const SizedBox(width: 12), trailing!],
+      ],
+    ),
+  );
 }
 
 class _CampaignToggle extends StatelessWidget {

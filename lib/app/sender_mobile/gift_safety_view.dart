@@ -26,18 +26,24 @@ class _GiftSafetyViewState extends State<GiftSafetyView> {
   @override
   void initState() {
     super.initState();
-    _foodAllergiesController =
-        TextEditingController(text: widget.draft.foodAllergies ?? '');
-    _medicalAllergiesController =
-        TextEditingController(text: widget.draft.medicalAllergies ?? '');
-    _dietaryRestrictionsController =
-        TextEditingController(text: widget.draft.dietaryRestrictions ?? '');
-    _culturalConsiderationsController =
-        TextEditingController(text: widget.draft.culturalConsiderations ?? '');
-    _thingsToAvoidController =
-        TextEditingController(text: widget.draft.safetyThingsToAvoid ?? '');
-    _giftTeamNotesController =
-        TextEditingController(text: widget.draft.giftTeamNotes ?? '');
+    _foodAllergiesController = TextEditingController(
+      text: widget.draft.foodAllergies ?? '',
+    );
+    _medicalAllergiesController = TextEditingController(
+      text: widget.draft.medicalAllergies ?? '',
+    );
+    _dietaryRestrictionsController = TextEditingController(
+      text: widget.draft.dietaryRestrictions ?? '',
+    );
+    _culturalConsiderationsController = TextEditingController(
+      text: widget.draft.culturalConsiderations ?? '',
+    );
+    _thingsToAvoidController = TextEditingController(
+      text: widget.draft.safetyThingsToAvoid ?? '',
+    );
+    _giftTeamNotesController = TextEditingController(
+      text: widget.draft.giftTeamNotes ?? '',
+    );
   }
 
   @override

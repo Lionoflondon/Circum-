@@ -110,13 +110,13 @@ class _GiftPrivacyViewState extends State<GiftPrivacyView> {
   }
 
   String _subtitleFor(String key) => switch (key) {
-        'anonymous_forever' => 'Your identity will remain private.',
-        'reveal_after_delivery' =>
-          "We'll reveal your name once the gift has safely arrived.",
-        'reveal_immediately' =>
-          'The recipient will know you sent the gift straight away.',
-        _ => '',
-      };
+    'anonymous_forever' => 'Your identity will remain private.',
+    'reveal_after_delivery' =>
+      "We'll reveal your name once the gift has safely arrived.",
+    'reveal_immediately' =>
+      'The recipient will know you sent the gift straight away.',
+    _ => '',
+  };
 }
 
 class _GiftConsentToggle extends StatelessWidget {

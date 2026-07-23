@@ -21,10 +21,7 @@ const senderGiftAddressLookupCallableName = 'searchFreeUkAddresses';
 class GiftDeliveryView extends StatefulWidget {
   final GiftJourneyDraft draft;
 
-  const GiftDeliveryView({
-    super.key,
-    required this.draft,
-  });
+  const GiftDeliveryView({super.key, required this.draft});
 
   static const routeName = '/sender-mobile/gifts/delivery';
 
@@ -61,7 +58,8 @@ class _GiftDeliveryViewState extends State<GiftDeliveryView> {
     _selectedAddressSuggestion = widget.draft.deliveryAddressData;
     _deliveryDate = DateTime.tryParse(widget.draft.deliveryDate ?? '');
     _deliveryTimeWindow = widget.draft.deliveryTimeWindow;
-    _flexibleDelivery = widget.draft.flexibleDelivery ||
+    _flexibleDelivery =
+        widget.draft.flexibleDelivery ||
         widget.draft.deliveryDate == 'Flexible' ||
         widget.draft.deliveryTimeWindow == 'Flexible';
   }
@@ -258,23 +256,25 @@ class _GiftDeliveryViewState extends State<GiftDeliveryView> {
         onTap: !_canContinue
             ? null
             : () => Navigator.of(context).push(
-                  MaterialPageRoute<void>(
-                    builder: (_) => GiftMessageView(
-                      draft: widget.draft.copyWith(
-                        deliveryAddress: _deliveryAddressController.text.trim(),
-                        deliveryAddressData: _selectedAddressSuggestion,
-                        deliveryDate:
-                            _deliveryDate == null ? null : _deliveryDateLabel,
-                        deliveryTimeWindow:
-                            _flexibleDelivery ? null : _deliveryTimeWindow,
-                        flexibleDelivery: _flexibleDelivery,
-                      ),
-                    ),
-                    settings: const RouteSettings(
-                      name: GiftMessageView.routeName,
+                MaterialPageRoute<void>(
+                  builder: (_) => GiftMessageView(
+                    draft: widget.draft.copyWith(
+                      deliveryAddress: _deliveryAddressController.text.trim(),
+                      deliveryAddressData: _selectedAddressSuggestion,
+                      deliveryDate: _deliveryDate == null
+                          ? null
+                          : _deliveryDateLabel,
+                      deliveryTimeWindow: _flexibleDelivery
+                          ? null
+                          : _deliveryTimeWindow,
+                      flexibleDelivery: _flexibleDelivery,
                     ),
                   ),
+                  settings: const RouteSettings(
+                    name: GiftMessageView.routeName,
+                  ),
                 ),
+              ),
       ),
     );
   }
@@ -346,8 +346,10 @@ class _GiftAddressLookupCard extends StatelessWidget {
                 borderRadius: BorderRadius.circular(16),
                 onTap: () => onSuggestionSelected(suggestion),
                 child: Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 14,
+                    vertical: 12,
+                  ),
                   decoration: BoxDecoration(
                     color: Colors.white.withValues(alpha: .045),
                     borderRadius: BorderRadius.circular(16),

@@ -4,7 +4,7 @@ import 'package:flutter/material.dart';
 import '../../../utils/theme/colors.dart';
 
 class IndexPage extends StatelessWidget {
-  const IndexPage({Key? key}) : super(key: key);
+  const IndexPage({super.key});
 
   static Page<void> page() => const MaterialPage<void>(child: IndexPage());
 
@@ -13,10 +13,7 @@ class IndexPage extends StatelessWidget {
     return Scaffold(
       backgroundColor: AppColors.secondary,
       body: Center(
-        child: Image.asset(
-          'assets/images/splash.png',
-          fit: BoxFit.fitWidth,
-        ),
+        child: Image.asset('assets/images/splash.png', fit: BoxFit.fitWidth),
       ),
     );
   }

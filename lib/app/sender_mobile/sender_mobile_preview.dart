@@ -20,19 +20,16 @@ import 'sender_startup_diagnostics.dart';
 
 Future<void> main() async {
   SenderStartupDiagnostics.installGlobalHandlers();
-  await runZonedGuarded<Future<void>>(
-    _startSenderWeb,
-    (error, stackTrace) {
-      SenderStartupDiagnostics.instance.fail(
-        'runZonedGuarded',
-        error,
-        stackTrace,
-      );
-      if (!_senderAppStarted) {
-        _runSenderApp(const _SenderWebStartupRecovery());
-      }
-    },
-  );
+  await runZonedGuarded<Future<void>>(_startSenderWeb, (error, stackTrace) {
+    SenderStartupDiagnostics.instance.fail(
+      'runZonedGuarded',
+      error,
+      stackTrace,
+    );
+    if (!_senderAppStarted) {
+      _runSenderApp(const _SenderWebStartupRecovery());
+    }
+  });
 }
 
 var _senderAppStarted = false;
@@ -111,18 +108,20 @@ void _runSenderApp(Widget app) {
 }
 
 void _refreshRuntimeHealth() {
-  SenderStartupDiagnostics.instance.updateHealth(SenderRuntimeHealthSnapshot(
-    buildHash: senderBuildHash,
-    releaseTag: senderReleaseTag,
-    firebaseInitialized: _firebaseInitialized,
-    appCheckState: _appCheckState,
-    authInitialized: _authInitialized,
-    firestoreConnected: _firestoreConnected,
-    functionsConnected: _functionsConnected,
-    mapsReady: false,
-    stripeReady: false,
-    authenticated: FirebaseAuth.instance.currentUser != null,
-  ));
+  SenderStartupDiagnostics.instance.updateHealth(
+    SenderRuntimeHealthSnapshot(
+      buildHash: senderBuildHash,
+      releaseTag: senderReleaseTag,
+      firebaseInitialized: _firebaseInitialized,
+      appCheckState: _appCheckState,
+      authInitialized: _authInitialized,
+      firestoreConnected: _firestoreConnected,
+      functionsConnected: _functionsConnected,
+      mapsReady: false,
+      stripeReady: false,
+      authenticated: FirebaseAuth.instance.currentUser != null,
+    ),
+  );
 }
 
 class SenderMobilePreviewApp extends StatelessWidget {

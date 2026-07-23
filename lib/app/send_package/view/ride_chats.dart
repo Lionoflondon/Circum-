@@ -75,10 +75,10 @@ class _RideChatPageViewState extends State<RideChatPageView> {
       final result = await FirebaseFunctions.instance
           .httpsCallable('getOrCreateSupportConversation')
           .call({
-        'topic': 'wallet_support',
-        'title': 'Circum Support',
-        'participantRole': 'sender',
-      });
+            'topic': 'wallet_support',
+            'title': 'Circum Support',
+            'participantRole': 'sender',
+          });
       final data = result.data is Map
           ? Map<String, dynamic>.from(result.data as Map)
           : const <String, dynamic>{};
@@ -132,17 +132,19 @@ class _RideChatPageViewState extends State<RideChatPageView> {
     if (message.isEmpty || chatId == null || readOnly || _sending) return;
     setState(() => _sending = true);
     try {
-      await FirebaseFunctions.instance
-          .httpsCallable('sendCircumMessage')
-          .call({'chatId': chatId, 'message': message, 'messageType': 'text'});
+      await FirebaseFunctions.instance.httpsCallable('sendCircumMessage').call({
+        'chatId': chatId,
+        'message': message,
+        'messageType': 'text',
+      });
       _input.clear();
       await _setTyping(false);
     } on FirebaseFunctionsException catch (error) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-              content:
-                  Text(error.message ?? 'Your message could not be sent.')),
+            content: Text(error.message ?? 'Your message could not be sent.'),
+          ),
         );
       }
     } finally {
@@ -170,80 +172,91 @@ class _RideChatPageViewState extends State<RideChatPageView> {
               onAction: () => Navigator.of(context).pop(),
             )
           : chatId == null
-              ? const _ChatLoadingState(
-                  title: 'Opening conversation',
-                  body: 'Preparing your secure Circum chat.',
-                )
-              : StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
-                  stream: FirebaseFirestore.instance
-                      .collection('chats')
-                      .doc(chatId)
-                      .snapshots(),
-                  builder: (context, chatSnapshot) {
-                    if (chatSnapshot.hasError) {
-                      return _UnavailableChat(
-                          onBack: () => Navigator.of(context).pop());
-                    }
-                    if (!chatSnapshot.hasData) {
-                      return const _ChatLoadingState(
-                        title: 'Loading messages',
-                        body: 'Keeping the conversation up to date.',
-                      );
-                    }
-                    if (!chatSnapshot.data!.exists) {
-                      return _UnavailableChat(
-                          onBack: () => Navigator.of(context).pop());
-                    }
-                    final chat = chatSnapshot.data!.data()!;
-                    if (_markedReadChatId != chatId) {
-                      _markedReadChatId = chatId;
-                      unawaited(_markConversationRead(chatId));
-                    }
-                    final readOnly = chat['readOnly'] == true;
-                    final typing = Map<String, dynamic>.from(
-                        chat['typing'] as Map? ?? const {});
-                    final currentId = FirebaseAuth.instance.currentUser?.uid;
-                    final typingOther = typing.entries.any((entry) =>
-                        entry.key != currentId &&
-                        entry.value is num &&
-                        (entry.value as num).toInt() >
-                            DateTime.now().millisecondsSinceEpoch);
-                    return Column(
-                      children: [
-                        if (readOnly)
-                          const _ChatNotice(
-                              'Delivery completed. This conversation is now read-only.'),
-                        if (typingOther)
-                          const _ChatNotice('Rider is typing...'),
-                        Expanded(
-                            child: _MessageStream(
-                                chatId: chatId, scrollController: _scroll)),
-                        _Composer(
-                          controller: _input,
-                          hintText: widget.supportConversation
-                              ? 'Message Circum Support'
-                              : 'Message your rider',
-                          readOnly: readOnly,
-                          sending: _sending,
-                          role:
-                              '${Map<String, dynamic>.from(chat['participantRoles'] as Map? ?? const {})[currentId] ?? 'sender'}',
-                          onChanged: (_) {
-                            _setTyping(true);
-                            _typingDebounce?.cancel();
-                            _typingDebounce = Timer(const Duration(seconds: 4),
-                                () => _setTyping(false));
-                          },
-                          onQuickReply: (reply) {
-                            _input.text = reply;
-                            _input.selection =
-                                TextSelection.collapsed(offset: reply.length);
-                          },
-                          onSend: () => _send(readOnly),
-                        ),
-                      ],
-                    );
-                  },
-                ),
+          ? const _ChatLoadingState(
+              title: 'Opening conversation',
+              body: 'Preparing your secure Circum chat.',
+            )
+          : StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
+              stream: FirebaseFirestore.instance
+                  .collection('chats')
+                  .doc(chatId)
+                  .snapshots(),
+              builder: (context, chatSnapshot) {
+                if (chatSnapshot.hasError) {
+                  return _UnavailableChat(
+                    onBack: () => Navigator.of(context).pop(),
+                  );
+                }
+                if (!chatSnapshot.hasData) {
+                  return const _ChatLoadingState(
+                    title: 'Loading messages',
+                    body: 'Keeping the conversation up to date.',
+                  );
+                }
+                if (!chatSnapshot.data!.exists) {
+                  return _UnavailableChat(
+                    onBack: () => Navigator.of(context).pop(),
+                  );
+                }
+                final chat = chatSnapshot.data!.data()!;
+                if (_markedReadChatId != chatId) {
+                  _markedReadChatId = chatId;
+                  unawaited(_markConversationRead(chatId));
+                }
+                final readOnly = chat['readOnly'] == true;
+                final typing = Map<String, dynamic>.from(
+                  chat['typing'] as Map? ?? const {},
+                );
+                final currentId = FirebaseAuth.instance.currentUser?.uid;
+                final typingOther = typing.entries.any(
+                  (entry) =>
+                      entry.key != currentId &&
+                      entry.value is num &&
+                      (entry.value as num).toInt() >
+                          DateTime.now().millisecondsSinceEpoch,
+                );
+                return Column(
+                  children: [
+                    if (readOnly)
+                      const _ChatNotice(
+                        'Delivery completed. This conversation is now read-only.',
+                      ),
+                    if (typingOther) const _ChatNotice('Rider is typing...'),
+                    Expanded(
+                      child: _MessageStream(
+                        chatId: chatId,
+                        scrollController: _scroll,
+                      ),
+                    ),
+                    _Composer(
+                      controller: _input,
+                      hintText: widget.supportConversation
+                          ? 'Message Circum Support'
+                          : 'Message your rider',
+                      readOnly: readOnly,
+                      sending: _sending,
+                      role:
+                          '${Map<String, dynamic>.from(chat['participantRoles'] as Map? ?? const {})[currentId] ?? 'sender'}',
+                      onChanged: (_) {
+                        _setTyping(true);
+                        _typingDebounce?.cancel();
+                        _typingDebounce = Timer(
+                          const Duration(seconds: 4),
+                          () => _setTyping(false),
+                        );
+                      },
+                      onQuickReply: (reply) {
+                        _input.text = reply;
+                        _input.selection = TextSelection.collapsed(
+                          offset: reply.length,
+                        );
+                      },
+                      onSend: () => _send(readOnly),
+                    ),
+                  ],
+                );
+              },
+            ),
     );
   }
 }
@@ -255,56 +268,58 @@ class _MessageStream extends StatelessWidget {
   const _MessageStream({required this.chatId, required this.scrollController});
 
   @override
-  Widget build(BuildContext context) =>
-      StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
-        stream: FirebaseFirestore.instance
-            .collection('chats')
-            .doc(chatId)
-            .collection('messages')
-            .orderBy('createdAt', descending: false)
-            .limitToLast(100)
-            .snapshots(),
-        builder: (context, snapshot) {
-          if (snapshot.hasError) {
-            return const AppEmptyState(
-              icon: Icons.cloud_off_outlined,
-              title: 'Messages are unavailable',
-              body: 'Check your connection and try again.',
-            );
-          }
-          if (!snapshot.hasData) {
-            return const _ChatLoadingState(
-              title: 'Loading messages',
-              body: 'Your chat history will appear here.',
-            );
-          }
-          final messages = snapshot.data!.docs;
-          if (messages.isEmpty) {
-            return const AppEmptyState(
-              icon: Icons.forum_outlined,
-              title: 'Chat is ready',
-              body:
-                  'Message your rider once there is something you need to clarify.',
-            );
-          }
-          WidgetsBinding.instance.addPostFrameCallback((_) {
-            if (scrollController.hasClients) {
-              scrollController.animateTo(
-                  scrollController.position.maxScrollExtent,
-                  duration: AppTokens.fast,
-                  curve: Curves.easeOut);
-            }
-          });
-          return ListView.separated(
-            controller: scrollController,
-            padding: const EdgeInsets.all(AppTokens.space16),
-            itemCount: messages.length,
-            separatorBuilder: (_, __) => const SizedBox(height: 10),
-            itemBuilder: (context, index) =>
-                _MessageBubble(data: messages[index].data()),
+  Widget build(
+    BuildContext context,
+  ) => StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
+    stream: FirebaseFirestore.instance
+        .collection('chats')
+        .doc(chatId)
+        .collection('messages')
+        .orderBy('createdAt', descending: false)
+        .limitToLast(100)
+        .snapshots(),
+    builder: (context, snapshot) {
+      if (snapshot.hasError) {
+        return const AppEmptyState(
+          icon: Icons.cloud_off_outlined,
+          title: 'Messages are unavailable',
+          body: 'Check your connection and try again.',
+        );
+      }
+      if (!snapshot.hasData) {
+        return const _ChatLoadingState(
+          title: 'Loading messages',
+          body: 'Your chat history will appear here.',
+        );
+      }
+      final messages = snapshot.data!.docs;
+      if (messages.isEmpty) {
+        return const AppEmptyState(
+          icon: Icons.forum_outlined,
+          title: 'Chat is ready',
+          body:
+              'Message your rider once there is something you need to clarify.',
+        );
+      }
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (scrollController.hasClients) {
+          scrollController.animateTo(
+            scrollController.position.maxScrollExtent,
+            duration: AppTokens.fast,
+            curve: Curves.easeOut,
           );
-        },
+        }
+      });
+      return ListView.separated(
+        controller: scrollController,
+        padding: const EdgeInsets.all(AppTokens.space16),
+        itemCount: messages.length,
+        separatorBuilder: (_, __) => const SizedBox(height: 10),
+        itemBuilder: (context, index) =>
+            _MessageBubble(data: messages[index].data()),
       );
+    },
+  );
 }
 
 class _ChatLoadingState extends StatelessWidget {
@@ -333,18 +348,18 @@ class _ChatLoadingState extends StatelessWidget {
               title,
               textAlign: TextAlign.center,
               style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                    color: AppTokens.text,
-                    fontWeight: FontWeight.w800,
-                  ),
+                color: AppTokens.text,
+                fontWeight: FontWeight.w800,
+              ),
             ),
             const SizedBox(height: AppTokens.space8),
             Text(
               body,
               textAlign: TextAlign.center,
               style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                    color: AppTokens.mutedText,
-                    height: 1.35,
-                  ),
+                color: AppTokens.mutedText,
+                height: 1.35,
+              ),
             ),
           ],
         ),
@@ -374,23 +389,28 @@ class _MessageBubble extends StatelessWidget {
           accent: mine
               ? AppTokens.primary
               : admin
-                  ? AppTokens.success
-                  : null,
+              ? AppTokens.success
+              : null,
           padding: const EdgeInsets.all(12),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               if (admin)
                 const AppStatusBadge(
-                    label: 'Circum Support', tone: AppStatusTone.success),
+                  label: 'Circum Support',
+                  tone: AppStatusTone.success,
+                ),
               if (admin) const SizedBox(height: 6),
               Text(message),
               if (timestamp != null) ...[
                 const SizedBox(height: 5),
                 Text(
-                    '${timestamp.hour.toString().padLeft(2, '0')}:${timestamp.minute.toString().padLeft(2, '0')}',
-                    style: const TextStyle(
-                        fontSize: 11, color: AppTokens.mutedText)),
+                  '${timestamp.hour.toString().padLeft(2, '0')}:${timestamp.minute.toString().padLeft(2, '0')}',
+                  style: const TextStyle(
+                    fontSize: 11,
+                    color: AppTokens.mutedText,
+                  ),
+                ),
               ],
             ],
           ),
@@ -410,37 +430,41 @@ class _Composer extends StatelessWidget {
   final ValueChanged<String> onQuickReply;
   final VoidCallback onSend;
 
-  const _Composer(
-      {required this.controller,
-      required this.hintText,
-      required this.readOnly,
-      required this.sending,
-      required this.role,
-      required this.onChanged,
-      required this.onQuickReply,
-      required this.onSend});
+  const _Composer({
+    required this.controller,
+    required this.hintText,
+    required this.readOnly,
+    required this.sending,
+    required this.role,
+    required this.onChanged,
+    required this.onQuickReply,
+    required this.onSend,
+  });
 
   @override
   Widget build(BuildContext context) => SafeArea(
-        top: false,
-        child: Column(mainAxisSize: MainAxisSize.min, children: [
-          if (!readOnly)
-            SizedBox(
-              height: 40,
-              child: ListView.separated(
-                scrollDirection: Axis.horizontal,
-                padding: const EdgeInsets.symmetric(horizontal: 16),
-                itemCount: _quickReplies.length,
-                separatorBuilder: (_, __) => const SizedBox(width: 8),
-                itemBuilder: (context, index) => ActionChip(
-                  label: Text(_quickReplies[index]),
-                  onPressed: () => onQuickReply(_quickReplies[index]),
-                ),
+    top: false,
+    child: Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        if (!readOnly)
+          SizedBox(
+            height: 40,
+            child: ListView.separated(
+              scrollDirection: Axis.horizontal,
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              itemCount: _quickReplies.length,
+              separatorBuilder: (_, __) => const SizedBox(width: 8),
+              itemBuilder: (context, index) => ActionChip(
+                label: Text(_quickReplies[index]),
+                onPressed: () => onQuickReply(_quickReplies[index]),
               ),
             ),
-          Padding(
-            padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
-            child: Row(children: [
+          ),
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
+          child: Row(
+            children: [
               Expanded(
                 child: TextField(
                   controller: controller,
@@ -449,13 +473,14 @@ class _Composer extends StatelessWidget {
                   maxLines: 4,
                   onChanged: onChanged,
                   decoration: InputDecoration(
-                    hintText:
-                        readOnly ? 'This conversation is closed' : hintText,
+                    hintText: readOnly
+                        ? 'This conversation is closed'
+                        : hintText,
                     filled: true,
                     fillColor: AppTokens.raisedPanel,
                     border: OutlineInputBorder(
-                        borderRadius:
-                            BorderRadius.circular(AppTokens.radius16)),
+                      borderRadius: BorderRadius.circular(AppTokens.radius16),
+                    ),
                   ),
                 ),
               ),
@@ -466,13 +491,16 @@ class _Composer extends StatelessWidget {
                 icon: sending
                     ? const SizedBox.square(
                         dimension: 18,
-                        child: CircularProgressIndicator(strokeWidth: 2))
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
                     : const Icon(Icons.send_rounded),
               ),
-            ]),
+            ],
           ),
-        ]),
-      );
+        ),
+      ],
+    ),
+  );
 
   List<String> get _quickReplies => role == 'rider'
       ? const [
@@ -498,13 +526,15 @@ class _ChatNotice extends StatelessWidget {
   const _ChatNotice(this.text);
   @override
   Widget build(BuildContext context) => Container(
-        width: double.infinity,
-        padding: const EdgeInsets.all(10),
-        color: AppTokens.primary.withValues(alpha: .12),
-        child: Text(text,
-            textAlign: TextAlign.center,
-            style: const TextStyle(color: AppTokens.mutedText)),
-      );
+    width: double.infinity,
+    padding: const EdgeInsets.all(10),
+    color: AppTokens.primary.withValues(alpha: .12),
+    child: Text(
+      text,
+      textAlign: TextAlign.center,
+      style: const TextStyle(color: AppTokens.mutedText),
+    ),
+  );
 }
 
 class _UnavailableChat extends StatelessWidget {
@@ -512,11 +542,11 @@ class _UnavailableChat extends StatelessWidget {
   const _UnavailableChat({required this.onBack});
   @override
   Widget build(BuildContext context) => AppEmptyState(
-        icon: Icons.lock_outline,
-        title: 'Chat is not available yet',
-        body:
-            'Delivery chat becomes available once your rider has accepted the delivery.',
-        actionLabel: 'Back',
-        onAction: onBack,
-      );
+    icon: Icons.lock_outline,
+    title: 'Chat is not available yet',
+    body:
+        'Delivery chat becomes available once your rider has accepted the delivery.',
+    actionLabel: 'Back',
+    onAction: onBack,
+  );
 }

@@ -67,7 +67,8 @@ class CanonicalIrisResult {
       if (recommendation['customerSafeExplanation'] != null)
         '${recommendation['customerSafeExplanation']}',
     ].where((item) => item.trim().isNotEmpty).toList();
-    final quantity = _int(data['quantity'] ?? recommendation['quantity']) ??
+    final quantity =
+        _int(data['quantity'] ?? recommendation['quantity']) ??
         (fallbackQuantity <= 0 ? 1 : fallbackQuantity);
     final totalWeight = _double(
       data['totalWeightKg'] ??
@@ -107,7 +108,8 @@ class CanonicalIrisResult {
       ),
       explanation: '${recommendation['customerSafeExplanation'] ?? ''}'.trim(),
       reasons: reasons,
-      partial: totalWeight == null ||
+      partial:
+          totalWeight == null ||
           '${data['recommendedVehicle'] ?? riderMatching['vehicleRequired'] ?? ''}'
               .trim()
               .isEmpty,

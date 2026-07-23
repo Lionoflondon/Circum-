@@ -10,9 +10,8 @@ import 'gift_mode_view.dart';
 import 'sender_booking_canvas.dart';
 import 'sender_wallet.dart';
 
-typedef SenderNotificationOpenHandler = bool Function(
-  SenderNotificationOpenRequest request,
-);
+typedef SenderNotificationOpenHandler =
+    bool Function(SenderNotificationOpenRequest request);
 
 class SenderNotificationOpenRequest {
   final Map<String, dynamic> destination;
@@ -77,7 +76,8 @@ Map<String, dynamic> parseSenderNotificationDestination(
     parsedData['screen'],
     parsedData['destinationRoute'],
     _routeForNotificationType(
-        _firstText([payload['type'], parsedData['type']])),
+      _firstText([payload['type'], parsedData['type']]),
+    ),
   ]);
 
   final chatId = _firstText([
@@ -110,21 +110,23 @@ bool openSenderNotificationDestination(
       if (onOpenWallet != null) {
         onOpenWallet();
       } else {
-        Navigator.of(context).push(MaterialPageRoute<void>(
-          builder: (_) => const SenderWalletView(),
-        ));
+        Navigator.of(context).push(
+          MaterialPageRoute<void>(builder: (_) => const SenderWalletView()),
+        );
       }
       return true;
     case 'gift':
-      Navigator.of(context).push(MaterialPageRoute<void>(
-        builder: (_) => const GiftModeView(),
-        settings: const RouteSettings(name: GiftModeView.routeName),
-      ));
+      Navigator.of(context).push(
+        MaterialPageRoute<void>(
+          builder: (_) => const GiftModeView(),
+          settings: const RouteSettings(name: GiftModeView.routeName),
+        ),
+      );
       return true;
     case 'health':
-      Navigator.of(context).push(
-        MaterialPageRoute<void>(builder: (_) => const HealthPlusView()),
-      );
+      Navigator.of(
+        context,
+      ).push(MaterialPageRoute<void>(builder: (_) => const HealthPlusView()));
       return true;
     case 'business':
       Navigator.of(context).push(
@@ -133,10 +135,12 @@ bool openSenderNotificationDestination(
       return true;
     case 'conversation':
       final chatId = _firstText([destination['chatId']]);
-      Navigator.of(context).push(MaterialPageRoute<void>(
-        builder: (_) =>
-            RideChatPageView(chatId: chatId.isEmpty ? null : chatId),
-      ));
+      Navigator.of(context).push(
+        MaterialPageRoute<void>(
+          builder: (_) =>
+              RideChatPageView(chatId: chatId.isEmpty ? null : chatId),
+        ),
+      );
       return true;
     case 'tracking':
       Navigator.of(context).push(
@@ -174,15 +178,14 @@ String _firstText(Iterable<Object?> values) {
 }
 
 String _routeForNotificationType(String type) => switch (type) {
-      'payment' || 'wallet' => 'wallet',
-      'message' || 'chat_message' => 'conversation',
-      'connection' ||
-      'location-broadcast' ||
-      'delivery-completed' ||
-      'delivery' =>
-        'tracking',
-      'gift' || 'gifts' => 'gift',
-      'health' || 'health_plus' => 'health',
-      'business' => 'business',
-      _ => 'notifications',
-    };
+  'payment' || 'wallet' => 'wallet',
+  'message' || 'chat_message' => 'conversation',
+  'connection' ||
+  'location-broadcast' ||
+  'delivery-completed' ||
+  'delivery' => 'tracking',
+  'gift' || 'gifts' => 'gift',
+  'health' || 'health_plus' => 'health',
+  'business' => 'business',
+  _ => 'notifications',
+};

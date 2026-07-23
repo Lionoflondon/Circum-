@@ -91,8 +91,10 @@ class _SenderMobileHomeState extends State<SenderMobileHome> {
   @override
   void initState() {
     super.initState();
-    _index = widget.initialIndex
-        .clamp(0, senderMobileBottomNavigationLabels.length - 1);
+    _index = widget.initialIndex.clamp(
+      0,
+      senderMobileBottomNavigationLabels.length - 1,
+    );
     _entry = widget.initialAuthenticated
         ? _SenderEntryScreen.app
         : _SenderEntryScreen.landing;
@@ -128,10 +130,7 @@ class _SenderMobileHomeState extends State<SenderMobileHome> {
         ],
       ),
       bottomNavigationBar: !_authRestoring && _entry == _SenderEntryScreen.app
-          ? _SenderBottomNav(
-              index: _index,
-              onChanged: _selectTab,
-            )
+          ? _SenderBottomNav(index: _index, onChanged: _selectTab)
           : null,
     );
     final providedSurface = BlocProvider<SendPackageBloc>.value(
@@ -250,13 +249,13 @@ class _SenderMobileHomeState extends State<SenderMobileHome> {
           Navigator.of(context).push(
             MaterialPageRoute<void>(
               builder: (_) => GiftStoryView(
-                draft:
-                    GiftJourneyDraft.forMode(SenderGiftMode.someone).copyWith(
-                  linkedGiftDeliveryStatus: 'delivered',
-                  riderCompletionAccepted: true,
-                  deliveryVerificationCompleted: true,
-                  deliveryAuditSuccessful: true,
-                ),
+                draft: GiftJourneyDraft.forMode(SenderGiftMode.someone)
+                    .copyWith(
+                      linkedGiftDeliveryStatus: 'delivered',
+                      riderCompletionAccepted: true,
+                      deliveryVerificationCompleted: true,
+                      deliveryAuditSuccessful: true,
+                    ),
               ),
               settings: const RouteSettings(name: GiftStoryView.routeName),
             ),
@@ -277,18 +276,18 @@ class _SenderMobileHomeState extends State<SenderMobileHome> {
   }
 
   Future<void> _openNotificationCentre() => Navigator.of(context).push(
-        MaterialPageRoute<void>(
-          builder: (_) => SenderNotificationsView(
-            onOpenNotification: (notification) {
-              openSenderNotificationDestination(
-                context,
-                notification.destination,
-                onOpenWallet: () => _selectTab(3),
-              );
-            },
-          ),
-        ),
-      );
+    MaterialPageRoute<void>(
+      builder: (_) => SenderNotificationsView(
+        onOpenNotification: (notification) {
+          openSenderNotificationDestination(
+            context,
+            notification.destination,
+            onOpenWallet: () => _selectTab(3),
+          );
+        },
+      ),
+    ),
+  );
 
   Future<void> _restoreAuthenticatedSenderSession() async {
     if (!widget.previewAuthEnabled) return;
@@ -297,27 +296,29 @@ class _SenderMobileHomeState extends State<SenderMobileHome> {
       if (kIsWeb) {
         await FirebaseAuth.instance.setPersistence(Persistence.LOCAL);
       }
-      _authSubscription =
-          FirebaseAuth.instance.authStateChanges().listen((user) {
-        if (!mounted) return;
-        setState(() {
-          _authRestoring = false;
-          _entry = user == null
-              ? _SenderEntryScreen.landing
-              : _SenderEntryScreen.app;
-        });
-      }, onError: (Object error, StackTrace stackTrace) {
-        _reportUnexpectedAuthRestoreError(
-          error,
-          stackTrace,
-          'restoring Sender session',
-        );
-        if (!mounted) return;
-        setState(() {
-          _authRestoring = false;
-          _entry = _SenderEntryScreen.landing;
-        });
-      });
+      _authSubscription = FirebaseAuth.instance.authStateChanges().listen(
+        (user) {
+          if (!mounted) return;
+          setState(() {
+            _authRestoring = false;
+            _entry = user == null
+                ? _SenderEntryScreen.landing
+                : _SenderEntryScreen.app;
+          });
+        },
+        onError: (Object error, StackTrace stackTrace) {
+          _reportUnexpectedAuthRestoreError(
+            error,
+            stackTrace,
+            'restoring Sender session',
+          );
+          if (!mounted) return;
+          setState(() {
+            _authRestoring = false;
+            _entry = _SenderEntryScreen.landing;
+          });
+        },
+      );
     } catch (error, stackTrace) {
       _reportUnexpectedAuthRestoreError(
         error,
@@ -341,12 +342,14 @@ class _SenderMobileHomeState extends State<SenderMobileHome> {
       debugPrint('Sender auth restore recovered: $error');
       return;
     }
-    FlutterError.reportError(FlutterErrorDetails(
-      exception: error,
-      stack: stackTrace,
-      library: 'sender auth',
-      context: ErrorDescription(context),
-    ));
+    FlutterError.reportError(
+      FlutterErrorDetails(
+        exception: error,
+        stack: stackTrace,
+        library: 'sender auth',
+        context: ErrorDescription(context),
+      ),
+    );
   }
 
   bool _isExpectedAuthRestoreFailure(Object error) {
@@ -581,10 +584,10 @@ class _SenderAuthEntryState extends State<_SenderAuthEntry> {
     final identityError = !_showErrors
         ? null
         : identityText.isEmpty
-            ? 'Email or phone is required'
-            : widget.previewAuthEnabled && !identityText.contains('@')
-                ? 'Use an email address for preview auth'
-                : null;
+        ? 'Email or phone is required'
+        : widget.previewAuthEnabled && !identityText.contains('@')
+        ? 'Use an email address for preview auth'
+        : null;
     return Stack(
       children: [
         const _AmbientOrbs(count: 1),
@@ -659,8 +662,8 @@ class _SenderAuthEntryState extends State<_SenderAuthEntry> {
               label: _busy
                   ? 'Preparing preview...'
                   : _isSignIn
-                      ? 'Sign in'
-                      : 'Create account',
+                  ? 'Sign in'
+                  : 'Create account',
               semanticLabel: _isSignIn ? 'Sign in' : 'Create account',
               onTap: _busy ? () {} : () => _submit(),
             ),
@@ -768,15 +771,9 @@ class _SenderAuthEntryState extends State<_SenderAuthEntry> {
     if (user == null) {
       throw FirebaseAuthException(code: 'preview-no-user');
     }
-    await FirebaseFirestore.instance.collection('users').doc(user.uid).set({
-      'email': user.email,
-      'role': 'user',
-      'roles': ['sender'],
-      'userType': 'sender',
-      'status': 'active',
-      'source': 'sender_mobile_preview',
-      'updatedAt': FieldValue.serverTimestamp(),
-    }, SetOptions(merge: true));
+    await FirebaseFunctions.instanceFor(
+      region: 'us-central1',
+    ).httpsCallable('ensureSenderAccount').call();
     await user.getIdToken(true);
   }
 
@@ -1628,10 +1625,7 @@ class SenderHomeOrder {
     this.scheduledAt,
   });
 
-  factory SenderHomeOrder.fromFirestore(
-    String id,
-    Map<String, dynamic> data,
-  ) {
+  factory SenderHomeOrder.fromFirestore(String id, Map<String, dynamic> data) {
     final pickup = Map<String, dynamic>.from(
       data['pickupDetails'] as Map? ?? data['pickup'] as Map? ?? const {},
     );
@@ -1642,7 +1636,8 @@ class SenderHomeOrder {
       data['parcel'] as Map? ?? data['package'] as Map? ?? const {},
     );
     final rawDate = data['updatedAt'] ?? data['createdAt'];
-    final scheduleDate = data['scheduledAt'] ??
+    final scheduleDate =
+        data['scheduledAt'] ??
         data['scheduledFor'] ??
         data['deliveryDate'] ??
         data['pickupDate'];
@@ -1667,9 +1662,10 @@ class SenderHomeOrder {
         data['packageDescription'],
         'Delivery',
       ]),
-      route: [pickupLabel, dropoffLabel]
-          .where((value) => value.isNotEmpty)
-          .join(' → '),
+      route: [
+        pickupLabel,
+        dropoffLabel,
+      ].where((value) => value.isNotEmpty).join(' → '),
       status: _statusLabel(rawStatus),
       rawStatus: rawStatus.trim().toLowerCase(),
       updatedAt: rawDate is Timestamp ? rawDate.toDate() : null,
@@ -1772,9 +1768,9 @@ class FirebaseSenderHomeRepository implements SenderHomeRepository {
     FirebaseAuth? auth,
     FirebaseFirestore? firestore,
     FirebaseFunctions? functions,
-  })  : auth = auth ?? FirebaseAuth.instance,
-        firestore = firestore ?? FirebaseFirestore.instance,
-        functions = functions ?? FirebaseFunctions.instance;
+  }) : auth = auth ?? FirebaseAuth.instance,
+       firestore = firestore ?? FirebaseFirestore.instance,
+       functions = functions ?? FirebaseFunctions.instance;
 
   User? get _maybeUser => auth.currentUser;
 
@@ -1823,9 +1819,9 @@ class FirebaseSenderHomeRepository implements SenderHomeRepository {
     final teamBusinesses = teamSnapshot.docs.map((doc) => doc.id).toSet();
     final trustPoints =
         ((profile['senderTrustPoints'] ?? profile['trustPoints']) as num?)
-                ?.toInt() ??
-            (profile['trustScore'] as num?)?.toInt() ??
-            0;
+            ?.toInt() ??
+        (profile['trustScore'] as num?)?.toInt() ??
+        0;
     final trustTier = SenderTrustPolicy.normalizeTier(
       profile['senderTier'] ?? profile['trustTier'],
       points: trustPoints,
@@ -1837,13 +1833,16 @@ class FirebaseSenderHomeRepository implements SenderHomeRepository {
     return SenderHomeSummary(
       displayName: '${profile['displayName'] ?? user.displayName ?? ''}'.trim(),
       healthProfileExists: healthSnapshot.exists,
-      businessAccountCount:
-          <String>{...ownedBusinesses, ...teamBusinesses}.length,
+      businessAccountCount: <String>{
+        ...ownedBusinesses,
+        ...teamBusinesses,
+      }.length,
       giftCount: giftsSnapshot.docs.length,
       trustPoints: trustPoints,
       trustTier: trustTier,
       nextTrustTier: nextTier,
-      pointsToNextTier: (profile['pointsToNextTier'] as num?)?.toInt() ??
+      pointsToNextTier:
+          (profile['pointsToNextTier'] as num?)?.toInt() ??
           SenderTrustPolicy.pointsForNextTier(trustPoints),
     );
   }
@@ -1859,13 +1858,16 @@ class FirebaseSenderHomeRepository implements SenderHomeRepository {
         .limit(20)
         .snapshots()
         .map((snapshot) {
-      final orders = snapshot.docs
-          .map((doc) => SenderHomeOrder.fromFirestore(doc.id, doc.data()))
-          .toList();
-      orders.sort((a, b) => (b.updatedAt ?? DateTime(1970))
-          .compareTo(a.updatedAt ?? DateTime(1970)));
-      return orders.take(2).toList(growable: false);
-    });
+          final orders = snapshot.docs
+              .map((doc) => SenderHomeOrder.fromFirestore(doc.id, doc.data()))
+              .toList();
+          orders.sort(
+            (a, b) => (b.updatedAt ?? DateTime(1970)).compareTo(
+              a.updatedAt ?? DateTime(1970),
+            ),
+          );
+          return orders.take(2).toList(growable: false);
+        });
   }
 
   @override
@@ -1879,36 +1881,41 @@ class FirebaseSenderHomeRepository implements SenderHomeRepository {
         .limit(50)
         .snapshots()
         .map((snapshot) {
-      final items = snapshot.docs.map((doc) {
-        final data = doc.data();
-        final rawDate = data['createdAt'];
-        final nested = data['data'] is Map
-            ? Map<String, dynamic>.from(data['data'] as Map)
-            : const <String, dynamic>{};
-        final rawDestination = data['destination'] ?? nested['destination'];
-        return SenderHomeNotification(
-          id: doc.id,
-          title: '${data['title'] ?? 'Circum update'}'.trim(),
-          body: '${data['body'] ?? data['message'] ?? ''}'.trim(),
-          read: data['read'] == true,
-          type: '${data['type'] ?? ''}'.trim(),
-          destination: rawDestination is Map
-              ? Map<String, dynamic>.from(rawDestination)
-              : const <String, dynamic>{},
-          createdAt: rawDate is Timestamp ? rawDate.toDate() : null,
-        );
-      }).toList();
-      items.sort((a, b) => (b.createdAt ?? DateTime(1970))
-          .compareTo(a.createdAt ?? DateTime(1970)));
-      return items;
-    });
+          final items = snapshot.docs.map((doc) {
+            final data = doc.data();
+            final rawDate = data['createdAt'];
+            final nested = data['data'] is Map
+                ? Map<String, dynamic>.from(data['data'] as Map)
+                : const <String, dynamic>{};
+            final rawDestination = data['destination'] ?? nested['destination'];
+            return SenderHomeNotification(
+              id: doc.id,
+              title: '${data['title'] ?? 'Circum update'}'.trim(),
+              body: '${data['body'] ?? data['message'] ?? ''}'.trim(),
+              read: data['read'] == true,
+              type: '${data['type'] ?? ''}'.trim(),
+              destination: rawDestination is Map
+                  ? Map<String, dynamic>.from(rawDestination)
+                  : const <String, dynamic>{},
+              createdAt: rawDate is Timestamp ? rawDate.toDate() : null,
+            );
+          }).toList();
+          items.sort(
+            (a, b) => (b.createdAt ?? DateTime(1970)).compareTo(
+              a.createdAt ?? DateTime(1970),
+            ),
+          );
+          return items;
+        });
   }
 
   @override
   Future<void> markNotificationsRead(Iterable<String> ids) async {
     if (_maybeUser == null) return;
-    final cleanIds =
-        ids.map((id) => id.trim()).where((id) => id.isNotEmpty).toList();
+    final cleanIds = ids
+        .map((id) => id.trim())
+        .where((id) => id.isNotEmpty)
+        .toList();
     if (cleanIds.isEmpty) return;
     await functions.httpsCallable('updateSenderNotificationState').call({
       'action': 'mark_read',
@@ -1970,37 +1977,46 @@ class _CanonicalSenderHomeState extends State<_CanonicalSenderHome> {
       _ordersError = null;
       _notificationsError = null;
     });
-    _repository.loadSummary().then((summary) {
-      if (mounted) setState(() => _summary = summary);
-    }).catchError((Object error) {
-      if (mounted) setState(() => _summaryError = '$error');
-    });
+    _repository
+        .loadSummary()
+        .then((summary) {
+          if (mounted) setState(() => _summary = summary);
+        })
+        .catchError((Object error) {
+          if (mounted) setState(() => _summaryError = '$error');
+        });
     _ordersSubscription?.cancel();
-    _ordersSubscription = _repository.watchRecentOrders().listen((orders) {
-      if (mounted) setState(() => _orders = orders);
-    }, onError: (Object error) {
-      if (mounted) setState(() => _ordersError = '$error');
-    });
+    _ordersSubscription = _repository.watchRecentOrders().listen(
+      (orders) {
+        if (mounted) setState(() => _orders = orders);
+      },
+      onError: (Object error) {
+        if (mounted) setState(() => _ordersError = '$error');
+      },
+    );
     _notificationsSubscription?.cancel();
-    _notificationsSubscription =
-        _repository.watchNotifications().listen((notifications) {
-      if (!mounted) return;
-      final previous = _knownNotificationIds;
-      _knownNotificationIds = notifications.map((item) => item.id).toSet();
-      setState(() => _notifications = notifications);
-      if (previous != null) {
-        final fresh = notifications.where(
-          (item) => !item.read && !previous.contains(item.id),
-        );
-        if (fresh.isNotEmpty) {
-          final item = fresh.first;
-          SenderAccessibilityScope.maybeOf(context)
-              ?.announceNotification('${item.title}. ${item.body}');
+    _notificationsSubscription = _repository.watchNotifications().listen(
+      (notifications) {
+        if (!mounted) return;
+        final previous = _knownNotificationIds;
+        _knownNotificationIds = notifications.map((item) => item.id).toSet();
+        setState(() => _notifications = notifications);
+        if (previous != null) {
+          final fresh = notifications.where(
+            (item) => !item.read && !previous.contains(item.id),
+          );
+          if (fresh.isNotEmpty) {
+            final item = fresh.first;
+            SenderAccessibilityScope.maybeOf(
+              context,
+            )?.announceNotification('${item.title}. ${item.body}');
+          }
         }
-      }
-    }, onError: (Object error) {
-      if (mounted) setState(() => _notificationsError = '$error');
-    });
+      },
+      onError: (Object error) {
+        if (mounted) setState(() => _notificationsError = '$error');
+      },
+    );
   }
 
   @override
@@ -2053,11 +2069,15 @@ class _CanonicalSenderHomeState extends State<_CanonicalSenderHome> {
   }
 
   SenderHomeOrder? get _scheduledDraft {
-    final scheduled = _qualifyingOrders
-        .where((order) => order.rawStatus == 'scheduled')
-        .toList()
-      ..sort((a, b) => (a.scheduledAt ?? DateTime(9999))
-          .compareTo(b.scheduledAt ?? DateTime(9999)));
+    final scheduled =
+        _qualifyingOrders
+            .where((order) => order.rawStatus == 'scheduled')
+            .toList()
+          ..sort(
+            (a, b) => (a.scheduledAt ?? DateTime(9999)).compareTo(
+              b.scheduledAt ?? DateTime(9999),
+            ),
+          );
     return scheduled.isEmpty ? null : scheduled.first;
   }
 
@@ -2094,29 +2114,25 @@ class _CanonicalSenderHomeState extends State<_CanonicalSenderHome> {
     final heroTitle = activeDelivery != null
         ? activeDelivery.status
         : scheduledDraft != null
-            ? 'Continue ${scheduledDraft.title}'
-            : 'Send a parcel';
+        ? 'Continue ${scheduledDraft.title}'
+        : 'Send a parcel';
     final heroBody = activeDelivery != null
         ? activeDelivery.route
         : scheduledDraft != null
-            ? scheduledDraft.route
-            : 'Fast, trusted delivery powered by IRIS and verified riders.';
+        ? scheduledDraft.route
+        : 'Fast, trusted delivery powered by IRIS and verified riders.';
     final heroButton = activeDelivery != null
         ? 'Track delivery'
         : scheduledDraft != null
-            ? 'Continue'
-            : 'Send now';
+        ? 'Continue'
+        : 'Send now';
     return Container(
       key: const Key('sender-home-canonical-content'),
       decoration: const BoxDecoration(
         gradient: RadialGradient(
           center: Alignment(-.72, -.92),
           radius: 1.25,
-          colors: [
-            Color(0x332E7DF7),
-            Color(0x220B1D42),
-            _SenderTokens.bg,
-          ],
+          colors: [Color(0x332E7DF7), Color(0x220B1D42), _SenderTokens.bg],
           stops: [0, .42, 1],
         ),
       ),
@@ -2156,8 +2172,8 @@ class _CanonicalSenderHomeState extends State<_CanonicalSenderHome> {
                         onPrimaryTap: activeDelivery != null
                             ? widget.onOpenActivity
                             : scheduledDraft != null
-                                ? widget.onStartDelivery
-                                : widget.onStartDelivery,
+                            ? widget.onStartDelivery
+                            : widget.onStartDelivery,
                       ),
                       if (activeDelivery != null) ...[
                         const SizedBox(height: 18),
@@ -2176,8 +2192,8 @@ class _CanonicalSenderHomeState extends State<_CanonicalSenderHome> {
                             status: _summaryError != null
                                 ? 'Unable to refresh'
                                 : _summary?.healthProfileExists == true
-                                    ? 'Profile ready'
-                                    : 'Ready',
+                                ? 'Profile ready'
+                                : 'Ready',
                             description:
                                 'Medicine, testing and Health+ deliveries.',
                             icon: Icons.medical_services_outlined,
@@ -2189,8 +2205,8 @@ class _CanonicalSenderHomeState extends State<_CanonicalSenderHome> {
                             status: _summaryError != null
                                 ? 'Unable to refresh'
                                 : (_summary?.businessAccountCount ?? 0) > 0
-                                    ? '${_summary!.businessAccountCount} account'
-                                    : 'No account yet',
+                                ? '${_summary!.businessAccountCount} account'
+                                : 'No account yet',
                             description: 'Manage deliveries and invoices.',
                             icon: Icons.business_center_outlined,
                             accent: _SenderTokens.business,
@@ -2201,8 +2217,8 @@ class _CanonicalSenderHomeState extends State<_CanonicalSenderHome> {
                             status: _summaryError != null
                                 ? 'Unable to refresh'
                                 : (_summary?.giftCount ?? 0) > 0
-                                    ? '${_summary!.giftCount} gift'
-                                    : 'Start gifting',
+                                ? '${_summary!.giftCount} gift'
+                                : 'Start gifting',
                             description:
                                 'Thoughtful gifting powered by Circum.',
                             icon: Icons.card_giftcard_rounded,
@@ -2225,7 +2241,8 @@ class _CanonicalSenderHomeState extends State<_CanonicalSenderHome> {
                       const SizedBox(height: 20),
                       _RebuiltSenderNotificationStrip(
                         notifications: _importantUnreadNotifications,
-                        loading: _notifications == null &&
+                        loading:
+                            _notifications == null &&
                             _notificationsError == null,
                         hasError: _notificationsError != null,
                         onOpenNotifications: widget.onOpenNotifications,
@@ -2390,8 +2407,8 @@ class _RebuiltSenderHomeHero extends StatelessWidget {
                         loading
                             ? 'Checking your deliveries'
                             : activeDelivery
-                                ? 'Live delivery'
-                                : 'Ready when you are',
+                            ? 'Live delivery'
+                            : 'Ready when you are',
                         style: const TextStyle(
                           color: Color(0xFFD5E8FF),
                           fontSize: 14,
@@ -2777,8 +2794,10 @@ class _RebuiltSenderRecentActivity extends StatelessWidget {
             const Expanded(
               child: Text(
                 'Activity is taking longer than usual.',
-                style:
-                    TextStyle(color: Colors.white, fontWeight: FontWeight.w800),
+                style: TextStyle(
+                  color: Colors.white,
+                  fontWeight: FontWeight.w800,
+                ),
               ),
             ),
             TextButton(onPressed: onRetry, child: const Text('Retry')),
@@ -2790,8 +2809,10 @@ class _RebuiltSenderRecentActivity extends StatelessWidget {
       return const _RebuiltSenderPanel(
         child: Text(
           'Loading recent activity...',
-          style:
-              TextStyle(color: Color(0xFFB8C6DD), fontWeight: FontWeight.w700),
+          style: TextStyle(
+            color: Color(0xFFB8C6DD),
+            fontWeight: FontWeight.w700,
+          ),
         ),
       );
     }
@@ -2920,8 +2941,10 @@ class _RebuiltSenderNotificationStrip extends StatelessWidget {
       onTap: onOpenNotifications,
       child: Row(
         children: [
-          const Icon(Icons.notifications_active_outlined,
-              color: Color(0xFF7AB8FF)),
+          const Icon(
+            Icons.notifications_active_outlined,
+            color: Color(0xFF7AB8FF),
+          ),
           const SizedBox(width: 12),
           Expanded(
             child: Column(
@@ -3003,10 +3026,7 @@ class _RebuiltSenderPanelState extends State<_RebuiltSenderPanel> {
           child: InkWell(
             borderRadius: BorderRadius.circular(24),
             onTap: widget.onTap,
-            child: Padding(
-              padding: widget.padding,
-              child: widget.child,
-            ),
+            child: Padding(padding: widget.padding, child: widget.child),
           ),
         ),
       ),
@@ -3060,37 +3080,46 @@ class _SenderDashboardState extends State<_SenderDashboard> {
       _ordersError = null;
       _notificationsError = null;
     });
-    _repository.loadSummary().then((summary) {
-      if (mounted) setState(() => _summary = summary);
-    }).catchError((Object error) {
-      if (mounted) setState(() => _summaryError = '$error');
-    });
+    _repository
+        .loadSummary()
+        .then((summary) {
+          if (mounted) setState(() => _summary = summary);
+        })
+        .catchError((Object error) {
+          if (mounted) setState(() => _summaryError = '$error');
+        });
     _ordersSubscription?.cancel();
-    _ordersSubscription = _repository.watchRecentOrders().listen((orders) {
-      if (mounted) setState(() => _orders = orders);
-    }, onError: (Object error) {
-      if (mounted) setState(() => _ordersError = '$error');
-    });
+    _ordersSubscription = _repository.watchRecentOrders().listen(
+      (orders) {
+        if (mounted) setState(() => _orders = orders);
+      },
+      onError: (Object error) {
+        if (mounted) setState(() => _ordersError = '$error');
+      },
+    );
     _notificationsSubscription?.cancel();
-    _notificationsSubscription =
-        _repository.watchNotifications().listen((notifications) {
-      if (!mounted) return;
-      final previous = _knownNotificationIds;
-      _knownNotificationIds = notifications.map((item) => item.id).toSet();
-      setState(() => _notifications = notifications);
-      if (previous != null) {
-        final fresh = notifications.where(
-          (item) => !item.read && !previous.contains(item.id),
-        );
-        if (fresh.isNotEmpty) {
-          final item = fresh.first;
-          SenderAccessibilityScope.maybeOf(context)
-              ?.announceNotification('${item.title}. ${item.body}');
+    _notificationsSubscription = _repository.watchNotifications().listen(
+      (notifications) {
+        if (!mounted) return;
+        final previous = _knownNotificationIds;
+        _knownNotificationIds = notifications.map((item) => item.id).toSet();
+        setState(() => _notifications = notifications);
+        if (previous != null) {
+          final fresh = notifications.where(
+            (item) => !item.read && !previous.contains(item.id),
+          );
+          if (fresh.isNotEmpty) {
+            final item = fresh.first;
+            SenderAccessibilityScope.maybeOf(
+              context,
+            )?.announceNotification('${item.title}. ${item.body}');
+          }
         }
-      }
-    }, onError: (Object error) {
-      if (mounted) setState(() => _notificationsError = '$error');
-    });
+      },
+      onError: (Object error) {
+        if (mounted) setState(() => _notificationsError = '$error');
+      },
+    );
   }
 
   @override
@@ -3145,11 +3174,15 @@ class _SenderDashboardState extends State<_SenderDashboard> {
     if (active.isNotEmpty) {
       return '${active.length} active deliver${active.length == 1 ? 'y' : 'ies'}';
     }
-    final scheduled = _dashboardOrders
-        .where((order) => order.rawStatus == 'scheduled')
-        .toList()
-      ..sort((a, b) => (a.scheduledAt ?? DateTime(9999))
-          .compareTo(b.scheduledAt ?? DateTime(9999)));
+    final scheduled =
+        _dashboardOrders
+            .where((order) => order.rawStatus == 'scheduled')
+            .toList()
+          ..sort(
+            (a, b) => (a.scheduledAt ?? DateTime(9999)).compareTo(
+              b.scheduledAt ?? DateTime(9999),
+            ),
+          );
     if (scheduled.isNotEmpty && scheduled.first.scheduledAt != null) {
       final date = scheduled.first.scheduledAt!;
       final tomorrow = DateTime.now().add(const Duration(days: 1));
@@ -3167,22 +3200,24 @@ class _SenderDashboardState extends State<_SenderDashboard> {
 
   SenderHomeNotification? get _unreadChatNotification {
     final activeIds = _dashboardOrders
-        .where((order) => const {
-              'requested',
-              'broadcasting',
-              'finding_rider',
-              'accepted',
-              'rider_assigned',
-              'rider_en_route',
-              'navigating_to_pickup',
-              'arrived_at_pickup',
-              'pickup_verified',
-              'collected',
-              'in_transit',
-              'navigating_to_dropoff',
-              'arrived_at_dropoff',
-              'pin_required',
-            }.contains(order.rawStatus))
+        .where(
+          (order) => const {
+            'requested',
+            'broadcasting',
+            'finding_rider',
+            'accepted',
+            'rider_assigned',
+            'rider_en_route',
+            'navigating_to_pickup',
+            'arrived_at_pickup',
+            'pickup_verified',
+            'collected',
+            'in_transit',
+            'navigating_to_dropoff',
+            'arrived_at_dropoff',
+            'pin_required',
+          }.contains(order.rawStatus),
+        )
         .map((order) => order.id)
         .toSet();
     for (final notification in _notifications ?? const []) {
@@ -3221,12 +3256,12 @@ class _SenderDashboardState extends State<_SenderDashboard> {
   }
 
   Future<void> _openNotifications() => Navigator.of(context).push(
-        MaterialPageRoute<void>(
-          builder: (_) => SenderNotificationsView(
-            onOpenNotification: _openNotificationDestination,
-          ),
-        ),
-      );
+    MaterialPageRoute<void>(
+      builder: (_) => SenderNotificationsView(
+        onOpenNotification: _openNotificationDestination,
+      ),
+    ),
+  );
 
   void _openNotificationDestination(CircumNotification notification) {
     openSenderNotificationDestination(
@@ -3261,7 +3296,8 @@ class _SenderDashboardState extends State<_SenderDashboard> {
             ),
             const SizedBox(width: 10),
             _SenderAvatar(
-                imageUrl: FirebaseAuth.instance.currentUser?.photoURL),
+              imageUrl: FirebaseAuth.instance.currentUser?.photoURL,
+            ),
           ],
         ),
         const SizedBox(height: 22),
@@ -3289,10 +3325,12 @@ class _SenderDashboardState extends State<_SenderDashboard> {
               final chatId =
                   '${_unreadChatNotification!.destination['chatId'] ?? ''}'
                       .trim();
-              Navigator.of(context).push(MaterialPageRoute<void>(
-                builder: (_) =>
-                    RideChatPageView(chatId: chatId.isEmpty ? null : chatId),
-              ));
+              Navigator.of(context).push(
+                MaterialPageRoute<void>(
+                  builder: (_) =>
+                      RideChatPageView(chatId: chatId.isEmpty ? null : chatId),
+                ),
+              );
             },
           ),
         ],
@@ -3373,7 +3411,7 @@ class _HomeNotificationBellState extends State<_HomeNotificationBell>
   Widget build(BuildContext context) {
     final reduceMotion =
         SenderAccessibilityScope.maybeOf(context)?.settings.reduceMotion ??
-            false;
+        false;
     final showDot = widget.unreadCount > 0 && !widget.hasError;
     final icon = _IconGlassButton(
       icon: Icons.notifications_none_rounded,
@@ -3427,25 +3465,33 @@ class _ActiveConversationCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => _GlassCard(
-        padding: const EdgeInsets.all(14),
-        child: Row(children: [
-          Container(
-            width: 42,
-            height: 42,
-            decoration: BoxDecoration(
-              color: _SenderTokens.blue.withValues(alpha: .16),
-              borderRadius: BorderRadius.circular(14),
-            ),
-            child: const Icon(Icons.forum_outlined,
-                color: _SenderTokens.lightBlue),
+    padding: const EdgeInsets.all(14),
+    child: Row(
+      children: [
+        Container(
+          width: 42,
+          height: 42,
+          decoration: BoxDecoration(
+            color: _SenderTokens.blue.withValues(alpha: .16),
+            borderRadius: BorderRadius.circular(14),
           ),
-          const SizedBox(width: 12),
-          Expanded(
-            child:
-                Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              const Text('Active conversation',
-                  style: TextStyle(
-                      color: Colors.white, fontWeight: FontWeight.w900)),
+          child: const Icon(
+            Icons.forum_outlined,
+            color: _SenderTokens.lightBlue,
+          ),
+        ),
+        const SizedBox(width: 12),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text(
+                'Active conversation',
+                style: TextStyle(
+                  color: Colors.white,
+                  fontWeight: FontWeight.w900,
+                ),
+              ),
               const SizedBox(height: 3),
               Text(
                 notification.body.isEmpty
@@ -3453,14 +3499,18 @@ class _ActiveConversationCard extends StatelessWidget {
                     : notification.body,
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
-                style:
-                    const TextStyle(color: _SenderTokens.muted, fontSize: 12),
+                style: const TextStyle(
+                  color: _SenderTokens.muted,
+                  fontSize: 12,
+                ),
               ),
-            ]),
+            ],
           ),
-          TextButton(onPressed: onTap, child: const Text('Open Chat')),
-        ]),
-      );
+        ),
+        TextButton(onPressed: onTap, child: const Text('Open Chat')),
+      ],
+    ),
+  );
 }
 
 class _HeroSendCard extends StatelessWidget {
@@ -3528,8 +3578,8 @@ class _HeroSendCard extends StatelessWidget {
                         hasError
                             ? 'Orders unavailable'
                             : orderCount == null
-                                ? 'Loading orders'
-                                : '$orderCount recent',
+                            ? 'Loading orders'
+                            : '$orderCount recent',
                         style: const TextStyle(
                           color: Colors.white,
                           fontWeight: FontWeight.w900,
@@ -3713,8 +3763,8 @@ class _YourCircumHub extends StatelessWidget {
                 subtitle: hasError
                     ? 'Unavailable right now'
                     : summary == null
-                        ? 'Loading…'
-                        : _giftSummaryLabel(summary!.giftCount),
+                    ? 'Loading…'
+                    : _giftSummaryLabel(summary!.giftCount),
                 icon: Icons.card_giftcard_rounded,
                 accent: _SenderTokens.gifts,
                 onTap: onOpenGifts,
@@ -4001,23 +4051,20 @@ class _HomeInlineState extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Padding(
-        padding: const EdgeInsets.symmetric(vertical: 10),
-        child: Row(
-          children: [
-            Expanded(
-              child: Text(
-                message,
-                style: const TextStyle(
-                  color: _SenderTokens.muted,
-                  height: 1.4,
-                ),
-              ),
-            ),
-            if (action != null)
-              TextButton(onPressed: action, child: Text(actionLabel)),
-          ],
+    padding: const EdgeInsets.symmetric(vertical: 10),
+    child: Row(
+      children: [
+        Expanded(
+          child: Text(
+            message,
+            style: const TextStyle(color: _SenderTokens.muted, height: 1.4),
+          ),
         ),
-      );
+        if (action != null)
+          TextButton(onPressed: action, child: Text(actionLabel)),
+      ],
+    ),
+  );
 }
 
 class _OrderLine extends StatelessWidget {
@@ -4320,11 +4367,11 @@ class _GlassCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => AppGlassContainer(
-        padding: padding,
-        radius: radius,
-        accent: AppTokens.primary,
-        child: child,
-      );
+    padding: padding,
+    radius: radius,
+    accent: AppTokens.primary,
+    child: child,
+  );
 }
 
 class _IrisOrb extends StatefulWidget {

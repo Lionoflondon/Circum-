@@ -7,25 +7,28 @@ class ContactInfo {
   final String? moreInformation;
   final String? locality;
 
-  ContactInfo(
-      {this.fullname,
-      required this.address,
-      this.phoneNumber,
-      this.moreInformation,
-      this.locality});
+  ContactInfo({
+    this.fullname,
+    required this.address,
+    this.phoneNumber,
+    this.moreInformation,
+    this.locality,
+  });
 
-  factory ContactInfo.fromJson(
-      {String? fullname,
-      required PlaceCoordinate address,
-      String? phoneNumber,
-      String? moreInformation,
-      String? locality}) {
+  factory ContactInfo.fromJson({
+    String? fullname,
+    required PlaceCoordinate address,
+    String? phoneNumber,
+    String? moreInformation,
+    String? locality,
+  }) {
     return ContactInfo(
-        fullname: fullname,
-        address: address,
-        phoneNumber: phoneNumber,
-        moreInformation: moreInformation,
-        locality: locality);
+      fullname: fullname,
+      address: address,
+      phoneNumber: phoneNumber,
+      moreInformation: moreInformation,
+      locality: locality,
+    );
   }
 
   Map<String, dynamic> toJson() {

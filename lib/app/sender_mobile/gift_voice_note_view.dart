@@ -259,9 +259,9 @@ class _GiftVoiceNoteViewState extends State<GiftVoiceNoteView> {
 
   void _continue(GiftJourneyDraft draft) {
     if (draft.voiceNote == null && _voiceNote?.storagePath != null) {
-      unawaited(_mediaStorage
-          .deleteMedia(_voiceNote?.storagePath)
-          .catchError((_) {}));
+      unawaited(
+        _mediaStorage.deleteMedia(_voiceNote?.storagePath).catchError((_) {}),
+      );
     }
     Navigator.of(context).push(
       MaterialPageRoute<void>(
@@ -332,8 +332,8 @@ class _VoiceNoteCard extends StatelessWidget {
               recording
                   ? Icons.stop_rounded
                   : hasNote
-                      ? Icons.graphic_eq_rounded
-                      : Icons.mic_none_rounded,
+                  ? Icons.graphic_eq_rounded
+                  : Icons.mic_none_rounded,
               color: const Color(0xFF07090F),
               size: 34,
             ),
@@ -343,8 +343,8 @@ class _VoiceNoteCard extends StatelessWidget {
             recording
                 ? 'Recording... ${_format(seconds)}'
                 : hasNote
-                    ? 'Voice note ready · ${_format(voiceNote!.durationSeconds)}'
-                    : 'Record a voice note',
+                ? 'Voice note ready · ${_format(voiceNote!.durationSeconds)}'
+                : 'Record a voice note',
             textAlign: TextAlign.center,
             style: GoogleFonts.inter(
               color: Colors.white,
@@ -358,10 +358,10 @@ class _VoiceNoteCard extends StatelessWidget {
                 (permissionDenied
                     ? 'Microphone access is blocked. Enable it in your browser settings, or skip this step.'
                     : recording
-                        ? 'Maximum length is 60 seconds.'
-                        : hasNote
-                            ? 'Recording saved · ${voiceNote!.durationSeconds}s. You can play it back or re-record.'
-                            : 'Ask for microphone permission, then record a short note.'),
+                    ? 'Maximum length is 60 seconds.'
+                    : hasNote
+                    ? 'Recording saved · ${voiceNote!.durationSeconds}s. You can play it back or re-record.'
+                    : 'Ask for microphone permission, then record a short note.'),
             textAlign: TextAlign.center,
             style: GoogleFonts.inter(
               color: permissionDenied || uploadFailed
@@ -376,7 +376,9 @@ class _VoiceNoteCard extends StatelessWidget {
           if (recording)
             Row(
               children: [
-                Expanded(child: _VoiceButton(label: 'Stop', onTap: onStop)),
+                Expanded(
+                  child: _VoiceButton(label: 'Stop', onTap: onStop),
+                ),
                 const SizedBox(width: 10),
                 Expanded(
                   child: _VoiceButton(label: 'Cancel', onTap: onCancel),
@@ -390,8 +392,9 @@ class _VoiceNoteCard extends StatelessWidget {
               runSpacing: 8,
               children: [
                 _VoiceButton(
-                    label: playing ? 'Pause' : 'Play',
-                    onTap: playing ? onPause : onPlay),
+                  label: playing ? 'Pause' : 'Play',
+                  onTap: playing ? onPause : onPlay,
+                ),
                 _VoiceButton(label: 'Delete', onTap: onDelete),
                 _VoiceButton(label: 'Re-record', onTap: onRerecord),
               ],

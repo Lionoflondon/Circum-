@@ -31,13 +31,15 @@ class AppGlassContainer extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final resolvedBorderColor = borderColor ??
+    final resolvedBorderColor =
+        borderColor ??
         (highContrast ? AppTokens.strongGlassBorder : AppTokens.glassBorder);
     final body = Container(
       constraints: constraints,
       padding: padding,
       decoration: BoxDecoration(
-        color: surfaceColor ??
+        color:
+            surfaceColor ??
             (highContrast ? AppTokens.strongGlass : AppTokens.glass),
         borderRadius: BorderRadius.circular(radius),
         border: Border.all(
@@ -54,10 +56,7 @@ class AppGlassContainer extends StatelessWidget {
             ),
         ],
       ),
-      child: Material(
-        type: MaterialType.transparency,
-        child: child,
-      ),
+      child: Material(type: MaterialType.transparency, child: child),
     );
     return ClipRRect(
       borderRadius: BorderRadius.circular(radius),
@@ -94,11 +93,11 @@ class AppCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => AppGlassContainer(
-        padding: padding,
-        accent: accent,
-        onTap: onTap,
-        child: child,
-      );
+    padding: padding,
+    accent: accent,
+    onTap: onTap,
+    child: child,
+  );
 }
 
 enum AppButtonStyle { primary, secondary, quiet }
@@ -129,14 +128,18 @@ class AppButton extends StatelessWidget {
             children: [
               Icon(icon, size: 18),
               const SizedBox(width: 8),
-              Text(label)
+              Text(label),
             ],
           );
     final button = switch (style) {
-      AppButtonStyle.primary =>
-        FilledButton(onPressed: onPressed, child: child),
-      AppButtonStyle.secondary =>
-        OutlinedButton(onPressed: onPressed, child: child),
+      AppButtonStyle.primary => FilledButton(
+        onPressed: onPressed,
+        child: child,
+      ),
+      AppButtonStyle.secondary => OutlinedButton(
+        onPressed: onPressed,
+        child: child,
+      ),
       AppButtonStyle.quiet => TextButton(onPressed: onPressed, child: child),
     };
     return SizedBox(
@@ -165,13 +168,13 @@ class AppToggle extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => SwitchListTile.adaptive(
-        contentPadding: EdgeInsets.zero,
-        value: value,
-        onChanged: onChanged,
-        secondary: icon == null ? null : Icon(icon),
-        title: Text(label),
-        subtitle: detail == null ? null : Text(detail!),
-      );
+    contentPadding: EdgeInsets.zero,
+    value: value,
+    onChanged: onChanged,
+    secondary: icon == null ? null : Icon(icon),
+    title: Text(label),
+    subtitle: detail == null ? null : Text(detail!),
+  );
 }
 
 class AppSection extends StatelessWidget {
@@ -190,27 +193,27 @@ class AppSection extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+    crossAxisAlignment: CrossAxisAlignment.start,
+    children: [
+      Row(
         children: [
-          Row(
-            children: [
-              Expanded(
-                child: Text(
-                  title,
-                  style: GoogleFonts.dmSerifDisplay(
-                    color: AppTokens.text,
-                    fontSize: 22,
-                  ),
-                ),
+          Expanded(
+            child: Text(
+              title,
+              style: GoogleFonts.dmSerifDisplay(
+                color: AppTokens.text,
+                fontSize: 22,
               ),
-              if (actionLabel != null)
-                TextButton(onPressed: onAction, child: Text(actionLabel!)),
-            ],
+            ),
           ),
-          const SizedBox(height: AppTokens.space12),
-          child,
+          if (actionLabel != null)
+            TextButton(onPressed: onAction, child: Text(actionLabel!)),
         ],
-      );
+      ),
+      const SizedBox(height: AppTokens.space12),
+      child,
+    ],
+  );
 }
 
 class AppListTile extends StatelessWidget {
@@ -231,13 +234,13 @@ class AppListTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => ListTile(
-        minVerticalPadding: AppTokens.space8,
-        leading: Icon(icon, color: AppTokens.primaryLight),
-        title: Text(title),
-        subtitle: detail == null ? null : Text(detail!),
-        trailing: trailing ?? const Icon(Icons.chevron_right_rounded),
-        onTap: onTap,
-      );
+    minVerticalPadding: AppTokens.space8,
+    leading: Icon(icon, color: AppTokens.primaryLight),
+    title: Text(title),
+    subtitle: detail == null ? null : Text(detail!),
+    trailing: trailing ?? const Icon(Icons.chevron_right_rounded),
+    onTap: onTap,
+  );
 }
 
 class AppAvatar extends StatelessWidget {
@@ -298,24 +301,24 @@ class AppStatusBadge extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Container(
-        padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
-        decoration: BoxDecoration(
-          color: _color.withValues(alpha: highContrast ? .22 : .12),
-          borderRadius: BorderRadius.circular(999),
-          border: Border.all(
-            color: _color.withValues(alpha: highContrast ? .84 : .32),
-            width: highContrast ? 1.3 : 1,
-          ),
-        ),
-        child: Text(
-          label,
-          style: GoogleFonts.inter(
-            color: highContrast ? Colors.white : _color,
-            fontSize: 11,
-            fontWeight: highContrast ? FontWeight.w700 : FontWeight.w600,
-          ),
-        ),
-      );
+    padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
+    decoration: BoxDecoration(
+      color: _color.withValues(alpha: highContrast ? .22 : .12),
+      borderRadius: BorderRadius.circular(999),
+      border: Border.all(
+        color: _color.withValues(alpha: highContrast ? .84 : .32),
+        width: highContrast ? 1.3 : 1,
+      ),
+    ),
+    child: Text(
+      label,
+      style: GoogleFonts.inter(
+        color: highContrast ? Colors.white : _color,
+        fontSize: 11,
+        fontWeight: highContrast ? FontWeight.w700 : FontWeight.w600,
+      ),
+    ),
+  );
 }
 
 class AppRankBadge extends StatelessWidget {
@@ -323,28 +326,31 @@ class AppRankBadge extends StatelessWidget {
   const AppRankBadge({super.key, required this.rank});
 
   Color get _color => switch (rank.trim().toLowerCase()) {
-        'agent' => const Color(0xFFC7D2E0),
-        'sentinel' => AppTokens.primaryLight,
-        'warden' => const Color(0xFF34D399),
-        'knight' => const Color(0xFFC4B5FD),
-        'veteran' => const Color(0xFFFCD34D),
-        _ => AppTokens.mutedText,
-      };
+    'agent' => const Color(0xFFC7D2E0),
+    'sentinel' => AppTokens.primaryLight,
+    'warden' => const Color(0xFF34D399),
+    'knight' => const Color(0xFFC4B5FD),
+    'veteran' => const Color(0xFFFCD34D),
+    _ => AppTokens.mutedText,
+  };
 
   @override
   Widget build(BuildContext context) => Container(
-        padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
-        decoration: BoxDecoration(
-          color: _color.withValues(alpha: .13),
-          borderRadius: BorderRadius.circular(999),
-          border: Border.all(color: _color.withValues(alpha: .28)),
-        ),
-        child: Text(
-          rank,
-          style: TextStyle(
-              color: _color, fontWeight: FontWeight.w700, fontSize: 11),
-        ),
-      );
+    padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
+    decoration: BoxDecoration(
+      color: _color.withValues(alpha: .13),
+      borderRadius: BorderRadius.circular(999),
+      border: Border.all(color: _color.withValues(alpha: .28)),
+    ),
+    child: Text(
+      rank,
+      style: TextStyle(
+        color: _color,
+        fontWeight: FontWeight.w700,
+        fontSize: 11,
+      ),
+    ),
+  );
 }
 
 class AppEmptyState extends StatelessWidget {
@@ -365,69 +371,82 @@ class AppEmptyState extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Padding(
-        padding: const EdgeInsets.all(AppTokens.space32),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(icon, size: 42, color: AppTokens.primaryLight),
-            const SizedBox(height: AppTokens.space16),
-            Text(title,
-                textAlign: TextAlign.center,
-                style: Theme.of(context).textTheme.titleLarge),
-            const SizedBox(height: AppTokens.space8),
-            Text(body,
-                textAlign: TextAlign.center,
-                style: Theme.of(context).textTheme.bodyMedium),
-            if (actionLabel != null) ...[
-              const SizedBox(height: AppTokens.space20),
-              AppButton(label: actionLabel!, onPressed: onAction),
-            ],
-          ],
+    padding: const EdgeInsets.all(AppTokens.space32),
+    child: Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Icon(icon, size: 42, color: AppTokens.primaryLight),
+        const SizedBox(height: AppTokens.space16),
+        Text(
+          title,
+          textAlign: TextAlign.center,
+          style: Theme.of(context).textTheme.titleLarge,
         ),
-      );
+        const SizedBox(height: AppTokens.space8),
+        Text(
+          body,
+          textAlign: TextAlign.center,
+          style: Theme.of(context).textTheme.bodyMedium,
+        ),
+        if (actionLabel != null) ...[
+          const SizedBox(height: AppTokens.space20),
+          AppButton(label: actionLabel!, onPressed: onAction),
+        ],
+      ],
+    ),
+  );
 }
 
 class AppTimeline extends StatelessWidget {
   final List<Widget> children;
   final Color color;
 
-  const AppTimeline(
-      {super.key, required this.children, this.color = AppTokens.primaryLight});
+  const AppTimeline({
+    super.key,
+    required this.children,
+    this.color = AppTokens.primaryLight,
+  });
 
   @override
   Widget build(BuildContext context) => Column(
-        children: List.generate(children.length, (index) {
-          final last = index == children.length - 1;
-          return IntrinsicHeight(
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                SizedBox(
-                  width: 18,
-                  child: Column(
-                    children: [
-                      Container(
-                        width: 8,
-                        height: 8,
-                        decoration:
-                            BoxDecoration(shape: BoxShape.circle, color: color),
-                      ),
-                      if (!last)
-                        Expanded(
-                            child: Container(
-                                width: 1, color: color.withValues(alpha: .24))),
-                    ],
+    children: List.generate(children.length, (index) {
+      final last = index == children.length - 1;
+      return IntrinsicHeight(
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            SizedBox(
+              width: 18,
+              child: Column(
+                children: [
+                  Container(
+                    width: 8,
+                    height: 8,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      color: color,
+                    ),
                   ),
-                ),
-                const SizedBox(width: AppTokens.space8),
-                Expanded(
-                    child: Padding(
-                        padding:
-                            const EdgeInsets.only(bottom: AppTokens.space12),
-                        child: children[index])),
-              ],
+                  if (!last)
+                    Expanded(
+                      child: Container(
+                        width: 1,
+                        color: color.withValues(alpha: .24),
+                      ),
+                    ),
+                ],
+              ),
             ),
-          );
-        }),
+            const SizedBox(width: AppTokens.space8),
+            Expanded(
+              child: Padding(
+                padding: const EdgeInsets.only(bottom: AppTokens.space12),
+                child: children[index],
+              ),
+            ),
+          ],
+        ),
       );
+    }),
+  );
 }

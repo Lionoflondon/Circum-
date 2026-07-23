@@ -48,10 +48,9 @@ abstract final class AppTokens {
 abstract final class AppTheme {
   static ThemeData dark() {
     final base = ThemeData.dark(useMaterial3: true);
-    final text = GoogleFonts.interTextTheme(base.textTheme).apply(
-      bodyColor: AppTokens.text,
-      displayColor: AppTokens.text,
-    );
+    final text = GoogleFonts.interTextTheme(
+      base.textTheme,
+    ).apply(bodyColor: AppTokens.text, displayColor: AppTokens.text);
     return base.copyWith(
       scaffoldBackgroundColor: AppTokens.background,
       colorScheme: const ColorScheme.dark(

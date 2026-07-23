@@ -15,12 +15,7 @@ class AuthRepository {
   // User Sign in
   // ........................
   Future<bool> signIn({required String email, required String password}) async {
-    try {
-      return true;
-    } catch (e) {
-    }
-    throw Exception("Something went wrong");
-    // SubmissionFailed(Exception());
+    return true;
   }
 
   Future<UserModel> signupWithGoogle(accessToken) async {
@@ -49,9 +44,7 @@ class AuthRepository {
 
   // Request for an OTP while registering
   // ........................
-  Future<bool> requestOTP({
-    required String email,
-  }) async {
+  Future<bool> requestOTP({required String email}) async {
     try {
       return true;
     } catch (e) {

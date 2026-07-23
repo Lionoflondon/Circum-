@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:math' as math;
 
 import 'package:circum/app/iris/iris_learning_bridge.dart';
 import 'package:circum/app/iris/iris_weight_estimator.dart';
@@ -34,8 +35,9 @@ import '../repo/place_api.dart';
 part 'send_package_event.dart';
 part 'send_package_state.dart';
 
-const _googleMapsDirectionsApiKey =
-    String.fromEnvironment('GOOGLE_MAPS_DIRECTIONS_API_KEY');
+const _googleMapsDirectionsApiKey = String.fromEnvironment(
+  'GOOGLE_MAPS_DIRECTIONS_API_KEY',
+);
 
 void _logRecoverableSenderError(
   String context,
@@ -52,9 +54,9 @@ class SendPackageBloc extends Bloc<SendPackageEvent, SendPackageState> {
   FirebaseFirestore db = FirebaseFirestore.instance;
   final FirebaseMessaging firebaseMessaging = FirebaseMessaging.instance;
   StreamSubscription<QuerySnapshot<Map<String, dynamic>>>?
-      _activeDeliverySubscription;
+  _activeDeliverySubscription;
   StreamSubscription<DocumentSnapshot<Map<String, dynamic>>>?
-      _activeDeliveryLiveLocationSubscription;
+  _activeDeliveryLiveLocationSubscription;
   String? _activeDeliveryLiveLocationId;
   SendPackageBloc() : super(SendPackageState()) {
     on<CheckForPushToken>(_handleCheckForPushToken);
@@ -112,28 +114,28 @@ class SendPackageBloc extends Bloc<SendPackageEvent, SendPackageState> {
         .limit(1)
         .snapshots()
         .listen(
-      (snapshot) {
-        if (snapshot.docs.isEmpty) {
-          unawaited(_clearActiveRequestIfCurrent(normalized));
-          add(ActiveDeliverySnapshotChanged(clearedRequestId: normalized));
-          return;
-        }
-        final doc = snapshot.docs.first;
-        _listenToActiveDeliveryLiveLocation(doc.id);
-        add(
-          ActiveDeliverySnapshotChanged(
-            data: {...doc.data(), 'id': doc.id},
-          ),
+          (snapshot) {
+            if (snapshot.docs.isEmpty) {
+              unawaited(_clearActiveRequestIfCurrent(normalized));
+              add(ActiveDeliverySnapshotChanged(clearedRequestId: normalized));
+              return;
+            }
+            final doc = snapshot.docs.first;
+            _listenToActiveDeliveryLiveLocation(doc.id);
+            add(
+              ActiveDeliverySnapshotChanged(
+                data: {...doc.data(), 'id': doc.id},
+              ),
+            );
+          },
+          onError: (Object error) {
+            add(
+              ActiveDeliverySnapshotChanged(
+                errorMessage: 'Unable to load live delivery status.',
+              ),
+            );
+          },
         );
-      },
-      onError: (Object error) {
-        add(
-          ActiveDeliverySnapshotChanged(
-            errorMessage: 'Unable to load live delivery status.',
-          ),
-        );
-      },
-    );
   }
 
   Future<void> _clearActiveRequestIfCurrent(String requestId) async {
@@ -155,8 +157,8 @@ class SendPackageBloc extends Bloc<SendPackageEvent, SendPackageState> {
         .doc(normalized)
         .snapshots()
         .listen((snapshot) {
-      add(ActiveDeliveryLiveLocationChanged(data: snapshot.data()));
-    });
+          add(ActiveDeliveryLiveLocationChanged(data: snapshot.data()));
+        });
   }
 
   void _handleCheckForPushToken(
@@ -325,9 +327,11 @@ class SendPackageBloc extends Bloc<SendPackageEvent, SendPackageState> {
         PolylinePoints points = PolylinePoints();
 
         if (_googleMapsDirectionsApiKey.isEmpty) {
-          emit(state.copyWith(
-            addressSearchError: 'Route preview could not be prepared.',
-          ));
+          emit(
+            state.copyWith(
+              addressSearchError: 'Route preview could not be prepared.',
+            ),
+          );
           return;
         }
 
@@ -488,9 +492,17 @@ class SendPackageBloc extends Bloc<SendPackageEvent, SendPackageState> {
       state.copyWith(
         parcelWeightKg: quickWeight,
         irisResult: quickEstimate,
-        itemDescription:
-            itemDescription.trim().isEmpty ? null : itemDescription,
+        itemDescription: itemDescription.trim().isEmpty
+            ? null
+            : itemDescription,
         isIrisResolving: quickEstimate != null,
+        irisWeightReviewMessage: quickEstimate == null
+            ? ''
+            : _weightReviewMessage(
+                userWeightKg: event.weightKg,
+                irisWeightKg: quickEstimate.weightKg,
+                finalWeightKg: quickWeight,
+              ),
       ),
     );
     add(SetPrice());
@@ -505,12 +517,18 @@ class SendPackageBloc extends Bloc<SendPackageEvent, SendPackageState> {
         userEnteredWeightKg: event.weightKg,
         irisEstimatedWeightKg: trusted.pricingWeightKg,
       );
+      final reviewMessage = _weightReviewMessage(
+        userWeightKg: event.weightKg,
+        irisWeightKg: trusted.pricingWeightKg,
+        finalWeightKg: finalWeight,
+      );
       emit(
         state.copyWith(
           parcelWeightKg: finalWeight,
           irisResult: quickEstimate,
           itemDescription: itemDescription,
           isIrisResolving: false,
+          irisWeightReviewMessage: reviewMessage,
         ),
       );
       add(SetPrice());
@@ -521,10 +539,32 @@ class SendPackageBloc extends Bloc<SendPackageEvent, SendPackageState> {
           irisResult: quickEstimate,
           itemDescription: itemDescription,
           isIrisResolving: false,
+          irisWeightReviewMessage: _weightReviewMessage(
+            userWeightKg: event.weightKg,
+            irisWeightKg: quickEstimate.weightKg,
+            finalWeightKg: quickWeight,
+          ),
         ),
       );
       add(SetPrice());
     }
+  }
+
+  String _weightReviewMessage({
+    required double userWeightKg,
+    required double? irisWeightKg,
+    required double finalWeightKg,
+  }) {
+    if (userWeightKg <= 0 || irisWeightKg == null || irisWeightKg <= 0) {
+      return '';
+    }
+    final lower = math.min(userWeightKg, irisWeightKg);
+    final higher = math.max(userWeightKg, irisWeightKg);
+    if (higher - lower < 2 || higher / lower < 2.5) return '';
+    final source = userWeightKg >= irisWeightKg
+        ? 'your entered weight'
+        : 'Circum’s parcel estimate';
+    return 'The parcel weight looks unusually different. Pricing uses the higher weight for fairness: ${finalWeightKg.toStringAsFixed(1)}kg from $source. Please check the weight before payment.';
   }
 
   void _handleRequestCanonicalIrisEstimate(
@@ -537,8 +577,9 @@ class SendPackageBloc extends Bloc<SendPackageEvent, SendPackageState> {
     ].where((value) => value.trim().isNotEmpty).join(' · ');
     emit(
       state.copyWith(
-        itemDescription:
-            itemDescription.trim().isEmpty ? null : itemDescription,
+        itemDescription: itemDescription.trim().isEmpty
+            ? null
+            : itemDescription,
         isIrisResolving: true,
         irisErrorMessage: '',
         canonicalIrisResult: null,
@@ -546,10 +587,12 @@ class SendPackageBloc extends Bloc<SendPackageEvent, SendPackageState> {
     );
     try {
       final payload = <String, dynamic>{
-        'description':
-            itemDescription.trim().isEmpty ? event.itemName : itemDescription,
-        'packageDescription':
-            itemDescription.trim().isEmpty ? event.itemName : itemDescription,
+        'description': itemDescription.trim().isEmpty
+            ? event.itemName
+            : itemDescription,
+        'packageDescription': itemDescription.trim().isEmpty
+            ? event.itemName
+            : itemDescription,
         'declaredWeightText': event.declaredWeightText,
         'weight': event.declaredWeightText,
         'quantity': event.quantity,
@@ -622,8 +665,9 @@ class SendPackageBloc extends Bloc<SendPackageEvent, SendPackageState> {
     String name,
     Map<String, dynamic> payload,
   ) async {
-    final result =
-        await FirebaseFunctions.instance.httpsCallable(name).call(payload);
+    final result = await FirebaseFunctions.instance
+        .httpsCallable(name)
+        .call(payload);
     return result.data is Map
         ? Map<String, dynamic>.from(result.data as Map)
         : <String, dynamic>{};
@@ -633,12 +677,7 @@ class SendPackageBloc extends Bloc<SendPackageEvent, SendPackageState> {
     RequestSenderBookingQuote event,
     Emitter<SendPackageState> emit,
   ) async {
-    emit(
-      state.copyWith(
-        isSenderQuoteLoading: true,
-        senderQuoteError: '',
-      ),
-    );
+    emit(state.copyWith(isSenderQuoteLoading: true, senderQuoteError: ''));
     try {
       final data = await _callableMap('createSenderBookingQuote', {
         if (event.businessContext != null)
@@ -648,8 +687,9 @@ class SendPackageBloc extends Bloc<SendPackageEvent, SendPackageState> {
         'distanceMiles': state.distance == null
             ? 0
             : DeliveryPricing.kilometresToMiles(state.distance!),
-        'weightKg':
-            state.parcelWeightKg <= 0 ? event.weightKg : state.parcelWeightKg,
+        'weightKg': state.parcelWeightKg <= 0
+            ? event.weightKg
+            : state.parcelWeightKg,
         'parcel': {
           'itemName': event.itemName,
           'description': event.description,
@@ -711,9 +751,7 @@ class SendPackageBloc extends Bloc<SendPackageEvent, SendPackageState> {
     LoadSenderRothBalance event,
     Emitter<SendPackageState> emit,
   ) async {
-    emit(
-      state.copyWith(isSenderRothLoading: true, senderRothError: ''),
-    );
+    emit(state.copyWith(isSenderRothLoading: true, senderRothError: ''));
     try {
       final data = await _callableMap('getSenderRothBalance', const {});
       emit(
@@ -756,12 +794,7 @@ class SendPackageBloc extends Bloc<SendPackageEvent, SendPackageState> {
       );
       return;
     }
-    emit(
-      state.copyWith(
-        isSenderPaymentLoading: true,
-        senderPaymentError: '',
-      ),
-    );
+    emit(state.copyWith(isSenderPaymentLoading: true, senderPaymentError: ''));
     try {
       final data = await _callableMap('createSenderPaymentSession', {
         'quoteId': state.senderQuoteId,
@@ -775,13 +808,15 @@ class SendPackageBloc extends Bloc<SendPackageEvent, SendPackageState> {
           senderPaymentSessionId: '${data['paymentSessionId'] ?? ''}',
           senderPaymentStatus:
               '${data['paymentStatus'] ?? data['status'] ?? ''}',
-          senderPaymentClientSecret:
-              data['clientSecret'] == null ? null : '${data['clientSecret']}',
+          senderPaymentClientSecret: data['clientSecret'] == null
+              ? null
+              : '${data['clientSecret']}',
           senderPaymentIntentId: data['stripePaymentIntentId'] == null
               ? null
               : '${data['stripePaymentIntentId']}',
-          senderPaymentCustomerId:
-              data['customerId'] == null ? null : '${data['customerId']}',
+          senderPaymentCustomerId: data['customerId'] == null
+              ? null
+              : '${data['customerId']}',
           senderPaymentEphemeralKeySecret: data['ephemeralKeySecret'] == null
               ? null
               : '${data['ephemeralKeySecret']}',
@@ -825,10 +860,7 @@ class SendPackageBloc extends Bloc<SendPackageEvent, SendPackageState> {
       return;
     }
     emit(
-      state.copyWith(
-        isSenderDeliveryCreating: true,
-        senderDeliveryError: '',
-      ),
+      state.copyWith(isSenderDeliveryCreating: true, senderDeliveryError: ''),
     );
     try {
       final payload = {
@@ -839,9 +871,9 @@ class SendPackageBloc extends Bloc<SendPackageEvent, SendPackageState> {
       final data = await _callableMap('createSenderPaidDelivery', payload);
       final requestId = '${data['requestId'] ?? ''}';
       if (requestId.isNotEmpty) {
-        await FirebaseFunctions.instanceFor(region: 'us-central1')
-            .httpsCallable('sendPackage')
-            .call({'requestId': requestId});
+        await FirebaseFunctions.instanceFor(
+          region: 'us-central1',
+        ).httpsCallable('sendPackage').call({'requestId': requestId});
         final prefs = await SharedPreferences.getInstance();
         await prefs.setString('activeRequest', requestId);
         add(WatchActiveDelivery(requestId: requestId));
@@ -980,8 +1012,9 @@ class SendPackageBloc extends Bloc<SendPackageEvent, SendPackageState> {
       add(SetMapCameraStatus(status: MapCameraStatus.showRiderLocation));
 
       if (state.deliveryData == null) {
-        final documentReference =
-            db.collection('deliveryRequests').doc(user!.uid);
+        final documentReference = db
+            .collection('deliveryRequests')
+            .doc(user!.uid);
 
         final docResponse = await documentReference.get();
 
@@ -1035,8 +1068,9 @@ class SendPackageBloc extends Bloc<SendPackageEvent, SendPackageState> {
     if (data == null) return;
 
     final requestStatus = '${data['status'] ?? ''}'.trim();
-    if (_terminalRequestStatuses
-        .contains(requestStatus.toLowerCase().replaceAll('-', '_'))) {
+    if (_terminalRequestStatuses.contains(
+      requestStatus.toLowerCase().replaceAll('-', '_'),
+    )) {
       final requestId = '${data['requestId'] ?? data['id'] ?? ''}'.trim();
       if (requestId.isNotEmpty) {
         unawaited(_clearActiveRequestIfCurrent(requestId));
@@ -1062,16 +1096,16 @@ class SendPackageBloc extends Bloc<SendPackageEvent, SendPackageState> {
         dropoffDetails: dropoffDetails,
         pickupLocation:
             '${data['pickupDetails']?['address'] ?? state.pickupLocation ?? ''}'
-                    .trim()
-                    .isEmpty
-                ? state.pickupLocation
-                : '${data['pickupDetails']?['address']}',
+                .trim()
+                .isEmpty
+            ? state.pickupLocation
+            : '${data['pickupDetails']?['address']}',
         destinationLocation:
             '${data['dropoffDetails']?['address'] ?? state.destinationLocation ?? ''}'
-                    .trim()
-                    .isEmpty
-                ? state.destinationLocation
-                : '${data['dropoffDetails']?['address']}',
+                .trim()
+                .isEmpty
+            ? state.destinationLocation
+            : '${data['dropoffDetails']?['address']}',
         price: (data['price'] as num?)?.toDouble() ?? state.price,
         currency: '${data['currency'] ?? state.currency}',
         deliveryData: deliveryData,
@@ -1161,10 +1195,7 @@ class SendPackageBloc extends Bloc<SendPackageEvent, SendPackageState> {
     ..._cancelledRequestStatuses,
   };
 
-  ContactInfo? _contactFromDelivery(
-    Object? value, {
-    ContactInfo? fallback,
-  }) {
+  ContactInfo? _contactFromDelivery(Object? value, {ContactInfo? fallback}) {
     if (value is! Map) return fallback;
     final coordinate = _coordinateFromPosition(value['position']);
     if (coordinate == null) return fallback;
@@ -1242,10 +1273,12 @@ class SendPackageBloc extends Bloc<SendPackageEvent, SendPackageState> {
         return;
       }
       add(WatchActiveDelivery(requestId: activeRequest));
-      final userDocumentReference =
-          db.collection('deliveryRequests').doc(user.uid);
-      final requestDocumentReference =
-          db.collection('deliveryRequests').doc(activeRequest);
+      final userDocumentReference = db
+          .collection('deliveryRequests')
+          .doc(user.uid);
+      final requestDocumentReference = db
+          .collection('deliveryRequests')
+          .doc(activeRequest);
 
       var docResponse = await userDocumentReference.get();
       if (!docResponse.exists) {
@@ -1279,8 +1312,9 @@ class SendPackageBloc extends Bloc<SendPackageEvent, SendPackageState> {
         // }
 
         final requestStatus = '${data['status'] ?? ''}';
-        if (_activeRequestStatuses
-            .contains(requestStatus.toLowerCase().replaceAll('-', '_'))) {
+        if (_activeRequestStatuses.contains(
+          requestStatus.toLowerCase().replaceAll('-', '_'),
+        )) {
           status = DeliveryStatus.reconnectingWithRider;
           final deliveryData = DeliveryData.fromJson(data);
           emit(
@@ -1377,8 +1411,9 @@ class SendPackageBloc extends Bloc<SendPackageEvent, SendPackageState> {
       }
 
       emit(state.copyWith(message: ''));
-      final callable =
-          FirebaseFunctions.instance.httpsCallable('sendCircumMessage');
+      final callable = FirebaseFunctions.instance.httpsCallable(
+        'sendCircumMessage',
+      );
       await callable.call({
         'chatId': activeRequest,
         'message': event.message,
@@ -1421,13 +1456,14 @@ class SendPackageBloc extends Bloc<SendPackageEvent, SendPackageState> {
 
   void _handleCancelRequestEvent(CancelRequest event, Emitter emit) async {
     final prefs = await SharedPreferences.getInstance();
-    final activeRequest = prefs.getString('activeRequest') ??
+    final activeRequest =
+        prefs.getString('activeRequest') ??
         '${state.activeDeliveryData['id'] ?? ''}';
     if (activeRequest.trim().isNotEmpty) {
       try {
-        await FirebaseFunctions.instanceFor(region: 'us-central1')
-            .httpsCallable('requestSenderCancellation')
-            .call({
+        await FirebaseFunctions.instanceFor(
+          region: 'us-central1',
+        ).httpsCallable('requestSenderCancellation').call({
           'deliveryId': activeRequest,
           'idempotencyKey': '$activeRequest:legacy_sender_cancel',
         });

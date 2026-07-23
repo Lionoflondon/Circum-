@@ -13,46 +13,48 @@ class UserModel extends Equatable {
   final int? statusCode;
   final String? userType;
 
-  const UserModel(
-      {this.token,
-      this.image,
-      this.email,
-      this.isEmailVerified,
-      this.role,
-      this.phoneNumber,
-      this.fullname,
-      this.message,
-      this.statusCode,
-      this.data,
-      this.userType});
+  const UserModel({
+    this.token,
+    this.image,
+    this.email,
+    this.isEmailVerified,
+    this.role,
+    this.phoneNumber,
+    this.fullname,
+    this.message,
+    this.statusCode,
+    this.data,
+    this.userType,
+  });
 
   @override
   List<Object> get props => [
-        {token},
-        {image},
-        {email},
-        {isEmailVerified},
-        {role},
-        {phoneNumber},
-        {fullname},
-        {message},
-        {statusCode},
-        {data},
-        {userType}
-      ];
+    {token},
+    {image},
+    {email},
+    {isEmailVerified},
+    {role},
+    {phoneNumber},
+    {fullname},
+    {message},
+    {statusCode},
+    {data},
+    {userType},
+  ];
 
   static UserModel fromJson(dynamic json, status) {
     return UserModel(
-        token: json['access_token'],
-        image: json['user']?['image'] ?? '',
-        email: json['email'] ?? '',
-        isEmailVerified: json['user']?['isEmailVerified'] ?? '',
-        role: json['user']?['role'] ?? '',
-        phoneNumber: json['user']?['phoneNumber'] ?? '',
-        fullname: json['user']?['fullname'] ?? '',
-        message: json['message'] ?? '',
-        statusCode: status,
-        userType: json['user_type'] ?? '');
+      token: json['access_token'],
+      image: json['user']?['image'] ?? '',
+      email: json['email'] ?? '',
+      isEmailVerified: json['user']?['isEmailVerified'] ?? '',
+      role: json['user']?['role'] ?? '',
+      phoneNumber: json['user']?['phoneNumber'] ?? '',
+      fullname: json['user']?['fullname'] ?? '',
+      message: json['message'] ?? '',
+      statusCode: status,
+      userType: json['user_type'] ?? '',
+    );
   }
 
   static UserModel response(json, status) {
@@ -75,7 +77,8 @@ class UserModel extends Equatable {
   }
 
   @override
-  String toString() => '''User { 
+  String toString() =>
+      '''User { 
       token: $token, 
       email: $email, 
       image: $image, 

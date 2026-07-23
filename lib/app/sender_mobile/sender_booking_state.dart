@@ -54,7 +54,9 @@ List<DateTime> senderScheduleDateOptions({DateTime? now, int days = 7}) {
   final base = now ?? DateTime.now();
   final today = DateTime(base.year, base.month, base.day);
   return List<DateTime>.generate(
-      days, (index) => today.add(Duration(days: index)));
+    days,
+    (index) => today.add(Duration(days: index)),
+  );
 }
 
 String senderScheduleDateValue(DateTime date) {
@@ -173,8 +175,9 @@ class SenderPaymentSplit {
     SenderFallbackPaymentMethod? fallbackMethod,
   }) {
     final maxRothAmount = availableRothCredits * senderRothPoundValue;
-    final rothAppliedAmount =
-        rothEnabled ? maxRothAmount.clamp(0, totalDue).toDouble() : 0.0;
+    final rothAppliedAmount = rothEnabled
+        ? maxRothAmount.clamp(0, totalDue).toDouble()
+        : 0.0;
     final rothAppliedCredits = rothAppliedAmount / senderRothPoundValue;
     final remaining = (totalDue - rothAppliedAmount).clamp(0, totalDue);
     return SenderPaymentSplit(
@@ -436,56 +439,44 @@ class SenderBookingDraft {
   }
 
   Map<String, dynamic> toBackendDraftPayload() => {
-        'version': 1,
-        'step': step.name,
-        'status': 'draft',
-        'completed': false,
-        'pickup': {
-          'address': pickupAddress,
-        },
-        'dropoff': {
-          'address': dropoffAddress,
-        },
-        'recipient': {
-          'name': receiverName,
-          'phone': receiverPhone,
-          'deliveryNotes': deliveryNotes,
-        },
-        'deliveryTime': {
-          'type': deliveryTimingType == SenderDeliveryTimingType.now
-              ? 'now'
-              : 'scheduled',
-          'scheduledDate': scheduledDate,
-          'scheduledWindow': scheduledWindow,
-          'customWindowStart': customWindowStart,
-          'customWindowEnd': customWindowEnd,
-          'summary': deliveryTimeSummary,
-        },
-        'parcel': {
-          'itemName': itemName,
-          'description': itemDescription,
-          'weightLabel': weightLabel,
-          'fragile': fragile,
-          'highValue': highValue,
-        },
-        'iris': {
-          'confidence': irisConfidence,
-          'recommendedVehicle': irisVehicle,
-        },
-        'deliveryOptions': {
-          'selectedOption': selectedOption,
-          'vanguard': vanguard,
-        },
-        'review': {
-          'amountDue': amountDue,
-        },
-        'paymentMethod': {
-          'type': selectedPaymentMethod?.name ?? '',
-          'paymentMethodId': selectedPaymentMethodId,
-          'label': selectedPaymentMethodLabel,
-          'rothEnabled': rothEnabled,
-        },
-      };
+    'version': 1,
+    'step': step.name,
+    'status': 'draft',
+    'completed': false,
+    'pickup': {'address': pickupAddress},
+    'dropoff': {'address': dropoffAddress},
+    'recipient': {
+      'name': receiverName,
+      'phone': receiverPhone,
+      'deliveryNotes': deliveryNotes,
+    },
+    'deliveryTime': {
+      'type': deliveryTimingType == SenderDeliveryTimingType.now
+          ? 'now'
+          : 'scheduled',
+      'scheduledDate': scheduledDate,
+      'scheduledWindow': scheduledWindow,
+      'customWindowStart': customWindowStart,
+      'customWindowEnd': customWindowEnd,
+      'summary': deliveryTimeSummary,
+    },
+    'parcel': {
+      'itemName': itemName,
+      'description': itemDescription,
+      'weightLabel': weightLabel,
+      'fragile': fragile,
+      'highValue': highValue,
+    },
+    'iris': {'confidence': irisConfidence, 'recommendedVehicle': irisVehicle},
+    'deliveryOptions': {'selectedOption': selectedOption, 'vanguard': vanguard},
+    'review': {'amountDue': amountDue},
+    'paymentMethod': {
+      'type': selectedPaymentMethod?.name ?? '',
+      'paymentMethodId': selectedPaymentMethodId,
+      'label': selectedPaymentMethodLabel,
+      'rothEnabled': rothEnabled,
+    },
+  };
 
   factory SenderBookingDraft.fromBackendDraft(Map<String, dynamic> data) {
     final pickup = _draftMap(data['pickup']);
@@ -510,7 +501,8 @@ class SenderBookingDraft {
     final fallback = matchingMethods.isEmpty ? null : matchingMethods.first;
 
     return SenderBookingDraft(
-      step: restoredStep == SenderBookingStep.findingRider ||
+      step:
+          restoredStep == SenderBookingStep.findingRider ||
               restoredStep == SenderBookingStep.liveTracking
           ? SenderBookingStep.pickup
           : restoredStep,

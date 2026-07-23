@@ -1,9 +1,4 @@
-enum CircumRole {
-  sender,
-  rider,
-  admin,
-  unknown,
-}
+enum CircumRole { sender, rider, admin, unknown }
 
 const adminRoleNames = {
   'admin',
@@ -83,11 +78,13 @@ class RoleAccessPolicy {
     if (roles.any((role) => role == 'rider' || role == 'driver')) {
       resolvedRoles.add(CircumRole.rider);
     }
-    if (roles.any((role) =>
-        role == 'sender' ||
-        role == 'customer' ||
-        role == 'user' ||
-        role == 'client')) {
+    if (roles.any(
+      (role) =>
+          role == 'sender' ||
+          role == 'customer' ||
+          role == 'user' ||
+          role == 'client',
+    )) {
       resolvedRoles.add(CircumRole.sender);
     }
     return resolvedRoles.isEmpty ? {CircumRole.unknown} : resolvedRoles;
@@ -114,9 +111,9 @@ class RoleAccessPolicy {
   static Iterable<String> _roleValues(Object? value) {
     if (value == null) return const [];
     if (value is Iterable) {
-      return value.map((item) => '$item'.trim().toLowerCase()).where(
-            (item) => item.isNotEmpty,
-          );
+      return value
+          .map((item) => '$item'.trim().toLowerCase())
+          .where((item) => item.isNotEmpty);
     }
     return ['$value'.trim().toLowerCase()].where((item) => item.isNotEmpty);
   }

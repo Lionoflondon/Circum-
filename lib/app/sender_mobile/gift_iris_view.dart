@@ -101,14 +101,13 @@ class _GiftIrisViewState extends State<GiftIrisView> {
         onTap: _loading || _brief == null
             ? null
             : () => Navigator.of(context).push(
-                  MaterialPageRoute<void>(
-                    builder: (_) => GiftStyleView(
-                      draft: widget.draft.copyWith(irisGiftBrief: _brief),
-                    ),
-                    settings:
-                        const RouteSettings(name: GiftStyleView.routeName),
+                MaterialPageRoute<void>(
+                  builder: (_) => GiftStyleView(
+                    draft: widget.draft.copyWith(irisGiftBrief: _brief),
                   ),
+                  settings: const RouteSettings(name: GiftStyleView.routeName),
                 ),
+              ),
       ),
     );
   }

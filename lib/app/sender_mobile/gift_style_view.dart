@@ -80,8 +80,8 @@ class _GiftStyleViewState extends State<GiftStyleView> {
           MaterialPageRoute<void>(
             builder: (_) => GiftPrivacyView(
               draft: widget.draft.copyWith(
-                recipientPreferencesFreeform:
-                    _preferencesController.text.trim(),
+                recipientPreferencesFreeform: _preferencesController.text
+                    .trim(),
               ),
             ),
             settings: const RouteSettings(name: GiftPrivacyView.routeName),
@@ -108,10 +108,7 @@ class _PreferenceHelperChip extends StatelessWidget {
   final String label;
   final VoidCallback onTap;
 
-  const _PreferenceHelperChip({
-    required this.label,
-    required this.onTap,
-  });
+  const _PreferenceHelperChip({required this.label, required this.onTap});
 
   @override
   Widget build(BuildContext context) {

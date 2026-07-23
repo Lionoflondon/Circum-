@@ -239,24 +239,24 @@ class _GiftRelationshipViewState extends State<GiftRelationshipView> {
         onTap: !_canContinue
             ? null
             : () => Navigator.of(context).push(
-                  MaterialPageRoute<void>(
-                    builder: (_) => GiftDeliveryView(
-                      draft: widget.draft.copyWith(
-                        recipientName: _nameController.text.trim(),
-                        relationship: _relationship,
-                        occasion: _occasion,
-                        recipientPhone: _phoneController.text.trim(),
-                        recipientEmail: _emailController.text.trim(),
-                        notes: _notesController.text.trim(),
-                        senderRevealMode: _senderRevealMode,
-                        selfGiftFrequency: _selfGiftFrequency,
-                      ),
-                    ),
-                    settings: const RouteSettings(
-                      name: GiftDeliveryView.routeName,
+                MaterialPageRoute<void>(
+                  builder: (_) => GiftDeliveryView(
+                    draft: widget.draft.copyWith(
+                      recipientName: _nameController.text.trim(),
+                      relationship: _relationship,
+                      occasion: _occasion,
+                      recipientPhone: _phoneController.text.trim(),
+                      recipientEmail: _emailController.text.trim(),
+                      notes: _notesController.text.trim(),
+                      senderRevealMode: _senderRevealMode,
+                      selfGiftFrequency: _selfGiftFrequency,
                     ),
                   ),
+                  settings: const RouteSettings(
+                    name: GiftDeliveryView.routeName,
+                  ),
                 ),
+              ),
       ),
       children: [
         _GiftInputCard(
@@ -322,34 +322,33 @@ class _GiftRelationshipViewState extends State<GiftRelationshipView> {
   }
 
   String get _title => switch (widget.draft.mode) {
-        SenderGiftMode.myself => 'Tell us about yourself',
-        SenderGiftMode.anonymous => 'Keep it thoughtful',
-        SenderGiftMode.campaign => 'Shape the campaign',
-        SenderGiftMode.someone => 'Tell us about them',
-      };
+    SenderGiftMode.myself => 'Tell us about yourself',
+    SenderGiftMode.anonymous => 'Keep it thoughtful',
+    SenderGiftMode.campaign => 'Shape the campaign',
+    SenderGiftMode.someone => 'Tell us about them',
+  };
 
   String get _subtitle => switch (widget.draft.mode) {
-        SenderGiftMode.myself =>
-          'Tell IRIS what would make this feel considered.',
-        SenderGiftMode.anonymous =>
-          'Circum keeps your identity private while Admin can still review the request safely.',
-        SenderGiftMode.campaign =>
-          'Use the Bringing London Closer campaign path already defined in Gifts.',
-        SenderGiftMode.someone =>
-          'Tell IRIS who this is for so we can shape the experience.',
-      };
+    SenderGiftMode.myself => 'Tell IRIS what would make this feel considered.',
+    SenderGiftMode.anonymous =>
+      'Circum keeps your identity private while Admin can still review the request safely.',
+    SenderGiftMode.campaign =>
+      'Use the Bringing London Closer campaign path already defined in Gifts.',
+    SenderGiftMode.someone =>
+      'Tell IRIS who this is for so we can shape the experience.',
+  };
 
   String get _nameLabel => switch (widget.draft.mode) {
-        SenderGiftMode.myself => 'YOUR NAME',
-        SenderGiftMode.campaign => 'RECIPIENT OR GROUP',
-        _ => 'RECIPIENT NAME',
-      };
+    SenderGiftMode.myself => 'YOUR NAME',
+    SenderGiftMode.campaign => 'RECIPIENT OR GROUP',
+    _ => 'RECIPIENT NAME',
+  };
 
   String get _namePlaceholder => switch (widget.draft.mode) {
-        SenderGiftMode.myself => 'What should we call you?',
-        SenderGiftMode.campaign => 'Who is this campaign for?',
-        _ => "Who's receiving this?",
-      };
+    SenderGiftMode.myself => 'What should we call you?',
+    SenderGiftMode.campaign => 'Who is this campaign for?',
+    _ => "Who's receiving this?",
+  };
 }
 
 class _GiftContactCard extends StatelessWidget {

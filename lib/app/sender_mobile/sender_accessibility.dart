@@ -52,11 +52,11 @@ class SenderAccessibilitySettings {
   });
 
   double get textScale => switch (textSize) {
-        SenderTextSize.small => .9,
-        SenderTextSize.standard => 1,
-        SenderTextSize.large => 1.15,
-        SenderTextSize.extraLarge => 1.3,
-      };
+    SenderTextSize.small => .9,
+    SenderTextSize.standard => 1,
+    SenderTextSize.large => 1.15,
+    SenderTextSize.extraLarge => 1.3,
+  };
 
   factory SenderAccessibilitySettings.fromMap(Map<String, dynamic>? map) {
     final data = map ?? const <String, dynamic>{};
@@ -67,7 +67,10 @@ class SenderAccessibilitySettings {
 
     return SenderAccessibilitySettings(
       textSize: enumValue(
-          SenderTextSize.values, data['textSize'], SenderTextSize.standard),
+        SenderTextSize.values,
+        data['textSize'],
+        SenderTextSize.standard,
+      ),
       highContrast: data['highContrast'] == true,
       reduceMotion: data['reduceMotion'] == true,
       largerTouchTargets: data['largerTouchTargets'] == true,
@@ -75,33 +78,39 @@ class SenderAccessibilitySettings {
       confirmBeforePayment: data['confirmBeforePayment'] == true,
       voiceGuidance: data['voiceGuidance'] == true,
       readNotifications: data['readNotifications'] == true,
-      deliveryAlerts: enumValue(SenderDeliveryAlertLevel.values,
-          data['deliveryAlerts'], SenderDeliveryAlertLevel.normal),
+      deliveryAlerts: enumValue(
+        SenderDeliveryAlertLevel.values,
+        data['deliveryAlerts'],
+        SenderDeliveryAlertLevel.normal,
+      ),
       announceRiderArrival: data['announceRiderArrival'] != false,
       announceDeliveryComplete: data['announceDeliveryComplete'] != false,
-      colourVisionMode: enumValue(SenderColourVisionMode.values,
-          data['colourVisionMode'], SenderColourVisionMode.off),
+      colourVisionMode: enumValue(
+        SenderColourVisionMode.values,
+        data['colourVisionMode'],
+        SenderColourVisionMode.off,
+      ),
       flashDeliveryAlerts: data['flashDeliveryAlerts'] == true,
       leftHandedMode: data['leftHandedMode'] == true,
     );
   }
 
   Map<String, Object> toMap() => {
-        'textSize': textSize.name,
-        'highContrast': highContrast,
-        'reduceMotion': reduceMotion,
-        'largerTouchTargets': largerTouchTargets,
-        'hapticFeedback': hapticFeedback,
-        'confirmBeforePayment': confirmBeforePayment,
-        'voiceGuidance': voiceGuidance,
-        'readNotifications': readNotifications,
-        'deliveryAlerts': deliveryAlerts.name,
-        'announceRiderArrival': announceRiderArrival,
-        'announceDeliveryComplete': announceDeliveryComplete,
-        'colourVisionMode': colourVisionMode.name,
-        'flashDeliveryAlerts': flashDeliveryAlerts,
-        'leftHandedMode': leftHandedMode,
-      };
+    'textSize': textSize.name,
+    'highContrast': highContrast,
+    'reduceMotion': reduceMotion,
+    'largerTouchTargets': largerTouchTargets,
+    'hapticFeedback': hapticFeedback,
+    'confirmBeforePayment': confirmBeforePayment,
+    'voiceGuidance': voiceGuidance,
+    'readNotifications': readNotifications,
+    'deliveryAlerts': deliveryAlerts.name,
+    'announceRiderArrival': announceRiderArrival,
+    'announceDeliveryComplete': announceDeliveryComplete,
+    'colourVisionMode': colourVisionMode.name,
+    'flashDeliveryAlerts': flashDeliveryAlerts,
+    'leftHandedMode': leftHandedMode,
+  };
 
   SenderAccessibilitySettings copyWith({
     SenderTextSize? textSize,
@@ -118,24 +127,23 @@ class SenderAccessibilitySettings {
     SenderColourVisionMode? colourVisionMode,
     bool? flashDeliveryAlerts,
     bool? leftHandedMode,
-  }) =>
-      SenderAccessibilitySettings(
-        textSize: textSize ?? this.textSize,
-        highContrast: highContrast ?? this.highContrast,
-        reduceMotion: reduceMotion ?? this.reduceMotion,
-        largerTouchTargets: largerTouchTargets ?? this.largerTouchTargets,
-        hapticFeedback: hapticFeedback ?? this.hapticFeedback,
-        confirmBeforePayment: confirmBeforePayment ?? this.confirmBeforePayment,
-        voiceGuidance: voiceGuidance ?? this.voiceGuidance,
-        readNotifications: readNotifications ?? this.readNotifications,
-        deliveryAlerts: deliveryAlerts ?? this.deliveryAlerts,
-        announceRiderArrival: announceRiderArrival ?? this.announceRiderArrival,
-        announceDeliveryComplete:
-            announceDeliveryComplete ?? this.announceDeliveryComplete,
-        colourVisionMode: colourVisionMode ?? this.colourVisionMode,
-        flashDeliveryAlerts: flashDeliveryAlerts ?? this.flashDeliveryAlerts,
-        leftHandedMode: leftHandedMode ?? this.leftHandedMode,
-      );
+  }) => SenderAccessibilitySettings(
+    textSize: textSize ?? this.textSize,
+    highContrast: highContrast ?? this.highContrast,
+    reduceMotion: reduceMotion ?? this.reduceMotion,
+    largerTouchTargets: largerTouchTargets ?? this.largerTouchTargets,
+    hapticFeedback: hapticFeedback ?? this.hapticFeedback,
+    confirmBeforePayment: confirmBeforePayment ?? this.confirmBeforePayment,
+    voiceGuidance: voiceGuidance ?? this.voiceGuidance,
+    readNotifications: readNotifications ?? this.readNotifications,
+    deliveryAlerts: deliveryAlerts ?? this.deliveryAlerts,
+    announceRiderArrival: announceRiderArrival ?? this.announceRiderArrival,
+    announceDeliveryComplete:
+        announceDeliveryComplete ?? this.announceDeliveryComplete,
+    colourVisionMode: colourVisionMode ?? this.colourVisionMode,
+    flashDeliveryAlerts: flashDeliveryAlerts ?? this.flashDeliveryAlerts,
+    leftHandedMode: leftHandedMode ?? this.leftHandedMode,
+  );
 }
 
 abstract class SenderAccessibilityRepository {
@@ -151,8 +159,8 @@ class FirebaseSenderAccessibilityRepository
   FirebaseSenderAccessibilityRepository({
     FirebaseAuth? auth,
     FirebaseFirestore? firestore,
-  })  : auth = auth ?? FirebaseAuth.instance,
-        firestore = firestore ?? FirebaseFirestore.instance;
+  }) : auth = auth ?? FirebaseAuth.instance,
+       firestore = firestore ?? FirebaseFirestore.instance;
 
   DocumentReference<Map<String, dynamic>> get _profile {
     final user = auth.currentUser;
@@ -170,16 +178,18 @@ class FirebaseSenderAccessibilityRepository
           output.add(const SenderAccessibilitySettings());
           return;
         }
-        profile =
-            firestore.collection('users').doc(user.uid).snapshots().listen(
-          (snapshot) {
-            final data = snapshot.data();
-            output.add(SenderAccessibilitySettings.fromMap(
-              data?['accessibilitySettings'] as Map<String, dynamic>?,
-            ));
-          },
-          onError: output.addError,
-        );
+        profile = firestore
+            .collection('users')
+            .doc(user.uid)
+            .snapshots()
+            .listen((snapshot) {
+              final data = snapshot.data();
+              output.add(
+                SenderAccessibilitySettings.fromMap(
+                  data?['accessibilitySettings'] as Map<String, dynamic>?,
+                ),
+              );
+            }, onError: output.addError);
       }, onError: output.addError);
       output.onCancel = () async {
         await authChanges.cancel();
@@ -190,9 +200,9 @@ class FirebaseSenderAccessibilityRepository
 
   @override
   Future<void> save(SenderAccessibilitySettings settings) => _profile.set({
-        'accessibilitySettings': settings.toMap(),
-        'accessibilityUpdatedAt': FieldValue.serverTimestamp(),
-      }, SetOptions(merge: true));
+    'accessibilitySettings': settings.toMap(),
+    'accessibilityUpdatedAt': FieldValue.serverTimestamp(),
+  }, SetOptions(merge: true));
 }
 
 class SenderAccessibilityController extends ChangeNotifier {
@@ -214,16 +224,19 @@ class SenderAccessibilityController extends ChangeNotifier {
   }) : tts = tts ?? FlutterTts();
 
   void start() {
-    _subscription ??= repository.watch().listen((value) {
-      settings = value;
-      loading = false;
-      error = null;
-      notifyListeners();
-    }, onError: (Object failure) {
-      loading = false;
-      error = 'Accessibility settings could not be loaded.';
-      notifyListeners();
-    });
+    _subscription ??= repository.watch().listen(
+      (value) {
+        settings = value;
+        loading = false;
+        error = null;
+        notifyListeners();
+      },
+      onError: (Object failure) {
+        loading = false;
+        error = 'Accessibility settings could not be loaded.';
+        notifyListeners();
+      },
+    );
   }
 
   Future<void> update(SenderAccessibilitySettings next) async {
@@ -393,7 +406,8 @@ class SenderAccessibilityHost extends StatefulWidget {
 }
 
 class _SenderAccessibilityHostState extends State<SenderAccessibilityHost> {
-  late final SenderAccessibilityController _controller = widget.controller ??
+  late final SenderAccessibilityController _controller =
+      widget.controller ??
       SenderAccessibilityController(
         repository:
             widget.repository ?? FirebaseSenderAccessibilityRepository(),
@@ -487,13 +501,15 @@ ThemeData _accessibleTheme(
           ? MaterialTapTargetSize.padded
           : base.materialTapTargetSize,
       pageTransitionsTheme: settings.reduceMotion
-          ? const PageTransitionsTheme(builders: {
-              TargetPlatform.android: _NoPageTransitionBuilder(),
-              TargetPlatform.iOS: _NoPageTransitionBuilder(),
-              TargetPlatform.macOS: _NoPageTransitionBuilder(),
-              TargetPlatform.windows: _NoPageTransitionBuilder(),
-              TargetPlatform.linux: _NoPageTransitionBuilder(),
-            })
+          ? const PageTransitionsTheme(
+              builders: {
+                TargetPlatform.android: _NoPageTransitionBuilder(),
+                TargetPlatform.iOS: _NoPageTransitionBuilder(),
+                TargetPlatform.macOS: _NoPageTransitionBuilder(),
+                TargetPlatform.windows: _NoPageTransitionBuilder(),
+                TargetPlatform.linux: _NoPageTransitionBuilder(),
+              },
+            )
           : base.pageTransitionsTheme,
     );
   }
@@ -612,41 +628,39 @@ ThemeData _accessibleTheme(
       ),
     ),
     pageTransitionsTheme: settings.reduceMotion
-        ? const PageTransitionsTheme(builders: {
-            TargetPlatform.android: _NoPageTransitionBuilder(),
-            TargetPlatform.iOS: _NoPageTransitionBuilder(),
-            TargetPlatform.macOS: _NoPageTransitionBuilder(),
-            TargetPlatform.windows: _NoPageTransitionBuilder(),
-            TargetPlatform.linux: _NoPageTransitionBuilder(),
-          })
+        ? const PageTransitionsTheme(
+            builders: {
+              TargetPlatform.android: _NoPageTransitionBuilder(),
+              TargetPlatform.iOS: _NoPageTransitionBuilder(),
+              TargetPlatform.macOS: _NoPageTransitionBuilder(),
+              TargetPlatform.windows: _NoPageTransitionBuilder(),
+              TargetPlatform.linux: _NoPageTransitionBuilder(),
+            },
+          )
         : base.pageTransitionsTheme,
   );
 }
 
 TextTheme _highContrastTextTheme(TextTheme theme) => theme.copyWith(
-      displayLarge: _highContrastTextStyle(theme.displayLarge, Colors.white),
-      displayMedium: _highContrastTextStyle(theme.displayMedium, Colors.white),
-      displaySmall: _highContrastTextStyle(theme.displaySmall, Colors.white),
-      headlineLarge: _highContrastTextStyle(theme.headlineLarge, Colors.white),
-      headlineMedium:
-          _highContrastTextStyle(theme.headlineMedium, Colors.white),
-      headlineSmall: _highContrastTextStyle(theme.headlineSmall, Colors.white),
-      titleLarge: _highContrastTextStyle(theme.titleLarge, Colors.white),
-      titleMedium: _highContrastTextStyle(theme.titleMedium, Colors.white),
-      titleSmall: _highContrastTextStyle(theme.titleSmall, Colors.white),
-      bodyLarge:
-          _highContrastTextStyle(theme.bodyLarge, const Color(0xFFE5E7EB)),
-      bodyMedium:
-          _highContrastTextStyle(theme.bodyMedium, const Color(0xFFE5E7EB)),
-      bodySmall:
-          _highContrastTextStyle(theme.bodySmall, const Color(0xFFE5E7EB)),
-      labelLarge:
-          _highContrastTextStyle(theme.labelLarge, const Color(0xFFE5E7EB)),
-      labelMedium:
-          _highContrastTextStyle(theme.labelMedium, const Color(0xFFE5E7EB)),
-      labelSmall:
-          _highContrastTextStyle(theme.labelSmall, const Color(0xFF9CA3AF)),
-    );
+  displayLarge: _highContrastTextStyle(theme.displayLarge, Colors.white),
+  displayMedium: _highContrastTextStyle(theme.displayMedium, Colors.white),
+  displaySmall: _highContrastTextStyle(theme.displaySmall, Colors.white),
+  headlineLarge: _highContrastTextStyle(theme.headlineLarge, Colors.white),
+  headlineMedium: _highContrastTextStyle(theme.headlineMedium, Colors.white),
+  headlineSmall: _highContrastTextStyle(theme.headlineSmall, Colors.white),
+  titleLarge: _highContrastTextStyle(theme.titleLarge, Colors.white),
+  titleMedium: _highContrastTextStyle(theme.titleMedium, Colors.white),
+  titleSmall: _highContrastTextStyle(theme.titleSmall, Colors.white),
+  bodyLarge: _highContrastTextStyle(theme.bodyLarge, const Color(0xFFE5E7EB)),
+  bodyMedium: _highContrastTextStyle(theme.bodyMedium, const Color(0xFFE5E7EB)),
+  bodySmall: _highContrastTextStyle(theme.bodySmall, const Color(0xFFE5E7EB)),
+  labelLarge: _highContrastTextStyle(theme.labelLarge, const Color(0xFFE5E7EB)),
+  labelMedium: _highContrastTextStyle(
+    theme.labelMedium,
+    const Color(0xFFE5E7EB),
+  ),
+  labelSmall: _highContrastTextStyle(theme.labelSmall, const Color(0xFF9CA3AF)),
+);
 
 TextStyle? _highContrastTextStyle(TextStyle? style, Color color) {
   if (style == null) return null;
@@ -681,79 +695,78 @@ class _NoPageTransitionBuilder extends PageTransitionsBuilder {
     Animation<double> animation,
     Animation<double> secondaryAnimation,
     Widget child,
-  ) =>
-      child;
+  ) => child;
 }
 
 List<double>? _colourMatrix(SenderAccessibilitySettings settings) {
   return switch (settings.colourVisionMode) {
     SenderColourVisionMode.off => null,
     SenderColourVisionMode.protanopia => const [
-        .567,
-        .433,
-        0,
-        0,
-        0,
-        .558,
-        .442,
-        0,
-        0,
-        0,
-        0,
-        .242,
-        .758,
-        0,
-        0,
-        0,
-        0,
-        0,
-        1,
-        0
-      ],
+      .567,
+      .433,
+      0,
+      0,
+      0,
+      .558,
+      .442,
+      0,
+      0,
+      0,
+      0,
+      .242,
+      .758,
+      0,
+      0,
+      0,
+      0,
+      0,
+      1,
+      0,
+    ],
     SenderColourVisionMode.deuteranopia => const [
-        .625,
-        .375,
-        0,
-        0,
-        0,
-        .7,
-        .3,
-        0,
-        0,
-        0,
-        0,
-        .3,
-        .7,
-        0,
-        0,
-        0,
-        0,
-        0,
-        1,
-        0
-      ],
+      .625,
+      .375,
+      0,
+      0,
+      0,
+      .7,
+      .3,
+      0,
+      0,
+      0,
+      0,
+      .3,
+      .7,
+      0,
+      0,
+      0,
+      0,
+      0,
+      1,
+      0,
+    ],
     SenderColourVisionMode.tritanopia => const [
-        .95,
-        .05,
-        0,
-        0,
-        0,
-        0,
-        .433,
-        .567,
-        0,
-        0,
-        0,
-        .475,
-        .525,
-        0,
-        0,
-        0,
-        0,
-        0,
-        1,
-        0
-      ],
+      .95,
+      .05,
+      0,
+      0,
+      0,
+      0,
+      .433,
+      .567,
+      0,
+      0,
+      0,
+      .475,
+      .525,
+      0,
+      0,
+      0,
+      0,
+      0,
+      1,
+      0,
+    ],
   };
 }
 
@@ -845,8 +858,9 @@ class SenderAccessibilityView extends StatelessWidget {
               _SwitchTile(
                 title: 'Larger touch targets',
                 value: settings.largerTouchTargets,
-                onChanged: (value) => controller
-                    .update(settings.copyWith(largerTouchTargets: value)),
+                onChanged: (value) => controller.update(
+                  settings.copyWith(largerTouchTargets: value),
+                ),
               ),
               _SwitchTile(
                 title: 'Haptic feedback',
@@ -862,8 +876,9 @@ class SenderAccessibilityView extends StatelessWidget {
                 title: 'Confirm before payment',
                 subtitle: 'Ask before charging any payment method.',
                 value: settings.confirmBeforePayment,
-                onChanged: (value) => controller
-                    .update(settings.copyWith(confirmBeforePayment: value)),
+                onChanged: (value) => controller.update(
+                  settings.copyWith(confirmBeforePayment: value),
+                ),
               ),
             ],
           ),
@@ -879,8 +894,9 @@ class SenderAccessibilityView extends StatelessWidget {
               _SwitchTile(
                 title: 'Read notifications',
                 value: settings.readNotifications,
-                onChanged: (value) => controller
-                    .update(settings.copyWith(readNotifications: value)),
+                onChanged: (value) => controller.update(
+                  settings.copyWith(readNotifications: value),
+                ),
               ),
               _ChoiceTile<SenderDeliveryAlertLevel>(
                 title: 'Delivery alerts',
@@ -896,14 +912,16 @@ class SenderAccessibilityView extends StatelessWidget {
               _SwitchTile(
                 title: 'Announce rider arrival',
                 value: settings.announceRiderArrival,
-                onChanged: (value) => controller
-                    .update(settings.copyWith(announceRiderArrival: value)),
+                onChanged: (value) => controller.update(
+                  settings.copyWith(announceRiderArrival: value),
+                ),
               ),
               _SwitchTile(
                 title: 'Announce delivery complete',
                 value: settings.announceDeliveryComplete,
-                onChanged: (value) => controller
-                    .update(settings.copyWith(announceDeliveryComplete: value)),
+                onChanged: (value) => controller.update(
+                  settings.copyWith(announceDeliveryComplete: value),
+                ),
               ),
             ],
           ),
@@ -919,14 +937,16 @@ class SenderAccessibilityView extends StatelessWidget {
                   SenderColourVisionMode.deuteranopia: 'Deuteranopia',
                   SenderColourVisionMode.tritanopia: 'Tritanopia',
                 },
-                onChanged: (value) => controller
-                    .update(settings.copyWith(colourVisionMode: value)),
+                onChanged: (value) => controller.update(
+                  settings.copyWith(colourVisionMode: value),
+                ),
               ),
               _SwitchTile(
                 title: 'Flash screen for delivery alerts',
                 value: settings.flashDeliveryAlerts,
-                onChanged: (value) => controller
-                    .update(settings.copyWith(flashDeliveryAlerts: value)),
+                onChanged: (value) => controller.update(
+                  settings.copyWith(flashDeliveryAlerts: value),
+                ),
               ),
             ],
           ),
@@ -957,7 +977,8 @@ class SenderAccessibilityView extends StatelessWidget {
                 builder: (context) => AlertDialog(
                   title: const Text('Reset accessibility settings?'),
                   content: const Text(
-                      'All Circum accessibility preferences will return to their defaults.'),
+                    'All Circum accessibility preferences will return to their defaults.',
+                  ),
                   actions: [
                     TextButton(
                       onPressed: () => Navigator.pop(context, false),
@@ -1008,25 +1029,27 @@ class _Section extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Padding(
-        padding: const EdgeInsets.only(bottom: 18),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Padding(
-              padding: const EdgeInsets.fromLTRB(4, 0, 4, 8),
-              child: Text(title,
-                  style: GoogleFonts.inter(fontWeight: FontWeight.w800)),
-            ),
-            AppGlassContainer(
-              radius: AppTokens.radius16,
-              padding: EdgeInsets.zero,
-              surfaceColor: Colors.white.withValues(alpha: .06),
-              borderColor: Colors.white.withValues(alpha: .12),
-              child: Column(children: children),
-            ),
-          ],
+    padding: const EdgeInsets.only(bottom: 18),
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Padding(
+          padding: const EdgeInsets.fromLTRB(4, 0, 4, 8),
+          child: Text(
+            title,
+            style: GoogleFonts.inter(fontWeight: FontWeight.w800),
+          ),
         ),
-      );
+        AppGlassContainer(
+          radius: AppTokens.radius16,
+          padding: EdgeInsets.zero,
+          surfaceColor: Colors.white.withValues(alpha: .06),
+          borderColor: Colors.white.withValues(alpha: .12),
+          child: Column(children: children),
+        ),
+      ],
+    ),
+  );
 }
 
 class _SwitchTile extends StatelessWidget {
@@ -1043,11 +1066,11 @@ class _SwitchTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => AppToggle(
-        label: title,
-        detail: subtitle,
-        value: value,
-        onChanged: onChanged,
-      );
+    label: title,
+    detail: subtitle,
+    value: value,
+    onChanged: onChanged,
+  );
 }
 
 class _ChoiceTile<T> extends StatelessWidget {
@@ -1064,34 +1087,34 @@ class _ChoiceTile<T> extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => ListTile(
-        title: Text(title),
-        subtitle: Text(labels[value] ?? ''),
-        trailing: const Icon(Icons.chevron_right_rounded),
-        onTap: () => showModalBottomSheet<void>(
-          context: context,
-          backgroundColor: const Color(0xFF101A2D),
-          builder: (context) => SafeArea(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                for (final entry in labels.entries)
-                  ListTile(
-                    title: Text(entry.value),
-                    leading: Icon(
-                      entry.key == value
-                          ? Icons.radio_button_checked_rounded
-                          : Icons.radio_button_off_rounded,
-                    ),
-                    onTap: () {
-                      onChanged(entry.key);
-                      Navigator.pop(context);
-                    },
-                  ),
-              ],
-            ),
-          ),
+    title: Text(title),
+    subtitle: Text(labels[value] ?? ''),
+    trailing: const Icon(Icons.chevron_right_rounded),
+    onTap: () => showModalBottomSheet<void>(
+      context: context,
+      backgroundColor: const Color(0xFF101A2D),
+      builder: (context) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            for (final entry in labels.entries)
+              ListTile(
+                title: Text(entry.value),
+                leading: Icon(
+                  entry.key == value
+                      ? Icons.radio_button_checked_rounded
+                      : Icons.radio_button_off_rounded,
+                ),
+                onTap: () {
+                  onChanged(entry.key);
+                  Navigator.pop(context);
+                },
+              ),
+          ],
         ),
-      );
+      ),
+    ),
+  );
 }
 
 class _AccessibilityNotice extends StatelessWidget {
@@ -1100,14 +1123,14 @@ class _AccessibilityNotice extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Padding(
-        padding: const EdgeInsets.only(bottom: 12),
-        child: Material(
-          color: const Color(0xFF3D1D22),
-          borderRadius: BorderRadius.circular(12),
-          child: ListTile(
-            leading: const Icon(Icons.error_outline_rounded),
-            title: Text(message),
-          ),
-        ),
-      );
+    padding: const EdgeInsets.only(bottom: 12),
+    child: Material(
+      color: const Color(0xFF3D1D22),
+      borderRadius: BorderRadius.circular(12),
+      child: ListTile(
+        leading: const Icon(Icons.error_outline_rounded),
+        title: Text(message),
+      ),
+    ),
+  );
 }

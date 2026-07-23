@@ -46,8 +46,9 @@ class _GiftReviewViewState extends State<GiftReviewView> {
         ),
         _ReviewRow(
           label: 'Reveal',
-          value: (senderGiftRevealModeOptions[
-                  draft.senderRevealMode ?? 'reveal_immediately'] ??
+          value:
+              (senderGiftRevealModeOptions[draft.senderRevealMode ??
+                  'reveal_immediately'] ??
               'Reveal immediately'),
         ),
         _ReviewRow(
@@ -70,14 +71,8 @@ class _GiftReviewViewState extends State<GiftReviewView> {
               ? 'No extra preferences provided.'
               : draft.recipientPreferencesContext,
         ),
-        _ReviewRow(
-          label: 'Safety / allergies',
-          value: draft.safetySummary,
-        ),
-        _GiftBriefCard(
-          draft: draft,
-          brief: brief,
-        ),
+        _ReviewRow(label: 'Safety / allergies', value: draft.safetySummary),
+        _GiftBriefCard(draft: draft, brief: brief),
         _OurApproachCard(draft: draft, brief: brief),
         if (draft.mode == SenderGiftMode.campaign) ...[
           const _ReviewRow(
@@ -153,9 +148,13 @@ class _GiftBriefCard extends StatelessWidget {
           ),
           const SizedBox(height: 12),
           _BriefLine(
-              label: 'Recipient', value: draft.recipientName ?? 'Not set'),
+            label: 'Recipient',
+            value: draft.recipientName ?? 'Not set',
+          ),
           _BriefLine(
-              label: 'Relationship', value: draft.relationship ?? 'Not set'),
+            label: 'Relationship',
+            value: draft.relationship ?? 'Not set',
+          ),
           _BriefLine(label: 'Occasion', value: draft.occasion ?? 'Not set'),
           _BriefLine(
             label: 'Emotional direction',

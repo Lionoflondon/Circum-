@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'dart:typed_data';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:cloud_functions/cloud_functions.dart';
@@ -30,8 +29,9 @@ part 'signup_event.dart';
 class AuthBloc extends Bloc<AuthEvent, AuthState> {
   FirebaseAuth auth = FirebaseAuth.instance;
   FirebaseFirestore db = FirebaseFirestore.instance;
-  FirebaseFunctions functions =
-      FirebaseFunctions.instanceFor(region: 'us-central1');
+  FirebaseFunctions functions = FirebaseFunctions.instanceFor(
+    region: 'us-central1',
+  );
   // Init firestore and geoFlutterFire
   // final geo = GeoFlutterFire();
   LocationHelper locationHelper = LocationHelper();
@@ -99,8 +99,9 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
   }
 
   Future<void> _updateSenderLocation(Position locationData) async {
-    final point =
-        GeoFirePoint(GeoPoint(locationData.latitude, locationData.longitude));
+    final point = GeoFirePoint(
+      GeoPoint(locationData.latitude, locationData.longitude),
+    );
     final raw = point.data;
     await functions.httpsCallable('updateSenderLocation').call({
       'position': {
@@ -111,8 +112,19 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
     });
   }
 
+  void _logRecoverableAuthError(
+    String step,
+    Object error, [
+    StackTrace? stack,
+  ]) {
+    debugPrint('Sender auth recoverable failure [$step]: $error');
+    if (stack != null) debugPrint('$stack');
+  }
+
   Future<void> _handleSortSessionState(
-      SortSessionState event, Emitter<AuthState> emit) async {
+    SortSessionState event,
+    Emitter<AuthState> emit,
+  ) async {
     // FirebaseAuth auth = FirebaseAuth.instance;
     final storage = FlutterSecureStorage();
 
@@ -122,13 +134,16 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
       final phone = (await storage.readAll())["phone"];
       // print("User is signed in: ${user.uid}");
       // You can also access user information like user.displayName, user.email, etc.
-      emit(state.copyWith(
+      emit(
+        state.copyWith(
           currentState: AppState.authenticated,
           username: user.displayName,
           phoneNumber: user.phoneNumber ?? phone,
           email: user.email,
           profilePhoto: user.photoURL,
-          authenticatedStatus: AuthenticatedStatus.authenticated));
+          authenticatedStatus: AuthenticatedStatus.authenticated,
+        ),
+      );
 
       await Future.delayed(const Duration(seconds: 3));
 
@@ -151,16 +166,13 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
   void _handleStartCountDown(StartCountDown event, Emitter<AuthState> emit) {
     int countdown = state.countdown;
     const oneSec = Duration(seconds: 1);
-    Timer.periodic(
-      oneSec,
-      (Timer timer) {
-        if (state.countdown == 0) {
-          timer.cancel();
-        } else {
-          emit(state.copyWith(countdown: countdown--));
-        }
-      },
-    );
+    Timer.periodic(oneSec, (Timer timer) {
+      if (state.countdown == 0) {
+        timer.cancel();
+      } else {
+        emit(state.copyWith(countdown: countdown--));
+      }
+    });
   }
 
   void _handleResetCountdown(ResetCountdown event, Emitter<AuthState> emit) {
@@ -174,7 +186,9 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
   }
 
   void _handleSignupEmailChanged(
-      SignupEmailChanged event, Emitter<AuthState> emit) {
+    SignupEmailChanged event,
+    Emitter<AuthState> emit,
+  ) {
     emit(state.copyWith(email: event.email));
     if (event.email!.isValidEmail()) {
       emit(state.copyWith(isEmailValid: true));
@@ -186,22 +200,30 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
   }
 
   void _handlePhoneNumberChanged(
-      PhoneNumberChanged event, Emitter<AuthState> emit) {
+    PhoneNumberChanged event,
+    Emitter<AuthState> emit,
+  ) {
     emit(state.copyWith(phoneNumber: event.phoneNumber));
   }
 
   void _handleSignupPasswordChanged(
-      SignupPasswordChanged event, Emitter<AuthState> emit) {
+    SignupPasswordChanged event,
+    Emitter<AuthState> emit,
+  ) {
     emit(state.copyWith(password: event.password));
   }
 
   void _handleConfirmPasswordChanged(
-      ConfirmPasswordChanged event, Emitter<AuthState> emit) {
+    ConfirmPasswordChanged event,
+    Emitter<AuthState> emit,
+  ) {
     emit(state.copyWith(confirmPassword: event.password));
   }
 
   void _handleDateOfBirthChanged(
-      DateOfBirthChanged event, Emitter<AuthState> emit) {
+    DateOfBirthChanged event,
+    Emitter<AuthState> emit,
+  ) {
     if (event.dateOfBirth.length == 10) {
       var inputFormat = DateFormat('dd/MM/yyyy');
       var date1 = inputFormat.parse(event.dateOfBirth);
@@ -224,7 +246,9 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
   }
 
   Future<void> _handleSignInWithAppleAuth(
-      SignInWithAppleAuth event, Emitter<AuthState> emit) async {
+    SignInWithAppleAuth event,
+    Emitter<AuthState> emit,
+  ) async {
     try {
       final appleCredential = await SignInWithApple.getAppleIDCredential(
         scopes: [
@@ -234,38 +258,58 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
       );
 
       final oauthCredential = OAuthProvider("apple.com").credential(
-          idToken: appleCredential.identityToken,
-          accessToken: appleCredential.authorizationCode);
+        idToken: appleCredential.identityToken,
+        accessToken: appleCredential.authorizationCode,
+      );
 
-      UserCredential userCredential =
-          await auth.signInWithCredential(oauthCredential);
+      UserCredential userCredential = await auth.signInWithCredential(
+        oauthCredential,
+      );
 
-      emit(state.copyWith(
+      emit(
+        state.copyWith(
           username: userCredential.user?.displayName,
           email: userCredential.user?.email,
           profilePhoto: userCredential.user?.photoURL,
           status: Status.signedInWithOAuth,
           currentState: AppState.authenticated,
-          authenticatedStatus: appleCredential.givenName == null &&
+          authenticatedStatus:
+              appleCredential.givenName == null &&
                   userCredential.user?.displayName == null
               ? AuthenticatedStatus.incompleteData
-              : AuthenticatedStatus.authenticated));
+              : AuthenticatedStatus.authenticated,
+        ),
+      );
 
       if (appleCredential.givenName != null) {
-        add(UpdateUserProfile(
+        add(
+          UpdateUserProfile(
             username:
-                "${appleCredential.givenName} ${appleCredential.familyName}"));
+                "${appleCredential.givenName} ${appleCredential.familyName}",
+          ),
+        );
       }
       await Future.delayed(const Duration(seconds: 2));
-    } catch (e) {}
+    } catch (e, stack) {
+      _logRecoverableAuthError('apple_sign_in', e, stack);
+      emit(
+        state.copyWith(
+          status: Status.failure,
+          errorMessage:
+              'Apple sign-in could not be completed. Please try again.',
+        ),
+      );
+    }
   }
 
   void _handleRequestForOTP(
-      RequestForOTP event, Emitter<AuthState> emit) async {
+    RequestForOTP event,
+    Emitter<AuthState> emit,
+  ) async {
     var completer = Completer<bool>();
 
-    String? _verificationId;
-    int? _resendToken;
+    String? verificationIdValue;
+    int? resendTokenValue;
 
     try {
       emit(state.copyWith(status: Status.loading));
@@ -276,8 +320,8 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
           throw 'Verification failed';
         },
         codeSent: (String verificationId, int? resendToken) async {
-          _verificationId = verificationId;
-          _resendToken = resendToken;
+          verificationIdValue = verificationId;
+          resendTokenValue = resendToken;
           completer.complete(true);
         },
         codeAutoRetrievalTimeout: (_) {
@@ -286,23 +330,31 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
       );
       await completer.future;
 
-      emit(state.copyWith(
-          verificationId: _verificationId,
-          resendToken: _resendToken,
-          status: Status.success));
+      emit(
+        state.copyWith(
+          verificationId: verificationIdValue,
+          resendToken: resendTokenValue,
+          status: Status.success,
+        ),
+      );
     } catch (e) {
-      emit(state.copyWith(
+      emit(
+        state.copyWith(
           errorMessage: e.toString().split(':').last.trim(),
           isLoading: false,
-          status: Status.failure));
+          status: Status.failure,
+        ),
+      );
     }
   }
 
   Future<void> _handleSignInWithGoogle(
-      SignInWithGoogle event, Emitter<AuthState> emit) async {
+    SignInWithGoogle event,
+    Emitter<AuthState> emit,
+  ) async {
     final GoogleSignIn googleSignIn = GoogleSignIn();
-    final GoogleSignInAccount? googleSignInAccount =
-        await googleSignIn.signIn();
+    final GoogleSignInAccount? googleSignInAccount = await googleSignIn
+        .signIn();
 
     if (googleSignInAccount != null) {
       final GoogleSignInAuthentication googleSignInAuthentication =
@@ -314,27 +366,35 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
       );
 
       // Sign in with credential
-      UserCredential userCredential =
-          await auth.signInWithCredential(credential);
+      UserCredential userCredential = await auth.signInWithCredential(
+        credential,
+      );
 
-      emit(state.copyWith(
+      emit(
+        state.copyWith(
           username: userCredential.user?.displayName,
           email: userCredential.user?.email,
           profilePhoto: userCredential.user?.photoURL,
           status: Status.signedInWithOAuth,
           currentState: AppState.authenticated,
-          authenticatedStatus: AuthenticatedStatus.authenticated));
+          authenticatedStatus: AuthenticatedStatus.authenticated,
+        ),
+      );
 
       add(UpdateUserProfile(username: userCredential.user!.displayName!));
     }
   }
 
   Future<void> _handleVerifySentCode(
-      VerifySentCode event, Emitter<AuthState> emit) async {
+    VerifySentCode event,
+    Emitter<AuthState> emit,
+  ) async {
     try {
       // Create a PhoneAuthCredential with the code
       PhoneAuthCredential credential = PhoneAuthProvider.credential(
-          verificationId: state.verificationId!, smsCode: '${state.otp}');
+        verificationId: state.verificationId!,
+        smsCode: '${state.otp}',
+      );
 
       // if user is already signed in by other means, link the credentials
       // else, sign user in
@@ -342,38 +402,51 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
       if (auth.currentUser != null) {
         await auth.currentUser?.linkWithCredential(credential);
       } else {
-        final UserCredential _userCredential =
-            await auth.signInWithCredential(credential);
+        final UserCredential userCredential = await auth.signInWithCredential(
+          credential,
+        );
 
-        if (_userCredential.user?.displayName == null) {
+        if (userCredential.user?.displayName == null) {
           if (state.oAuthFirstName == null) {
-            emit(state.copyWith(
+            emit(
+              state.copyWith(
                 authenticatedStatus: AuthenticatedStatus.incompleteData,
-                currentState: AppState.authenticated));
+                currentState: AppState.authenticated,
+              ),
+            );
           } else {
-            add(UpdateUserProfile(
-                username: "${state.oAuthFirstName} ${state.oAuthLastName}"));
-            emit(state.copyWith(
+            add(
+              UpdateUserProfile(
+                username: "${state.oAuthFirstName} ${state.oAuthLastName}",
+              ),
+            );
+            emit(
+              state.copyWith(
                 status: Status.success,
                 username: "${state.oAuthFirstName} ${state.oAuthLastName}",
                 profilePhoto: state.oAuthPhotoURL,
                 email: state.oAuthEmail,
                 verificationId: '',
                 otp: '',
-                phoneNumber: _userCredential.user?.phoneNumber,
-                currentState: AppState.authenticated));
+                phoneNumber: userCredential.user?.phoneNumber,
+                currentState: AppState.authenticated,
+              ),
+            );
           }
         } else {
-          emit(state.copyWith(
+          emit(
+            state.copyWith(
               status: Status.success,
-              username: _userCredential.user?.displayName,
-              profilePhoto: _userCredential.user?.photoURL,
-              email: _userCredential.user?.email,
+              username: userCredential.user?.displayName,
+              profilePhoto: userCredential.user?.photoURL,
+              email: userCredential.user?.email,
               verificationId: '',
               otp: '',
-              phoneNumber: _userCredential.user?.phoneNumber,
+              phoneNumber: userCredential.user?.phoneNumber,
               authenticatedStatus: AuthenticatedStatus.authenticated,
-              currentState: AppState.authenticated));
+              currentState: AppState.authenticated,
+            ),
+          );
         }
       }
       // Sign the user in (or link) with the credential
@@ -381,74 +454,105 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
       if (e.code == 'invalid-verification-code') {
         emit(state.copyWith(errorMessage: 'Invalid verification code'));
       }
-    } catch (e) {}
+    } catch (e, stack) {
+      _logRecoverableAuthError('verify_sent_code', e, stack);
+      emit(
+        state.copyWith(errorMessage: 'Verification could not be completed.'),
+      );
+    }
   }
 
   Future<void> _handleSubmitOTP(
-      SubmitOTP event, Emitter<AuthState> emit) async {
+    SubmitOTP event,
+    Emitter<AuthState> emit,
+  ) async {
     emit(state.copyWith(isLoading: true, status: Status.success));
   }
 
   Future<void> _handleFirstNameChanged(
-      FirstNameChanged event, Emitter<AuthState> emit) async {
+    FirstNameChanged event,
+    Emitter<AuthState> emit,
+  ) async {
     return emit(state.copyWith(firstName: event.firstName));
   }
 
   Future<void> _handleLastNameChanged(
-      LastNameChanged event, Emitter<AuthState> emit) async {
+    LastNameChanged event,
+    Emitter<AuthState> emit,
+  ) async {
     return emit(state.copyWith(lastName: event.lastName));
   }
 
   Future<void> _handleUsernameChanged(
-      UsernameChanged event, Emitter<AuthState> emit) async {
+    UsernameChanged event,
+    Emitter<AuthState> emit,
+  ) async {
     return emit(state.copyWith(username: event.username));
   }
 
   Future<void> _handleSetVerificationMethod(
-      SetVerificationMethod event, Emitter<AuthState> emit) async {
+    SetVerificationMethod event,
+    Emitter<AuthState> emit,
+  ) async {
     emit(state.copyWith(verificationType: event.method));
   }
 
   Future<void> _handleSetResetPasswordOTP(
-      SetResetPasswordOTP event, Emitter<AuthState> emit) async {
+    SetResetPasswordOTP event,
+    Emitter<AuthState> emit,
+  ) async {
     emit(state.copyWith(resetPasswordOtp: event.otp));
   }
 
   Future<void> _handleForgotPassword(
-      ForgotPassword event, Emitter<AuthState> emit) async {
+    ForgotPassword event,
+    Emitter<AuthState> emit,
+  ) async {
     try {} catch (e) {
-      emit(state.copyWith(
-          errorMessage: e.toString().split(':').last.trim(), isLoading: false));
+      emit(
+        state.copyWith(
+          errorMessage: e.toString().split(':').last.trim(),
+          isLoading: false,
+        ),
+      );
     }
   }
 
   Future<void> _handleGenderChanged(
-      GenderChanged event, Emitter<AuthState> emit) async {
+    GenderChanged event,
+    Emitter<AuthState> emit,
+  ) async {
     return emit(state.copyWith(gender: event.gender.toUpperCase().trim()));
   }
 
   void _handleSignInWithEmail(
-      SignInWithEmail event, Emitter<AuthState> emit) async {
+    SignInWithEmail event,
+    Emitter<AuthState> emit,
+  ) async {
     FlutterSecureStorage storage = const FlutterSecureStorage();
     try {
       emit(state.copyWith(status: Status.loading));
-      final UserCredential userCredential =
-          await auth.signInWithEmailAndPassword(
-              email: event.email, password: event.password);
+      final UserCredential userCredential = await auth
+          .signInWithEmailAndPassword(
+            email: event.email,
+            password: event.password,
+          );
       storage.write(key: 'password', value: event.password);
 
       if (auth.currentUser?.emailVerified == false) {
         await auth.currentUser?.sendEmailVerification();
-        emit(state.copyWith(
-          status: Status.unverifiedEmail,
-        ));
+        emit(state.copyWith(status: Status.unverifiedEmail));
       } else {
         if (userCredential.user?.displayName == null) {
-          emit(state.copyWith(
+          emit(
+            state.copyWith(
               authenticatedStatus: AuthenticatedStatus.incompleteData,
-              currentState: AppState.authenticated));
+              currentState: AppState.authenticated,
+            ),
+          );
         } else {
-          emit(state.copyWith(
+          emit(
+            state.copyWith(
               status: Status.success,
               authenticatedStatus: AuthenticatedStatus.authenticated,
               username: userCredential.user?.displayName,
@@ -457,7 +561,9 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
               verificationId: '',
               otp: '',
               phoneNumber: userCredential.user?.phoneNumber,
-              currentState: AppState.authenticated));
+              currentState: AppState.authenticated,
+            ),
+          );
 
           User? user = auth.currentUser;
           final documentReference = db.collection('users').doc(user?.uid);
@@ -494,19 +600,21 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
   }
 
   void _handleSignUpWithEmail(
-      SignUpWithEmail event, Emitter<AuthState> emit) async {
+    SignUpWithEmail event,
+    Emitter<AuthState> emit,
+  ) async {
     FlutterSecureStorage storage = const FlutterSecureStorage();
     try {
       emit(state.copyWith(status: Status.loading));
       await auth.createUserWithEmailAndPassword(
-          email: event.email, password: event.password);
+        email: event.email,
+        password: event.password,
+      );
 
       storage.write(key: 'password', value: event.password);
       if (auth.currentUser?.emailVerified == false) {
         await auth.currentUser?.sendEmailVerification();
-        emit(state.copyWith(
-          status: Status.unverifiedEmail,
-        ));
+        emit(state.copyWith(status: Status.unverifiedEmail));
       }
     } on FirebaseAuthException catch (e) {
       emit(state.copyWith(status: Status.failure));
@@ -528,27 +636,35 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
   }
 
   void _handleConfirmEmailVerification(
-      ConfirmEmailVerification event, Emitter<AuthState> emit) async {
+    ConfirmEmailVerification event,
+    Emitter<AuthState> emit,
+  ) async {
     await auth.currentUser?.reload();
     if (auth.currentUser?.emailVerified == true) {
       if (auth.currentUser?.displayName == null) {
-        emit(state.copyWith(
-          authenticatedStatus: AuthenticatedStatus.incompleteData,
-          currentState: AppState.authenticated,
-        ));
+        emit(
+          state.copyWith(
+            authenticatedStatus: AuthenticatedStatus.incompleteData,
+            currentState: AppState.authenticated,
+          ),
+        );
       } else {
-        emit(state.copyWith(
-          authenticatedStatus: AuthenticatedStatus.authenticated,
-          currentState: AppState.authenticated,
-          username: auth.currentUser?.displayName,
-          profilePhoto: auth.currentUser?.photoURL,
-        ));
+        emit(
+          state.copyWith(
+            authenticatedStatus: AuthenticatedStatus.authenticated,
+            currentState: AppState.authenticated,
+            username: auth.currentUser?.displayName,
+            profilePhoto: auth.currentUser?.photoURL,
+          ),
+        );
       }
     } else {}
   }
 
   void _handleUpdatePhoneNumber(
-      UpdatePhoneNumber event, Emitter<AuthState> emit) async {
+    UpdatePhoneNumber event,
+    Emitter<AuthState> emit,
+  ) async {
     try {
       User? user = auth.currentUser;
       FlutterSecureStorage storage = const FlutterSecureStorage();
@@ -560,26 +676,37 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
 
         emit(state.copyWith(phoneNumber: event.value));
       }
-    } catch (e) {}
+    } catch (e, stack) {
+      _logRecoverableAuthError('update_phone_number', e, stack);
+      emit(state.copyWith(errorMessage: 'Phone number could not be updated.'));
+    }
   }
 
   void _handleUpdateUserProfilePhoto(
-      UpdateUserProfilePhoto event, Emitter<AuthState> emit) async {
+    UpdateUserProfilePhoto event,
+    Emitter<AuthState> emit,
+  ) async {
     try {
       User? user = auth.currentUser;
       final fileName = user!.uid;
 
       final storageRef = FirebaseStorage.instance;
-      await storageRef.ref('profile-photos/$fileName').putData(
+      await storageRef
+          .ref('profile-photos/$fileName')
+          .putData(
             event.imageBytes,
             SettableMetadata(contentType: 'image/jpeg'),
           );
-      final downloadUrl =
-          await storageRef.ref('profile-photos/$fileName').getDownloadURL();
+      final downloadUrl = await storageRef
+          .ref('profile-photos/$fileName')
+          .getDownloadURL();
 
       await user.updatePhotoURL(downloadUrl);
       emit(state.copyWith(profilePhoto: downloadUrl));
-    } catch (e) {}
+    } catch (e, stack) {
+      _logRecoverableAuthError('update_profile_photo', e, stack);
+      emit(state.copyWith(errorMessage: 'Profile photo could not be updated.'));
+    }
   }
 
   void _handleSignOut(SignOut event, Emitter<AuthState> emit) async {
@@ -591,7 +718,9 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
   }
 
   void _handleDeleteAccount(
-      DeleteAccount event, Emitter<AuthState> emit) async {
+    DeleteAccount event,
+    Emitter<AuthState> emit,
+  ) async {
     FlutterSecureStorage storage = const FlutterSecureStorage();
     final user = auth.currentUser!;
     final password = (await storage.readAll())["password"];
@@ -605,7 +734,9 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
       //     verificationId: state.verificationId!, smsCode: '${state.otp}');
 
       final AuthCredential credential = EmailAuthProvider.credential(
-          email: state.email!, password: password!);
+        email: state.email!,
+        password: password!,
+      );
 
       // Reauthenticate user with phone credential
       await user.reauthenticateWithCredential(credential);
@@ -632,7 +763,9 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
   }
 
   void _handleResetPassword(
-      ResetPassword event, Emitter<AuthState> emit) async {
+    ResetPassword event,
+    Emitter<AuthState> emit,
+  ) async {
     try {
       emit(state.copyWith(status: Status.loading));
       await auth.sendPasswordResetEmail(email: event.email);
@@ -659,37 +792,49 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
   }
 
   void _handleValidatePhoneNumber(
-      ValidatePhoneNumber event, Emitter<AuthState> emit) {
+    ValidatePhoneNumber event,
+    Emitter<AuthState> emit,
+  ) {
     emit(state.copyWith(isPhoneNumberValid: event.val));
   }
 
   void _handleRequestLocationData(
-      RequestLocationData event, Emitter<AuthState> emit) async {
+    RequestLocationData event,
+    Emitter<AuthState> emit,
+  ) async {
     try {
       final User? user = auth.currentUser;
       Position locationData = await locationHelper.enableLocation();
 
-      emit(state.copyWith(
+      emit(
+        state.copyWith(
           locationData: locationData,
           hasLocationPermission: true,
           isLocationEnabled: true,
           status: Status.locationRequested,
-          appLocationStatus: AppLocationStatus.available));
+          appLocationStatus: AppLocationStatus.available,
+        ),
+      );
       if (user != null) {
         await _updateSenderLocation(locationData);
       }
     } catch (e) {
       if (e == 'Location permissions are permanently denied') {
-        emit(state.copyWith(
+        emit(
+          state.copyWith(
             hasLocationPermission: false,
             status: Status.locationRequested,
-            appLocationStatus: AppLocationStatus.denied));
+            appLocationStatus: AppLocationStatus.denied,
+          ),
+        );
       }
     }
   }
 
   void _handleUpdateUserProfile(
-      UpdateUserProfile event, Emitter<AuthState> emit) async {
+    UpdateUserProfile event,
+    Emitter<AuthState> emit,
+  ) async {
     try {
       emit(state.copyWith(status: Status.loading));
       final User? user = auth.currentUser;
@@ -702,24 +847,35 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
 
       // print(user);
 
-      emit(state.copyWith(
+      emit(
+        state.copyWith(
           status: Status.success,
           authenticatedStatus: AuthenticatedStatus.authenticated,
-          username: event.username));
-    } catch (e) {}
+          username: event.username,
+        ),
+      );
+    } catch (e, stack) {
+      _logRecoverableAuthError('update_user_profile', e, stack);
+      emit(state.copyWith(errorMessage: 'Profile could not be updated.'));
+    }
   }
 
   void _handleOpenSettingsApp(
-      OpenSettingsApp event, Emitter<AuthState> emit) async {
+    OpenSettingsApp event,
+    Emitter<AuthState> emit,
+  ) async {
     try {
       final User? user = auth.currentUser;
       Position locationData = await locationHelper.enableLocation();
 
-      emit(state.copyWith(
+      emit(
+        state.copyWith(
           locationData: locationData,
           hasLocationPermission: true,
           isLocationEnabled: true,
-          status: Status.locationRequested));
+          status: Status.locationRequested,
+        ),
+      );
       if (user != null) {
         await _updateSenderLocation(locationData);
       }
@@ -735,7 +891,9 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
   }
 
   void _handleUpdateFirstName(
-      UpdateFirstName event, Emitter<AuthState> emit) async {
+    UpdateFirstName event,
+    Emitter<AuthState> emit,
+  ) async {
     try {
       User? user = auth.currentUser;
       final lastName = state.username?.trim().split(' ').last;
@@ -751,11 +909,16 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
         emit(state.copyWith(username: event.value));
         await _updateSenderProfile(displayName: event.value);
       }
-    } catch (e) {}
+    } catch (e, stack) {
+      _logRecoverableAuthError('update_first_name', e, stack);
+      emit(state.copyWith(errorMessage: 'First name could not be updated.'));
+    }
   }
 
   void _handleUpdateLastName(
-      UpdateLastName event, Emitter<AuthState> emit) async {
+    UpdateLastName event,
+    Emitter<AuthState> emit,
+  ) async {
     try {
       User? user = auth.currentUser;
       final firstName = state.username?.trim().split(' ').first;
@@ -771,7 +934,10 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
         emit(state.copyWith(username: event.value));
         await _updateSenderProfile(displayName: event.value);
       }
-    } catch (e) {}
+    } catch (e, stack) {
+      _logRecoverableAuthError('update_last_name', e, stack);
+      emit(state.copyWith(errorMessage: 'Last name could not be updated.'));
+    }
   }
 
   void _handleSetErrorMessage(SetErrorMessage event, Emitter<AuthState> emit) {

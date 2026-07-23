@@ -46,10 +46,7 @@ class _SenderTrackingStateGalleryState
         backgroundColor: const Color(0xFF07090F),
         body: Stack(
           children: [
-            SenderMobileTrackingScreen(
-              engine: _engine,
-              stateOverride: _state,
-            ),
+            SenderMobileTrackingScreen(engine: _engine, stateOverride: _state),
             SafeArea(
               child: Align(
                 alignment: Alignment.centerRight,

@@ -9,10 +9,7 @@ const senderGiftPersonalMessageFieldName = 'personalMessage';
 class GiftMessageView extends StatefulWidget {
   final GiftJourneyDraft draft;
 
-  const GiftMessageView({
-    super.key,
-    required this.draft,
-  });
+  const GiftMessageView({super.key, required this.draft});
 
   static const routeName = '/sender-mobile/gifts/message';
 
@@ -62,17 +59,17 @@ class _GiftMessageViewState extends State<GiftMessageView> {
         onTap: !_canContinue
             ? null
             : () => Navigator.of(context).push(
-                  MaterialPageRoute<void>(
-                    builder: (_) => GiftVoiceNoteView(
-                      draft: widget.draft.copyWith(
-                        personalMessage: _messageController.text.trim(),
-                      ),
-                    ),
-                    settings: const RouteSettings(
-                      name: GiftVoiceNoteView.routeName,
+                MaterialPageRoute<void>(
+                  builder: (_) => GiftVoiceNoteView(
+                    draft: widget.draft.copyWith(
+                      personalMessage: _messageController.text.trim(),
                     ),
                   ),
+                  settings: const RouteSettings(
+                    name: GiftVoiceNoteView.routeName,
+                  ),
                 ),
+              ),
       ),
     );
   }

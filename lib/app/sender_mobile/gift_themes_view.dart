@@ -26,9 +26,7 @@ class _GiftThemesViewState extends State<GiftThemesView> {
   @override
   void initState() {
     super.initState();
-    _customController = TextEditingController(
-      text: '',
-    );
+    _customController = TextEditingController(text: '');
     _themes = [...widget.draft.normalizedGiftThemes];
   }
 
@@ -101,23 +99,23 @@ class _GiftThemesViewState extends State<GiftThemesView> {
         onTap: !_canContinue
             ? null
             : () => Navigator.of(context).push(
-                  MaterialPageRoute<void>(
-                    builder: (_) => GiftIrisView(
-                      draft: widget.draft.copyWith(
-                        interests: _themes
-                            .where((theme) => theme.source == 'catalogue')
-                            .map((theme) => theme.label)
-                            .toList(),
-                        customInterest: _themes
-                            .where((theme) => theme.source == 'custom')
-                            .map((theme) => theme.label)
-                            .join(', '),
-                        giftThemes: _themes,
-                      ),
+                MaterialPageRoute<void>(
+                  builder: (_) => GiftIrisView(
+                    draft: widget.draft.copyWith(
+                      interests: _themes
+                          .where((theme) => theme.source == 'catalogue')
+                          .map((theme) => theme.label)
+                          .toList(),
+                      customInterest: _themes
+                          .where((theme) => theme.source == 'custom')
+                          .map((theme) => theme.label)
+                          .join(', '),
+                      giftThemes: _themes,
                     ),
-                    settings: const RouteSettings(name: GiftIrisView.routeName),
                   ),
+                  settings: const RouteSettings(name: GiftIrisView.routeName),
                 ),
+              ),
       ),
     );
   }
@@ -176,8 +174,8 @@ class _IrisThemePanel extends StatelessWidget {
     final body = !hasThemes
         ? 'Add an interest to help us understand the person behind the occasion.'
         : customThemes.isNotEmpty && signals.isEmpty
-            ? "We've saved this as personal context. IRIS will use it while planning the experience."
-            : "We'll use these interests to shape the experience with more care.";
+        ? "We've saved this as personal context. IRIS will use it while planning the experience."
+        : "We'll use these interests to shape the experience with more care.";
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.all(16),
