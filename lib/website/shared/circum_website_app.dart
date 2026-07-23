@@ -4,6 +4,7 @@ import 'dart:math' as math;
 
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:cloud_functions/cloud_functions.dart';
+import 'package:circum/app/delivery/proof_of_delivery.dart';
 import 'package:circum/website/shared/health_plus/health_plus_pricing.dart';
 import 'package:circum/website/shared/health_plus/pickup_status.dart';
 import 'package:circum/website/shared/health_plus/recurring_pickup_schedule.dart';
@@ -37,9 +38,7 @@ import 'pricing/website_special_handling_engine.dart';
 const _companyName = 'Circum';
 const _webQuoteDistanceMiles = 4.8;
 const _desktopWebBreakpoint = 760.0;
-const _googlePlacesApiKey = String.fromEnvironment(
-  'GOOGLE_PLACES_API_KEY',
-);
+const _googlePlacesApiKey = String.fromEnvironment('GOOGLE_PLACES_API_KEY');
 const _spectrumGradient = [
   Color(0xffff8c00),
   Color(0xfff80032),
@@ -72,8 +71,9 @@ class _CircumWebsiteAppState extends State<CircumWebsiteApp> {
     publicHostingHost: true,
   );
   late _WebAppMode _mode = _modeFromRoute(_initialRoute);
-  late _SenderStep _senderInitialStep =
-      _senderStepFromRoute(_initialRoute.senderEntry);
+  late _SenderStep _senderInitialStep = _senderStepFromRoute(
+    _initialRoute.senderEntry,
+  );
 
   @override
   void initState() {
@@ -117,11 +117,7 @@ class _CircumWebsiteAppState extends State<CircumWebsiteApp> {
   }
 
   static Uri _canonicalWebUri(String path) {
-    return Uri.base.replace(
-      path: path,
-      queryParameters: {},
-      fragment: '',
-    );
+    return Uri.base.replace(path: path, queryParameters: {}, fragment: '');
   }
 
   Future<void> _openSurface(
@@ -131,11 +127,11 @@ class _CircumWebsiteAppState extends State<CircumWebsiteApp> {
     final path = switch (mode) {
       _WebAppMode.landing => '/',
       _WebAppMode.sender => switch (senderStep) {
-          _SenderStep.healthPlus => '/send/health',
-          _SenderStep.business => '/send/business',
-          _SenderStep.profile => '/send/profile',
-          _ => '/send',
-        },
+        _SenderStep.healthPlus => '/send/health',
+        _SenderStep.business => '/send/business',
+        _SenderStep.profile => '/send/profile',
+        _ => '/send',
+      },
       _WebAppMode.rider => '/rider',
       _WebAppMode.gifts => '/gifts',
       _WebAppMode.vanguard => '/vanguard',
@@ -204,57 +200,55 @@ class _CircumWebsiteAppState extends State<CircumWebsiteApp> {
   Widget _surfaceStage(_CircumColors colors) {
     return switch (_mode) {
       _WebAppMode.sender => _PhoneStage(
-          key: const ValueKey(circumSenderWebIdentity),
-          colors: colors,
-          child: _CustomerPortal(
-            darkMode: _darkMode,
-            colors: colors,
-            initialStep: _senderInitialStep,
-            onBack: () => _openSurface(_WebAppMode.landing),
-            onRoleSelected: _openRole,
-            onGifts: () => _openSurface(_WebAppMode.gifts),
-            onToggleTheme: () => setState(() => _darkMode = !_darkMode),
-          ),
-        ),
-      _WebAppMode.rider => _PhoneStage(
-          key: const ValueKey(circumRiderWebIdentity),
-          colors: colors,
-          child: _RiderEnrollmentPortal(
-            darkMode: _darkMode,
-            colors: colors,
-            onBack: () => _openSurface(_WebAppMode.landing),
-            onRoleSelected: _openRole,
-            onToggleTheme: () => setState(() => _darkMode = !_darkMode),
-          ),
-        ),
-      _WebAppMode.gifts => _GiftsRequestPage(
-          key: const ValueKey('gifts-request'),
-          colors: colors,
-          onBack: () => _openSurface(_WebAppMode.landing),
-        ),
-      _WebAppMode.vanguard => _VanguardLandingPage(
-          key: const ValueKey('vanguard-page'),
-          colors: colors,
-          onBack: () => _openSurface(_WebAppMode.landing),
-        ),
-      _WebAppMode.landing => _LandingPage(
-          key: const ValueKey(circumPublicWebIdentity),
-          colors: colors,
+        key: const ValueKey(circumSenderWebIdentity),
+        colors: colors,
+        child: _CustomerPortal(
           darkMode: _darkMode,
-          onStart: () => _openSurface(_WebAppMode.sender),
-          onRider: () => _openSurface(_WebAppMode.rider),
-          onHealthPlus: () => _openSurface(
-            _WebAppMode.sender,
-            senderStep: _SenderStep.healthPlus,
-          ),
-          onBusiness: () => _openSurface(
-            _WebAppMode.sender,
-            senderStep: _SenderStep.business,
-          ),
-          onVanguard: () => _openSurface(_WebAppMode.vanguard),
+          colors: colors,
+          initialStep: _senderInitialStep,
+          onBack: () => _openSurface(_WebAppMode.landing),
+          onRoleSelected: _openRole,
           onGifts: () => _openSurface(_WebAppMode.gifts),
           onToggleTheme: () => setState(() => _darkMode = !_darkMode),
         ),
+      ),
+      _WebAppMode.rider => _PhoneStage(
+        key: const ValueKey(circumRiderWebIdentity),
+        colors: colors,
+        child: _RiderEnrollmentPortal(
+          darkMode: _darkMode,
+          colors: colors,
+          onBack: () => _openSurface(_WebAppMode.landing),
+          onRoleSelected: _openRole,
+          onToggleTheme: () => setState(() => _darkMode = !_darkMode),
+        ),
+      ),
+      _WebAppMode.gifts => _GiftsRequestPage(
+        key: const ValueKey('gifts-request'),
+        colors: colors,
+        onBack: () => _openSurface(_WebAppMode.landing),
+      ),
+      _WebAppMode.vanguard => _VanguardLandingPage(
+        key: const ValueKey('vanguard-page'),
+        colors: colors,
+        onBack: () => _openSurface(_WebAppMode.landing),
+      ),
+      _WebAppMode.landing => _LandingPage(
+        key: const ValueKey(circumPublicWebIdentity),
+        colors: colors,
+        darkMode: _darkMode,
+        onStart: () => _openSurface(_WebAppMode.sender),
+        onRider: () => _openSurface(_WebAppMode.rider),
+        onHealthPlus: () => _openSurface(
+          _WebAppMode.sender,
+          senderStep: _SenderStep.healthPlus,
+        ),
+        onBusiness: () =>
+            _openSurface(_WebAppMode.sender, senderStep: _SenderStep.business),
+        onVanguard: () => _openSurface(_WebAppMode.vanguard),
+        onGifts: () => _openSurface(_WebAppMode.gifts),
+        onToggleTheme: () => setState(() => _darkMode = !_darkMode),
+      ),
     };
   }
 
@@ -320,8 +314,9 @@ class _PlatformNotificationCenterState
       if (mounted) setState(() => _items = const []);
       return;
     }
-    Query<Map<String, dynamic>> query =
-        FirebaseFirestore.instance.collection('notifications').limit(80);
+    Query<Map<String, dynamic>> query = FirebaseFirestore.instance
+        .collection('notifications')
+        .limit(80);
     query = query.where('recipientId', isEqualTo: user.uid);
     _subscription = query.snapshots().listen((snapshot) {
       final docs = snapshot.docs.toList(growable: false)
@@ -329,8 +324,9 @@ class _PlatformNotificationCenterState
           final left = a.data()['createdAt'];
           final right = b.data()['createdAt'];
           final leftDate = left is Timestamp ? left.toDate() : DateTime(1970);
-          final rightDate =
-              right is Timestamp ? right.toDate() : DateTime(1970);
+          final rightDate = right is Timestamp
+              ? right.toDate()
+              : DateTime(1970);
           return rightDate.compareTo(leftDate);
         });
       if (mounted) setState(() => _items = docs);
@@ -347,9 +343,9 @@ class _PlatformNotificationCenterState
       final callable = widget.mode == _WebAppMode.rider
           ? 'updateRiderPushToken'
           : 'updateSenderPushToken';
-      await FirebaseFunctions.instanceFor(region: 'us-central1')
-          .httpsCallable(callable)
-          .call({'fcmToken': token});
+      await FirebaseFunctions.instanceFor(
+        region: 'us-central1',
+      ).httpsCallable(callable).call({'fcmToken': token});
     } catch (_) {
       // In-app notification history remains available if push is unavailable.
     }
@@ -360,26 +356,27 @@ class _PlatformNotificationCenterState
   ) async {
     if (item.data()['read'] == true) return;
     await FirebaseFunctions.instanceFor(region: 'us-central1')
-        .httpsCallable(widget.mode == _WebAppMode.rider
-            ? 'updateRiderNotificationState'
-            : 'updateSenderNotificationState')
-        .call({
-      'notificationId': item.id,
-      'action': 'mark_read',
-    });
+        .httpsCallable(
+          widget.mode == _WebAppMode.rider
+              ? 'updateRiderNotificationState'
+              : 'updateSenderNotificationState',
+        )
+        .call({'notificationId': item.id, 'action': 'mark_read'});
   }
 
   Future<void> _markAllRead() async {
     final unread = _items.where((item) => item.data()['read'] != true).toList();
     if (unread.isEmpty) return;
     await FirebaseFunctions.instanceFor(region: 'us-central1')
-        .httpsCallable(widget.mode == _WebAppMode.rider
-            ? 'updateRiderNotificationState'
-            : 'updateSenderNotificationState')
+        .httpsCallable(
+          widget.mode == _WebAppMode.rider
+              ? 'updateRiderNotificationState'
+              : 'updateSenderNotificationState',
+        )
         .call({
-      'notificationIds': unread.map((item) => item.id).toList(),
-      'action': 'mark_read',
-    });
+          'notificationIds': unread.map((item) => item.id).toList(),
+          'action': 'mark_read',
+        });
   }
 
   @override
@@ -440,8 +437,10 @@ class _PlatformNotificationCenterState
                     padding: const EdgeInsets.fromLTRB(18, 14, 8, 12),
                     child: Row(
                       children: [
-                        Icon(Icons.notifications_rounded,
-                            color: widget.colors.text),
+                        Icon(
+                          Icons.notifications_rounded,
+                          color: widget.colors.text,
+                        ),
                         const SizedBox(width: 10),
                         Expanded(
                           child: Text(
@@ -496,7 +495,7 @@ class _PlatformNotificationCenterState
                                     border: Border.all(
                                       color: isUnread
                                           ? widget.colors.adminAccent
-                                              .withValues(alpha: 0.45)
+                                                .withValues(alpha: 0.45)
                                           : widget.colors.border,
                                     ),
                                   ),
@@ -675,8 +674,9 @@ class _LandingPage extends StatelessWidget {
                     textAlign: TextAlign.center,
                     style: TextStyle(
                       color: colors.mutedText,
-                      fontSize:
-                          MediaQuery.sizeOf(context).width < 680 ? 18 : 22,
+                      fontSize: MediaQuery.sizeOf(context).width < 680
+                          ? 18
+                          : 22,
                       height: 1.45,
                       fontWeight: FontWeight.w600,
                     ),
@@ -787,8 +787,8 @@ String _jobReceivedTextFromDate(DateTime? date) {
   final monthIndex = local.month < 1
       ? 0
       : local.month > 12
-          ? 11
-          : local.month - 1;
+      ? 11
+      : local.month - 1;
   final month = _shortMonthNames[monthIndex];
   return 'Received: ${local.day} $month, $hour:$minute';
 }
@@ -1057,10 +1057,7 @@ class _LandingNavLink extends StatelessWidget {
           onPressed: followLink ?? onPressed,
           child: Text(
             label,
-            style: TextStyle(
-              color: colors.text,
-              fontWeight: FontWeight.w700,
-            ),
+            style: TextStyle(color: colors.text, fontWeight: FontWeight.w700),
           ),
         );
       },
@@ -1325,8 +1322,11 @@ class _ServiceIntroCard extends StatelessWidget {
               ),
             ],
           ),
-          child: Icon(icon,
-              color: const Color(0xff0a84ff), size: compact ? 30 : 34),
+          child: Icon(
+            icon,
+            color: const Color(0xff0a84ff),
+            size: compact ? 30 : 34,
+          ),
         );
 
         final action = _VanguardBlueActionButton(
@@ -1535,8 +1535,11 @@ class _ServiceHighlightPill extends StatelessWidget {
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          const Icon(Icons.check_circle_outline,
-              color: Color(0xff0a84ff), size: 17),
+          const Icon(
+            Icons.check_circle_outline,
+            color: Color(0xff0a84ff),
+            size: 17,
+          ),
           const SizedBox(width: 8),
           Text(
             label,
@@ -2297,16 +2300,18 @@ Uri _circumOrderPdfUri() {
   return _pdfUriFromLines(
     rawLines,
     title: 'THE CIRCUM ORDER',
-    sectionTitles:
-        _circumOrderCharterSections.map((section) => section.title).toSet(),
+    sectionTitles: _circumOrderCharterSections
+        .map((section) => section.title)
+        .toSet(),
   );
 }
 
 Uri _businessInvoicePdfUri(Map<String, dynamic> invoice) {
   final id = '${invoice['id'] ?? ''}'.trim();
   final invoiceNumber = '${invoice['invoiceNumber'] ?? id}'.trim();
-  final displayNumber =
-      invoiceNumber.isEmpty ? 'Business invoice' : invoiceNumber;
+  final displayNumber = invoiceNumber.isEmpty
+      ? 'Business invoice'
+      : invoiceNumber;
   final status = _displayStatusLabel(
     '${invoice['status'] ?? invoice['paymentStatus'] ?? 'open'}',
   );
@@ -2314,7 +2319,8 @@ Uri _businessInvoicePdfUri(Map<String, dynamic> invoice) {
   final paid = _pdfMoney(invoice['amountPaid']);
   final balance = _pdfMoney(invoice['balanceDue'] ?? invoice['total']);
   final roth = _pdfMoney(invoice['rothApplied'] ?? invoice['rothAmount']);
-  final deliveryCount = invoice['deliveryCount'] ??
+  final deliveryCount =
+      invoice['deliveryCount'] ??
       (invoice['deliveryIds'] is List
           ? (invoice['deliveryIds'] as List).length
           : null);
@@ -2741,7 +2747,8 @@ class _RiderOrderProfileCard extends StatelessWidget {
         : performance.averageRating.toStringAsFixed(2);
     final verificationStatus =
         '${profile?['verificationStatus'] ?? profile?['approvalStatus'] ?? 'pending'}';
-    final verified = verificationStatus.toLowerCase() == 'approved' ||
+    final verified =
+        verificationStatus.toLowerCase() == 'approved' ||
         verificationStatus.toLowerCase() == 'verified';
     final memberSince = _dateFromAny(
       profile?['memberSince'] ?? profile?['createdAt'],
@@ -2834,11 +2841,7 @@ class _RiderOrderProfileCard extends StatelessWidget {
                 label: 'Deliveries',
                 value: '${performance.completedTrips}',
               ),
-              _RiderStatTile(
-                colors: colors,
-                label: 'Rating',
-                value: rating,
-              ),
+              _RiderStatTile(colors: colors, label: 'Rating', value: rating),
               if (memberSince != null)
                 _RiderStatTile(
                   colors: colors,
@@ -3215,7 +3218,8 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
   }
 
   _RiderPortalTab _initialRiderTab() {
-    final section = Uri.base.queryParameters['section'] ??
+    final section =
+        Uri.base.queryParameters['section'] ??
         Uri.base.queryParameters['tab'] ??
         Uri.base.queryParameters['app'];
     return switch (section) {
@@ -3321,8 +3325,9 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
 
     setState(() {
       _authSubmitting = true;
-      _authMessage =
-          _signupMode ? 'Creating your rider account...' : 'Signing you in...';
+      _authMessage = _signupMode
+          ? 'Creating your rider account...'
+          : 'Signing you in...';
     });
 
     try {
@@ -3368,8 +3373,9 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
       setState(() {
         _riderUser = user;
         _roleChoiceConfirmed = _availableRoles.length <= 1;
-        _authMessage =
-            _signupMode ? 'Your rider account is ready.' : 'You are signed in.';
+        _authMessage = _signupMode
+            ? 'Your rider account is ready.'
+            : 'You are signed in.';
       });
     } on FirebaseAuthException catch (error) {
       if (!mounted) return;
@@ -3555,9 +3561,9 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
   }
 
   Future<void> _saveRiderProfile(User user) async {
-    await FirebaseFunctions.instanceFor(region: 'us-central1')
-        .httpsCallable('updateRiderProfile')
-        .call({
+    await FirebaseFunctions.instanceFor(
+      region: 'us-central1',
+    ).httpsCallable('updateRiderProfile').call({
       'fullName': _fullName.text.trim().isEmpty
           ? user.displayName
           : _fullName.text.trim(),
@@ -3582,11 +3588,11 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
         .doc(riderId)
         .snapshots()
         .listen((snapshot) {
-      if (!mounted) return;
-      setState(() {
-        _earnings = _RiderEarningsSnapshot.fromMap(snapshot.data());
-      });
-    });
+          if (!mounted) return;
+          setState(() {
+            _earnings = _RiderEarningsSnapshot.fromMap(snapshot.data());
+          });
+        });
   }
 
   void _listenToRiderPerformance(String riderId) {
@@ -3597,27 +3603,27 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
         .doc(riderId)
         .snapshots()
         .listen((snapshot) {
-      if (!mounted) return;
-      setState(() {
-        _performance = DriverPerformanceMetric.fromMap(
-          riderId,
-          snapshot.data(),
-        );
-      });
-    });
+          if (!mounted) return;
+          setState(() {
+            _performance = DriverPerformanceMetric.fromMap(
+              riderId,
+              snapshot.data(),
+            );
+          });
+        });
     _ratingSub = FirebaseFirestore.instance
         .collection('driverRatings')
         .where('driverId', isEqualTo: riderId)
         .limit(8)
         .snapshots()
         .listen((snapshot) {
-      if (!mounted) return;
-      setState(() {
-        _recentRatings = snapshot.docs
-            .map((doc) => DriverRating.fromMap(doc.data()))
-            .toList();
-      });
-    });
+          if (!mounted) return;
+          setState(() {
+            _recentRatings = snapshot.docs
+                .map((doc) => DriverRating.fromMap(doc.data()))
+                .toList();
+          });
+        });
   }
 
   void _listenToAvailableJobs() {
@@ -3628,70 +3634,75 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
         .limit(20)
         .snapshots()
         .listen(
-      (snapshot) {
-        if (!mounted) return;
-        setState(() {
-          final jobs = snapshot.docs
-              .map((doc) => {'id': doc.id, ...doc.data()})
-              .where((job) {
-            final matchingStatus =
-                '${job['matchingStatus'] ?? 'available'}'.toLowerCase();
-            final ignoredBy = (job['ignoredByRiders'] as List?) ?? const [];
-            final rejectedBy = (job['rejectedByRiders'] as List?) ?? const [];
-            final currentRider = _riderUser?.uid;
-            if (currentRider != null &&
-                (ignoredBy.contains(currentRider) ||
-                    rejectedBy.contains(currentRider))) {
-              return false;
-            }
-            final riderVehicle = '${_riderProfile?['vehicleType'] ?? ''}';
-            final requiredVehicle =
-                '${job['vehicleType'] ?? job['irisRecommendedVehicle'] ?? ''}';
-            if (!_superAdminRiderBypass &&
-                riderVehicle.isNotEmpty &&
-                requiredVehicle.isNotEmpty &&
-                !DeliveryPricing.vehicleMeetsMinimum(
-                  riderVehicle,
-                  requiredVehicle,
-                )) {
-              return false;
-            }
-            final riderRank = _riderProfile?['rank'] ??
-                _riderProfile?['riderRank'] ??
-                'agent';
-            if (!_superAdminRiderBypass &&
-                !RiderDispatchPolicy.canViewJob(
-                  riderRank: riderRank,
-                  job: job,
-                )) {
-              return false;
-            }
-            return matchingStatus == 'available' ||
-                matchingStatus == 'requested';
-          }).toList();
-          jobs.sort(_compareRiderJobs);
-          _availableJobs = jobs;
-        });
-      },
-      onError: (_) {
-        if (!mounted) return;
-        setState(
-          () => _jobMessage = 'Could not load available jobs right now.',
+          (snapshot) {
+            if (!mounted) return;
+            setState(() {
+              final jobs = snapshot.docs
+                  .map((doc) => {'id': doc.id, ...doc.data()})
+                  .where((job) {
+                    final matchingStatus =
+                        '${job['matchingStatus'] ?? 'available'}'.toLowerCase();
+                    final ignoredBy =
+                        (job['ignoredByRiders'] as List?) ?? const [];
+                    final rejectedBy =
+                        (job['rejectedByRiders'] as List?) ?? const [];
+                    final currentRider = _riderUser?.uid;
+                    if (currentRider != null &&
+                        (ignoredBy.contains(currentRider) ||
+                            rejectedBy.contains(currentRider))) {
+                      return false;
+                    }
+                    final riderVehicle =
+                        '${_riderProfile?['vehicleType'] ?? ''}';
+                    final requiredVehicle =
+                        '${job['vehicleType'] ?? job['irisRecommendedVehicle'] ?? ''}';
+                    if (!_superAdminRiderBypass &&
+                        riderVehicle.isNotEmpty &&
+                        requiredVehicle.isNotEmpty &&
+                        !DeliveryPricing.vehicleMeetsMinimum(
+                          riderVehicle,
+                          requiredVehicle,
+                        )) {
+                      return false;
+                    }
+                    final riderRank =
+                        _riderProfile?['rank'] ??
+                        _riderProfile?['riderRank'] ??
+                        'agent';
+                    if (!_superAdminRiderBypass &&
+                        !RiderDispatchPolicy.canViewJob(
+                          riderRank: riderRank,
+                          job: job,
+                        )) {
+                      return false;
+                    }
+                    return matchingStatus == 'available' ||
+                        matchingStatus == 'requested';
+                  })
+                  .toList();
+              jobs.sort(_compareRiderJobs);
+              _availableJobs = jobs;
+            });
+          },
+          onError: (_) {
+            if (!mounted) return;
+            setState(
+              () => _jobMessage = 'Could not load available jobs right now.',
+            );
+          },
         );
-      },
-    );
   }
 
   int _compareRiderJobs(Map<String, dynamic> a, Map<String, dynamic> b) {
     final riderRank =
         _riderProfile?['rank'] ?? _riderProfile?['riderRank'] ?? 'agent';
-    final rankPriority = RiderDispatchPolicy.priorityScore(
-      riderRank: riderRank,
-      job: b,
-    ).compareTo(RiderDispatchPolicy.priorityScore(
-      riderRank: riderRank,
-      job: a,
-    ));
+    final rankPriority =
+        RiderDispatchPolicy.priorityScore(
+          riderRank: riderRank,
+          job: b,
+        ).compareTo(
+          RiderDispatchPolicy.priorityScore(riderRank: riderRank, job: a),
+        );
     if (rankPriority != 0) return rankPriority;
     final serviceA = '${a['selectedServiceLevel'] ?? a['serviceLevel'] ?? ''}';
     final serviceB = '${b['selectedServiceLevel'] ?? b['serviceLevel'] ?? ''}';
@@ -3703,8 +3714,8 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
     final pickupCompare =
         '${a['scheduledPickupDate'] ?? ''} ${a['scheduledPickupWindow'] ?? ''}'
             .compareTo(
-      '${b['scheduledPickupDate'] ?? ''} ${b['scheduledPickupWindow'] ?? ''}',
-    );
+              '${b['scheduledPickupDate'] ?? ''} ${b['scheduledPickupWindow'] ?? ''}',
+            );
     if (pickupCompare != 0) return pickupCompare;
 
     return _jobDistanceMiles(a).compareTo(_jobDistanceMiles(b));
@@ -3752,13 +3763,13 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
         .limit(20)
         .snapshots()
         .listen((snapshot) {
-      if (!mounted) return;
-      setState(() {
-        _completedJobs = snapshot.docs
-            .map((doc) => {'id': doc.id, ...doc.data()})
-            .toList(growable: false);
-      });
-    });
+          if (!mounted) return;
+          setState(() {
+            _completedJobs = snapshot.docs
+                .map((doc) => {'id': doc.id, ...doc.data()})
+                .toList(growable: false);
+          });
+        });
   }
 
   Future<void> _acceptDeliveryJob(Map<String, dynamic> job) async {
@@ -3772,8 +3783,10 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
       profile: _riderProfile,
       verifiedSuperAdmin: _superAdminRiderBypass,
     )) {
-      setState(() => _jobMessage =
-          'Your rider account must be approved before accepting jobs.');
+      setState(
+        () => _jobMessage =
+            'Your rider account must be approved before accepting jobs.',
+      );
       return;
     }
     final requestId = '${job['requestId'] ?? job['id'] ?? ''}'.trim();
@@ -3781,9 +3794,9 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
     setState(() => _jobMessage = 'Accepting job $requestId...');
     try {
       await _ensureCircumFirebaseReady();
-      await FirebaseFunctions.instanceFor(region: 'us-central1')
-          .httpsCallable('acceptRideRequests')
-          .call({'requestId': requestId});
+      await FirebaseFunctions.instanceFor(
+        region: 'us-central1',
+      ).httpsCallable('acceptRideRequests').call({'requestId': requestId});
       await _startRiderLiveLocationPublishing(requestId, user.uid, 'accepted');
       if (!mounted) return;
       setState(() => _jobMessage = 'Job accepted. Head to pickup.');
@@ -3812,8 +3825,8 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
       _stopRiderLiveLocationPublishing(status: 'offline');
       return;
     }
-    final requestId =
-        '${activeJob['requestId'] ?? activeJob['id'] ?? ''}'.trim();
+    final requestId = '${activeJob['requestId'] ?? activeJob['id'] ?? ''}'
+        .trim();
     final status = '${activeJob['status'] ?? 'accepted'}'.toLowerCase();
     if (requestId.isEmpty || requestId == _trackingDeliveryId) return;
     _startRiderLiveLocationPublishing(requestId, user.uid, status);
@@ -3878,9 +3891,9 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
           timeLimit: Duration(seconds: 6),
         ),
       );
-      await FirebaseFunctions.instanceFor(region: 'us-central1')
-          .httpsCallable('updateDeliveryLiveLocation')
-          .call({
+      await FirebaseFunctions.instanceFor(
+        region: 'us-central1',
+      ).httpsCallable('updateDeliveryLiveLocation').call({
         'deliveryId': deliveryId,
         'status': status,
         'location': {
@@ -3913,14 +3926,12 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
     try {
       await FirebaseFunctions.instanceFor(region: 'us-central1')
           .httpsCallable('recordRiderJobDecision')
-          .call({
-        'requestId': requestId,
-        'action': action,
-      });
+          .call({'requestId': requestId, 'action': action});
       if (!mounted) return;
       setState(
-        () => _jobMessage =
-            action == 'reject' ? 'Job rejected.' : 'Job hidden for now.',
+        () => _jobMessage = action == 'reject'
+            ? 'Job rejected.'
+            : 'Job hidden for now.',
       );
     } catch (_) {
       if (!mounted) return;
@@ -3972,8 +3983,9 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
       }
       if (!mounted) return;
       setState(
-        () => _jobMessage =
-            status == 'completed' ? 'Delivery completed.' : 'Job updated.',
+        () => _jobMessage = status == 'completed'
+            ? 'Delivery completed.'
+            : 'Job updated.',
       );
     } catch (_) {
       if (!mounted) return;
@@ -3989,13 +4001,15 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
     Map<String, dynamic>? verificationPatch,
   }) async {
     final currentStatus = _canonicalRiderBackendStatus(
-        '${job['status'] ?? 'accepted'}'
-            .trim()
-            .toLowerCase()
-            .replaceAll(RegExp(r'[-\s]+'), '_'));
+      '${job['status'] ?? 'accepted'}'.trim().toLowerCase().replaceAll(
+        RegExp(r'[-\s]+'),
+        '_',
+      ),
+    );
     final actions = _backendActionsForRiderTarget(currentStatus, targetStatus);
-    final callable = FirebaseFunctions.instanceFor(region: 'us-central1')
-        .httpsCallable('updateDeliveryTrackingStatus');
+    final callable = FirebaseFunctions.instanceFor(
+      region: 'us-central1',
+    ).httpsCallable('updateDeliveryTrackingStatus');
     for (final action in actions) {
       await callable.call({
         'deliveryId': requestId,
@@ -4043,8 +4057,9 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
     if (targetStatus == 'in_transit') {
       if (currentStatus != 'collected' &&
           currentStatus != 'navigating_to_dropoff') {
-        actions
-            .addAll(_backendActionsForRiderTarget(currentStatus, 'picked_up'));
+        actions.addAll(
+          _backendActionsForRiderTarget(currentStatus, 'picked_up'),
+        );
       }
       if (currentStatus != 'navigating_to_dropoff') {
         actions.add('start_delivery');
@@ -4055,8 +4070,9 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
       if (currentStatus != 'navigating_to_dropoff' &&
           currentStatus != 'arrived_at_dropoff' &&
           currentStatus != 'pin_required') {
-        actions
-            .addAll(_backendActionsForRiderTarget(currentStatus, 'in_transit'));
+        actions.addAll(
+          _backendActionsForRiderTarget(currentStatus, 'in_transit'),
+        );
       }
       if (currentStatus != 'arrived_at_dropoff' &&
           currentStatus != 'pin_required') {
@@ -4096,11 +4112,11 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
 
     final summary =
         (job['driverJobSummary'] as Map?)?.cast<String, dynamic>() ??
-            const <String, dynamic>{};
-    final collectionContact =
-        (job['collectionContact'] as Map?)?.cast<String, dynamic>();
-    final receiverDetails =
-        (job['receiverDetails'] as Map?)?.cast<String, dynamic>();
+        const <String, dynamic>{};
+    final collectionContact = (job['collectionContact'] as Map?)
+        ?.cast<String, dynamic>();
+    final receiverDetails = (job['receiverDetails'] as Map?)
+        ?.cast<String, dynamic>();
     final collectionName =
         '${summary['collectionContactName'] ?? job['collectionContactName'] ?? collectionContact?['name'] ?? job['senderName'] ?? 'the sender or collection contact'}'
             .trim();
@@ -4176,8 +4192,9 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
       return null;
     }
 
-    final verifiedField =
-        stage == 'delivery' ? 'deliveryPinVerified' : 'collectionPinVerified';
+    final verifiedField = stage == 'delivery'
+        ? 'deliveryPinVerified'
+        : 'collectionPinVerified';
     final verifiedAtField = stage == 'delivery'
         ? 'deliveryPinVerifiedAt'
         : 'collectionPinVerifiedAt';
@@ -4201,8 +4218,8 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
 
   bool _jobVanguardEnabled(Map<String, dynamic> job) {
     if (job['vanguardEnabled'] == true) return true;
-    final protection =
-        (job['vanguardProtection'] as Map?)?.cast<String, dynamic>();
+    final protection = (job['vanguardProtection'] as Map?)
+        ?.cast<String, dynamic>();
     return protection?['enabled'] == true;
   }
 
@@ -4387,19 +4404,21 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
       pickupAccess: accessValue(job['pickupAccess']),
       dropoffAccess: accessValue(job['dropoffAccess']),
     );
-    final revisedQuote = revisedHandling.applyTo(DeliveryPricing.calculate(
-      DeliveryPricingInput(
-        distanceMiles: distanceMiles,
-        weightKg: finalWeightUsed,
-        vehicleType: vehicle,
+    final revisedQuote = revisedHandling.applyTo(
+      DeliveryPricing.calculate(
+        DeliveryPricingInput(
+          distanceMiles: distanceMiles,
+          weightKg: finalWeightUsed,
+          vehicleType: vehicle,
+        ),
       ),
-    ));
+    );
     final revisedPayout = revisedQuote.totalRiderEarnings;
     final revisedPlatformRevenue = revisedQuote.totalCircumRevenue;
     final heavier = finalWeightUsed > currentFinalWeight + 0.01;
     final summary =
         (job['driverJobSummary'] as Map?)?.cast<String, dynamic>() ??
-            const <String, dynamic>{};
+        const <String, dynamic>{};
 
     if (heavier) {
       await FirebaseFunctions.instanceFor(region: 'us-central1')
@@ -4435,8 +4454,9 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
       'driverShare': DeliveryPricing.riderDeliveryFareShare,
       'pricingBreakdown': revisedQuote.toJson(),
       'weightReviewRequired': optionValue != 'accurate',
-      'weightDisputeStatus':
-          optionValue == 'accurate' ? 'verified' : 'admin_review',
+      'weightDisputeStatus': optionValue == 'accurate'
+          ? 'verified'
+          : 'admin_review',
       'driverWeightDispute': {
         'reported': optionValue != 'accurate',
         'issueType': optionValue,
@@ -4545,12 +4565,16 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
           .httpsCallable('reportLoadDiscrepancy')
           .call(reason);
       if (!mounted) return;
-      setState(() => _jobMessage =
-          'Discrepancy reported. Collection is paused for the sender.');
+      setState(
+        () => _jobMessage =
+            'Discrepancy reported. Collection is paused for the sender.',
+      );
     } on FirebaseFunctionsException catch (error) {
       if (!mounted) return;
-      setState(() => _jobMessage =
-          error.message ?? 'Could not report this discrepancy. Try again.');
+      setState(
+        () => _jobMessage =
+            error.message ?? 'Could not report this discrepancy. Try again.',
+      );
     }
   }
 
@@ -4586,17 +4610,21 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
                     decoration: const InputDecoration(labelText: 'Reason'),
                     items: const [
                       DropdownMenuItem(
-                          value: 'weight_exceeded',
-                          child: Text('Weight exceeded')),
+                        value: 'weight_exceeded',
+                        child: Text('Weight exceeded'),
+                      ),
                       DropdownMenuItem(
-                          value: 'dimensions_exceeded',
-                          child: Text('Dimensions exceeded')),
+                        value: 'dimensions_exceeded',
+                        child: Text('Dimensions exceeded'),
+                      ),
                       DropdownMenuItem(
-                          value: 'additional_undeclared_items',
-                          child: Text('Additional undeclared items')),
+                        value: 'additional_undeclared_items',
+                        child: Text('Additional undeclared items'),
+                      ),
                       DropdownMenuItem(
-                          value: 'item_differs_from_booking',
-                          child: Text('Item differs from booking')),
+                        value: 'item_differs_from_booking',
+                        child: Text('Item differs from booking'),
+                      ),
                     ],
                     onChanged: (value) =>
                         setDialogState(() => reason = value ?? reason),
@@ -4605,16 +4633,19 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
                   if (reason == 'weight_exceeded')
                     TextField(
                       controller: weight,
-                      keyboardType:
-                          const TextInputType.numberWithOptions(decimal: true),
+                      keyboardType: const TextInputType.numberWithOptions(
+                        decimal: true,
+                      ),
                       decoration: const InputDecoration(
-                          labelText: 'Observed weight (kg)'),
+                        labelText: 'Observed weight (kg)',
+                      ),
                     ),
                   if (reason == 'dimensions_exceeded')
                     TextField(
                       controller: dimensions,
                       decoration: const InputDecoration(
-                          labelText: 'Observed dimensions'),
+                        labelText: 'Observed dimensions',
+                      ),
                     ),
                   if (reason == 'dimensions_exceeded' ||
                       reason == 'item_differs_from_booking') ...[
@@ -4622,7 +4653,8 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
                     DropdownButtonFormField<String>(
                       initialValue: observedVehicleType,
                       decoration: const InputDecoration(
-                          labelText: 'Vehicle now required'),
+                        labelText: 'Vehicle now required',
+                      ),
                       items: const [
                         DropdownMenuItem(value: 'bike', child: Text('Bike')),
                         DropdownMenuItem(value: 'car', child: Text('Car')),
@@ -4637,14 +4669,16 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
                     TextField(
                       controller: description,
                       decoration: const InputDecoration(
-                          labelText: 'What is actually present?'),
+                        labelText: 'What is actually present?',
+                      ),
                     ),
                   const SizedBox(height: 12),
                   TextField(
                     controller: notes,
                     maxLines: 2,
-                    decoration:
-                        const InputDecoration(labelText: 'Optional note'),
+                    decoration: const InputDecoration(
+                      labelText: 'Optional note',
+                    ),
                   ),
                   const SizedBox(height: 12),
                   OutlinedButton.icon(
@@ -4655,19 +4689,25 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
                               imageQuality: 75,
                               limit: 4,
                             );
-                            setDialogState(() => photos
-                              ..clear()
-                              ..addAll(selected));
+                            setDialogState(
+                              () => photos
+                                ..clear()
+                                ..addAll(selected),
+                            );
                           },
                     icon: const Icon(Icons.add_a_photo_outlined),
-                    label: Text(photos.isEmpty
-                        ? 'Add evidence photo'
-                        : '${photos.length} photo(s) selected'),
+                    label: Text(
+                      photos.isEmpty
+                          ? 'Add evidence photo'
+                          : '${photos.length} photo(s) selected',
+                    ),
                   ),
                   if (error != null) ...[
                     const SizedBox(height: 8),
-                    Text(error!,
-                        style: const TextStyle(color: Colors.redAccent)),
+                    Text(
+                      error!,
+                      style: const TextStyle(color: Colors.redAccent),
+                    ),
                   ],
                 ],
               ),
@@ -4675,31 +4715,37 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
           ),
           actions: [
             TextButton(
-              onPressed:
-                  uploading ? null : () => Navigator.of(dialogContext).pop(),
+              onPressed: uploading
+                  ? null
+                  : () => Navigator.of(dialogContext).pop(),
               child: const Text('Back'),
             ),
             FilledButton(
               onPressed: uploading
                   ? null
                   : () async {
-                      final observedWeight =
-                          double.tryParse(weight.text.trim());
+                      final observedWeight = double.tryParse(
+                        weight.text.trim(),
+                      );
                       if (photos.isEmpty) {
                         setDialogState(
-                            () => error = 'Add at least one evidence photo.');
+                          () => error = 'Add at least one evidence photo.',
+                        );
                         return;
                       }
                       if (reason == 'weight_exceeded' &&
                           (observedWeight == null || observedWeight <= 0)) {
                         setDialogState(
-                            () => error = 'Enter the observed weight.');
+                          () => error = 'Enter the observed weight.',
+                        );
                         return;
                       }
                       if (reason == 'dimensions_exceeded' &&
                           observedVehicleType == null) {
-                        setDialogState(() => error =
-                            'Select the vehicle now required for this load.');
+                        setDialogState(
+                          () => error =
+                              'Select the vehicle now required for this load.',
+                        );
                         return;
                       }
                       setDialogState(() {
@@ -4713,8 +4759,10 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
                           final ref = FirebaseStorage.instance.ref(
                             'delivery-discrepancies/$requestId/${user.uid}/${DateTime.now().millisecondsSinceEpoch}-$index.jpg',
                           );
-                          await ref.putData(await photo.readAsBytes(),
-                              SettableMetadata(contentType: photo.mimeType));
+                          await ref.putData(
+                            await photo.readAsBytes(),
+                            SettableMetadata(contentType: photo.mimeType),
+                          );
                           urls.add(await ref.getDownloadURL());
                         }
                         if (!dialogContext.mounted) return;
@@ -4765,38 +4813,41 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
         .limit(80)
         .snapshots()
         .listen(
-      (snapshot) {
-        if (!mounted) return;
-        setState(() {
-          _riderChatMessages
-            ..clear()
-            ..addAll(
-              snapshot.docs.map((doc) {
-                final data = doc.data();
-                final role =
-                    '${data['senderRole'] ?? data['senderType'] ?? ''}';
-                return _ChatMessage(
-                  fromMe: data['senderId'] == _riderUser?.uid,
-                  text: '${data['messageText'] ?? data['message'] ?? ''}',
-                  time: _formatMessageTime(
-                    data['createdAt'],
-                    data['timeStamp'],
-                  ),
-                  label: role == 'admin' || role == 'support'
-                      ? 'CIRCUM Support'
-                      : role == 'sender' || role == 'user'
-                          ? 'Sender'
-                          : 'Rider',
+          (snapshot) {
+            if (!mounted) return;
+            setState(() {
+              _riderChatMessages
+                ..clear()
+                ..addAll(
+                  snapshot.docs
+                      .map((doc) {
+                        final data = doc.data();
+                        final role =
+                            '${data['senderRole'] ?? data['senderType'] ?? ''}';
+                        return _ChatMessage(
+                          fromMe: data['senderId'] == _riderUser?.uid,
+                          text:
+                              '${data['messageText'] ?? data['message'] ?? ''}',
+                          time: _formatMessageTime(
+                            data['createdAt'],
+                            data['timeStamp'],
+                          ),
+                          label: role == 'admin' || role == 'support'
+                              ? 'CIRCUM Support'
+                              : role == 'sender' || role == 'user'
+                              ? 'Sender'
+                              : 'Rider',
+                        );
+                      })
+                      .where((message) => message.text.trim().isNotEmpty),
                 );
-              }).where((message) => message.text.trim().isNotEmpty),
-            );
-        });
-      },
-      onError: (_) {
-        if (!mounted) return;
-        setState(() => _jobMessage = 'Could not open this chat.');
-      },
-    );
+            });
+          },
+          onError: (_) {
+            if (!mounted) return;
+            setState(() => _jobMessage = 'Could not open this chat.');
+          },
+        );
     setState(() {
       _activeRiderChatJob = job;
       _riderChatOpen = true;
@@ -4815,11 +4866,7 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
       await _ensureCircumFirebaseReady();
       await FirebaseFunctions.instanceFor(region: 'us-central1')
           .httpsCallable('sendCircumMessage')
-          .call({
-        'chatId': requestId,
-        'requestId': requestId,
-        'message': text,
-      });
+          .call({'chatId': requestId, 'requestId': requestId, 'message': text});
     } catch (_) {
       if (!mounted) return;
       setState(() => _jobMessage = 'Message could not be sent.');
@@ -4877,15 +4924,15 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
       profile: _riderProfile,
       verifiedSuperAdmin: _superAdminRiderBypass,
     )) {
-      setState(() => _withdrawMessage =
-          'Your rider account must be approved before requesting a withdrawal.');
+      setState(
+        () => _withdrawMessage =
+            'Your rider account must be approved before requesting a withdrawal.',
+      );
       return;
     }
     final amount = double.tryParse(_withdrawAmount.text.trim()) ?? 0;
     if (amount <= 0) {
-      setState(
-        () => _withdrawMessage = 'Enter the amount first.',
-      );
+      setState(() => _withdrawMessage = 'Enter the amount first.');
       return;
     }
     if (amount > _earnings.availableBalance) {
@@ -4903,9 +4950,9 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
 
     try {
       await _ensureCircumFirebaseReady();
-      await FirebaseFunctions.instanceFor(region: 'us-central1')
-          .httpsCallable('requestRiderWithdrawal')
-          .call({'amount': amount});
+      await FirebaseFunctions.instanceFor(
+        region: 'us-central1',
+      ).httpsCallable('requestRiderWithdrawal').call({'amount': amount});
       if (!mounted) return;
       setState(
         () => _withdrawMessage =
@@ -4947,9 +4994,9 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
       final bytes = await picked.readAsBytes();
       final documentType = _riderDocumentType(_documentType.text);
       final contentType = picked.mimeType ?? 'image/jpeg';
-      await FirebaseFunctions.instanceFor(region: 'us-central1')
-          .httpsCallable('submitRiderDocument')
-          .call({
+      await FirebaseFunctions.instanceFor(
+        region: 'us-central1',
+      ).httpsCallable('submitRiderDocument').call({
         'documentType': documentType,
         'notes': _documentNotes.text.trim(),
         'fileName': picked.name,
@@ -4988,8 +5035,7 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
       'email-already-in-use' => 'That email already has a rider account.',
       'user-not-found' => 'No rider account found for that email.',
       'wrong-password' ||
-      'invalid-credential' =>
-        'The sign-in details are not right.',
+      'invalid-credential' => 'The sign-in details are not right.',
       'weak-password' => 'Use a stronger password.',
       _ => 'We could not sign you in. Please check the details.',
     };
@@ -5024,18 +5070,18 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
       final result = await FirebaseFunctions.instanceFor(region: 'us-central1')
           .httpsCallable('submitRiderApplication')
           .call<Map<String, dynamic>>({
-        'fullName': _fullName.text.trim(),
-        'phoneNumber': _phone.text.trim(),
-        'email': _email.text.trim(),
-        'postcode': _postcode.text.trim(),
-        'vehicleType': _vehicle.text.trim(),
-        'vehicleRegistration': _plateNumber.text.trim(),
-        'availability': _availability.text.trim(),
-        'notes': _notes.text.trim(),
-        'rightToWorkConfirmed': _rightToWork,
-        'sealedPackageConsent': _sealedPackageConsent,
-        'idempotencyKey': 'web-rider-application:${_riderUser?.uid}',
-      });
+            'fullName': _fullName.text.trim(),
+            'phoneNumber': _phone.text.trim(),
+            'email': _email.text.trim(),
+            'postcode': _postcode.text.trim(),
+            'vehicleType': _vehicle.text.trim(),
+            'vehicleRegistration': _plateNumber.text.trim(),
+            'availability': _availability.text.trim(),
+            'notes': _notes.text.trim(),
+            'rightToWorkConfirmed': _rightToWork,
+            'sealedPackageConsent': _sealedPackageConsent,
+            'idempotencyKey': 'web-rider-application:${_riderUser?.uid}',
+          });
       final applicationId = '${result.data['applicationId'] ?? ''}'.trim();
       if (_riderUser != null) {
         _riderProfile = await _loadRiderProfile(_riderUser!.uid);
@@ -5269,68 +5315,69 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
                 Expanded(
                   child: switch (_riderTab) {
                     _RiderPortalTab.order => _CircumOrderContent(
-                        colors: colors,
-                        onBecomeRider: () => setState(
-                            () => _riderTab = _RiderPortalTab.overview),
-                      ),
+                      colors: colors,
+                      onBecomeRider: () =>
+                          setState(() => _riderTab = _RiderPortalTab.overview),
+                    ),
                     _RiderPortalTab.earnings => _RiderEarningsTab(
-                        colors: colors,
-                        earnings: _earnings,
-                      ),
+                      colors: colors,
+                      earnings: _earnings,
+                    ),
                     _RiderPortalTab.referrals => _RiderReferralsTab(
-                        colors: colors,
-                      ),
-                    _RiderPortalTab.overview => _riderUser == null
-                        ? ListView(
-                            padding: EdgeInsets.fromLTRB(
-                              wide ? 28 : 18,
-                              18,
-                              wide ? 28 : 18,
-                              34,
-                            ),
-                            children: [
-                              _RiderPublicIntro(colors: colors),
-                              const SizedBox(height: 14),
-                              _RiderAccessPanel(
-                                colors: colors,
-                                email: _email,
-                                password: _password,
-                                signupMode: _signupMode,
-                                submitting: _authSubmitting,
-                                user: _riderUser,
-                                message: _authMessage,
-                                onToggleMode: () => setState(
-                                  () => _signupMode = !_signupMode,
-                                ),
-                                onSubmit: _submitAuth,
-                                onForgotPassword: _sendRiderPasswordReset,
-                                onSignOut: _signOutRider,
+                      colors: colors,
+                    ),
+                    _RiderPortalTab.overview =>
+                      _riderUser == null
+                          ? ListView(
+                              padding: EdgeInsets.fromLTRB(
+                                wide ? 28 : 18,
+                                18,
+                                wide ? 28 : 18,
+                                34,
                               ),
-                            ],
-                          )
-                        : !_roleChoiceConfirmed && _availableRoles.length > 1
-                            ? ListView(
-                                padding: EdgeInsets.fromLTRB(
-                                  wide ? 28 : 18,
-                                  18,
-                                  wide ? 28 : 18,
-                                  34,
-                                ),
-                                children: [
-                                  _MultiRoleChoicePanel(
-                                    colors: colors,
-                                    roles: _availableRoles,
-                                    onSender: () => widget
-                                        .onRoleSelected(CircumRole.sender),
-                                    onRider: () => setState(
-                                      () => _roleChoiceConfirmed = true,
-                                    ),
-                                    onAdmin: () =>
-                                        widget.onRoleSelected(CircumRole.admin),
+                              children: [
+                                _RiderPublicIntro(colors: colors),
+                                const SizedBox(height: 14),
+                                _RiderAccessPanel(
+                                  colors: colors,
+                                  email: _email,
+                                  password: _password,
+                                  signupMode: _signupMode,
+                                  submitting: _authSubmitting,
+                                  user: _riderUser,
+                                  message: _authMessage,
+                                  onToggleMode: () => setState(
+                                    () => _signupMode = !_signupMode,
                                   ),
-                                ],
-                              )
-                            : _buildSignedInRiderContent(colors, wide),
+                                  onSubmit: _submitAuth,
+                                  onForgotPassword: _sendRiderPasswordReset,
+                                  onSignOut: _signOutRider,
+                                ),
+                              ],
+                            )
+                          : !_roleChoiceConfirmed && _availableRoles.length > 1
+                          ? ListView(
+                              padding: EdgeInsets.fromLTRB(
+                                wide ? 28 : 18,
+                                18,
+                                wide ? 28 : 18,
+                                34,
+                              ),
+                              children: [
+                                _MultiRoleChoicePanel(
+                                  colors: colors,
+                                  roles: _availableRoles,
+                                  onSender: () =>
+                                      widget.onRoleSelected(CircumRole.sender),
+                                  onRider: () => setState(
+                                    () => _roleChoiceConfirmed = true,
+                                  ),
+                                  onAdmin: () =>
+                                      widget.onRoleSelected(CircumRole.admin),
+                                ),
+                              ],
+                            )
+                          : _buildSignedInRiderContent(colors, wide),
                   },
                 ),
               ],
@@ -5494,8 +5541,8 @@ class _RiderAccessPanel extends StatelessWidget {
                       submitting
                           ? 'Please wait...'
                           : signupMode
-                              ? 'Create account'
-                              : 'Sign in',
+                          ? 'Create account'
+                          : 'Sign in',
                     ),
                     style: FilledButton.styleFrom(
                       backgroundColor: colors.text,
@@ -5558,15 +5605,16 @@ class _RiderApprovalStatusPanel extends StatelessWidget {
       _ =>
         'Your rider profile has been created. Circum will review your details and documents before jobs appear here.',
     };
-    final note = [
-      profile['adminMessage'],
-      profile['approvalNote'],
-      profile['rejectionReason'],
-      profile['accountNote'],
-    ]
-        .where((value) => '${value ?? ''}'.trim().isNotEmpty)
-        .map((value) => '$value'.trim())
-        .join('\n');
+    final note =
+        [
+              profile['adminMessage'],
+              profile['approvalNote'],
+              profile['rejectionReason'],
+              profile['accountNote'],
+            ]
+            .where((value) => '${value ?? ''}'.trim().isNotEmpty)
+            .map((value) => '$value'.trim())
+            .join('\n');
 
     return _GlassPanel(
       colors: colors,
@@ -5579,8 +5627,8 @@ class _RiderApprovalStatusPanel extends StatelessWidget {
                 normalized == 'suspended'
                     ? Icons.block
                     : normalized == 'rejected'
-                        ? Icons.report_problem_outlined
-                        : Icons.pending_actions,
+                    ? Icons.report_problem_outlined
+                    : Icons.pending_actions,
                 color: colors.text,
               ),
               const SizedBox(width: 10),
@@ -5897,7 +5945,7 @@ class _RiderWorkspace extends StatelessWidget {
   final ValueChanged<Map<String, dynamic>> onRejectJob;
   final ValueChanged<Map<String, dynamic>> onIgnoreJob;
   final void Function(Map<String, dynamic> job, String status)
-      onUpdateJobStatus;
+  onUpdateJobStatus;
   final void Function(Map<String, dynamic> job, String issueType) onReportIssue;
   final ValueChanged<Map<String, dynamic>> onOpenChat;
   final bool nested;
@@ -6232,7 +6280,8 @@ class _RiderWorkspace extends StatelessWidget {
                 SizedBox(
                   width: double.infinity,
                   child: FilledButton.icon(
-                    onPressed: signedIn &&
+                    onPressed:
+                        signedIn &&
                             !submittingWithdrawal &&
                             _canRequestWithdrawal(
                               amountText: withdrawAmount.text,
@@ -6420,10 +6469,10 @@ class _RiderDocumentStatusList extends StatelessWidget {
                 color: rejected
                     ? const Color(0xfff97316)
                     : status == 'approved'
-                        ? const Color(0xff22c55e)
-                        : status == 'missing'
-                            ? const Color(0xff60a5fa)
-                            : const Color(0xfff59e0b),
+                    ? const Color(0xff22c55e)
+                    : status == 'missing'
+                    ? const Color(0xff60a5fa)
+                    : const Color(0xfff59e0b),
               ),
               const SizedBox(width: 10),
               Expanded(
@@ -6482,9 +6531,10 @@ class _RiderDocumentStatusList extends StatelessWidget {
     final key = type.toLowerCase().replaceAll(RegExp(r'[^a-z0-9]+'), '_');
     final documents =
         (profile?['verificationDocuments'] as Map?)?.cast<String, dynamic>() ??
-            (profile?['documents'] as Map?)?.cast<String, dynamic>() ??
-            const <String, dynamic>{};
-    final entry = documents[key] ??
+        (profile?['documents'] as Map?)?.cast<String, dynamic>() ??
+        const <String, dynamic>{};
+    final entry =
+        documents[key] ??
         documents[type] ??
         documents[type.toLowerCase()] ??
         documents[key.replaceAll('_', '')];
@@ -6502,8 +6552,8 @@ class _RiderDocumentStatusList extends StatelessWidget {
     final key = type.toLowerCase().replaceAll(RegExp(r'[^a-z0-9]+'), '_');
     final documents =
         (profile?['verificationDocuments'] as Map?)?.cast<String, dynamic>() ??
-            (profile?['documents'] as Map?)?.cast<String, dynamic>() ??
-            const <String, dynamic>{};
+        (profile?['documents'] as Map?)?.cast<String, dynamic>() ??
+        const <String, dynamic>{};
     final entry =
         documents[key] ?? documents[type] ?? documents[type.toLowerCase()];
     if (entry is Map) {
@@ -6708,7 +6758,9 @@ class _AvailableDriverJobsPanel extends StatelessWidget {
               style: TextStyle(color: colors.mutedText),
             )
           else
-            ...jobs.take(8).map(
+            ...jobs
+                .take(8)
+                .map(
                   (job) => _DriverJobCard(
                     colors: colors,
                     job: job,
@@ -6733,7 +6785,7 @@ class _RiderJobListPanel extends StatelessWidget {
   final List<Map<String, dynamic>> jobs;
   final bool completed;
   final void Function(Map<String, dynamic> job, String status)
-      onUpdateJobStatus;
+  onUpdateJobStatus;
   final void Function(Map<String, dynamic> job, String issueType) onReportIssue;
   final ValueChanged<Map<String, dynamic>> onOpenChat;
 
@@ -6760,7 +6812,9 @@ class _RiderJobListPanel extends StatelessWidget {
           if (jobs.isEmpty)
             Text(emptyText, style: TextStyle(color: colors.mutedText))
           else
-            ...jobs.take(8).map(
+            ...jobs
+                .take(8)
+                .map(
                   (job) => _DriverJobCard(
                     colors: colors,
                     job: job,
@@ -6807,10 +6861,10 @@ class _DriverJobCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final summary =
         (job['driverJobSummary'] as Map?)?.cast<String, dynamic>() ??
-            const <String, dynamic>{};
+        const <String, dynamic>{};
     final pricing =
         (job['pricingBreakdown'] as Map?)?.cast<String, dynamic>() ??
-            const <String, dynamic>{};
+        const <String, dynamic>{};
     final customerWeight = _num(
       job['customerDeclaredWeight'] ?? job['senderEnteredWeightKg'],
     );
@@ -6857,7 +6911,8 @@ class _DriverJobCard extends StatelessWidget {
         '${summary['vehicleType'] ?? job['vehicleType'] ?? 'Vehicle'}';
     final serviceLevel =
         '${job['selectedServiceLevel'] ?? job['serviceLevel'] ?? summary['serviceLevel'] ?? 'standard'}';
-    final vanguardEnabled = job['vanguardEnabled'] == true ||
+    final vanguardEnabled =
+        job['vanguardEnabled'] == true ||
         summary['vanguardEnabled'] == true ||
         ((job['vanguardProtection'] as Map?)?['enabled'] == true);
     final duration = _num(
@@ -6912,10 +6967,12 @@ class _DriverJobCard extends StatelessWidget {
       nestedKey: 'collectionContact',
       nestedName: 'phone',
     );
-    final collectionDifferent = (job['collectionContactDifferent'] == true ||
+    final collectionDifferent =
+        (job['collectionContactDifferent'] == true ||
         summary['collectionContactDifferent'] == true ||
         ((job['collectionContact'] as Map?)?['differentFromSender'] == true));
     final jobStatus = '${job['status'] ?? ''}'.toLowerCase();
+    final proof = proofOfDeliveryFromRecord(job);
     final canReportDiscrepancy = const {
       'accepted',
       'rider_assigned',
@@ -7044,8 +7101,9 @@ class _DriverJobCard extends StatelessWidget {
             colors: colors,
             icon: Icons.timer,
             label: 'ETA',
-            value:
-                duration > 0 ? '${duration.toStringAsFixed(0)} min' : 'Not set',
+            value: duration > 0
+                ? '${duration.toStringAsFixed(0)} min'
+                : 'Not set',
           ),
           _JobInfoLine(
             colors: colors,
@@ -7105,6 +7163,32 @@ class _DriverJobCard extends StatelessWidget {
               label: 'Vanguard Handling',
               value:
                   'Enhanced custody tracking and trusted rider prioritisation.',
+            ),
+          ],
+          if (completed) ...[
+            const SizedBox(height: 8),
+            _JobInfoLine(
+              colors: colors,
+              icon: Icons.fact_check_outlined,
+              label: 'Proof of delivery',
+              value: proof.hasAnyProof
+                  ? 'Proof submitted - ${proof.statusLabel}'
+                  : 'Proof missing',
+            ),
+            if (proof.vanguardIncomplete)
+              _JobInfoLine(
+                colors: colors,
+                icon: Icons.warning_amber_rounded,
+                label: 'Vanguard review',
+                value: 'Vanguard proof is incomplete.',
+              ),
+          ] else if (vanguardEnabled && !proof.hasAnyProof) ...[
+            const SizedBox(height: 8),
+            _JobInfoLine(
+              colors: colors,
+              icon: Icons.fact_check_outlined,
+              label: 'Proof required',
+              value: 'Proof required to complete this delivery.',
             ),
           ],
           const SizedBox(height: 12),
@@ -7371,7 +7455,9 @@ class _DriverPerformancePanel extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 8),
-          ...recentRatings.take(3).map(
+          ...recentRatings
+              .take(3)
+              .map(
                 (rating) => Padding(
                   padding: const EdgeInsets.only(bottom: 8),
                   child: _RatingFeedbackRow(colors: colors, rating: rating),
@@ -7414,10 +7500,10 @@ class _RatingFeedbackRow extends StatelessWidget {
     final feedback = rating.hiddenByAdmin
         ? 'Written feedback hidden by Circum.'
         : rating.feedbackText.trim().isNotEmpty
-            ? rating.feedbackText.trim()
-            : rating.feedbackTags.isNotEmpty
-                ? rating.feedbackTags.join(', ')
-                : 'No written feedback';
+        ? rating.feedbackText.trim()
+        : rating.feedbackTags.isNotEmpty
+        ? rating.feedbackTags.join(', ')
+        : 'No written feedback';
     return Container(
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
@@ -7484,33 +7570,36 @@ class _RiderEarningsSnapshot {
   });
 
   factory _RiderEarningsSnapshot.empty() => const _RiderEarningsSnapshot(
-        availableBalance: 0,
-        pendingBalance: 0,
-        pendingWithdrawal: 0,
-        lifetimeEarnings: 0,
-        tipsReceived: 0,
-        withdrawnEarnings: 0,
-        completedJobs: 0,
-      );
+    availableBalance: 0,
+    pendingBalance: 0,
+    pendingWithdrawal: 0,
+    lifetimeEarnings: 0,
+    tipsReceived: 0,
+    withdrawnEarnings: 0,
+    completedJobs: 0,
+  );
 
   factory _RiderEarningsSnapshot.fromMap(Map<String, dynamic>? data) {
     if (data == null) return _RiderEarningsSnapshot.empty();
     return _RiderEarningsSnapshot(
-      availableBalance: (data['availableBalance'] as num? ??
-              data['accountBalance'] as num? ??
-              0)
-          .toDouble(),
+      availableBalance:
+          (data['availableBalance'] as num? ??
+                  data['accountBalance'] as num? ??
+                  0)
+              .toDouble(),
       pendingBalance: (data['pendingBalance'] as num? ?? 0).toDouble(),
       pendingWithdrawal: (data['pendingWithdrawal'] as num? ?? 0).toDouble(),
-      lifetimeEarnings: (data['lifetimeEarnings'] as num? ??
-              data['totalAmountEarned'] as num? ??
-              0)
-          .toDouble(),
+      lifetimeEarnings:
+          (data['lifetimeEarnings'] as num? ??
+                  data['totalAmountEarned'] as num? ??
+                  0)
+              .toDouble(),
       tipsReceived: (data['tipsReceived'] as num? ?? 0).toDouble(),
-      withdrawnEarnings: (data['withdrawnEarnings'] as num? ??
-              data['totalWithdrawn'] as num? ??
-              0)
-          .toDouble(),
+      withdrawnEarnings:
+          (data['withdrawnEarnings'] as num? ??
+                  data['totalWithdrawn'] as num? ??
+                  0)
+              .toDouble(),
       completedJobs:
           (data['completedJobs'] as num? ?? data['totalTrips'] as num? ?? 0)
               .toInt(),
@@ -7750,6 +7839,7 @@ class _CustomerPortalState extends State<_CustomerPortal> {
   bool _supportChat = false;
   bool _healthConsent = false;
   bool _healthSavePayment = true;
+  bool _healthUseRoth = false;
   bool _healthSubmitting = false;
   bool _businessLoading = false;
   bool _businessBusy = false;
@@ -7763,6 +7853,7 @@ class _CustomerPortalState extends State<_CustomerPortal> {
   String? _healthScheduleId;
   String? _healthMessage;
   String? _healthCheckoutUrl;
+  double _healthRothBalance = 0;
   String? _businessMessage;
   String? _selectedBusinessId;
   String? _firebaseError;
@@ -7797,6 +7888,7 @@ class _CustomerPortalState extends State<_CustomerPortal> {
   XFile? _parcelPhoto;
   DateTime? _parcelPhotoCapturedAt;
   String? _parcelPhotoMessage;
+  String? _irisPhotoAnalysisId;
   _IrisImageInsight? _irisImageInsight;
   DateTime? _activeRequestReceivedAt;
   Set<String> _selectedRatingTags = {};
@@ -7814,11 +7906,11 @@ class _CustomerPortalState extends State<_CustomerPortal> {
   StreamSubscription<DocumentSnapshot<Map<String, dynamic>>>? _senderSub;
   StreamSubscription<DocumentSnapshot<Map<String, dynamic>>>? _driverProfileSub;
   StreamSubscription<DocumentSnapshot<Map<String, dynamic>>>?
-      _driverPerformanceSub;
+  _driverPerformanceSub;
   StreamSubscription<QuerySnapshot<Map<String, dynamic>>>?
-      _assignedDriverRatingsSub;
+  _assignedDriverRatingsSub;
   StreamSubscription<QuerySnapshot<Map<String, dynamic>>>?
-      _deliveryAdjustmentSub;
+  _deliveryAdjustmentSub;
   String? _visibleAdjustmentId;
 
   bool get _matchingHasStarted =>
@@ -7929,7 +8021,8 @@ class _CustomerPortalState extends State<_CustomerPortal> {
       children: [
         LayoutBuilder(
           builder: (context, constraints) {
-            final desktop = constraints.maxWidth >= _desktopWebBreakpoint &&
+            final desktop =
+                constraints.maxWidth >= _desktopWebBreakpoint &&
                 _step != _SenderStep.healthPlus;
             return Column(
               children: [
@@ -8029,377 +8122,381 @@ class _CustomerPortalState extends State<_CustomerPortal> {
     }
     return switch (_step) {
       _SenderStep.dashboard => _SenderDashboardStep(
-          key: const ValueKey('sender-dashboard'),
-          colors: colors,
-          profile: _senderProfile,
-          deliveries: _senderDeliveries,
-          onSendParcel: () => setState(() => _step = _SenderStep.details),
-          onHealthPlus: () => setState(() => _step = _SenderStep.healthPlus),
-          onBusiness: () => setState(() => _step = _SenderStep.business),
-          onProfile: () => setState(() => _step = _SenderStep.profile),
-          onSupport: () => setState(() {
-            _supportChat = true;
-            _chatOpen = true;
-          }),
-        ),
+        key: const ValueKey('sender-dashboard'),
+        colors: colors,
+        profile: _senderProfile,
+        deliveries: _senderDeliveries,
+        onSendParcel: () => setState(() => _step = _SenderStep.details),
+        onHealthPlus: () => setState(() => _step = _SenderStep.healthPlus),
+        onBusiness: () => setState(() => _step = _SenderStep.business),
+        onProfile: () => setState(() => _step = _SenderStep.profile),
+        onSupport: () => setState(() {
+          _supportChat = true;
+          _chatOpen = true;
+        }),
+      ),
       _SenderStep.details => _DetailsStep(
-          key: const ValueKey('details'),
-          colors: colors,
-          pickup: _pickup,
-          dropoff: _dropoff,
-          savedAddresses: _senderProfile?.savedAddresses ?? const [],
-          onSavedPickup: _applySavedPickupAddress,
-          onSavedDropoff: _applySavedDropoffAddress,
-          pickupVerified: _pickupAddressVerified,
-          dropoffVerified: _dropoffAddressVerified,
-          locationValidationMessage: _locationValidationMessage,
-          checkoutState: _checkoutState,
-          canSubmit: _canAnalyzeDelivery,
-          senderName: _senderName,
-          senderPhone: _senderPhone,
-          senderDisplayName: _effectiveSenderName,
-          senderDisplayPhone: _effectiveSenderPhone,
-          senderDetailsRequired: _senderDetailsRequired,
-          receiverName: _receiverName,
-          receiverPhone: _receiverPhone,
-          differentCollectionContact: _differentCollectionContact,
-          collectionContactName: _collectionContactName,
-          collectionContactPhone: _collectionContactPhone,
-          contactDetailsReady: _hasRequiredContactDetails,
-          contactValidationMessage: _contactValidationMessage,
-          onDifferentCollectionContact: (value) {
-            setState(() {
-              _differentCollectionContact = value;
-              if (!value) {
-                _collectionContactName.clear();
-                _collectionContactPhone.clear();
-              }
-            });
-          },
-          onPickupSelected: _selectPickupAddress,
-          onDropoffSelected: _selectDropoffAddress,
-          onPickupEdited: _handlePickupEdited,
-          onDropoffEdited: _handleDropoffEdited,
-          description: _description,
-          weight: _weight,
-          irisEstimatedWeightKg: _irisEstimatedWeightKg,
-          irisWeightBand: _irisWeightBand,
-          irisWeightConfidence: _irisWeightConfidence,
-          irisWeightExplanation: _irisWeightExplanation,
-          irisMatchedItemName: _irisMatchedItemName,
-          irisQuantity: _irisQuantity,
-          irisTruthBand: _irisTruthBand(),
-          senderEnteredWeightKg: _senderEnteredWeightKg,
-          pricingWeightKg: _confirmedWeightKg,
-          weightSource: _weightSourceText,
-          pricingReason: _weightPricingReason,
-          verificationRequired: _weightVerificationRequired,
-          weightMessage: _weightMessage,
-          onConfirmIrisWeight: _confirmIrisWeight,
-          parcelPhotoName: _parcelPhoto?.name,
-          parcelPhotoBusy: _parcelPhotoBusy,
-          parcelPhotoMessage: _parcelPhotoMessage,
-          onPickParcelPhoto: _pickParcelPhoto,
-          onRemoveParcelPhoto: () => setState(() {
-            _parcelPhoto = null;
-            _parcelPhotoCapturedAt = null;
-            _irisImageInsight = null;
-            _parcelPhotoMessage = 'Parcel photo removed.';
-          }),
-          scheduledPickupDate: _scheduledPickupDate,
-          scheduledPickupWindow: _scheduledPickupWindow,
-          scheduledDropoffDate: _scheduledDropoffDate,
-          scheduledDropoffWindow: _scheduledDropoffWindow,
-          deliveryTimingType: _deliveryTimingType,
-          onDeliveryTimingChanged: _setDeliveryTimingType,
-          analyzing: _analyzing,
-          onSubmit: _analyseRequest,
-        ),
+        key: const ValueKey('details'),
+        colors: colors,
+        pickup: _pickup,
+        dropoff: _dropoff,
+        savedAddresses: _senderProfile?.savedAddresses ?? const [],
+        onSavedPickup: _applySavedPickupAddress,
+        onSavedDropoff: _applySavedDropoffAddress,
+        pickupVerified: _pickupAddressVerified,
+        dropoffVerified: _dropoffAddressVerified,
+        locationValidationMessage: _locationValidationMessage,
+        checkoutState: _checkoutState,
+        canSubmit: _canAnalyzeDelivery,
+        senderName: _senderName,
+        senderPhone: _senderPhone,
+        senderDisplayName: _effectiveSenderName,
+        senderDisplayPhone: _effectiveSenderPhone,
+        senderDetailsRequired: _senderDetailsRequired,
+        receiverName: _receiverName,
+        receiverPhone: _receiverPhone,
+        differentCollectionContact: _differentCollectionContact,
+        collectionContactName: _collectionContactName,
+        collectionContactPhone: _collectionContactPhone,
+        contactDetailsReady: _hasRequiredContactDetails,
+        contactValidationMessage: _contactValidationMessage,
+        onDifferentCollectionContact: (value) {
+          setState(() {
+            _differentCollectionContact = value;
+            if (!value) {
+              _collectionContactName.clear();
+              _collectionContactPhone.clear();
+            }
+          });
+        },
+        onPickupSelected: _selectPickupAddress,
+        onDropoffSelected: _selectDropoffAddress,
+        onPickupEdited: _handlePickupEdited,
+        onDropoffEdited: _handleDropoffEdited,
+        description: _description,
+        weight: _weight,
+        irisEstimatedWeightKg: _irisEstimatedWeightKg,
+        irisWeightBand: _irisWeightBand,
+        irisWeightConfidence: _irisWeightConfidence,
+        irisWeightExplanation: _irisWeightExplanation,
+        irisMatchedItemName: _irisMatchedItemName,
+        irisQuantity: _irisQuantity,
+        irisTruthBand: _irisTruthBand(),
+        senderEnteredWeightKg: _senderEnteredWeightKg,
+        pricingWeightKg: _confirmedWeightKg,
+        weightSource: _weightSourceText,
+        pricingReason: _weightPricingReason,
+        verificationRequired: _weightVerificationRequired,
+        weightMessage: _weightMessage,
+        onConfirmIrisWeight: _confirmIrisWeight,
+        parcelPhotoName: _parcelPhoto?.name,
+        parcelPhotoBusy: _parcelPhotoBusy,
+        parcelPhotoMessage: _parcelPhotoMessage,
+        onPickParcelPhoto: _pickParcelPhoto,
+        onRemoveParcelPhoto: () => setState(() {
+          _parcelPhoto = null;
+          _parcelPhotoCapturedAt = null;
+          _irisPhotoAnalysisId = null;
+          _irisImageInsight = null;
+          _parcelPhotoMessage = 'Parcel photo removed.';
+        }),
+        scheduledPickupDate: _scheduledPickupDate,
+        scheduledPickupWindow: _scheduledPickupWindow,
+        scheduledDropoffDate: _scheduledDropoffDate,
+        scheduledDropoffWindow: _scheduledDropoffWindow,
+        deliveryTimingType: _deliveryTimingType,
+        onDeliveryTimingChanged: _setDeliveryTimingType,
+        analyzing: _analyzing,
+        onSubmit: _analyseRequest,
+      ),
       _SenderStep.vehicle => _VehicleStep(
-          key: const ValueKey('vehicle'),
-          colors: colors,
-          pickup: _pickup.text,
-          dropoff: _dropoff.text,
-          chargeableWeightKg: _deliveryClassification.finalWeightKg,
-          vehicleSuitability: _vehicleSuitability,
-          selectedVehicle: _effectiveVehicle,
-          selectedSpeed: _selectedSpeed,
-          locationsConfirmed: _hasValidatedRoute,
-          priceReady: _quoteTotal > 0,
-          weightReady: _deliveryClassification.finalWeightKg > 0,
-          specialHandling: _specialHandling,
-          vanguardRequired: _webVanguardRequired,
-          pickupAccess: _pickupAccess,
-          dropoffAccess: _dropoffAccess,
-          onPickupAccess: (value) => setState(() => _pickupAccess = value),
-          onDropoffAccess: (value) => setState(() => _dropoffAccess = value),
-          onVehicle: (vehicle) {
-            final suitability = _vehicleSuitability;
-            if (!DeliveryPricing.vehicleCanCarryDelivery(
-              vehicle.name,
-              suitability,
-            )) {
-              setState(() {
-                _selectedVehicle = _effectiveVehicle;
-                _weightMessage =
-                    'Vehicle recommendation based on weight, dimensions, and item type. Recommended vehicle: ${suitability.recommendedVehicle}.';
-              });
-              return;
-            }
+        key: const ValueKey('vehicle'),
+        colors: colors,
+        pickup: _pickup.text,
+        dropoff: _dropoff.text,
+        chargeableWeightKg: _deliveryClassification.finalWeightKg,
+        vehicleSuitability: _vehicleSuitability,
+        selectedVehicle: _effectiveVehicle,
+        selectedSpeed: _selectedSpeed,
+        locationsConfirmed: _hasValidatedRoute,
+        priceReady: _quoteTotal > 0,
+        weightReady: _deliveryClassification.finalWeightKg > 0,
+        specialHandling: _specialHandling,
+        vanguardRequired: _webVanguardRequired,
+        pickupAccess: _pickupAccess,
+        dropoffAccess: _dropoffAccess,
+        onPickupAccess: (value) => setState(() => _pickupAccess = value),
+        onDropoffAccess: (value) => setState(() => _dropoffAccess = value),
+        onVehicle: (vehicle) {
+          final suitability = _vehicleSuitability;
+          if (!DeliveryPricing.vehicleCanCarryDelivery(
+            vehicle.name,
+            suitability,
+          )) {
             setState(() {
-              _selectedVehicle = vehicle;
-              _checkoutState = _CheckoutState.awaitingPayment;
+              _selectedVehicle = _effectiveVehicle;
+              _weightMessage =
+                  'Vehicle recommendation based on weight, dimensions, and item type. Recommended vehicle: ${suitability.recommendedVehicle}.';
             });
-          },
-          onSpeed: (speed) => setState(() {
-            _selectedSpeed = speed;
+            return;
+          }
+          setState(() {
+            _selectedVehicle = vehicle;
             _checkoutState = _CheckoutState.awaitingPayment;
-          }),
-          onBack: () => setState(() => _step = _SenderStep.dashboard),
-          onContinue: () => setState(() {
-            _checkoutState = _CheckoutState.awaitingPayment;
-            _step = _SenderStep.payment;
-          }),
-        ),
+          });
+        },
+        onSpeed: (speed) => setState(() {
+          _selectedSpeed = speed;
+          _checkoutState = _CheckoutState.awaitingPayment;
+        }),
+        onBack: () => setState(() => _step = _SenderStep.dashboard),
+        onContinue: () => setState(() {
+          _checkoutState = _CheckoutState.awaitingPayment;
+          _step = _SenderStep.payment;
+        }),
+      ),
       _SenderStep.payment => _PaymentStep(
-          key: const ValueKey('payment'),
-          colors: colors,
-          vehicle: _effectiveVehicle,
-          speed: _selectedSpeed,
-          breakdown: _quoteBreakdown,
-          distanceMiles: _confirmedRouteDistanceMiles,
-          locationsConfirmed: _hasValidatedRoute,
-          routeMessage: _locationValidationMessage,
-          irisEstimatedWeightKg: _irisEstimatedWeightKg,
-          senderEnteredWeightKg: _senderEnteredWeightKg,
-          weightKg: _deliveryClassification.finalWeightKg,
-          total: _quoteTotal,
-          checkoutState: _checkoutState,
-          weightConfirmed: _hasConfirmedWeight,
-          weightSource: _weightSourceText,
-          pricingReason: _weightPricingReason,
-          specialHandling: _specialHandling,
-          scheduledPickupDate: _scheduledPickupDate.text.trim(),
-          scheduledPickupWindow: _scheduledPickupWindow.text.trim(),
-          scheduledDropoffDate: _scheduledDropoffDate.text.trim(),
-          scheduledDropoffWindow: _scheduledDropoffWindow.text.trim(),
-          onBack: () => setState(() {
-            if (!_matchingHasStarted) {
-              _checkoutState = _CheckoutState.awaitingPayment;
-            }
-            _step = _SenderStep.vehicle;
-          }),
-          onPay: _confirmPayment,
-        ),
+        key: const ValueKey('payment'),
+        colors: colors,
+        vehicle: _effectiveVehicle,
+        speed: _selectedSpeed,
+        breakdown: _quoteBreakdown,
+        distanceMiles: _confirmedRouteDistanceMiles,
+        locationsConfirmed: _hasValidatedRoute,
+        routeMessage: _locationValidationMessage,
+        irisEstimatedWeightKg: _irisEstimatedWeightKg,
+        senderEnteredWeightKg: _senderEnteredWeightKg,
+        weightKg: _deliveryClassification.finalWeightKg,
+        total: _quoteTotal,
+        checkoutState: _checkoutState,
+        weightConfirmed: _hasConfirmedWeight,
+        weightSource: _weightSourceText,
+        pricingReason: _weightPricingReason,
+        specialHandling: _specialHandling,
+        scheduledPickupDate: _scheduledPickupDate.text.trim(),
+        scheduledPickupWindow: _scheduledPickupWindow.text.trim(),
+        scheduledDropoffDate: _scheduledDropoffDate.text.trim(),
+        scheduledDropoffWindow: _scheduledDropoffWindow.text.trim(),
+        onBack: () => setState(() {
+          if (!_matchingHasStarted) {
+            _checkoutState = _CheckoutState.awaitingPayment;
+          }
+          _step = _SenderStep.vehicle;
+        }),
+        onPay: _confirmPayment,
+      ),
       _SenderStep.tracking => _TrackingStep(
-          key: const ValueKey('tracking'),
-          colors: colors,
-          orderId: _activeOrderId ?? 'CIR-2026',
-          pickup: _pickup.text,
-          dropoff: _dropoff.text,
-          vehicle: _effectiveVehicle,
-          statusIndex: _statusIndex,
-          broadcasting: _broadcasting,
-          checkoutState: _checkoutState,
-          firebaseOnline: _firebaseOnline,
-          firebaseError: _firebaseError,
-          receivedAt: _activeRequestReceivedAt,
-          pickupAddress: _validatedPickup,
-          dropoffAddress: _validatedDropoff,
-          liveLocation: _liveLocationData,
-          vanguardData: _activeVanguardData,
-          irisItemName: _irisMatchedItemName,
-          irisQuantity: _irisQuantity,
-          irisConfidence: _irisWeightConfidence,
-          irisWeightKg: _deliveryClassification.finalWeightKg,
-          irisWeightBand: _deliveryClassification.finalWeightBand,
-          irisRepositoryMatched: _irisMatchedItemName != null,
-          irisCorrected: _weightSource == 'sender_confirmed' ||
-              _weightSource == 'manual_sender_entry',
-          recommendedVehicle: _vehicleSuitability.recommendedVehicle,
-          breakdown: _quoteBreakdown,
-          assignedDriver: _assignedDriver,
-          assignedDriverMetric: _assignedDriverMetric,
-          ratingStars: _selectedRating,
-          ratingFeedback: _ratingFeedback,
-          selectedRatingTags: _selectedRatingTags,
-          selectedTipAmount: _selectedTipAmount,
-          ratingSubmitting: _ratingSubmitting,
-          ratingSubmitted: _ratingSubmitted,
-          ratingMessage: _ratingMessage,
-          onRatingChanged: (rating) => setState(() => _selectedRating = rating),
-          onRatingTag: _toggleRatingTag,
-          onTipChanged: (amount) => setState(() => _selectedTipAmount = amount),
-          onSubmitRating: _submitDriverRating,
-          onChatDriver: () => setState(() {
-            _supportChat = false;
-            _chatOpen = true;
-          }),
-          onChatSupport: () => setState(() {
-            _supportChat = true;
-            _chatOpen = true;
-          }),
-          onNewOrder: _reset,
-          onViewHistory: () => setState(() {
-            _step = _SenderStep.profile;
-            _senderProfileTab = 1;
-          }),
-        ),
+        key: const ValueKey('tracking'),
+        colors: colors,
+        orderId: _activeOrderId ?? 'CIR-2026',
+        pickup: _pickup.text,
+        dropoff: _dropoff.text,
+        vehicle: _effectiveVehicle,
+        statusIndex: _statusIndex,
+        broadcasting: _broadcasting,
+        checkoutState: _checkoutState,
+        firebaseOnline: _firebaseOnline,
+        firebaseError: _firebaseError,
+        receivedAt: _activeRequestReceivedAt,
+        pickupAddress: _validatedPickup,
+        dropoffAddress: _validatedDropoff,
+        liveLocation: _liveLocationData,
+        vanguardData: _activeVanguardData,
+        irisItemName: _irisMatchedItemName,
+        irisQuantity: _irisQuantity,
+        irisConfidence: _irisWeightConfidence,
+        irisWeightKg: _deliveryClassification.finalWeightKg,
+        irisWeightBand: _deliveryClassification.finalWeightBand,
+        irisRepositoryMatched: _irisMatchedItemName != null,
+        irisCorrected:
+            _weightSource == 'sender_confirmed' ||
+            _weightSource == 'manual_sender_entry',
+        recommendedVehicle: _vehicleSuitability.recommendedVehicle,
+        breakdown: _quoteBreakdown,
+        assignedDriver: _assignedDriver,
+        assignedDriverMetric: _assignedDriverMetric,
+        ratingStars: _selectedRating,
+        ratingFeedback: _ratingFeedback,
+        selectedRatingTags: _selectedRatingTags,
+        selectedTipAmount: _selectedTipAmount,
+        ratingSubmitting: _ratingSubmitting,
+        ratingSubmitted: _ratingSubmitted,
+        ratingMessage: _ratingMessage,
+        onRatingChanged: (rating) => setState(() => _selectedRating = rating),
+        onRatingTag: _toggleRatingTag,
+        onTipChanged: (amount) => setState(() => _selectedTipAmount = amount),
+        onSubmitRating: _submitDriverRating,
+        onChatDriver: () => setState(() {
+          _supportChat = false;
+          _chatOpen = true;
+        }),
+        onChatSupport: () => setState(() {
+          _supportChat = true;
+          _chatOpen = true;
+        }),
+        onNewOrder: _reset,
+        onViewHistory: () => setState(() {
+          _step = _SenderStep.profile;
+          _senderProfileTab = 1;
+        }),
+      ),
       _SenderStep.healthPlus => _HealthPlusStep(
-          key: const ValueKey('health-plus'),
-          colors: colors,
-          fullName: _healthName,
-          phone: _healthPhone,
-          email: _healthEmail,
-          pharmacyName: _healthPharmacyName,
-          pharmacyAddress: _healthPharmacy,
-          deliveryAddress: _healthDelivery,
-          notes: _healthNotes,
-          preferredDay: _healthPreferredDay,
-          preferredTime: _healthPreferredTime,
-          customSchedule: _healthCustomSchedule,
-          frequency: _healthFrequency,
-          prescriptionType: _healthPrescriptionType,
-          subscriptionPlan: _healthSubscriptionPlan,
-          consent: _healthConsent,
-          savePayment: _healthSavePayment,
-          submitting: _healthSubmitting,
-          message: _healthMessage,
-          checkoutUrl: _healthCheckoutUrl,
-          quote: _healthQuote,
-          pickups: _healthPickups,
-          payments: _healthPayments,
-          onBack: () => setState(() => _step = _SenderStep.dashboard),
-          onFrequency: (frequency) =>
-              setState(() => _healthFrequency = frequency),
-          onPrescriptionType: (type) =>
-              setState(() => _healthPrescriptionType = type),
-          onSubscriptionPlan: (plan) =>
-              setState(() => _healthSubscriptionPlan = plan),
-          onStartSubscription: (plan) {
-            setState(() {
-              _healthSubscriptionPlan = plan;
-              if (_healthFrequency == HealthPlusFrequency.oneOff) {
-                _healthFrequency = HealthPlusFrequency.weekly;
-              }
-            });
-            _bookHealthPlus();
-          },
-          onContinueOneOff: () {
-            setState(() => _healthFrequency = HealthPlusFrequency.oneOff);
-            _bookHealthPlus();
-          },
-          onConsent: (value) => setState(() => _healthConsent = value ?? false),
-          onSavePayment: (value) =>
-              setState(() => _healthSavePayment = value ?? false),
-          onSubmit: _bookHealthPlus,
-          onPauseSchedule: _pauseHealthPlusSchedule,
-          onResumeSchedule: _resumeHealthPlusSchedule,
-          onCancelSchedule: _cancelHealthPlusSchedule,
-          onCancelPickup: _cancelNextHealthPlusPickup,
-          onUpdatePayment: _openHealthPlusCheckout,
-          onAdminStatus: _adminUpdateHealthPlusStatus,
-        ),
+        key: const ValueKey('health-plus'),
+        colors: colors,
+        fullName: _healthName,
+        phone: _healthPhone,
+        email: _healthEmail,
+        pharmacyName: _healthPharmacyName,
+        pharmacyAddress: _healthPharmacy,
+        deliveryAddress: _healthDelivery,
+        notes: _healthNotes,
+        preferredDay: _healthPreferredDay,
+        preferredTime: _healthPreferredTime,
+        customSchedule: _healthCustomSchedule,
+        frequency: _healthFrequency,
+        prescriptionType: _healthPrescriptionType,
+        subscriptionPlan: _healthSubscriptionPlan,
+        consent: _healthConsent,
+        savePayment: _healthSavePayment,
+        useRoth: _healthUseRoth,
+        rothBalance: _healthRothBalance,
+        submitting: _healthSubmitting,
+        message: _healthMessage,
+        checkoutUrl: _healthCheckoutUrl,
+        quote: _healthQuote,
+        pickups: _healthPickups,
+        payments: _healthPayments,
+        onBack: () => setState(() => _step = _SenderStep.dashboard),
+        onFrequency: (frequency) =>
+            setState(() => _healthFrequency = frequency),
+        onPrescriptionType: (type) =>
+            setState(() => _healthPrescriptionType = type),
+        onSubscriptionPlan: (plan) =>
+            setState(() => _healthSubscriptionPlan = plan),
+        onStartSubscription: (plan) {
+          setState(() {
+            _healthSubscriptionPlan = plan;
+            if (_healthFrequency == HealthPlusFrequency.oneOff) {
+              _healthFrequency = HealthPlusFrequency.weekly;
+            }
+          });
+          _bookHealthPlus();
+        },
+        onContinueOneOff: () {
+          setState(() => _healthFrequency = HealthPlusFrequency.oneOff);
+          _bookHealthPlus();
+        },
+        onConsent: (value) => setState(() => _healthConsent = value ?? false),
+        onSavePayment: (value) =>
+            setState(() => _healthSavePayment = value ?? false),
+        onUseRoth: (value) => setState(() => _healthUseRoth = value ?? false),
+        onSubmit: _bookHealthPlus,
+        onPauseSchedule: _pauseHealthPlusSchedule,
+        onResumeSchedule: _resumeHealthPlusSchedule,
+        onCancelSchedule: _cancelHealthPlusSchedule,
+        onCancelPickup: _cancelNextHealthPlusPickup,
+        onUpdatePayment: _openHealthPlusCheckout,
+        onAdminStatus: _adminUpdateHealthPlusStatus,
+      ),
       _SenderStep.business => _BusinessCentreStep(
-          key: const ValueKey('business-centre'),
-          colors: colors,
-          loading: _businessLoading,
-          busy: _businessBusy,
-          message: _businessMessage,
-          accounts: _businessAccounts,
-          selectedBusinessId: _selectedBusinessId,
-          account: _selectedBusinessAccount,
-          invoices: _businessInvoices,
-          deliveries: _senderDeliveries,
-          joinRequests: _businessJoinRequests,
-          auditLogs: _businessAuditLogs,
-          wallet: _businessWallet,
-          companyName: _businessCompanyName,
-          businessType: _businessType,
-          businessEmail: _businessEmail,
-          businessPhone: _businessPhone,
-          businessAddress: _businessAddress,
-          vatNumber: _businessVatNumber,
-          website: _businessWebsite,
-          companyCode: _businessCompanyCode,
-          rothAmount: _businessRothAmount,
-          onBack: () => setState(() => _step = _SenderStep.dashboard),
-          onRefresh: () {
-            final user = _senderUser;
-            if (user != null) _loadBusinessWorkspaces(user.uid);
-          },
-          onSelectBusiness: (id) async {
-            setState(() {
-              _selectedBusinessId = id;
-              final account = _selectedBusinessAccount;
-              if (account != null) _populateBusinessControllers(account);
-            });
-            final user = _senderUser;
-            if (user != null) await _loadBusinessWorkspaces(user.uid);
-          },
-          onCreateBusiness: _createBusinessAccount,
-          onJoinBusiness: _joinBusinessByCode,
-          onSaveProfile: _saveBusinessProfile,
-          onReviewRequest: _reviewBusinessRequest,
-          onUpdateMemberRole: _updateBusinessMemberRole,
-          onRemoveMember: _removeBusinessMember,
-          onPayInvoice: (invoiceId) => _openBusinessInvoiceCheckout(invoiceId),
-          onPayInvoiceWithRoth: (invoiceId) =>
-              _openBusinessInvoiceCheckout(invoiceId, useRoth: true),
-          onDownloadInvoice: _downloadBusinessInvoice,
-          onBuyRoth: _openBusinessRothCheckout,
-          onCreateDelivery: () => setState(() => _step = _SenderStep.details),
-          onHealthPlus: () => setState(() => _step = _SenderStep.healthPlus),
-          onGifts: widget.onGifts,
-        ),
+        key: const ValueKey('business-centre'),
+        colors: colors,
+        loading: _businessLoading,
+        busy: _businessBusy,
+        message: _businessMessage,
+        accounts: _businessAccounts,
+        selectedBusinessId: _selectedBusinessId,
+        account: _selectedBusinessAccount,
+        invoices: _businessInvoices,
+        deliveries: _senderDeliveries,
+        joinRequests: _businessJoinRequests,
+        auditLogs: _businessAuditLogs,
+        wallet: _businessWallet,
+        companyName: _businessCompanyName,
+        businessType: _businessType,
+        businessEmail: _businessEmail,
+        businessPhone: _businessPhone,
+        businessAddress: _businessAddress,
+        vatNumber: _businessVatNumber,
+        website: _businessWebsite,
+        companyCode: _businessCompanyCode,
+        rothAmount: _businessRothAmount,
+        onBack: () => setState(() => _step = _SenderStep.dashboard),
+        onRefresh: () {
+          final user = _senderUser;
+          if (user != null) _loadBusinessWorkspaces(user.uid);
+        },
+        onSelectBusiness: (id) async {
+          setState(() {
+            _selectedBusinessId = id;
+            final account = _selectedBusinessAccount;
+            if (account != null) _populateBusinessControllers(account);
+          });
+          final user = _senderUser;
+          if (user != null) await _loadBusinessWorkspaces(user.uid);
+        },
+        onCreateBusiness: _createBusinessAccount,
+        onJoinBusiness: _joinBusinessByCode,
+        onSaveProfile: _saveBusinessProfile,
+        onReviewRequest: _reviewBusinessRequest,
+        onUpdateMemberRole: _updateBusinessMemberRole,
+        onRemoveMember: _removeBusinessMember,
+        onPayInvoice: (invoiceId) => _openBusinessInvoiceCheckout(invoiceId),
+        onPayInvoiceWithRoth: (invoiceId) =>
+            _openBusinessInvoiceCheckout(invoiceId, useRoth: true),
+        onDownloadInvoice: _downloadBusinessInvoice,
+        onBuyRoth: _openBusinessRothCheckout,
+        onCreateDelivery: () => setState(() => _step = _SenderStep.details),
+        onHealthPlus: () => setState(() => _step = _SenderStep.healthPlus),
+        onGifts: widget.onGifts,
+      ),
       _SenderStep.profile => _SenderProfileStep(
-          key: const ValueKey('sender-profile'),
-          colors: colors,
-          user: _senderUser,
-          profile: _senderProfile,
-          deliveries: _senderDeliveries,
-          selectedDelivery: _selectedSenderDelivery,
-          loading: _senderAuthLoading,
-          busy: _senderAuthBusy || _senderProfileSaving,
-          message: _senderProfileMessage,
-          tabIndex: _senderProfileTab,
-          email: _senderEmail,
-          password: _senderPassword,
-          fullName: _senderName,
-          phone: _senderPhone,
-          currentPassword: _senderCurrentPassword,
-          newPassword: _senderNewPassword,
-          confirmNewPassword: _senderConfirmNewPassword,
-          newEmail: _senderNewEmail,
-          emailChangePassword: _senderEmailChangePassword,
-          securitySubmitting: _senderSecurityBusy,
-          securityMessage: _senderSecurityMessage,
-          savedAddressLabel: _savedAddressLabel,
-          savedAddress: _savedAddress,
-          savedAddressType: _savedAddressType,
-          onBack: () => setState(() => _step = _SenderStep.dashboard),
-          onTab: (index) => setState(() => _senderProfileTab = index),
-          onSignIn: _signInSender,
-          onSignUp: _signUpSender,
-          onForgotPassword: _sendSenderPasswordReset,
-          onChangePassword: _changeSenderPassword,
-          onChangeEmail: _changeSenderEmail,
-          onSignOut: _signOutSender,
-          onSaveProfile: _saveSenderProfile,
-          onAddAddress: _addSenderAddress,
-          onSavedAddressType: (type) =>
-              setState(() => _savedAddressType = type),
-          onSavedAddressSelected: (address) => setState(() {
-            _validatedSavedAddress = address;
-            _savedAddress.text = address.displayAddress;
-          }),
-          onSavedAddressEdited: (_) =>
-              setState(() => _validatedSavedAddress = null),
-          onSelectDelivery: (delivery) =>
-              setState(() => _selectedSenderDelivery = delivery),
-          onCloseDelivery: () => setState(() => _selectedSenderDelivery = null),
-          onCancelBooking: _cancelSenderBooking,
-        ),
+        key: const ValueKey('sender-profile'),
+        colors: colors,
+        user: _senderUser,
+        profile: _senderProfile,
+        deliveries: _senderDeliveries,
+        selectedDelivery: _selectedSenderDelivery,
+        loading: _senderAuthLoading,
+        busy: _senderAuthBusy || _senderProfileSaving,
+        message: _senderProfileMessage,
+        tabIndex: _senderProfileTab,
+        email: _senderEmail,
+        password: _senderPassword,
+        fullName: _senderName,
+        phone: _senderPhone,
+        currentPassword: _senderCurrentPassword,
+        newPassword: _senderNewPassword,
+        confirmNewPassword: _senderConfirmNewPassword,
+        newEmail: _senderNewEmail,
+        emailChangePassword: _senderEmailChangePassword,
+        securitySubmitting: _senderSecurityBusy,
+        securityMessage: _senderSecurityMessage,
+        savedAddressLabel: _savedAddressLabel,
+        savedAddress: _savedAddress,
+        savedAddressType: _savedAddressType,
+        onBack: () => setState(() => _step = _SenderStep.dashboard),
+        onTab: (index) => setState(() => _senderProfileTab = index),
+        onSignIn: _signInSender,
+        onSignUp: _signUpSender,
+        onForgotPassword: _sendSenderPasswordReset,
+        onChangePassword: _changeSenderPassword,
+        onChangeEmail: _changeSenderEmail,
+        onSignOut: _signOutSender,
+        onSaveProfile: _saveSenderProfile,
+        onAddAddress: _addSenderAddress,
+        onSavedAddressType: (type) => setState(() => _savedAddressType = type),
+        onSavedAddressSelected: (address) => setState(() {
+          _validatedSavedAddress = address;
+          _savedAddress.text = address.displayAddress;
+        }),
+        onSavedAddressEdited: (_) =>
+            setState(() => _validatedSavedAddress = null),
+        onSelectDelivery: (delivery) =>
+            setState(() => _selectedSenderDelivery = delivery),
+        onCloseDelivery: () => setState(() => _selectedSenderDelivery = null),
+        onCancelBooking: _cancelSenderBooking,
+      ),
     };
   }
 
@@ -8415,7 +8512,8 @@ class _CustomerPortalState extends State<_CustomerPortal> {
 
   DeliveryClassification get _deliveryClassification {
     final pricingWeightKg = DeliveryPricing.checkoutPricingWeightKg(
-      userEnteredWeightKg: _senderEnteredWeightKg ??
+      userEnteredWeightKg:
+          _senderEnteredWeightKg ??
           DeliveryPricing.parseWeightKg(_weight.text, fallbackKg: 0),
       irisEstimatedWeightKg: _irisEstimatedWeightKg,
       matchedCatalogueWeightKg: _matchedCatalogueWeightKg,
@@ -8457,12 +8555,14 @@ class _CustomerPortalState extends State<_CustomerPortal> {
   bool get _hasValidDeliveryTiming {
     return switch (_deliveryTimingType) {
       'asap' => true,
-      'today' => _scheduledPickupWindow.text.trim().isNotEmpty &&
-          _scheduledDropoffWindow.text.trim().isNotEmpty,
-      'scheduled' => _scheduledPickupDate.text.trim().isNotEmpty &&
-          _scheduledDropoffDate.text.trim().isNotEmpty &&
-          _scheduledPickupWindow.text.trim().isNotEmpty &&
-          _scheduledDropoffWindow.text.trim().isNotEmpty,
+      'today' =>
+        _scheduledPickupWindow.text.trim().isNotEmpty &&
+            _scheduledDropoffWindow.text.trim().isNotEmpty,
+      'scheduled' =>
+        _scheduledPickupDate.text.trim().isNotEmpty &&
+            _scheduledDropoffDate.text.trim().isNotEmpty &&
+            _scheduledPickupWindow.text.trim().isNotEmpty &&
+            _scheduledDropoffWindow.text.trim().isNotEmpty,
       _ => false,
     };
   }
@@ -8676,22 +8776,25 @@ class _CustomerPortalState extends State<_CustomerPortal> {
     debugPrint('[CIRCUM pricing] userEnteredWeight=$_senderEnteredWeightKg');
     debugPrint('[CIRCUM pricing] irisEstimatedWeight=$_irisEstimatedWeightKg');
     debugPrint(
-        '[CIRCUM pricing] matchedCatalogueWeight=$_matchedCatalogueWeightKg');
+      '[CIRCUM pricing] matchedCatalogueWeight=$_matchedCatalogueWeightKg',
+    );
     debugPrint(
-        '[CIRCUM pricing] finalPricingWeightKg=${classification.finalWeightKg}');
+      '[CIRCUM pricing] finalPricingWeightKg=${classification.finalWeightKg}',
+    );
     debugPrint(
-        '[CIRCUM pricing] pricingWeightKg=${classification.finalWeightKg}');
+      '[CIRCUM pricing] pricingWeightKg=${classification.finalWeightKg}',
+    );
     debugPrint('[CIRCUM pricing] weightBand=${quote.weightCategory}');
     debugPrint('[CIRCUM pricing] vehicleType=${_effectiveVehicle.name}');
     debugPrint('[CIRCUM pricing] finalCheckoutPrice=${quote.total}');
   }
 
   SpecialHandlingResult get _specialHandling => SpecialHandlingEngine.evaluate(
-        description: _description.text,
-        itemName: _irisMatchedItemName,
-        pickupAccess: _pickupAccess,
-        dropoffAccess: _dropoffAccess,
-      );
+    description: _description.text,
+    itemName: _irisMatchedItemName,
+    pickupAccess: _pickupAccess,
+    dropoffAccess: _dropoffAccess,
+  );
 
   void _selectPickupAddress(_ValidatedAddress address) {
     if (!address.hasCoordinates) {
@@ -8852,6 +8955,7 @@ class _CustomerPortalState extends State<_CustomerPortal> {
       _attachSender(user);
       await _loadSenderDeliveries(user.uid);
       await _loadBusinessWorkspaces(user.uid);
+      await _loadSenderRothBalance();
     } catch (_) {
       if (!mounted) return;
       setState(() {
@@ -8874,34 +8978,55 @@ class _CustomerPortalState extends State<_CustomerPortal> {
         .doc(user.uid)
         .snapshots()
         .listen((snapshot) {
-      final data = snapshot.data() ?? <String, dynamic>{};
-      final profile = SenderProfile.fromMap(user.uid, {
-        'email': user.email,
-        'photoURL': user.photoURL,
-        'phoneNumber': user.phoneNumber,
-        ...data,
-      });
+          final data = snapshot.data() ?? <String, dynamic>{};
+          final profile = SenderProfile.fromMap(user.uid, {
+            'email': user.email,
+            'photoURL': user.photoURL,
+            'phoneNumber': user.phoneNumber,
+            ...data,
+          });
+          if (!mounted) return;
+          setState(() {
+            _senderProfile = profile;
+            if (_senderName.text.trim().isEmpty) {
+              _senderName.text = profile.fullName;
+            }
+            if (_senderPhone.text.trim().isEmpty) {
+              _senderPhone.text = profile.phoneNumber;
+            }
+          });
+          _loadBusinessWorkspaces(user.uid);
+          if (profile.isLegend &&
+              profile.legendNumber != null &&
+              profile.legendCelebrationSeenAt == null &&
+              !_legendCelebrationShowing) {
+            WidgetsBinding.instance.addPostFrameCallback(
+              (_) => _showLegendCelebration(profile),
+            );
+          }
+        });
+    _listenForDeliveryAdjustments(user.uid);
+    _loadSenderRothBalance();
+  }
+
+  Future<void> _loadSenderRothBalance() async {
+    try {
+      await _ensureFirebaseReady();
+      final result = await FirebaseFunctions.instanceFor(
+        region: 'us-central1',
+      ).httpsCallable('getSenderRothBalance').call<Map<String, dynamic>>();
+      final data = Map<String, dynamic>.from(result.data);
       if (!mounted) return;
       setState(() {
-        _senderProfile = profile;
-        if (_senderName.text.trim().isEmpty) {
-          _senderName.text = profile.fullName;
-        }
-        if (_senderPhone.text.trim().isEmpty) {
-          _senderPhone.text = profile.phoneNumber;
-        }
+        _healthRothBalance =
+            (data['availableRoth'] as num?)?.toDouble() ??
+            (data['balance'] as num?)?.toDouble() ??
+            0;
       });
-      _loadBusinessWorkspaces(user.uid);
-      if (profile.isLegend &&
-          profile.legendNumber != null &&
-          profile.legendCelebrationSeenAt == null &&
-          !_legendCelebrationShowing) {
-        WidgetsBinding.instance.addPostFrameCallback(
-          (_) => _showLegendCelebration(profile),
-        );
-      }
-    });
-    _listenForDeliveryAdjustments(user.uid);
+    } catch (_) {
+      if (!mounted) return;
+      setState(() => _healthRothBalance = 0);
+    }
   }
 
   Future<void> _showLegendCelebration(SenderProfile profile) async {
@@ -8938,29 +9063,35 @@ class _CustomerPortalState extends State<_CustomerPortal> {
         .where('senderId', isEqualTo: senderId)
         .limit(20)
         .snapshots()
-        .listen((snapshot) {
-      if (!mounted) return;
-      final pending = snapshot.docs.where((doc) {
-        final status = '${doc.data()['status'] ?? ''}';
-        return {
-          'awaiting_admin_review',
-          'more_evidence_requested',
-          'awaiting_sender_payment',
-          'rejected_by_admin',
-        }.contains(status);
-      }).toList();
-      if (pending.isEmpty) return;
-      pending.sort((a, b) => _timestampMillis(b.data()['createdAt'])
-          .compareTo(_timestampMillis(a.data()['createdAt'])));
-      final doc = pending.first;
-      if (_visibleAdjustmentId == doc.id) return;
-      _visibleAdjustmentId = doc.id;
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (mounted) _showSenderAdjustmentDialog(doc.id, doc.data());
-      });
-    }, onError: (error) {
-      debugPrint('Could not load delivery adjustment: $error');
-    });
+        .listen(
+          (snapshot) {
+            if (!mounted) return;
+            final pending = snapshot.docs.where((doc) {
+              final status = '${doc.data()['status'] ?? ''}';
+              return {
+                'awaiting_admin_review',
+                'more_evidence_requested',
+                'awaiting_sender_payment',
+                'rejected_by_admin',
+              }.contains(status);
+            }).toList();
+            if (pending.isEmpty) return;
+            pending.sort(
+              (a, b) => _timestampMillis(
+                b.data()['createdAt'],
+              ).compareTo(_timestampMillis(a.data()['createdAt'])),
+            );
+            final doc = pending.first;
+            if (_visibleAdjustmentId == doc.id) return;
+            _visibleAdjustmentId = doc.id;
+            WidgetsBinding.instance.addPostFrameCallback((_) {
+              if (mounted) _showSenderAdjustmentDialog(doc.id, doc.data());
+            });
+          },
+          onError: (error) {
+            debugPrint('Could not load delivery adjustment: $error');
+          },
+        );
   }
 
   static int _timestampMillis(Object? value) {
@@ -8986,10 +9117,10 @@ class _CustomerPortalState extends State<_CustomerPortal> {
     final title = rejected
         ? 'Adjustment rejected'
         : approvedForPayment
-            ? 'Adjustment approved'
-            : moreEvidence
-                ? 'More evidence requested'
-                : 'Adjustment under review';
+        ? 'Adjustment approved'
+        : moreEvidence
+        ? 'More evidence requested'
+        : 'Adjustment under review';
     await showDialog<void>(
       context: context,
       barrierDismissible: !approvedForPayment,
@@ -9002,29 +9133,39 @@ class _CustomerPortalState extends State<_CustomerPortal> {
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(_senderAdjustmentStateCopy(
-                  status: status,
-                  note: '${adjustment['adminReviewNote'] ?? ''}',
-                )),
+                Text(
+                  _senderAdjustmentStateCopy(
+                    status: status,
+                    note: '${adjustment['adminReviewNote'] ?? ''}',
+                  ),
+                ),
                 const SizedBox(height: 16),
                 _adjustmentTimeline(status),
                 const SizedBox(height: 16),
-                Text(_discrepancyReasonLabel(
-                    '${adjustment['riderReason'] ?? ''}')),
+                Text(
+                  _discrepancyReasonLabel('${adjustment['riderReason'] ?? ''}'),
+                ),
                 const SizedBox(height: 10),
                 _adjustmentPriceRow(
-                    'Original quote', adjustment['originalQuote']),
+                  'Original quote',
+                  adjustment['originalQuote'],
+                ),
                 _adjustmentPriceRow(
-                    'Revised quote', adjustment['revisedQuote']),
+                  'Revised quote',
+                  adjustment['revisedQuote'],
+                ),
                 _adjustmentPriceRow(
-                    'Additional amount', adjustment['additionalAmount'],
-                    emphasized: true),
+                  'Additional amount',
+                  adjustment['additionalAmount'],
+                  emphasized: true,
+                ),
                 if ('${adjustment['observations'] ?? ''}'
                     .trim()
                     .isNotEmpty) ...[
                   const SizedBox(height: 10),
                   Text(
-                      'Updated delivery evidence is attached for Admin review.'),
+                    'Updated delivery evidence is attached for Admin review.',
+                  ),
                 ],
                 if (error != null) ...[
                   const SizedBox(height: 12),
@@ -9054,7 +9195,8 @@ class _CustomerPortalState extends State<_CustomerPortal> {
                         } on FirebaseFunctionsException catch (exception) {
                           setDialogState(() {
                             busy = false;
-                            error = exception.message ??
+                            error =
+                                exception.message ??
                                 'Could not cancel this collection.';
                           });
                         }
@@ -9076,8 +9218,9 @@ class _CustomerPortalState extends State<_CustomerPortal> {
                           final payment = await FirebaseFunctions.instance
                               .httpsCallable('createDeliveryAdjustmentPayment')
                               .call({'adjustmentId': adjustmentId});
-                          final data =
-                              Map<String, dynamic>.from(payment.data as Map);
+                          final data = Map<String, dynamic>.from(
+                            payment.data as Map,
+                          );
                           await Stripe.instance.initPaymentSheet(
                             paymentSheetParameters: SetupPaymentSheetParameters(
                               paymentIntentClientSecret:
@@ -9089,7 +9232,8 @@ class _CustomerPortalState extends State<_CustomerPortal> {
                           await Stripe.instance.presentPaymentSheet();
                           await FirebaseFunctions.instance
                               .httpsCallable(
-                                  'finalizeDeliveryAdjustmentPayment')
+                                'finalizeDeliveryAdjustmentPayment',
+                              )
                               .call({'adjustmentId': adjustmentId});
                           if (!dialogContext.mounted) return;
                           Navigator.of(dialogContext).pop();
@@ -9164,32 +9308,38 @@ class _CustomerPortalState extends State<_CustomerPortal> {
     );
   }
 
-  Widget _adjustmentPriceRow(String label, Object? value,
-      {bool emphasized = false}) {
+  Widget _adjustmentPriceRow(
+    String label,
+    Object? value, {
+    bool emphasized = false,
+  }) {
     final amount = value is num ? value.toDouble() : double.tryParse('$value');
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 4),
       child: Row(
         children: [
           Expanded(child: Text(label)),
-          Text('£${(amount ?? 0).toStringAsFixed(2)}',
-              style: TextStyle(
-                  fontWeight: emphasized ? FontWeight.w900 : FontWeight.w700)),
+          Text(
+            '£${(amount ?? 0).toStringAsFixed(2)}',
+            style: TextStyle(
+              fontWeight: emphasized ? FontWeight.w900 : FontWeight.w700,
+            ),
+          ),
         ],
       ),
     );
   }
 
   static String _discrepancyReasonLabel(String reason) => switch (reason) {
-        'weight_exceeded' => 'The collected parcel is heavier than booked.',
-        'dimensions_exceeded' =>
-          'The parcel dimensions exceed the booking details.',
-        'additional_undeclared_items' =>
-          'Additional undeclared items were presented.',
-        'item_differs_from_booking' =>
-          'The item differs from the original booking.',
-        _ => 'The rider reported a material load discrepancy.',
-      };
+    'weight_exceeded' => 'The collected parcel is heavier than booked.',
+    'dimensions_exceeded' =>
+      'The parcel dimensions exceed the booking details.',
+    'additional_undeclared_items' =>
+      'Additional undeclared items were presented.',
+    'item_differs_from_booking' =>
+      'The item differs from the original booking.',
+    _ => 'The rider reported a material load discrepancy.',
+  };
 
   Future<void> _signInSender() async {
     if (_senderAuthBusy) return;
@@ -9230,15 +9380,15 @@ class _CustomerPortalState extends State<_CustomerPortal> {
     });
     try {
       await _ensureFirebaseReady();
-      final credential =
-          await FirebaseAuth.instance.createUserWithEmailAndPassword(
-        email: _senderEmail.text.trim(),
-        password: _senderPassword.text.trim(),
-      );
+      final credential = await FirebaseAuth.instance
+          .createUserWithEmailAndPassword(
+            email: _senderEmail.text.trim(),
+            password: _senderPassword.text.trim(),
+          );
       final user = credential.user!;
-      await FirebaseFunctions.instanceFor(region: 'us-central1')
-          .httpsCallable('updateSenderProfile')
-          .call({
+      await FirebaseFunctions.instanceFor(
+        region: 'us-central1',
+      ).httpsCallable('updateSenderProfile').call({
         'displayName': _senderName.text.trim(),
         'phone': _senderPhone.text.trim(),
       });
@@ -9393,9 +9543,9 @@ class _CustomerPortalState extends State<_CustomerPortal> {
     if (RoleAccessPolicy.rolesCanAccessSender(roles)) return true;
     if (!roles.contains(CircumRole.rider) &&
         !roles.contains(CircumRole.admin)) {
-      final result = await FirebaseFunctions.instanceFor(region: 'us-central1')
-          .httpsCallable('ensureSenderAccount')
-          .call();
+      final result = await FirebaseFunctions.instanceFor(
+        region: 'us-central1',
+      ).httpsCallable('ensureSenderAccount').call();
       final data = Map<String, dynamic>.from(result.data as Map);
       if (data['allowed'] == true) {
         setState(() => _availableRoles = {CircumRole.sender});
@@ -9443,15 +9593,16 @@ class _CustomerPortalState extends State<_CustomerPortal> {
     if (user == null) return;
     setState(() => _senderProfileSaving = true);
     try {
-      final profile = _senderProfile ??
+      final profile =
+          _senderProfile ??
           SenderProfile.fromMap(user.uid, {
             'email': user.email,
             'fullName': _senderName.text.trim(),
             'phoneNumber': _senderPhone.text.trim(),
           });
-      await FirebaseFunctions.instanceFor(region: 'us-central1')
-          .httpsCallable('updateSenderProfile')
-          .call({
+      await FirebaseFunctions.instanceFor(
+        region: 'us-central1',
+      ).httpsCallable('updateSenderProfile').call({
         'displayName': _senderName.text.trim(),
         'phone': _senderPhone.text.trim(),
         'communicationPreferences': profile.communicationPreferences.isEmpty
@@ -9496,8 +9647,9 @@ class _CustomerPortalState extends State<_CustomerPortal> {
     setState(() => _senderProfileSaving = true);
     try {
       await FirebaseFirestore.instance.collection('users').doc(user.uid).set({
-        'savedAddresses':
-            next.map((senderAddress) => senderAddress.toJson()).toList(),
+        'savedAddresses': next
+            .map((senderAddress) => senderAddress.toJson())
+            .toList(),
         'updatedAt': FieldValue.serverTimestamp(),
       }, SetOptions(merge: true));
       _savedAddress.clear();
@@ -9526,15 +9678,15 @@ class _CustomerPortalState extends State<_CustomerPortal> {
           byId[record.requestId] = record;
         }
       }
-      final records = SenderProfileService.ownDeliveries(
-        uid,
-        byId.values,
-      ).toList(growable: false)
-        ..sort((a, b) {
-          final left = a.createdAt ?? DateTime.fromMillisecondsSinceEpoch(0);
-          final right = b.createdAt ?? DateTime.fromMillisecondsSinceEpoch(0);
-          return right.compareTo(left);
-        });
+      final records =
+          SenderProfileService.ownDeliveries(
+            uid,
+            byId.values,
+          ).toList(growable: false)..sort((a, b) {
+            final left = a.createdAt ?? DateTime.fromMillisecondsSinceEpoch(0);
+            final right = b.createdAt ?? DateTime.fromMillisecondsSinceEpoch(0);
+            return right.compareTo(left);
+          });
       if (!mounted) return;
       setState(() {
         _senderDeliveries = records;
@@ -9558,6 +9710,7 @@ class _CustomerPortalState extends State<_CustomerPortal> {
       final db = FirebaseFirestore.instance;
       final userSnap = await db.collection('users').doc(uid).get();
       final userData = userSnap.data() ?? <String, dynamic>{};
+      final userEmail = (_senderUser?.email ?? '').trim().toLowerCase();
       final ids = <String>{
         for (final id
             in (userData['businessWorkspaceIds'] as List? ?? const []))
@@ -9565,6 +9718,23 @@ class _CustomerPortalState extends State<_CustomerPortal> {
         if ('${userData['lastBusinessWorkspaceId'] ?? ''}'.trim().isNotEmpty)
           '${userData['lastBusinessWorkspaceId']}',
       };
+      final ownedAccounts = await db
+          .collection('businessAccounts')
+          .where('createdByUserId', isEqualTo: uid)
+          .limit(20)
+          .get();
+      for (final doc in ownedAccounts.docs) {
+        ids.add(doc.id);
+      }
+      final teamLookupValues = [uid, if (userEmail.isNotEmpty) userEmail];
+      final teamAccounts = await db
+          .collection('businessAccounts')
+          .where('teamMemberIds', arrayContainsAny: teamLookupValues)
+          .limit(20)
+          .get();
+      for (final doc in teamAccounts.docs) {
+        ids.add(doc.id);
+      }
       final memberships = await db
           .collection('businessMemberships')
           .where('userId', isEqualTo: uid)
@@ -9581,12 +9751,13 @@ class _CustomerPortalState extends State<_CustomerPortal> {
           accounts.add({'id': snap.id, ...snap.data()!});
         }
       }
-      final selectedId = _selectedBusinessId != null &&
+      final selectedId =
+          _selectedBusinessId != null &&
               accounts.any((account) => account['id'] == _selectedBusinessId)
           ? _selectedBusinessId!
           : accounts.isEmpty
-              ? null
-              : '${accounts.first['id']}';
+          ? null
+          : '${accounts.first['id']}';
       final invoices = <Map<String, dynamic>>[];
       final requests = <Map<String, dynamic>>[];
       final audits = <Map<String, dynamic>>[];
@@ -9613,18 +9784,27 @@ class _CustomerPortalState extends State<_CustomerPortal> {
             .where('businessId', isEqualTo: selectedId)
             .limit(30)
             .get();
-        audits
-            .addAll(auditSnap.docs.map((doc) => {'id': doc.id, ...doc.data()}));
-        final walletSnap =
-            await db.collection('business_wallets').doc(selectedId).get();
+        audits.addAll(
+          auditSnap.docs.map((doc) => {'id': doc.id, ...doc.data()}),
+        );
+        final walletSnap = await db
+            .collection('business_wallets')
+            .doc(selectedId)
+            .get();
         if (walletSnap.exists) {
           wallet = {'id': walletSnap.id, ...walletSnap.data()!};
         }
       }
-      invoices.sort((a, b) => _timestampMillis(b['createdAt'])
-          .compareTo(_timestampMillis(a['createdAt'])));
-      audits.sort((a, b) => _timestampMillis(b['createdAt'])
-          .compareTo(_timestampMillis(a['createdAt'])));
+      invoices.sort(
+        (a, b) => _timestampMillis(
+          b['createdAt'],
+        ).compareTo(_timestampMillis(a['createdAt'])),
+      );
+      audits.sort(
+        (a, b) => _timestampMillis(
+          b['createdAt'],
+        ).compareTo(_timestampMillis(a['createdAt'])),
+      );
       if (!mounted) return;
       setState(() {
         _businessAccounts = accounts;
@@ -9694,27 +9874,31 @@ class _CustomerPortalState extends State<_CustomerPortal> {
       final result = await FirebaseFunctions.instanceFor(region: 'us-central1')
           .httpsCallable('createBusinessAccount')
           .call({
-        'companyName': _businessCompanyName.text.trim(),
-        'businessType': _businessType.text.trim(),
-        'businessEmail': _businessEmail.text.trim().isEmpty
-            ? _senderUser?.email
-            : _businessEmail.text.trim(),
-        'businessPhone': _businessPhone.text.trim(),
-        'businessAddress': _businessAddress.text.trim(),
-        'vatNumber': _businessVatNumber.text.trim(),
-        'businessSize': '1-10',
-        'acceptTerms': true,
-      });
+            'companyName': _businessCompanyName.text.trim(),
+            'businessType': _businessType.text.trim(),
+            'businessEmail': _businessEmail.text.trim().isEmpty
+                ? _senderUser?.email
+                : _businessEmail.text.trim(),
+            'businessPhone': _businessPhone.text.trim(),
+            'businessAddress': _businessAddress.text.trim(),
+            'vatNumber': _businessVatNumber.text.trim(),
+            'businessSize': '1-10',
+            'acceptTerms': true,
+          });
       final data = Map<String, dynamic>.from(result.data as Map);
       _selectedBusinessId = '${data['businessId']}';
       await _loadBusinessWorkspaces(_senderUser!.uid);
       if (!mounted) return;
-      setState(() => _businessMessage =
-          'Business workspace created. Company code ${data['companyCode']}.');
+      setState(
+        () => _businessMessage =
+            'Business workspace created. Company code ${data['companyCode']}.',
+      );
     } on FirebaseFunctionsException catch (error) {
       if (!mounted) return;
-      setState(() => _businessMessage =
-          error.message ?? 'Business workspace could not be created.');
+      setState(
+        () => _businessMessage =
+            error.message ?? 'Business workspace could not be created.',
+      );
     } finally {
       if (mounted) setState(() => _businessBusy = false);
     }
@@ -9728,22 +9912,25 @@ class _CustomerPortalState extends State<_CustomerPortal> {
     });
     try {
       final functions = FirebaseFunctions.instanceFor(region: 'us-central1');
-      final lookup =
-          await functions.httpsCallable('lookupBusinessByCompanyCode').call({
-        'companyCode': _businessCompanyCode.text.trim(),
-      });
+      final lookup = await functions
+          .httpsCallable('lookupBusinessByCompanyCode')
+          .call({'companyCode': _businessCompanyCode.text.trim()});
       final found = Map<String, dynamic>.from(lookup.data as Map);
       await functions.httpsCallable('requestBusinessAccess').call({
         'businessId': found['businessId'],
         'role': 'member',
       });
       if (!mounted) return;
-      setState(() => _businessMessage =
-          'Access request sent to ${found['companyName'] ?? 'the company'}.');
+      setState(
+        () => _businessMessage =
+            'Access request sent to ${found['companyName'] ?? 'the company'}.',
+      );
     } on FirebaseFunctionsException catch (error) {
       if (!mounted) return;
-      setState(() => _businessMessage =
-          error.message ?? 'Business access request could not be sent.');
+      setState(
+        () => _businessMessage =
+            error.message ?? 'Business access request could not be sent.',
+      );
     } finally {
       if (mounted) setState(() => _businessBusy = false);
     }
@@ -9758,8 +9945,11 @@ class _CustomerPortalState extends State<_CustomerPortal> {
           .call({'requestId': requestId, 'approved': approved});
       await _loadBusinessWorkspaces(_senderUser!.uid);
       if (!mounted) return;
-      setState(() => _businessMessage =
-          approved ? 'Business access approved.' : 'Business access rejected.');
+      setState(
+        () => _businessMessage = approved
+            ? 'Business access approved.'
+            : 'Business access rejected.',
+      );
     } finally {
       if (mounted) setState(() => _businessBusy = false);
     }
@@ -9770,9 +9960,9 @@ class _CustomerPortalState extends State<_CustomerPortal> {
     if (_senderUser == null || businessId == null || _businessBusy) return;
     setState(() => _businessBusy = true);
     try {
-      await FirebaseFunctions.instanceFor(region: 'us-central1')
-          .httpsCallable('updateBusinessProfile')
-          .call({
+      await FirebaseFunctions.instanceFor(
+        region: 'us-central1',
+      ).httpsCallable('updateBusinessProfile').call({
         'businessId': businessId,
         'businessName': _businessCompanyName.text.trim(),
         'businessType': _businessType.text.trim(),
@@ -9799,12 +9989,12 @@ class _CustomerPortalState extends State<_CustomerPortal> {
     if (_senderUser == null || businessId == null || _businessBusy) return;
     setState(() => _businessBusy = true);
     try {
-      await FirebaseFunctions.instanceFor(region: 'us-central1')
-          .httpsCallable('updateBusinessMemberRole')
-          .call({
+      await FirebaseFunctions.instanceFor(
+        region: 'us-central1',
+      ).httpsCallable('updateBusinessMemberRole').call({
         'businessId': businessId,
         'memberUserId': memberUserId,
-        'role': role
+        'role': role,
       });
       await _loadBusinessWorkspaces(_senderUser!.uid);
       if (!mounted) return;
@@ -9844,11 +10034,11 @@ class _CustomerPortalState extends State<_CustomerPortal> {
       final result = await FirebaseFunctions.instanceFor(region: 'us-central1')
           .httpsCallable('createBusinessInvoiceCheckout')
           .call({
-        'businessId': businessId,
-        'invoiceId': invoiceId,
-        'useRoth': useRoth,
-        'returnUrl': 'https://circumuk.com/?app=business',
-      });
+            'businessId': businessId,
+            'invoiceId': invoiceId,
+            'useRoth': useRoth,
+            'returnUrl': 'https://circumuk.com/?app=business',
+          });
       final data = Map<String, dynamic>.from(result.data as Map);
       final url = '${data['checkoutUrl'] ?? ''}';
       if (url.startsWith('http')) {
@@ -9864,8 +10054,10 @@ class _CustomerPortalState extends State<_CustomerPortal> {
   }
 
   Future<void> _downloadBusinessInvoice(Map<String, dynamic> invoice) async {
-    await launchUrl(_businessInvoicePdfUri(invoice),
-        webOnlyWindowName: '_blank');
+    await launchUrl(
+      _businessInvoicePdfUri(invoice),
+      webOnlyWindowName: '_blank',
+    );
   }
 
   Future<void> _openBusinessRothCheckout() async {
@@ -9880,10 +10072,10 @@ class _CustomerPortalState extends State<_CustomerPortal> {
       final result = await FirebaseFunctions.instanceFor(region: 'us-central1')
           .httpsCallable('createBusinessRothCheckout')
           .call({
-        'businessId': businessId,
-        'amount': amount,
-        'returnUrl': 'https://circumuk.com/?app=business',
-      });
+            'businessId': businessId,
+            'amount': amount,
+            'returnUrl': 'https://circumuk.com/?app=business',
+          });
       final data = Map<String, dynamic>.from(result.data as Map);
       final url = '${data['checkoutUrl'] ?? ''}';
       if (url.startsWith('http')) {
@@ -9922,16 +10114,17 @@ class _CustomerPortalState extends State<_CustomerPortal> {
     if (confirmed != true) return;
 
     try {
-      final response =
-          await FirebaseFunctions.instanceFor(region: 'us-central1')
-              .httpsCallable('cancelDelivery')
-              .call({'deliveryId': delivery.id});
+      final response = await FirebaseFunctions.instanceFor(
+        region: 'us-central1',
+      ).httpsCallable('cancelDelivery').call({'deliveryId': delivery.id});
       final data = Map<String, dynamic>.from(response.data as Map);
       if (data['success'] != true) {
-        final decision =
-            Map<String, dynamic>.from(data['decision'] as Map? ?? {});
+        final decision = Map<String, dynamic>.from(
+          data['decision'] as Map? ?? {},
+        );
         throw StateError(
-            '${decision['userFacingMessage'] ?? 'This delivery requires support review.'}');
+          '${decision['userFacingMessage'] ?? 'This delivery requires support review.'}',
+        );
       }
       await _loadSenderDeliveries(user.uid);
       if (!mounted) return;
@@ -9941,8 +10134,9 @@ class _CustomerPortalState extends State<_CustomerPortal> {
       });
     } catch (error) {
       if (!mounted) return;
-      setState(() =>
-          _senderProfileMessage = '$error'.replaceFirst('Bad state: ', ''));
+      setState(
+        () => _senderProfileMessage = '$error'.replaceFirst('Bad state: ', ''),
+      );
     }
   }
 
@@ -9951,8 +10145,7 @@ class _CustomerPortalState extends State<_CustomerPortal> {
       'email-already-in-use' => 'That email already has a Circum profile.',
       'user-not-found' => 'No Circum profile found for that email.',
       'wrong-password' ||
-      'invalid-credential' =>
-        'Those sign-in details are not right.',
+      'invalid-credential' => 'Those sign-in details are not right.',
       'weak-password' => 'Use a stronger password.',
       _ => 'We could not sign you in. Please check the details.',
     };
@@ -9996,8 +10189,8 @@ class _CustomerPortalState extends State<_CustomerPortal> {
       _senderEnteredWeightKg = senderWeight > 0 ? senderWeight : null;
       _irisEstimatedWeightKg =
           decision.source == 'repository_match' && decision.weightKg != null
-              ? math.max(estimate.weightKg, decision.weightKg!)
-              : estimate.weightKg;
+          ? math.max(estimate.weightKg, decision.weightKg!)
+          : estimate.weightKg;
       _irisWeightBand = estimate.weightBand;
       _irisWeightConfidence = estimate.confidence;
       _irisWeightExplanation = estimate.explanation;
@@ -10057,18 +10250,21 @@ class _CustomerPortalState extends State<_CustomerPortal> {
         setState(() {
           _parcelPhoto = null;
           _parcelPhotoCapturedAt = null;
+          _irisPhotoAnalysisId = null;
           _irisImageInsight = null;
           _parcelPhotoMessage =
               'Choose a JPG, PNG, WebP, or HEIC image under 10MB.';
         });
         return;
       }
-      final insight =
-          picked == null ? null : await _analyseParcelPhotoForIris(picked);
+      final insight = picked == null
+          ? null
+          : await _analyseParcelPhotoForIris(picked);
       if (!mounted) return;
       setState(() {
         _parcelPhoto = picked;
         _parcelPhotoCapturedAt = picked == null ? null : DateTime.now();
+        _irisPhotoAnalysisId = insight?.analysisId;
         _irisImageInsight = insight;
         _parcelPhotoMessage = picked == null
             ? 'No parcel photo selected.'
@@ -10087,14 +10283,16 @@ class _CustomerPortalState extends State<_CustomerPortal> {
 
   Future<bool> _parcelPhotoIsSafe(XFile photo) async {
     final name = photo.name.toLowerCase();
-    final allowedExtension = name.endsWith('.jpg') ||
+    final allowedExtension =
+        name.endsWith('.jpg') ||
         name.endsWith('.jpeg') ||
         name.endsWith('.png') ||
         name.endsWith('.webp') ||
         name.endsWith('.heic') ||
         name.endsWith('.heif');
     final mime = (photo.mimeType ?? '').toLowerCase();
-    final allowedMime = mime.isEmpty ||
+    final allowedMime =
+        mime.isEmpty ||
         mime.startsWith('image/') ||
         mime == 'application/octet-stream';
     final length = await photo.length();
@@ -10103,97 +10301,22 @@ class _CustomerPortalState extends State<_CustomerPortal> {
 
   Future<_IrisImageInsight> _analyseParcelPhotoForIris(XFile photo) async {
     try {
-      final sizeBytes = await photo.length();
-      final name = photo.name.toLowerCase();
-      final details = '${_description.text} $name'.toLowerCase();
-      var inferredItem = 'Parcel photo';
-      var category = 'Parcel';
-      var weightKg = 2.0;
-      var confidence = 0.45;
-      var fragilityRisk = 'medium';
-      var valueRisk = 'low';
-      var handlingNotes = 'Photo attached for rider handling context.';
-      var riderGuidance = 'Check parcel size and condition at pickup.';
-      var needsReview = false;
-
-      final repository = _knownProductWeightEstimate(details);
-      if (repository != null) {
-        inferredItem = repository.matchedItemName ?? repository.packageType;
-        category = repository.packageType;
-        weightKg = repository.weightKg;
-        confidence = (repository.confidenceScore ?? 0.7).clamp(0.0, 1.0);
-        fragilityRisk = repository.fragile ? 'high' : 'medium';
-        valueRisk = _looksHighValue(details, repository.packageType)
-            ? 'high'
-            : 'medium';
-        handlingNotes =
-            repository.handlingNotes ?? 'Handle according to item type.';
-        riderGuidance =
-            'Photo and item details suggest $inferredItem. Verify condition and weight at pickup.';
-      } else if (_containsAny(details, const [
-        'phone',
-        'iphone',
-        'ipad',
-        'laptop',
-        'macbook',
-        'camera',
-        'watch',
-        'console',
-      ])) {
-        inferredItem = 'Consumer electronics';
-        category = 'Electronics';
-        weightKg = 2.5;
-        confidence = 0.58;
-        fragilityRisk = 'high';
-        valueRisk = 'high';
-        handlingNotes = 'Likely fragile or high-value electronics.';
-        riderGuidance = 'Keep sealed, avoid stacking, and verify handover.';
-        needsReview = true;
-      } else if (_containsAny(details, const [
-        'sofa',
-        'chair',
-        'table',
-        'tv',
-        'furniture',
-        'mattress',
-        'bike',
-      ])) {
-        inferredItem = 'Large item';
-        category = 'Large item';
-        weightKg = 15;
-        confidence = 0.55;
-        fragilityRisk = details.contains('tv') ? 'high' : 'medium';
-        valueRisk = 'medium';
-        handlingNotes = 'Bulky item; check vehicle suitability.';
-        riderGuidance = 'Confirm dimensions and safe loading before pickup.';
-        needsReview = true;
-      } else if (sizeBytes > 7 * 1024 * 1024) {
-        inferredItem = 'Detailed parcel photo';
-        category = 'Parcel';
-        weightKg = 5;
-        confidence = 0.42;
-        fragilityRisk = 'medium';
-        valueRisk = 'low';
-        handlingNotes = 'Photo quality is high, but item type is unclear.';
-        riderGuidance = 'Use the photo to confirm parcel condition at pickup.';
-        needsReview = true;
-      }
-
-      final band = DeliveryPricing.weightBandFor(weightKg).category;
-      return _IrisImageInsight(
-        inferredItemName: inferredItem,
-        inferredCategory: category,
-        estimatedWeightKg: weightKg,
-        weightClass: band,
-        confidenceScore: confidence,
-        fragilityRisk: fragilityRisk,
-        valueRisk: valueRisk,
-        handlingNotes: handlingNotes,
-        riderGuidance: riderGuidance,
-        needsHumanReview: needsReview || confidence < 0.5,
-        fileName: photo.name,
-        fileSizeBytes: sizeBytes,
-      );
+      await _ensureFirebaseReady();
+      final bytes = await photo.readAsBytes();
+      final result = await FirebaseFunctions.instanceFor(region: 'us-central1')
+          .httpsCallable('analyseParcelPhotoForIris')
+          .call({
+            'imageBase64': base64Encode(bytes),
+            'contentType': photo.mimeType,
+            'fileName': photo.name,
+            'description': _description.text.trim(),
+            'declaredWeightText': _weight.text.trim(),
+            'distanceMiles': _confirmedRouteDistanceMiles,
+            'selectedSpeed': _selectedSpeed,
+            'vehicleType': _effectiveVehicle.name,
+          });
+      final data = Map<String, dynamic>.from(result.data as Map);
+      return _IrisImageInsight.fromBackend(data, fallbackFileName: photo.name);
     } catch (_) {
       return _IrisImageInsight.fallback(photo.name);
     }
@@ -10248,7 +10371,8 @@ class _CustomerPortalState extends State<_CustomerPortal> {
     );
     final estimate = _IrisWeightEstimate(
       weightKg: estimateWeight,
-      weightBand: _irisWeightBand ??
+      weightBand:
+          _irisWeightBand ??
           DeliveryPricing.weightBandFor(estimateWeight).category,
       confidence: _irisWeightConfidence ?? 'low',
       explanation:
@@ -10343,28 +10467,31 @@ class _CustomerPortalState extends State<_CustomerPortal> {
     required _IrisWeightEstimate estimate,
     required double? senderWeightKg,
   }) {
-    final trustedKnownItem = estimate.confidence == 'high' &&
+    final trustedKnownItem =
+        estimate.confidence == 'high' &&
         (estimate.weightSource == 'known_product_lookup' ||
             estimate.weightSource == 'repository_match');
     if (trustedKnownItem) {
       final trustedDecision =
           IrisWeightEstimator.resolveTrustedKnownItemPricing(
-        description: _description.text,
-        quantity: estimate.quantity,
-        userWeightKg: senderWeightKg ?? 0,
-        trustedItemWeightKg: estimate.weightKg,
-        historicalMatches: estimate.historicalVerifiedWeightKg == null
-            ? const []
-            : [estimate.historicalVerifiedWeightKg!],
-      );
+            description: _description.text,
+            quantity: estimate.quantity,
+            userWeightKg: senderWeightKg ?? 0,
+            trustedItemWeightKg: estimate.weightKg,
+            historicalMatches: estimate.historicalVerifiedWeightKg == null
+                ? const []
+                : [estimate.historicalVerifiedWeightKg!],
+          );
       final pricingWeight = trustedDecision.pricingWeightKg;
       return _WeightPricingDecision(
         weightKg: pricingWeight,
         weightBand: DeliveryPricing.weightBandFor(pricingWeight).category,
         source: 'repository_match',
-        message: trustedDecision.explanation ??
+        message:
+            trustedDecision.explanation ??
             'IRIS used the verified item weight with a packaging allowance.',
-        reason: trustedDecision.explanation ??
+        reason:
+            trustedDecision.explanation ??
             'Verified catalogue weight used for pricing.',
         verificationRequired: true,
       );
@@ -10395,11 +10522,13 @@ class _CustomerPortalState extends State<_CustomerPortal> {
     );
     final hasSenderWeight = senderWeightKg != null && senderWeightKg > 0;
     final irisBand = DeliveryPricing.weightBandFor(estimate.weightKg);
-    final senderBand =
-        hasSenderWeight ? DeliveryPricing.weightBandFor(senderWeightKg) : null;
+    final senderBand = hasSenderWeight
+        ? DeliveryPricing.weightBandFor(senderWeightKg)
+        : null;
     final bandChanged =
         senderBand != null && senderBand.category != irisBand.category;
-    final significantDifference = bandChanged ||
+    final significantDifference =
+        bandChanged ||
         classification.selectedWeightSource == 'keyword_override';
     final mismatchReview = _hasIrisMismatchReview(
       senderWeightKg: senderWeightKg,
@@ -10434,10 +10563,10 @@ class _CustomerPortalState extends State<_CustomerPortal> {
     final source = classification.selectedWeightSource == 'keyword_override'
         ? 'keyword_override'
         : estimate.weightSource == 'known_product_lookup'
-            ? 'repository_match'
-            : estimate.weightKg >= (senderWeightKg ?? 0)
-                ? 'photo_match'
-                : 'customer_declared';
+        ? 'repository_match'
+        : estimate.weightKg >= (senderWeightKg ?? 0)
+        ? 'photo_match'
+        : 'customer_declared';
 
     return _WeightPricingDecision(
       weightKg: higherWeight,
@@ -10446,10 +10575,11 @@ class _CustomerPortalState extends State<_CustomerPortal> {
       message: mismatchReview
           ? 'Potential mismatch detected — manual review required.'
           : significantDifference
-              ? 'Iris and your entered weight fall into different pricing checks. Confirm the pricing weight before continuing.'
-              : 'IRIS has analysed this item and selected the most reliable weight available.',
+          ? 'Iris and your entered weight fall into different pricing checks. Confirm the pricing weight before continuing.'
+          : 'IRIS has analysed this item and selected the most reliable weight available.',
       reason: classification.resolutionReason,
-      verificationRequired: mismatchReview ||
+      verificationRequired:
+          mismatchReview ||
           significantDifference ||
           classification.requiresManualReview,
     );
@@ -10553,16 +10683,15 @@ class _CustomerPortalState extends State<_CustomerPortal> {
     if (imageInsight == null) return textEstimate;
     final imageTotalWeight =
         imageInsight.estimatedWeightKg * textEstimate.quantity;
-    final imageBand = DeliveryPricing.weightBandFor(
-      imageTotalWeight,
-    ).category;
+    final imageBand = DeliveryPricing.weightBandFor(imageTotalWeight).category;
     final textBand = DeliveryPricing.weightBandFor(textEstimate.weightKg);
     final imageBandRank =
         DeliveryPricing.weightBandFor(imageTotalWeight).maxKg ??
-            double.infinity;
+        double.infinity;
     final textBandRank = textBand.maxKg ?? double.infinity;
     final strongImage = imageInsight.confidenceScore >= 0.55;
-    final shouldUseImage = strongImage &&
+    final shouldUseImage =
+        strongImage &&
         (imageBandRank > textBandRank || textEstimate.confidence == 'low');
     if (!shouldUseImage) {
       return textEstimate.copyWith(
@@ -10613,7 +10742,8 @@ class _CustomerPortalState extends State<_CustomerPortal> {
             '${data['packageDescription'] ?? data['description'] ?? ''}'
                 .toLowerCase();
         if (!_looksLikeSimilarParcel(text, description)) continue;
-        final verified = _readWeightKg(data['finalVerifiedWeight']) ??
+        final verified =
+            _readWeightKg(data['finalVerifiedWeight']) ??
             _readWeightKg(data['riderVerifiedWeight']) ??
             _readWeightKg(data['driverReportedWeightKg']) ??
             _readWeightKg(data['finalWeightUsed']) ??
@@ -10624,7 +10754,8 @@ class _CustomerPortalState extends State<_CustomerPortal> {
       matches.sort();
       final high = matches.last;
       final low = matches.first;
-      final trustedKnownItem = base.confidence == 'high' &&
+      final trustedKnownItem =
+          base.confidence == 'high' &&
           (base.weightSource == 'known_product_lookup' ||
               base.weightSource == 'repository_match');
       if (trustedKnownItem) {
@@ -10632,9 +10763,9 @@ class _CustomerPortalState extends State<_CustomerPortal> {
             .where((weight) => weight > base.weightKg * 5)
             .toList(growable: false);
         if (outliers.isNotEmpty) {
-          await FirebaseFunctions.instanceFor(region: 'us-central1')
-              .httpsCallable('recordIrisLearningOutlier')
-              .call({
+          await FirebaseFunctions.instanceFor(
+            region: 'us-central1',
+          ).httpsCallable('recordIrisLearningOutlier').call({
             'description': _description.text.trim(),
             'matchedItemName': base.matchedItemName,
             'trustedWeightKg': base.weightKg,
@@ -10802,30 +10933,6 @@ class _CustomerPortalState extends State<_CustomerPortal> {
     };
   }
 
-  bool _containsAny(String text, Iterable<String> needles) {
-    return needles.any(text.contains);
-  }
-
-  bool _looksHighValue(String text, String category) {
-    final combined = '$text $category'.toLowerCase();
-    return _containsAny(combined, const [
-      'iphone',
-      'phone',
-      'macbook',
-      'laptop',
-      'camera',
-      'watch',
-      'jewellery',
-      'jewelry',
-      'console',
-      'playstation',
-      'xbox',
-      'designer',
-      'gold',
-      'diamond',
-    ]);
-  }
-
   String _formatWeight(double weightKg) {
     return weightKg.truncateToDouble() == weightKg
         ? weightKg.toStringAsFixed(0)
@@ -10881,20 +10988,28 @@ class _CustomerPortalState extends State<_CustomerPortal> {
     try {
       await _ensureFirebaseReady();
       final functions = FirebaseFunctions.instanceFor(region: 'us-central1');
-      final quoteResult =
-          await functions.httpsCallable('createSenderBookingQuote').call({
-        'quoteId': id,
-        'distanceMiles': _confirmedRouteDistanceMiles,
-        'weightKg': _deliveryClassification.finalWeightKg,
-        'selectedSpeed': _selectedSpeed,
-        'vanguard': _webVanguardRequired,
-        'iris': _webCanonicalIrisPayload(),
-        'clientDisplayQuote': {
-          'amount': _quoteTotal,
-          'amountPence': (_quoteTotal * 100).round(),
-          'currency': 'GBP',
-        },
-      });
+      final quoteResult = await functions
+          .httpsCallable('createSenderBookingQuote')
+          .call({
+            'quoteId': id,
+            'distanceMiles': _confirmedRouteDistanceMiles,
+            'weightKg': _deliveryClassification.finalWeightKg,
+            'selectedSpeed': _selectedSpeed,
+            'vanguard': _webVanguardRequired,
+            'parcel': {
+              'itemName': _irisMatchedItemName ?? _inferPackageType(),
+              'description': _description.text.trim(),
+              'weightKg': _deliveryClassification.finalWeightKg,
+            },
+            if (_irisPhotoAnalysisId != null)
+              'irisPhotoAnalysisId': _irisPhotoAnalysisId,
+            'iris': _webCanonicalIrisPayload(),
+            'clientDisplayQuote': {
+              'amount': _quoteTotal,
+              'amountPence': (_quoteTotal * 100).round(),
+              'currency': 'GBP',
+            },
+          });
       final quote = Map<String, dynamic>.from(quoteResult.data as Map);
       final authoritativeTotal =
           (quote['amountDue'] as num? ?? quote['total'] as num? ?? 0)
@@ -10913,12 +11028,13 @@ class _CustomerPortalState extends State<_CustomerPortal> {
           return;
         }
       }
-      final sessionResult =
-          await functions.httpsCallable('createSenderPaymentSession').call({
-        'quoteId': quote['quoteId'],
-        'fallbackMethod': 'card',
-        'rothEnabled': false,
-      });
+      final sessionResult = await functions
+          .httpsCallable('createSenderPaymentSession')
+          .call({
+            'quoteId': quote['quoteId'],
+            'fallbackMethod': 'card',
+            'rothEnabled': false,
+          });
       final session = Map<String, dynamic>.from(sessionResult.data as Map);
       final clientSecret = '${session['clientSecret'] ?? ''}';
       if (clientSecret.isNotEmpty) {
@@ -10938,21 +11054,23 @@ class _CustomerPortalState extends State<_CustomerPortal> {
       }
       final parcelPhotoData = await _uploadParcelPhoto(id);
       final request = _requestPayload(id, parcelPhotoData);
-      final paidDeliveryResult =
-          await functions.httpsCallable('createSenderPaidDelivery').call({
-        'requestId': id,
-        'quoteId': quote['quoteId'],
-        'paymentSessionId': session['paymentSessionId'],
-        'idempotencyKey': id,
-        'pickup': _webCanonicalPickupPayload(request),
-        'dropoff': _webCanonicalDropoffPayload(request),
-        'recipient': _webCanonicalRecipientPayload(request),
-        'parcel': _webCanonicalParcelPayload(request),
-        'iris': _webCanonicalIrisPayload(),
-        'deliveryTime': _webCanonicalDeliveryTimePayload(),
-      });
-      final paidDelivery =
-          Map<String, dynamic>.from(paidDeliveryResult.data as Map);
+      final paidDeliveryResult = await functions
+          .httpsCallable('createSenderPaidDelivery')
+          .call({
+            'requestId': id,
+            'quoteId': quote['quoteId'],
+            'paymentSessionId': session['paymentSessionId'],
+            'idempotencyKey': id,
+            'pickup': _webCanonicalPickupPayload(request),
+            'dropoff': _webCanonicalDropoffPayload(request),
+            'recipient': _webCanonicalRecipientPayload(request),
+            'parcel': _webCanonicalParcelPayload(request),
+            'iris': _webCanonicalIrisPayload(),
+            'deliveryTime': _webCanonicalDeliveryTimePayload(),
+          });
+      final paidDelivery = Map<String, dynamic>.from(
+        paidDeliveryResult.data as Map,
+      );
       final requestId = '${paidDelivery['requestId'] ?? id}';
       _activeVanguardData = request['vanguardEnabled'] == true
           ? Map<String, dynamic>.from(request)
@@ -11063,6 +11181,7 @@ class _CustomerPortalState extends State<_CustomerPortal> {
       'quantity': request['quantity'],
       'photoUrl': request['photoUrl'],
       'photoStoragePath': request['photoStoragePath'],
+      'irisPhotoAnalysisId': request['irisPhotoAnalysisId'],
     };
   }
 
@@ -11075,6 +11194,7 @@ class _CustomerPortalState extends State<_CustomerPortal> {
       'weightBand': _deliveryClassification.finalWeightBand,
       'confidence': _irisWeightConfidence,
       'source': _irisWeightSource,
+      'photoAnalysisId': _irisPhotoAnalysisId,
       'vanguardRequired': _webVanguardRequired,
       'vanguardRequiredReason': _webVanguardRequired
           ? 'Vanguard protection selected by item value policy.'
@@ -11142,30 +11262,30 @@ class _CustomerPortalState extends State<_CustomerPortal> {
       final result = await FirebaseFunctions.instanceFor(region: 'us-central1')
           .httpsCallable('createHealthPlusBooking')
           .call<Map<String, dynamic>>({
-        'fullName': _healthName.text.trim(),
-        'phoneNumber': _healthPhone.text.trim(),
-        'email': _healthEmail.text.trim(),
-        'pharmacyName': _healthPharmacyName.text.trim(),
-        'pharmacyAddress': _healthPharmacy.text.trim(),
-        'deliveryAddress': _healthDelivery.text.trim(),
-        'notes': _healthNotes.text.trim(),
-        'prescriptionType': _healthPrescriptionType,
-        'subscriptionPlan': _healthSubscriptionPlan,
-        'healthPlusPlan': _healthSubscriptionPlan,
-        'preferredDay': _healthPreferredDay.text.trim(),
-        'preferredPickupDay': _healthPreferredDay.text.trim(),
-        'preferredPickupTime': _healthPreferredTime.text.trim(),
-        'consentConfirmed': _healthConsent,
-        'frequency': _healthFrequency.value,
-        'customSchedule': _healthCustomSchedule.text.trim(),
-        'savedPaymentMethod': _healthSavePayment,
-        'pricingInputs': {
-          'distanceMiles': HealthPlusPricing.defaultDistanceMiles,
-          'medicationWeightKg': HealthPlusPricing.defaultMedicationWeightKg,
-        },
-        'idempotencyKey':
-            'web-healthplus:${FirebaseAuth.instance.currentUser?.uid}:${_healthFrequency.value}:${_healthPreferredTime.text.trim()}:$_healthSubscriptionPlan',
-      });
+            'fullName': _healthName.text.trim(),
+            'phoneNumber': _healthPhone.text.trim(),
+            'email': _healthEmail.text.trim(),
+            'pharmacyName': _healthPharmacyName.text.trim(),
+            'pharmacyAddress': _healthPharmacy.text.trim(),
+            'deliveryAddress': _healthDelivery.text.trim(),
+            'notes': _healthNotes.text.trim(),
+            'prescriptionType': _healthPrescriptionType,
+            'subscriptionPlan': _healthSubscriptionPlan,
+            'healthPlusPlan': _healthSubscriptionPlan,
+            'preferredDay': _healthPreferredDay.text.trim(),
+            'preferredPickupDay': _healthPreferredDay.text.trim(),
+            'preferredPickupTime': _healthPreferredTime.text.trim(),
+            'consentConfirmed': _healthConsent,
+            'frequency': _healthFrequency.value,
+            'customSchedule': _healthCustomSchedule.text.trim(),
+            'savedPaymentMethod': _healthSavePayment,
+            'pricingInputs': {
+              'distanceMiles': HealthPlusPricing.defaultDistanceMiles,
+              'medicationWeightKg': HealthPlusPricing.defaultMedicationWeightKg,
+            },
+            'idempotencyKey':
+                'web-healthplus:${FirebaseAuth.instance.currentUser?.uid}:${_healthFrequency.value}:${_healthPreferredTime.text.trim()}:$_healthSubscriptionPlan',
+          });
       final data = Map<String, dynamic>.from(result.data);
       final id = '${data['profileId'] ?? ''}'.trim();
       final scheduleId = '${data['scheduleId'] ?? ''}'.trim();
@@ -11204,11 +11324,16 @@ class _CustomerPortalState extends State<_CustomerPortal> {
         'type': 'health_plus_prescription_pickup',
         'source': 'circum-web',
       };
-      final checkoutUrl = await _createHealthPlusCheckoutSession(
+      final checkout = await _createHealthPlusCheckoutSession(
         pickupId: pickupId,
         profileId: id,
         quote: quote,
       );
+      final checkoutUrl = checkout == null
+          ? null
+          : '${checkout['checkoutUrl'] ?? ''}'.trim();
+      final paid = checkout != null && checkout['paid'] == true;
+      final hasCheckoutUrl = checkoutUrl != null && checkoutUrl.isNotEmpty;
 
       if (!mounted) return;
       setState(() {
@@ -11218,17 +11343,23 @@ class _CustomerPortalState extends State<_CustomerPortal> {
         _healthPayments.insert(0, {
           'pickupId': pickupId,
           'amount': amount,
-          'status': checkoutUrl == null
+          'status': paid
+              ? 'paid'
+              : !hasCheckoutUrl
               ? 'pending_secure_checkout'
               : 'checkout_created',
+          'rothApplied': checkout?['rothApplied'],
+          'cardAmount': checkout?['cardAmount'],
         });
-        _healthMessage = checkoutUrl == null
+        _healthMessage = paid
+            ? 'Your Health+ pickup has been paid with Roth.'
+            : !hasCheckoutUrl
             ? 'Your Health+ pickup is saved. Payment setup is not ready yet.'
             : 'Your Health+ pickup is saved. Payment is ready.';
         _firebaseOnline = true;
       });
 
-      if (checkoutUrl != null) {
+      if (hasCheckoutUrl) {
         await launchUrl(
           Uri.parse(checkoutUrl),
           mode: LaunchMode.externalApplication,
@@ -11246,7 +11377,7 @@ class _CustomerPortalState extends State<_CustomerPortal> {
     }
   }
 
-  Future<String?> _createHealthPlusCheckoutSession({
+  Future<Map<String, dynamic>?> _createHealthPlusCheckoutSession({
     required String pickupId,
     required String profileId,
     required HealthPlusPriceBreakdown quote,
@@ -11270,6 +11401,7 @@ class _CustomerPortalState extends State<_CustomerPortal> {
               : _healthFrequency.value,
           'subscriptionPlan': _healthSubscriptionPlan,
           'prescriptionType': _healthPrescriptionType,
+          'useRoth': _healthUseRoth,
           'priceBreakdown': quote.toJson(),
           'successUrl':
               'https://circum-app-2797c.web.app/?app=sender&health=success',
@@ -11281,7 +11413,7 @@ class _CustomerPortalState extends State<_CustomerPortal> {
         return null;
       }
       final data = jsonDecode(response.body) as Map<String, dynamic>;
-      return data['checkoutUrl'] as String?;
+      return data;
     } catch (_) {
       return null;
     }
@@ -11306,9 +11438,9 @@ class _CustomerPortalState extends State<_CustomerPortal> {
       return;
     }
     await _ensureFirebaseReady();
-    await FirebaseFunctions.instanceFor(region: 'us-central1')
-        .httpsCallable('updateSenderHealthPlusBooking')
-        .call({
+    await FirebaseFunctions.instanceFor(
+      region: 'us-central1',
+    ).httpsCallable('updateSenderHealthPlusBooking').call({
       'action': 'pause_schedule',
       'scheduleId': scheduleId,
       'idempotencyKey': 'web-healthplus:pause:$scheduleId',
@@ -11323,9 +11455,9 @@ class _CustomerPortalState extends State<_CustomerPortal> {
       return;
     }
     await _ensureFirebaseReady();
-    await FirebaseFunctions.instanceFor(region: 'us-central1')
-        .httpsCallable('updateSenderHealthPlusBooking')
-        .call({
+    await FirebaseFunctions.instanceFor(
+      region: 'us-central1',
+    ).httpsCallable('updateSenderHealthPlusBooking').call({
       'action': 'resume_schedule',
       'scheduleId': scheduleId,
       'idempotencyKey': 'web-healthplus:resume:$scheduleId',
@@ -11340,9 +11472,9 @@ class _CustomerPortalState extends State<_CustomerPortal> {
       return;
     }
     await _ensureFirebaseReady();
-    await FirebaseFunctions.instanceFor(region: 'us-central1')
-        .httpsCallable('updateSenderHealthPlusBooking')
-        .call({
+    await FirebaseFunctions.instanceFor(
+      region: 'us-central1',
+    ).httpsCallable('updateSenderHealthPlusBooking').call({
       'action': 'cancel_schedule',
       'scheduleId': scheduleId,
       'idempotencyKey': 'web-healthplus:cancel-schedule:$scheduleId',
@@ -11355,9 +11487,9 @@ class _CustomerPortalState extends State<_CustomerPortal> {
     final pickupId = _healthPickups.first['id'] as String?;
     if (pickupId == null) return;
     await _ensureFirebaseReady();
-    await FirebaseFunctions.instanceFor(region: 'us-central1')
-        .httpsCallable('updateSenderHealthPlusBooking')
-        .call({
+    await FirebaseFunctions.instanceFor(
+      region: 'us-central1',
+    ).httpsCallable('updateSenderHealthPlusBooking').call({
       'action': 'cancel_pickup',
       'pickupId': pickupId,
       'idempotencyKey': 'web-healthplus:cancel-pickup:$pickupId',
@@ -11408,38 +11540,44 @@ class _CustomerPortalState extends State<_CustomerPortal> {
     final dropoffAddress = _validatedDropoff!;
     final distanceMiles = _confirmedRouteDistanceMiles!;
     final handling = _specialHandling;
-    final economyQuote = handling.applyTo(DeliveryPricing.calculate(
-      DeliveryPricingInput(
-        distanceMiles: distanceMiles,
-        weightKg: classification.finalWeightKg,
-        vehicleType: _effectiveVehicle.name,
-        quantity: _irisQuantity,
-        singleItemWeightKg: _irisSingleItemWeightKg,
-        stackable: _irisStackable,
-        economy: true,
+    final economyQuote = handling.applyTo(
+      DeliveryPricing.calculate(
+        DeliveryPricingInput(
+          distanceMiles: distanceMiles,
+          weightKg: classification.finalWeightKg,
+          vehicleType: _effectiveVehicle.name,
+          quantity: _irisQuantity,
+          singleItemWeightKg: _irisSingleItemWeightKg,
+          stackable: _irisStackable,
+          economy: true,
+        ),
       ),
-    ));
-    final standardQuote = handling.applyTo(DeliveryPricing.calculate(
-      DeliveryPricingInput(
-        distanceMiles: distanceMiles,
-        weightKg: classification.finalWeightKg,
-        vehicleType: _effectiveVehicle.name,
-        quantity: _irisQuantity,
-        singleItemWeightKg: _irisSingleItemWeightKg,
-        stackable: _irisStackable,
+    );
+    final standardQuote = handling.applyTo(
+      DeliveryPricing.calculate(
+        DeliveryPricingInput(
+          distanceMiles: distanceMiles,
+          weightKg: classification.finalWeightKg,
+          vehicleType: _effectiveVehicle.name,
+          quantity: _irisQuantity,
+          singleItemWeightKg: _irisSingleItemWeightKg,
+          stackable: _irisStackable,
+        ),
       ),
-    ));
-    final expressQuote = handling.applyTo(DeliveryPricing.calculate(
-      DeliveryPricingInput(
-        distanceMiles: distanceMiles,
-        weightKg: classification.finalWeightKg,
-        vehicleType: _effectiveVehicle.name,
-        quantity: _irisQuantity,
-        singleItemWeightKg: _irisSingleItemWeightKg,
-        stackable: _irisStackable,
-        express: true,
+    );
+    final expressQuote = handling.applyTo(
+      DeliveryPricing.calculate(
+        DeliveryPricingInput(
+          distanceMiles: distanceMiles,
+          weightKg: classification.finalWeightKg,
+          vehicleType: _effectiveVehicle.name,
+          quantity: _irisQuantity,
+          singleItemWeightKg: _irisSingleItemWeightKg,
+          stackable: _irisStackable,
+          express: true,
+        ),
       ),
-    ));
+    );
     final selectedServiceLevel = switch (_selectedSpeed) {
       'Economy' => 'economy',
       'Express' => 'express',
@@ -11535,6 +11673,7 @@ class _CustomerPortalState extends State<_CustomerPortal> {
       'hasPhoto': hasPhoto,
       'photoUrl': parcelPhotoUrl,
       'irisImageAnalysis': _irisImageInsight?.toJson(),
+      'irisPhotoAnalysisId': _irisPhotoAnalysisId,
       'imageAnalysisStatus': _irisImageInsight == null
           ? parcelPhotoData['analysisStatus']
           : 'analysed_by_iris',
@@ -11600,15 +11739,15 @@ class _CustomerPortalState extends State<_CustomerPortal> {
       'specialHandlingNotes': _weightVerificationRequired
           ? 'Weight verification required at pickup.'
           : _irisImageInsight?.riderGuidance ??
-              (vanguardEnabled
-                  ? 'Vanguard protected delivery. PIN verification required at pickup and delivery.'
-                  : ''),
+                (vanguardEnabled
+                    ? 'Vanguard protected delivery. PIN verification required at pickup and delivery.'
+                    : ''),
       'vanguardEnabled': vanguardEnabled,
       'serviceType': selectedServiceLevel == 'express'
           ? 'Express Delivery'
           : selectedServiceLevel == 'economy'
-              ? 'Economy Delivery'
-              : 'Normal Delivery',
+          ? 'Economy Delivery'
+          : 'Normal Delivery',
     };
     return {
       'requestId': id,
@@ -11643,13 +11782,14 @@ class _CustomerPortalState extends State<_CustomerPortal> {
           ? parcelPhotoData['analysisStatus']
           : 'analysed_by_iris',
       'irisImageAnalysis': _irisImageInsight?.toJson(),
+      'irisPhotoAnalysisId': _irisPhotoAnalysisId,
       'parcelPhoto': {
         ...parcelPhotoData,
         'irisImageAnalysis': _irisImageInsight?.toJson(),
         'irisDecisionStatus': hasPhoto
             ? (_irisImageInsight == null
-                ? 'photo_attached_text_fallback'
-                : 'photo_used_in_iris_analysis')
+                  ? 'photo_attached_text_fallback'
+                  : 'photo_used_in_iris_analysis')
             : 'not_provided',
       },
       'weight': _weight.text.trim(),
@@ -11754,8 +11894,9 @@ class _CustomerPortalState extends State<_CustomerPortal> {
       'circumLabourShare': quote.circumLabourShare,
       'totalRiderEarnings': quote.totalRiderEarnings,
       'totalCircumRevenue': quote.totalCircumRevenue,
-      'serviceLevelSurcharge':
-          serviceLevelSurcharge < 0 ? 0 : serviceLevelSurcharge,
+      'serviceLevelSurcharge': serviceLevelSurcharge < 0
+          ? 0
+          : serviceLevelSurcharge,
       'priority': selectedServiceLevel == 'express',
       'matchingPriority': selectedServiceLevel == 'express' ? 'high' : 'normal',
       'broadcastRank': DeliveryPricing.matchingPriorityRank(
@@ -11813,8 +11954,9 @@ class _CustomerPortalState extends State<_CustomerPortal> {
             : 'distanceFromRider',
         'preferredVehicle': safeVehicleName.toLowerCase(),
         'requiresVerifiedRider': true,
-        'matchingPriority':
-            selectedServiceLevel == 'express' ? 'high' : 'normal',
+        'matchingPriority': selectedServiceLevel == 'express'
+            ? 'high'
+            : 'normal',
       },
       'pickupDetails': {
         'fullname': collectionContactName,
@@ -11881,48 +12023,50 @@ class _CustomerPortalState extends State<_CustomerPortal> {
         .doc(id)
         .snapshots()
         .listen(
-      (snapshot) {
-        final data = snapshot.data();
-        if (!mounted || data == null) return;
-        final status = _backendStatusFromDelivery(data);
-        final driverId = _driverIdFromRequest(data);
-        setState(() {
-          final matchingStatus = status == 'requested' || status == 'pending';
-          if (driverId != null || _statusIndexFromFirebase(status) > 0) {
-            _checkoutState = _CheckoutState.riderAssigned;
-          } else if (matchingStatus &&
-              (_checkoutState == _CheckoutState.bookingCreated ||
-                  _checkoutState == _CheckoutState.matchingRiders)) {
-            _checkoutState = _CheckoutState.matchingRiders;
-          }
-          _firebaseOnline = true;
-          _firebaseError = null;
-          _broadcasting =
-              _checkoutState == _CheckoutState.matchingRiders && matchingStatus;
-          _statusIndex = _statusIndexFromFirebase(status);
-          _activeVanguardData = data['vanguardEnabled'] == true
-              ? Map<String, dynamic>.from(data)
-              : null;
-          _activeRequestReceivedAt = _jobReceivedDate(data);
-        });
-        if (driverId != null && driverId != _assignedDriverId) {
-          _assignedDriverId = driverId;
-          _listenToAssignedDriver(driverId, data);
-        }
-        if (_statusIndexFromFirebase(status) >= 3) {
-          _checkExistingDriverRating();
-        }
-      },
-      onError: (Object _) {
-        if (!mounted) return;
-        setState(() {
-          _checkoutState = _CheckoutState.failed;
-          _broadcasting = false;
-          _firebaseOnline = false;
-          _firebaseError = 'Could not keep this delivery up to date.';
-        });
-      },
-    );
+          (snapshot) {
+            final data = snapshot.data();
+            if (!mounted || data == null) return;
+            final status = _backendStatusFromDelivery(data);
+            final driverId = _driverIdFromRequest(data);
+            setState(() {
+              final matchingStatus =
+                  status == 'requested' || status == 'pending';
+              if (driverId != null || _statusIndexFromFirebase(status) > 0) {
+                _checkoutState = _CheckoutState.riderAssigned;
+              } else if (matchingStatus &&
+                  (_checkoutState == _CheckoutState.bookingCreated ||
+                      _checkoutState == _CheckoutState.matchingRiders)) {
+                _checkoutState = _CheckoutState.matchingRiders;
+              }
+              _firebaseOnline = true;
+              _firebaseError = null;
+              _broadcasting =
+                  _checkoutState == _CheckoutState.matchingRiders &&
+                  matchingStatus;
+              _statusIndex = _statusIndexFromFirebase(status);
+              _activeVanguardData = data['vanguardEnabled'] == true
+                  ? Map<String, dynamic>.from(data)
+                  : null;
+              _activeRequestReceivedAt = _jobReceivedDate(data);
+            });
+            if (driverId != null && driverId != _assignedDriverId) {
+              _assignedDriverId = driverId;
+              _listenToAssignedDriver(driverId, data);
+            }
+            if (_statusIndexFromFirebase(status) >= 3) {
+              _checkExistingDriverRating();
+            }
+          },
+          onError: (Object _) {
+            if (!mounted) return;
+            setState(() {
+              _checkoutState = _CheckoutState.failed;
+              _broadcasting = false;
+              _firebaseOnline = false;
+              _firebaseError = 'Could not keep this delivery up to date.';
+            });
+          },
+        );
   }
 
   void _listenToLiveLocation(String deliveryId) {
@@ -11934,17 +12078,17 @@ class _CustomerPortalState extends State<_CustomerPortal> {
         .doc('liveLocation')
         .snapshots()
         .listen(
-      (snapshot) {
-        if (!mounted) return;
-        setState(() {
-          _liveLocationData = snapshot.data();
-        });
-      },
-      onError: (_) {
-        if (!mounted) return;
-        setState(() => _liveLocationData = null);
-      },
-    );
+          (snapshot) {
+            if (!mounted) return;
+            setState(() {
+              _liveLocationData = snapshot.data();
+            });
+          },
+          onError: (_) {
+            if (!mounted) return;
+            setState(() => _liveLocationData = null);
+          },
+        );
   }
 
   String? _driverIdFromRequest(Map<String, dynamic> data) {
@@ -11969,109 +12113,106 @@ class _CustomerPortalState extends State<_CustomerPortal> {
         .doc(driverId)
         .snapshots()
         .listen((snapshot) async {
-      if (!mounted) return;
-      if (snapshot.exists) {
-        setState(() {
-          _assignedDriver = DriverProfile.fromMap(
-            driverId,
-            snapshot.data(),
-            performance: _assignedDriverMetric,
-          );
+          if (!mounted) return;
+          if (snapshot.exists) {
+            setState(() {
+              _assignedDriver = DriverProfile.fromMap(
+                driverId,
+                snapshot.data(),
+                performance: _assignedDriverMetric,
+              );
+            });
+            return;
+          }
+          final riderSnapshot = await FirebaseFirestore.instance
+              .collection('riders')
+              .doc(driverId)
+              .get();
+          if (!mounted || !riderSnapshot.exists) return;
+          setState(() {
+            _assignedDriver = DriverProfile.fromMap(
+              driverId,
+              riderSnapshot.data(),
+              performance: _assignedDriverMetric,
+            );
+          });
         });
-        return;
-      }
-      final riderSnapshot = await FirebaseFirestore.instance
-          .collection('riders')
-          .doc(driverId)
-          .get();
-      if (!mounted || !riderSnapshot.exists) return;
-      setState(() {
-        _assignedDriver = DriverProfile.fromMap(
-          driverId,
-          riderSnapshot.data(),
-          performance: _assignedDriverMetric,
-        );
-      });
-    });
     _driverPerformanceSub = FirebaseFirestore.instance
         .collection('driverPerformanceMetrics')
         .doc(driverId)
         .snapshots()
         .listen((snapshot) {
-      if (!mounted) return;
-      final metric = DriverPerformanceMetric.fromMap(
-        driverId,
-        snapshot.data(),
-      );
-      setState(() {
-        _assignedDriverMetric = metric;
-        final profile = _assignedDriver;
-        if (profile != null) {
-          _assignedDriver = DriverProfile.fromMap(
-            profile.driverId,
-            {
-              'fullName': profile.fullName,
-              'photoUrl': profile.photoUrl,
-              'phoneNumber': profile.phoneNumber,
-              'verificationStatus': profile.verificationStatus,
-              'driverStatus': profile.status,
-              'vehicle': profile.vehicle.toJson(),
-            },
-            performance: metric,
-            recentRatings: profile.recentRatings,
+          if (!mounted) return;
+          final metric = DriverPerformanceMetric.fromMap(
+            driverId,
+            snapshot.data(),
           );
-        }
-      });
-    });
+          setState(() {
+            _assignedDriverMetric = metric;
+            final profile = _assignedDriver;
+            if (profile != null) {
+              _assignedDriver = DriverProfile.fromMap(
+                profile.driverId,
+                {
+                  'fullName': profile.fullName,
+                  'photoUrl': profile.photoUrl,
+                  'phoneNumber': profile.phoneNumber,
+                  'verificationStatus': profile.verificationStatus,
+                  'driverStatus': profile.status,
+                  'vehicle': profile.vehicle.toJson(),
+                },
+                performance: metric,
+                recentRatings: profile.recentRatings,
+              );
+            }
+          });
+        });
     _assignedDriverRatingsSub = FirebaseFirestore.instance
         .collection('driverRatings')
         .where('driverId', isEqualTo: driverId)
         .limit(6)
         .snapshots()
         .listen((snapshot) {
-      if (!mounted) return;
-      final ratings = snapshot.docs
-          .map((doc) => DriverRating.fromMap(doc.data()))
-          .where((rating) => !rating.hiddenByAdmin)
-          .take(3)
-          .toList();
-      final profile = _assignedDriver;
-      if (profile == null) return;
-      setState(() {
-        _assignedDriver = DriverProfile.fromMap(
-          profile.driverId,
-          {
-            'fullName': profile.fullName,
-            'photoUrl': profile.photoUrl,
-            'phoneNumber': profile.phoneNumber,
-            'verificationStatus': profile.verificationStatus,
-            'driverStatus': profile.status,
-            'vehicle': profile.vehicle.toJson(),
-          },
-          performance: _assignedDriverMetric,
-          recentRatings: ratings,
-        );
-      });
-    });
+          if (!mounted) return;
+          final ratings = snapshot.docs
+              .map((doc) => DriverRating.fromMap(doc.data()))
+              .where((rating) => !rating.hiddenByAdmin)
+              .take(3)
+              .toList();
+          final profile = _assignedDriver;
+          if (profile == null) return;
+          setState(() {
+            _assignedDriver = DriverProfile.fromMap(
+              profile.driverId,
+              {
+                'fullName': profile.fullName,
+                'photoUrl': profile.photoUrl,
+                'phoneNumber': profile.phoneNumber,
+                'verificationStatus': profile.verificationStatus,
+                'driverStatus': profile.status,
+                'vehicle': profile.vehicle.toJson(),
+              },
+              performance: _assignedDriverMetric,
+              recentRatings: ratings,
+            );
+          });
+        });
   }
 
   DriverProfile _driverProfileFromDelivery(
     String driverId,
     Map<String, dynamic> data,
   ) {
-    return DriverProfile.fromMap(
-        driverId,
-        {
-          'fullName': data['driverName'] ?? data['riderName'] ?? 'Circum rider',
-          'phoneNumber': data['driverPhone'] ?? data['riderPhone'] ?? '',
-          'vehicleType':
-              data['vehicleType'] ?? data['vehicle'] ?? _selectedVehicle.name,
-          'vehicleMakeModel': data['vehicleMakeModel'] ?? '',
-          'vehicleColour': data['vehicleColour'] ?? '',
-          'plateNumber': data['plateNumber'] ?? '',
-          'verificationStatus': data['verificationStatus'] ?? 'verified',
-        },
-        performance: _assignedDriverMetric);
+    return DriverProfile.fromMap(driverId, {
+      'fullName': data['driverName'] ?? data['riderName'] ?? 'Circum rider',
+      'phoneNumber': data['driverPhone'] ?? data['riderPhone'] ?? '',
+      'vehicleType':
+          data['vehicleType'] ?? data['vehicle'] ?? _selectedVehicle.name,
+      'vehicleMakeModel': data['vehicleMakeModel'] ?? '',
+      'vehicleColour': data['vehicleColour'] ?? '',
+      'plateNumber': data['plateNumber'] ?? '',
+      'verificationStatus': data['verificationStatus'] ?? 'verified',
+    }, performance: _assignedDriverMetric);
   }
 
   Future<void> _checkExistingDriverRating() async {
@@ -12182,66 +12323,68 @@ class _CustomerPortalState extends State<_CustomerPortal> {
         .orderBy('createdAt')
         .snapshots()
         .listen((snapshot) {
-      if (!mounted) return;
-      final driverMessages = <_ChatMessage>[];
-      final supportMessages = <_ChatMessage>[];
-      for (final doc in snapshot.docs) {
-        final data = doc.data();
-        final senderType = '${data['senderType'] ?? 'support'}';
-        final senderRole = '${data['senderRole'] ?? senderType}';
-        final message =
-            '${data['messageText'] ?? data['message'] ?? ''}'.trim();
-        if (message.isEmpty) continue;
-        final chatMessage = _ChatMessage(
-          fromMe: data['senderId'] == _senderUser?.uid &&
-              senderRole != 'system' &&
-              senderType != 'support',
-          text: message,
-          time: _formatMessageTime(data['createdAt'], data['timeStamp']),
-          label: senderRole == 'system' ||
-                  senderType == 'support' ||
-                  senderType == 'admin'
-              ? 'CIRCUM Support'
-              : senderType == 'rider' || senderType == 'driver'
+          if (!mounted) return;
+          final driverMessages = <_ChatMessage>[];
+          final supportMessages = <_ChatMessage>[];
+          for (final doc in snapshot.docs) {
+            final data = doc.data();
+            final senderType = '${data['senderType'] ?? 'support'}';
+            final senderRole = '${data['senderRole'] ?? senderType}';
+            final message = '${data['messageText'] ?? data['message'] ?? ''}'
+                .trim();
+            if (message.isEmpty) continue;
+            final chatMessage = _ChatMessage(
+              fromMe:
+                  data['senderId'] == _senderUser?.uid &&
+                  senderRole != 'system' &&
+                  senderType != 'support',
+              text: message,
+              time: _formatMessageTime(data['createdAt'], data['timeStamp']),
+              label:
+                  senderRole == 'system' ||
+                      senderType == 'support' ||
+                      senderType == 'admin'
+                  ? 'CIRCUM Support'
+                  : senderType == 'rider' || senderType == 'driver'
                   ? 'Rider'
                   : 'You',
-        );
-        if (senderType == 'rider' || senderType == 'driver') {
-          driverMessages.add(chatMessage);
-        } else {
-          supportMessages.add(chatMessage);
-        }
-      }
-      setState(() {
-        _driverMessages
-          ..clear()
-          ..addAll(
-            driverMessages.isEmpty
-                ? [
-                    const _ChatMessage(
-                      fromMe: false,
-                      text:
-                          'Rider chat will open when someone accepts the job.',
-                      time: 'Now',
-                    ),
-                  ]
-                : driverMessages,
-          );
-        _supportMessages
-          ..clear()
-          ..addAll(
-            supportMessages.isEmpty
-                ? [
-                    const _ChatMessage(
-                      fromMe: false,
-                      text: "Hi, this is Iris. How can we help?",
-                      time: 'Now',
-                    ),
-                  ]
-                : supportMessages,
-          );
-      });
-    });
+            );
+            if (senderType == 'rider' || senderType == 'driver') {
+              driverMessages.add(chatMessage);
+            } else {
+              supportMessages.add(chatMessage);
+            }
+          }
+          setState(() {
+            _driverMessages
+              ..clear()
+              ..addAll(
+                driverMessages.isEmpty
+                    ? [
+                        const _ChatMessage(
+                          fromMe: false,
+                          text:
+                              'Rider chat will open when someone accepts the job.',
+                          time: 'Now',
+                        ),
+                      ]
+                    : driverMessages,
+              );
+            _supportMessages
+              ..clear()
+              ..addAll(
+                supportMessages.isEmpty
+                    ? [
+                        const _ChatMessage(
+                          fromMe: false,
+                          text: "Hi, this is Iris. How can we help?",
+                          time: 'Now',
+                        ),
+                      ]
+                    : supportMessages,
+              );
+          });
+        });
   }
 
   int _statusIndexFromFirebase(String status) {
@@ -12280,8 +12423,10 @@ class _CustomerPortalState extends State<_CustomerPortal> {
   }
 
   String _senderTrackingStateForBackendStatus(String status) {
-    final normalized =
-        status.trim().toLowerCase().replaceAll(RegExp(r'[-\s]+'), '_');
+    final normalized = status.trim().toLowerCase().replaceAll(
+      RegExp(r'[-\s]+'),
+      '_',
+    );
     const mapping = {
       'requested': 'finding_rider',
       'pending': 'finding_rider',
@@ -12349,11 +12494,7 @@ class _CustomerPortalState extends State<_CustomerPortal> {
       await _ensureFirebaseReady();
       await FirebaseFunctions.instanceFor(region: 'us-central1')
           .httpsCallable('sendCircumMessage')
-          .call({
-        'chatId': requestId,
-        'requestId': requestId,
-        'message': text,
-      });
+          .call({'chatId': requestId, 'requestId': requestId, 'message': text});
     } catch (_) {
       if (!mounted) return;
       setState(
@@ -12464,24 +12605,26 @@ class _DesktopPortalLayout extends StatelessWidget {
                         message: deliveryLoadError!,
                       )
                     : activeDelivery == null
-                        ? _DesktopNoActiveDelivery(
-                            colors: colors,
-                            onSendParcel: onSendParcel,
-                            onViewHistory: onViewHistory,
-                          )
-                        : _DesktopActiveDeliveryStatus(
-                            colors: colors,
-                            delivery: activeDelivery!,
-                            onCancelBooking: onCancelBooking,
-                          ),
+                    ? _DesktopNoActiveDelivery(
+                        colors: colors,
+                        onSendParcel: onSendParcel,
+                        onViewHistory: onViewHistory,
+                      )
+                    : _DesktopActiveDeliveryStatus(
+                        colors: colors,
+                        delivery: activeDelivery!,
+                        onCancelBooking: onCancelBooking,
+                      ),
               ),
             ),
           ),
         ],
       );
     }
-    final status = _trackingStatuses[
-        statusIndex.clamp(0, _trackingStatuses.length - 1).toInt()];
+    final status =
+        _trackingStatuses[statusIndex
+            .clamp(0, _trackingStatuses.length - 1)
+            .toInt()];
 
     return Row(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -12591,8 +12734,9 @@ class _DesktopPortalLayout extends StatelessWidget {
                           colors: colors,
                           icon: Icons.location_on,
                           label: 'Drop-off',
-                          value:
-                              dropoff.isEmpty ? 'Drop-off location' : dropoff,
+                          value: dropoff.isEmpty
+                              ? 'Drop-off location'
+                              : dropoff,
                           iconColor: const Color(0xff22c55e),
                         ),
                       ],
@@ -13186,8 +13330,8 @@ class _SenderAccessGate extends StatelessWidget {
                       onPressed: busy
                           ? null
                           : signupMode
-                              ? onSignUp
-                              : onSignIn,
+                          ? onSignUp
+                          : onSignIn,
                       icon: busy
                           ? const SizedBox(
                               width: 18,
@@ -13199,8 +13343,8 @@ class _SenderAccessGate extends StatelessWidget {
                         busy
                             ? 'Please wait'
                             : signupMode
-                                ? 'Create account'
-                                : 'Sign in',
+                            ? 'Create account'
+                            : 'Sign in',
                       ),
                       style: FilledButton.styleFrom(
                         backgroundColor: colors.text,
@@ -13522,7 +13666,9 @@ class _WeightConfirmationPanel extends StatelessWidget {
   static String _cleanMatchedItemName(String value) {
     return value
         .replaceFirst(
-            RegExp(r'^(urgent|sealed|return)\s+', caseSensitive: false), '')
+          RegExp(r'^(urgent|sealed|return)\s+', caseSensitive: false),
+          '',
+        )
         .trim();
   }
 
@@ -13812,11 +13958,16 @@ class _BusinessCentreStep extends StatelessWidget {
         .where((delivery) => _isActiveSenderDeliveryStatus(delivery.status))
         .toList();
     final completedDeliveries = businessDeliveries
-        .where((delivery) =>
-            ['completed', 'delivered'].contains(delivery.status.toLowerCase()))
+        .where(
+          (delivery) => [
+            'completed',
+            'delivered',
+          ].contains(delivery.status.toLowerCase()),
+        )
         .toList();
-    final outstandingInvoices =
-        invoices.where((invoice) => !_invoicePaid(invoice)).toList();
+    final outstandingInvoices = invoices
+        .where((invoice) => !_invoicePaid(invoice))
+        .toList();
     final monthlySpend = businessDeliveries.fold<double>(
       0,
       (total, delivery) => total + delivery.pricePaid,
@@ -13824,62 +13975,33 @@ class _BusinessCentreStep extends StatelessWidget {
     final members = _teamMembers;
     final accountName = '${account?['businessName'] ?? 'Circum Business'}';
 
+    final teamMemberCount = members
+        .where((member) => member['status'] != 'removed')
+        .length;
+    final rothBalance = _money(
+      wallet?['balance'] ?? wallet?['availableBalance'],
+    );
+
     return SingleChildScrollView(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          _StepTopBar(colors: colors, title: 'Business Centre', onBack: onBack),
-          const SizedBox(height: 12),
-          _GlassPanel(
+          _BusinessSenderSuiteHeader(
             colors: colors,
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  children: [
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            account == null
-                                ? 'Set up Circum Business'
-                                : accountName,
-                            style: TextStyle(
-                              color: colors.text,
-                              fontSize: 28,
-                              fontWeight: FontWeight.w900,
-                            ),
-                          ),
-                          const SizedBox(height: 6),
-                          Text(
-                            account == null
-                                ? 'Create or join a company workspace to manage team deliveries, invoices, Roth, Health+, Gifts, and Vanguard.'
-                                : 'Manage company deliveries, teams, invoices, analytics, and premium services from one secure operations workspace.',
-                            style: TextStyle(
-                              color: colors.mutedText,
-                              height: 1.45,
-                              fontWeight: FontWeight.w700,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                    IconButton(
-                      tooltip: 'Refresh Business',
-                      onPressed: busy ? null : onRefresh,
-                      icon: Icon(Icons.refresh, color: colors.text),
-                    ),
-                  ],
-                ),
-                if (message != null && message!.trim().isNotEmpty) ...[
-                  const SizedBox(height: 12),
-                  _BusinessNotice(colors: colors, message: message!),
-                ],
-              ],
-            ),
+            accountName: account == null ? 'Circum Business' : accountName,
+            accountStatus: '${account?['status'] ?? 'pending'}',
+            accounts: accounts,
+            selectedBusinessId: selectedBusinessId,
+            busy: busy,
+            onBack: onBack,
+            onRefresh: onRefresh,
+            onSelectBusiness: onSelectBusiness,
           ),
-          const SizedBox(height: 14),
+          if (message != null && message!.trim().isNotEmpty) ...[
+            const SizedBox(height: 12),
+            _BusinessNotice(colors: colors, message: message!),
+          ],
+          const SizedBox(height: 12),
           if (loading)
             _BusinessSkeleton(colors: colors)
           else if (account == null)
@@ -13896,88 +14018,25 @@ class _BusinessCentreStep extends StatelessWidget {
               onCreateBusiness: onCreateBusiness,
               onJoinBusiness: onJoinBusiness,
             )
-          else ...[
-            if (accounts.length > 1)
-              _GlassPanel(
-                colors: colors,
-                child: DropdownButtonFormField<String>(
-                  value: selectedBusinessId,
-                  dropdownColor: colors.panel,
-                  decoration: const InputDecoration(labelText: 'Workspace'),
-                  items: accounts
-                      .map(
-                        (item) => DropdownMenuItem<String>(
-                          value: '${item['id']}',
-                          child: Text('${item['businessName'] ?? item['id']}'),
-                        ),
-                      )
-                      .toList(),
-                  onChanged: busy || loading || selectedBusinessId == null
-                      ? null
-                      : (value) {
-                          if (value != null) onSelectBusiness(value);
-                        },
-                ),
-              ),
-            if (accounts.length > 1) const SizedBox(height: 14),
-            _BusinessOverviewGrid(
-              colors: colors,
-              activeDeliveries: activeDeliveries.length,
-              completedDeliveries: completedDeliveries.length,
-              outstandingInvoices: outstandingInvoices.length,
-              monthlySpend: monthlySpend,
-              teamMembers: members
-                  .where((member) => member['status'] != 'removed')
-                  .length,
-              rothBalance:
-                  _money(wallet?['balance'] ?? wallet?['availableBalance']),
-            ),
-            const SizedBox(height: 14),
-            _BusinessQuickActions(
-              colors: colors,
-              onCreateDelivery: onCreateDelivery,
-              onHealthPlus: onHealthPlus,
-              onGifts: onGifts,
-              onBuyRoth: onBuyRoth,
-              rothAmount: rothAmount,
-              busy: busy,
-            ),
-            const SizedBox(height: 14),
-            _BusinessDeliveriesPanel(
-              colors: colors,
-              deliveries: businessDeliveries,
-              activeDeliveries: activeDeliveries,
-              onCreateDelivery: onCreateDelivery,
-            ),
-            const SizedBox(height: 14),
-            _BusinessInvoicesPanel(
-              colors: colors,
-              invoices: invoices,
-              onPayInvoice: onPayInvoice,
-              onPayInvoiceWithRoth: onPayInvoiceWithRoth,
-              onDownloadInvoice: onDownloadInvoice,
-            ),
-            const SizedBox(height: 14),
-            _BusinessTeamPanel(
+          else
+            _BusinessSectionTabs(
               colors: colors,
               members: members,
               joinRequests: joinRequests,
-              busy: busy,
-              onReviewRequest: onReviewRequest,
-              onUpdateMemberRole: onUpdateMemberRole,
-              onRemoveMember: onRemoveMember,
-            ),
-            const SizedBox(height: 14),
-            _BusinessAnalyticsPanel(
-              colors: colors,
+              auditLogs: auditLogs,
               deliveries: businessDeliveries,
+              activeDeliveries: activeDeliveries,
               invoices: invoices,
-            ),
-            const SizedBox(height: 14),
-            _BusinessSettingsPanel(
-              colors: colors,
+              wallet: wallet,
+              activeDeliveryCount: activeDeliveries.length,
+              completedDeliveryCount: completedDeliveries.length,
+              outstandingInvoiceCount: outstandingInvoices.length,
+              monthlySpend: monthlySpend,
+              teamMemberCount: teamMemberCount,
+              rothBalance: rothBalance,
               busy: busy,
               account: account!,
+              rothAmount: rothAmount,
               companyName: companyName,
               businessType: businessType,
               businessEmail: businessEmail,
@@ -13985,11 +14044,18 @@ class _BusinessCentreStep extends StatelessWidget {
               businessAddress: businessAddress,
               vatNumber: vatNumber,
               website: website,
+              onCreateDelivery: onCreateDelivery,
+              onHealthPlus: onHealthPlus,
+              onGifts: onGifts,
+              onBuyRoth: onBuyRoth,
+              onPayInvoice: onPayInvoice,
+              onPayInvoiceWithRoth: onPayInvoiceWithRoth,
+              onDownloadInvoice: onDownloadInvoice,
+              onReviewRequest: onReviewRequest,
+              onUpdateMemberRole: onUpdateMemberRole,
+              onRemoveMember: onRemoveMember,
               onSaveProfile: onSaveProfile,
             ),
-            const SizedBox(height: 14),
-            _BusinessAuditPanel(colors: colors, auditLogs: auditLogs),
-          ],
         ],
       ),
     );
@@ -13999,10 +14065,12 @@ class _BusinessCentreStep extends StatelessWidget {
     final businessId = selectedBusinessId;
     if (businessId == null) return const [];
     return deliveries
-        .where((delivery) =>
-            delivery.raw['businessId'] == businessId ||
-            delivery.raw['businessAccountId'] == businessId ||
-            delivery.raw['businessMode'] == true)
+        .where(
+          (delivery) =>
+              delivery.raw['businessId'] == businessId ||
+              delivery.raw['businessAccountId'] == businessId ||
+              delivery.raw['businessMode'] == true,
+        )
         .toList(growable: false);
   }
 
@@ -14016,13 +14084,169 @@ class _BusinessCentreStep extends StatelessWidget {
   }
 
   static bool _invoicePaid(Map<String, dynamic> invoice) {
-    final status =
-        '${invoice['status'] ?? invoice['paymentStatus'] ?? ''}'.toLowerCase();
+    final status = '${invoice['status'] ?? invoice['paymentStatus'] ?? ''}'
+        .toLowerCase();
     return status == 'paid' || status == 'paid_manually';
   }
 
   static double _money(dynamic value) =>
       value is num ? value.toDouble() : double.tryParse('$value') ?? 0;
+}
+
+class _BusinessSenderSuiteHeader extends StatelessWidget {
+  final _CircumColors colors;
+  final String accountName;
+  final String accountStatus;
+  final List<Map<String, dynamic>> accounts;
+  final String? selectedBusinessId;
+  final bool busy;
+  final VoidCallback onBack;
+  final VoidCallback onRefresh;
+  final ValueChanged<String> onSelectBusiness;
+
+  const _BusinessSenderSuiteHeader({
+    required this.colors,
+    required this.accountName,
+    required this.accountStatus,
+    required this.accounts,
+    required this.selectedBusinessId,
+    required this.busy,
+    required this.onBack,
+    required this.onRefresh,
+    required this.onSelectBusiness,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final initial = accountName.trim().isEmpty
+        ? 'C'
+        : accountName.trim().characters.first.toUpperCase();
+    final active =
+        accountStatus.toLowerCase() == 'approved' ||
+        accountStatus.toLowerCase() == 'active';
+    return _BusinessSurface(
+      colors: colors,
+      padding: const EdgeInsets.fromLTRB(18, 16, 18, 18),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              IconButton(
+                tooltip: 'Back',
+                onPressed: onBack,
+                icon: Icon(Icons.arrow_back, color: colors.text),
+              ),
+              const SizedBox(width: 4),
+              Text(
+                'CIRCUM · BUSINESS',
+                style: TextStyle(
+                  color: colors.mutedText,
+                  fontSize: 11,
+                  fontWeight: FontWeight.w900,
+                  letterSpacing: 1.4,
+                ),
+              ),
+              const Spacer(),
+              IconButton(
+                tooltip: 'Refresh Business',
+                onPressed: busy ? null : onRefresh,
+                icon: Icon(Icons.refresh, color: colors.text),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          if (accounts.length > 1) ...[
+            Align(
+              alignment: Alignment.centerRight,
+              child: Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 12,
+                  vertical: 4,
+                ),
+                decoration: BoxDecoration(
+                  color: colors.field,
+                  borderRadius: BorderRadius.circular(999),
+                  border: Border.all(color: colors.border),
+                ),
+                child: DropdownButtonHideUnderline(
+                  child: DropdownButton<String>(
+                    value: selectedBusinessId,
+                    dropdownColor: colors.panel,
+                    iconEnabledColor: colors.mutedText,
+                    style: TextStyle(
+                      color: colors.text,
+                      fontWeight: FontWeight.w800,
+                    ),
+                    items: accounts
+                        .map(
+                          (item) => DropdownMenuItem<String>(
+                            value: '${item['id']}',
+                            child: Text(
+                              '${item['businessName'] ?? item['id']}',
+                            ),
+                          ),
+                        )
+                        .toList(),
+                    onChanged: busy
+                        ? null
+                        : (value) {
+                            if (value != null) onSelectBusiness(value);
+                          },
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(height: 12),
+          ],
+          Row(
+            children: [
+              Container(
+                width: 42,
+                height: 42,
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(12),
+                  gradient: const LinearGradient(
+                    colors: [Color(0xff3b82f6), Color(0xff1e4fbf)],
+                  ),
+                ),
+                child: Center(
+                  child: Text(
+                    initial,
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 20,
+                      fontWeight: FontWeight.w900,
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Text(
+                  'Good afternoon, $accountName.',
+                  style: TextStyle(
+                    color: colors.text,
+                    fontSize: 26,
+                    fontWeight: FontWeight.w900,
+                    height: 1.08,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          _BusinessOperationalPill(
+            colors: colors,
+            label: active
+                ? 'Active Business workspace'
+                : 'Pending Circum approval',
+            tone: active ? _BusinessTone.success : _BusinessTone.warning,
+          ),
+        ],
+      ),
+    );
+  }
 }
 
 class _BusinessNotice extends StatelessWidget {
@@ -14033,18 +14257,18 @@ class _BusinessNotice extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Container(
-        width: double.infinity,
-        padding: const EdgeInsets.all(12),
-        decoration: BoxDecoration(
-          color: colors.field,
-          borderRadius: BorderRadius.circular(14),
-          border: Border.all(color: colors.border),
-        ),
-        child: Text(
-          message,
-          style: TextStyle(color: colors.text, fontWeight: FontWeight.w800),
-        ),
-      );
+    width: double.infinity,
+    padding: const EdgeInsets.all(12),
+    decoration: BoxDecoration(
+      color: colors.field,
+      borderRadius: BorderRadius.circular(14),
+      border: Border.all(color: colors.border),
+    ),
+    child: Text(
+      message,
+      style: TextStyle(color: colors.text, fontWeight: FontWeight.w800),
+    ),
+  );
 }
 
 class _BusinessSkeleton extends StatelessWidget {
@@ -14054,21 +14278,21 @@ class _BusinessSkeleton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => _GlassPanel(
-        colors: colors,
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            _SectionTitle(colors: colors, title: 'Loading Business'),
-            const SizedBox(height: 12),
-            LinearProgressIndicator(color: colors.text),
-            const SizedBox(height: 10),
-            Text(
-              'Loading company workspace, invoices, team and delivery records.',
-              style: TextStyle(color: colors.mutedText),
-            ),
-          ],
+    colors: colors,
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _SectionTitle(colors: colors, title: 'Loading Business'),
+        const SizedBox(height: 12),
+        LinearProgressIndicator(color: colors.text),
+        const SizedBox(height: 10),
+        Text(
+          'Loading company workspace, invoices, team and delivery records.',
+          style: TextStyle(color: colors.mutedText),
         ),
-      );
+      ],
+    ),
+  );
 }
 
 class _BusinessOnboardingPanel extends StatelessWidget {
@@ -14100,221 +14324,222 @@ class _BusinessOnboardingPanel extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => LayoutBuilder(
-        builder: (context, constraints) {
-          final twoColumn = constraints.maxWidth >= 760;
-          final create = _GlassPanel(
-            colors: colors,
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                _SectionTitle(colors: colors, title: 'Create company'),
-                const SizedBox(height: 10),
-                _InputBox(
-                    colors: colors,
-                    controller: companyName,
-                    hint: 'Company name'),
-                const SizedBox(height: 10),
-                _InputBox(
-                    colors: colors,
-                    controller: businessType,
-                    hint: 'Business type'),
-                const SizedBox(height: 10),
-                _InputBox(
-                    colors: colors,
-                    controller: businessEmail,
-                    hint: 'Business email'),
-                const SizedBox(height: 10),
-                _InputBox(
-                    colors: colors,
-                    controller: businessPhone,
-                    hint: 'Business phone'),
-                const SizedBox(height: 10),
-                _InputBox(
-                    colors: colors,
-                    controller: businessAddress,
-                    hint: 'Registered address'),
-                const SizedBox(height: 10),
-                _InputBox(
-                    colors: colors,
-                    controller: vatNumber,
-                    hint: 'VAT number optional'),
-                const SizedBox(height: 14),
-                SizedBox(
-                  width: double.infinity,
-                  child: FilledButton.icon(
-                    onPressed: busy ? null : onCreateBusiness,
-                    icon: const Icon(Icons.business_center_outlined),
-                    label: const Text('Create Business workspace'),
-                  ),
-                ),
-              ],
-            ),
-          );
-          final join = _GlassPanel(
-            colors: colors,
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                _SectionTitle(colors: colors, title: 'Join company'),
-                const SizedBox(height: 10),
-                Text(
-                  'Enter the company code from your Business owner or admin.',
-                  style: TextStyle(color: colors.mutedText, height: 1.4),
-                ),
-                const SizedBox(height: 10),
-                _InputBox(
-                    colors: colors,
-                    controller: companyCode,
-                    hint: 'Company code'),
-                const SizedBox(height: 14),
-                SizedBox(
-                  width: double.infinity,
-                  child: OutlinedButton.icon(
-                    onPressed: busy ? null : onJoinBusiness,
-                    icon: const Icon(Icons.group_add_outlined),
-                    label: const Text('Request access'),
-                  ),
-                ),
-              ],
-            ),
-          );
-          if (!twoColumn) {
-            return Column(children: [create, const SizedBox(height: 14), join]);
-          }
-          return Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Expanded(child: create),
-              const SizedBox(width: 14),
-              Expanded(child: join),
-            ],
-          );
-        },
-      );
-}
-
-class _BusinessOverviewGrid extends StatelessWidget {
-  final _CircumColors colors;
-  final int activeDeliveries;
-  final int completedDeliveries;
-  final int outstandingInvoices;
-  final double monthlySpend;
-  final int teamMembers;
-  final double rothBalance;
-
-  const _BusinessOverviewGrid({
-    required this.colors,
-    required this.activeDeliveries,
-    required this.completedDeliveries,
-    required this.outstandingInvoices,
-    required this.monthlySpend,
-    required this.teamMembers,
-    required this.rothBalance,
-  });
-
-  @override
-  Widget build(BuildContext context) => GridView.count(
-        shrinkWrap: true,
-        crossAxisCount: MediaQuery.sizeOf(context).width < 720 ? 2 : 3,
-        crossAxisSpacing: 10,
-        mainAxisSpacing: 10,
-        childAspectRatio: 1.65,
-        physics: const NeverScrollableScrollPhysics(),
-        children: [
-          _MetricPill(
-              colors: colors,
-              label: "Today's deliveries",
-              value: '$activeDeliveries'),
-          _MetricPill(
-              colors: colors,
-              label: 'Completed',
-              value: '$completedDeliveries'),
-          _MetricPill(
-              colors: colors,
-              label: 'Outstanding invoices',
-              value: '$outstandingInvoices'),
-          _MetricPill(
-              colors: colors,
-              label: 'Monthly spend',
-              value: '£${monthlySpend.toStringAsFixed(2)}'),
-          _MetricPill(
-              colors: colors, label: 'Team members', value: '$teamMembers'),
-          _MetricPill(
-              colors: colors,
-              label: 'Business Roth',
-              value: '£${rothBalance.toStringAsFixed(2)}'),
-        ],
-      );
-}
-
-class _BusinessQuickActions extends StatelessWidget {
-  final _CircumColors colors;
-  final VoidCallback onCreateDelivery;
-  final VoidCallback onHealthPlus;
-  final VoidCallback onGifts;
-  final VoidCallback onBuyRoth;
-  final TextEditingController rothAmount;
-  final bool busy;
-
-  const _BusinessQuickActions({
-    required this.colors,
-    required this.onCreateDelivery,
-    required this.onHealthPlus,
-    required this.onGifts,
-    required this.onBuyRoth,
-    required this.rothAmount,
-    required this.busy,
-  });
-
-  @override
-  Widget build(BuildContext context) => _GlassPanel(
+    builder: (context, constraints) {
+      final twoColumn = constraints.maxWidth >= 760;
+      final create = _GlassPanel(
         colors: colors,
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            _SectionTitle(colors: colors, title: 'Quick actions'),
-            const SizedBox(height: 12),
-            Wrap(
-              spacing: 10,
-              runSpacing: 10,
-              children: [
-                FilledButton.icon(
-                    onPressed: onCreateDelivery,
-                    icon: const Icon(Icons.add_box_outlined),
-                    label: const Text('Create delivery')),
-                OutlinedButton.icon(
-                    onPressed: onHealthPlus,
-                    icon: const Icon(Icons.local_pharmacy_outlined),
-                    label: const Text('Health+ for Business')),
-                OutlinedButton.icon(
-                    onPressed: onGifts,
-                    icon: const Icon(Icons.card_giftcard),
-                    label: const Text('Gifts for Business')),
-                OutlinedButton.icon(
-                    onPressed: onCreateDelivery,
-                    icon: const Icon(Icons.verified_user_outlined),
-                    label: const Text('Vanguard delivery')),
-              ],
+            _SectionTitle(colors: colors, title: 'Create company'),
+            const SizedBox(height: 10),
+            _InputBox(
+              colors: colors,
+              controller: companyName,
+              hint: 'Company name',
             ),
-            const SizedBox(height: 12),
-            Row(
-              children: [
-                SizedBox(
-                  width: 120,
-                  child: _InputBox(
-                      colors: colors, controller: rothAmount, hint: 'Roth £'),
-                ),
-                const SizedBox(width: 10),
-                OutlinedButton.icon(
-                  onPressed: busy ? null : onBuyRoth,
-                  icon: const Icon(Icons.account_balance_wallet_outlined),
-                  label: const Text('Add Business Roth'),
-                ),
-              ],
+            const SizedBox(height: 10),
+            _InputBox(
+              colors: colors,
+              controller: businessType,
+              hint: 'Business type',
+            ),
+            const SizedBox(height: 10),
+            _InputBox(
+              colors: colors,
+              controller: businessEmail,
+              hint: 'Business email',
+            ),
+            const SizedBox(height: 10),
+            _InputBox(
+              colors: colors,
+              controller: businessPhone,
+              hint: 'Business phone',
+            ),
+            const SizedBox(height: 10),
+            _InputBox(
+              colors: colors,
+              controller: businessAddress,
+              hint: 'Registered address',
+            ),
+            const SizedBox(height: 10),
+            _InputBox(
+              colors: colors,
+              controller: vatNumber,
+              hint: 'VAT number optional',
+            ),
+            const SizedBox(height: 14),
+            SizedBox(
+              width: double.infinity,
+              child: FilledButton.icon(
+                onPressed: busy ? null : onCreateBusiness,
+                icon: const Icon(Icons.business_center_outlined),
+                label: const Text('Create Business workspace'),
+              ),
             ),
           ],
         ),
       );
+      final join = _GlassPanel(
+        colors: colors,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            _SectionTitle(colors: colors, title: 'Join company'),
+            const SizedBox(height: 10),
+            Text(
+              'Enter the company code from your Business owner or admin.',
+              style: TextStyle(color: colors.mutedText, height: 1.4),
+            ),
+            const SizedBox(height: 10),
+            _InputBox(
+              colors: colors,
+              controller: companyCode,
+              hint: 'Company code',
+            ),
+            const SizedBox(height: 14),
+            SizedBox(
+              width: double.infinity,
+              child: OutlinedButton.icon(
+                onPressed: busy ? null : onJoinBusiness,
+                icon: const Icon(Icons.group_add_outlined),
+                label: const Text('Request access'),
+              ),
+            ),
+          ],
+        ),
+      );
+      if (!twoColumn) {
+        return Column(children: [create, const SizedBox(height: 14), join]);
+      }
+      return Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Expanded(child: create),
+          const SizedBox(width: 14),
+          Expanded(child: join),
+        ],
+      );
+    },
+  );
+}
+
+enum _BusinessTone { neutral, success, warning, danger, blue, roth }
+
+class _BusinessSurface extends StatelessWidget {
+  final _CircumColors colors;
+  final Widget child;
+  final EdgeInsetsGeometry padding;
+
+  const _BusinessSurface({
+    required this.colors,
+    required this.child,
+    this.padding = const EdgeInsets.all(16),
+  });
+
+  @override
+  Widget build(BuildContext context) => Container(
+    width: double.infinity,
+    padding: padding,
+    decoration: BoxDecoration(
+      color: colors.dark
+          ? const Color(0xff0d111c).withValues(alpha: 0.92)
+          : colors.panel,
+      borderRadius: BorderRadius.circular(18),
+      border: Border.all(color: colors.border),
+      boxShadow: [
+        BoxShadow(
+          color: const Color(0xff3b82f6).withValues(alpha: 0.08),
+          blurRadius: 26,
+          offset: const Offset(0, 16),
+        ),
+      ],
+    ),
+    child: child,
+  );
+}
+
+class _BusinessSectionLabel extends StatelessWidget {
+  final _CircumColors colors;
+  final String label;
+
+  const _BusinessSectionLabel({required this.colors, required this.label});
+
+  @override
+  Widget build(BuildContext context) => Padding(
+    padding: const EdgeInsets.only(bottom: 10),
+    child: Text(
+      label.toUpperCase(),
+      style: TextStyle(
+        color: colors.mutedText,
+        fontSize: 10.5,
+        fontWeight: FontWeight.w900,
+        letterSpacing: 1.2,
+      ),
+    ),
+  );
+}
+
+class _BusinessOperationalPill extends StatelessWidget {
+  final _CircumColors colors;
+  final String label;
+  final _BusinessTone tone;
+
+  const _BusinessOperationalPill({
+    required this.colors,
+    required this.label,
+    this.tone = _BusinessTone.neutral,
+  });
+
+  Color get _toneColor {
+    switch (tone) {
+      case _BusinessTone.success:
+        return const Color(0xff22c55e);
+      case _BusinessTone.warning:
+        return const Color(0xfff5a623);
+      case _BusinessTone.danger:
+        return const Color(0xfff0555b);
+      case _BusinessTone.blue:
+        return const Color(0xff3b82f6);
+      case _BusinessTone.roth:
+        return const Color(0xffc9a227);
+      case _BusinessTone.neutral:
+        return colors.mutedText;
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final toneColor = _toneColor;
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      decoration: BoxDecoration(
+        color: toneColor.withValues(alpha: 0.12),
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(color: toneColor.withValues(alpha: 0.35)),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(
+            width: 6,
+            height: 6,
+            decoration: BoxDecoration(color: toneColor, shape: BoxShape.circle),
+          ),
+          const SizedBox(width: 7),
+          Text(
+            label.toUpperCase(),
+            style: TextStyle(
+              color: toneColor,
+              fontSize: 10.5,
+              fontWeight: FontWeight.w900,
+              letterSpacing: 0.5,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
 }
 
 class _BusinessDeliveriesPanel extends StatelessWidget {
@@ -14332,45 +14557,49 @@ class _BusinessDeliveriesPanel extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => _GlassPanel(
-        colors: colors,
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            _SectionTitle(colors: colors, title: 'Delivery management'),
-            const SizedBox(height: 8),
-            if (deliveries.isEmpty)
-              _BusinessEmptyState(
-                colors: colors,
-                icon: Icons.local_shipping_outlined,
-                title: 'No Business deliveries yet',
-                body:
-                    'Create a Business delivery to see live tracking, scheduled jobs, repeat jobs and history here.',
-                action: 'Create delivery',
-                onAction: onCreateDelivery,
-              )
-            else ...[
-              Text(
-                '${activeDeliveries.length} active · ${deliveries.length} total',
-                style: TextStyle(
-                    color: colors.mutedText, fontWeight: FontWeight.w800),
+    colors: colors,
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _SectionTitle(colors: colors, title: 'Delivery management'),
+        const SizedBox(height: 8),
+        if (deliveries.isEmpty)
+          _BusinessEmptyState(
+            colors: colors,
+            icon: Icons.local_shipping_outlined,
+            title: 'No Business deliveries yet',
+            body:
+                'Create a Business delivery to see live tracking, scheduled jobs, repeat jobs and history here.',
+            action: 'Create delivery',
+            onAction: onCreateDelivery,
+          )
+        else ...[
+          Text(
+            '${activeDeliveries.length} active · ${deliveries.length} total',
+            style: TextStyle(
+              color: colors.mutedText,
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+          const SizedBox(height: 10),
+          ...deliveries
+              .take(8)
+              .map(
+                (delivery) => _BusinessRecordRow(
+                  colors: colors,
+                  icon: Icons.route_outlined,
+                  title: delivery.trackingReference.isEmpty
+                      ? delivery.requestId
+                      : delivery.trackingReference,
+                  subtitle:
+                      '${delivery.pickupAddress} → ${delivery.dropoffAddress}',
+                  trailing: _displayStatusLabel(delivery.status),
+                ),
               ),
-              const SizedBox(height: 10),
-              ...deliveries.take(8).map(
-                    (delivery) => _BusinessRecordRow(
-                      colors: colors,
-                      icon: Icons.route_outlined,
-                      title: delivery.trackingReference.isEmpty
-                          ? delivery.requestId
-                          : delivery.trackingReference,
-                      subtitle:
-                          '${delivery.pickupAddress} → ${delivery.dropoffAddress}',
-                      trailing: _displayStatusLabel(delivery.status),
-                    ),
-                  ),
-            ],
-          ],
-        ),
-      );
+        ],
+      ],
+    ),
+  );
 }
 
 class _BusinessInvoicesPanel extends StatelessWidget {
@@ -14390,56 +14619,57 @@ class _BusinessInvoicesPanel extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => _GlassPanel(
-        colors: colors,
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            _SectionTitle(colors: colors, title: 'Invoices'),
-            const SizedBox(height: 8),
-            if (invoices.isEmpty)
-              _BusinessEmptyState(
-                colors: colors,
-                icon: Icons.receipt_long_outlined,
-                title: 'No invoices yet',
-                body:
-                    'Business invoices will appear here with Stripe, Roth and part-payment actions.',
-              )
-            else
-              ...invoices.take(10).map((invoice) {
-                final id = '${invoice['id']}';
-                final status =
-                    '${invoice['status'] ?? invoice['paymentStatus'] ?? 'open'}';
-                final total = _BusinessCentreStep._money(
-                    invoice['balanceDue'] ?? invoice['total']);
-                final paid = status.toLowerCase() == 'paid';
-                return _BusinessRecordRow(
-                  colors: colors,
-                  icon: Icons.receipt_long_outlined,
-                  title: '${invoice['invoiceNumber'] ?? id}',
-                  subtitle:
-                      'Balance £${total.toStringAsFixed(2)} · ${_displayStatusLabel(status)}',
-                  trailing: paid ? 'Paid' : 'Pay',
-                  actions: [
-                    TextButton(
-                      onPressed: () => onDownloadInvoice(invoice),
-                      child: const Text('Print / PDF'),
-                    ),
-                    if (!paid) ...[
-                      TextButton(
-                        onPressed: () => onPayInvoice(id),
-                        child: const Text('Stripe'),
-                      ),
-                      TextButton(
-                        onPressed: () => onPayInvoiceWithRoth(id),
-                        child: const Text('Roth'),
-                      ),
-                    ],
-                  ],
-                );
-              }),
-          ],
-        ),
-      );
+    colors: colors,
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _SectionTitle(colors: colors, title: 'Invoices'),
+        const SizedBox(height: 8),
+        if (invoices.isEmpty)
+          _BusinessEmptyState(
+            colors: colors,
+            icon: Icons.receipt_long_outlined,
+            title: 'No invoices yet',
+            body:
+                'Business invoices will appear here with Stripe, Roth and part-payment actions.',
+          )
+        else
+          ...invoices.take(10).map((invoice) {
+            final id = '${invoice['id']}';
+            final status =
+                '${invoice['status'] ?? invoice['paymentStatus'] ?? 'open'}';
+            final total = _BusinessCentreStep._money(
+              invoice['balanceDue'] ?? invoice['total'],
+            );
+            final paid = status.toLowerCase() == 'paid';
+            return _BusinessRecordRow(
+              colors: colors,
+              icon: Icons.receipt_long_outlined,
+              title: '${invoice['invoiceNumber'] ?? id}',
+              subtitle:
+                  'Balance £${total.toStringAsFixed(2)} · ${_displayStatusLabel(status)}',
+              trailing: paid ? 'Paid' : 'Pay',
+              actions: [
+                TextButton(
+                  onPressed: () => onDownloadInvoice(invoice),
+                  child: const Text('Print / PDF'),
+                ),
+                if (!paid) ...[
+                  TextButton(
+                    onPressed: () => onPayInvoice(id),
+                    child: const Text('Stripe'),
+                  ),
+                  TextButton(
+                    onPressed: () => onPayInvoiceWithRoth(id),
+                    child: const Text('Roth'),
+                  ),
+                ],
+              ],
+            );
+          }),
+      ],
+    ),
+  );
 }
 
 class _BusinessTeamPanel extends StatelessWidget {
@@ -14463,67 +14693,70 @@ class _BusinessTeamPanel extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => _GlassPanel(
-        colors: colors,
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            _SectionTitle(colors: colors, title: 'Team management'),
-            const SizedBox(height: 8),
-            if (members.isEmpty)
-              _BusinessEmptyState(
-                colors: colors,
-                icon: Icons.groups_outlined,
-                title: 'No team records',
-                body:
-                    'Team members and roles appear after onboarding or access approval.',
-              )
-            else
-              ...members.where((member) => member['status'] != 'removed').map(
-                    (member) => _BusinessTeamRow(
-                      colors: colors,
-                      member: member,
-                      busy: busy,
-                      onRole: (role) =>
-                          onUpdateMemberRole('${member['userId']}', role),
-                      onRemove: () => onRemoveMember('${member['userId']}'),
+    colors: colors,
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _SectionTitle(colors: colors, title: 'Team management'),
+        const SizedBox(height: 8),
+        if (members.isEmpty)
+          _BusinessEmptyState(
+            colors: colors,
+            icon: Icons.groups_outlined,
+            title: 'No team records',
+            body:
+                'Team members and roles appear after onboarding or access approval.',
+          )
+        else
+          ...members
+              .where((member) => member['status'] != 'removed')
+              .map(
+                (member) => _BusinessTeamRow(
+                  colors: colors,
+                  member: member,
+                  busy: busy,
+                  onRole: (role) =>
+                      onUpdateMemberRole('${member['userId']}', role),
+                  onRemove: () => onRemoveMember('${member['userId']}'),
+                ),
+              ),
+        if (joinRequests.any(
+          (request) => '${request['status']}' == 'pending',
+        )) ...[
+          const SizedBox(height: 12),
+          _SectionTitle(colors: colors, title: 'Access requests'),
+          const SizedBox(height: 8),
+          ...joinRequests
+              .where((request) => '${request['status']}' == 'pending')
+              .map(
+                (request) => _BusinessRecordRow(
+                  colors: colors,
+                  icon: Icons.person_add_alt_1_outlined,
+                  title:
+                      '${request['name'] ?? request['email'] ?? 'Requester'}',
+                  subtitle:
+                      'Requested role: ${request['roleRequested'] ?? 'member'}',
+                  trailing: 'Pending',
+                  actions: [
+                    TextButton(
+                      onPressed: busy
+                          ? null
+                          : () => onReviewRequest('${request['id']}', true),
+                      child: const Text('Approve'),
                     ),
-                  ),
-            if (joinRequests
-                .any((request) => '${request['status']}' == 'pending')) ...[
-              const SizedBox(height: 12),
-              _SectionTitle(colors: colors, title: 'Access requests'),
-              const SizedBox(height: 8),
-              ...joinRequests
-                  .where((request) => '${request['status']}' == 'pending')
-                  .map(
-                    (request) => _BusinessRecordRow(
-                      colors: colors,
-                      icon: Icons.person_add_alt_1_outlined,
-                      title:
-                          '${request['name'] ?? request['email'] ?? 'Requester'}',
-                      subtitle:
-                          'Requested role: ${request['roleRequested'] ?? 'member'}',
-                      trailing: 'Pending',
-                      actions: [
-                        TextButton(
-                            onPressed: busy
-                                ? null
-                                : () =>
-                                    onReviewRequest('${request['id']}', true),
-                            child: const Text('Approve')),
-                        TextButton(
-                            onPressed: busy
-                                ? null
-                                : () =>
-                                    onReviewRequest('${request['id']}', false),
-                            child: const Text('Reject')),
-                      ],
+                    TextButton(
+                      onPressed: busy
+                          ? null
+                          : () => onReviewRequest('${request['id']}', false),
+                      child: const Text('Reject'),
                     ),
-                  ),
-            ],
-          ],
-        ),
-      );
+                  ],
+                ),
+              ),
+        ],
+      ],
+    ),
+  );
 }
 
 class _BusinessTeamRow extends StatelessWidget {
@@ -14555,14 +14788,15 @@ class _BusinessTeamRow extends StatelessWidget {
           ? const []
           : [
               DropdownButton<String>(
-                value: [
-                  'admin',
-                  'manager',
-                  'dispatcher',
-                  'finance',
-                  'viewer',
-                  'member'
-                ].contains(role)
+                value:
+                    [
+                      'admin',
+                      'manager',
+                      'dispatcher',
+                      'finance',
+                      'viewer',
+                      'member',
+                    ].contains(role)
                     ? role
                     : 'member',
                 dropdownColor: colors.panel,
@@ -14570,7 +14804,9 @@ class _BusinessTeamRow extends StatelessWidget {
                   DropdownMenuItem(value: 'admin', child: Text('Admin')),
                   DropdownMenuItem(value: 'manager', child: Text('Manager')),
                   DropdownMenuItem(
-                      value: 'dispatcher', child: Text('Dispatcher')),
+                    value: 'dispatcher',
+                    child: Text('Dispatcher'),
+                  ),
                   DropdownMenuItem(value: 'finance', child: Text('Finance')),
                   DropdownMenuItem(value: 'viewer', child: Text('Viewer')),
                   DropdownMenuItem(value: 'member', child: Text('Member')),
@@ -14582,11 +14818,1124 @@ class _BusinessTeamRow extends StatelessWidget {
                       },
               ),
               TextButton(
-                  onPressed: busy ? null : onRemove,
-                  child: const Text('Remove')),
+                onPressed: busy ? null : onRemove,
+                child: const Text('Remove'),
+              ),
             ],
     );
   }
+}
+
+enum _BusinessWebSection {
+  overview,
+  deliveries,
+  invoices,
+  team,
+  healthPlus,
+  gifts,
+  vanguard,
+  analytics,
+  finance,
+  settings,
+}
+
+extension _BusinessWebSectionCopy on _BusinessWebSection {
+  String get label {
+    switch (this) {
+      case _BusinessWebSection.overview:
+        return 'Overview';
+      case _BusinessWebSection.deliveries:
+        return 'Deliveries';
+      case _BusinessWebSection.invoices:
+        return 'Invoices';
+      case _BusinessWebSection.team:
+        return 'Team';
+      case _BusinessWebSection.healthPlus:
+        return 'Health+';
+      case _BusinessWebSection.gifts:
+        return 'Gifts';
+      case _BusinessWebSection.vanguard:
+        return 'Vanguard';
+      case _BusinessWebSection.analytics:
+        return 'Analytics';
+      case _BusinessWebSection.finance:
+        return 'Finance';
+      case _BusinessWebSection.settings:
+        return 'Settings';
+    }
+  }
+
+  IconData get icon {
+    switch (this) {
+      case _BusinessWebSection.overview:
+        return Icons.home_outlined;
+      case _BusinessWebSection.deliveries:
+        return Icons.local_shipping_outlined;
+      case _BusinessWebSection.invoices:
+        return Icons.receipt_long_outlined;
+      case _BusinessWebSection.team:
+        return Icons.groups_outlined;
+      case _BusinessWebSection.healthPlus:
+        return Icons.health_and_safety_outlined;
+      case _BusinessWebSection.gifts:
+        return Icons.card_giftcard_outlined;
+      case _BusinessWebSection.vanguard:
+        return Icons.shield_outlined;
+      case _BusinessWebSection.analytics:
+        return Icons.analytics_outlined;
+      case _BusinessWebSection.finance:
+        return Icons.account_balance_wallet_outlined;
+      case _BusinessWebSection.settings:
+        return Icons.settings_outlined;
+    }
+  }
+}
+
+class _BusinessSectionTabs extends StatefulWidget {
+  final _CircumColors colors;
+  final List<Map<String, dynamic>> members;
+  final List<Map<String, dynamic>> joinRequests;
+  final List<Map<String, dynamic>> auditLogs;
+  final List<SenderDeliveryRecord> deliveries;
+  final List<SenderDeliveryRecord> activeDeliveries;
+  final List<Map<String, dynamic>> invoices;
+  final Map<String, dynamic>? wallet;
+  final int activeDeliveryCount;
+  final int completedDeliveryCount;
+  final int outstandingInvoiceCount;
+  final double monthlySpend;
+  final int teamMemberCount;
+  final double rothBalance;
+  final bool busy;
+  final Map<String, dynamic> account;
+  final TextEditingController rothAmount;
+  final TextEditingController companyName;
+  final TextEditingController businessType;
+  final TextEditingController businessEmail;
+  final TextEditingController businessPhone;
+  final TextEditingController businessAddress;
+  final TextEditingController vatNumber;
+  final TextEditingController website;
+  final VoidCallback onCreateDelivery;
+  final VoidCallback onHealthPlus;
+  final VoidCallback onGifts;
+  final VoidCallback onBuyRoth;
+  final ValueChanged<String> onPayInvoice;
+  final ValueChanged<String> onPayInvoiceWithRoth;
+  final ValueChanged<Map<String, dynamic>> onDownloadInvoice;
+  final void Function(String requestId, bool approved) onReviewRequest;
+  final void Function(String memberUserId, String role) onUpdateMemberRole;
+  final ValueChanged<String> onRemoveMember;
+  final VoidCallback onSaveProfile;
+
+  const _BusinessSectionTabs({
+    required this.colors,
+    required this.members,
+    required this.joinRequests,
+    required this.auditLogs,
+    required this.deliveries,
+    required this.activeDeliveries,
+    required this.invoices,
+    required this.wallet,
+    required this.activeDeliveryCount,
+    required this.completedDeliveryCount,
+    required this.outstandingInvoiceCount,
+    required this.monthlySpend,
+    required this.teamMemberCount,
+    required this.rothBalance,
+    required this.busy,
+    required this.account,
+    required this.rothAmount,
+    required this.companyName,
+    required this.businessType,
+    required this.businessEmail,
+    required this.businessPhone,
+    required this.businessAddress,
+    required this.vatNumber,
+    required this.website,
+    required this.onCreateDelivery,
+    required this.onHealthPlus,
+    required this.onGifts,
+    required this.onBuyRoth,
+    required this.onPayInvoice,
+    required this.onPayInvoiceWithRoth,
+    required this.onDownloadInvoice,
+    required this.onReviewRequest,
+    required this.onUpdateMemberRole,
+    required this.onRemoveMember,
+    required this.onSaveProfile,
+  });
+
+  @override
+  State<_BusinessSectionTabs> createState() => _BusinessSectionTabsState();
+}
+
+class _BusinessSectionTabsState extends State<_BusinessSectionTabs> {
+  var _section = _BusinessWebSection.overview;
+
+  static const _sections = [
+    _BusinessWebSection.overview,
+    _BusinessWebSection.deliveries,
+    _BusinessWebSection.invoices,
+    _BusinessWebSection.team,
+    _BusinessWebSection.healthPlus,
+    _BusinessWebSection.gifts,
+    _BusinessWebSection.vanguard,
+    _BusinessWebSection.analytics,
+    _BusinessWebSection.settings,
+  ];
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Semantics(
+          label: 'Business sections',
+          child: SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            child: Row(
+              children: _sections
+                  .map(
+                    (section) => Padding(
+                      padding: const EdgeInsets.only(right: 8),
+                      child: _BusinessTabChip(
+                        colors: widget.colors,
+                        selected: _section == section,
+                        icon: section.icon,
+                        label: section.label,
+                        onPressed: () => setState(() => _section = section),
+                      ),
+                    ),
+                  )
+                  .toList(),
+            ),
+          ),
+        ),
+        const SizedBox(height: 12),
+        _selectedSection(),
+      ],
+    );
+  }
+
+  Widget _selectedSection() {
+    switch (_section) {
+      case _BusinessWebSection.overview:
+        return _BusinessSuiteOverviewPanel(
+          colors: widget.colors,
+          activeDeliveryCount: widget.activeDeliveryCount,
+          completedDeliveryCount: widget.completedDeliveryCount,
+          outstandingInvoiceCount: widget.outstandingInvoiceCount,
+          monthlySpend: widget.monthlySpend,
+          teamMemberCount: widget.teamMemberCount,
+          rothBalance: widget.rothBalance,
+          deliveries: widget.deliveries,
+          invoices: widget.invoices,
+          rothAmount: widget.rothAmount,
+          busy: widget.busy,
+          onCreateDelivery: widget.onCreateDelivery,
+          onTeam: () => setState(() => _section = _BusinessWebSection.team),
+          onHealthPlus: widget.onHealthPlus,
+          onGifts: widget.onGifts,
+          onBuyRoth: widget.onBuyRoth,
+        );
+      case _BusinessWebSection.deliveries:
+        return _BusinessDeliveriesPanel(
+          colors: widget.colors,
+          deliveries: widget.deliveries,
+          activeDeliveries: widget.activeDeliveries,
+          onCreateDelivery: widget.onCreateDelivery,
+        );
+      case _BusinessWebSection.invoices:
+        return _BusinessInvoicesPanel(
+          colors: widget.colors,
+          invoices: widget.invoices,
+          onPayInvoice: widget.onPayInvoice,
+          onPayInvoiceWithRoth: widget.onPayInvoiceWithRoth,
+          onDownloadInvoice: widget.onDownloadInvoice,
+        );
+      case _BusinessWebSection.team:
+        return _BusinessTeamPanel(
+          colors: widget.colors,
+          members: widget.members,
+          joinRequests: widget.joinRequests,
+          busy: widget.busy,
+          onReviewRequest: widget.onReviewRequest,
+          onUpdateMemberRole: widget.onUpdateMemberRole,
+          onRemoveMember: widget.onRemoveMember,
+        );
+      case _BusinessWebSection.healthPlus:
+        return _BusinessProductParityPanel(
+          colors: widget.colors,
+          deliveries: widget.deliveries,
+          invoices: const [],
+          wallet: widget.wallet,
+          onCreateDelivery: widget.onCreateDelivery,
+          onHealthPlus: widget.onHealthPlus,
+          onGifts: widget.onGifts,
+          onBuyRoth: widget.onBuyRoth,
+          initialProduct: 'Health+',
+        );
+      case _BusinessWebSection.gifts:
+        return _BusinessProductParityPanel(
+          colors: widget.colors,
+          deliveries: widget.deliveries,
+          invoices: const [],
+          wallet: widget.wallet,
+          onCreateDelivery: widget.onCreateDelivery,
+          onHealthPlus: widget.onHealthPlus,
+          onGifts: widget.onGifts,
+          onBuyRoth: widget.onBuyRoth,
+          initialProduct: 'Gifts',
+        );
+      case _BusinessWebSection.vanguard:
+        return _BusinessProductParityPanel(
+          colors: widget.colors,
+          deliveries: widget.deliveries,
+          invoices: const [],
+          wallet: widget.wallet,
+          onCreateDelivery: widget.onCreateDelivery,
+          onHealthPlus: widget.onHealthPlus,
+          onGifts: widget.onGifts,
+          onBuyRoth: widget.onBuyRoth,
+          initialProduct: 'Vanguard',
+        );
+      case _BusinessWebSection.analytics:
+        return _BusinessAnalyticsPanel(
+          colors: widget.colors,
+          deliveries: widget.deliveries,
+          invoices: widget.invoices,
+        );
+      case _BusinessWebSection.finance:
+        return _BusinessFinanceProductCard(
+          colors: widget.colors,
+          rothBalance: _BusinessCentreStep._money(
+            widget.wallet?['balance'] ?? widget.wallet?['availableBalance'],
+          ),
+          outstandingInvoices: widget.invoices
+              .where((invoice) => !_BusinessCentreStep._invoicePaid(invoice))
+              .length,
+          invoiceCount: widget.invoices.length,
+          onBuyRoth: widget.onBuyRoth,
+        );
+      case _BusinessWebSection.settings:
+        return Column(
+          children: [
+            _BusinessSettingsPanel(
+              colors: widget.colors,
+              busy: widget.busy,
+              account: widget.account,
+              companyName: widget.companyName,
+              businessType: widget.businessType,
+              businessEmail: widget.businessEmail,
+              businessPhone: widget.businessPhone,
+              businessAddress: widget.businessAddress,
+              vatNumber: widget.vatNumber,
+              website: widget.website,
+              onSaveProfile: widget.onSaveProfile,
+            ),
+            const SizedBox(height: 14),
+            _BusinessAuditPanel(
+              colors: widget.colors,
+              auditLogs: widget.auditLogs,
+            ),
+          ],
+        );
+    }
+  }
+}
+
+class _BusinessTabChip extends StatelessWidget {
+  final _CircumColors colors;
+  final bool selected;
+  final IconData icon;
+  final String label;
+  final VoidCallback onPressed;
+
+  const _BusinessTabChip({
+    required this.colors,
+    required this.selected,
+    required this.icon,
+    required this.label,
+    required this.onPressed,
+  });
+
+  @override
+  Widget build(BuildContext context) => InkWell(
+    borderRadius: BorderRadius.circular(999),
+    onTap: onPressed,
+    child: AnimatedContainer(
+      duration: const Duration(milliseconds: 160),
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+      decoration: BoxDecoration(
+        color: selected
+            ? const Color(0xff3b82f6).withValues(alpha: 0.14)
+            : colors.panel,
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(
+          color: selected
+              ? const Color(0xff3b82f6).withValues(alpha: 0.5)
+              : colors.border,
+        ),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(
+            icon,
+            color: selected ? const Color(0xffdce7ff) : colors.mutedText,
+            size: 16,
+          ),
+          const SizedBox(width: 7),
+          Text(
+            label,
+            style: TextStyle(
+              color: selected ? const Color(0xffdce7ff) : colors.mutedText,
+              fontWeight: FontWeight.w900,
+              fontSize: 12.5,
+            ),
+          ),
+        ],
+      ),
+    ),
+  );
+}
+
+class _BusinessSuiteOverviewPanel extends StatelessWidget {
+  final _CircumColors colors;
+  final int activeDeliveryCount;
+  final int completedDeliveryCount;
+  final int outstandingInvoiceCount;
+  final double monthlySpend;
+  final int teamMemberCount;
+  final double rothBalance;
+  final List<SenderDeliveryRecord> deliveries;
+  final List<Map<String, dynamic>> invoices;
+  final TextEditingController rothAmount;
+  final bool busy;
+  final VoidCallback onCreateDelivery;
+  final VoidCallback onTeam;
+  final VoidCallback onHealthPlus;
+  final VoidCallback onGifts;
+  final VoidCallback onBuyRoth;
+
+  const _BusinessSuiteOverviewPanel({
+    required this.colors,
+    required this.activeDeliveryCount,
+    required this.completedDeliveryCount,
+    required this.outstandingInvoiceCount,
+    required this.monthlySpend,
+    required this.teamMemberCount,
+    required this.rothBalance,
+    required this.deliveries,
+    required this.invoices,
+    required this.rothAmount,
+    required this.busy,
+    required this.onCreateDelivery,
+    required this.onTeam,
+    required this.onHealthPlus,
+    required this.onGifts,
+    required this.onBuyRoth,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final recent = deliveries.take(2).toList(growable: false);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Padding(
+          padding: const EdgeInsets.only(left: 2, right: 2, bottom: 14),
+          child: Text(
+            'Your command centre for deliveries, invoices, team access, Health+, Gifts, Vanguard and IRIS insights.',
+            style: TextStyle(
+              color: colors.mutedText,
+              height: 1.5,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+        ),
+        _BusinessSectionLabel(colors: colors, label: 'This month'),
+        LayoutBuilder(
+          builder: (context, constraints) {
+            final columns = constraints.maxWidth < 720 ? 2 : 4;
+            return GridView.count(
+              shrinkWrap: true,
+              physics: const NeverScrollableScrollPhysics(),
+              crossAxisCount: columns,
+              crossAxisSpacing: 10,
+              mainAxisSpacing: 10,
+              childAspectRatio: columns == 2 ? 1.32 : 1.45,
+              children: [
+                _BusinessStatCard(
+                  colors: colors,
+                  label: 'Deliveries',
+                  value: '$activeDeliveryCount',
+                  delta: '$completedDeliveryCount completed',
+                ),
+                _BusinessStatCard(
+                  colors: colors,
+                  label: 'Outstanding',
+                  value: '£${_outstandingAmount.toStringAsFixed(2)}',
+                  delta: '$outstandingInvoiceCount invoices due',
+                  tone: _BusinessTone.warning,
+                ),
+                _BusinessStatCard(
+                  colors: colors,
+                  label: 'Team members',
+                  value: '$teamMemberCount',
+                  delta: 'Active workspace',
+                ),
+                _BusinessStatCard(
+                  colors: colors,
+                  label: 'Roth offset',
+                  value: '£${rothBalance.toStringAsFixed(2)}',
+                  delta: 'Applied at invoicing',
+                  tone: _BusinessTone.roth,
+                ),
+              ],
+            );
+          },
+        ),
+        const SizedBox(height: 18),
+        _BusinessSectionLabel(colors: colors, label: 'Quick actions'),
+        LayoutBuilder(
+          builder: (context, constraints) {
+            final columns = constraints.maxWidth < 640 ? 2 : 4;
+            return GridView.count(
+              shrinkWrap: true,
+              physics: const NeverScrollableScrollPhysics(),
+              crossAxisCount: columns,
+              crossAxisSpacing: 10,
+              mainAxisSpacing: 10,
+              childAspectRatio: columns == 2 ? 1.12 : 1.08,
+              children: [
+                _BusinessActionTile(
+                  colors: colors,
+                  icon: Icons.local_shipping_outlined,
+                  title: 'Book a delivery',
+                  subtitle: 'New job on a default pickup address',
+                  onPressed: onCreateDelivery,
+                ),
+                _BusinessActionTile(
+                  colors: colors,
+                  icon: Icons.group_add_outlined,
+                  title: 'Invite teammate',
+                  subtitle: 'Add booking or admin access',
+                  onPressed: onTeam,
+                ),
+                _BusinessActionTile(
+                  colors: colors,
+                  icon: Icons.health_and_safety_outlined,
+                  title: 'Health+ request',
+                  subtitle: 'Vanguard-covered by default',
+                  onPressed: onHealthPlus,
+                ),
+                _BusinessActionTile(
+                  colors: colors,
+                  icon: Icons.card_giftcard_outlined,
+                  title: 'Corporate gift',
+                  subtitle: 'Contents stay undisclosed',
+                  onPressed: onGifts,
+                ),
+              ],
+            );
+          },
+        ),
+        const SizedBox(height: 18),
+        _BusinessSectionLabel(colors: colors, label: 'Business Roth'),
+        _BusinessSurface(
+          colors: colors,
+          padding: const EdgeInsets.all(14),
+          child: Row(
+            children: [
+              SizedBox(
+                width: 110,
+                child: _InputBox(
+                  colors: colors,
+                  controller: rothAmount,
+                  hint: 'Roth £',
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: FilledButton.icon(
+                  onPressed: busy ? null : onBuyRoth,
+                  icon: const Icon(Icons.account_balance_wallet_outlined),
+                  label: const Text('Add Business Roth'),
+                ),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 18),
+        _BusinessSectionLabel(colors: colors, label: 'Recent activity'),
+        if (recent.isEmpty)
+          _BusinessEmptyState(
+            colors: colors,
+            icon: Icons.history_outlined,
+            title: 'No Business activity yet',
+            body:
+                'Business deliveries, invoice events and premium service activity will appear here.',
+          )
+        else
+          ...recent.map(
+            (delivery) => _BusinessRecordRow(
+              colors: colors,
+              icon: _BusinessProductParityPanel._hasVanguard(delivery)
+                  ? Icons.shield_outlined
+                  : Icons.local_shipping_outlined,
+              title: delivery.trackingReference.isEmpty
+                  ? delivery.requestId
+                  : delivery.trackingReference,
+              subtitle:
+                  '${delivery.pickupAddress} → ${delivery.dropoffAddress}',
+              trailing: _displayStatusLabel(delivery.status),
+            ),
+          ),
+      ],
+    );
+  }
+
+  double get _outstandingAmount {
+    return invoices
+        .where((invoice) => !_BusinessCentreStep._invoicePaid(invoice))
+        .fold<double>(
+          0,
+          (total, invoice) =>
+              total +
+              _BusinessCentreStep._money(
+                invoice['balanceDue'] ?? invoice['total'] ?? invoice['amount'],
+              ),
+        );
+  }
+}
+
+class _BusinessStatCard extends StatelessWidget {
+  final _CircumColors colors;
+  final String label;
+  final String value;
+  final String delta;
+  final _BusinessTone tone;
+
+  const _BusinessStatCard({
+    required this.colors,
+    required this.label,
+    required this.value,
+    required this.delta,
+    this.tone = _BusinessTone.neutral,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final valueColor = tone == _BusinessTone.roth
+        ? const Color(0xffc9a227)
+        : colors.text;
+    return _BusinessSurface(
+      colors: colors,
+      padding: const EdgeInsets.all(14),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Text(
+            label,
+            style: TextStyle(
+              color: colors.mutedText,
+              fontSize: 11.5,
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            value,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(
+              color: valueColor,
+              fontSize: 22,
+              fontWeight: FontWeight.w900,
+            ),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            delta,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(
+              color: tone == _BusinessTone.warning
+                  ? const Color(0xfff5a623)
+                  : colors.mutedText,
+              fontSize: 10.5,
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _BusinessActionTile extends StatelessWidget {
+  final _CircumColors colors;
+  final IconData icon;
+  final String title;
+  final String subtitle;
+  final VoidCallback onPressed;
+
+  const _BusinessActionTile({
+    required this.colors,
+    required this.icon,
+    required this.title,
+    required this.subtitle,
+    required this.onPressed,
+  });
+
+  @override
+  Widget build(BuildContext context) => _BusinessSurface(
+    colors: colors,
+    padding: EdgeInsets.zero,
+    child: InkWell(
+      borderRadius: BorderRadius.circular(18),
+      onTap: onPressed,
+      child: Padding(
+        padding: const EdgeInsets.all(14),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Container(
+              width: 34,
+              height: 34,
+              decoration: BoxDecoration(
+                color: colors.field,
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: Icon(icon, color: colors.text, size: 18),
+            ),
+            const SizedBox(height: 10),
+            Text(
+              title,
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                color: colors.text,
+                fontWeight: FontWeight.w900,
+                fontSize: 13.5,
+              ),
+            ),
+            const SizedBox(height: 4),
+            Text(
+              subtitle,
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                color: colors.mutedText,
+                height: 1.3,
+                fontSize: 11,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+          ],
+        ),
+      ),
+    ),
+  );
+}
+
+class _BusinessProductParityPanel extends StatelessWidget {
+  final _CircumColors colors;
+  final List<SenderDeliveryRecord> deliveries;
+  final List<Map<String, dynamic>> invoices;
+  final Map<String, dynamic>? wallet;
+  final VoidCallback onCreateDelivery;
+  final VoidCallback onHealthPlus;
+  final VoidCallback onGifts;
+  final VoidCallback onBuyRoth;
+  final String? initialProduct;
+
+  const _BusinessProductParityPanel({
+    required this.colors,
+    required this.deliveries,
+    required this.invoices,
+    required this.wallet,
+    required this.onCreateDelivery,
+    required this.onHealthPlus,
+    required this.onGifts,
+    required this.onBuyRoth,
+    this.initialProduct,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final health = _matchingDeliveries(const [
+      'health',
+      'pharmacy',
+      'prescription',
+      'medical',
+    ]);
+    final gifts = _matchingDeliveries(const ['gift', 'gifts']);
+    final vanguard = deliveries.where(_hasVanguard).toList(growable: false);
+    final outstanding = invoices
+        .where((invoice) => !_BusinessCentreStep._invoicePaid(invoice))
+        .length;
+    final roth = _BusinessCentreStep._money(
+      wallet?['balance'] ?? wallet?['availableBalance'],
+    );
+
+    final cards = [
+      _BusinessProductCard(
+        colors: colors,
+        icon: Icons.health_and_safety_outlined,
+        title: 'Health+',
+        subtitle:
+            'Business prescription pickups and medical deliveries with Vanguard included.',
+        primaryMetric: '${health.length}',
+        primaryLabel: 'Health+ records',
+        secondaryMetric:
+            '${health.where((item) => _active(item.status)).length}',
+        secondaryLabel: 'Active',
+        actionLabel: 'New Health+ request',
+        onAction: onHealthPlus,
+        records: health,
+        badgeLabel: 'Vanguard Included',
+      ),
+      _BusinessProductCard(
+        colors: colors,
+        icon: Icons.card_giftcard_outlined,
+        title: 'Gifts',
+        subtitle:
+            'Corporate gift requests, recipient status and protected delivery history.',
+        primaryMetric: '${gifts.length}',
+        primaryLabel: 'Gift records',
+        secondaryMetric:
+            '${gifts.where((item) => _active(item.status)).length}',
+        secondaryLabel: 'Active',
+        actionLabel: 'Start corporate gift',
+        onAction: onGifts,
+        records: gifts,
+        badgeLabel: 'Vanguard Included',
+      ),
+      _BusinessProductCard(
+        colors: colors,
+        icon: Icons.shield_outlined,
+        title: 'Vanguard',
+        subtitle:
+            'Important deliveries with enhanced custody tracking and trusted rider prioritisation.',
+        primaryMetric: '${vanguard.length}',
+        primaryLabel: 'Vanguard deliveries',
+        secondaryMetric:
+            '${vanguard.where((item) => _active(item.status)).length}',
+        secondaryLabel: 'Active',
+        actionLabel: 'Create Vanguard delivery',
+        onAction: onCreateDelivery,
+        records: vanguard,
+        badgeLabel: 'Custody tracking',
+      ),
+      _BusinessFinanceProductCard(
+        colors: colors,
+        rothBalance: roth,
+        outstandingInvoices: outstanding,
+        invoiceCount: invoices.length,
+        onBuyRoth: onBuyRoth,
+      ),
+    ];
+    final visibleCards = initialProduct == null
+        ? cards
+        : cards.where((card) {
+            if (card is _BusinessProductCard) {
+              return card.title == initialProduct;
+            }
+            return initialProduct == 'Finance';
+          }).toList();
+
+    return _GlassPanel(
+      colors: colors,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _SectionTitle(colors: colors, title: 'Business products'),
+          const SizedBox(height: 8),
+          Text(
+            'The web centre now exposes the same operational areas as the app: Health+, Gifts, Vanguard and Finance.',
+            style: TextStyle(
+              color: colors.mutedText,
+              height: 1.4,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+          const SizedBox(height: 12),
+          LayoutBuilder(
+            builder: (context, constraints) {
+              final columns = constraints.maxWidth < 760 ? 1 : 2;
+              return GridView.count(
+                shrinkWrap: true,
+                physics: const NeverScrollableScrollPhysics(),
+                crossAxisCount: columns,
+                crossAxisSpacing: 10,
+                mainAxisSpacing: 10,
+                childAspectRatio: columns == 1 ? 1.55 : 1.35,
+                children: visibleCards,
+              );
+            },
+          ),
+        ],
+      ),
+    );
+  }
+
+  List<SenderDeliveryRecord> _matchingDeliveries(List<String> needles) {
+    return deliveries
+        .where((delivery) {
+          final haystack = [
+            delivery.status,
+            delivery.raw['category'],
+            delivery.raw['deliveryCategory'],
+            delivery.raw['service'],
+            delivery.raw['product'],
+            delivery.raw['workflow'],
+            delivery.raw['deliveryType'],
+            delivery.raw['requestType'],
+            delivery.raw['notes'],
+          ].join(' ').toLowerCase();
+          return needles.any(haystack.contains);
+        })
+        .toList(growable: false);
+  }
+
+  static bool _active(String status) {
+    final normalized = status.toLowerCase();
+    return !const {
+      'completed',
+      'delivered',
+      'cancelled',
+      'canceled',
+      'failed',
+    }.contains(normalized);
+  }
+
+  static bool _hasVanguard(SenderDeliveryRecord delivery) {
+    final raw = delivery.raw;
+    final category = '${raw['category'] ?? raw['deliveryCategory'] ?? ''}'
+        .toLowerCase();
+    final protection = raw['vanguardProtection'];
+    return raw['vanguardEnabled'] == true ||
+        raw['vanguardRequired'] == true ||
+        category.contains('vanguard') ||
+        (protection is Map && protection['enabled'] == true);
+  }
+}
+
+class _BusinessProductCard extends StatelessWidget {
+  final _CircumColors colors;
+  final IconData icon;
+  final String title;
+  final String subtitle;
+  final String primaryMetric;
+  final String primaryLabel;
+  final String secondaryMetric;
+  final String secondaryLabel;
+  final String actionLabel;
+  final VoidCallback onAction;
+  final List<SenderDeliveryRecord> records;
+  final String? badgeLabel;
+
+  const _BusinessProductCard({
+    required this.colors,
+    required this.icon,
+    required this.title,
+    required this.subtitle,
+    required this.primaryMetric,
+    required this.primaryLabel,
+    required this.secondaryMetric,
+    required this.secondaryLabel,
+    required this.actionLabel,
+    required this.onAction,
+    required this.records,
+    this.badgeLabel,
+  });
+
+  @override
+  Widget build(BuildContext context) => Container(
+    padding: const EdgeInsets.all(14),
+    decoration: BoxDecoration(
+      color: colors.field,
+      borderRadius: BorderRadius.circular(18),
+      border: Border.all(color: colors.border),
+    ),
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Icon(icon, color: colors.text),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Text(
+                title,
+                style: TextStyle(
+                  color: colors.text,
+                  fontSize: 18,
+                  fontWeight: FontWeight.w900,
+                ),
+              ),
+            ),
+            if (badgeLabel != null) _HealthChip(label: badgeLabel!),
+          ],
+        ),
+        const SizedBox(height: 8),
+        Text(
+          subtitle,
+          style: TextStyle(
+            color: colors.mutedText,
+            height: 1.35,
+            fontWeight: FontWeight.w700,
+          ),
+        ),
+        const SizedBox(height: 10),
+        Row(
+          children: [
+            Expanded(
+              child: _MetricPill(
+                colors: colors,
+                label: primaryLabel,
+                value: primaryMetric,
+              ),
+            ),
+            const SizedBox(width: 8),
+            Expanded(
+              child: _MetricPill(
+                colors: colors,
+                label: secondaryLabel,
+                value: secondaryMetric,
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 10),
+        if (records.isEmpty)
+          Text(
+            'No ${title.toLowerCase()} records yet.',
+            style: TextStyle(color: colors.mutedText),
+          )
+        else
+          ...records
+              .take(2)
+              .map(
+                (record) => _BusinessRecordRow(
+                  colors: colors,
+                  icon: Icons.route_outlined,
+                  title: record.trackingReference.isEmpty
+                      ? record.requestId
+                      : record.trackingReference,
+                  subtitle: record.dropoffAddress,
+                  trailing: _displayStatusLabel(record.status),
+                ),
+              ),
+        const SizedBox(height: 10),
+        Align(
+          alignment: Alignment.centerLeft,
+          child: OutlinedButton.icon(
+            onPressed: onAction,
+            icon: const Icon(Icons.arrow_forward),
+            label: Text(actionLabel),
+          ),
+        ),
+      ],
+    ),
+  );
+}
+
+class _BusinessFinanceProductCard extends StatelessWidget {
+  final _CircumColors colors;
+  final double rothBalance;
+  final int outstandingInvoices;
+  final int invoiceCount;
+  final VoidCallback onBuyRoth;
+
+  const _BusinessFinanceProductCard({
+    required this.colors,
+    required this.rothBalance,
+    required this.outstandingInvoices,
+    required this.invoiceCount,
+    required this.onBuyRoth,
+  });
+
+  @override
+  Widget build(BuildContext context) => Container(
+    padding: const EdgeInsets.all(14),
+    decoration: BoxDecoration(
+      color: colors.field,
+      borderRadius: BorderRadius.circular(18),
+      border: Border.all(color: colors.border),
+    ),
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Icon(Icons.account_balance_wallet_outlined, color: colors.text),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Text(
+                'Finance',
+                style: TextStyle(
+                  color: colors.text,
+                  fontSize: 18,
+                  fontWeight: FontWeight.w900,
+                ),
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 8),
+        Text(
+          'Business invoices, printable records, Stripe payment and Roth payment are available from web.',
+          style: TextStyle(
+            color: colors.mutedText,
+            height: 1.35,
+            fontWeight: FontWeight.w700,
+          ),
+        ),
+        const SizedBox(height: 10),
+        Row(
+          children: [
+            Expanded(
+              child: _MetricPill(
+                colors: colors,
+                label: 'Business Roth',
+                value: '£${rothBalance.toStringAsFixed(2)}',
+              ),
+            ),
+            const SizedBox(width: 8),
+            Expanded(
+              child: _MetricPill(
+                colors: colors,
+                label: 'Outstanding',
+                value: '$outstandingInvoices',
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 10),
+        _BusinessRecordRow(
+          colors: colors,
+          icon: Icons.receipt_long_outlined,
+          title: 'Invoice records',
+          subtitle: '$invoiceCount invoices available for print or PDF',
+          trailing: '$invoiceCount',
+        ),
+        const SizedBox(height: 10),
+        Align(
+          alignment: Alignment.centerLeft,
+          child: OutlinedButton.icon(
+            onPressed: onBuyRoth,
+            icon: const Icon(Icons.add_card_outlined),
+            label: const Text('Add Business Roth'),
+          ),
+        ),
+      ],
+    ),
+  );
 }
 
 class _BusinessAnalyticsPanel extends StatelessWidget {
@@ -14603,13 +15952,20 @@ class _BusinessAnalyticsPanel extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final completed = deliveries
-        .where((delivery) =>
-            ['completed', 'delivered'].contains(delivery.status.toLowerCase()))
+        .where(
+          (delivery) => [
+            'completed',
+            'delivered',
+          ].contains(delivery.status.toLowerCase()),
+        )
         .length;
-    final successRate =
-        deliveries.isEmpty ? 0 : completed / deliveries.length * 100;
+    final successRate = deliveries.isEmpty
+        ? 0
+        : completed / deliveries.length * 100;
     final spend = deliveries.fold<double>(
-        0, (total, delivery) => total + delivery.pricePaid);
+      0,
+      (total, delivery) => total + delivery.pricePaid,
+    );
     final average = deliveries.isEmpty ? 0 : spend / deliveries.length;
     final destinations = <String, int>{};
     for (final delivery in deliveries) {
@@ -14632,40 +15988,50 @@ class _BusinessAnalyticsPanel extends StatelessWidget {
             runSpacing: 10,
             children: [
               _BusinessMiniMetric(
-                  colors: colors,
-                  label: 'Spend',
-                  value: '£${spend.toStringAsFixed(2)}'),
+                colors: colors,
+                label: 'Spend',
+                value: '£${spend.toStringAsFixed(2)}',
+              ),
               _BusinessMiniMetric(
-                  colors: colors,
-                  label: 'Deliveries',
-                  value: '${deliveries.length}'),
+                colors: colors,
+                label: 'Deliveries',
+                value: '${deliveries.length}',
+              ),
               _BusinessMiniMetric(
-                  colors: colors,
-                  label: 'Success rate',
-                  value: '${successRate.toStringAsFixed(0)}%'),
+                colors: colors,
+                label: 'Success rate',
+                value: '${successRate.toStringAsFixed(0)}%',
+              ),
               _BusinessMiniMetric(
-                  colors: colors,
-                  label: 'Average cost',
-                  value: '£${average.toStringAsFixed(2)}'),
+                colors: colors,
+                label: 'Average cost',
+                value: '£${average.toStringAsFixed(2)}',
+              ),
               _BusinessMiniMetric(
-                  colors: colors,
-                  label: 'Invoices',
-                  value: '${invoices.length}'),
+                colors: colors,
+                label: 'Invoices',
+                value: '${invoices.length}',
+              ),
             ],
           ),
           const SizedBox(height: 12),
           if (topDestinations.isEmpty)
             Text(
-                'Top destinations will appear after Business deliveries complete.',
-                style: TextStyle(color: colors.mutedText))
+              'Top destinations will appear after Business deliveries complete.',
+              style: TextStyle(color: colors.mutedText),
+            )
           else
-            ...topDestinations.take(3).map((entry) => _BusinessRecordRow(
-                  colors: colors,
-                  icon: Icons.place_outlined,
-                  title: entry.key,
-                  subtitle: 'Destination frequency',
-                  trailing: '${entry.value}',
-                )),
+            ...topDestinations
+                .take(3)
+                .map(
+                  (entry) => _BusinessRecordRow(
+                    colors: colors,
+                    icon: Icons.place_outlined,
+                    title: entry.key,
+                    subtitle: 'Destination frequency',
+                    trailing: '${entry.value}',
+                  ),
+                ),
         ],
       ),
     );
@@ -14701,57 +16067,64 @@ class _BusinessSettingsPanel extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => _GlassPanel(
-        colors: colors,
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
+    colors: colors,
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _SectionTitle(colors: colors, title: 'Settings'),
+        const SizedBox(height: 10),
+        _InputBox(
+          colors: colors,
+          controller: companyName,
+          hint: 'Company name',
+        ),
+        const SizedBox(height: 10),
+        _InputBox(
+          colors: colors,
+          controller: businessType,
+          hint: 'Business type',
+        ),
+        const SizedBox(height: 10),
+        _InputBox(
+          colors: colors,
+          controller: businessEmail,
+          hint: 'Billing email',
+        ),
+        const SizedBox(height: 10),
+        _InputBox(colors: colors, controller: businessPhone, hint: 'Phone'),
+        const SizedBox(height: 10),
+        _InputBox(
+          colors: colors,
+          controller: businessAddress,
+          hint: 'Business address',
+        ),
+        const SizedBox(height: 10),
+        _InputBox(colors: colors, controller: vatNumber, hint: 'VAT number'),
+        const SizedBox(height: 10),
+        _InputBox(
+          colors: colors,
+          controller: website,
+          hint: 'Website / brand URL',
+        ),
+        const SizedBox(height: 14),
+        Wrap(
+          spacing: 10,
+          runSpacing: 10,
           children: [
-            _SectionTitle(colors: colors, title: 'Settings'),
-            const SizedBox(height: 10),
-            _InputBox(
-                colors: colors, controller: companyName, hint: 'Company name'),
-            const SizedBox(height: 10),
-            _InputBox(
-                colors: colors,
-                controller: businessType,
-                hint: 'Business type'),
-            const SizedBox(height: 10),
-            _InputBox(
-                colors: colors,
-                controller: businessEmail,
-                hint: 'Billing email'),
-            const SizedBox(height: 10),
-            _InputBox(colors: colors, controller: businessPhone, hint: 'Phone'),
-            const SizedBox(height: 10),
-            _InputBox(
-                colors: colors,
-                controller: businessAddress,
-                hint: 'Business address'),
-            const SizedBox(height: 10),
-            _InputBox(
-                colors: colors, controller: vatNumber, hint: 'VAT number'),
-            const SizedBox(height: 10),
-            _InputBox(
-                colors: colors,
-                controller: website,
-                hint: 'Website / brand URL'),
-            const SizedBox(height: 14),
-            Wrap(
-              spacing: 10,
-              runSpacing: 10,
-              children: [
-                FilledButton.icon(
-                  onPressed: busy ? null : onSaveProfile,
-                  icon: const Icon(Icons.save_outlined),
-                  label: const Text('Save Business settings'),
-                ),
-                _StatusPill(
-                    colors: colors,
-                    label: '${account['status'] ?? 'approved'}'),
-              ],
+            FilledButton.icon(
+              onPressed: busy ? null : onSaveProfile,
+              icon: const Icon(Icons.save_outlined),
+              label: const Text('Save Business settings'),
+            ),
+            _StatusPill(
+              colors: colors,
+              label: '${account['status'] ?? 'approved'}',
             ),
           ],
         ),
-      );
+      ],
+    ),
+  );
 }
 
 class _BusinessAuditPanel extends StatelessWidget {
@@ -14762,30 +16135,34 @@ class _BusinessAuditPanel extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => _GlassPanel(
-        colors: colors,
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            _SectionTitle(colors: colors, title: 'Audit history'),
-            const SizedBox(height: 8),
-            if (auditLogs.isEmpty)
-              Text('Business audit events will appear here.',
-                  style: TextStyle(color: colors.mutedText))
-            else
-              ...auditLogs.take(8).map(
-                    (log) => _BusinessRecordRow(
-                      colors: colors,
-                      icon: Icons.fact_check_outlined,
-                      title: '${log['action'] ?? 'Business event'}',
-                      subtitle: _adminDateText(log['createdAt']),
-                      trailing: '${log['actorUserId'] ?? ''}'.isEmpty
-                          ? 'System'
-                          : 'User',
-                    ),
-                  ),
-          ],
-        ),
-      );
+    colors: colors,
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _SectionTitle(colors: colors, title: 'Audit history'),
+        const SizedBox(height: 8),
+        if (auditLogs.isEmpty)
+          Text(
+            'Business audit events will appear here.',
+            style: TextStyle(color: colors.mutedText),
+          )
+        else
+          ...auditLogs
+              .take(8)
+              .map(
+                (log) => _BusinessRecordRow(
+                  colors: colors,
+                  icon: Icons.fact_check_outlined,
+                  title: '${log['action'] ?? 'Business event'}',
+                  subtitle: _adminDateText(log['createdAt']),
+                  trailing: '${log['actorUserId'] ?? ''}'.isEmpty
+                      ? 'System'
+                      : 'User',
+                ),
+              ),
+      ],
+    ),
+  );
 }
 
 class _BusinessMiniMetric extends StatelessWidget {
@@ -14801,9 +16178,9 @@ class _BusinessMiniMetric extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => SizedBox(
-        width: 150,
-        child: _MetricPill(colors: colors, label: label, value: value),
-      );
+    width: 150,
+    child: _MetricPill(colors: colors, label: label, value: value),
+  );
 }
 
 class _BusinessRecordRow extends StatelessWidget {
@@ -14825,40 +16202,47 @@ class _BusinessRecordRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Container(
-        margin: const EdgeInsets.only(top: 8),
-        padding: const EdgeInsets.all(12),
-        decoration: BoxDecoration(
-          color: colors.field,
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: colors.border),
-        ),
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.center,
-          children: [
-            Icon(icon, color: colors.text),
-            const SizedBox(width: 10),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(title,
-                      style: TextStyle(
-                          color: colors.text, fontWeight: FontWeight.w900)),
-                  const SizedBox(height: 3),
-                  Text(subtitle,
-                      style: TextStyle(color: colors.mutedText, height: 1.35)),
-                ],
+    margin: const EdgeInsets.only(top: 8),
+    padding: const EdgeInsets.all(12),
+    decoration: BoxDecoration(
+      color: colors.field,
+      borderRadius: BorderRadius.circular(16),
+      border: Border.all(color: colors.border),
+    ),
+    child: Row(
+      crossAxisAlignment: CrossAxisAlignment.center,
+      children: [
+        Icon(icon, color: colors.text),
+        const SizedBox(width: 10),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                title,
+                style: TextStyle(
+                  color: colors.text,
+                  fontWeight: FontWeight.w900,
+                ),
               ),
-            ),
-            if (actions.isEmpty)
-              Text(trailing,
-                  style: TextStyle(
-                      color: colors.text, fontWeight: FontWeight.w900))
-            else
-              Wrap(spacing: 4, children: actions),
-          ],
+              const SizedBox(height: 3),
+              Text(
+                subtitle,
+                style: TextStyle(color: colors.mutedText, height: 1.35),
+              ),
+            ],
+          ),
         ),
-      );
+        if (actions.isEmpty)
+          Text(
+            trailing,
+            style: TextStyle(color: colors.text, fontWeight: FontWeight.w900),
+          )
+        else
+          Wrap(spacing: 4, children: actions),
+      ],
+    ),
+  );
 }
 
 class _BusinessEmptyState extends StatelessWidget {
@@ -14880,30 +16264,31 @@ class _BusinessEmptyState extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Container(
-        width: double.infinity,
-        padding: const EdgeInsets.all(16),
-        decoration: BoxDecoration(
-          color: colors.field,
-          borderRadius: BorderRadius.circular(18),
-          border: Border.all(color: colors.border),
+    width: double.infinity,
+    padding: const EdgeInsets.all(16),
+    decoration: BoxDecoration(
+      color: colors.field,
+      borderRadius: BorderRadius.circular(18),
+      border: Border.all(color: colors.border),
+    ),
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Icon(icon, color: colors.text),
+        const SizedBox(height: 10),
+        Text(
+          title,
+          style: TextStyle(color: colors.text, fontWeight: FontWeight.w900),
         ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Icon(icon, color: colors.text),
-            const SizedBox(height: 10),
-            Text(title,
-                style:
-                    TextStyle(color: colors.text, fontWeight: FontWeight.w900)),
-            const SizedBox(height: 4),
-            Text(body, style: TextStyle(color: colors.mutedText, height: 1.4)),
-            if (action != null && onAction != null) ...[
-              const SizedBox(height: 12),
-              OutlinedButton(onPressed: onAction, child: Text(action!)),
-            ],
-          ],
-        ),
-      );
+        const SizedBox(height: 4),
+        Text(body, style: TextStyle(color: colors.mutedText, height: 1.4)),
+        if (action != null && onAction != null) ...[
+          const SizedBox(height: 12),
+          OutlinedButton(onPressed: onAction, child: Text(action!)),
+        ],
+      ],
+    ),
+  );
 }
 
 class _LegendBadge extends StatelessWidget {
@@ -14913,22 +16298,22 @@ class _LegendBadge extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Container(
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-        decoration: BoxDecoration(
-          gradient: const LinearGradient(
-            colors: [Color(0xffa78bfa), Color(0xff38bdf8), Color(0xff5eead4)],
-          ),
-          borderRadius: BorderRadius.circular(8),
-        ),
-        child: Text(
-          'LEGEND #$number',
-          style: const TextStyle(
-            color: Colors.black,
-            fontSize: 11,
-            fontWeight: FontWeight.w900,
-          ),
-        ),
-      );
+    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+    decoration: BoxDecoration(
+      gradient: const LinearGradient(
+        colors: [Color(0xffa78bfa), Color(0xff38bdf8), Color(0xff5eead4)],
+      ),
+      borderRadius: BorderRadius.circular(8),
+    ),
+    child: Text(
+      'LEGEND #$number',
+      style: const TextStyle(
+        color: Colors.black,
+        fontSize: 11,
+        fontWeight: FontWeight.w900,
+      ),
+    ),
+  );
 }
 
 class _LegendCard extends StatelessWidget {
@@ -14950,103 +16335,97 @@ class _LegendCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Container(
-        padding: const EdgeInsets.all(22),
-        decoration: BoxDecoration(
-          color: const Color(0xff070b17),
-          borderRadius: BorderRadius.circular(22),
-          border: Border.all(color: const Color(0xff7dd3fc)),
-          boxShadow: const [
-            BoxShadow(color: Color(0x5538bdf8), blurRadius: 30),
-          ],
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          mainAxisSize: MainAxisSize.min,
+    padding: const EdgeInsets.all(22),
+    decoration: BoxDecoration(
+      color: const Color(0xff070b17),
+      borderRadius: BorderRadius.circular(22),
+      border: Border.all(color: const Color(0xff7dd3fc)),
+      boxShadow: const [BoxShadow(color: Color(0x5538bdf8), blurRadius: 30)],
+    ),
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Row(
           children: [
-            Row(
-              children: [
-                const Icon(Icons.auto_awesome, color: Color(0xff5eead4)),
-                const SizedBox(width: 9),
-                const Expanded(
-                  child: Text(
-                    'CIRCUM LEGEND',
-                    style: TextStyle(
-                      color: Colors.white,
-                      fontSize: 13,
-                      fontWeight: FontWeight.w900,
-                      letterSpacing: 1.4,
-                    ),
-                  ),
-                ),
-                if (onClose != null)
-                  IconButton(
-                    tooltip: 'Close',
-                    onPressed: onClose,
-                    icon: const Icon(Icons.close, color: Colors.white),
-                  ),
-              ],
-            ),
-            if (celebratory) ...[
-              const SizedBox(height: 14),
-              const Text(
-                'You’re officially a Circum Legend.',
+            const Icon(Icons.auto_awesome, color: Color(0xff5eead4)),
+            const SizedBox(width: 9),
+            const Expanded(
+              child: Text(
+                'CIRCUM LEGEND',
                 style: TextStyle(
                   color: Colors.white,
-                  fontSize: 24,
+                  fontSize: 13,
                   fontWeight: FontWeight.w900,
-                ),
-              ),
-            ],
-            const SizedBox(height: 18),
-            Text(
-              name,
-              style: const TextStyle(
-                color: Colors.white,
-                fontSize: 21,
-                fontWeight: FontWeight.w900,
-              ),
-            ),
-            const SizedBox(height: 7),
-            ShaderMask(
-              shaderCallback: (bounds) => const LinearGradient(
-                colors: [
-                  Color(0xffc084fc),
-                  Color(0xff38bdf8),
-                  Color(0xff5eead4)
-                ],
-              ).createShader(bounds),
-              child: Text(
-                'Legend #$number',
-                style: const TextStyle(
-                  color: Colors.white,
-                  fontSize: 30,
-                  fontWeight: FontWeight.w900,
+                  letterSpacing: 1.4,
                 ),
               ),
             ),
-            const SizedBox(height: 7),
-            Text(
-              'Awarded ${_readableDate(awardedAt)}',
-              style: const TextStyle(color: Color(0xffcbd5e1)),
-            ),
-            const SizedBox(height: 16),
-            const Text(
-              'Legend status is a recognition badge and may unlock future Circum perks. It does not represent shares, equity, ownership, or financial rights.',
-              style: TextStyle(color: Color(0xff94a3b8), height: 1.4),
-            ),
-            if (celebratory) ...[
-              const SizedBox(height: 18),
-              SizedBox(
-                width: double.infinity,
-                child: FilledButton(
-                  onPressed: onClose,
-                  child: const Text('View my Legend card'),
-                ),
+            if (onClose != null)
+              IconButton(
+                tooltip: 'Close',
+                onPressed: onClose,
+                icon: const Icon(Icons.close, color: Colors.white),
               ),
-            ],
           ],
         ),
-      );
+        if (celebratory) ...[
+          const SizedBox(height: 14),
+          const Text(
+            'You’re officially a Circum Legend.',
+            style: TextStyle(
+              color: Colors.white,
+              fontSize: 24,
+              fontWeight: FontWeight.w900,
+            ),
+          ),
+        ],
+        const SizedBox(height: 18),
+        Text(
+          name,
+          style: const TextStyle(
+            color: Colors.white,
+            fontSize: 21,
+            fontWeight: FontWeight.w900,
+          ),
+        ),
+        const SizedBox(height: 7),
+        ShaderMask(
+          shaderCallback: (bounds) => const LinearGradient(
+            colors: [Color(0xffc084fc), Color(0xff38bdf8), Color(0xff5eead4)],
+          ).createShader(bounds),
+          child: Text(
+            'Legend #$number',
+            style: const TextStyle(
+              color: Colors.white,
+              fontSize: 30,
+              fontWeight: FontWeight.w900,
+            ),
+          ),
+        ),
+        const SizedBox(height: 7),
+        Text(
+          'Awarded ${_readableDate(awardedAt)}',
+          style: const TextStyle(color: Color(0xffcbd5e1)),
+        ),
+        const SizedBox(height: 16),
+        const Text(
+          'Legend status is a recognition badge and may unlock future Circum perks. It does not represent shares, equity, ownership, or financial rights.',
+          style: TextStyle(color: Color(0xff94a3b8), height: 1.4),
+        ),
+        if (celebratory) ...[
+          const SizedBox(height: 18),
+          SizedBox(
+            width: double.infinity,
+            child: FilledButton(
+              onPressed: onClose,
+              child: const Text('View my Legend card'),
+            ),
+          ),
+        ],
+      ],
+    ),
+  );
 }
 
 class _SenderProfileStep extends StatelessWidget {
@@ -15265,8 +16644,9 @@ class _SenderProfileStep extends StatelessWidget {
                 const SizedBox(height: 18),
                 GridView.count(
                   shrinkWrap: true,
-                  crossAxisCount:
-                      MediaQuery.sizeOf(context).width < 720 ? 2 : 4,
+                  crossAxisCount: MediaQuery.sizeOf(context).width < 720
+                      ? 2
+                      : 4,
                   crossAxisSpacing: 10,
                   mainAxisSpacing: 10,
                   childAspectRatio: 1.55,
@@ -15352,8 +16732,9 @@ class _SenderProfileStep extends StatelessWidget {
         if (profile?.isLegend == true && profile?.legendNumber != null) ...[
           _LegendCard(
             colors: colors,
-            name:
-                profile!.fullName.isEmpty ? 'Circum member' : profile!.fullName,
+            name: profile!.fullName.isEmpty
+                ? 'Circum member'
+                : profile!.fullName,
             number: profile!.legendNumber!,
             awardedAt: profile!.legendAwardedAt,
           ),
@@ -15682,6 +17063,10 @@ class _SenderDeliveryDetails extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final proof = proofOfDeliveryFromRecord(
+      delivery.raw,
+      fallbackReference: delivery.trackingReference,
+    );
     final rows = {
       'Tracking reference': delivery.trackingReference,
       'Status': delivery.status,
@@ -15739,11 +17124,7 @@ class _SenderDeliveryDetails extends StatelessWidget {
             ),
           ),
         ),
-        if (delivery.proofOfDelivery.isNotEmpty)
-          Text(
-            'Proof of delivery is attached.',
-            style: TextStyle(color: colors.mutedText),
-          ),
+        _SenderProofOfDeliveryPanel(colors: colors, proof: proof),
         if (BookingCancellationPolicy.canSenderCancel(delivery.status)) ...[
           const SizedBox(height: 16),
           OutlinedButton.icon(
@@ -15753,6 +17134,142 @@ class _SenderDeliveryDetails extends StatelessWidget {
           ),
         ],
       ],
+    );
+  }
+}
+
+class _SenderProofOfDeliveryPanel extends StatelessWidget {
+  final _CircumColors colors;
+  final ProofOfDeliveryDetails proof;
+
+  const _SenderProofOfDeliveryPanel({
+    required this.colors,
+    required this.proof,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final badgeColor = proof.statusLabel.toLowerCase().contains('available')
+        ? const Color(0xFF34D399)
+        : proof.statusLabel.toLowerCase().contains('review')
+        ? const Color(0xFFFBBF24)
+        : const Color(0xFFF87171);
+    return Container(
+      width: double.infinity,
+      margin: const EdgeInsets.only(top: 4),
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: colors.field,
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: colors.border),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  'Proof of Delivery',
+                  style: TextStyle(
+                    color: colors.text,
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+              ),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
+                decoration: BoxDecoration(
+                  color: badgeColor.withValues(alpha: .12),
+                  borderRadius: BorderRadius.circular(999),
+                  border: Border.all(color: badgeColor.withValues(alpha: .24)),
+                ),
+                child: Text(
+                  proof.statusLabel,
+                  style: TextStyle(
+                    color: badgeColor,
+                    fontSize: 11,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          if (!proof.hasAnyProof)
+            Text(
+              'Proof of delivery is not available for this delivery.',
+              style: TextStyle(color: colors.mutedText, height: 1.45),
+            )
+          else ...[
+            if (proof.hasPhoto) ...[
+              ClipRRect(
+                borderRadius: BorderRadius.circular(14),
+                child: AspectRatio(
+                  aspectRatio: 16 / 9,
+                  child: Image.network(
+                    proof.photoUrl,
+                    fit: BoxFit.cover,
+                    errorBuilder: (_, __, ___) => Container(
+                      color: colors.border.withValues(alpha: .18),
+                      alignment: Alignment.center,
+                      child: Icon(
+                        Icons.broken_image_outlined,
+                        color: colors.mutedText,
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 10),
+              OutlinedButton.icon(
+                onPressed: () => showDialog<void>(
+                  context: context,
+                  builder: (_) => Dialog(
+                    backgroundColor: colors.appBackground,
+                    child: ClipRRect(
+                      borderRadius: BorderRadius.circular(18),
+                      child: Image.network(
+                        proof.photoUrl,
+                        fit: BoxFit.contain,
+                        errorBuilder: (_, __, ___) => Padding(
+                          padding: const EdgeInsets.all(24),
+                          child: Text(
+                            'Proof photo could not be loaded.',
+                            style: TextStyle(color: colors.text),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+                icon: const Icon(Icons.open_in_full_rounded),
+                label: const Text('View full proof'),
+              ),
+              const SizedBox(height: 10),
+            ],
+            for (final row in proof.visibleRows)
+              Padding(
+                padding: const EdgeInsets.only(bottom: 7),
+                child: RichText(
+                  text: TextSpan(
+                    style: TextStyle(color: colors.mutedText, height: 1.35),
+                    children: [
+                      TextSpan(
+                        text: '${row.$1}: ',
+                        style: TextStyle(
+                          color: colors.text,
+                          fontWeight: FontWeight.w900,
+                        ),
+                      ),
+                      TextSpan(text: row.$2),
+                    ],
+                  ),
+                ),
+              ),
+          ],
+        ],
+      ),
     );
   }
 }
@@ -15947,22 +17464,23 @@ class _DetailsStep extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final matchingHasStarted = checkoutState == _CheckoutState.matchingRiders ||
+    final matchingHasStarted =
+        checkoutState == _CheckoutState.matchingRiders ||
         checkoutState == _CheckoutState.riderAssigned;
     final validating = analyzing || checkoutState == _CheckoutState.validating;
     final ctaLabel = matchingHasStarted
         ? 'Delivery is connecting'
         : validating
-            ? 'Checking options...'
-            : canSubmit
-                ? 'See delivery options'
-                : !pickupVerified || !dropoffVerified
-                    ? 'Verify addresses before pricing'
-                    : !contactDetailsReady
-                        ? 'Add contact details before pricing'
-                        : deliveryTimingType == null
-                            ? 'Choose delivery timing'
-                            : 'Complete delivery timing';
+        ? 'Checking options...'
+        : canSubmit
+        ? 'See delivery options'
+        : !pickupVerified || !dropoffVerified
+        ? 'Verify addresses before pricing'
+        : !contactDetailsReady
+        ? 'Add contact details before pricing'
+        : deliveryTimingType == null
+        ? 'Choose delivery timing'
+        : 'Complete delivery timing';
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -16442,6 +17960,8 @@ class _HealthPlusStep extends StatelessWidget {
   final String subscriptionPlan;
   final bool consent;
   final bool savePayment;
+  final bool useRoth;
+  final double rothBalance;
   final bool submitting;
   final String? message;
   final String? checkoutUrl;
@@ -16456,6 +17976,7 @@ class _HealthPlusStep extends StatelessWidget {
   final VoidCallback onContinueOneOff;
   final ValueChanged<bool?> onConsent;
   final ValueChanged<bool?> onSavePayment;
+  final ValueChanged<bool?> onUseRoth;
   final VoidCallback onSubmit;
   final VoidCallback onPauseSchedule;
   final VoidCallback onResumeSchedule;
@@ -16482,6 +18003,8 @@ class _HealthPlusStep extends StatelessWidget {
     required this.subscriptionPlan,
     required this.consent,
     required this.savePayment,
+    required this.useRoth,
+    required this.rothBalance,
     required this.submitting,
     required this.message,
     required this.checkoutUrl,
@@ -16496,6 +18019,7 @@ class _HealthPlusStep extends StatelessWidget {
     required this.onContinueOneOff,
     required this.onConsent,
     required this.onSavePayment,
+    required this.onUseRoth,
     required this.onSubmit,
     required this.onPauseSchedule,
     required this.onResumeSchedule,
@@ -16508,6 +18032,24 @@ class _HealthPlusStep extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final nextPickup = pickups.isEmpty ? null : pickups.first;
+    final detailsKey = GlobalKey();
+    final pharmacyKey = GlobalKey();
+    final prescriptionKey = GlobalKey();
+    final scheduleKey = GlobalKey();
+    final planKey = GlobalKey();
+    final checkoutKey = GlobalKey();
+    final statusKey = GlobalKey();
+    void scrollTo(GlobalKey key) {
+      final target = key.currentContext;
+      if (target == null) return;
+      Scrollable.ensureVisible(
+        target,
+        duration: const Duration(milliseconds: 260),
+        curve: Curves.easeOutCubic,
+        alignment: 0.08,
+      );
+    }
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -16577,197 +18119,285 @@ class _HealthPlusStep extends StatelessWidget {
           ),
         ),
         const SizedBox(height: 14),
-        _GlassPanel(
+        _HealthParityMap(
           colors: colors,
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              _SectionTitle(colors: colors, title: 'Pharmacy / pickup details'),
-              const SizedBox(height: 12),
-              _InputBox(
-                colors: colors,
-                controller: fullName,
-                hint: 'Full name',
-              ),
-              const SizedBox(height: 10),
-              _InputBox(
-                colors: colors,
-                controller: phone,
-                hint: 'Phone number',
-              ),
-              const SizedBox(height: 10),
-              _InputBox(colors: colors, controller: email, hint: 'Email'),
-              const SizedBox(height: 10),
-              _InputBox(
-                colors: colors,
-                controller: pharmacyName,
-                hint: 'Pharmacy name',
-              ),
-              const SizedBox(height: 10),
-              _AddressField(
-                colors: colors,
-                icon: Icons.local_pharmacy,
-                controller: pharmacyAddress,
-                label: 'Pharmacy pickup address',
-                pharmacyMode: true,
-              ),
-              const SizedBox(height: 10),
-              _AddressField(
-                colors: colors,
-                icon: Icons.home_outlined,
-                controller: deliveryAddress,
-                label: 'Delivery address',
-              ),
-            ],
-          ),
+          frequency: frequency,
+          subscriptionPlan: subscriptionPlan,
+          prescriptionType: prescriptionType,
+          quote: quote,
+          pickup: nextPickup,
+          payments: payments,
+          hasContactDetails:
+              fullName.text.trim().isNotEmpty &&
+              phone.text.trim().isNotEmpty &&
+              email.text.trim().isNotEmpty,
+          hasPharmacy: pharmacyAddress.text.trim().isNotEmpty,
+          hasDelivery: deliveryAddress.text.trim().isNotEmpty,
+          hasNotes: notes.text.trim().isNotEmpty,
+          consent: consent,
+          savePayment: savePayment,
+          useRoth: useRoth,
+          onSelectSection: (title) {
+            switch (title) {
+              case 'Status':
+              case 'Confirmed':
+                scrollTo(statusKey);
+              case 'Details':
+                scrollTo(detailsKey);
+              case 'Pharmacy':
+              case 'Delivery':
+                scrollTo(pharmacyKey);
+              case 'Frequency':
+                scrollTo(scheduleKey);
+              case 'Plan':
+                scrollTo(planKey);
+              case 'Notes':
+              case 'Review':
+                scrollTo(prescriptionKey);
+              case 'Checkout':
+                scrollTo(checkoutKey);
+            }
+          },
         ),
         const SizedBox(height: 14),
-        _GlassPanel(
-          colors: colors,
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              _SectionTitle(colors: colors, title: 'Prescription details'),
-              const SizedBox(height: 12),
-              _PrescriptionTypePicker(
-                colors: colors,
-                selected: prescriptionType,
-                onChanged: onPrescriptionType,
-              ),
-              const SizedBox(height: 10),
-              _InputBox(
-                colors: colors,
-                controller: notes,
-                hint: 'Prescription or pickup notes',
-                maxLines: 3,
-              ),
-            ],
-          ),
-        ),
-        const SizedBox(height: 14),
-        _GlassPanel(
-          colors: colors,
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              _SectionTitle(colors: colors, title: 'Recurring schedule'),
-              const SizedBox(height: 12),
-              _HealthFrequencyPicker(
-                colors: colors,
-                selected: frequency,
-                onChanged: onFrequency,
-              ),
-              const SizedBox(height: 10),
-              _InputBox(
-                colors: colors,
-                controller: preferredDay,
-                hint: 'Preferred pickup day',
-              ),
-              const SizedBox(height: 10),
-              _InputBox(
-                colors: colors,
-                controller: preferredTime,
-                hint: 'Preferred pickup time',
-              ),
-              if (frequency == HealthPlusFrequency.custom) ...[
+        KeyedSubtree(
+          key: detailsKey,
+          child: _GlassPanel(
+            colors: colors,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                _SectionTitle(
+                  colors: colors,
+                  title: 'Pharmacy / pickup details',
+                ),
+                const SizedBox(height: 12),
+                _InputBox(
+                  colors: colors,
+                  controller: fullName,
+                  hint: 'Full name',
+                ),
                 const SizedBox(height: 10),
                 _InputBox(
                   colors: colors,
-                  controller: customSchedule,
-                  hint: 'Custom pickup date or repeat pattern',
+                  controller: phone,
+                  hint: 'Phone number',
                 ),
-              ],
-            ],
-          ),
-        ),
-        const SizedBox(height: 14),
-        _GlassPanel(
-          colors: colors,
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              _SectionTitle(colors: colors, title: 'Subscription plan'),
-              const SizedBox(height: 12),
-              _HealthPlanGrid(
-                colors: colors,
-                selectedPlan: subscriptionPlan,
-                onSelect: onSubscriptionPlan,
-                onStartSubscription: onStartSubscription,
-                onContinueOneOff: onContinueOneOff,
-              ),
-            ],
-          ),
-        ),
-        const SizedBox(height: 14),
-        _GlassPanel(
-          colors: colors,
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              _SectionTitle(colors: colors, title: 'Price breakdown'),
-              const SizedBox(height: 10),
-              _PriceLine(
-                colors: colors,
-                label: 'Base pickup fee',
-                value: '£${quote.delivery.baseFare.toStringAsFixed(2)}',
-              ),
-              _PriceLine(
-                colors: colors,
-                label: 'Distance estimate',
-                value: '£${quote.delivery.distanceFare.toStringAsFixed(2)}',
-              ),
-              _PriceLine(
-                colors: colors,
-                label: 'Health+ care fee',
-                value: '£${quote.serviceFee.toStringAsFixed(2)}',
-              ),
-              if (quote.priorityFee > 0)
-                _PriceLine(
-                  colors: colors,
-                  label: 'Priority fee',
-                  value: '£${quote.priorityFee.toStringAsFixed(2)}',
-                ),
-              if (quote.familySupportFee > 0)
-                _PriceLine(
-                  colors: colors,
-                  label: 'Family support',
-                  value: '£${quote.familySupportFee.toStringAsFixed(2)}',
-                ),
-              if (quote.recurringDiscount > 0)
-                _PriceLine(
-                  colors: colors,
-                  label: 'Recurring discount',
-                  value: '-£${quote.recurringDiscount.toStringAsFixed(2)}',
-                ),
-              if (quote.minimumAdjustment > 0)
-                _PriceLine(
-                  colors: colors,
-                  label: 'Health+ minimum adjustment',
-                  value: '£${quote.minimumAdjustment.toStringAsFixed(2)}',
-                ),
-              Divider(color: colors.border, height: 24),
-              _PriceLine(
-                colors: colors,
-                label: frequency == HealthPlusFrequency.oneOff
-                    ? 'One-off total'
-                    : 'Recurring pickup total',
-                value: '£${quote.total.toStringAsFixed(2)}',
-                strong: true,
-              ),
-              CheckboxListTile(
-                contentPadding: EdgeInsets.zero,
-                value: savePayment,
-                onChanged: onSavePayment,
-                activeColor: colors.text,
-                title: Text(
-                  'Save this payment method',
-                  style: TextStyle(
-                    color: colors.text,
-                    fontWeight: FontWeight.w800,
+                const SizedBox(height: 10),
+                _InputBox(colors: colors, controller: email, hint: 'Email'),
+                const SizedBox(height: 10),
+                KeyedSubtree(
+                  key: pharmacyKey,
+                  child: Column(
+                    children: [
+                      _InputBox(
+                        colors: colors,
+                        controller: pharmacyName,
+                        hint: 'Pharmacy name',
+                      ),
+                      const SizedBox(height: 10),
+                      _AddressField(
+                        colors: colors,
+                        icon: Icons.local_pharmacy,
+                        controller: pharmacyAddress,
+                        label: 'Pharmacy pickup address',
+                        pharmacyMode: true,
+                      ),
+                      const SizedBox(height: 10),
+                      _AddressField(
+                        colors: colors,
+                        icon: Icons.home_outlined,
+                        controller: deliveryAddress,
+                        label: 'Delivery address',
+                      ),
+                    ],
                   ),
                 ),
-              ),
-            ],
+              ],
+            ),
+          ),
+        ),
+        const SizedBox(height: 14),
+        KeyedSubtree(
+          key: prescriptionKey,
+          child: _GlassPanel(
+            colors: colors,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                _SectionTitle(colors: colors, title: 'Prescription details'),
+                const SizedBox(height: 12),
+                _PrescriptionTypePicker(
+                  colors: colors,
+                  selected: prescriptionType,
+                  onChanged: onPrescriptionType,
+                ),
+                const SizedBox(height: 10),
+                _InputBox(
+                  colors: colors,
+                  controller: notes,
+                  hint: 'Prescription or pickup notes',
+                  maxLines: 3,
+                ),
+              ],
+            ),
+          ),
+        ),
+        const SizedBox(height: 14),
+        KeyedSubtree(
+          key: scheduleKey,
+          child: _GlassPanel(
+            colors: colors,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                _SectionTitle(colors: colors, title: 'Recurring schedule'),
+                const SizedBox(height: 12),
+                _HealthFrequencyPicker(
+                  colors: colors,
+                  selected: frequency,
+                  onChanged: onFrequency,
+                ),
+                const SizedBox(height: 10),
+                _InputBox(
+                  colors: colors,
+                  controller: preferredDay,
+                  hint: 'Preferred pickup day',
+                ),
+                const SizedBox(height: 10),
+                _InputBox(
+                  colors: colors,
+                  controller: preferredTime,
+                  hint: 'Preferred pickup time',
+                ),
+                if (frequency == HealthPlusFrequency.custom) ...[
+                  const SizedBox(height: 10),
+                  _InputBox(
+                    colors: colors,
+                    controller: customSchedule,
+                    hint: 'Custom pickup date or repeat pattern',
+                  ),
+                ],
+              ],
+            ),
+          ),
+        ),
+        const SizedBox(height: 14),
+        KeyedSubtree(
+          key: planKey,
+          child: _GlassPanel(
+            colors: colors,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                _SectionTitle(colors: colors, title: 'Subscription plan'),
+                const SizedBox(height: 12),
+                _HealthPlanGrid(
+                  colors: colors,
+                  selectedPlan: subscriptionPlan,
+                  onSelect: onSubscriptionPlan,
+                  onStartSubscription: onStartSubscription,
+                  onContinueOneOff: onContinueOneOff,
+                ),
+              ],
+            ),
+          ),
+        ),
+        const SizedBox(height: 14),
+        KeyedSubtree(
+          key: checkoutKey,
+          child: _GlassPanel(
+            colors: colors,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                _SectionTitle(colors: colors, title: 'Price breakdown'),
+                const SizedBox(height: 10),
+                _PriceLine(
+                  colors: colors,
+                  label: 'Base pickup fee',
+                  value: '£${quote.delivery.baseFare.toStringAsFixed(2)}',
+                ),
+                _PriceLine(
+                  colors: colors,
+                  label: 'Distance estimate',
+                  value: '£${quote.delivery.distanceFare.toStringAsFixed(2)}',
+                ),
+                _PriceLine(
+                  colors: colors,
+                  label: 'Health+ care fee',
+                  value: '£${quote.serviceFee.toStringAsFixed(2)}',
+                ),
+                if (quote.priorityFee > 0)
+                  _PriceLine(
+                    colors: colors,
+                    label: 'Priority fee',
+                    value: '£${quote.priorityFee.toStringAsFixed(2)}',
+                  ),
+                if (quote.familySupportFee > 0)
+                  _PriceLine(
+                    colors: colors,
+                    label: 'Family support',
+                    value: '£${quote.familySupportFee.toStringAsFixed(2)}',
+                  ),
+                if (quote.recurringDiscount > 0)
+                  _PriceLine(
+                    colors: colors,
+                    label: 'Recurring discount',
+                    value: '-£${quote.recurringDiscount.toStringAsFixed(2)}',
+                  ),
+                if (quote.minimumAdjustment > 0)
+                  _PriceLine(
+                    colors: colors,
+                    label: 'Health+ minimum adjustment',
+                    value: '£${quote.minimumAdjustment.toStringAsFixed(2)}',
+                  ),
+                Divider(color: colors.border, height: 24),
+                _PriceLine(
+                  colors: colors,
+                  label: frequency == HealthPlusFrequency.oneOff
+                      ? 'One-off total'
+                      : 'Recurring pickup total',
+                  value: '£${quote.total.toStringAsFixed(2)}',
+                  strong: true,
+                ),
+                CheckboxListTile(
+                  contentPadding: EdgeInsets.zero,
+                  value: savePayment,
+                  onChanged: onSavePayment,
+                  activeColor: colors.text,
+                  title: Text(
+                    'Save this payment method',
+                    style: TextStyle(
+                      color: colors.text,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                ),
+                CheckboxListTile(
+                  contentPadding: EdgeInsets.zero,
+                  value: useRoth,
+                  onChanged: onUseRoth,
+                  activeColor: colors.text,
+                  title: Text(
+                    'Apply Roth',
+                    style: TextStyle(
+                      color: colors.text,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                  subtitle: Text(
+                    frequency == HealthPlusFrequency.oneOff
+                        ? 'Available: £${rothBalance.toStringAsFixed(2)}. Any remaining balance is paid securely by card.'
+                        : 'Available: £${rothBalance.toStringAsFixed(2)}. Roth applies to the first subscription payment; future renewals continue securely by card.',
+                    style: TextStyle(
+                      color: colors.mutedText,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ),
+              ],
+            ),
           ),
         ),
         const SizedBox(height: 14),
@@ -16832,15 +18462,18 @@ class _HealthPlusStep extends StatelessWidget {
           ),
         ],
         const SizedBox(height: 18),
-        _HealthDashboard(
-          colors: colors,
-          pickup: nextPickup,
-          payments: payments,
-          onPauseSchedule: onPauseSchedule,
-          onResumeSchedule: onResumeSchedule,
-          onCancelSchedule: onCancelSchedule,
-          onCancelPickup: onCancelPickup,
-          onUpdatePayment: onUpdatePayment,
+        KeyedSubtree(
+          key: statusKey,
+          child: _HealthDashboard(
+            colors: colors,
+            pickup: nextPickup,
+            payments: payments,
+            onPauseSchedule: onPauseSchedule,
+            onResumeSchedule: onResumeSchedule,
+            onCancelSchedule: onCancelSchedule,
+            onCancelPickup: onCancelPickup,
+            onUpdatePayment: onUpdatePayment,
+          ),
         ),
         const SizedBox(height: 14),
         _HealthAdminPanel(
@@ -16851,6 +18484,275 @@ class _HealthPlusStep extends StatelessWidget {
       ],
     );
   }
+}
+
+class _HealthParityMap extends StatelessWidget {
+  final _CircumColors colors;
+  final HealthPlusFrequency frequency;
+  final String subscriptionPlan;
+  final String prescriptionType;
+  final HealthPlusPriceBreakdown quote;
+  final Map<String, dynamic>? pickup;
+  final List<Map<String, dynamic>> payments;
+  final bool hasContactDetails;
+  final bool hasPharmacy;
+  final bool hasDelivery;
+  final bool hasNotes;
+  final bool consent;
+  final bool savePayment;
+  final bool useRoth;
+  final ValueChanged<String>? onSelectSection;
+
+  const _HealthParityMap({
+    required this.colors,
+    required this.frequency,
+    required this.subscriptionPlan,
+    required this.prescriptionType,
+    required this.quote,
+    required this.pickup,
+    required this.payments,
+    required this.hasContactDetails,
+    required this.hasPharmacy,
+    required this.hasDelivery,
+    required this.hasNotes,
+    required this.consent,
+    required this.savePayment,
+    required this.useRoth,
+    this.onSelectSection,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final pickupStatus = pickup == null
+        ? 'No active pickup'
+        : _displayStatusLabel('${pickup!['status'] ?? 'scheduled'}');
+    final paymentStatus = payments.isEmpty
+        ? 'Ready at checkout'
+        : _displayStatusLabel('${payments.first['status'] ?? 'recorded'}');
+    final sections = [
+      _HealthParitySection(
+        icon: Icons.monitor_heart_outlined,
+        title: 'Status',
+        value: pickupStatus,
+        complete: pickup != null,
+      ),
+      _HealthParitySection(
+        icon: Icons.person_outline,
+        title: 'Details',
+        value: hasContactDetails ? 'Contact details ready' : 'Add contact',
+        complete: hasContactDetails,
+      ),
+      _HealthParitySection(
+        icon: Icons.local_pharmacy_outlined,
+        title: 'Pharmacy',
+        value: hasPharmacy ? 'Pickup address ready' : 'Add pharmacy',
+        complete: hasPharmacy,
+      ),
+      _HealthParitySection(
+        icon: Icons.home_outlined,
+        title: 'Delivery',
+        value: hasDelivery ? 'Delivery address ready' : 'Add delivery address',
+        complete: hasDelivery,
+      ),
+      _HealthParitySection(
+        icon: Icons.event_repeat_outlined,
+        title: 'Frequency',
+        value: frequency.label,
+        complete: true,
+      ),
+      _HealthParitySection(
+        icon: Icons.workspace_premium_outlined,
+        title: 'Plan',
+        value: _planLabel(subscriptionPlan),
+        complete: subscriptionPlan.trim().isNotEmpty,
+      ),
+      _HealthParitySection(
+        icon: Icons.notes_outlined,
+        title: 'Notes',
+        value: hasNotes ? prescriptionType : 'Optional notes',
+        complete: hasNotes,
+      ),
+      _HealthParitySection(
+        icon: Icons.fact_check_outlined,
+        title: 'Review',
+        value: consent ? 'Consent confirmed' : 'Consent needed',
+        complete: consent,
+      ),
+      _HealthParitySection(
+        icon: Icons.lock_outline,
+        title: 'Checkout',
+        value: paymentStatus,
+        complete: payments.isNotEmpty,
+      ),
+      _HealthParitySection(
+        icon: Icons.verified_outlined,
+        title: 'Confirmed',
+        value: pickup == null ? 'After booking' : 'Pickup saved',
+        complete: pickup != null,
+      ),
+    ];
+
+    return _GlassPanel(
+      colors: colors,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _SectionTitle(colors: colors, title: 'Health+ sections'),
+          const SizedBox(height: 8),
+          Text(
+            'The web flow exposes the same Health+ areas as the app: status, details, pharmacy, delivery, frequency, plan, notes, review, checkout and confirmation.',
+            style: TextStyle(
+              color: colors.mutedText,
+              height: 1.4,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+          const SizedBox(height: 12),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              _HealthChip(label: frequency.label),
+              _HealthChip(label: _planLabel(subscriptionPlan)),
+              if (useRoth) const _HealthChip(label: 'Roth selected'),
+              if (savePayment) const _HealthChip(label: 'Saved payment ready'),
+              const _HealthChip(label: 'Vanguard Included'),
+            ],
+          ),
+          const SizedBox(height: 12),
+          LayoutBuilder(
+            builder: (context, constraints) {
+              final columns = constraints.maxWidth < 720 ? 2 : 5;
+              return GridView.count(
+                shrinkWrap: true,
+                physics: const NeverScrollableScrollPhysics(),
+                crossAxisCount: columns,
+                crossAxisSpacing: 8,
+                mainAxisSpacing: 8,
+                childAspectRatio: columns == 2 ? 1.18 : 1.08,
+                children: sections
+                    .map(
+                      (section) => _HealthParityTile(
+                        colors: colors,
+                        section: section,
+                        onTap: onSelectSection == null
+                            ? null
+                            : () => onSelectSection!(section.title),
+                      ),
+                    )
+                    .toList(),
+              );
+            },
+          ),
+          const SizedBox(height: 12),
+          _PriceLine(
+            colors: colors,
+            label: frequency == HealthPlusFrequency.oneOff
+                ? 'One-off total'
+                : 'Recurring pickup total',
+            value: '£${quote.total.toStringAsFixed(2)}',
+            strong: true,
+          ),
+        ],
+      ),
+    );
+  }
+
+  static String _planLabel(String value) {
+    switch (value) {
+      case 'priority':
+        return 'Priority';
+      case 'family':
+        return 'Family';
+      case 'basic':
+        return 'Basic';
+      default:
+        return value.trim().isEmpty ? 'Basic' : value;
+    }
+  }
+}
+
+class _HealthParitySection {
+  final IconData icon;
+  final String title;
+  final String value;
+  final bool complete;
+
+  const _HealthParitySection({
+    required this.icon,
+    required this.title,
+    required this.value,
+    required this.complete,
+  });
+}
+
+class _HealthParityTile extends StatelessWidget {
+  final _CircumColors colors;
+  final _HealthParitySection section;
+  final VoidCallback? onTap;
+
+  const _HealthParityTile({
+    required this.colors,
+    required this.section,
+    this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) => InkWell(
+    onTap: onTap,
+    borderRadius: BorderRadius.circular(16),
+    child: Container(
+      padding: const EdgeInsets.all(11),
+      decoration: BoxDecoration(
+        color: colors.field,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: section.complete
+              ? colors.success.withValues(alpha: .42)
+              : colors.border,
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(
+                section.icon,
+                color: section.complete ? colors.success : colors.text,
+                size: 19,
+              ),
+              const Spacer(),
+              Icon(
+                section.complete
+                    ? Icons.check_circle
+                    : Icons.radio_button_unchecked,
+                color: section.complete ? colors.success : colors.mutedText,
+                size: 17,
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Text(
+            section.title,
+            style: TextStyle(color: colors.text, fontWeight: FontWeight.w900),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            section.value,
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(
+              color: colors.mutedText,
+              fontSize: 12,
+              height: 1.25,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+        ],
+      ),
+    ),
+  );
 }
 
 class _HealthChip extends StatelessWidget {
@@ -17551,6 +19453,7 @@ class _IrisWeightEstimate {
 }
 
 class _IrisImageInsight {
+  final String? analysisId;
   final String inferredItemName;
   final String inferredCategory;
   final double estimatedWeightKg;
@@ -17565,6 +19468,7 @@ class _IrisImageInsight {
   final int fileSizeBytes;
 
   const _IrisImageInsight({
+    this.analysisId,
     required this.inferredItemName,
     required this.inferredCategory,
     required this.estimatedWeightKg,
@@ -17581,6 +19485,7 @@ class _IrisImageInsight {
 
   factory _IrisImageInsight.fallback(String fileName) {
     return _IrisImageInsight(
+      analysisId: null,
       inferredItemName: 'Parcel photo',
       inferredCategory: 'Parcel',
       estimatedWeightKg: 2,
@@ -17597,21 +19502,54 @@ class _IrisImageInsight {
     );
   }
 
+  factory _IrisImageInsight.fromBackend(
+    Map<String, dynamic> data, {
+    required String fallbackFileName,
+  }) {
+    final weightKg = (data['estimatedWeightKg'] as num?)?.toDouble() ?? 2.0;
+    final score = (data['confidenceScore'] as num?)?.toDouble() ?? 0.25;
+    return _IrisImageInsight(
+      analysisId: '${data['analysisId'] ?? ''}'.trim().isEmpty
+          ? null
+          : '${data['analysisId']}',
+      inferredItemName:
+          '${data['inferredItemName'] ?? data['detectedItem'] ?? 'Parcel'}',
+      inferredCategory: '${data['inferredCategory'] ?? 'Parcel'}',
+      estimatedWeightKg: weightKg,
+      weightClass: '${data['weightClass'] ?? ''}'.trim().isEmpty
+          ? DeliveryPricing.weightBandFor(weightKg).category
+          : '${data['weightClass']}',
+      confidenceScore: score.clamp(0.0, 1.0),
+      fragilityRisk: '${data['fragilityRisk'] ?? 'medium'}',
+      valueRisk: '${data['valueRisk'] ?? 'low'}',
+      handlingNotes:
+          '${data['handlingNotes'] ?? 'Backend verified the parcel photo before using it as an IRIS visual signal.'}',
+      riderGuidance:
+          '${data['riderGuidance'] ?? 'Use the parcel photo to verify condition at pickup.'}',
+      needsHumanReview: data['needsHumanReview'] == true,
+      fileName: '${data['fileName'] ?? fallbackFileName}',
+      fileSizeBytes: (data['sizeBytes'] as num?)?.toInt() ?? 0,
+    );
+  }
+
   Map<String, dynamic> toJson() => {
-        'inferredItemName': inferredItemName,
-        'inferredCategory': inferredCategory,
-        'estimatedWeightKg': estimatedWeightKg,
-        'weightClass': weightClass,
-        'confidenceScore': confidenceScore,
-        'fragilityRisk': fragilityRisk,
-        'valueRisk': valueRisk,
-        'handlingNotes': handlingNotes,
-        'riderGuidance': riderGuidance,
-        'needsHumanReview': needsHumanReview,
-        'fileName': fileName,
-        'fileSizeBytes': fileSizeBytes,
-        'source': 'parcel_photo_and_item_details',
-      };
+    'analysisId': analysisId,
+    'inferredItemName': inferredItemName,
+    'inferredCategory': inferredCategory,
+    'estimatedWeightKg': estimatedWeightKg,
+    'weightClass': weightClass,
+    'confidenceScore': confidenceScore,
+    'fragilityRisk': fragilityRisk,
+    'valueRisk': valueRisk,
+    'handlingNotes': handlingNotes,
+    'riderGuidance': riderGuidance,
+    'needsHumanReview': needsHumanReview,
+    'fileName': fileName,
+    'fileSizeBytes': fileSizeBytes,
+    'source': analysisId == null
+        ? 'parcel_photo_and_item_details'
+        : 'backend_parcel_photo_analysis',
+  };
 }
 
 class _WeightPricingDecision {
@@ -17670,7 +19608,8 @@ class _AddressSuggestion {
       lng: resolvedLng,
       confidence: confidence,
       provider: provider,
-      locationId: placeId ??
+      locationId:
+          placeId ??
           _stableLocationId(displayAddress, resolvedLat, resolvedLng),
       placeId: placeId,
       buildingNumber: components['buildingNumber'],
@@ -17727,14 +19666,14 @@ class _ValidatedAddress {
   }
 
   String get compactDisplay {
-    final primary = [buildingNumber, street]
-        .whereType<String>()
-        .where((value) => value.trim().isNotEmpty)
-        .join(' ');
-    final locality = [city, postcode]
-        .whereType<String>()
-        .where((value) => value.trim().isNotEmpty)
-        .join(' ');
+    final primary = [
+      buildingNumber,
+      street,
+    ].whereType<String>().where((value) => value.trim().isNotEmpty).join(' ');
+    final locality = [
+      city,
+      postcode,
+    ].whereType<String>().where((value) => value.trim().isNotEmpty).join(' ');
     if (primary.isNotEmpty && locality.isNotEmpty) return '$primary\n$locality';
     if (street?.trim().isNotEmpty == true &&
         postcode?.trim().isNotEmpty == true) {
@@ -17744,34 +19683,34 @@ class _ValidatedAddress {
   }
 
   Map<String, dynamic> toJson() => {
-        'rawInput': rawInput,
-        'displayAddress': displayAddress,
-        'postcode': postcode,
-        'lat': lat,
-        'lng': lng,
-        'geocodeConfidence': confidence,
-        'confidenceBand': confidenceBand,
-        'validationStatus': isVerified ? 'verified' : 'requires_confirmation',
-        'addressSource': provider,
-        'provider': provider,
-        'locationId': locationId,
-        if (placeId != null) 'placeId': placeId,
-        if (buildingNumber != null) 'buildingNumber': buildingNumber,
-        if (street != null) 'street': street,
-        if (city != null) 'city': city,
-        if (county != null) 'county': county,
-        if (country != null) 'country': country,
-      };
+    'rawInput': rawInput,
+    'displayAddress': displayAddress,
+    'postcode': postcode,
+    'lat': lat,
+    'lng': lng,
+    'geocodeConfidence': confidence,
+    'confidenceBand': confidenceBand,
+    'validationStatus': isVerified ? 'verified' : 'requires_confirmation',
+    'addressSource': provider,
+    'provider': provider,
+    'locationId': locationId,
+    if (placeId != null) 'placeId': placeId,
+    if (buildingNumber != null) 'buildingNumber': buildingNumber,
+    if (street != null) 'street': street,
+    if (city != null) 'city': city,
+    if (county != null) 'county': county,
+    if (country != null) 'country': country,
+  };
 
   Map<String, dynamic> toPositionMap() => {
-        'geopoint': GeoPoint(lat, lng),
-        'lat': lat,
-        'lng': lng,
-        'geocodeConfidence': confidence,
-        'locationId': locationId,
-        if (placeId != null) 'placeId': placeId,
-        'provider': provider,
-      };
+    'geopoint': GeoPoint(lat, lng),
+    'lat': lat,
+    'lng': lng,
+    'geocodeConfidence': confidence,
+    'locationId': locationId,
+    if (placeId != null) 'placeId': placeId,
+    'provider': provider,
+  };
 }
 
 extension _SavedSenderAddressValidation on SavedSenderAddress {
@@ -17841,9 +19780,9 @@ String _cleanGoogleAddress(String address) {
 
 String _stableLocationId(String address, double lat, double lng) {
   final normalized = address.toLowerCase().replaceAll(
-        RegExp(r'[^a-z0-9]+'),
-        '-',
-      );
+    RegExp(r'[^a-z0-9]+'),
+    '-',
+  );
   return '${normalized.substring(0, math.min(normalized.length, 48))}'
       '-${lat.toStringAsFixed(4)}-${lng.toStringAsFixed(4)}';
 }
@@ -17903,7 +19842,8 @@ double? _coordinateDistanceMiles(
   final dLng = _degreesToRadians(dropoffLng - pickupLng);
   final lat1 = _degreesToRadians(pickupLat);
   final lat2 = _degreesToRadians(dropoffLat);
-  final a = math.sin(dLat / 2) * math.sin(dLat / 2) +
+  final a =
+      math.sin(dLat / 2) * math.sin(dLat / 2) +
       math.cos(lat1) * math.cos(lat2) * math.sin(dLng / 2) * math.sin(dLng / 2);
   final c = 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a));
   final directMiles = earthRadiusMiles * c;
@@ -18002,7 +19942,8 @@ class _VehicleStep extends StatelessWidget {
       selectedVehicle.name,
       vehicleSuitability,
     );
-    final canContinue = vehicleValid &&
+    final canContinue =
+        vehicleValid &&
         selectedSpeed.trim().isNotEmpty &&
         locationsConfirmed &&
         weightReady &&
@@ -18010,14 +19951,14 @@ class _VehicleStep extends StatelessWidget {
     final disabledReason = !vehicleValid
         ? 'Choose a safe vehicle for this parcel.'
         : selectedSpeed.trim().isEmpty
-            ? 'Choose a delivery speed.'
-            : !locationsConfirmed
-                ? 'Confirm pickup and drop-off addresses.'
-                : !weightReady
-                    ? 'Confirm the parcel weight.'
-                    : !priceReady
-                        ? 'Pricing is not ready yet.'
-                        : null;
+        ? 'Choose a delivery speed.'
+        : !locationsConfirmed
+        ? 'Confirm pickup and drop-off addresses.'
+        : !weightReady
+        ? 'Confirm the parcel weight.'
+        : !priceReady
+        ? 'Pricing is not ready yet.'
+        : null;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -18101,24 +20042,22 @@ class _VehicleStep extends StatelessWidget {
         const SizedBox(height: 12),
         _RouteSummary(colors: colors, pickup: pickup, dropoff: dropoff),
         const SizedBox(height: 14),
-        ..._vehicles.map(
-          (vehicle) {
-            final disabledReason = DeliveryPricing.vehicleDisabledReason(
-              vehicle.name,
-              vehicleSuitability,
-            );
-            return Padding(
-              padding: const EdgeInsets.only(bottom: 10),
-              child: _VehicleTile(
-                colors: colors,
-                vehicle: vehicle,
-                selected: vehicle.name == selectedVehicle.name,
-                disabledReason: disabledReason,
-                onTap: () => onVehicle(vehicle),
-              ),
-            );
-          },
-        ),
+        ..._vehicles.map((vehicle) {
+          final disabledReason = DeliveryPricing.vehicleDisabledReason(
+            vehicle.name,
+            vehicleSuitability,
+          );
+          return Padding(
+            padding: const EdgeInsets.only(bottom: 10),
+            child: _VehicleTile(
+              colors: colors,
+              vehicle: vehicle,
+              selected: vehicle.name == selectedVehicle.name,
+              disabledReason: disabledReason,
+              onTap: () => onVehicle(vehicle),
+            ),
+          );
+        }),
         const SizedBox(height: 8),
         _SpeedToggle(
           colors: colors,
@@ -18243,10 +20182,7 @@ class _AccessDropdown extends StatelessWidget {
           value: DeliveryAccess.liftAvailable,
           child: Text('Lift available'),
         ),
-        DropdownMenuItem(
-          value: DeliveryAccess.stairs,
-          child: Text('Stairs'),
-        ),
+        DropdownMenuItem(value: DeliveryAccess.stairs, child: Text('Stairs')),
       ],
       onChanged: (next) {
         if (next != null) onChanged(next);
@@ -18265,8 +20201,9 @@ class _VanguardBookingNotice extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(
-        color: const Color(0xff0b1530)
-            .withValues(alpha: colors.dark ? 0.82 : 0.08),
+        color: const Color(
+          0xff0b1530,
+        ).withValues(alpha: colors.dark ? 0.82 : 0.08),
         borderRadius: BorderRadius.circular(22),
         border: Border.all(
           color: const Color(0xff38bdf8).withValues(alpha: 0.28),
@@ -18400,7 +20337,8 @@ class _PaymentStep extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final hasSchedule = scheduledPickupDate.isNotEmpty ||
+    final hasSchedule =
+        scheduledPickupDate.isNotEmpty ||
         scheduledPickupWindow.isNotEmpty ||
         scheduledDropoffDate.isNotEmpty ||
         scheduledDropoffWindow.isNotEmpty;
@@ -18620,8 +20558,8 @@ class _PaymentStep extends StatelessWidget {
           child: FilledButton.icon(
             onPressed:
                 weightConfirmed && locationsConfirmed && !processingPayment
-                    ? onPay
-                    : null,
+                ? onPay
+                : null,
             icon: processingPayment
                 ? const SizedBox(
                     width: 18,
@@ -18633,10 +20571,10 @@ class _PaymentStep extends StatelessWidget {
               processingPayment
                   ? 'Processing payment...'
                   : !locationsConfirmed
-                      ? 'Confirm pickup and drop-off before payment'
-                      : weightConfirmed
-                          ? 'Pay £${total.toStringAsFixed(2)} & Broadcast'
-                          : 'Confirm parcel weight before payment',
+                  ? 'Confirm pickup and drop-off before payment'
+                  : weightConfirmed
+                  ? 'Pay £${total.toStringAsFixed(2)} & Broadcast'
+                  : 'Confirm parcel weight before payment',
             ),
             style: FilledButton.styleFrom(
               backgroundColor: colors.text,
@@ -18909,9 +20847,11 @@ class _LiveDeliveryTrackingPanel extends StatelessWidget {
     final riderLat = _num(live?['latitude']);
     final riderLng = _num(live?['longitude']);
     final updatedAt = _dateTimeFromFirestore(live?['updatedAt']);
-    final fresh = updatedAt != null &&
+    final fresh =
+        updatedAt != null &&
         DateTime.now().difference(updatedAt).inSeconds <= 60;
-    final hasLiveTracking = fresh &&
+    final hasLiveTracking =
+        fresh &&
         pickup?.hasCoordinates == true &&
         dropoff?.hasCoordinates == true &&
         riderLat != null &&
@@ -18957,7 +20897,8 @@ class _LiveDeliveryTrackingPanel extends StatelessWidget {
     }
 
     final destination = statusIndex < 5 ? pickup! : dropoff!;
-    final remainingMiles = _coordinateDistanceMiles(
+    final remainingMiles =
+        _coordinateDistanceMiles(
           riderLat,
           riderLng,
           destination.lat,
@@ -19098,7 +21039,8 @@ class _FirebaseStatusBanner extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final healthy = online &&
+    final healthy =
+        online &&
         error == null &&
         (checkoutState == _CheckoutState.matchingRiders ||
             checkoutState == _CheckoutState.riderAssigned);
@@ -19132,12 +21074,13 @@ class _FirebaseStatusBanner extends StatelessWidget {
               healthy
                   ? 'This delivery is saved and live.'
                   : checkoutState.index < _CheckoutState.bookingCreated.index &&
-                          error == null
-                      ? '$message\nRider matching starts after payment and booking confirmation.'
-                      : message,
+                        error == null
+                  ? '$message\nRider matching starts after payment and booking confirmation.'
+                  : message,
               style: TextStyle(
-                color:
-                    healthy ? const Color(0xff166534) : const Color(0xff9a3412),
+                color: healthy
+                    ? const Color(0xff166534)
+                    : const Color(0xff9a3412),
                 fontSize: 12,
                 height: 1.3,
                 fontWeight: FontWeight.w800,
@@ -19161,10 +21104,10 @@ class _VanguardCustomerPanel extends StatelessWidget {
     final collectionVerified = data['collectionPinVerified'] == true;
     final deliveryVerified = data['deliveryPinVerified'] == true;
     final handoffCompleted = collectionVerified && deliveryVerified;
-    final collectionContact =
-        (data['collectionContact'] as Map?)?.cast<String, dynamic>();
-    final receiverDetails =
-        (data['receiverDetails'] as Map?)?.cast<String, dynamic>();
+    final collectionContact = (data['collectionContact'] as Map?)
+        ?.cast<String, dynamic>();
+    final receiverDetails = (data['receiverDetails'] as Map?)
+        ?.cast<String, dynamic>();
     final collectionName =
         '${data['collectionContactName'] ?? collectionContact?['name'] ?? data['senderName'] ?? 'the sender or collection contact'}'
             .trim();
@@ -19678,12 +21621,18 @@ class _AddressFieldState extends State<_AddressField> {
   List<_AddressSuggestion> _initialPopularSuggestions() {
     final places = widget.pharmacyMode
         ? _circumPopularPlaces.where(
-            (place) => const {'hospital', 'pharmacy', 'nhs facility'}
-                .contains(place.category),
+            (place) => const {
+              'hospital',
+              'pharmacy',
+              'nhs facility',
+            }.contains(place.category),
           )
         : _circumPopularPlaces.where(
-            (place) => const {'station', 'airport', 'landmark'}
-                .contains(place.category),
+            (place) => const {
+              'station',
+              'airport',
+              'landmark',
+            }.contains(place.category),
           );
     return places
         .take(4)
@@ -19891,12 +21840,13 @@ class _AddressFieldState extends State<_AddressField> {
     try {
       final uri =
           Uri.https('maps.googleapis.com', '/maps/api/place/details/json', {
-        'place_id': placeId,
-        'language': 'en',
-        'fields': 'formatted_address,address_components,geometry,place_id,name',
-        'key': _googlePlacesApiKey,
-        'sessiontoken': _placesSessionToken,
-      });
+            'place_id': placeId,
+            'language': 'en',
+            'fields':
+                'formatted_address,address_components,geometry,place_id,name',
+            'key': _googlePlacesApiKey,
+            'sessiontoken': _placesSessionToken,
+          });
       final response = await http.get(uri).timeout(const Duration(seconds: 4));
       if (response.statusCode != 200) return null;
       final body = jsonDecode(response.body) as Map<String, dynamic>;
@@ -20014,8 +21964,8 @@ class _AddressFieldState extends State<_AddressField> {
     final resolved = suggestion.isPopularPlace
         ? await _resolvePopularPlace(suggestion)
         : suggestion.provider == 'google_places'
-            ? await _googlePlaceDetails(suggestion)
-            : suggestion;
+        ? await _googlePlaceDetails(suggestion)
+        : suggestion;
     if (!mounted) return;
     if (resolved == null || !resolved.toValidatedAddress().hasCoordinates) {
       setState(() {
@@ -20101,8 +22051,8 @@ class _AddressFieldState extends State<_AddressField> {
                             suggestion.isPopularPlace
                                 ? Icons.star_rounded
                                 : widget.pharmacyMode
-                                    ? Icons.local_pharmacy
-                                    : Icons.place_outlined,
+                                ? Icons.local_pharmacy
+                                : Icons.place_outlined,
                             color: colors.text,
                             size: 16,
                           ),
@@ -20951,8 +22901,9 @@ class _ScheduleDateButtonState extends State<_ScheduleDateButton> {
     final current = DateTime.tryParse(widget.controller.text);
     final selected = await showDatePicker(
       context: context,
-      initialDate:
-          current != null && !current.isBefore(firstDate) ? current : firstDate,
+      initialDate: current != null && !current.isBefore(firstDate)
+          ? current
+          : firstDate,
       firstDate: firstDate,
       lastDate: now.add(const Duration(days: 365)),
     );
@@ -21292,9 +23243,10 @@ class _VehicleTile extends StatelessWidget {
     final surcharge = DeliveryPricing.calculateVehicleSurcharge(vehicle.name);
     final priceLabel = switch (vehicle.name) {
       'Bike' => 'No surcharge',
-      'Car' => surcharge == 0
-          ? 'Standard vehicle'
-          : 'Standard vehicle · +£${surcharge.toStringAsFixed(2)}',
+      'Car' =>
+        surcharge == 0
+            ? 'Standard vehicle'
+            : 'Standard vehicle · +£${surcharge.toStringAsFixed(2)}',
       'Van' => '+£${surcharge.toStringAsFixed(2)} surcharge',
       _ =>
         surcharge == 0 ? 'No surcharge' : '+£${surcharge.toStringAsFixed(2)}',
@@ -21601,19 +23553,18 @@ class _DriverCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final profile = driver ??
-        DriverProfile.fromMap(
-            'preview-rider',
-            {
-              'fullName': 'Marcus A.',
-              'vehicleType': vehicle.name,
-              'vehicleMakeModel':
-                  vehicle.name == 'Bike' ? 'E-bike' : 'Toyota Prius',
-              'vehicleColour': 'Blue',
-              'plateNumber': 'CIR 24K',
-              'verificationStatus': 'verified',
-            },
-            performance: metric);
+    final profile =
+        driver ??
+        DriverProfile.fromMap('preview-rider', {
+          'fullName': 'Marcus A.',
+          'vehicleType': vehicle.name,
+          'vehicleMakeModel': vehicle.name == 'Bike'
+              ? 'E-bike'
+              : 'Toyota Prius',
+          'vehicleColour': 'Blue',
+          'plateNumber': 'CIR 24K',
+          'verificationStatus': 'verified',
+        }, performance: metric);
     final performance = metric ?? profile.performance;
     final orderRank = _circumOrderRankForPerformance(performance);
     final rating = performance.averageRating <= 0
@@ -21744,8 +23695,8 @@ class _DriverCard extends StatelessWidget {
                         rating.feedbackText.trim().isNotEmpty
                             ? rating.feedbackText.trim()
                             : rating.feedbackTags
-                                .map(_DriverRatingPrompt.labelForTag)
-                                .join(', '),
+                                  .map(_DriverRatingPrompt.labelForTag)
+                                  .join(', '),
                         style: TextStyle(
                           color: colors.mutedText,
                           fontWeight: FontWeight.w700,
@@ -22014,8 +23965,8 @@ class _DriverRatingPrompt extends StatelessWidget {
                 submitted
                     ? 'Rating submitted'
                     : submitting
-                        ? 'Saving...'
-                        : 'Submit rating',
+                    ? 'Saving...'
+                    : 'Submit rating',
               ),
               style: FilledButton.styleFrom(
                 backgroundColor: colors.text,
@@ -22066,11 +24017,7 @@ class _IrisDeliveryAnalysisCard extends StatelessWidget {
           _SectionTitle(colors: colors, title: 'IRIS Delivery Analysis'),
           const SizedBox(height: 10),
           _AnalysisLine(colors: colors, label: 'Item', value: itemName),
-          _AnalysisLine(
-            colors: colors,
-            label: 'Quantity',
-            value: '$quantity',
-          ),
+          _AnalysisLine(colors: colors, label: 'Quantity', value: '$quantity'),
           _AnalysisLine(
             colors: colors,
             label: 'Pricing weight',
@@ -22313,13 +24260,13 @@ class _Timeline extends StatelessWidget {
                   completed
                       ? Icons.check_circle
                       : current
-                          ? Icons.radio_button_checked
-                          : Icons.circle_outlined,
+                      ? Icons.radio_button_checked
+                      : Icons.circle_outlined,
                   color: completed
                       ? colors.success
                       : current
-                          ? colors.adminAccent
-                          : colors.mutedText,
+                      ? colors.adminAccent
+                      : colors.mutedText,
                 ),
                 const SizedBox(width: 12),
                 Expanded(
@@ -22852,10 +24799,7 @@ class _VanguardChecklistCard extends StatelessWidget {
   final String title;
   final List<String> items;
 
-  const _VanguardChecklistCard({
-    required this.title,
-    required this.items,
-  });
+  const _VanguardChecklistCard({required this.title, required this.items});
 
   @override
   Widget build(BuildContext context) {
@@ -23202,7 +25146,7 @@ class _GiftsRequestPageState extends State<_GiftsRequestPage> {
     'Colleague',
     'Mentor',
     'Client',
-    'Teacher'
+    'Teacher',
   ];
   static const _occasions = [
     'Birthday',
@@ -23235,7 +25179,7 @@ class _GiftsRequestPageState extends State<_GiftsRequestPage> {
     'Just Because',
     'Bank Holiday Surprise',
     'Leaving Gift',
-    'Achievement Reward'
+    'Achievement Reward',
   ];
   static const _interestOptions = [
     'Fashion',
@@ -23282,7 +25226,7 @@ class _GiftsRequestPageState extends State<_GiftsRequestPage> {
     'Animals',
     'Nature',
     'Sustainability',
-    'Collectibles'
+    'Collectibles',
   ];
 
   @override
@@ -23311,7 +25255,7 @@ class _GiftsRequestPageState extends State<_GiftsRequestPage> {
       _likedBrands,
       _dislikedBrands,
       _previewEmail,
-      _previewPassword
+      _previewPassword,
     ]) {
       controller.dispose();
     }
@@ -23331,9 +25275,11 @@ class _GiftsRequestPageState extends State<_GiftsRequestPage> {
           .limit(20)
           .get();
       if (!mounted) return;
-      setState(() => _requests = snapshot.docs
-          .map((doc) => <String, dynamic>{'id': doc.id, ...doc.data()})
-          .toList());
+      setState(
+        () => _requests = snapshot.docs
+            .map((doc) => <String, dynamic>{'id': doc.id, ...doc.data()})
+            .toList(),
+      );
       await _handleGiftPaymentReturn();
     } catch (error) {
       debugPrint('Gift request history error: $error');
@@ -23357,19 +25303,21 @@ class _GiftsRequestPageState extends State<_GiftsRequestPage> {
       if (mounted) setState(() => _message = 'Signed in.');
     } on FirebaseAuthException catch (error) {
       if (mounted) {
-        setState(() => _message = switch (error.code) {
-              'invalid-credential' ||
-              'wrong-password' =>
-                'The email or password is incorrect.',
-              'invalid-email' => 'Enter a valid email address.',
-              _ => 'We could not sign you in. Please try again.',
-            });
+        setState(
+          () => _message = switch (error.code) {
+            'invalid-credential' ||
+            'wrong-password' => 'The email or password is incorrect.',
+            'invalid-email' => 'Enter a valid email address.',
+            _ => 'We could not sign you in. Please try again.',
+          },
+        );
       }
     } catch (error) {
       debugPrint('Gifts sign-in error: $error');
       if (mounted)
         setState(
-            () => _message = 'We could not sign you in. Please try again.');
+          () => _message = 'We could not sign you in. Please try again.',
+        );
     } finally {
       if (mounted) setState(() => _signingIn = false);
     }
@@ -23379,8 +25327,10 @@ class _GiftsRequestPageState extends State<_GiftsRequestPage> {
     final result = Uri.base.queryParameters['gift_payment'];
     if (result == 'cancelled') {
       if (mounted)
-        setState(() => _message =
-            'Payment was cancelled. Your gift has not been submitted.');
+        setState(
+          () => _message =
+              'Payment was cancelled. Your gift has not been submitted.',
+        );
       return;
     }
     if (result != 'success') return;
@@ -23390,19 +25340,22 @@ class _GiftsRequestPageState extends State<_GiftsRequestPage> {
     try {
       await FirebaseFunctions.instance
           .httpsCallable('finalizeGiftPayment')
-          .call({
-        'giftDraftId': giftDraftId,
-        'sessionId': sessionId,
-      });
+          .call({'giftDraftId': giftDraftId, 'sessionId': sessionId});
       if (mounted)
-        setState(() => _message =
-            'Payment received. Your gift experience is now submitted for review.');
+        setState(
+          () => _message =
+              'Payment received. Your gift experience is now submitted for review.',
+        );
     } on FirebaseFunctionsException catch (error) {
       debugPrint(
-          'Gift payment finalization error: ${error.code} ${error.message}');
+        'Gift payment finalization error: ${error.code} ${error.message}',
+      );
       if (mounted)
-        setState(() => _message = error.message ??
-            'We could not confirm payment yet. Please refresh shortly.');
+        setState(
+          () => _message =
+              error.message ??
+              'We could not confirm payment yet. Please refresh shortly.',
+        );
     }
   }
 
@@ -23438,8 +25391,10 @@ class _GiftsRequestPageState extends State<_GiftsRequestPage> {
       return;
     }
     if (_validatedGiftAddress == null) {
-      setState(() => _message =
-          'Please select a verified address from the suggestions, or confirm the manual address.');
+      setState(
+        () => _message =
+            'Please select a verified address from the suggestions, or confirm the manual address.',
+      );
       return;
     }
     final proceed = await showDialog<bool>(
@@ -23447,29 +25402,35 @@ class _GiftsRequestPageState extends State<_GiftsRequestPage> {
       builder: (context) => AlertDialog(
         title: const Text('Review your gift experience'),
         content: SingleChildScrollView(
-          child:
-              Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Text('Occasion: $_occasion'),
-            Text('Recipient: ${_recipientName.text.trim()}'),
-            Text(
-                'Contact: ${_recipientPhone.text.trim()} · ${_recipientEmail.text.trim()}'),
-            Text('Delivery: ${_deliveryAddress.text.trim()}'),
-            Text('Date: ${_adminDateText(_deliveryDate)} · $_timeWindow'),
-            Text('Gift budget: £${grossBudget!.toStringAsFixed(2)}'),
-            if (_personalMessage.text.trim().isNotEmpty)
-              Text('Message: ${_personalMessage.text.trim()}'),
-            const SizedBox(height: 12),
-            const Text(
-                'Gift contents remain confidential before delivery. No products, brands, retailers or basket details are shown.'),
-          ]),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text('Occasion: $_occasion'),
+              Text('Recipient: ${_recipientName.text.trim()}'),
+              Text(
+                'Contact: ${_recipientPhone.text.trim()} · ${_recipientEmail.text.trim()}',
+              ),
+              Text('Delivery: ${_deliveryAddress.text.trim()}'),
+              Text('Date: ${_adminDateText(_deliveryDate)} · $_timeWindow'),
+              Text('Gift budget: £${grossBudget!.toStringAsFixed(2)}'),
+              if (_personalMessage.text.trim().isNotEmpty)
+                Text('Message: ${_personalMessage.text.trim()}'),
+              const SizedBox(height: 12),
+              const Text(
+                'Gift contents remain confidential before delivery. No products, brands, retailers or basket details are shown.',
+              ),
+            ],
+          ),
         ),
         actions: [
           TextButton(
-              onPressed: () => Navigator.pop(context, false),
-              child: const Text('Back')),
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Back'),
+          ),
           FilledButton(
-              onPressed: () => Navigator.pop(context, true),
-              child: const Text('Proceed to Payment')),
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Proceed to Payment'),
+          ),
         ],
       ),
     );
@@ -23479,16 +25440,19 @@ class _GiftsRequestPageState extends State<_GiftsRequestPage> {
       _message = null;
     });
     try {
-      final giftDraftId =
-          FirebaseFirestore.instance.collection('giftPaymentDrafts').doc().id;
+      final giftDraftId = FirebaseFirestore.instance
+          .collection('giftPaymentDrafts')
+          .doc()
+          .id;
       final photoUrls = <String>[];
       if (_photo != null) {
         final bytes = await _photo!.readAsBytes();
         if (bytes.length > 8 * 1024 * 1024) {
           throw StateError('Photo must be smaller than 8 MB.');
         }
-        final ref = FirebaseStorage.instance
-            .ref('gift_requests/${user.uid}/$giftDraftId.jpg');
+        final ref = FirebaseStorage.instance.ref(
+          'gift_requests/${user.uid}/$giftDraftId.jpg',
+        );
         await ref.putData(bytes, SettableMetadata(contentType: 'image/jpeg'));
         photoUrls.add(await ref.getDownloadURL());
       }
@@ -23504,16 +25468,19 @@ class _GiftsRequestPageState extends State<_GiftsRequestPage> {
         'relationship': _relationship,
         'occasion': _occasion,
         'giftMode': _giftMode,
-        'anonymousGiftType':
-            _giftMode == 'anonymous_gift' ? _anonymousGiftType : null,
+        'anonymousGiftType': _giftMode == 'anonymous_gift'
+            ? _anonymousGiftType
+            : null,
         'senderRevealMode': _giftMode == 'anonymous_gift'
             ? _senderRevealMode
             : 'reveal_immediately',
-        'senderRevealConsent':
-            _giftMode == 'anonymous_gift' ? 'not_requested' : 'granted',
+        'senderRevealConsent': _giftMode == 'anonymous_gift'
+            ? 'not_requested'
+            : 'granted',
         'recipientRevealRequestStatus': 'none',
-        'selfGiftFrequency':
-            _giftMode == 'gift_myself' ? _selfGiftFrequency : null,
+        'selfGiftFrequency': _giftMode == 'gift_myself'
+            ? _selfGiftFrequency
+            : null,
         'deliveryAddress': _deliveryAddress.text.trim(),
         'deliveryAddressData': _validatedGiftAddress!.toJson(),
         'deliveryPostcode': _validatedGiftAddress!.postcode,
@@ -23524,12 +25491,15 @@ class _GiftsRequestPageState extends State<_GiftsRequestPage> {
         'budget': grossBudget,
         'grossBudget': grossBudget,
         'grossGiftBudget': grossBudget,
-        'estimatedStripeFee':
-            GiftRequestPolicy.estimatedStripeFee(grossBudget!),
-        'netGiftBudgetAfterFees':
-            GiftRequestPolicy.estimatedNetGiftBudget(grossBudget),
-        'estimatedNetGiftBudget':
-            GiftRequestPolicy.estimatedNetGiftBudget(grossBudget),
+        'estimatedStripeFee': GiftRequestPolicy.estimatedStripeFee(
+          grossBudget!,
+        ),
+        'netGiftBudgetAfterFees': GiftRequestPolicy.estimatedNetGiftBudget(
+          grossBudget,
+        ),
+        'estimatedNetGiftBudget': GiftRequestPolicy.estimatedNetGiftBudget(
+          grossBudget,
+        ),
         'budgetStatus': 'pending_allocation',
         'personalMessage': _personalMessage.text.trim(),
         'interests': _interests.toList(),
@@ -23547,8 +25517,8 @@ class _GiftsRequestPageState extends State<_GiftsRequestPage> {
         },
         'giftType':
             _giftMode == 'anonymous_gift' && _anonymousGiftType == 'campaign'
-                ? 'campaign'
-                : 'standard',
+            ? 'campaign'
+            : 'standard',
         'paymentStatus': 'payment_pending',
         'giftStatus': 'draft',
         'status': 'draft',
@@ -23569,15 +25539,18 @@ class _GiftsRequestPageState extends State<_GiftsRequestPage> {
         'contentUsageScope': 'private',
         'contentConsentWithdrawnAt': null,
         'contentStatus': 'not_started',
-        'campaignId':
-            _anonymousGiftType == 'campaign' ? 'bringing-london-closer' : null,
-        'campaignName':
-            _anonymousGiftType == 'campaign' ? 'Bringing London Closer' : null,
+        'campaignId': _anonymousGiftType == 'campaign'
+            ? 'bringing-london-closer'
+            : null,
+        'campaignName': _anonymousGiftType == 'campaign'
+            ? 'Bringing London Closer'
+            : null,
         'campaignTagline': _anonymousGiftType == 'campaign'
             ? '100 Londoners. 100 gifts. 100 stories.'
             : null,
-        'campaignType':
-            _anonymousGiftType == 'campaign' ? 'anonymous_gifting' : null,
+        'campaignType': _anonymousGiftType == 'campaign'
+            ? 'anonymous_gifting'
+            : null,
         'participantConsentRequired': _anonymousGiftType == 'campaign',
         'recordingConsentRequired': _anonymousGiftType == 'campaign',
         'mutualRevealAllowed': _anonymousGiftType == 'campaign',
@@ -23590,23 +25563,28 @@ class _GiftsRequestPageState extends State<_GiftsRequestPage> {
       final checkoutUrl = Uri.tryParse('${paymentData['url'] ?? ''}');
       if (checkoutUrl == null || checkoutUrl.host.isEmpty) {
         throw StateError(
-            'Stripe Checkout could not be opened. Please try again.');
+          'Stripe Checkout could not be opened. Please try again.',
+        );
       }
       setState(
-          () => _message = 'Complete payment to submit your gift request.');
+        () => _message = 'Complete payment to submit your gift request.',
+      );
       final opened = await launchUrl(checkoutUrl, webOnlyWindowName: '_self');
       if (!opened)
         throw StateError(
-            'Stripe Checkout could not be opened. Please try again.');
+          'Stripe Checkout could not be opened. Please try again.',
+        );
     } catch (error) {
       debugPrint('Gift request submit error: $error');
       if (mounted)
-        setState(() => _message = error is StateError
-            ? error.message
-            : error is FirebaseFunctionsException
-                ? (error.message ??
+        setState(
+          () => _message = error is StateError
+              ? error.message
+              : error is FirebaseFunctionsException
+              ? (error.message ??
                     'Could not start Stripe Checkout. Please try again.')
-                : 'Could not start Stripe Checkout. Please try again.');
+              : 'Could not start Stripe Checkout. Please try again.',
+        );
     } finally {
       if (mounted) setState(() => _saving = false);
     }
@@ -23621,563 +25599,753 @@ class _GiftsRequestPageState extends State<_GiftsRequestPage> {
       backgroundColor: colors.background,
       body: SafeArea(
         child: ListView(
-          padding:
-              EdgeInsets.fromLTRB(narrow ? 16 : 28, 16, narrow ? 16 : 28, 48),
+          padding: EdgeInsets.fromLTRB(
+            narrow ? 16 : 28,
+            16,
+            narrow ? 16 : 28,
+            48,
+          ),
           children: [
-            Row(children: [
-              IconButton(
-                  onPressed: widget.onBack, icon: const Icon(Icons.arrow_back)),
-              Image.asset('assets/images/circum_wordmark.png', width: 126),
-            ]),
+            Row(
+              children: [
+                IconButton(
+                  onPressed: widget.onBack,
+                  icon: const Icon(Icons.arrow_back),
+                ),
+                Image.asset('assets/images/circum_wordmark.png', width: 126),
+              ],
+            ),
             const SizedBox(height: 22),
             Center(
               child: ConstrainedBox(
                 constraints: const BoxConstraints(maxWidth: 980),
                 child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      Center(
-                          child: Image.asset(
-                              'assets/images/gifts_by_circum_logo.jpg',
-                              width: narrow ? 280 : 390,
-                              semanticLabel: 'Gifts by Circum logo')),
-                      const SizedBox(height: 12),
-                      Text('Thoughtful gifting, delivered by Circum',
-                          textAlign: TextAlign.center,
-                          style: TextStyle(
-                              color: colors.mutedText,
-                              fontSize: 18,
-                              fontWeight: FontWeight.w600)),
-                      const SizedBox(height: 28),
-                      Text(
-                          'Tell us the occasion, the person, and your budget. Circum creates and delivers a thoughtful gift experience.',
-                          textAlign: TextAlign.center,
-                          style: TextStyle(
-                              color: colors.text,
-                              fontSize: narrow ? 25 : 34,
-                              height: 1.2,
-                              fontWeight: FontWeight.w900)),
-                      const SizedBox(height: 24),
-                      Center(
-                        child: Chip(
-                          avatar: const Icon(Icons.lock_clock, size: 18),
-                          label: const Text('Early Access Beta'),
-                          backgroundColor:
-                              colors.adminAccent.withValues(alpha: 0.16),
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Center(
+                      child: Image.asset(
+                        'assets/images/gifts_by_circum_logo.jpg',
+                        width: narrow ? 280 : 390,
+                        semanticLabel: 'Gifts by Circum logo',
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    Text(
+                      'Thoughtful gifting, delivered by Circum',
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                        color: colors.mutedText,
+                        fontSize: 18,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    const SizedBox(height: 28),
+                    Text(
+                      'Tell us the occasion, the person, and your budget. Circum creates and delivers a thoughtful gift experience.',
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                        color: colors.text,
+                        fontSize: narrow ? 25 : 34,
+                        height: 1.2,
+                        fontWeight: FontWeight.w900,
+                      ),
+                    ),
+                    const SizedBox(height: 24),
+                    Center(
+                      child: Chip(
+                        avatar: const Icon(Icons.lock_clock, size: 18),
+                        label: const Text('Early Access Beta'),
+                        backgroundColor: colors.adminAccent.withValues(
+                          alpha: 0.16,
                         ),
                       ),
-                      const SizedBox(height: 10),
-                      const Center(
-                        child: _HealthChip(label: 'Vanguard Included'),
-                      ),
-                      const SizedBox(height: 16),
-                      if (!signedIn)
-                        _GlassPanel(
-                          colors: colors,
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.stretch,
-                            children: [
+                    ),
+                    const SizedBox(height: 10),
+                    const Center(
+                      child: _HealthChip(label: 'Vanguard Included'),
+                    ),
+                    const SizedBox(height: 16),
+                    if (!signedIn)
+                      _GlassPanel(
+                        colors: colors,
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: [
+                            Text(
+                              'Sign in to Gifts',
+                              style: TextStyle(
+                                color: colors.text,
+                                fontSize: 24,
+                                fontWeight: FontWeight.w900,
+                              ),
+                            ),
+                            const SizedBox(height: 6),
+                            Text(
+                              'Sign in to create and pay for a curated gift experience.',
+                              style: TextStyle(
+                                color: colors.mutedText,
+                                height: 1.4,
+                              ),
+                            ),
+                            const SizedBox(height: 16),
+                            _giftField(
+                              _previewEmail,
+                              'Email address',
+                              Icons.email_outlined,
+                              type: TextInputType.emailAddress,
+                            ),
+                            _giftField(
+                              _previewPassword,
+                              'Password',
+                              Icons.lock_outline,
+                              obscure: true,
+                            ),
+                            if (_message != null) ...[
+                              const SizedBox(height: 4),
                               Text(
-                                'Sign in to Gifts',
+                                _message!,
                                 style: TextStyle(
                                   color: colors.text,
-                                  fontSize: 24,
-                                  fontWeight: FontWeight.w900,
+                                  fontWeight: FontWeight.w700,
                                 ),
                               ),
-                              const SizedBox(height: 6),
+                            ],
+                            const SizedBox(height: 12),
+                            FilledButton.icon(
+                              onPressed: _signingIn ? null : _signInToPreview,
+                              icon: _signingIn
+                                  ? const SizedBox.square(
+                                      dimension: 18,
+                                      child: CircularProgressIndicator(
+                                        strokeWidth: 2,
+                                      ),
+                                    )
+                                  : const Icon(Icons.lock_open),
+                              label: Text(
+                                _signingIn
+                                    ? 'Signing in...'
+                                    : 'Sign in and continue',
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    if (signedIn) ...[
+                      _GlassPanel(
+                        colors: colors,
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'How Gifts Works',
+                              style: TextStyle(
+                                color: colors.text,
+                                fontSize: 22,
+                                fontWeight: FontWeight.w900,
+                              ),
+                            ),
+                            const SizedBox(height: 10),
+                            ...const [
+                              '1. Tell us about the recipient.',
+                              '2. Set your budget.',
+                              '3. IRIS creates private recommendations.',
+                              '4. The Gifts Team reviews and approves the experience.',
+                              '5. We source, prepare and deliver.',
+                              '6. The recipient discovers the surprise.',
+                            ].map(
+                              (step) => Padding(
+                                padding: const EdgeInsets.only(bottom: 6),
+                                child: Text(step),
+                              ),
+                            ),
+                            const SizedBox(height: 8),
+                            const Text(
+                              'Gift contents are intentionally kept confidential before delivery. Gifts by Circum is a curated gifting experience, not a traditional online shop.',
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(height: 14),
+                      _GlassPanel(
+                        colors: colors,
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: [
+                            Text(
+                              'Create the experience',
+                              style: TextStyle(
+                                color: colors.text,
+                                fontSize: 26,
+                                fontWeight: FontWeight.w900,
+                              ),
+                            ),
+                            const SizedBox(height: 16),
+                            DropdownButtonFormField<String>(
+                              initialValue: _giftMode,
+                              decoration: const InputDecoration(
+                                labelText: 'Gift mode',
+                              ),
+                              items:
+                                  const {
+                                        'gift_someone': 'Gift someone',
+                                        'gift_myself': 'Gift myself',
+                                        'anonymous_gift': 'Anonymous gift',
+                                      }.entries
+                                      .map(
+                                        (entry) => DropdownMenuItem(
+                                          value: entry.key,
+                                          child: Text(entry.value),
+                                        ),
+                                      )
+                                      .toList(),
+                              onChanged: (value) => setState(
+                                () => _giftMode = value ?? _giftMode,
+                              ),
+                            ),
+                            if (_giftMode == 'anonymous_gift') ...[
+                              const SizedBox(height: 12),
+                              DropdownButtonFormField<String>(
+                                initialValue: _anonymousGiftType,
+                                decoration: const InputDecoration(
+                                  labelText: 'Anonymous gift type',
+                                ),
+                                items:
+                                    const {
+                                          'direct': 'Direct anonymous gift',
+                                          'campaign':
+                                              'Campaign · Bringing London Closer',
+                                        }.entries
+                                        .map(
+                                          (entry) => DropdownMenuItem(
+                                            value: entry.key,
+                                            child: Text(entry.value),
+                                          ),
+                                        )
+                                        .toList(),
+                                onChanged: (value) => setState(
+                                  () => _anonymousGiftType =
+                                      value ?? _anonymousGiftType,
+                                ),
+                              ),
+                              const SizedBox(height: 12),
+                              DropdownButtonFormField<String>(
+                                initialValue: _senderRevealMode,
+                                decoration: const InputDecoration(
+                                  labelText: 'Identity reveal',
+                                ),
+                                items:
+                                    const {
+                                          'anonymous_forever':
+                                              'Anonymous forever',
+                                          'reveal_after_delivery':
+                                              'Reveal after delivery',
+                                          'anonymous_until_consent':
+                                              'Reveal only with later consent',
+                                          'reveal_immediately':
+                                              'Reveal immediately',
+                                        }.entries
+                                        .map(
+                                          (entry) => DropdownMenuItem(
+                                            value: entry.key,
+                                            child: Text(entry.value),
+                                          ),
+                                        )
+                                        .toList(),
+                                onChanged: (value) => setState(
+                                  () => _senderRevealMode =
+                                      value ?? _senderRevealMode,
+                                ),
+                              ),
+                              const SizedBox(height: 8),
                               Text(
-                                'Sign in to create and pay for a curated gift experience.',
+                                'Circum knows who arranged the gift for safety and fraud prevention. The recipient only sees the sender identity when consent permits or disclosure is legally required.',
                                 style: TextStyle(
                                   color: colors.mutedText,
-                                  height: 1.4,
+                                  fontSize: 12,
                                 ),
                               ),
-                              const SizedBox(height: 16),
-                              _giftField(
-                                _previewEmail,
-                                'Email address',
-                                Icons.email_outlined,
-                                type: TextInputType.emailAddress,
+                            ],
+                            if (_giftMode == 'gift_myself') ...[
+                              const SizedBox(height: 12),
+                              DropdownButtonFormField<String>(
+                                initialValue: _selfGiftFrequency,
+                                decoration: const InputDecoration(
+                                  labelText: 'Self-gift frequency',
+                                ),
+                                items:
+                                    const {
+                                          'one_off': 'One-off',
+                                          'monthly': 'Monthly',
+                                          'quarterly': 'Quarterly',
+                                          'custom': 'Custom',
+                                        }.entries
+                                        .map(
+                                          (entry) => DropdownMenuItem(
+                                            value: entry.key,
+                                            child: Text(entry.value),
+                                          ),
+                                        )
+                                        .toList(),
+                                onChanged: (value) => setState(
+                                  () => _selfGiftFrequency =
+                                      value ?? _selfGiftFrequency,
+                                ),
                               ),
-                              _giftField(
-                                _previewPassword,
-                                'Password',
-                                Icons.lock_outline,
-                                obscure: true,
+                            ],
+                            const SizedBox(height: 12),
+                            Text(
+                              'Who is receiving?',
+                              style: TextStyle(
+                                color: colors.text,
+                                fontSize: 18,
+                                fontWeight: FontWeight.w900,
                               ),
-                              if (_message != null) ...[
-                                const SizedBox(height: 4),
-                                Text(
+                            ),
+                            const SizedBox(height: 10),
+                            _giftField(
+                              _senderName,
+                              'Sender name',
+                              Icons.person_outline,
+                            ),
+                            _giftField(
+                              _senderEmail,
+                              'Sender email',
+                              Icons.email_outlined,
+                              type: TextInputType.emailAddress,
+                            ),
+                            _giftField(
+                              _recipientName,
+                              'Recipient name',
+                              Icons.redeem_outlined,
+                            ),
+                            _giftField(
+                              _recipientPhone,
+                              'Recipient phone',
+                              Icons.contact_phone_outlined,
+                            ),
+                            _giftField(
+                              _recipientEmail,
+                              'Recipient email',
+                              Icons.email_outlined,
+                              type: TextInputType.emailAddress,
+                            ),
+                            Text(
+                              'Tell us about them',
+                              style: TextStyle(
+                                color: colors.text,
+                                fontSize: 18,
+                                fontWeight: FontWeight.w900,
+                              ),
+                            ),
+                            const SizedBox(height: 10),
+                            Row(
+                              children: [
+                                Expanded(
+                                  child: DropdownButtonFormField<String>(
+                                    initialValue: _relationship,
+                                    decoration: const InputDecoration(
+                                      labelText: 'Relationship',
+                                    ),
+                                    items: _relationships
+                                        .map(
+                                          (v) => DropdownMenuItem(
+                                            value: v,
+                                            child: Text(v),
+                                          ),
+                                        )
+                                        .toList(),
+                                    onChanged: (v) => setState(
+                                      () => _relationship = v ?? _relationship,
+                                    ),
+                                  ),
+                                ),
+                                const SizedBox(width: 12),
+                                Expanded(
+                                  child: DropdownButtonFormField<String>(
+                                    initialValue: _occasion,
+                                    decoration: const InputDecoration(
+                                      labelText: 'Occasion',
+                                    ),
+                                    items: _occasions
+                                        .map(
+                                          (v) => DropdownMenuItem(
+                                            value: v,
+                                            child: Text(v),
+                                          ),
+                                        )
+                                        .toList(),
+                                    onChanged: (v) => setState(
+                                      () => _occasion = v ?? _occasion,
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 12),
+                            Text(
+                              'Sizes and preferences',
+                              style: TextStyle(
+                                color: colors.text,
+                                fontSize: 18,
+                                fontWeight: FontWeight.w900,
+                              ),
+                            ),
+                            const SizedBox(height: 10),
+                            Wrap(
+                              spacing: 10,
+                              runSpacing: 10,
+                              children: [
+                                SizedBox(
+                                  width: 180,
+                                  child: _giftField(
+                                    _clothingSize,
+                                    'Clothing size',
+                                    Icons.checkroom,
+                                  ),
+                                ),
+                                SizedBox(
+                                  width: 180,
+                                  child: _giftField(
+                                    _shoeSize,
+                                    'Shoe size',
+                                    Icons.hiking,
+                                  ),
+                                ),
+                                SizedBox(
+                                  width: 180,
+                                  child: _giftField(
+                                    _ringSize,
+                                    'Ring size',
+                                    Icons.circle_outlined,
+                                  ),
+                                ),
+                                SizedBox(
+                                  width: 180,
+                                  child: _giftField(
+                                    _height,
+                                    'Height',
+                                    Icons.height,
+                                  ),
+                                ),
+                              ],
+                            ),
+                            DropdownButtonFormField<String>(
+                              initialValue: _preferredFit,
+                              decoration: const InputDecoration(
+                                labelText: 'Preferred fit',
+                              ),
+                              items:
+                                  const [
+                                        'Slim',
+                                        'Regular',
+                                        'Relaxed',
+                                        'Oversized',
+                                      ]
+                                      .map(
+                                        (v) => DropdownMenuItem(
+                                          value: v,
+                                          child: Text(v),
+                                        ),
+                                      )
+                                      .toList(),
+                              onChanged: (v) => setState(
+                                () => _preferredFit = v ?? _preferredFit,
+                              ),
+                            ),
+                            _giftField(
+                              _favouriteColours,
+                              'Favourite colours',
+                              Icons.palette_outlined,
+                            ),
+                            _giftField(
+                              _likedBrands,
+                              'Brands they like',
+                              Icons.favorite_border,
+                            ),
+                            _giftField(
+                              _dislikedBrands,
+                              'Brands they dislike',
+                              Icons.block,
+                            ),
+                            Text(
+                              'Delivery details',
+                              style: TextStyle(
+                                color: colors.text,
+                                fontSize: 18,
+                                fontWeight: FontWeight.w900,
+                              ),
+                            ),
+                            const SizedBox(height: 10),
+                            _AddressField(
+                              colors: colors,
+                              icon: Icons.location_on_outlined,
+                              label: 'Delivery address',
+                              controller: _deliveryAddress,
+                              verified:
+                                  _validatedGiftAddress?.isVerified == true,
+                              onSelected: (address) => setState(
+                                () => _validatedGiftAddress = address,
+                              ),
+                              onEdited: (_) =>
+                                  setState(() => _validatedGiftAddress = null),
+                              verifiedMessage:
+                                  'Verified delivery address selected',
+                            ),
+                            Row(
+                              children: [
+                                Expanded(
+                                  child: OutlinedButton.icon(
+                                    onPressed: () async {
+                                      final date = await showDatePicker(
+                                        context: context,
+                                        firstDate: DateTime.now(),
+                                        lastDate: DateTime.now().add(
+                                          const Duration(days: 365),
+                                        ),
+                                        initialDate:
+                                            _deliveryDate ??
+                                            DateTime.now().add(
+                                              const Duration(days: 2),
+                                            ),
+                                      );
+                                      if (date != null)
+                                        setState(() => _deliveryDate = date);
+                                    },
+                                    icon: const Icon(Icons.calendar_month),
+                                    label: Text(
+                                      _deliveryDate == null
+                                          ? 'Preferred delivery date'
+                                          : _adminDateText(_deliveryDate),
+                                    ),
+                                  ),
+                                ),
+                                const SizedBox(width: 12),
+                                Expanded(
+                                  child: DropdownButtonFormField<String>(
+                                    initialValue: _timeWindow,
+                                    decoration: const InputDecoration(
+                                      labelText: 'Time window',
+                                    ),
+                                    items:
+                                        const [
+                                              'Morning',
+                                              'Afternoon',
+                                              'Evening',
+                                            ]
+                                            .map(
+                                              (v) => DropdownMenuItem(
+                                                value: v,
+                                                child: Text(v),
+                                              ),
+                                            )
+                                            .toList(),
+                                    onChanged: (v) => setState(
+                                      () => _timeWindow = v ?? _timeWindow,
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 12),
+                            Text(
+                              'Gift budget',
+                              style: TextStyle(
+                                color: colors.text,
+                                fontSize: 18,
+                                fontWeight: FontWeight.w900,
+                              ),
+                            ),
+                            const SizedBox(height: 8),
+                            Wrap(
+                              spacing: 8,
+                              runSpacing: 8,
+                              children: [50, 100, 250, 500, 1000, 1500]
+                                  .map(
+                                    (value) => ChoiceChip(
+                                      label: Text('£$value'),
+                                      selected: _budget.text == '$value',
+                                      onSelected: (_) => setState(
+                                        () => _budget.text = '$value',
+                                      ),
+                                    ),
+                                  )
+                                  .toList(),
+                            ),
+                            const SizedBox(height: 8),
+                            _giftField(
+                              _budget,
+                              'Gift budget (minimum £50)',
+                              Icons.payments_outlined,
+                              type: const TextInputType.numberWithOptions(
+                                decimal: true,
+                              ),
+                            ),
+                            Text(
+                              'Interests',
+                              style: TextStyle(
+                                color: colors.text,
+                                fontWeight: FontWeight.w800,
+                              ),
+                            ),
+                            const SizedBox(height: 8),
+                            Wrap(
+                              spacing: 8,
+                              runSpacing: 8,
+                              children: _interestOptions
+                                  .map(
+                                    (interest) => FilterChip(
+                                      label: Text(interest),
+                                      selected: _interests.contains(interest),
+                                      onSelected: (selected) => setState(
+                                        () => selected
+                                            ? _interests.add(interest)
+                                            : _interests.remove(interest),
+                                      ),
+                                    ),
+                                  )
+                                  .toList(),
+                            ),
+                            const SizedBox(height: 12),
+                            Text(
+                              'Additional information',
+                              style: TextStyle(
+                                color: colors.text,
+                                fontSize: 18,
+                                fontWeight: FontWeight.w900,
+                              ),
+                            ),
+                            const SizedBox(height: 8),
+                            _giftField(
+                              _personalMessage,
+                              'Personal message',
+                              Icons.chat_bubble_outline,
+                              lines: 3,
+                            ),
+                            _giftField(
+                              _notes,
+                              'Additional Information',
+                              Icons.notes,
+                              lines: 3,
+                            ),
+                            Text(
+                              'Record allergies, medical conditions, dietary requirements, religious considerations, sensitivities, accessibility requirements, favourite colours, favourite brands, dislikes, or any special requests.',
+                              style: TextStyle(
+                                color: colors.mutedText,
+                                fontSize: 12,
+                              ),
+                            ),
+                            OutlinedButton.icon(
+                              onPressed: _pickPhoto,
+                              icon: const Icon(Icons.add_a_photo_outlined),
+                              label: Text(
+                                _photo == null
+                                    ? 'Add optional recipient photo'
+                                    : 'Photo selected · Replace',
+                              ),
+                            ),
+                            if (_photo != null)
+                              Align(
+                                alignment: Alignment.centerLeft,
+                                child: TextButton.icon(
+                                  onPressed: () =>
+                                      setState(() => _photo = null),
+                                  icon: const Icon(Icons.close),
+                                  label: const Text('Remove photo'),
+                                ),
+                              ),
+                            if (_message != null)
+                              Padding(
+                                padding: const EdgeInsets.only(top: 12),
+                                child: Text(
                                   _message!,
                                   style: TextStyle(
                                     color: colors.text,
                                     fontWeight: FontWeight.w700,
                                   ),
                                 ),
-                              ],
-                              const SizedBox(height: 12),
-                              FilledButton.icon(
-                                onPressed: _signingIn ? null : _signInToPreview,
-                                icon: _signingIn
-                                    ? const SizedBox.square(
-                                        dimension: 18,
-                                        child: CircularProgressIndicator(
-                                            strokeWidth: 2),
-                                      )
-                                    : const Icon(Icons.lock_open),
-                                label: Text(_signingIn
-                                    ? 'Signing in...'
-                                    : 'Sign in and continue'),
                               ),
-                            ],
-                          ),
-                        ),
-                      if (signedIn) ...[
-                        _GlassPanel(
-                          colors: colors,
-                          child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text('How Gifts Works',
-                                    style: TextStyle(
-                                        color: colors.text,
-                                        fontSize: 22,
-                                        fontWeight: FontWeight.w900)),
-                                const SizedBox(height: 10),
-                                ...const [
-                                  '1. Tell us about the recipient.',
-                                  '2. Set your budget.',
-                                  '3. IRIS creates private recommendations.',
-                                  '4. The Gifts Team reviews and approves the experience.',
-                                  '5. We source, prepare and deliver.',
-                                  '6. The recipient discovers the surprise.',
-                                ].map((step) => Padding(
-                                    padding: const EdgeInsets.only(bottom: 6),
-                                    child: Text(step))),
-                                const SizedBox(height: 8),
-                                const Text(
-                                    'Gift contents are intentionally kept confidential before delivery. Gifts by Circum is a curated gifting experience, not a traditional online shop.'),
-                              ]),
-                        ),
-                        const SizedBox(height: 14),
-                        _GlassPanel(
-                            colors: colors,
-                            child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.stretch,
-                                children: [
-                                  Text('Create the experience',
-                                      style: TextStyle(
-                                          color: colors.text,
-                                          fontSize: 26,
-                                          fontWeight: FontWeight.w900)),
-                                  const SizedBox(height: 16),
-                                  DropdownButtonFormField<String>(
-                                    initialValue: _giftMode,
-                                    decoration: const InputDecoration(
-                                        labelText: 'Gift mode'),
-                                    items: const {
-                                      'gift_someone': 'Gift someone',
-                                      'gift_myself': 'Gift myself',
-                                      'anonymous_gift': 'Anonymous gift',
-                                    }
-                                        .entries
-                                        .map((entry) => DropdownMenuItem(
-                                            value: entry.key,
-                                            child: Text(entry.value)))
-                                        .toList(),
-                                    onChanged: (value) => setState(
-                                        () => _giftMode = value ?? _giftMode),
-                                  ),
-                                  if (_giftMode == 'anonymous_gift') ...[
-                                    const SizedBox(height: 12),
-                                    DropdownButtonFormField<String>(
-                                      initialValue: _anonymousGiftType,
-                                      decoration: const InputDecoration(
-                                          labelText: 'Anonymous gift type'),
-                                      items: const {
-                                        'direct': 'Direct anonymous gift',
-                                        'campaign':
-                                            'Campaign · Bringing London Closer',
-                                      }
-                                          .entries
-                                          .map((entry) => DropdownMenuItem(
-                                              value: entry.key,
-                                              child: Text(entry.value)))
-                                          .toList(),
-                                      onChanged: (value) => setState(() =>
-                                          _anonymousGiftType =
-                                              value ?? _anonymousGiftType),
-                                    ),
-                                    const SizedBox(height: 12),
-                                    DropdownButtonFormField<String>(
-                                      initialValue: _senderRevealMode,
-                                      decoration: const InputDecoration(
-                                          labelText: 'Identity reveal'),
-                                      items: const {
-                                        'anonymous_forever':
-                                            'Anonymous forever',
-                                        'reveal_after_delivery':
-                                            'Reveal after delivery',
-                                        'anonymous_until_consent':
-                                            'Reveal only with later consent',
-                                        'reveal_immediately':
-                                            'Reveal immediately',
-                                      }
-                                          .entries
-                                          .map((entry) => DropdownMenuItem(
-                                              value: entry.key,
-                                              child: Text(entry.value)))
-                                          .toList(),
-                                      onChanged: (value) => setState(() =>
-                                          _senderRevealMode =
-                                              value ?? _senderRevealMode),
-                                    ),
-                                    const SizedBox(height: 8),
-                                    Text(
-                                      'Circum knows who arranged the gift for safety and fraud prevention. The recipient only sees the sender identity when consent permits or disclosure is legally required.',
-                                      style: TextStyle(
-                                          color: colors.mutedText,
-                                          fontSize: 12),
-                                    ),
-                                  ],
-                                  if (_giftMode == 'gift_myself') ...[
-                                    const SizedBox(height: 12),
-                                    DropdownButtonFormField<String>(
-                                      initialValue: _selfGiftFrequency,
-                                      decoration: const InputDecoration(
-                                          labelText: 'Self-gift frequency'),
-                                      items: const {
-                                        'one_off': 'One-off',
-                                        'monthly': 'Monthly',
-                                        'quarterly': 'Quarterly',
-                                        'custom': 'Custom',
-                                      }
-                                          .entries
-                                          .map((entry) => DropdownMenuItem(
-                                              value: entry.key,
-                                              child: Text(entry.value)))
-                                          .toList(),
-                                      onChanged: (value) => setState(() =>
-                                          _selfGiftFrequency =
-                                              value ?? _selfGiftFrequency),
-                                    ),
-                                  ],
-                                  const SizedBox(height: 12),
-                                  Text('Who is receiving?',
-                                      style: TextStyle(
-                                          color: colors.text,
-                                          fontSize: 18,
-                                          fontWeight: FontWeight.w900)),
-                                  const SizedBox(height: 10),
-                                  _giftField(_senderName, 'Sender name',
-                                      Icons.person_outline),
-                                  _giftField(_senderEmail, 'Sender email',
-                                      Icons.email_outlined,
-                                      type: TextInputType.emailAddress),
-                                  _giftField(_recipientName, 'Recipient name',
-                                      Icons.redeem_outlined),
-                                  _giftField(_recipientPhone, 'Recipient phone',
-                                      Icons.contact_phone_outlined),
-                                  _giftField(_recipientEmail, 'Recipient email',
-                                      Icons.email_outlined,
-                                      type: TextInputType.emailAddress),
-                                  Text('Tell us about them',
-                                      style: TextStyle(
-                                          color: colors.text,
-                                          fontSize: 18,
-                                          fontWeight: FontWeight.w900)),
-                                  const SizedBox(height: 10),
-                                  Row(children: [
-                                    Expanded(
-                                        child: DropdownButtonFormField<String>(
-                                            initialValue: _relationship,
-                                            decoration: const InputDecoration(
-                                                labelText: 'Relationship'),
-                                            items: _relationships
-                                                .map((v) => DropdownMenuItem(
-                                                    value: v, child: Text(v)))
-                                                .toList(),
-                                            onChanged: (v) => setState(() =>
-                                                _relationship =
-                                                    v ?? _relationship))),
-                                    const SizedBox(width: 12),
-                                    Expanded(
-                                        child: DropdownButtonFormField<String>(
-                                            initialValue: _occasion,
-                                            decoration: const InputDecoration(
-                                                labelText: 'Occasion'),
-                                            items: _occasions
-                                                .map((v) => DropdownMenuItem(
-                                                    value: v, child: Text(v)))
-                                                .toList(),
-                                            onChanged: (v) => setState(() =>
-                                                _occasion = v ?? _occasion))),
-                                  ]),
-                                  const SizedBox(height: 12),
-                                  Text('Sizes and preferences',
-                                      style: TextStyle(
-                                          color: colors.text,
-                                          fontSize: 18,
-                                          fontWeight: FontWeight.w900)),
-                                  const SizedBox(height: 10),
-                                  Wrap(spacing: 10, runSpacing: 10, children: [
-                                    SizedBox(
-                                        width: 180,
-                                        child: _giftField(_clothingSize,
-                                            'Clothing size', Icons.checkroom)),
-                                    SizedBox(
-                                        width: 180,
-                                        child: _giftField(_shoeSize,
-                                            'Shoe size', Icons.hiking)),
-                                    SizedBox(
-                                        width: 180,
-                                        child: _giftField(
-                                            _ringSize,
-                                            'Ring size',
-                                            Icons.circle_outlined)),
-                                    SizedBox(
-                                        width: 180,
-                                        child: _giftField(
-                                            _height, 'Height', Icons.height)),
-                                  ]),
-                                  DropdownButtonFormField<String>(
-                                      initialValue: _preferredFit,
-                                      decoration: const InputDecoration(
-                                          labelText: 'Preferred fit'),
-                                      items: const [
-                                        'Slim',
-                                        'Regular',
-                                        'Relaxed',
-                                        'Oversized'
-                                      ]
-                                          .map((v) => DropdownMenuItem(
-                                              value: v, child: Text(v)))
-                                          .toList(),
-                                      onChanged: (v) => setState(() =>
-                                          _preferredFit = v ?? _preferredFit)),
-                                  _giftField(
-                                      _favouriteColours,
-                                      'Favourite colours',
-                                      Icons.palette_outlined),
-                                  _giftField(_likedBrands, 'Brands they like',
-                                      Icons.favorite_border),
-                                  _giftField(_dislikedBrands,
-                                      'Brands they dislike', Icons.block),
-                                  Text('Delivery details',
-                                      style: TextStyle(
-                                          color: colors.text,
-                                          fontSize: 18,
-                                          fontWeight: FontWeight.w900)),
-                                  const SizedBox(height: 10),
-                                  _AddressField(
-                                      colors: colors,
-                                      icon: Icons.location_on_outlined,
-                                      label: 'Delivery address',
-                                      controller: _deliveryAddress,
-                                      verified:
-                                          _validatedGiftAddress?.isVerified ==
-                                              true,
-                                      onSelected: (address) => setState(() =>
-                                          _validatedGiftAddress = address),
-                                      onEdited: (_) => setState(
-                                          () => _validatedGiftAddress = null),
-                                      verifiedMessage:
-                                          'Verified delivery address selected'),
-                                  Row(children: [
-                                    Expanded(
-                                        child: OutlinedButton.icon(
-                                            onPressed: () async {
-                                              final date = await showDatePicker(
-                                                  context: context,
-                                                  firstDate: DateTime.now(),
-                                                  lastDate: DateTime.now().add(
-                                                      const Duration(
-                                                          days: 365)),
-                                                  initialDate: _deliveryDate ??
-                                                      DateTime.now().add(
-                                                          const Duration(
-                                                              days: 2)));
-                                              if (date != null)
-                                                setState(
-                                                    () => _deliveryDate = date);
-                                            },
-                                            icon: const Icon(
-                                                Icons.calendar_month),
-                                            label: Text(_deliveryDate == null
-                                                ? 'Preferred delivery date'
-                                                : _adminDateText(
-                                                    _deliveryDate)))),
-                                    const SizedBox(width: 12),
-                                    Expanded(
-                                        child: DropdownButtonFormField<String>(
-                                            initialValue: _timeWindow,
-                                            decoration: const InputDecoration(
-                                                labelText: 'Time window'),
-                                            items: const [
-                                              'Morning',
-                                              'Afternoon',
-                                              'Evening'
-                                            ]
-                                                .map((v) => DropdownMenuItem(
-                                                    value: v, child: Text(v)))
-                                                .toList(),
-                                            onChanged: (v) => setState(() =>
-                                                _timeWindow =
-                                                    v ?? _timeWindow))),
-                                  ]),
-                                  const SizedBox(height: 12),
-                                  Text('Gift budget',
-                                      style: TextStyle(
-                                          color: colors.text,
-                                          fontSize: 18,
-                                          fontWeight: FontWeight.w900)),
-                                  const SizedBox(height: 8),
-                                  Wrap(
-                                      spacing: 8,
-                                      runSpacing: 8,
-                                      children: [50, 100, 250, 500, 1000, 1500]
-                                          .map((value) => ChoiceChip(
-                                              label: Text('£$value'),
-                                              selected:
-                                                  _budget.text == '$value',
-                                              onSelected: (_) => setState(() =>
-                                                  _budget.text = '$value')))
-                                          .toList()),
-                                  const SizedBox(height: 8),
-                                  _giftField(
-                                      _budget,
-                                      'Gift budget (minimum £50)',
-                                      Icons.payments_outlined,
-                                      type:
-                                          const TextInputType.numberWithOptions(
-                                              decimal: true)),
-                                  Text('Interests',
-                                      style: TextStyle(
-                                          color: colors.text,
-                                          fontWeight: FontWeight.w800)),
-                                  const SizedBox(height: 8),
-                                  Wrap(
-                                      spacing: 8,
-                                      runSpacing: 8,
-                                      children: _interestOptions
-                                          .map((interest) => FilterChip(
-                                              label: Text(interest),
-                                              selected:
-                                                  _interests.contains(interest),
-                                              onSelected: (selected) =>
-                                                  setState(() => selected
-                                                      ? _interests.add(interest)
-                                                      : _interests
-                                                          .remove(interest))))
-                                          .toList()),
-                                  const SizedBox(height: 12),
-                                  Text('Additional information',
-                                      style: TextStyle(
-                                          color: colors.text,
-                                          fontSize: 18,
-                                          fontWeight: FontWeight.w900)),
-                                  const SizedBox(height: 8),
-                                  _giftField(
-                                      _personalMessage,
-                                      'Personal message',
-                                      Icons.chat_bubble_outline,
-                                      lines: 3),
-                                  _giftField(_notes, 'Additional Information',
-                                      Icons.notes,
-                                      lines: 3),
-                                  Text(
-                                      'Record allergies, medical conditions, dietary requirements, religious considerations, sensitivities, accessibility requirements, favourite colours, favourite brands, dislikes, or any special requests.',
-                                      style: TextStyle(
-                                          color: colors.mutedText,
-                                          fontSize: 12)),
-                                  OutlinedButton.icon(
-                                      onPressed: _pickPhoto,
-                                      icon: const Icon(
-                                          Icons.add_a_photo_outlined),
-                                      label: Text(_photo == null
-                                          ? 'Add optional recipient photo'
-                                          : 'Photo selected · Replace')),
-                                  if (_photo != null)
-                                    Align(
-                                        alignment: Alignment.centerLeft,
-                                        child: TextButton.icon(
-                                            onPressed: () =>
-                                                setState(() => _photo = null),
-                                            icon: const Icon(Icons.close),
-                                            label: const Text('Remove photo'))),
-                                  if (_message != null)
-                                    Padding(
-                                        padding: const EdgeInsets.only(top: 12),
-                                        child: Text(_message!,
-                                            style: TextStyle(
-                                                color: colors.text,
-                                                fontWeight: FontWeight.w700))),
-                                  const SizedBox(height: 16),
-                                  FilledButton.icon(
-                                      onPressed: _saving ? null : _submit,
-                                      icon: _saving
-                                          ? const SizedBox.square(
-                                              dimension: 18,
-                                              child: CircularProgressIndicator(
-                                                  strokeWidth: 2))
-                                          : const Icon(Icons.card_giftcard),
-                                      label: Text(_saving
-                                          ? 'Preparing payment...'
-                                          : 'Create Gift Experience'),
-                                      style: FilledButton.styleFrom(
-                                          padding: const EdgeInsets.symmetric(
-                                              vertical: 17))),
-                                  const SizedBox(height: 8),
-                                  Text(
-                                      'The exact gift contents, supplier costs, and internal fulfilment plan remain private until delivery.',
-                                      textAlign: TextAlign.center,
-                                      style: TextStyle(
-                                          color: colors.mutedText,
-                                          fontSize: 12)),
-                                  const SizedBox(height: 6),
-                                  Text(
-                                    'Circum may ask to record or share a gift reaction. This is optional, and the gift can still be received if filming or public posting is declined.',
-                                    textAlign: TextAlign.center,
-                                    style: TextStyle(
-                                        color: colors.mutedText, fontSize: 12),
-                                  ),
-                                ])),
-                      ],
-                      if (_requests.isNotEmpty) ...[
-                        const SizedBox(height: 22),
-                        Text('Your gift requests',
-                            style: TextStyle(
-                                color: colors.text,
-                                fontSize: 22,
-                                fontWeight: FontWeight.w900)),
-                        const SizedBox(height: 10),
-                        ..._requests.map(
-                          (request) => Container(
-                            margin: const EdgeInsets.only(bottom: 8),
-                            decoration: BoxDecoration(
-                              color: colors.field,
-                              borderRadius: BorderRadius.circular(12),
-                              border: Border.all(color: colors.border),
-                            ),
-                            child: ListTile(
-                              leading: const Icon(Icons.card_giftcard),
-                              title: Text(
-                                '${request['occasion']} for ${request['recipientName']}',
+                            const SizedBox(height: 16),
+                            FilledButton.icon(
+                              onPressed: _saving ? null : _submit,
+                              icon: _saving
+                                  ? const SizedBox.square(
+                                      dimension: 18,
+                                      child: CircularProgressIndicator(
+                                        strokeWidth: 2,
+                                      ),
+                                    )
+                                  : const Icon(Icons.card_giftcard),
+                              label: Text(
+                                _saving
+                                    ? 'Preparing payment...'
+                                    : 'Create Gift Experience',
                               ),
-                              subtitle: Text(
-                                GiftRequestPolicy.senderStatus(
-                                  '${request['status']}',
+                              style: FilledButton.styleFrom(
+                                padding: const EdgeInsets.symmetric(
+                                  vertical: 17,
                                 ),
                               ),
-                              trailing: Text(
-                                '£${((request['grossBudget'] as num?)?.toDouble() ?? 0).toStringAsFixed(0)}',
+                            ),
+                            const SizedBox(height: 8),
+                            Text(
+                              'The exact gift contents, supplier costs, and internal fulfilment plan remain private until delivery.',
+                              textAlign: TextAlign.center,
+                              style: TextStyle(
+                                color: colors.mutedText,
+                                fontSize: 12,
                               ),
+                            ),
+                            const SizedBox(height: 6),
+                            Text(
+                              'Circum may ask to record or share a gift reaction. This is optional, and the gift can still be received if filming or public posting is declined.',
+                              textAlign: TextAlign.center,
+                              style: TextStyle(
+                                color: colors.mutedText,
+                                fontSize: 12,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                    if (_requests.isNotEmpty) ...[
+                      const SizedBox(height: 22),
+                      Text(
+                        'Your gift requests',
+                        style: TextStyle(
+                          color: colors.text,
+                          fontSize: 22,
+                          fontWeight: FontWeight.w900,
+                        ),
+                      ),
+                      const SizedBox(height: 10),
+                      ..._requests.map(
+                        (request) => Container(
+                          margin: const EdgeInsets.only(bottom: 8),
+                          decoration: BoxDecoration(
+                            color: colors.field,
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(color: colors.border),
+                          ),
+                          child: ListTile(
+                            leading: const Icon(Icons.card_giftcard),
+                            title: Text(
+                              '${request['occasion']} for ${request['recipientName']}',
+                            ),
+                            subtitle: Text(
+                              GiftRequestPolicy.senderStatus(
+                                '${request['status']}',
+                              ),
+                            ),
+                            trailing: Text(
+                              '£${((request['grossBudget'] as num?)?.toDouble() ?? 0).toStringAsFixed(0)}',
                             ),
                           ),
                         ),
-                      ],
-                    ]),
+                      ),
+                    ],
+                  ],
+                ),
               ),
             ),
           ],
@@ -24187,17 +26355,22 @@ class _GiftsRequestPageState extends State<_GiftsRequestPage> {
   }
 
   Widget _giftField(
-      TextEditingController controller, String label, IconData icon,
-      {TextInputType? type, int lines = 1, bool obscure = false}) {
+    TextEditingController controller,
+    String label,
+    IconData icon, {
+    TextInputType? type,
+    int lines = 1,
+    bool obscure = false,
+  }) {
     return Padding(
       padding: const EdgeInsets.only(bottom: 12),
       child: TextField(
-          controller: controller,
-          keyboardType: type,
-          maxLines: lines,
-          obscureText: obscure,
-          decoration:
-              InputDecoration(labelText: label, prefixIcon: Icon(icon))),
+        controller: controller,
+        keyboardType: type,
+        maxLines: lines,
+        obscureText: obscure,
+        decoration: InputDecoration(labelText: label, prefixIcon: Icon(icon)),
+      ),
     );
   }
 }
@@ -24275,8 +26448,10 @@ class _GiftsComingSoonPageState extends State<_GiftsComingSoonPage> {
     } catch (error) {
       debugPrint('Gifts waitlist error: $error');
       if (mounted) {
-        setState(() => _message =
-            'We could not add you just now. Please try again shortly.');
+        setState(
+          () => _message =
+              'We could not add you just now. Please try again shortly.',
+        );
       }
     } finally {
       if (mounted) setState(() => _saving = false);
@@ -24291,8 +26466,12 @@ class _GiftsComingSoonPageState extends State<_GiftsComingSoonPage> {
       backgroundColor: colors.background,
       body: SafeArea(
         child: ListView(
-          padding:
-              EdgeInsets.fromLTRB(narrow ? 18 : 28, 16, narrow ? 18 : 28, 42),
+          padding: EdgeInsets.fromLTRB(
+            narrow ? 18 : 28,
+            16,
+            narrow ? 18 : 28,
+            42,
+          ),
           children: [
             ConstrainedBox(
               constraints: const BoxConstraints(maxWidth: 1100),
@@ -24328,13 +26507,15 @@ class _GiftsComingSoonPageState extends State<_GiftsComingSoonPage> {
                           borderRadius: BorderRadius.circular(28),
                           color: Colors.black,
                           border: Border.all(
-                            color:
-                                const Color(0xff70f5d0).withValues(alpha: 0.24),
+                            color: const Color(
+                              0xff70f5d0,
+                            ).withValues(alpha: 0.24),
                           ),
                           boxShadow: [
                             BoxShadow(
-                              color: const Color(0xff9b72ff)
-                                  .withValues(alpha: 0.24),
+                              color: const Color(
+                                0xff9b72ff,
+                              ).withValues(alpha: 0.24),
                               blurRadius: 46,
                               offset: const Offset(0, 18),
                             ),
@@ -24388,11 +26569,12 @@ class _GiftsComingSoonPageState extends State<_GiftsComingSoonPage> {
                       spacing: 9,
                       runSpacing: 9,
                       children: _interests
-                          .map((label) => Chip(
-                                avatar:
-                                    const Icon(Icons.auto_awesome, size: 16),
-                                label: Text(label),
-                              ))
+                          .map(
+                            (label) => Chip(
+                              avatar: const Icon(Icons.auto_awesome, size: 16),
+                              label: Text(label),
+                            ),
+                          )
                           .toList(),
                     ),
                     const SizedBox(height: 34),
@@ -24453,11 +26635,13 @@ class _GiftsComingSoonPageState extends State<_GiftsComingSoonPage> {
                                 ? const SizedBox.square(
                                     dimension: 18,
                                     child: CircularProgressIndicator(
-                                        strokeWidth: 2),
+                                      strokeWidth: 2,
+                                    ),
                                   )
                                 : const Icon(Icons.card_giftcard),
-                            label:
-                                Text(_saving ? 'Joining...' : 'Join waitlist'),
+                            label: Text(
+                              _saving ? 'Joining...' : 'Join waitlist',
+                            ),
                             style: FilledButton.styleFrom(
                               padding: const EdgeInsets.symmetric(vertical: 17),
                             ),
@@ -24593,8 +26777,9 @@ class _CompanyLiveChatButtonState extends State<_CompanyLiveChatButton> {
               border: Border.all(color: colors.border),
               boxShadow: [
                 BoxShadow(
-                  color:
-                      Colors.black.withValues(alpha: colors.dark ? 0.34 : 0.16),
+                  color: Colors.black.withValues(
+                    alpha: colors.dark ? 0.34 : 0.16,
+                  ),
                   blurRadius: 28,
                   offset: const Offset(0, 16),
                 ),
@@ -24610,12 +26795,15 @@ class _CompanyLiveChatButtonState extends State<_CompanyLiveChatButton> {
                       width: 38,
                       height: 38,
                       decoration: BoxDecoration(
-                        gradient:
-                            const LinearGradient(colors: _spectrumGradient),
+                        gradient: const LinearGradient(
+                          colors: _spectrumGradient,
+                        ),
                         borderRadius: BorderRadius.circular(14),
                       ),
-                      child:
-                          const Icon(Icons.support_agent, color: Colors.white),
+                      child: const Icon(
+                        Icons.support_agent,
+                        color: Colors.white,
+                      ),
                     ),
                     const SizedBox(width: 12),
                     Expanded(
@@ -24724,9 +26912,9 @@ class _CompanyLiveChatButtonState extends State<_CompanyLiveChatButton> {
     });
     try {
       await _ensureCircumFirebaseReady();
-      await FirebaseFunctions.instanceFor(region: 'us-central1')
-          .httpsCallable('submitWebsiteSupportRequest')
-          .call({
+      await FirebaseFunctions.instanceFor(
+        region: 'us-central1',
+      ).httpsCallable('submitWebsiteSupportRequest').call({
         'name': _name.text.trim(),
         'email': contact,
         'message': message,
@@ -24936,14 +27124,8 @@ const _trackingStatuses = [
   ),
   _TrackingStatus(
     'Delivered',
-    'Proof of delivery is saved in your Circum history.',
+    'Delivery completed. Open the delivery record to view available proof.',
   ),
-  _TrackingStatus(
-    'Closed',
-    'This delivery is no longer active.',
-  ),
-  _TrackingStatus(
-    'Needs attention',
-    'Circum is reviewing this delivery.',
-  ),
+  _TrackingStatus('Closed', 'This delivery is no longer active.'),
+  _TrackingStatus('Needs attention', 'Circum is reviewing this delivery.'),
 ];
