@@ -768,15 +768,9 @@ class _SenderAuthEntryState extends State<_SenderAuthEntry> {
     if (user == null) {
       throw FirebaseAuthException(code: 'preview-no-user');
     }
-    await FirebaseFirestore.instance.collection('users').doc(user.uid).set({
-      'email': user.email,
-      'role': 'user',
-      'roles': ['sender'],
-      'userType': 'sender',
-      'status': 'active',
-      'source': 'sender_mobile_preview',
-      'updatedAt': FieldValue.serverTimestamp(),
-    }, SetOptions(merge: true));
+    await FirebaseFunctions.instanceFor(region: 'us-central1')
+        .httpsCallable('ensureSenderAccount')
+        .call();
     await user.getIdToken(true);
   }
 
@@ -1876,6 +1870,7 @@ class FirebaseSenderHomeRepository implements SenderHomeRepository {
     return firestore
         .collection('notifications')
         .where('recipientId', isEqualTo: uid)
+        .orderBy('createdAt', descending: true)
         .limit(50)
         .snapshots()
         .map((snapshot) {
@@ -1898,8 +1893,6 @@ class FirebaseSenderHomeRepository implements SenderHomeRepository {
           createdAt: rawDate is Timestamp ? rawDate.toDate() : null,
         );
       }).toList();
-      items.sort((a, b) => (b.createdAt ?? DateTime(1970))
-          .compareTo(a.createdAt ?? DateTime(1970)));
       return items;
     });
   }
