@@ -564,6 +564,7 @@ class _SenderAuthEntryState extends State<_SenderAuthEntry> {
   final _password = TextEditingController();
   var _showErrors = false;
   var _busy = false;
+  var _showPassword = false;
   String? _authMessage;
 
   bool get _isSignIn => widget.mode == _SenderAuthMode.signIn;
@@ -648,10 +649,22 @@ class _SenderAuthEntryState extends State<_SenderAuthEntry> {
               controller: _password,
               label: 'PASSWORD',
               hint: _isSignIn ? 'Password' : 'Create a password',
-              obscureText: true,
+              obscureText: !_showPassword,
               errorText: _showErrors && _password.text.isEmpty
                   ? 'Password is required'
-                  : null,
+                  : _showErrors && !_isSignIn && _password.text.length < 6
+                      ? 'Use at least 6 characters'
+                      : null,
+              suffix: IconButton(
+                tooltip: _showPassword ? 'Hide password' : 'Show password',
+                onPressed: () => setState(() => _showPassword = !_showPassword),
+                icon: Icon(
+                  _showPassword
+                      ? Icons.visibility_off_outlined
+                      : Icons.visibility_outlined,
+                  color: _SenderTokens.muted,
+                ),
+              ),
               onChanged: (_) => setState(() {}),
             ),
             const SizedBox(height: 14),
@@ -662,7 +675,7 @@ class _SenderAuthEntryState extends State<_SenderAuthEntry> {
                       ? 'Sign in'
                       : 'Create account',
               semanticLabel: _isSignIn ? 'Sign in' : 'Create account',
-              onTap: _busy ? () {} : () => _submit(),
+              onTap: _busy ? null : () => _submit(),
             ),
             if (_authMessage != null) ...[
               const SizedBox(height: 10),
@@ -698,7 +711,8 @@ class _SenderAuthEntryState extends State<_SenderAuthEntry> {
 
   Future<void> _submit() async {
     final validIdentity = _identity.text.trim().isNotEmpty;
-    final validPassword = !_isSignIn || _password.text.isNotEmpty;
+    final validPassword =
+        _isSignIn ? _password.text.isNotEmpty : _password.text.length >= 6;
     final validPreviewEmail =
         !widget.previewAuthEnabled || _identity.text.trim().contains('@');
     setState(() {
@@ -768,15 +782,9 @@ class _SenderAuthEntryState extends State<_SenderAuthEntry> {
     if (user == null) {
       throw FirebaseAuthException(code: 'preview-no-user');
     }
-    await FirebaseFirestore.instance.collection('users').doc(user.uid).set({
-      'email': user.email,
-      'role': 'user',
-      'roles': ['sender'],
-      'userType': 'sender',
-      'status': 'active',
-      'source': 'sender_mobile_preview',
-      'updatedAt': FieldValue.serverTimestamp(),
-    }, SetOptions(merge: true));
+    await FirebaseFunctions.instanceFor(region: 'us-central1')
+        .httpsCallable('ensureSenderAccount')
+        .call();
     await user.getIdToken(true);
   }
 
@@ -972,7 +980,7 @@ class _GlassIconChip extends StatelessWidget {
 class _SenderPrimaryAction extends StatelessWidget {
   final String label;
   final String semanticLabel;
-  final VoidCallback onTap;
+  final VoidCallback? onTap;
 
   const _SenderPrimaryAction({
     required this.label,
@@ -1453,6 +1461,7 @@ class _AuthField extends StatelessWidget {
   final TextInputType? keyboardType;
   final bool obscureText;
   final String? errorText;
+  final Widget? suffix;
   final ValueChanged<String> onChanged;
 
   const _AuthField({
@@ -1462,6 +1471,7 @@ class _AuthField extends StatelessWidget {
     this.keyboardType,
     this.obscureText = false,
     this.errorText,
+    this.suffix,
     required this.onChanged,
   });
 
@@ -1495,6 +1505,7 @@ class _AuthField extends StatelessWidget {
             ),
             decoration: InputDecoration(
               hintText: hint,
+              suffixIcon: suffix,
               hintStyle: GoogleFonts.inter(
                 color: Colors.white.withValues(alpha: .34),
               ),
@@ -1876,6 +1887,7 @@ class FirebaseSenderHomeRepository implements SenderHomeRepository {
     return firestore
         .collection('notifications')
         .where('recipientId', isEqualTo: uid)
+        .orderBy('createdAt', descending: true)
         .limit(50)
         .snapshots()
         .map((snapshot) {
@@ -1898,8 +1910,6 @@ class FirebaseSenderHomeRepository implements SenderHomeRepository {
           createdAt: rawDate is Timestamp ? rawDate.toDate() : null,
         );
       }).toList();
-      items.sort((a, b) => (b.createdAt ?? DateTime(1970))
-          .compareTo(a.createdAt ?? DateTime(1970)));
       return items;
     });
   }
