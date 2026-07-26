@@ -290,9 +290,15 @@ exports.onDeliveryUpdated = functions.firestore.document("deliveryRequests/{deli
   const oldWaitingCharge = Number(customerWaitingCharge(before).amount || 0);
   const waitingCharge = customerWaitingCharge(after);
   const waitingChargeAmount = Number(waitingCharge.amount || 0);
-  if (!statusChanged && oldPayment === payment && oldWaitingContext === waitingContext && oldWaitingCharge === waitingChargeAmount) return;
-  if (statusChanged) await communicationEngine.closeDeliveryConversation(
-      ids.bookingId, status);
+  if (!statusChanged &&
+      oldPayment === payment &&
+      oldWaitingContext === waitingContext &&
+      oldWaitingCharge === waitingChargeAmount) {
+    return;
+  }
+  if (statusChanged) {
+    await communicationEngine.closeDeliveryConversation(ids.bookingId, status);
+  }
   const systemMessages = {
     accepted: "Rider accepted the delivery.",
     navigating_to_pickup: "Rider is heading to pickup.",
