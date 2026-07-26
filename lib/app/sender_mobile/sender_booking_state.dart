@@ -571,7 +571,7 @@ String senderStepTitle(SenderBookingStep step) {
     case SenderBookingStep.payment:
       return 'Payment';
     case SenderBookingStep.findingRider:
-      return 'Finding the best rider for you...';
+      return 'Finding the best Circum Rider for you...';
     case SenderBookingStep.liveTracking:
       return 'Track your delivery.';
   }

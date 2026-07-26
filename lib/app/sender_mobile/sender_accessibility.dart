@@ -345,8 +345,8 @@ enum SenderFeedbackEvent {
 }
 
 enum SenderDeliveryAnnouncement {
-  riderAccepted('Rider accepted your delivery.'),
-  riderArrived('Your rider has arrived.'),
+  riderAccepted('Circum Rider accepted your delivery.'),
+  riderArrived('Your Circum Rider has arrived.'),
   pickupComplete('Pickup complete.'),
   deliveryCompleted('Your delivery has been completed.'),
   giftDelivered('Gift delivered.'),
@@ -894,7 +894,7 @@ class SenderAccessibilityView extends StatelessWidget {
                     controller.update(settings.copyWith(deliveryAlerts: value)),
               ),
               _SwitchTile(
-                title: 'Announce rider arrival',
+                title: 'Announce Circum Rider arrival',
                 value: settings.announceRiderArrival,
                 onChanged: (value) => controller
                     .update(settings.copyWith(announceRiderArrival: value)),

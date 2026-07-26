@@ -152,15 +152,48 @@ class FirebaseSenderWalletRepository implements SenderWalletRepository {
   }
 
   @override
-  Stream<SenderWalletData> watch() async* {
+  Stream<SenderWalletData> watch() {
     final user = _user;
-    await for (final snapshot
-        in firestore.collection('senderWallets').doc(user.uid).snapshots()) {
-      final profile = await firestore.collection('users').doc(user.uid).get();
-      yield SenderWalletData.fromMap(snapshot.data() ?? const {},
-          onboardingCompleted:
-              profile.data()?['senderWalletOnboardingCompleted'] == true);
+    final controller = StreamController<SenderWalletData>();
+    DocumentSnapshot<Map<String, dynamic>>? latestWallet;
+    DocumentSnapshot<Map<String, dynamic>>? latestProfile;
+    StreamSubscription<DocumentSnapshot<Map<String, dynamic>>>? walletSub;
+    StreamSubscription<DocumentSnapshot<Map<String, dynamic>>>? profileSub;
+
+    void emitIfReady() {
+      final wallet = latestWallet;
+      final profile = latestProfile;
+      if (wallet == null || profile == null) return;
+      controller.add(SenderWalletData.fromMap(
+        wallet.data() ?? const {},
+        onboardingCompleted:
+            profile.data()?['senderWalletOnboardingCompleted'] == true,
+      ));
     }
+
+    controller.onListen = () {
+      walletSub = firestore
+          .collection('senderWallets')
+          .doc(user.uid)
+          .snapshots()
+          .listen((snapshot) {
+        latestWallet = snapshot;
+        emitIfReady();
+      }, onError: controller.addError);
+      profileSub =
+          firestore.collection('users').doc(user.uid).snapshots().listen(
+        (snapshot) {
+          latestProfile = snapshot;
+          emitIfReady();
+        },
+        onError: controller.addError,
+      );
+    };
+    controller.onCancel = () async {
+      await walletSub?.cancel();
+      await profileSub?.cancel();
+    };
+    return controller.stream;
   }
 
   @override
@@ -1628,7 +1661,7 @@ class _PaymentMethodsSection extends StatelessWidget {
           child: Padding(
             padding: EdgeInsets.only(top: 10),
             child: Text(
-              'Add a card to make future Sender payments faster.',
+              'Add a card to make future Circum payments faster.',
               style: TextStyle(color: _WalletColors.muted, height: 1.4),
             ),
           ),
@@ -1678,7 +1711,7 @@ class _PaymentMethodsSection extends StatelessWidget {
                     child: Padding(
                       padding: EdgeInsets.only(top: 10),
                       child: Text(
-                        'Add a card to make future Sender payments faster.',
+                        'Add a card to make future Circum payments faster.',
                         style: TextStyle(
                           color: _WalletColors.muted,
                           height: 1.4,

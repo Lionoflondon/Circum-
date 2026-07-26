@@ -680,7 +680,7 @@ class _SenderMobileProfileViewState extends State<SenderMobileProfileView> {
         backgroundColor: _ProfileTokens.panel,
         title: const Text('Close your Circum account?'),
         content: const Text(
-          'This permanently closes your Sender account. Active deliveries, '
+          'This permanently closes your Circum account. Active deliveries, '
           'open disputes or pending payments must be resolved first.',
         ),
         actions: [
@@ -1440,7 +1440,7 @@ class _ProfileTrustCard extends StatelessWidget {
     final progressCopy = !profile.hasTrustScore
         ? 'Trust progress unavailable'
         : profile.nextTierLabel == null
-            ? 'Highest Sender tier reached'
+            ? 'Highest Circum tier reached'
             : '${profile.pointsToNextTier} Trust Points until ${profile.nextTierLabel}';
     return _ProfileGlassCard(
       child: Column(
@@ -2766,7 +2766,7 @@ class _AccountTypeBadge extends StatelessWidget {
         mainAxisSize: MainAxisSize.min,
         children: [
           Text(
-            'Sender Account',
+            'Circum Account',
             style: GoogleFonts.jetBrainsMono(
               color: _ProfileTokens.lightAccent,
               fontSize: 10,

@@ -6,6 +6,7 @@ import 'package:cloud_functions/cloud_functions.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import '../delivery/proof_of_delivery.dart';
 import '../send_package/bloc/send_package_bloc.dart';
 import '../send_package/view/ride_chats.dart';
 import 'design_system/sender_design_system.dart';
@@ -185,7 +186,9 @@ SenderTrackingState? senderTrackingStateForBackendStatus(Object? status) {
     'finding_rider' ||
     'awaiting_rider' ||
     'broadcast' ||
-    'broadcasted' =>
+    'broadcasted' ||
+    'broadcasting' ||
+    'available' =>
       SenderTrackingState.findingRider,
     'accepted' || 'rider_assigned' => SenderTrackingState.riderAssigned,
     'navigating_to_pickup' ||
@@ -268,8 +271,8 @@ SenderTrackingContent senderTrackingContentFor(
       );
     case SenderTrackingState.findingRider:
       return const SenderTrackingContent(
-        title: 'Finding your rider',
-        body: 'Searching verified riders near your pickup.',
+        title: 'Finding your Circum Rider',
+        body: 'Searching verified Circum Riders near your pickup.',
         pill: 'Searching',
         progress: 0,
         dimMap: false,
@@ -281,8 +284,8 @@ SenderTrackingContent senderTrackingContentFor(
       );
     case SenderTrackingState.riderAssigned:
       return const SenderTrackingContent(
-        title: 'Your rider is on the way',
-        body: 'Your rider has accepted your delivery.',
+        title: 'Your Circum Rider is on the way',
+        body: 'Your Circum Rider has accepted your delivery.',
         pill: 'Assigned',
         progress: 1,
         showRoute: true,
@@ -298,7 +301,7 @@ SenderTrackingContent senderTrackingContentFor(
       );
     case SenderTrackingState.riderEnRouteToPickup:
       return const SenderTrackingContent(
-        title: 'Your rider is heading to pickup',
+        title: 'Your Circum Rider is heading to pickup',
         body: 'Have your parcel ready.',
         pill: 'En route',
         progress: 1,
@@ -315,8 +318,8 @@ SenderTrackingContent senderTrackingContentFor(
       );
     case SenderTrackingState.riderArrivedAtPickup:
       return const SenderTrackingContent(
-        title: 'Your rider has arrived',
-        body: 'Meet your rider to hand off the parcel.',
+        title: 'Your Circum Rider has arrived',
+        body: 'Meet your Circum Rider to hand off the parcel.',
         pill: 'Arrived',
         progress: 1,
         showRoute: true,
@@ -366,7 +369,7 @@ SenderTrackingContent senderTrackingContentFor(
       );
     case SenderTrackingState.riderArrivingAtDropoff:
       return const SenderTrackingContent(
-        title: 'Your rider is almost there',
+        title: 'Your Circum Rider is almost there',
         body: 'Your parcel is arriving shortly.',
         pill: 'Arriving',
         progress: 3,
@@ -385,7 +388,7 @@ SenderTrackingContent senderTrackingContentFor(
       return const SenderTrackingContent(
         title: 'Adjustment under review',
         body:
-            'Rider has reported a discrepancy. Delivery and payment are paused while Admin reviews the evidence.',
+            'Circum Rider has reported a discrepancy. Delivery and payment are paused while Admin reviews the evidence.',
         pill: 'Awaiting review',
         progress: 1,
         showRoute: true,
@@ -476,7 +479,7 @@ SenderTrackingContent senderTrackingContentFor(
       return const SenderTrackingContent(
         title: "There's an issue with this delivery",
         body:
-            "Your rider reported a problem completing this delivery. We're looking into it now.",
+            "Your Circum Rider reported a problem completing this delivery. We're looking into it now.",
         pill: 'Needs attention',
         progress: 3,
         showRoute: true,
@@ -548,7 +551,7 @@ String _senderWaitingStateLabel({
   if (status == 'waiting' || status == 'waiting_for_collection') {
     return 'Waiting for collection';
   }
-  return 'Rider arrived';
+  return 'Circum Rider arrived';
 }
 
 Map<String, dynamic> _mapFrom(Object? value) {
@@ -626,6 +629,15 @@ String senderActiveDeliveryIdFor(SendPackageState engine) {
   final data = engine.activeDeliveryData;
   return '${data['requestId'] ?? data['deliveryId'] ?? data['id'] ?? data['_docId'] ?? ''}'
       .trim();
+}
+
+String senderActiveRiderNameFor(SendPackageState engine) {
+  final data = engine.activeDeliveryData;
+  for (final key in ['riderName', 'driverName', 'courierName']) {
+    final value = '${data[key] ?? ''}'.trim();
+    if (value.isNotEmpty) return value;
+  }
+  return '';
 }
 
 bool senderCanCancelBeforeCollection(SenderTrackingState state) {
@@ -877,11 +889,12 @@ class _SenderMobileTrackingScreenState extends State<SenderMobileTrackingScreen>
 
   void _openDeliveryChat() {
     final chatId = senderActiveDeliveryIdFor(widget.engine);
+    final riderName = senderActiveRiderNameFor(widget.engine);
     Navigator.of(context).push(
       MaterialPageRoute<void>(
         builder: (_) => RideChatPageView(
           chatId: chatId.isEmpty ? null : chatId,
-          title: 'Delivery chat',
+          title: riderName.isEmpty ? 'Delivery chat' : riderName,
         ),
       ),
     );
@@ -1239,7 +1252,7 @@ class _TrackingPanelContent extends StatelessWidget {
           PINCard(
             pin: engine.deliveryData?.code,
             label: 'Collection PIN',
-            hint: 'Give this to your rider at pickup.',
+            hint: 'Give this to your Circum Rider at pickup.',
             statusLabel: senderCollectionPinStatusFor(
               state,
               verified: engine.collectionPinVerified,
@@ -1308,6 +1321,13 @@ class _TrackingPanelContent extends StatelessWidget {
         if (state == SenderTrackingState.delivered) ...[
           const SizedBox(height: 8),
           const _DeliveredChipSequence(),
+          const SizedBox(height: 12),
+          _ProofOfDeliverySection(
+            proof: proofOfDeliveryFromRecord(
+              engine.activeDeliveryData,
+              fallbackReference: engine.deliveryData?.code,
+            ),
+          ),
         ],
         const SizedBox(height: 16),
         _TrackingActions(
@@ -1407,6 +1427,179 @@ class _DeliveredChipSequence extends StatelessWidget {
           color: Color(0xFF34D399),
         ),
       ],
+    );
+  }
+}
+
+class _ProofOfDeliverySection extends StatelessWidget {
+  final ProofOfDeliveryDetails proof;
+
+  const _ProofOfDeliverySection({required this.proof});
+
+  @override
+  Widget build(BuildContext context) {
+    final rows = proof.visibleRows;
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(14),
+      decoration: _cardDecoration(),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(
+                proof.hasAnyProof
+                    ? Icons.verified_outlined
+                    : Icons.info_outline_rounded,
+                color: proof.hasAnyProof
+                    ? const Color(0xFF34D399)
+                    : _TrackingTokens.muted,
+                size: 20,
+              ),
+              const SizedBox(width: 8),
+              const Expanded(
+                child: Text(
+                  'Proof of Delivery',
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontWeight: FontWeight.w800,
+                    fontSize: 15,
+                  ),
+                ),
+              ),
+              _ProofStatusPill(label: proof.statusLabel),
+            ],
+          ),
+          const SizedBox(height: 10),
+          if (!proof.hasAnyProof)
+            const Text(
+              'Proof of delivery is not available for this delivery.',
+              style: TextStyle(color: _TrackingTokens.muted, height: 1.45),
+            )
+          else ...[
+            if (proof.vanguardIncomplete) ...[
+              const Text(
+                'Vanguard proof is incomplete and should be reviewed by Circum.',
+                style: TextStyle(
+                  color: Color(0xFFFBBF24),
+                  fontWeight: FontWeight.w700,
+                  height: 1.35,
+                ),
+              ),
+              const SizedBox(height: 10),
+            ],
+            if (proof.hasPhoto) ...[
+              ClipRRect(
+                borderRadius: BorderRadius.circular(14),
+                child: AspectRatio(
+                  aspectRatio: 16 / 9,
+                  child: Image.network(
+                    proof.photoUrl,
+                    fit: BoxFit.cover,
+                    errorBuilder: (_, __, ___) => Container(
+                      color: Colors.white.withValues(alpha: .06),
+                      alignment: Alignment.center,
+                      child: const Icon(
+                        Icons.broken_image_outlined,
+                        color: _TrackingTokens.muted,
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 10),
+              OutlinedButton.icon(
+                onPressed: () => showDialog<void>(
+                  context: context,
+                  builder: (_) => Dialog(
+                    backgroundColor: const Color(0xFF07111F),
+                    child: ClipRRect(
+                      borderRadius: BorderRadius.circular(18),
+                      child: Image.network(
+                        proof.photoUrl,
+                        fit: BoxFit.contain,
+                        errorBuilder: (_, __, ___) => const Padding(
+                          padding: EdgeInsets.all(24),
+                          child: Text(
+                            'Proof photo could not be loaded.',
+                            style: TextStyle(color: Colors.white),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+                icon: const Icon(Icons.open_in_full_rounded, size: 16),
+                label: const Text('View full proof'),
+              ),
+              const SizedBox(height: 10),
+            ],
+            for (final row in rows)
+              Padding(
+                padding: const EdgeInsets.only(bottom: 6),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    SizedBox(
+                      width: 132,
+                      child: Text(
+                        row.$1,
+                        style: const TextStyle(
+                          color: _TrackingTokens.muted,
+                          fontSize: 12,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                    ),
+                    Expanded(
+                      child: Text(
+                        row.$2,
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 12,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+class _ProofStatusPill extends StatelessWidget {
+  final String label;
+
+  const _ProofStatusPill({required this.label});
+
+  @override
+  Widget build(BuildContext context) {
+    final lower = label.toLowerCase();
+    final color = lower.contains('available')
+        ? const Color(0xFF34D399)
+        : lower.contains('review')
+            ? const Color(0xFFFBBF24)
+            : const Color(0xFFF87171);
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: .12),
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(color: color.withValues(alpha: .28)),
+      ),
+      child: Text(
+        label,
+        style: TextStyle(
+          color: color,
+          fontSize: 11,
+          fontWeight: FontWeight.w800,
+        ),
+      ),
     );
   }
 }
@@ -1589,7 +1782,7 @@ class SenderWaitingSnapshot {
       message: customerResponded
           ? 'Customer response received. Collection time continues.'
           : noShowAvailable
-              ? 'Your rider has completed the required waiting period. Contact your rider immediately if you still require this delivery.'
+              ? 'Your Circum Rider has completed the required waiting period. Contact your Circum Rider immediately if you still require this delivery.'
               : 'Sender notified on arrival. Collection countdown is live.',
     );
   }
@@ -1636,7 +1829,7 @@ class SenderWaitingCard extends StatelessWidget {
                 ),
                 const SizedBox(height: 4),
                 const Text(
-                  'Meet your rider to hand over your parcel.',
+                  'Meet your Circum Rider to hand over your parcel.',
                   style: TextStyle(
                     color: _TrackingTokens.muted,
                     fontSize: 11.5,
@@ -1719,7 +1912,7 @@ class _CancelDeliverySheet extends StatelessWidget {
               ),
               const SizedBox(height: 8),
               const Text(
-                'The rider will be updated immediately if you confirm.',
+                'The Circum Rider will be updated immediately if you confirm.',
                 style: TextStyle(
                   color: _TrackingTokens.muted,
                   height: 1.4,
@@ -1977,7 +2170,7 @@ class _VanguardCollectionPinCardState extends State<VanguardCollectionPinCard> {
                     ),
                     const SizedBox(height: 3),
                     const Text(
-                      'This PIN must be shown to your rider during collection.',
+                      'This PIN must be shown to your Circum Rider during collection.',
                       maxLines: 2,
                       overflow: TextOverflow.ellipsis,
                       style: TextStyle(
@@ -2027,10 +2220,10 @@ class RiderCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final data = engine.deliveryData;
-    final name = _firstName(data?.courierName) ?? 'Your rider';
+    final name = _firstName(data?.courierName) ?? 'Your Circum Rider';
     final vehicle = data?.typeOfVehicle.trim().isNotEmpty == true
         ? data!.typeOfVehicle
-        : 'Rider';
+        : 'Circum Rider';
     final rating = data?.rating.trim().isNotEmpty == true ? data!.rating : '';
     return Container(
       padding: const EdgeInsets.all(12),
@@ -2066,7 +2259,7 @@ class RiderCard extends StatelessWidget {
                 const SizedBox(height: 3),
                 Text(
                   [
-                    'Order rider',
+                    'Order Circum Rider',
                     if (rating.isNotEmpty) '$rating star',
                     vehicle,
                   ].join(' · '),
@@ -2541,7 +2734,7 @@ class MatchingSearchCard extends StatelessWidget {
           ),
           const SizedBox(height: 4),
           const Text(
-            'Circum is checking nearby verified riders and preserving your booking state until a rider accepts.',
+            'Circum is checking nearby verified Circum Riders and preserving your booking state until a Circum Rider accepts.',
             style: TextStyle(
               color: _TrackingTokens.muted,
               fontSize: 11.5,
@@ -2568,8 +2761,8 @@ class MatchingStatusRotator extends StatefulWidget {
 class _MatchingStatusRotatorState extends State<MatchingStatusRotator> {
   static const _messages = [
     'Searching nearby riders...',
-    'Checking rider availability...',
-    'Finding the fastest rider...',
+    'Checking Circum Rider availability...',
+    'Finding the fastest Circum Rider...',
     'Sending request...',
   ];
   int _index = 0;
@@ -2697,7 +2890,7 @@ class ProgressiveMatchChecklist extends StatefulWidget {
 class _ProgressiveMatchChecklistState extends State<ProgressiveMatchChecklist> {
   static const _items = [
     'Searching nearby riders',
-    'Searching verified riders',
+    'Searching verified Circum Riders',
     'Matching based on distance',
     'Matching based on vehicle suitability',
     'Matching based on trust',
@@ -3368,7 +3561,7 @@ class _LiveMapPendingPaymentNote extends StatelessWidget {
           SizedBox(width: 10),
           Expanded(
             child: Text(
-              'Live tracking begins once payment is complete and your rider has accepted.',
+              'Live tracking begins once payment is complete and your Circum Rider has accepted.',
               style: TextStyle(color: _TrackingTokens.muted, height: 1.35),
             ),
           ),

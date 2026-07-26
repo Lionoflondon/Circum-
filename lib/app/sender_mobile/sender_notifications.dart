@@ -78,6 +78,7 @@ class SenderNotificationsRepository {
     return firestore
         .collection('notifications')
         .where('recipientId', isEqualTo: uid)
+        .orderBy('createdAt', descending: true)
         .limit(100)
         .snapshots()
         .map((snapshot) {
@@ -85,8 +86,6 @@ class SenderNotificationsRepository {
           .map(CircumNotification.fromDocument)
           .where((notification) => !notification.archived)
           .toList();
-      results.sort((a, b) => (b.createdAt ?? DateTime(1970))
-          .compareTo(a.createdAt ?? DateTime(1970)));
       return results;
     });
   }

@@ -588,6 +588,17 @@ class DeliveryPricing {
       'small electronics',
       'lightweight gift',
     ].any(text.contains);
+    final compactFootwear = categoryText.contains('fashion') &&
+        [
+          'shoe',
+          'shoes',
+          'trainer',
+          'trainers',
+          'sneaker',
+          'sneakers',
+          'shoebox',
+          'shoe box',
+        ].any(text.contains);
     final resolvedQuantity = max(1, quantity ?? _quantityFromDescription(text));
     final largestItemWeightKg = singleItemWeightKg ??
         (resolvedQuantity > 1 ? weightKg / resolvedQuantity : weightKg);
@@ -700,6 +711,15 @@ class DeliveryPricing {
       recommended = 'Bike';
       score = max(score, 78);
     }
+    if (compactFootwear &&
+        weightKg <= 5 &&
+        bikeSafeDimensions &&
+        !oversizedDimensions &&
+        repo == 'bike') {
+      allowed = {'Bike', 'Car', 'Van'};
+      recommended = 'Bike';
+      score = max(score, 86);
+    }
 
     return VehicleSuitability(
       recommendedVehicle: recommended,
@@ -795,10 +815,6 @@ class DeliveryPricing {
       'van': 2,
     };
     return order[vehicleType?.trim().toLowerCase()];
-  }
-
-  static String _normalizeVehicle(String? vehicleType) {
-    return _normalizePricingVehicle(vehicleType);
   }
 
   static double calculateVehicleSurcharge(String? vehicleType) {

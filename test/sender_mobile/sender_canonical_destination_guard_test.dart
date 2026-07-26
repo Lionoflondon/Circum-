@@ -204,6 +204,33 @@ void main() {
     expect(bloc, contains('_terminalRequestStatuses'));
   });
 
+  test('Sender billing weight uses the higher of customer and IRIS weight', () {
+    final bloc = read('lib/app/send_package/bloc/send_package_bloc.dart');
+    final handlerStart = bloc.indexOf('void _handleSetParcelWeight(');
+    final handlerEnd =
+        bloc.indexOf('void _handleRequestCanonicalIrisEstimate', handlerStart);
+    expect(handlerStart, isNonNegative);
+    expect(handlerEnd, greaterThan(handlerStart));
+
+    final handler = bloc.substring(handlerStart, handlerEnd);
+    final trustedStart =
+        handler.indexOf('final trusted = await IrisLearningBridge');
+    final emitStart = handler.indexOf('emit(', trustedStart);
+    expect(trustedStart, isNonNegative);
+    expect(emitStart, greaterThan(trustedStart));
+    final trustedResolution = handler.substring(trustedStart, emitStart);
+
+    expect(
+        trustedResolution, contains('DeliveryPricing.checkoutPricingWeightKg'));
+    expect(trustedResolution, contains('userEnteredWeightKg: event.weightKg'));
+    expect(
+      trustedResolution,
+      contains('irisEstimatedWeightKg: trusted.pricingWeightKg'),
+      reason:
+          'Billing must use whichever is higher: customer-declared weight or IRIS weight.',
+    );
+  });
+
   test('Sender wallet actions stay inside Sender wallet destinations', () {
     final source = read('lib/app/sender_mobile/sender_wallet.dart');
 

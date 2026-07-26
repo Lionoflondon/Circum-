@@ -1088,7 +1088,8 @@ class _RecipientPanel extends StatelessWidget {
           controller: phone,
           hint: 'Recipient phone',
           keyboardType: TextInputType.phone,
-          helperText: 'Used only if the rider needs to contact the recipient.',
+          helperText:
+              'Used only if the Circum Rider needs to contact the recipient.',
           errorText:
               phone.text.trim().isEmpty ? 'Recipient phone is required' : null,
           onChanged: (_) => onChanged(),
@@ -1141,14 +1142,15 @@ class _DeliveryTimePanel extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         const Text(
-          'Choose when your rider should collect and deliver your parcel.',
+          'Choose when your Circum Rider should collect and deliver your parcel.',
           style: TextStyle(color: _Tokens.muted, height: 1.35),
         ),
         const SizedBox(height: 14),
         _RadioGlassTile(
           selected: !scheduled,
           title: 'Deliver now',
-          caption: 'Start finding a rider as soon as payment is complete.',
+          caption:
+              'Start finding a Circum Rider as soon as payment is complete.',
           onTap: () => onDraft(
             draft.copyWith(
               deliveryTimingType: SenderDeliveryTimingType.now,
@@ -1247,7 +1249,7 @@ class _DeliveryTimePanel extends StatelessWidget {
         const SizedBox(height: 14),
         const _InfoNote(
           text:
-              "Scheduled deliveries depend on rider availability. We'll confirm before the delivery begins.",
+              "Scheduled deliveries depend on Circum Rider availability. We'll confirm before the delivery begins.",
         ),
         const SizedBox(height: 14),
         _PrimaryButton(
@@ -1485,6 +1487,10 @@ class _IrisPanel extends StatelessWidget {
                 style: TextStyle(color: _Tokens.muted, height: 1.35),
               ),
             ),
+          if (engine.irisWeightReviewMessage.isNotEmpty) ...[
+            _InfoNote(text: engine.irisWeightReviewMessage),
+            const SizedBox(height: 10),
+          ],
           _IrisResultRow(
             label: 'Item recognised',
             value: iris?.itemName.isNotEmpty == true
@@ -1507,8 +1513,8 @@ class _IrisPanel extends StatelessWidget {
             value: iris?.confidenceLabel ?? 'Awaiting IRIS',
           ),
           const _IrisResultRow(
-            label: 'Rider verification at collection',
-            value: 'The rider confirms the parcel before departure.',
+            label: 'Circum Rider verification at collection',
+            value: 'The Circum Rider confirms the parcel before departure.',
           ),
         ],
         ExpansionTile(
@@ -1960,6 +1966,14 @@ class _SenderReviewDeliveryScreenState
                                     ? const _VanguardReviewBadge()
                                     : null,
                               ),
+                              if (widget
+                                  .engine.irisWeightReviewMessage.isNotEmpty)
+                                Padding(
+                                  padding: const EdgeInsets.only(top: 10),
+                                  child: _InfoNote(
+                                    text: widget.engine.irisWeightReviewMessage,
+                                  ),
+                                ),
                               _ReviewListRow(
                                 icon: Icons.schedule_rounded,
                                 label: 'Delivery time',
@@ -2888,7 +2902,7 @@ String _maskSenderPhoneForReview(String phone) {
   final trimmed = phone.trim();
   if (trimmed.isEmpty) return 'Phone number pending';
   final digits = trimmed.replaceAll(RegExp(r'\D'), '');
-  if (digits.length <= 3) return 'Phone masked until rider assigned';
+  if (digits.length <= 3) return 'Phone masked until Circum Rider assigned';
   final suffix = digits.substring(digits.length - 3);
   final prefix = trimmed.startsWith('+') ? '+${digits.substring(0, 2)} ' : '';
   return '$prefix•••• •••$suffix';
@@ -3156,7 +3170,7 @@ class _PaymentPanel extends StatelessWidget {
           const _GapNotice(
             title: "Payment couldn't be started",
             body:
-                'Please try again. No payment has been confirmed and no rider broadcast has been created.',
+                'Please try again. No payment has been confirmed and no Circum Rider broadcast has been created.',
           ),
         ],
         if (engine.senderPaymentError.isNotEmpty ||

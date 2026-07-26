@@ -668,6 +668,28 @@ void main() {
       expect(vanguard.allows('Bike'), isFalse);
     });
 
+    test('compact footwear remains Bike eligible when repository confirms it',
+        () {
+      final shoes = DeliveryPricing.resolveVehicleSuitability(
+        weightKg: 1.2,
+        description: 'Nike shoes',
+        itemCategory: 'Fashion',
+        repositoryVehicleSuitability: 'Bike',
+        fragile: true,
+        highValue: true,
+        vanguardRequired: true,
+        dimensions: const DeliveryItemDimensions(
+          lengthCm: 25,
+          widthCm: 18,
+          heightCm: 8,
+        ),
+      );
+
+      expect(shoes.recommendedVehicle, 'Bike');
+      expect(shoes.allowedVehicles, containsAll(['Bike', 'Car', 'Van']));
+      expect(DeliveryPricing.vehicleCanCarryDelivery('Bike', shoes), isTrue);
+    });
+
     test('vehicle surcharge follows the selected vehicle', () {
       expect(DeliveryPricing.calculateVehicleSurcharge('Bike'), 0);
       expect(DeliveryPricing.calculateVehicleSurcharge('Car'), 2);

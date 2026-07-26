@@ -16,7 +16,7 @@ foregoundMessage() {
           sendPackageBloc.add(DeliveryAccepted(data: mapData));
 
           notifyUser(
-              title: 'Rider on the way!',
+              title: 'Circum Rider on the way!',
               body:
                   '${mapData['courierName'].split(' ').first.trim()} will be picking up your parcel soon.');
         }
@@ -105,7 +105,7 @@ Future<void> _firebaseMessagingBackgroundHandler(RemoteMessage message) async {
         sendPackageBloc.add(DeliveryAccepted(data: mapData));
 
         notifyUser(
-            title: 'Rider on the way!',
+            title: 'Circum Rider on the way!',
             body:
                 '${mapData['courierName'].split(' ').first.trim()} will be picking up your parcel soon.');
       }

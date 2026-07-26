@@ -48,6 +48,21 @@ void main() {
     );
   });
 
+  test('Sender profile photos are owner scoped while rider photos remain operational', () {
+    final rules = File('storage.rules').readAsStringSync();
+
+    expect(rules, contains('match /profilePhotos/{userId}/{allPaths=**}'));
+    expect(
+      rules,
+      contains(
+          'allow read: if isAdmin() || (signedIn() && request.auth.uid == userId);'),
+    );
+    expect(rules, contains('match /users/{userId}/profile/{fileName}'));
+    expect(rules, contains("fileName.matches('avatar\\\\.jpg|avatar\\\\.png')"));
+    expect(rules, contains('match /rider-profiles/{riderId}/{fileName}'));
+    expect(rules, contains('allow read: if signedIn() || isAdmin();'));
+  });
+
   test('Gift Story app access is backend-led and token deep-linkable', () {
     final story =
         File('lib/app/sender_mobile/gift_story_view.dart').readAsStringSync();

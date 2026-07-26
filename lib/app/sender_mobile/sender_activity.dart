@@ -6,6 +6,7 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
 
+import '../delivery/proof_of_delivery.dart';
 import '../send_package/bloc/send_package_bloc.dart';
 import '../send_package/view/ride_chats.dart';
 import 'design_system/sender_design_system.dart';
@@ -42,6 +43,7 @@ class SenderActivityItem {
   final int? riderCompletedDeliveries;
   final DateTime? riderMemberSince;
   final List<String> riderAchievements;
+  final ProofOfDeliveryDetails? proofOfDelivery;
 
   const SenderActivityItem({
     required this.id,
@@ -70,6 +72,7 @@ class SenderActivityItem {
     this.riderCompletedDeliveries,
     this.riderMemberSince,
     this.riderAchievements = const [],
+    this.proofOfDelivery,
   });
 
   SenderActivityItem copyWith({bool? repeatRider}) => SenderActivityItem(
@@ -99,6 +102,7 @@ class SenderActivityItem {
         riderCompletedDeliveries: riderCompletedDeliveries,
         riderMemberSince: riderMemberSince,
         riderAchievements: riderAchievements,
+        proofOfDelivery: proofOfDelivery,
       );
 }
 
@@ -335,6 +339,7 @@ class FirebaseSenderActivityRepository implements SenderActivityRepository {
       riderAchievements: _safeAchievementLabels(
         profile['recentAchievements'] ?? profile['achievements'],
       ),
+      proofOfDelivery: proofOfDeliveryFromRecord(data, fallbackReference: id),
     );
   }
 
@@ -665,7 +670,9 @@ class _LiveCardContent extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      item.rider.isEmpty ? 'Finding your rider' : item.rider,
+                      item.rider.isEmpty
+                          ? 'Finding your Circum Rider'
+                          : item.rider,
                       style: GoogleFonts.inter(
                         color: Colors.white,
                         fontSize: 15,
@@ -833,6 +840,8 @@ class _CompletedDeliverySummary extends StatelessWidget {
             ActivityStatusBadge(status: item.status, type: item.type),
           ],
         ),
+        const SizedBox(height: 10),
+        _CompletedProofStatus(item: item),
         const SizedBox(height: 18),
         _PremiumRiderSummary(item: item, riderName: riderName),
         if (item.trustPoints > 0) ...[
@@ -936,6 +945,69 @@ class _CompletedDeliverySummary extends StatelessWidget {
   }
 }
 
+class _CompletedProofStatus extends StatelessWidget {
+  final SenderActivityItem item;
+
+  const _CompletedProofStatus({required this.item});
+
+  @override
+  Widget build(BuildContext context) {
+    final proof = item.proofOfDelivery;
+    final label = proof?.statusLabel ?? 'Proof missing';
+    final lower = label.toLowerCase();
+    final color = lower.contains('available')
+        ? const Color(0xFF31D17D)
+        : lower.contains('review')
+            ? const Color(0xFFFBBF24)
+            : const Color(0xFFF87171);
+    final detail = proof?.hasAnyProof == true
+        ? (proof!.hasPhoto
+            ? 'Photo and delivery evidence recorded.'
+            : 'Delivery evidence recorded.')
+        : 'Proof of delivery is not available for this delivery.';
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: .08),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: color.withValues(alpha: .22)),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(Icons.fact_check_outlined, color: color, size: 18),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  label,
+                  style: GoogleFonts.inter(
+                    color: color,
+                    fontSize: 12,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+                const SizedBox(height: 3),
+                Text(
+                  detail,
+                  style: GoogleFonts.inter(
+                    color: _ActivityColors.muted,
+                    fontSize: 11,
+                    height: 1.35,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 class _PremiumRiderSummary extends StatelessWidget {
   final SenderActivityItem item;
   final String riderName;
@@ -944,10 +1016,10 @@ class _PremiumRiderSummary extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final repeatMessage = item.repeatRider && item.rider.isNotEmpty
-        ? 'One of your trusted riders'
+        ? 'One of your trusted Circum Riders'
         : null;
     final trustLabel = item.riderVanguardApproved
-        ? 'Vanguard Approved Rider'
+        ? 'Vanguard Approved Circum Rider'
         : item.riderTrusted
             ? 'Trusted Circum Rider'
             : null;
@@ -1276,12 +1348,12 @@ class _RiderProfileSheet extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final trustLabel = item.riderVanguardApproved
-        ? 'Vanguard Approved Rider'
+        ? 'Vanguard Approved Circum Rider'
         : item.riderTrusted
             ? 'Trusted Circum Rider'
             : null;
     return Semantics(
-      label: '$riderName rider profile',
+      label: '$riderName Circum Rider profile',
       child: Container(
         margin: const EdgeInsets.fromLTRB(10, 0, 10, 10),
         padding: const EdgeInsets.fromLTRB(22, 12, 22, 30),
@@ -1552,7 +1624,7 @@ class ActivityReceiptView extends StatelessWidget {
                     _Detail(
                         'Amount paid', '£${item.amount!.toStringAsFixed(2)}'),
                   _Detail(
-                    'Rider',
+                    'Circum Rider',
                     item.rider.isEmpty ? 'Circum Rider' : item.rider,
                   ),
                   if (item.vanguardProtected)
@@ -1825,6 +1897,15 @@ class _ActivityDetail extends StatelessWidget {
               _Detail('Amount paid', '£${item.amount!.toStringAsFixed(2)}'),
             if (item.rothAmount != null)
               _Detail('Roth', '${item.rothAmount!.toStringAsFixed(2)} Roth'),
+            if (_isCompletedDelivery(item)) ...[
+              _Detail(
+                'Proof of delivery',
+                item.proofOfDelivery?.statusLabel ?? 'Proof missing',
+              ),
+              if (item.proofOfDelivery?.hasAnyProof == true)
+                for (final row in item.proofOfDelivery!.visibleRows)
+                  _Detail(row.$1, row.$2),
+            ],
             _Detail(
                 'Date',
                 item.occurredAt == null

@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:math' as math;
 
 import 'package:circum/app/iris/iris_learning_bridge.dart';
 import 'package:circum/app/iris/iris_weight_estimator.dart';
@@ -491,6 +492,13 @@ class SendPackageBloc extends Bloc<SendPackageEvent, SendPackageState> {
         itemDescription:
             itemDescription.trim().isEmpty ? null : itemDescription,
         isIrisResolving: quickEstimate != null,
+        irisWeightReviewMessage: quickEstimate == null
+            ? ''
+            : _weightReviewMessage(
+                userWeightKg: event.weightKg,
+                irisWeightKg: quickEstimate.weightKg,
+                finalWeightKg: quickWeight,
+              ),
       ),
     );
     add(SetPrice());
@@ -505,12 +513,18 @@ class SendPackageBloc extends Bloc<SendPackageEvent, SendPackageState> {
         userEnteredWeightKg: event.weightKg,
         irisEstimatedWeightKg: trusted.pricingWeightKg,
       );
+      final reviewMessage = _weightReviewMessage(
+        userWeightKg: event.weightKg,
+        irisWeightKg: trusted.pricingWeightKg,
+        finalWeightKg: finalWeight,
+      );
       emit(
         state.copyWith(
           parcelWeightKg: finalWeight,
           irisResult: quickEstimate,
           itemDescription: itemDescription,
           isIrisResolving: false,
+          irisWeightReviewMessage: reviewMessage,
         ),
       );
       add(SetPrice());
@@ -521,10 +535,32 @@ class SendPackageBloc extends Bloc<SendPackageEvent, SendPackageState> {
           irisResult: quickEstimate,
           itemDescription: itemDescription,
           isIrisResolving: false,
+          irisWeightReviewMessage: _weightReviewMessage(
+            userWeightKg: event.weightKg,
+            irisWeightKg: quickEstimate.weightKg,
+            finalWeightKg: quickWeight,
+          ),
         ),
       );
       add(SetPrice());
     }
+  }
+
+  String _weightReviewMessage({
+    required double userWeightKg,
+    required double? irisWeightKg,
+    required double finalWeightKg,
+  }) {
+    if (userWeightKg <= 0 || irisWeightKg == null || irisWeightKg <= 0) {
+      return '';
+    }
+    final lower = math.min(userWeightKg, irisWeightKg);
+    final higher = math.max(userWeightKg, irisWeightKg);
+    if (higher - lower < 2 || higher / lower < 2.5) return '';
+    final source = userWeightKg >= irisWeightKg
+        ? 'your entered weight'
+        : 'Circum’s parcel estimate';
+    return 'The parcel weight looks unusually different. Pricing uses the higher weight for fairness: ${finalWeightKg.toStringAsFixed(1)}kg from $source. Please check the weight before payment.';
   }
 
   void _handleRequestCanonicalIrisEstimate(
