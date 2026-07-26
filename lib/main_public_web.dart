@@ -1,4 +1,4 @@
-import 'dart:ui';
+import 'dart:async';
 
 import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/foundation.dart';
@@ -9,59 +9,58 @@ import 'website/shared/firebase/website_firebase_options.dart';
 import 'website/shared/security/circum_website_app_check.dart';
 
 Future<void> main() async {
-  WidgetsFlutterBinding.ensureInitialized();
-  _installAppCheckStartupBoundary();
-  await Firebase.initializeApp(options: DefaultFirebaseOptions.web);
-  final appCheckStartup = await initializeCircumAppCheck();
-  if (appCheckStartup.blockStartup) {
-    runApp(_PublicWebStartupBlocked(message: appCheckStartup.message));
-    return;
+  runZonedGuarded(
+    () async {
+      WidgetsFlutterBinding.ensureInitialized();
+      _installAppCheckStartupBoundary();
+      await Firebase.initializeApp(options: DefaultFirebaseOptions.web);
+      runApp(const CircumWebsiteApp());
+      unawaited(_activateAppCheckAfterStartup());
+    },
+    (error, stack) {
+      if (_isAppCheckStartupError(error)) {
+        if (kDebugMode) {
+          debugPrint('Website App Check startup warning: $error');
+        }
+        return;
+      }
+      FlutterError.reportError(
+        FlutterErrorDetails(
+          exception: error,
+          stack: stack,
+          library: 'Circum public web startup',
+        ),
+      );
+    },
+  );
+}
+
+Future<void> _activateAppCheckAfterStartup() async {
+  try {
+    final appCheckStartup = await initializeCircumAppCheck();
+    if (appCheckStartup.blockStartup && kDebugMode) {
+      debugPrint('Website App Check warning: ${appCheckStartup.message}');
+    }
+  } catch (error) {
+    if (kDebugMode) {
+      debugPrint('Website App Check warning: $error');
+    }
   }
-  runApp(const CircumWebsiteApp());
 }
 
 void _installAppCheckStartupBoundary() {
   PlatformDispatcher.instance.onError = (error, stack) {
-    final message = error.toString();
-    final isAppCheckStartupError = message.contains('AppCheck') ||
-        message.contains('appCheck/recaptcha-error') ||
-        message.contains('app-check');
-    if (!isAppCheckStartupError) return false;
+    if (!_isAppCheckStartupError(error)) return false;
     if (kDebugMode) {
-      debugPrint('Website App Check startup warning: $message');
+      debugPrint('Website App Check startup warning: $error');
     }
     return true;
   };
 }
 
-class _PublicWebStartupBlocked extends StatelessWidget {
-  const _PublicWebStartupBlocked({required this.message});
-
-  final String message;
-
-  @override
-  Widget build(BuildContext context) {
-    return MaterialApp(
-      debugShowCheckedModeBanner: false,
-      home: Scaffold(
-        backgroundColor: const Color(0xFF07090F),
-        body: SafeArea(
-          child: Center(
-            child: Padding(
-              padding: const EdgeInsets.all(24),
-              child: Text(
-                message,
-                textAlign: TextAlign.center,
-                style: const TextStyle(
-                  color: Colors.white,
-                  fontSize: 16,
-                  fontWeight: FontWeight.w700,
-                ),
-              ),
-            ),
-          ),
-        ),
-      ),
-    );
-  }
+bool _isAppCheckStartupError(Object error) {
+  final message = error.toString();
+  return message.contains('AppCheck') ||
+      message.contains('appCheck/recaptcha-error') ||
+      message.contains('app-check');
 }

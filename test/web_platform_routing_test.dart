@@ -195,6 +195,39 @@ void main() {
       expect(source, contains('senderStep: _SenderStep.business'));
     });
 
+    test('Business and Health web keep app-style section parity', () {
+      final source =
+          File('lib/website/shared/circum_website_app.dart').readAsStringSync();
+
+      expect(source, contains('enum _BusinessWebSection'));
+      for (final label in [
+        'Overview',
+        'Deliveries',
+        'Invoices',
+        'Team',
+        'Health+',
+        'Gifts',
+        'Vanguard',
+        'Analytics',
+        'Finance',
+        'Settings',
+      ]) {
+        expect(source, contains("return '$label';"));
+      }
+      expect(source, contains('Scrollable.ensureVisible'));
+      expect(source, contains('onSelectSection'));
+      expect(source, contains('Health+ sections'));
+      expect(source, contains('Business sections'));
+    });
+
+    test('Sender delivery payload leaves Rider offer display aliases to backend', () {
+      final source =
+          File('lib/website/shared/circum_website_app.dart').readAsStringSync();
+      expect(source, isNot(contains("'riderEarning': driverPayout")));
+      expect(source, isNot(contains("'requiresVanguard': vanguardEnabled")));
+      expect(source, contains("httpsCallable('createSenderPaidDelivery')"));
+    });
+
     test('Vanguard copy avoids customer rider choice wording', () {
       final source =
           File('lib/website/shared/circum_website_app.dart').readAsStringSync();

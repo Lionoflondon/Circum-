@@ -94,6 +94,7 @@ dependencies:
   flutter_native_splash: ^2.3.7
   url_launcher: ^6.2.2
   uuid: ^4.3.3
+  web: 1.1.1
 
 dev_dependencies:
   flutter_test:
