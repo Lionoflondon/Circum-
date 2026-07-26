@@ -4,7 +4,7 @@ import 'dart:math' as math;
 
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:cloud_functions/cloud_functions.dart';
-import 'package:circum/app/delivery/proof_of_delivery.dart';
+import 'package:circum/website/shared/delivery/proof_of_delivery.dart';
 import 'package:circum/website/shared/health_plus/health_plus_pricing.dart';
 import 'package:circum/website/shared/health_plus/pickup_status.dart';
 import 'package:circum/website/shared/health_plus/recurring_pickup_schedule.dart';
