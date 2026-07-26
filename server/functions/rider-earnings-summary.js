@@ -1,5 +1,6 @@
 "use strict";
 
+/* eslint-disable max-len, require-jsdoc */
 const functions = require("firebase-functions/v1");
 const {getFirestore, FieldValue} = require("firebase-admin/firestore");
 
@@ -32,8 +33,12 @@ function reconcileLedger(rows = [], wallet = {}, payouts = []) {
     seen.add(key);
     const type = text(row.type || row.category);
     const fixture = row.isTest === true || row.testData === true || text(row.environment) === "test" || text(row.source).includes("fixture");
-    if (fixture) { quarantined.push({...row, id, classification: "test_fixture"}); continue; }
-    if (!LEDGER_TYPES.has(type)) { quarantined.push({...row, id, classification: "unclassified"}); continue; }
+    if (fixture) {
+      quarantined.push({...row, id, classification: "test_fixture"}); continue;
+    }
+    if (!LEDGER_TYPES.has(type)) {
+      quarantined.push({...row, id, classification: "unclassified"}); continue;
+    }
     totals[type] = money(totals[type] + Math.abs(number(row.amount)));
     production.push({...row, id, type});
   }
