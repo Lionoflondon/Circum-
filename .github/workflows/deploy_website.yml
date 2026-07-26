@@ -23,4 +23,5 @@ jobs:
       - run: flutter test test/web_artifact_isolation_test.dart test/web_platform_routing_test.dart
       - run: PUBLIC_WEB_RECAPTCHA_ENTERPRISE_SITE_KEY="${{ secrets.PUBLIC_WEB_RECAPTCHA_ENTERPRISE_SITE_KEY }}" scripts/build_public_web.sh
       - run: node scripts/validate_web_artifacts.js --surface=website
+      - run: npm install -g firebase-tools
       - run: firebase deploy --only hosting:public --project circum-2797c

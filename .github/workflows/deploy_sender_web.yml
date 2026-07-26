@@ -23,4 +23,5 @@ jobs:
       - run: flutter test test/sender_product_isolation_test.dart test/sender_mobile/sender_canonical_destination_guard_test.dart
       - run: CIRCUM_WEB_RECAPTCHA_ENTERPRISE_SITE_KEY="${{ secrets.CIRCUM_WEB_RECAPTCHA_ENTERPRISE_SITE_KEY }}" scripts/build_sender_app_web.sh
       - run: node scripts/validate_web_artifacts.js --surface=sender-app
+      - run: npm install -g firebase-tools
       - run: firebase deploy --only hosting:app --project circum-2797c
