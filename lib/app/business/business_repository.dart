@@ -13,6 +13,10 @@ abstract class BusinessRepository {
   Future<String> requestBusinessAccess({
     required BusinessCodeLookupResult business,
   });
+  Future<String> ensureCompanyCode({
+    required BusinessAccount account,
+    bool rotate = false,
+  });
   Future<List<BusinessAccessRequest>> loadPendingAccessRequests(
       BusinessAccount account);
   Future<void> reviewAccessRequest({
@@ -207,6 +211,20 @@ class FirebaseBusinessRepository implements BusinessRepository {
     });
     final data = Map<String, dynamic>.from(result.data as Map);
     return '${data['status'] ?? 'pending'}';
+  }
+
+  @override
+  Future<String> ensureCompanyCode({
+    required BusinessAccount account,
+    bool rotate = false,
+  }) async {
+    final result =
+        await functions.httpsCallable('ensureBusinessCompanyCode').call({
+      'businessId': account.id,
+      'rotate': rotate,
+    });
+    final data = Map<String, dynamic>.from(result.data as Map);
+    return '${data['companyCode'] ?? ''}'.trim();
   }
 
   @override

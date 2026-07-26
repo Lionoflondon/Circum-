@@ -65,7 +65,7 @@ extension _HealthStepCopy on _HealthStep {
       _HealthStep.delivery => 'Where should it go?',
       _HealthStep.frequency => 'How often?',
       _HealthStep.plan => 'Choose your plan',
-      _HealthStep.notes => 'Anything the rider should know?',
+      _HealthStep.notes => 'Anything the Circum Rider should know?',
       _HealthStep.review => 'Review your pickup',
       _HealthStep.checkout => 'Secure payment',
       _HealthStep.confirmed => 'Pickup scheduled',
@@ -97,7 +97,9 @@ class _HealthPlusViewState extends State<HealthPlusView> {
   var _plan = 'basic';
   var _consent = false;
   var _savePaymentMethod = true;
+  var _useRoth = false;
   var _submitting = false;
+  double _rothBalance = 0;
   String? _scheduleId;
   String? _message;
   String? _checkoutUrl;
@@ -118,6 +120,7 @@ class _HealthPlusViewState extends State<HealthPlusView> {
     _fullName.text = user?.displayName ?? '';
     _email.text = user?.email ?? '';
     _phone.text = user?.phoneNumber ?? '';
+    _loadRothBalance();
   }
 
   @override
@@ -188,6 +191,24 @@ class _HealthPlusViewState extends State<HealthPlusView> {
     return false;
   }
 
+  Future<void> _loadRothBalance() async {
+    try {
+      final result = await FirebaseFunctions.instanceFor(region: 'us-central1')
+          .httpsCallable('getSenderRothBalance')
+          .call<Map<String, dynamic>>();
+      final data = Map<String, dynamic>.from(result.data);
+      if (!mounted) return;
+      setState(() {
+        _rothBalance = (data['availableRoth'] as num?)?.toDouble() ??
+            (data['balance'] as num?)?.toDouble() ??
+            0;
+      });
+    } catch (_) {
+      if (!mounted) return;
+      setState(() => _rothBalance = 0);
+    }
+  }
+
   Future<void> _bookHealthPlus() async {
     if (_submitting) return;
     if (!_consent) {
@@ -232,11 +253,15 @@ class _HealthPlusViewState extends State<HealthPlusView> {
       final pickupId = '${data['pickupId'] ?? ''}'.trim();
       final scheduleId = '${data['scheduleId'] ?? ''}'.trim();
       final amount = (data['amount'] as num?)?.toDouble() ?? quote.total;
-      final checkoutUrl = await _createCheckoutSession(
+      final checkout = await _createCheckoutSession(
         pickupId: pickupId,
         profileId: profileId,
         quote: quote,
       );
+      final checkoutUrl =
+          checkout == null ? null : '${checkout['checkoutUrl'] ?? ''}'.trim();
+      final paid = checkout != null && checkout['paid'] == true;
+      final hasCheckoutUrl = checkoutUrl != null && checkoutUrl.isNotEmpty;
 
       if (!mounted) return;
       setState(() {
@@ -258,17 +283,23 @@ class _HealthPlusViewState extends State<HealthPlusView> {
         _payments.insert(0, {
           'pickupId': pickupId,
           'amount': amount,
-          'status': checkoutUrl == null
-              ? 'pending_secure_checkout'
-              : 'checkout_created',
+          'status': paid
+              ? 'paid'
+              : !hasCheckoutUrl
+                  ? 'pending_secure_checkout'
+                  : 'checkout_created',
+          'rothApplied': checkout?['rothApplied'],
+          'cardAmount': checkout?['cardAmount'],
         });
-        _message = checkoutUrl == null
-            ? 'Health+ pickup saved. Secure checkout needs configuration.'
-            : 'Health+ pickup saved. Secure checkout is ready.';
+        _message = paid
+            ? 'Health+ pickup paid with Roth.'
+            : !hasCheckoutUrl
+                ? 'Health+ pickup saved. Secure checkout needs configuration.'
+                : 'Health+ pickup saved. Secure checkout is ready.';
         _step = _HealthStep.confirmed;
       });
 
-      if (checkoutUrl != null) {
+      if (hasCheckoutUrl) {
         await launchUrl(
           Uri.parse(checkoutUrl),
           mode: LaunchMode.externalApplication,
@@ -290,7 +321,7 @@ class _HealthPlusViewState extends State<HealthPlusView> {
     }
   }
 
-  Future<String?> _createCheckoutSession({
+  Future<Map<String, dynamic>?> _createCheckoutSession({
     required String pickupId,
     required String profileId,
     required HealthPlusPriceBreakdown quote,
@@ -310,6 +341,7 @@ class _HealthPlusViewState extends State<HealthPlusView> {
           'profileId': profileId,
           'email': _email.text.trim(),
           'frequency': _frequency.value,
+          'useRoth': _useRoth,
           'priceBreakdown': quote.toJson(),
           'successUrl':
               'https://circum-app-2797c.web.app/?app=health&health=success',
@@ -321,7 +353,7 @@ class _HealthPlusViewState extends State<HealthPlusView> {
         return null;
       }
       final data = jsonDecode(response.body) as Map<String, dynamic>;
-      return data['checkoutUrl'] as String?;
+      return data;
     } catch (_) {
       return null;
     }
@@ -519,6 +551,10 @@ class _HealthPlusViewState extends State<HealthPlusView> {
       _HealthStep.checkout => _HealthCheckoutStep(
           quote: _quote,
           submitting: _submitting,
+          useRoth: _useRoth,
+          rothBalance: _rothBalance,
+          recurring: _frequency != HealthPlusFrequency.oneOff,
+          onUseRoth: (value) => setState(() => _useRoth = value),
           onCheckout: _next,
         ),
       _HealthStep.confirmed => _HealthConfirmedStep(
@@ -955,7 +991,7 @@ class _HealthPlanStep extends StatelessWidget {
   Widget build(BuildContext context) {
     const plans = [
       _HealthPlan('basic', 'Basic', 'Standard prescription delivery'),
-      _HealthPlan('priority', 'Priority', 'Faster rider assignment'),
+      _HealthPlan('priority', 'Priority', 'Faster Circum Rider assignment'),
       _HealthPlan('family', 'Family support', 'Household pickup support'),
     ];
     return _HealthStepCard(
@@ -1009,7 +1045,7 @@ class _HealthNotesStep extends StatelessWidget {
       children: [
         _HealthInput(
           controller: notes,
-          label: 'Notes for the rider (optional)',
+          label: 'Notes for the Circum Rider (optional)',
           maxLines: 4,
         ),
         _HealthToggleRow(
@@ -1099,11 +1135,19 @@ class _HealthReviewStep extends StatelessWidget {
 class _HealthCheckoutStep extends StatelessWidget {
   final HealthPlusPriceBreakdown quote;
   final bool submitting;
+  final bool useRoth;
+  final double rothBalance;
+  final bool recurring;
+  final ValueChanged<bool> onUseRoth;
   final VoidCallback onCheckout;
 
   const _HealthCheckoutStep({
     required this.quote,
     required this.submitting,
+    required this.useRoth,
+    required this.rothBalance,
+    required this.recurring,
+    required this.onUseRoth,
     required this.onCheckout,
   });
 
@@ -1113,6 +1157,22 @@ class _HealthCheckoutStep extends StatelessWidget {
       children: [
         const _HealthSecureNote(),
         _HealthTotalRow(total: quote.total),
+        _HealthToggleRow(
+          selected: useRoth,
+          title: recurring
+              ? 'Use Roth on the first Health+ subscription payment. Available: ${_money(rothBalance)}.'
+              : 'Use Roth for this Health+ pickup. Available: ${_money(rothBalance)}.',
+          onTap: () => onUseRoth(!useRoth),
+        ),
+        if (recurring)
+          const Text(
+            'Future subscription renewals continue securely by card unless Roth subscription billing is enabled later.',
+            style: TextStyle(
+              color: _HealthTokens.muted,
+              height: 1.4,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
         _HealthPrimaryButton(
           label: submitting
               ? 'Creating Health+...'
@@ -1972,7 +2032,7 @@ String _money(double value) => '£${value.toStringAsFixed(2)}';
 String _pickupLabel(PickupStatus status) {
   return switch (status) {
     PickupStatus.scheduled => 'Scheduled',
-    PickupStatus.assigned => 'Assigned to a rider',
+    PickupStatus.assigned => 'Assigned to a Circum Rider',
     PickupStatus.awaitingPharmacyCollection => 'Awaiting pharmacy collection',
     PickupStatus.collected => 'Collected',
     PickupStatus.outForDelivery => 'Out for delivery',
