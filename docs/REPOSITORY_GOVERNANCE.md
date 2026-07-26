@@ -39,6 +39,13 @@ Merges to `main` should require:
 - required status checks passing
 - force pushes blocked
 - branch deletion blocked
+- backend authority review for any feature that changes operational state
+
+Operational changes must be backend-owned. A pull request that adds direct
+client writes to deliveries, dispatch, identity, verification, payments, Roth,
+Wallet, IRIS, Health+, Gifts, Vanguard, Business, chat, notifications, tracking,
+or Admin recovery must be rejected unless the write is explicitly non-operational
+client state such as a local preference, cache entry, or draft.
 
 ## Release Process
 

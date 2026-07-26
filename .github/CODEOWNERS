@@ -5,5 +5,6 @@
 /deploy-manifest.json @Lionoflondon
 /scripts/deploy_guard.js @Lionoflondon
 /scripts/deploy_guard.self_test.js @Lionoflondon
+/scripts/backend_authority_guard.js @Lionoflondon
 /scripts/absolute_product_ownership.js @Lionoflondon
 /.github/workflows/ @Lionoflondon

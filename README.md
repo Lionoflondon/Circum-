@@ -17,11 +17,22 @@ Run the deployment guard before any release:
 
 ```sh
 node scripts/deploy_guard.self_test.js
+node scripts/backend_authority_guard.js
 node scripts/deploy_guard.js --target=sender-app --base HEAD
 node scripts/deploy_guard.js --target=website --base HEAD
 node scripts/deploy_guard.js --target=admin --base HEAD
 node scripts/deploy_guard.js --target=backend --base HEAD
 ```
+
+## Backend Authority
+
+The backend is the authoritative source of truth for operational state. New
+features must use backend callables or server-owned triggers for delivery
+lifecycle, dispatch, identity, verification, payments, Roth, Wallet, IRIS,
+Health+, Gifts, Vanguard, Business, chat, notifications, and Admin recovery.
+
+Clients may own only UI state, local preferences, local cache, and draft form
+state. See `docs/BACKEND_AUTHORITY_POLICY.md`.
 
 ## Local Validation
 

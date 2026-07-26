@@ -83,6 +83,32 @@ Forbidden:
 - Shared widgets, screens, routes, navigation, controllers, blocs, providers, repositories, models, services, helpers, or utilities between products.
 - Product configuration imported by another product.
 
+## Backend Authority Rule
+
+Backend authority is mandatory for all operational state.
+
+Clients may render, validate user input for usability, hold local preferences,
+hold local cache, and save draft form state. Clients must not be authoritative
+for delivery lifecycle, dispatch, identity, verification, payments, Roth, Wallet,
+IRIS, Health+, Gifts, Vanguard, Business, chat, notifications, tracking, proof
+of delivery, or Admin recovery.
+
+New operational features must use this flow:
+
+```text
+Client -> Callable/backend trigger -> Backend validation -> Firestore/Storage -> Realtime update -> Client
+```
+
+New features must not use this flow:
+
+```text
+Client -> Firestore operational write
+```
+
+`scripts/backend_authority_guard.js` enforces this for new client-side code in
+CI. Existing legacy writes must be migrated behind backend authority as scoped
+production-hardening work.
+
 ## Entrypoint Matrix
 
 | Product | Entrypoint | Hosting/build target | Identity |
