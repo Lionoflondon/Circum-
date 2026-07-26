@@ -1,17 +1,13 @@
 import 'dart:async';
 
-import 'package:circum/app/authentication/view/add_details.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import '../../../utils/theme/theme.dart';
 import '../bloc/auth_bloc.dart';
-import 'enter_otp.dart';
-import 'signup_form.dart';
 
 class VerifyEmailView extends StatefulWidget {
-  const VerifyEmailView({Key? key}) : super(key: key);
+  const VerifyEmailView({super.key});
 
   @override
   VerifyEmailViewState createState() => VerifyEmailViewState();

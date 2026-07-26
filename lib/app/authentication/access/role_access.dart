@@ -58,36 +58,31 @@ class RoleAccessPolicy {
     Map<String, dynamic> rider = const {},
     Map<String, dynamic> adminUser = const {},
   }) {
-    final roles = <String>{
+    final trustedRoles = <String>{
       ..._roleValues(claims['adminRole']),
       ..._roleValues(claims['role']),
       ..._roleValues(claims['roles']),
-      ..._roleValues(user['roles']),
-      ..._roleValues(user['role']),
-      ..._roleValues(user['userType']),
-      ..._roleValues(rider['roles']),
-      ..._roleValues(rider['role']),
-      ..._roleValues(rider['userType']),
       ..._roleValues(adminUser['role']),
       ..._roleValues(adminUser['roles']),
     };
 
     final resolvedRoles = <CircumRole>{};
-    if (roles.any(adminRoleNames.contains)) {
+    if (trustedRoles.any(adminRoleNames.contains)) {
       resolvedRoles.add(CircumRole.admin);
     }
-    if (roles.contains('super_admin')) {
+    if (trustedRoles.contains('super_admin')) {
       resolvedRoles.add(CircumRole.sender);
       resolvedRoles.add(CircumRole.rider);
     }
-    if (roles.any((role) => role == 'rider' || role == 'driver')) {
+    if (rider.isNotEmpty || trustedRoles.any((role) => role == 'rider')) {
       resolvedRoles.add(CircumRole.rider);
     }
-    if (roles.any((role) =>
-        role == 'sender' ||
-        role == 'customer' ||
-        role == 'user' ||
-        role == 'client')) {
+    if (user.isNotEmpty ||
+        trustedRoles.any((role) =>
+            role == 'sender' ||
+            role == 'customer' ||
+            role == 'user' ||
+            role == 'client')) {
       resolvedRoles.add(CircumRole.sender);
     }
     return resolvedRoles.isEmpty ? {CircumRole.unknown} : resolvedRoles;

@@ -1,4 +1,3 @@
-import 'package:bot_toast/bot_toast.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -9,7 +8,7 @@ import '../../../utils/theme/theme.dart';
 import '../bloc/auth_bloc.dart';
 
 class ForgotPasswordView extends StatefulWidget {
-  ForgotPasswordView({Key? key}) : super(key: key);
+  const ForgotPasswordView({super.key});
 
   @override
   State<ForgotPasswordView> createState() => _ForgotPasswordViewState();
@@ -97,10 +96,7 @@ class _ForgotPasswordViewState extends State<ForgotPasswordView> {
                 width: 80,
                 child: Align(
                     alignment: Alignment.centerRight,
-                    child: GestureDetector(
-                      onTap: () => context
-                          .read<AuthBloc>()
-                          .add(SetShowPassword(val: !state.showPassword)),
+                    child: ExcludeSemantics(
                       child: state.isEmailValid == true
                           ? const Icon(CupertinoIcons.check_mark_circled,
                               color: AppColors.primary)
@@ -123,8 +119,9 @@ class _ForgotPasswordViewState extends State<ForgotPasswordView> {
           child: AppButton.button(
               backgroundColor: state.isEmailValid == true
                   ? null
-                  : Colors.white.withOpacity(0.3),
+                  : Colors.white.withValues(alpha: 0.3),
               onPressed: () async {
+                if (state.status == Status.loading || state.isLoading) return;
                 // Navigator.push(
                 //     context,
                 //     MaterialPageRoute(

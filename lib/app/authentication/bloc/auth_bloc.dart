@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'dart:typed_data';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:cloud_functions/cloud_functions.dart';
@@ -109,6 +108,12 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
         'geohash': raw['geohash'],
       },
     });
+  }
+
+  void _logRecoverableAuthError(String step, Object error,
+      [StackTrace? stack]) {
+    debugPrint('Sender auth recoverable failure [$step]: $error');
+    if (stack != null) debugPrint('$stack');
   }
 
   Future<void> _handleSortSessionState(
@@ -257,15 +262,21 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
                 "${appleCredential.givenName} ${appleCredential.familyName}"));
       }
       await Future.delayed(const Duration(seconds: 2));
-    } catch (e) {}
+    } catch (e, stack) {
+      _logRecoverableAuthError('apple_sign_in', e, stack);
+      emit(state.copyWith(
+        status: Status.failure,
+        errorMessage: 'Apple sign-in could not be completed. Please try again.',
+      ));
+    }
   }
 
   void _handleRequestForOTP(
       RequestForOTP event, Emitter<AuthState> emit) async {
     var completer = Completer<bool>();
 
-    String? _verificationId;
-    int? _resendToken;
+    String? verificationIdValue;
+    int? resendTokenValue;
 
     try {
       emit(state.copyWith(status: Status.loading));
@@ -276,8 +287,8 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
           throw 'Verification failed';
         },
         codeSent: (String verificationId, int? resendToken) async {
-          _verificationId = verificationId;
-          _resendToken = resendToken;
+          verificationIdValue = verificationId;
+          resendTokenValue = resendToken;
           completer.complete(true);
         },
         codeAutoRetrievalTimeout: (_) {
@@ -287,8 +298,8 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
       await completer.future;
 
       emit(state.copyWith(
-          verificationId: _verificationId,
-          resendToken: _resendToken,
+          verificationId: verificationIdValue,
+          resendToken: resendTokenValue,
           status: Status.success));
     } catch (e) {
       emit(state.copyWith(
@@ -342,10 +353,10 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
       if (auth.currentUser != null) {
         await auth.currentUser?.linkWithCredential(credential);
       } else {
-        final UserCredential _userCredential =
+        final UserCredential userCredential =
             await auth.signInWithCredential(credential);
 
-        if (_userCredential.user?.displayName == null) {
+        if (userCredential.user?.displayName == null) {
           if (state.oAuthFirstName == null) {
             emit(state.copyWith(
                 authenticatedStatus: AuthenticatedStatus.incompleteData,
@@ -360,18 +371,18 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
                 email: state.oAuthEmail,
                 verificationId: '',
                 otp: '',
-                phoneNumber: _userCredential.user?.phoneNumber,
+                phoneNumber: userCredential.user?.phoneNumber,
                 currentState: AppState.authenticated));
           }
         } else {
           emit(state.copyWith(
               status: Status.success,
-              username: _userCredential.user?.displayName,
-              profilePhoto: _userCredential.user?.photoURL,
-              email: _userCredential.user?.email,
+              username: userCredential.user?.displayName,
+              profilePhoto: userCredential.user?.photoURL,
+              email: userCredential.user?.email,
               verificationId: '',
               otp: '',
-              phoneNumber: _userCredential.user?.phoneNumber,
+              phoneNumber: userCredential.user?.phoneNumber,
               authenticatedStatus: AuthenticatedStatus.authenticated,
               currentState: AppState.authenticated));
         }
@@ -381,7 +392,11 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
       if (e.code == 'invalid-verification-code') {
         emit(state.copyWith(errorMessage: 'Invalid verification code'));
       }
-    } catch (e) {}
+    } catch (e, stack) {
+      _logRecoverableAuthError('verify_sent_code', e, stack);
+      emit(
+          state.copyWith(errorMessage: 'Verification could not be completed.'));
+    }
   }
 
   Future<void> _handleSubmitOTP(
@@ -435,7 +450,6 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
       final UserCredential userCredential =
           await auth.signInWithEmailAndPassword(
               email: event.email, password: event.password);
-      storage.write(key: 'password', value: event.password);
 
       if (auth.currentUser?.emailVerified == false) {
         await auth.currentUser?.sendEmailVerification();
@@ -495,13 +509,11 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
 
   void _handleSignUpWithEmail(
       SignUpWithEmail event, Emitter<AuthState> emit) async {
-    FlutterSecureStorage storage = const FlutterSecureStorage();
     try {
       emit(state.copyWith(status: Status.loading));
       await auth.createUserWithEmailAndPassword(
           email: event.email, password: event.password);
 
-      storage.write(key: 'password', value: event.password);
       if (auth.currentUser?.emailVerified == false) {
         await auth.currentUser?.sendEmailVerification();
         emit(state.copyWith(
@@ -560,7 +572,10 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
 
         emit(state.copyWith(phoneNumber: event.value));
       }
-    } catch (e) {}
+    } catch (e, stack) {
+      _logRecoverableAuthError('update_phone_number', e, stack);
+      emit(state.copyWith(errorMessage: 'Phone number could not be updated.'));
+    }
   }
 
   void _handleUpdateUserProfilePhoto(
@@ -579,7 +594,10 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
 
       await user.updatePhotoURL(downloadUrl);
       emit(state.copyWith(profilePhoto: downloadUrl));
-    } catch (e) {}
+    } catch (e, stack) {
+      _logRecoverableAuthError('update_profile_photo', e, stack);
+      emit(state.copyWith(errorMessage: 'Profile photo could not be updated.'));
+    }
   }
 
   void _handleSignOut(SignOut event, Emitter<AuthState> emit) async {
@@ -594,7 +612,13 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
       DeleteAccount event, Emitter<AuthState> emit) async {
     FlutterSecureStorage storage = const FlutterSecureStorage();
     final user = auth.currentUser!;
-    final password = (await storage.readAll())["password"];
+    final password = state.password?.trim() ?? '';
+    if (password.isEmpty) {
+      emit(state.copyWith(
+          errorMessage:
+              'Enter your password again before deleting your account.'));
+      return;
+    }
 
     // auth.currentUser.reauthenticateWithProvider(provider)
 
@@ -604,8 +628,8 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
       // final AuthCredential credential = PhoneAuthProvider.credential(
       //     verificationId: state.verificationId!, smsCode: '${state.otp}');
 
-      final AuthCredential credential = EmailAuthProvider.credential(
-          email: state.email!, password: password!);
+      final AuthCredential credential =
+          EmailAuthProvider.credential(email: state.email!, password: password);
 
       // Reauthenticate user with phone credential
       await user.reauthenticateWithCredential(credential);
@@ -624,10 +648,11 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
       if (e.code == 'invalid-verification-code') {
         emit(state.copyWith(errorMessage: 'Invalid verification code'));
       }
-    } catch (error) {
-      // An error occurred during reauthentication or account deletion
-      // print("Error deleting account: $error");
-      // Handle error (e.g., display error message)
+    } catch (error, stack) {
+      _logRecoverableAuthError('delete_account', error, stack);
+      emit(state.copyWith(
+          errorMessage:
+              'Account deletion could not be completed. Please sign in again and retry.'));
     }
   }
 
@@ -706,7 +731,10 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
           status: Status.success,
           authenticatedStatus: AuthenticatedStatus.authenticated,
           username: event.username));
-    } catch (e) {}
+    } catch (e, stack) {
+      _logRecoverableAuthError('update_user_profile', e, stack);
+      emit(state.copyWith(errorMessage: 'Profile could not be updated.'));
+    }
   }
 
   void _handleOpenSettingsApp(
@@ -751,7 +779,10 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
         emit(state.copyWith(username: event.value));
         await _updateSenderProfile(displayName: event.value);
       }
-    } catch (e) {}
+    } catch (e, stack) {
+      _logRecoverableAuthError('update_first_name', e, stack);
+      emit(state.copyWith(errorMessage: 'First name could not be updated.'));
+    }
   }
 
   void _handleUpdateLastName(
@@ -771,7 +802,10 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
         emit(state.copyWith(username: event.value));
         await _updateSenderProfile(displayName: event.value);
       }
-    } catch (e) {}
+    } catch (e, stack) {
+      _logRecoverableAuthError('update_last_name', e, stack);
+      emit(state.copyWith(errorMessage: 'Last name could not be updated.'));
+    }
   }
 
   void _handleSetErrorMessage(SetErrorMessage event, Emitter<AuthState> emit) {

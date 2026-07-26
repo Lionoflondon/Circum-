@@ -1,17 +1,15 @@
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
-import 'package:flutter_svg/svg.dart';
 import 'package:intl_phone_field/intl_phone_field.dart';
 
 import '../../../utils/theme/text_field.dart';
 import '../../../utils/theme/theme.dart';
 import '../bloc/auth_bloc.dart';
 import 'forgot_password.dart';
-import 'signup.dart';
 
 class SigninForm extends StatefulWidget {
-  const SigninForm({Key? key}) : super(key: key);
+  const SigninForm({super.key});
 
   @override
   SigninFormState createState() => SigninFormState();
@@ -21,6 +19,13 @@ class SigninFormState extends State<SigninForm> {
   static final _formKey = GlobalKey<FormState>();
   final TextEditingController emailController = TextEditingController();
   final TextEditingController passwordController = TextEditingController();
+
+  @override
+  void dispose() {
+    emailController.dispose();
+    passwordController.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -85,7 +90,7 @@ class SigninFormState extends State<SigninForm> {
                   color: AppColors.grey),
               // hintText: '9020020222',
               hintStyle: TextStyle(
-                  color: const Color(0xFF050529).withOpacity(0.25),
+                  color: const Color(0xFF050529).withValues(alpha: 0.25),
                   fontFamily: 'Helvetica'),
               focusedBorder: const OutlineInputBorder(
                 borderRadius: BorderRadius.all(Radius.circular(0)),
@@ -125,10 +130,7 @@ class SigninFormState extends State<SigninForm> {
                 width: 60,
                 child: Align(
                     alignment: Alignment.centerRight,
-                    child: GestureDetector(
-                      onTap: () => context
-                          .read<AuthBloc>()
-                          .add(SetShowPassword(val: !state.showPassword)),
+                    child: ExcludeSemantics(
                       child: state.isEmailValid == true
                           ? const Icon(CupertinoIcons.check_mark_circled,
                               color: AppColors.primary)
@@ -164,11 +166,14 @@ class SigninFormState extends State<SigninForm> {
                   width: 80,
                   child: Align(
                       alignment: Alignment.centerRight,
-                      child: GestureDetector(
-                        onTap: () => context
+                      child: IconButton(
+                        tooltip: state.showPassword
+                            ? 'Hide password'
+                            : 'Show password',
+                        onPressed: () => context
                             .read<AuthBloc>()
                             .add(SetShowPassword(val: !state.showPassword)),
-                        child: state.showPassword == true
+                        icon: state.showPassword == true
                             ? const Icon(CupertinoIcons.eye,
                                 color: AppColors.primary)
                             : const Icon(CupertinoIcons.eye_slash,
@@ -183,41 +188,15 @@ class SigninFormState extends State<SigninForm> {
                 context
                     .read<AuthBloc>()
                     .add(SignupPasswordChanged(password: ''));
-                Navigator.push(context,
-                    MaterialPageRoute(builder: (_) => ForgotPasswordView()));
+                Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                        builder: (_) => const ForgotPasswordView()));
               },
               child: AppText.text('Forgot password?',
                   color: AppColors.primary,
                   fontSize: 16,
                   fontWeight: FontWeight.bold))
-        ],
-      );
-    });
-  }
-
-  Widget _confirmPasswordField() {
-    return BlocBuilder<AuthBloc, AuthState>(builder: (context, state) {
-      return Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          AppText.text('Confirm Password',
-              color: Colors.white, fontWeight: FontWeight.bold),
-          const SizedBox(
-            height: 4,
-          ),
-          const SizedBox(height: 10),
-          AppTextInput.input(
-              obscureText: true,
-              hintText: '(8+ characters)',
-              maxLines: 1,
-              minLines: 1,
-              onChanged: (value) => context
-                  .read<AuthBloc>()
-                  .add(ConfirmPasswordChanged(password: value))
-              // context.read<AuthBloc>().add(
-              //       ConfirmPasswordChanged(password: value),
-              //     ),
-              )
         ],
       );
     });
@@ -243,8 +222,9 @@ class SigninFormState extends State<SigninForm> {
                       state.password != null &&
                       state.password!.length >= 8
                   ? null
-                  : Colors.white.withOpacity(0.3),
+                  : Colors.white.withValues(alpha: 0.3),
               onPressed: () async {
+                if (state.status == Status.loading || state.isLoading) return;
                 // Navigator.push(
                 //     context,
                 //     MaterialPageRoute(

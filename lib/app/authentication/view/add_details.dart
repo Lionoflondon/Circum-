@@ -1,14 +1,12 @@
-import 'package:circum/app/authentication/view/enable_location.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
 import '../../../utils/theme/text_field.dart';
 import '../../../utils/theme/theme.dart';
-import '../../bottom_nav/view/index.dart';
 import '../bloc/auth_bloc.dart';
 
 class AddDetailsView extends StatelessWidget {
-  const AddDetailsView({Key? key}) : super(key: key);
+  const AddDetailsView({super.key});
 
   @override
   Widget build(BuildContext context) {
@@ -27,8 +25,8 @@ class AddDetailsView extends StatelessWidget {
                 // );
               }
             },
-            child: WillPopScope(
-                onWillPop: () async => false,
+            child: PopScope(
+                canPop: false,
                 child: SizedBox(
                     width: MediaQuery.of(context).size.width,
                     height: MediaQuery.of(context).size.height,

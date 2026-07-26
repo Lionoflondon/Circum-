@@ -2,22 +2,18 @@
 
 import 'dart:async';
 
-import 'package:circum/app/bottom_nav/view/index.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
-import 'package:flutter_svg/flutter_svg.dart';
 import 'package:pinput/pinput.dart';
 
-import '../../../app.dart';
 import '../../../utils/app_state/app_state.dart';
 import '../../../utils/theme/theme.dart';
 import '../bloc/auth_bloc.dart';
-import 'add_details.dart';
 
 class EnterOTPView extends StatefulWidget {
   final bool deleteAccount;
-  const EnterOTPView({Key? key, this.deleteAccount = false}) : super(key: key);
+  const EnterOTPView({super.key, this.deleteAccount = false});
 
   @override
   EnterOTPViewState createState() => EnterOTPViewState();
@@ -32,7 +28,7 @@ class EnterOTPViewState extends State<EnterOTPView> {
     if (!_isCountdownActive) {
       _isCountdownActive = true;
       _countdown = 30;
-      _countdownTimer = Timer.periodic(Duration(seconds: 1), (timer) {
+      _countdownTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
         setState(() {
           if (_countdown > 0) {
             _countdown--;
@@ -251,64 +247,6 @@ class EnterOTPViewState extends State<EnterOTPView> {
               child: AppText.text('${state.errorMessage}',
                   color: const Color(0xFFFF452B)))
       ]);
-    });
-  }
-
-  Widget _errorMessage() {
-    return BlocBuilder<AuthBloc, AuthState>(builder: (context, state) {
-      return Container(
-          padding:
-              EdgeInsets.symmetric(vertical: state.errorMessage == '' ? 0 : 10),
-          child: Text(state.errorMessage ?? '',
-              style: const TextStyle(color: Colors.red)));
-    });
-  }
-
-  Widget _contiuneButton() {
-    return BlocBuilder<AuthBloc, AuthState>(builder: (context, state) {
-      return SizedBox(
-          // margin: const EdgeInsets.symmetric(horizontal: 30),
-          height: 50,
-          width: MediaQuery.of(context).size.width * 0.8,
-          child: AppButton.button(
-              onPressed: () {
-                if (state.status != Status.loading) {
-                  context.read<AuthBloc>().add(SubmitOTP());
-                }
-              },
-              widget: const Text(
-                "Continue",
-                style:
-                    TextStyle(fontWeight: FontWeight.w700, color: Colors.white),
-              ),
-              isLoading: state.status == Status.loading));
-    });
-  }
-
-  Widget _alreadyHaveAnAccount() {
-    return BlocBuilder<AuthBloc, AuthState>(builder: (context, state) {
-      return GestureDetector(
-          onTap: () {
-            context.read<AuthBloc>().add(
-                  GotAnAccount(),
-                );
-          },
-          child: const SizedBox(
-              child: Text.rich(
-            textAlign: TextAlign.center,
-            TextSpan(
-              children: [
-                TextSpan(text: 'Already have an account? '),
-                TextSpan(
-                  text: 'Sign in',
-                  style: TextStyle(
-                    fontWeight: FontWeight.bold,
-                    color: AppColors.primary,
-                  ),
-                ),
-              ],
-            ),
-          )));
     });
   }
 }
