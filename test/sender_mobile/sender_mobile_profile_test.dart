@@ -89,7 +89,7 @@ void main() {
     expect(find.text('Not set'), findsOneWidget);
     expect(find.text('Create Username'), findsOneWidget);
     expect(find.text('jason@circum.app'), findsOneWidget);
-    expect(find.text('Sender Account'), findsOneWidget);
+    expect(find.text('Circum Account'), findsOneWidget);
     expect(find.text('15 Jul 2026'), findsAtLeastNWidgets(1));
     expect(find.text('No recent trust activity.'), findsOneWidget);
     expect(find.text('Account trust baseline established'), findsNothing);

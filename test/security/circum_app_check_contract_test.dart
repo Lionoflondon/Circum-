@@ -89,7 +89,7 @@ void main() {
 
       expect(firebaseInit, isNonNegative, reason: path);
       expect(appCheckInit, greaterThan(firebaseInit), reason: path);
-      expect(source, contains('StartupBlocked'), reason: path);
+      expect(source, contains('blockStartup'), reason: path);
     }
   });
 
@@ -187,7 +187,7 @@ void main() {
 
     expect(
       File('lib/website/shared/circum_website_app.dart').readAsStringSync(),
-      contains("String.fromEnvironment(\n  'GOOGLE_PLACES_API_KEY'"),
+      contains("String.fromEnvironment('GOOGLE_PLACES_API_KEY')"),
     );
     expect(
       File('lib/app/send_package/bloc/send_package_bloc.dart')

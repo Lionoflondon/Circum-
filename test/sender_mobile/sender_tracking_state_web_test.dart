@@ -118,7 +118,7 @@ void main() {
     expect(
       senderTrackingContentFor(SenderTrackingState.riderArrivingAtDropoff)
           .title,
-      'Your rider is almost there',
+      'Your Circum Rider is almost there',
     );
     expect(
       senderTrackingContentFor(SenderTrackingState.adjustmentUnderReview).body,
