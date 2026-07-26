@@ -13,6 +13,10 @@ function cleanText(value, max = 160) {
   return String(value || "").trim().slice(0, max);
 }
 
+function cleanMap(value) {
+  return value && typeof value === "object" && !Array.isArray(value) ? value : {};
+}
+
 function cleanEmail(value) {
   const email = cleanText(value, 180).toLowerCase();
   if (!email || !email.includes("@")) {
@@ -135,6 +139,40 @@ exports.ensureSenderAccount = functions.https.onCall(async (data, context) => {
   });
 
   return {ok: true, ...result};
+});
+
+exports.markSenderLegendCelebrationSeen = functions.https.onCall(async (data, context) => {
+  const uid = requireSender(context);
+  const profileId = cleanText(data && data.profileId, 160);
+  if (profileId && profileId !== uid) {
+    throw new functions.https.HttpsError("permission-denied", "You can only update your own recognition view.");
+  }
+  await getFirestore().collection("users").doc(uid).set({
+    legendCelebrationSeenAt: FieldValue.serverTimestamp(),
+    updatedAt: FieldValue.serverTimestamp(),
+  }, {merge: true});
+  return {ok: true};
+});
+
+exports.recordWebsiteVisit = functions.https.onCall(async (data, context) => {
+  const input = cleanMap(data);
+  const query = cleanMap(input.query);
+  const safeQuery = {};
+  Object.entries(query).slice(0, 20).forEach(([key, value]) => {
+    safeQuery[cleanText(key, 80)] = cleanText(value, 240);
+  });
+  await getFirestore().collection("websiteVisitors").add({
+    url: cleanText(input.url, 1000),
+    path: cleanText(input.path, 300),
+    query: safeQuery,
+    appMode: cleanText(input.appMode, 80),
+    userId: context.auth && context.auth.uid || null,
+    email: context.auth && context.auth.token && context.auth.token.email || null,
+    signedIn: Boolean(context.auth),
+    source: "circum-web",
+    createdAt: FieldValue.serverTimestamp(),
+  });
+  return {ok: true};
 });
 
 exports.requestSenderEmailChange = functions.https.onCall(async (data, context) => {

@@ -175,6 +175,8 @@ function buildHealthPlusCheckoutParams({
   recurring,
   successUrl,
   cancelUrl,
+  metadata = {},
+  discounts = null,
 }) {
   const mode = recurring ? "subscription" : "payment";
   const lineItem = {
@@ -195,7 +197,7 @@ function buildHealthPlusCheckoutParams({
     lineItem.price_data.recurring = {interval: "month"};
   }
 
-  return {
+  const params = {
     mode,
     payment_method_types: ["card"],
     customer_email: email || undefined,
@@ -204,10 +206,14 @@ function buildHealthPlusCheckoutParams({
     cancel_url: cancelUrl,
     metadata: {
       feature: "health_plus",
+      type: "health_plus_payment",
       bookingId,
       profileId,
+      ...metadata,
     },
   };
+  if (discounts) params.discounts = discounts;
+  return params;
 }
 
 function buildAdminStatusUpdate(status, driverId) {

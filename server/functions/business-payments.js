@@ -1,14 +1,37 @@
-/* eslint-disable max-len */
+/* eslint-disable max-len, require-jsdoc */
 "use strict";
 
 const functions = require("firebase-functions/v1");
 const {getFirestore, FieldValue} = require("firebase-admin/firestore");
+const {requireAdmin} = require("./admin-auth");
 const {calculateWalletCheckout} = require("./wallet-core");
 
 function money(value) {
   const parsed = Number(value || 0);
   if (!Number.isFinite(parsed)) return 0;
   return Math.round(parsed * 100) / 100;
+}
+
+function text(value, max = 500) {
+  return `${value || ""}`.trim().slice(0, max);
+}
+
+function invoiceNumberFor(ref) {
+  const today = new Date().toISOString().slice(0, 10).replace(/-/g, "");
+  return `CIR-BIZ-${today}-${ref.id.slice(0, 6).toUpperCase()}`;
+}
+
+function normaliseLineItems(items, fallbackDescription, total) {
+  const lines = Array.isArray(items) ? items : [];
+  const normalised = lines.slice(0, 20).map((item) => ({
+    description: text(item && item.description, 160),
+    amount: money(item && item.amount),
+  })).filter((item) => item.description && item.amount > 0);
+  if (normalised.length) return normalised;
+  return [{
+    description: text(fallbackDescription, 160) || "Business services",
+    amount: total,
+  }];
 }
 
 function isMember(account, context) {
@@ -69,14 +92,6 @@ async function creditBusinessRoth({businessId, amount, type, note, metadata = {}
     transaction.set(accountRef, {
       businessRothBalance: resulting,
       rothBalance: resulting,
-      recentBusinessRothTransactions: FieldValue.arrayUnion({
-        transactionId: txRef.id,
-        direction: "credit",
-        amount,
-        source: type,
-        reason: note,
-        createdAt: new Date(),
-      }),
       updatedAt: FieldValue.serverTimestamp(),
     }, {merge: true});
   });
@@ -120,15 +135,6 @@ async function debitBusinessRoth({businessId, amount, invoiceId, metadata = {}})
     transaction.set(accountRef, {
       businessRothBalance: resulting,
       rothBalance: resulting,
-      recentBusinessRothTransactions: FieldValue.arrayUnion({
-        transactionId: txRef.id,
-        direction: "debit",
-        amount,
-        source: "invoice_payment",
-        reason: "Business invoice paid with Roth.",
-        invoiceId,
-        createdAt: new Date(),
-      }),
       updatedAt: FieldValue.serverTimestamp(),
     }, {merge: true});
     return true;
@@ -174,17 +180,6 @@ async function markInvoicePaid({invoiceId, businessId, amount, method, stripeSes
       createdAt: FieldValue.serverTimestamp(),
     }, {merge: true});
     transaction.set(db.collection("businessAccounts").doc(businessId), {
-      recentBusinessInvoices: FieldValue.arrayUnion({
-        invoiceId,
-        invoiceNumber: invoice.invoiceNumber,
-        status: nextStatus,
-        total,
-        amountPaid: nextPaid,
-        balanceDue: nextBalance,
-        paymentMethod: method,
-        updatedAt: new Date(),
-        ...(nextStatus === "paid" ? {paidAt: new Date()} : {}),
-      }),
       updatedAt: FieldValue.serverTimestamp(),
     }, {merge: true});
     transaction.set(db.collection("adminAuditLogs").doc(), {
@@ -202,6 +197,92 @@ async function markInvoicePaid({invoiceId, businessId, amount, method, stripeSes
     });
   });
 }
+
+exports.adminCreateBusinessInvoice = functions.https.onCall(async (payload, context) => {
+  const adminUid = requireAdmin(context, "Your Admin role cannot create Business invoices.");
+  const data = payload || {};
+  const db = getFirestore();
+  const businessId = text(data.businessId, 120);
+  const total = money(data.total || data.amount || data.balanceDue);
+  const reason = text(data.reason, 500);
+  if (!businessId || total <= 0) {
+    throw new functions.https.HttpsError("invalid-argument", "Choose a Business account and invoice amount.");
+  }
+  if (!reason) {
+    throw new functions.https.HttpsError("invalid-argument", "Add a reason before creating the invoice.");
+  }
+  const businessRef = db.collection("businessAccounts").doc(businessId);
+  const businessSnap = await businessRef.get();
+  if (!businessSnap.exists) {
+    throw new functions.https.HttpsError("not-found", "Business account not found.");
+  }
+  const business = businessSnap.data() || {};
+  const invoiceRef = db.collection("businessInvoices").doc();
+  const invoiceNumber = text(data.invoiceNumber, 80) || invoiceNumberFor(invoiceRef);
+  const lineItems = normaliseLineItems(data.lineItems, data.description, total);
+  const subtotal = money(lineItems.reduce((sum, item) => sum + item.amount, 0));
+  const invoiceTotal = money(total || subtotal);
+  const now = FieldValue.serverTimestamp();
+  const dueDate = text(data.dueDate, 40) || null;
+  const invoice = {
+    invoiceId: invoiceRef.id,
+    invoiceNumber,
+    businessId,
+    businessName: business.businessName || business.companyName || "Business",
+    billingEmail: business.billingEmail || business.contactEmail || business.ownerEmail || null,
+    description: text(data.description, 500),
+    lineItems,
+    subtotal: invoiceTotal,
+    total: invoiceTotal,
+    amountPaid: 0,
+    balanceDue: invoiceTotal,
+    currency: "GBP",
+    status: "open",
+    invoiceStatus: "open",
+    paymentStatus: "unpaid",
+    source: "circum_operations",
+    createdByAdminId: adminUid,
+    createdByAdminEmail: text(context.auth.token && context.auth.token.email, 160),
+    createdReason: reason,
+    deliveryIds: Array.isArray(data.deliveryIds) ? data.deliveryIds.map((item) => text(item, 120)).filter(Boolean).slice(0, 50) : [],
+    dueDate,
+    createdAt: now,
+    updatedAt: now,
+  };
+  await db.runTransaction(async (transaction) => {
+    transaction.set(invoiceRef, invoice);
+    transaction.set(businessRef, {
+      outstandingInvoiceAmount: FieldValue.increment(invoiceTotal),
+      updatedAt: now,
+    }, {merge: true});
+    const auditPayload = {
+      action: "business_invoice_created",
+      actionType: "business_invoice_created",
+      actorId: adminUid,
+      actorEmail: text(context.auth.token && context.auth.token.email, 160),
+      businessId,
+      invoiceId: invoiceRef.id,
+      invoiceNumber,
+      amount: invoiceTotal,
+      reason,
+      createdAt: now,
+    };
+    transaction.set(db.collection("businessAuditLogs").doc(), auditPayload);
+    transaction.set(db.collection("adminAuditLogs").doc(), {
+      ...auditPayload,
+      recordType: "businessInvoices",
+      recordId: invoiceRef.id,
+    });
+  });
+  return {
+    invoiceId: invoiceRef.id,
+    invoiceNumber,
+    businessId,
+    total: invoiceTotal,
+    balanceDue: invoiceTotal,
+    status: "open",
+  };
+});
 
 exports.createBusinessRothCheckout = (stripe) => functions.https.onCall(async (data, context) => {
   const businessId = `${data.businessId || ""}`.trim();
@@ -255,14 +336,6 @@ exports.createBusinessRothCheckout = (stripe) => functions.https.onCall(async (d
     createdByUserId: context.auth.uid,
   });
   await db.collection("businessAccounts").doc(businessId).set({
-    recentBusinessRothPurchases: FieldValue.arrayUnion({
-      purchaseId: purchaseRef.id,
-      amountGbp: amount,
-      rothAmount: amount,
-      status: "pending_verification",
-      paymentProvider: "stripe",
-      createdAt: new Date(),
-    }),
     updatedAt: FieldValue.serverTimestamp(),
   }, {merge: true});
   return {checkoutUrl: session.url, sessionId: session.id, purchaseId: purchaseRef.id};

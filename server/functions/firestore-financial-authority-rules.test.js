@@ -50,6 +50,35 @@ test("assigned riders can only make non-authoritative offer preference updates d
   );
 });
 
+test("riderProfiles mirrors riders admin-only authority fields", () => {
+  assert.match(rules, /function riderAdminOnlyFields\(\)/);
+  assert.match(
+      rules,
+      /match \/riderProfiles\/\{driverId\}[\s\S]*allow create: if isDriverManager\(\) \|\| isSafeRiderSelfCreate\(driverId\);[\s\S]*allow update: if isDriverManager\(\) \|\| isSafeRiderSelfUpdate\(driverId\);/,
+  );
+  for (const field of [
+    "approvalStatus",
+    "verificationStatus",
+    "driverStatus",
+    "role",
+    "roles",
+    "trustPoints",
+    "stripeConnectAccountId",
+  ]) {
+    assert.match(rules, new RegExp(`'${field}'`));
+  }
+});
+
+test("users cannot self-write admin or rider role escalation fields", () => {
+  assert.match(rules, /function userAdminOnlyRoleFields\(\)/);
+  assert.match(rules, /function hasUnsafeSelfUserRoleCreate\(\)/);
+  assert.match(rules, /function hasUnsafeSelfUserTypeUpdate\(\)/);
+  assert.match(
+      rules,
+      /match \/users\/\{userId\}[\s\S]*!request\.resource\.data\.keys\(\)\.hasAny\(userAdminOnlyRoleFields\(\)\)[\s\S]*!hasUnsafeSelfUserRoleCreate\(\)[\s\S]*!hasUnsafeSelfUserTypeCreate\(\)/,
+  );
+});
+
 test("rider earnings, wallet ledger, payout requests, and bank data are not client-writable", () => {
   assert.match(
       rules,
@@ -66,6 +95,31 @@ test("rider earnings, wallet ledger, payout requests, and bank data are not clie
   assert.match(
       rules,
       /match \/riderBankAccounts\/\{riderId\}[\s\S]*allow read: if isAdmin\(\);[\s\S]*allow create, update: if isAdmin\(\);/,
+  );
+  assert.match(
+      rules,
+      /match \/riderEarningsReconciliations\/\{reconciliationId\}[\s\S]*allow read: if isFinanceAdmin\(\);[\s\S]*allow write: if false;/,
+  );
+});
+
+test("Stripe Connect webhook replay ledger is server-owned only", () => {
+  assert.match(
+      rules,
+      /match \/stripeConnectWebhookEvents\/\{eventId\} \{[\s\S]*allow read, write: if false;/,
+  );
+});
+
+test("notifications are backend or admin authored only", () => {
+  const notificationBlock = rules.match(
+      /match \/notifications\/\{notificationId\} \{[\s\S]*?\n {4}\}/,
+  )[0];
+  assert.match(
+      notificationBlock,
+      /allow create: if isAdmin\(\);/,
+  );
+  assert.doesNotMatch(
+      notificationBlock,
+      /allow create: if isAdmin\(\) \|\|\s*\(signedIn\(\)/,
   );
 });
 

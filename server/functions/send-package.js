@@ -26,7 +26,7 @@ const sendPackage = functions.https.onCall(async (data, context) => {
     const uid = context.auth.uid;
 
     // const userRef = await getFirestore().collection("users").doc(uid).get();
-    const snapshot = await getFirestore().collection("deliveryRequests") .where("requestId", "==", requestId).get();
+    const snapshot = await getFirestore().collection("deliveryRequests") .where("requestId", "==", requestId).limit(1).get();
     const deliveryRequest = snapshot.docs.map((doc) => ({
       id: doc.id,
       ...doc.data(),

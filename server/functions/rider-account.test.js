@@ -37,6 +37,11 @@ test("Rider self-service authority validates auth ownership documents and audit"
   assert.match(source, /runTransaction/);
 });
 
+test("Rider account creation initializes backend-owned rank and trust", () => {
+  assert.match(source, /riderRank:\s*"agent"/);
+  assert.match(source, /trustPoints:\s*0/);
+});
+
 test("Rider Web routes operational self-service mutations through callables", () => {
   assert.match(websiteSource, /httpsCallable\('updateRiderProfile'\)/);
   assert.match(websiteSource, /httpsCallable\('requestRiderEmailChange'\)/);

@@ -1023,17 +1023,19 @@ test("express jobs receive dispatch priority", () => {
 
 test("rider rank never hides jobs and only changes backup priority", () => {
   const now = Date.parse("2026-06-14T12:00:00Z");
+  const approved = {approvalStatus: "approved"};
   assert.equal(normalizeRiderRank(), "agent");
-  assert.equal(riderCanViewDispatch({}, {createdAt: "2026-06-14T11:59:00Z"}, now), true);
-  assert.equal(riderCanViewDispatch({rank: "sentinel"}, {createdAt: "2026-06-14T11:59:00Z"}, now), true);
-  assert.equal(riderCanViewDispatch({rank: "sentinel"}, {createdAt: "2026-06-14T11:55:00Z"}, now), true);
-  assert.equal(riderCanViewDispatch({rank: "warden"}, {createdAt: "2026-06-14T11:50:00Z"}, now), true);
-  assert.equal(riderCanViewDispatch({rank: "knight"}, {createdAt: "2026-06-14T11:45:00Z"}, now), true);
-  assert.equal(riderCanViewDispatch({rank: "veteran"}, {createdAt: "2026-06-14T11:40:00Z"}, now), true);
-  assert.equal(riderCanViewDispatch({rank: "knight"}, {highTrust: true}, now), true);
-  assert.equal(riderCanViewDispatch({rank: "agent"}, {vanguardEnabled: true, highTrust: true}, now), true);
-  assert.equal(riderCanViewDispatch({rank: "veteran"}, {healthPlusEnabled: true}, now), true);
-  assert.equal(riderCanViewDispatch({rank: "sentinel"}, {
+  assert.equal(riderCanViewDispatch({}, {createdAt: "2026-06-14T11:59:00Z"}, now), false);
+  assert.equal(riderCanViewDispatch({...approved}, {createdAt: "2026-06-14T11:59:00Z"}, now), true);
+  assert.equal(riderCanViewDispatch({...approved, rank: "sentinel"}, {createdAt: "2026-06-14T11:59:00Z"}, now), true);
+  assert.equal(riderCanViewDispatch({...approved, rank: "sentinel"}, {createdAt: "2026-06-14T11:55:00Z"}, now), true);
+  assert.equal(riderCanViewDispatch({...approved, rank: "warden"}, {createdAt: "2026-06-14T11:50:00Z"}, now), true);
+  assert.equal(riderCanViewDispatch({...approved, rank: "knight"}, {createdAt: "2026-06-14T11:45:00Z"}, now), true);
+  assert.equal(riderCanViewDispatch({...approved, rank: "veteran"}, {createdAt: "2026-06-14T11:40:00Z"}, now), true);
+  assert.equal(riderCanViewDispatch({...approved, rank: "knight"}, {highTrust: true}, now), true);
+  assert.equal(riderCanViewDispatch({...approved, rank: "agent"}, {vanguardEnabled: true, highTrust: true}, now), true);
+  assert.equal(riderCanViewDispatch({...approved, rank: "veteran"}, {healthPlusEnabled: true}, now), true);
+  assert.equal(riderCanViewDispatch({...approved, rank: "sentinel"}, {
     vanguardEnabled: true,
     dispatchRankOverrideEnabled: true,
     dispatchAllowedRanks: ["sentinel"],

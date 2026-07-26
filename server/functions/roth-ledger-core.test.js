@@ -1,5 +1,6 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
+const fs = require("node:fs");
 const {
   BALANCE_TYPES,
   LEDGER_EVENTS,
@@ -112,4 +113,10 @@ test("Roth gift debit and refund ledger records are auditable", () => {
   assert.equal(refund.balanceAfter, 200);
   assert.equal(LEDGER_EVENTS.paymentRefunded, "roth_payment_refunded");
   assert.equal(LEDGER_EVENTS.paymentFailed, "roth_payment_failed");
+});
+
+test("sender wallet history prefers canonical walletId query with bounded legacy fallback", () => {
+  const source = fs.readFileSync("roth-ledger.js", "utf8");
+  assert.match(source, /collection\("walletTransactions"\)\s*\.where\("walletId", "==", identity\.walletId\)\s*\.orderBy\("createdAt", "desc"\)\s*\.limit\(100\)/);
+  assert.match(source, /walletSnap\.empty \? await db\.collection\("walletTransactions"\)\s*\.where\("uid", "==", context\.auth\.uid\)\s*\.orderBy\("createdAt", "desc"\)\s*\.limit\(100\)/);
 });

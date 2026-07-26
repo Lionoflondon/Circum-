@@ -70,7 +70,8 @@ test("Sender mobile uses canonical quote, payment session, and paid delivery cal
 
 test("canonical payment authority calculates and records authoritative pricing", () => {
   assert.match(senderBookingSource, /exports\.createSenderBookingQuote/);
-  assert.match(senderBookingSource, /quotePayload\(data \|\| \{\}, sender\.uid\)/);
+  assert.match(senderBookingSource, /verifiedPhotoAnalysis\(\{/);
+  assert.match(senderBookingSource, /quotePayload\(data \|\| \{\}, sender\.uid, serverPhotoAnalysis\)/);
   assert.match(senderBookingSource, /clientDisplayQuote/);
   assert.match(senderBookingSource, /pricingDiscrepancyPence/);
   assert.match(senderBookingSource, /exports\.createSenderPaymentSession/);
@@ -92,6 +93,20 @@ test("canonical paid delivery finalization requires succeeded payment and is ide
   assert.match(senderBookingSource, /pricingBreakdown: quote/);
 });
 
+test("canonical backend delivery records include Rider display aliases", () => {
+  assert.match(senderBookingSource, /const RIDER_DELIVERY_FARE_SHARE = 0\.65/);
+  assert.match(senderBookingSource, /function riderDisplayAliases\(/);
+  assert.match(senderBookingSource, /function riderPayoutFromQuote\(/);
+  assert.match(senderBookingSource, /totalRiderEarnings/);
+  assert.match(senderBookingSource, /const riderAliases = riderDisplayAliases\(\{quote, data, vanguardFields\}\)/);
+  assert.match(senderBookingSource, /\.\.\.riderAliases/);
+  assert.match(senderBookingSource, /riderEarning: riderPayout/);
+  assert.match(senderBookingSource, /distanceText: distanceMiles > 0/);
+  assert.match(senderBookingSource, /durationText: durationMinutes > 0/);
+  assert.match(senderBookingSource, /requiresVanguard: vanguardFields\.vanguardProtocolEnabled === true/);
+  assert.match(senderBookingSource, /pickupWindow: pickupWindow \|\| null/);
+});
+
 test("Sender Web checkout uses canonical payment callables and never writes paid deliveries directly", () => {
   const confirmPaymentMatch = webSenderSource.match(/Future<void> _confirmPayment\(\) async \{[\s\S]*?\n {2}Future<bool\?> _confirmAuthoritativeWebQuote/);
   assert.ok(confirmPaymentMatch, "web _confirmPayment implementation not found");
@@ -104,4 +119,16 @@ test("Sender Web checkout uses canonical payment callables and never writes paid
   assert.doesNotMatch(confirmPaymentSource, /collection\('deliveryRequests'\)\.doc\(id\)/);
   assert.doesNotMatch(confirmPaymentSource, /collection\('chats'\)/);
   assert.doesNotMatch(confirmPaymentSource, /batch\.commit\(\)/);
+});
+
+test("legacy endTrip handles missing requests before reading delivery data", () => {
+  assert.match(
+      indexSource,
+      /collection\("deliveryRequests"\)\.where\("requestId", "==", requestId\)\.limit\(1\)\.get\(\)/,
+  );
+  assert.match(indexSource, /if \(ride\.empty\) \{\s*return res\.status\(404\)\.send\(\{msg: "Trip already completed"\}\);\s*\}/);
+  assert.doesNotMatch(
+      indexSource,
+      /const rideData = ride\.docs\[0\];\s*const rideDataRes = rideData\.data\(\);\s*if \(!rideData\.exists\)/,
+  );
 });

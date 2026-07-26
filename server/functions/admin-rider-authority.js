@@ -156,13 +156,13 @@ function documentPatch(status, actor, reason, previous) {
     ...(status === "approved" ? {rejectionReason: FieldValue.delete()} : {}),
     ...(status !== "approved" ? {rejectionReason: reason} : {}),
     reviewNotes: reason,
-    statusHistory: FieldValue.arrayUnion([{
+    statusHistory: FieldValue.arrayUnion({
       previousStatus: previous,
       status,
       timestamp: new Date().toISOString(),
       reviewer: actor.uid,
       reviewerEmail: actor.email || null,
-    }]),
+    }),
     updatedAt: timestamp,
   };
 }

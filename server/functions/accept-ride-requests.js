@@ -45,10 +45,13 @@ const findDeliveryRequest = async (db, transaction, requestId) => {
 
 const getRiderProfile = async (db, riderId) => {
   const profileDoc = await db.collection("riderProfiles").doc(riderId).get();
-  if (profileDoc.exists) return profileDoc.data();
-
   const riderDoc = await db.collection("riders").doc(riderId).get();
-  if (riderDoc.exists) return riderDoc.data();
+  if (riderDoc.exists) {
+    return {
+      ...(profileDoc.exists ? profileDoc.data() : {}),
+      ...riderDoc.data(),
+    };
+  }
 
   return null;
 };

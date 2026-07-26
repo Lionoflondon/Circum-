@@ -52,6 +52,19 @@ async function routeCheckoutSessionCompleted(
     return {handled: true, type};
   }
 
+  if (type === "health_plus_payment" || metadata.feature === "health_plus") {
+    if (!deps.healthPlus ||
+        typeof deps.healthPlus.handleHealthPlusCheckoutSession !==
+        "function") {
+      throw new Error("health plus checkout finalizer unavailable");
+    }
+    await deps.healthPlus.handleHealthPlusCheckoutSession(
+        sessionData,
+        eventId,
+    );
+    return {handled: true, type: type || "health_plus_payment"};
+  }
+
   logger.info(
       "Stripe checkout session completed with no registered finalizer",
       {

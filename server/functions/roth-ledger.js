@@ -420,12 +420,18 @@ exports.getSenderWallet = functions.https.onCall(async (_data, context) => {
 exports.getSenderWalletTransactions = functions.https.onCall(async (data, context) => {
   const identity = await requireSenderIdentity(context);
   const db = getFirestore();
-  const [uidSnap, walletSnap] = await Promise.all([
-    db.collection("walletTransactions").where("uid", "==", context.auth.uid).limit(100).get(),
-    db.collection("walletTransactions").where("walletId", "==", identity.walletId).limit(100).get(),
-  ]);
+  const walletSnap = await db.collection("walletTransactions")
+      .where("walletId", "==", identity.walletId)
+      .orderBy("createdAt", "desc")
+      .limit(100)
+      .get();
+  const legacyUidSnap = walletSnap.empty ? await db.collection("walletTransactions")
+      .where("uid", "==", context.auth.uid)
+      .orderBy("createdAt", "desc")
+      .limit(100)
+      .get() : {docs: []};
   const seen = new Set();
-  const records = [...uidSnap.docs, ...walletSnap.docs].filter((doc) => {
+  const records = [...walletSnap.docs, ...legacyUidSnap.docs].filter((doc) => {
     if (seen.has(doc.id)) return false;
     seen.add(doc.id);
     return true;

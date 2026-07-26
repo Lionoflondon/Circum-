@@ -1321,7 +1321,7 @@ function estimateIrisWeightKg(rawText, normalizedText = normalize(rawText)) {
   return 2;
 }
 
-function resolveAuthoritativeShipmentWeight({rawText, declaredWeightText, shipmentSummary, shipmentItems}) {
+function resolveAuthoritativeShipmentWeight({rawText, declaredWeightText, shipmentSummary, shipmentItems, photoEstimatedWeightKg = null}) {
   const declaredWeightKg = parseWeightKg(rawText, declaredWeightText);
   const itemWeightKg = Array.isArray(shipmentItems) && shipmentItems.length ?
     Math.round(shipmentItems.reduce((sum, item) => sum + item.totalWeightKg, 0) * 100) / 100 :
@@ -1345,6 +1345,10 @@ function resolveAuthoritativeShipmentWeight({rawText, declaredWeightText, shipme
   if (perUnitDeclaredWeightKg != null && perUnitDeclaredWeightKg >= 0) {
     candidates.push({source: "declared_per_unit_weight", value: perUnitDeclaredWeightKg, confidence: "sender_declared_per_unit"});
   }
+  const visualWeightKg = Number(photoEstimatedWeightKg);
+  if (Number.isFinite(visualWeightKg) && visualWeightKg > 0) {
+    candidates.push({source: "backend_photo_estimate", value: visualWeightKg, confidence: "backend_photo_signal"});
+  }
   const best = candidates
       .filter((candidate) => Number.isFinite(candidate.value) && candidate.value >= 0)
       .sort((a, b) => b.value - a.value)[0] || {source: "iris_estimate", value: 2, confidence: "low"};
@@ -1354,6 +1358,7 @@ function resolveAuthoritativeShipmentWeight({rawText, declaredWeightText, shipme
     declaredWeightKg,
     irisEstimatedWeightKg,
     combinedWeightKg: shipmentSummary ? shipmentSummary.combinedWeightKg : itemWeightKg,
+    photoEstimatedWeightKg: Number.isFinite(visualWeightKg) && visualWeightKg > 0 ? Math.round(visualWeightKg * 100) / 100 : null,
     authoritativeWeightKg: Math.round(best.value * 100) / 100,
     authoritySource: best.source,
     confidence: best.confidence,
@@ -1938,6 +1943,7 @@ function classifyIris(input = {}) {
     declaredWeightText,
     shipmentSummary,
     shipmentItems,
+    photoEstimatedWeightKg: input.photoEstimatedWeightKg,
   });
   const estimatedWeightKg = weightAuthority.authoritativeWeightKg;
   const baseCategory = classifyCategory(text, shipmentSummary);
@@ -2165,6 +2171,10 @@ function serverIrisForDispatch(request = {}) {
   return classifyIris({
     description,
     declaredWeightText: request.weight || request.weightLabel || parcel.weightLabel || parcel.weightKg || "",
+    photoEstimatedWeightKg: request.photoEstimatedWeightKg ||
+      request.irisPhotoAnalysis && request.irisPhotoAnalysis.estimatedWeightKg ||
+      request.iris && request.iris.photoAnalysis && request.iris.photoAnalysis.estimatedWeightKg ||
+      null,
     distanceMiles: request.distanceMiles || request.routeDistanceMiles || 0,
     speed: request.selectedSpeed || request.selectedServiceLevel || request.serviceLevel || request.speed || "",
     vehicleType: request.vehicleType || request.recommendedVehicle || null,
@@ -2230,8 +2240,20 @@ function normalizeRiderRank(value) {
   return RIDER_RANKS.has(rank) ? rank : "agent";
 }
 
+const APPROVED_RIDER_STATUSES = new Set(["approved", "verified"]);
+
+function isApprovedRiderForDispatch(rider = {}) {
+  return [
+    rider.approvalStatus,
+    rider.verificationStatus,
+    rider.adminApprovalStatus,
+    rider.accountStatus,
+    rider.onboardingStatus,
+  ].some((status) => APPROVED_RIDER_STATUSES.has(normalize(status)));
+}
+
 function riderCanViewDispatch(rider, request, now = Date.now()) {
-  return true;
+  return isApprovedRiderForDispatch(rider);
 }
 
 function riderDispatchPriority(rider, request, now = Date.now()) {

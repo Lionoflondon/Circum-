@@ -68,12 +68,23 @@ service firebase.storage {
     }
 
     match /profilePhotos/{userId}/{allPaths=**} {
-      allow read: if signedIn();
+      allow read: if isAdmin() || (signedIn() && request.auth.uid == userId);
       allow create, update: if (isAdmin() || (signedIn() && request.auth.uid == userId)) &&
         request.resource != null &&
         request.resource.size <= 5 * 1024 * 1024 &&
         request.resource.contentType is string &&
         request.resource.contentType.matches('image/.*');
+      allow delete: if isSuperAdmin() || (signedIn() && request.auth.uid == userId);
+    }
+
+    match /users/{userId}/profile/{fileName} {
+      allow read: if isAdmin() || (signedIn() && request.auth.uid == userId);
+      allow create, update: if (isAdmin() || (signedIn() && request.auth.uid == userId)) &&
+        fileName.matches('avatar\\.jpg|avatar\\.png') &&
+        request.resource != null &&
+        request.resource.size <= 8 * 1024 * 1024 &&
+        request.resource.contentType is string &&
+        request.resource.contentType.matches('image/jpeg|image/jpg|image/png');
       allow delete: if isSuperAdmin() || (signedIn() && request.auth.uid == userId);
     }
 

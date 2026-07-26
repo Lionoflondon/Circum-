@@ -102,3 +102,16 @@ test("Admin payout review is backend authoritative and auditable", () => {
   assert.match(source, /riderPayoutAudit/);
   assert.match(source, /idempotent: true/);
 });
+
+test("Stripe Connect webhook money events are replay-safe", () => {
+  const source = fs.readFileSync("rider-connect.js", "utf8");
+  assert.match(source, /function processStripeConnectEventOnce/);
+  assert.match(source, /collection\("stripeConnectWebhookEvents"\)\.doc\(eventId\)/);
+  assert.match(source, /const existingEvent = await transaction\.get\(eventRef\)/);
+  assert.match(source, /if \(existingEvent\.exists\)/);
+  assert.match(source, /transaction\.create\(eventRef/);
+  assert.match(source, /event\.type === "payout\.paid" \|\| event\.type === "payout\.failed"[\s\S]*processStripeConnectEventOnce/);
+  assert.match(source, /event\.type === "transfer\.created" \|\| event\.type === "transfer\.failed"[\s\S]*processStripeConnectEventOnce/);
+  assert.match(source, /const active = \["processing", "pending", "requested"\]\.includes\(currentStatus\)/);
+  assert.match(source, /event\.type === "transfer\.failed" && active && riderId && amount > 0/);
+});

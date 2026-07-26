@@ -53,13 +53,20 @@ test("IRIS dispatch records audit when server recomputation blocks dispatch", ()
   assert.match(sendPackage, /storedIrisMismatch: dispatchDecision\.storedIrisMismatch === true/);
 });
 
-test("Firestore rules reserve rider rank changes for driver managers", () => {
+test("legacy sendPackage request lookup remains bounded", () => {
+  assert.match(
+      sendPackage,
+      /collection\("deliveryRequests"\) \.where\("requestId", "==", requestId\)\.limit\(1\)\.get\(\)/,
+  );
+});
+
+test("Firestore rules reserve rider authority changes for driver managers", () => {
   assert.match(
       rules,
-      /match \/riderProfiles\/\{driverId\}[\s\S]*allow update: if isDriverManager\(\)/,
+      /match \/riderProfiles\/\{driverId\}[\s\S]*allow create: if isDriverManager\(\) \|\| isSafeRiderSelfCreate\(driverId\);[\s\S]*allow update: if isDriverManager\(\) \|\| isSafeRiderSelfUpdate\(driverId\);/,
   );
   assert.match(
       rules,
-      /changedKeys\(\)\.hasAny\(\[[\s\S]*'rank'[\s\S]*'riderRank'[\s\S]*'rankUpdatedBy'/,
+      /function riderAdminOnlyFields\(\)[\s\S]*'approvalStatus'[\s\S]*'verificationStatus'[\s\S]*'driverStatus'[\s\S]*'rank'[\s\S]*'riderRank'/,
   );
 });

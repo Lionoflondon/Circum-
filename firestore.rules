@@ -34,6 +34,44 @@ service cloud.firestore {
       return signedIn() && request.auth.uid == userId;
     }
 
+    function authEmail() {
+      return signedIn() && request.auth.token.email is string
+        ? request.auth.token.email
+        : '';
+    }
+
+    function isBusinessMemberRecord() {
+      return signedIn() && (
+        resource.data.ownerUid == request.auth.uid ||
+        resource.data.createdByUserId == request.auth.uid ||
+        (
+          resource.data.teamMemberIds is list &&
+          (
+            request.auth.uid in resource.data.teamMemberIds ||
+            authEmail() in resource.data.teamMemberIds
+          )
+        )
+      );
+    }
+
+    function canReadBusinessId(businessId) {
+      return signedIn() &&
+        businessId is string &&
+        businessId.size() > 0 &&
+        exists(/databases/$(database)/documents/businessAccounts/$(businessId)) &&
+        (
+          get(/databases/$(database)/documents/businessAccounts/$(businessId)).data.ownerUid == request.auth.uid ||
+          get(/databases/$(database)/documents/businessAccounts/$(businessId)).data.createdByUserId == request.auth.uid ||
+          (
+            get(/databases/$(database)/documents/businessAccounts/$(businessId)).data.teamMemberIds is list &&
+            (
+              request.auth.uid in get(/databases/$(database)/documents/businessAccounts/$(businessId)).data.teamMemberIds ||
+              authEmail() in get(/databases/$(database)/documents/businessAccounts/$(businessId)).data.teamMemberIds
+            )
+          )
+        );
+    }
+
     function changesLegendFields() {
       return request.resource.data.diff(resource.data).changedKeys().hasAny([
         'isLegend',
@@ -122,6 +160,9 @@ service cloud.firestore {
         'trustPointsAwarded',
         'rank',
         'riderRank',
+        'weightKg',
+        'finalWeightKg',
+        'confirmedWeightKg',
         'completionState',
         'completedAt',
         'pinVerified',
@@ -243,6 +284,39 @@ service cloud.firestore {
         'isAdmin',
         'admin'
       ];
+    }
+
+    function userAdminOnlyRoleFields() {
+      return [
+        'roles',
+        'adminRole',
+        'isAdmin',
+        'admin'
+      ];
+    }
+
+    function isSafeSenderRoleValue(value) {
+      return value in ['sender', 'customer', 'user', 'client', 'member'];
+    }
+
+    function hasUnsafeSelfUserRoleCreate() {
+      return request.resource.data.keys().hasAny(['role']) &&
+        !isSafeSenderRoleValue(request.resource.data.role);
+    }
+
+    function hasUnsafeSelfUserTypeCreate() {
+      return request.resource.data.keys().hasAny(['userType']) &&
+        !isSafeSenderRoleValue(request.resource.data.userType);
+    }
+
+    function hasUnsafeSelfUserRoleUpdate() {
+      return request.resource.data.diff(resource.data).affectedKeys().hasAny(['role']) &&
+        !isSafeSenderRoleValue(request.resource.data.role);
+    }
+
+    function hasUnsafeSelfUserTypeUpdate() {
+      return request.resource.data.diff(resource.data).affectedKeys().hasAny(['userType']) &&
+        !isSafeSenderRoleValue(request.resource.data.userType);
     }
 
     function riderSelfWritableFields() {
@@ -585,9 +659,57 @@ service cloud.firestore {
     match /notifications/{notificationId} {
       allow read, update: if isAdmin() ||
         (signedIn() && resource.data.recipientId == request.auth.uid);
-      allow create: if isAdmin() ||
-        (signedIn() && request.resource.data.recipientId is string);
+      allow create: if isAdmin();
       allow delete: if hasRole('super_admin');
+    }
+
+    match /businessAccounts/{businessId} {
+      allow read: if isAdmin() || isBusinessMemberRecord();
+      allow write: if isAdmin();
+    }
+
+    match /businessWorkspaces/{businessId} {
+      allow read: if isAdmin() || canReadBusinessId(businessId);
+      allow write: if isAdmin();
+    }
+
+    match /businessSettings/{businessId} {
+      allow read: if isAdmin() || canReadBusinessId(businessId);
+      allow write: if isAdmin();
+    }
+
+    match /businessAnalytics/{businessId} {
+      allow read: if isAdmin() || canReadBusinessId(businessId);
+      allow write: if isAdmin();
+    }
+
+    match /business_wallets/{businessId} {
+      allow read: if isAdmin() || canReadBusinessId(businessId);
+      allow write: if isAdmin();
+    }
+
+    match /businessMemberships/{membershipId} {
+      allow read: if isAdmin() ||
+        (signedIn() && resource.data.userId == request.auth.uid) ||
+        canReadBusinessId(resource.data.businessId);
+      allow write: if isAdmin();
+    }
+
+    match /businessJoinRequests/{requestId} {
+      allow read: if isAdmin() ||
+        (signedIn() && resource.data.userId == request.auth.uid) ||
+        canReadBusinessId(resource.data.businessId);
+      allow write: if isAdmin();
+    }
+
+    match /businessInvoices/{invoiceId} {
+      allow read: if isAdmin() || canReadBusinessId(resource.data.businessId);
+      allow write: if isAdmin();
+    }
+
+    match /businessAuditLogs/{logId} {
+      allow read: if isAdmin() || canReadBusinessId(resource.data.businessId);
+      allow write: if isAdmin();
     }
 
     match /giftsWaitlist/{entryId} {
@@ -610,6 +732,7 @@ service cloud.firestore {
     match /giftRequests/{giftRequestId} {
       allow create: if isAdmin();
       allow read: if isAdmin() ||
+        canReadBusinessId(resource.data.businessId) ||
         (signedIn() && resource.data.senderId == request.auth.uid);
       allow update: if isAdmin();
       allow delete: if hasRole('super_admin');
@@ -684,19 +807,8 @@ service cloud.firestore {
 
     match /riderProfiles/{driverId} {
       allow read: if isAdmin() || (signedIn() && request.auth.uid == driverId);
-      allow create: if isDriverManager() ||
-        (signedIn() && request.auth.uid == driverId &&
-          (!('rank' in request.resource.data) || request.resource.data.rank == 'agent') &&
-          (!('riderRank' in request.resource.data) || request.resource.data.riderRank == 'agent'));
-      allow update: if isDriverManager() ||
-        (signedIn() && request.auth.uid == driverId &&
-          !request.resource.data.diff(resource.data).changedKeys().hasAny([
-            'rank',
-            'riderRank',
-            'rankUpdatedAt',
-            'rankUpdatedBy',
-            'rankReason'
-          ]));
+      allow create: if isDriverManager() || isSafeRiderSelfCreate(driverId);
+      allow update: if isDriverManager() || isSafeRiderSelfUpdate(driverId);
       allow delete: if hasRole('super_admin');
     }
 
@@ -727,6 +839,7 @@ service cloud.firestore {
       allow read: if isAdmin() ||
         isOwnDelivery(deliveryId) ||
         isAssignedRider() ||
+        canReadBusinessId(resource.data.businessId) ||
         isAvailableRiderJob();
       allow create: if isAdmin() || isSafeDeliveryCreate();
       allow update: if isAdmin() ||
@@ -802,9 +915,20 @@ service cloud.firestore {
           'legendAwardedAt',
           'legendSource',
           'legendDeliveryId'
-        ]);
+        ]) &&
+        (isAdmin() || (
+          !request.resource.data.keys().hasAny(userAdminOnlyRoleFields()) &&
+          !hasUnsafeSelfUserRoleCreate() &&
+          !hasUnsafeSelfUserTypeCreate()
+        ));
       allow update: if hasRole('super_admin') ||
-        ((isAdmin() || ownsSenderRecord(userId)) && !changesLegendFields());
+        ((isAdmin() || ownsSenderRecord(userId)) &&
+          !changesLegendFields() &&
+          (isAdmin() || (
+            !request.resource.data.diff(resource.data).affectedKeys().hasAny(userAdminOnlyRoleFields()) &&
+            !hasUnsafeSelfUserRoleUpdate() &&
+            !hasUnsafeSelfUserTypeUpdate()
+          )));
       allow delete: if hasRole('super_admin');
     }
 
@@ -827,6 +951,7 @@ service cloud.firestore {
 
     match /prescriptionPickups/{pickupId} {
       allow read, update, delete: if isAdmin() ||
+        canReadBusinessId(resource.data.businessId) ||
         (signedIn() && resource.data.senderId == request.auth.uid) ||
         (signedIn() && resource.data.userId == request.auth.uid) ||
         isAssignedRider();
@@ -895,6 +1020,11 @@ service cloud.firestore {
       allow delete: if hasRole('super_admin');
     }
 
+    match /riderEarningsReconciliations/{reconciliationId} {
+      allow read: if isFinanceAdmin();
+      allow write: if false;
+    }
+
     match /riderWalletTransactions/{transactionId} {
       allow read: if isAdmin() ||
         (signedIn() && resource.data.riderId == request.auth.uid);
@@ -909,6 +1039,10 @@ service cloud.firestore {
       allow create: if isAdmin();
       allow update: if isAdmin();
       allow delete: if hasRole('super_admin');
+    }
+
+    match /stripeConnectWebhookEvents/{eventId} {
+      allow read, write: if false;
     }
 
     match /riderBankAccounts/{riderId} {

@@ -179,6 +179,20 @@ function deliveryIds(data) {
   };
 }
 
+async function onlineCandidateRiderProfileDocs(db) {
+  const byId = new Map();
+  const addDocs = (snapshot) => {
+    snapshot.docs.forEach((doc) => byId.set(doc.id, doc));
+  };
+  const [byStatus, byAvailability] = await Promise.all([
+    db.collection("riderProfiles").where("status", "in", ["online", "available"]).get(),
+    db.collection("riderProfiles").where("availabilityStatus", "in", ["online", "available"]).get(),
+  ]);
+  addDocs(byStatus);
+  addDocs(byAvailability);
+  return [...byId.values()];
+}
+
 function moneyText(value, currency = "GBP") {
   const amount = Number(value || 0);
   if (!Number.isFinite(amount) || amount <= 0) return "";
@@ -241,8 +255,8 @@ exports.onDeliveryCreated = functions.firestore.document("deliveryRequests/{deli
   const delivery = snapshot.data();
   const ids = deliveryIds({...delivery, id: snapshot.id});
   if (ids.senderId) await notify({recipientId: ids.senderId, recipientRole: "shipper", type: "delivery_created", title: "Delivery created", body: "Your delivery request has been created.", bookingId: ids.bookingId, data: {category: "Deliveries"}});
-  const riders = await getFirestore().collection("riderProfiles").get();
-  const eligible = riders.docs.filter((doc) => {
+  const riders = await onlineCandidateRiderProfileDocs(getFirestore());
+  const eligible = riders.filter((doc) => {
     const rider = doc.data();
     const approval = text(rider.approvalStatus || rider.verificationStatus).toLowerCase();
     const online = text(rider.status || rider.availabilityStatus).toLowerCase();
@@ -379,6 +393,7 @@ exports.escalateUnclaimedDeliveries = functions.pubsub.schedule("every 1 minutes
   const db = getFirestore();
   const cutoff = Timestamp.fromMillis(Date.now() - 2 * 60 * 1000);
   const snapshot = await db.collection("deliveryRequests").where("createdAt", "<=", cutoff).limit(100).get();
+  let riderProfileDocs = null;
   for (const doc of snapshot.docs) {
     const delivery = doc.data();
     if (!openStatuses.has(text(delivery.status).toLowerCase())) continue;
@@ -389,8 +404,10 @@ exports.escalateUnclaimedDeliveries = functions.pubsub.schedule("every 1 minutes
     if (stage === 5) {
       await notify({recipientRole: "admin", type: "unclaimed_delivery", title: "Unclaimed delivery", body: "A delivery remains unclaimed after five minutes.", bookingId: text(delivery.requestId || doc.id)});
     } else {
-      const riders = await db.collection("riderProfiles").get();
-      await Promise.all(riders.docs.filter((riderDoc) => {
+      if (!riderProfileDocs) {
+        riderProfileDocs = await onlineCandidateRiderProfileDocs(db);
+      }
+      await Promise.all(riderProfileDocs.filter((riderDoc) => {
         const rider = riderDoc.data();
         const approval = text(rider.approvalStatus || rider.verificationStatus).toLowerCase();
         const online = text(rider.status || rider.availabilityStatus).toLowerCase();
@@ -409,4 +426,5 @@ exports.giftNotificationRecordsForTransition = giftNotificationRecordsForTransit
 exports._private = {
   giftStatus,
   giftStatusNotification,
+  onlineCandidateRiderProfileDocs,
 };

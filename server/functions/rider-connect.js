@@ -954,6 +954,38 @@ function adminReviewRiderWithdrawal() {
   });
 }
 
+async function processStripeConnectEventOnce(db, event, handler) {
+  const eventId = text(event && event.id);
+  if (!eventId) {
+    throw new Error("Stripe Connect webhook event id is missing.");
+  }
+  const eventRef = db.collection("stripeConnectWebhookEvents").doc(eventId);
+  return db.runTransaction(async (transaction) => {
+    const existingEvent = await transaction.get(eventRef);
+    if (existingEvent.exists) {
+      return {
+        duplicate: true,
+        eventId,
+        previousStatus: existingEvent.data().status || "processed",
+      };
+    }
+    const result = await handler(transaction);
+    transaction.create(eventRef, {
+      eventId,
+      type: event.type,
+      stripeAccountId: text(event.account),
+      status: "processed",
+      createdAt: FieldValue.serverTimestamp(),
+      result: result || {},
+    });
+    return {
+      duplicate: false,
+      eventId,
+      ...(result || {}),
+    };
+  });
+}
+
 function handleStripeConnectWebhook(stripeOrFactory) {
   return stripeWebhookRuntime.https.onRequest(async (req, res) => {
     const stripe = stripeFrom(stripeOrFactory);
@@ -988,57 +1020,64 @@ function handleStripeConnectWebhook(stripeOrFactory) {
       if (event.type === "payout.paid" || event.type === "payout.failed") {
         const accountId = text(object.destination || object.account || event.account);
         const status = event.type === "payout.paid" ? "paid" : "failed";
-        const query = await db.collection("payoutRequests")
-            .where("stripeAccountId", "==", accountId)
-            .where("status", "in", ["processing", "pending", "requested"])
-            .limit(10)
-            .get();
-        const batch = db.batch();
-        query.docs.forEach((doc) => {
-          const payout = doc.data() || {};
-          const riderId = text(payout.riderId);
-          const amount = Number(payout.amount || 0);
-          batch.set(doc.ref, {
-            status,
-            stripePayoutId: object.id,
-            failureReason: object.failure_message || object.failure_code || null,
-            paidAt: status === "paid" ? FieldValue.serverTimestamp() : null,
-            failedAt: status === "failed" ? FieldValue.serverTimestamp() : null,
-            updatedAt: FieldValue.serverTimestamp(),
-          }, {merge: true});
-          if (riderId && amount > 0) {
-            batch.set(db.collection("riderEarnings").doc(riderId), {
-              pendingWithdrawal: FieldValue.increment(-amount),
-              totalWithdrawn: status === "paid" ? FieldValue.increment(amount) : FieldValue.increment(0),
-              withdrawnEarnings: status === "paid" ? FieldValue.increment(amount) : FieldValue.increment(0),
-              availableBalance: status === "failed" ? FieldValue.increment(amount) : FieldValue.increment(0),
+        await processStripeConnectEventOnce(db, event, async (transaction) => {
+          const query = await transaction.get(db.collection("payoutRequests")
+              .where("stripeAccountId", "==", accountId)
+              .where("status", "in", ["processing", "pending", "requested"])
+              .limit(10));
+          let matched = 0;
+          query.docs.forEach((doc) => {
+            const payout = doc.data() || {};
+            const riderId = text(payout.riderId);
+            const amount = Number(payout.amount || 0);
+            matched += 1;
+            transaction.set(doc.ref, {
+              status,
+              stripePayoutId: object.id,
+              failureReason: object.failure_message || object.failure_code || null,
+              paidAt: status === "paid" ? FieldValue.serverTimestamp() : null,
+              failedAt: status === "failed" ? FieldValue.serverTimestamp() : null,
               updatedAt: FieldValue.serverTimestamp(),
             }, {merge: true});
-          }
+            if (riderId && amount > 0) {
+              transaction.set(db.collection("riderEarnings").doc(riderId), {
+                pendingWithdrawal: FieldValue.increment(-amount),
+                totalWithdrawn: status === "paid" ? FieldValue.increment(amount) : FieldValue.increment(0),
+                withdrawnEarnings: status === "paid" ? FieldValue.increment(amount) : FieldValue.increment(0),
+                availableBalance: status === "failed" ? FieldValue.increment(amount) : FieldValue.increment(0),
+                updatedAt: FieldValue.serverTimestamp(),
+              }, {merge: true});
+            }
+          });
+          return {status, matched};
         });
-        await batch.commit();
       }
       if (event.type === "transfer.created" || event.type === "transfer.failed") {
         const requestId = text(object.metadata && object.metadata.payoutRequestId);
         if (requestId) {
           const requestRef = db.collection("payoutRequests").doc(requestId);
-          const request = await requestRef.get();
-          const requestData = request.data() || {};
-          const riderId = text(requestData.riderId);
-          const amount = Number(requestData.amount || object.amount / 100 || 0);
-          await db.collection("payoutRequests").doc(requestId).set({
-            status: event.type === "transfer.failed" ? "failed" : "processing",
-            stripeTransferId: object.id,
-            failureReason: object.failure_message || object.failure_code || null,
-            updatedAt: FieldValue.serverTimestamp(),
-          }, {merge: true});
-          if (event.type === "transfer.failed" && riderId && amount > 0) {
-            await db.collection("riderEarnings").doc(riderId).set({
-              availableBalance: FieldValue.increment(amount),
-              pendingWithdrawal: FieldValue.increment(-amount),
+          await processStripeConnectEventOnce(db, event, async (transaction) => {
+            const request = await transaction.get(requestRef);
+            const requestData = request.data() || {};
+            const riderId = text(requestData.riderId);
+            const amount = Number(requestData.amount || object.amount / 100 || 0);
+            const currentStatus = text(requestData.status || requestData.payoutStatus).toLowerCase();
+            const active = ["processing", "pending", "requested"].includes(currentStatus);
+            transaction.set(requestRef, {
+              status: event.type === "transfer.failed" ? "failed" : "processing",
+              stripeTransferId: object.id,
+              failureReason: object.failure_message || object.failure_code || null,
               updatedAt: FieldValue.serverTimestamp(),
             }, {merge: true});
-          }
+            if (event.type === "transfer.failed" && active && riderId && amount > 0) {
+              transaction.set(db.collection("riderEarnings").doc(riderId), {
+                availableBalance: FieldValue.increment(amount),
+                pendingWithdrawal: FieldValue.increment(-amount),
+                updatedAt: FieldValue.serverTimestamp(),
+              }, {merge: true});
+            }
+            return {requestId, active, status: event.type === "transfer.failed" ? "failed" : "processing"};
+          });
         }
       }
       res.json({received: true});

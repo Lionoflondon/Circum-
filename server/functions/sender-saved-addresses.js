@@ -47,6 +47,31 @@ function canonicalAddress(data) {
   return address;
 }
 
+function legacySavedAddressEntry(docId, data) {
+  const address = data || {};
+  const label = clean(address.customLabel || address.label || "Saved address");
+  return {
+    id: docId,
+    label,
+    address: clean(address.formattedAddress || [
+      address.addressLine1,
+      address.addressLine2,
+      address.city,
+      address.county,
+      address.postcode,
+      address.country,
+    ].filter(Boolean).join(", ")),
+    addressType: clean(address.addressType || address.type || "pickup"),
+    notes: clean(address.deliveryInstructions || address.notes),
+    postcode: clean(address.postcode),
+    lat: Number.isFinite(Number(address.latitude)) ? Number(address.latitude) : null,
+    lng: Number.isFinite(Number(address.longitude)) ? Number(address.longitude) : null,
+    placeId: clean(address.placeId),
+    provider: clean(address.provider || "backend_verified"),
+    locationId: clean(address.locationId || address.placeId || docId),
+  };
+}
+
 exports.saveSenderSavedAddress = functions.https.onCall(async (data, context) => {
   const userId = requireSender(context);
   const db = getFirestore();
@@ -97,6 +122,15 @@ exports.saveSenderSavedAddress = functions.https.onCall(async (data, context) =>
       version: Number(existing && existing.data().version || 0) + 1,
     };
     transaction.set(reference, saved, {merge: false});
+    const legacyAddresses = all.docs
+        .filter((document) => document.id !== reference.id)
+        .map((document) => legacySavedAddressEntry(document.id, document.data()))
+        .concat(legacySavedAddressEntry(reference.id, saved))
+        .slice(-25);
+    transaction.set(db.collection("users").doc(userId), {
+      savedAddresses: legacyAddresses,
+      updatedAt: now,
+    }, {merge: true});
   });
   return {addressId: reference.id, version: saved.version};
 });
@@ -108,8 +142,20 @@ exports.deleteSenderSavedAddress = functions.https.onCall(async (data, context) 
   const reference = getFirestore().collection("users").doc(userId).collection("savedAddresses").doc(addressId);
   const snapshot = await reference.get();
   if (!snapshot.exists) throw new functions.https.HttpsError("not-found", "Saved address not found.");
-  await reference.delete();
+  await getFirestore().runTransaction(async (transaction) => {
+    const all = await transaction.get(reference.parent);
+    const remaining = all.docs
+        .filter((document) => document.id !== addressId)
+        .map((document) => legacySavedAddressEntry(document.id, document.data()))
+        .slice(-25);
+    transaction.delete(reference);
+    transaction.set(getFirestore().collection("users").doc(userId), {
+      savedAddresses: remaining,
+      updatedAt: FieldValue.serverTimestamp(),
+    }, {merge: true});
+  });
   return {deleted: true, wasDefaultPickup: snapshot.data().isDefaultPickup === true, wasDefaultDropoff: snapshot.data().isDefaultDropoff === true};
 });
 
 exports.canonicalAddress = canonicalAddress;
+exports.legacySavedAddressEntry = legacySavedAddressEntry;

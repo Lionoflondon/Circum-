@@ -34,3 +34,12 @@ test("goOffline validates the referenced delivery before blocking", () => {
   assert.match(source, /activeDeliveryId: FieldValue\.delete\(\)/);
   assert.doesNotMatch(source, /presence\.busy === true \|\|\s*text\(presence\.activeDeliveryId\)/);
 });
+
+test("stale delivery reconciliation queries only referenced rider presence records", () => {
+  const backend = fs.readFileSync(path.join(__dirname, "stale-delivery.js"), "utf8");
+  assert.match(backend, /async function referencedPresenceDocs\(db\)/);
+  assert.match(backend, /\.where\("activeDeliveryId", ">", ""\)\.limit\(500\)\.get\(\)/);
+  assert.match(backend, /\.where\("currentDeliveryId", ">", ""\)\.limit\(500\)\.get\(\)/);
+  assert.match(backend, /const presenceDocs = await referencedPresenceDocs\(db\)/);
+  assert.doesNotMatch(backend, /db\.collection\("riderPresence"\)\.limit\(500\)\.get\(\)/);
+});

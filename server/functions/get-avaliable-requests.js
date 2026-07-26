@@ -1,7 +1,56 @@
-/* eslint-disable max-len */
+/* eslint-disable max-len, require-jsdoc */
 const functions = require("firebase-functions/v1");
 const {getFirestore} = require("firebase-admin/firestore");
 const {dispatchPriority, isDispatchable, riderCanViewDispatch, riderDispatchPriority, riderMatchesIris} = require("./iris-core");
+
+const REQUEST_SCAN_LIMIT = 100;
+const openStatuses = new Set(["requested", "pending", "broadcast", "broadcasted", "awaiting_rider", "finding_rider"]);
+const text = (value) => `${value || ""}`.trim();
+
+function riderLocality(rider = {}) {
+  return text(rider.dispatchLocality || rider.locality || rider.city || rider.town || rider.area);
+}
+
+function deliveryLocality(delivery = {}) {
+  return text(delivery.pickupLocality || delivery.collectionLocality || delivery.pickupCity || delivery.collectionCity);
+}
+
+function hasPickupGeo(delivery = {}) {
+  return Boolean(delivery.pickupPosition &&
+    delivery.pickupPosition.geopoint &&
+    Number.isFinite(Number(delivery.pickupPosition.geopoint.latitude)) &&
+    Number.isFinite(Number(delivery.pickupPosition.geopoint.longitude)));
+}
+
+async function candidateRequestDocs(db, riderData = {}) {
+  const byId = new Map();
+  const addDocs = (snapshot) => {
+    snapshot.docs.forEach((doc) => byId.set(doc.id, doc));
+  };
+  const locality = riderLocality(riderData);
+  const queries = [
+    db.collection("deliveryRequests")
+        .where("status", "==", "requested")
+        .limit(REQUEST_SCAN_LIMIT)
+        .get(),
+  ];
+  if (locality) {
+    queries.unshift(
+        db.collection("deliveryRequests")
+            .where("pickupLocality", "==", locality)
+            .limit(REQUEST_SCAN_LIMIT)
+            .get(),
+    );
+  }
+  const snapshots = await Promise.all(queries);
+  snapshots.forEach(addDocs);
+  return [...byId.values()].filter((doc) => {
+    const delivery = doc.data() || {};
+    const status = text(delivery.status).toLowerCase();
+    if (status && !openStatuses.has(status)) return false;
+    return hasPickupGeo(delivery);
+  });
+}
 
 const getNearbyRequests = functions.https.onCall(async (data, context) => {
   try {
@@ -25,10 +74,12 @@ const getNearbyRequests = functions.https.onCall(async (data, context) => {
 
     const riderProfileDoc = await getFirestore().collection("riderProfiles").doc(riderId).get();
     const riderData = {
-      ...riderDoc.data(),
       ...(riderProfileDoc.exists ? riderProfileDoc.data() : {}),
+      ...riderDoc.data(),
     };
-    if (!riderData.position.geopoint.latitude || !riderData.position.geopoint.longitude) {
+    if (!riderData.position || !riderData.position.geopoint ||
+        !Number.isFinite(Number(riderData.position.geopoint.latitude)) ||
+        !Number.isFinite(Number(riderData.position.geopoint.longitude))) {
       throw new functions.https.HttpsError("failed-precondition", "Rider position not available");
     }
 
@@ -37,19 +88,15 @@ const getNearbyRequests = functions.https.onCall(async (data, context) => {
       longitude: riderData.position.geopoint.longitude,
     };
 
-    // Get all available delivery requests
-    const requestsSnapshot = await getFirestore().collection("deliveryRequests")
-        .where("status", "==", "requested") // Assuming 'pending' status for available requests
-        .get();
+    const requestDocs = await candidateRequestDocs(getFirestore(), riderData);
 
     // Calculate distances from rider to each request
     const requestsWithDistances = await Promise.all(
-        requestsSnapshot.docs
+        requestDocs
             .filter((doc) => {
               const requestData = doc.data();
               if (!isDispatchable(requestData)) return false;
-              return requestData.pickupPosition.geopoint.latitude &&
-                     requestData.pickupPosition.geopoint.longitude;
+              return hasPickupGeo(requestData);
             })
             .map(async (doc) => {
               try {
@@ -105,9 +152,11 @@ const getNearbyRequests = functions.https.onCall(async (data, context) => {
       nearestRequests: nearestRequests,
     };
   } catch (error) {
+    if (error instanceof functions.https.HttpsError) throw error;
     console.error("Error in getNearbyRequests:", error);
     throw new functions.https.HttpsError("internal", error.message);
   }
 });
 
 module.exports = getNearbyRequests;
+module.exports._private = {candidateRequestDocs, riderLocality, deliveryLocality, hasPickupGeo, REQUEST_SCAN_LIMIT};

@@ -51,6 +51,18 @@ function giftStoryStoragePaths(giftId) {
   };
 }
 
+function giftStoryVideoPaths(gift = {}, giftId = "") {
+  const allowedPrefixes = giftId ? [
+    `gifts/${giftId}/story/exports/silent/`,
+    `gifts/${giftId}/story/exports/sound/`,
+  ] : ["gifts/"];
+  return [...new Set([
+    text(gift.giftStoryRenderedVideoPath),
+    text(gift.giftStorySilentVersionUrl),
+    text(gift.giftStorySoundVersionUrl),
+  ].filter((path) => path && allowedPrefixes.some((prefix) => path.startsWith(prefix))))];
+}
+
 function cleanSkin(value) {
   const skin = text(value).toLowerCase().replace(/-/g, "_");
   return STORY_SKINS.has(skin) ? skin : "iridescent";
@@ -1226,9 +1238,16 @@ exports.manageGiftStoryAccess = functions.https.onCall(async (data, context) => 
     ));
     await giftRef.set({giftStoryAccessExpiresAt: expiresAt, giftStoryVideoExpiresAt: expiresAt, giftStoryUpdatedAt: FieldValue.serverTimestamp()}, {merge: true});
   } else if (action === "delete_assets") {
-    const path = text(gift.giftStoryRenderedVideoPath);
-    if (path) await getStorage().bucket().file(path).delete({ignoreNotFound: true});
-    await giftRef.set({giftStoryRenderedVideoPath: FieldValue.delete(), giftStoryVideoStatus: "deleted", giftStoryUpdatedAt: FieldValue.serverTimestamp()}, {merge: true});
+    await Promise.all(giftStoryVideoPaths(gift, giftId).map((path) =>
+      getStorage().bucket().file(path).delete({ignoreNotFound: true}),
+    ));
+    await giftRef.set({
+      giftStoryRenderedVideoPath: FieldValue.delete(),
+      giftStorySilentVersionUrl: FieldValue.delete(),
+      giftStorySoundVersionUrl: FieldValue.delete(),
+      giftStoryVideoStatus: "deleted",
+      giftStoryUpdatedAt: FieldValue.serverTimestamp(),
+    }, {merge: true});
   } else {
     throw new functions.https.HttpsError("invalid-argument", "Unknown Gift Story action.");
   }
@@ -1311,12 +1330,19 @@ exports.cleanupExpiredGiftStories = functions.pubsub.schedule("every 60 minutes"
     const giftSnap = await giftRef.get();
     if (giftSnap.exists) {
       const gift = giftSnap.data() || {};
-      const path = text(gift.giftStoryRenderedVideoPath);
-      if (path) await getStorage().bucket().file(path).delete({ignoreNotFound: true}).catch((error) => console.error("Gift Story asset cleanup failed", error));
+      await Promise.all(giftStoryVideoPaths(gift, data.giftRequestId).map((path) =>
+        getStorage().bucket().file(path).delete({ignoreNotFound: true})
+            .catch((error) => console.error("Gift Story asset cleanup failed", error)),
+      ));
       await giftRef.set({
         giftStoryRenderedVideoPath: FieldValue.delete(),
+        giftStorySilentVersionUrl: FieldValue.delete(),
+        giftStorySoundVersionUrl: FieldValue.delete(),
         giftStoryAccessToken: FieldValue.delete(),
         giftStoryAccessTokenHash: FieldValue.delete(),
+        recipientStoryToken: FieldValue.delete(),
+        recipientStoryTokenHash: FieldValue.delete(),
+        recipientStoryUrl: FieldValue.delete(),
         giftStoryAccessStatus: "expired",
         giftStoryVideoStatus: "expired",
         giftStoryUpdatedAt: FieldValue.serverTimestamp(),
@@ -1333,6 +1359,7 @@ module.exports.tokenHash = tokenHash;
 module.exports.safeStory = safeStory;
 module.exports.buildGiftStorySlides = buildGiftStorySlides;
 module.exports.giftStoryStoragePaths = giftStoryStoragePaths;
+module.exports.giftStoryVideoPaths = giftStoryVideoPaths;
 module.exports.cleanSkin = cleanSkin;
 module.exports.renderGiftStoryHtml = renderGiftStoryHtml;
 module.exports.storyNotificationRecord = storyNotificationRecord;

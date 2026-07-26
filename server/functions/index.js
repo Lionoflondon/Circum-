@@ -10,7 +10,9 @@ const {
   assertStripeEventMode,
   resolveStripeRuntimeConfig,
 } = require("./stripe-config");
-const stripeRuntimeConfig = resolveStripeRuntimeConfig({config: stripeConfig});
+const stripeRuntimeConfig = resolveStripeRuntimeConfig({
+  config: stripeConfig,
+});
 const stripe = require("stripe")(stripeRuntimeConfig.secretKey);
 const stripeConnectClient = () => stripe;
 const {v4: uuidv4} = require("uuid");
@@ -22,6 +24,7 @@ const sendMessage = require("./send-message");
 const sendRiderUpdate = require("./send-rider-update");
 const healthPlus = require("./health-plus");
 const iris = require("./iris");
+const irisPhotoAnalysis = require("./iris-photo-analysis");
 const deliveryAdjustments = require("./delivery-adjustments");
 const platformNotifications = require("./platform-notifications");
 const legends = require("./legends");
@@ -58,6 +61,7 @@ const riderIrisAcknowledgement = require("./rider-iris-acknowledgement");
 const adminIrisReferenceImages = require("./admin-iris-reference-images");
 const adminRiderAuthority = require("./admin-rider-authority");
 const adminGovernance = require("./admin-governance");
+const adminOperationsAuthority = require("./admin-operations-authority");
 const {routeCheckoutSessionCompleted} = require("./checkout-session-router");
 
 initializeApp();
@@ -82,17 +86,22 @@ exports.sendCircumMessage = communicationEngine.sendCircumMessage;
 exports.markConversationRead = communicationEngine.markConversationRead;
 exports.setConversationTyping = communicationEngine.setConversationTyping;
 exports.sendRiderUpdate = sendRiderUpdate;
-exports.createHealthPlusCheckoutSession = healthPlus.createHealthPlusCheckoutSession;
+exports.createHealthPlusCheckoutSession =
+  healthPlus.createHealthPlusCheckoutSession;
 exports.createHealthPlusBooking = healthPlus.createHealthPlusBooking;
-exports.updateSenderHealthPlusBooking = healthPlus.updateSenderHealthPlusBooking;
+exports.updateSenderHealthPlusBooking =
+  healthPlus.updateSenderHealthPlusBooking;
 exports.updateHealthPlusPickupStatus = healthPlus.updateHealthPlusPickupStatus;
 exports.analyseIris = iris.analyseIris;
+exports.analyseParcelPhotoForIris = irisPhotoAnalysis.analyseParcelPhotoForIris;
 exports.adjudicateIris = iris.adjudicateIris;
 exports.reportLoadDiscrepancy = deliveryAdjustments.reportLoadDiscrepancy;
 exports.reviewDeliveryAdjustment = deliveryAdjustments.reviewDeliveryAdjustment;
 exports.cancelAdjustedCollection = deliveryAdjustments.cancelAdjustedCollection;
-exports.createDeliveryAdjustmentPayment = deliveryAdjustments.createDeliveryAdjustmentPayment;
-exports.finalizeDeliveryAdjustmentPayment = deliveryAdjustments.finalizeDeliveryAdjustmentPayment;
+exports.createDeliveryAdjustmentPayment =
+  deliveryAdjustments.createDeliveryAdjustmentPayment;
+exports.finalizeDeliveryAdjustmentPayment =
+  deliveryAdjustments.finalizeDeliveryAdjustmentPayment;
 exports.onDeliveryCreated = platformNotifications.onDeliveryCreated;
 exports.onDeliveryUpdated = platformNotifications.onDeliveryUpdated;
 exports.onChatMessageCreated = platformNotifications.onChatMessageCreated;
@@ -100,40 +109,58 @@ exports.onSupportTicketCreated = platformNotifications.onSupportTicketCreated;
 exports.onDisputeCreated = platformNotifications.onDisputeCreated;
 exports.onRiderProfileUpdated = platformNotifications.onRiderProfileUpdated;
 exports.onPayoutUpdated = platformNotifications.onPayoutUpdated;
-exports.escalateUnclaimedDeliveries = platformNotifications.escalateUnclaimedDeliveries;
+exports.escalateUnclaimedDeliveries =
+  platformNotifications.escalateUnclaimedDeliveries;
 exports.awardLegendOnCompletion = legends.awardLegendOnCompletion;
 exports.createGiftPayment = giftsPayment.createGiftPayment(stripe);
 exports.finalizeGiftPayment = giftsPayment.finalizeGiftPayment(stripe);
-exports.cleanupExpiredGiftVoiceDrafts = giftsPayment.cleanupExpiredGiftVoiceDrafts;
-exports.onGiftRequestVoiceMediaDeleted = giftsPayment.onGiftRequestVoiceMediaDeleted;
+exports.cleanupExpiredGiftVoiceDrafts =
+  giftsPayment.cleanupExpiredGiftVoiceDrafts;
+exports.onGiftRequestVoiceMediaDeleted =
+  giftsPayment.onGiftRequestVoiceMediaDeleted;
 exports.recordRiderArrival = deliveryPolicy.recordRiderArrival;
 exports.reportWaitingContext = deliveryPolicy.reportWaitingContext;
 exports.markRiderNoShow = deliveryPolicy.markRiderNoShow;
 exports.cancelDelivery = deliveryPolicy.requestSenderCancellation;
-exports.updateDeliveryTrackingStatus = deliveryTracking.updateDeliveryTrackingStatus;
-exports.updateDeliveryLiveLocation = deliveryTracking.updateDeliveryLiveLocation;
+exports.updateDeliveryTrackingStatus =
+  deliveryTracking.updateDeliveryTrackingStatus;
+exports.updateDeliveryLiveLocation =
+  deliveryTracking.updateDeliveryLiveLocation;
 exports.submitDeliveryRating = ratingsTipping.submitDeliveryRating;
 exports.submitDeliveryTip = ratingsTipping.submitDeliveryTip(stripe);
 
-exports.getRiderEarningsSummary = riderEarningsSummary.getRiderEarningsSummary();
+exports.getRiderEarningsSummary =
+  riderEarningsSummary.getRiderEarningsSummary();
+exports.adminReconcileRiderEarnings = riderEarningsSummary.adminReconcileRiderEarnings();
+exports.scheduledRiderEarningsReconciliation = riderEarningsSummary.scheduledRiderEarningsReconciliation;
 exports.setFounderRiderAccess = founderRiderAccess.setFounderRiderAccess();
 exports.startAdminConversation = communicationEngine.startAdminConversation;
-exports.getOrCreateSupportConversation = communicationEngine.getOrCreateSupportConversation;
-exports.submitWebsiteSupportRequest = communicationEngine.submitWebsiteSupportRequest;
-exports.updateSupportConversationStatus = communicationEngine.updateSupportConversationStatus;
+exports.getOrCreateSupportConversation =
+  communicationEngine.getOrCreateSupportConversation;
+exports.submitWebsiteSupportRequest =
+  communicationEngine.submitWebsiteSupportRequest;
+exports.updateSupportConversationStatus =
+  communicationEngine.updateSupportConversationStatus;
 exports.reportCircumMessage = communicationEngine.reportCircumMessage;
 exports.sendCircumAnnouncement = communicationEngine.sendCircumAnnouncement;
 exports.retryNotificationDelivery = communicationEngine.retryNotificationDelivery;
-exports.onHealthPlusPickupOperationalWrite = healthPlusOperations.onHealthPlusPickupOperationalWrite;
-exports.processHealthPlusReminders = healthPlusOperations.processHealthPlusReminders;
-exports.resetHealthPlusMonthlyUsage = healthPlusOperations.resetHealthPlusMonthlyUsage;
-exports.generateHealthPlusRecurringBookings = healthPlusOperations.generateHealthPlusRecurringBookings;
+exports.onHealthPlusPickupOperationalWrite =
+  healthPlusOperations.onHealthPlusPickupOperationalWrite;
+exports.processHealthPlusReminders =
+  healthPlusOperations.processHealthPlusReminders;
+exports.resetHealthPlusMonthlyUsage =
+  healthPlusOperations.resetHealthPlusMonthlyUsage;
+exports.generateHealthPlusRecurringBookings =
+  healthPlusOperations.generateHealthPlusRecurringBookings;
 exports.onGiftRequestCreated = platformNotifications.onGiftRequestCreated;
 exports.onGiftRequestUpdated = platformNotifications.onGiftRequestUpdated;
-exports.onGiftCampaignParticipantUpdated = platformNotifications.onGiftCampaignParticipantUpdated;
+exports.onGiftCampaignParticipantUpdated =
+  platformNotifications.onGiftCampaignParticipantUpdated;
 exports.awardFoundingRiderOnApproval = legends.awardFoundingRiderOnApproval;
-exports.awardFoundingRiderOnRiderApproval = legends.awardFoundingRiderOnRiderApproval;
-exports.awardPatronOnBusinessInvoicePaid = legends.awardPatronOnBusinessInvoicePaid;
+exports.awardFoundingRiderOnRiderApproval =
+  legends.awardFoundingRiderOnRiderApproval;
+exports.awardPatronOnBusinessInvoicePaid =
+  legends.awardPatronOnBusinessInvoicePaid;
 exports.grantRecognition = legends.grantRecognition;
 exports.revokeRecognition = legends.revokeRecognition;
 exports.issueRothCredit = rothLedger.issueRothCredit;
@@ -146,103 +173,172 @@ exports.applyCheckoutRoth = rothLedger.applyCheckoutRoth;
 exports.initialiseSenderWallet = rothLedger.initialiseSenderWallet;
 exports.getSenderWallet = rothLedger.getSenderWallet;
 exports.getSenderWalletTransactions = rothLedger.getSenderWalletTransactions;
-exports.completeSenderWalletOnboarding = rothLedger.completeSenderWalletOnboarding;
+exports.completeSenderWalletOnboarding =
+  rothLedger.completeSenderWalletOnboarding;
 exports.requestSenderWalletDebit = rothLedger.requestSenderWalletDebit;
 exports.requestSenderWalletRefund = rothLedger.requestSenderWalletRefund;
 exports.reportRating = ratingsTipping.reportRating;
-exports.confirmRiderIrisAssessment = riderIrisAcknowledgement.confirmRiderIrisAssessment;
+exports.confirmRiderIrisAssessment =
+  riderIrisAcknowledgement.confirmRiderIrisAssessment;
 exports.getIrisReferenceImage = adminIrisReferenceImages.getIrisReferenceImage;
-exports.finalizeIrisReferenceImage = adminIrisReferenceImages.finalizeIrisReferenceImage;
-exports.deleteIrisReferenceImage = adminIrisReferenceImages.deleteIrisReferenceImage;
+exports.finalizeIrisReferenceImage =
+  adminIrisReferenceImages.finalizeIrisReferenceImage;
+exports.deleteIrisReferenceImage =
+  adminIrisReferenceImages.deleteIrisReferenceImage;
 exports.closeCircumAccount = accountClosure.closeAccount;
-exports.createBusinessRothCheckout = businessPayments.createBusinessRothCheckout(stripe);
-exports.createBusinessInvoiceCheckout = businessPayments.createBusinessInvoiceCheckout(stripe);
+exports.createBusinessRothCheckout =
+  businessPayments.createBusinessRothCheckout(stripe);
+exports.adminCreateBusinessInvoice =
+  businessPayments.adminCreateBusinessInvoice;
+exports.createBusinessInvoiceCheckout =
+  businessPayments.createBusinessInvoiceCheckout(stripe);
 exports.createBusinessAccount = businessAccess.createBusinessAccount;
-exports.lookupBusinessByCompanyCode = businessAccess.lookupBusinessByCompanyCode;
+exports.ensureBusinessCompanyCode = businessAccess.ensureBusinessCompanyCode;
+exports.lookupBusinessByCompanyCode =
+  businessAccess.lookupBusinessByCompanyCode;
 exports.requestBusinessAccess = businessAccess.requestBusinessAccess;
-exports.reviewBusinessAccessRequest = businessAccess.reviewBusinessAccessRequest;
+exports.reviewBusinessAccessRequest =
+  businessAccess.reviewBusinessAccessRequest;
 exports.updateBusinessProfile = businessAccess.updateBusinessProfile;
 exports.inviteBusinessMember = businessAccess.inviteBusinessMember;
 exports.updateBusinessMemberRole = businessAccess.updateBusinessMemberRole;
 exports.updateBusinessMemberStatus = businessAccess.updateBusinessMemberStatus;
 exports.removeBusinessMember = businessAccess.removeBusinessMember;
 exports.recordBusinessIrisMoment = businessAccess.recordBusinessIrisMoment;
-exports.createStripeConnectAccountForRider = riderConnect.createStripeConnectAccountForRider(stripeConnectClient);
-exports.createStripeOnboardingLink = riderConnect.createStripeOnboardingLink(stripeConnectClient);
-exports.refreshStripeOnboardingLink = riderConnect.refreshStripeOnboardingLink(stripeConnectClient);
-exports.syncStripeConnectStatus = riderConnect.syncStripeConnectStatus(stripeConnectClient);
-exports.createRiderTransferOrPayout = riderConnect.createRiderTransferOrPayout(stripeConnectClient);
+exports.createStripeConnectAccountForRider =
+  riderConnect.createStripeConnectAccountForRider(stripeConnectClient);
+exports.createStripeOnboardingLink =
+  riderConnect.createStripeOnboardingLink(stripeConnectClient);
+exports.refreshStripeOnboardingLink =
+  riderConnect.refreshStripeOnboardingLink(stripeConnectClient);
+exports.syncStripeConnectStatus =
+  riderConnect.syncStripeConnectStatus(stripeConnectClient);
+exports.createRiderTransferOrPayout =
+  riderConnect.createRiderTransferOrPayout(stripeConnectClient);
 exports.requestRiderWithdrawal = riderConnect.requestRiderWithdrawal();
 exports.cancelRiderWithdrawal = riderConnect.cancelRiderWithdrawal();
 exports.adminReviewRiderWithdrawal = riderConnect.adminReviewRiderWithdrawal();
 exports.adminReviewRider = adminRiderAuthority.adminReviewRider;
 exports.adminGovernanceAction = adminGovernance.adminGovernanceAction;
-exports.resetRiderTestStripeAccount = riderConnect.resetRiderTestStripeAccount();
-exports.handleStripeConnectWebhook = riderConnect.handleStripeConnectWebhook(stripeConnectClient);
-exports.scheduledRiderStripeStatusSync = riderConnect.scheduledRiderStripeStatusSync(stripeConnectClient);
-exports.redactLegacyPayoutBankFields = riderConnect.redactLegacyPayoutBankFields();
+exports.adminResolveAccess = adminOperationsAuthority.adminResolveAccess;
+exports.adminRecordAuditEntry = adminOperationsAuthority.adminRecordAuditEntry;
+exports.adminSaveAdminUser = adminOperationsAuthority.adminSaveAdminUser;
+exports.adminDuplicateDelivery = adminOperationsAuthority.adminDuplicateDelivery;
+exports.adminUpdateDeliveryOperation =
+  adminOperationsAuthority.adminUpdateDeliveryOperation;
+exports.adminArchiveDelivery = adminOperationsAuthority.adminArchiveDelivery;
+exports.adminUpdateIrisReview = adminOperationsAuthority.adminUpdateIrisReview;
+exports.adminUpdateSenderAccountStatus =
+  adminOperationsAuthority.adminUpdateSenderAccountStatus;
+exports.adminUpdateBusinessAccountStatus =
+  adminOperationsAuthority.adminUpdateBusinessAccountStatus;
+exports.adminUpdateBusinessOperation =
+  adminOperationsAuthority.adminUpdateBusinessOperation;
+exports.adminUpdateBusinessMember =
+  adminOperationsAuthority.adminUpdateBusinessMember;
+exports.adminUpdateHealthPlusPickup =
+  adminOperationsAuthority.adminUpdateHealthPlusPickup;
+exports.adminUpdateHealthPlusSchedule =
+  adminOperationsAuthority.adminUpdateHealthPlusSchedule;
+exports.adminUpdateHealthPlusProfile =
+  adminOperationsAuthority.adminUpdateHealthPlusProfile;
+exports.adminUpdateFinanceWorkflow =
+  adminOperationsAuthority.adminUpdateFinanceWorkflow;
+exports.resetRiderTestStripeAccount =
+  riderConnect.resetRiderTestStripeAccount();
+exports.handleStripeConnectWebhook =
+  riderConnect.handleStripeConnectWebhook(stripeConnectClient);
+exports.scheduledRiderStripeStatusSync =
+  riderConnect.scheduledRiderStripeStatusSync(stripeConnectClient);
+exports.redactLegacyPayoutBankFields =
+  riderConnect.redactLegacyPayoutBankFields();
 exports.syncSenderTrustBaseline = senderTrust.syncSenderTrustBaseline;
 exports.adminUpdateSenderTrust = senderTrust.adminUpdateSenderTrust;
 exports.ensureReferralCode = referrals.ensureReferralCode;
 exports.attachReferralCode = referrals.attachReferralCode;
 exports.activateReferral = referrals.activateReferral;
-exports.activateReferralOnDeliveryCompleted = referrals.activateReferralOnDeliveryCompleted;
-exports.activateReferralOnGiftCompleted = referrals.activateReferralOnGiftCompleted;
-exports.activateReferralOnHealthPlusCompleted = referrals.activateReferralOnHealthPlusCompleted;
+exports.activateReferralOnDeliveryCompleted =
+  referrals.activateReferralOnDeliveryCompleted;
+exports.activateReferralOnGiftCompleted =
+  referrals.activateReferralOnGiftCompleted;
+exports.activateReferralOnHealthPlusCompleted =
+  referrals.activateReferralOnHealthPlusCompleted;
 exports.onGiftMovementWrite = movementLedger.onGiftMovementWrite;
 exports.onHealthMovementWrite = movementLedger.onHealthMovementWrite;
-exports.onHealthPaymentMovementWrite = movementLedger.onHealthPaymentMovementWrite;
+exports.onHealthPaymentMovementWrite =
+  movementLedger.onHealthPaymentMovementWrite;
 exports.onMovementTimelineWrite = movementTimeline.onMovementTimelineWrite;
-exports.onDeliveryLiveLocationWrite = movementTimeline.onDeliveryLiveLocationWrite;
+exports.onDeliveryLiveLocationWrite =
+  movementTimeline.onDeliveryLiveLocationWrite;
 exports.onGiftDeliveryCompleted = giftStoryAutomation.onGiftDeliveryCompleted;
 exports.resolveGiftStoryAccess = giftStoryAutomation.resolveGiftStoryAccess;
 exports.recordGiftStoryEvent = giftStoryAutomation.recordGiftStoryEvent;
-exports.recordGiftStoryGuestEvent = giftStoryAutomation.recordGiftStoryGuestEvent;
+exports.recordGiftStoryGuestEvent =
+  giftStoryAutomation.recordGiftStoryGuestEvent;
 exports.updateGiftStoryPrivacy = giftStoryAutomation.updateGiftStoryPrivacy;
 exports.retryGiftStoryAutomation = giftStoryAutomation.retryGiftStoryAutomation;
 exports.manageGiftStoryAccess = giftStoryAutomation.manageGiftStoryAccess;
-exports.createGiftStoryVideoUpload = giftStoryAutomation.createGiftStoryVideoUpload;
-exports.finalizeGiftStoryVideoUpload = giftStoryAutomation.finalizeGiftStoryVideoUpload;
-exports.getGiftStoryVideoDownload = giftStoryAutomation.getGiftStoryVideoDownload;
+exports.createGiftStoryVideoUpload =
+  giftStoryAutomation.createGiftStoryVideoUpload;
+exports.finalizeGiftStoryVideoUpload =
+  giftStoryAutomation.finalizeGiftStoryVideoUpload;
+exports.getGiftStoryVideoDownload =
+  giftStoryAutomation.getGiftStoryVideoDownload;
 exports.giftStoryLanding = giftStoryAutomation.giftStoryLanding;
 exports.submitGiftStoryThankYou = giftStoryAutomation.submitGiftStoryThankYou;
 exports.acknowledgeGiftStory = giftStoryAutomation.acknowledgeGiftStory;
 exports.saveGiftStoryToVault = giftStoryAutomation.saveGiftStoryToVault;
 exports.getGiftStoryActionState = giftStoryAutomation.getGiftStoryActionState;
 exports.onStoryNotificationWrite = giftStoryAutomation.onStoryNotificationWrite;
-exports.cleanupExpiredGiftStories = giftStoryAutomation.cleanupExpiredGiftStories;
+exports.cleanupExpiredGiftStories =
+  giftStoryAutomation.cleanupExpiredGiftStories;
 exports.requestSenderCancellation = deliveryPolicy.requestSenderCancellation;
 exports.previewSenderCancellation = deliveryPolicy.previewSenderCancellation;
 exports.recordArrivalZoneCheck = deliveryPolicy.recordArrivalZoneCheck;
-exports.recordCustomerArrivalResponse = deliveryPolicy.recordCustomerArrivalResponse;
+exports.recordCustomerArrivalResponse =
+  deliveryPolicy.recordCustomerArrivalResponse;
 exports.goOnline = riderPresence.goOnline;
 exports.goOffline = riderPresence.goOffline;
 exports.updateRiderPresence = riderPresence.updateRiderPresence;
 exports.onDeliveryPresenceWrite = riderPresence.onDeliveryPresenceWrite;
-exports.onRiderRecordAvailabilityWrite = riderPresence.onRiderRecordAvailabilityWrite;
-exports.onRiderProfileAvailabilityWrite = riderPresence.onRiderProfileAvailabilityWrite;
-exports.markStaleRiderPresenceOffline = riderPresence.markStaleRiderPresenceOffline;
+exports.onRiderRecordAvailabilityWrite =
+  riderPresence.onRiderRecordAvailabilityWrite;
+exports.onRiderProfileAvailabilityWrite =
+  riderPresence.onRiderProfileAvailabilityWrite;
+exports.markStaleRiderPresenceOffline =
+  riderPresence.markStaleRiderPresenceOffline;
 exports.searchFreeUkAddresses = freeAddressSearch.searchFreeUkAddresses;
 exports.getSenderRothBalance = senderBooking.getSenderRothBalance;
 exports.createSenderBookingQuote = senderBooking.createSenderBookingQuote;
-exports.createSenderPaymentSession = senderBooking.createSenderPaymentSession(stripe);
-exports.createSenderPaidDelivery = senderBooking.createSenderPaidDelivery(stripe);
+exports.createSenderPaymentSession =
+  senderBooking.createSenderPaymentSession(stripe);
+exports.createSenderPaidDelivery =
+  senderBooking.createSenderPaidDelivery(stripe);
 exports.saveSenderDraft = senderBooking.saveSenderDraft;
 exports.loadSenderDraft = senderBooking.loadSenderDraft;
 exports.deleteSenderDraft = senderBooking.deleteSenderDraft;
 exports.cleanupExpiredSenderDrafts = senderBooking.cleanupExpiredSenderDrafts;
-exports.listSenderPaymentMethods = senderFinance.listSenderPaymentMethods(stripe);
+exports.listSenderPaymentMethods =
+  senderFinance.listSenderPaymentMethods(stripe);
 exports.createSenderSetupIntent = senderFinance.createSenderSetupIntent(stripe);
-exports.detachSenderPaymentMethod = senderFinance.detachSenderPaymentMethod(stripe);
-exports.setDefaultSenderPaymentMethod = senderFinance.setDefaultSenderPaymentMethod(stripe);
-exports.saveSenderCheckoutPreference = senderFinance.saveSenderCheckoutPreference;
+exports.detachSenderPaymentMethod =
+  senderFinance.detachSenderPaymentMethod(stripe);
+exports.setDefaultSenderPaymentMethod =
+  senderFinance.setDefaultSenderPaymentMethod(stripe);
+exports.saveSenderCheckoutPreference =
+  senderFinance.saveSenderCheckoutPreference;
 exports.saveSenderSavedAddress = senderSavedAddresses.saveSenderSavedAddress;
-exports.deleteSenderSavedAddress = senderSavedAddresses.deleteSenderSavedAddress;
+exports.deleteSenderSavedAddress =
+  senderSavedAddresses.deleteSenderSavedAddress;
 exports.updateSenderProfile = senderAccount.updateSenderProfile;
 exports.updateSenderProfilePhoto = senderAccount.updateSenderProfilePhoto;
 exports.updateSenderPushToken = senderAccount.updateSenderPushToken;
-exports.updateSenderNotificationState = senderAccount.updateSenderNotificationState;
+exports.updateSenderNotificationState =
+  senderAccount.updateSenderNotificationState;
 exports.ensureSenderAccount = senderAccount.ensureSenderAccount;
+exports.markSenderLegendCelebrationSeen =
+  senderAccount.markSenderLegendCelebrationSeen;
+exports.recordWebsiteVisit = senderAccount.recordWebsiteVisit;
 exports.requestSenderEmailChange = senderAccount.requestSenderEmailChange;
 exports.updateSenderLocation = senderAccount.updateSenderLocation;
 exports.recordIrisLearningCandidate = senderAccount.recordIrisLearningCandidate;
@@ -250,7 +346,8 @@ exports.recordIrisLearningOutlier = senderAccount.recordIrisLearningOutlier;
 exports.updateRiderProfile = riderAccount.updateRiderProfile;
 exports.requestRiderEmailChange = riderAccount.requestRiderEmailChange;
 exports.updateRiderPushToken = riderAccount.updateRiderPushToken;
-exports.updateRiderNotificationState = riderAccount.updateRiderNotificationState;
+exports.updateRiderNotificationState =
+  riderAccount.updateRiderNotificationState;
 exports.recordRiderJobDecision = riderAccount.recordRiderJobDecision;
 exports.ensureRiderRothWallet = riderAccount.ensureRiderRothWallet;
 exports.createWeightAdjustedNotification =
@@ -261,166 +358,193 @@ exports.archiveExpiredDeliveries = deliveryCleanup.archiveExpiredDeliveries;
 exports.resolveStaleDeliveryLock = staleDelivery.resolveStaleDeliveryLock;
 exports.reconcileStaleDeliveryLocks = staleDelivery.reconcileStaleDeliveryLocks;
 
-exports.StripeWebhook = functions.runWith({secrets: [stripeWebhookSecret]}).https.onRequest(async (req, res) => {
-  const sig = req.headers["stripe-signature"];
-  // console.log(sig);
+exports.StripeWebhook = functions
+    .runWith({secrets: [stripeWebhookSecret]})
+    .https.onRequest(async (req, res) => {
+      const sig = req.headers["stripe-signature"];
+      // console.log(sig);
 
-  let webhookRuntimeConfig;
-  try {
-    webhookRuntimeConfig = resolveStripeRuntimeConfig({
-      config: stripeConfig,
-      webhookSecret: stripeWebhookSecret.value(),
-      requireWebhookSecret: true,
-    });
-  } catch (error) {
-    console.error("Stripe webhook configuration failed closed", {
-      mode: stripeRuntimeConfig.mode,
-      firebaseProject: stripeRuntimeConfig.firebaseProject,
-      reason: error && error.message ? error.message : "invalid_configuration",
-    });
-    return res.status(500).send({error: "Stripe webhook secret is not configured"});
-  }
+      let webhookRuntimeConfig;
+      try {
+        webhookRuntimeConfig = resolveStripeRuntimeConfig({
+          config: stripeConfig,
+          webhookSecret: stripeWebhookSecret.value(),
+          requireWebhookSecret: true,
+        });
+      } catch (error) {
+        console.error("Stripe webhook configuration failed closed", {
+          mode: stripeRuntimeConfig.mode,
+          firebaseProject: stripeRuntimeConfig.firebaseProject,
+          reason:
+          error && error.message ? error.message : "invalid_configuration",
+        });
+        return res
+            .status(500)
+            .send({error: "Stripe webhook secret is not configured"});
+      }
 
-  let event;
-  try {
-    event = stripe.webhooks.constructEvent(req.rawBody, sig, webhookRuntimeConfig.webhookSecret);
-    assertStripeEventMode(event, webhookRuntimeConfig);
-  } catch (err) {
-    console.error("Stripe webhook signature verification failed:", err.message);
-    return res.status(400).send({error: "Invalid Stripe webhook signature"});
-  }
+      let event;
+      try {
+        event = stripe.webhooks.constructEvent(
+            req.rawBody,
+            sig,
+            webhookRuntimeConfig.webhookSecret,
+        );
+        assertStripeEventMode(event, webhookRuntimeConfig);
+      } catch (err) {
+        console.error(
+            "Stripe webhook signature verification failed:",
+            err.message,
+        );
+        return res
+            .status(400)
+            .send({error: "Invalid Stripe webhook signature"});
+      }
 
-  console.log("💰 Webhook working!");
-  console.log(`Event: ${event.type}`);
+      console.log("💰 Webhook working!");
+      console.log(`Event: ${event.type}`);
 
-  if (event.type === "charge.refunded") {
-    const refundResult = await stripeRefunds.syncChargeRefund({db: getFirestore(), event});
-    return res.send({success: true, refund: refundResult});
-  }
+      if (event.type === "charge.refunded") {
+        const refundResult = await stripeRefunds.syncChargeRefund({
+          db: getFirestore(),
+          event,
+        });
+        return res.send({success: true, refund: refundResult});
+      }
 
-  if (event.type === "payment_intent.succeeded" ||
+      if (
+        event.type === "payment_intent.succeeded" ||
       event.type === "payment_intent.processing" ||
       event.type === "payment_intent.payment_failed" ||
-      event.type === "payment_intent.canceled") {
-    const tipResult = await ratingsTipping.processStripeTipIntent(stripe, event.data.object);
-    if (tipResult && tipResult.handled) return res.send({success: true, tip: tipResult});
-  }
+      event.type === "payment_intent.canceled"
+      ) {
+        const tipResult = await ratingsTipping.processStripeTipIntent(
+            stripe,
+            event.data.object,
+        );
+        if (tipResult && tipResult.handled) {
+          return res.send({success: true, tip: tipResult});
+        }
+      }
 
-  if (event.type === "charge.succeeded") {
-    console.log("💰 Payment completed!");
-    const sessionData = event.data.object;
-    const metadata = sessionData.metadata;
+      if (event.type === "charge.succeeded") {
+        console.log("💰 Payment completed!");
+        const sessionData = event.data.object;
+        const metadata = sessionData.metadata;
 
-    const messageObj = JSON.stringify({
-      // sessionData,
-      metadata,
-      success: true,
-    });
+        const messageObj = JSON.stringify({
+        // sessionData,
+          metadata,
+          success: true,
+        });
 
-
-    const message = {
-      apns: {
-        payload: {
-          aps: {
-            "content-available": 1,
+        const message = {
+          apns: {
+            payload: {
+              aps: {
+                "content-available": 1,
+              },
+            },
           },
-        },
-      },
-      data: {
-        "type": "payment",
-        "data": messageObj,
-      },
-      // notification: {
-      //   title: `${req.user.firstName}`,
-      //   body: text,
-      // },
-      token: metadata.pushToken,
-
-    };
-
-    getMessaging().send(message).then(
-        (response)=> {
-          console.log(`Successfully sent message: ${response}`);
-          // console.log(`token: ${metadata.pushToken}`);
-        },
-    ).catch((err)=>{
-      //   console.log(err)
-      // console.log('new error')
-    });
-  }
-
-  if (event.type == "checkout.session.completed") {
-    console.log("💰 Payment completed!");
-    const sessionData = event.data.object;
-    const metadata = sessionData.metadata || {};
-
-    try {
-      await routeCheckoutSessionCompleted(sessionData, event.id, {
-        businessPayments,
-        giftsPayment,
-        rothLedger,
-        logger: console,
-      });
-    } catch (error) {
-      console.error("Stripe checkout session finalization failed", {
-        eventId: event.id,
-        sessionId: sessionData && sessionData.id ? sessionData.id : null,
-        metadataType: metadata.type || null,
-        purchaseRequestId: metadata.purchaseRequestId || null,
-        paymentIntentId: sessionData && sessionData.payment_intent ? sessionData.payment_intent : null,
-        error: error && error.message ? error.message : error,
-      });
-      return res.status(500).send({success: false, error: "checkout_finalization_failed"});
-    }
-
-    const messageObj = JSON.stringify({
-      // sessionData,
-      metadata,
-      success: true,
-    });
-
-    if (!metadata.pushToken) {
-      return res.send({success: true});
-    }
-
-    const message = {
-      apns: {
-        payload: {
-          aps: {
-            "content-available": 1,
+          data: {
+            type: "payment",
+            data: messageObj,
           },
-        },
-      },
-      data: {
-        "type": "payment",
-        "data": messageObj,
-      },
-      // notification: {
-      //   title: `${req.user.firstName}`,
-      //   body: text,
-      // },
-      token: metadata.pushToken,
+          // notification: {
+          //   title: `${req.user.firstName}`,
+          //   body: text,
+          // },
+          token: metadata.pushToken,
+        };
 
-    };
+        getMessaging()
+            .send(message)
+            .then((response) => {
+              console.log(`Successfully sent message: ${response}`);
+              // console.log(`token: ${metadata.pushToken}`);
+            })
+            .catch((err) => {
+              //   console.log(err)
+              // console.log('new error')
+            });
+      }
 
-    getMessaging().send(message).then(
-        (response)=> {
-          console.log(`Successfully sent message: ${response}`);
-        },
-    ).catch((err)=>{
-      //   console.log(err)
-      // console.log('new error')
+      if (event.type == "checkout.session.completed") {
+        console.log("💰 Payment completed!");
+        const sessionData = event.data.object;
+        const metadata = sessionData.metadata || {};
+
+        try {
+          await routeCheckoutSessionCompleted(sessionData, event.id, {
+            businessPayments,
+            giftsPayment,
+            healthPlus,
+            rothLedger,
+            logger: console,
+          });
+        } catch (error) {
+          console.error("Stripe checkout session finalization failed", {
+            eventId: event.id,
+            sessionId: sessionData && sessionData.id ? sessionData.id : null,
+            metadataType: metadata.type || null,
+            purchaseRequestId: metadata.purchaseRequestId || null,
+            paymentIntentId:
+            sessionData && sessionData.payment_intent ?
+              sessionData.payment_intent :
+              null,
+            error: error && error.message ? error.message : error,
+          });
+          return res
+              .status(500)
+              .send({success: false, error: "checkout_finalization_failed"});
+        }
+
+        const messageObj = JSON.stringify({
+        // sessionData,
+          metadata,
+          success: true,
+        });
+
+        if (!metadata.pushToken) {
+          return res.send({success: true});
+        }
+
+        const message = {
+          apns: {
+            payload: {
+              aps: {
+                "content-available": 1,
+              },
+            },
+          },
+          data: {
+            type: "payment",
+            data: messageObj,
+          },
+          // notification: {
+          //   title: `${req.user.firstName}`,
+          //   body: text,
+          // },
+          token: metadata.pushToken,
+        };
+
+        getMessaging()
+            .send(message)
+            .then((response) => {
+              console.log(`Successfully sent message: ${response}`);
+            })
+            .catch((err) => {
+              //   console.log(err)
+              // console.log('new error')
+            });
+      }
+
+      res.send({success: true});
     });
-  }
-
-  res.send({success: true});
-});
 
 exports.RetrieveCardDetails = functions.https.onRequest(async (req, res) => {
   try {
-    const {
-      customerId,
-    } = req.body;
+    const {customerId} = req.body;
     // const customer = await stripe.customers.retrieve(customerId);
 
     const paymentMethods = await stripe.paymentMethods.list({
@@ -437,7 +561,6 @@ exports.RetrieveCardDetails = functions.https.onRequest(async (req, res) => {
   }
 });
 
-
 exports.calculateEarnings = functions.https.onRequest(async (req, res) => {
   if (allowCors(req, res)) return;
   try {
@@ -447,7 +570,10 @@ exports.calculateEarnings = functions.https.onRequest(async (req, res) => {
       return res.status(404).send({msg: "riderId is required"});
     }
 
-    const paymentRef = await getFirestore().collection("payments").doc(riderId).get();
+    const paymentRef = await getFirestore()
+        .collection("payments")
+        .doc(riderId)
+        .get();
 
     let accountBalance = 0;
     if (paymentRef.exists) {
@@ -491,7 +617,8 @@ exports.calculateEarnings = functions.https.onRequest(async (req, res) => {
     // endDate.setDate(endDate.getDate() + (6 - endDate.getDay()));
 
     // Query Firestore for earnings within the current week for the given user
-    const earningsSnapshot = await getFirestore().collection("history")
+    const earningsSnapshot = await getFirestore()
+        .collection("history")
         .where("riderId", "==", riderId)
         .where("createdAt", ">=", startDate)
         .where("createdAt", "<=", endDate)
@@ -503,7 +630,9 @@ exports.calculateEarnings = functions.https.onRequest(async (req, res) => {
 
       // console.log(earningData);
       const earningDate = earningData.createdAt.toDate();
-      const dayOfWeek = earningDate.toLocaleDateString("en-US", {weekday: "short"});
+      const dayOfWeek = earningDate.toLocaleDateString("en-US", {
+        weekday: "short",
+      });
 
       weeklyEarnings[dayOfWeek] += earningData.price || 0;
     });
@@ -542,13 +671,12 @@ exports.endTrip = functions.https.onRequest(async (req, res) => {
     }
 
     // Retrieve the 'history' database reference
-    const ride = await getFirestore().collection("deliveryRequests").where("requestId", "==", requestId).get();
-    const rideData = ride.docs[0];
-    const rideDataRes = rideData.data();
-
-    if (!rideData.exists) {
+    const ride = await getFirestore().collection("deliveryRequests").where("requestId", "==", requestId).limit(1).get();
+    if (ride.empty) {
       return res.status(404).send({msg: "Trip already completed"});
     }
+    const rideData = ride.docs[0];
+    const rideDataRes = rideData.data();
 
     if (rideDataRes.riderId != riderId) {
       return res.status(400).send({msg: "riderId does not match"});
@@ -556,12 +684,14 @@ exports.endTrip = functions.https.onRequest(async (req, res) => {
 
     const rideCost = rideDataRes.price;
 
-
     const uuid1 = uuidv4();
     const uuid2 = uuidv4();
     const uuiduuid = `${uuid1}${uuid2}`;
     await riderEarnings.creditRiderEarnings({
-      db: getFirestore(), riderId, deliveryId: requestId, amount: rideCost,
+      db: getFirestore(),
+      riderId,
+      deliveryId: requestId,
+      amount: rideCost,
     });
 
     const irisData = require("./iris-core");
@@ -570,24 +700,33 @@ exports.endTrip = functions.https.onRequest(async (req, res) => {
         .doc(requestId)
         .get();
     const privateIrisData = privateIrisDoc.exists ? privateIrisDoc.data() : {};
-    const learningSnapshot = irisData.createLearningSnapshot({
-      ...(rideDataRes.iris || {}),
-      verification: privateIrisData.verification || {},
-    }, {
-      ...rideDataRes,
-      completedAt: Date.now(),
-    });
+    const learningSnapshot = irisData.createLearningSnapshot(
+        {
+          ...(rideDataRes.iris || {}),
+          verification: privateIrisData.verification || {},
+        },
+        {
+          ...rideDataRes,
+          completedAt: Date.now(),
+        },
+    );
 
-    await getFirestore().collection("deliveryRequests").doc(rideData.id).update({
-      "status": "completed",
-      "historyId": uuiduuid,
-      "updatedAt": Date.now(),
-    });
-    await getFirestore().collection("irisPrivate").doc(requestId).set({
-      requestId,
-      learningSnapshot,
-      updatedAt: Date.now(),
-    }, {merge: true});
+    await getFirestore()
+        .collection("deliveryRequests")
+        .doc(rideData.id)
+        .update({
+          status: "completed",
+          historyId: uuiduuid,
+          updatedAt: Date.now(),
+        });
+    await getFirestore().collection("irisPrivate").doc(requestId).set(
+        {
+          requestId,
+          learningSnapshot,
+          updatedAt: Date.now(),
+        },
+        {merge: true},
+    );
 
     const newRideData = rideDataRes;
     newRideData.userId = rideData.id;

@@ -439,6 +439,29 @@ test("Gift Story lifecycle revokes and extends sender and recipient tokens", () 
   assert.match(source, /expiresAt, status: "active"/);
 });
 
+test("Gift Story cleanup removes every rendered video path and recipient token field", () => {
+  const story = require("./gift-story-automation");
+  assert.deepEqual(story.giftStoryVideoPaths({
+    giftStoryRenderedVideoPath: "gifts/gift-1/story/exports/sound/current.webm",
+    giftStorySilentVersionUrl: "gifts/gift-1/story/exports/silent/current.webm",
+    giftStorySoundVersionUrl: "gifts/gift-1/story/exports/sound/current.webm",
+    unsafeUrl: "https://storage.example/gifts/gift-1/story/exports/sound/current.webm",
+  }, "gift-1"), [
+    "gifts/gift-1/story/exports/sound/current.webm",
+    "gifts/gift-1/story/exports/silent/current.webm",
+  ]);
+
+  const source = require("node:fs").readFileSync(
+      require("node:path").join(__dirname, "gift-story-automation.js"),
+      "utf8",
+  );
+  assert.match(source, /giftStorySilentVersionUrl: FieldValue\.delete\(\)/);
+  assert.match(source, /giftStorySoundVersionUrl: FieldValue\.delete\(\)/);
+  assert.match(source, /recipientStoryToken: FieldValue\.delete\(\)/);
+  assert.match(source, /recipientStoryTokenHash: FieldValue\.delete\(\)/);
+  assert.match(source, /recipientStoryUrl: FieldValue\.delete\(\)/);
+});
+
 test("Gift Story landing blocks disabled and unapproved stories", () => {
   const source = require("node:fs").readFileSync(
       require("node:path").join(__dirname, "gift-story-automation.js"),

@@ -8,6 +8,7 @@ const {calculateWalletCheckout, roundMoney, minorUnits} = require("./wallet-core
 const rothLedger = require("./roth-ledger");
 const vanguardProtocol = require("./vanguard-protocol-core");
 const {classifyIris} = require("./iris-core");
+const {verifiedPhotoAnalysis} = require("./iris-photo-analysis");
 
 const BASE_FARE_GBP = 5;
 const ADDITIONAL_FARE_PER_MILE_GBP = 1.5;
@@ -15,6 +16,8 @@ const SHORT_TRIP_FARE_FLOOR_MILES = 1.6;
 const LONG_DISTANCE_THRESHOLD_MILES = 20;
 const LONG_DISTANCE_MULTIPLIER = 1.2;
 const VANGUARD_ADD_ON_GBP = 1.99;
+const RIDER_DELIVERY_FARE_SHARE = 0.65;
+const PLATFORM_DELIVERY_FARE_SHARE = 0.35;
 const DRAFT_SCHEMA_VERSION = 1;
 const DRAFT_RETENTION_DAYS = 30;
 const MAX_DRAFT_BYTES = 32768;
@@ -48,6 +51,14 @@ function text(value) {
 
 function money(value) {
   return roundMoney(Number(value || 0));
+}
+
+function firstMoney(...values) {
+  for (const value of values) {
+    const parsed = Number(value);
+    if (Number.isFinite(parsed) && parsed > 0) return money(parsed);
+  }
+  return 0;
 }
 
 function senderDraftRef(db, uid) {
@@ -375,9 +386,64 @@ function speedAdjustment(subtotal, speed) {
   return 0;
 }
 
-function quotePayload(data, uid) {
+function riderEligibleFareFromQuote(quote = {}) {
+  if (Array.isArray(quote.lineItems)) {
+    const eligible = quote.lineItems
+        .filter((item) => `${item && item.key || ""}`.toLowerCase() !== "vanguard")
+        .reduce((sum, item) => sum + Number(item && item.amount || 0), 0);
+    if (Number.isFinite(eligible) && eligible > 0) return money(eligible);
+  }
+  const total = money(quote.total || quote.finalAmount || quote.amountDue);
+  const vanguard = quote.vanguardProtocolEnabled === true || quote.vanguardRequired === true ?
+    VANGUARD_ADD_ON_GBP : 0;
+  return money(Math.max(0, total - vanguard));
+}
+
+function riderPayoutFromQuote(quote = {}) {
+  return firstMoney(
+      quote.riderEarning,
+      quote.riderPayout,
+      quote.driverPayout,
+      quote.totalRiderEarnings,
+      money(riderEligibleFareFromQuote(quote) * RIDER_DELIVERY_FARE_SHARE),
+  );
+}
+
+function riderDisplayAliases({quote = {}, data = {}, vanguardFields = {}} = {}) {
+  const distanceMiles = Number(quote.distanceMiles || data.distanceMiles || 0);
+  const durationMinutes = Number(
+      quote.estimatedDurationMinutes ||
+      data.estimatedDurationMinutes ||
+      data.durationMinutes ||
+      0,
+  );
+  const deliveryTime = cleanMap(data.deliveryTime);
+  const pickupWindow = text(
+      deliveryTime.scheduledWindow ||
+      deliveryTime.customWindow ||
+      deliveryTime.summary ||
+      data.pickupWindow ||
+      data.scheduledPickupWindow,
+  );
+  const riderPayout = riderPayoutFromQuote(quote);
+  return {
+    driverPayout: riderPayout,
+    riderPayout,
+    riderEarning: riderPayout,
+    distanceText: distanceMiles > 0 ? `${distanceMiles.toFixed(1)} mi` : null,
+    durationText: durationMinutes > 0 ? `${Math.round(durationMinutes)} min` : null,
+    requiresVanguard: vanguardFields.vanguardProtocolEnabled === true ||
+      quote.vanguardRequired === true ||
+      quote.vanguardProtocolEnabled === true,
+    pickupWindow: pickupWindow || null,
+  };
+}
+
+function quotePayload(data, uid, serverPhotoAnalysis = null) {
   const selectedSpeed = speedKey(data.selectedSpeed || data.selectedOption);
-  const weightKg = Math.max(0.5, Number(data.weightKg || data.parcel && data.parcel.weightKg || 0.5));
+  const clientWeightKg = Number(data.weightKg || data.parcel && data.parcel.weightKg || 0.5);
+  const photoWeightKg = Number(serverPhotoAnalysis && serverPhotoAnalysis.estimatedWeightKg || 0);
+  const weightKg = Math.max(0.5, clientWeightKg, photoWeightKg);
   const base = BASE_FARE_GBP;
   const distance = distanceFare(data.distanceMiles);
   const weight = weightSurcharge(weightKg);
@@ -387,6 +453,10 @@ function quotePayload(data, uid) {
   const vanguardRequired = data.iris && data.iris.vanguardRequired === true;
   const vanguard = vanguardSelected || vanguardRequired ? VANGUARD_ADD_ON_GBP : 0;
   const total = money(Math.max(0, subtotal + speed + vanguard));
+  const riderBaseShare = money(Math.max(0, subtotal + speed) * RIDER_DELIVERY_FARE_SHARE);
+  const platformBaseShare = money(Math.max(0, subtotal + speed) * PLATFORM_DELIVERY_FARE_SHARE);
+  const totalRiderEarnings = riderBaseShare;
+  const totalCircumRevenue = money(total - totalRiderEarnings);
   const quoteId = text(data.quoteId) || `sender_quote_${uid}_${Date.now()}`;
   return {
     quoteId,
@@ -408,7 +478,37 @@ function quotePayload(data, uid) {
     total,
     finalAmount: total,
     amountDue: total,
+    driverPayout: totalRiderEarnings,
+    riderPayout: totalRiderEarnings,
+    riderEarning: totalRiderEarnings,
+    riderBaseShare,
+    riderLabourShare: 0,
+    circumBaseShare: platformBaseShare,
+    circumLabourShare: 0,
+    totalRiderEarnings,
+    totalCircumRevenue,
+    driverShare: RIDER_DELIVERY_FARE_SHARE,
+    platformShare: PLATFORM_DELIVERY_FARE_SHARE,
     pricingSource: "sender_backend_quote_v1",
+    ...(serverPhotoAnalysis ? {
+      irisPhotoAnalysisId: serverPhotoAnalysis.analysisId,
+      photoEstimatedWeightKg: photoWeightKg,
+      photoAnalysis: {
+        analysisId: serverPhotoAnalysis.analysisId,
+        source: serverPhotoAnalysis.source,
+        serverAuthored: true,
+        confidence: serverPhotoAnalysis.confidence,
+        confidenceScore: serverPhotoAnalysis.confidenceScore,
+        estimatedWeightKg: photoWeightKg,
+        weightClass: serverPhotoAnalysis.weightClass,
+        inferredItemName: serverPhotoAnalysis.inferredItemName,
+        inferredCategory: serverPhotoAnalysis.inferredCategory,
+        width: serverPhotoAnalysis.width,
+        height: serverPhotoAnalysis.height,
+        imageQuality: serverPhotoAnalysis.imageQuality,
+        needsHumanReview: serverPhotoAnalysis.needsHumanReview === true,
+      },
+    } : {}),
   };
 }
 
@@ -455,7 +555,15 @@ exports.createSenderBookingQuote = functions.https.onCall(async (data, context) 
   const sender = requireSender(context);
   const db = getFirestore();
   const businessContext = await verifiedBusinessContext(db, sender, data && data.businessContext);
-  const quote = quotePayload(data || {}, sender.uid);
+  const parcel = data && data.parcel && typeof data.parcel === "object" ? data.parcel : {};
+  const parcelDescription = text(data && (data.description || data.packageDescription) || parcel.description || parcel.itemName || "");
+  const serverPhotoAnalysis = await verifiedPhotoAnalysis({
+    db,
+    uid: sender.uid,
+    analysisId: data && data.irisPhotoAnalysisId,
+    description: parcelDescription,
+  });
+  const quote = quotePayload(data || {}, sender.uid, serverPhotoAnalysis);
   const clientDisplayQuote = cleanMap(data && data.clientDisplayQuote);
   const clientDisplayedAmount = cleanNumber(clientDisplayQuote.amount);
   const clientDisplayedAmountPence = cleanNumber(clientDisplayQuote.amountPence);
@@ -851,10 +959,12 @@ exports.createSenderPaidDelivery = (stripe) => functions.https.onCall(async (dat
     }
     const selectedServiceLevel = `${quote.selectedSpeed || "standard"}`.toLowerCase();
     const parcelDescription = parcel.description || parcel.itemName || "Parcel";
+    const quotePhotoAnalysis = quote.photoAnalysis || null;
     const iris = {
       ...classifyIris({
         description: parcelDescription,
         declaredWeightText: parcel.weightLabel || parcel.weightKg || quote.weightKg || "",
+        photoEstimatedWeightKg: quote.photoEstimatedWeightKg || null,
         distanceMiles: quote.distanceMiles || data.distanceMiles || 0,
         speed: selectedServiceLevel,
         vehicleType: clientIris.recommendedVehicle || clientIris.vehicleType || null,
@@ -862,9 +972,11 @@ exports.createSenderPaidDelivery = (stripe) => functions.https.onCall(async (dat
       serverAuthored: true,
       authority: "backend",
       source: "createSenderPaidDelivery",
+      ...(quotePhotoAnalysis ? {photoAnalysis: quotePhotoAnalysis} : {}),
     };
     const irisWeightKg =
       Number(iris.recommendation && iris.recommendation.estimatedWeightKg || parcel.weightKg || 0) || null;
+    const riderAliases = riderDisplayAliases({quote, data, vanguardFields});
 
     transaction.set(deliveryRef, {
       requestId,
@@ -918,6 +1030,11 @@ exports.createSenderPaidDelivery = (stripe) => functions.https.onCall(async (dat
       irisDeliveryEstimateId: requestId,
       irisDeliveryEstimate: iris,
       irisEstimatedWeight: irisWeightKg,
+      ...(quotePhotoAnalysis ? {
+        irisPhotoAnalysisId: quotePhotoAnalysis.analysisId,
+        irisPhotoAnalysis: quotePhotoAnalysis,
+        photoEstimatedWeightKg: quote.photoEstimatedWeightKg || null,
+      } : {}),
       selectedSpeed: quote.selectedSpeed,
       selectedServiceLevel,
       serviceLevel: selectedServiceLevel,
@@ -925,6 +1042,7 @@ exports.createSenderPaidDelivery = (stripe) => functions.https.onCall(async (dat
       quoteId,
       paymentSessionId,
       price: quote.total,
+      ...riderAliases,
       paidAmount: quote.total,
       paymentStatus: "paid",
       paymentMethod: payment.paymentMethod,
@@ -983,5 +1101,7 @@ exports._private = {
   sanitizeSenderDraftPayload,
   stableId,
   quotePayload,
+  riderDisplayAliases,
+  riderPayoutFromQuote,
   DRAFT_RETENTION_DAYS,
 };

@@ -13,6 +13,8 @@ const {
   buildHealthPlusCheckoutParams,
   buildAdminStatusUpdate,
 } = require("./health-plus-core");
+const {calculateWalletCheckout} = require("./wallet-core");
+const rothLedger = require("./roth-ledger");
 
 function allowCors(res) {
   res.set("Access-Control-Allow-Origin", "*");
@@ -127,6 +129,98 @@ function checkoutBlockedStatus(status) {
 function submittedAmountPence(breakdown = {}) {
   const total = Number(breakdown.total);
   return Number.isFinite(total) ? Math.round(total * 100) : null;
+}
+
+function money(value) {
+  const amount = Number(value || 0);
+  if (!Number.isFinite(amount)) return 0;
+  return Math.round(amount * 100) / 100;
+}
+
+async function walletBalanceForSender(sender) {
+  const walletId = `${sender.email || sender.uid}`.trim().toLowerCase();
+  const snap = await getFirestore().collection("wallets").doc(walletId).get();
+  const wallet = snap.exists ? snap.data() || {} : {};
+  if (wallet.isFrozen === true) return 0;
+  return money(wallet.balance == null ? wallet.rothCredit : wallet.balance);
+}
+
+async function markHealthPlusPaid({
+  db = getFirestore(),
+  bookingId,
+  profileId,
+  senderId,
+  userEmail = null,
+  paymentId = null,
+  stripeSessionId = null,
+  stripePaymentIntentId = null,
+  stripeEventId = null,
+  amountPence,
+  cardAmount,
+  rothAmount,
+  method,
+  authoritativePricing = null,
+  frequency = null,
+  recurring = false,
+}) {
+  const bookingRef = db.collection("prescriptionPickups").doc(bookingId);
+  const paymentRef = db.collection("healthPlusPayments").doc(bookingId);
+  const paymentSnap = await paymentRef.get();
+  const payment = paymentSnap.exists ? paymentSnap.data() || {} : {};
+  if (payment.status === "paid" || payment.paymentStatus === "paid") {
+    return {paid: true, duplicate: true};
+  }
+  const now = FieldValue.serverTimestamp();
+  await paymentRef.set({
+    bookingId,
+    profileId,
+    senderId,
+    userId: senderId,
+    userEmail,
+    paymentId: paymentId || payment.paymentId || bookingId,
+    amountPence,
+    amount: amountPence / 100,
+    cardAmount,
+    rothAmount,
+    currency: "GBP",
+    frequency,
+    recurring,
+    method,
+    paymentMethod: method,
+    status: "paid",
+    paymentStatus: "paid",
+    stripeSessionId,
+    checkoutSessionId: stripeSessionId,
+    stripePaymentIntentId,
+    stripeEventId,
+    authoritativePricing: authoritativePricing || payment.authoritativePricing || null,
+    paidAt: now,
+    updatedAt: now,
+    createdAt: payment.createdAt || now,
+  }, {merge: true});
+  await bookingRef.set({
+    paymentStatus: "paid",
+    paidAt: now,
+    updatedAt: now,
+  }, {merge: true});
+  await db.collection("healthPlusUsageEvents").add({
+    type: "checkout_paid",
+    senderId,
+    userId: senderId,
+    profileId,
+    pickupId: bookingId,
+    amountPence,
+    cardAmount,
+    rothAmount,
+    currency: "GBP",
+    method,
+    stripeSessionId,
+    stripePaymentIntentId,
+    stripeEventId,
+    source: "cloud-functions",
+    createdAt: Date.now(),
+  });
+  return {paid: true, duplicate: false};
 }
 
 function text(value) {
@@ -471,6 +565,7 @@ exports.createHealthPlusCheckoutSession = functions.https.onRequest(async (req, 
       priceBreakdown,
       successUrl,
       cancelUrl,
+      useRoth,
     } = req.body;
 
     if (!bookingId || !profileId) {
@@ -535,18 +630,95 @@ exports.createHealthPlusCheckoutSession = functions.https.onRequest(async (req, 
       );
     }
     const amountPence = authoritative.amountPence;
+    const orderTotalGbp = money(amountPence / 100);
     const recurring = authoritative.recurring;
     const submittedPence = submittedAmountPence(priceBreakdown || {});
     const discrepancyPence = submittedPence == null ? null : submittedPence - amountPence;
+    const rothRequested = useRoth === true;
+    const walletBalance = rothRequested ? await walletBalanceForSender(sender) : 0;
+    const split = calculateWalletCheckout({
+      orderTotalGbp,
+      walletBalanceGbp: walletBalance,
+      selectedCurrency: "gbp",
+    });
+    const rothAmount = split.walletContributionGbp;
+    const cardAmount = split.remainingGbp;
+
+    if (!recurring && !split.stripeRequired) {
+      await rothLedger.applyWalletDebit({
+        userId: sender.uid,
+        userEmail: sender.email,
+        amount: rothAmount,
+        type: "health_payment",
+        referenceId: bookingId,
+        notes: "Roth applied to Health+ checkout.",
+        transactionId: `wallet_health_plus_${bookingId}`,
+        metadata: {service: "health_plus", source: "health_plus_checkout"},
+      });
+      await markHealthPlusPaid({
+        db,
+        bookingId,
+        profileId,
+        senderId: sender.uid,
+        userEmail: sender.email,
+        amountPence,
+        cardAmount: 0,
+        rothAmount,
+        method: "roth",
+        authoritativePricing: authoritative,
+        frequency: authoritative.frequency,
+        recurring,
+      });
+      return res.send({
+        paid: true,
+        method: "roth",
+        checkoutUrl: null,
+        sessionId: null,
+        amountPence,
+        rothApplied: rothAmount,
+        cardAmount: 0,
+        recurring,
+      });
+    }
+
+    let discounts = null;
+    if (recurring && rothAmount > 0) {
+      const coupon = await stripe.coupons.create({
+        amount_off: Math.round(rothAmount * 100),
+        currency: "gbp",
+        duration: "once",
+        name: "Circum Roth for Health+",
+        metadata: {
+          type: "health_plus_roth_first_invoice",
+          bookingId,
+          profileId,
+          userId: sender.uid,
+        },
+      }, {
+        idempotencyKey:
+          `health_plus_roth_coupon_${bookingId}_${Math.round(rothAmount * 100)}`,
+      });
+      discounts = [{coupon: coupon.id}];
+    }
 
     const params = buildHealthPlusCheckoutParams({
       bookingId,
       profileId,
       email: email || sender.email || profile.email || booking.email,
-      amountPence,
+      amountPence: recurring ? amountPence : Math.round(cardAmount * 100),
       recurring,
       successUrl: successUrl || "https://circum-app-2797c.web.app/?app=sender&health=success",
       cancelUrl: cancelUrl || "https://circum-app-2797c.web.app/?app=sender&health=cancelled",
+      discounts,
+      metadata: {
+        userId: sender.uid,
+        userEmail: sender.email || "",
+        orderTotalGbp: `${orderTotalGbp}`,
+        cardAmountGbp: `${cardAmount}`,
+        rothAmountGbp: `${rothAmount}`,
+        rothAppliesTo: recurring ? "first_subscription_invoice" : "checkout",
+        paymentStatus: "pending_verification",
+      },
     });
 
     const session = await stripe.checkout.sessions.create(params);
@@ -557,11 +729,16 @@ exports.createHealthPlusCheckoutSession = functions.https.onRequest(async (req, 
       userId: sender.uid,
       amountPence,
       amount: amountPence / 100,
+      cardAmount,
+      rothAmount,
       currency: "GBP",
       frequency: authoritative.frequency,
       recurring,
       subscriptionPlan: authoritative.subscriptionPlan,
-      status: "checkout_created",
+      status: "pending_verification",
+      paymentStatus: "pending_verification",
+      method: rothAmount > 0 ? "roth_card" : "card",
+      paymentMethod: rothAmount > 0 ? "roth_card" : "card",
       checkoutSessionId: session.id,
       checkoutUrl: session.url,
       authoritativePricing: authoritative,
@@ -596,6 +773,8 @@ exports.createHealthPlusCheckoutSession = functions.https.onRequest(async (req, 
       pickupId: bookingId,
       amountPence,
       amount: amountPence / 100,
+      cardAmount,
+      rothAmount,
       currency: "GBP",
       frequency: authoritative.frequency,
       recurring,
@@ -607,6 +786,8 @@ exports.createHealthPlusCheckoutSession = functions.https.onRequest(async (req, 
       checkoutUrl: session.url,
       sessionId: session.id,
       amountPence,
+      rothApplied: rothAmount,
+      cardAmount,
       recurring,
     });
   } catch (error) {
@@ -615,6 +796,57 @@ exports.createHealthPlusCheckoutSession = functions.https.onRequest(async (req, 
     return res.status(500).send({error: error.message});
   }
 });
+
+exports.handleHealthPlusCheckoutSession = async (sessionData, eventId = null) => {
+  const metadata = sessionData.metadata || {};
+  const bookingId = `${metadata.bookingId || ""}`.trim();
+  const profileId = `${metadata.profileId || ""}`.trim();
+  const senderId = `${metadata.userId || ""}`.trim();
+  if (!bookingId || !profileId || !senderId) {
+    throw new Error("Health+ checkout finalizer missing booking metadata.");
+  }
+  const db = getFirestore();
+  const paymentRef = db.collection("healthPlusPayments").doc(bookingId);
+  const paymentSnap = await paymentRef.get();
+  const payment = paymentSnap.exists ? paymentSnap.data() || {} : {};
+  if (payment.status === "paid" || payment.paymentStatus === "paid") return;
+  const rothAmount = money(metadata.rothAmountGbp || payment.rothAmount);
+  const cardAmount = money(metadata.cardAmountGbp || Number(sessionData.amount_total || 0) / 100);
+  if (rothAmount > 0) {
+    await rothLedger.applyWalletDebit({
+      userId: senderId,
+      userEmail: metadata.userEmail || payment.userEmail || null,
+      amount: rothAmount,
+      type: "health_payment",
+      referenceId: bookingId,
+      notes: "Roth applied to Health+ checkout.",
+      transactionId: `wallet_health_plus_${bookingId}`,
+      metadata: {
+        service: "health_plus",
+        stripeCheckoutSessionId: sessionData.id,
+        stripePaymentIntentId: sessionData.payment_intent || null,
+        stripeEventId: eventId || null,
+      },
+    });
+  }
+  await markHealthPlusPaid({
+    db,
+    bookingId,
+    profileId,
+    senderId,
+    userEmail: metadata.userEmail || payment.userEmail || null,
+    stripeSessionId: sessionData.id,
+    stripePaymentIntentId: sessionData.payment_intent || null,
+    stripeEventId: eventId,
+    amountPence: Number(payment.amountPence || Math.round((cardAmount + rothAmount) * 100)),
+    cardAmount,
+    rothAmount,
+    method: rothAmount > 0 ? "roth_card" : "card",
+    authoritativePricing: payment.authoritativePricing || null,
+    frequency: payment.frequency || null,
+    recurring: payment.recurring === true,
+  });
+};
 
 exports.updateHealthPlusPickupStatus = functions.https.onRequest(async (req, res) => {
   allowCors(res);
