@@ -33,7 +33,8 @@ test("Admin Rider authority supports required certification actions", () => {
   }
 });
 
-test("Admin Rider document review status history stores event objects, not nested arrays", () => {
+test("Admin Rider document review status history stores event objects, not " +
+    "nested arrays", () => {
   const source = fs.readFileSync("admin-rider-authority.js", "utf8");
 
   assert.match(source, /statusHistory: FieldValue\.arrayUnion\(\{/);
