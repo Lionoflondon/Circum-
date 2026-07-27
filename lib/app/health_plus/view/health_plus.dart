@@ -87,7 +87,8 @@ class _HealthPlusViewState extends State<HealthPlusView> {
   final _pharmacyAddress = TextEditingController();
   final _deliveryAddress = TextEditingController();
   final _notes = TextEditingController();
-  final _preferredTime = TextEditingController(text: 'Tuesday, 10:00 AM');
+  final _preferredTime =
+      TextEditingController(text: _defaultHealthPickupDateTime());
   final _customSchedule = TextEditingController();
   final _pharmacySearch = _HealthPlaceSearchController();
   final _deliverySearch = _HealthPlaceSearchController();
@@ -948,9 +949,9 @@ class _HealthFrequencyStep extends StatelessWidget {
             );
           }).toList(),
         ),
-        _HealthInput(
+        _HealthDateTimeInput(
           controller: preferredTime,
-          label: 'Preferred pickup day/time',
+          label: 'Preferred pickup date and time',
         ),
         if (selected == HealthPlusFrequency.custom)
           _HealthInput(
@@ -1288,6 +1289,109 @@ class _HealthInput extends StatelessWidget {
         focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(14),
           borderSide: const BorderSide(color: _HealthTokens.health),
+        ),
+      ),
+    );
+  }
+}
+
+class _HealthDateTimeInput extends StatelessWidget {
+  final TextEditingController controller;
+  final String label;
+
+  const _HealthDateTimeInput({
+    required this.controller,
+    required this.label,
+  });
+
+  Future<void> _pick(BuildContext context) async {
+    FocusScope.of(context).unfocus();
+    final now = DateTime.now();
+    final initialDate = now.add(const Duration(days: 1));
+    final date = await showDatePicker(
+      context: context,
+      initialDate: initialDate,
+      firstDate: DateTime(now.year, now.month, now.day),
+      lastDate: DateTime(now.year + 1, now.month, now.day),
+      helpText: 'Select pickup date',
+      builder: (context, child) => Theme(
+        data: Theme.of(context).copyWith(
+          colorScheme: const ColorScheme.dark(
+            primary: _HealthTokens.health,
+            surface: _HealthTokens.bg,
+          ),
+        ),
+        child: child ?? const SizedBox.shrink(),
+      ),
+    );
+    if (!context.mounted || date == null) return;
+
+    final time = await showTimePicker(
+      context: context,
+      initialTime: const TimeOfDay(hour: 10, minute: 0),
+      helpText: 'Select pickup time',
+      builder: (context, child) => Theme(
+        data: Theme.of(context).copyWith(
+          colorScheme: const ColorScheme.dark(
+            primary: _HealthTokens.health,
+            surface: _HealthTokens.bg,
+          ),
+        ),
+        child: child ?? const SizedBox.shrink(),
+      ),
+    );
+    if (time == null) return;
+
+    controller.text = _formatHealthPickupDateTime(date, time);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Semantics(
+      button: true,
+      label: '$label. ${controller.text}',
+      hint: 'Opens date and time selectors',
+      child: TextField(
+        controller: controller,
+        readOnly: true,
+        onTap: () => _pick(context),
+        style:
+            const TextStyle(color: Colors.white, fontWeight: FontWeight.w700),
+        decoration: InputDecoration(
+          labelText: label,
+          helperText: 'Choose day, month, year and time.',
+          helperStyle: const TextStyle(
+            color: _HealthTokens.muted,
+            fontSize: 11,
+            fontWeight: FontWeight.w700,
+          ),
+          labelStyle: const TextStyle(
+            color: _HealthTokens.muted,
+            fontSize: 12,
+            fontWeight: FontWeight.w800,
+          ),
+          prefixIcon: const Icon(
+            Icons.event_available_outlined,
+            color: _HealthTokens.health,
+          ),
+          suffixIcon: const Icon(
+            Icons.expand_more_rounded,
+            color: _HealthTokens.muted,
+          ),
+          filled: true,
+          fillColor: _HealthTokens.input,
+          border: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(14),
+            borderSide: BorderSide.none,
+          ),
+          enabledBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(14),
+            borderSide: const BorderSide(color: _HealthTokens.border),
+          ),
+          focusedBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(14),
+            borderSide: const BorderSide(color: _HealthTokens.health),
+          ),
         ),
       ),
     );
@@ -2025,6 +2129,44 @@ class _HealthTokens {
   static const health = Color(0xFF2FAE8C);
   static const muted = Color(0x99FFFFFF);
   static const danger = Color(0xFFFF452B);
+}
+
+String _defaultHealthPickupDateTime() {
+  return _formatHealthPickupDateTime(
+    DateTime.now().add(const Duration(days: 1)),
+    const TimeOfDay(hour: 10, minute: 0),
+  );
+}
+
+String _formatHealthPickupDateTime(DateTime date, TimeOfDay time) {
+  final weekdays = [
+    'Monday',
+    'Tuesday',
+    'Wednesday',
+    'Thursday',
+    'Friday',
+    'Saturday',
+    'Sunday',
+  ];
+  final months = [
+    'January',
+    'February',
+    'March',
+    'April',
+    'May',
+    'June',
+    'July',
+    'August',
+    'September',
+    'October',
+    'November',
+    'December',
+  ];
+  final weekday = weekdays[date.weekday - 1];
+  final month = months[date.month - 1];
+  final hour = time.hour.toString().padLeft(2, '0');
+  final minute = time.minute.toString().padLeft(2, '0');
+  return '$weekday, ${date.day} $month ${date.year}, $hour:$minute';
 }
 
 String _money(double value) => '£${value.toStringAsFixed(2)}';

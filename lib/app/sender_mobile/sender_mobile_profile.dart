@@ -345,7 +345,15 @@ class FirebaseSenderMobileProfileRepository
         'Sign in again to load your profile.',
       );
     }
-    final snapshot = await firestore.collection('users').doc(user.uid).get();
+    DocumentSnapshot<Map<String, dynamic>>? snapshot;
+    SenderMobileProfileException? profileReadError;
+    try {
+      snapshot = await firestore.collection('users').doc(user.uid).get();
+    } catch (_) {
+      profileReadError = const SenderMobileProfileException(
+        'Profile details are temporarily limited. Your account is still available.',
+      );
+    }
     List<Map<String, dynamic>> trustEvents = const [];
     try {
       final eventSnapshot = await firestore
@@ -359,11 +367,18 @@ class FirebaseSenderMobileProfileRepository
     } catch (_) {
       // The profile's embedded trust history remains the safe fallback.
     }
-    return SenderMobileProfileData.fromSources(
+    final profile = SenderMobileProfileData.fromSources(
       user: user,
-      data: snapshot.data(),
+      data: snapshot?.data(),
       trustEvents: trustEvents,
     );
+    if (profileReadError != null &&
+        profile.displayName.isEmpty &&
+        profile.email.isEmpty &&
+        profile.phone.isEmpty) {
+      throw profileReadError;
+    }
+    return profile;
   }
 
   @override
@@ -588,11 +603,13 @@ class _SenderMobileProfileViewState extends State<SenderMobileProfileView> {
           _error = 'Live profile updates could not connect. Please try again.';
         });
       });
-    } catch (_) {
+    } catch (error) {
       if (!mounted) return;
       setState(() {
         _loading = false;
-        _error = 'We could not load your profile. Check your connection.';
+        _error = error is SenderMobileProfileException
+            ? error.message
+            : 'We could not load your profile. Check your connection.';
       });
     }
   }

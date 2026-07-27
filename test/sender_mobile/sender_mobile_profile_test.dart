@@ -56,6 +56,40 @@ class _FakeProfileRepository implements SenderMobileProfileRepository {
   Future<void> dispose() => _controller.close();
 }
 
+class _FailingProfileRepository implements SenderMobileProfileRepository {
+  const _FailingProfileRepository();
+
+  @override
+  Future<void> closeAccount() async {}
+
+  @override
+  Future<SenderMobileProfileData> load() {
+    throw const SenderMobileProfileException(
+      'Sign in again to load your profile.',
+    );
+  }
+
+  @override
+  Future<void> logout() async {}
+
+  @override
+  Future<SenderMobileProfileData> save({
+    required String displayName,
+    required String username,
+    required String phone,
+  }) {
+    throw UnimplementedError();
+  }
+
+  @override
+  Future<SenderMobileProfileData> uploadPhoto(SenderProfilePhoto photo) {
+    throw UnimplementedError();
+  }
+
+  @override
+  Stream<SenderMobileProfileData> watch() => const Stream.empty();
+}
+
 void main() {
   testWidgets('Sender profile shows username empty state and no trust activity',
       (tester) async {
@@ -133,5 +167,24 @@ void main() {
     expect(find.text('Create Username'), findsNothing);
     expect(find.text('Completed Delivery'), findsOneWidget);
     expect(find.text('+5'), findsOneWidget);
+  });
+
+  testWidgets('Sender profile shows recoverable sign-in message',
+      (tester) async {
+    await tester.pumpWidget(
+      const MaterialApp(
+        home: Scaffold(
+          body: SenderMobileProfileView(
+            repository: _FailingProfileRepository(),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Profile unavailable'), findsOneWidget);
+    expect(find.text('Sign in again to load your profile.'), findsOneWidget);
+    expect(find.text('We could not load your profile. Check your connection.'),
+        findsNothing);
   });
 }

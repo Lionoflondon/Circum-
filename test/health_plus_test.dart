@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:circum/app/health_plus/health_plus_pricing.dart';
 import 'package:circum/app/health_plus/models/health_plus_profile.dart';
 import 'package:circum/app/health_plus/models/pickup_status.dart';
@@ -101,6 +103,19 @@ void main() {
     test('cancelling or pausing uses explicit status fields', () {
       expect(PickupStatusValue.fromValue('cancelled'), PickupStatus.cancelled);
       expect(PickupStatus.failed.value, 'failed');
+    });
+
+    test('app pickup preference requires full date and time selection', () {
+      final source =
+          File('lib/app/health_plus/view/health_plus.dart').readAsStringSync();
+
+      expect(source, contains('_HealthDateTimeInput'));
+      expect(source, contains('showDatePicker'));
+      expect(source, contains('showTimePicker'));
+      expect(source, contains('Preferred pickup date and time'));
+      expect(source, contains('Choose day, month, year and time.'));
+      expect(source, contains("_formatHealthPickupDateTime"));
+      expect(source, isNot(contains("Tuesday, 10:00 AM")));
     });
   });
 }
