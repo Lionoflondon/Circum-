@@ -12,6 +12,7 @@ const {
   healthPlusPricingInputFromBooking,
   buildHealthPlusCheckoutParams,
   buildAdminStatusUpdate,
+  buildHealthPlusPlanFields,
 } = require("./health-plus-core");
 const {calculateWalletCheckout} = require("./wallet-core");
 const {verifiedStripePaidGbpSession} = require("./roth-ledger-core");
@@ -316,6 +317,7 @@ exports.createHealthPlusBooking = functions.https.onCall(async (data, context) =
     }
 
     const now = FieldValue.serverTimestamp();
+    const planFields = buildHealthPlusPlanFields(subscriptionPlan);
     const profile = {
       id: profileId,
       senderId: sender.uid,
@@ -331,6 +333,7 @@ exports.createHealthPlusBooking = functions.https.onCall(async (data, context) =
       prescriptionType,
       subscriptionPlan,
       healthPlusPlan: subscriptionPlan,
+      ...planFields,
       preferredDay,
       preferredPickupDay: preferredDay,
       preferredPickupTime,
@@ -357,6 +360,7 @@ exports.createHealthPlusBooking = functions.https.onCall(async (data, context) =
       prescriptionType,
       subscriptionPlan,
       healthPlusPlan: subscriptionPlan,
+      ...planFields,
       preferredDay,
       preferredTime: preferredPickupTime,
       preferredPickupDay: preferredDay,
@@ -417,6 +421,7 @@ exports.createHealthPlusBooking = functions.https.onCall(async (data, context) =
         prescriptionType,
         subscriptionPlan,
         healthPlusPlan: subscriptionPlan,
+        ...planFields,
         preferredDay,
         preferredTime: preferredPickupTime,
         preferredPickupDay: preferredDay,

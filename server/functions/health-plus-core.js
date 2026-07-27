@@ -1,9 +1,9 @@
 /* eslint-disable require-jsdoc */
 const HEALTH_PLUS_MINIMUM_PENCE = 1100;
 const HEALTH_PLUS_SERVICE_FEE_PENCE = 120;
-const HEALTH_PLUS_PRIORITY_FEE_PENCE = 299;
-const HEALTH_PLUS_FAMILY_SUPPORT_FEE_PENCE = 399;
-const HEALTH_PLUS_RECURRING_DISCOUNT_PENCE = 150;
+const HEALTH_PLUS_BASIC_MONTHLY_PENCE = 1100;
+const HEALTH_PLUS_PRIORITY_MONTHLY_PENCE = 2500;
+const HEALTH_PLUS_FAMILY_MONTHLY_PENCE = 4000;
 const DELIVERY_BASE_FARE_PENCE = 500;
 const ADDITIONAL_FARE_PER_MILE_PENCE = 150;
 const SHORT_TRIP_FARE_FLOOR_MILES = 1.6;
@@ -34,7 +34,73 @@ function positiveNumber(value) {
 
 function normalizePlan(plan) {
   const value = `${plan || "basic"}`.trim().toLowerCase();
-  return value || "basic";
+  return ["basic", "priority", "family"].includes(value) ? value : "basic";
+}
+
+function healthPlusPlanContract(plan) {
+  const normalized = normalizePlan(plan);
+  if (normalized === "priority") {
+    return {
+      planType: "priority",
+      subscriptionPlan: "priority",
+      planLabel: "Health+ Priority",
+      monthlyPricePence: HEALTH_PLUS_PRIORITY_MONTHLY_PENCE,
+      monthlyPrice: HEALTH_PLUS_PRIORITY_MONTHLY_PENCE / 100,
+      includedDeliveries: 4,
+      includedPickups: 4,
+      unlimitedDeliveries: false,
+      unlimitedPickups: false,
+      fairUseMonitored: false,
+    };
+  }
+  if (normalized === "family") {
+    return {
+      planType: "family",
+      subscriptionPlan: "family",
+      planLabel: "Health+ Family",
+      monthlyPricePence: HEALTH_PLUS_FAMILY_MONTHLY_PENCE,
+      monthlyPrice: HEALTH_PLUS_FAMILY_MONTHLY_PENCE / 100,
+      includedDeliveries: null,
+      includedPickups: null,
+      unlimitedDeliveries: true,
+      unlimitedPickups: true,
+      fairUseMonitored: true,
+    };
+  }
+  return {
+    planType: "basic",
+    subscriptionPlan: "basic",
+    planLabel: "Health+ Basic",
+    monthlyPricePence: HEALTH_PLUS_BASIC_MONTHLY_PENCE,
+    monthlyPrice: HEALTH_PLUS_BASIC_MONTHLY_PENCE / 100,
+    includedDeliveries: 2,
+    includedPickups: 2,
+    unlimitedDeliveries: false,
+    unlimitedPickups: false,
+    fairUseMonitored: false,
+  };
+}
+
+function buildHealthPlusPlanFields(plan, current = {}) {
+  const contract = healthPlusPlanContract(plan);
+  const used = Math.max(0, Number(
+      current.usedDeliveriesThisCycle ||
+      current.usedPickupsThisCycle ||
+      0,
+  ));
+  const remaining = contract.includedDeliveries == null ?
+    null :
+    Math.max(0, contract.includedDeliveries - used);
+  return {
+    ...contract,
+    usedDeliveriesThisCycle: used,
+    usedPickupsThisCycle: used,
+    remainingDeliveriesThisCycle: remaining,
+    remainingPickupsThisCycle: remaining,
+    allowanceResetsMonthly: true,
+    unusedPickupsRollOver: false,
+    overagePolicy: "standard_health_plus_one_off_pricing",
+  };
 }
 
 function weightBandFor(weightKg) {
@@ -71,29 +137,29 @@ function calculateAuthoritativeHealthPlusPricing(input = {}) {
   const frequency = normalizeSchedule(input.frequency);
   const recurring = input.recurring === true || frequency !== "one_off";
   const plan = normalizePlan(input.subscriptionPlan || input.healthPlusPlan);
+  const planContract = healthPlusPlanContract(plan);
   const weightBand = weightBandFor(medicationWeightKg);
   const baseFarePence = DELIVERY_BASE_FARE_PENCE;
   const distanceFarePence = calculateDistanceFarePence(distanceMiles);
   const weightSurchargePence = weightBand.surchargePence;
   const serviceFeePence = HEALTH_PLUS_SERVICE_FEE_PENCE;
-  const priorityFeePence = plan === "priority" ?
-    HEALTH_PLUS_PRIORITY_FEE_PENCE :
-    0;
-  const familySupportFeePence = plan === "family" ?
-    HEALTH_PLUS_FAMILY_SUPPORT_FEE_PENCE :
-    0;
-  const recurringDiscountPence = recurring ?
-    HEALTH_PLUS_RECURRING_DISCOUNT_PENCE :
-    0;
+  const priorityFeePence = 0;
+  const familySupportFeePence = 0;
+  const recurringDiscountPence = 0;
   const subtotalPence = baseFarePence + distanceFarePence +
-    weightSurchargePence + serviceFeePence + priorityFeePence +
-    familySupportFeePence - recurringDiscountPence;
-  const amountPence = Math.max(subtotalPence, HEALTH_PLUS_MINIMUM_PENCE);
+    weightSurchargePence + serviceFeePence;
+  const oneOffAmountPence = Math.max(
+      subtotalPence,
+      HEALTH_PLUS_MINIMUM_PENCE,
+  );
+  const amountPence = recurring ?
+    planContract.monthlyPricePence :
+    oneOffAmountPence;
   return {
     amountPence,
     currency: "GBP",
-    minimumApplied: amountPence > subtotalPence,
-    minimumAdjustmentPence: amountPence - subtotalPence,
+    minimumApplied: !recurring && amountPence > subtotalPence,
+    minimumAdjustmentPence: recurring ? 0 : amountPence - subtotalPence,
     baseFarePence,
     distanceFarePence,
     weightSurchargePence,
@@ -108,6 +174,14 @@ function calculateAuthoritativeHealthPlusPricing(input = {}) {
     frequency,
     recurring,
     subscriptionPlan: plan,
+    planType: plan,
+    monthlyPlanPricePence: planContract.monthlyPricePence,
+    monthlyPlanPrice: planContract.monthlyPrice,
+    includedPickups: planContract.includedPickups,
+    includedDeliveries: planContract.includedDeliveries,
+    unlimitedPickups: planContract.unlimitedPickups,
+    fairUseMonitored: planContract.fairUseMonitored,
+    overagePolicy: "standard_health_plus_one_off_pricing",
     source: "backend_authoritative_health_plus_v1",
   };
 }
@@ -235,10 +309,12 @@ function buildAdminStatusUpdate(status, driverId) {
 
 module.exports = {
   HEALTH_PLUS_MINIMUM_PENCE,
-  HEALTH_PLUS_PRIORITY_FEE_PENCE,
-  HEALTH_PLUS_FAMILY_SUPPORT_FEE_PENCE,
-  HEALTH_PLUS_RECURRING_DISCOUNT_PENCE,
+  HEALTH_PLUS_BASIC_MONTHLY_PENCE,
+  HEALTH_PLUS_PRIORITY_MONTHLY_PENCE,
+  HEALTH_PLUS_FAMILY_MONTHLY_PENCE,
   PICKUP_STATUSES,
+  healthPlusPlanContract,
+  buildHealthPlusPlanFields,
   calculateHealthPlusAmountPence,
   calculateAuthoritativeHealthPlusPricing,
   healthPlusPricingInputFromBooking,

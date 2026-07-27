@@ -1174,7 +1174,8 @@ class _HeroMockup extends StatelessWidget {
             border: Border.all(color: colors.border),
             boxShadow: [
               BoxShadow(
-                color: Colors.black.withValues(alpha: colors.dark ? 0.32 : 0.08),
+                color:
+                    Colors.black.withValues(alpha: colors.dark ? 0.32 : 0.08),
                 blurRadius: 36,
                 offset: const Offset(0, 18),
               ),
@@ -2453,7 +2454,8 @@ class _CircumOrderContentState extends State<_CircumOrderContent> {
                       Color(0xffffffff),
                     ],
             ),
-            border: Border.all(color: colors.adminAccent.withValues(alpha: 0.18)),
+            border:
+                Border.all(color: colors.adminAccent.withValues(alpha: 0.18)),
           ),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -19361,9 +19363,9 @@ class _HealthPlanGrid extends StatelessWidget {
       _HealthPlanCopy(
         id: 'basic',
         title: 'Health+ Basic',
-        price: 'From £11',
+        price: '£11/month',
         benefits: [
-          'Discounted recurring pickups',
+          '2 Health+ prescription pickups every calendar month',
           'Medicine delivery reminders',
           'Secure sealed-package handover',
         ],
@@ -19371,21 +19373,24 @@ class _HealthPlanGrid extends StatelessWidget {
       _HealthPlanCopy(
         id: 'priority',
         title: 'Health+ Priority',
-        price: 'Priority matching',
+        price: '£25/month',
         benefits: [
+          '4 Health+ prescription pickups every calendar month',
           'Priority Circum Rider matching',
           'Faster pickup target',
-          'Recurring prescription reminders',
+          'Medicine reminders',
         ],
       ),
       _HealthPlanCopy(
         id: 'family',
         title: 'Health+ Family',
-        price: 'Family support',
+        price: '£40/month',
         benefits: [
-          'Support for elderly relatives',
+          'Unlimited Health+ prescription pickups',
+          'Family member support',
           'Shared pickup notes',
           'Repeat medicine reminders',
+          'Priority support',
         ],
       ),
     ];
@@ -25076,7 +25081,8 @@ class _GlassPanel extends StatelessWidget {
             offset: const Offset(0, 8),
           ),
           BoxShadow(
-            color: colors.adminGlow.withValues(alpha: colors.dark ? 0.12 : 0.08),
+            color:
+                colors.adminGlow.withValues(alpha: colors.dark ? 0.12 : 0.08),
             blurRadius: 24,
             offset: const Offset(0, 12),
           ),

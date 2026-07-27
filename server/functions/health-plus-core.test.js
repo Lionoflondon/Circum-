@@ -26,24 +26,48 @@ test("Health+ pricing ignores client breakdown values", () => {
     frequency: "one_off",
     priceBreakdown: lowClientQuote,
   });
-  assert.equal(pricing.amountPence, 2119);
+  assert.equal(pricing.amountPence, 1820);
   assert.equal(pricing.distanceFarePence, 1200);
-  assert.equal(pricing.priorityFeePence, 299);
+  assert.equal(pricing.priorityFeePence, 0);
 });
 
-test("Health+ pricing applies plan and weight policy", () => {
+test("Health+ one-off pricing applies standard Health+ policy", () => {
   const pricing = calculateAuthoritativeHealthPlusPricing({
     distanceMiles: 4.8,
     medicationWeightKg: 12,
     subscriptionPlan: "family",
-    frequency: "weekly",
+    frequency: "one_off",
   });
   assert.equal(pricing.baseFarePence, 500);
   assert.equal(pricing.distanceFarePence, 720);
   assert.equal(pricing.weightSurchargePence, 700);
-  assert.equal(pricing.familySupportFeePence, 399);
-  assert.equal(pricing.recurringDiscountPence, 150);
-  assert.equal(pricing.amountPence, 2289);
+  assert.equal(pricing.familySupportFeePence, 0);
+  assert.equal(pricing.recurringDiscountPence, 0);
+  assert.equal(pricing.amountPence, 2040);
+});
+
+test("Health+ subscriptions use the locked monthly plan prices", () => {
+  assert.equal(calculateAuthoritativeHealthPlusPricing({
+    distanceMiles: 4.8,
+    medicationWeightKg: 0.5,
+    subscriptionPlan: "basic",
+    frequency: "monthly",
+  }).amountPence, 1100);
+  assert.equal(calculateAuthoritativeHealthPlusPricing({
+    distanceMiles: 4.8,
+    medicationWeightKg: 0.5,
+    subscriptionPlan: "priority",
+    frequency: "monthly",
+  }).amountPence, 2500);
+  const family = calculateAuthoritativeHealthPlusPricing({
+    distanceMiles: 4.8,
+    medicationWeightKg: 0.5,
+    subscriptionPlan: "family",
+    frequency: "monthly",
+  });
+  assert.equal(family.amountPence, 4000);
+  assert.equal(family.unlimitedPickups, true);
+  assert.equal(family.fairUseMonitored, true);
 });
 
 test("missing authoritative Health+ pricing inputs fail safely", () => {

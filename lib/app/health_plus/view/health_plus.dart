@@ -1030,9 +1030,9 @@ const _healthPlans = [
   _HealthPlan(
     id: 'basic',
     title: 'Health+ Basic',
-    subtitle: '',
+    subtitle: '£11/month',
     features: [
-      'Discounted recurring pickups',
+      '2 Health+ prescription pickups every calendar month',
       'Medicine delivery reminders',
       'Secure sealed-package handover',
     ],
@@ -1040,21 +1040,24 @@ const _healthPlans = [
   _HealthPlan(
     id: 'priority',
     title: 'Health+ Priority',
-    subtitle: 'Priority matching',
+    subtitle: '£25/month',
     features: [
+      '4 Health+ prescription pickups every calendar month',
       'Priority Circum Rider matching',
       'Faster pickup target',
-      'Recurring prescription reminders',
+      'Medicine reminders',
     ],
   ),
   _HealthPlan(
     id: 'family',
     title: 'Health+ Family',
-    subtitle: 'Family support',
+    subtitle: '£40/month',
     features: [
-      'Support for elderly relatives',
+      'Unlimited Health+ prescription pickups',
+      'Family member support',
       'Shared pickup notes',
       'Repeat medicine reminders',
+      'Priority support',
     ],
   ),
 ];
@@ -1583,7 +1586,9 @@ class _HealthPlanCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final extra = quote.priorityFee + quote.familySupportFee;
+    final allowance = plan.id == 'family'
+        ? 'Unlimited pickups'
+        : '${quote.includedPickups} included pickups/month';
     return InkWell(
       borderRadius: BorderRadius.circular(16),
       onTap: onTap,
@@ -1663,7 +1668,7 @@ class _HealthPlanCard extends StatelessWidget {
               ),
             ),
             Text(
-              extra == 0 ? 'Included' : '+${_money(extra)}',
+              quote.recurring ? allowance : 'One-off rates',
               style: const TextStyle(
                 color: _HealthTokens.health,
                 fontWeight: FontWeight.w900,
