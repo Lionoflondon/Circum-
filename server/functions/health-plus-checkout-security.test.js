@@ -96,6 +96,9 @@ test("Health+ booking and Sender actions are backend-authoritative callables", (
   assert.match(source, /db\.runTransaction/);
   assert.match(source, /healthPlusBookingIdempotency/);
   assert.match(source, /auditHistory/);
+  assert.match(source, /health_admin_\$\{pickupRef\.id\}_booking_created/);
+  assert.match(source, /recipientRole: "admin"/);
+  assert.match(source, /route: "admin_health_plus"/);
 });
 
 test("Sender Health+ UI does not write authoritative Health+ records directly", () => {

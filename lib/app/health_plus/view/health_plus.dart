@@ -990,14 +990,9 @@ class _HealthPlanStep extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    const plans = [
-      _HealthPlan('basic', 'Basic', 'Standard prescription delivery'),
-      _HealthPlan('priority', 'Priority', 'Faster Circum Rider assignment'),
-      _HealthPlan('family', 'Family support', 'Household pickup support'),
-    ];
     return _HealthStepCard(
       children: [
-        ...plans.map((plan) {
+        ..._healthPlans.map((plan) {
           final quote = HealthPlusPricing.calculate(
             recurring: frequency != HealthPlusFrequency.oneOff,
             subscriptionPlan: plan.id,
@@ -1009,18 +1004,69 @@ class _HealthPlanStep extends StatelessWidget {
             onTap: () => onChanged(plan.id),
           );
         }),
-        _HealthPrimaryButton(label: 'Continue to Notes', onTap: onContinue),
+        _HealthPrimaryButton(
+          label: frequency == HealthPlusFrequency.oneOff
+              ? 'Continue one-off pickup'
+              : 'Start subscription',
+          onTap: onContinue,
+        ),
       ],
     );
   }
+}
+
+const _healthPlans = [
+  _HealthPlan(
+    id: 'basic',
+    title: 'Health+ Basic',
+    subtitle: '',
+    features: [
+      'Discounted recurring pickups',
+      'Medicine delivery reminders',
+      'Secure sealed-package handover',
+    ],
+  ),
+  _HealthPlan(
+    id: 'priority',
+    title: 'Health+ Priority',
+    subtitle: 'Priority matching',
+    features: [
+      'Priority Circum Rider matching',
+      'Faster pickup target',
+      'Recurring prescription reminders',
+    ],
+  ),
+  _HealthPlan(
+    id: 'family',
+    title: 'Health+ Family',
+    subtitle: 'Family support',
+    features: [
+      'Support for elderly relatives',
+      'Shared pickup notes',
+      'Repeat medicine reminders',
+    ],
+  ),
+];
+
+String _healthPlanTitle(String id) {
+  for (final plan in _healthPlans) {
+    if (plan.id == id) return plan.title;
+  }
+  return id;
 }
 
 class _HealthPlan {
   final String id;
   final String title;
   final String subtitle;
+  final List<String> features;
 
-  const _HealthPlan(this.id, this.title, this.subtitle);
+  const _HealthPlan({
+    required this.id,
+    required this.title,
+    required this.subtitle,
+    required this.features,
+  });
 }
 
 class _HealthNotesStep extends StatelessWidget {
@@ -1094,7 +1140,7 @@ class _HealthReviewStep extends StatelessWidget {
         _HealthReviewRow(label: 'Delivery', value: delivery),
         _HealthReviewRow(label: 'Preferred time', value: preferredTime),
         _HealthReviewRow(label: 'Frequency', value: frequency.label),
-        _HealthReviewRow(label: 'Plan', value: plan),
+        _HealthReviewRow(label: 'Plan', value: _healthPlanTitle(plan)),
         const _HealthDivider(),
         _HealthReviewRow(
             label: 'Base fare', value: _money(quote.delivery.baseFare)),
@@ -1564,10 +1610,43 @@ class _HealthPlanCard extends StatelessWidget {
                       fontWeight: FontWeight.w900,
                     ),
                   ),
-                  const SizedBox(height: 3),
-                  Text(
-                    plan.subtitle,
-                    style: const TextStyle(color: _HealthTokens.muted),
+                  if (plan.subtitle.isNotEmpty) ...[
+                    const SizedBox(height: 3),
+                    Text(
+                      plan.subtitle,
+                      style: const TextStyle(
+                        color: _HealthTokens.muted,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                  ],
+                  const SizedBox(height: 8),
+                  ...plan.features.map(
+                    (feature) => Padding(
+                      padding: const EdgeInsets.only(bottom: 5),
+                      child: Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Icon(
+                            Icons.check_circle_rounded,
+                            color: _HealthTokens.health,
+                            size: 15,
+                          ),
+                          const SizedBox(width: 6),
+                          Expanded(
+                            child: Text(
+                              feature,
+                              style: const TextStyle(
+                                color: _HealthTokens.muted,
+                                fontSize: 12,
+                                height: 1.25,
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
                   ),
                 ],
               ),

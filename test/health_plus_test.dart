@@ -117,5 +117,30 @@ void main() {
       expect(source, contains("_formatHealthPickupDateTime"));
       expect(source, isNot(contains("Tuesday, 10:00 AM")));
     });
+
+    test('app booking plans match the public Health+ plan copy', () {
+      final source =
+          File('lib/app/health_plus/view/health_plus.dart').readAsStringSync();
+
+      expect(source, contains('Health+ Basic'));
+      expect(source, contains('Discounted recurring pickups'));
+      expect(source, contains('Medicine delivery reminders'));
+      expect(source, contains('Secure sealed-package handover'));
+      expect(source, contains('Health+ Priority'));
+      expect(source, contains('Priority matching'));
+      expect(source, contains('Priority Circum Rider matching'));
+      expect(source, contains('Faster pickup target'));
+      expect(source, contains('Recurring prescription reminders'));
+      expect(source, contains('Health+ Family'));
+      expect(source, contains('Family support'));
+      expect(source, contains('Support for elderly relatives'));
+      expect(source, contains('Shared pickup notes'));
+      expect(source, contains('Repeat medicine reminders'));
+      expect(source, contains('Start subscription'));
+      expect(source, contains('Continue one-off pickup'));
+      expect(source, isNot(contains('Standard prescription delivery')));
+      expect(source, isNot(contains('Faster Circum Rider assignment')));
+      expect(source, isNot(contains('Household pickup support')));
+    });
   });
 }

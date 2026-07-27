@@ -449,6 +449,38 @@ exports.createHealthPlusBooking = functions.https.onCall(async (data, context) =
       read: false,
       createdAt: now,
     });
+    transaction.set(db.collection("notifications").doc(`health_admin_${pickupRef.id}_booking_created`), {
+      notificationId: `health_admin_${pickupRef.id}_booking_created`,
+      recipientId: "circum-operations",
+      recipientRole: "admin",
+      type: "health_plus_booking_created",
+      title: "Health+ booking received",
+      body: "A new Health+ pickup is ready for Operations review.",
+      message: "A new Health+ pickup is ready for Operations review.",
+      category: "health",
+      pickupId: pickupRef.id,
+      healthPickupId: pickupRef.id,
+      profileId,
+      senderId: sender.uid,
+      destination: {
+        route: "admin_health_plus",
+        healthPickupId: pickupRef.id,
+        pickupId: pickupRef.id,
+      },
+      data: {
+        category: "Health+",
+        pickupId: pickupRef.id,
+        profileId,
+        status: "scheduled",
+      },
+      read: false,
+      archived: false,
+      deliveryStatus: "persisted",
+      deliveryState: "persisted",
+      source: "health_plus",
+      createdAt: now,
+      updatedAt: now,
+    }, {merge: true});
     transaction.set(db.collection("healthPlusUsageEvents").doc(), healthPlusAudit("pickup_created", sender, {
       profileId,
       pickupId: pickupRef.id,
