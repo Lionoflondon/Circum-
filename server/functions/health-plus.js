@@ -14,6 +14,7 @@ const {
   buildAdminStatusUpdate,
 } = require("./health-plus-core");
 const {calculateWalletCheckout} = require("./wallet-core");
+const {verifiedStripePaidGbpSession} = require("./roth-ledger-core");
 const rothLedger = require("./roth-ledger");
 
 function allowCors(res) {
@@ -720,6 +721,7 @@ exports.createHealthPlusCheckoutSession = functions.https.onRequest(async (req, 
         paymentStatus: "pending_verification",
       },
     });
+    params.client_reference_id = sender.uid;
 
     const session = await stripe.checkout.sessions.create(params);
     await paymentRef.set({
@@ -808,10 +810,17 @@ exports.handleHealthPlusCheckoutSession = async (sessionData, eventId = null) =>
   const db = getFirestore();
   const paymentRef = db.collection("healthPlusPayments").doc(bookingId);
   const paymentSnap = await paymentRef.get();
-  const payment = paymentSnap.exists ? paymentSnap.data() || {} : {};
+  if (!paymentSnap.exists) {
+    throw new Error("Health+ payment record is missing.");
+  }
+  const payment = paymentSnap.data() || {};
   if (payment.status === "paid" || payment.paymentStatus === "paid") return;
-  const rothAmount = money(metadata.rothAmountGbp || payment.rothAmount);
-  const cardAmount = money(metadata.cardAmountGbp || Number(sessionData.amount_total || 0) / 100);
+  const rothAmount = money(payment.rothAmount);
+  const verifiedPayment = verifiedStripePaidGbpSession(sessionData, {
+    ownerId: senderId,
+    expectedAmountGBP: payment.cardAmount,
+  });
+  const cardAmount = verifiedPayment.amountGBP;
   if (rothAmount > 0) {
     await rothLedger.applyWalletDebit({
       userId: senderId,

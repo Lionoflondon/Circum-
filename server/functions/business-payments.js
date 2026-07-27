@@ -3,8 +3,13 @@
 
 const functions = require("firebase-functions/v1");
 const {getFirestore, FieldValue} = require("firebase-admin/firestore");
+const {
+  verifiedStripePaidGbpSession,
+  verifiedStripeRothPurchase,
+} = require("./roth-ledger-core");
 const {requireAdmin} = require("./admin-auth");
 const {calculateWalletCheckout} = require("./wallet-core");
+const communicationEngine = require("./communication-engine");
 
 function money(value) {
   const parsed = Number(value || 0);
@@ -65,6 +70,8 @@ async function creditBusinessRoth({businessId, amount, type, note, metadata = {}
   const accountRef = db.collection("businessAccounts").doc(businessId);
   await db.runTransaction(async (transaction) => {
     const walletSnap = await transaction.get(walletRef);
+    const existingTx = await transaction.get(txRef);
+    if (existingTx.exists) return;
     const previous = money(walletSnap.data() && walletSnap.data().balance);
     const resulting = money(previous + amount);
     transaction.set(walletRef, {
@@ -81,6 +88,11 @@ async function creditBusinessRoth({businessId, amount, type, note, metadata = {}
       businessId,
       direction: "credit",
       amount,
+      amountGBP: metadata.amountGBP == null ? amount : metadata.amountGBP,
+      rothIssued: metadata.rothIssued == null ? amount : metadata.rothIssued,
+      currency: metadata.currency || "GBP",
+      source: metadata.source || "purchase",
+      paymentIntentId: metadata.stripePaymentIntentId || null,
       type,
       note,
       createdAt: FieldValue.serverTimestamp(),
@@ -298,6 +310,7 @@ exports.createBusinessRothCheckout = (stripe) => functions.https.onCall(async (d
   const session = await stripe.checkout.sessions.create({
     mode: "payment",
     payment_method_types: ["card"],
+    client_reference_id: businessId,
     line_items: [{
       quantity: 1,
       price_data: {
@@ -388,6 +401,7 @@ exports.createBusinessInvoiceCheckout = (stripe) => functions.https.onCall(async
   const session = await stripe.checkout.sessions.create({
     mode: "payment",
     payment_method_types: ["card"],
+    client_reference_id: businessId,
     line_items: [{
       quantity: 1,
       price_data: {
@@ -444,11 +458,54 @@ exports.handleBusinessCheckoutSession = async (sessionData, eventId = null) => {
   if (metadata.type === "business_roth_purchase") {
     const businessId = metadata.businessId;
     const purchaseId = metadata.purchaseRequestId;
-    const amount = money(metadata.amountGbp || Number(sessionData.amount_total || 0) / 100);
+    if (!businessId || !purchaseId) {
+      throw new Error("Business Roth purchase owner could not be verified.");
+    }
+    let verifiedPurchase;
+    try {
+      verifiedPurchase = verifiedStripeRothPurchase(sessionData, {ownerId: businessId});
+    } catch (error) {
+      await getFirestore().collection("businessRothPurchases").doc(purchaseId).set({
+        status: "failed",
+        failureCode: "payment_not_verified",
+        failureMessage: error && error.message ? error.message : "Business Roth payment could not be verified.",
+        stripePaymentIntentId: sessionData.payment_intent || null,
+        stripeSessionId: sessionData.id || null,
+        updatedAt: FieldValue.serverTimestamp(),
+      }, {merge: true});
+      if (metadata.createdByUserId) {
+        try {
+          await communicationEngine.emitNotification({
+            recipientId: metadata.createdByUserId,
+            recipientRole: "sender",
+            type: "business_roth_purchase_failed",
+            title: "Business Roth purchase needs attention",
+            body: "We could not add Roth from this payment. No Business Roth has been credited.",
+            data: {
+              correlationId: `business_roth_purchase_${sessionData.id || eventId || "unknown"}`,
+              businessId,
+              purchaseId,
+              stripeEventId: eventId || "",
+              stripeCheckoutSessionId: sessionData.id || "",
+              paymentIntentId: sessionData.payment_intent || "",
+              failureCode: "payment_not_verified",
+            },
+          });
+        } catch (notificationError) {
+          console.error("Business Roth purchase failure notification failed", {
+            businessId,
+            purchaseId,
+            error: notificationError && notificationError.message ? notificationError.message : notificationError,
+          });
+        }
+      }
+      throw error;
+    }
+    const amount = verifiedPurchase.rothIssued;
     const purchaseRef = getFirestore().collection("businessRothPurchases").doc(purchaseId);
     const snap = await purchaseRef.get();
-    const purchase = snap.exists ? snap.data() || {} : {};
-    if (purchase.status === "paid" || purchase.creditedAt) return;
+    const purchaseRecord = snap.exists ? snap.data() || {} : {};
+    if (purchaseRecord.status === "paid" || purchaseRecord.creditedAt) return;
     await creditBusinessRoth({
       businessId,
       amount,
@@ -460,6 +517,10 @@ exports.handleBusinessCheckoutSession = async (sessionData, eventId = null) => {
         stripeEventId: eventId,
         stripeCheckoutSessionId: sessionData.id,
         stripePaymentIntentId: sessionData.payment_intent || null,
+        amountGBP: verifiedPurchase.amountGBP,
+        rothIssued: verifiedPurchase.rothIssued,
+        currency: verifiedPurchase.currency,
+        source: "purchase",
         purchaseId,
       },
     });
@@ -469,20 +530,57 @@ exports.handleBusinessCheckoutSession = async (sessionData, eventId = null) => {
       creditedAt: FieldValue.serverTimestamp(),
       stripePaymentIntentId: sessionData.payment_intent || null,
       stripeSessionId: sessionData.id,
+      amountGBP: verifiedPurchase.amountGBP,
+      amountRoth: verifiedPurchase.rothIssued,
+      rothAmount: verifiedPurchase.rothIssued,
+      currency: verifiedPurchase.currency,
     }, {merge: true});
+    if (metadata.createdByUserId) {
+      try {
+        await communicationEngine.emitNotification({
+          recipientId: metadata.createdByUserId,
+          recipientRole: "sender",
+          type: "business_roth_purchase_completed",
+          title: "Business Roth added",
+          body: `${amount} Roth has been added to your Business balance.`,
+          data: {
+            correlationId: `business_roth_purchase_${sessionData.id}`,
+            businessId,
+            purchaseId,
+            paymentIntentId: sessionData.payment_intent || "",
+            amountGBP: `${verifiedPurchase.amountGBP}`,
+            rothIssued: `${verifiedPurchase.rothIssued}`,
+          },
+        });
+      } catch (error) {
+        console.error("Business Roth purchase notification failed", {
+          businessId,
+          purchaseId,
+          error: error && error.message ? error.message : error,
+        });
+      }
+    }
   }
   if (metadata.type === "business_invoice_payment") {
     const businessId = metadata.businessId;
     const invoiceId = metadata.invoiceId;
     const paymentId = metadata.paymentId || sessionData.id;
     const paymentSnap = await getFirestore().collection("businessInvoicePayments").doc(paymentId).get();
-    if (paymentSnap.exists && paymentSnap.data() && paymentSnap.data().status === "paid") return;
-    const rothAmount = money(metadata.rothAmountGbp);
-    const cardAmount = money(metadata.cardAmountGbp || Number(sessionData.amount_total || 0) / 100);
+    if (!paymentSnap.exists) {
+      throw new Error("Business invoice payment record is missing.");
+    }
+    const payment = paymentSnap.data() || {};
+    if (payment.status === "paid") return;
+    const rothAmount = money(payment.rothAmount);
+    const verifiedPayment = verifiedStripePaidGbpSession(sessionData, {
+      ownerId: businessId,
+      expectedAmountGBP: payment.cardAmount,
+    });
+    const cardAmount = verifiedPayment.amountGBP;
     if (rothAmount > 0) {
       await debitBusinessRoth({businessId, amount: rothAmount, invoiceId, metadata: {paymentId, stripeCheckoutSessionId: sessionData.id}});
     }
-    const requestedMethod = `${metadata.requestedPaymentMethod || "card"}`;
+    const requestedMethod = `${payment.requestedPaymentMethod || metadata.requestedPaymentMethod || "card"}`;
     await markInvoicePaid({
       invoiceId,
       businessId,

@@ -785,6 +785,32 @@ service cloud.firestore {
       allow read, update, delete: if isAdmin();
     }
 
+    match /irisLearningCases/{caseId} {
+      allow read, create, update: if isAdmin();
+      allow delete: if hasRole('super_admin');
+    }
+
+    match /iris_learning_review_candidates/{candidateId} {
+      allow read, update: if isAdmin();
+      allow create: if false;
+      allow delete: if hasRole('super_admin');
+    }
+
+    match /irisCanonicalObjects/{objectId} {
+      allow read, create, update: if isAdmin();
+      allow delete: if hasRole('super_admin');
+    }
+
+    match /irisEvidence/{evidenceId} {
+      allow read, create, update: if isAdmin();
+      allow delete: if hasRole('super_admin');
+    }
+
+    match /irisPolicies/{policyId} {
+      allow read, create, update: if isAdmin();
+      allow delete: if hasRole('super_admin');
+    }
+
     match /deliveryAdjustments/{adjustmentId} {
       allow read: if isAdmin() ||
         (signedIn() && resource.data.senderId == request.auth.uid) ||

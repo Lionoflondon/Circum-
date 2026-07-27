@@ -150,6 +150,14 @@ test("Business invoice payment supports partial Roth plus remaining card payment
   assert.match(businessPaymentsSource, /method: rothAmount > 0 \? `roth_\$\{requestedMethod\}` : requestedMethod/);
 });
 
+test("Business invoice finalizer verifies Stripe paid amount against server payment record", () => {
+  assert.match(businessPaymentsSource, /verifiedStripePaidGbpSession\(sessionData, \{[\s\S]*?ownerId: businessId,[\s\S]*?expectedAmountGBP: payment\.cardAmount/);
+  assert.match(businessPaymentsSource, /const rothAmount = money\(payment\.rothAmount\);/);
+  assert.match(businessPaymentsSource, /const cardAmount = verifiedPayment\.amountGBP;/);
+  assert.doesNotMatch(businessPaymentsSource, /metadata\.cardAmountGbp \|\| Number\(sessionData\.amount_total/);
+  assert.match(businessPaymentsSource, /throw new Error\("Business invoice payment record is missing\."\)/);
+});
+
 test("Business invoice Stripe payment without Roth charges the full balance by card", () => {
   assert.match(businessPaymentsSource, /const useRoth = data\.useRoth === true;/);
   assert.match(businessPaymentsSource, /const walletBalance = useRoth && `\$\{wallet\.status \|\| "active"\}` === "active" \? money\(wallet\.balance \|\| wallet\.availableBalance\) : 0;/);

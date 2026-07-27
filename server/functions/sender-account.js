@@ -1,6 +1,7 @@
 /* eslint-disable max-len, require-jsdoc */
 const functions = require("firebase-functions/v1");
 const {getFirestore, FieldValue} = require("firebase-admin/firestore");
+const crypto = require("crypto");
 
 function requireSender(context) {
   if (!context.auth) {
@@ -227,18 +228,35 @@ exports.recordIrisLearningCandidate = functions.https.onCall(async (data, contex
   if (!description || !matchedItemName || !Number.isFinite(userCorrectedWeightKg)) {
     throw new functions.https.HttpsError("invalid-argument", "IRIS learning candidate is incomplete.");
   }
-  await getFirestore().collection("iris_learning_review_candidates").add({
+  const candidateId = crypto.createHash("sha256")
+      .update([uid, description.toLowerCase(), matchedItemName.toLowerCase(), userCorrectedWeightKg.toFixed(3)].join("|"))
+      .digest("hex");
+  const candidate = {
     senderId: uid,
     description,
+    enteredText: description,
     matchedItemName,
+    objectName: matchedItemName,
     userCorrectedWeightKg,
+    knownWeight: userCorrectedWeightKg,
     irisEstimatedWeightKg: Number(data.irisEstimatedWeightKg) || null,
     deltaKg: Number(data.deltaKg) || null,
     confidence: Number(data.confidence) || null,
     createdAt: FieldValue.serverTimestamp(),
+    updatedAt: FieldValue.serverTimestamp(),
     source: "recordIrisLearningCandidate",
     status: "pending_review",
-  });
+    learningStatus: "pending_review",
+    reviewStatus: "pending_review",
+  };
+  const db = getFirestore();
+  const batch = db.batch();
+  batch.set(db.collection("irisLearningCases").doc(candidateId), candidate, {merge: true});
+  batch.set(db.collection("iris_learning_review_candidates").doc(candidateId), {
+    ...candidate,
+    canonicalCollection: "irisLearningCases",
+  }, {merge: true});
+  await batch.commit();
   return {ok: true};
 });
 

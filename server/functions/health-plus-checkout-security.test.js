@@ -78,7 +78,11 @@ test("Health+ subscriptions apply Roth to the first invoice without changing ren
 
 test("Health+ checkout finalizes partial Roth only after Stripe confirms", () => {
   assert.match(source, /exports\.handleHealthPlusCheckoutSession\s*=\s*async/);
-  assert.match(source, /metadata\.rothAmountGbp/);
+  assert.match(source, /verifiedStripePaidGbpSession\(sessionData/);
+  assert.match(source, /expectedAmountGBP: payment\.cardAmount/);
+  assert.match(source, /const rothAmount = money\(payment\.rothAmount\)/);
+  assert.doesNotMatch(source, /metadata\.cardAmountGbp \|\| Number\(sessionData\.amount_total/);
+  assert.doesNotMatch(source, /metadata\.rothAmountGbp \|\| payment\.rothAmount/);
   assert.match(source, /stripeCheckoutSessionId: sessionData\.id/);
   assert.match(source, /markHealthPlusPaid\(\{[\s\S]*?method: rothAmount > 0 \? "roth_card" : "card"/);
   assert.match(indexSource, /healthPlus,/);

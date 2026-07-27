@@ -11,6 +11,7 @@ const {
   assertTransactionType,
   nextBalance,
   roundMoney,
+  verifiedStripeRothPurchase,
   senderWalletProjectionRecord,
   walletTransactionView,
   paginateWalletTransactions,
@@ -21,6 +22,7 @@ const {
   roundMoney: roundWalletMoney,
   walletIdForEmail,
 } = require("./wallet-core");
+const communicationEngine = require("./communication-engine");
 const senderTrust = require("./sender-trust");
 
 function hasAdminRole(context) {
@@ -257,6 +259,7 @@ async function recordRothMovement({
     }
     transaction.set(ledgerRef, {
       id: ledgerRef.id,
+      transactionId: ledgerRef.id,
       userId: identity.walletId,
       uid: identity.uid,
       userEmail: identity.userEmail,
@@ -275,6 +278,11 @@ async function recordRothMovement({
       status: "completed",
       paymentProvider,
       providerTransactionId,
+      paymentIntentId: metadata.stripePaymentIntentId || metadata.paymentIntentId || null,
+      amountGBP: metadata.amountGBP == null ? null : roundMoney(metadata.amountGBP),
+      rothIssued: metadata.rothIssued == null ? null : roundMoney(metadata.rothIssued),
+      currency: metadata.currency || null,
+      source: metadata.source || null,
       issuedByAdminId,
       issuedByAdminEmail,
       balanceBefore,
@@ -514,6 +522,7 @@ exports.createWalletTopUp = (stripe) => functions.https.onCall(async (data, cont
   const session = await stripe.checkout.sessions.create({
     mode: "payment",
     payment_method_types: ["card"],
+    client_reference_id: identity.walletId,
     line_items: [{
       quantity: 1,
       price_data: {
@@ -541,8 +550,41 @@ exports.createWalletTopUp = (stripe) => functions.https.onCall(async (data, cont
 async function recordWalletTopUpFromStripeSession(sessionData, eventId = null) {
   const metadata = sessionData.metadata || {};
   if (metadata.type !== "wallet_top_up") return null;
-  const amount = roundWalletMoney(metadata.amountGbp || Number(sessionData.amount_total || 0) / 100);
-  if (amount <= 0) return null;
+  let purchase;
+  try {
+    purchase = verifiedStripeRothPurchase(sessionData, {
+      ownerId: metadata.userId || metadata.uid,
+      ownerEmail: metadata.userEmail,
+    });
+  } catch (error) {
+    if (metadata.uid) {
+      try {
+        await communicationEngine.emitNotification({
+          recipientId: metadata.uid,
+          recipientRole: "sender",
+          type: "roth_purchase_failed",
+          title: "Roth purchase needs attention",
+          body: "We could not add Roth from this payment. No Roth has been credited.",
+          data: {
+            correlationId: `wallet_top_up_${sessionData.id || eventId || "unknown"}`,
+            stripeEventId: eventId || "",
+            stripeCheckoutSessionId: sessionData.id || "",
+            paymentIntentId: sessionData.payment_intent || "",
+            failureCode: "payment_not_verified",
+          },
+        });
+      } catch (notificationError) {
+        console.error("Roth purchase failure notification failed", {
+          userId: metadata.userId || null,
+          uid: metadata.uid || null,
+          sessionId: sessionData.id || null,
+          error: notificationError && notificationError.message ? notificationError.message : notificationError,
+        });
+      }
+    }
+    throw error;
+  }
+  const amount = purchase.rothIssued;
   const transactionId = `wallet_top_up_${sessionData.id}`;
   const movement = await recordRothMovement({
     userId: metadata.userId || metadata.userEmail || metadata.uid,
@@ -560,6 +602,10 @@ async function recordWalletTopUpFromStripeSession(sessionData, eventId = null) {
       stripeEventId: eventId,
       stripeCheckoutSessionId: sessionData.id,
       stripePaymentIntentId: sessionData.payment_intent || null,
+      amountGBP: purchase.amountGBP,
+      rothIssued: purchase.rothIssued,
+      currency: purchase.currency,
+      source: "purchase",
       label: "Roth top-up",
     },
   });
@@ -570,6 +616,31 @@ async function recordWalletTopUpFromStripeSession(sessionData, eventId = null) {
     stripeSessionId: sessionData.id,
     walletTransactionId: transactionId,
   });
+  if (metadata.uid) {
+    try {
+      await communicationEngine.emitNotification({
+        recipientId: metadata.uid,
+        recipientRole: "sender",
+        type: "roth_purchase_completed",
+        title: "Roth added",
+        body: `${amount} Roth has been added to your wallet.`,
+        data: {
+          correlationId: transactionId,
+          transactionId,
+          paymentIntentId: sessionData.payment_intent || "",
+          amountGBP: `${purchase.amountGBP}`,
+          rothIssued: `${purchase.rothIssued}`,
+        },
+      });
+    } catch (error) {
+      console.error("Roth purchase notification failed", {
+        userId: metadata.userId || null,
+        uid: metadata.uid || null,
+        transactionId,
+        error: error && error.message ? error.message : error,
+      });
+    }
+  }
   return {...movement, progression};
 }
 

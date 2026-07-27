@@ -4029,8 +4029,28 @@ class AdminRepository {
             .orderBy('createdAt', descending: true)
             .limit(150),
       ),
-      _read(_db.collection('irisCanonicalObjects').limit(150)),
-      _read(_db.collection('irisLearningCases').limit(150)),
+      _readTagged(
+        _db.collection('irisCanonicalObjects').limit(150),
+        'irisCanonicalObjects',
+      ),
+      Future.wait([
+        _readTagged(
+          _db.collection('irisLearningCases').limit(150),
+          'irisLearningCases',
+        ),
+        _readTagged(
+          _db.collection('iris_learning_review_candidates').limit(150),
+          'iris_learning_review_candidates',
+        ),
+      ]).then((groups) {
+        final byId = <String, Map<String, dynamic>>{};
+        for (final group in groups) {
+          for (final record in group) {
+            byId['${record['id']}'] = record;
+          }
+        }
+        return byId.values.toList(growable: false);
+      }),
       _read(_db.collection('irisLearningOutliers').limit(150)),
       _read(_db.collection('irisPolicies').limit(50)),
       _read(_db.collection('irisEvidence').limit(150)),
@@ -6682,7 +6702,7 @@ class _IrisCanonicalLibraryModule extends StatelessWidget {
                   _MiniAction(
                     label: action.$1,
                     onPressed: records.isEmpty
-                        ? () {}
+                        ? null
                         : () => unawaited(
                             onUpdateRepositoryRecord(records.first, action.$2),
                           ),
@@ -14528,22 +14548,25 @@ class _GiftMoreMenu extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final enabledActions = actions
+        .where((action) => action.onPressed != null)
+        .toList(growable: false);
     return PopupMenuButton<int>(
       tooltip: 'More',
-      enabled: actions.isNotEmpty,
+      enabled: enabledActions.isNotEmpty,
       color: const Color(0xFF111827),
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
       itemBuilder: (context) => [
-        for (var i = 0; i < actions.length; i++)
+        for (var i = 0; i < enabledActions.length; i++)
           PopupMenuItem<int>(
             value: i,
             child: Text(
-              actions[i].label,
+              enabledActions[i].label,
               style: const TextStyle(color: Colors.white),
             ),
           ),
       ],
-      onSelected: (index) => actions[index].onPressed(),
+      onSelected: (index) => enabledActions[index].onPressed!(),
       child: Container(
         width: 42,
         height: 40,
@@ -18660,7 +18683,7 @@ class _MiniAction extends StatelessWidget {
   const _MiniAction({required this.label, required this.onPressed});
 
   final String label;
-  final VoidCallback onPressed;
+  final VoidCallback? onPressed;
 
   @override
   Widget build(BuildContext context) {

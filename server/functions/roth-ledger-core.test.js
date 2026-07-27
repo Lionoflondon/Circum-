@@ -13,6 +13,8 @@ const {
   paginateWalletTransactions,
   senderWalletProjectionRecord,
   senderWalletRecord,
+  verifiedStripePaidGbpSession,
+  verifiedStripeRothPurchase,
   walletTransactionView,
 } = require("./roth-ledger-core");
 
@@ -114,6 +116,68 @@ test("Roth gift debit and refund ledger records are auditable", () => {
   assert.equal(refund.balanceAfter, 200);
   assert.equal(LEDGER_EVENTS.paymentRefunded, "roth_payment_refunded");
   assert.equal(LEDGER_EVENTS.paymentFailed, "roth_payment_failed");
+});
+
+test("verified Stripe Roth purchase issues Roth 1:1 from paid GBP", () => {
+  for (const amount of [5, 50, 5000]) {
+    const purchase = verifiedStripeRothPurchase({
+      id: `cs_${amount}`,
+      payment_status: "paid",
+      currency: "gbp",
+      amount_total: amount * 100,
+      payment_intent: `pi_${amount}`,
+      client_reference_id: "sender-1",
+    }, {ownerId: "sender-1"});
+    assert.equal(purchase.amountGBP, amount);
+    assert.equal(purchase.rothIssued, amount);
+    assert.equal(purchase.currency, "GBP");
+    assert.equal(purchase.paymentIntentId, `pi_${amount}`);
+  }
+});
+
+test("verified Stripe Roth purchase rejects unsafe sessions", () => {
+  assert.throws(() => verifiedStripeRothPurchase({
+    payment_status: "unpaid",
+    currency: "gbp",
+    amount_total: 500,
+  }, {ownerId: "sender-1"}), /not been verified as paid/);
+  assert.throws(() => verifiedStripeRothPurchase({
+    payment_status: "paid",
+    currency: "usd",
+    amount_total: 500,
+  }, {ownerId: "sender-1"}), /must be paid in GBP/);
+  assert.throws(() => verifiedStripeRothPurchase({
+    payment_status: "paid",
+    currency: "gbp",
+    amount_total: 0,
+  }, {ownerId: "sender-1"}), /greater than zero/);
+  assert.throws(() => verifiedStripeRothPurchase({
+    payment_status: "paid",
+    currency: "gbp",
+    amount_total: 500,
+  }), /owner could not be verified/);
+  assert.throws(() => verifiedStripeRothPurchase({
+    payment_status: "paid",
+    currency: "gbp",
+    amount_total: 500,
+    client_reference_id: "sender-2",
+  }, {ownerId: "sender-1"}), /owner does not match/);
+});
+
+test("verified Stripe paid GBP session rejects mismatched expected amount", () => {
+  assert.throws(() => verifiedStripePaidGbpSession({
+    payment_status: "paid",
+    currency: "gbp",
+    amount_total: 499,
+    client_reference_id: "sender-1",
+  }, {ownerId: "sender-1", expectedAmountGBP: 5}), /amount does not match/);
+  const verified = verifiedStripePaidGbpSession({
+    payment_status: "paid",
+    currency: "gbp",
+    amount_total: 500,
+    client_reference_id: "sender-1",
+  }, {ownerId: "sender-1", expectedAmountGBP: 5});
+  assert.equal(verified.amountGBP, 5);
 });
 
 test("sender wallet history prefers canonical walletId query with bounded legacy fallback", () => {

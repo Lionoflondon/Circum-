@@ -38,6 +38,12 @@ test("Firestore rules keep referrals admin-only", () => {
   assert.match(rules, /match \/irisReferrals\/\{referralId\}[\s\S]*allow read, write: if isAdmin\(\);/);
 });
 
+test("Firestore rules expose IRIS learning review collections to admins", () => {
+  assert.match(rules, /match \/irisLearningCases\/\{caseId\}[\s\S]*allow read, create, update: if isAdmin\(\);/);
+  assert.match(rules, /match \/iris_learning_review_candidates\/\{candidateId\}[\s\S]*allow read, update: if isAdmin\(\);[\s\S]*allow create: if false;/);
+  assert.match(rules, /match \/irisCanonicalObjects\/\{objectId\}[\s\S]*allow read, create, update: if isAdmin\(\);/);
+});
+
 test("IRIS dispatch callable requires delivery owner or admin", () => {
   assert.match(sendPackage, /const \{hasAdminClaim\} = require\("\.\/admin-auth"\)/);
   assert.match(sendPackage, /function senderOwnsRequest\(delivery, uid\)/);

@@ -1116,6 +1116,31 @@ void main() {
       expect(source, contains('IRIS Reference Image Lifecycle'));
     });
 
+    test(
+      'Admin IRIS learning queue includes canonical and legacy candidates',
+      () {
+        final source = File(
+          'lib/app/admin/admin_phase1_shell.dart',
+        ).readAsStringSync();
+
+        expect(source, contains("collection('irisLearningCases')"));
+        expect(
+          source,
+          contains("collection('iris_learning_review_candidates')"),
+        );
+        expect(source, contains("'iris_learning_review_candidates'"));
+      },
+    );
+
+    test('Admin IRIS action buttons do not use empty callbacks', () {
+      final source = File(
+        'lib/app/admin/admin_phase1_shell.dart',
+      ).readAsStringSync();
+
+      expect(source, isNot(contains('onPressed: () {}')));
+      expect(source, isNot(contains('onPressed: () => null')));
+    });
+
     test('restores Vanguard enhanced custody Admin review path', () {
       final source = File(
         'lib/app/admin/admin_phase1_shell.dart',
