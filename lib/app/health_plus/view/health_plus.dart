@@ -3,6 +3,7 @@ import 'dart:convert';
 
 import 'package:cloud_functions/cloud_functions.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:url_launcher/url_launcher.dart';
@@ -301,16 +302,19 @@ class _HealthPlusViewState extends State<HealthPlusView> {
       });
 
       if (hasCheckoutUrl) {
-        await launchUrl(
-          Uri.parse(checkoutUrl),
-          mode: LaunchMode.externalApplication,
-        );
+        await _openStripeCheckoutUrl(checkoutUrl);
       }
     } on FirebaseFunctionsException catch (error) {
       if (!mounted) return;
       setState(() {
         _message = error.message ??
             'Health+ could not be saved. Please check the details and try again.';
+      });
+    } on _HealthCheckoutException catch (error) {
+      if (!mounted) return;
+      setState(() {
+        _message =
+            'Health+ pickup was saved, but payment could not start. ${error.message}';
       });
     } catch (_) {
       if (!mounted) return;
@@ -343,6 +347,7 @@ class _HealthPlusViewState extends State<HealthPlusView> {
           'email': _email.text.trim(),
           'frequency': _frequency.value,
           'useRoth': _useRoth,
+          'subscriptionPlan': _plan,
           'priceBreakdown': quote.toJson(),
           'successUrl':
               'https://circum-app-2797c.web.app/?app=health&health=success',
@@ -351,12 +356,16 @@ class _HealthPlusViewState extends State<HealthPlusView> {
         }),
       );
       if (response.statusCode < 200 || response.statusCode >= 300) {
-        return null;
+        throw _HealthCheckoutException(_checkoutErrorMessage(response.body));
       }
       final data = jsonDecode(response.body) as Map<String, dynamic>;
       return data;
+    } on _HealthCheckoutException {
+      rethrow;
     } catch (_) {
-      return null;
+      throw const _HealthCheckoutException(
+        'Secure payment could not be prepared. Please try again.',
+      );
     }
   }
 
@@ -367,10 +376,12 @@ class _HealthPlusViewState extends State<HealthPlusView> {
       });
       return;
     }
-    await launchUrl(
-      Uri.parse(_checkoutUrl!),
-      mode: LaunchMode.externalApplication,
-    );
+    try {
+      await _openStripeCheckoutUrl(_checkoutUrl!);
+    } on _HealthCheckoutException catch (error) {
+      if (!mounted) return;
+      setState(() => _message = error.message);
+    }
   }
 
   Future<void> _pauseSchedule() async {
@@ -2197,6 +2208,38 @@ class _HealthBackdrop extends StatelessWidget {
         ),
       ),
       child: SizedBox.expand(),
+    );
+  }
+}
+
+class _HealthCheckoutException implements Exception {
+  final String message;
+
+  const _HealthCheckoutException(this.message);
+}
+
+String _checkoutErrorMessage(String body) {
+  try {
+    final decoded = jsonDecode(body);
+    if (decoded is Map<String, dynamic>) {
+      final error = '${decoded['error'] ?? decoded['message'] ?? ''}'.trim();
+      if (error.isNotEmpty) return error;
+    }
+  } catch (_) {
+    // The server may return a plain text or empty error body.
+  }
+  return 'Secure payment could not be prepared. Please try again.';
+}
+
+Future<void> _openStripeCheckoutUrl(String checkoutUrl) async {
+  final opened = await launchUrl(
+    Uri.parse(checkoutUrl),
+    mode: kIsWeb ? LaunchMode.platformDefault : LaunchMode.externalApplication,
+    webOnlyWindowName: kIsWeb ? '_self' : null,
+  );
+  if (!opened) {
+    throw const _HealthCheckoutException(
+      'Secure payment could not be opened. Please try again.',
     );
   }
 }

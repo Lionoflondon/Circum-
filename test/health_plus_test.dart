@@ -142,5 +142,15 @@ void main() {
       expect(source, isNot(contains('Faster Circum Rider assignment')));
       expect(source, isNot(contains('Household pickup support')));
     });
+
+    test('app Health+ checkout opens Stripe correctly on web', () {
+      final source =
+          File('lib/app/health_plus/view/health_plus.dart').readAsStringSync();
+
+      expect(source, contains("_openStripeCheckoutUrl(checkoutUrl)"));
+      expect(source, contains("webOnlyWindowName: kIsWeb ? '_self' : null"));
+      expect(source, contains("'subscriptionPlan': _plan"));
+      expect(source, contains('_HealthCheckoutException'));
+    });
   });
 }
