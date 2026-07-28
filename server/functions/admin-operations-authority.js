@@ -413,6 +413,114 @@ const IRIS_REPOSITORY_PATCH_FIELDS = [
   "status",
 ];
 
+const GIFT_EDITOR_COLLECTIONS = new Set(["giftRequests", "giftOrders"]);
+const PLATFORM_OPERATION_COLLECTIONS = new Set([
+  "platformConfig",
+  "platformStatus",
+  "platformNotices",
+  "platformVersions",
+]);
+const PLATFORM_OPERATION_STATUSES = new Set([
+  "active",
+  "inactive",
+  "enabled",
+  "disabled",
+  "maintenance_enabled",
+  "maintenance_disabled",
+  "published",
+  "unpublished",
+  "acknowledged",
+  "resolved",
+]);
+
+function stringList(value) {
+  if (Array.isArray(value)) return value.map(clean).filter(Boolean).slice(0, 80);
+  return clean(value).split(",").map(clean).filter(Boolean).slice(0, 80);
+}
+
+function giftRequestEditorPatch(data, actor) {
+  const patch = {};
+  const stringFields = [
+    "status",
+    "manualGiftPlan",
+    "adminDecision",
+    "internalNotes",
+    "procurementItemTitle",
+    "procurementSupplier",
+    "procurementOrderReference",
+    "procurementDeliveryEta",
+    "procurementNotes",
+    "giftStoryCircumMessage",
+    "giftStoryCustomAudioUrl",
+    "giftStorySharePrivacy",
+    "contentUsageScope",
+    "contentStatus",
+    "captionDraft",
+    "approvedCaption",
+    "postedTikTokUrl",
+    "postedInstagramUrl",
+    "postedYouTubeShortsUrl",
+  ];
+  for (const field of stringFields) {
+    if (Object.prototype.hasOwnProperty.call(data, field)) {
+      patch[field] = clean(data[field]);
+    }
+  }
+  if (Object.prototype.hasOwnProperty.call(data, "procurementEstimatedCost")) {
+    const value = Number(data.procurementEstimatedCost);
+    patch.procurementEstimatedCost = Number.isFinite(value) ? value : null;
+  }
+  if (Object.prototype.hasOwnProperty.call(data, "procurementActualCost")) {
+    const value = Number(data.procurementActualCost);
+    patch.procurementActualCost = Number.isFinite(value) ? value : null;
+  }
+  for (const field of ["giftStoryEnabled", "giftStoryApproved", "allowCircumSocialUse", "allowPublicPosting", "allowBrandTagging"]) {
+    if (Object.prototype.hasOwnProperty.call(data, field)) patch[field] = data[field] === true;
+  }
+  if (Object.prototype.hasOwnProperty.call(data, "irisAcceptedSignals")) {
+    patch["giftsTeamWorkspace.irisCollaboration.acceptedSignals"] = stringList(data.irisAcceptedSignals);
+  }
+  if (Object.prototype.hasOwnProperty.call(data, "rejectedIrisGiftSuggestionIds")) {
+    patch.rejectedIrisGiftSuggestionIds = stringList(data.rejectedIrisGiftSuggestionIds);
+  }
+  if (Object.prototype.hasOwnProperty.call(data, "giftStoryPhotoUrls")) {
+    const photos = stringList(data.giftStoryPhotoUrls);
+    patch.giftStoryPhotoUrls = photos;
+    patch.giftStoryPhotos = photos;
+  }
+  patch.giftWorkspaceAuditTrail = FieldValue.arrayUnion([{
+    event: "gift_request_editor_saved",
+    updatedBy: actor.label,
+    updatedAt: new Date().toISOString(),
+  }]);
+  patch.updatedAt = FieldValue.serverTimestamp();
+  patch.updatedBy = actor.label;
+  return patch;
+}
+
+function platformOperationPatch(status, actor, reason) {
+  if (!PLATFORM_OPERATION_STATUSES.has(status)) {
+    throw new functions.https.HttpsError("invalid-argument", "Unsupported platform operation status.");
+  }
+  const trimmedReason = clean(reason);
+  if (!trimmedReason) {
+    throw new functions.https.HttpsError("invalid-argument", "A platform operation reason is required.");
+  }
+  return {
+    adminOperationStatus: status,
+    adminUpdatedBy: actor.label,
+    adminUpdatedAt: FieldValue.serverTimestamp(),
+    adminReason: trimmedReason,
+    ...(status === "maintenance_enabled" ? {maintenanceMode: true} : {}),
+    ...(status === "maintenance_disabled" ? {maintenanceMode: false} : {}),
+    ...(status === "published" ? {published: true} : {}),
+    ...(status === "unpublished" ? {published: false} : {}),
+    ...(status === "enabled" ? {enabled: true} : {}),
+    ...(status === "disabled" ? {enabled: false} : {}),
+    ...(status === "resolved" ? {resolved: true} : {}),
+  };
+}
+
 function duplicateDelivery(source, newId) {
   const copy = {...source};
   delete copy.historyId;
@@ -1170,6 +1278,29 @@ exports.adminUpdateIrisCandidateWorkflow = functions.https.onCall(async (data, c
   return {ok: true};
 });
 
+exports.adminSaveGiftRequestEditor = functions.https.onCall(async (data, context) => {
+  const actor = await resolveActor(context);
+  requireSupport(actor, "Gift Operations Admin access is required.");
+  const id = clean(data.giftId);
+  const collection = clean(data.collection || "giftRequests");
+  if (!id || !GIFT_EDITOR_COLLECTIONS.has(collection)) {
+    throw new functions.https.HttpsError("invalid-argument", "Gift request record is required.");
+  }
+  const db = getFirestore();
+  const ref = db.collection(collection).doc(id);
+  const snap = await ref.get();
+  const before = snap.exists ? snap.data() : {};
+  const patch = giftRequestEditorPatch(data.patch || {}, actor);
+  await ref.set(patch, {merge: true});
+  await writeAudit(db, actor, {
+    actionType: "gift_request_editor_saved",
+    recordType: collection,
+    recordId: id,
+    reason: clean(data.reason || "Historical Gift Request editor workflow restored"),
+  }, before, patch);
+  return {ok: true};
+});
+
 exports.adminUpdateGiftWorkspace = functions.https.onCall(async (data, context) => {
   const actor = await resolveActor(context);
   requireSupport(actor, "Gift Workspace Admin access is required.");
@@ -1204,6 +1335,30 @@ exports.adminUpdateGiftWorkspace = functions.https.onCall(async (data, context) 
     recordId: id,
     reason: clean(data.reason || "Gift Team workspace action confirmed from Admin"),
   }, before, {workspaceStatus: action});
+  return {ok: true};
+});
+
+exports.adminUpdatePlatformRecord = functions.https.onCall(async (data, context) => {
+  const actor = await resolveActor(context);
+  requireManageAdmins(actor);
+  const id = clean(data.recordId);
+  const collection = clean(data.collection);
+  const status = lower(data.status);
+  if (!id || !PLATFORM_OPERATION_COLLECTIONS.has(collection)) {
+    throw new functions.https.HttpsError("invalid-argument", "Platform record is required.");
+  }
+  const db = getFirestore();
+  const ref = db.collection(collection).doc(id);
+  const snap = await ref.get();
+  const before = snap.exists ? snap.data() : {};
+  const patch = platformOperationPatch(status, actor, data.reason || "Platform operation confirmed from Admin");
+  await ref.set(patch, {merge: true});
+  await writeAudit(db, actor, {
+    actionType: `platform_operation_${status}`,
+    recordType: collection,
+    recordId: id,
+    reason: clean(data.reason || "Platform operation updated from Admin"),
+  }, before, patch);
   return {ok: true};
 });
 

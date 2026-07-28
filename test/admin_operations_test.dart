@@ -537,6 +537,12 @@ void main() {
     });
 
     test('Platform operation patches preserve backend authority', () {
+      final source = File(
+        'lib/app/admin/admin_phase1_shell.dart',
+      ).readAsStringSync();
+      final backend = File(
+        'server/functions/admin-operations-authority.js',
+      ).readAsStringSync();
       final patch = AdminPlatformTools.operationPatch(
         status: 'maintenance_enabled',
         updatedBy: 'platform@circumuk.com',
@@ -550,6 +556,9 @@ void main() {
       expect(patch.containsKey('firebaseProject'), isFalse);
       expect(patch.containsKey('hostingTarget'), isFalse);
       expect(patch.containsKey('apiKey'), isFalse);
+      expect(source, contains("httpsCallable('adminUpdatePlatformRecord')"));
+      expect(backend, contains('PLATFORM_OPERATION_COLLECTIONS'));
+      expect(backend, contains('platform_operation_\${status}'));
       expect(
         () => AdminPlatformTools.operationPatch(
           status: 'deploy_all_products',
@@ -963,7 +972,8 @@ void main() {
       expect(source, contains('contentStatus'));
       expect(source, contains('captionDraft'));
       expect(source, contains('postedTikTokUrl'));
-      expect(source, contains('gift_request_editor_saved'));
+      expect(source, contains("httpsCallable('adminSaveGiftRequestEditor')"));
+      expect(backend, contains('gift_request_editor_saved'));
     });
 
     test('Gifts Admin is split into three operational workspaces', () {

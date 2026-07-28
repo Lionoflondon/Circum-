@@ -1814,15 +1814,6 @@ class _AdminPhaseOneShellState extends State<AdminPhaseOneShell> {
       'postedTikTokUrl': tiktok.text.trim(),
       'postedInstagramUrl': instagram.text.trim(),
       'postedYouTubeShortsUrl': youtube.text.trim(),
-      'giftWorkspaceAuditTrail': FieldValue.arrayUnion([
-        {
-          'event': 'gift_request_editor_saved',
-          'updatedBy': _user?.email ?? _user?.uid,
-          'updatedAt': DateTime.now().toIso8601String(),
-        },
-      ]),
-      'updatedAt': FieldValue.serverTimestamp(),
-      'updatedBy': _user?.email ?? _user?.uid,
     };
     for (final controller in [
       status,
@@ -1849,22 +1840,18 @@ class _AdminPhaseOneShellState extends State<AdminPhaseOneShell> {
       controller.dispose();
     }
     if (confirmed != true) return;
-    await _db
-        .collection(collection)
-        .doc(id)
-        .set(patch, SetOptions(merge: true));
-    await _writeAudit(
-      AdminAuditEntry(
-        adminUserId: _user?.uid ?? 'unknown-admin',
-        actionType: 'gift_request_editor_saved',
-        recordType: collection,
-        recordId: id,
-        newValue: patch,
-        reason: 'Historical Gift Request editor workflow restored',
-      ),
-    );
-    setState(() => _message = 'Gift Request $id saved.');
-    await _loadAdminData();
+    try {
+      await _functions.httpsCallable('adminSaveGiftRequestEditor').call({
+        'giftId': id,
+        'collection': collection,
+        'patch': patch,
+        'reason': 'Historical Gift Request editor workflow restored',
+      });
+      setState(() => _message = 'Gift Request $id saved.');
+      await _loadAdminData();
+    } on FirebaseFunctionsException catch (error) {
+      setState(() => _message = error.message ?? 'Gift Request save failed.');
+    }
   }
 
   Future<void> _updateGiftStoryAccess(
@@ -2111,30 +2098,12 @@ class _AdminPhaseOneShellState extends State<AdminPhaseOneShell> {
     final collection = '${record['_collection'] ?? ''}'.trim();
     if (id.isEmpty || collection.isEmpty) return;
     try {
-      final patch = AdminPlatformTools.operationPatch(
-        status: status,
-        updatedBy: _user?.email ?? _user?.uid ?? 'admin',
-        updatedAt: FieldValue.serverTimestamp(),
-        reason: 'Platform operation confirmed from Admin',
-      );
-      await _db
-          .collection(collection)
-          .doc(id)
-          .set(patch, SetOptions(merge: true));
-      await _writeAudit(
-        AdminAuditEntry(
-          adminUserId: _user?.uid ?? 'unknown-admin',
-          actionType: 'platform_operation_$status',
-          recordType: collection,
-          recordId: id,
-          oldValue: {
-            'status': record['status'],
-            'adminOperationStatus': record['adminOperationStatus'],
-          },
-          newValue: patch,
-          reason: 'Platform operation updated from Admin',
-        ),
-      );
+      await _functions.httpsCallable('adminUpdatePlatformRecord').call({
+        'recordId': id,
+        'collection': collection,
+        'status': status,
+        'reason': 'Platform operation confirmed from Admin',
+      });
       setState(() => _message = 'Platform record $id updated to $status.');
       await _loadAdminData();
     } on ArgumentError catch (error) {

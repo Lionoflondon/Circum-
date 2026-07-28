@@ -262,8 +262,12 @@ exports.adminUpdateIrisRepositoryRecord =
   adminOperationsAuthority.adminUpdateIrisRepositoryRecord;
 exports.adminUpdateIrisCandidateWorkflow =
   adminOperationsAuthority.adminUpdateIrisCandidateWorkflow;
+exports.adminSaveGiftRequestEditor =
+  adminOperationsAuthority.adminSaveGiftRequestEditor;
 exports.adminUpdateGiftWorkspace =
   adminOperationsAuthority.adminUpdateGiftWorkspace;
+exports.adminUpdatePlatformRecord =
+  adminOperationsAuthority.adminUpdatePlatformRecord;
 exports.adminAddAdminNote = adminOperationsAuthority.adminAddAdminNote;
 exports.adminRecordRiderEvent =
   adminOperationsAuthority.adminRecordRiderEvent;
