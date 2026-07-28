@@ -103,6 +103,29 @@ function buildHealthPlusPlanFields(plan, current = {}) {
   };
 }
 
+function buildCustodyEvent({
+  eventType,
+  actorType = "system",
+  actorId = null,
+  actorName = null,
+  publicMessage = "",
+  internalNote = null,
+  statusAfterEvent = null,
+  evidenceUrl = null,
+} = {}) {
+  return {
+    eventType: `${eventType || "health_plus_custody_event"}`.trim(),
+    timestamp: Date.now(),
+    actorType: `${actorType || "system"}`.trim(),
+    actorId,
+    actorName,
+    publicMessage: `${publicMessage || ""}`.trim(),
+    internalNote,
+    statusAfterEvent,
+    evidenceUrl,
+  };
+}
+
 function weightBandFor(weightKg) {
   const weight = Math.max(0, Number(weightKg || 0));
   return WEIGHT_BANDS.find((band) => {
@@ -315,6 +338,7 @@ module.exports = {
   PICKUP_STATUSES,
   healthPlusPlanContract,
   buildHealthPlusPlanFields,
+  buildCustodyEvent,
   calculateHealthPlusAmountPence,
   calculateAuthoritativeHealthPlusPricing,
   healthPlusPricingInputFromBooking,

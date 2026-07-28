@@ -8,6 +8,7 @@ const {
   normalizeSchedule,
   buildHealthPlusCheckoutParams,
   buildAdminStatusUpdate,
+  buildCustodyEvent,
 } = require("./health-plus-core");
 
 test("creates a Health+ checkout amount with the £11 minimum", () => {
@@ -114,6 +115,26 @@ test("normalizes recurring pickup schedules", () => {
   assert.equal(normalizeSchedule("every_2_weeks"), "every_2_weeks");
   assert.equal(normalizeSchedule("every_28_days"), "every_28_days");
   assert.equal(normalizeSchedule("random"), "one_off");
+});
+
+test("builds Health+ custody events for operational archive", () => {
+  const event = buildCustodyEvent({
+    eventType: "pickup_delivered",
+    actorType: "rider",
+    actorId: "rider_1",
+    actorName: "Ayo",
+    publicMessage: "Health+ pickup delivered.",
+    internalNote: "Delivery completed with custody evidence.",
+    statusAfterEvent: "delivered",
+    evidenceUrl: "https://example.com/proof.jpg",
+  });
+  assert.equal(event.eventType, "pickup_delivered");
+  assert.equal(event.actorType, "rider");
+  assert.equal(event.actorId, "rider_1");
+  assert.equal(event.actorName, "Ayo");
+  assert.equal(event.statusAfterEvent, "delivered");
+  assert.equal(event.evidenceUrl, "https://example.com/proof.jpg");
+  assert.equal(typeof event.timestamp, "number");
 });
 
 test("admin status updates reject unknown pickup statuses", () => {
