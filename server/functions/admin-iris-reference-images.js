@@ -11,6 +11,22 @@ function text(value) {
   return `${value || ""}`.trim();
 }
 
+function lower(value) {
+  return text(value).toLowerCase();
+}
+
+function requireIrisAdmin(context) {
+  const token = context.auth && context.auth.token ? context.auth.token : {};
+  const roles = Array.isArray(token.roles) ? token.roles.map(lower) : [];
+  const allowed = token.admin === true || token.superAdmin === true ||
+    token.super_admin === true ||
+    [lower(token.adminRole), lower(token.role), ...roles]
+        .some((role) => ["admin", "super_admin", "operations_admin"].includes(role));
+  if (!allowed) {
+    throw new functions.https.HttpsError("permission-denied", "IRIS administrator access is required.");
+  }
+}
+
 function identifiers(data) {
   const itemId = text(data && data.itemId);
   const storagePath = text(data && data.storagePath);
@@ -34,6 +50,7 @@ async function signedPreview(storagePath) {
 
 exports.getIrisReferenceImage = functions.https.onCall(async (data, context) => {
   requireAdmin(context, "IRIS administrator access is required.");
+  requireIrisAdmin(context);
   const {itemId} = identifiers(data);
   const snapshot = await getFirestore().collection("irisReferenceImages").doc(itemId).get();
   if (!snapshot.exists || snapshot.data().deleted === true) {
@@ -54,6 +71,7 @@ exports.getIrisReferenceImage = functions.https.onCall(async (data, context) => 
 
 exports.finalizeIrisReferenceImage = functions.https.onCall(async (data, context) => {
   const adminId = requireAdmin(context, "IRIS administrator access is required.");
+  requireIrisAdmin(context);
   const {itemId, storagePath} = identifiers(data);
   if (!storagePath) {
     throw new functions.https.HttpsError("invalid-argument", "storagePath is required.");
@@ -114,6 +132,7 @@ exports.finalizeIrisReferenceImage = functions.https.onCall(async (data, context
 
 exports.deleteIrisReferenceImage = functions.https.onCall(async (data, context) => {
   const adminId = requireAdmin(context, "IRIS administrator access is required.");
+  requireIrisAdmin(context);
   const {itemId} = identifiers(data);
   const db = getFirestore();
   const reference = db.collection("irisReferenceImages").doc(itemId);

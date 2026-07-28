@@ -578,15 +578,13 @@ class _AdminPhaseOneShellState extends State<AdminPhaseOneShell> {
     String? newStatus,
     String? note,
   }) async {
-    await _db.collection('riderAdminEvents').add({
+    await _functions.httpsCallable('adminRecordRiderEvent').call({
       'riderId': riderId,
-      'adminId': _user?.uid ?? 'unknown-admin',
-      'adminEmail': _user?.email,
       'action': action,
       'previousStatus': previousStatus,
       'newStatus': newStatus,
       'note': note,
-      'createdAt': FieldValue.serverTimestamp(),
+      'reason': note ?? 'Rider Admin event recorded',
     });
   }
 
@@ -1034,26 +1032,23 @@ class _AdminPhaseOneShellState extends State<AdminPhaseOneShell> {
     final id = _idFor(account);
     final duplicateId = _idFor(duplicate);
     try {
-      final record = AdminAccountTools.mergeReviewRecord(
+      AdminAccountTools.mergeReviewRecord(
         primaryAccountId: id,
         duplicateAccountId: duplicateId,
         requestedBy: _user?.email ?? _user?.uid ?? 'admin',
         createdAt: FieldValue.serverTimestamp(),
       );
-      await _db.collection('accountMergeReviews').add(record);
-      await _writeAudit(
-        AdminAuditEntry(
-          adminUserId: _user?.uid ?? 'unknown-admin',
-          actionType: 'account_merge_review_requested',
-          recordType: 'accountMergeReviews',
-          recordId: '$id:$duplicateId',
-          newValue: {'primaryAccountId': id, 'duplicateAccountId': duplicateId},
-          reason: 'Duplicate account merge review requested from Admin',
-        ),
-      );
+      await _functions.httpsCallable('adminRequestAccountMergeReview').call({
+        'primaryAccountId': id,
+        'duplicateAccountId': duplicateId,
+        'accountType': _selectedAccountType,
+        'reason': 'Duplicate account merge review requested from Admin',
+      });
       setState(() => _message = 'Merge review requested for $duplicateId.');
     } on ArgumentError catch (error) {
       setState(() => _message = error.message);
+    } on FirebaseFunctionsException catch (error) {
+      setState(() => _message = error.message ?? 'Merge review failed.');
     }
   }
 
@@ -1108,34 +1103,24 @@ class _AdminPhaseOneShellState extends State<AdminPhaseOneShell> {
     final id = _idFor(gift);
     if (id.isEmpty) return;
     try {
-      final patch = AdminGiftTools.workflowPatch(
+      AdminGiftTools.workflowPatch(
         status: status,
         updatedBy: _user?.email ?? _user?.uid ?? 'admin',
         updatedAt: FieldValue.serverTimestamp(),
         reason: 'Gift workflow action confirmed from Admin',
       );
-      await _db
-          .collection('${gift['_collection'] ?? 'giftOrders'}')
-          .doc(id)
-          .set(patch, SetOptions(merge: true));
-      await _writeAudit(
-        AdminAuditEntry(
-          adminUserId: _user?.uid ?? 'unknown-admin',
-          actionType: 'gift_workflow_$status',
-          recordType: '${gift['_collection'] ?? 'giftOrders'}',
-          recordId: id,
-          oldValue: {
-            'status': gift['status'],
-            'giftAdminStatus': gift['giftAdminStatus'],
-          },
-          newValue: patch,
-          reason: 'Gift workflow updated from Admin',
-        ),
-      );
+      await _functions.httpsCallable('adminUpdateGiftWorkflow').call({
+        'giftId': id,
+        'collection': '${gift['_collection'] ?? 'giftOrders'}',
+        'status': status,
+        'reason': 'Gift workflow action confirmed from Admin',
+      });
       setState(() => _message = 'Gift $id updated to $status.');
       await _loadAdminData();
     } on ArgumentError catch (error) {
       setState(() => _message = error.message);
+    } on FirebaseFunctionsException catch (error) {
+      setState(() => _message = error.message ?? 'Gift workflow failed.');
     }
   }
 
@@ -1149,30 +1134,19 @@ class _AdminPhaseOneShellState extends State<AdminPhaseOneShell> {
     }
     final id = _idFor(participant);
     if (id.isEmpty) return;
-    await _db.collection('giftCampaignParticipants').doc(id).set({
-      'matchStatus': status,
-      'adminReviewStatus': status,
-      if (status == 'assign_later')
-        'assignmentDeferredAt': FieldValue.serverTimestamp(),
-      if (status == 'assign_later') 'assignmentDeferredBy': _user?.uid,
-      if (status == 'rejected') 'suggestedParticipantId': FieldValue.delete(),
-      if (status == 'rejected') 'suggestedMatchScore': FieldValue.delete(),
-      if (status == 'rejected') 'suggestedMatchReason': FieldValue.delete(),
-      'updatedAt': FieldValue.serverTimestamp(),
-    }, SetOptions(merge: true));
-    await _writeAudit(
-      AdminAuditEntry(
-        adminUserId: _user?.uid ?? 'unknown-admin',
-        actionType: 'gift_campaign_participant_$status',
-        recordType: 'giftCampaignParticipants',
-        recordId: id,
-        oldValue: {'matchStatus': participant['matchStatus']},
-        newValue: {'matchStatus': status},
-        reason: 'Gift campaign participant reviewed from Admin',
-      ),
-    );
-    setState(() => _message = 'Gift campaign participant $id updated.');
-    await _loadAdminData();
+    try {
+      await _functions
+          .httpsCallable('adminUpdateGiftCampaignParticipant')
+          .call({
+        'participantId': id,
+        'status': status,
+        'reason': 'Gift campaign participant reviewed from Admin',
+      });
+      setState(() => _message = 'Gift campaign participant $id updated.');
+      await _loadAdminData();
+    } on FirebaseFunctionsException catch (error) {
+      setState(() => _message = error.message ?? 'Campaign action failed.');
+    }
   }
 
   Future<void> _setGiftBrandStatus(
@@ -1190,31 +1164,20 @@ class _AdminPhaseOneShellState extends State<AdminPhaseOneShell> {
       'Set ${brand['partnerName'] ?? brand['brandName'] ?? id} to $status?',
     );
     if (!confirmed) return;
-    final patch = AdminGiftTools.brandPartnerPatch(
-      status: status,
-      updatedBy: _user?.email ?? _user?.uid ?? 'admin',
-      updatedAt: FieldValue.serverTimestamp(),
-    );
-    await _db
-        .collection('giftBrands')
-        .doc(id)
-        .set(patch, SetOptions(merge: true));
-    await _writeAudit(
-      AdminAuditEntry(
-        adminUserId: _user?.uid ?? 'unknown-admin',
-        actionType: 'gift_brand_partner_$status',
-        recordType: 'giftBrands',
-        recordId: id,
-        oldValue: {
-          'status': brand['status'],
-          'partnershipStatus': brand['partnershipStatus'],
-        },
-        newValue: patch,
-        reason: 'Historical Gift Brand Partner workflow restored',
-      ),
-    );
-    setState(() => _message = 'Gift Brand Partner $id marked $status.');
-    await _loadAdminData();
+    try {
+      await _functions.httpsCallable('adminSaveGiftBrandPartner').call({
+        'brandId': id,
+        'partnerName': brand['partnerName'] ?? brand['brandName'] ?? id,
+        'brandName': brand['brandName'] ?? brand['partnerName'] ?? id,
+        'status': status,
+        'reason': 'Gift Brand Partner workflow action from Admin',
+      });
+      setState(() => _message = 'Gift Brand Partner $id marked $status.');
+      await _loadAdminData();
+    } on FirebaseFunctionsException catch (error) {
+      setState(
+          () => _message = error.message ?? 'Brand Partner action failed.');
+    }
   }
 
   Future<void> _editGiftBrandPartner(Map<String, dynamic>? brand) async {
@@ -1361,24 +1324,26 @@ class _AdminPhaseOneShellState extends State<AdminPhaseOneShell> {
     notes.dispose();
     if (confirmed != true || name.isEmpty) return;
     final id = _brandId(existing).isEmpty ? _slugId(name) : _brandId(existing);
-    await _db.collection('giftBrands').doc(id).set({
-      'partnerId': id,
-      if (brand == null) 'createdAt': FieldValue.serverTimestamp(),
-      if (brand == null) 'createdBy': _user?.email ?? _user?.uid,
-      ...patch,
-    }, SetOptions(merge: true));
-    await _writeAudit(
-      AdminAuditEntry(
-        adminUserId: _user?.uid ?? 'unknown-admin',
-        actionType: 'gift_brand_partner_saved',
-        recordType: 'giftBrands',
-        recordId: id,
-        newValue: patch,
-        reason: 'Historical Brand Partner profile saved',
-      ),
-    );
-    setState(() => _message = 'Gift Brand Partner $id saved.');
-    await _loadAdminData();
+    try {
+      await _functions.httpsCallable('adminSaveGiftBrandPartner').call({
+        'brandId': id,
+        'partnerName': patch['partnerName'],
+        'brandName': patch['brandName'],
+        'category': patch['category'],
+        'contactName': patch['contactName'],
+        'contactEmail': patch['contactEmail'],
+        'phone': patch['phone'],
+        'website': patch['website'],
+        'notes': patch['internalNotes'],
+        'approvedFor': patch['approvedFor'] ?? const [],
+        'status': status,
+        'reason': 'Brand Partner profile saved from Admin',
+      });
+      setState(() => _message = 'Gift Brand Partner $id saved.');
+      await _loadAdminData();
+    } on FirebaseFunctionsException catch (error) {
+      setState(() => _message = error.message ?? 'Brand Partner save failed.');
+    }
   }
 
   Future<void> _suggestGiftCampaignMatch(
@@ -1415,25 +1380,18 @@ class _AdminPhaseOneShellState extends State<AdminPhaseOneShell> {
       'Suggest ${best['displayName'] ?? best['userId'] ?? _idFor(best)} for ${participant['displayName'] ?? participant['userId'] ?? id}?',
     );
     if (!confirmed) return;
-    await _db.collection('giftCampaignParticipants').doc(id).set({
-      'suggestedParticipantId': _idFor(best),
-      'suggestedMatchScore': bestScore,
-      'suggestedMatchReason': bestReason,
-      'updatedAt': FieldValue.serverTimestamp(),
-      'updatedBy': _user?.email ?? _user?.uid,
-    }, SetOptions(merge: true));
-    await _writeAudit(
-      AdminAuditEntry(
-        adminUserId: _user?.uid ?? 'unknown-admin',
-        actionType: 'gift_campaign_match_suggested',
-        recordType: 'giftCampaignParticipants',
-        recordId: id,
-        newValue: {'suggestedParticipantId': _idFor(best), 'score': bestScore},
-        reason: bestReason,
-      ),
-    );
-    setState(() => _message = 'Campaign match suggestion saved.');
-    await _loadAdminData();
+    try {
+      await _functions.httpsCallable('adminSuggestGiftCampaignMatch').call({
+        'participantId': id,
+        'suggestedParticipantId': _idFor(best),
+        'suggestedMatchScore': bestScore,
+        'suggestedMatchReason': bestReason,
+      });
+      setState(() => _message = 'Campaign match suggestion saved.');
+      await _loadAdminData();
+    } on FirebaseFunctionsException catch (error) {
+      setState(() => _message = error.message ?? 'Match suggestion failed.');
+    }
   }
 
   Future<void> _approveGiftCampaignMatch(
@@ -1466,87 +1424,18 @@ class _AdminPhaseOneShellState extends State<AdminPhaseOneShell> {
       'Approve this match and create the historical draft Gift Requests?',
     );
     if (!confirmed) return;
-    final matchId = _db.collection('giftCampaignMatches').doc().id;
-    final batch = _db.batch();
-    final reason = '${participant['suggestedMatchReason'] ?? ''}';
-    final score = participant['suggestedMatchScore'] ?? 0;
-    for (final pair in [(participant, other), (other, participant)]) {
-      batch.set(
-        _db.collection('giftCampaignParticipants').doc(_idFor(pair.$1)),
-        {
-          'matchStatus': 'matched',
-          'adminReviewStatus': 'approved',
-          'matchedParticipantId': _idFor(pair.$2),
-          'matchId': matchId,
-          'matchScore': score,
-          'matchReason': reason,
-          'matchLockedAt': FieldValue.serverTimestamp(),
-          'matchApprovedBy': _user?.uid,
-          'updatedAt': FieldValue.serverTimestamp(),
-        },
-        SetOptions(merge: true),
-      );
-      final gift = _db.collection('giftRequests').doc();
-      batch.set(gift, {
-        'senderId': pair.$1['userId'],
-        'senderName': pair.$1['displayName'],
-        'recipientName': pair.$2['displayName'],
-        'giftMode': 'anonymous_gift',
-        'anonymousGiftType': 'campaign',
-        'senderRevealMode': 'anonymous_until_consent',
-        'senderRevealConsent': 'not_requested',
-        'recipientRevealRequestStatus': 'none',
-        'campaignId': participant['campaignId'],
-        'campaignName': participant['campaignName'] ?? 'Bringing London Closer',
-        'campaignTagline': participant['campaignTagline'] ??
-            '100 Londoners. 100 gifts. 100 stories.',
-        'campaignType': 'anonymous_gifting',
-        'matchId': matchId,
-        'status': 'draft',
-        'budgetStatus': 'pending_allocation',
-        'recipientContentConsent': 'pending',
-        'senderContentConsent': 'pending',
-        'allowCircumSocialUse': false,
-        'allowBrandTagging': false,
-        'allowReactionRecording': false,
-        'allowPublicPosting': false,
-        'allowAnonymousPosting': false,
-        'contentUsageScope': 'private',
-        'anonymousByDefault': true,
-        'createdAt': FieldValue.serverTimestamp(),
-        'updatedAt': FieldValue.serverTimestamp(),
+    try {
+      await _functions.httpsCallable('adminApproveGiftCampaignMatch').call({
+        'participantId': id,
+        'reason': 'Campaign Matching approval confirmed from Admin',
       });
+      setState(
+        () => _message = 'Campaign match approved and draft gifts created.',
+      );
+      await _loadAdminData();
+    } on FirebaseFunctionsException catch (error) {
+      setState(() => _message = error.message ?? 'Campaign approval failed.');
     }
-    batch.set(_db.collection('giftCampaignMatches').doc(matchId), {
-      'campaignId': participant['campaignId'],
-      'campaignName': participant['campaignName'],
-      'participantIds': [id, otherId],
-      'matchScore': score,
-      'matchReason': reason,
-      'status': 'approved',
-      'approvedBy': _user?.uid,
-      'approvedByEmail': _user?.email,
-      'createdAt': FieldValue.serverTimestamp(),
-      'updatedAt': FieldValue.serverTimestamp(),
-    });
-    await batch.commit();
-    await _writeAudit(
-      AdminAuditEntry(
-        adminUserId: _user?.uid ?? 'unknown-admin',
-        actionType: 'gift_campaign_match_approved',
-        recordType: 'giftCampaignMatches',
-        recordId: matchId,
-        newValue: {
-          'participantIds': [id, otherId],
-          'score': score,
-        },
-        reason: 'Historical Campaign Matching approval restored',
-      ),
-    );
-    setState(
-      () => _message = 'Campaign match approved and draft gifts created.',
-    );
-    await _loadAdminData();
   }
 
   Future<void> _bulkGiftCampaignAction(
@@ -1570,40 +1459,19 @@ class _AdminPhaseOneShellState extends State<AdminPhaseOneShell> {
       'Apply $action to ${selected.length} campaign participant records?',
     );
     if (!confirmed) return;
-    final batch = _db.batch();
-    for (final participant in selected) {
-      final id = _idFor(participant);
-      if (id.isEmpty) continue;
-      batch.set(
-        _db.collection('giftCampaignParticipants').doc(id),
-        {
-          if (action != 'exported') 'matchStatus': action,
-          if (action != 'exported') 'adminReviewStatus': action,
-          if (action == 'assign_later')
-            'assignmentDeferredAt': FieldValue.serverTimestamp(),
-          if (action == 'assign_later') 'assignmentDeferredBy': _user?.uid,
-          if (action == 'exported')
-            'lastExportedAt': FieldValue.serverTimestamp(),
-          if (action == 'exported')
-            'lastExportedBy': _user?.email ?? _user?.uid,
-          'updatedAt': FieldValue.serverTimestamp(),
-        },
-        SetOptions(merge: true),
-      );
+    try {
+      await _functions.httpsCallable('adminBulkGiftCampaignAction').call({
+        'participantIds':
+            selected.map(_idFor).where((id) => id.isNotEmpty).toList(),
+        'action': action,
+        'reason': 'Bulk Campaign Matching workflow confirmed from Admin',
+      });
+      setState(() => _message = 'Campaign matching bulk $action complete.');
+      await _loadAdminData();
+    } on FirebaseFunctionsException catch (error) {
+      setState(
+          () => _message = error.message ?? 'Bulk campaign action failed.');
     }
-    await batch.commit();
-    await _writeAudit(
-      AdminAuditEntry(
-        adminUserId: _user?.uid ?? 'unknown-admin',
-        actionType: 'gift_campaign_match_bulk_$action',
-        recordType: 'giftCampaignParticipants',
-        recordId: 'bulk',
-        newValue: {'count': selected.length, 'action': action},
-        reason: 'Historical bulk Campaign Matching workflow restored',
-      ),
-    );
-    setState(() => _message = 'Campaign matching bulk $action complete.');
-    await _loadAdminData();
   }
 
   Future<void> _editGiftRequestWorkflow(Map<String, dynamic> gift) async {
@@ -2061,61 +1929,37 @@ class _AdminPhaseOneShellState extends State<AdminPhaseOneShell> {
               '${patch['canonicalName'] ?? patch['objectName'] ?? id}-copy',
             )
           : id;
-      await _db.collection(collection).doc(targetId).set({
-        ...patch,
-        'adminRepositoryAction': action,
-        'repositoryReviewStatus': action,
-        if (action == 'duplicate_review') 'duplicatedFrom': id,
-        if (action == 'duplicate_review')
-          'createdAt': FieldValue.serverTimestamp(),
-        'updatedAt': FieldValue.serverTimestamp(),
-        'updatedBy': _user?.email ?? _user?.uid,
-      }, SetOptions(merge: true));
-      await _writeAudit(
-        AdminAuditEntry(
-          adminUserId: _user?.uid ?? 'unknown-admin',
-          actionType: 'iris_repository_$action',
-          recordType: collection,
-          recordId: targetId,
-          oldValue: record,
-          newValue: patch,
-          reason: 'Historical IRIS canonical editor restored',
-        ),
-      );
-      setState(() => _message = 'IRIS repository record $targetId saved.');
-      await _loadAdminData();
+      try {
+        await _functions.httpsCallable('adminUpdateIrisRepositoryRecord').call({
+          'recordId': id,
+          'collection': collection,
+          'action': action,
+          'patch': patch,
+          'reason': 'IRIS canonical editor confirmed from Admin',
+        });
+        setState(() => _message = 'IRIS repository record $targetId saved.');
+        await _loadAdminData();
+      } on FirebaseFunctionsException catch (error) {
+        setState(
+          () => _message = error.message ?? 'IRIS repository save failed.',
+        );
+      }
       return;
     }
-    final patch = <String, Object?>{
-      'adminRepositoryAction': action,
-      'repositoryReviewStatus': action,
-      'updatedAt': FieldValue.serverTimestamp(),
-      'updatedBy': _user?.email ?? _user?.uid,
-      if (action == 'deactivated') 'status': 'deactivated',
-      if (action == 'activated') 'status': 'active',
-      if (action == 'bulk_exported')
-        'lastExportedAt': FieldValue.serverTimestamp(),
-    };
-    await _db
-        .collection(collection)
-        .doc(id)
-        .set(patch, SetOptions(merge: true));
-    await _writeAudit(
-      AdminAuditEntry(
-        adminUserId: _user?.uid ?? 'unknown-admin',
-        actionType: 'iris_repository_$action',
-        recordType: collection,
-        recordId: id,
-        oldValue: {
-          'status': record['status'],
-          'repositoryReviewStatus': record['repositoryReviewStatus'],
-        },
-        newValue: patch,
-        reason: 'Historical IRIS repository governance action restored',
-      ),
-    );
-    setState(() => _message = 'IRIS repository record $id marked $action.');
-    await _loadAdminData();
+    try {
+      await _functions.httpsCallable('adminUpdateIrisRepositoryRecord').call({
+        'recordId': id,
+        'collection': collection,
+        'action': action,
+        'reason': 'IRIS repository governance action confirmed from Admin',
+      });
+      setState(() => _message = 'IRIS repository record $id marked $action.');
+      await _loadAdminData();
+    } on FirebaseFunctionsException catch (error) {
+      setState(
+        () => _message = error.message ?? 'IRIS repository action failed.',
+      );
+    }
   }
 
   Future<void> _updateIrisCandidateWorkflow(
@@ -2134,99 +1978,38 @@ class _AdminPhaseOneShellState extends State<AdminPhaseOneShell> {
         '${record['canonicalName'] ?? record['objectName'] ?? record['enteredText'] ?? record['category'] ?? id}',
       );
       if (canonicalId.isEmpty) return;
-      final batch = _db.batch();
-      batch.set(
-        _db.collection('irisCanonicalObjects').doc(canonicalId),
-        {
-          'canonicalId': canonicalId,
-          'objectName': record['objectName'] ??
-              record['enteredText'] ??
-              record['category'] ??
-              id,
-          'canonicalName': record['canonicalName'] ??
-              record['enteredText'] ??
-              record['objectName'] ??
-              id,
-          'category': record['category'] ?? record['irisCategory'],
-          'subcategory': record['subcategory'],
-          'knownWeight': record['knownWeight'] ??
-              record['estimatedWeight'] ??
-              record['irisEstimatedWeight'],
-          'weightBand': record['weightBand'],
-          'vehicleRecommendation':
-              record['vehicleRecommendation'] ?? record['recommendedVehicle'],
-          'handlingRequirements':
-              record['handlingRequirements'] ?? record['handlingNotes'],
-          'sourceCandidateId': id,
-          'status': 'active',
-          'repositoryReviewStatus': 'promoted',
-          'createdAt': FieldValue.serverTimestamp(),
-          'updatedAt': FieldValue.serverTimestamp(),
-          'updatedBy': _user?.email ?? _user?.uid,
-        },
-        SetOptions(merge: true),
-      );
-      batch.set(
-          _db.collection(collection).doc(id),
-          {
-            'learningStatus': 'promoted',
-            'reviewStatus': 'promoted',
-            'repositoryPromotionStatus': 'committed',
-            'promotedCanonicalId': canonicalId,
-            'reviewedAt': FieldValue.serverTimestamp(),
-            'reviewedBy': _user?.email ?? _user?.uid,
-            'updatedAt': FieldValue.serverTimestamp(),
-          },
-          SetOptions(merge: true));
-      await batch.commit();
-      await _writeAudit(
-        AdminAuditEntry(
-          adminUserId: _user?.uid ?? 'unknown-admin',
-          actionType: 'iris_candidate_promoted',
-          recordType: collection,
-          recordId: id,
-          newValue: {'promotedCanonicalId': canonicalId},
-          reason:
-              'Historical Candidate to Canonical Repository transition restored',
-        ),
-      );
-      setState(() => _message = 'IRIS candidate promoted to $canonicalId.');
-      await _loadAdminData();
+      try {
+        await _functions
+            .httpsCallable('adminUpdateIrisCandidateWorkflow')
+            .call({
+          'candidateId': id,
+          'collection': collection,
+          'action': action,
+          'reason': 'Candidate promoted to Canonical Repository from Admin',
+        });
+        setState(() => _message = 'IRIS candidate promoted to $canonicalId.');
+        await _loadAdminData();
+      } on FirebaseFunctionsException catch (error) {
+        setState(
+          () => _message = error.message ?? 'IRIS candidate promotion failed.',
+        );
+      }
       return;
     }
-    final patch = <String, Object?>{
-      'learningStatus': action,
-      'reviewStatus': action,
-      'reviewedAt': FieldValue.serverTimestamp(),
-      'reviewedBy': _user?.email ?? _user?.uid,
-      'updatedAt': FieldValue.serverTimestamp(),
-      if (action == 'promoted') 'repositoryPromotionStatus': 'pending_commit',
-      if (action == 'merge_existing') 'repositoryMergeStatus': 'pending',
-      if (action == 'save_alias') 'aliasReviewStatus': 'pending',
-      if (action == 'suspicious') 'riskReviewStatus': 'suspicious',
-      if (action == 'rejected') 'rejectedAt': FieldValue.serverTimestamp(),
-      if (action == 'approved') 'approvedAt': FieldValue.serverTimestamp(),
-    };
-    await _db
-        .collection(collection)
-        .doc(id)
-        .set(patch, SetOptions(merge: true));
-    await _writeAudit(
-      AdminAuditEntry(
-        adminUserId: _user?.uid ?? 'unknown-admin',
-        actionType: 'iris_candidate_$action',
-        recordType: collection,
-        recordId: id,
-        oldValue: {
-          'learningStatus': record['learningStatus'],
-          'reviewStatus': record['reviewStatus'],
-        },
-        newValue: patch,
-        reason: 'Historical IRIS candidate workflow restored',
-      ),
-    );
-    setState(() => _message = 'IRIS candidate $id marked $action.');
-    await _loadAdminData();
+    try {
+      await _functions.httpsCallable('adminUpdateIrisCandidateWorkflow').call({
+        'candidateId': id,
+        'collection': collection,
+        'action': action,
+        'reason': 'IRIS candidate workflow confirmed from Admin',
+      });
+      setState(() => _message = 'IRIS candidate $id marked $action.');
+      await _loadAdminData();
+    } on FirebaseFunctionsException catch (error) {
+      setState(
+        () => _message = error.message ?? 'IRIS candidate action failed.',
+      );
+    }
   }
 
   Future<void> _updateGiftWorkspace(
@@ -2240,42 +2023,19 @@ class _AdminPhaseOneShellState extends State<AdminPhaseOneShell> {
     final id = _idFor(gift);
     if (id.isEmpty) return;
     final collection = '${gift['_collection'] ?? 'giftRequests'}';
-    final patch = <String, Object?>{
-      'giftsTeamWorkspace.status': action,
-      'giftsTeamWorkspace.updatedAt': FieldValue.serverTimestamp(),
-      'giftsTeamWorkspace.updatedBy': _user?.email ?? _user?.uid,
-      'giftWorkspaceAuditTrail': FieldValue.arrayUnion([
-        {
-          'event': action,
-          'updatedBy': _user?.email ?? _user?.uid,
-          'updatedAt': DateTime.now().toIso8601String(),
-        },
-      ]),
-      if (action == 'ready_for_procurement')
-        'giftsTeamWorkspace.readiness.readyForProcurement': true,
-      if (action == 'ready_for_rider')
-        'giftsTeamWorkspace.readiness.readyForRider': true,
-      if (action == 'ready_for_scheduling')
-        'giftsTeamWorkspace.readiness.readyForScheduling': true,
-      if (action == 'ready_for_delivery')
-        'giftsTeamWorkspace.readiness.readyForDelivery': true,
-    };
-    await _db
-        .collection(collection)
-        .doc(id)
-        .set(patch, SetOptions(merge: true));
-    await _writeAudit(
-      AdminAuditEntry(
-        adminUserId: _user?.uid ?? 'unknown-admin',
-        actionType: 'gift_workspace_$action',
-        recordType: collection,
-        recordId: id,
-        newValue: {'workspaceStatus': action},
-        reason: 'Historical Gift Team workspace action restored',
-      ),
-    );
-    setState(() => _message = 'Gift workspace $id marked $action.');
-    await _loadAdminData();
+    try {
+      await _functions.httpsCallable('adminUpdateGiftWorkspace').call({
+        'giftId': id,
+        'collection': collection,
+        'action': action,
+        'reason': 'Gift Team workspace action confirmed from Admin',
+      });
+      setState(() => _message = 'Gift workspace $id marked $action.');
+      await _loadAdminData();
+    } on FirebaseFunctionsException catch (error) {
+      setState(
+          () => _message = error.message ?? 'Gift workspace action failed.');
+    }
   }
 
   Future<void> _updateGiftStoryMedia(
@@ -3066,29 +2826,19 @@ class _AdminPhaseOneShellState extends State<AdminPhaseOneShell> {
     final body = note.text.trim();
     note.dispose();
     if (confirmed != true || body.isEmpty) return;
-    await _db.collection('adminNotes').add({
-      'recordType': recordType,
-      'recordId': recordId,
-      'body': body,
-      'note': body,
-      'pinned': pinned,
-      'operatorId': _user?.uid,
-      'operatorEmail': _user?.email,
-      'createdAt': FieldValue.serverTimestamp(),
-      'updatedAt': FieldValue.serverTimestamp(),
-    });
-    await _writeAudit(
-      AdminAuditEntry(
-        adminUserId: _user?.uid ?? 'unknown-admin',
-        actionType: 'admin_note_added',
-        recordType: recordType,
-        recordId: recordId,
-        newValue: {'pinned': pinned},
-        reason: 'Internal Admin note added',
-      ),
-    );
-    setState(() => _message = 'Admin note added.');
-    await _loadAdminData();
+    try {
+      await _functions.httpsCallable('adminAddAdminNote').call({
+        'recordType': recordType,
+        'recordId': recordId,
+        'body': body,
+        'pinned': pinned,
+        'reason': 'Internal Admin note added',
+      });
+      setState(() => _message = 'Admin note added.');
+      await _loadAdminData();
+    } on FirebaseFunctionsException catch (error) {
+      setState(() => _message = error.message ?? 'Admin note failed.');
+    }
   }
 
   Future<bool> _confirmAdminAction(String title, String body) async {
@@ -3406,27 +3156,18 @@ class _AdminPhaseOneShellState extends State<AdminPhaseOneShell> {
     }
     final id = _idFor(report);
     if (id.isEmpty) return;
-    await _db.collection('messageReports').doc(id).set({
-      'status': status,
-      'reviewStatus': status,
-      'resolvedAt': FieldValue.serverTimestamp(),
-      'resolvedBy': _user?.uid ?? _user?.email,
-      'adminResolution': status,
-      'updatedAt': FieldValue.serverTimestamp(),
-    }, SetOptions(merge: true));
-    await _writeAudit(
-      AdminAuditEntry(
-        adminUserId: _user?.uid ?? 'unknown-admin',
-        actionType: 'message_report_$status',
-        recordType: 'messageReports',
-        recordId: id,
-        oldValue: {'status': report['status']},
-        newValue: {'status': status},
-        reason: 'Message report reviewed from Admin',
-      ),
-    );
-    setState(() => _message = 'Message report $id marked $status.');
-    await _loadAdminData();
+    try {
+      await _functions.httpsCallable('adminResolveMessageReport').call({
+        'reportId': id,
+        'status': status,
+        'reason': 'Message report reviewed from Admin',
+      });
+      setState(() => _message = 'Message report $id marked $status.');
+      await _loadAdminData();
+    } on FirebaseFunctionsException catch (error) {
+      setState(
+          () => _message = error.message ?? 'Message report update failed.');
+    }
   }
 
   void _openRiderProfile(Map<String, dynamic> rider) {

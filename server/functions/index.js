@@ -244,6 +244,31 @@ exports.adminUpdateHealthPlusProfile =
   adminOperationsAuthority.adminUpdateHealthPlusProfile;
 exports.adminUpdateFinanceWorkflow =
   adminOperationsAuthority.adminUpdateFinanceWorkflow;
+exports.adminRequestAccountMergeReview =
+  adminOperationsAuthority.adminRequestAccountMergeReview;
+exports.adminUpdateGiftWorkflow =
+  adminOperationsAuthority.adminUpdateGiftWorkflow;
+exports.adminUpdateGiftCampaignParticipant =
+  adminOperationsAuthority.adminUpdateGiftCampaignParticipant;
+exports.adminSaveGiftBrandPartner =
+  adminOperationsAuthority.adminSaveGiftBrandPartner;
+exports.adminSuggestGiftCampaignMatch =
+  adminOperationsAuthority.adminSuggestGiftCampaignMatch;
+exports.adminApproveGiftCampaignMatch =
+  adminOperationsAuthority.adminApproveGiftCampaignMatch;
+exports.adminBulkGiftCampaignAction =
+  adminOperationsAuthority.adminBulkGiftCampaignAction;
+exports.adminUpdateIrisRepositoryRecord =
+  adminOperationsAuthority.adminUpdateIrisRepositoryRecord;
+exports.adminUpdateIrisCandidateWorkflow =
+  adminOperationsAuthority.adminUpdateIrisCandidateWorkflow;
+exports.adminUpdateGiftWorkspace =
+  adminOperationsAuthority.adminUpdateGiftWorkspace;
+exports.adminAddAdminNote = adminOperationsAuthority.adminAddAdminNote;
+exports.adminRecordRiderEvent =
+  adminOperationsAuthority.adminRecordRiderEvent;
+exports.adminResolveMessageReport =
+  adminOperationsAuthority.adminResolveMessageReport;
 exports.resetRiderTestStripeAccount =
   riderConnect.resetRiderTestStripeAccount();
 exports.handleStripeConnectWebhook =

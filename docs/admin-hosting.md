@@ -1,19 +1,21 @@
 # Admin Hosting
 
-Circum has two Firebase Hosting targets in this repository.
+Circum has isolated Firebase Hosting targets in this repository.
 
 ## Hosting targets
 
-- `main`: customer-facing web app, intended for `circumuk.com`.
-- `admin`: internal operations app, intended for `admin.circumuk.com`.
+- `public`: public website, intended for `circumuk.com`.
+- `app`: Sender app web surface, hosted at `circum-app-2797c.web.app`.
+- `admin`: internal operations app, hosted at `circum-admin-2797c.web.app`.
 
-The admin panel is not exposed through the public customer app. The public build ignores `?app=admin` and only the admin hosting build enables the operations panel through the compile-time flag `CIRCUM_ADMIN_HOSTING=true`.
+The admin panel is not exposed through the public customer app. The Admin build uses `lib/main_admin_web.dart`, writes the `circum-admin-web` surface marker, and is deployed only through the isolated Admin pipeline.
 
 ## Firebase setup
 
 `.firebaserc` maps:
 
-- `main` to Firebase Hosting site `circum-app-2797c`
+- `public` to Firebase Hosting site `circum-2797c`
+- `app` to Firebase Hosting site `circum-app-2797c`
 - `admin` to Firebase Hosting site `circum-admin-2797c`
 
 If the admin site does not exist yet, create it once:
@@ -48,6 +50,8 @@ Broad multi-target web deployment is intentionally unavailable. Production
 hosting deployments must run through the isolated deployment pipeline described
 in `docs/isolated-deployment-pipeline.md`.
 
+The Admin build requires `CIRCUM_WEB_RECAPTCHA_ENTERPRISE_SITE_KEY` for App Check.
+
 ## Admin access
 
 The admin panel uses Firebase Auth. There is no public admin signup. Access is granted only when one of these is present:
@@ -78,7 +82,7 @@ Normal customers, senders, and drivers can sign in but are blocked from the pane
 - finance/payment collections
 - driver approval and performance management collections
 
-Important admin actions write an `adminAuditLogs` record from the operations panel.
+Important admin actions are routed through callable backend authority where available and write an `adminAuditLogs` record. Simple recovery metadata that still uses Firestore rules must remain Admin-only and audited until a dedicated callable is added.
 
 ## Testing checklist
 

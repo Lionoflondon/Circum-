@@ -687,7 +687,7 @@ void main() {
           source,
           contains("httpsCallable('resetRiderTestStripeAccount')"),
         );
-        expect(source, contains("collection('riderAdminEvents')"));
+        expect(source, contains("httpsCallable('adminRecordRiderEvent')"));
         expect(source, contains("collection('recurringPickupSchedules')"));
         expect(source, contains("collection('healthPlusCustodyArchive')"));
         expect(source, contains("collection('giftRequests')"));
@@ -908,6 +908,9 @@ void main() {
       final source = File(
         'lib/app/admin/admin_phase1_shell.dart',
       ).readAsStringSync();
+      final backend = File(
+        'server/functions/admin-operations-authority.js',
+      ).readAsStringSync();
 
       expect(source, contains('New Canonical Item'));
       expect(
@@ -917,15 +920,16 @@ void main() {
       expect(source, contains('Alias Manager'));
       expect(source, contains('Category Management'));
       expect(source, contains('Imports and Repository Settings'));
+      expect(source, contains("httpsCallable('adminUpdateIrisRepositoryRecord')"));
       expect(
         source,
-        contains("collection('irisCanonicalObjects').doc(canonicalId)"),
+        isNot(contains("collection('irisCanonicalObjects').doc(canonicalId)")),
       );
-      expect(source, contains("'repositoryPromotionStatus': 'committed'"));
+      expect(backend, contains('repositoryPromotionStatus: "committed"'));
       expect(
-        source,
+        backend,
         contains(
-          'Historical Candidate to Canonical Repository transition restored',
+          'Candidate promoted to Canonical Repository from Admin',
         ),
       );
 
@@ -938,12 +942,15 @@ void main() {
       expect(source, contains('Future<void> _suggestGiftCampaignMatch'));
       expect(source, contains('Future<void> _approveGiftCampaignMatch'));
       expect(source, contains('Future<void> _bulkGiftCampaignAction'));
+      expect(source, contains("httpsCallable('adminSuggestGiftCampaignMatch')"));
+      expect(source, contains("httpsCallable('adminApproveGiftCampaignMatch')"));
+      expect(source, contains("httpsCallable('adminBulkGiftCampaignAction')"));
       expect(
         source,
-        contains("collection('giftCampaignMatches').doc(matchId)"),
+        isNot(contains("collection('giftCampaignMatches').doc(matchId)")),
       );
-      expect(source, contains("collection('giftRequests').doc()"));
-      expect(source, contains('gift_campaign_match_approved'));
+      expect(source, isNot(contains("collection('giftRequests').doc()")));
+      expect(backend, contains('gift_campaign_match_approved'));
       expect(source, contains('Export selected'));
 
       expect(source, contains('Future<void> _editGiftRequestWorkflow'));
