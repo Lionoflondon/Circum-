@@ -8,12 +8,23 @@ source "$ROOT_DIR/scripts/firebase_tools.sh"
 OUTPUT_DIR="$ROOT_DIR/build/sender_app_web"
 SYMBOLS_ROOT="$ROOT_DIR/build/release_symbols/sender_app_web"
 WEB_RECAPTCHA_SITE_KEY="${CIRCUM_WEB_RECAPTCHA_ENTERPRISE_SITE_KEY:-}"
+WEB_GOOGLE_MAPS_API_KEY="${CIRCUM_WEB_GOOGLE_MAPS_API_KEY:-}"
 BUILD_HASH="$(git rev-parse HEAD)"
 RELEASE_TAG="${CIRCUM_RELEASE_TAG:-$(git describe --tags --exact-match HEAD 2>/dev/null || git describe --tags --always --dirty)}"
 DIAGNOSTICS_PANEL="${CIRCUM_WEB_DIAGNOSTICS_PANEL:-false}"
+EXTRA_FLUTTER_BUILD_ARGS=()
+if [[ -n "${CIRCUM_SENDER_WEB_EXTRA_BUILD_ARGS:-}" ]]; then
+  # shellcheck disable=SC2206
+  EXTRA_FLUTTER_BUILD_ARGS=(${CIRCUM_SENDER_WEB_EXTRA_BUILD_ARGS})
+fi
 
 if [[ -z "$WEB_RECAPTCHA_SITE_KEY" ]]; then
   echo "Missing CIRCUM_WEB_RECAPTCHA_ENTERPRISE_SITE_KEY for Sender App Web App Check." >&2
+  exit 1
+fi
+
+if [[ -z "$WEB_GOOGLE_MAPS_API_KEY" ]]; then
+  echo "Missing CIRCUM_WEB_GOOGLE_MAPS_API_KEY for Sender App Web Google Maps." >&2
   exit 1
 fi
 
@@ -31,12 +42,24 @@ rm -rf "$OUTPUT_DIR"
   --release \
   --source-maps \
   --no-wasm-dry-run \
+  ${EXTRA_FLUTTER_BUILD_ARGS+"${EXTRA_FLUTTER_BUILD_ARGS[@]}"} \
   --dart-define=CIRCUM_WEB_RECAPTCHA_ENTERPRISE_SITE_KEY="$WEB_RECAPTCHA_SITE_KEY" \
   --dart-define=CIRCUM_BUILD_HASH="$BUILD_HASH" \
   --dart-define=CIRCUM_RELEASE_TAG="$RELEASE_TAG" \
   --dart-define=CIRCUM_WEB_DIAGNOSTICS_PANEL="$DIAGNOSTICS_PANEL" \
   --target=lib/app/sender_mobile/sender_mobile_preview.dart \
   --output="$OUTPUT_DIR"
+
+node - "$OUTPUT_DIR/index.html" "$WEB_GOOGLE_MAPS_API_KEY" <<'NODE'
+const fs = require('fs');
+const [indexPath, apiKey] = process.argv.slice(2);
+let html = fs.readFileSync(indexPath, 'utf8');
+const mapsScript = `<script src="https://maps.googleapis.com/maps/api/js?key=${encodeURIComponent(apiKey)}"></script>`;
+if (!html.includes('maps.googleapis.com/maps/api/js')) {
+  html = html.replace('</head>', `  ${mapsScript}\n</head>`);
+}
+fs.writeFileSync(indexPath, html);
+NODE
 
 SYMBOLS_DIR="$SYMBOLS_ROOT/$BUILD_HASH"
 rm -rf "$SYMBOLS_DIR"
