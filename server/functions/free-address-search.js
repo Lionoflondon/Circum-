@@ -6,14 +6,14 @@ const {
 } = require("./free-address-core");
 
 function googlePlacesApiKey() {
-  return `${process.env.GOOGLE_PLACES_API_KEY || process.env.CIRCUM_GOOGLE_PLACES_API_KEY || ""}`.trim();
+  const config = functions.config() || {};
+  return `${process.env.GOOGLE_PLACES_API_KEY ||
+    process.env.CIRCUM_GOOGLE_PLACES_API_KEY ||
+    config.google && config.google.places_api_key ||
+    ""}`.trim();
 }
 
-const googlePlacesRuntime = functions.runWith({
-  secrets: ["GOOGLE_PLACES_API_KEY"],
-});
-
-exports.searchFreeUkAddresses = googlePlacesRuntime.https.onCall(async (data) => {
+exports.searchFreeUkAddresses = functions.https.onCall(async (data) => {
   const query = `${data && data.query || ""}`.trim();
   const sessionToken = `${data && data.sessionToken || ""}`.trim();
   if (query.length < 3) {
@@ -34,7 +34,7 @@ exports.searchFreeUkAddresses = googlePlacesRuntime.https.onCall(async (data) =>
   }
 });
 
-exports.resolveUkAddressPlace = googlePlacesRuntime.https.onCall(async (data) => {
+exports.resolveUkAddressPlace = functions.https.onCall(async (data) => {
   const placeId = `${data && data.placeId || ""}`.trim();
   const sessionToken = `${data && data.sessionToken || ""}`.trim();
   if (!placeId) {

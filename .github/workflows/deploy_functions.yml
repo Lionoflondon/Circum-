@@ -22,7 +22,7 @@ jobs:
         with:
           credentials_json: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_CIRCUM_2797C }}
       - run: npm install -g firebase-tools
-      - run: printf "%s" "$GOOGLE_PLACES_API_KEY" | firebase functions:secrets:set GOOGLE_PLACES_API_KEY --project circum-2797c --data-file -
+      - run: firebase functions:config:set google.places_api_key="$GOOGLE_PLACES_API_KEY" --project circum-2797c
         env:
           GOOGLE_PLACES_API_KEY: ${{ secrets.GOOGLE_PLACES_API_KEY }}
       - run: firebase deploy --only functions --project circum-2797c
