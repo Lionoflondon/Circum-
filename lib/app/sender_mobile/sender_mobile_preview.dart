@@ -243,8 +243,8 @@ class SenderMobilePreviewApp extends StatelessWidget {
     final initialIndex =
         int.tryParse(Uri.base.queryParameters['tab'] ?? '')?.clamp(0, 4) ?? 0;
     final home = SenderMobileHome(
-      initialAuthenticated: true,
-      previewAuthEnabled: false,
+      initialAuthenticated: false,
+      previewAuthEnabled: true,
       initialIndex: initialIndex,
       initialRouteName: initialRouteName,
     );

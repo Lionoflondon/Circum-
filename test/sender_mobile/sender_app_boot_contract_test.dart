@@ -12,14 +12,21 @@ void main() {
     expect(index, isNot(contains('flt-glass-pane')));
   });
 
-  test('Sender app boots into the production app shell', () {
+  test('Sender app cannot enter app shell without Firebase Auth authority', () {
     final preview = File('lib/app/sender_mobile/sender_mobile_preview.dart')
         .readAsStringSync();
+    final app = File('lib/app.dart').readAsStringSync();
+    final appNav =
+        File('lib/app/bottom_nav/view/app_nav.dart').readAsStringSync();
 
-    expect(preview, contains('initialAuthenticated: true'));
-    expect(preview, contains('previewAuthEnabled: false'));
-    expect(preview, isNot(contains('initialAuthenticated: false')));
-    expect(preview, isNot(contains('previewAuthEnabled: true')));
+    expect(preview, contains('initialAuthenticated: false'));
+    expect(preview, contains('previewAuthEnabled: true'));
+    expect(preview, isNot(contains('initialAuthenticated: true')));
+    expect(preview, isNot(contains('previewAuthEnabled: false')));
+    expect(app, isNot(contains('initialAuthenticated: true')));
+    expect(app, contains('SenderMobileHome(previewAuthEnabled: true)'));
+    expect(appNav, isNot(contains('initialAuthenticated: true')));
+    expect(appNav, contains('SenderMobileHome(previewAuthEnabled: true)'));
   });
 
   test('Sender session restore never signs out existing users by account age',
