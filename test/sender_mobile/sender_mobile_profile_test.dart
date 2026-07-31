@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:io';
 
 import 'package:circum/app/sender_mobile/sender_mobile_profile.dart';
+import 'package:circum/app/sender_mobile/sender_profile_authority.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -65,7 +66,7 @@ class _FailingProfileRepository implements SenderMobileProfileRepository {
 
   @override
   Future<SenderMobileProfileData> load() {
-    throw SenderMobileProfileException(
+    throw SenderProfileAuthorityException(
       code: SenderProfileDiagnosticCode.authUnavailable,
       message: 'Sign in again to load your profile.',
       phase: 'test.auth',
@@ -192,7 +193,7 @@ void main() {
   });
 
   test('Sender profile diagnostics expose precise internal failure codes', () {
-    final source = File('lib/app/sender_mobile/sender_mobile_profile.dart')
+    final source = File('lib/app/sender_mobile/sender_profile_authority.dart')
         .readAsStringSync();
 
     expect(source, contains('PROFILE_NOT_FOUND'));
@@ -201,9 +202,26 @@ void main() {
     expect(source, contains('PROFILE_SCHEMA_MISMATCH'));
     expect(source, contains('PROFILE_STARTUP_RACE'));
     expect(source, contains('PROFILE_REPOSITORY_FAILURE'));
-    expect(source, contains("httpsCallable('ensureSenderAccount')"));
-    expect(source, contains('auth'));
-    expect(source, contains('authStateChanges()'));
+    expect(source, contains('SenderProfileAuthority'));
     expect(source, isNot(contains("'Profile unavailable'")));
+  });
+
+  test('Sender profile authority is the only users/{uid} reader in Sender tabs',
+      () {
+    final root = Directory('lib/app/sender_mobile');
+    final offenders = <String>[];
+    for (final file in root.listSync(recursive: true).whereType<File>()) {
+      if (!file.path.endsWith('.dart')) continue;
+      if (file.path.endsWith('sender_profile_authority.dart')) continue;
+      final source = file.readAsStringSync();
+      if (source.contains("collection('users').doc(user.uid)") ||
+          source.contains('collection("users").doc(user.uid)') ||
+          source.contains("collection('users').doc(uid)") ||
+          source.contains('collection("users").doc(uid)')) {
+        offenders.add(file.path);
+      }
+    }
+
+    expect(offenders, isEmpty);
   });
 }
