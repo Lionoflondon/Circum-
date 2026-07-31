@@ -69,7 +69,14 @@
   <script>
     window.addEventListener('load', function(ev) {
       window.setTimeout(function() {
-        if (document.querySelector('flt-scene-host') || document.querySelector('canvas')) {
+        var hasFlutterScene = document.querySelector('flt-scene-host') ||
+          document.querySelector('canvas') ||
+          Array.from(document.getElementsByTagName('flt-' + 'glass-pane')).some(function(pane) {
+            return pane.shadowRoot &&
+              (pane.shadowRoot.querySelector('flt-scene-host') ||
+                pane.shadowRoot.querySelector('canvas'));
+          });
+        if (hasFlutterScene) {
           return;
         }
         var fallback = document.createElement('div');

@@ -54,6 +54,10 @@ Future<void> _startSenderWeb() async {
   WidgetsFlutterBinding.ensureInitialized();
   diagnostics.complete('Flutter initialization');
 
+  diagnostics.start('runApp(boot)');
+  _runSenderApp(const _SenderWebStartupLoading());
+  diagnostics.complete('runApp(boot)');
+
   _stripeReady = await _runOptionalStartupStep(
     'Stripe initialization',
     _configureStripe,
@@ -91,7 +95,6 @@ Future<void> _startSenderWeb() async {
         StackTrace.current,
       );
       _refreshRuntimeHealth();
-      _runSenderApp(const _SenderWebStartupRecovery());
       return;
     }
     _appCheckState = 'Ready';
@@ -133,6 +136,7 @@ Future<void> _startSenderWeb() async {
     _firebaseInitialized = true;
     _refreshRuntimeHealth();
   }
+
   diagnostics.start('runApp()');
   _runSenderApp(const SenderMobilePreviewApp());
   diagnostics.complete('runApp()');
@@ -198,7 +202,6 @@ Future<T?> _runRequiredStartupValue<T>(
 }
 
 void _runSenderStartupRecovery() {
-  if (_senderAppStarted) return;
   _runSenderApp(const _SenderWebStartupRecovery());
 }
 
@@ -298,6 +301,60 @@ class _PreviewSenderAccessibilityRepository
   @override
   Stream<SenderAccessibilitySettings> watch() =>
       Stream.value(const SenderAccessibilitySettings());
+}
+
+class _SenderWebStartupLoading extends StatelessWidget {
+  const _SenderWebStartupLoading();
+
+  @override
+  Widget build(BuildContext context) {
+    return MaterialApp(
+      debugShowCheckedModeBanner: false,
+      title: 'Circum Sender',
+      home: Scaffold(
+        backgroundColor: const Color(0xFF07090F),
+        body: SafeArea(
+          child: Center(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Container(
+                  width: 42,
+                  height: 42,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    border: Border.all(color: const Color(0xFF60A5FA)),
+                    boxShadow: const [
+                      BoxShadow(
+                        color: Color(0x663B82F6),
+                        blurRadius: 28,
+                      ),
+                    ],
+                  ),
+                  child: const Padding(
+                    padding: EdgeInsets.all(10),
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2,
+                      color: Color(0xFF93C5FD),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 18),
+                const Text(
+                  'Starting Circum',
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontSize: 16,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
 }
 
 class _SenderWebStartupRecovery extends StatelessWidget {

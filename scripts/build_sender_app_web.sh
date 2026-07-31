@@ -48,6 +48,7 @@ rm -rf "$OUTPUT_DIR"
   --release \
   --source-maps \
   --no-wasm-dry-run \
+  --no-web-resources-cdn \
   ${EXTRA_FLUTTER_BUILD_ARGS+"${EXTRA_FLUTTER_BUILD_ARGS[@]}"} \
   --dart-define=CIRCUM_WEB_RECAPTCHA_ENTERPRISE_SITE_KEY="$WEB_RECAPTCHA_SITE_KEY" \
   --dart-define=STRIPE_PUBLISHABLE_KEY="$STRIPE_PUBLISHABLE_KEY_VALUE" \
