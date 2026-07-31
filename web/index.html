@@ -50,10 +50,6 @@
       });
     }
   </script>
-  <!-- This script adds the flutter initialization JS code -->
-  <script src="/flutter.js" defer=""></script>
-  
-  
   <meta content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" name="viewport">
   
   
@@ -72,7 +68,7 @@
 <body>
   <script>
     window.addEventListener('load', function(ev) {
-      var bootFallback = window.setTimeout(function() {
+      window.setTimeout(function() {
         if (document.querySelector('flt-scene-host') || document.querySelector('canvas')) {
           return;
         }
@@ -82,19 +78,9 @@
         fallback.textContent = 'Circum is taking longer than expected to start. Please refresh the page.';
         document.body.appendChild(fallback);
       }, 15000);
-      _flutter.loader.load({
-        onEntrypointLoaded: function(engineInitializer) {
-          engineInitializer.initializeEngine().then(function(appRunner) {
-            window.clearTimeout(bootFallback);
-            appRunner.runApp();
-          });
-        }
-      }).catch(function(error) {
-        window.clearTimeout(bootFallback);
-        throw error;
-      });
     });
   </script>
+  <script src="flutter_bootstrap.js" async></script>
 
 
 </body></html>
