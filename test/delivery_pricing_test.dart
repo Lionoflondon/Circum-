@@ -1,4 +1,10 @@
+import 'dart:convert';
+import 'dart:io';
+
 import 'package:circum/pricing/delivery_pricing.dart';
+import 'package:circum/pricing/pricing_constants.dart';
+import 'package:circum/website/shared/pricing/website_pricing_constants.dart'
+    as website;
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
@@ -85,18 +91,11 @@ void main() {
         ),
       );
 
-      expect(quote.specialConditions, 14);
-      expect(quote.total, 22);
+      expect(quote.specialConditions, 9);
+      expect(quote.total, 17);
     });
 
     test('express price is always greater than standard', () {
-      final economy = DeliveryPricing.calculate(
-        const DeliveryPricingInput(
-          distanceMiles: 4.8,
-          weightKg: 2,
-          economy: true,
-        ),
-      );
       final standard = DeliveryPricing.calculate(
         const DeliveryPricingInput(distanceMiles: 4.8, weightKg: 2),
       );
@@ -111,11 +110,8 @@ void main() {
         const DeliveryPricingInput(distanceMiles: 4.8, weightKg: 2),
       );
 
-      expect(economy.total, lessThan(standard.total));
       expect(express.total, greaterThan(standard.total));
-      expect(prices['economyPrice']!, lessThan(prices['standardPrice']!));
       expect(prices['expressPrice']!, greaterThan(prices['standardPrice']!));
-      expect(economy.serviceLevel, 'economy');
       expect(express.serviceLevel, 'express');
       expect(standard.serviceLevel, 'standard');
       expect(express.serviceLevelSurcharge, greaterThan(0));
@@ -126,9 +122,71 @@ void main() {
         DeliveryPricing.matchingPriorityRank('express'),
         lessThan(DeliveryPricing.matchingPriorityRank('standard')),
       );
+    });
+
+    test('matches canonical backend delivery policy constants', () {
+      final policy = jsonDecode(
+        File('server/functions/circum-delivery-policy.json').readAsStringSync(),
+      ) as Map<String, dynamic>;
+      final pricing = policy['pricing'] as Map<String, dynamic>;
+      final vehicleSurcharges =
+          pricing['vehicleSurchargesGbp'] as Map<String, dynamic>;
+      final express = pricing['express'] as Map<String, dynamic>;
+      final vehiclePolicy = policy['vehiclePolicy'] as Map<String, dynamic>;
+
+      expect(PricingConstants.baseFareGbp, pricing['baseDeliveryGbp']);
       expect(
-        DeliveryPricing.matchingPriorityRank('standard'),
-        lessThan(DeliveryPricing.matchingPriorityRank('economy')),
+        PricingConstants.additionalFarePerMileGbp,
+        pricing['distancePerMileGbp'],
+      );
+      expect(
+        PricingConstants.includedBaseMiles,
+        pricing['includedBaseMiles'],
+      );
+      expect(
+        PricingConstants.shortTripFareFloorMiles,
+        pricing['shortTripFareFloorMiles'],
+      );
+      expect(
+        PricingConstants.longDistanceThresholdMiles,
+        pricing['longDistanceThresholdMiles'],
+      );
+      expect(
+        PricingConstants.longDistanceMileageMultiplier,
+        pricing['longDistanceMileageMultiplier'],
+      );
+      expect(
+        PricingConstants.fixedExpressSurchargeGbp,
+        express['minimumSurchargeGbp'],
+      );
+      expect(
+        PricingConstants.expressMultiplier,
+        1 + (express['standardSubtotalPercent'] as num),
+      );
+      expect(
+        PricingConstants.twoPersonThresholdKg,
+        vehiclePolicy['vanRequiredMinKg'],
+      );
+      expect(
+        PricingConstants.vehicleSurchargesGbp['motorbike'],
+        vehicleSurcharges['motorbike'],
+      );
+      expect(
+        PricingConstants.vehicleSurchargesGbp['car'],
+        vehicleSurcharges['car'],
+      );
+      expect(
+        PricingConstants.vehicleSurchargesGbp['van'],
+        vehicleSurcharges['van'],
+      );
+
+      expect(
+        website.PricingConstants.fixedExpressSurchargeGbp,
+        PricingConstants.fixedExpressSurchargeGbp,
+      );
+      expect(
+        website.PricingConstants.vehicleSurchargesGbp,
+        PricingConstants.vehicleSurchargesGbp,
       );
     });
 
@@ -224,7 +282,7 @@ void main() {
       expect(quote.weightCategory, 'Heavy Parcel');
       expect(quote.weightSurcharge, 7);
       expect(DeliveryPricing.recommendedVehicleForWeight(20), 'Van');
-      expect(DeliveryPricing.vehicleCanCarryWeight('Bike', 20), isFalse);
+      expect(DeliveryPricing.vehicleCanCarryWeight('Motorbike', 20), isFalse);
       expect(DeliveryPricing.vehicleCanCarryWeight('Van', 20), isTrue);
     });
 
@@ -342,10 +400,10 @@ void main() {
 
       expect(classification.finalWeightKg, 50);
       expect(classification.finalWeightBand, 'Extra Heavy');
-      expect(classification.vehicleType, isNot('Bike'));
+      expect(classification.vehicleType, isNot('Motorbike'));
       expect(classification.vehicleType, 'Van');
       expect(quote.weightCategory, isNot('Small Parcel'));
-      expect(DeliveryPricing.vehicleCanCarryWeight('Bike', 50), isFalse);
+      expect(DeliveryPricing.vehicleCanCarryWeight('Motorbike', 50), isFalse);
       expect(DeliveryPricing.vehicleCanCarryWeight('Van', 50), isTrue);
     });
 
@@ -357,7 +415,7 @@ void main() {
 
       expect(classification.finalWeightBand, 'Heavy Parcel');
       expect(classification.vehicleType, 'Van');
-      expect(DeliveryPricing.vehicleCanCarryWeight('Bike', 12), isFalse);
+      expect(DeliveryPricing.vehicleCanCarryWeight('Motorbike', 12), isFalse);
     });
 
     test('small envelope remains small and bike compatible', () {
@@ -368,8 +426,8 @@ void main() {
 
       expect(classification.finalWeightKg, 1);
       expect(classification.finalWeightBand, 'Small Parcel');
-      expect(classification.vehicleType, 'Bike');
-      expect(DeliveryPricing.vehicleCanCarryWeight('Bike', 1), isTrue);
+      expect(classification.vehicleType, 'Motorbike');
+      expect(DeliveryPricing.vehicleCanCarryWeight('Motorbike', 1), isTrue);
     });
 
     test('phone remains small and bike compatible when weight is light', () {
@@ -382,7 +440,7 @@ void main() {
 
       expect(classification.finalWeightKg, closeTo(0.178, 0.001));
       expect(classification.finalWeightBand, 'Small Parcel');
-      expect(classification.vehicleType, 'Bike');
+      expect(classification.vehicleType, 'Motorbike');
       expect(classification.requiresManualReview, isFalse);
     });
 
@@ -394,7 +452,7 @@ void main() {
 
       expect(classification.finalWeightBand, 'Heavy Parcel');
       expect(classification.vehicleType, 'Van');
-      expect(DeliveryPricing.vehicleCanCarryWeight('Bike', 12), isFalse);
+      expect(DeliveryPricing.vehicleCanCarryWeight('Motorbike', 12), isFalse);
     });
 
     test('vehicle suitability considers dimensions and item type', () {
@@ -562,29 +620,30 @@ void main() {
         description: 'Wardrobe',
       );
 
-      expect(small.recommendedVehicle, 'Bike');
-      expect(small.allowedVehicles, containsAll(['Bike', 'Car', 'Van']));
+      expect(small.recommendedVehicle, 'Motorbike');
+      expect(small.allowedVehicles, containsAll(['Motorbike', 'Car', 'Van']));
       expect(suitcase.recommendedVehicle, 'Car');
-      expect(suitcase.allows('Bike'), isFalse);
+      expect(suitcase.allows('Motorbike'), isFalse);
       expect(suitcase.allows('Car'), isTrue);
       expect(suitcase.allows('Van'), isTrue);
       expect(wardrobe.recommendedVehicle, 'Van');
       expect(wardrobe.allowedVehicles, ['Van']);
       expect(DeliveryPricing.vehicleWasUpgraded('Van', 'Car'), isTrue);
-      expect(DeliveryPricing.vehicleWasUpgraded('Bike', 'Car'), isFalse);
-      expect(DeliveryPricing.vehicleMeetsMinimum('E-bike', 'Bike'), isTrue);
-      expect(DeliveryPricing.vehicleDisabledReason('Bike', small), isNull);
+      expect(DeliveryPricing.vehicleWasUpgraded('Motorbike', 'Car'), isFalse);
       expect(
-        DeliveryPricing.vehicleDisabledReason('Bike', suitcase),
+          DeliveryPricing.vehicleMeetsMinimum('E-bike', 'Motorbike'), isTrue);
+      expect(DeliveryPricing.vehicleDisabledReason('Motorbike', small), isNull);
+      expect(
+        DeliveryPricing.vehicleDisabledReason('Motorbike', suitcase),
         'Too small for this parcel',
       );
       expect(
-        DeliveryPricing.vehicleDisabledReason('Bike', wardrobe),
+        DeliveryPricing.vehicleDisabledReason('Motorbike', wardrobe),
         'Too small for this parcel',
       );
     });
 
-    test('document deliveries always retain Bike eligibility', () {
+    test('document deliveries always retain Motorbike eligibility', () {
       for (final description in [
         'Legal documents',
         'Passport',
@@ -596,24 +655,26 @@ void main() {
           weightKg: 1,
           description: description,
           itemCategory: 'Documents',
-          repositoryVehicleSuitability: 'Bike',
+          repositoryVehicleSuitability: 'Motorbike',
           fragile: true,
         );
-        expect(suitability.recommendedVehicle, 'Bike');
+        expect(suitability.recommendedVehicle, 'Motorbike');
+        expect(suitability.allowedVehicles,
+            containsAll(['Motorbike', 'Car', 'Van']));
         expect(
-            suitability.allowedVehicles, containsAll(['Bike', 'Car', 'Van']));
-        expect(DeliveryPricing.vehicleCanCarryDelivery('Bike', suitability),
+            DeliveryPricing.vehicleCanCarryDelivery('Motorbike', suitability),
             isTrue);
       }
     });
 
-    test('small electronics and courier-safe parcels up to 10kg can use Bike',
+    test(
+        'small electronics and courier-safe parcels up to 10kg can use Motorbike',
         () {
       final phone = DeliveryPricing.resolveVehicleSuitability(
         weightKg: 0.8,
         description: 'Small phone package',
         itemCategory: 'Electronics',
-        repositoryVehicleSuitability: 'Bike',
+        repositoryVehicleSuitability: 'Motorbike',
         fragile: false,
       );
       final medium = DeliveryPricing.resolveVehicleSuitability(
@@ -621,9 +682,9 @@ void main() {
         description: 'Medium parcel',
       );
 
-      expect(phone.allows('Bike'), isTrue);
-      expect(medium.allows('Bike'), isTrue);
-      expect(medium.recommendedVehicle, 'Bike');
+      expect(phone.allows('Motorbike'), isTrue);
+      expect(medium.allows('Motorbike'), isTrue);
+      expect(medium.recommendedVehicle, 'Motorbike');
     });
 
     test('printer uses car unless dimensions require a van', () {
@@ -651,7 +712,30 @@ void main() {
       expect(bulkyPrinter.recommendedVehicle, 'Van');
     });
 
-    test('fragile or Vanguard small items are not Bike eligible', () {
+    test('two compact printers use car below the two-person threshold', () {
+      final compactPrinterLoad = DeliveryPricing.resolveVehicleSuitability(
+        weightKg: 15,
+        description: '2 printers',
+        itemCategory: 'Business equipment',
+        fragile: true,
+        quantity: 2,
+        repositoryVehicleSuitability: 'Van',
+      );
+      final heavyPrinterLoad = DeliveryPricing.resolveVehicleSuitability(
+        weightKg: 40,
+        description: '2 printers',
+        itemCategory: 'Business equipment',
+        fragile: true,
+        quantity: 2,
+        repositoryVehicleSuitability: 'Van',
+      );
+
+      expect(compactPrinterLoad.recommendedVehicle, 'Car');
+      expect(compactPrinterLoad.allowedVehicles, containsAll(['Car', 'Van']));
+      expect(heavyPrinterLoad.recommendedVehicle, 'Van');
+    });
+
+    test('fragile or Vanguard small items are not Motorbike eligible', () {
       final fragile = DeliveryPricing.resolveVehicleSuitability(
         weightKg: 1,
         description: 'Glass ornament',
@@ -664,17 +748,17 @@ void main() {
         vanguardRequired: true,
       );
 
-      expect(fragile.allows('Bike'), isFalse);
-      expect(vanguard.allows('Bike'), isFalse);
+      expect(fragile.allows('Motorbike'), isFalse);
+      expect(vanguard.allows('Motorbike'), isFalse);
     });
 
-    test('compact footwear remains Bike eligible when repository confirms it',
+    test('compact footwear uses car when high value and Vanguard protected',
         () {
       final shoes = DeliveryPricing.resolveVehicleSuitability(
         weightKg: 1.2,
         description: 'Nike shoes',
         itemCategory: 'Fashion',
-        repositoryVehicleSuitability: 'Bike',
+        repositoryVehicleSuitability: 'Motorbike',
         fragile: true,
         highValue: true,
         vanguardRequired: true,
@@ -685,13 +769,14 @@ void main() {
         ),
       );
 
-      expect(shoes.recommendedVehicle, 'Bike');
-      expect(shoes.allowedVehicles, containsAll(['Bike', 'Car', 'Van']));
-      expect(DeliveryPricing.vehicleCanCarryDelivery('Bike', shoes), isTrue);
+      expect(shoes.recommendedVehicle, 'Car');
+      expect(shoes.allowedVehicles, containsAll(['Car', 'Van']));
+      expect(
+          DeliveryPricing.vehicleCanCarryDelivery('Motorbike', shoes), isFalse);
     });
 
     test('vehicle surcharge follows the selected vehicle', () {
-      expect(DeliveryPricing.calculateVehicleSurcharge('Bike'), 0);
+      expect(DeliveryPricing.calculateVehicleSurcharge('Motorbike'), 0);
       expect(DeliveryPricing.calculateVehicleSurcharge('Car'), 2);
       expect(DeliveryPricing.calculateVehicleSurcharge('Van'), 10);
     });

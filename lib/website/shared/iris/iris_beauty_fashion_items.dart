@@ -57,7 +57,7 @@ IrisRepositoryItem _expandedIrisItem({
     vehicleSuitability: 'Car',
     stackable: category != 'Gifts',
     giftSignals: giftSignals.toSet(),
-    allowedVehicles: const ['Bike', 'Car'],
+    allowedVehicles: const ['Motorbike', 'Car'],
     requiresVan: false,
     confidenceBoostTerms: aliases,
   );

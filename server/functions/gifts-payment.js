@@ -3,6 +3,7 @@ const functions = require("firebase-functions/v1");
 const {getFirestore, FieldValue} = require("firebase-admin/firestore");
 const {getStorage} = require("firebase-admin/storage");
 const giftVoiceMedia = require("./gift-voice-media");
+const vanguardProtocol = require("./vanguard-protocol-core");
 
 function requireAuth(context) {
   if (!context.auth) {
@@ -19,6 +20,22 @@ function cleanObject(value) {
 
 function text(value, fallback = "") {
   return String(value || fallback).trim();
+}
+
+function giftVanguardFields() {
+  return {
+    ...vanguardProtocol.initialProtocolFields({
+      selected: true,
+      required: true,
+      irisRequired: true,
+      irisRequiredReason: "Vanguard is required for Gifts deliveries.",
+      category: "Gifts",
+      description: "Gifts by Circum delivery",
+    }),
+    vanguardRequired: true,
+    requiresVanguard: true,
+    vanguardRequiredReason: "Vanguard is required for Gifts deliveries.",
+  };
 }
 
 async function createCampaignPaymentDraft({data, context}) {
@@ -266,6 +283,7 @@ async function finalizeGiftPaymentSession({
       paymentStatus: "paid",
       giftStatus: "submitted_for_review",
       status: "submitted_for_review",
+      ...giftVanguardFields(),
       stripeCheckoutSessionId: session.id,
       stripePaymentIntentId: session.payment_intent,
       stripePaymentEventId: eventId,

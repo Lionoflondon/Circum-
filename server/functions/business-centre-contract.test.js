@@ -154,8 +154,26 @@ test("Business invoice finalizer verifies Stripe paid amount against server paym
   assert.match(businessPaymentsSource, /verifiedStripePaidGbpSession\(sessionData, \{[\s\S]*?ownerId: businessId,[\s\S]*?expectedAmountGBP: payment\.cardAmount/);
   assert.match(businessPaymentsSource, /const rothAmount = money\(payment\.rothAmount\);/);
   assert.match(businessPaymentsSource, /const cardAmount = verifiedPayment\.amountGBP;/);
+  assert.match(businessPaymentsSource, /await payBusinessInvoiceAtomically\(\{/);
   assert.doesNotMatch(businessPaymentsSource, /metadata\.cardAmountGbp \|\| Number\(sessionData\.amount_total/);
   assert.match(businessPaymentsSource, /throw new Error\("Business invoice payment record is missing\."\)/);
+});
+
+test("Business Roth invoice payment debits and marks invoice paid atomically", () => {
+  assert.match(businessPaymentsSource, /async function payBusinessInvoiceAtomically\(\{/);
+  assert.match(businessPaymentsSource, /return db\.runTransaction\(async \(transaction\) => \{/);
+  assert.match(businessPaymentsSource, /transaction\.get\(paymentRef\)/);
+  assert.match(businessPaymentsSource, /transaction\.get\(invoiceRef\)/);
+  assert.match(businessPaymentsSource, /transaction\.get\(walletRef\)/);
+  assert.match(businessPaymentsSource, /transaction\.set\(walletRef,[\s\S]*?balance: resultingWalletBalance/);
+  assert.match(businessPaymentsSource, /transaction\.set\(walletTxRef,[\s\S]*?type: "invoice_payment"/);
+  assert.match(businessPaymentsSource, /transaction\.set\(invoiceRef,[\s\S]*?status: nextStatus/);
+  assert.match(businessPaymentsSource, /transaction\.set\(paymentRef,[\s\S]*?status: "paid"/);
+  const invoiceFinalizer = businessPaymentsSource.slice(
+      businessPaymentsSource.indexOf('if (metadata.type === "business_invoice_payment")'),
+      businessPaymentsSource.indexOf("exports._private ="),
+  );
+  assert.doesNotMatch(invoiceFinalizer, /debitBusinessRoth\(/);
 });
 
 test("Business invoice Stripe payment without Roth charges the full balance by card", () => {

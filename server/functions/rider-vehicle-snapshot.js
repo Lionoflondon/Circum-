@@ -4,10 +4,26 @@ const cleanText = (value, fallback = "") => {
   return text.length > 0 ? text : fallback;
 };
 
+const canonicalVehicleType = (value) => {
+  const raw = cleanText(value);
+  const normalized = raw.toLowerCase().replace(/[_-]+/g, " ");
+  if (!normalized) return "";
+  if (/(van|luton|lorry|box truck|transit|sprinter)/.test(normalized)) {
+    return "Van";
+  }
+  if (/(car|estate|suv|4x4|sedan|saloon|hatchback)/.test(normalized)) {
+    return "Car";
+  }
+  if (/(bike|bicycle|cycle|motorcycle|motorbike|moped|scooter)/.test(normalized)) {
+    return "Motorbike";
+  }
+  return raw;
+};
+
 const buildRiderVehicleSnapshot = (rider = {}) => {
   const vehicle = rider.vehicle || rider.vehicleDetails || {};
   const snapshot = {
-    type: cleanText(vehicle.type || rider.vehicleType || rider.typeOfVehicle),
+    type: canonicalVehicleType(vehicle.type || rider.vehicleType || rider.typeOfVehicle),
     manufacturer: cleanText(vehicle.manufacturer || vehicle.make),
     model: cleanText(vehicle.model),
     colour: cleanText(vehicle.colour || vehicle.color),

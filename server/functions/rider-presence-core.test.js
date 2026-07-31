@@ -1,5 +1,7 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
+const fs = require("node:fs");
+const path = require("node:path");
 const core = require("./rider-presence-core");
 
 test("approved rider receives dispatch only when online and available", () => {
@@ -49,6 +51,47 @@ test("founder claim bypasses readiness while normal rider remains blocked", () =
   const incomplete = {onboardingStatus: "in_progress", vehicleStatus: "pending"};
   assert.equal(core.blockedReasonForAccess(incomplete, true), "");
   assert.equal(core.blockedReasonForAccess(incomplete, false), "Rider approval required.");
+});
+
+test("goOnline never leaks raw internal failures to riders", () => {
+  const source = fs.readFileSync(path.join(__dirname, "rider-presence.js"), "utf8");
+  const goOnlineStart = source.indexOf("exports.goOnline = functions.https.onCall");
+  const goOfflineStart = source.indexOf("exports.goOffline = functions.https.onCall");
+  const goOnlineSource = source.slice(goOnlineStart, goOfflineStart);
+  assert.match(goOnlineSource, /catch \(error\)/);
+  assert.match(goOnlineSource, /error instanceof functions\.https\.HttpsError/);
+  assert.match(goOnlineSource, /goOnline unexpected failure/);
+  assert.match(goOnlineSource, /We could not switch you online\. Check your connection and try again\./);
+  assert.doesNotMatch(goOnlineSource, /throw new functions\.https\.HttpsError\("internal"/);
+});
+
+test("online presence clears stale offline status field", () => {
+  const source = fs.readFileSync(path.join(__dirname, "rider-presence.js"), "utf8");
+
+  assert.match(source, /status: status === "offline" \? "offline" : "online"/);
+  assert.match(source, /availabilityStatus: status/);
+  assert.match(source, /status: "online",\s+availabilityStatus: "connection_lost"/);
+});
+
+test("goOnline mirrors dispatch availability into riderProfiles", () => {
+  const source = fs.readFileSync(path.join(__dirname, "rider-presence.js"), "utf8");
+  const goOnlineStart = source.indexOf("exports.goOnline = functions.https.onCall");
+  const goOfflineStart = source.indexOf("exports.goOffline = functions.https.onCall");
+  const goOnlineSource = source.slice(goOnlineStart, goOfflineStart);
+  assert.match(goOnlineSource, /collection\("riderProfiles"\)\.doc\(riderId\)/);
+  assert.match(goOnlineSource, /status: "online"/);
+  assert.match(goOnlineSource, /availabilityStatus: "available"/);
+  assert.match(goOnlineSource, /dispatchEligible: patch\.dispatchEligible === true/);
+});
+
+test("heartbeat keeps riderProfiles dispatch state fresh", () => {
+  const source = fs.readFileSync(path.join(__dirname, "rider-presence.js"), "utf8");
+  const heartbeatStart = source.indexOf("exports.updateRiderPresence = functions.https.onCall");
+  const deliveryWriteStart = source.indexOf("exports.onDeliveryPresenceWrite = functions.firestore");
+  const heartbeatSource = source.slice(heartbeatStart, deliveryWriteStart);
+  assert.match(heartbeatSource, /collection\("riderProfiles"\)\.doc\(riderId\)/);
+  assert.match(heartbeatSource, /availabilityStatus: status/);
+  assert.match(heartbeatSource, /lastHeartbeatAt: patch\.lastHeartbeatAt/);
 });
 
 test("stale heartbeat blocks dispatch", () => {

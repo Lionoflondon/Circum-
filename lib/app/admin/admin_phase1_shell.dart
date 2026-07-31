@@ -3430,7 +3430,9 @@ class _AdminPhaseOneShellState extends State<AdminPhaseOneShell> {
           : _RiderProfileDrawer(
               rider: _selectedRider!,
               deliveries: _data.deliveries,
+              applications: _data.riderApplications,
               documents: _data.riderDocuments,
+              onboardingEvents: _data.riderOnboardingEvents,
               ratings: _data.ratings,
               supportTickets: _data.supportTickets,
               auditLogs: _data.auditLogs,
@@ -3472,7 +3474,9 @@ class AdminDataBundle {
     required this.giftCampaignMatches,
     required this.auditLogs,
     required this.chats,
+    required this.riderApplications,
     required this.riderDocuments,
+    required this.riderOnboardingEvents,
     required this.driverPerformanceMetrics,
     required this.websiteVisitors,
     required this.irisCanonicalObjects,
@@ -3526,7 +3530,9 @@ class AdminDataBundle {
   final List<Map<String, dynamic>> giftCampaignMatches;
   final List<Map<String, dynamic>> auditLogs;
   final List<Map<String, dynamic>> chats;
+  final List<Map<String, dynamic>> riderApplications;
   final List<Map<String, dynamic>> riderDocuments;
+  final List<Map<String, dynamic>> riderOnboardingEvents;
   final List<Map<String, dynamic>> driverPerformanceMetrics;
   final List<Map<String, dynamic>> websiteVisitors;
   final List<Map<String, dynamic>> irisCanonicalObjects;
@@ -3580,7 +3586,9 @@ class AdminDataBundle {
         giftCampaignMatches: [],
         auditLogs: [],
         chats: [],
+        riderApplications: [],
         riderDocuments: [],
+        riderOnboardingEvents: [],
         driverPerformanceMetrics: [],
         websiteVisitors: [],
         irisCanonicalObjects: [],
@@ -3714,7 +3722,9 @@ class AdminRepository {
             .orderBy('updatedAt', descending: true)
             .limit(50),
       ),
+      _read(_db.collection('riderApplications').limit(150)),
       _read(_db.collection('riderDocuments').limit(150)),
+      _read(_db.collection('riderOnboardingEvents').limit(150)),
       _read(_db.collection('driverPerformanceMetrics').limit(150)),
       _read(
         _db
@@ -3837,29 +3847,31 @@ class AdminRepository {
       giftCampaignMatches: results[26],
       auditLogs: results[27],
       chats: results[28],
-      riderDocuments: results[29],
-      driverPerformanceMetrics: results[30],
-      websiteVisitors: results[31],
-      irisCanonicalObjects: results[32],
-      irisLearningCases: results[33],
-      irisLearningOutliers: results[34],
-      irisPolicies: results[35],
-      irisEvidence: results[36],
-      irisReferenceImages: results[37],
-      platformConfig: results[38],
-      platformStatus: results[39],
-      platformNotices: results[40],
-      platformVersions: results[41],
-      notifications: results[42],
-      messageReports: results[43],
-      adminNotes: results[44],
-      senderTrustEvents: results[45],
-      recognitionAwards: results[46],
-      recognitionAuditLogs: results[47],
-      recognitionCounters: results[48],
-      rateLimits: results[49],
-      senderDrafts: results[50],
-      riderPresence: results[51],
+      riderApplications: results[29],
+      riderDocuments: results[30],
+      riderOnboardingEvents: results[31],
+      driverPerformanceMetrics: results[32],
+      websiteVisitors: results[33],
+      irisCanonicalObjects: results[34],
+      irisLearningCases: results[35],
+      irisLearningOutliers: results[36],
+      irisPolicies: results[37],
+      irisEvidence: results[38],
+      irisReferenceImages: results[39],
+      platformConfig: results[40],
+      platformStatus: results[41],
+      platformNotices: results[42],
+      platformVersions: results[43],
+      notifications: results[44],
+      messageReports: results[45],
+      adminNotes: results[46],
+      senderTrustEvents: results[47],
+      recognitionAwards: results[48],
+      recognitionAuditLogs: results[49],
+      recognitionCounters: results[50],
+      rateLimits: results[51],
+      senderDrafts: results[52],
+      riderPresence: results[53],
     );
   }
 
@@ -4537,7 +4549,9 @@ class _AdminModuleBody extends StatelessWidget {
           AdminModule.riders => _RiderOperationsModule(
               riders: data.riders,
               deliveries: data.deliveries,
+              applications: data.riderApplications,
               documents: data.riderDocuments,
+              onboardingEvents: data.riderOnboardingEvents,
               driverPerformanceMetrics: data.driverPerformanceMetrics,
               auditLogs: data.auditLogs,
               adminNotes: data.adminNotes,
@@ -8050,10 +8064,6 @@ class _StripeConnectOperationsPanel extends StatelessWidget {
                           unawaited(onOpenRiderStripeDashboard(record)),
                     ),
                     _MiniAction(
-                      label: 'Retry sync',
-                      onPressed: () => unawaited(onSyncRiderStripe(record)),
-                    ),
-                    _MiniAction(
                       label: 'Investigate',
                       onPressed: () => unawaited(
                         onMarkRiderStripeInvestigation(
@@ -8392,7 +8402,9 @@ class _RiderOperationsModule extends StatelessWidget {
   const _RiderOperationsModule({
     required this.riders,
     required this.deliveries,
+    required this.applications,
     required this.documents,
+    required this.onboardingEvents,
     required this.driverPerformanceMetrics,
     required this.auditLogs,
     required this.adminNotes,
@@ -8412,7 +8424,9 @@ class _RiderOperationsModule extends StatelessWidget {
 
   final List<Map<String, dynamic>> riders;
   final List<Map<String, dynamic>> deliveries;
+  final List<Map<String, dynamic>> applications;
   final List<Map<String, dynamic>> documents;
+  final List<Map<String, dynamic>> onboardingEvents;
   final List<Map<String, dynamic>> driverPerformanceMetrics;
   final List<Map<String, dynamic>> auditLogs;
   final List<Map<String, dynamic>> adminNotes;
@@ -8459,6 +8473,11 @@ class _RiderOperationsModule extends StatelessWidget {
             ),
             _MetricCard('Suspended', suspended.toString(), 'restricted'),
             _MetricCard('Pending', pending.toString(), 'verification review'),
+            _MetricCard(
+              'Applications',
+              applications.length.toString(),
+              'submitted records',
+            ),
           ],
         ),
         const SizedBox(height: 18),
@@ -8513,6 +8532,50 @@ class _RiderOperationsModule extends StatelessWidget {
         ),
         const SizedBox(height: 18),
         _RecordModule(
+          title: 'Rider application review',
+          subtitle:
+              'Application Centre submissions, section progress and Admin review state.',
+          records: applications,
+          query: query,
+          fields: const [
+            'id',
+            'riderId',
+            'fullName',
+            'email',
+            'phoneNumber',
+            'vehicleType',
+            'status',
+            'sectionStatus',
+          ],
+          columns: const ['Application', 'Rider', 'Status', 'Updated'],
+          row: (record) => [
+            '${record['fullName'] ?? record['id']}\n${record['vehicleType'] ?? 'Vehicle pending'}',
+            '${record['riderId'] ?? 'unknown'}\n${record['email'] ?? record['phoneNumber'] ?? ''}',
+            '${record['status'] ?? 'submitted'}\n${_sectionStatusSummary(record)}',
+            _date(record['updatedAt'] ?? record['createdAt']),
+          ],
+          actions: canManageRiders
+              ? (record) {
+                  final rider = _riderForApplication(record);
+                  return [
+                    _MiniAction(
+                      label: 'Open rider',
+                      onPressed: rider.isEmpty
+                          ? null
+                          : () => onOpenRiderProfile(rider),
+                    ),
+                    _MiniAction(
+                      label: 'Request info',
+                      onPressed: rider.isEmpty
+                          ? null
+                          : () => unawaited(onRequestMoreInformation(rider)),
+                    ),
+                  ];
+                }
+              : null,
+        ),
+        const SizedBox(height: 18),
+        _RecordModule(
           title: 'Rider document review',
           subtitle:
               'Insurance, MOT, V5C and identity document signals from loaded Rider records.',
@@ -8556,6 +8619,31 @@ class _RiderOperationsModule extends StatelessWidget {
                     ),
                   ]
               : null,
+        ),
+        const SizedBox(height: 18),
+        _RecordModule(
+          title: 'Rider onboarding events',
+          subtitle:
+              'Backend events emitted by Rider Application Centre submissions, document uploads and review actions.',
+          records: onboardingEvents,
+          query: query,
+          fields: const [
+            'id',
+            'riderId',
+            'action',
+            'event',
+            'eventType',
+            'applicationId',
+            'documentId',
+            'status',
+          ],
+          columns: const ['Event', 'Rider', 'Record', 'Time'],
+          row: (record) => [
+            '${record['action'] ?? record['eventType'] ?? record['event'] ?? 'event'}\n${record['status'] ?? ''}',
+            '${record['riderId'] ?? record['uid'] ?? 'unknown'}',
+            '${record['applicationId'] ?? record['documentId'] ?? record['id']}',
+            _date(record['createdAt'] ?? record['updatedAt']),
+          ],
         ),
         const SizedBox(height: 18),
         _RecordModule(
@@ -8644,6 +8732,15 @@ class _RiderOperationsModule extends StatelessWidget {
     return '${rider['fullName'] ?? rider['name'] ?? metric['fullName'] ?? 'Rider'}';
   }
 
+  Map<String, dynamic> _riderForApplication(Map<String, dynamic> application) {
+    final id = '${application['riderId'] ?? application['uid'] ?? ''}'.trim();
+    if (id.isEmpty) return const {};
+    return riders.firstWhere(
+      (rider) => _riderId(rider) == id,
+      orElse: () => const {},
+    );
+  }
+
   int _historyCount(Object? value) => value is List ? value.length : 0;
 
   String _riderWarningSummary(Map<String, dynamic> record) {
@@ -8657,6 +8754,16 @@ class _RiderOperationsModule extends StatelessWidget {
     if (warnings.isEmpty) return 'No active warnings';
     return warnings.join(' / ');
   }
+}
+
+String _sectionStatusSummary(Map<String, dynamic> record) {
+  final sections = record['sectionStatus'];
+  if (sections is! Map || sections.isEmpty) return 'No section status';
+  final complete = sections.values
+      .where((value) => {'submitted', 'approved', 'verified'}
+          .contains('$value'.trim().toLowerCase()))
+      .length;
+  return '$complete/${sections.length} sections complete';
 }
 
 class _RiderOperationsHistoryPanel extends StatelessWidget {
@@ -19106,7 +19213,9 @@ class _RiderProfileDrawer extends StatelessWidget {
   const _RiderProfileDrawer({
     required this.rider,
     required this.deliveries,
+    required this.applications,
     required this.documents,
+    required this.onboardingEvents,
     required this.ratings,
     required this.supportTickets,
     required this.auditLogs,
@@ -19116,7 +19225,9 @@ class _RiderProfileDrawer extends StatelessWidget {
 
   final Map<String, dynamic> rider;
   final List<Map<String, dynamic>> deliveries;
+  final List<Map<String, dynamic>> applications;
   final List<Map<String, dynamic>> documents;
+  final List<Map<String, dynamic>> onboardingEvents;
   final List<Map<String, dynamic>> ratings;
   final List<Map<String, dynamic>> supportTickets;
   final List<Map<String, dynamic>> auditLogs;
@@ -19131,6 +19242,15 @@ class _RiderProfileDrawer extends StatelessWidget {
         .toList(growable: false);
     final riderDocs = documents
         .where((document) => _documentBelongsToRider(document, riderId))
+        .toList(growable: false);
+    final riderApplications = applications
+        .where((application) =>
+            '${application['riderId'] ?? application['uid'] ?? ''}'.trim() ==
+            riderId)
+        .toList(growable: false);
+    final riderOnboardingEvents = onboardingEvents
+        .where((event) =>
+            '${event['riderId'] ?? event['uid'] ?? ''}'.trim() == riderId)
         .toList(growable: false);
     final riderRatings = ratings
         .where((rating) => _recordReferencesRider(rating, riderId))
@@ -19303,6 +19423,26 @@ class _RiderProfileDrawer extends StatelessWidget {
             ),
             const SizedBox(height: 14),
             _DrawerSection(
+              title: 'Application Centre',
+              rows: riderApplications.isEmpty
+                  ? const [('Application', 'No application records loaded')]
+                  : [
+                      for (final application in riderApplications.take(3))
+                        (
+                          '${application['status'] ?? 'submitted'}',
+                          '${application['fullName'] ?? application['id']} · ${_sectionStatusSummary(application)}',
+                        ),
+                      (
+                        'Latest update',
+                        _date(
+                          riderApplications.first['updatedAt'] ??
+                              riderApplications.first['createdAt'],
+                        ),
+                      ),
+                    ],
+            ),
+            const SizedBox(height: 14),
+            _DrawerSection(
               title: 'Documents',
               rows: riderDocs.isEmpty
                   ? const [('Documents', 'No documents found')]
@@ -19325,6 +19465,19 @@ class _RiderProfileDrawer extends StatelessWidget {
                 ('V5C', _documentStatus(riderDocs, 'v5c')),
                 ('Vehicle review', rider['vehicleVerificationStatus']),
               ],
+            ),
+            const SizedBox(height: 14),
+            _DrawerSection(
+              title: 'Onboarding events',
+              rows: riderOnboardingEvents.isEmpty
+                  ? const [('Events', 'No onboarding events loaded')]
+                  : [
+                      for (final event in riderOnboardingEvents.take(6))
+                        (
+                          '${event['action'] ?? event['eventType'] ?? event['event'] ?? 'event'}',
+                          '${event['status'] ?? event['applicationId'] ?? event['documentId'] ?? ''} · ${_date(event['createdAt'] ?? event['updatedAt'])}',
+                        ),
+                    ],
             ),
             const SizedBox(height: 14),
             _DrawerSection(

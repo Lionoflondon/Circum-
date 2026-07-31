@@ -17,6 +17,7 @@ const {
 const {calculateWalletCheckout} = require("./wallet-core");
 const {verifiedStripePaidGbpSession} = require("./roth-ledger-core");
 const rothLedger = require("./roth-ledger");
+const vanguardProtocol = require("./vanguard-protocol-core");
 
 function allowCors(res) {
   res.set("Access-Control-Allow-Origin", "*");
@@ -202,6 +203,7 @@ async function markHealthPlusPaid({
   }, {merge: true});
   await bookingRef.set({
     paymentStatus: "paid",
+    ...healthPlusVanguardFields(),
     paidAt: now,
     updatedAt: now,
   }, {merge: true});
@@ -269,6 +271,22 @@ function healthPlusAudit(type, sender, extra = {}) {
     source: "cloud-functions",
     createdAt: new Date(),
     ...extra,
+  };
+}
+
+function healthPlusVanguardFields() {
+  return {
+    ...vanguardProtocol.initialProtocolFields({
+      selected: true,
+      required: true,
+      irisRequired: true,
+      irisRequiredReason: "Vanguard is required for Health+ deliveries.",
+      category: "Health+",
+      description: "Health+ prescription pickup",
+    }),
+    vanguardRequired: true,
+    requiresVanguard: true,
+    vanguardRequiredReason: "Vanguard is required for Health+ deliveries.",
   };
 }
 
@@ -373,6 +391,7 @@ exports.createHealthPlusBooking = functions.https.onCall(async (data, context) =
       recurring: scheduleRef != null,
       customSchedule: text(data.customSchedule),
       priorityRiderMatching: subscriptionPlan === "priority",
+      ...healthPlusVanguardFields(),
       consentAccepted: true,
       status: "scheduled",
       price: authoritative.amountPence / 100,

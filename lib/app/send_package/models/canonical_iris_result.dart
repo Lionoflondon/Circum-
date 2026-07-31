@@ -3,6 +3,7 @@ class CanonicalIrisResult {
   final int quantity;
   final double? unitWeightKg;
   final double? totalWeightKg;
+  final double? irisSuggestedWeightKg;
   final String? category;
   final String? weightBand;
   final String? recommendedVehicle;
@@ -10,6 +11,7 @@ class CanonicalIrisResult {
   final String? repositoryMatch;
   final int? similarVerifiedDeliveries;
   final String? explanation;
+  final List<String> handlingRequirements;
   final List<String> reasons;
   final bool partial;
   final bool vanguardRequired;
@@ -21,12 +23,14 @@ class CanonicalIrisResult {
     required this.confidenceLabel,
     this.unitWeightKg,
     this.totalWeightKg,
+    this.irisSuggestedWeightKg,
     this.category,
     this.weightBand,
     this.recommendedVehicle,
     this.repositoryMatch,
     this.similarVerifiedDeliveries,
     this.explanation,
+    this.handlingRequirements = const [],
     this.reasons = const [],
     this.partial = false,
     this.vanguardRequired = false,
@@ -38,11 +42,11 @@ class CanonicalIrisResult {
 
   String get totalWeightLabel => totalWeightKg == null
       ? 'Unavailable'
-      : '${totalWeightKg!.toStringAsFixed(2)}kg';
+      : '${totalWeightKg!.toStringAsFixed(2)} kg';
 
   String get unitWeightLabel => unitWeightKg == null
       ? 'Unavailable'
-      : '${unitWeightKg!.toStringAsFixed(2)}kg';
+      : '${unitWeightKg!.toStringAsFixed(2)} kg';
 
   factory CanonicalIrisResult.fromCallable(
     Map<String, dynamic> data, {
@@ -53,6 +57,7 @@ class CanonicalIrisResult {
     final weightBand = recommendation['weightBand'];
     final repository = _map(data['repositoryMatch']);
     final internal = _map(data['internal']);
+    final weightAuthority = _map(internal['weightAuthority']);
     final riderMatching = _map(internal['riderMatching']);
     final vanguard = _map(data['vanguard']);
     final requiresVanguard = _bool(
@@ -60,8 +65,16 @@ class CanonicalIrisResult {
           data['vanguardRequired'] ??
           recommendation['requiresVanguard'] ??
           recommendation['vanguardRecommended'] ??
+          data['vanguardRecommended'] ??
+          vanguard['recommended'] ??
           vanguard['required'],
     );
+    final handlingRequirements = _list(
+      recommendation['handlingFlags'] ??
+          recommendation['handlingRequirements'] ??
+          data['handlingFlags'] ??
+          data['handlingRequirements'],
+    ).where((item) => item.trim().isNotEmpty).toList(growable: false);
     final reasons = [
       ..._list(data['reasons']),
       if (recommendation['customerSafeExplanation'] != null)
@@ -86,12 +99,13 @@ class CanonicalIrisResult {
       quantity: quantity,
       unitWeightKg: unitWeight,
       totalWeightKg: totalWeight,
+      irisSuggestedWeightKg: _double(weightAuthority['irisEstimatedWeightKg']),
       category: '${recommendation['category'] ?? ''}'.trim(),
       weightBand: weightBand is Map
           ? '${weightBand['label'] ?? ''}'.trim()
           : '${weightBand ?? ''}'.trim(),
       recommendedVehicle:
-          '${data['recommendedVehicle'] ?? riderMatching['vehicleRequired'] ?? riderMatching['minimumVehicle'] ?? ''}'
+          '${data['recommendedVehicle'] ?? recommendation['recommendedVehicle'] ?? riderMatching['vehicleRequired'] ?? riderMatching['minimumVehicle'] ?? ''}'
               .trim(),
       confidenceLabel: _confidenceLabel(
         data['confidence'] ??
@@ -106,9 +120,10 @@ class CanonicalIrisResult {
             internal['learningMatchedExamples'],
       ),
       explanation: '${recommendation['customerSafeExplanation'] ?? ''}'.trim(),
+      handlingRequirements: handlingRequirements,
       reasons: reasons,
       partial: totalWeight == null ||
-          '${data['recommendedVehicle'] ?? riderMatching['vehicleRequired'] ?? ''}'
+          '${data['recommendedVehicle'] ?? recommendation['recommendedVehicle'] ?? riderMatching['vehicleRequired'] ?? ''}'
               .trim()
               .isEmpty,
       vanguardRequired: requiresVanguard,
@@ -152,8 +167,6 @@ class CanonicalIrisResult {
     final number = _double(value);
     if (number == null) return 'Medium';
     final score = number <= 1 ? number * 100 : number;
-    if (score >= 80) return 'High';
-    if (score >= 55) return 'Medium';
-    return 'Low';
+    return '${score.round()}%';
   }
 }

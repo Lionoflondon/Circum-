@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:firebase_app_check/firebase_app_check.dart';
 import 'package:flutter/foundation.dart';
 
@@ -62,21 +64,39 @@ Future<CircumAppCheckStartup> initializeCircumAppCheck({
   );
 
   if (isWeb && webProvider == null) {
-    return const CircumAppCheckStartup.blocked(
-      'Circum security verification is not configured for this version.',
+    return const CircumAppCheckStartup._(
+      enabled: false,
+      blockStartup: false,
+      message:
+          'Circum security verification is not configured for this version.',
     );
   }
 
   try {
-    await (appCheck ?? FirebaseAppCheck.instance).activate(
+    final activation = (appCheck ?? FirebaseAppCheck.instance).activate(
       androidProvider: circumAndroidAppCheckProvider(debug: debug),
       appleProvider: circumAppleAppCheckProvider(debug: debug),
       webProvider: webProvider,
     );
+    if (isWeb) {
+      await activation.timeout(const Duration(seconds: 3));
+    } else {
+      await activation;
+    }
     return const CircumAppCheckStartup.enabled();
+  } on TimeoutException {
+    return const CircumAppCheckStartup._(
+      enabled: false,
+      blockStartup: false,
+      message:
+          'Circum security verification is taking longer than expected.',
+    );
   } catch (_) {
-    return const CircumAppCheckStartup.blocked(
-      'Circum security verification could not start. Please try again.',
+    return const CircumAppCheckStartup._(
+      enabled: false,
+      blockStartup: false,
+      message:
+          'Circum security verification could not start. Please try again.',
     );
   }
 }

@@ -21,7 +21,7 @@ jobs:
       - run: node scripts/deploy_guard.self_test.js
       - run: node scripts/deploy_guard.js --target=website --base HEAD
       - run: flutter test test/web_artifact_isolation_test.dart test/web_platform_routing_test.dart
-      - run: PUBLIC_WEB_RECAPTCHA_ENTERPRISE_SITE_KEY="${{ secrets.PUBLIC_WEB_RECAPTCHA_ENTERPRISE_SITE_KEY }}" scripts/build_public_web.sh
+      - run: PUBLIC_WEB_RECAPTCHA_ENTERPRISE_SITE_KEY="${{ secrets.PUBLIC_WEB_RECAPTCHA_ENTERPRISE_SITE_KEY }}" GOOGLE_PLACES_API_KEY="${{ secrets.GOOGLE_PLACES_API_KEY }}" scripts/build_public_web.sh
       - run: node scripts/validate_web_artifacts.js --surface=website
       - uses: google-github-actions/auth@v2
         with:

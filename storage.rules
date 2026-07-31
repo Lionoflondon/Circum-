@@ -51,19 +51,19 @@ service firebase.storage {
 
     match /riderDocuments/{riderId}/{allPaths=**} {
       allow read: if isAdmin() || (signedIn() && request.auth.uid == riderId);
-      allow create, update: if (isAdmin() || (signedIn() && request.auth.uid == riderId)) && isSafeUpload();
+      allow create, update: if isAdmin() && isSafeUpload();
       allow delete: if isSuperAdmin();
     }
 
     match /riders/{riderId}/documents/{allPaths=**} {
       allow read: if isAdmin() || (signedIn() && request.auth.uid == riderId);
-      allow create, update: if (isAdmin() || (signedIn() && request.auth.uid == riderId)) && isSafeUpload();
+      allow create, update: if isAdmin() && isSafeUpload();
       allow delete: if isSuperAdmin();
     }
 
     match /vehicleDocuments/{riderId}/{allPaths=**} {
       allow read: if isAdmin() || (signedIn() && request.auth.uid == riderId);
-      allow create, update: if (isAdmin() || (signedIn() && request.auth.uid == riderId)) && isSafeUpload();
+      allow create, update: if isAdmin() && isSafeUpload();
       allow delete: if isSuperAdmin();
     }
 

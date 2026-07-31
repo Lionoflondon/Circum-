@@ -39,7 +39,29 @@ class SetDeliveryAddress extends SendPackageEvent {
 
 class ClearSuggestions extends SendPackageEvent {}
 
+class ResetSenderBookingSession extends SendPackageEvent {
+  const ResetSenderBookingSession();
+}
+
 class CalculateDistance extends SendPackageEvent {}
+
+class RestoreSenderRoute extends SendPackageEvent {
+  final String pickupAddress;
+  final double pickupLat;
+  final double pickupLng;
+  final String dropoffAddress;
+  final double dropoffLat;
+  final double dropoffLng;
+
+  const RestoreSenderRoute({
+    required this.pickupAddress,
+    required this.pickupLat,
+    required this.pickupLng,
+    required this.dropoffAddress,
+    required this.dropoffLat,
+    required this.dropoffLng,
+  });
+}
 
 class SendAPackage extends SendPackageEvent {}
 
@@ -96,6 +118,8 @@ class RequestSenderBookingQuote extends SendPackageEvent {
   final double weightKg;
   final bool fragile;
   final bool highValue;
+  final String selectedVehicle;
+  final String irisPhotoAnalysisId;
   final Map<String, dynamic>? businessContext;
 
   const RequestSenderBookingQuote({
@@ -106,6 +130,8 @@ class RequestSenderBookingQuote extends SendPackageEvent {
     required this.weightKg,
     required this.fragile,
     required this.highValue,
+    this.selectedVehicle = '',
+    this.irisPhotoAnalysisId = '',
     this.businessContext,
   });
 }
@@ -118,11 +144,21 @@ class StartSenderPaymentSession extends SendPackageEvent {
   final bool rothEnabled;
   final String fallbackMethod;
   final String paymentMethodId;
+  final String checkoutMode;
+  final String returnUrl;
+  final String draftId;
+  final String idempotencyKey;
+  final Map<String, dynamic> deliveryPayload;
 
   const StartSenderPaymentSession({
     required this.rothEnabled,
     required this.fallbackMethod,
     this.paymentMethodId = '',
+    this.checkoutMode = '',
+    this.returnUrl = '',
+    this.draftId = '',
+    this.idempotencyKey = '',
+    this.deliveryPayload = const {},
   });
 }
 
@@ -130,6 +166,16 @@ class CreatePaidSenderDelivery extends SendPackageEvent {
   final Map<String, dynamic> bookingPayload;
 
   const CreatePaidSenderDelivery({required this.bookingPayload});
+}
+
+class FinalizeSenderWebCheckout extends SendPackageEvent {
+  final String checkoutSessionId;
+  final String paymentSessionId;
+
+  const FinalizeSenderWebCheckout({
+    required this.checkoutSessionId,
+    required this.paymentSessionId,
+  });
 }
 
 class CheckForPushToken extends SendPackageEvent {}

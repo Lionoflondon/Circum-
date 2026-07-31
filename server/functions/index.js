@@ -65,6 +65,7 @@ const adminOperationsAuthority = require("./admin-operations-authority");
 const {routeCheckoutSessionCompleted} = require("./checkout-session-router");
 
 initializeApp();
+getFirestore().settings({ignoreUndefinedProperties: true});
 
 function allowCors(req, res) {
   res.set("Access-Control-Allow-Origin", "*");
@@ -213,6 +214,7 @@ exports.refreshStripeOnboardingLink =
   riderConnect.refreshStripeOnboardingLink(stripeConnectClient);
 exports.syncStripeConnectStatus =
   riderConnect.syncStripeConnectStatus(stripeConnectClient);
+exports.riderPayoutReadiness = riderConnect.riderPayoutReadiness();
 exports.createRiderTransferOrPayout =
   riderConnect.createRiderTransferOrPayout(stripeConnectClient);
 exports.requestRiderWithdrawal = riderConnect.requestRiderWithdrawal();
@@ -337,12 +339,15 @@ exports.onRiderProfileAvailabilityWrite =
 exports.markStaleRiderPresenceOffline =
   riderPresence.markStaleRiderPresenceOffline;
 exports.searchFreeUkAddresses = freeAddressSearch.searchFreeUkAddresses;
+exports.resolveUkAddressPlace = freeAddressSearch.resolveUkAddressPlace;
 exports.getSenderRothBalance = senderBooking.getSenderRothBalance;
 exports.createSenderBookingQuote = senderBooking.createSenderBookingQuote;
 exports.createSenderPaymentSession =
   senderBooking.createSenderPaymentSession(stripe);
 exports.createSenderPaidDelivery =
   senderBooking.createSenderPaidDelivery(stripe);
+exports.finalizeSenderWebCheckout =
+  senderBooking.finalizeSenderWebCheckout(stripe);
 exports.saveSenderDraft = senderBooking.saveSenderDraft;
 exports.loadSenderDraft = senderBooking.loadSenderDraft;
 exports.deleteSenderDraft = senderBooking.deleteSenderDraft;
@@ -382,6 +387,8 @@ exports.ensureRiderRothWallet = riderAccount.ensureRiderRothWallet;
 exports.createWeightAdjustedNotification =
   riderAccount.createWeightAdjustedNotification;
 exports.submitRiderApplication = riderAccount.submitRiderApplication;
+exports.updateRiderApplicationSection =
+  riderAccount.updateRiderApplicationSection;
 exports.submitRiderDocument = riderAccount.submitRiderDocument;
 exports.archiveExpiredDeliveries = deliveryCleanup.archiveExpiredDeliveries;
 exports.resolveStaleDeliveryLock = staleDelivery.resolveStaleDeliveryLock;
@@ -454,6 +461,29 @@ exports.StripeWebhook = functions
         if (tipResult && tipResult.handled) {
           return res.send({success: true, tip: tipResult});
         }
+        try {
+          const senderIntentResult =
+            await senderBooking.handleSenderPaymentIntent(
+                stripe,
+                event.data.object,
+                event.id,
+            );
+          if (senderIntentResult && senderIntentResult.handled) {
+            return res.send({success: true, sender: senderIntentResult});
+          }
+        } catch (error) {
+          console.error("Sender PaymentIntent webhook finalization failed", {
+            eventId: event.id,
+            paymentIntentId:
+              event.data && event.data.object ? event.data.object.id : null,
+            status:
+              event.data && event.data.object ? event.data.object.status : null,
+            error: error && error.message ? error.message : error,
+          });
+          return res
+              .status(500)
+              .send({success: false, error: "sender_payment_intent_failed"});
+        }
       }
 
       if (event.type === "charge.succeeded") {
@@ -509,6 +539,15 @@ exports.StripeWebhook = functions
             giftsPayment,
             healthPlus,
             rothLedger,
+            senderBooking: {
+              handleSenderCheckoutSession:
+                (session, eventId) =>
+                  senderBooking.handleSenderCheckoutSession(
+                      stripe,
+                      session,
+                      eventId,
+                  ),
+            },
             logger: console,
           });
         } catch (error) {

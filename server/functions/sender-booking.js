@@ -5,7 +5,7 @@ const functions = require("firebase-functions/v1");
 const crypto = require("crypto");
 const {getFirestore, FieldValue, GeoPoint, Timestamp} = require("firebase-admin/firestore");
 const {calculateWalletCheckout, roundMoney, minorUnits} = require("./wallet-core");
-const rothLedger = require("./roth-ledger");
+const {verifiedStripePaidGbpSession} = require("./roth-ledger-core");
 const vanguardProtocol = require("./vanguard-protocol-core");
 const {classifyIris} = require("./iris-core");
 const {verifiedPhotoAnalysis} = require("./iris-photo-analysis");
@@ -15,17 +15,25 @@ const ADDITIONAL_FARE_PER_MILE_GBP = 1.5;
 const SHORT_TRIP_FARE_FLOOR_MILES = 1.6;
 const LONG_DISTANCE_THRESHOLD_MILES = 20;
 const LONG_DISTANCE_MULTIPLIER = 1.2;
+const EXPRESS_SURCHARGE_GBP = 5;
 const VANGUARD_ADD_ON_GBP = 1.99;
+const VEHICLE_SURCHARGES_GBP = {
+  motorbike: 0,
+  car: 2,
+  van: 10,
+};
 const RIDER_DELIVERY_FARE_SHARE = 0.65;
 const PLATFORM_DELIVERY_FARE_SHARE = 0.35;
 const DRAFT_SCHEMA_VERSION = 1;
 const DRAFT_RETENTION_DAYS = 30;
+const DRAFT_INACTIVITY_MINUTES = 10;
 const MAX_DRAFT_BYTES = 32768;
 const MAX_STRING_LENGTH = 1000;
 const MAX_DEPTH = 6;
 const ALLOWED_STEPS = new Set(["pickup", "dropoff", "recipient", "deliveryTime", "parcel", "iris", "options", "review", "payment"]);
 const ALLOWED_TIMING_TYPES = new Set(["now", "scheduled"]);
-const ALLOWED_OPTIONS = new Set(["Economy", "Standard", "Express", "economy", "standard", "express"]);
+const ALLOWED_OPTIONS = new Set(["Standard", "Express", "standard", "express"]);
+const LEGACY_ALLOWED_OPTIONS = new Set(["Economy", "economy"]);
 const FORBIDDEN_DRAFT_KEYS = [
   "cardnumber", "card_number", "cvc", "cvv", "securitycode", "password",
   "token", "authtoken", "accesstoken", "refreshtoken", "clientsecret",
@@ -53,6 +61,25 @@ function money(value) {
   return roundMoney(Number(value || 0));
 }
 
+function canonicalVehicle(value) {
+  const normalized = text(value).toLowerCase();
+  if (/(van|luton|transit|sprinter)/.test(normalized)) return "van";
+  if (/(car|estate|suv|4x4|sedan|saloon|hatchback)/.test(normalized)) return "car";
+  if (/(motorbike|motorcycle|moped|scooter|bike|bicycle|cycle|ebike|e-bike|electric bike)/.test(normalized)) {
+    return "motorbike";
+  }
+  return "motorbike";
+}
+
+function vehicleSurcharge(value) {
+  return money(VEHICLE_SURCHARGES_GBP[canonicalVehicle(value)] || 0);
+}
+
+function vehicleLabel(value) {
+  const vehicle = canonicalVehicle(value);
+  return vehicle === "van" ? "Van" : vehicle === "car" ? "Car" : "Motorbike";
+}
+
 function firstMoney(...values) {
   for (const value of values) {
     const parsed = Number(value);
@@ -75,6 +102,26 @@ function cleanBoolean(value) {
 
 function cleanMap(value) {
   return value && typeof value === "object" && !Array.isArray(value) ? value : {};
+}
+
+function stripUndefined(value) {
+  if (Array.isArray(value)) {
+    return value
+        .map((item) => stripUndefined(item))
+        .filter((item) => item !== undefined);
+  }
+  if (value && typeof value === "object" &&
+      !(value instanceof Date) &&
+      !(value instanceof GeoPoint) &&
+      !(value instanceof Timestamp)) {
+    return Object.fromEntries(
+        Object.entries(value)
+            .filter(([, item]) => item !== undefined)
+            .map(([key, item]) => [key, stripUndefined(item)])
+            .filter(([, item]) => item !== undefined),
+    );
+  }
+  return value;
 }
 
 function cleanNumber(value) {
@@ -154,14 +201,17 @@ function sanitizeSenderDraftPayload(raw) {
 
   const step = cleanString(input.step, 60) || "pickup";
   const timingType = cleanString(deliveryTime.type, 40) || "now";
-  const selectedOption = cleanString(deliveryOptions.selectedOption, 80) || "Standard";
+  const selectedOptionRaw = cleanString(deliveryOptions.selectedOption, 80) || "Standard";
+  const selectedOption =
+    speedKey(selectedOptionRaw) === "express" ? "Express" : "Standard";
   if (!ALLOWED_STEPS.has(step)) {
     throw new functions.https.HttpsError("invalid-argument", "Draft step is not supported.");
   }
   if (!ALLOWED_TIMING_TYPES.has(timingType)) {
     throw new functions.https.HttpsError("invalid-argument", "Delivery time type is not supported.");
   }
-  if (!ALLOWED_OPTIONS.has(selectedOption)) {
+  if (!ALLOWED_OPTIONS.has(selectedOptionRaw) &&
+      !LEGACY_ALLOWED_OPTIONS.has(selectedOptionRaw)) {
     throw new functions.https.HttpsError("invalid-argument", "Delivery option is not supported.");
   }
 
@@ -238,6 +288,29 @@ function draftExpiresAt() {
   return Timestamp.fromDate(new Date(Date.now() + DRAFT_RETENTION_DAYS * 24 * 60 * 60 * 1000));
 }
 
+function timestampMillis(value) {
+  if (!value) return null;
+  if (value instanceof Timestamp) return value.toMillis();
+  if (typeof value.toMillis === "function") return value.toMillis();
+  const parsed = Date.parse(`${value}`);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+function draftExpired(record) {
+  if (!record || !record.expiresAt) return false;
+  const expiresAt = timestampMillis(record.expiresAt);
+  return expiresAt != null && expiresAt <= Date.now();
+}
+
+function draftInactive(record) {
+  if (!record) return false;
+  const activityAt = timestampMillis(
+      record.lastActivityAt || record.updatedAt || record.lastOpenedAt || record.createdAt,
+  );
+  if (activityAt == null) return false;
+  return Date.now() - activityAt > DRAFT_INACTIVITY_MINUTES * 60 * 1000;
+}
+
 function canonicalDraftResponse(record) {
   if (!record) return {exists: false};
   const draft = record.draft ? record.draft : sanitizeSenderDraftPayload(record).draft;
@@ -283,6 +356,7 @@ exports.saveSenderDraft = functions.https.onCall(async (data, context) => {
       completed: false,
       createdAt: existing.exists ? current.createdAt || now : now,
       updatedAt: now,
+      lastActivityAt: now,
       lastOpenedAt: now,
       expiresAt: draftExpiresAt(),
     };
@@ -300,6 +374,10 @@ exports.loadSenderDraft = functions.https.onCall(async (_data, context) => {
   }
   const record = snapshot.data() || {};
   if (record.completed === true || record.status === "completed" || record.status === "converting") {
+    return {exists: false};
+  }
+  if (draftExpired(record) || draftInactive(record)) {
+    await snapshot.ref.delete();
     return {exists: false};
   }
   await snapshot.ref.set({
@@ -359,7 +437,6 @@ async function verifiedBusinessContext(db, sender, rawContext) {
 
 function speedKey(value) {
   const normalized = text(value).toLowerCase();
-  if (normalized === "economy") return "economy";
   if (normalized === "express") return "express";
   return "standard";
 }
@@ -381,8 +458,7 @@ function distanceFare(distanceMiles) {
 }
 
 function speedAdjustment(subtotal, speed) {
-  if (speed === "economy") return -1.5;
-  if (speed === "express") return Math.max(2.99, money(subtotal * 0.2));
+  if (speed === "express") return Math.max(EXPRESS_SURCHARGE_GBP, money(subtotal * 0.2));
   return 0;
 }
 
@@ -407,6 +483,188 @@ function riderPayoutFromQuote(quote = {}) {
       quote.totalRiderEarnings,
       money(riderEligibleFareFromQuote(quote) * RIDER_DELIVERY_FARE_SHARE),
   );
+}
+
+function safeStripeCheckoutError(error) {
+  const code = text(error && (error.code || error.type || error.rawType)) || "stripe_checkout_failed";
+  const message = text(error && error.message);
+  const parameter = text(error && error.param);
+  console.error("Sender Stripe checkout creation failed", {
+    code,
+    type: text(error && error.type),
+    statusCode: error && error.statusCode || null,
+    requestId: error && error.requestId || null,
+    parameter: parameter || null,
+    message,
+    declineCode: error && error.decline_code || null,
+    paymentIntent: error && error.payment_intent && error.payment_intent.id || null,
+  });
+  if (code === "parameter_unknown") {
+    return parameter ?
+      `Stripe checkout configuration rejected ${parameter}. Please contact support.` :
+      "Stripe checkout configuration was rejected. Please contact support.";
+  }
+  if (code === "rate_limit") {
+    return "Stripe is temporarily busy. Please wait a moment and try again.";
+  }
+  if (code === "authentication_error") {
+    return "Stripe API authentication failed. Please contact support.";
+  }
+  if (code === "api_connection_error") {
+    return "Unable to contact Stripe. Please try again.";
+  }
+  if (message.toLowerCase().includes("no such customer")) {
+    return "Your saved payment profile needs to be refreshed. Please try again.";
+  }
+  if (message.toLowerCase().includes("api key")) {
+    return "Stripe checkout is not available right now. Please contact support.";
+  }
+  return "Stripe checkout could not be started. Please try again.";
+}
+
+function safePaymentFinalizationError(error) {
+  const message = text(error && error.message);
+  const lower = message.toLowerCase();
+  console.error("Sender payment finalization failed", {
+    code: text(error && (error.code || error.type || error.rawType)),
+    statusCode: error && error.statusCode || null,
+    requestId: error && error.requestId || null,
+    message,
+  });
+  if (lower.includes("must be confirmed") || lower.includes("could not be verified")) {
+    return "Payment could not be confirmed yet. Please try again.";
+  }
+  if (lower.includes("ownership") || lower.includes("belong")) {
+    return "This payment session does not belong to this account.";
+  }
+  if (lower.includes("not found")) {
+    return "Payment session could not be found. Please restart checkout.";
+  }
+  if (lower.includes("timeout") || lower.includes("network")) {
+    return "Unable to contact payment service. Please try again.";
+  }
+  return "Stripe payment could not be confirmed. Please try again.";
+}
+
+function logSenderPaymentStage(stage, fields = {}) {
+  console.info("sender_payment_flow", {
+    stage,
+    surface: "sender",
+    ...fields,
+  });
+}
+
+function wait(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+async function retrievePaidCheckoutSession(stripe, sessionId, paymentSessionId) {
+  let latest = null;
+  for (let attempt = 1; attempt <= 3; attempt += 1) {
+    latest = await stripe.checkout.sessions.retrieve(sessionId);
+    logSenderPaymentStage("stripe_checkout_session_retrieved", {
+      paymentSessionId,
+      checkoutSessionId: sessionId,
+      attempt,
+      paymentStatus: latest.payment_status || null,
+      status: latest.status || null,
+      amountTotal: latest.amount_total || null,
+      currency: latest.currency || null,
+    });
+    if (`${latest.payment_status || ""}`.toLowerCase() === "paid") {
+      return latest;
+    }
+    await wait(attempt * 750);
+  }
+  return latest;
+}
+
+function safeDeliveryCreationError(error) {
+  const message = text(error && error.message);
+  const sourceCode = text(error && error.code);
+  const lower = message.toLowerCase();
+  console.error("Sender paid delivery creation failed", {
+    code: sourceCode,
+    message,
+    details: error && error.details || null,
+  });
+  if (sourceCode === "unauthenticated" || lower.includes("auth")) {
+    return {
+      code: "unauthenticated",
+      message: "Please sign in again before paying.",
+      reason: "authentication_required",
+    };
+  }
+  if (sourceCode === "permission-denied" || lower.includes("permission")) {
+    return {
+      code: "permission-denied",
+      message: "Payment could not create this delivery for your account.",
+      reason: "delivery_write_denied",
+    };
+  }
+  if (lower.includes("wallet is frozen")) {
+    return {
+      code: "failed-precondition",
+      message: "Roth balance is frozen. Please choose another payment method.",
+      reason: "roth_wallet_frozen",
+    };
+  }
+  if (lower.includes("wallet balance is too low") || lower.includes("insufficient roth")) {
+    return {
+      code: "failed-precondition",
+      message: "Insufficient Roth balance. Please add Roth or choose card payment.",
+      reason: "insufficient_roth_balance",
+    };
+  }
+  if (lower.includes("stripe payment must be confirmed")) {
+    return {
+      code: "failed-precondition",
+      message: "Card payment must be confirmed before delivery creation.",
+      reason: "stripe_payment_unconfirmed",
+    };
+  }
+  if (lower.includes("payment session") && lower.includes("not found")) {
+    return {
+      code: "not-found",
+      message: "Payment session could not be found. Please restart checkout.",
+      reason: "payment_session_missing",
+    };
+  }
+  if (lower.includes("idempotency") || lower.includes("duplicate")) {
+    return {
+      code: "already-exists",
+      message: "This payment is already being processed. Please refresh your delivery status.",
+      reason: "duplicate_delivery_payment",
+    };
+  }
+  if (lower.includes("payload") || lower.includes("missing") || lower.includes("invalid")) {
+    return {
+      code: "invalid-argument",
+      message: "Some delivery details are incomplete. Please review the booking and try again.",
+      reason: "invalid_delivery_payload",
+    };
+  }
+  if (lower.includes("deadline") || lower.includes("timeout") || lower.includes("network")) {
+    return {
+      code: "deadline-exceeded",
+      message: "Delivery creation timed out. No Roth was deducted. Please try again.",
+      reason: "delivery_creation_timeout",
+    };
+  }
+  return {
+    code: sourceCode && sourceCode !== "internal" ? sourceCode : "failed-precondition",
+    message: "Delivery could not be created safely. No Roth was deducted. Please try again.",
+    reason: "delivery_creation_failed",
+  };
+}
+
+function walletRefsForSender(db, sender) {
+  const walletId = (sender.email || sender.uid).trim().toLowerCase();
+  return {
+    walletId,
+    walletRef: db.collection("wallets").doc(walletId),
+    senderWalletRef: db.collection("senderWallets").doc(sender.uid),
+  };
 }
 
 function riderDisplayAliases({quote = {}, data = {}, vanguardFields = {}} = {}) {
@@ -447,17 +705,56 @@ function quotePayload(data, uid, serverPhotoAnalysis = null) {
   const base = BASE_FARE_GBP;
   const distance = distanceFare(data.distanceMiles);
   const weight = weightSurcharge(weightKg);
-  const subtotal = money(base + distance + weight);
+  const selectedVehicle = canonicalVehicle(
+      data.selectedVehicle ||
+      data.vehicleType ||
+      data.recommendedVehicle ||
+      data.iris && (data.iris.recommendedVehicle || data.iris.vehicleType),
+  );
+  const vehicle = vehicleSurcharge(selectedVehicle);
+  const subtotal = money(base + distance + weight + vehicle);
   const speed = money(speedAdjustment(subtotal, selectedSpeed));
+  const parcelData = cleanMap(data.parcel);
+  const highValueParcel = data.highValue === true || parcelData.highValue === true;
+  const surfaceText = text(data.sourceModule || data.serviceType || data.type).toLowerCase();
+  const businessDelivery = data.businessMode === true ||
+    text(data.businessId || data.businessAccountId).length > 0;
+  const healthDelivery = surfaceText.includes("health");
+  const giftDelivery = surfaceText.includes("gift");
   const vanguardSelected = data.vanguardProtocolEnabled === true || data.vanguard === true;
-  const vanguardRequired = data.iris && data.iris.vanguardRequired === true;
-  const vanguard = vanguardSelected || vanguardRequired ? VANGUARD_ADD_ON_GBP : 0;
+  const irisVanguardRequired = data.iris && data.iris.vanguardRequired === true;
+  const vanguardRequired = irisVanguardRequired || highValueParcel ||
+    businessDelivery || healthDelivery || giftDelivery;
+  const vanguardIncluded = vanguardRequired;
+  const vanguard = !vanguardIncluded && vanguardSelected ? VANGUARD_ADD_ON_GBP : 0;
+  const vanguardRequiredReason = highValueParcel ?
+    "Vanguard is required for high-value deliveries." :
+    businessDelivery ?
+      "Vanguard is required for business deliveries." :
+      healthDelivery ?
+        "Vanguard is required for Health+ deliveries." :
+        giftDelivery ?
+          "Vanguard is required for Gifts deliveries." :
+          data.iris && data.iris.vanguardRequiredReason || "";
   const total = money(Math.max(0, subtotal + speed + vanguard));
   const riderBaseShare = money(Math.max(0, subtotal + speed) * RIDER_DELIVERY_FARE_SHARE);
   const platformBaseShare = money(Math.max(0, subtotal + speed) * PLATFORM_DELIVERY_FARE_SHARE);
   const totalRiderEarnings = riderBaseShare;
   const totalCircumRevenue = money(total - totalRiderEarnings);
   const quoteId = text(data.quoteId) || `sender_quote_${uid}_${Date.now()}`;
+  const speedOptions = ["standard", "express"].map((speedOption) => {
+    const optionSpeed = money(speedAdjustment(subtotal, speedOption));
+    const optionTotal = money(Math.max(0, subtotal + optionSpeed + vanguard));
+    return {
+      speed: `${speedOption[0].toUpperCase()}${speedOption.slice(1)}`,
+      total: optionTotal,
+      speedAdjustment: optionSpeed,
+      description: speedOption === "express" ?
+        "Priority rider matching and urgent pickup." :
+        "Regular rider matching.",
+      currency: "GBP",
+    };
+  });
   return {
     quoteId,
     userId: uid,
@@ -465,19 +762,26 @@ function quotePayload(data, uid, serverPhotoAnalysis = null) {
     selectedSpeed,
     distanceMiles: Number(data.distanceMiles || 0),
     weightKg,
-    vanguardProtocolEnabled: vanguard > 0,
+    selectedVehicle,
+    vehicleType: selectedVehicle,
+    vehicleSurcharge: vehicle,
+    vanguardProtocolEnabled: vanguardIncluded || vanguard > 0,
+    vanguardIncluded,
     vanguardRequired,
-    vanguardRequiredReason: data.iris && data.iris.vanguardRequiredReason || "",
+    vanguardRequiredReason,
     lineItems: [
       {key: "base_delivery", label: "Base delivery", amount: base},
       {key: "distance", label: "Distance", amount: distance},
       {key: "weight", label: "Parcel weight", amount: weight},
-      {key: "speed_adjustment", label: `${selectedSpeed[0].toUpperCase()}${selectedSpeed.slice(1)} priority`, amount: speed},
-      ...(vanguard > 0 ? [{key: "vanguard", label: "Vanguard Protection", amount: vanguard}] : []),
+      ...(vehicle > 0 ? [{key: "vehicle", label: `${vehicleLabel(selectedVehicle)} vehicle`, amount: vehicle}] : []),
+      {key: "speed_adjustment", label: selectedSpeed === "express" ? "Express priority" : `${selectedSpeed[0].toUpperCase()}${selectedSpeed.slice(1)} service`, amount: speed},
+      ...(vanguardIncluded ? [{key: "vanguard", label: "Vanguard Included", amount: 0}] : []),
+      ...(!vanguardIncluded && vanguard > 0 ? [{key: "vanguard", label: "Vanguard Protection", amount: vanguard}] : []),
     ],
     total,
     finalAmount: total,
     amountDue: total,
+    speedOptions,
     driverPayout: totalRiderEarnings,
     riderPayout: totalRiderEarnings,
     riderEarning: totalRiderEarnings,
@@ -513,10 +817,32 @@ function quotePayload(data, uid, serverPhotoAnalysis = null) {
 }
 
 async function walletBalanceForSender(sender) {
-  const walletId = (sender.email || sender.uid).trim().toLowerCase();
-  const snap = await getFirestore().collection("wallets").doc(walletId).get();
-  const wallet = snap.exists ? snap.data() : {};
-  return money(wallet.balance == null ? wallet.rothCredit : wallet.balance);
+  const db = getFirestore();
+  const {walletId, walletRef, senderWalletRef} = walletRefsForSender(db, sender);
+  const [legacySnap, projectionSnap] = await Promise.all([
+    walletRef.get(),
+    senderWalletRef.get(),
+  ]);
+  const legacy = legacySnap.exists ? legacySnap.data() || {} : {};
+  const projection = projectionSnap.exists ? projectionSnap.data() || {} : {};
+  const legacyBalance = legacy.balance == null ? legacy.rothCredit : legacy.balance;
+  const projectionBalance = projection.balance == null ?
+    projection.rothCredit : projection.balance;
+  const candidates = [legacyBalance, projectionBalance]
+      .map((value) => Number(value))
+      .filter((value) => Number.isFinite(value) && value >= 0);
+  const balance = candidates.length ? Math.max(...candidates) : 0;
+  if (legacySnap.exists && projectionSnap.exists &&
+      money(Number(legacyBalance || 0)) !== money(Number(projectionBalance || 0))) {
+    console.warn("Sender wallet projection drift detected during payment", {
+      userId: sender.uid,
+      walletId,
+      legacyBalance: money(Number(legacyBalance || 0)),
+      projectionBalance: money(Number(projectionBalance || 0)),
+      resolvedBalance: money(balance),
+    });
+  }
+  return money(balance);
 }
 
 async function ensureStripeCustomerForSender(stripe, sender) {
@@ -524,8 +850,24 @@ async function ensureStripeCustomerForSender(stripe, sender) {
   const userRef = db.collection("users").doc(sender.uid);
   const userSnap = await userRef.get();
   const user = userSnap.exists ? userSnap.data() : {};
-  if (user.stripeCustomerId || user.customerId) {
-    return user.stripeCustomerId || user.customerId;
+  const existingCustomerId = text(user.stripeCustomerId || user.customerId);
+  if (existingCustomerId) {
+    try {
+      const existingCustomer = await stripe.customers.retrieve(existingCustomerId);
+      if (existingCustomer && !existingCustomer.deleted) {
+        return existingCustomerId;
+      }
+    } catch (error) {
+      const code = text(error && (error.code || error.type || error.rawType));
+      if (code !== "resource_missing") {
+        throw error;
+      }
+      console.warn("Refreshing missing Sender Stripe customer", {
+        userId: sender.uid,
+        customerId: existingCustomerId,
+        code,
+      });
+    }
   }
   const customer = await stripe.customers.create({
     email: sender.email || undefined,
@@ -563,7 +905,10 @@ exports.createSenderBookingQuote = functions.https.onCall(async (data, context) 
     analysisId: data && data.irisPhotoAnalysisId,
     description: parcelDescription,
   });
-  const quote = quotePayload(data || {}, sender.uid, serverPhotoAnalysis);
+  const quote = quotePayload({
+    ...(data || {}),
+    ...(businessContext || {}),
+  }, sender.uid, serverPhotoAnalysis);
   const clientDisplayQuote = cleanMap(data && data.clientDisplayQuote);
   const clientDisplayedAmount = cleanNumber(clientDisplayQuote.amount);
   const clientDisplayedAmountPence = cleanNumber(clientDisplayQuote.amountPence);
@@ -612,11 +957,22 @@ exports.createSenderPaymentSession = (stripe) => functions.https.onCall(async (d
   const rothBalance = rothEnabled ? await walletBalanceForSender(sender) : 0;
   const savedPaymentMethodId = text(data.paymentMethodId);
   const requestedFallback = text(data.fallbackMethod) || "card";
+  const checkoutMode = text(data.checkoutMode);
+  const webCheckout = checkoutMode === "web_checkout";
+  const deliveryPayload = cleanMap(data.deliveryPayload);
   const split = calculateWalletCheckout({
     orderTotalGbp: total,
     walletBalanceGbp: rothEnabled ? rothBalance : 0,
     selectedCurrency: "gbp",
   });
+  const requestedSessionKey = stableId(JSON.stringify({
+    rothEnabled,
+    walletContributionGbp: split.walletContributionGbp,
+    remainingGbp: split.remainingGbp,
+    fallbackMethod: requestedFallback,
+    savedPaymentMethodId,
+    checkoutMode: webCheckout ? "web_checkout" : "payment_intent",
+  }));
   const sessionRef = db.collection("senderPaymentSessions").doc(quoteId);
   const existingSessionSnap = await sessionRef.get();
   if (existingSessionSnap.exists) {
@@ -626,19 +982,51 @@ exports.createSenderPaymentSession = (stripe) => functions.https.onCall(async (d
     }
     if (existingSession.paymentStatus === "succeeded" || existingSession.status === "succeeded") {
       return {
-        ...existingSession,
         paymentSessionId: sessionRef.id,
+        quoteId,
+        userId: sender.uid,
+        amountDue: total,
+        rothEnabled: existingSession.rothEnabled === true,
+        rothAppliedAmount: money(existingSession.rothAppliedAmount || 0),
+        remainingAmount: money(existingSession.remainingAmount || 0),
+        currency: "GBP",
+        status: "succeeded",
+        paymentStatus: "succeeded",
+        paymentMethod: text(existingSession.paymentMethod || "card"),
         idempotent: true,
       };
     }
-    if (existingSession.clientSecret && existingSession.stripeCustomerId) {
+    const sameRequestedSession = existingSession.checkoutKey === requestedSessionKey ||
+      existingSession.paymentSessionKey === requestedSessionKey;
+    if (webCheckout && existingSession.checkoutSessionId) {
+      logSenderPaymentStage("web_checkout_retry_forces_fresh_session", {
+        userId: sender.uid,
+        quoteId,
+        paymentSessionId: sessionRef.id,
+        previousCheckoutSessionId: existingSession.checkoutSessionId,
+        previousStatus: text(existingSession.paymentStatus || existingSession.status),
+      });
+    }
+    if (!webCheckout && sameRequestedSession && existingSession.clientSecret && existingSession.stripeCustomerId) {
       const existingEphemeralKey = await stripe.ephemeralKeys.create(
           {customer: existingSession.stripeCustomerId},
           {apiVersion: "2020-08-27"},
       );
       return {
-        ...existingSession,
         paymentSessionId: sessionRef.id,
+        quoteId,
+        userId: sender.uid,
+        amountDue: total,
+        rothEnabled,
+        rothAppliedAmount: split.walletContributionGbp,
+        remainingAmount: split.remainingGbp,
+        currency: "GBP",
+        status: text(existingSession.status || existingSession.paymentStatus),
+        paymentStatus: text(existingSession.paymentStatus || existingSession.status),
+        paymentMethod: requestedFallback,
+        savedPaymentMethodId: savedPaymentMethodId || null,
+        stripePaymentIntentId: existingSession.stripePaymentIntentId || null,
+        clientSecret: existingSession.clientSecret,
         customerId: existingSession.stripeCustomerId,
         ephemeralKeySecret: existingEphemeralKey.secret,
         idempotent: true,
@@ -667,37 +1055,227 @@ exports.createSenderPaymentSession = (stripe) => functions.https.onCall(async (d
     rothAppliedAmount: split.walletContributionGbp,
     remainingAmount: split.remainingGbp,
     currency: "GBP",
+    paymentSessionKey: requestedSessionKey,
     createdAt: FieldValue.serverTimestamp(),
     updatedAt: FieldValue.serverTimestamp(),
   };
   if (!split.stripeRequired) {
-    await rothLedger.applyWalletDebit({
+    if (!deliveryPayload.pickup || !deliveryPayload.dropoff || !deliveryPayload.parcel || !deliveryPayload.recipient) {
+      throw new functions.https.HttpsError("invalid-argument", "Delivery details are required before Roth payment.");
+    }
+    const requestId = text(data.requestId) || `sender_${stableId(`${sender.uid}:${quoteId}:${sessionRef.id}`)}`;
+    const draftId = text(data.draftId);
+    const idempotencyKey = text(data.idempotencyKey) ||
+      stableId(`${sender.uid}:${draftId || "roth"}:${quoteId}:${sessionRef.id}:${requestedSessionKey}`);
+    logSenderPaymentStage("roth_only_session_authorized", {
       userId: sender.uid,
-      userEmail: sender.email,
-      amount: split.walletContributionGbp,
-      type: "delivery_payment",
-      referenceId: sessionRef.id,
-      notes: "Roth applied to Circum delivery payment.",
-      transactionId: `wallet_delivery_${sessionRef.id}`,
-      metadata: {quoteId, service: "delivery", source: "sender_booking_payment"},
+      quoteId,
+      paymentSessionId: sessionRef.id,
+      rothAppliedAmount: split.walletContributionGbp,
+      remainingAmount: split.remainingGbp,
+      requestId,
     });
     await sessionRef.set({
       ...sessionBase,
-      status: "succeeded",
-      paymentStatus: "succeeded",
+      status: "payment_processing",
+      paymentStatus: "payment_processing",
       paymentMethod: "roth",
-      confirmedAt: FieldValue.serverTimestamp(),
+      rothDebitStatus: "pending_delivery_creation",
+      checkoutMode: webCheckout ? "web_checkout" : "payment_intent",
+      requestId,
+      draftId: draftId || null,
+      idempotencyKey,
+      deliveryPayload,
+      updatedAt: FieldValue.serverTimestamp(),
     });
-    return {
-      ...sessionBase,
-      status: "succeeded",
-      paymentStatus: "succeeded",
-      paymentMethod: "roth",
-    };
+    try {
+      const delivery = await createPaidDeliveryFromSession(stripe, sender, {
+        ...deliveryPayload,
+        requestId,
+        quoteId,
+        paymentSessionId: sessionRef.id,
+        draftId: draftId || null,
+        idempotencyKey,
+      });
+      await sessionRef.set({
+        status: "succeeded",
+        paymentStatus: "succeeded",
+        deliveryId: delivery.deliveryId || delivery.requestId || requestId,
+        requestId: delivery.requestId || requestId,
+        confirmedAt: FieldValue.serverTimestamp(),
+        updatedAt: FieldValue.serverTimestamp(),
+      }, {merge: true});
+      logSenderPaymentStage("roth_only_delivery_committed", {
+        userId: sender.uid,
+        quoteId,
+        paymentSessionId: sessionRef.id,
+        requestId: delivery.requestId || requestId,
+        deliveryId: delivery.deliveryId || requestId,
+      });
+      return {
+        paymentSessionId: sessionRef.id,
+        quoteId,
+        userId: sender.uid,
+        amountDue: total,
+        rothEnabled,
+        rothAppliedAmount: split.walletContributionGbp,
+        remainingAmount: split.remainingGbp,
+        currency: "GBP",
+        status: "succeeded",
+        paymentStatus: "succeeded",
+        paymentMethod: "roth",
+        requestId: delivery.requestId || requestId,
+        deliveryId: delivery.deliveryId || delivery.requestId || requestId,
+        idempotencyKey,
+      };
+    } catch (error) {
+      const safe = safeDeliveryCreationError(error);
+      await sessionRef.set({
+        status: "delivery_creation_failed",
+        paymentStatus: "delivery_creation_failed",
+        rothDebitStatus: "rolled_back_not_debited",
+        lastFailure: {
+          code: safe.code,
+          reason: safe.reason,
+          message: safe.message,
+          originalMessage: text(error && error.message),
+          stage: "roth_only_delivery_creation",
+          updatedAt: FieldValue.serverTimestamp(),
+        },
+        updatedAt: FieldValue.serverTimestamp(),
+      }, {merge: true});
+      logSenderPaymentStage("roth_only_delivery_failed_rolled_back", {
+        userId: sender.uid,
+        quoteId,
+        paymentSessionId: sessionRef.id,
+        requestId,
+        reason: safe.reason,
+      });
+      throw new functions.https.HttpsError(safe.code, safe.message, {
+        reason: safe.reason,
+        paymentSessionId: sessionRef.id,
+        quoteId,
+        requestId,
+        rollback: "roth_not_debited",
+      });
+    }
   }
-  const customerId = await ensureStripeCustomerForSender(stripe, sender);
+  let customerId;
+  try {
+    customerId = await ensureStripeCustomerForSender(stripe, sender);
+  } catch (error) {
+    throw new functions.https.HttpsError(
+        text(error && error.code) === "rate_limit" ? "resource-exhausted" : "failed-precondition",
+        safeStripeCheckoutError(error),
+        {code: text(error && (error.code || error.type || error.rawType))},
+    );
+  }
   if (savedPaymentMethodId && !customerId) {
     throw new functions.https.HttpsError("failed-precondition", "Saved payment method is unavailable.");
+  }
+  if (webCheckout) {
+    if (!deliveryPayload.pickup || !deliveryPayload.dropoff || !deliveryPayload.parcel || !deliveryPayload.recipient) {
+      throw new functions.https.HttpsError("invalid-argument", "Delivery details are required before web checkout.");
+    }
+    const requestId = text(data.requestId) || `sender_${stableId(`${sender.uid}:${quoteId}:${sessionRef.id}`)}`;
+    const draftId = text(data.draftId);
+    const checkoutAttempt = existingSessionSnap.exists ?
+      Number(existingSessionSnap.data().checkoutAttempt || 0) + 1 :
+      1;
+    const idempotencyKey = stableId(`${sender.uid}:${draftId || "web"}:${quoteId}:${sessionRef.id}:${requestedSessionKey}:${checkoutAttempt}`);
+    const baseUrl = text(data.returnUrl) || "https://circum-2797c.web.app/send";
+    const separator = baseUrl.includes("?") ? "&" : "?";
+    let checkoutSession;
+    try {
+      checkoutSession = await stripe.checkout.sessions.create({
+        mode: "payment",
+        payment_method_types: ["card"],
+        client_reference_id: sender.uid,
+        customer: customerId,
+        line_items: [{
+          quantity: 1,
+          price_data: {
+            currency: "gbp",
+            unit_amount: minorUnits(split.customerPaymentAmount, "gbp"),
+            product_data: {
+              name: "Circum delivery",
+              description: "Trusted Circum delivery booking.",
+            },
+          },
+        }],
+        success_url: `${baseUrl}${separator}sender_payment=success&paymentSessionId=${sessionRef.id}&checkoutSessionId={CHECKOUT_SESSION_ID}`,
+        cancel_url: `${baseUrl}${separator}sender_payment=cancelled&paymentSessionId=${sessionRef.id}`,
+        payment_intent_data: {
+          setup_future_usage: "off_session",
+          metadata: {
+            paymentType: "delivery",
+            type: "sender_delivery_payment",
+            userId: sender.uid,
+            userEmail: sender.email,
+            quoteId,
+            paymentSessionId: sessionRef.id,
+            rothAppliedAmount: `${split.walletContributionGbp}`,
+            remainingAmount: `${split.remainingGbp}`,
+            orderTotalGbp: `${split.orderTotalGbp}`,
+            fallbackMethod: requestedFallback,
+            billingSource: quote.businessMode === true ? "business_finance" : "sender_finance",
+          },
+        },
+        metadata: {
+          type: "sender_delivery_payment",
+          userId: sender.uid,
+          userEmail: sender.email,
+          quoteId,
+          paymentSessionId: sessionRef.id,
+          requestId,
+          idempotencyKey,
+          rothAppliedAmount: `${split.walletContributionGbp}`,
+          remainingAmount: `${split.remainingGbp}`,
+          orderTotalGbp: `${split.orderTotalGbp}`,
+          returnUrl: baseUrl,
+        },
+      }, {idempotencyKey: `sender_checkout_${idempotencyKey}`});
+    } catch (error) {
+      throw new functions.https.HttpsError(
+          "failed-precondition",
+          safeStripeCheckoutError(error),
+          {code: text(error && (error.code || error.type || error.rawType))},
+      );
+    }
+    await sessionRef.set({
+      ...sessionBase,
+      status: "checkout_created",
+      paymentStatus: "checkout_created",
+        paymentMethod: requestedFallback,
+        checkoutMode: "web_checkout",
+        checkoutKey: requestedSessionKey,
+        checkoutAttempt,
+        checkoutUrl: checkoutSession.url,
+        checkoutSessionId: checkoutSession.id,
+      stripeCustomerId: customerId,
+      requestId,
+      draftId: draftId || null,
+      idempotencyKey,
+      deliveryPayload,
+    });
+    return {
+      paymentSessionId: sessionRef.id,
+      quoteId,
+      userId: sender.uid,
+      amountDue: total,
+      rothEnabled,
+      rothAppliedAmount: split.walletContributionGbp,
+      remainingAmount: split.remainingGbp,
+      currency: "GBP",
+      status: "checkout_created",
+      paymentStatus: "checkout_created",
+      paymentMethod: requestedFallback,
+      checkoutMode: "web_checkout",
+      checkoutUrl: checkoutSession.url,
+      checkoutSessionId: checkoutSession.id,
+      requestId,
+      idempotencyKey,
+    };
   }
   if (savedPaymentMethodId) {
     const method = await stripe.paymentMethods.retrieve(savedPaymentMethodId);
@@ -705,32 +1283,42 @@ exports.createSenderPaymentSession = (stripe) => functions.https.onCall(async (d
       throw new functions.https.HttpsError("permission-denied", "Saved payment method does not belong to this Sender.");
     }
   }
-  const ephemeralKey = await stripe.ephemeralKeys.create(
-      {customer: customerId},
-      {apiVersion: "2020-08-27"},
-  );
   const idempotencyKey = `sender_booking_${quoteId}`;
-  const intent = await stripe.paymentIntents.create({
-    amount: minorUnits(split.customerPaymentAmount, "gbp"),
-    currency: "gbp",
-    automatic_payment_methods: {enabled: true},
-    customer: customerId,
-    payment_method: savedPaymentMethodId || undefined,
-    setup_future_usage: savedPaymentMethodId ? undefined : "off_session",
-    metadata: {
-      paymentType: "delivery",
-      userId: sender.uid,
-      userEmail: sender.email,
-      quoteId,
-      paymentSessionId: sessionRef.id,
-      rothAppliedAmount: `${split.walletContributionGbp}`,
-      remainingAmount: `${split.remainingGbp}`,
-      orderTotalGbp: `${split.orderTotalGbp}`,
-      fallbackMethod: requestedFallback,
-      savedPaymentMethodId,
-      billingSource: quote.businessMode === true ? "business_finance" : "sender_finance",
-    },
-  }, {idempotencyKey});
+  let ephemeralKey;
+  let intent;
+  try {
+    ephemeralKey = await stripe.ephemeralKeys.create(
+        {customer: customerId},
+        {apiVersion: "2020-08-27"},
+    );
+    intent = await stripe.paymentIntents.create({
+      amount: minorUnits(split.customerPaymentAmount, "gbp"),
+      currency: "gbp",
+      automatic_payment_methods: {enabled: true},
+      customer: customerId,
+      payment_method: savedPaymentMethodId || undefined,
+      setup_future_usage: savedPaymentMethodId ? undefined : "off_session",
+      metadata: {
+        paymentType: "delivery",
+        userId: sender.uid,
+        userEmail: sender.email,
+        quoteId,
+        paymentSessionId: sessionRef.id,
+        rothAppliedAmount: `${split.walletContributionGbp}`,
+        remainingAmount: `${split.remainingGbp}`,
+        orderTotalGbp: `${split.orderTotalGbp}`,
+        fallbackMethod: requestedFallback,
+        savedPaymentMethodId,
+        billingSource: quote.businessMode === true ? "business_finance" : "sender_finance",
+      },
+    }, {idempotencyKey});
+  } catch (error) {
+    throw new functions.https.HttpsError(
+        text(error && error.code) === "rate_limit" ? "resource-exhausted" : "failed-precondition",
+        safeStripeCheckoutError(error),
+        {code: text(error && (error.code || error.type || error.rawType))},
+    );
+  }
   await sessionRef.set({
     ...sessionBase,
     status: intent.status,
@@ -743,7 +1331,14 @@ exports.createSenderPaymentSession = (stripe) => functions.https.onCall(async (d
     idempotencyKey,
   });
   return {
-    ...sessionBase,
+    paymentSessionId: sessionRef.id,
+    quoteId,
+    userId: sender.uid,
+    amountDue: total,
+    rothEnabled,
+    rothAppliedAmount: split.walletContributionGbp,
+    remainingAmount: split.remainingGbp,
+    currency: "GBP",
     status: intent.status,
     paymentStatus: intent.status,
     paymentMethod: requestedFallback,
@@ -820,23 +1415,94 @@ async function updateSenderPaymentIntentStatus(stripe, intent, eventId = "") {
   });
   const amount = Number(metadata.rothAppliedAmount || 0);
   if (succeeded && amount > 0) {
-    await rothLedger.applyWalletDebit({
+    logSenderPaymentStage("roth_debit_deferred_until_delivery_creation", {
       userId: metadata.userId,
-      userEmail: metadata.userEmail,
+      quoteId: metadata.quoteId || null,
+      paymentSessionId: sessionId,
+      stripePaymentIntentId: intent.id,
       amount,
-      type: "delivery_payment",
-      referenceId: sessionId,
-      notes: "Roth applied to Circum delivery payment.",
-      transactionId: `wallet_delivery_${sessionId}`,
-      metadata: {
-        quoteId: metadata.quoteId || null,
-        service: "delivery",
-        stripePaymentIntentId: intent.id,
-        stripeEventId: eventId || null,
-      },
     });
   }
   return {updated: true, status};
+}
+
+async function handleSenderPaymentIntent(stripe, intent, eventId = "") {
+  const metadata = intent && intent.metadata ? intent.metadata : {};
+  const paymentType = text(metadata.paymentType || metadata.type);
+  const sessionId = text(metadata.paymentSessionId);
+  if (paymentType !== "delivery" && paymentType !== "sender_delivery_payment") {
+    return {handled: false, reason: "not_sender_delivery_payment"};
+  }
+  if (!sessionId) return {handled: false, reason: "missing_payment_session"};
+  const db = getFirestore();
+  const sessionRef = db.collection("senderPaymentSessions").doc(sessionId);
+  const sessionSnap = await sessionRef.get();
+  if (!sessionSnap.exists) {
+    throw new Error("Sender payment session was not found.");
+  }
+  const payment = sessionSnap.data() || {};
+  if (intent.status === "succeeded") {
+    const expectedAmount = money(payment.remainingAmount || metadata.remainingAmount || 0);
+    const paidAmount = money(Number(intent.amount || 0) / 100);
+    const expectedCurrency = text(payment.currency || metadata.currency || "gbp").toLowerCase();
+    const paidCurrency = text(intent.currency || "gbp").toLowerCase();
+    const expectedUserId = text(payment.userId || metadata.userId);
+    const metadataUserId = text(metadata.userId || payment.userId);
+    if (!expectedUserId || expectedUserId !== metadataUserId) {
+      throw new Error("Sender PaymentIntent metadata does not match payment session owner.");
+    }
+    if (paidCurrency !== expectedCurrency) {
+      throw new Error("Sender PaymentIntent currency does not match payment session.");
+    }
+    if (paidAmount !== expectedAmount) {
+      throw new Error("Sender PaymentIntent amount does not match payment session.");
+    }
+  }
+  const statusResult = await updateSenderPaymentIntentStatus(
+      stripe,
+      intent,
+      eventId,
+  );
+  if (intent.status !== "succeeded") {
+    return {
+      handled: true,
+      status: intent.status,
+      paymentSessionId: sessionId,
+      updated: statusResult.updated,
+    };
+  }
+  const sender = {
+    uid: payment.userId || metadata.userId,
+    email: payment.userEmail || metadata.userEmail || "",
+    name: payment.userName || "",
+  };
+  if (!sender.uid) {
+    throw new Error("Sender payment session owner is missing.");
+  }
+  const delivery = await createPaidDeliveryFromSession(stripe, sender, {
+    ...(payment.deliveryPayload || {}),
+    requestId: payment.requestId || metadata.requestId,
+    quoteId: payment.quoteId || metadata.quoteId,
+    paymentSessionId: sessionId,
+    draftId: payment.draftId || null,
+    idempotencyKey: payment.idempotencyKey || metadata.idempotencyKey,
+  });
+  await db.collection("senderPaymentSessions").doc(sessionId).set({
+    status: "succeeded",
+    paymentStatus: "succeeded",
+    deliveryId: delivery.deliveryId || delivery.requestId || null,
+    requestId: delivery.requestId || null,
+    webhookCompletedAt: FieldValue.serverTimestamp(),
+    updatedAt: FieldValue.serverTimestamp(),
+  }, {merge: true});
+  return {
+    handled: true,
+    status: intent.status,
+    paymentSessionId: sessionId,
+    requestId: delivery.requestId || null,
+    deliveryId: delivery.deliveryId || delivery.requestId || null,
+    idempotent: delivery.idempotent === true,
+  };
 }
 
 function geoData(point = {}) {
@@ -878,10 +1544,15 @@ function privateVanguardPinFields(vanguardFields) {
   };
 }
 
-exports.createSenderPaidDelivery = (stripe) => functions.https.onCall(async (data, context) => {
-  const sender = requireSender(context);
+async function createPaidDeliveryFromSession(stripe, sender, data) {
   const quoteId = text(data.quoteId);
   const paymentSessionId = text(data.paymentSessionId);
+  logSenderPaymentStage("delivery_creation_started", {
+    userId: sender.uid,
+    quoteId,
+    paymentSessionId,
+    hasStripe: Boolean(stripe),
+  });
   if (!quoteId || !paymentSessionId) {
     throw new functions.https.HttpsError("invalid-argument", "Confirmed payment and quote are required.");
   }
@@ -897,6 +1568,13 @@ exports.createSenderPaidDelivery = (stripe) => functions.https.onCall(async (dat
     throw new functions.https.HttpsError("not-found", "Payment session not found.");
   }
   let payment = paymentSnap.data();
+  const rothOnlyPayment = payment.paymentMethod === "roth" &&
+    Number(payment.remainingAmount || 0) <= 0 &&
+    Number(payment.rothAppliedAmount || 0) > 0 &&
+    !payment.stripePaymentIntentId &&
+    !payment.checkoutSessionId;
+  const rothOnlyPaymentAuthorized = rothOnlyPayment &&
+    `${payment.paymentStatus || payment.status}` === "payment_processing";
   if (`${payment.paymentStatus || payment.status}` !== "succeeded" && payment.stripePaymentIntentId) {
     const intent = await stripe.paymentIntents.retrieve(payment.stripePaymentIntentId);
     if (intent.status === "succeeded") {
@@ -904,8 +1582,16 @@ exports.createSenderPaidDelivery = (stripe) => functions.https.onCall(async (dat
       payment = {...payment, status: "succeeded", paymentStatus: "succeeded"};
     }
   }
-  if (`${payment.paymentStatus || payment.status}` !== "succeeded") {
-    throw new functions.https.HttpsError("failed-precondition", "Stripe payment must be confirmed before delivery creation.");
+  if (`${payment.paymentStatus || payment.status}` !== "succeeded" &&
+      !rothOnlyPaymentAuthorized) {
+    const message = rothOnlyPayment ?
+      "Roth payment session must be authorised before delivery creation." :
+      "Stripe payment must be confirmed before delivery creation.";
+    throw new functions.https.HttpsError("failed-precondition", message, {
+      reason: rothOnlyPayment ? "roth_session_unconfirmed" : "stripe_payment_unconfirmed",
+      paymentSessionId,
+      quoteId,
+    });
   }
   const quote = quoteSnap.data();
   const draftId = text(data.draftId);
@@ -924,14 +1610,27 @@ exports.createSenderPaidDelivery = (stripe) => functions.https.onCall(async (dat
   }
   const requestId = text(data.requestId) || `sender_${stableId(`${sender.uid}:${draftId || quoteId}:${paymentSessionId}`)}`;
   const deliveryRef = db.collection("deliveryRequests").doc(requestId);
+  const rothAppliedAmount = money(payment.rothAppliedAmount || 0);
+  const walletDebitRequired = rothAppliedAmount > 0 &&
+    payment.rothDebitStatus !== "completed";
+  const walletDebitRef = db.collection("walletTransactions").doc(`wallet_delivery_${paymentSessionId}`);
+  const {walletId, walletRef, senderWalletRef} = walletRefsForSender(db, sender);
   const pickup = data.pickup || {};
   const dropoff = data.dropoff || {};
   const parcel = data.parcel || {};
   const clientIris = data.iris || {};
+  const forcedVanguardRequired = quote.vanguardRequired === true ||
+    quote.businessMode === true ||
+    text(quote.sourceModule || quote.serviceType || quote.type)
+        .toLowerCase()
+        .includes("health") ||
+    text(quote.sourceModule || quote.serviceType || quote.type)
+        .toLowerCase()
+        .includes("gift");
   const vanguardFields = vanguardProtocol.initialProtocolFields({
     selected: quote.vanguardProtocolEnabled === true,
-    required: quote.vanguardRequired === true,
-    irisRequired: quote.vanguardRequired === true,
+    required: forcedVanguardRequired,
+    irisRequired: forcedVanguardRequired,
     irisRequiredReason: quote.vanguardRequiredReason,
     itemName: parcel.itemName,
     description: parcel.description,
@@ -939,10 +1638,17 @@ exports.createSenderPaidDelivery = (stripe) => functions.https.onCall(async (dat
   });
   const privateVanguardFields = privateVanguardPinFields(vanguardFields);
   await db.runTransaction(async (transaction) => {
-    const [existingDelivery, existingIdem] = await Promise.all([
+    const reads = [
       transaction.get(deliveryRef),
       transaction.get(idempotencyRef),
-    ]);
+    ];
+    if (walletDebitRequired) {
+      reads.push(transaction.get(walletRef));
+      reads.push(transaction.get(walletDebitRef));
+      reads.push(transaction.get(senderWalletRef));
+    }
+    const [existingDelivery, existingIdem, walletSnap, existingDebitSnap, senderWalletSnap] =
+      await Promise.all(reads);
     if (existingIdem.exists) return;
     if (existingDelivery.exists) {
       transaction.set(idempotencyRef, {
@@ -957,7 +1663,40 @@ exports.createSenderPaidDelivery = (stripe) => functions.https.onCall(async (dat
       }, {merge: true});
       return;
     }
+    let walletBalanceBefore = null;
+    let walletBalanceAfter = null;
+    if (walletDebitRequired) {
+      if (existingDebitSnap && existingDebitSnap.exists) {
+        throw new Error("Roth debit exists without a completed delivery. Please contact support.");
+      }
+      const wallet = walletSnap && walletSnap.exists ? walletSnap.data() || {} : {};
+      const senderWallet = senderWalletSnap && senderWalletSnap.exists ?
+        senderWalletSnap.data() || {} : {};
+      if (wallet.isFrozen === true) throw new Error("Wallet is frozen.");
+      if (senderWallet.status === "frozen" || senderWallet.frozen === true) {
+        throw new Error("Wallet is frozen.");
+      }
+      const legacyBalance = Number(wallet.balance == null ? wallet.rothCredit : wallet.balance);
+      const projectionBalance = Number(senderWallet.balance == null ?
+        senderWallet.rothCredit : senderWallet.balance);
+      const availableBalances = [legacyBalance, projectionBalance]
+          .filter((value) => Number.isFinite(value) && value >= 0);
+      walletBalanceBefore = money(availableBalances.length ? Math.max(...availableBalances) : 0);
+      if (walletBalanceBefore < rothAppliedAmount) {
+        throw new Error("Insufficient Roth balance.");
+      }
+      walletBalanceAfter = money(walletBalanceBefore - rothAppliedAmount);
+      logSenderPaymentStage("roth_debit_validated", {
+        userId: sender.uid,
+        quoteId,
+        paymentSessionId,
+        amount: rothAppliedAmount,
+        walletBalanceBefore,
+        walletBalanceAfter,
+      });
+    }
     const selectedServiceLevel = `${quote.selectedSpeed || "standard"}`.toLowerCase();
+    const expressDelivery = selectedServiceLevel === "express";
     const parcelDescription = parcel.description || parcel.itemName || "Parcel";
     const quotePhotoAnalysis = quote.photoAnalysis || null;
     const iris = {
@@ -978,7 +1717,7 @@ exports.createSenderPaidDelivery = (stripe) => functions.https.onCall(async (dat
       Number(iris.recommendation && iris.recommendation.estimatedWeightKg || parcel.weightKg || 0) || null;
     const riderAliases = riderDisplayAliases({quote, data, vanguardFields});
 
-    transaction.set(deliveryRef, {
+    transaction.set(deliveryRef, stripUndefined({
       requestId,
       deliveryId: requestId,
       role: "user",
@@ -997,7 +1736,8 @@ exports.createSenderPaidDelivery = (stripe) => functions.https.onCall(async (dat
       } : {}),
       pickupDetails: {
         fullname: pickup.fullname || sender.name || "Sender",
-        phone: pickup.phone || "",
+        phone: "",
+        contactMethod: "circum_relay",
         position: geoData(pickup.coordinates),
         moreInformation: pickup.instructions || "",
         locality: pickup.locality || "",
@@ -1006,7 +1746,8 @@ exports.createSenderPaidDelivery = (stripe) => functions.https.onCall(async (dat
       },
       dropoffDetails: {
         fullname: dropoff.fullname || data.recipient && data.recipient.name || "",
-        phone: dropoff.phone || data.recipient && data.recipient.phone || "",
+        phone: "",
+        contactMethod: "circum_relay",
         position: geoData(dropoff.coordinates),
         moreInformation: dropoff.instructions || data.recipient && data.recipient.deliveryNotes || "",
         locality: dropoff.locality || "",
@@ -1019,8 +1760,14 @@ exports.createSenderPaidDelivery = (stripe) => functions.https.onCall(async (dat
       dropoffAddress: dropoff.address || "",
       dropoffLocality: dropoff.locality || "",
       receiverName: data.recipient && data.recipient.name || dropoff.fullname || "",
-      receiverPhone: data.recipient && data.recipient.phone || dropoff.phone || "",
-      recipient: data.recipient || {},
+      receiverPhone: "",
+      recipient: {
+        ...(data.recipient || {}),
+        phone: "",
+        contactMethod: "circum_relay",
+      },
+      contactMethod: "circum_relay",
+      maskedCommunicationOnly: true,
       deliveryTime: data.deliveryTime || {},
       parcel,
       packageDescription: parcelDescription,
@@ -1039,6 +1786,13 @@ exports.createSenderPaidDelivery = (stripe) => functions.https.onCall(async (dat
       selectedServiceLevel,
       serviceLevel: selectedServiceLevel,
       selectedTier: selectedServiceLevel,
+      priority: expressDelivery,
+      urgent: expressDelivery,
+      riderUrgency: expressDelivery ? "urgent" : "normal",
+      riderAlert: expressDelivery ?
+        "Express delivery: urgent pickup requested." :
+        "",
+      matchingPriority: expressDelivery ? "express" : "standard",
       quoteId,
       paymentSessionId,
       price: quote.total,
@@ -1066,15 +1820,84 @@ exports.createSenderPaidDelivery = (stripe) => functions.https.onCall(async (dat
       },
       createdAt: FieldValue.serverTimestamp(),
       updatedAt: FieldValue.serverTimestamp(),
-    });
-    if (privateVanguardFields) {
-      transaction.set(db.collection("deliveryRequestsPrivate").doc(deliveryRef.id), {
-        deliveryId: deliveryRef.id,
+    }));
+    if (walletDebitRequired) {
+      const now = FieldValue.serverTimestamp();
+      const senderWallet = senderWalletSnap && senderWalletSnap.exists ?
+        senderWalletSnap.data() || {} : {};
+      transaction.set(walletRef, {
+        userId: walletId,
+        uid: sender.uid,
+        userEmail: sender.email,
+        normalizedEmail: sender.email,
+        balance: walletBalanceAfter,
+        rothCredit: walletBalanceAfter,
+        currency: "GBP",
+        isFrozen: false,
+        createdAt: walletSnap && walletSnap.exists ? walletSnap.data().createdAt || now : now,
+        updatedAt: now,
+      }, {merge: true});
+      transaction.set(senderWalletRef, {
+        userId: sender.uid,
+        balance: walletBalanceAfter,
+        rothCredit: walletBalanceAfter,
+        currency: "ROTH",
+        status: "active",
+        frozen: false,
+        version: Number(senderWallet.version || 0) + 1,
+        createdAt: senderWallet.createdAt || now,
+        updatedAt: now,
+      }, {merge: true});
+      transaction.set(walletDebitRef, {
+        id: walletDebitRef.id,
+        userId: walletId,
+        uid: sender.uid,
+        userEmail: sender.email,
+        normalizedEmail: sender.email,
+        walletId,
+        type: "delivery_payment",
+        amount: -rothAppliedAmount,
+        direction: "debit",
+        walletType: "sender",
+        balanceType: "rothCredit",
+        balanceBefore: walletBalanceBefore,
+        balanceAfter: walletBalanceAfter,
+        referenceId: paymentSessionId,
+        relatedEntityId: requestId,
+        notes: "Roth applied to Circum delivery payment.",
+        description: "Roth applied to Circum delivery payment.",
+        idempotencyKey: walletDebitRef.id,
+        createdBy: "system",
+        status: "completed",
+        paymentProvider: "roth_internal",
+        createdAt: now,
+        metadata: {
+          quoteId,
+          paymentSessionId,
+          deliveryId: requestId,
+          service: "delivery",
+          source: "sender_booking_delivery_creation",
+        },
+      });
+      transaction.set(db.collection("senderPaymentSessions").doc(paymentSessionId), {
+        rothDebitStatus: "completed",
+        rothDebitTransactionId: walletDebitRef.id,
+        deliveryId: requestId,
         requestId,
-        senderId: sender.uid,
-        ...privateVanguardFields,
-      }, {merge: false});
+        updatedAt: now,
+      }, {merge: true});
     }
+    transaction.set(db.collection("deliveryRequestsPrivate").doc(deliveryRef.id), {
+      deliveryId: deliveryRef.id,
+      requestId,
+      senderId: sender.uid,
+      privateContactDetails: stripUndefined({
+        pickupPhone: pickup.phone || "",
+        dropoffPhone: dropoff.phone || data.recipient && data.recipient.phone || "",
+        receiverPhone: data.recipient && data.recipient.phone || dropoff.phone || "",
+      }),
+      ...(privateVanguardFields || {}),
+    }, {merge: false});
     transaction.set(idempotencyRef, {
       idempotencyKey,
       requestId,
@@ -1093,15 +1916,123 @@ exports.createSenderPaidDelivery = (stripe) => functions.https.onCall(async (dat
       }, {merge: true});
     }
   });
+  logSenderPaymentStage("delivery_creation_completed", {
+    userId: sender.uid,
+    quoteId,
+    paymentSessionId,
+    requestId,
+    rothAppliedAmount,
+    rothDebitStatus: walletDebitRequired ? "completed" : payment.rothDebitStatus || "not_required",
+  });
   return {requestId, deliveryId: deliveryRef.id, idempotencyKey};
+}
+
+exports.createSenderPaidDelivery = (stripe) => functions.https.onCall(async (data, context) => {
+  try {
+    return await createPaidDeliveryFromSession(stripe, requireSender(context), data || {});
+  } catch (error) {
+    if (error instanceof functions.https.HttpsError) throw error;
+    const safe = safeDeliveryCreationError(error);
+    throw new functions.https.HttpsError(safe.code, safe.message, {
+      reason: safe.reason,
+      originalMessage: text(error && error.message),
+    });
+  }
 });
 
+async function finalizeSenderCheckoutSession(stripe, sessionData, eventId = "") {
+  const metadata = sessionData.metadata || {};
+  const paymentSessionId = text(metadata.paymentSessionId);
+  const quoteId = text(metadata.quoteId);
+  if (!paymentSessionId || !quoteId) {
+    throw new Error("Sender checkout session metadata is incomplete.");
+  }
+  const db = getFirestore();
+  const sessionRef = db.collection("senderPaymentSessions").doc(paymentSessionId);
+  const sessionSnap = await sessionRef.get();
+  if (!sessionSnap.exists) {
+    throw new Error("Sender payment session was not found.");
+  }
+  const payment = sessionSnap.data() || {};
+  if (payment.quoteId !== quoteId || payment.checkoutSessionId !== sessionData.id) {
+    throw new Error("Sender checkout session ownership mismatch.");
+  }
+  const verified = verifiedStripePaidGbpSession(sessionData, {
+    ownerId: payment.userId || metadata.userId,
+    ownerEmail: payment.userEmail || metadata.userEmail,
+    expectedAmountGBP: payment.remainingAmount,
+  });
+  await sessionRef.set({
+    status: "succeeded",
+    paymentStatus: "succeeded",
+    stripeCheckoutSessionId: sessionData.id,
+    checkoutSessionId: sessionData.id,
+    stripePaymentIntentId: sessionData.payment_intent || payment.stripePaymentIntentId || null,
+    stripeAmount: verified.amountGBP,
+    stripeCurrency: verified.currency,
+    confirmedAt: FieldValue.serverTimestamp(),
+    lastStripeEventId: eventId || payment.lastStripeEventId || null,
+    updatedAt: FieldValue.serverTimestamp(),
+  }, {merge: true});
+  if (Number(payment.rothAppliedAmount || 0) > 0) {
+    logSenderPaymentStage("roth_debit_deferred_until_delivery_creation", {
+      userId: payment.userId || metadata.userId,
+      quoteId,
+      paymentSessionId,
+      stripeCheckoutSessionId: sessionData.id,
+      stripePaymentIntentId: sessionData.payment_intent || null,
+      amount: Number(payment.rothAppliedAmount || 0),
+    });
+  }
+  const sender = {
+    uid: payment.userId || metadata.userId,
+    email: payment.userEmail || metadata.userEmail || "",
+    name: payment.userName || "",
+  };
+  const payload = payment.deliveryPayload || {};
+  return createPaidDeliveryFromSession(stripe, sender, {
+    ...payload,
+    requestId: payment.requestId || metadata.requestId,
+    quoteId,
+    paymentSessionId,
+    draftId: payment.draftId || null,
+    idempotencyKey: payment.idempotencyKey || metadata.idempotencyKey,
+  });
+}
+
+exports.finalizeSenderWebCheckout = (stripe) => functions.https.onCall(async (data, context) => {
+  const sender = requireSender(context);
+  const sessionId = text(data.checkoutSessionId || data.sessionId);
+  const paymentSessionId = text(data.paymentSessionId);
+  if (!sessionId || !paymentSessionId) {
+    throw new functions.https.HttpsError("invalid-argument", "Confirmed checkout session is required.");
+  }
+  const sessionSnap = await getFirestore().collection("senderPaymentSessions").doc(paymentSessionId).get();
+  if (!sessionSnap.exists || sessionSnap.data().userId !== sender.uid) {
+    throw new functions.https.HttpsError("not-found", "Sender payment session not found.");
+  }
+  const sessionData = await retrievePaidCheckoutSession(stripe, sessionId, paymentSessionId);
+  try {
+    return await finalizeSenderCheckoutSession(stripe, sessionData, `callable_${paymentSessionId}`);
+  } catch (error) {
+    throw new functions.https.HttpsError("failed-precondition", safePaymentFinalizationError(error));
+  }
+});
+
+exports.handleSenderCheckoutSession = async (stripe, sessionData, eventId = null) => {
+  return finalizeSenderCheckoutSession(stripe, sessionData, eventId || "");
+};
+
 exports.updateSenderPaymentIntentStatus = updateSenderPaymentIntentStatus;
+exports.handleSenderPaymentIntent = handleSenderPaymentIntent;
 exports._private = {
   sanitizeSenderDraftPayload,
+  draftExpired,
+  draftInactive,
   stableId,
   quotePayload,
   riderDisplayAliases,
   riderPayoutFromQuote,
   DRAFT_RETENTION_DAYS,
+  DRAFT_INACTIVITY_MINUTES,
 };

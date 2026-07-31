@@ -100,6 +100,19 @@ class SenderStartupDiagnostics extends ChangeNotifier {
         details.exception,
         details.stack,
       );
+      if (kDebugMode && _isLayoutException(details.exception)) {
+        debugPrint('CIRCUM_LAYOUT_EXCEPTION ${details.exceptionAsString()}');
+        debugPrint('CIRCUM_LAYOUT_EXCEPTION_WIDGET_TREE_BEGIN');
+        debugDumpApp();
+        debugPrint('CIRCUM_LAYOUT_EXCEPTION_WIDGET_TREE_END');
+        debugPrint('CIRCUM_LAYOUT_EXCEPTION_RENDER_TREE_BEGIN');
+        debugDumpRenderTree();
+        debugPrint('CIRCUM_LAYOUT_EXCEPTION_RENDER_TREE_END');
+        debugPrintStack(
+          label: 'CIRCUM_LAYOUT_EXCEPTION_STACK',
+          stackTrace: details.stack,
+        );
+      }
       FlutterError.presentError(details);
     };
 
@@ -163,6 +176,17 @@ class SenderStartupDiagnostics extends ChangeNotifier {
       debugPrint('Sender startup diagnostic failed at $stage: $exception');
     }
   }
+}
+
+bool _isLayoutException(Object exception) {
+  final message = exception.toString().toLowerCase();
+  return message.contains('viewport was given unbounded') ||
+      message.contains('renderbox was not laid out') ||
+      message.contains('renderflex overflow') ||
+      message.contains('overflowed by') ||
+      message.contains('boxconstraints forces an infinite') ||
+      message.contains('incorrect use of parentdatawidget') ||
+      message.contains('failed assertion') && message.contains('render');
 }
 
 class SenderRuntimeHealthPanel extends StatelessWidget {

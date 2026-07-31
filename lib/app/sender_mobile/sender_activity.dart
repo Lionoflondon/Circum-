@@ -12,6 +12,7 @@ import '../send_package/view/ride_chats.dart';
 import 'design_system/sender_design_system.dart';
 import 'sender_booking_canvas.dart';
 import 'sender_accessibility.dart';
+import 'sender_page_shell.dart';
 import 'sender_wallet.dart';
 
 enum SenderActivityType { parcel, gift, health, business, roth }
@@ -513,8 +514,8 @@ class _SenderActivityViewState extends State<SenderActivityView> {
   }
 
   @override
-  Widget build(BuildContext context) => ListView(
-        padding: const EdgeInsets.fromLTRB(20, 18, 20, 30),
+  Widget build(BuildContext context) => SenderScrollablePageShell(
+        paddingBuilder: (_) => const EdgeInsets.fromLTRB(20, 18, 20, 30),
         children: [
           Text(
             'Activity',

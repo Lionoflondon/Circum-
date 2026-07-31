@@ -377,8 +377,7 @@ class SenderDeliveryRecord {
       serviceType: '${data['serviceType'] ?? ''}',
       assignedDriverName:
           '${data['riderName'] ?? data['driverName'] ?? data['courierName'] ?? ''}',
-      assignedDriverPhone:
-          '${data['riderPhone'] ?? data['driverPhone'] ?? data['courierPhone'] ?? ''}',
+      assignedDriverPhone: '',
       assignedDriverPhotoUrl:
           '${assignedRider['profileThumbnailUrl'] ?? assignedRider['profilePhotoUrl'] ?? assignedRider['photoURL'] ?? data['profileThumbnailUrl'] ?? data['profilePhotoUrl'] ?? data['riderPhotoURL'] ?? data['riderPhotoUrl'] ?? data['driverPhotoUrl'] ?? data['photoURL'] ?? data['photoUrl'] ?? ''}',
       assignedDriverVehicle:

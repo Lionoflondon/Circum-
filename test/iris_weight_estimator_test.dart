@@ -129,7 +129,7 @@ void main() {
       expect(estimate.matchedItemName, 'Apple iPhone 15');
       expect(estimate.truthBand, 'Exact Match');
       expect(estimate.typicalDimensions?.label, '15 x 8 x 2 cm');
-      expect(estimate.vehicleSuitability, 'Bike');
+      expect(estimate.vehicleSuitability, 'Motorbike');
       expect(estimate.fragile, isTrue);
     });
 
@@ -389,7 +389,7 @@ void main() {
       expect(phone?.matchedItemName, 'Apple iPhone 13');
       expect(phone?.matchedItemName, isNot(contains('Suitcase')));
       expect(documents?.packageType, 'Documents');
-      expect(documents?.vehicleSuitability, 'Bike');
+      expect(documents?.vehicleSuitability, 'Motorbike');
     });
 
     test('bulky known items use realistic weights and quantity', () {

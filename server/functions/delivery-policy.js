@@ -134,6 +134,13 @@ exports.requestSenderCancellation = functions.https.onCall(async (data, context)
         cancelledAt: FieldValue.serverTimestamp(),
         cancelledBy: uid,
         cancellationReason,
+        matchingStatus: "cancelled",
+        dispatchStatus: "cancelled",
+        broadcastBlocked: true,
+        broadcastBlockReason: "sender_cancelled",
+        active: false,
+        archived: true,
+        removedFromActiveQueues: true,
         previousLifecycleState,
         cancellationPaymentStatus: paymentStatus || null,
         cancellationStripePaymentIntentId: stripePaymentIntentId,
@@ -177,6 +184,9 @@ exports.previewSenderCancellation = functions.https.onCall(async (data, context)
     state: delivery.state || delivery.status,
     serverNow: Date.now(),
   });
+  const paidAmount = Number(delivery.price || delivery.total || delivery.amount || delivery.payment && delivery.payment.amount || 0) || 0;
+  const cancellationFee = Number(decision.feeAmount || 0) || 0;
+  const finalRefund = decision.canCancel ? Math.max(0, paidAmount - cancellationFee) : 0;
   return {
     success: true,
     decision,
@@ -187,7 +197,12 @@ exports.previewSenderCancellation = functions.https.onCall(async (data, context)
     backendReason: decision.userFacingMessage || decision.adminFacingReason || "",
     reason: decision.cancellationType,
     amountToChargeOrRefund: decision.feeApplies ? decision.feeAmount : 0,
+    riderCompensation: decision.riderCompensation,
+    refundAmount: finalRefund,
+    finalRefund,
     canCancel: decision.canCancel,
+    requiresAdminReview: decision.requiresAdminReview,
+    interventionAvailable: !decision.canCancel,
   };
 });
 

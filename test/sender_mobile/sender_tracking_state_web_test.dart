@@ -1,8 +1,11 @@
 import 'dart:io';
 
+import 'package:circum/app/send_package/bloc/send_package_bloc.dart';
 import 'package:circum/app/send_package/models/delivery_restoration_coordinates.dart';
+import 'package:circum/app/send_package/models/place_coordinates.m.dart';
 import 'package:circum/app/sender_mobile/sender_tracking_screen.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:google_maps_flutter/google_maps_flutter.dart';
 
 void main() {
   test('Sender mobile preserves distinct pickup and drop-off coordinates', () {
@@ -104,7 +107,46 @@ void main() {
     );
     expect(
       senderTrackingStateForBackendStatus('unknown_future_status'),
+      isNull,
+    );
+  });
+
+  test('Sender mobile gates live lifecycle on backend proof fields', () {
+    expect(
+      senderTrackingStateForBackendData({
+        'status': 'in_transit',
+      }),
+      SenderTrackingState.findingRider,
+    );
+    expect(
+      senderTrackingStateForBackendData({
+        'status': 'in_transit',
+        'riderId': 'rider_123',
+      }),
+      SenderTrackingState.riderArrivedAtPickup,
+    );
+    expect(
+      senderTrackingStateForBackendData({
+        'status': 'in_transit',
+        'riderId': 'rider_123',
+        'collectedAt': DateTime(2026, 7, 30),
+      }),
       SenderTrackingState.inTransit,
+    );
+    expect(
+      senderTrackingStateForBackendData({
+        'status': 'collected',
+        'riderId': 'rider_123',
+      }),
+      SenderTrackingState.riderArrivedAtPickup,
+    );
+    expect(
+      senderTrackingStateForBackendData({
+        'status': 'collected',
+        'riderId': 'rider_123',
+        'collectionPinVerified': true,
+      }),
+      SenderTrackingState.pickupComplete,
     );
   });
 
@@ -174,5 +216,42 @@ void main() {
     expect(source, contains('SenderTrackingState.findingRider'));
     expect(source, contains('SenderTrackingState.riderArrivingAtDropoff'));
     expect(source, contains('PINCard'));
+  });
+
+  test('Sender tracking map adapter creates live Google map snapshot', () {
+    final content = senderTrackingContentFor(SenderTrackingState.inTransit);
+    final snapshot = SenderTrackingMapAdapter.snapshotFor(
+      SendPackageState(
+        pickupCoordinate: PlaceCoordinate(lat: 51.501, lng: -0.141),
+        desinationCoordinate: PlaceCoordinate(lat: 51.515, lng: -0.092),
+        riderLocation: PlaceCoordinate(lat: 51.507, lng: -0.118),
+        polylineCoordinates: const [
+          LatLng(51.501, -0.141),
+          LatLng(51.507, -0.118),
+          LatLng(51.515, -0.092),
+        ],
+      ),
+      content: content,
+      stateDelivered: false,
+    );
+
+    expect(snapshot, isNotNull);
+    expect(snapshot!.pickup.latitude, 51.501);
+    expect(snapshot.dropoff.longitude, -0.092);
+    expect(snapshot.rider?.latitude, 51.507);
+    expect(snapshot.completedRoute, hasLength(3));
+    expect(snapshot.remainingRoute.first, snapshot.rider);
+  });
+
+  test(
+      'Sender tracking map adapter falls back when coordinates are unavailable',
+      () {
+    final snapshot = SenderTrackingMapAdapter.snapshotFor(
+      SendPackageState(),
+      content: senderTrackingContentFor(SenderTrackingState.findingRider),
+      stateDelivered: false,
+    );
+
+    expect(snapshot, isNull);
   });
 }

@@ -1,0 +1,44 @@
+{
+  "version": "2026-07-canonical-v1",
+  "currency": "GBP",
+  "distanceUnit": "mile",
+  "pricing": {
+    "baseDeliveryGbp": 5,
+    "distancePerMileGbp": 1.5,
+    "includedBaseMiles": 0,
+    "shortTripFareFloorMiles": 1.6,
+    "longDistanceThresholdMiles": 20,
+    "longDistanceMileageMultiplier": 1.2,
+    "vehicleSurchargesGbp": {
+      "motorbike": 0,
+      "car": 2,
+      "van": 10
+    },
+    "express": {
+      "minimumSurchargeGbp": 5,
+      "standardSubtotalPercent": 0.2
+    },
+    "vanguard": {
+      "optionalFeeGbp": 1.99,
+      "includedFor": [
+        "business",
+        "health",
+        "gifts",
+        "high_value",
+        "medical",
+        "protected_documents",
+        "confidential"
+      ]
+    }
+  },
+  "vehiclePolicy": {
+    "canonicalVehicles": [
+      "motorbike",
+      "car",
+      "van"
+    ],
+    "defaultVehicle": "motorbike",
+    "carSuitableMaxExclusiveKg": 40,
+    "vanRequiredMinKg": 40
+  }
+}

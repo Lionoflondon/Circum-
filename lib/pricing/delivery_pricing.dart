@@ -13,7 +13,6 @@ class DeliveryPricingInput {
   final bool noLift;
   final bool priority;
   final bool express;
-  final bool economy;
   final int quantity;
   final double? singleItemWeightKg;
   final bool stackable;
@@ -31,7 +30,6 @@ class DeliveryPricingInput {
     this.noLift = false,
     this.priority = false,
     this.express = false,
-    this.economy = false,
     this.quantity = 1,
     this.singleItemWeightKg,
     this.stackable = false,
@@ -280,7 +278,6 @@ class DeliveryPricing {
       preServiceSubtotal,
       express: input.express,
       priority: input.priority,
-      economy: input.economy,
     );
     final specialConditions = _roundMoney(
       baseSpecialConditions + serviceLevelSurcharge,
@@ -304,9 +301,7 @@ class DeliveryPricing {
       serviceLevelSurcharge: serviceLevelSurcharge,
       serviceLevel: input.express
           ? 'express'
-          : input.economy
-              ? 'economy'
-              : 'standard',
+          : 'standard',
       surgeMultiplier: surgeMultiplier,
       total: total,
       weightCategory: weightBand.category,
@@ -513,7 +508,7 @@ class DeliveryPricing {
   static String recommendedVehicleForWeight(double weightKg) {
     if (weightKg > 10) return 'Van';
     if (weightKg > 5) return 'Car';
-    return 'Bike';
+    return 'Motorbike';
   }
 
   static VehicleSuitability resolveVehicleSuitability({
@@ -580,7 +575,7 @@ class DeliveryPricing {
           'document folder',
           'government paperwork',
         ].any(text.contains);
-    final compactBikeItem = [
+    final compactMotorbikeItem = [
       'keys',
       'key set',
       'phone',
@@ -611,6 +606,11 @@ class DeliveryPricing {
         resolvedQuantity == 1 &&
         weightKg <= 15 &&
         !oversizedDimensions;
+    final printerLoadFitsCar = text.contains('printer') &&
+        resolvedQuantity <= 2 &&
+        weightKg < PricingConstants.twoPersonThresholdKg &&
+        largestItemWeightKg <= 25 &&
+        !oversizedDimensions;
     final luggageFitsCar = compactLuggage &&
         resolvedQuantity <= 4 &&
         largestItemWeightKg <= 25 &&
@@ -631,8 +631,8 @@ class DeliveryPricing {
 
     // The recommendation is the minimum safe vehicle. Larger vehicles remain
     // valid sender upgrades.
-    var allowed = <String>{'Bike', 'Car', 'Van'};
-    var recommended = 'Bike';
+    var allowed = <String>{'Motorbike', 'Car', 'Van'};
+    var recommended = 'Motorbike';
     var score = 30;
 
     if (weightKg > 10 ||
@@ -659,6 +659,11 @@ class DeliveryPricing {
       recommended = 'Car';
       score = max(score, 80);
     }
+    if (printerLoadFitsCar) {
+      allowed = {'Car', 'Van'};
+      recommended = 'Car';
+      score = max(score, 82);
+    }
     if (flatPacked && weightKg <= 25 && !oversizedDimensions) {
       allowed = {'Car', 'Van'};
       recommended = 'Car';
@@ -669,13 +674,14 @@ class DeliveryPricing {
     if (repo == 'van' &&
         !luggageFitsCar &&
         !compactStackableLoad &&
+        !printerLoadFitsCar &&
         !normalPrinter) {
       allowed = {'Van'};
       recommended = 'Van';
       score = max(score, 90);
     } else if (repo == 'car or van') {
       allowed = {'Car', 'Van'};
-      if (recommended == 'Bike') recommended = 'Car';
+      if (recommended == 'Motorbike') recommended = 'Car';
       score = max(score, 70);
     } else if (repo == 'car') {
       allowed = {'Car', 'Van'};
@@ -689,15 +695,15 @@ class DeliveryPricing {
       score = max(score, 82);
     }
 
-    // Documents are a core Bike use case when they remain within the normal
+    // Documents are a core Motorbike use case when they remain within the normal
     // courier safety, value, and protection limits.
     if (documentDelivery &&
         weightKg <= 10 &&
         bikeSafeDimensions &&
         !highValue &&
         !vanguardRequired) {
-      allowed = {'Bike', 'Car', 'Van'};
-      recommended = 'Bike';
+      allowed = {'Motorbike', 'Car', 'Van'};
+      recommended = 'Motorbike';
       score = max(score, 95);
     } else if (weightKg <= 10 &&
         bikeSafeDimensions &&
@@ -706,9 +712,9 @@ class DeliveryPricing {
         !vanguardRequired &&
         !bulkyByKeyword &&
         !oversizedDimensions &&
-        (repo == 'bike' || compactBikeItem)) {
-      allowed = {'Bike', 'Car', 'Van'};
-      recommended = 'Bike';
+        (repo == 'bike' || repo == 'motorbike' || compactMotorbikeItem)) {
+      allowed = {'Motorbike', 'Car', 'Van'};
+      recommended = 'Motorbike';
       score = max(score, 78);
     }
     if (compactFootwear &&
@@ -716,8 +722,8 @@ class DeliveryPricing {
         bikeSafeDimensions &&
         !oversizedDimensions &&
         repo == 'bike') {
-      allowed = {'Bike', 'Car', 'Van'};
-      recommended = 'Bike';
+      allowed = {'Motorbike', 'Car', 'Van'};
+      recommended = 'Motorbike';
       score = max(score, 86);
     }
 
@@ -730,7 +736,7 @@ class DeliveryPricing {
           ? 'Recommended because this item may be bulky or needs extra loading space.'
           : recommended == 'Car'
               ? 'Recommended because this item fits safely in a car.'
-              : 'Recommended as a faster option for this small, lightweight delivery.',
+          : 'Recommended as the fastest suitable option for this small, lightweight delivery.',
       handlingNotes: compactLuggage && weightKg > 20
           ? 'Heavy item - rider must confirm they can lift safely.'
           : handlingNotes?.trim().isNotEmpty == true
@@ -754,7 +760,14 @@ class DeliveryPricing {
     final vehicle = vehicleType?.trim().toLowerCase();
     if (vehicle == 'van') return true;
     if (vehicle == 'car') return weightKg <= 50;
-    if (vehicle == 'bike' || vehicle == 'bicycle') return weightKg <= 5;
+    if (vehicle == 'motorbike' ||
+        vehicle == 'bike' ||
+        vehicle == 'bicycle' ||
+        vehicle == 'e-bike' ||
+        vehicle == 'ebike' ||
+        vehicle == 'electric bike') {
+      return weightKg <= 5;
+    }
     return weightKg <= 5;
   }
 
@@ -807,12 +820,18 @@ class DeliveryPricing {
 
   static int? _vehicleCapabilityRank(String? vehicleType) {
     const order = {
+      'motorbike': 0,
       'bike': 0,
       'bicycle': 0,
       'e-bike': 0,
       'ebike': 0,
+      'electric bike': 0,
       'car': 1,
+      'estate': 1,
+      'suv': 1,
+      'estate/suv': 1,
       'van': 2,
+      'luton van': 2,
     };
     return order[vehicleType?.trim().toLowerCase()];
   }
@@ -859,7 +878,6 @@ class DeliveryPricing {
     double standardSubtotal, {
     bool express = false,
     bool priority = false,
-    bool economy = false,
   }) {
     if (express) {
       final configuredFee =
@@ -875,29 +893,10 @@ class DeliveryPricing {
     if (priority) {
       return PricingConstants.specialConditionFeesGbp['priority'] ?? 0;
     }
-    if (economy) {
-      return -min<double>(
-        PricingConstants.economyDiscountGbp,
-        max<double>(0, standardSubtotal - PricingConstants.baseFareGbp),
-      );
-    }
     return 0;
   }
 
   static Map<String, double> serviceLevelPrices(DeliveryPricingInput input) {
-    final economy = calculate(DeliveryPricingInput(
-      distanceMiles: input.distanceMiles,
-      weightKg: input.weightKg,
-      vehicleType: input.vehicleType,
-      oversized: input.oversized,
-      fragile: input.fragile,
-      twoPersonHandling: input.twoPersonHandling,
-      stairsFloors: input.stairsFloors,
-      noLift: input.noLift,
-      economy: true,
-      waitingMinutes: input.waitingMinutes,
-      surgeMultiplier: input.surgeMultiplier,
-    ));
     final standard = calculate(DeliveryPricingInput(
       distanceMiles: input.distanceMiles,
       weightKg: input.weightKg,
@@ -924,7 +923,6 @@ class DeliveryPricing {
       surgeMultiplier: input.surgeMultiplier,
     ));
     return {
-      'economyPrice': min(economy.total, standard.total - 0.01),
       'standardPrice': standard.total,
       'expressPrice': max(express.total, standard.total + 0.01),
     };
@@ -934,7 +932,6 @@ class DeliveryPricing {
     return switch (serviceLevel?.trim().toLowerCase()) {
       'express' => 0,
       'standard' => 1,
-      'economy' => 2,
       _ => 1,
     };
   }
@@ -972,7 +969,10 @@ class DeliveryPricing {
 String _normalizePricingVehicle(String? vehicleType) {
   final vehicle = vehicleType?.trim().toLowerCase() ?? '';
   if (vehicle.contains('van')) return 'van';
+  if (vehicle.contains('estate') || vehicle.contains('suv')) return 'car';
   if (vehicle.contains('car')) return 'car';
-  if (vehicle.contains('bike') || vehicle.contains('bicycle')) return 'bike';
+  if (vehicle.contains('bike') || vehicle.contains('bicycle')) {
+    return 'motorbike';
+  }
   return vehicle;
 }

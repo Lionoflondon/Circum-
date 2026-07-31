@@ -2,15 +2,9 @@
 const functions = require("firebase-functions/v1");
 const {getFirestore, FieldValue} = require("firebase-admin/firestore");
 const {getStorage} = require("firebase-admin/storage");
+const {canonicalDocumentId, DOCUMENT_MATRIX} = require("./rider-certification-policy");
 
-const ALLOWED_DOCUMENT_TYPES = new Set([
-  "driving_licence",
-  "proof_of_address",
-  "vehicle_insurance",
-  "right_to_work",
-  "profile_photo",
-  "identity",
-]);
+const ALLOWED_DOCUMENT_TYPES = new Set(Object.values(DOCUMENT_MATRIX).flat());
 const ALLOWED_CONTENT_TYPES = new Set([
   "image/jpeg",
   "image/png",
@@ -18,6 +12,26 @@ const ALLOWED_CONTENT_TYPES = new Set([
   "application/pdf",
 ]);
 const MAX_DOCUMENT_BYTES = 8 * 1024 * 1024;
+const ALLOWED_APPLICATION_SECTIONS = new Set([
+  "personal_details",
+  "home_address",
+  "contact_details",
+  "identity_verification",
+  "right_to_work",
+  "vehicle_details",
+  "vehicle_documents",
+  "payout_details",
+  "roth_wallet_setup",
+  "application_messages",
+  "review_status",
+]);
+const ALLOWED_SECTION_STATUSES = new Set([
+  "not_started",
+  "in_progress",
+  "submitted",
+  "needs_attention",
+  "approved",
+]);
 
 function requireRider(context) {
   if (!context.auth) {
@@ -44,9 +58,27 @@ function lower(value, max = 500) {
 }
 
 function cleanDocumentType(value) {
-  const normalized = lower(value, 80).replace(/[^a-z0-9]+/g, "_").replace(/^_+|_+$/g, "");
+  const normalized = canonicalDocumentId(
+      lower(value, 80).replace(/[^a-z0-9]+/g, "_").replace(/^_+|_+$/g, ""),
+  );
   if (!ALLOWED_DOCUMENT_TYPES.has(normalized)) {
     throw new functions.https.HttpsError("invalid-argument", "Unsupported Rider document type.");
+  }
+  return normalized;
+}
+
+function cleanApplicationSection(value) {
+  const normalized = lower(value, 80).replace(/[^a-z0-9]+/g, "_").replace(/^_+|_+$/g, "");
+  if (!ALLOWED_APPLICATION_SECTIONS.has(normalized)) {
+    throw new functions.https.HttpsError("invalid-argument", "Unsupported Rider application section.");
+  }
+  return normalized;
+}
+
+function cleanSectionStatus(value) {
+  const normalized = lower(value, 80).replace(/[^a-z0-9]+/g, "_").replace(/^_+|_+$/g, "");
+  if (!ALLOWED_SECTION_STATUSES.has(normalized)) {
+    throw new functions.https.HttpsError("invalid-argument", "Unsupported Rider application section status.");
   }
   return normalized;
 }
@@ -68,18 +100,16 @@ function audit(type, rider, extra = {}) {
   };
 }
 
-function profilePatch(data, rider) {
-  const fullName = text(data.fullName || rider.name, 160);
-  const phoneNumber = text(data.phoneNumber || data.phone, 60);
-  const vehicleType = lower(data.vehicleType, 80);
-  const vehicleRegistration = text(data.vehicleRegistration || data.plateNumber, 40);
-  if (!fullName || !phoneNumber || !vehicleType || !vehicleRegistration) {
-    throw new functions.https.HttpsError("invalid-argument", "Name, phone, vehicle and registration are required.");
-  }
+function profilePatch(data, rider, existing = {}) {
+  const vehicleExisting = existing.vehicle && typeof existing.vehicle === "object" ? existing.vehicle : {};
+  const fullName = text(data.fullName || existing.fullName || existing.name || rider.name, 160);
+  const phoneNumber = text(data.phoneNumber || data.phone || existing.phoneNumber || existing.phone, 60);
+  const vehicleType = lower(data.vehicleType || existing.vehicleType || existing.typeOfVehicle || vehicleExisting.type, 80);
+  const vehicleRegistration = text(data.vehicleRegistration || data.plateNumber || existing.vehicleRegistration || existing.plateNumber || vehicleExisting.registration || vehicleExisting.plateNumber, 40);
   const vehicle = {
     type: vehicleType,
-    makeModel: text(data.vehicleMakeModel, 120),
-    colour: text(data.vehicleColour, 80),
+    makeModel: text(data.vehicleMakeModel || existing.vehicleMakeModel || vehicleExisting.makeModel, 120),
+    colour: text(data.vehicleColour || existing.vehicleColour || vehicleExisting.colour, 80),
     plateNumber: vehicleRegistration,
   };
   return {
@@ -88,17 +118,23 @@ function profilePatch(data, rider) {
     fullName,
     phoneNumber,
     email: rider.email || text(data.email, 180),
-    postcode: text(data.postcode, 40),
+    postcode: text(data.postcode || existing.postcode || existing.homePostcode, 40),
+    dateOfBirth: text(data.dateOfBirth || existing.dateOfBirth, 40),
+    homeAddress: text(data.homeAddress || data.address || existing.homeAddress || existing.address, 500),
+    address: text(data.address || data.homeAddress || existing.address || existing.homeAddress, 500),
+    emergencyContactName: text(data.emergencyContactName || existing.emergencyContactName, 160),
+    emergencyContactPhone: text(data.emergencyContactPhone || existing.emergencyContactPhone, 60),
+    accessibilityNeeds: text(data.accessibilityNeeds || existing.accessibilityNeeds, 1000),
     vehicleType,
     vehicleMakeModel: vehicle.makeModel,
     vehicleColour: vehicle.colour,
     plateNumber: vehicleRegistration,
     vehicleRegistration,
     vehicle,
-    availability: text(data.availability, 240),
-    approvalStatus: "pending",
-    onboardingStatus: "not_started",
-    verificationStatus: "pending",
+    availability: text(data.availability || existing.availability, 240),
+    approvalStatus: existing.approvalStatus || "pending",
+    onboardingStatus: existing.onboardingStatus || "not_started",
+    verificationStatus: existing.verificationStatus || "pending",
     riderRank: "agent",
     trustPoints: 0,
     driverStatus: "active",
@@ -109,19 +145,45 @@ function profilePatch(data, rider) {
   };
 }
 
-function riderPatch(data, rider) {
+function riderPatch(data, rider, existing = {}) {
   return {
-    name: text(data.fullName || rider.name, 160),
-    phone: text(data.phoneNumber || data.phone, 60),
+    name: text(data.fullName || existing.fullName || existing.name || rider.name, 160),
+    phone: text(data.phoneNumber || data.phone || existing.phoneNumber || existing.phone, 60),
     role: "delivery",
-    status: "offline",
-    rating: "0.00",
-    plateNumber: text(data.vehicleRegistration || data.plateNumber, 40),
-    typeOfVehicle: text(data.vehicleType, 80),
-    vehicleMakeModel: text(data.vehicleMakeModel, 120),
-    vehicleColour: text(data.vehicleColour, 80),
-    verificationStatus: "pending",
+    status: text(existing.status || "offline", 40),
+    rating: text(existing.rating || "0.00", 20),
+    plateNumber: text(data.vehicleRegistration || data.plateNumber || existing.vehicleRegistration || existing.plateNumber, 40),
+    typeOfVehicle: text(data.vehicleType || existing.vehicleType || existing.typeOfVehicle, 80),
+    vehicleMakeModel: text(data.vehicleMakeModel || existing.vehicleMakeModel, 120),
+    vehicleColour: text(data.vehicleColour || existing.vehicleColour, 80),
+    verificationStatus: existing.verificationStatus || "pending",
     updatedAt: FieldValue.serverTimestamp(),
+  };
+}
+
+function applicationPatchFromProfile(data, rider, profile) {
+  const section = data.section ? cleanApplicationSection(data.section) : null;
+  const now = FieldValue.serverTimestamp();
+  return {
+    id: rider.uid,
+    riderId: rider.uid,
+    fullName: profile.fullName,
+    phoneNumber: profile.phoneNumber,
+    email: profile.email,
+    postcode: profile.postcode,
+    homeAddress: profile.homeAddress,
+    address: profile.address,
+    dateOfBirth: profile.dateOfBirth,
+    emergencyContactName: profile.emergencyContactName,
+    emergencyContactPhone: profile.emergencyContactPhone,
+    accessibilityNeeds: profile.accessibilityNeeds,
+    vehicleType: profile.vehicleType,
+    vehicleRegistration: profile.vehicleRegistration,
+    vehicle: profile.vehicle,
+    availability: profile.availability,
+    source: "cloud-functions",
+    updatedAt: now,
+    ...(section ? {sectionStatus: {[section]: "submitted"}} : {}),
   };
 }
 
@@ -130,17 +192,31 @@ exports.updateRiderProfile = functions.https.onCall(async (data, context) => {
   const db = getFirestore();
   const profileRef = db.collection("riderProfiles").doc(rider.uid);
   const riderRef = db.collection("riders").doc(rider.uid);
+  const applicationRef = db.collection("riderApplications").doc(rider.uid);
   const metricsRef = db.collection("driverPerformanceMetrics").doc(rider.uid);
   const eventRef = db.collection("riderOnboardingEvents").doc();
 
   await db.runTransaction(async (transaction) => {
-    const profileSnap = await transaction.get(profileRef);
-    const profile = profilePatch(data || {}, rider);
+    const [profileSnap, riderSnap, applicationSnap] = await Promise.all([
+      transaction.get(profileRef),
+      transaction.get(riderRef),
+      transaction.get(applicationRef),
+    ]);
+    const existing = {
+      ...(riderSnap.data() || {}),
+      ...(profileSnap.data() || {}),
+    };
+    const profile = profilePatch(data || {}, rider, existing);
+    const riderData = riderPatch(data || {}, rider, profile);
     transaction.set(profileRef, {
       ...profile,
       ...(profileSnap.exists ? {} : {createdAt: FieldValue.serverTimestamp()}),
     }, {merge: true});
-    transaction.set(riderRef, riderPatch(data || {}, rider), {merge: true});
+    transaction.set(riderRef, riderData, {merge: true});
+    transaction.set(applicationRef, {
+      ...applicationPatchFromProfile(data || {}, rider, profile),
+      ...(applicationSnap.exists ? {} : {createdAt: FieldValue.serverTimestamp()}),
+    }, {merge: true});
     transaction.set(metricsRef, {
       riderId: rider.uid,
       completedDeliveries: 0,
@@ -385,42 +461,64 @@ exports.submitRiderApplication = functions.https.onCall(async (data, context) =>
   const db = getFirestore();
   const idempotencyKey = text(data.idempotencyKey, 180) || `rider_application_${rider.uid}`;
   const idempotencyRef = db.collection("riderApplicationIdempotency").doc(idempotencyKey.replace(/[/.#[\]]/g, "_"));
-  const applicationRef = db.collection("riderApplications").doc();
+  const applicationRef = db.collection("riderApplications").doc(rider.uid);
+  const riderRef = db.collection("riders").doc(rider.uid);
   const profileRef = db.collection("riderProfiles").doc(rider.uid);
   const eventRef = db.collection("riderOnboardingEvents").doc();
 
   const result = await db.runTransaction(async (transaction) => {
     const replay = await transaction.get(idempotencyRef);
     if (replay.exists) return {...replay.data(), idempotent: true};
+    const [riderSnap, profileSnap, applicationSnap] = await Promise.all([
+      transaction.get(riderRef),
+      transaction.get(profileRef),
+      transaction.get(applicationRef),
+    ]);
+    const riderData = riderSnap.data() || {};
+    const profileData = profileSnap.data() || {};
+    const applicationData = applicationSnap.data() || {};
+    const existing = {...riderData, ...profileData, ...applicationData};
+    const vehicle = existing.vehicle && typeof existing.vehicle === "object" ? existing.vehicle : {};
 
     const now = FieldValue.serverTimestamp();
     const application = {
       id: applicationRef.id,
       riderId: rider.uid,
-      fullName: text(data.fullName || rider.name, 160),
-      phoneNumber: text(data.phoneNumber, 60),
-      email: rider.email || text(data.email, 180),
-      postcode: text(data.postcode, 40),
-      vehicleType: lower(data.vehicleType, 80),
-      availability: text(data.availability, 240),
+      fullName: text(data.fullName || existing.fullName || existing.name || rider.name, 160),
+      phoneNumber: text(data.phoneNumber || existing.phoneNumber || existing.phone, 60),
+      email: rider.email || text(data.email || existing.email, 180),
+      postcode: text(data.postcode || existing.postcode || existing.homePostcode, 40),
+      homeAddress: text(data.homeAddress || data.address || existing.homeAddress || existing.address, 500),
+      address: text(data.address || data.homeAddress || existing.address || existing.homeAddress, 500),
+      dateOfBirth: text(data.dateOfBirth || existing.dateOfBirth, 40),
+      emergencyContactName: text(data.emergencyContactName || existing.emergencyContactName, 160),
+      emergencyContactPhone: text(data.emergencyContactPhone || existing.emergencyContactPhone, 60),
+      accessibilityNeeds: text(data.accessibilityNeeds || existing.accessibilityNeeds, 1000),
+      vehicleType: lower(data.vehicleType || existing.vehicleType || vehicle.type, 80),
+      vehicleRegistration: text(data.vehicleRegistration || data.plateNumber || existing.vehicleRegistration || existing.plateNumber || vehicle.registration, 40),
+      vehicle,
+      availability: text(data.availability || existing.availability, 240),
       notes: text(data.notes, 1000),
       rightToWorkConfirmed: true,
       sealedPackageConsent: true,
       status: "submitted",
       source: "cloud-functions",
-      createdAt: now,
       updatedAt: now,
     };
     if (!application.fullName || !application.phoneNumber || !application.vehicleType) {
       throw new functions.https.HttpsError("invalid-argument", "Name, phone and vehicle type are required.");
     }
-    transaction.set(applicationRef, application);
+    transaction.set(applicationRef, {
+      ...application,
+      ...(existing.sectionStatus ? {sectionStatus: existing.sectionStatus} : {}),
+      ...(applicationSnap.exists ? {} : {createdAt: now}),
+    }, {merge: true});
     transaction.set(profileRef, {
       fullName: application.fullName,
       email: application.email,
       phoneNumber: application.phoneNumber,
       vehicleType: application.vehicleType,
-      vehicleRegistration: text(data.vehicleRegistration || data.plateNumber, 40),
+      vehicleRegistration: text(data.vehicleRegistration || data.plateNumber || existing.vehicleRegistration || existing.plateNumber || vehicle.registration, 40),
       onboardingStatus: "pending_review",
       approvalStatus: "pending",
       verificationStatus: "pending",
@@ -444,6 +542,39 @@ exports.submitRiderApplication = functions.https.onCall(async (data, context) =>
   });
 
   return result;
+});
+
+exports.updateRiderApplicationSection = functions.https.onCall(async (data, context) => {
+  const rider = requireRider(context);
+  const section = cleanApplicationSection(data.section);
+  const status = cleanSectionStatus(data.status || "in_progress");
+  const db = getFirestore();
+  const applicationRef = db.collection("riderApplications").doc(rider.uid);
+  const eventRef = db.collection("riderOnboardingEvents").doc();
+  const now = FieldValue.serverTimestamp();
+  await db.runTransaction(async (transaction) => {
+    const applicationSnap = await transaction.get(applicationRef);
+    const existing = applicationSnap.data() || {};
+    const currentStatus = text(existing.status);
+    transaction.set(applicationRef, {
+      id: rider.uid,
+      riderId: rider.uid,
+      email: rider.email,
+      sectionStatus: {
+        [section]: status,
+      },
+      status: currentStatus || (status === "needs_attention" ? "needs_information" : "draft"),
+      source: "cloud-functions",
+      updatedAt: now,
+      ...(!applicationSnap.exists ? {createdAt: now} : {}),
+    }, {merge: true});
+    transaction.set(eventRef, audit("rider_application_section_updated", rider, {
+      applicationId: rider.uid,
+      section,
+      status,
+    }));
+  });
+  return {ok: true, applicationId: rider.uid, section, status};
 });
 
 exports.submitRiderDocument = functions.https.onCall(async (data, context) => {

@@ -871,10 +871,12 @@ exports.issueRothCredit = functions.https.onCall(async (data, context) => {
   const rawUser = `${data.userId || data.email || ""}`.trim();
   const amount = Number(data.amount || 0);
   const reason = `${data.reason || ""}`.trim();
-  if (!rawUser || amount <= 0 || !reason) {
-    throw new functions.https.HttpsError("invalid-argument", "User, amount and reason are required.");
+  const idempotencyKey = `${data.idempotencyKey || data.adminIssueId || ""}`.trim();
+  if (!rawUser || amount <= 0 || !reason || !idempotencyKey) {
+    throw new functions.https.HttpsError("invalid-argument", "User, amount, reason and idempotency key are required.");
   }
   const identity = await resolveWalletIdentity({userId: rawUser, email: data.email});
+  const transactionId = `admin_roth_credit_${idempotencyKey}`;
   const result = await recordRothMovement({
     userId: identity.walletId,
     uid: identity.uid,
@@ -886,7 +888,13 @@ exports.issueRothCredit = functions.https.onCall(async (data, context) => {
     paymentProvider: "manual_admin",
     issuedByAdminId: context.auth.uid,
     issuedByAdminEmail: context.auth.token.email || null,
-    metadata: {source: "admin_issue_roth", input: rawUser},
+    transactionId,
+    metadata: {
+      source: "admin_issue_roth",
+      input: rawUser,
+      idempotencyKey,
+      correlationId: transactionId,
+    },
   });
   await writeRothAudit({
     adminId: context.auth.uid,
@@ -895,7 +903,7 @@ exports.issueRothCredit = functions.https.onCall(async (data, context) => {
     userId: identity.walletId,
     amount,
     reason,
-    metadata: {uid: identity.uid, userEmail: identity.userEmail},
+    metadata: {uid: identity.uid, userEmail: identity.userEmail, idempotencyKey, transactionId},
   });
   return result;
 });

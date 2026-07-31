@@ -1,5 +1,6 @@
 /* eslint-disable max-len, require-jsdoc */
 const vehicleDispatch = require("./vehicle-dispatch");
+const deliveryPolicy = require("./circum-delivery-policy.json");
 const CATEGORIES = Object.freeze([
   "Documents",
   "Electronics",
@@ -247,11 +248,25 @@ const OBJECT_MAPPINGS = Object.freeze([
     vehicleRequired: "van",
   },
   {
-    id: "books",
-    patterns: [/\bbox of books\b/, /\bbooks\b/],
+    id: "book_bundle",
+    patterns: [
+      /\bbox of books\b/,
+      /\bbox full of books\b/,
+      /\bsuitcase containing books\b/,
+      /\bsuitcase full of books\b/,
+      /\bstack of books\b/,
+    ],
     category: "Personal Items & Luggage",
     weightKg: 12,
     handlingFlags: ["Bulky"],
+    vehicleRequired: "any",
+  },
+  {
+    id: "books",
+    patterns: [/\bbooks?\b/],
+    category: "Documents",
+    weightKg: 0.6,
+    handlingFlags: [],
     vehicleRequired: "any",
   },
   {
@@ -595,7 +610,7 @@ const OBJECT_MAPPINGS = Object.freeze([
     patterns: [/\bgenerators?\b/],
     category: "Tools & Machinery",
     weightKg: 28,
-    handlingFlags: ["Bulky", "Van Required"],
+    handlingFlags: ["Bulky", "Van Required", "Two Person Lift"],
     vehicleRequired: "van",
   },
   {
@@ -785,12 +800,12 @@ const OBJECT_MAPPINGS = Object.freeze([
 ]);
 
 const PRICING = Object.freeze({
-  baseFareGbp: 6,
-  additionalFarePerMileGbp: 1,
-  includedBaseMiles: 1,
-  shortTripFareFloorMiles: 1.6,
-  longDistanceThresholdMiles: 20,
-  longDistanceMileageMultiplier: 1.2,
+  baseFareGbp: deliveryPolicy.pricing.baseDeliveryGbp,
+  additionalFarePerMileGbp: deliveryPolicy.pricing.distancePerMileGbp,
+  includedBaseMiles: deliveryPolicy.pricing.includedBaseMiles,
+  shortTripFareFloorMiles: deliveryPolicy.pricing.shortTripFareFloorMiles,
+  longDistanceThresholdMiles: deliveryPolicy.pricing.longDistanceThresholdMiles,
+  longDistanceMileageMultiplier: deliveryPolicy.pricing.longDistanceMileageMultiplier,
   modifiers: {
     fragile: 5,
     perishable: 4,
@@ -801,7 +816,9 @@ const PRICING = Object.freeze({
     awkwardShape: 6,
     vanRequired: 10,
     twoPersonLift: 25,
-    express: 5,
+    carVehicle: deliveryPolicy.pricing.vehicleSurchargesGbp.car,
+    vanVehicle: deliveryPolicy.pricing.vehicleSurchargesGbp.van,
+    express: deliveryPolicy.pricing.express.minimumSurchargeGbp,
   },
 });
 
@@ -948,6 +965,18 @@ function parseQuantity(text) {
     "pcs",
     "generator",
     "generators",
+    "printer",
+    "printers",
+    "sofa",
+    "sofas",
+    "wardrobe",
+    "wardrobes",
+    "mattress",
+    "mattresses",
+    "fridge",
+    "fridges",
+    "toolbox",
+    "toolboxes",
     "equipment",
     "server",
     "servers",
@@ -1165,6 +1194,21 @@ function parseWeightKg(...values) {
   return null;
 }
 
+function parsePerUnitWeightKg(rawText) {
+  const source = normalize(rawText);
+  const quantityPattern = "(\\d+|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve)";
+  const weightPattern = "(\\d+(?:\\.\\d+)?)\\s*(kg|kilogram|kilograms|kilo|kilos|g|gram|grams)";
+  const match = source.match(new RegExp(`\\b${quantityPattern}\\b[\\s\\w+-]{0,80}?${weightPattern}\\s*(?:each|per item|per unit|per piece)\\b`));
+  if (!match) return null;
+  const quantity = parseQuantityToken(match[1]);
+  if (!quantity) return null;
+  const value = Number(match[2]);
+  if (!Number.isFinite(value) || value <= 0) return null;
+  const unit = match[3];
+  const kg = unit === "g" || unit === "gram" || unit === "grams" ? value / 1000 : value;
+  return Math.round(quantity * kg * 100) / 100;
+}
+
 function splitItemClauses(rawText) {
   const normalized = `${rawText || ""}`
       .replace(/\n+/g, ",")
@@ -1173,7 +1217,7 @@ function splitItemClauses(rawText) {
       .replace(/\bfull of\b/gi, ",")
       .replace(/\bfilled with\b/gi, ",")
       .replace(/\bwith\b/gi, ",")
-      .replace(/\b(suitcase|box|crate|bag|envelope|backpack|toolbox)\s+of\b/gi, "$1,");
+      .replace(/\b(suitcases?|box(?:es)?|crates?|bags?|envelopes?|backpacks?|toolbox(?:es)?)\s+of\b/gi, "$1,");
   const clauses = normalized
       .split(/\s*,\s*/i)
       .map((part) => part.trim())
@@ -1191,7 +1235,7 @@ function splitItemClauses(rawText) {
 }
 
 function hasContainerContents(rawText) {
-  return /\b(suitcase|box|crate|bag|envelope|backpack|toolbox)\s+(containing|full of|filled with|with|of)\b/i.test(`${rawText || ""}`);
+  return /\b(suitcases?|box(?:es)?|crates?|bags?|envelopes?|backpacks?|toolbox(?:es)?)\s+(containing|full of|filled with|with|of)\b/i.test(`${rawText || ""}`);
 }
 
 function parseQuantityToken(token) {
@@ -1240,18 +1284,62 @@ function extractNestedContainerItems(rawText) {
     }
     match = pattern.exec(source);
   }
+  if (!nested.length) {
+    const containerPattern = /\b(\d+|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve)\s+(boxes|box|crates?|bags?|packs?|suitcases?|stacks?)\s+(?:containing|with|of|full of|filled with)\s+([a-z0-9 .+-]+?)(?:$|\s+(?:with|near|from|to|for|please|collection|drop|recipient)\b)/g;
+    match = containerPattern.exec(source);
+    while (match) {
+      const containerQuantity = parseQuantityToken(match[1]);
+      const container = match[2];
+      const itemText = match[3].replace(/\beach\b/g, "").trim();
+      const object = /\bbooks?\b/.test(itemText) && /^(boxes|box|suitcases?|stacks?)$/.test(container) ?
+        detectObject("box of books") :
+        detectObject(itemText);
+      if (containerQuantity && object) {
+        nested.push({
+          id: object.id,
+          description: `${containerQuantity} ${itemText}`,
+          category: object.category,
+          quantity: containerQuantity,
+          unitWeightKg: object.weightKg,
+          totalWeightKg: Math.round(object.weightKg * containerQuantity * 100) / 100,
+          handlingFlags: object.handlingFlags,
+          vehicleRequired: object.vehicleRequired,
+        });
+      }
+      match = containerPattern.exec(source);
+    }
+  }
   return nested;
 }
 
 function extractShipmentItems(rawText) {
   const nestedItems = extractNestedContainerItems(rawText);
   if (nestedItems.length) return nestedItems;
+  const source = normalize(rawText);
+  if (/\b(box|boxes|suitcase|suitcases|stack|stacks)\b.*\bbooks\b/.test(source)) {
+    const object = detectObject("box of books");
+    const bundleQuantity = source.match(/\b(\d+|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve)\s+(?:boxes|box|suitcases?|stacks?)\s+(?:of|full of|containing|with)\s+books\b/);
+    const quantity = bundleQuantity ? parseQuantityToken(bundleQuantity[1]) || 1 : parseQuantity(rawText);
+    return [{
+      id: object.id,
+      description: rawText,
+      category: object.category,
+      quantity,
+      unitWeightKg: object.weightKg,
+      totalWeightKg: Math.round(object.weightKg * quantity * 100) / 100,
+      handlingFlags: object.handlingFlags,
+      vehicleRequired: object.vehicleRequired,
+    }];
+  }
   const clauses = splitItemClauses(rawText);
   const items = [];
   const describesContainerContents = hasContainerContents(rawText);
   for (const clause of clauses) {
     const text = normalize(clause);
-    if (describesContainerContents && /^(suitcase|box|crate|bag|envelope|backpack|toolbox)$/i.test(text)) continue;
+    if (describesContainerContents &&
+        /^(?:(?:\d+|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve)\s+)?(?:suitcases?|box(?:es)?|crates?|bags?|envelopes?|backpacks?|toolbox(?:es)?)$/i.test(text)) {
+      continue;
+    }
     const object = detectObject(text);
     if (!object) continue;
     const quantity = parseQuantity(clause);
@@ -1283,7 +1371,7 @@ function summarizeShipmentItems(items = []) {
     combinedWeightKg,
     dominantItem,
     handlingFlags,
-    vehicleRequired: items.some((item) => item.vehicleRequired === "van") || combinedWeightKg > 25 ? "van" : "any",
+    vehicleRequired: items.some((item) => item.vehicleRequired === "van") || combinedWeightKg >= 40 ? "van" : "any",
   };
 }
 
@@ -1323,6 +1411,7 @@ function estimateIrisWeightKg(rawText, normalizedText = normalize(rawText)) {
 
 function resolveAuthoritativeShipmentWeight({rawText, declaredWeightText, shipmentSummary, shipmentItems, photoEstimatedWeightKg = null}) {
   const declaredWeightKg = parseWeightKg(rawText, declaredWeightText);
+  const explicitPerUnitWeightKg = parsePerUnitWeightKg(rawText);
   const itemWeightKg = Array.isArray(shipmentItems) && shipmentItems.length ?
     Math.round(shipmentItems.reduce((sum, item) => sum + item.totalWeightKg, 0) * 100) / 100 :
     null;
@@ -1344,6 +1433,9 @@ function resolveAuthoritativeShipmentWeight({rawText, declaredWeightText, shipme
   }
   if (perUnitDeclaredWeightKg != null && perUnitDeclaredWeightKg >= 0) {
     candidates.push({source: "declared_per_unit_weight", value: perUnitDeclaredWeightKg, confidence: "sender_declared_per_unit"});
+  }
+  if (explicitPerUnitWeightKg != null && explicitPerUnitWeightKg >= 0) {
+    candidates.push({source: "explicit_per_unit_weight", value: explicitPerUnitWeightKg, confidence: "sender_declared_per_unit"});
   }
   const visualWeightKg = Number(photoEstimatedWeightKg);
   if (Number.isFinite(visualWeightKg) && visualWeightKg > 0) {
@@ -1387,15 +1479,19 @@ function classifyCategory(text, shipmentSummary = null) {
 function handlingFlagsFor(text, category, weightKg, shipmentSummary = null) {
   const object = detectObject(text);
   const flags = new Set(shipmentSummary ? shipmentSummary.handlingFlags : object ? object.handlingFlags : []);
+  const compactPrinterLoad = includesAny(text, ["printer"]) &&
+    weightKg < deliveryPolicy.vehiclePolicy.carSuitableMaxExclusiveKg;
   if (category === "Electronics" || category === "Fragile & Valuable" || includesAny(text, ["glass", "mirror", "ceramic", "tv", "monitor", "fragile"])) flags.add("Fragile");
   if (category === "Food & Consumables" || includesAny(text, ["food", "meal", "cake", "groceries"])) flags.add("Perishable");
   if (includesAny(text, ["upright", "keep upright", "tv", "fridge", "glass cabinet", "display cabinet", "glass table"])) flags.add("Keep Upright");
-  if (category === "Fragile & Valuable" || includesAny(text, ["iphone", "laptop", "jewellery", "jewelry", "valuable", "expensive", "designer", "luxury"])) flags.add("High Value");
+  if (category === "Fragile & Valuable" || includesAny(text, ["iphone", "laptop", "jewellery", "jewelry", "watch", "valuable", "expensive", "designer", "luxury"])) flags.add("High Value");
   if (includesAny(text, ["cold", "frozen", "temperature", "medicine", "insulin", "vaccine", "blood sample", "pathology", "diagnostic sample", "urine sample", "tissue sample", "swab sample", "specimen"])) flags.add("Temperature Sensitive");
   if (weightKg > 10 || includesAny(text, ["large", "65 inch", "65-inch", "sofa", "wardrobe", "mattress", "pallet"])) flags.add("Bulky");
   if (includesAny(text, ["awkward", "odd shape", "long", "ladder"])) flags.add("Awkward Shape");
-  if (weightKg > 25 || flags.has("Bulky") || includesAny(text, ["van", "sofa", "wardrobe", "mattress", "65 inch", "65-inch"])) flags.add("Van Required");
-  if (weightKg > 25 || includesAny(text, ["two person", "2 person", "sofa", "wardrobe", "65 inch", "65-inch"])) flags.add("Two Person Lift");
+  if (weightKg >= deliveryPolicy.vehiclePolicy.vanRequiredMinKg ||
+      !compactPrinterLoad && flags.has("Bulky") ||
+      includesAny(text, ["van", "sofa", "wardrobe", "mattress", "65 inch", "65-inch"])) flags.add("Van Required");
+  if (weightKg >= deliveryPolicy.vehiclePolicy.vanRequiredMinKg || includesAny(text, ["two person", "2 person", "sofa", "wardrobe", "65 inch", "65-inch"])) flags.add("Two Person Lift");
   return Array.from(flags);
 }
 
@@ -1581,6 +1677,7 @@ function complianceFor(text, rawText = text) {
     "fireworks",
     "petrol",
     "gasoline",
+    "cash",
     "cocaine",
     "heroin",
     "poison",
@@ -1600,6 +1697,8 @@ function complianceFor(text, rawText = text) {
     "radioactive material",
     "corrosive acid",
     "compressed gas",
+    "large cash",
+    "cash delivery",
   ];
   const specialistTerms = [
     "snake",
@@ -1682,8 +1781,22 @@ function calculatePrice({distanceMiles = 0, weightKg = 0, handlingFlags = [], ex
   if (flags.has("Awkward Shape")) logisticsModifiers += PRICING.modifiers.awkwardShape;
   if (flags.has("Van Required")) logisticsModifiers += PRICING.modifiers.vanRequired;
   if (flags.has("Two Person Lift")) logisticsModifiers += PRICING.modifiers.twoPersonLift;
-  if (express) logisticsModifiers += PRICING.modifiers.express;
-  const vehicleSurcharge = normalize(vehicleType).includes("van") ? 10 : 0;
+  if (express) {
+    const standardSubtotal = PRICING.baseFareGbp +
+      distanceFare +
+      weightBand.baseGbp +
+      logisticsModifiers;
+    logisticsModifiers += Math.max(
+        PRICING.modifiers.express,
+        roundMoney(standardSubtotal * 0.2),
+    );
+  }
+  const vehicleText = normalize(vehicleType);
+  const vehicleSurcharge = vehicleText.includes("van") ?
+    PRICING.modifiers.vanVehicle :
+    vehicleText.includes("car") ?
+      PRICING.modifiers.carVehicle :
+      0;
   const total = roundMoney(PRICING.baseFareGbp + distanceFare + weightBand.baseGbp + logisticsModifiers + vehicleSurcharge);
   return {
     baseFare: PRICING.baseFareGbp,
@@ -1713,7 +1826,8 @@ function serviceabilityFor({complianceStatus, weightKg, handlingFlags}) {
 }
 
 function matchingRequirementsFor({handlingFlags, weightKg, express}) {
-  const requiresVan = handlingFlags.includes("Van Required") || weightKg > 25;
+  const requiresVan = handlingFlags.includes("Van Required") ||
+    weightKg >= deliveryPolicy.vehiclePolicy.vanRequiredMinKg;
   return {
     vehicleRequired: requiresVan ? "van" : "any",
     requiresVerifiedRider: true,
@@ -1759,14 +1873,44 @@ function valueProtectionFor({text, category, handlingFlags, complianceStatus}) {
     return {level: "declared_value_review_required", reasons: ["sensitive_or_confidential_material"]};
   }
   if (handlingFlags.includes("High Value") || category === "Fragile & Valuable") {
-    return {level: "enhanced_verification_recommended", reasons: ["high_value_or_fragile_item"]};
+    return {level: "enhanced_verification_required", reasons: ["high_value_or_fragile_item"]};
   }
   return {level: "standard_protection", reasons: ["normal_delivery_risk"]};
 }
 
-function workflowFor({category}) {
+function workflowFor({category, declaredWorkflow}) {
+  const workflow = normalize(declaredWorkflow);
+  if (workflow.includes("health")) return "Health+";
+  if (workflow.includes("business")) return "Business";
+  if (workflow.includes("gift")) return "Gifts";
   if (category === "Medical & Pharmacy") return "Health+";
   return "Standard";
+}
+
+function vanguardPolicyFor({workflow, valueProtection, category, text}) {
+  if (valueProtection && valueProtection.level === "admin_referral_required") {
+    return {required: false, reason: ""};
+  }
+  if (workflow === "Business") {
+    return {required: true, reason: "Vanguard is included for Business deliveries."};
+  }
+  if (workflow === "Health+") {
+    return {required: true, reason: "Vanguard is included for Health+ deliveries."};
+  }
+  if (workflow === "Gifts") {
+    return {required: true, reason: "Vanguard is included for Gifts deliveries."};
+  }
+  if (valueProtection && valueProtection.level === "enhanced_verification_required") {
+    return {required: true, reason: "Vanguard is included for high-value deliveries."};
+  }
+  if (includesAny(text, ["passport", "legal document", "legal documents", "legal files", "confidential", "confidential contract", "confidential document", "confidential documents", "government paperwork", "exam papers"])) {
+    return {required: true, reason: "Vanguard is included for protected documents."};
+  }
+  if (category === "Medical & Pharmacy" ||
+      includesAny(text, ["medicine", "prescription", "insulin", "blood sample", "swab sample", "specimen"])) {
+    return {required: true, reason: "Vanguard is included for medical deliveries."};
+  }
+  return {required: false, reason: ""};
 }
 
 function verificationPolicyFor({text, category, handlingFlags, complianceStatus, serviceability}) {
@@ -1836,10 +1980,14 @@ function accessIntelligenceFor(input = {}) {
   const constraints = [];
   const instructions = [];
   if (collectionFloor > 2 || deliveryFloor > 2) constraints.push("upper_floor_access");
-  if (liftUnavailable && (collectionFloor > 1 || deliveryFloor > 1)) constraints.push("stairs_without_lift");
+  if (liftUnavailable &&
+      (collectionFloor > 1 || deliveryFloor > 1 ||
+        includesAny(values, ["stairs only", "third floor", "3rd floor", "fourth floor", "4th floor", "fifth floor", "5th floor"]))) {
+    constraints.push("stairs_without_lift");
+  }
   if (includesAny(values, ["tower block", "estate", "gated", "concierge"])) constraints.push("managed_or_gated_access");
   if (includesAny(values, ["hospital", "airport", "station", "stadium", "hotel", "university", "warehouse", "construction"])) constraints.push("controlled_site_access");
-  if (includesAny(values, ["red route", "loading restriction", "loading bay", "restricted parking", "pedestrian", "market", "forecourt", "bus gate", "ltn", "ulez", "congestion charge", "road closure", "school traffic", "school street", "airport", "airport security", "airport drop off", "security checkpoint", "event congestion", "event traffic", "football match", "match day", "concert congestion", "station", "station forecourt", "stadium", "temporary access restriction", "hospital access", "hospital loading", "construction zone", "construction site", "roadworks", "bridge restriction", "underground car park", "height restriction"])) constraints.push("declared_loading_or_parking_constraint");
+  if (includesAny(values, ["red route", "loading restriction", "loading bay", "restricted parking", "parking restriction", "no parking", "no parking outside", "pedestrian", "market", "forecourt", "bus gate", "ltn", "ulez", "congestion charge", "road closure", "school traffic", "school street", "airport", "airport security", "airport drop off", "security checkpoint", "event congestion", "event traffic", "football match", "match day", "concert congestion", "station", "station forecourt", "stadium", "temporary access restriction", "hospital access", "hospital loading", "construction zone", "construction site", "roadworks", "bridge restriction", "underground car park", "height restriction"])) constraints.push("declared_loading_or_parking_constraint");
   if (constraints.includes("stairs_without_lift")) instructions.push("Confirm stair access and safe carry before dispatch.");
   if (constraints.includes("managed_or_gated_access")) instructions.push("Request gate, estate, concierge or block access details.");
   if (constraints.includes("controlled_site_access")) instructions.push("Confirm reception, security or loading point before arrival.");
@@ -1849,7 +1997,8 @@ function accessIntelligenceFor(input = {}) {
     difficulty,
     constraints,
     additionalPersonRecommended: difficulty === "high",
-    vehicleAccessWarning: constraints.includes("declared_loading_or_parking_constraint"),
+    vehicleAccessWarning: constraints.includes("declared_loading_or_parking_constraint") ||
+      constraints.includes("stairs_without_lift"),
     loadingTimeWarning: difficulty !== "low",
     riderInstructions: instructions,
   };
@@ -1857,14 +2006,50 @@ function accessIntelligenceFor(input = {}) {
 
 function customerSafeIris(iris) {
   const recommendation = iris.recommendation || {};
+  const operational = iris.operationalRecommendation || {};
+  const vehicle = operational.vehicleRecommendation || {};
+  const riderMatching = iris.internal && iris.internal.riderMatching ?
+    iris.internal.riderMatching : {};
+  const recommendedVehicle =
+    customerVehicleLabel(vehicle) || riderMatching.vehicleRequired || null;
+  const protection = operational.valueProtectionRecommendation || {};
+  const vanguardRequired =
+    protection.level === "enhanced_verification_required" ||
+    iris.vanguardRequired === true;
+  const vanguardRecommended =
+    vanguardRequired ||
+    protection.level === "enhanced_verification_recommended";
+  const vanguardReason = iris.vanguardRequiredReason ||
+    (protection.reasons || []).join(", ");
   return {
     version: iris.version || "v1",
     workflow: iris.workflow || "Standard",
+    itemName: recommendation.detectedItem || null,
+    totalWeightKg: recommendation.estimatedWeightKg || null,
+    recommendedVehicle,
+    vanguardRequired,
+    vanguardRequiredReason: vanguardRequired ? vanguardReason : null,
+    vanguardRecommended,
     recommendation: {
+      detectedItem: recommendation.detectedItem || null,
+      estimatedWeightKg: recommendation.estimatedWeightKg || null,
+      handlingFlags: recommendation.handlingFlags || [],
+      recommendedVehicle,
+      vanguardRequired,
+      vanguardRequiredReason: vanguardRequired ? vanguardReason : null,
+      vanguardRecommended,
       category: recommendation.category || null,
       weightBand: recommendation.weightBand || null,
       confidencePercent: recommendation.confidencePercent || null,
       customerSafeExplanation: customerSafeExplanation(iris),
+    },
+    vanguard: {
+      required: vanguardRequired,
+      recommended: vanguardRecommended,
+      reason: vanguardRequired ?
+        (vanguardReason || "Vanguard is included for this delivery.") :
+        vanguardRecommended ?
+          "Enhanced verification is recommended for this parcel." : null,
     },
   };
 }
@@ -1883,6 +2068,16 @@ function customerSafeExplanation(iris) {
   const recommendation = iris.recommendation || {};
   const band = recommendation.weightBand && recommendation.weightBand.label;
   return `${recommendation.category || "Item"} classified as ${band || "a delivery band"} based on item type, likely size, and handling needs.`;
+}
+
+function customerVehicleLabel(vehicle) {
+  if (!vehicle) return null;
+  const required = `${vehicle.required || ""}`.trim();
+  if (required && required !== "any") return required;
+  if (vehicle.motorbikeSuitable === true) return "Motorbike";
+  if (vehicle.carSuitable === true) return "Car";
+  if (vehicle.vanSuitable === true) return "Van";
+  return required || null;
 }
 
 function similarLearningMatches(description, completedExamples = []) {
@@ -2027,6 +2222,16 @@ function classifyIris(input = {}) {
     handlingFlags: authoritativeRecommendation.handlingFlags,
     complianceStatus: compliance.status,
   });
+  const workflow = workflowFor({
+    category: authoritativeRecommendation.category,
+    declaredWorkflow: input.workflow || input.serviceType || input.productType,
+  });
+  const vanguardPolicy = vanguardPolicyFor({
+    workflow,
+    valueProtection,
+    category: authoritativeRecommendation.category,
+    text,
+  });
   const operationalWarnings = [];
   if (access.vehicleAccessWarning) operationalWarnings.push("Declared access or loading constraints may affect rider approach.");
   if (access.loadingTimeWarning) operationalWarnings.push("Access conditions may require additional handover time.");
@@ -2034,7 +2239,9 @@ function classifyIris(input = {}) {
   const iris = {
     version: "v1",
     status: compliance.status,
-    workflow: workflowFor({category: authoritativeRecommendation.category}),
+    workflow,
+    vanguardRequired: vanguardPolicy.required,
+    vanguardRequiredReason: vanguardPolicy.reason,
     customerDeclaration: {
       description: description.trim(),
       declaredWeightText: `${declaredWeightText || ""}`.trim() || null,
@@ -2046,9 +2253,9 @@ function classifyIris(input = {}) {
       dimensionalBand,
       vehicleRecommendation: {
         required: matching.vehicleRequired,
-        bikeSuitable: matching.vehicleRequired === "any" && !authoritativeRecommendation.handlingFlags.includes("Bulky"),
         motorbikeSuitable: matching.vehicleRequired === "any" && authoritativeRecommendation.estimatedWeightKg <= 10,
-        carSuitable: matching.vehicleRequired === "any" && authoritativeRecommendation.estimatedWeightKg <= 25,
+        carSuitable: matching.vehicleRequired === "any" &&
+          authoritativeRecommendation.estimatedWeightKg < deliveryPolicy.vehiclePolicy.carSuitableMaxExclusiveKg,
         vanSuitable: true,
         heavyDutySuitable: authoritativeRecommendation.estimatedWeightKg > 50 || authoritativeRecommendation.handlingFlags.includes("Two Person Lift"),
       },

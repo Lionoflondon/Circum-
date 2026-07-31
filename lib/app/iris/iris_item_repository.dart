@@ -120,11 +120,11 @@ class IrisItemRepository {
       requiresVanguard: true,
       requiresIRISReview: false,
       deliveryNotes:
-          "Documents item. Protect from impact. Recommended vehicle: Bike.",
+          "Documents item. Protect from impact. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.9,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 25, widthCm: 18, heightCm: 8),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: false,
     ),
     IrisRepositoryItem(
@@ -142,11 +142,11 @@ class IrisItemRepository {
       requiresVanguard: true,
       requiresIRISReview: false,
       deliveryNotes:
-          "Documents item. Protect from impact. Recommended vehicle: Bike.",
+          "Documents item. Protect from impact. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.9,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 25, widthCm: 18, heightCm: 8),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: false,
     ),
     IrisRepositoryItem(
@@ -164,11 +164,11 @@ class IrisItemRepository {
       requiresVanguard: true,
       requiresIRISReview: false,
       deliveryNotes:
-          "Documents item. Protect from impact. Recommended vehicle: Bike.",
+          "Documents item. Protect from impact. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.9,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 25, widthCm: 18, heightCm: 8),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: false,
     ),
     IrisRepositoryItem(
@@ -191,11 +191,11 @@ class IrisItemRepository {
       requiresVanguard: true,
       requiresIRISReview: false,
       deliveryNotes:
-          "Documents item. Protect from impact. Recommended vehicle: Bike.",
+          "Documents item. Protect from impact. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.9,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 25, widthCm: 18, heightCm: 8),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: false,
     ),
     IrisRepositoryItem(
@@ -218,11 +218,11 @@ class IrisItemRepository {
       requiresVanguard: true,
       requiresIRISReview: false,
       deliveryNotes:
-          "Documents item. Protect from impact. Recommended vehicle: Bike.",
+          "Documents item. Protect from impact. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.9,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 25, widthCm: 18, heightCm: 8),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: false,
     ),
     IrisRepositoryItem(
@@ -240,11 +240,11 @@ class IrisItemRepository {
       requiresVanguard: true,
       requiresIRISReview: false,
       deliveryNotes:
-          "Documents item. Protect from impact. Recommended vehicle: Bike.",
+          "Documents item. Protect from impact. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.9,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 25, widthCm: 18, heightCm: 8),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: false,
     ),
     IrisRepositoryItem(
@@ -267,11 +267,11 @@ class IrisItemRepository {
       requiresVanguard: true,
       requiresIRISReview: false,
       deliveryNotes:
-          "Documents item. Protect from impact. Recommended vehicle: Bike.",
+          "Documents item. Protect from impact. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.9,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 25, widthCm: 18, heightCm: 8),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: false,
     ),
     IrisRepositoryItem(
@@ -294,11 +294,11 @@ class IrisItemRepository {
       requiresVanguard: true,
       requiresIRISReview: false,
       deliveryNotes:
-          "Documents item. Protect from impact. Recommended vehicle: Bike.",
+          "Documents item. Protect from impact. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.9,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 25, widthCm: 18, heightCm: 8),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: false,
     ),
     IrisRepositoryItem(
@@ -321,11 +321,11 @@ class IrisItemRepository {
       requiresVanguard: true,
       requiresIRISReview: false,
       deliveryNotes:
-          "Documents item. Protect from impact. Recommended vehicle: Bike.",
+          "Documents item. Protect from impact. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.9,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 25, widthCm: 18, heightCm: 8),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: false,
     ),
     IrisRepositoryItem(
@@ -348,11 +348,11 @@ class IrisItemRepository {
       requiresVanguard: true,
       requiresIRISReview: false,
       deliveryNotes:
-          "Documents item. Protect from impact. Recommended vehicle: Bike.",
+          "Documents item. Protect from impact. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.9,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 25, widthCm: 18, heightCm: 8),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: false,
     ),
     IrisRepositoryItem(
@@ -375,11 +375,11 @@ class IrisItemRepository {
       requiresVanguard: true,
       requiresIRISReview: false,
       deliveryNotes:
-          "Documents item. Protect from impact. Recommended vehicle: Bike.",
+          "Documents item. Protect from impact. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 25, widthCm: 18, heightCm: 8),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: false,
     ),
     IrisRepositoryItem(
@@ -402,11 +402,11 @@ class IrisItemRepository {
       requiresVanguard: true,
       requiresIRISReview: false,
       deliveryNotes:
-          "Documents item. Protect from impact. Recommended vehicle: Bike.",
+          "Documents item. Protect from impact. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 25, widthCm: 18, heightCm: 8),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: false,
     ),
     IrisRepositoryItem(
@@ -429,11 +429,11 @@ class IrisItemRepository {
       requiresVanguard: true,
       requiresIRISReview: false,
       deliveryNotes:
-          "Documents item. Protect from impact. Recommended vehicle: Bike.",
+          "Documents item. Protect from impact. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 25, widthCm: 18, heightCm: 8),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: false,
     ),
     IrisRepositoryItem(
@@ -456,11 +456,11 @@ class IrisItemRepository {
       requiresVanguard: true,
       requiresIRISReview: false,
       deliveryNotes:
-          "Documents item. Protect from impact. Recommended vehicle: Bike.",
+          "Documents item. Protect from impact. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 25, widthCm: 18, heightCm: 8),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: false,
     ),
     IrisRepositoryItem(
@@ -483,11 +483,11 @@ class IrisItemRepository {
       requiresVanguard: true,
       requiresIRISReview: false,
       deliveryNotes:
-          "Documents item. Protect from impact. Recommended vehicle: Bike.",
+          "Documents item. Protect from impact. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 25, widthCm: 18, heightCm: 8),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: false,
     ),
     IrisRepositoryItem(
@@ -510,11 +510,11 @@ class IrisItemRepository {
       requiresVanguard: true,
       requiresIRISReview: false,
       deliveryNotes:
-          "Documents item. Protect from impact. Recommended vehicle: Bike.",
+          "Documents item. Protect from impact. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 25, widthCm: 18, heightCm: 8),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: false,
     ),
     IrisRepositoryItem(
@@ -537,11 +537,11 @@ class IrisItemRepository {
       requiresVanguard: true,
       requiresIRISReview: false,
       deliveryNotes:
-          "Documents item. Protect from impact. Recommended vehicle: Bike.",
+          "Documents item. Protect from impact. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 25, widthCm: 18, heightCm: 8),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: false,
     ),
     IrisRepositoryItem(
@@ -564,11 +564,11 @@ class IrisItemRepository {
       requiresVanguard: true,
       requiresIRISReview: false,
       deliveryNotes:
-          "Documents item. Protect from impact. Recommended vehicle: Bike.",
+          "Documents item. Protect from impact. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 25, widthCm: 18, heightCm: 8),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: false,
     ),
     IrisRepositoryItem(
@@ -591,11 +591,11 @@ class IrisItemRepository {
       requiresVanguard: true,
       requiresIRISReview: false,
       deliveryNotes:
-          "Documents item. Protect from impact. Recommended vehicle: Bike.",
+          "Documents item. Protect from impact. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 25, widthCm: 18, heightCm: 8),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: false,
     ),
     IrisRepositoryItem(
@@ -618,11 +618,11 @@ class IrisItemRepository {
       requiresVanguard: true,
       requiresIRISReview: false,
       deliveryNotes:
-          "Documents item. Protect from impact. Recommended vehicle: Bike.",
+          "Documents item. Protect from impact. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 25, widthCm: 18, heightCm: 8),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: false,
     ),
     IrisRepositoryItem(
@@ -645,11 +645,11 @@ class IrisItemRepository {
       requiresVanguard: true,
       requiresIRISReview: false,
       deliveryNotes:
-          "Documents item. Protect from impact. Recommended vehicle: Bike.",
+          "Documents item. Protect from impact. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 25, widthCm: 18, heightCm: 8),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: false,
     ),
     IrisRepositoryItem(
@@ -672,11 +672,11 @@ class IrisItemRepository {
       requiresVanguard: true,
       requiresIRISReview: false,
       deliveryNotes:
-          "Documents item. Protect from impact. Recommended vehicle: Bike.",
+          "Documents item. Protect from impact. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 25, widthCm: 18, heightCm: 8),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: false,
     ),
     IrisRepositoryItem(
@@ -699,11 +699,11 @@ class IrisItemRepository {
       requiresVanguard: true,
       requiresIRISReview: false,
       deliveryNotes:
-          "Documents item. Protect from impact. Recommended vehicle: Bike.",
+          "Documents item. Protect from impact. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 25, widthCm: 18, heightCm: 8),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: false,
     ),
     IrisRepositoryItem(
@@ -726,11 +726,11 @@ class IrisItemRepository {
       requiresVanguard: true,
       requiresIRISReview: false,
       deliveryNotes:
-          "Documents item. Protect from impact. Recommended vehicle: Bike.",
+          "Documents item. Protect from impact. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 25, widthCm: 18, heightCm: 8),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: false,
     ),
     IrisRepositoryItem(
@@ -753,11 +753,11 @@ class IrisItemRepository {
       requiresVanguard: true,
       requiresIRISReview: false,
       deliveryNotes:
-          "Documents item. Protect from impact. Recommended vehicle: Bike.",
+          "Documents item. Protect from impact. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 25, widthCm: 18, heightCm: 8),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: false,
     ),
     IrisRepositoryItem(
@@ -780,11 +780,11 @@ class IrisItemRepository {
       requiresVanguard: true,
       requiresIRISReview: false,
       deliveryNotes:
-          "Documents item. Protect from impact. Recommended vehicle: Bike.",
+          "Documents item. Protect from impact. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 25, widthCm: 18, heightCm: 8),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: false,
     ),
     IrisRepositoryItem(
@@ -807,11 +807,11 @@ class IrisItemRepository {
       requiresVanguard: true,
       requiresIRISReview: false,
       deliveryNotes:
-          "Documents item. Protect from impact. Recommended vehicle: Bike.",
+          "Documents item. Protect from impact. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 25, widthCm: 18, heightCm: 8),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: false,
     ),
     IrisRepositoryItem(
@@ -834,11 +834,11 @@ class IrisItemRepository {
       requiresVanguard: true,
       requiresIRISReview: false,
       deliveryNotes:
-          "Documents item. Protect from impact. Recommended vehicle: Bike.",
+          "Documents item. Protect from impact. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 25, widthCm: 18, heightCm: 8),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: false,
     ),
     IrisRepositoryItem(
@@ -861,11 +861,11 @@ class IrisItemRepository {
       requiresVanguard: true,
       requiresIRISReview: false,
       deliveryNotes:
-          "Documents item. Protect from impact. Recommended vehicle: Bike.",
+          "Documents item. Protect from impact. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 25, widthCm: 18, heightCm: 8),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: false,
     ),
     IrisRepositoryItem(
@@ -888,11 +888,11 @@ class IrisItemRepository {
       requiresVanguard: true,
       requiresIRISReview: false,
       deliveryNotes:
-          "Documents item. Protect from impact. Recommended vehicle: Bike.",
+          "Documents item. Protect from impact. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 25, widthCm: 18, heightCm: 8),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: false,
     ),
     IrisRepositoryItem(
@@ -915,11 +915,11 @@ class IrisItemRepository {
       requiresVanguard: true,
       requiresIRISReview: false,
       deliveryNotes:
-          "Documents item. Protect from impact. Recommended vehicle: Bike.",
+          "Documents item. Protect from impact. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 25, widthCm: 18, heightCm: 8),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: false,
     ),
     IrisRepositoryItem(
@@ -942,11 +942,11 @@ class IrisItemRepository {
       requiresVanguard: true,
       requiresIRISReview: false,
       deliveryNotes:
-          "Documents item. Protect from impact. Recommended vehicle: Bike.",
+          "Documents item. Protect from impact. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 25, widthCm: 18, heightCm: 8),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: false,
     ),
     IrisRepositoryItem(
@@ -969,11 +969,11 @@ class IrisItemRepository {
       requiresVanguard: true,
       requiresIRISReview: false,
       deliveryNotes:
-          "Documents item. Protect from impact. Recommended vehicle: Bike.",
+          "Documents item. Protect from impact. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 25, widthCm: 18, heightCm: 8),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: false,
     ),
     IrisRepositoryItem(
@@ -996,11 +996,11 @@ class IrisItemRepository {
       requiresVanguard: true,
       requiresIRISReview: false,
       deliveryNotes:
-          "Documents item. Protect from impact. Recommended vehicle: Bike.",
+          "Documents item. Protect from impact. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 25, widthCm: 18, heightCm: 8),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: false,
     ),
     IrisRepositoryItem(
@@ -1023,11 +1023,11 @@ class IrisItemRepository {
       requiresVanguard: true,
       requiresIRISReview: false,
       deliveryNotes:
-          "Documents item. Protect from impact. Recommended vehicle: Bike.",
+          "Documents item. Protect from impact. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 25, widthCm: 18, heightCm: 8),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: false,
     ),
     IrisRepositoryItem(
@@ -1050,11 +1050,11 @@ class IrisItemRepository {
       requiresVanguard: true,
       requiresIRISReview: false,
       deliveryNotes:
-          "Documents item. Protect from impact. Recommended vehicle: Bike.",
+          "Documents item. Protect from impact. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 25, widthCm: 18, heightCm: 8),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: false,
     ),
     IrisRepositoryItem(
@@ -1077,11 +1077,11 @@ class IrisItemRepository {
       requiresVanguard: true,
       requiresIRISReview: false,
       deliveryNotes:
-          "Documents item. Protect from impact. Recommended vehicle: Bike.",
+          "Documents item. Protect from impact. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 25, widthCm: 18, heightCm: 8),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: false,
     ),
     IrisRepositoryItem(
@@ -1104,11 +1104,11 @@ class IrisItemRepository {
       requiresVanguard: true,
       requiresIRISReview: false,
       deliveryNotes:
-          "Documents item. Protect from impact. Recommended vehicle: Bike.",
+          "Documents item. Protect from impact. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 25, widthCm: 18, heightCm: 8),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: false,
     ),
     IrisRepositoryItem(
@@ -1131,11 +1131,11 @@ class IrisItemRepository {
       requiresVanguard: true,
       requiresIRISReview: false,
       deliveryNotes:
-          "Documents item. Protect from impact. Recommended vehicle: Bike.",
+          "Documents item. Protect from impact. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 25, widthCm: 18, heightCm: 8),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: false,
     ),
     IrisRepositoryItem(
@@ -1158,11 +1158,11 @@ class IrisItemRepository {
       requiresVanguard: true,
       requiresIRISReview: false,
       deliveryNotes:
-          "Documents item. Protect from impact. Recommended vehicle: Bike.",
+          "Documents item. Protect from impact. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 25, widthCm: 18, heightCm: 8),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: false,
     ),
     IrisRepositoryItem(
@@ -1185,11 +1185,11 @@ class IrisItemRepository {
       requiresVanguard: true,
       requiresIRISReview: false,
       deliveryNotes:
-          "Documents item. Protect from impact. Recommended vehicle: Bike.",
+          "Documents item. Protect from impact. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 25, widthCm: 18, heightCm: 8),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: false,
     ),
     IrisRepositoryItem(
@@ -1212,11 +1212,11 @@ class IrisItemRepository {
       requiresVanguard: true,
       requiresIRISReview: false,
       deliveryNotes:
-          "Documents item. Protect from impact. Recommended vehicle: Bike.",
+          "Documents item. Protect from impact. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 25, widthCm: 18, heightCm: 8),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: false,
     ),
     IrisRepositoryItem(
@@ -1239,11 +1239,11 @@ class IrisItemRepository {
       requiresVanguard: true,
       requiresIRISReview: false,
       deliveryNotes:
-          "Documents item. Protect from impact. Recommended vehicle: Bike.",
+          "Documents item. Protect from impact. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 25, widthCm: 18, heightCm: 8),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: false,
     ),
     IrisRepositoryItem(
@@ -1266,11 +1266,11 @@ class IrisItemRepository {
       requiresVanguard: true,
       requiresIRISReview: false,
       deliveryNotes:
-          "Documents item. Protect from impact. Recommended vehicle: Bike.",
+          "Documents item. Protect from impact. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 25, widthCm: 18, heightCm: 8),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: false,
     ),
     IrisRepositoryItem(
@@ -1293,11 +1293,11 @@ class IrisItemRepository {
       requiresVanguard: true,
       requiresIRISReview: false,
       deliveryNotes:
-          "Documents item. Protect from impact. Recommended vehicle: Bike.",
+          "Documents item. Protect from impact. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 25, widthCm: 18, heightCm: 8),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: false,
     ),
     IrisRepositoryItem(
@@ -1320,11 +1320,11 @@ class IrisItemRepository {
       requiresVanguard: true,
       requiresIRISReview: false,
       deliveryNotes:
-          "Documents item. Protect from impact. Recommended vehicle: Bike.",
+          "Documents item. Protect from impact. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 25, widthCm: 18, heightCm: 8),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: false,
     ),
     IrisRepositoryItem(
@@ -1347,11 +1347,11 @@ class IrisItemRepository {
       requiresVanguard: true,
       requiresIRISReview: false,
       deliveryNotes:
-          "Documents item. Protect from impact. Recommended vehicle: Bike.",
+          "Documents item. Protect from impact. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 25, widthCm: 18, heightCm: 8),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: false,
     ),
     IrisRepositoryItem(
@@ -1374,11 +1374,11 @@ class IrisItemRepository {
       requiresVanguard: true,
       requiresIRISReview: false,
       deliveryNotes:
-          "Documents item. Protect from impact. Recommended vehicle: Bike.",
+          "Documents item. Protect from impact. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 25, widthCm: 18, heightCm: 8),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: false,
     ),
     IrisRepositoryItem(
@@ -1401,11 +1401,11 @@ class IrisItemRepository {
       requiresVanguard: true,
       requiresIRISReview: false,
       deliveryNotes:
-          "Documents item. Protect from impact. Recommended vehicle: Bike.",
+          "Documents item. Protect from impact. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 25, widthCm: 18, heightCm: 8),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: false,
     ),
     IrisRepositoryItem(
@@ -1428,11 +1428,11 @@ class IrisItemRepository {
       requiresVanguard: true,
       requiresIRISReview: false,
       deliveryNotes:
-          "Documents item. Protect from impact. Recommended vehicle: Bike.",
+          "Documents item. Protect from impact. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 25, widthCm: 18, heightCm: 8),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: false,
     ),
     IrisRepositoryItem(
@@ -1455,11 +1455,11 @@ class IrisItemRepository {
       requiresVanguard: false,
       requiresIRISReview: false,
       deliveryNotes:
-          "Documents item. Protect from impact. Recommended vehicle: Bike.",
+          "Documents item. Protect from impact. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 25, widthCm: 18, heightCm: 8),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: false,
     ),
     IrisRepositoryItem(
@@ -1482,11 +1482,11 @@ class IrisItemRepository {
       requiresVanguard: false,
       requiresIRISReview: false,
       deliveryNotes:
-          "Documents item. Protect from impact. Recommended vehicle: Bike.",
+          "Documents item. Protect from impact. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 25, widthCm: 18, heightCm: 8),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: false,
     ),
     IrisRepositoryItem(
@@ -1509,11 +1509,11 @@ class IrisItemRepository {
       requiresVanguard: false,
       requiresIRISReview: false,
       deliveryNotes:
-          "Documents item. Protect from impact. Recommended vehicle: Bike.",
+          "Documents item. Protect from impact. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 25, widthCm: 18, heightCm: 8),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: false,
     ),
     IrisRepositoryItem(
@@ -1536,11 +1536,11 @@ class IrisItemRepository {
       requiresVanguard: false,
       requiresIRISReview: false,
       deliveryNotes:
-          "Documents item. Protect from impact. Recommended vehicle: Bike.",
+          "Documents item. Protect from impact. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 25, widthCm: 18, heightCm: 8),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: false,
     ),
     IrisRepositoryItem(
@@ -1563,11 +1563,11 @@ class IrisItemRepository {
       requiresVanguard: false,
       requiresIRISReview: false,
       deliveryNotes:
-          "Documents item. Protect from impact. Recommended vehicle: Bike.",
+          "Documents item. Protect from impact. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 25, widthCm: 18, heightCm: 8),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: false,
     ),
     IrisRepositoryItem(
@@ -1590,11 +1590,11 @@ class IrisItemRepository {
       requiresVanguard: false,
       requiresIRISReview: false,
       deliveryNotes:
-          "Documents item. Protect from impact. Recommended vehicle: Bike.",
+          "Documents item. Protect from impact. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 25, widthCm: 18, heightCm: 8),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: false,
     ),
     IrisRepositoryItem(
@@ -1617,11 +1617,11 @@ class IrisItemRepository {
       requiresVanguard: false,
       requiresIRISReview: false,
       deliveryNotes:
-          "Documents item. Protect from impact. Recommended vehicle: Bike.",
+          "Documents item. Protect from impact. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 25, widthCm: 18, heightCm: 8),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: false,
     ),
     IrisRepositoryItem(
@@ -1644,11 +1644,11 @@ class IrisItemRepository {
       requiresVanguard: false,
       requiresIRISReview: false,
       deliveryNotes:
-          "Documents item. Protect from impact. Recommended vehicle: Bike.",
+          "Documents item. Protect from impact. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 25, widthCm: 18, heightCm: 8),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: false,
     ),
     IrisRepositoryItem(
@@ -1671,11 +1671,11 @@ class IrisItemRepository {
       requiresVanguard: false,
       requiresIRISReview: false,
       deliveryNotes:
-          "Documents item. Protect from impact. Recommended vehicle: Bike.",
+          "Documents item. Protect from impact. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 25, widthCm: 18, heightCm: 8),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: false,
     ),
     IrisRepositoryItem(
@@ -1698,11 +1698,11 @@ class IrisItemRepository {
       requiresVanguard: false,
       requiresIRISReview: false,
       deliveryNotes:
-          "Documents item. Protect from impact. Recommended vehicle: Bike.",
+          "Documents item. Protect from impact. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 25, widthCm: 18, heightCm: 8),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: false,
     ),
     IrisRepositoryItem(
@@ -1725,11 +1725,11 @@ class IrisItemRepository {
       requiresVanguard: false,
       requiresIRISReview: false,
       deliveryNotes:
-          "Documents item. Standard handling. Recommended vehicle: Bike.",
+          "Documents item. Standard handling. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 45, widthCm: 35, heightCm: 25),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: true,
     ),
     IrisRepositoryItem(
@@ -1752,11 +1752,11 @@ class IrisItemRepository {
       requiresVanguard: false,
       requiresIRISReview: false,
       deliveryNotes:
-          "Documents item. Standard handling. Recommended vehicle: Bike.",
+          "Documents item. Standard handling. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 45, widthCm: 35, heightCm: 25),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: true,
     ),
     IrisRepositoryItem(
@@ -1779,11 +1779,11 @@ class IrisItemRepository {
       requiresVanguard: false,
       requiresIRISReview: false,
       deliveryNotes:
-          "Documents item. Standard handling. Recommended vehicle: Bike.",
+          "Documents item. Standard handling. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 45, widthCm: 35, heightCm: 25),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: true,
     ),
     IrisRepositoryItem(
@@ -1806,11 +1806,11 @@ class IrisItemRepository {
       requiresVanguard: false,
       requiresIRISReview: false,
       deliveryNotes:
-          "Documents item. Standard handling. Recommended vehicle: Bike.",
+          "Documents item. Standard handling. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 45, widthCm: 35, heightCm: 25),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: true,
     ),
     IrisRepositoryItem(
@@ -1833,11 +1833,11 @@ class IrisItemRepository {
       requiresVanguard: false,
       requiresIRISReview: false,
       deliveryNotes:
-          "Documents item. Standard handling. Recommended vehicle: Bike.",
+          "Documents item. Standard handling. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 45, widthCm: 35, heightCm: 25),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: true,
     ),
     IrisRepositoryItem(
@@ -1860,11 +1860,11 @@ class IrisItemRepository {
       requiresVanguard: false,
       requiresIRISReview: false,
       deliveryNotes:
-          "Documents item. Standard handling. Recommended vehicle: Bike.",
+          "Documents item. Standard handling. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 45, widthCm: 35, heightCm: 25),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: true,
     ),
     IrisRepositoryItem(
@@ -1887,11 +1887,11 @@ class IrisItemRepository {
       requiresVanguard: false,
       requiresIRISReview: false,
       deliveryNotes:
-          "Documents item. Standard handling. Recommended vehicle: Bike.",
+          "Documents item. Standard handling. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 45, widthCm: 35, heightCm: 25),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: true,
     ),
     IrisRepositoryItem(
@@ -1914,11 +1914,11 @@ class IrisItemRepository {
       requiresVanguard: false,
       requiresIRISReview: false,
       deliveryNotes:
-          "Documents item. Standard handling. Recommended vehicle: Bike.",
+          "Documents item. Standard handling. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 45, widthCm: 35, heightCm: 25),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: true,
     ),
     IrisRepositoryItem(
@@ -1941,11 +1941,11 @@ class IrisItemRepository {
       requiresVanguard: false,
       requiresIRISReview: false,
       deliveryNotes:
-          "Documents item. Standard handling. Recommended vehicle: Bike.",
+          "Documents item. Standard handling. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 45, widthCm: 35, heightCm: 25),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: true,
     ),
     IrisRepositoryItem(
@@ -1968,11 +1968,11 @@ class IrisItemRepository {
       requiresVanguard: false,
       requiresIRISReview: false,
       deliveryNotes:
-          "Documents item. Standard handling. Recommended vehicle: Bike.",
+          "Documents item. Standard handling. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 45, widthCm: 35, heightCm: 25),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: true,
     ),
     IrisRepositoryItem(
@@ -1990,11 +1990,11 @@ class IrisItemRepository {
       requiresVanguard: true,
       requiresIRISReview: false,
       deliveryNotes:
-          "Electronics item. Protect from impact. Recommended vehicle: Bike.",
+          "Electronics item. Protect from impact. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.9,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 25, widthCm: 18, heightCm: 8),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: false,
     ),
     IrisRepositoryItem(
@@ -2017,11 +2017,11 @@ class IrisItemRepository {
       requiresVanguard: true,
       requiresIRISReview: false,
       deliveryNotes:
-          "Electronics item. Protect from impact. Recommended vehicle: Bike.",
+          "Electronics item. Protect from impact. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.9,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 25, widthCm: 18, heightCm: 8),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: false,
     ),
     IrisRepositoryItem(
@@ -2044,11 +2044,11 @@ class IrisItemRepository {
       requiresVanguard: true,
       requiresIRISReview: false,
       deliveryNotes:
-          "Electronics item. Protect from impact. Recommended vehicle: Bike.",
+          "Electronics item. Protect from impact. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.9,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 25, widthCm: 18, heightCm: 8),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: false,
     ),
     IrisRepositoryItem(
@@ -2066,11 +2066,11 @@ class IrisItemRepository {
       requiresVanguard: true,
       requiresIRISReview: false,
       deliveryNotes:
-          "Electronics item. Protect from impact. Recommended vehicle: Bike.",
+          "Electronics item. Protect from impact. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.9,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 25, widthCm: 18, heightCm: 8),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: false,
     ),
     IrisRepositoryItem(
@@ -2093,11 +2093,11 @@ class IrisItemRepository {
       requiresVanguard: true,
       requiresIRISReview: false,
       deliveryNotes:
-          "Electronics item. Protect from impact. Recommended vehicle: Bike.",
+          "Electronics item. Protect from impact. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.9,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 25, widthCm: 18, heightCm: 8),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: false,
     ),
     IrisRepositoryItem(
@@ -2120,11 +2120,11 @@ class IrisItemRepository {
       requiresVanguard: true,
       requiresIRISReview: false,
       deliveryNotes:
-          "Electronics item. Protect from impact. Recommended vehicle: Bike.",
+          "Electronics item. Protect from impact. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.9,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 25, widthCm: 18, heightCm: 8),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: false,
     ),
     IrisRepositoryItem(
@@ -2147,11 +2147,11 @@ class IrisItemRepository {
       requiresVanguard: true,
       requiresIRISReview: false,
       deliveryNotes:
-          "Electronics item. Protect from impact. Recommended vehicle: Bike.",
+          "Electronics item. Protect from impact. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.9,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 25, widthCm: 18, heightCm: 8),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: false,
     ),
     IrisRepositoryItem(
@@ -2169,11 +2169,11 @@ class IrisItemRepository {
       requiresVanguard: true,
       requiresIRISReview: false,
       deliveryNotes:
-          "Electronics item. Protect from impact. Recommended vehicle: Bike.",
+          "Electronics item. Protect from impact. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.9,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 25, widthCm: 18, heightCm: 8),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: false,
     ),
     IrisRepositoryItem(
@@ -2196,11 +2196,11 @@ class IrisItemRepository {
       requiresVanguard: true,
       requiresIRISReview: false,
       deliveryNotes:
-          "Electronics item. Protect from impact. Recommended vehicle: Bike.",
+          "Electronics item. Protect from impact. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.9,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 25, widthCm: 18, heightCm: 8),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: false,
     ),
     IrisRepositoryItem(
@@ -2218,11 +2218,11 @@ class IrisItemRepository {
       requiresVanguard: true,
       requiresIRISReview: false,
       deliveryNotes:
-          "Electronics item. Protect from impact. Recommended vehicle: Bike.",
+          "Electronics item. Protect from impact. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.9,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 25, widthCm: 18, heightCm: 8),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: false,
     ),
     IrisRepositoryItem(
@@ -2245,11 +2245,11 @@ class IrisItemRepository {
       requiresVanguard: false,
       requiresIRISReview: false,
       deliveryNotes:
-          "Electronics item. Protect from impact. Recommended vehicle: Bike.",
+          "Electronics item. Protect from impact. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 25, widthCm: 18, heightCm: 8),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: false,
     ),
     IrisRepositoryItem(
@@ -2272,11 +2272,11 @@ class IrisItemRepository {
       requiresVanguard: false,
       requiresIRISReview: false,
       deliveryNotes:
-          "Electronics item. Protect from impact. Recommended vehicle: Bike.",
+          "Electronics item. Protect from impact. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 25, widthCm: 18, heightCm: 8),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: false,
     ),
     IrisRepositoryItem(
@@ -2299,11 +2299,11 @@ class IrisItemRepository {
       requiresVanguard: false,
       requiresIRISReview: false,
       deliveryNotes:
-          "Electronics item. Protect from impact. Recommended vehicle: Bike.",
+          "Electronics item. Protect from impact. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 25, widthCm: 18, heightCm: 8),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: false,
     ),
     IrisRepositoryItem(
@@ -2326,11 +2326,11 @@ class IrisItemRepository {
       requiresVanguard: false,
       requiresIRISReview: false,
       deliveryNotes:
-          "Electronics item. Protect from impact. Recommended vehicle: Bike.",
+          "Electronics item. Protect from impact. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 25, widthCm: 18, heightCm: 8),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: false,
     ),
     IrisRepositoryItem(
@@ -2353,11 +2353,11 @@ class IrisItemRepository {
       requiresVanguard: false,
       requiresIRISReview: false,
       deliveryNotes:
-          "Electronics item. Protect from impact. Recommended vehicle: Bike.",
+          "Electronics item. Protect from impact. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 25, widthCm: 18, heightCm: 8),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: false,
     ),
     IrisRepositoryItem(
@@ -2380,11 +2380,11 @@ class IrisItemRepository {
       requiresVanguard: false,
       requiresIRISReview: false,
       deliveryNotes:
-          "Electronics item. Protect from impact. Recommended vehicle: Bike.",
+          "Electronics item. Protect from impact. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 25, widthCm: 18, heightCm: 8),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: false,
     ),
     IrisRepositoryItem(
@@ -2407,11 +2407,11 @@ class IrisItemRepository {
       requiresVanguard: false,
       requiresIRISReview: false,
       deliveryNotes:
-          "Electronics item. Protect from impact. Recommended vehicle: Bike.",
+          "Electronics item. Protect from impact. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 25, widthCm: 18, heightCm: 8),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: false,
     ),
     IrisRepositoryItem(
@@ -2434,11 +2434,11 @@ class IrisItemRepository {
       requiresVanguard: false,
       requiresIRISReview: false,
       deliveryNotes:
-          "Electronics item. Protect from impact. Recommended vehicle: Bike.",
+          "Electronics item. Protect from impact. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 25, widthCm: 18, heightCm: 8),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: false,
     ),
     IrisRepositoryItem(
@@ -2461,11 +2461,11 @@ class IrisItemRepository {
       requiresVanguard: false,
       requiresIRISReview: false,
       deliveryNotes:
-          "Electronics item. Protect from impact. Recommended vehicle: Bike.",
+          "Electronics item. Protect from impact. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 25, widthCm: 18, heightCm: 8),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: false,
     ),
     IrisRepositoryItem(
@@ -2488,11 +2488,11 @@ class IrisItemRepository {
       requiresVanguard: false,
       requiresIRISReview: false,
       deliveryNotes:
-          "Electronics item. Protect from impact. Recommended vehicle: Bike.",
+          "Electronics item. Protect from impact. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 25, widthCm: 18, heightCm: 8),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: false,
     ),
     IrisRepositoryItem(
@@ -2510,11 +2510,11 @@ class IrisItemRepository {
       requiresVanguard: false,
       requiresIRISReview: false,
       deliveryNotes:
-          "Electronics item. Protect from impact. Recommended vehicle: Bike.",
+          "Electronics item. Protect from impact. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 25, widthCm: 18, heightCm: 8),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: false,
     ),
     IrisRepositoryItem(
@@ -2532,11 +2532,11 @@ class IrisItemRepository {
       requiresVanguard: false,
       requiresIRISReview: false,
       deliveryNotes:
-          "Electronics item. Protect from impact. Recommended vehicle: Bike.",
+          "Electronics item. Protect from impact. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 25, widthCm: 18, heightCm: 8),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: false,
     ),
     IrisRepositoryItem(
@@ -2559,11 +2559,11 @@ class IrisItemRepository {
       requiresVanguard: false,
       requiresIRISReview: false,
       deliveryNotes:
-          "Electronics item. Protect from impact. Recommended vehicle: Bike.",
+          "Electronics item. Protect from impact. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 25, widthCm: 18, heightCm: 8),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: false,
     ),
     IrisRepositoryItem(
@@ -2581,11 +2581,11 @@ class IrisItemRepository {
       requiresVanguard: false,
       requiresIRISReview: false,
       deliveryNotes:
-          "Electronics item. Protect from impact. Recommended vehicle: Bike.",
+          "Electronics item. Protect from impact. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 25, widthCm: 18, heightCm: 8),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: false,
     ),
     IrisRepositoryItem(
@@ -2608,11 +2608,11 @@ class IrisItemRepository {
       requiresVanguard: false,
       requiresIRISReview: false,
       deliveryNotes:
-          "Electronics item. Protect from impact. Recommended vehicle: Bike.",
+          "Electronics item. Protect from impact. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 25, widthCm: 18, heightCm: 8),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: false,
     ),
     IrisRepositoryItem(
@@ -2635,11 +2635,11 @@ class IrisItemRepository {
       requiresVanguard: false,
       requiresIRISReview: false,
       deliveryNotes:
-          "Electronics item. Protect from impact. Recommended vehicle: Bike.",
+          "Electronics item. Protect from impact. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 25, widthCm: 18, heightCm: 8),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: false,
     ),
     IrisRepositoryItem(
@@ -2657,11 +2657,11 @@ class IrisItemRepository {
       requiresVanguard: false,
       requiresIRISReview: false,
       deliveryNotes:
-          "Electronics item. Protect from impact. Recommended vehicle: Bike.",
+          "Electronics item. Protect from impact. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 25, widthCm: 18, heightCm: 8),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: false,
     ),
     IrisRepositoryItem(
@@ -2679,11 +2679,11 @@ class IrisItemRepository {
       requiresVanguard: false,
       requiresIRISReview: false,
       deliveryNotes:
-          "Electronics item. Protect from impact. Recommended vehicle: Bike.",
+          "Electronics item. Protect from impact. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 25, widthCm: 18, heightCm: 8),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: false,
     ),
     IrisRepositoryItem(
@@ -2701,11 +2701,11 @@ class IrisItemRepository {
       requiresVanguard: false,
       requiresIRISReview: false,
       deliveryNotes:
-          "Electronics item. Protect from impact. Recommended vehicle: Bike.",
+          "Electronics item. Protect from impact. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 25, widthCm: 18, heightCm: 8),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: false,
     ),
     IrisRepositoryItem(
@@ -2723,11 +2723,11 @@ class IrisItemRepository {
       requiresVanguard: false,
       requiresIRISReview: false,
       deliveryNotes:
-          "Electronics item. Protect from impact. Recommended vehicle: Bike.",
+          "Electronics item. Protect from impact. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 25, widthCm: 18, heightCm: 8),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: false,
     ),
     IrisRepositoryItem(
@@ -2750,11 +2750,11 @@ class IrisItemRepository {
       requiresVanguard: true,
       requiresIRISReview: false,
       deliveryNotes:
-          "Electronics item. Protect from impact. Recommended vehicle: Bike.",
+          "Electronics item. Protect from impact. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.9,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 45, widthCm: 35, heightCm: 25),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: false,
     ),
     IrisRepositoryItem(
@@ -2777,11 +2777,11 @@ class IrisItemRepository {
       requiresVanguard: true,
       requiresIRISReview: false,
       deliveryNotes:
-          "Electronics item. Protect from impact. Recommended vehicle: Bike.",
+          "Electronics item. Protect from impact. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.9,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 45, widthCm: 35, heightCm: 25),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: false,
     ),
     IrisRepositoryItem(
@@ -2804,11 +2804,11 @@ class IrisItemRepository {
       requiresVanguard: true,
       requiresIRISReview: false,
       deliveryNotes:
-          "Electronics item. Protect from impact. Recommended vehicle: Bike.",
+          "Electronics item. Protect from impact. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.9,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 45, widthCm: 35, heightCm: 25),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: false,
     ),
     IrisRepositoryItem(
@@ -2831,11 +2831,11 @@ class IrisItemRepository {
       requiresVanguard: true,
       requiresIRISReview: false,
       deliveryNotes:
-          "Electronics item. Protect from impact. Recommended vehicle: Bike.",
+          "Electronics item. Protect from impact. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.9,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 45, widthCm: 35, heightCm: 25),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: false,
     ),
     IrisRepositoryItem(
@@ -2858,11 +2858,11 @@ class IrisItemRepository {
       requiresVanguard: true,
       requiresIRISReview: false,
       deliveryNotes:
-          "Electronics item. Protect from impact. Recommended vehicle: Bike.",
+          "Electronics item. Protect from impact. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.9,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 45, widthCm: 35, heightCm: 25),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: false,
     ),
     IrisRepositoryItem(
@@ -2885,11 +2885,11 @@ class IrisItemRepository {
       requiresVanguard: true,
       requiresIRISReview: false,
       deliveryNotes:
-          "Electronics item. Protect from impact. Recommended vehicle: Bike.",
+          "Electronics item. Protect from impact. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.9,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 45, widthCm: 35, heightCm: 25),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: false,
     ),
     IrisRepositoryItem(
@@ -2912,11 +2912,11 @@ class IrisItemRepository {
       requiresVanguard: true,
       requiresIRISReview: false,
       deliveryNotes:
-          "Electronics item. Protect from impact. Recommended vehicle: Bike.",
+          "Electronics item. Protect from impact. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.9,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 45, widthCm: 35, heightCm: 25),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: false,
     ),
     IrisRepositoryItem(
@@ -2939,11 +2939,11 @@ class IrisItemRepository {
       requiresVanguard: true,
       requiresIRISReview: false,
       deliveryNotes:
-          "Electronics item. Protect from impact. Recommended vehicle: Bike.",
+          "Electronics item. Protect from impact. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.9,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 45, widthCm: 35, heightCm: 25),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: false,
     ),
     IrisRepositoryItem(
@@ -2966,11 +2966,11 @@ class IrisItemRepository {
       requiresVanguard: true,
       requiresIRISReview: false,
       deliveryNotes:
-          "Electronics item. Protect from impact. Recommended vehicle: Bike.",
+          "Electronics item. Protect from impact. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.9,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 45, widthCm: 35, heightCm: 25),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: false,
     ),
     IrisRepositoryItem(
@@ -2993,11 +2993,11 @@ class IrisItemRepository {
       requiresVanguard: true,
       requiresIRISReview: false,
       deliveryNotes:
-          "Electronics item. Protect from impact. Recommended vehicle: Bike.",
+          "Electronics item. Protect from impact. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.9,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 45, widthCm: 35, heightCm: 25),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: false,
     ),
     IrisRepositoryItem(
@@ -3020,11 +3020,11 @@ class IrisItemRepository {
       requiresVanguard: true,
       requiresIRISReview: false,
       deliveryNotes:
-          "Electronics item. Protect from impact. Recommended vehicle: Bike.",
+          "Electronics item. Protect from impact. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.9,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 45, widthCm: 35, heightCm: 25),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: false,
     ),
     IrisRepositoryItem(
@@ -3047,11 +3047,11 @@ class IrisItemRepository {
       requiresVanguard: true,
       requiresIRISReview: false,
       deliveryNotes:
-          "Electronics item. Protect from impact. Recommended vehicle: Bike.",
+          "Electronics item. Protect from impact. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.9,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 45, widthCm: 35, heightCm: 25),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: false,
     ),
     IrisRepositoryItem(
@@ -3074,11 +3074,11 @@ class IrisItemRepository {
       requiresVanguard: true,
       requiresIRISReview: false,
       deliveryNotes:
-          "Electronics item. Protect from impact. Recommended vehicle: Bike.",
+          "Electronics item. Protect from impact. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.9,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 45, widthCm: 35, heightCm: 25),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: false,
     ),
     IrisRepositoryItem(
@@ -3101,11 +3101,11 @@ class IrisItemRepository {
       requiresVanguard: true,
       requiresIRISReview: false,
       deliveryNotes:
-          "Electronics item. Protect from impact. Recommended vehicle: Bike.",
+          "Electronics item. Protect from impact. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.9,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 45, widthCm: 35, heightCm: 25),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: false,
     ),
     IrisRepositoryItem(
@@ -3128,11 +3128,11 @@ class IrisItemRepository {
       requiresVanguard: true,
       requiresIRISReview: false,
       deliveryNotes:
-          "Electronics item. Protect from impact. Recommended vehicle: Bike.",
+          "Electronics item. Protect from impact. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.9,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 45, widthCm: 35, heightCm: 25),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: false,
     ),
     IrisRepositoryItem(
@@ -3155,11 +3155,11 @@ class IrisItemRepository {
       requiresVanguard: true,
       requiresIRISReview: false,
       deliveryNotes:
-          "Electronics item. Protect from impact. Recommended vehicle: Bike.",
+          "Electronics item. Protect from impact. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.9,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 45, widthCm: 35, heightCm: 25),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: false,
     ),
     IrisRepositoryItem(
@@ -3182,11 +3182,11 @@ class IrisItemRepository {
       requiresVanguard: true,
       requiresIRISReview: false,
       deliveryNotes:
-          "Electronics item. Protect from impact. Recommended vehicle: Bike.",
+          "Electronics item. Protect from impact. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.9,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 45, widthCm: 35, heightCm: 25),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: false,
     ),
     IrisRepositoryItem(
@@ -3209,11 +3209,11 @@ class IrisItemRepository {
       requiresVanguard: true,
       requiresIRISReview: false,
       deliveryNotes:
-          "Electronics item. Protect from impact. Recommended vehicle: Bike.",
+          "Electronics item. Protect from impact. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.9,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 45, widthCm: 35, heightCm: 25),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: false,
     ),
     IrisRepositoryItem(
@@ -3236,11 +3236,11 @@ class IrisItemRepository {
       requiresVanguard: true,
       requiresIRISReview: false,
       deliveryNotes:
-          "Electronics item. Protect from impact. Recommended vehicle: Bike.",
+          "Electronics item. Protect from impact. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.9,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 45, widthCm: 35, heightCm: 25),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: false,
     ),
     IrisRepositoryItem(
@@ -3263,11 +3263,11 @@ class IrisItemRepository {
       requiresVanguard: true,
       requiresIRISReview: false,
       deliveryNotes:
-          "Electronics item. Protect from impact. Recommended vehicle: Bike.",
+          "Electronics item. Protect from impact. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.9,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 45, widthCm: 35, heightCm: 25),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: false,
     ),
     IrisRepositoryItem(
@@ -3290,11 +3290,11 @@ class IrisItemRepository {
       requiresVanguard: true,
       requiresIRISReview: false,
       deliveryNotes:
-          "Electronics item. Protect from impact. Recommended vehicle: Bike.",
+          "Electronics item. Protect from impact. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.9,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 45, widthCm: 35, heightCm: 25),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: false,
     ),
     IrisRepositoryItem(
@@ -3317,11 +3317,11 @@ class IrisItemRepository {
       requiresVanguard: true,
       requiresIRISReview: false,
       deliveryNotes:
-          "Electronics item. Protect from impact. Recommended vehicle: Bike.",
+          "Electronics item. Protect from impact. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.9,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 45, widthCm: 35, heightCm: 25),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: false,
     ),
     IrisRepositoryItem(
@@ -3344,11 +3344,11 @@ class IrisItemRepository {
       requiresVanguard: true,
       requiresIRISReview: false,
       deliveryNotes:
-          "Electronics item. Protect from impact. Recommended vehicle: Bike.",
+          "Electronics item. Protect from impact. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.9,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 45, widthCm: 35, heightCm: 25),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: false,
     ),
     IrisRepositoryItem(
@@ -3371,11 +3371,11 @@ class IrisItemRepository {
       requiresVanguard: true,
       requiresIRISReview: false,
       deliveryNotes:
-          "Electronics item. Protect from impact. Recommended vehicle: Bike.",
+          "Electronics item. Protect from impact. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.9,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 45, widthCm: 35, heightCm: 25),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: false,
     ),
     IrisRepositoryItem(
@@ -3398,11 +3398,11 @@ class IrisItemRepository {
       requiresVanguard: true,
       requiresIRISReview: false,
       deliveryNotes:
-          "Electronics item. Protect from impact. Recommended vehicle: Bike.",
+          "Electronics item. Protect from impact. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.9,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 45, widthCm: 35, heightCm: 25),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: false,
     ),
     IrisRepositoryItem(
@@ -3425,11 +3425,11 @@ class IrisItemRepository {
       requiresVanguard: true,
       requiresIRISReview: false,
       deliveryNotes:
-          "Electronics item. Protect from impact. Recommended vehicle: Bike.",
+          "Electronics item. Protect from impact. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.9,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 45, widthCm: 35, heightCm: 25),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: false,
     ),
     IrisRepositoryItem(
@@ -3452,11 +3452,11 @@ class IrisItemRepository {
       requiresVanguard: true,
       requiresIRISReview: false,
       deliveryNotes:
-          "Electronics item. Protect from impact. Recommended vehicle: Bike.",
+          "Electronics item. Protect from impact. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.9,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 45, widthCm: 35, heightCm: 25),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: false,
     ),
     IrisRepositoryItem(
@@ -3479,11 +3479,11 @@ class IrisItemRepository {
       requiresVanguard: true,
       requiresIRISReview: false,
       deliveryNotes:
-          "Electronics item. Protect from impact. Recommended vehicle: Bike.",
+          "Electronics item. Protect from impact. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.9,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 45, widthCm: 35, heightCm: 25),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: false,
     ),
     IrisRepositoryItem(
@@ -3506,11 +3506,11 @@ class IrisItemRepository {
       requiresVanguard: true,
       requiresIRISReview: false,
       deliveryNotes:
-          "Electronics item. Protect from impact. Recommended vehicle: Bike.",
+          "Electronics item. Protect from impact. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.9,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 45, widthCm: 35, heightCm: 25),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: false,
     ),
     IrisRepositoryItem(
@@ -3533,11 +3533,11 @@ class IrisItemRepository {
       requiresVanguard: true,
       requiresIRISReview: false,
       deliveryNotes:
-          "Electronics item. Protect from impact. Recommended vehicle: Bike.",
+          "Electronics item. Protect from impact. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.9,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 45, widthCm: 35, heightCm: 25),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: false,
     ),
     IrisRepositoryItem(
@@ -3815,11 +3815,11 @@ class IrisItemRepository {
       requiresVanguard: true,
       requiresIRISReview: false,
       deliveryNotes:
-          "Electronics item. Protect from impact. Recommended vehicle: Bike.",
+          "Electronics item. Protect from impact. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.9,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 25, widthCm: 18, heightCm: 8),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: false,
     ),
     IrisRepositoryItem(
@@ -3842,11 +3842,11 @@ class IrisItemRepository {
       requiresVanguard: true,
       requiresIRISReview: false,
       deliveryNotes:
-          "Electronics item. Protect from impact. Recommended vehicle: Bike.",
+          "Electronics item. Protect from impact. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.9,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 25, widthCm: 18, heightCm: 8),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: false,
     ),
     IrisRepositoryItem(
@@ -3869,11 +3869,11 @@ class IrisItemRepository {
       requiresVanguard: true,
       requiresIRISReview: false,
       deliveryNotes:
-          "Electronics item. Protect from impact. Recommended vehicle: Bike.",
+          "Electronics item. Protect from impact. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.9,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 25, widthCm: 18, heightCm: 8),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: false,
     ),
     IrisRepositoryItem(
@@ -3896,11 +3896,11 @@ class IrisItemRepository {
       requiresVanguard: true,
       requiresIRISReview: false,
       deliveryNotes:
-          "Electronics item. Protect from impact. Recommended vehicle: Bike.",
+          "Electronics item. Protect from impact. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.9,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 25, widthCm: 18, heightCm: 8),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: false,
     ),
     IrisRepositoryItem(
@@ -3923,11 +3923,11 @@ class IrisItemRepository {
       requiresVanguard: true,
       requiresIRISReview: false,
       deliveryNotes:
-          "Electronics item. Protect from impact. Recommended vehicle: Bike.",
+          "Electronics item. Protect from impact. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.9,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 25, widthCm: 18, heightCm: 8),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: false,
     ),
     IrisRepositoryItem(
@@ -3950,11 +3950,11 @@ class IrisItemRepository {
       requiresVanguard: true,
       requiresIRISReview: false,
       deliveryNotes:
-          "Electronics item. Protect from impact. Recommended vehicle: Bike.",
+          "Electronics item. Protect from impact. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.9,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 25, widthCm: 18, heightCm: 8),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: false,
     ),
     IrisRepositoryItem(
@@ -3977,11 +3977,11 @@ class IrisItemRepository {
       requiresVanguard: true,
       requiresIRISReview: false,
       deliveryNotes:
-          "Electronics item. Protect from impact. Recommended vehicle: Bike.",
+          "Electronics item. Protect from impact. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.9,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 25, widthCm: 18, heightCm: 8),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: false,
     ),
     IrisRepositoryItem(
@@ -4004,11 +4004,11 @@ class IrisItemRepository {
       requiresVanguard: true,
       requiresIRISReview: false,
       deliveryNotes:
-          "Electronics item. Protect from impact. Recommended vehicle: Bike.",
+          "Electronics item. Protect from impact. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.9,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 25, widthCm: 18, heightCm: 8),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: false,
     ),
     IrisRepositoryItem(
@@ -4031,11 +4031,11 @@ class IrisItemRepository {
       requiresVanguard: true,
       requiresIRISReview: false,
       deliveryNotes:
-          "Electronics item. Protect from impact. Recommended vehicle: Bike.",
+          "Electronics item. Protect from impact. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.9,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 25, widthCm: 18, heightCm: 8),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: false,
     ),
     IrisRepositoryItem(
@@ -4058,11 +4058,11 @@ class IrisItemRepository {
       requiresVanguard: true,
       requiresIRISReview: false,
       deliveryNotes:
-          "Electronics item. Protect from impact. Recommended vehicle: Bike.",
+          "Electronics item. Protect from impact. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.9,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 25, widthCm: 18, heightCm: 8),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: false,
     ),
     IrisRepositoryItem(
@@ -4085,11 +4085,11 @@ class IrisItemRepository {
       requiresVanguard: true,
       requiresIRISReview: false,
       deliveryNotes:
-          "Electronics item. Protect from impact. Recommended vehicle: Bike.",
+          "Electronics item. Protect from impact. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.9,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 45, widthCm: 35, heightCm: 25),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: false,
     ),
     IrisRepositoryItem(
@@ -4112,11 +4112,11 @@ class IrisItemRepository {
       requiresVanguard: true,
       requiresIRISReview: false,
       deliveryNotes:
-          "Electronics item. Protect from impact. Recommended vehicle: Bike.",
+          "Electronics item. Protect from impact. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.9,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 45, widthCm: 35, heightCm: 25),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: false,
     ),
     IrisRepositoryItem(
@@ -4139,11 +4139,11 @@ class IrisItemRepository {
       requiresVanguard: true,
       requiresIRISReview: false,
       deliveryNotes:
-          "Electronics item. Protect from impact. Recommended vehicle: Bike.",
+          "Electronics item. Protect from impact. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.9,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 45, widthCm: 35, heightCm: 25),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: false,
     ),
     IrisRepositoryItem(
@@ -4166,11 +4166,11 @@ class IrisItemRepository {
       requiresVanguard: true,
       requiresIRISReview: false,
       deliveryNotes:
-          "Electronics item. Protect from impact. Recommended vehicle: Bike.",
+          "Electronics item. Protect from impact. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.9,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 45, widthCm: 35, heightCm: 25),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: false,
     ),
     IrisRepositoryItem(
@@ -4193,11 +4193,11 @@ class IrisItemRepository {
       requiresVanguard: true,
       requiresIRISReview: false,
       deliveryNotes:
-          "Electronics item. Protect from impact. Recommended vehicle: Bike.",
+          "Electronics item. Protect from impact. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.9,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 45, widthCm: 35, heightCm: 25),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: false,
     ),
     IrisRepositoryItem(
@@ -4220,11 +4220,11 @@ class IrisItemRepository {
       requiresVanguard: true,
       requiresIRISReview: false,
       deliveryNotes:
-          "Electronics item. Protect from impact. Recommended vehicle: Bike.",
+          "Electronics item. Protect from impact. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.9,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 45, widthCm: 35, heightCm: 25),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: false,
     ),
     IrisRepositoryItem(
@@ -4247,11 +4247,11 @@ class IrisItemRepository {
       requiresVanguard: true,
       requiresIRISReview: false,
       deliveryNotes:
-          "Electronics item. Protect from impact. Recommended vehicle: Bike.",
+          "Electronics item. Protect from impact. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.9,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 45, widthCm: 35, heightCm: 25),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: false,
     ),
     IrisRepositoryItem(
@@ -4274,11 +4274,11 @@ class IrisItemRepository {
       requiresVanguard: true,
       requiresIRISReview: false,
       deliveryNotes:
-          "Electronics item. Protect from impact. Recommended vehicle: Bike.",
+          "Electronics item. Protect from impact. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.9,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 45, widthCm: 35, heightCm: 25),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: false,
     ),
     IrisRepositoryItem(
@@ -4301,11 +4301,11 @@ class IrisItemRepository {
       requiresVanguard: true,
       requiresIRISReview: false,
       deliveryNotes:
-          "Electronics item. Protect from impact. Recommended vehicle: Bike.",
+          "Electronics item. Protect from impact. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.9,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 45, widthCm: 35, heightCm: 25),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: false,
     ),
     IrisRepositoryItem(
@@ -4328,11 +4328,11 @@ class IrisItemRepository {
       requiresVanguard: true,
       requiresIRISReview: false,
       deliveryNotes:
-          "Electronics item. Protect from impact. Recommended vehicle: Bike.",
+          "Electronics item. Protect from impact. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.9,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 45, widthCm: 35, heightCm: 25),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: false,
     ),
     IrisRepositoryItem(
@@ -4355,11 +4355,11 @@ class IrisItemRepository {
       requiresVanguard: true,
       requiresIRISReview: false,
       deliveryNotes:
-          "Electronics item. Protect from impact. Recommended vehicle: Bike.",
+          "Electronics item. Protect from impact. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.9,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 45, widthCm: 35, heightCm: 25),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: false,
     ),
     IrisRepositoryItem(
@@ -4382,11 +4382,11 @@ class IrisItemRepository {
       requiresVanguard: true,
       requiresIRISReview: false,
       deliveryNotes:
-          "Electronics item. Protect from impact. Recommended vehicle: Bike.",
+          "Electronics item. Protect from impact. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.9,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 45, widthCm: 35, heightCm: 25),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: false,
     ),
     IrisRepositoryItem(
@@ -4409,11 +4409,11 @@ class IrisItemRepository {
       requiresVanguard: true,
       requiresIRISReview: false,
       deliveryNotes:
-          "Electronics item. Protect from impact. Recommended vehicle: Bike.",
+          "Electronics item. Protect from impact. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.9,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 45, widthCm: 35, heightCm: 25),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: false,
     ),
     IrisRepositoryItem(
@@ -4436,11 +4436,11 @@ class IrisItemRepository {
       requiresVanguard: true,
       requiresIRISReview: false,
       deliveryNotes:
-          "Electronics item. Protect from impact. Recommended vehicle: Bike.",
+          "Electronics item. Protect from impact. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.9,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 45, widthCm: 35, heightCm: 25),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: false,
     ),
     IrisRepositoryItem(
@@ -4463,11 +4463,11 @@ class IrisItemRepository {
       requiresVanguard: true,
       requiresIRISReview: false,
       deliveryNotes:
-          "Electronics item. Protect from impact. Recommended vehicle: Bike.",
+          "Electronics item. Protect from impact. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.9,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 45, widthCm: 35, heightCm: 25),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: false,
     ),
     IrisRepositoryItem(
@@ -4490,11 +4490,11 @@ class IrisItemRepository {
       requiresVanguard: true,
       requiresIRISReview: false,
       deliveryNotes:
-          "Electronics item. Protect from impact. Recommended vehicle: Bike.",
+          "Electronics item. Protect from impact. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.9,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 45, widthCm: 35, heightCm: 25),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: false,
     ),
     IrisRepositoryItem(
@@ -4517,11 +4517,11 @@ class IrisItemRepository {
       requiresVanguard: true,
       requiresIRISReview: false,
       deliveryNotes:
-          "Electronics item. Protect from impact. Recommended vehicle: Bike.",
+          "Electronics item. Protect from impact. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.9,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 45, widthCm: 35, heightCm: 25),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: false,
     ),
     IrisRepositoryItem(
@@ -4544,11 +4544,11 @@ class IrisItemRepository {
       requiresVanguard: true,
       requiresIRISReview: false,
       deliveryNotes:
-          "Electronics item. Protect from impact. Recommended vehicle: Bike.",
+          "Electronics item. Protect from impact. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.9,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 45, widthCm: 35, heightCm: 25),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: false,
     ),
     IrisRepositoryItem(
@@ -4571,11 +4571,11 @@ class IrisItemRepository {
       requiresVanguard: true,
       requiresIRISReview: false,
       deliveryNotes:
-          "Electronics item. Protect from impact. Recommended vehicle: Bike.",
+          "Electronics item. Protect from impact. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.9,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 45, widthCm: 35, heightCm: 25),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: false,
     ),
     IrisRepositoryItem(
@@ -4598,11 +4598,11 @@ class IrisItemRepository {
       requiresVanguard: true,
       requiresIRISReview: false,
       deliveryNotes:
-          "Electronics item. Protect from impact. Recommended vehicle: Bike.",
+          "Electronics item. Protect from impact. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.9,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 45, widthCm: 35, heightCm: 25),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: false,
     ),
     IrisRepositoryItem(
@@ -4625,11 +4625,11 @@ class IrisItemRepository {
       requiresVanguard: true,
       requiresIRISReview: false,
       deliveryNotes:
-          "Electronics item. Protect from impact. Recommended vehicle: Bike.",
+          "Electronics item. Protect from impact. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.9,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 25, widthCm: 18, heightCm: 8),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: false,
     ),
     IrisRepositoryItem(
@@ -4652,11 +4652,11 @@ class IrisItemRepository {
       requiresVanguard: true,
       requiresIRISReview: false,
       deliveryNotes:
-          "Electronics item. Protect from impact. Recommended vehicle: Bike.",
+          "Electronics item. Protect from impact. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.9,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 25, widthCm: 18, heightCm: 8),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: false,
     ),
     IrisRepositoryItem(
@@ -4679,11 +4679,11 @@ class IrisItemRepository {
       requiresVanguard: true,
       requiresIRISReview: false,
       deliveryNotes:
-          "Electronics item. Protect from impact. Recommended vehicle: Bike.",
+          "Electronics item. Protect from impact. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.9,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 25, widthCm: 18, heightCm: 8),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: false,
     ),
     IrisRepositoryItem(
@@ -4706,11 +4706,11 @@ class IrisItemRepository {
       requiresVanguard: true,
       requiresIRISReview: false,
       deliveryNotes:
-          "Electronics item. Protect from impact. Recommended vehicle: Bike.",
+          "Electronics item. Protect from impact. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.9,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 25, widthCm: 18, heightCm: 8),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: false,
     ),
     IrisRepositoryItem(
@@ -4733,11 +4733,11 @@ class IrisItemRepository {
       requiresVanguard: true,
       requiresIRISReview: false,
       deliveryNotes:
-          "Electronics item. Protect from impact. Recommended vehicle: Bike.",
+          "Electronics item. Protect from impact. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.9,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 25, widthCm: 18, heightCm: 8),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: false,
     ),
     IrisRepositoryItem(
@@ -4760,11 +4760,11 @@ class IrisItemRepository {
       requiresVanguard: true,
       requiresIRISReview: false,
       deliveryNotes:
-          "Electronics item. Protect from impact. Recommended vehicle: Bike.",
+          "Electronics item. Protect from impact. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.9,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 25, widthCm: 18, heightCm: 8),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: false,
     ),
     IrisRepositoryItem(
@@ -4787,11 +4787,11 @@ class IrisItemRepository {
       requiresVanguard: true,
       requiresIRISReview: false,
       deliveryNotes:
-          "Electronics item. Protect from impact. Recommended vehicle: Bike.",
+          "Electronics item. Protect from impact. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.9,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 25, widthCm: 18, heightCm: 8),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: false,
     ),
     IrisRepositoryItem(
@@ -4814,11 +4814,11 @@ class IrisItemRepository {
       requiresVanguard: true,
       requiresIRISReview: false,
       deliveryNotes:
-          "Electronics item. Protect from impact. Recommended vehicle: Bike.",
+          "Electronics item. Protect from impact. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.9,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 25, widthCm: 18, heightCm: 8),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: false,
     ),
     IrisRepositoryItem(
@@ -4841,11 +4841,11 @@ class IrisItemRepository {
       requiresVanguard: true,
       requiresIRISReview: false,
       deliveryNotes:
-          "Electronics item. Protect from impact. Recommended vehicle: Bike.",
+          "Electronics item. Protect from impact. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.9,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 25, widthCm: 18, heightCm: 8),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: false,
     ),
     IrisRepositoryItem(
@@ -4868,11 +4868,11 @@ class IrisItemRepository {
       requiresVanguard: true,
       requiresIRISReview: false,
       deliveryNotes:
-          "Electronics item. Protect from impact. Recommended vehicle: Bike.",
+          "Electronics item. Protect from impact. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.9,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 25, widthCm: 18, heightCm: 8),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: false,
     ),
     IrisRepositoryItem(
@@ -4890,11 +4890,11 @@ class IrisItemRepository {
       requiresVanguard: false,
       requiresIRISReview: false,
       deliveryNotes:
-          "Electronics item. Protect from impact. Recommended vehicle: Bike.",
+          "Electronics item. Protect from impact. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 45, widthCm: 35, heightCm: 25),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: false,
     ),
     IrisRepositoryItem(
@@ -4912,11 +4912,11 @@ class IrisItemRepository {
       requiresVanguard: false,
       requiresIRISReview: false,
       deliveryNotes:
-          "Electronics item. Protect from impact. Recommended vehicle: Bike.",
+          "Electronics item. Protect from impact. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 45, widthCm: 35, heightCm: 25),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: false,
     ),
     IrisRepositoryItem(
@@ -4939,11 +4939,11 @@ class IrisItemRepository {
       requiresVanguard: false,
       requiresIRISReview: false,
       deliveryNotes:
-          "Electronics item. Protect from impact. Recommended vehicle: Bike.",
+          "Electronics item. Protect from impact. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 45, widthCm: 35, heightCm: 25),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: false,
     ),
     IrisRepositoryItem(
@@ -4961,11 +4961,11 @@ class IrisItemRepository {
       requiresVanguard: false,
       requiresIRISReview: false,
       deliveryNotes:
-          "Electronics item. Protect from impact. Recommended vehicle: Bike.",
+          "Electronics item. Protect from impact. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 45, widthCm: 35, heightCm: 25),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: false,
     ),
     IrisRepositoryItem(
@@ -4988,11 +4988,11 @@ class IrisItemRepository {
       requiresVanguard: false,
       requiresIRISReview: false,
       deliveryNotes:
-          "Electronics item. Protect from impact. Recommended vehicle: Bike.",
+          "Electronics item. Protect from impact. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 45, widthCm: 35, heightCm: 25),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: false,
     ),
     IrisRepositoryItem(
@@ -5015,11 +5015,11 @@ class IrisItemRepository {
       requiresVanguard: false,
       requiresIRISReview: false,
       deliveryNotes:
-          "Electronics item. Protect from impact. Recommended vehicle: Bike.",
+          "Electronics item. Protect from impact. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 45, widthCm: 35, heightCm: 25),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: false,
     ),
     IrisRepositoryItem(
@@ -5037,11 +5037,11 @@ class IrisItemRepository {
       requiresVanguard: false,
       requiresIRISReview: false,
       deliveryNotes:
-          "Electronics item. Protect from impact. Recommended vehicle: Bike.",
+          "Electronics item. Protect from impact. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 45, widthCm: 35, heightCm: 25),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: false,
     ),
     IrisRepositoryItem(
@@ -5059,11 +5059,11 @@ class IrisItemRepository {
       requiresVanguard: false,
       requiresIRISReview: false,
       deliveryNotes:
-          "Electronics item. Protect from impact. Recommended vehicle: Bike.",
+          "Electronics item. Protect from impact. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 45, widthCm: 35, heightCm: 25),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: false,
     ),
     IrisRepositoryItem(
@@ -5086,11 +5086,11 @@ class IrisItemRepository {
       requiresVanguard: false,
       requiresIRISReview: false,
       deliveryNotes:
-          "Electronics item. Protect from impact. Recommended vehicle: Bike.",
+          "Electronics item. Protect from impact. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 45, widthCm: 35, heightCm: 25),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: false,
     ),
     IrisRepositoryItem(
@@ -5108,11 +5108,11 @@ class IrisItemRepository {
       requiresVanguard: false,
       requiresIRISReview: false,
       deliveryNotes:
-          "Electronics item. Protect from impact. Recommended vehicle: Bike.",
+          "Electronics item. Protect from impact. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 45, widthCm: 35, heightCm: 25),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: false,
     ),
     IrisRepositoryItem(
@@ -5135,11 +5135,11 @@ class IrisItemRepository {
       requiresVanguard: false,
       requiresIRISReview: false,
       deliveryNotes:
-          "Electronics item. Protect from impact. Recommended vehicle: Bike.",
+          "Electronics item. Protect from impact. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 25, widthCm: 18, heightCm: 8),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: false,
     ),
     IrisRepositoryItem(
@@ -5162,11 +5162,11 @@ class IrisItemRepository {
       requiresVanguard: false,
       requiresIRISReview: false,
       deliveryNotes:
-          "Electronics item. Protect from impact. Recommended vehicle: Bike.",
+          "Electronics item. Protect from impact. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 25, widthCm: 18, heightCm: 8),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: false,
     ),
     IrisRepositoryItem(
@@ -5189,11 +5189,11 @@ class IrisItemRepository {
       requiresVanguard: false,
       requiresIRISReview: false,
       deliveryNotes:
-          "Electronics item. Protect from impact. Recommended vehicle: Bike.",
+          "Electronics item. Protect from impact. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 25, widthCm: 18, heightCm: 8),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: false,
     ),
     IrisRepositoryItem(
@@ -5216,11 +5216,11 @@ class IrisItemRepository {
       requiresVanguard: false,
       requiresIRISReview: false,
       deliveryNotes:
-          "Electronics item. Protect from impact. Recommended vehicle: Bike.",
+          "Electronics item. Protect from impact. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 25, widthCm: 18, heightCm: 8),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: false,
     ),
     IrisRepositoryItem(
@@ -5243,11 +5243,11 @@ class IrisItemRepository {
       requiresVanguard: false,
       requiresIRISReview: false,
       deliveryNotes:
-          "Electronics item. Protect from impact. Recommended vehicle: Bike.",
+          "Electronics item. Protect from impact. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 25, widthCm: 18, heightCm: 8),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: false,
     ),
     IrisRepositoryItem(
@@ -5270,11 +5270,11 @@ class IrisItemRepository {
       requiresVanguard: false,
       requiresIRISReview: false,
       deliveryNotes:
-          "Electronics item. Protect from impact. Recommended vehicle: Bike.",
+          "Electronics item. Protect from impact. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 25, widthCm: 18, heightCm: 8),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: false,
     ),
     IrisRepositoryItem(
@@ -5297,11 +5297,11 @@ class IrisItemRepository {
       requiresVanguard: false,
       requiresIRISReview: false,
       deliveryNotes:
-          "Electronics item. Protect from impact. Recommended vehicle: Bike.",
+          "Electronics item. Protect from impact. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 25, widthCm: 18, heightCm: 8),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: false,
     ),
     IrisRepositoryItem(
@@ -5324,11 +5324,11 @@ class IrisItemRepository {
       requiresVanguard: false,
       requiresIRISReview: false,
       deliveryNotes:
-          "Electronics item. Protect from impact. Recommended vehicle: Bike.",
+          "Electronics item. Protect from impact. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 25, widthCm: 18, heightCm: 8),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: false,
     ),
     IrisRepositoryItem(
@@ -5351,11 +5351,11 @@ class IrisItemRepository {
       requiresVanguard: false,
       requiresIRISReview: false,
       deliveryNotes:
-          "Electronics item. Protect from impact. Recommended vehicle: Bike.",
+          "Electronics item. Protect from impact. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 25, widthCm: 18, heightCm: 8),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: false,
     ),
     IrisRepositoryItem(
@@ -5378,11 +5378,11 @@ class IrisItemRepository {
       requiresVanguard: false,
       requiresIRISReview: false,
       deliveryNotes:
-          "Electronics item. Protect from impact. Recommended vehicle: Bike.",
+          "Electronics item. Protect from impact. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 25, widthCm: 18, heightCm: 8),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: false,
     ),
     IrisRepositoryItem(
@@ -5660,11 +5660,11 @@ class IrisItemRepository {
       requiresVanguard: false,
       requiresIRISReview: false,
       deliveryNotes:
-          "Fashion item. Standard handling. Recommended vehicle: Bike.",
+          "Fashion item. Standard handling. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 25, widthCm: 18, heightCm: 8),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: true,
     ),
     IrisRepositoryItem(
@@ -5682,11 +5682,11 @@ class IrisItemRepository {
       requiresVanguard: false,
       requiresIRISReview: false,
       deliveryNotes:
-          "Fashion item. Standard handling. Recommended vehicle: Bike.",
+          "Fashion item. Standard handling. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 25, widthCm: 18, heightCm: 8),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: true,
     ),
     IrisRepositoryItem(
@@ -5704,11 +5704,11 @@ class IrisItemRepository {
       requiresVanguard: false,
       requiresIRISReview: false,
       deliveryNotes:
-          "Fashion item. Standard handling. Recommended vehicle: Bike.",
+          "Fashion item. Standard handling. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 25, widthCm: 18, heightCm: 8),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: true,
     ),
     IrisRepositoryItem(
@@ -5731,11 +5731,11 @@ class IrisItemRepository {
       requiresVanguard: false,
       requiresIRISReview: false,
       deliveryNotes:
-          "Fashion item. Standard handling. Recommended vehicle: Bike.",
+          "Fashion item. Standard handling. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 25, widthCm: 18, heightCm: 8),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: true,
     ),
     IrisRepositoryItem(
@@ -5758,11 +5758,11 @@ class IrisItemRepository {
       requiresVanguard: false,
       requiresIRISReview: false,
       deliveryNotes:
-          "Fashion item. Standard handling. Recommended vehicle: Bike.",
+          "Fashion item. Standard handling. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 25, widthCm: 18, heightCm: 8),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: true,
     ),
     IrisRepositoryItem(
@@ -5785,11 +5785,11 @@ class IrisItemRepository {
       requiresVanguard: false,
       requiresIRISReview: false,
       deliveryNotes:
-          "Fashion item. Standard handling. Recommended vehicle: Bike.",
+          "Fashion item. Standard handling. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 25, widthCm: 18, heightCm: 8),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: true,
     ),
     IrisRepositoryItem(
@@ -5807,11 +5807,11 @@ class IrisItemRepository {
       requiresVanguard: false,
       requiresIRISReview: false,
       deliveryNotes:
-          "Fashion item. Standard handling. Recommended vehicle: Bike.",
+          "Fashion item. Standard handling. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 25, widthCm: 18, heightCm: 8),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: true,
     ),
     IrisRepositoryItem(
@@ -5829,11 +5829,11 @@ class IrisItemRepository {
       requiresVanguard: false,
       requiresIRISReview: false,
       deliveryNotes:
-          "Fashion item. Standard handling. Recommended vehicle: Bike.",
+          "Fashion item. Standard handling. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 25, widthCm: 18, heightCm: 8),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: true,
     ),
     IrisRepositoryItem(
@@ -5856,11 +5856,11 @@ class IrisItemRepository {
       requiresVanguard: false,
       requiresIRISReview: false,
       deliveryNotes:
-          "Fashion item. Standard handling. Recommended vehicle: Bike.",
+          "Fashion item. Standard handling. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 25, widthCm: 18, heightCm: 8),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: true,
     ),
     IrisRepositoryItem(
@@ -5878,11 +5878,11 @@ class IrisItemRepository {
       requiresVanguard: false,
       requiresIRISReview: false,
       deliveryNotes:
-          "Fashion item. Standard handling. Recommended vehicle: Bike.",
+          "Fashion item. Standard handling. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 25, widthCm: 18, heightCm: 8),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: true,
     ),
     IrisRepositoryItem(
@@ -5905,11 +5905,11 @@ class IrisItemRepository {
       requiresVanguard: true,
       requiresIRISReview: false,
       deliveryNotes:
-          "Fashion item. Protect from impact. Recommended vehicle: Bike.",
+          "Fashion item. Protect from impact. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.9,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 25, widthCm: 18, heightCm: 8),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: false,
     ),
     IrisRepositoryItem(
@@ -5932,11 +5932,11 @@ class IrisItemRepository {
       requiresVanguard: true,
       requiresIRISReview: false,
       deliveryNotes:
-          "Fashion item. Protect from impact. Recommended vehicle: Bike.",
+          "Fashion item. Protect from impact. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.9,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 25, widthCm: 18, heightCm: 8),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: false,
     ),
     IrisRepositoryItem(
@@ -5959,11 +5959,11 @@ class IrisItemRepository {
       requiresVanguard: true,
       requiresIRISReview: false,
       deliveryNotes:
-          "Fashion item. Protect from impact. Recommended vehicle: Bike.",
+          "Fashion item. Protect from impact. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.9,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 25, widthCm: 18, heightCm: 8),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: false,
     ),
     IrisRepositoryItem(
@@ -5986,11 +5986,11 @@ class IrisItemRepository {
       requiresVanguard: true,
       requiresIRISReview: false,
       deliveryNotes:
-          "Fashion item. Protect from impact. Recommended vehicle: Bike.",
+          "Fashion item. Protect from impact. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.9,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 25, widthCm: 18, heightCm: 8),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: false,
     ),
     IrisRepositoryItem(
@@ -6013,11 +6013,11 @@ class IrisItemRepository {
       requiresVanguard: true,
       requiresIRISReview: false,
       deliveryNotes:
-          "Fashion item. Protect from impact. Recommended vehicle: Bike.",
+          "Fashion item. Protect from impact. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.9,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 25, widthCm: 18, heightCm: 8),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: false,
     ),
     IrisRepositoryItem(
@@ -6040,11 +6040,11 @@ class IrisItemRepository {
       requiresVanguard: true,
       requiresIRISReview: false,
       deliveryNotes:
-          "Fashion item. Protect from impact. Recommended vehicle: Bike.",
+          "Fashion item. Protect from impact. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.9,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 25, widthCm: 18, heightCm: 8),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: false,
     ),
     IrisRepositoryItem(
@@ -6067,11 +6067,11 @@ class IrisItemRepository {
       requiresVanguard: true,
       requiresIRISReview: false,
       deliveryNotes:
-          "Fashion item. Protect from impact. Recommended vehicle: Bike.",
+          "Fashion item. Protect from impact. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.9,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 25, widthCm: 18, heightCm: 8),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: false,
     ),
     IrisRepositoryItem(
@@ -6094,11 +6094,11 @@ class IrisItemRepository {
       requiresVanguard: true,
       requiresIRISReview: false,
       deliveryNotes:
-          "Fashion item. Protect from impact. Recommended vehicle: Bike.",
+          "Fashion item. Protect from impact. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.9,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 25, widthCm: 18, heightCm: 8),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: false,
     ),
     IrisRepositoryItem(
@@ -6121,11 +6121,11 @@ class IrisItemRepository {
       requiresVanguard: true,
       requiresIRISReview: false,
       deliveryNotes:
-          "Fashion item. Protect from impact. Recommended vehicle: Bike.",
+          "Fashion item. Protect from impact. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.9,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 25, widthCm: 18, heightCm: 8),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: false,
     ),
     IrisRepositoryItem(
@@ -6148,11 +6148,11 @@ class IrisItemRepository {
       requiresVanguard: true,
       requiresIRISReview: false,
       deliveryNotes:
-          "Fashion item. Protect from impact. Recommended vehicle: Bike.",
+          "Fashion item. Protect from impact. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.9,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 25, widthCm: 18, heightCm: 8),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: false,
     ),
     IrisRepositoryItem(
@@ -6175,11 +6175,11 @@ class IrisItemRepository {
       requiresVanguard: true,
       requiresIRISReview: false,
       deliveryNotes:
-          "Fashion item. Protect from impact. Recommended vehicle: Bike.",
+          "Fashion item. Protect from impact. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.9,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 25, widthCm: 18, heightCm: 8),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: false,
     ),
     IrisRepositoryItem(
@@ -6202,11 +6202,11 @@ class IrisItemRepository {
       requiresVanguard: true,
       requiresIRISReview: false,
       deliveryNotes:
-          "Fashion item. Protect from impact. Recommended vehicle: Bike.",
+          "Fashion item. Protect from impact. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.9,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 25, widthCm: 18, heightCm: 8),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: false,
     ),
     IrisRepositoryItem(
@@ -6229,11 +6229,11 @@ class IrisItemRepository {
       requiresVanguard: true,
       requiresIRISReview: false,
       deliveryNotes:
-          "Fashion item. Protect from impact. Recommended vehicle: Bike.",
+          "Fashion item. Protect from impact. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.9,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 25, widthCm: 18, heightCm: 8),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: false,
     ),
     IrisRepositoryItem(
@@ -6256,11 +6256,11 @@ class IrisItemRepository {
       requiresVanguard: true,
       requiresIRISReview: false,
       deliveryNotes:
-          "Fashion item. Protect from impact. Recommended vehicle: Bike.",
+          "Fashion item. Protect from impact. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.9,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 25, widthCm: 18, heightCm: 8),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: false,
     ),
     IrisRepositoryItem(
@@ -6283,11 +6283,11 @@ class IrisItemRepository {
       requiresVanguard: true,
       requiresIRISReview: false,
       deliveryNotes:
-          "Fashion item. Protect from impact. Recommended vehicle: Bike.",
+          "Fashion item. Protect from impact. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.9,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 25, widthCm: 18, heightCm: 8),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: false,
     ),
     IrisRepositoryItem(
@@ -6310,11 +6310,11 @@ class IrisItemRepository {
       requiresVanguard: true,
       requiresIRISReview: false,
       deliveryNotes:
-          "Fashion item. Protect from impact. Recommended vehicle: Bike.",
+          "Fashion item. Protect from impact. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.9,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 25, widthCm: 18, heightCm: 8),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: false,
     ),
     IrisRepositoryItem(
@@ -6337,11 +6337,11 @@ class IrisItemRepository {
       requiresVanguard: true,
       requiresIRISReview: false,
       deliveryNotes:
-          "Fashion item. Protect from impact. Recommended vehicle: Bike.",
+          "Fashion item. Protect from impact. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.9,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 25, widthCm: 18, heightCm: 8),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: false,
     ),
     IrisRepositoryItem(
@@ -6364,11 +6364,11 @@ class IrisItemRepository {
       requiresVanguard: true,
       requiresIRISReview: false,
       deliveryNotes:
-          "Fashion item. Protect from impact. Recommended vehicle: Bike.",
+          "Fashion item. Protect from impact. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.9,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 25, widthCm: 18, heightCm: 8),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: false,
     ),
     IrisRepositoryItem(
@@ -6391,11 +6391,11 @@ class IrisItemRepository {
       requiresVanguard: true,
       requiresIRISReview: false,
       deliveryNotes:
-          "Fashion item. Protect from impact. Recommended vehicle: Bike.",
+          "Fashion item. Protect from impact. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.9,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 25, widthCm: 18, heightCm: 8),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: false,
     ),
     IrisRepositoryItem(
@@ -6418,11 +6418,11 @@ class IrisItemRepository {
       requiresVanguard: true,
       requiresIRISReview: false,
       deliveryNotes:
-          "Fashion item. Protect from impact. Recommended vehicle: Bike.",
+          "Fashion item. Protect from impact. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.9,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 25, widthCm: 18, heightCm: 8),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: false,
     ),
     IrisRepositoryItem(
@@ -6440,11 +6440,11 @@ class IrisItemRepository {
       requiresVanguard: false,
       requiresIRISReview: false,
       deliveryNotes:
-          "Fashion item. Standard handling. Recommended vehicle: Bike.",
+          "Fashion item. Standard handling. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 25, widthCm: 18, heightCm: 8),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: true,
     ),
     IrisRepositoryItem(
@@ -6462,11 +6462,11 @@ class IrisItemRepository {
       requiresVanguard: false,
       requiresIRISReview: false,
       deliveryNotes:
-          "Fashion item. Standard handling. Recommended vehicle: Bike.",
+          "Fashion item. Standard handling. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 25, widthCm: 18, heightCm: 8),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: true,
     ),
     IrisRepositoryItem(
@@ -6484,11 +6484,11 @@ class IrisItemRepository {
       requiresVanguard: false,
       requiresIRISReview: false,
       deliveryNotes:
-          "Fashion item. Standard handling. Recommended vehicle: Bike.",
+          "Fashion item. Standard handling. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 25, widthCm: 18, heightCm: 8),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: true,
     ),
     IrisRepositoryItem(
@@ -6511,11 +6511,11 @@ class IrisItemRepository {
       requiresVanguard: false,
       requiresIRISReview: false,
       deliveryNotes:
-          "Fashion item. Standard handling. Recommended vehicle: Bike.",
+          "Fashion item. Standard handling. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 25, widthCm: 18, heightCm: 8),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: true,
     ),
     IrisRepositoryItem(
@@ -6538,11 +6538,11 @@ class IrisItemRepository {
       requiresVanguard: false,
       requiresIRISReview: false,
       deliveryNotes:
-          "Fashion item. Standard handling. Recommended vehicle: Bike.",
+          "Fashion item. Standard handling. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 25, widthCm: 18, heightCm: 8),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: true,
     ),
     IrisRepositoryItem(
@@ -6565,11 +6565,11 @@ class IrisItemRepository {
       requiresVanguard: false,
       requiresIRISReview: false,
       deliveryNotes:
-          "Fashion item. Standard handling. Recommended vehicle: Bike.",
+          "Fashion item. Standard handling. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 25, widthCm: 18, heightCm: 8),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: true,
     ),
     IrisRepositoryItem(
@@ -6587,11 +6587,11 @@ class IrisItemRepository {
       requiresVanguard: false,
       requiresIRISReview: false,
       deliveryNotes:
-          "Fashion item. Standard handling. Recommended vehicle: Bike.",
+          "Fashion item. Standard handling. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 25, widthCm: 18, heightCm: 8),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: true,
     ),
     IrisRepositoryItem(
@@ -6609,11 +6609,11 @@ class IrisItemRepository {
       requiresVanguard: false,
       requiresIRISReview: false,
       deliveryNotes:
-          "Fashion item. Standard handling. Recommended vehicle: Bike.",
+          "Fashion item. Standard handling. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 25, widthCm: 18, heightCm: 8),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: true,
     ),
     IrisRepositoryItem(
@@ -6636,11 +6636,11 @@ class IrisItemRepository {
       requiresVanguard: false,
       requiresIRISReview: false,
       deliveryNotes:
-          "Fashion item. Standard handling. Recommended vehicle: Bike.",
+          "Fashion item. Standard handling. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 25, widthCm: 18, heightCm: 8),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: true,
     ),
     IrisRepositoryItem(
@@ -6658,11 +6658,11 @@ class IrisItemRepository {
       requiresVanguard: false,
       requiresIRISReview: false,
       deliveryNotes:
-          "Fashion item. Standard handling. Recommended vehicle: Bike.",
+          "Fashion item. Standard handling. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 25, widthCm: 18, heightCm: 8),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: true,
     ),
     IrisRepositoryItem(
@@ -6680,11 +6680,11 @@ class IrisItemRepository {
       requiresVanguard: false,
       requiresIRISReview: false,
       deliveryNotes:
-          "Fashion item. Standard handling. Recommended vehicle: Bike.",
+          "Fashion item. Standard handling. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 45, widthCm: 35, heightCm: 25),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: true,
     ),
     IrisRepositoryItem(
@@ -6702,11 +6702,11 @@ class IrisItemRepository {
       requiresVanguard: false,
       requiresIRISReview: false,
       deliveryNotes:
-          "Fashion item. Standard handling. Recommended vehicle: Bike.",
+          "Fashion item. Standard handling. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 45, widthCm: 35, heightCm: 25),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: true,
     ),
     IrisRepositoryItem(
@@ -6724,11 +6724,11 @@ class IrisItemRepository {
       requiresVanguard: false,
       requiresIRISReview: false,
       deliveryNotes:
-          "Fashion item. Standard handling. Recommended vehicle: Bike.",
+          "Fashion item. Standard handling. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 45, widthCm: 35, heightCm: 25),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: true,
     ),
     IrisRepositoryItem(
@@ -6746,11 +6746,11 @@ class IrisItemRepository {
       requiresVanguard: false,
       requiresIRISReview: false,
       deliveryNotes:
-          "Fashion item. Standard handling. Recommended vehicle: Bike.",
+          "Fashion item. Standard handling. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 45, widthCm: 35, heightCm: 25),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: true,
     ),
     IrisRepositoryItem(
@@ -6768,11 +6768,11 @@ class IrisItemRepository {
       requiresVanguard: false,
       requiresIRISReview: false,
       deliveryNotes:
-          "Fashion item. Standard handling. Recommended vehicle: Bike.",
+          "Fashion item. Standard handling. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 45, widthCm: 35, heightCm: 25),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: true,
     ),
     IrisRepositoryItem(
@@ -6790,11 +6790,11 @@ class IrisItemRepository {
       requiresVanguard: false,
       requiresIRISReview: false,
       deliveryNotes:
-          "Fashion item. Standard handling. Recommended vehicle: Bike.",
+          "Fashion item. Standard handling. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 45, widthCm: 35, heightCm: 25),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: true,
     ),
     IrisRepositoryItem(
@@ -6812,11 +6812,11 @@ class IrisItemRepository {
       requiresVanguard: false,
       requiresIRISReview: false,
       deliveryNotes:
-          "Fashion item. Standard handling. Recommended vehicle: Bike.",
+          "Fashion item. Standard handling. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 45, widthCm: 35, heightCm: 25),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: true,
     ),
     IrisRepositoryItem(
@@ -6834,11 +6834,11 @@ class IrisItemRepository {
       requiresVanguard: false,
       requiresIRISReview: false,
       deliveryNotes:
-          "Fashion item. Standard handling. Recommended vehicle: Bike.",
+          "Fashion item. Standard handling. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 45, widthCm: 35, heightCm: 25),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: true,
     ),
     IrisRepositoryItem(
@@ -6856,11 +6856,11 @@ class IrisItemRepository {
       requiresVanguard: false,
       requiresIRISReview: false,
       deliveryNotes:
-          "Fashion item. Standard handling. Recommended vehicle: Bike.",
+          "Fashion item. Standard handling. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 45, widthCm: 35, heightCm: 25),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: true,
     ),
     IrisRepositoryItem(
@@ -6878,11 +6878,11 @@ class IrisItemRepository {
       requiresVanguard: false,
       requiresIRISReview: false,
       deliveryNotes:
-          "Fashion item. Standard handling. Recommended vehicle: Bike.",
+          "Fashion item. Standard handling. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 45, widthCm: 35, heightCm: 25),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: true,
     ),
     IrisRepositoryItem(
@@ -6900,11 +6900,11 @@ class IrisItemRepository {
       requiresVanguard: false,
       requiresIRISReview: false,
       deliveryNotes:
-          "Fashion item. Standard handling. Recommended vehicle: Bike.",
+          "Fashion item. Standard handling. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 25, widthCm: 18, heightCm: 8),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: true,
     ),
     IrisRepositoryItem(
@@ -6922,11 +6922,11 @@ class IrisItemRepository {
       requiresVanguard: false,
       requiresIRISReview: false,
       deliveryNotes:
-          "Fashion item. Standard handling. Recommended vehicle: Bike.",
+          "Fashion item. Standard handling. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 25, widthCm: 18, heightCm: 8),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: true,
     ),
     IrisRepositoryItem(
@@ -6944,11 +6944,11 @@ class IrisItemRepository {
       requiresVanguard: false,
       requiresIRISReview: false,
       deliveryNotes:
-          "Fashion item. Standard handling. Recommended vehicle: Bike.",
+          "Fashion item. Standard handling. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 25, widthCm: 18, heightCm: 8),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: true,
     ),
     IrisRepositoryItem(
@@ -6971,11 +6971,11 @@ class IrisItemRepository {
       requiresVanguard: false,
       requiresIRISReview: false,
       deliveryNotes:
-          "Fashion item. Standard handling. Recommended vehicle: Bike.",
+          "Fashion item. Standard handling. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 25, widthCm: 18, heightCm: 8),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: true,
     ),
     IrisRepositoryItem(
@@ -6993,11 +6993,11 @@ class IrisItemRepository {
       requiresVanguard: false,
       requiresIRISReview: false,
       deliveryNotes:
-          "Fashion item. Standard handling. Recommended vehicle: Bike.",
+          "Fashion item. Standard handling. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 25, widthCm: 18, heightCm: 8),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: true,
     ),
     IrisRepositoryItem(
@@ -7015,11 +7015,11 @@ class IrisItemRepository {
       requiresVanguard: false,
       requiresIRISReview: false,
       deliveryNotes:
-          "Fashion item. Standard handling. Recommended vehicle: Bike.",
+          "Fashion item. Standard handling. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 25, widthCm: 18, heightCm: 8),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: true,
     ),
     IrisRepositoryItem(
@@ -7037,11 +7037,11 @@ class IrisItemRepository {
       requiresVanguard: false,
       requiresIRISReview: false,
       deliveryNotes:
-          "Fashion item. Standard handling. Recommended vehicle: Bike.",
+          "Fashion item. Standard handling. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 25, widthCm: 18, heightCm: 8),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: true,
     ),
     IrisRepositoryItem(
@@ -7059,11 +7059,11 @@ class IrisItemRepository {
       requiresVanguard: false,
       requiresIRISReview: false,
       deliveryNotes:
-          "Fashion item. Standard handling. Recommended vehicle: Bike.",
+          "Fashion item. Standard handling. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 25, widthCm: 18, heightCm: 8),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: true,
     ),
     IrisRepositoryItem(
@@ -7081,11 +7081,11 @@ class IrisItemRepository {
       requiresVanguard: false,
       requiresIRISReview: false,
       deliveryNotes:
-          "Fashion item. Standard handling. Recommended vehicle: Bike.",
+          "Fashion item. Standard handling. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 25, widthCm: 18, heightCm: 8),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: true,
     ),
     IrisRepositoryItem(
@@ -7103,11 +7103,11 @@ class IrisItemRepository {
       requiresVanguard: false,
       requiresIRISReview: false,
       deliveryNotes:
-          "Fashion item. Standard handling. Recommended vehicle: Bike.",
+          "Fashion item. Standard handling. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 25, widthCm: 18, heightCm: 8),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: true,
     ),
     IrisRepositoryItem(
@@ -7130,11 +7130,11 @@ class IrisItemRepository {
       requiresVanguard: true,
       requiresIRISReview: false,
       deliveryNotes:
-          "Fashion item. Protect from impact. Recommended vehicle: Bike.",
+          "Fashion item. Protect from impact. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.9,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 25, widthCm: 18, heightCm: 8),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: false,
     ),
     IrisRepositoryItem(
@@ -7157,11 +7157,11 @@ class IrisItemRepository {
       requiresVanguard: true,
       requiresIRISReview: false,
       deliveryNotes:
-          "Fashion item. Protect from impact. Recommended vehicle: Bike.",
+          "Fashion item. Protect from impact. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.9,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 25, widthCm: 18, heightCm: 8),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: false,
     ),
     IrisRepositoryItem(
@@ -7184,11 +7184,11 @@ class IrisItemRepository {
       requiresVanguard: true,
       requiresIRISReview: false,
       deliveryNotes:
-          "Fashion item. Protect from impact. Recommended vehicle: Bike.",
+          "Fashion item. Protect from impact. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.9,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 25, widthCm: 18, heightCm: 8),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: false,
     ),
     IrisRepositoryItem(
@@ -7211,11 +7211,11 @@ class IrisItemRepository {
       requiresVanguard: true,
       requiresIRISReview: false,
       deliveryNotes:
-          "Fashion item. Protect from impact. Recommended vehicle: Bike.",
+          "Fashion item. Protect from impact. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.9,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 25, widthCm: 18, heightCm: 8),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: false,
     ),
     IrisRepositoryItem(
@@ -7238,11 +7238,11 @@ class IrisItemRepository {
       requiresVanguard: true,
       requiresIRISReview: false,
       deliveryNotes:
-          "Fashion item. Protect from impact. Recommended vehicle: Bike.",
+          "Fashion item. Protect from impact. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.9,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 25, widthCm: 18, heightCm: 8),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: false,
     ),
     IrisRepositoryItem(
@@ -7265,11 +7265,11 @@ class IrisItemRepository {
       requiresVanguard: true,
       requiresIRISReview: false,
       deliveryNotes:
-          "Fashion item. Protect from impact. Recommended vehicle: Bike.",
+          "Fashion item. Protect from impact. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.9,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 25, widthCm: 18, heightCm: 8),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: false,
     ),
     IrisRepositoryItem(
@@ -7292,11 +7292,11 @@ class IrisItemRepository {
       requiresVanguard: true,
       requiresIRISReview: false,
       deliveryNotes:
-          "Fashion item. Protect from impact. Recommended vehicle: Bike.",
+          "Fashion item. Protect from impact. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.9,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 25, widthCm: 18, heightCm: 8),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: false,
     ),
     IrisRepositoryItem(
@@ -7319,11 +7319,11 @@ class IrisItemRepository {
       requiresVanguard: true,
       requiresIRISReview: false,
       deliveryNotes:
-          "Fashion item. Protect from impact. Recommended vehicle: Bike.",
+          "Fashion item. Protect from impact. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.9,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 25, widthCm: 18, heightCm: 8),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: false,
     ),
     IrisRepositoryItem(
@@ -7346,11 +7346,11 @@ class IrisItemRepository {
       requiresVanguard: true,
       requiresIRISReview: false,
       deliveryNotes:
-          "Fashion item. Protect from impact. Recommended vehicle: Bike.",
+          "Fashion item. Protect from impact. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.9,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 25, widthCm: 18, heightCm: 8),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: false,
     ),
     IrisRepositoryItem(
@@ -7373,11 +7373,11 @@ class IrisItemRepository {
       requiresVanguard: true,
       requiresIRISReview: false,
       deliveryNotes:
-          "Fashion item. Protect from impact. Recommended vehicle: Bike.",
+          "Fashion item. Protect from impact. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.9,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 25, widthCm: 18, heightCm: 8),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: false,
     ),
     IrisRepositoryItem(
@@ -7400,11 +7400,11 @@ class IrisItemRepository {
       requiresVanguard: true,
       requiresIRISReview: false,
       deliveryNotes:
-          "Fashion item. Protect from impact. Recommended vehicle: Bike.",
+          "Fashion item. Protect from impact. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.9,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 25, widthCm: 18, heightCm: 8),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: false,
     ),
     IrisRepositoryItem(
@@ -7427,11 +7427,11 @@ class IrisItemRepository {
       requiresVanguard: true,
       requiresIRISReview: false,
       deliveryNotes:
-          "Fashion item. Protect from impact. Recommended vehicle: Bike.",
+          "Fashion item. Protect from impact. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.9,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 25, widthCm: 18, heightCm: 8),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: false,
     ),
     IrisRepositoryItem(
@@ -7454,11 +7454,11 @@ class IrisItemRepository {
       requiresVanguard: true,
       requiresIRISReview: false,
       deliveryNotes:
-          "Fashion item. Protect from impact. Recommended vehicle: Bike.",
+          "Fashion item. Protect from impact. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.9,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 25, widthCm: 18, heightCm: 8),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: false,
     ),
     IrisRepositoryItem(
@@ -7481,11 +7481,11 @@ class IrisItemRepository {
       requiresVanguard: true,
       requiresIRISReview: false,
       deliveryNotes:
-          "Fashion item. Protect from impact. Recommended vehicle: Bike.",
+          "Fashion item. Protect from impact. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.9,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 25, widthCm: 18, heightCm: 8),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: false,
     ),
     IrisRepositoryItem(
@@ -7508,11 +7508,11 @@ class IrisItemRepository {
       requiresVanguard: true,
       requiresIRISReview: false,
       deliveryNotes:
-          "Fashion item. Protect from impact. Recommended vehicle: Bike.",
+          "Fashion item. Protect from impact. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.9,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 25, widthCm: 18, heightCm: 8),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: false,
     ),
     IrisRepositoryItem(
@@ -7535,11 +7535,11 @@ class IrisItemRepository {
       requiresVanguard: true,
       requiresIRISReview: false,
       deliveryNotes:
-          "Fashion item. Protect from impact. Recommended vehicle: Bike.",
+          "Fashion item. Protect from impact. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.9,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 25, widthCm: 18, heightCm: 8),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: false,
     ),
     IrisRepositoryItem(
@@ -7562,11 +7562,11 @@ class IrisItemRepository {
       requiresVanguard: true,
       requiresIRISReview: false,
       deliveryNotes:
-          "Fashion item. Protect from impact. Recommended vehicle: Bike.",
+          "Fashion item. Protect from impact. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.9,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 25, widthCm: 18, heightCm: 8),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: false,
     ),
     IrisRepositoryItem(
@@ -7589,11 +7589,11 @@ class IrisItemRepository {
       requiresVanguard: true,
       requiresIRISReview: false,
       deliveryNotes:
-          "Fashion item. Protect from impact. Recommended vehicle: Bike.",
+          "Fashion item. Protect from impact. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.9,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 25, widthCm: 18, heightCm: 8),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: false,
     ),
     IrisRepositoryItem(
@@ -7616,11 +7616,11 @@ class IrisItemRepository {
       requiresVanguard: true,
       requiresIRISReview: false,
       deliveryNotes:
-          "Fashion item. Protect from impact. Recommended vehicle: Bike.",
+          "Fashion item. Protect from impact. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.9,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 25, widthCm: 18, heightCm: 8),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: false,
     ),
     IrisRepositoryItem(
@@ -7643,11 +7643,11 @@ class IrisItemRepository {
       requiresVanguard: true,
       requiresIRISReview: false,
       deliveryNotes:
-          "Fashion item. Protect from impact. Recommended vehicle: Bike.",
+          "Fashion item. Protect from impact. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.9,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 25, widthCm: 18, heightCm: 8),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: false,
     ),
     IrisRepositoryItem(
@@ -7665,11 +7665,11 @@ class IrisItemRepository {
       requiresVanguard: false,
       requiresIRISReview: false,
       deliveryNotes:
-          "Fashion item. Protect from impact. Recommended vehicle: Bike.",
+          "Fashion item. Protect from impact. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 25, widthCm: 18, heightCm: 8),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: false,
     ),
     IrisRepositoryItem(
@@ -7687,11 +7687,11 @@ class IrisItemRepository {
       requiresVanguard: false,
       requiresIRISReview: false,
       deliveryNotes:
-          "Fashion item. Protect from impact. Recommended vehicle: Bike.",
+          "Fashion item. Protect from impact. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 25, widthCm: 18, heightCm: 8),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: false,
     ),
     IrisRepositoryItem(
@@ -7714,11 +7714,11 @@ class IrisItemRepository {
       requiresVanguard: false,
       requiresIRISReview: false,
       deliveryNotes:
-          "Fashion item. Protect from impact. Recommended vehicle: Bike.",
+          "Fashion item. Protect from impact. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 25, widthCm: 18, heightCm: 8),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: false,
     ),
     IrisRepositoryItem(
@@ -7741,11 +7741,11 @@ class IrisItemRepository {
       requiresVanguard: false,
       requiresIRISReview: false,
       deliveryNotes:
-          "Fashion item. Protect from impact. Recommended vehicle: Bike.",
+          "Fashion item. Protect from impact. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 25, widthCm: 18, heightCm: 8),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: false,
     ),
     IrisRepositoryItem(
@@ -7768,11 +7768,11 @@ class IrisItemRepository {
       requiresVanguard: false,
       requiresIRISReview: false,
       deliveryNotes:
-          "Fashion item. Protect from impact. Recommended vehicle: Bike.",
+          "Fashion item. Protect from impact. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 25, widthCm: 18, heightCm: 8),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: false,
     ),
     IrisRepositoryItem(
@@ -7795,11 +7795,11 @@ class IrisItemRepository {
       requiresVanguard: false,
       requiresIRISReview: false,
       deliveryNotes:
-          "Fashion item. Protect from impact. Recommended vehicle: Bike.",
+          "Fashion item. Protect from impact. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 25, widthCm: 18, heightCm: 8),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: false,
     ),
     IrisRepositoryItem(
@@ -7822,11 +7822,11 @@ class IrisItemRepository {
       requiresVanguard: false,
       requiresIRISReview: false,
       deliveryNotes:
-          "Fashion item. Protect from impact. Recommended vehicle: Bike.",
+          "Fashion item. Protect from impact. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 25, widthCm: 18, heightCm: 8),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: false,
     ),
     IrisRepositoryItem(
@@ -7849,11 +7849,11 @@ class IrisItemRepository {
       requiresVanguard: false,
       requiresIRISReview: false,
       deliveryNotes:
-          "Fashion item. Protect from impact. Recommended vehicle: Bike.",
+          "Fashion item. Protect from impact. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 25, widthCm: 18, heightCm: 8),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: false,
     ),
     IrisRepositoryItem(
@@ -7876,11 +7876,11 @@ class IrisItemRepository {
       requiresVanguard: false,
       requiresIRISReview: false,
       deliveryNotes:
-          "Fashion item. Protect from impact. Recommended vehicle: Bike.",
+          "Fashion item. Protect from impact. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 25, widthCm: 18, heightCm: 8),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: false,
     ),
     IrisRepositoryItem(
@@ -7903,11 +7903,11 @@ class IrisItemRepository {
       requiresVanguard: false,
       requiresIRISReview: false,
       deliveryNotes:
-          "Fashion item. Protect from impact. Recommended vehicle: Bike.",
+          "Fashion item. Protect from impact. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 25, widthCm: 18, heightCm: 8),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: false,
     ),
     IrisRepositoryItem(
@@ -7930,11 +7930,11 @@ class IrisItemRepository {
       requiresVanguard: false,
       requiresIRISReview: false,
       deliveryNotes:
-          "Household item. Standard handling. Recommended vehicle: Bike.",
+          "Household item. Standard handling. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 45, widthCm: 35, heightCm: 25),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: true,
     ),
     IrisRepositoryItem(
@@ -7957,11 +7957,11 @@ class IrisItemRepository {
       requiresVanguard: false,
       requiresIRISReview: false,
       deliveryNotes:
-          "Household item. Standard handling. Recommended vehicle: Bike.",
+          "Household item. Standard handling. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 45, widthCm: 35, heightCm: 25),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: true,
     ),
     IrisRepositoryItem(
@@ -7984,11 +7984,11 @@ class IrisItemRepository {
       requiresVanguard: false,
       requiresIRISReview: false,
       deliveryNotes:
-          "Household item. Standard handling. Recommended vehicle: Bike.",
+          "Household item. Standard handling. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 45, widthCm: 35, heightCm: 25),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: true,
     ),
     IrisRepositoryItem(
@@ -8011,11 +8011,11 @@ class IrisItemRepository {
       requiresVanguard: false,
       requiresIRISReview: false,
       deliveryNotes:
-          "Household item. Standard handling. Recommended vehicle: Bike.",
+          "Household item. Standard handling. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 45, widthCm: 35, heightCm: 25),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: true,
     ),
     IrisRepositoryItem(
@@ -8038,11 +8038,11 @@ class IrisItemRepository {
       requiresVanguard: false,
       requiresIRISReview: false,
       deliveryNotes:
-          "Household item. Standard handling. Recommended vehicle: Bike.",
+          "Household item. Standard handling. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 45, widthCm: 35, heightCm: 25),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: true,
     ),
     IrisRepositoryItem(
@@ -8065,11 +8065,11 @@ class IrisItemRepository {
       requiresVanguard: false,
       requiresIRISReview: false,
       deliveryNotes:
-          "Household item. Standard handling. Recommended vehicle: Bike.",
+          "Household item. Standard handling. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 45, widthCm: 35, heightCm: 25),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: true,
     ),
     IrisRepositoryItem(
@@ -8092,11 +8092,11 @@ class IrisItemRepository {
       requiresVanguard: false,
       requiresIRISReview: false,
       deliveryNotes:
-          "Household item. Standard handling. Recommended vehicle: Bike.",
+          "Household item. Standard handling. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 45, widthCm: 35, heightCm: 25),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: true,
     ),
     IrisRepositoryItem(
@@ -8119,11 +8119,11 @@ class IrisItemRepository {
       requiresVanguard: false,
       requiresIRISReview: false,
       deliveryNotes:
-          "Household item. Standard handling. Recommended vehicle: Bike.",
+          "Household item. Standard handling. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 45, widthCm: 35, heightCm: 25),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: true,
     ),
     IrisRepositoryItem(
@@ -8146,11 +8146,11 @@ class IrisItemRepository {
       requiresVanguard: false,
       requiresIRISReview: false,
       deliveryNotes:
-          "Household item. Standard handling. Recommended vehicle: Bike.",
+          "Household item. Standard handling. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 45, widthCm: 35, heightCm: 25),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: true,
     ),
     IrisRepositoryItem(
@@ -8173,11 +8173,11 @@ class IrisItemRepository {
       requiresVanguard: false,
       requiresIRISReview: false,
       deliveryNotes:
-          "Household item. Standard handling. Recommended vehicle: Bike.",
+          "Household item. Standard handling. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 45, widthCm: 35, heightCm: 25),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: true,
     ),
     IrisRepositoryItem(
@@ -8200,11 +8200,11 @@ class IrisItemRepository {
       requiresVanguard: false,
       requiresIRISReview: false,
       deliveryNotes:
-          "Household item. Standard handling. Recommended vehicle: Bike.",
+          "Household item. Standard handling. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 25, widthCm: 18, heightCm: 8),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: true,
     ),
     IrisRepositoryItem(
@@ -8227,11 +8227,11 @@ class IrisItemRepository {
       requiresVanguard: false,
       requiresIRISReview: false,
       deliveryNotes:
-          "Household item. Standard handling. Recommended vehicle: Bike.",
+          "Household item. Standard handling. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 25, widthCm: 18, heightCm: 8),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: true,
     ),
     IrisRepositoryItem(
@@ -8254,11 +8254,11 @@ class IrisItemRepository {
       requiresVanguard: false,
       requiresIRISReview: false,
       deliveryNotes:
-          "Household item. Standard handling. Recommended vehicle: Bike.",
+          "Household item. Standard handling. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 25, widthCm: 18, heightCm: 8),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: true,
     ),
     IrisRepositoryItem(
@@ -8281,11 +8281,11 @@ class IrisItemRepository {
       requiresVanguard: false,
       requiresIRISReview: false,
       deliveryNotes:
-          "Household item. Standard handling. Recommended vehicle: Bike.",
+          "Household item. Standard handling. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 25, widthCm: 18, heightCm: 8),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: true,
     ),
     IrisRepositoryItem(
@@ -8308,11 +8308,11 @@ class IrisItemRepository {
       requiresVanguard: false,
       requiresIRISReview: false,
       deliveryNotes:
-          "Household item. Standard handling. Recommended vehicle: Bike.",
+          "Household item. Standard handling. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 25, widthCm: 18, heightCm: 8),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: true,
     ),
     IrisRepositoryItem(
@@ -8335,11 +8335,11 @@ class IrisItemRepository {
       requiresVanguard: false,
       requiresIRISReview: false,
       deliveryNotes:
-          "Household item. Standard handling. Recommended vehicle: Bike.",
+          "Household item. Standard handling. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 25, widthCm: 18, heightCm: 8),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: true,
     ),
     IrisRepositoryItem(
@@ -8362,11 +8362,11 @@ class IrisItemRepository {
       requiresVanguard: false,
       requiresIRISReview: false,
       deliveryNotes:
-          "Household item. Standard handling. Recommended vehicle: Bike.",
+          "Household item. Standard handling. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 25, widthCm: 18, heightCm: 8),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: true,
     ),
     IrisRepositoryItem(
@@ -8389,11 +8389,11 @@ class IrisItemRepository {
       requiresVanguard: false,
       requiresIRISReview: false,
       deliveryNotes:
-          "Household item. Standard handling. Recommended vehicle: Bike.",
+          "Household item. Standard handling. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 25, widthCm: 18, heightCm: 8),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: true,
     ),
     IrisRepositoryItem(
@@ -8416,11 +8416,11 @@ class IrisItemRepository {
       requiresVanguard: false,
       requiresIRISReview: false,
       deliveryNotes:
-          "Household item. Standard handling. Recommended vehicle: Bike.",
+          "Household item. Standard handling. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 25, widthCm: 18, heightCm: 8),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: true,
     ),
     IrisRepositoryItem(
@@ -8443,11 +8443,11 @@ class IrisItemRepository {
       requiresVanguard: false,
       requiresIRISReview: false,
       deliveryNotes:
-          "Household item. Standard handling. Recommended vehicle: Bike.",
+          "Household item. Standard handling. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 25, widthCm: 18, heightCm: 8),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: true,
     ),
     IrisRepositoryItem(
@@ -8470,11 +8470,11 @@ class IrisItemRepository {
       requiresVanguard: false,
       requiresIRISReview: false,
       deliveryNotes:
-          "Household item. Standard handling. Recommended vehicle: Bike.",
+          "Household item. Standard handling. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 45, widthCm: 35, heightCm: 25),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: true,
     ),
     IrisRepositoryItem(
@@ -8497,11 +8497,11 @@ class IrisItemRepository {
       requiresVanguard: false,
       requiresIRISReview: false,
       deliveryNotes:
-          "Household item. Standard handling. Recommended vehicle: Bike.",
+          "Household item. Standard handling. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 45, widthCm: 35, heightCm: 25),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: true,
     ),
     IrisRepositoryItem(
@@ -8524,11 +8524,11 @@ class IrisItemRepository {
       requiresVanguard: false,
       requiresIRISReview: false,
       deliveryNotes:
-          "Household item. Standard handling. Recommended vehicle: Bike.",
+          "Household item. Standard handling. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 45, widthCm: 35, heightCm: 25),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: true,
     ),
     IrisRepositoryItem(
@@ -8551,11 +8551,11 @@ class IrisItemRepository {
       requiresVanguard: false,
       requiresIRISReview: false,
       deliveryNotes:
-          "Household item. Standard handling. Recommended vehicle: Bike.",
+          "Household item. Standard handling. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 45, widthCm: 35, heightCm: 25),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: true,
     ),
     IrisRepositoryItem(
@@ -8578,11 +8578,11 @@ class IrisItemRepository {
       requiresVanguard: false,
       requiresIRISReview: false,
       deliveryNotes:
-          "Household item. Standard handling. Recommended vehicle: Bike.",
+          "Household item. Standard handling. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 45, widthCm: 35, heightCm: 25),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: true,
     ),
     IrisRepositoryItem(
@@ -8605,11 +8605,11 @@ class IrisItemRepository {
       requiresVanguard: false,
       requiresIRISReview: false,
       deliveryNotes:
-          "Household item. Standard handling. Recommended vehicle: Bike.",
+          "Household item. Standard handling. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 45, widthCm: 35, heightCm: 25),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: true,
     ),
     IrisRepositoryItem(
@@ -8632,11 +8632,11 @@ class IrisItemRepository {
       requiresVanguard: false,
       requiresIRISReview: false,
       deliveryNotes:
-          "Household item. Standard handling. Recommended vehicle: Bike.",
+          "Household item. Standard handling. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 45, widthCm: 35, heightCm: 25),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: true,
     ),
     IrisRepositoryItem(
@@ -8659,11 +8659,11 @@ class IrisItemRepository {
       requiresVanguard: false,
       requiresIRISReview: false,
       deliveryNotes:
-          "Household item. Standard handling. Recommended vehicle: Bike.",
+          "Household item. Standard handling. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 45, widthCm: 35, heightCm: 25),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: true,
     ),
     IrisRepositoryItem(
@@ -8686,11 +8686,11 @@ class IrisItemRepository {
       requiresVanguard: false,
       requiresIRISReview: false,
       deliveryNotes:
-          "Household item. Standard handling. Recommended vehicle: Bike.",
+          "Household item. Standard handling. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 45, widthCm: 35, heightCm: 25),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: true,
     ),
     IrisRepositoryItem(
@@ -8713,11 +8713,11 @@ class IrisItemRepository {
       requiresVanguard: false,
       requiresIRISReview: false,
       deliveryNotes:
-          "Household item. Standard handling. Recommended vehicle: Bike.",
+          "Household item. Standard handling. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 45, widthCm: 35, heightCm: 25),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: true,
     ),
     IrisRepositoryItem(
@@ -8735,11 +8735,11 @@ class IrisItemRepository {
       requiresVanguard: false,
       requiresIRISReview: false,
       deliveryNotes:
-          "Household item. Standard handling. Recommended vehicle: Bike.",
+          "Household item. Standard handling. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 45, widthCm: 35, heightCm: 25),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: true,
     ),
     IrisRepositoryItem(
@@ -8757,11 +8757,11 @@ class IrisItemRepository {
       requiresVanguard: false,
       requiresIRISReview: false,
       deliveryNotes:
-          "Household item. Standard handling. Recommended vehicle: Bike.",
+          "Household item. Standard handling. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 45, widthCm: 35, heightCm: 25),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: true,
     ),
     IrisRepositoryItem(
@@ -8779,11 +8779,11 @@ class IrisItemRepository {
       requiresVanguard: false,
       requiresIRISReview: false,
       deliveryNotes:
-          "Household item. Standard handling. Recommended vehicle: Bike.",
+          "Household item. Standard handling. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 45, widthCm: 35, heightCm: 25),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: true,
     ),
     IrisRepositoryItem(
@@ -8801,11 +8801,11 @@ class IrisItemRepository {
       requiresVanguard: false,
       requiresIRISReview: false,
       deliveryNotes:
-          "Household item. Standard handling. Recommended vehicle: Bike.",
+          "Household item. Standard handling. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 45, widthCm: 35, heightCm: 25),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: true,
     ),
     IrisRepositoryItem(
@@ -8823,11 +8823,11 @@ class IrisItemRepository {
       requiresVanguard: false,
       requiresIRISReview: false,
       deliveryNotes:
-          "Household item. Standard handling. Recommended vehicle: Bike.",
+          "Household item. Standard handling. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 45, widthCm: 35, heightCm: 25),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: true,
     ),
     IrisRepositoryItem(
@@ -8845,11 +8845,11 @@ class IrisItemRepository {
       requiresVanguard: false,
       requiresIRISReview: false,
       deliveryNotes:
-          "Household item. Standard handling. Recommended vehicle: Bike.",
+          "Household item. Standard handling. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 45, widthCm: 35, heightCm: 25),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: true,
     ),
     IrisRepositoryItem(
@@ -8867,11 +8867,11 @@ class IrisItemRepository {
       requiresVanguard: false,
       requiresIRISReview: false,
       deliveryNotes:
-          "Household item. Standard handling. Recommended vehicle: Bike.",
+          "Household item. Standard handling. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 45, widthCm: 35, heightCm: 25),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: true,
     ),
     IrisRepositoryItem(
@@ -8889,11 +8889,11 @@ class IrisItemRepository {
       requiresVanguard: false,
       requiresIRISReview: false,
       deliveryNotes:
-          "Household item. Standard handling. Recommended vehicle: Bike.",
+          "Household item. Standard handling. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 45, widthCm: 35, heightCm: 25),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: true,
     ),
     IrisRepositoryItem(
@@ -8911,11 +8911,11 @@ class IrisItemRepository {
       requiresVanguard: false,
       requiresIRISReview: false,
       deliveryNotes:
-          "Household item. Standard handling. Recommended vehicle: Bike.",
+          "Household item. Standard handling. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 45, widthCm: 35, heightCm: 25),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: true,
     ),
     IrisRepositoryItem(
@@ -8933,11 +8933,11 @@ class IrisItemRepository {
       requiresVanguard: false,
       requiresIRISReview: false,
       deliveryNotes:
-          "Household item. Standard handling. Recommended vehicle: Bike.",
+          "Household item. Standard handling. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 45, widthCm: 35, heightCm: 25),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: true,
     ),
     IrisRepositoryItem(
@@ -8955,11 +8955,11 @@ class IrisItemRepository {
       requiresVanguard: false,
       requiresIRISReview: false,
       deliveryNotes:
-          "Household item. Protect from impact. Recommended vehicle: Bike.",
+          "Household item. Protect from impact. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 25, widthCm: 18, heightCm: 8),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: false,
     ),
     IrisRepositoryItem(
@@ -8982,11 +8982,11 @@ class IrisItemRepository {
       requiresVanguard: false,
       requiresIRISReview: false,
       deliveryNotes:
-          "Household item. Protect from impact. Recommended vehicle: Bike.",
+          "Household item. Protect from impact. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 25, widthCm: 18, heightCm: 8),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: false,
     ),
     IrisRepositoryItem(
@@ -9009,11 +9009,11 @@ class IrisItemRepository {
       requiresVanguard: false,
       requiresIRISReview: false,
       deliveryNotes:
-          "Household item. Protect from impact. Recommended vehicle: Bike.",
+          "Household item. Protect from impact. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 25, widthCm: 18, heightCm: 8),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: false,
     ),
     IrisRepositoryItem(
@@ -9036,11 +9036,11 @@ class IrisItemRepository {
       requiresVanguard: false,
       requiresIRISReview: false,
       deliveryNotes:
-          "Household item. Protect from impact. Recommended vehicle: Bike.",
+          "Household item. Protect from impact. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 25, widthCm: 18, heightCm: 8),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: false,
     ),
     IrisRepositoryItem(
@@ -9058,11 +9058,11 @@ class IrisItemRepository {
       requiresVanguard: false,
       requiresIRISReview: false,
       deliveryNotes:
-          "Household item. Protect from impact. Recommended vehicle: Bike.",
+          "Household item. Protect from impact. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 25, widthCm: 18, heightCm: 8),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: false,
     ),
     IrisRepositoryItem(
@@ -9080,11 +9080,11 @@ class IrisItemRepository {
       requiresVanguard: false,
       requiresIRISReview: false,
       deliveryNotes:
-          "Household item. Protect from impact. Recommended vehicle: Bike.",
+          "Household item. Protect from impact. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 25, widthCm: 18, heightCm: 8),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: false,
     ),
     IrisRepositoryItem(
@@ -9107,11 +9107,11 @@ class IrisItemRepository {
       requiresVanguard: false,
       requiresIRISReview: false,
       deliveryNotes:
-          "Household item. Protect from impact. Recommended vehicle: Bike.",
+          "Household item. Protect from impact. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 25, widthCm: 18, heightCm: 8),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: false,
     ),
     IrisRepositoryItem(
@@ -9134,11 +9134,11 @@ class IrisItemRepository {
       requiresVanguard: false,
       requiresIRISReview: false,
       deliveryNotes:
-          "Household item. Protect from impact. Recommended vehicle: Bike.",
+          "Household item. Protect from impact. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 25, widthCm: 18, heightCm: 8),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: false,
     ),
     IrisRepositoryItem(
@@ -9161,11 +9161,11 @@ class IrisItemRepository {
       requiresVanguard: false,
       requiresIRISReview: false,
       deliveryNotes:
-          "Household item. Protect from impact. Recommended vehicle: Bike.",
+          "Household item. Protect from impact. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 25, widthCm: 18, heightCm: 8),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: false,
     ),
     IrisRepositoryItem(
@@ -9188,11 +9188,11 @@ class IrisItemRepository {
       requiresVanguard: false,
       requiresIRISReview: false,
       deliveryNotes:
-          "Household item. Protect from impact. Recommended vehicle: Bike.",
+          "Household item. Protect from impact. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 25, widthCm: 18, heightCm: 8),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: false,
     ),
     IrisRepositoryItem(
@@ -9215,11 +9215,11 @@ class IrisItemRepository {
       requiresVanguard: false,
       requiresIRISReview: false,
       deliveryNotes:
-          "Household item. Standard handling. Recommended vehicle: Bike.",
+          "Household item. Standard handling. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 45, widthCm: 35, heightCm: 25),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: true,
     ),
     IrisRepositoryItem(
@@ -9242,11 +9242,11 @@ class IrisItemRepository {
       requiresVanguard: false,
       requiresIRISReview: false,
       deliveryNotes:
-          "Household item. Standard handling. Recommended vehicle: Bike.",
+          "Household item. Standard handling. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 45, widthCm: 35, heightCm: 25),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: true,
     ),
     IrisRepositoryItem(
@@ -9269,11 +9269,11 @@ class IrisItemRepository {
       requiresVanguard: false,
       requiresIRISReview: false,
       deliveryNotes:
-          "Household item. Standard handling. Recommended vehicle: Bike.",
+          "Household item. Standard handling. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 45, widthCm: 35, heightCm: 25),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: true,
     ),
     IrisRepositoryItem(
@@ -9296,11 +9296,11 @@ class IrisItemRepository {
       requiresVanguard: false,
       requiresIRISReview: false,
       deliveryNotes:
-          "Household item. Standard handling. Recommended vehicle: Bike.",
+          "Household item. Standard handling. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 45, widthCm: 35, heightCm: 25),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: true,
     ),
     IrisRepositoryItem(
@@ -9323,11 +9323,11 @@ class IrisItemRepository {
       requiresVanguard: false,
       requiresIRISReview: false,
       deliveryNotes:
-          "Household item. Standard handling. Recommended vehicle: Bike.",
+          "Household item. Standard handling. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 45, widthCm: 35, heightCm: 25),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: true,
     ),
     IrisRepositoryItem(
@@ -9350,11 +9350,11 @@ class IrisItemRepository {
       requiresVanguard: false,
       requiresIRISReview: false,
       deliveryNotes:
-          "Household item. Standard handling. Recommended vehicle: Bike.",
+          "Household item. Standard handling. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 45, widthCm: 35, heightCm: 25),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: true,
     ),
     IrisRepositoryItem(
@@ -9377,11 +9377,11 @@ class IrisItemRepository {
       requiresVanguard: false,
       requiresIRISReview: false,
       deliveryNotes:
-          "Household item. Standard handling. Recommended vehicle: Bike.",
+          "Household item. Standard handling. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 45, widthCm: 35, heightCm: 25),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: true,
     ),
     IrisRepositoryItem(
@@ -9404,11 +9404,11 @@ class IrisItemRepository {
       requiresVanguard: false,
       requiresIRISReview: false,
       deliveryNotes:
-          "Household item. Standard handling. Recommended vehicle: Bike.",
+          "Household item. Standard handling. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 45, widthCm: 35, heightCm: 25),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: true,
     ),
     IrisRepositoryItem(
@@ -9431,11 +9431,11 @@ class IrisItemRepository {
       requiresVanguard: false,
       requiresIRISReview: false,
       deliveryNotes:
-          "Household item. Standard handling. Recommended vehicle: Bike.",
+          "Household item. Standard handling. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 45, widthCm: 35, heightCm: 25),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: true,
     ),
     IrisRepositoryItem(
@@ -9458,11 +9458,11 @@ class IrisItemRepository {
       requiresVanguard: false,
       requiresIRISReview: false,
       deliveryNotes:
-          "Household item. Standard handling. Recommended vehicle: Bike.",
+          "Household item. Standard handling. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 45, widthCm: 35, heightCm: 25),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: true,
     ),
     IrisRepositoryItem(
@@ -10805,11 +10805,11 @@ class IrisItemRepository {
       requiresVanguard: false,
       requiresIRISReview: false,
       deliveryNotes:
-          "Household item. Protect from impact. Recommended vehicle: Bike.",
+          "Household item. Protect from impact. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 45, widthCm: 35, heightCm: 25),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: false,
     ),
     IrisRepositoryItem(
@@ -10827,11 +10827,11 @@ class IrisItemRepository {
       requiresVanguard: false,
       requiresIRISReview: false,
       deliveryNotes:
-          "Household item. Protect from impact. Recommended vehicle: Bike.",
+          "Household item. Protect from impact. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 45, widthCm: 35, heightCm: 25),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: false,
     ),
     IrisRepositoryItem(
@@ -10849,11 +10849,11 @@ class IrisItemRepository {
       requiresVanguard: false,
       requiresIRISReview: false,
       deliveryNotes:
-          "Household item. Protect from impact. Recommended vehicle: Bike.",
+          "Household item. Protect from impact. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 45, widthCm: 35, heightCm: 25),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: false,
     ),
     IrisRepositoryItem(
@@ -10871,11 +10871,11 @@ class IrisItemRepository {
       requiresVanguard: false,
       requiresIRISReview: false,
       deliveryNotes:
-          "Household item. Protect from impact. Recommended vehicle: Bike.",
+          "Household item. Protect from impact. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 45, widthCm: 35, heightCm: 25),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: false,
     ),
     IrisRepositoryItem(
@@ -10893,11 +10893,11 @@ class IrisItemRepository {
       requiresVanguard: false,
       requiresIRISReview: false,
       deliveryNotes:
-          "Household item. Protect from impact. Recommended vehicle: Bike.",
+          "Household item. Protect from impact. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 45, widthCm: 35, heightCm: 25),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: false,
     ),
     IrisRepositoryItem(
@@ -10915,11 +10915,11 @@ class IrisItemRepository {
       requiresVanguard: false,
       requiresIRISReview: false,
       deliveryNotes:
-          "Household item. Protect from impact. Recommended vehicle: Bike.",
+          "Household item. Protect from impact. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 45, widthCm: 35, heightCm: 25),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: false,
     ),
     IrisRepositoryItem(
@@ -10937,11 +10937,11 @@ class IrisItemRepository {
       requiresVanguard: false,
       requiresIRISReview: false,
       deliveryNotes:
-          "Household item. Protect from impact. Recommended vehicle: Bike.",
+          "Household item. Protect from impact. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 45, widthCm: 35, heightCm: 25),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: false,
     ),
     IrisRepositoryItem(
@@ -10959,11 +10959,11 @@ class IrisItemRepository {
       requiresVanguard: false,
       requiresIRISReview: false,
       deliveryNotes:
-          "Household item. Protect from impact. Recommended vehicle: Bike.",
+          "Household item. Protect from impact. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 45, widthCm: 35, heightCm: 25),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: false,
     ),
     IrisRepositoryItem(
@@ -10981,11 +10981,11 @@ class IrisItemRepository {
       requiresVanguard: false,
       requiresIRISReview: false,
       deliveryNotes:
-          "Household item. Protect from impact. Recommended vehicle: Bike.",
+          "Household item. Protect from impact. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 45, widthCm: 35, heightCm: 25),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: false,
     ),
     IrisRepositoryItem(
@@ -11003,11 +11003,11 @@ class IrisItemRepository {
       requiresVanguard: false,
       requiresIRISReview: false,
       deliveryNotes:
-          "Household item. Protect from impact. Recommended vehicle: Bike.",
+          "Household item. Protect from impact. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 45, widthCm: 35, heightCm: 25),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: false,
     ),
     IrisRepositoryItem(
@@ -11275,11 +11275,11 @@ class IrisItemRepository {
       requiresVanguard: false,
       requiresIRISReview: false,
       deliveryNotes:
-          "Business item. Standard handling. Recommended vehicle: Bike.",
+          "Business item. Standard handling. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 45, widthCm: 35, heightCm: 25),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: true,
     ),
     IrisRepositoryItem(
@@ -11302,11 +11302,11 @@ class IrisItemRepository {
       requiresVanguard: false,
       requiresIRISReview: false,
       deliveryNotes:
-          "Business item. Standard handling. Recommended vehicle: Bike.",
+          "Business item. Standard handling. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 45, widthCm: 35, heightCm: 25),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: true,
     ),
     IrisRepositoryItem(
@@ -11329,11 +11329,11 @@ class IrisItemRepository {
       requiresVanguard: false,
       requiresIRISReview: false,
       deliveryNotes:
-          "Business item. Standard handling. Recommended vehicle: Bike.",
+          "Business item. Standard handling. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 45, widthCm: 35, heightCm: 25),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: true,
     ),
     IrisRepositoryItem(
@@ -11356,11 +11356,11 @@ class IrisItemRepository {
       requiresVanguard: false,
       requiresIRISReview: false,
       deliveryNotes:
-          "Business item. Standard handling. Recommended vehicle: Bike.",
+          "Business item. Standard handling. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 45, widthCm: 35, heightCm: 25),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: true,
     ),
     IrisRepositoryItem(
@@ -11383,11 +11383,11 @@ class IrisItemRepository {
       requiresVanguard: false,
       requiresIRISReview: false,
       deliveryNotes:
-          "Business item. Standard handling. Recommended vehicle: Bike.",
+          "Business item. Standard handling. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 45, widthCm: 35, heightCm: 25),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: true,
     ),
     IrisRepositoryItem(
@@ -11410,11 +11410,11 @@ class IrisItemRepository {
       requiresVanguard: false,
       requiresIRISReview: false,
       deliveryNotes:
-          "Business item. Standard handling. Recommended vehicle: Bike.",
+          "Business item. Standard handling. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 45, widthCm: 35, heightCm: 25),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: true,
     ),
     IrisRepositoryItem(
@@ -11437,11 +11437,11 @@ class IrisItemRepository {
       requiresVanguard: false,
       requiresIRISReview: false,
       deliveryNotes:
-          "Business item. Standard handling. Recommended vehicle: Bike.",
+          "Business item. Standard handling. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 45, widthCm: 35, heightCm: 25),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: true,
     ),
     IrisRepositoryItem(
@@ -11464,11 +11464,11 @@ class IrisItemRepository {
       requiresVanguard: false,
       requiresIRISReview: false,
       deliveryNotes:
-          "Business item. Standard handling. Recommended vehicle: Bike.",
+          "Business item. Standard handling. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 45, widthCm: 35, heightCm: 25),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: true,
     ),
     IrisRepositoryItem(
@@ -11491,11 +11491,11 @@ class IrisItemRepository {
       requiresVanguard: false,
       requiresIRISReview: false,
       deliveryNotes:
-          "Business item. Standard handling. Recommended vehicle: Bike.",
+          "Business item. Standard handling. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 45, widthCm: 35, heightCm: 25),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: true,
     ),
     IrisRepositoryItem(
@@ -11518,11 +11518,11 @@ class IrisItemRepository {
       requiresVanguard: false,
       requiresIRISReview: false,
       deliveryNotes:
-          "Business item. Standard handling. Recommended vehicle: Bike.",
+          "Business item. Standard handling. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 45, widthCm: 35, heightCm: 25),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: true,
     ),
     IrisRepositoryItem(
@@ -11545,11 +11545,11 @@ class IrisItemRepository {
       requiresVanguard: false,
       requiresIRISReview: false,
       deliveryNotes:
-          "Business item. Standard handling. Recommended vehicle: Bike.",
+          "Business item. Standard handling. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 45, widthCm: 35, heightCm: 25),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: true,
     ),
     IrisRepositoryItem(
@@ -11572,11 +11572,11 @@ class IrisItemRepository {
       requiresVanguard: false,
       requiresIRISReview: false,
       deliveryNotes:
-          "Business item. Standard handling. Recommended vehicle: Bike.",
+          "Business item. Standard handling. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 45, widthCm: 35, heightCm: 25),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: true,
     ),
     IrisRepositoryItem(
@@ -11599,11 +11599,11 @@ class IrisItemRepository {
       requiresVanguard: false,
       requiresIRISReview: false,
       deliveryNotes:
-          "Business item. Standard handling. Recommended vehicle: Bike.",
+          "Business item. Standard handling. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 45, widthCm: 35, heightCm: 25),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: true,
     ),
     IrisRepositoryItem(
@@ -11626,11 +11626,11 @@ class IrisItemRepository {
       requiresVanguard: false,
       requiresIRISReview: false,
       deliveryNotes:
-          "Business item. Standard handling. Recommended vehicle: Bike.",
+          "Business item. Standard handling. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 45, widthCm: 35, heightCm: 25),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: true,
     ),
     IrisRepositoryItem(
@@ -11653,11 +11653,11 @@ class IrisItemRepository {
       requiresVanguard: false,
       requiresIRISReview: false,
       deliveryNotes:
-          "Business item. Standard handling. Recommended vehicle: Bike.",
+          "Business item. Standard handling. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 45, widthCm: 35, heightCm: 25),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: true,
     ),
     IrisRepositoryItem(
@@ -11680,11 +11680,11 @@ class IrisItemRepository {
       requiresVanguard: false,
       requiresIRISReview: false,
       deliveryNotes:
-          "Business item. Standard handling. Recommended vehicle: Bike.",
+          "Business item. Standard handling. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 45, widthCm: 35, heightCm: 25),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: true,
     ),
     IrisRepositoryItem(
@@ -11707,11 +11707,11 @@ class IrisItemRepository {
       requiresVanguard: false,
       requiresIRISReview: false,
       deliveryNotes:
-          "Business item. Standard handling. Recommended vehicle: Bike.",
+          "Business item. Standard handling. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 45, widthCm: 35, heightCm: 25),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: true,
     ),
     IrisRepositoryItem(
@@ -11734,11 +11734,11 @@ class IrisItemRepository {
       requiresVanguard: false,
       requiresIRISReview: false,
       deliveryNotes:
-          "Business item. Standard handling. Recommended vehicle: Bike.",
+          "Business item. Standard handling. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 45, widthCm: 35, heightCm: 25),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: true,
     ),
     IrisRepositoryItem(
@@ -11761,11 +11761,11 @@ class IrisItemRepository {
       requiresVanguard: false,
       requiresIRISReview: false,
       deliveryNotes:
-          "Business item. Standard handling. Recommended vehicle: Bike.",
+          "Business item. Standard handling. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 45, widthCm: 35, heightCm: 25),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: true,
     ),
     IrisRepositoryItem(
@@ -11788,11 +11788,11 @@ class IrisItemRepository {
       requiresVanguard: false,
       requiresIRISReview: false,
       deliveryNotes:
-          "Business item. Standard handling. Recommended vehicle: Bike.",
+          "Business item. Standard handling. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 45, widthCm: 35, heightCm: 25),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: true,
     ),
     IrisRepositoryItem(
@@ -11815,11 +11815,11 @@ class IrisItemRepository {
       requiresVanguard: false,
       requiresIRISReview: false,
       deliveryNotes:
-          "Business item. Protect from impact. Recommended vehicle: Bike.",
+          "Business item. Protect from impact. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 45, widthCm: 35, heightCm: 25),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: false,
     ),
     IrisRepositoryItem(
@@ -11842,11 +11842,11 @@ class IrisItemRepository {
       requiresVanguard: false,
       requiresIRISReview: false,
       deliveryNotes:
-          "Business item. Protect from impact. Recommended vehicle: Bike.",
+          "Business item. Protect from impact. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 45, widthCm: 35, heightCm: 25),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: false,
     ),
     IrisRepositoryItem(
@@ -11869,11 +11869,11 @@ class IrisItemRepository {
       requiresVanguard: false,
       requiresIRISReview: false,
       deliveryNotes:
-          "Business item. Protect from impact. Recommended vehicle: Bike.",
+          "Business item. Protect from impact. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 45, widthCm: 35, heightCm: 25),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: false,
     ),
     IrisRepositoryItem(
@@ -11896,11 +11896,11 @@ class IrisItemRepository {
       requiresVanguard: false,
       requiresIRISReview: false,
       deliveryNotes:
-          "Business item. Protect from impact. Recommended vehicle: Bike.",
+          "Business item. Protect from impact. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 45, widthCm: 35, heightCm: 25),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: false,
     ),
     IrisRepositoryItem(
@@ -11923,11 +11923,11 @@ class IrisItemRepository {
       requiresVanguard: false,
       requiresIRISReview: false,
       deliveryNotes:
-          "Business item. Protect from impact. Recommended vehicle: Bike.",
+          "Business item. Protect from impact. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 45, widthCm: 35, heightCm: 25),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: false,
     ),
     IrisRepositoryItem(
@@ -11950,11 +11950,11 @@ class IrisItemRepository {
       requiresVanguard: false,
       requiresIRISReview: false,
       deliveryNotes:
-          "Business item. Protect from impact. Recommended vehicle: Bike.",
+          "Business item. Protect from impact. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 45, widthCm: 35, heightCm: 25),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: false,
     ),
     IrisRepositoryItem(
@@ -11977,11 +11977,11 @@ class IrisItemRepository {
       requiresVanguard: false,
       requiresIRISReview: false,
       deliveryNotes:
-          "Business item. Protect from impact. Recommended vehicle: Bike.",
+          "Business item. Protect from impact. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 45, widthCm: 35, heightCm: 25),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: false,
     ),
     IrisRepositoryItem(
@@ -12004,11 +12004,11 @@ class IrisItemRepository {
       requiresVanguard: false,
       requiresIRISReview: false,
       deliveryNotes:
-          "Business item. Protect from impact. Recommended vehicle: Bike.",
+          "Business item. Protect from impact. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 45, widthCm: 35, heightCm: 25),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: false,
     ),
     IrisRepositoryItem(
@@ -12031,11 +12031,11 @@ class IrisItemRepository {
       requiresVanguard: false,
       requiresIRISReview: false,
       deliveryNotes:
-          "Business item. Protect from impact. Recommended vehicle: Bike.",
+          "Business item. Protect from impact. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 45, widthCm: 35, heightCm: 25),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: false,
     ),
     IrisRepositoryItem(
@@ -12058,11 +12058,11 @@ class IrisItemRepository {
       requiresVanguard: false,
       requiresIRISReview: false,
       deliveryNotes:
-          "Business item. Protect from impact. Recommended vehicle: Bike.",
+          "Business item. Protect from impact. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 45, widthCm: 35, heightCm: 25),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: false,
     ),
     IrisRepositoryItem(
@@ -12085,11 +12085,11 @@ class IrisItemRepository {
       requiresVanguard: true,
       requiresIRISReview: false,
       deliveryNotes:
-          "Business item. Protect from impact. Recommended vehicle: Bike.",
+          "Business item. Protect from impact. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.9,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 25, widthCm: 18, heightCm: 8),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: false,
     ),
     IrisRepositoryItem(
@@ -12112,11 +12112,11 @@ class IrisItemRepository {
       requiresVanguard: true,
       requiresIRISReview: false,
       deliveryNotes:
-          "Business item. Protect from impact. Recommended vehicle: Bike.",
+          "Business item. Protect from impact. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.9,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 25, widthCm: 18, heightCm: 8),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: false,
     ),
     IrisRepositoryItem(
@@ -12139,11 +12139,11 @@ class IrisItemRepository {
       requiresVanguard: true,
       requiresIRISReview: false,
       deliveryNotes:
-          "Business item. Protect from impact. Recommended vehicle: Bike.",
+          "Business item. Protect from impact. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.9,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 25, widthCm: 18, heightCm: 8),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: false,
     ),
     IrisRepositoryItem(
@@ -12166,11 +12166,11 @@ class IrisItemRepository {
       requiresVanguard: true,
       requiresIRISReview: false,
       deliveryNotes:
-          "Business item. Protect from impact. Recommended vehicle: Bike.",
+          "Business item. Protect from impact. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.9,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 25, widthCm: 18, heightCm: 8),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: false,
     ),
     IrisRepositoryItem(
@@ -12193,11 +12193,11 @@ class IrisItemRepository {
       requiresVanguard: true,
       requiresIRISReview: false,
       deliveryNotes:
-          "Business item. Protect from impact. Recommended vehicle: Bike.",
+          "Business item. Protect from impact. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.9,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 25, widthCm: 18, heightCm: 8),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: false,
     ),
     IrisRepositoryItem(
@@ -12220,11 +12220,11 @@ class IrisItemRepository {
       requiresVanguard: true,
       requiresIRISReview: false,
       deliveryNotes:
-          "Business item. Protect from impact. Recommended vehicle: Bike.",
+          "Business item. Protect from impact. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.9,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 25, widthCm: 18, heightCm: 8),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: false,
     ),
     IrisRepositoryItem(
@@ -12247,11 +12247,11 @@ class IrisItemRepository {
       requiresVanguard: true,
       requiresIRISReview: false,
       deliveryNotes:
-          "Business item. Protect from impact. Recommended vehicle: Bike.",
+          "Business item. Protect from impact. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.9,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 25, widthCm: 18, heightCm: 8),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: false,
     ),
     IrisRepositoryItem(
@@ -12274,11 +12274,11 @@ class IrisItemRepository {
       requiresVanguard: true,
       requiresIRISReview: false,
       deliveryNotes:
-          "Business item. Protect from impact. Recommended vehicle: Bike.",
+          "Business item. Protect from impact. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.9,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 25, widthCm: 18, heightCm: 8),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: false,
     ),
     IrisRepositoryItem(
@@ -12301,11 +12301,11 @@ class IrisItemRepository {
       requiresVanguard: true,
       requiresIRISReview: false,
       deliveryNotes:
-          "Business item. Protect from impact. Recommended vehicle: Bike.",
+          "Business item. Protect from impact. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.9,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 25, widthCm: 18, heightCm: 8),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: false,
     ),
     IrisRepositoryItem(
@@ -12328,11 +12328,11 @@ class IrisItemRepository {
       requiresVanguard: true,
       requiresIRISReview: false,
       deliveryNotes:
-          "Business item. Protect from impact. Recommended vehicle: Bike.",
+          "Business item. Protect from impact. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.9,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 25, widthCm: 18, heightCm: 8),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: false,
     ),
     IrisRepositoryItem(
@@ -12355,11 +12355,11 @@ class IrisItemRepository {
       requiresVanguard: true,
       requiresIRISReview: false,
       deliveryNotes:
-          "Business item. Protect from impact. Recommended vehicle: Bike.",
+          "Business item. Protect from impact. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.9,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 45, widthCm: 35, heightCm: 25),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: false,
     ),
     IrisRepositoryItem(
@@ -12382,11 +12382,11 @@ class IrisItemRepository {
       requiresVanguard: true,
       requiresIRISReview: false,
       deliveryNotes:
-          "Business item. Protect from impact. Recommended vehicle: Bike.",
+          "Business item. Protect from impact. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.9,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 45, widthCm: 35, heightCm: 25),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: false,
     ),
     IrisRepositoryItem(
@@ -12409,11 +12409,11 @@ class IrisItemRepository {
       requiresVanguard: true,
       requiresIRISReview: false,
       deliveryNotes:
-          "Business item. Protect from impact. Recommended vehicle: Bike.",
+          "Business item. Protect from impact. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.9,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 45, widthCm: 35, heightCm: 25),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: false,
     ),
     IrisRepositoryItem(
@@ -12436,11 +12436,11 @@ class IrisItemRepository {
       requiresVanguard: true,
       requiresIRISReview: false,
       deliveryNotes:
-          "Business item. Protect from impact. Recommended vehicle: Bike.",
+          "Business item. Protect from impact. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.9,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 45, widthCm: 35, heightCm: 25),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: false,
     ),
     IrisRepositoryItem(
@@ -12463,11 +12463,11 @@ class IrisItemRepository {
       requiresVanguard: true,
       requiresIRISReview: false,
       deliveryNotes:
-          "Business item. Protect from impact. Recommended vehicle: Bike.",
+          "Business item. Protect from impact. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.9,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 45, widthCm: 35, heightCm: 25),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: false,
     ),
     IrisRepositoryItem(
@@ -12490,11 +12490,11 @@ class IrisItemRepository {
       requiresVanguard: true,
       requiresIRISReview: false,
       deliveryNotes:
-          "Business item. Protect from impact. Recommended vehicle: Bike.",
+          "Business item. Protect from impact. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.9,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 45, widthCm: 35, heightCm: 25),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: false,
     ),
     IrisRepositoryItem(
@@ -12517,11 +12517,11 @@ class IrisItemRepository {
       requiresVanguard: true,
       requiresIRISReview: false,
       deliveryNotes:
-          "Business item. Protect from impact. Recommended vehicle: Bike.",
+          "Business item. Protect from impact. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.9,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 45, widthCm: 35, heightCm: 25),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: false,
     ),
     IrisRepositoryItem(
@@ -12544,11 +12544,11 @@ class IrisItemRepository {
       requiresVanguard: true,
       requiresIRISReview: false,
       deliveryNotes:
-          "Business item. Protect from impact. Recommended vehicle: Bike.",
+          "Business item. Protect from impact. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.9,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 45, widthCm: 35, heightCm: 25),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: false,
     ),
     IrisRepositoryItem(
@@ -12571,11 +12571,11 @@ class IrisItemRepository {
       requiresVanguard: true,
       requiresIRISReview: false,
       deliveryNotes:
-          "Business item. Protect from impact. Recommended vehicle: Bike.",
+          "Business item. Protect from impact. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.9,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 45, widthCm: 35, heightCm: 25),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: false,
     ),
     IrisRepositoryItem(
@@ -12598,11 +12598,11 @@ class IrisItemRepository {
       requiresVanguard: true,
       requiresIRISReview: false,
       deliveryNotes:
-          "Business item. Protect from impact. Recommended vehicle: Bike.",
+          "Business item. Protect from impact. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.9,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 45, widthCm: 35, heightCm: 25),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: false,
     ),
     IrisRepositoryItem(
@@ -12895,11 +12895,11 @@ class IrisItemRepository {
       requiresVanguard: false,
       requiresIRISReview: false,
       deliveryNotes:
-          "Business item. Protect from impact. Recommended vehicle: Bike.",
+          "Business item. Protect from impact. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 25, widthCm: 18, heightCm: 8),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: false,
     ),
     IrisRepositoryItem(
@@ -12922,11 +12922,11 @@ class IrisItemRepository {
       requiresVanguard: false,
       requiresIRISReview: false,
       deliveryNotes:
-          "Business item. Protect from impact. Recommended vehicle: Bike.",
+          "Business item. Protect from impact. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 25, widthCm: 18, heightCm: 8),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: false,
     ),
     IrisRepositoryItem(
@@ -12949,11 +12949,11 @@ class IrisItemRepository {
       requiresVanguard: false,
       requiresIRISReview: false,
       deliveryNotes:
-          "Business item. Protect from impact. Recommended vehicle: Bike.",
+          "Business item. Protect from impact. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 25, widthCm: 18, heightCm: 8),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: false,
     ),
     IrisRepositoryItem(
@@ -12976,11 +12976,11 @@ class IrisItemRepository {
       requiresVanguard: false,
       requiresIRISReview: false,
       deliveryNotes:
-          "Business item. Protect from impact. Recommended vehicle: Bike.",
+          "Business item. Protect from impact. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 25, widthCm: 18, heightCm: 8),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: false,
     ),
     IrisRepositoryItem(
@@ -13003,11 +13003,11 @@ class IrisItemRepository {
       requiresVanguard: false,
       requiresIRISReview: false,
       deliveryNotes:
-          "Business item. Protect from impact. Recommended vehicle: Bike.",
+          "Business item. Protect from impact. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 25, widthCm: 18, heightCm: 8),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: false,
     ),
     IrisRepositoryItem(
@@ -13030,11 +13030,11 @@ class IrisItemRepository {
       requiresVanguard: false,
       requiresIRISReview: false,
       deliveryNotes:
-          "Business item. Protect from impact. Recommended vehicle: Bike.",
+          "Business item. Protect from impact. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 25, widthCm: 18, heightCm: 8),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: false,
     ),
     IrisRepositoryItem(
@@ -13057,11 +13057,11 @@ class IrisItemRepository {
       requiresVanguard: false,
       requiresIRISReview: false,
       deliveryNotes:
-          "Business item. Protect from impact. Recommended vehicle: Bike.",
+          "Business item. Protect from impact. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 25, widthCm: 18, heightCm: 8),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: false,
     ),
     IrisRepositoryItem(
@@ -13084,11 +13084,11 @@ class IrisItemRepository {
       requiresVanguard: false,
       requiresIRISReview: false,
       deliveryNotes:
-          "Business item. Protect from impact. Recommended vehicle: Bike.",
+          "Business item. Protect from impact. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 25, widthCm: 18, heightCm: 8),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: false,
     ),
     IrisRepositoryItem(
@@ -13111,11 +13111,11 @@ class IrisItemRepository {
       requiresVanguard: false,
       requiresIRISReview: false,
       deliveryNotes:
-          "Business item. Protect from impact. Recommended vehicle: Bike.",
+          "Business item. Protect from impact. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 25, widthCm: 18, heightCm: 8),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: false,
     ),
     IrisRepositoryItem(
@@ -13138,11 +13138,11 @@ class IrisItemRepository {
       requiresVanguard: false,
       requiresIRISReview: false,
       deliveryNotes:
-          "Business item. Protect from impact. Recommended vehicle: Bike.",
+          "Business item. Protect from impact. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 25, widthCm: 18, heightCm: 8),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: false,
     ),
     IrisRepositoryItem(
@@ -13165,11 +13165,11 @@ class IrisItemRepository {
       requiresVanguard: false,
       requiresIRISReview: false,
       deliveryNotes:
-          "Groceries item. Standard handling. Recommended vehicle: Bike.",
+          "Groceries item. Standard handling. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 45, widthCm: 35, heightCm: 25),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: true,
     ),
     IrisRepositoryItem(
@@ -13192,11 +13192,11 @@ class IrisItemRepository {
       requiresVanguard: false,
       requiresIRISReview: false,
       deliveryNotes:
-          "Groceries item. Standard handling. Recommended vehicle: Bike.",
+          "Groceries item. Standard handling. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 45, widthCm: 35, heightCm: 25),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: true,
     ),
     IrisRepositoryItem(
@@ -13219,11 +13219,11 @@ class IrisItemRepository {
       requiresVanguard: false,
       requiresIRISReview: false,
       deliveryNotes:
-          "Groceries item. Standard handling. Recommended vehicle: Bike.",
+          "Groceries item. Standard handling. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 45, widthCm: 35, heightCm: 25),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: true,
     ),
     IrisRepositoryItem(
@@ -13246,11 +13246,11 @@ class IrisItemRepository {
       requiresVanguard: false,
       requiresIRISReview: false,
       deliveryNotes:
-          "Groceries item. Standard handling. Recommended vehicle: Bike.",
+          "Groceries item. Standard handling. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 45, widthCm: 35, heightCm: 25),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: true,
     ),
     IrisRepositoryItem(
@@ -13273,11 +13273,11 @@ class IrisItemRepository {
       requiresVanguard: false,
       requiresIRISReview: false,
       deliveryNotes:
-          "Groceries item. Standard handling. Recommended vehicle: Bike.",
+          "Groceries item. Standard handling. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 45, widthCm: 35, heightCm: 25),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: true,
     ),
     IrisRepositoryItem(
@@ -13300,11 +13300,11 @@ class IrisItemRepository {
       requiresVanguard: false,
       requiresIRISReview: false,
       deliveryNotes:
-          "Groceries item. Standard handling. Recommended vehicle: Bike.",
+          "Groceries item. Standard handling. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 45, widthCm: 35, heightCm: 25),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: true,
     ),
     IrisRepositoryItem(
@@ -13327,11 +13327,11 @@ class IrisItemRepository {
       requiresVanguard: false,
       requiresIRISReview: false,
       deliveryNotes:
-          "Groceries item. Standard handling. Recommended vehicle: Bike.",
+          "Groceries item. Standard handling. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 45, widthCm: 35, heightCm: 25),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: true,
     ),
     IrisRepositoryItem(
@@ -13354,11 +13354,11 @@ class IrisItemRepository {
       requiresVanguard: false,
       requiresIRISReview: false,
       deliveryNotes:
-          "Groceries item. Standard handling. Recommended vehicle: Bike.",
+          "Groceries item. Standard handling. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 45, widthCm: 35, heightCm: 25),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: true,
     ),
     IrisRepositoryItem(
@@ -13381,11 +13381,11 @@ class IrisItemRepository {
       requiresVanguard: false,
       requiresIRISReview: false,
       deliveryNotes:
-          "Groceries item. Standard handling. Recommended vehicle: Bike.",
+          "Groceries item. Standard handling. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 45, widthCm: 35, heightCm: 25),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: true,
     ),
     IrisRepositoryItem(
@@ -13408,11 +13408,11 @@ class IrisItemRepository {
       requiresVanguard: false,
       requiresIRISReview: false,
       deliveryNotes:
-          "Groceries item. Standard handling. Recommended vehicle: Bike.",
+          "Groceries item. Standard handling. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 45, widthCm: 35, heightCm: 25),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: true,
     ),
     IrisRepositoryItem(
@@ -13975,11 +13975,11 @@ class IrisItemRepository {
       requiresVanguard: false,
       requiresIRISReview: false,
       deliveryNotes:
-          "Groceries item. Standard handling. Recommended vehicle: Bike.",
+          "Groceries item. Standard handling. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 45, widthCm: 35, heightCm: 25),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: true,
     ),
     IrisRepositoryItem(
@@ -14002,11 +14002,11 @@ class IrisItemRepository {
       requiresVanguard: false,
       requiresIRISReview: false,
       deliveryNotes:
-          "Groceries item. Standard handling. Recommended vehicle: Bike.",
+          "Groceries item. Standard handling. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 45, widthCm: 35, heightCm: 25),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: true,
     ),
     IrisRepositoryItem(
@@ -14029,11 +14029,11 @@ class IrisItemRepository {
       requiresVanguard: false,
       requiresIRISReview: false,
       deliveryNotes:
-          "Groceries item. Standard handling. Recommended vehicle: Bike.",
+          "Groceries item. Standard handling. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 45, widthCm: 35, heightCm: 25),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: true,
     ),
     IrisRepositoryItem(
@@ -14056,11 +14056,11 @@ class IrisItemRepository {
       requiresVanguard: false,
       requiresIRISReview: false,
       deliveryNotes:
-          "Groceries item. Standard handling. Recommended vehicle: Bike.",
+          "Groceries item. Standard handling. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 45, widthCm: 35, heightCm: 25),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: true,
     ),
     IrisRepositoryItem(
@@ -14083,11 +14083,11 @@ class IrisItemRepository {
       requiresVanguard: false,
       requiresIRISReview: false,
       deliveryNotes:
-          "Groceries item. Standard handling. Recommended vehicle: Bike.",
+          "Groceries item. Standard handling. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 45, widthCm: 35, heightCm: 25),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: true,
     ),
     IrisRepositoryItem(
@@ -14110,11 +14110,11 @@ class IrisItemRepository {
       requiresVanguard: false,
       requiresIRISReview: false,
       deliveryNotes:
-          "Groceries item. Standard handling. Recommended vehicle: Bike.",
+          "Groceries item. Standard handling. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 45, widthCm: 35, heightCm: 25),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: true,
     ),
     IrisRepositoryItem(
@@ -14137,11 +14137,11 @@ class IrisItemRepository {
       requiresVanguard: false,
       requiresIRISReview: false,
       deliveryNotes:
-          "Groceries item. Standard handling. Recommended vehicle: Bike.",
+          "Groceries item. Standard handling. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 45, widthCm: 35, heightCm: 25),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: true,
     ),
     IrisRepositoryItem(
@@ -14164,11 +14164,11 @@ class IrisItemRepository {
       requiresVanguard: false,
       requiresIRISReview: false,
       deliveryNotes:
-          "Groceries item. Standard handling. Recommended vehicle: Bike.",
+          "Groceries item. Standard handling. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 45, widthCm: 35, heightCm: 25),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: true,
     ),
     IrisRepositoryItem(
@@ -14191,11 +14191,11 @@ class IrisItemRepository {
       requiresVanguard: false,
       requiresIRISReview: false,
       deliveryNotes:
-          "Groceries item. Standard handling. Recommended vehicle: Bike.",
+          "Groceries item. Standard handling. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 45, widthCm: 35, heightCm: 25),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: true,
     ),
     IrisRepositoryItem(
@@ -14218,11 +14218,11 @@ class IrisItemRepository {
       requiresVanguard: false,
       requiresIRISReview: false,
       deliveryNotes:
-          "Groceries item. Standard handling. Recommended vehicle: Bike.",
+          "Groceries item. Standard handling. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 45, widthCm: 35, heightCm: 25),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: true,
     ),
     IrisRepositoryItem(
@@ -14245,11 +14245,11 @@ class IrisItemRepository {
       requiresVanguard: false,
       requiresIRISReview: false,
       deliveryNotes:
-          "Groceries item. Standard handling. Recommended vehicle: Bike.",
+          "Groceries item. Standard handling. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 45, widthCm: 35, heightCm: 25),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: true,
     ),
     IrisRepositoryItem(
@@ -14272,11 +14272,11 @@ class IrisItemRepository {
       requiresVanguard: false,
       requiresIRISReview: false,
       deliveryNotes:
-          "Groceries item. Standard handling. Recommended vehicle: Bike.",
+          "Groceries item. Standard handling. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 45, widthCm: 35, heightCm: 25),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: true,
     ),
     IrisRepositoryItem(
@@ -14299,11 +14299,11 @@ class IrisItemRepository {
       requiresVanguard: false,
       requiresIRISReview: false,
       deliveryNotes:
-          "Groceries item. Standard handling. Recommended vehicle: Bike.",
+          "Groceries item. Standard handling. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 45, widthCm: 35, heightCm: 25),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: true,
     ),
     IrisRepositoryItem(
@@ -14326,11 +14326,11 @@ class IrisItemRepository {
       requiresVanguard: false,
       requiresIRISReview: false,
       deliveryNotes:
-          "Groceries item. Standard handling. Recommended vehicle: Bike.",
+          "Groceries item. Standard handling. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 45, widthCm: 35, heightCm: 25),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: true,
     ),
     IrisRepositoryItem(
@@ -14353,11 +14353,11 @@ class IrisItemRepository {
       requiresVanguard: false,
       requiresIRISReview: false,
       deliveryNotes:
-          "Groceries item. Standard handling. Recommended vehicle: Bike.",
+          "Groceries item. Standard handling. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 45, widthCm: 35, heightCm: 25),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: true,
     ),
     IrisRepositoryItem(
@@ -14380,11 +14380,11 @@ class IrisItemRepository {
       requiresVanguard: false,
       requiresIRISReview: false,
       deliveryNotes:
-          "Groceries item. Standard handling. Recommended vehicle: Bike.",
+          "Groceries item. Standard handling. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 45, widthCm: 35, heightCm: 25),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: true,
     ),
     IrisRepositoryItem(
@@ -14407,11 +14407,11 @@ class IrisItemRepository {
       requiresVanguard: false,
       requiresIRISReview: false,
       deliveryNotes:
-          "Groceries item. Standard handling. Recommended vehicle: Bike.",
+          "Groceries item. Standard handling. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 45, widthCm: 35, heightCm: 25),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: true,
     ),
     IrisRepositoryItem(
@@ -14434,11 +14434,11 @@ class IrisItemRepository {
       requiresVanguard: false,
       requiresIRISReview: false,
       deliveryNotes:
-          "Groceries item. Standard handling. Recommended vehicle: Bike.",
+          "Groceries item. Standard handling. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 45, widthCm: 35, heightCm: 25),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: true,
     ),
     IrisRepositoryItem(
@@ -14461,11 +14461,11 @@ class IrisItemRepository {
       requiresVanguard: false,
       requiresIRISReview: false,
       deliveryNotes:
-          "Groceries item. Standard handling. Recommended vehicle: Bike.",
+          "Groceries item. Standard handling. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 45, widthCm: 35, heightCm: 25),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: true,
     ),
     IrisRepositoryItem(
@@ -14488,11 +14488,11 @@ class IrisItemRepository {
       requiresVanguard: false,
       requiresIRISReview: false,
       deliveryNotes:
-          "Groceries item. Standard handling. Recommended vehicle: Bike.",
+          "Groceries item. Standard handling. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 45, widthCm: 35, heightCm: 25),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: true,
     ),
     IrisRepositoryItem(
@@ -14510,11 +14510,11 @@ class IrisItemRepository {
       requiresVanguard: false,
       requiresIRISReview: false,
       deliveryNotes:
-          "Groceries item. Protect from impact. Recommended vehicle: Bike.",
+          "Groceries item. Protect from impact. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 25, widthCm: 18, heightCm: 8),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: false,
     ),
     IrisRepositoryItem(
@@ -14532,11 +14532,11 @@ class IrisItemRepository {
       requiresVanguard: false,
       requiresIRISReview: false,
       deliveryNotes:
-          "Groceries item. Protect from impact. Recommended vehicle: Bike.",
+          "Groceries item. Protect from impact. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 25, widthCm: 18, heightCm: 8),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: false,
     ),
     IrisRepositoryItem(
@@ -14554,11 +14554,11 @@ class IrisItemRepository {
       requiresVanguard: false,
       requiresIRISReview: false,
       deliveryNotes:
-          "Groceries item. Protect from impact. Recommended vehicle: Bike.",
+          "Groceries item. Protect from impact. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 25, widthCm: 18, heightCm: 8),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: false,
     ),
     IrisRepositoryItem(
@@ -14576,11 +14576,11 @@ class IrisItemRepository {
       requiresVanguard: false,
       requiresIRISReview: false,
       deliveryNotes:
-          "Groceries item. Protect from impact. Recommended vehicle: Bike.",
+          "Groceries item. Protect from impact. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 25, widthCm: 18, heightCm: 8),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: false,
     ),
     IrisRepositoryItem(
@@ -14598,11 +14598,11 @@ class IrisItemRepository {
       requiresVanguard: false,
       requiresIRISReview: false,
       deliveryNotes:
-          "Groceries item. Protect from impact. Recommended vehicle: Bike.",
+          "Groceries item. Protect from impact. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 25, widthCm: 18, heightCm: 8),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: false,
     ),
     IrisRepositoryItem(
@@ -14625,11 +14625,11 @@ class IrisItemRepository {
       requiresVanguard: false,
       requiresIRISReview: false,
       deliveryNotes:
-          "Groceries item. Protect from impact. Recommended vehicle: Bike.",
+          "Groceries item. Protect from impact. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 25, widthCm: 18, heightCm: 8),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: false,
     ),
     IrisRepositoryItem(
@@ -14652,11 +14652,11 @@ class IrisItemRepository {
       requiresVanguard: false,
       requiresIRISReview: false,
       deliveryNotes:
-          "Groceries item. Protect from impact. Recommended vehicle: Bike.",
+          "Groceries item. Protect from impact. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 25, widthCm: 18, heightCm: 8),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: false,
     ),
     IrisRepositoryItem(
@@ -14674,11 +14674,11 @@ class IrisItemRepository {
       requiresVanguard: false,
       requiresIRISReview: false,
       deliveryNotes:
-          "Groceries item. Protect from impact. Recommended vehicle: Bike.",
+          "Groceries item. Protect from impact. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 25, widthCm: 18, heightCm: 8),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: false,
     ),
     IrisRepositoryItem(
@@ -14696,11 +14696,11 @@ class IrisItemRepository {
       requiresVanguard: false,
       requiresIRISReview: false,
       deliveryNotes:
-          "Groceries item. Protect from impact. Recommended vehicle: Bike.",
+          "Groceries item. Protect from impact. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 25, widthCm: 18, heightCm: 8),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: false,
     ),
     IrisRepositoryItem(
@@ -14718,11 +14718,11 @@ class IrisItemRepository {
       requiresVanguard: false,
       requiresIRISReview: false,
       deliveryNotes:
-          "Groceries item. Protect from impact. Recommended vehicle: Bike.",
+          "Groceries item. Protect from impact. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 25, widthCm: 18, heightCm: 8),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: false,
     ),
     IrisRepositoryItem(
@@ -14740,11 +14740,11 @@ class IrisItemRepository {
       requiresVanguard: false,
       requiresIRISReview: false,
       deliveryNotes:
-          "Groceries item. Standard handling. Recommended vehicle: Bike.",
+          "Groceries item. Standard handling. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 45, widthCm: 35, heightCm: 25),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: true,
     ),
     IrisRepositoryItem(
@@ -14762,11 +14762,11 @@ class IrisItemRepository {
       requiresVanguard: false,
       requiresIRISReview: false,
       deliveryNotes:
-          "Groceries item. Standard handling. Recommended vehicle: Bike.",
+          "Groceries item. Standard handling. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 45, widthCm: 35, heightCm: 25),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: true,
     ),
     IrisRepositoryItem(
@@ -14784,11 +14784,11 @@ class IrisItemRepository {
       requiresVanguard: false,
       requiresIRISReview: false,
       deliveryNotes:
-          "Groceries item. Standard handling. Recommended vehicle: Bike.",
+          "Groceries item. Standard handling. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 45, widthCm: 35, heightCm: 25),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: true,
     ),
     IrisRepositoryItem(
@@ -14806,11 +14806,11 @@ class IrisItemRepository {
       requiresVanguard: false,
       requiresIRISReview: false,
       deliveryNotes:
-          "Groceries item. Standard handling. Recommended vehicle: Bike.",
+          "Groceries item. Standard handling. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 45, widthCm: 35, heightCm: 25),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: true,
     ),
     IrisRepositoryItem(
@@ -14828,11 +14828,11 @@ class IrisItemRepository {
       requiresVanguard: false,
       requiresIRISReview: false,
       deliveryNotes:
-          "Groceries item. Standard handling. Recommended vehicle: Bike.",
+          "Groceries item. Standard handling. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 45, widthCm: 35, heightCm: 25),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: true,
     ),
     IrisRepositoryItem(
@@ -14855,11 +14855,11 @@ class IrisItemRepository {
       requiresVanguard: false,
       requiresIRISReview: false,
       deliveryNotes:
-          "Groceries item. Standard handling. Recommended vehicle: Bike.",
+          "Groceries item. Standard handling. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 45, widthCm: 35, heightCm: 25),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: true,
     ),
     IrisRepositoryItem(
@@ -14882,11 +14882,11 @@ class IrisItemRepository {
       requiresVanguard: false,
       requiresIRISReview: false,
       deliveryNotes:
-          "Groceries item. Standard handling. Recommended vehicle: Bike.",
+          "Groceries item. Standard handling. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 45, widthCm: 35, heightCm: 25),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: true,
     ),
     IrisRepositoryItem(
@@ -14904,11 +14904,11 @@ class IrisItemRepository {
       requiresVanguard: false,
       requiresIRISReview: false,
       deliveryNotes:
-          "Groceries item. Standard handling. Recommended vehicle: Bike.",
+          "Groceries item. Standard handling. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 45, widthCm: 35, heightCm: 25),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: true,
     ),
     IrisRepositoryItem(
@@ -14926,11 +14926,11 @@ class IrisItemRepository {
       requiresVanguard: false,
       requiresIRISReview: false,
       deliveryNotes:
-          "Groceries item. Standard handling. Recommended vehicle: Bike.",
+          "Groceries item. Standard handling. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 45, widthCm: 35, heightCm: 25),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: true,
     ),
     IrisRepositoryItem(
@@ -14948,11 +14948,11 @@ class IrisItemRepository {
       requiresVanguard: false,
       requiresIRISReview: false,
       deliveryNotes:
-          "Groceries item. Standard handling. Recommended vehicle: Bike.",
+          "Groceries item. Standard handling. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 45, widthCm: 35, heightCm: 25),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: true,
     ),
     IrisRepositoryItem(
@@ -14975,11 +14975,11 @@ class IrisItemRepository {
       requiresVanguard: false,
       requiresIRISReview: false,
       deliveryNotes:
-          "Groceries item. Protect from impact. Recommended vehicle: Bike.",
+          "Groceries item. Protect from impact. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 45, widthCm: 35, heightCm: 25),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: false,
     ),
     IrisRepositoryItem(
@@ -15002,11 +15002,11 @@ class IrisItemRepository {
       requiresVanguard: false,
       requiresIRISReview: false,
       deliveryNotes:
-          "Groceries item. Protect from impact. Recommended vehicle: Bike.",
+          "Groceries item. Protect from impact. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 45, widthCm: 35, heightCm: 25),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: false,
     ),
     IrisRepositoryItem(
@@ -15029,11 +15029,11 @@ class IrisItemRepository {
       requiresVanguard: false,
       requiresIRISReview: false,
       deliveryNotes:
-          "Groceries item. Protect from impact. Recommended vehicle: Bike.",
+          "Groceries item. Protect from impact. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 45, widthCm: 35, heightCm: 25),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: false,
     ),
     IrisRepositoryItem(
@@ -15056,11 +15056,11 @@ class IrisItemRepository {
       requiresVanguard: false,
       requiresIRISReview: false,
       deliveryNotes:
-          "Groceries item. Protect from impact. Recommended vehicle: Bike.",
+          "Groceries item. Protect from impact. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 45, widthCm: 35, heightCm: 25),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: false,
     ),
     IrisRepositoryItem(
@@ -15083,11 +15083,11 @@ class IrisItemRepository {
       requiresVanguard: false,
       requiresIRISReview: false,
       deliveryNotes:
-          "Groceries item. Protect from impact. Recommended vehicle: Bike.",
+          "Groceries item. Protect from impact. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 45, widthCm: 35, heightCm: 25),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: false,
     ),
     IrisRepositoryItem(
@@ -15110,11 +15110,11 @@ class IrisItemRepository {
       requiresVanguard: false,
       requiresIRISReview: false,
       deliveryNotes:
-          "Groceries item. Protect from impact. Recommended vehicle: Bike.",
+          "Groceries item. Protect from impact. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 45, widthCm: 35, heightCm: 25),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: false,
     ),
     IrisRepositoryItem(
@@ -15137,11 +15137,11 @@ class IrisItemRepository {
       requiresVanguard: false,
       requiresIRISReview: false,
       deliveryNotes:
-          "Groceries item. Protect from impact. Recommended vehicle: Bike.",
+          "Groceries item. Protect from impact. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 45, widthCm: 35, heightCm: 25),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: false,
     ),
     IrisRepositoryItem(
@@ -15164,11 +15164,11 @@ class IrisItemRepository {
       requiresVanguard: false,
       requiresIRISReview: false,
       deliveryNotes:
-          "Groceries item. Protect from impact. Recommended vehicle: Bike.",
+          "Groceries item. Protect from impact. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 45, widthCm: 35, heightCm: 25),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: false,
     ),
     IrisRepositoryItem(
@@ -15191,11 +15191,11 @@ class IrisItemRepository {
       requiresVanguard: false,
       requiresIRISReview: false,
       deliveryNotes:
-          "Groceries item. Protect from impact. Recommended vehicle: Bike.",
+          "Groceries item. Protect from impact. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 45, widthCm: 35, heightCm: 25),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: false,
     ),
     IrisRepositoryItem(
@@ -15218,11 +15218,11 @@ class IrisItemRepository {
       requiresVanguard: false,
       requiresIRISReview: false,
       deliveryNotes:
-          "Groceries item. Protect from impact. Recommended vehicle: Bike.",
+          "Groceries item. Protect from impact. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 45, widthCm: 35, heightCm: 25),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: false,
     ),
     IrisRepositoryItem(
@@ -15515,11 +15515,11 @@ class IrisItemRepository {
       requiresVanguard: true,
       requiresIRISReview: false,
       deliveryNotes:
-          "Health+ item. Protect from impact. Recommended vehicle: Bike.",
+          "Health+ item. Protect from impact. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 25, widthCm: 18, heightCm: 8),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: false,
     ),
     IrisRepositoryItem(
@@ -15542,11 +15542,11 @@ class IrisItemRepository {
       requiresVanguard: true,
       requiresIRISReview: false,
       deliveryNotes:
-          "Health+ item. Protect from impact. Recommended vehicle: Bike.",
+          "Health+ item. Protect from impact. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 25, widthCm: 18, heightCm: 8),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: false,
     ),
     IrisRepositoryItem(
@@ -15569,11 +15569,11 @@ class IrisItemRepository {
       requiresVanguard: true,
       requiresIRISReview: false,
       deliveryNotes:
-          "Health+ item. Protect from impact. Recommended vehicle: Bike.",
+          "Health+ item. Protect from impact. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 25, widthCm: 18, heightCm: 8),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: false,
     ),
     IrisRepositoryItem(
@@ -15596,11 +15596,11 @@ class IrisItemRepository {
       requiresVanguard: true,
       requiresIRISReview: false,
       deliveryNotes:
-          "Health+ item. Protect from impact. Recommended vehicle: Bike.",
+          "Health+ item. Protect from impact. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 25, widthCm: 18, heightCm: 8),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: false,
     ),
     IrisRepositoryItem(
@@ -15623,11 +15623,11 @@ class IrisItemRepository {
       requiresVanguard: true,
       requiresIRISReview: false,
       deliveryNotes:
-          "Health+ item. Protect from impact. Recommended vehicle: Bike.",
+          "Health+ item. Protect from impact. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 25, widthCm: 18, heightCm: 8),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: false,
     ),
     IrisRepositoryItem(
@@ -15650,11 +15650,11 @@ class IrisItemRepository {
       requiresVanguard: true,
       requiresIRISReview: false,
       deliveryNotes:
-          "Health+ item. Protect from impact. Recommended vehicle: Bike.",
+          "Health+ item. Protect from impact. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 25, widthCm: 18, heightCm: 8),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: false,
     ),
     IrisRepositoryItem(
@@ -15677,11 +15677,11 @@ class IrisItemRepository {
       requiresVanguard: true,
       requiresIRISReview: false,
       deliveryNotes:
-          "Health+ item. Protect from impact. Recommended vehicle: Bike.",
+          "Health+ item. Protect from impact. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 25, widthCm: 18, heightCm: 8),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: false,
     ),
     IrisRepositoryItem(
@@ -15704,11 +15704,11 @@ class IrisItemRepository {
       requiresVanguard: true,
       requiresIRISReview: false,
       deliveryNotes:
-          "Health+ item. Protect from impact. Recommended vehicle: Bike.",
+          "Health+ item. Protect from impact. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 25, widthCm: 18, heightCm: 8),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: false,
     ),
     IrisRepositoryItem(
@@ -15731,11 +15731,11 @@ class IrisItemRepository {
       requiresVanguard: true,
       requiresIRISReview: false,
       deliveryNotes:
-          "Health+ item. Protect from impact. Recommended vehicle: Bike.",
+          "Health+ item. Protect from impact. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 25, widthCm: 18, heightCm: 8),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: false,
     ),
     IrisRepositoryItem(
@@ -15758,11 +15758,11 @@ class IrisItemRepository {
       requiresVanguard: true,
       requiresIRISReview: false,
       deliveryNotes:
-          "Health+ item. Protect from impact. Recommended vehicle: Bike.",
+          "Health+ item. Protect from impact. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 25, widthCm: 18, heightCm: 8),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: false,
     ),
     IrisRepositoryItem(
@@ -15785,11 +15785,11 @@ class IrisItemRepository {
       requiresVanguard: true,
       requiresIRISReview: false,
       deliveryNotes:
-          "Health+ item. Protect from impact. Recommended vehicle: Bike.",
+          "Health+ item. Protect from impact. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 25, widthCm: 18, heightCm: 8),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: false,
     ),
     IrisRepositoryItem(
@@ -15812,11 +15812,11 @@ class IrisItemRepository {
       requiresVanguard: true,
       requiresIRISReview: false,
       deliveryNotes:
-          "Health+ item. Protect from impact. Recommended vehicle: Bike.",
+          "Health+ item. Protect from impact. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 25, widthCm: 18, heightCm: 8),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: false,
     ),
     IrisRepositoryItem(
@@ -15839,11 +15839,11 @@ class IrisItemRepository {
       requiresVanguard: true,
       requiresIRISReview: false,
       deliveryNotes:
-          "Health+ item. Protect from impact. Recommended vehicle: Bike.",
+          "Health+ item. Protect from impact. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 25, widthCm: 18, heightCm: 8),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: false,
     ),
     IrisRepositoryItem(
@@ -15866,11 +15866,11 @@ class IrisItemRepository {
       requiresVanguard: true,
       requiresIRISReview: false,
       deliveryNotes:
-          "Health+ item. Protect from impact. Recommended vehicle: Bike.",
+          "Health+ item. Protect from impact. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 25, widthCm: 18, heightCm: 8),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: false,
     ),
     IrisRepositoryItem(
@@ -15893,11 +15893,11 @@ class IrisItemRepository {
       requiresVanguard: true,
       requiresIRISReview: false,
       deliveryNotes:
-          "Health+ item. Protect from impact. Recommended vehicle: Bike.",
+          "Health+ item. Protect from impact. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 25, widthCm: 18, heightCm: 8),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: false,
     ),
     IrisRepositoryItem(
@@ -15920,11 +15920,11 @@ class IrisItemRepository {
       requiresVanguard: true,
       requiresIRISReview: false,
       deliveryNotes:
-          "Health+ item. Protect from impact. Recommended vehicle: Bike.",
+          "Health+ item. Protect from impact. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 25, widthCm: 18, heightCm: 8),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: false,
     ),
     IrisRepositoryItem(
@@ -15947,11 +15947,11 @@ class IrisItemRepository {
       requiresVanguard: true,
       requiresIRISReview: false,
       deliveryNotes:
-          "Health+ item. Protect from impact. Recommended vehicle: Bike.",
+          "Health+ item. Protect from impact. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 25, widthCm: 18, heightCm: 8),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: false,
     ),
     IrisRepositoryItem(
@@ -15974,11 +15974,11 @@ class IrisItemRepository {
       requiresVanguard: true,
       requiresIRISReview: false,
       deliveryNotes:
-          "Health+ item. Protect from impact. Recommended vehicle: Bike.",
+          "Health+ item. Protect from impact. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 25, widthCm: 18, heightCm: 8),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: false,
     ),
     IrisRepositoryItem(
@@ -16001,11 +16001,11 @@ class IrisItemRepository {
       requiresVanguard: true,
       requiresIRISReview: false,
       deliveryNotes:
-          "Health+ item. Protect from impact. Recommended vehicle: Bike.",
+          "Health+ item. Protect from impact. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 25, widthCm: 18, heightCm: 8),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: false,
     ),
     IrisRepositoryItem(
@@ -16028,11 +16028,11 @@ class IrisItemRepository {
       requiresVanguard: true,
       requiresIRISReview: false,
       deliveryNotes:
-          "Health+ item. Protect from impact. Recommended vehicle: Bike.",
+          "Health+ item. Protect from impact. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 25, widthCm: 18, heightCm: 8),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: false,
     ),
     IrisRepositoryItem(
@@ -16055,11 +16055,11 @@ class IrisItemRepository {
       requiresVanguard: false,
       requiresIRISReview: false,
       deliveryNotes:
-          "Health+ item. Protect from impact. Recommended vehicle: Bike.",
+          "Health+ item. Protect from impact. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 45, widthCm: 35, heightCm: 25),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: false,
     ),
     IrisRepositoryItem(
@@ -16082,11 +16082,11 @@ class IrisItemRepository {
       requiresVanguard: false,
       requiresIRISReview: false,
       deliveryNotes:
-          "Health+ item. Protect from impact. Recommended vehicle: Bike.",
+          "Health+ item. Protect from impact. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 45, widthCm: 35, heightCm: 25),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: false,
     ),
     IrisRepositoryItem(
@@ -16109,11 +16109,11 @@ class IrisItemRepository {
       requiresVanguard: false,
       requiresIRISReview: false,
       deliveryNotes:
-          "Health+ item. Protect from impact. Recommended vehicle: Bike.",
+          "Health+ item. Protect from impact. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 45, widthCm: 35, heightCm: 25),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: false,
     ),
     IrisRepositoryItem(
@@ -16136,11 +16136,11 @@ class IrisItemRepository {
       requiresVanguard: false,
       requiresIRISReview: false,
       deliveryNotes:
-          "Health+ item. Protect from impact. Recommended vehicle: Bike.",
+          "Health+ item. Protect from impact. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 45, widthCm: 35, heightCm: 25),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: false,
     ),
     IrisRepositoryItem(
@@ -16163,11 +16163,11 @@ class IrisItemRepository {
       requiresVanguard: false,
       requiresIRISReview: false,
       deliveryNotes:
-          "Health+ item. Protect from impact. Recommended vehicle: Bike.",
+          "Health+ item. Protect from impact. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 45, widthCm: 35, heightCm: 25),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: false,
     ),
     IrisRepositoryItem(
@@ -16190,11 +16190,11 @@ class IrisItemRepository {
       requiresVanguard: false,
       requiresIRISReview: false,
       deliveryNotes:
-          "Health+ item. Protect from impact. Recommended vehicle: Bike.",
+          "Health+ item. Protect from impact. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 45, widthCm: 35, heightCm: 25),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: false,
     ),
     IrisRepositoryItem(
@@ -16217,11 +16217,11 @@ class IrisItemRepository {
       requiresVanguard: false,
       requiresIRISReview: false,
       deliveryNotes:
-          "Health+ item. Protect from impact. Recommended vehicle: Bike.",
+          "Health+ item. Protect from impact. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 45, widthCm: 35, heightCm: 25),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: false,
     ),
     IrisRepositoryItem(
@@ -16244,11 +16244,11 @@ class IrisItemRepository {
       requiresVanguard: false,
       requiresIRISReview: false,
       deliveryNotes:
-          "Health+ item. Protect from impact. Recommended vehicle: Bike.",
+          "Health+ item. Protect from impact. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 45, widthCm: 35, heightCm: 25),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: false,
     ),
     IrisRepositoryItem(
@@ -16271,11 +16271,11 @@ class IrisItemRepository {
       requiresVanguard: false,
       requiresIRISReview: false,
       deliveryNotes:
-          "Health+ item. Protect from impact. Recommended vehicle: Bike.",
+          "Health+ item. Protect from impact. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 45, widthCm: 35, heightCm: 25),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: false,
     ),
     IrisRepositoryItem(
@@ -16298,11 +16298,11 @@ class IrisItemRepository {
       requiresVanguard: false,
       requiresIRISReview: false,
       deliveryNotes:
-          "Health+ item. Protect from impact. Recommended vehicle: Bike.",
+          "Health+ item. Protect from impact. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 45, widthCm: 35, heightCm: 25),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: false,
     ),
     IrisRepositoryItem(
@@ -16325,11 +16325,11 @@ class IrisItemRepository {
       requiresVanguard: false,
       requiresIRISReview: false,
       deliveryNotes:
-          "Health+ item. Standard handling. Recommended vehicle: Bike.",
+          "Health+ item. Standard handling. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 45, widthCm: 35, heightCm: 25),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: true,
     ),
     IrisRepositoryItem(
@@ -16352,11 +16352,11 @@ class IrisItemRepository {
       requiresVanguard: false,
       requiresIRISReview: false,
       deliveryNotes:
-          "Health+ item. Standard handling. Recommended vehicle: Bike.",
+          "Health+ item. Standard handling. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 45, widthCm: 35, heightCm: 25),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: true,
     ),
     IrisRepositoryItem(
@@ -16379,11 +16379,11 @@ class IrisItemRepository {
       requiresVanguard: false,
       requiresIRISReview: false,
       deliveryNotes:
-          "Health+ item. Standard handling. Recommended vehicle: Bike.",
+          "Health+ item. Standard handling. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 45, widthCm: 35, heightCm: 25),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: true,
     ),
     IrisRepositoryItem(
@@ -16406,11 +16406,11 @@ class IrisItemRepository {
       requiresVanguard: false,
       requiresIRISReview: false,
       deliveryNotes:
-          "Health+ item. Standard handling. Recommended vehicle: Bike.",
+          "Health+ item. Standard handling. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 45, widthCm: 35, heightCm: 25),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: true,
     ),
     IrisRepositoryItem(
@@ -16433,11 +16433,11 @@ class IrisItemRepository {
       requiresVanguard: false,
       requiresIRISReview: false,
       deliveryNotes:
-          "Health+ item. Standard handling. Recommended vehicle: Bike.",
+          "Health+ item. Standard handling. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 45, widthCm: 35, heightCm: 25),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: true,
     ),
     IrisRepositoryItem(
@@ -16460,11 +16460,11 @@ class IrisItemRepository {
       requiresVanguard: false,
       requiresIRISReview: false,
       deliveryNotes:
-          "Health+ item. Standard handling. Recommended vehicle: Bike.",
+          "Health+ item. Standard handling. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 45, widthCm: 35, heightCm: 25),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: true,
     ),
     IrisRepositoryItem(
@@ -16487,11 +16487,11 @@ class IrisItemRepository {
       requiresVanguard: false,
       requiresIRISReview: false,
       deliveryNotes:
-          "Health+ item. Standard handling. Recommended vehicle: Bike.",
+          "Health+ item. Standard handling. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 45, widthCm: 35, heightCm: 25),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: true,
     ),
     IrisRepositoryItem(
@@ -16514,11 +16514,11 @@ class IrisItemRepository {
       requiresVanguard: false,
       requiresIRISReview: false,
       deliveryNotes:
-          "Health+ item. Standard handling. Recommended vehicle: Bike.",
+          "Health+ item. Standard handling. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 45, widthCm: 35, heightCm: 25),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: true,
     ),
     IrisRepositoryItem(
@@ -16541,11 +16541,11 @@ class IrisItemRepository {
       requiresVanguard: false,
       requiresIRISReview: false,
       deliveryNotes:
-          "Health+ item. Standard handling. Recommended vehicle: Bike.",
+          "Health+ item. Standard handling. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 45, widthCm: 35, heightCm: 25),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: true,
     ),
     IrisRepositoryItem(
@@ -16568,11 +16568,11 @@ class IrisItemRepository {
       requiresVanguard: false,
       requiresIRISReview: false,
       deliveryNotes:
-          "Health+ item. Standard handling. Recommended vehicle: Bike.",
+          "Health+ item. Standard handling. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 45, widthCm: 35, heightCm: 25),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: true,
     ),
     IrisRepositoryItem(
@@ -16595,11 +16595,11 @@ class IrisItemRepository {
       requiresVanguard: false,
       requiresIRISReview: false,
       deliveryNotes:
-          "Health+ item. Protect from impact. Recommended vehicle: Bike.",
+          "Health+ item. Protect from impact. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 25, widthCm: 18, heightCm: 8),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: false,
     ),
     IrisRepositoryItem(
@@ -16622,11 +16622,11 @@ class IrisItemRepository {
       requiresVanguard: false,
       requiresIRISReview: false,
       deliveryNotes:
-          "Health+ item. Protect from impact. Recommended vehicle: Bike.",
+          "Health+ item. Protect from impact. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 25, widthCm: 18, heightCm: 8),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: false,
     ),
     IrisRepositoryItem(
@@ -16649,11 +16649,11 @@ class IrisItemRepository {
       requiresVanguard: false,
       requiresIRISReview: false,
       deliveryNotes:
-          "Health+ item. Protect from impact. Recommended vehicle: Bike.",
+          "Health+ item. Protect from impact. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 25, widthCm: 18, heightCm: 8),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: false,
     ),
     IrisRepositoryItem(
@@ -16676,11 +16676,11 @@ class IrisItemRepository {
       requiresVanguard: false,
       requiresIRISReview: false,
       deliveryNotes:
-          "Health+ item. Protect from impact. Recommended vehicle: Bike.",
+          "Health+ item. Protect from impact. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 25, widthCm: 18, heightCm: 8),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: false,
     ),
     IrisRepositoryItem(
@@ -16703,11 +16703,11 @@ class IrisItemRepository {
       requiresVanguard: false,
       requiresIRISReview: false,
       deliveryNotes:
-          "Health+ item. Protect from impact. Recommended vehicle: Bike.",
+          "Health+ item. Protect from impact. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 25, widthCm: 18, heightCm: 8),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: false,
     ),
     IrisRepositoryItem(
@@ -16730,11 +16730,11 @@ class IrisItemRepository {
       requiresVanguard: false,
       requiresIRISReview: false,
       deliveryNotes:
-          "Health+ item. Protect from impact. Recommended vehicle: Bike.",
+          "Health+ item. Protect from impact. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 25, widthCm: 18, heightCm: 8),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: false,
     ),
     IrisRepositoryItem(
@@ -16757,11 +16757,11 @@ class IrisItemRepository {
       requiresVanguard: false,
       requiresIRISReview: false,
       deliveryNotes:
-          "Health+ item. Protect from impact. Recommended vehicle: Bike.",
+          "Health+ item. Protect from impact. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 25, widthCm: 18, heightCm: 8),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: false,
     ),
     IrisRepositoryItem(
@@ -16784,11 +16784,11 @@ class IrisItemRepository {
       requiresVanguard: false,
       requiresIRISReview: false,
       deliveryNotes:
-          "Health+ item. Protect from impact. Recommended vehicle: Bike.",
+          "Health+ item. Protect from impact. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 25, widthCm: 18, heightCm: 8),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: false,
     ),
     IrisRepositoryItem(
@@ -16811,11 +16811,11 @@ class IrisItemRepository {
       requiresVanguard: false,
       requiresIRISReview: false,
       deliveryNotes:
-          "Health+ item. Protect from impact. Recommended vehicle: Bike.",
+          "Health+ item. Protect from impact. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 25, widthCm: 18, heightCm: 8),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: false,
     ),
     IrisRepositoryItem(
@@ -16838,11 +16838,11 @@ class IrisItemRepository {
       requiresVanguard: false,
       requiresIRISReview: false,
       deliveryNotes:
-          "Health+ item. Protect from impact. Recommended vehicle: Bike.",
+          "Health+ item. Protect from impact. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 25, widthCm: 18, heightCm: 8),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: false,
     ),
     IrisRepositoryItem(
@@ -17135,11 +17135,11 @@ class IrisItemRepository {
       requiresVanguard: false,
       requiresIRISReview: false,
       deliveryNotes:
-          "Health+ item. Protect from impact. Recommended vehicle: Bike.",
+          "Health+ item. Protect from impact. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 25, widthCm: 18, heightCm: 8),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: false,
     ),
     IrisRepositoryItem(
@@ -17162,11 +17162,11 @@ class IrisItemRepository {
       requiresVanguard: false,
       requiresIRISReview: false,
       deliveryNotes:
-          "Health+ item. Protect from impact. Recommended vehicle: Bike.",
+          "Health+ item. Protect from impact. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 25, widthCm: 18, heightCm: 8),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: false,
     ),
     IrisRepositoryItem(
@@ -17189,11 +17189,11 @@ class IrisItemRepository {
       requiresVanguard: false,
       requiresIRISReview: false,
       deliveryNotes:
-          "Health+ item. Protect from impact. Recommended vehicle: Bike.",
+          "Health+ item. Protect from impact. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 25, widthCm: 18, heightCm: 8),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: false,
     ),
     IrisRepositoryItem(
@@ -17216,11 +17216,11 @@ class IrisItemRepository {
       requiresVanguard: false,
       requiresIRISReview: false,
       deliveryNotes:
-          "Health+ item. Protect from impact. Recommended vehicle: Bike.",
+          "Health+ item. Protect from impact. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 25, widthCm: 18, heightCm: 8),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: false,
     ),
     IrisRepositoryItem(
@@ -17243,11 +17243,11 @@ class IrisItemRepository {
       requiresVanguard: false,
       requiresIRISReview: false,
       deliveryNotes:
-          "Health+ item. Protect from impact. Recommended vehicle: Bike.",
+          "Health+ item. Protect from impact. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 25, widthCm: 18, heightCm: 8),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: false,
     ),
     IrisRepositoryItem(
@@ -17270,11 +17270,11 @@ class IrisItemRepository {
       requiresVanguard: false,
       requiresIRISReview: false,
       deliveryNotes:
-          "Health+ item. Protect from impact. Recommended vehicle: Bike.",
+          "Health+ item. Protect from impact. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 25, widthCm: 18, heightCm: 8),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: false,
     ),
     IrisRepositoryItem(
@@ -17297,11 +17297,11 @@ class IrisItemRepository {
       requiresVanguard: false,
       requiresIRISReview: false,
       deliveryNotes:
-          "Health+ item. Protect from impact. Recommended vehicle: Bike.",
+          "Health+ item. Protect from impact. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 25, widthCm: 18, heightCm: 8),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: false,
     ),
     IrisRepositoryItem(
@@ -17324,11 +17324,11 @@ class IrisItemRepository {
       requiresVanguard: false,
       requiresIRISReview: false,
       deliveryNotes:
-          "Health+ item. Protect from impact. Recommended vehicle: Bike.",
+          "Health+ item. Protect from impact. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 25, widthCm: 18, heightCm: 8),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: false,
     ),
     IrisRepositoryItem(
@@ -17351,11 +17351,11 @@ class IrisItemRepository {
       requiresVanguard: false,
       requiresIRISReview: false,
       deliveryNotes:
-          "Health+ item. Protect from impact. Recommended vehicle: Bike.",
+          "Health+ item. Protect from impact. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 25, widthCm: 18, heightCm: 8),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: false,
     ),
     IrisRepositoryItem(
@@ -17378,11 +17378,11 @@ class IrisItemRepository {
       requiresVanguard: false,
       requiresIRISReview: false,
       deliveryNotes:
-          "Health+ item. Protect from impact. Recommended vehicle: Bike.",
+          "Health+ item. Protect from impact. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 25, widthCm: 18, heightCm: 8),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: false,
     ),
     IrisRepositoryItem(
@@ -18215,11 +18215,11 @@ class IrisItemRepository {
       requiresVanguard: false,
       requiresIRISReview: false,
       deliveryNotes:
-          "Airport item. Protect from impact. Recommended vehicle: Bike.",
+          "Airport item. Protect from impact. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 25, widthCm: 18, heightCm: 8),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: false,
     ),
     IrisRepositoryItem(
@@ -18242,11 +18242,11 @@ class IrisItemRepository {
       requiresVanguard: false,
       requiresIRISReview: false,
       deliveryNotes:
-          "Airport item. Protect from impact. Recommended vehicle: Bike.",
+          "Airport item. Protect from impact. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 25, widthCm: 18, heightCm: 8),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: false,
     ),
     IrisRepositoryItem(
@@ -18269,11 +18269,11 @@ class IrisItemRepository {
       requiresVanguard: false,
       requiresIRISReview: false,
       deliveryNotes:
-          "Airport item. Protect from impact. Recommended vehicle: Bike.",
+          "Airport item. Protect from impact. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 25, widthCm: 18, heightCm: 8),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: false,
     ),
     IrisRepositoryItem(
@@ -18296,11 +18296,11 @@ class IrisItemRepository {
       requiresVanguard: false,
       requiresIRISReview: false,
       deliveryNotes:
-          "Airport item. Protect from impact. Recommended vehicle: Bike.",
+          "Airport item. Protect from impact. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 25, widthCm: 18, heightCm: 8),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: false,
     ),
     IrisRepositoryItem(
@@ -18323,11 +18323,11 @@ class IrisItemRepository {
       requiresVanguard: false,
       requiresIRISReview: false,
       deliveryNotes:
-          "Airport item. Protect from impact. Recommended vehicle: Bike.",
+          "Airport item. Protect from impact. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 25, widthCm: 18, heightCm: 8),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: false,
     ),
     IrisRepositoryItem(
@@ -18350,11 +18350,11 @@ class IrisItemRepository {
       requiresVanguard: false,
       requiresIRISReview: false,
       deliveryNotes:
-          "Airport item. Protect from impact. Recommended vehicle: Bike.",
+          "Airport item. Protect from impact. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 25, widthCm: 18, heightCm: 8),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: false,
     ),
     IrisRepositoryItem(
@@ -18377,11 +18377,11 @@ class IrisItemRepository {
       requiresVanguard: false,
       requiresIRISReview: false,
       deliveryNotes:
-          "Airport item. Protect from impact. Recommended vehicle: Bike.",
+          "Airport item. Protect from impact. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 25, widthCm: 18, heightCm: 8),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: false,
     ),
     IrisRepositoryItem(
@@ -18404,11 +18404,11 @@ class IrisItemRepository {
       requiresVanguard: false,
       requiresIRISReview: false,
       deliveryNotes:
-          "Airport item. Protect from impact. Recommended vehicle: Bike.",
+          "Airport item. Protect from impact. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 25, widthCm: 18, heightCm: 8),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: false,
     ),
     IrisRepositoryItem(
@@ -18431,11 +18431,11 @@ class IrisItemRepository {
       requiresVanguard: false,
       requiresIRISReview: false,
       deliveryNotes:
-          "Airport item. Protect from impact. Recommended vehicle: Bike.",
+          "Airport item. Protect from impact. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 25, widthCm: 18, heightCm: 8),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: false,
     ),
     IrisRepositoryItem(
@@ -18458,11 +18458,11 @@ class IrisItemRepository {
       requiresVanguard: false,
       requiresIRISReview: false,
       deliveryNotes:
-          "Airport item. Protect from impact. Recommended vehicle: Bike.",
+          "Airport item. Protect from impact. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 25, widthCm: 18, heightCm: 8),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: false,
     ),
     IrisRepositoryItem(
@@ -18485,11 +18485,11 @@ class IrisItemRepository {
       requiresVanguard: true,
       requiresIRISReview: false,
       deliveryNotes:
-          "Airport item. Protect from impact. Recommended vehicle: Bike.",
+          "Airport item. Protect from impact. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 25, widthCm: 18, heightCm: 8),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: false,
     ),
     IrisRepositoryItem(
@@ -18512,11 +18512,11 @@ class IrisItemRepository {
       requiresVanguard: true,
       requiresIRISReview: false,
       deliveryNotes:
-          "Airport item. Protect from impact. Recommended vehicle: Bike.",
+          "Airport item. Protect from impact. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 25, widthCm: 18, heightCm: 8),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: false,
     ),
     IrisRepositoryItem(
@@ -18539,11 +18539,11 @@ class IrisItemRepository {
       requiresVanguard: true,
       requiresIRISReview: false,
       deliveryNotes:
-          "Airport item. Protect from impact. Recommended vehicle: Bike.",
+          "Airport item. Protect from impact. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 25, widthCm: 18, heightCm: 8),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: false,
     ),
     IrisRepositoryItem(
@@ -18566,11 +18566,11 @@ class IrisItemRepository {
       requiresVanguard: true,
       requiresIRISReview: false,
       deliveryNotes:
-          "Airport item. Protect from impact. Recommended vehicle: Bike.",
+          "Airport item. Protect from impact. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 25, widthCm: 18, heightCm: 8),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: false,
     ),
     IrisRepositoryItem(
@@ -18593,11 +18593,11 @@ class IrisItemRepository {
       requiresVanguard: true,
       requiresIRISReview: false,
       deliveryNotes:
-          "Airport item. Protect from impact. Recommended vehicle: Bike.",
+          "Airport item. Protect from impact. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 25, widthCm: 18, heightCm: 8),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: false,
     ),
     IrisRepositoryItem(
@@ -18620,11 +18620,11 @@ class IrisItemRepository {
       requiresVanguard: true,
       requiresIRISReview: false,
       deliveryNotes:
-          "Airport item. Protect from impact. Recommended vehicle: Bike.",
+          "Airport item. Protect from impact. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 25, widthCm: 18, heightCm: 8),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: false,
     ),
     IrisRepositoryItem(
@@ -18647,11 +18647,11 @@ class IrisItemRepository {
       requiresVanguard: true,
       requiresIRISReview: false,
       deliveryNotes:
-          "Airport item. Protect from impact. Recommended vehicle: Bike.",
+          "Airport item. Protect from impact. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 25, widthCm: 18, heightCm: 8),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: false,
     ),
     IrisRepositoryItem(
@@ -18674,11 +18674,11 @@ class IrisItemRepository {
       requiresVanguard: true,
       requiresIRISReview: false,
       deliveryNotes:
-          "Airport item. Protect from impact. Recommended vehicle: Bike.",
+          "Airport item. Protect from impact. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 25, widthCm: 18, heightCm: 8),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: false,
     ),
     IrisRepositoryItem(
@@ -18701,11 +18701,11 @@ class IrisItemRepository {
       requiresVanguard: true,
       requiresIRISReview: false,
       deliveryNotes:
-          "Airport item. Protect from impact. Recommended vehicle: Bike.",
+          "Airport item. Protect from impact. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 25, widthCm: 18, heightCm: 8),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: false,
     ),
     IrisRepositoryItem(
@@ -18728,11 +18728,11 @@ class IrisItemRepository {
       requiresVanguard: true,
       requiresIRISReview: false,
       deliveryNotes:
-          "Airport item. Protect from impact. Recommended vehicle: Bike.",
+          "Airport item. Protect from impact. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 25, widthCm: 18, heightCm: 8),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: false,
     ),
     IrisRepositoryItem(
@@ -19290,11 +19290,11 @@ class IrisItemRepository {
       requiresVanguard: false,
       requiresIRISReview: false,
       deliveryNotes:
-          "Gifts item. Protect from impact. Recommended vehicle: Bike.",
+          "Gifts item. Protect from impact. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 45, widthCm: 35, heightCm: 25),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: false,
     ),
     IrisRepositoryItem(
@@ -19317,11 +19317,11 @@ class IrisItemRepository {
       requiresVanguard: false,
       requiresIRISReview: false,
       deliveryNotes:
-          "Gifts item. Protect from impact. Recommended vehicle: Bike.",
+          "Gifts item. Protect from impact. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 45, widthCm: 35, heightCm: 25),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: false,
     ),
     IrisRepositoryItem(
@@ -19339,11 +19339,11 @@ class IrisItemRepository {
       requiresVanguard: false,
       requiresIRISReview: false,
       deliveryNotes:
-          "Gifts item. Protect from impact. Recommended vehicle: Bike.",
+          "Gifts item. Protect from impact. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 45, widthCm: 35, heightCm: 25),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: false,
     ),
     IrisRepositoryItem(
@@ -19361,11 +19361,11 @@ class IrisItemRepository {
       requiresVanguard: false,
       requiresIRISReview: false,
       deliveryNotes:
-          "Gifts item. Protect from impact. Recommended vehicle: Bike.",
+          "Gifts item. Protect from impact. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 45, widthCm: 35, heightCm: 25),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: false,
     ),
     IrisRepositoryItem(
@@ -19383,11 +19383,11 @@ class IrisItemRepository {
       requiresVanguard: false,
       requiresIRISReview: false,
       deliveryNotes:
-          "Gifts item. Protect from impact. Recommended vehicle: Bike.",
+          "Gifts item. Protect from impact. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 45, widthCm: 35, heightCm: 25),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: false,
     ),
     IrisRepositoryItem(
@@ -19405,11 +19405,11 @@ class IrisItemRepository {
       requiresVanguard: false,
       requiresIRISReview: false,
       deliveryNotes:
-          "Gifts item. Protect from impact. Recommended vehicle: Bike.",
+          "Gifts item. Protect from impact. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 45, widthCm: 35, heightCm: 25),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: false,
     ),
     IrisRepositoryItem(
@@ -19427,11 +19427,11 @@ class IrisItemRepository {
       requiresVanguard: false,
       requiresIRISReview: false,
       deliveryNotes:
-          "Gifts item. Protect from impact. Recommended vehicle: Bike.",
+          "Gifts item. Protect from impact. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 45, widthCm: 35, heightCm: 25),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: false,
     ),
     IrisRepositoryItem(
@@ -19449,11 +19449,11 @@ class IrisItemRepository {
       requiresVanguard: false,
       requiresIRISReview: false,
       deliveryNotes:
-          "Gifts item. Protect from impact. Recommended vehicle: Bike.",
+          "Gifts item. Protect from impact. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 45, widthCm: 35, heightCm: 25),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: false,
     ),
     IrisRepositoryItem(
@@ -19471,11 +19471,11 @@ class IrisItemRepository {
       requiresVanguard: false,
       requiresIRISReview: false,
       deliveryNotes:
-          "Gifts item. Protect from impact. Recommended vehicle: Bike.",
+          "Gifts item. Protect from impact. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 45, widthCm: 35, heightCm: 25),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: false,
     ),
     IrisRepositoryItem(
@@ -19498,11 +19498,11 @@ class IrisItemRepository {
       requiresVanguard: false,
       requiresIRISReview: false,
       deliveryNotes:
-          "Gifts item. Protect from impact. Recommended vehicle: Bike.",
+          "Gifts item. Protect from impact. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 45, widthCm: 35, heightCm: 25),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: false,
     ),
     IrisRepositoryItem(
@@ -19520,11 +19520,11 @@ class IrisItemRepository {
       requiresVanguard: false,
       requiresIRISReview: false,
       deliveryNotes:
-          "Gifts item. Protect from impact. Recommended vehicle: Bike.",
+          "Gifts item. Protect from impact. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 25, widthCm: 18, heightCm: 8),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: false,
     ),
     IrisRepositoryItem(
@@ -19542,11 +19542,11 @@ class IrisItemRepository {
       requiresVanguard: false,
       requiresIRISReview: false,
       deliveryNotes:
-          "Gifts item. Protect from impact. Recommended vehicle: Bike.",
+          "Gifts item. Protect from impact. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 25, widthCm: 18, heightCm: 8),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: false,
     ),
     IrisRepositoryItem(
@@ -19564,11 +19564,11 @@ class IrisItemRepository {
       requiresVanguard: false,
       requiresIRISReview: false,
       deliveryNotes:
-          "Gifts item. Protect from impact. Recommended vehicle: Bike.",
+          "Gifts item. Protect from impact. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 25, widthCm: 18, heightCm: 8),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: false,
     ),
     IrisRepositoryItem(
@@ -19586,11 +19586,11 @@ class IrisItemRepository {
       requiresVanguard: false,
       requiresIRISReview: false,
       deliveryNotes:
-          "Gifts item. Protect from impact. Recommended vehicle: Bike.",
+          "Gifts item. Protect from impact. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 25, widthCm: 18, heightCm: 8),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: false,
     ),
     IrisRepositoryItem(
@@ -19608,11 +19608,11 @@ class IrisItemRepository {
       requiresVanguard: false,
       requiresIRISReview: false,
       deliveryNotes:
-          "Gifts item. Protect from impact. Recommended vehicle: Bike.",
+          "Gifts item. Protect from impact. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 25, widthCm: 18, heightCm: 8),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: false,
     ),
     IrisRepositoryItem(
@@ -19630,11 +19630,11 @@ class IrisItemRepository {
       requiresVanguard: false,
       requiresIRISReview: false,
       deliveryNotes:
-          "Gifts item. Protect from impact. Recommended vehicle: Bike.",
+          "Gifts item. Protect from impact. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 25, widthCm: 18, heightCm: 8),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: false,
     ),
     IrisRepositoryItem(
@@ -19652,11 +19652,11 @@ class IrisItemRepository {
       requiresVanguard: false,
       requiresIRISReview: false,
       deliveryNotes:
-          "Gifts item. Protect from impact. Recommended vehicle: Bike.",
+          "Gifts item. Protect from impact. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 25, widthCm: 18, heightCm: 8),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: false,
     ),
     IrisRepositoryItem(
@@ -19674,11 +19674,11 @@ class IrisItemRepository {
       requiresVanguard: false,
       requiresIRISReview: false,
       deliveryNotes:
-          "Gifts item. Protect from impact. Recommended vehicle: Bike.",
+          "Gifts item. Protect from impact. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 25, widthCm: 18, heightCm: 8),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: false,
     ),
     IrisRepositoryItem(
@@ -19696,11 +19696,11 @@ class IrisItemRepository {
       requiresVanguard: false,
       requiresIRISReview: false,
       deliveryNotes:
-          "Gifts item. Protect from impact. Recommended vehicle: Bike.",
+          "Gifts item. Protect from impact. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 25, widthCm: 18, heightCm: 8),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: false,
     ),
     IrisRepositoryItem(
@@ -19718,11 +19718,11 @@ class IrisItemRepository {
       requiresVanguard: false,
       requiresIRISReview: false,
       deliveryNotes:
-          "Gifts item. Protect from impact. Recommended vehicle: Bike.",
+          "Gifts item. Protect from impact. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 25, widthCm: 18, heightCm: 8),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: false,
     ),
     IrisRepositoryItem(
@@ -19745,11 +19745,11 @@ class IrisItemRepository {
       requiresVanguard: false,
       requiresIRISReview: false,
       deliveryNotes:
-          "Gifts item. Protect from impact. Recommended vehicle: Bike.",
+          "Gifts item. Protect from impact. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 45, widthCm: 35, heightCm: 25),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: false,
     ),
     IrisRepositoryItem(
@@ -19772,11 +19772,11 @@ class IrisItemRepository {
       requiresVanguard: false,
       requiresIRISReview: false,
       deliveryNotes:
-          "Gifts item. Protect from impact. Recommended vehicle: Bike.",
+          "Gifts item. Protect from impact. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 45, widthCm: 35, heightCm: 25),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: false,
     ),
     IrisRepositoryItem(
@@ -19799,11 +19799,11 @@ class IrisItemRepository {
       requiresVanguard: false,
       requiresIRISReview: false,
       deliveryNotes:
-          "Gifts item. Protect from impact. Recommended vehicle: Bike.",
+          "Gifts item. Protect from impact. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 45, widthCm: 35, heightCm: 25),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: false,
     ),
     IrisRepositoryItem(
@@ -19826,11 +19826,11 @@ class IrisItemRepository {
       requiresVanguard: false,
       requiresIRISReview: false,
       deliveryNotes:
-          "Gifts item. Protect from impact. Recommended vehicle: Bike.",
+          "Gifts item. Protect from impact. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 45, widthCm: 35, heightCm: 25),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: false,
     ),
     IrisRepositoryItem(
@@ -19853,11 +19853,11 @@ class IrisItemRepository {
       requiresVanguard: false,
       requiresIRISReview: false,
       deliveryNotes:
-          "Gifts item. Protect from impact. Recommended vehicle: Bike.",
+          "Gifts item. Protect from impact. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 45, widthCm: 35, heightCm: 25),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: false,
     ),
     IrisRepositoryItem(
@@ -19880,11 +19880,11 @@ class IrisItemRepository {
       requiresVanguard: false,
       requiresIRISReview: false,
       deliveryNotes:
-          "Gifts item. Protect from impact. Recommended vehicle: Bike.",
+          "Gifts item. Protect from impact. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 45, widthCm: 35, heightCm: 25),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: false,
     ),
     IrisRepositoryItem(
@@ -19907,11 +19907,11 @@ class IrisItemRepository {
       requiresVanguard: false,
       requiresIRISReview: false,
       deliveryNotes:
-          "Gifts item. Protect from impact. Recommended vehicle: Bike.",
+          "Gifts item. Protect from impact. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 45, widthCm: 35, heightCm: 25),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: false,
     ),
     IrisRepositoryItem(
@@ -19934,11 +19934,11 @@ class IrisItemRepository {
       requiresVanguard: false,
       requiresIRISReview: false,
       deliveryNotes:
-          "Gifts item. Protect from impact. Recommended vehicle: Bike.",
+          "Gifts item. Protect from impact. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 45, widthCm: 35, heightCm: 25),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: false,
     ),
     IrisRepositoryItem(
@@ -19961,11 +19961,11 @@ class IrisItemRepository {
       requiresVanguard: false,
       requiresIRISReview: false,
       deliveryNotes:
-          "Gifts item. Protect from impact. Recommended vehicle: Bike.",
+          "Gifts item. Protect from impact. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 45, widthCm: 35, heightCm: 25),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: false,
     ),
     IrisRepositoryItem(
@@ -19988,11 +19988,11 @@ class IrisItemRepository {
       requiresVanguard: false,
       requiresIRISReview: false,
       deliveryNotes:
-          "Gifts item. Protect from impact. Recommended vehicle: Bike.",
+          "Gifts item. Protect from impact. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 45, widthCm: 35, heightCm: 25),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: false,
     ),
     IrisRepositoryItem(
@@ -20015,11 +20015,11 @@ class IrisItemRepository {
       requiresVanguard: false,
       requiresIRISReview: false,
       deliveryNotes:
-          "Gifts item. Protect from impact. Recommended vehicle: Bike.",
+          "Gifts item. Protect from impact. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 25, widthCm: 18, heightCm: 8),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: false,
     ),
     IrisRepositoryItem(
@@ -20042,11 +20042,11 @@ class IrisItemRepository {
       requiresVanguard: false,
       requiresIRISReview: false,
       deliveryNotes:
-          "Gifts item. Protect from impact. Recommended vehicle: Bike.",
+          "Gifts item. Protect from impact. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 25, widthCm: 18, heightCm: 8),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: false,
     ),
     IrisRepositoryItem(
@@ -20069,11 +20069,11 @@ class IrisItemRepository {
       requiresVanguard: false,
       requiresIRISReview: false,
       deliveryNotes:
-          "Gifts item. Protect from impact. Recommended vehicle: Bike.",
+          "Gifts item. Protect from impact. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 25, widthCm: 18, heightCm: 8),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: false,
     ),
     IrisRepositoryItem(
@@ -20096,11 +20096,11 @@ class IrisItemRepository {
       requiresVanguard: false,
       requiresIRISReview: false,
       deliveryNotes:
-          "Gifts item. Protect from impact. Recommended vehicle: Bike.",
+          "Gifts item. Protect from impact. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 25, widthCm: 18, heightCm: 8),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: false,
     ),
     IrisRepositoryItem(
@@ -20123,11 +20123,11 @@ class IrisItemRepository {
       requiresVanguard: false,
       requiresIRISReview: false,
       deliveryNotes:
-          "Gifts item. Protect from impact. Recommended vehicle: Bike.",
+          "Gifts item. Protect from impact. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 25, widthCm: 18, heightCm: 8),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: false,
     ),
     IrisRepositoryItem(
@@ -20150,11 +20150,11 @@ class IrisItemRepository {
       requiresVanguard: false,
       requiresIRISReview: false,
       deliveryNotes:
-          "Gifts item. Protect from impact. Recommended vehicle: Bike.",
+          "Gifts item. Protect from impact. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 25, widthCm: 18, heightCm: 8),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: false,
     ),
     IrisRepositoryItem(
@@ -20177,11 +20177,11 @@ class IrisItemRepository {
       requiresVanguard: false,
       requiresIRISReview: false,
       deliveryNotes:
-          "Gifts item. Protect from impact. Recommended vehicle: Bike.",
+          "Gifts item. Protect from impact. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 25, widthCm: 18, heightCm: 8),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: false,
     ),
     IrisRepositoryItem(
@@ -20204,11 +20204,11 @@ class IrisItemRepository {
       requiresVanguard: false,
       requiresIRISReview: false,
       deliveryNotes:
-          "Gifts item. Protect from impact. Recommended vehicle: Bike.",
+          "Gifts item. Protect from impact. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 25, widthCm: 18, heightCm: 8),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: false,
     ),
     IrisRepositoryItem(
@@ -20231,11 +20231,11 @@ class IrisItemRepository {
       requiresVanguard: false,
       requiresIRISReview: false,
       deliveryNotes:
-          "Gifts item. Protect from impact. Recommended vehicle: Bike.",
+          "Gifts item. Protect from impact. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 25, widthCm: 18, heightCm: 8),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: false,
     ),
     IrisRepositoryItem(
@@ -20258,11 +20258,11 @@ class IrisItemRepository {
       requiresVanguard: false,
       requiresIRISReview: false,
       deliveryNotes:
-          "Gifts item. Protect from impact. Recommended vehicle: Bike.",
+          "Gifts item. Protect from impact. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 25, widthCm: 18, heightCm: 8),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: false,
     ),
     IrisRepositoryItem(
@@ -20280,11 +20280,11 @@ class IrisItemRepository {
       requiresVanguard: false,
       requiresIRISReview: false,
       deliveryNotes:
-          "Gifts item. Protect from impact. Recommended vehicle: Bike.",
+          "Gifts item. Protect from impact. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 25, widthCm: 18, heightCm: 8),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: false,
     ),
     IrisRepositoryItem(
@@ -20307,11 +20307,11 @@ class IrisItemRepository {
       requiresVanguard: false,
       requiresIRISReview: false,
       deliveryNotes:
-          "Gifts item. Protect from impact. Recommended vehicle: Bike.",
+          "Gifts item. Protect from impact. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 25, widthCm: 18, heightCm: 8),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: false,
     ),
     IrisRepositoryItem(
@@ -20329,11 +20329,11 @@ class IrisItemRepository {
       requiresVanguard: false,
       requiresIRISReview: false,
       deliveryNotes:
-          "Gifts item. Protect from impact. Recommended vehicle: Bike.",
+          "Gifts item. Protect from impact. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 25, widthCm: 18, heightCm: 8),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: false,
     ),
     IrisRepositoryItem(
@@ -20351,11 +20351,11 @@ class IrisItemRepository {
       requiresVanguard: false,
       requiresIRISReview: false,
       deliveryNotes:
-          "Gifts item. Protect from impact. Recommended vehicle: Bike.",
+          "Gifts item. Protect from impact. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 25, widthCm: 18, heightCm: 8),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: false,
     ),
     IrisRepositoryItem(
@@ -20373,11 +20373,11 @@ class IrisItemRepository {
       requiresVanguard: false,
       requiresIRISReview: false,
       deliveryNotes:
-          "Gifts item. Protect from impact. Recommended vehicle: Bike.",
+          "Gifts item. Protect from impact. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 25, widthCm: 18, heightCm: 8),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: false,
     ),
     IrisRepositoryItem(
@@ -20395,11 +20395,11 @@ class IrisItemRepository {
       requiresVanguard: false,
       requiresIRISReview: false,
       deliveryNotes:
-          "Gifts item. Protect from impact. Recommended vehicle: Bike.",
+          "Gifts item. Protect from impact. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 25, widthCm: 18, heightCm: 8),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: false,
     ),
     IrisRepositoryItem(
@@ -20417,11 +20417,11 @@ class IrisItemRepository {
       requiresVanguard: false,
       requiresIRISReview: false,
       deliveryNotes:
-          "Gifts item. Protect from impact. Recommended vehicle: Bike.",
+          "Gifts item. Protect from impact. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 25, widthCm: 18, heightCm: 8),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: false,
     ),
     IrisRepositoryItem(
@@ -20439,11 +20439,11 @@ class IrisItemRepository {
       requiresVanguard: false,
       requiresIRISReview: false,
       deliveryNotes:
-          "Gifts item. Protect from impact. Recommended vehicle: Bike.",
+          "Gifts item. Protect from impact. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 25, widthCm: 18, heightCm: 8),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: false,
     ),
     IrisRepositoryItem(
@@ -20461,11 +20461,11 @@ class IrisItemRepository {
       requiresVanguard: false,
       requiresIRISReview: false,
       deliveryNotes:
-          "Gifts item. Protect from impact. Recommended vehicle: Bike.",
+          "Gifts item. Protect from impact. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 25, widthCm: 18, heightCm: 8),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: false,
     ),
     IrisRepositoryItem(
@@ -20488,11 +20488,11 @@ class IrisItemRepository {
       requiresVanguard: false,
       requiresIRISReview: false,
       deliveryNotes:
-          "Gifts item. Protect from impact. Recommended vehicle: Bike.",
+          "Gifts item. Protect from impact. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 25, widthCm: 18, heightCm: 8),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: false,
     ),
     IrisRepositoryItem(
@@ -20515,11 +20515,11 @@ class IrisItemRepository {
       requiresVanguard: false,
       requiresIRISReview: false,
       deliveryNotes:
-          "Gifts item. Protect from impact. Recommended vehicle: Bike.",
+          "Gifts item. Protect from impact. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 25, widthCm: 18, heightCm: 8),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: false,
     ),
     IrisRepositoryItem(
@@ -20542,11 +20542,11 @@ class IrisItemRepository {
       requiresVanguard: false,
       requiresIRISReview: false,
       deliveryNotes:
-          "Gifts item. Protect from impact. Recommended vehicle: Bike.",
+          "Gifts item. Protect from impact. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 25, widthCm: 18, heightCm: 8),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: false,
     ),
     IrisRepositoryItem(
@@ -20569,11 +20569,11 @@ class IrisItemRepository {
       requiresVanguard: false,
       requiresIRISReview: false,
       deliveryNotes:
-          "Gifts item. Protect from impact. Recommended vehicle: Bike.",
+          "Gifts item. Protect from impact. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 25, widthCm: 18, heightCm: 8),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: false,
     ),
     IrisRepositoryItem(
@@ -20596,11 +20596,11 @@ class IrisItemRepository {
       requiresVanguard: false,
       requiresIRISReview: false,
       deliveryNotes:
-          "Gifts item. Protect from impact. Recommended vehicle: Bike.",
+          "Gifts item. Protect from impact. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 25, widthCm: 18, heightCm: 8),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: false,
     ),
     IrisRepositoryItem(
@@ -20623,11 +20623,11 @@ class IrisItemRepository {
       requiresVanguard: false,
       requiresIRISReview: false,
       deliveryNotes:
-          "Gifts item. Protect from impact. Recommended vehicle: Bike.",
+          "Gifts item. Protect from impact. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 25, widthCm: 18, heightCm: 8),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: false,
     ),
     IrisRepositoryItem(
@@ -20650,11 +20650,11 @@ class IrisItemRepository {
       requiresVanguard: false,
       requiresIRISReview: false,
       deliveryNotes:
-          "Gifts item. Protect from impact. Recommended vehicle: Bike.",
+          "Gifts item. Protect from impact. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 25, widthCm: 18, heightCm: 8),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: false,
     ),
     IrisRepositoryItem(
@@ -20677,11 +20677,11 @@ class IrisItemRepository {
       requiresVanguard: false,
       requiresIRISReview: false,
       deliveryNotes:
-          "Gifts item. Protect from impact. Recommended vehicle: Bike.",
+          "Gifts item. Protect from impact. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 25, widthCm: 18, heightCm: 8),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: false,
     ),
     IrisRepositoryItem(
@@ -20704,11 +20704,11 @@ class IrisItemRepository {
       requiresVanguard: false,
       requiresIRISReview: false,
       deliveryNotes:
-          "Gifts item. Protect from impact. Recommended vehicle: Bike.",
+          "Gifts item. Protect from impact. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 25, widthCm: 18, heightCm: 8),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: false,
     ),
     IrisRepositoryItem(
@@ -20731,11 +20731,11 @@ class IrisItemRepository {
       requiresVanguard: false,
       requiresIRISReview: false,
       deliveryNotes:
-          "Gifts item. Protect from impact. Recommended vehicle: Bike.",
+          "Gifts item. Protect from impact. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 25, widthCm: 18, heightCm: 8),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: false,
     ),
     IrisRepositoryItem(
@@ -20758,11 +20758,11 @@ class IrisItemRepository {
       requiresVanguard: false,
       requiresIRISReview: false,
       deliveryNotes:
-          "Gifts item. Protect from impact. Recommended vehicle: Bike.",
+          "Gifts item. Protect from impact. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 25, widthCm: 18, heightCm: 8),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: false,
     ),
     IrisRepositoryItem(
@@ -20785,11 +20785,11 @@ class IrisItemRepository {
       requiresVanguard: true,
       requiresIRISReview: false,
       deliveryNotes:
-          "Gifts item. Protect from impact. Recommended vehicle: Bike.",
+          "Gifts item. Protect from impact. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.9,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 45, widthCm: 35, heightCm: 25),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: false,
     ),
     IrisRepositoryItem(
@@ -20812,11 +20812,11 @@ class IrisItemRepository {
       requiresVanguard: true,
       requiresIRISReview: false,
       deliveryNotes:
-          "Gifts item. Protect from impact. Recommended vehicle: Bike.",
+          "Gifts item. Protect from impact. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.9,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 45, widthCm: 35, heightCm: 25),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: false,
     ),
     IrisRepositoryItem(
@@ -20839,11 +20839,11 @@ class IrisItemRepository {
       requiresVanguard: true,
       requiresIRISReview: false,
       deliveryNotes:
-          "Gifts item. Protect from impact. Recommended vehicle: Bike.",
+          "Gifts item. Protect from impact. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.9,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 45, widthCm: 35, heightCm: 25),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: false,
     ),
     IrisRepositoryItem(
@@ -20866,11 +20866,11 @@ class IrisItemRepository {
       requiresVanguard: true,
       requiresIRISReview: false,
       deliveryNotes:
-          "Gifts item. Protect from impact. Recommended vehicle: Bike.",
+          "Gifts item. Protect from impact. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.9,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 45, widthCm: 35, heightCm: 25),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: false,
     ),
     IrisRepositoryItem(
@@ -20893,11 +20893,11 @@ class IrisItemRepository {
       requiresVanguard: true,
       requiresIRISReview: false,
       deliveryNotes:
-          "Gifts item. Protect from impact. Recommended vehicle: Bike.",
+          "Gifts item. Protect from impact. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.9,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 45, widthCm: 35, heightCm: 25),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: false,
     ),
     IrisRepositoryItem(
@@ -20920,11 +20920,11 @@ class IrisItemRepository {
       requiresVanguard: true,
       requiresIRISReview: false,
       deliveryNotes:
-          "Gifts item. Protect from impact. Recommended vehicle: Bike.",
+          "Gifts item. Protect from impact. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.9,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 45, widthCm: 35, heightCm: 25),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: false,
     ),
     IrisRepositoryItem(
@@ -20942,11 +20942,11 @@ class IrisItemRepository {
       requiresVanguard: true,
       requiresIRISReview: false,
       deliveryNotes:
-          "Gifts item. Protect from impact. Recommended vehicle: Bike.",
+          "Gifts item. Protect from impact. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.9,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 45, widthCm: 35, heightCm: 25),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: false,
     ),
     IrisRepositoryItem(
@@ -20964,11 +20964,11 @@ class IrisItemRepository {
       requiresVanguard: true,
       requiresIRISReview: false,
       deliveryNotes:
-          "Gifts item. Protect from impact. Recommended vehicle: Bike.",
+          "Gifts item. Protect from impact. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.9,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 45, widthCm: 35, heightCm: 25),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: false,
     ),
     IrisRepositoryItem(
@@ -20991,11 +20991,11 @@ class IrisItemRepository {
       requiresVanguard: true,
       requiresIRISReview: false,
       deliveryNotes:
-          "Gifts item. Protect from impact. Recommended vehicle: Bike.",
+          "Gifts item. Protect from impact. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.9,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 45, widthCm: 35, heightCm: 25),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: false,
     ),
     IrisRepositoryItem(
@@ -21018,11 +21018,11 @@ class IrisItemRepository {
       requiresVanguard: true,
       requiresIRISReview: false,
       deliveryNotes:
-          "Gifts item. Protect from impact. Recommended vehicle: Bike.",
+          "Gifts item. Protect from impact. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.9,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 45, widthCm: 35, heightCm: 25),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: false,
     ),
     IrisRepositoryItem(
@@ -21045,11 +21045,11 @@ class IrisItemRepository {
       requiresVanguard: false,
       requiresIRISReview: false,
       deliveryNotes:
-          "Gifts item. Protect from impact. Recommended vehicle: Bike.",
+          "Gifts item. Protect from impact. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 45, widthCm: 35, heightCm: 25),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: false,
     ),
     IrisRepositoryItem(
@@ -21072,11 +21072,11 @@ class IrisItemRepository {
       requiresVanguard: false,
       requiresIRISReview: false,
       deliveryNotes:
-          "Gifts item. Protect from impact. Recommended vehicle: Bike.",
+          "Gifts item. Protect from impact. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 45, widthCm: 35, heightCm: 25),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: false,
     ),
     IrisRepositoryItem(
@@ -21099,11 +21099,11 @@ class IrisItemRepository {
       requiresVanguard: false,
       requiresIRISReview: false,
       deliveryNotes:
-          "Gifts item. Protect from impact. Recommended vehicle: Bike.",
+          "Gifts item. Protect from impact. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 45, widthCm: 35, heightCm: 25),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: false,
     ),
     IrisRepositoryItem(
@@ -21126,11 +21126,11 @@ class IrisItemRepository {
       requiresVanguard: false,
       requiresIRISReview: false,
       deliveryNotes:
-          "Gifts item. Protect from impact. Recommended vehicle: Bike.",
+          "Gifts item. Protect from impact. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 45, widthCm: 35, heightCm: 25),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: false,
     ),
     IrisRepositoryItem(
@@ -21153,11 +21153,11 @@ class IrisItemRepository {
       requiresVanguard: false,
       requiresIRISReview: false,
       deliveryNotes:
-          "Gifts item. Protect from impact. Recommended vehicle: Bike.",
+          "Gifts item. Protect from impact. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 45, widthCm: 35, heightCm: 25),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: false,
     ),
     IrisRepositoryItem(
@@ -21180,11 +21180,11 @@ class IrisItemRepository {
       requiresVanguard: false,
       requiresIRISReview: false,
       deliveryNotes:
-          "Gifts item. Protect from impact. Recommended vehicle: Bike.",
+          "Gifts item. Protect from impact. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 45, widthCm: 35, heightCm: 25),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: false,
     ),
     IrisRepositoryItem(
@@ -21207,11 +21207,11 @@ class IrisItemRepository {
       requiresVanguard: false,
       requiresIRISReview: false,
       deliveryNotes:
-          "Gifts item. Protect from impact. Recommended vehicle: Bike.",
+          "Gifts item. Protect from impact. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 45, widthCm: 35, heightCm: 25),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: false,
     ),
     IrisRepositoryItem(
@@ -21234,11 +21234,11 @@ class IrisItemRepository {
       requiresVanguard: false,
       requiresIRISReview: false,
       deliveryNotes:
-          "Gifts item. Protect from impact. Recommended vehicle: Bike.",
+          "Gifts item. Protect from impact. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 45, widthCm: 35, heightCm: 25),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: false,
     ),
     IrisRepositoryItem(
@@ -21261,11 +21261,11 @@ class IrisItemRepository {
       requiresVanguard: false,
       requiresIRISReview: false,
       deliveryNotes:
-          "Gifts item. Protect from impact. Recommended vehicle: Bike.",
+          "Gifts item. Protect from impact. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 45, widthCm: 35, heightCm: 25),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: false,
     ),
     IrisRepositoryItem(
@@ -21288,11 +21288,11 @@ class IrisItemRepository {
       requiresVanguard: false,
       requiresIRISReview: false,
       deliveryNotes:
-          "Gifts item. Protect from impact. Recommended vehicle: Bike.",
+          "Gifts item. Protect from impact. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 45, widthCm: 35, heightCm: 25),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: false,
     ),
     IrisRepositoryItem(
@@ -21524,11 +21524,11 @@ class IrisItemRepository {
       highValue: false,
       requiresVanguard: false,
       requiresIRISReview: false,
-      deliveryNotes: "DIY item. Standard handling. Recommended vehicle: Bike.",
+      deliveryNotes: "DIY item. Standard handling. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 25, widthCm: 18, heightCm: 8),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: true,
     ),
     IrisRepositoryItem(
@@ -21545,11 +21545,11 @@ class IrisItemRepository {
       highValue: false,
       requiresVanguard: false,
       requiresIRISReview: false,
-      deliveryNotes: "DIY item. Standard handling. Recommended vehicle: Bike.",
+      deliveryNotes: "DIY item. Standard handling. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 25, widthCm: 18, heightCm: 8),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: true,
     ),
     IrisRepositoryItem(
@@ -21566,11 +21566,11 @@ class IrisItemRepository {
       highValue: false,
       requiresVanguard: false,
       requiresIRISReview: false,
-      deliveryNotes: "DIY item. Standard handling. Recommended vehicle: Bike.",
+      deliveryNotes: "DIY item. Standard handling. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 25, widthCm: 18, heightCm: 8),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: true,
     ),
     IrisRepositoryItem(
@@ -21587,11 +21587,11 @@ class IrisItemRepository {
       highValue: false,
       requiresVanguard: false,
       requiresIRISReview: false,
-      deliveryNotes: "DIY item. Standard handling. Recommended vehicle: Bike.",
+      deliveryNotes: "DIY item. Standard handling. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 25, widthCm: 18, heightCm: 8),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: true,
     ),
     IrisRepositoryItem(
@@ -21608,11 +21608,11 @@ class IrisItemRepository {
       highValue: false,
       requiresVanguard: false,
       requiresIRISReview: false,
-      deliveryNotes: "DIY item. Standard handling. Recommended vehicle: Bike.",
+      deliveryNotes: "DIY item. Standard handling. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 25, widthCm: 18, heightCm: 8),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: true,
     ),
     IrisRepositoryItem(
@@ -21629,11 +21629,11 @@ class IrisItemRepository {
       highValue: false,
       requiresVanguard: false,
       requiresIRISReview: false,
-      deliveryNotes: "DIY item. Standard handling. Recommended vehicle: Bike.",
+      deliveryNotes: "DIY item. Standard handling. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 25, widthCm: 18, heightCm: 8),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: true,
     ),
     IrisRepositoryItem(
@@ -21650,11 +21650,11 @@ class IrisItemRepository {
       highValue: false,
       requiresVanguard: false,
       requiresIRISReview: false,
-      deliveryNotes: "DIY item. Standard handling. Recommended vehicle: Bike.",
+      deliveryNotes: "DIY item. Standard handling. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 25, widthCm: 18, heightCm: 8),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: true,
     ),
     IrisRepositoryItem(
@@ -21671,11 +21671,11 @@ class IrisItemRepository {
       highValue: false,
       requiresVanguard: false,
       requiresIRISReview: false,
-      deliveryNotes: "DIY item. Standard handling. Recommended vehicle: Bike.",
+      deliveryNotes: "DIY item. Standard handling. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 25, widthCm: 18, heightCm: 8),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: true,
     ),
     IrisRepositoryItem(
@@ -21692,11 +21692,11 @@ class IrisItemRepository {
       highValue: false,
       requiresVanguard: false,
       requiresIRISReview: false,
-      deliveryNotes: "DIY item. Standard handling. Recommended vehicle: Bike.",
+      deliveryNotes: "DIY item. Standard handling. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 25, widthCm: 18, heightCm: 8),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: true,
     ),
     IrisRepositoryItem(
@@ -21713,11 +21713,11 @@ class IrisItemRepository {
       highValue: false,
       requiresVanguard: false,
       requiresIRISReview: false,
-      deliveryNotes: "DIY item. Standard handling. Recommended vehicle: Bike.",
+      deliveryNotes: "DIY item. Standard handling. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 25, widthCm: 18, heightCm: 8),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: true,
     ),
     IrisRepositoryItem(
@@ -21739,11 +21739,11 @@ class IrisItemRepository {
       highValue: false,
       requiresVanguard: false,
       requiresIRISReview: false,
-      deliveryNotes: "DIY item. Standard handling. Recommended vehicle: Bike.",
+      deliveryNotes: "DIY item. Standard handling. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 25, widthCm: 18, heightCm: 8),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: true,
     ),
     IrisRepositoryItem(
@@ -21765,11 +21765,11 @@ class IrisItemRepository {
       highValue: false,
       requiresVanguard: false,
       requiresIRISReview: false,
-      deliveryNotes: "DIY item. Standard handling. Recommended vehicle: Bike.",
+      deliveryNotes: "DIY item. Standard handling. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 25, widthCm: 18, heightCm: 8),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: true,
     ),
     IrisRepositoryItem(
@@ -21791,11 +21791,11 @@ class IrisItemRepository {
       highValue: false,
       requiresVanguard: false,
       requiresIRISReview: false,
-      deliveryNotes: "DIY item. Standard handling. Recommended vehicle: Bike.",
+      deliveryNotes: "DIY item. Standard handling. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 25, widthCm: 18, heightCm: 8),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: true,
     ),
     IrisRepositoryItem(
@@ -21817,11 +21817,11 @@ class IrisItemRepository {
       highValue: false,
       requiresVanguard: false,
       requiresIRISReview: false,
-      deliveryNotes: "DIY item. Standard handling. Recommended vehicle: Bike.",
+      deliveryNotes: "DIY item. Standard handling. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 25, widthCm: 18, heightCm: 8),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: true,
     ),
     IrisRepositoryItem(
@@ -21843,11 +21843,11 @@ class IrisItemRepository {
       highValue: false,
       requiresVanguard: false,
       requiresIRISReview: false,
-      deliveryNotes: "DIY item. Standard handling. Recommended vehicle: Bike.",
+      deliveryNotes: "DIY item. Standard handling. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 25, widthCm: 18, heightCm: 8),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: true,
     ),
     IrisRepositoryItem(
@@ -21869,11 +21869,11 @@ class IrisItemRepository {
       highValue: false,
       requiresVanguard: false,
       requiresIRISReview: false,
-      deliveryNotes: "DIY item. Standard handling. Recommended vehicle: Bike.",
+      deliveryNotes: "DIY item. Standard handling. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 25, widthCm: 18, heightCm: 8),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: true,
     ),
     IrisRepositoryItem(
@@ -21895,11 +21895,11 @@ class IrisItemRepository {
       highValue: false,
       requiresVanguard: false,
       requiresIRISReview: false,
-      deliveryNotes: "DIY item. Standard handling. Recommended vehicle: Bike.",
+      deliveryNotes: "DIY item. Standard handling. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 25, widthCm: 18, heightCm: 8),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: true,
     ),
     IrisRepositoryItem(
@@ -21921,11 +21921,11 @@ class IrisItemRepository {
       highValue: false,
       requiresVanguard: false,
       requiresIRISReview: false,
-      deliveryNotes: "DIY item. Standard handling. Recommended vehicle: Bike.",
+      deliveryNotes: "DIY item. Standard handling. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 25, widthCm: 18, heightCm: 8),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: true,
     ),
     IrisRepositoryItem(
@@ -21947,11 +21947,11 @@ class IrisItemRepository {
       highValue: false,
       requiresVanguard: false,
       requiresIRISReview: false,
-      deliveryNotes: "DIY item. Standard handling. Recommended vehicle: Bike.",
+      deliveryNotes: "DIY item. Standard handling. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 25, widthCm: 18, heightCm: 8),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: true,
     ),
     IrisRepositoryItem(
@@ -21973,11 +21973,11 @@ class IrisItemRepository {
       highValue: false,
       requiresVanguard: false,
       requiresIRISReview: false,
-      deliveryNotes: "DIY item. Standard handling. Recommended vehicle: Bike.",
+      deliveryNotes: "DIY item. Standard handling. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 25, widthCm: 18, heightCm: 8),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: true,
     ),
     IrisRepositoryItem(
@@ -21999,11 +21999,11 @@ class IrisItemRepository {
       highValue: false,
       requiresVanguard: false,
       requiresIRISReview: false,
-      deliveryNotes: "DIY item. Standard handling. Recommended vehicle: Bike.",
+      deliveryNotes: "DIY item. Standard handling. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 25, widthCm: 18, heightCm: 8),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: true,
     ),
     IrisRepositoryItem(
@@ -22025,11 +22025,11 @@ class IrisItemRepository {
       highValue: false,
       requiresVanguard: false,
       requiresIRISReview: false,
-      deliveryNotes: "DIY item. Standard handling. Recommended vehicle: Bike.",
+      deliveryNotes: "DIY item. Standard handling. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 25, widthCm: 18, heightCm: 8),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: true,
     ),
     IrisRepositoryItem(
@@ -22051,11 +22051,11 @@ class IrisItemRepository {
       highValue: false,
       requiresVanguard: false,
       requiresIRISReview: false,
-      deliveryNotes: "DIY item. Standard handling. Recommended vehicle: Bike.",
+      deliveryNotes: "DIY item. Standard handling. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 25, widthCm: 18, heightCm: 8),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: true,
     ),
     IrisRepositoryItem(
@@ -22077,11 +22077,11 @@ class IrisItemRepository {
       highValue: false,
       requiresVanguard: false,
       requiresIRISReview: false,
-      deliveryNotes: "DIY item. Standard handling. Recommended vehicle: Bike.",
+      deliveryNotes: "DIY item. Standard handling. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 25, widthCm: 18, heightCm: 8),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: true,
     ),
     IrisRepositoryItem(
@@ -22103,11 +22103,11 @@ class IrisItemRepository {
       highValue: false,
       requiresVanguard: false,
       requiresIRISReview: false,
-      deliveryNotes: "DIY item. Standard handling. Recommended vehicle: Bike.",
+      deliveryNotes: "DIY item. Standard handling. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 25, widthCm: 18, heightCm: 8),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: true,
     ),
     IrisRepositoryItem(
@@ -22129,11 +22129,11 @@ class IrisItemRepository {
       highValue: false,
       requiresVanguard: false,
       requiresIRISReview: false,
-      deliveryNotes: "DIY item. Standard handling. Recommended vehicle: Bike.",
+      deliveryNotes: "DIY item. Standard handling. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 25, widthCm: 18, heightCm: 8),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: true,
     ),
     IrisRepositoryItem(
@@ -22155,11 +22155,11 @@ class IrisItemRepository {
       highValue: false,
       requiresVanguard: false,
       requiresIRISReview: false,
-      deliveryNotes: "DIY item. Standard handling. Recommended vehicle: Bike.",
+      deliveryNotes: "DIY item. Standard handling. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 25, widthCm: 18, heightCm: 8),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: true,
     ),
     IrisRepositoryItem(
@@ -22181,11 +22181,11 @@ class IrisItemRepository {
       highValue: false,
       requiresVanguard: false,
       requiresIRISReview: false,
-      deliveryNotes: "DIY item. Standard handling. Recommended vehicle: Bike.",
+      deliveryNotes: "DIY item. Standard handling. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 25, widthCm: 18, heightCm: 8),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: true,
     ),
     IrisRepositoryItem(
@@ -22207,11 +22207,11 @@ class IrisItemRepository {
       highValue: false,
       requiresVanguard: false,
       requiresIRISReview: false,
-      deliveryNotes: "DIY item. Standard handling. Recommended vehicle: Bike.",
+      deliveryNotes: "DIY item. Standard handling. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 25, widthCm: 18, heightCm: 8),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: true,
     ),
     IrisRepositoryItem(
@@ -22233,11 +22233,11 @@ class IrisItemRepository {
       highValue: false,
       requiresVanguard: false,
       requiresIRISReview: false,
-      deliveryNotes: "DIY item. Standard handling. Recommended vehicle: Bike.",
+      deliveryNotes: "DIY item. Standard handling. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 25, widthCm: 18, heightCm: 8),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: true,
     ),
     IrisRepositoryItem(
@@ -22254,11 +22254,11 @@ class IrisItemRepository {
       highValue: false,
       requiresVanguard: false,
       requiresIRISReview: false,
-      deliveryNotes: "DIY item. Standard handling. Recommended vehicle: Bike.",
+      deliveryNotes: "DIY item. Standard handling. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 45, widthCm: 35, heightCm: 25),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: true,
     ),
     IrisRepositoryItem(
@@ -22275,11 +22275,11 @@ class IrisItemRepository {
       highValue: false,
       requiresVanguard: false,
       requiresIRISReview: false,
-      deliveryNotes: "DIY item. Standard handling. Recommended vehicle: Bike.",
+      deliveryNotes: "DIY item. Standard handling. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 45, widthCm: 35, heightCm: 25),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: true,
     ),
     IrisRepositoryItem(
@@ -22296,11 +22296,11 @@ class IrisItemRepository {
       highValue: false,
       requiresVanguard: false,
       requiresIRISReview: false,
-      deliveryNotes: "DIY item. Standard handling. Recommended vehicle: Bike.",
+      deliveryNotes: "DIY item. Standard handling. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 45, widthCm: 35, heightCm: 25),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: true,
     ),
     IrisRepositoryItem(
@@ -22317,11 +22317,11 @@ class IrisItemRepository {
       highValue: false,
       requiresVanguard: false,
       requiresIRISReview: false,
-      deliveryNotes: "DIY item. Standard handling. Recommended vehicle: Bike.",
+      deliveryNotes: "DIY item. Standard handling. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 45, widthCm: 35, heightCm: 25),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: true,
     ),
     IrisRepositoryItem(
@@ -22338,11 +22338,11 @@ class IrisItemRepository {
       highValue: false,
       requiresVanguard: false,
       requiresIRISReview: false,
-      deliveryNotes: "DIY item. Standard handling. Recommended vehicle: Bike.",
+      deliveryNotes: "DIY item. Standard handling. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 45, widthCm: 35, heightCm: 25),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: true,
     ),
     IrisRepositoryItem(
@@ -22359,11 +22359,11 @@ class IrisItemRepository {
       highValue: false,
       requiresVanguard: false,
       requiresIRISReview: false,
-      deliveryNotes: "DIY item. Standard handling. Recommended vehicle: Bike.",
+      deliveryNotes: "DIY item. Standard handling. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 45, widthCm: 35, heightCm: 25),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: true,
     ),
     IrisRepositoryItem(
@@ -22385,11 +22385,11 @@ class IrisItemRepository {
       highValue: false,
       requiresVanguard: false,
       requiresIRISReview: false,
-      deliveryNotes: "DIY item. Standard handling. Recommended vehicle: Bike.",
+      deliveryNotes: "DIY item. Standard handling. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 45, widthCm: 35, heightCm: 25),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: true,
     ),
     IrisRepositoryItem(
@@ -22411,11 +22411,11 @@ class IrisItemRepository {
       highValue: false,
       requiresVanguard: false,
       requiresIRISReview: false,
-      deliveryNotes: "DIY item. Standard handling. Recommended vehicle: Bike.",
+      deliveryNotes: "DIY item. Standard handling. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 45, widthCm: 35, heightCm: 25),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: true,
     ),
     IrisRepositoryItem(
@@ -22437,11 +22437,11 @@ class IrisItemRepository {
       highValue: false,
       requiresVanguard: false,
       requiresIRISReview: false,
-      deliveryNotes: "DIY item. Standard handling. Recommended vehicle: Bike.",
+      deliveryNotes: "DIY item. Standard handling. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 45, widthCm: 35, heightCm: 25),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: true,
     ),
     IrisRepositoryItem(
@@ -22458,11 +22458,11 @@ class IrisItemRepository {
       highValue: false,
       requiresVanguard: false,
       requiresIRISReview: false,
-      deliveryNotes: "DIY item. Standard handling. Recommended vehicle: Bike.",
+      deliveryNotes: "DIY item. Standard handling. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 45, widthCm: 35, heightCm: 25),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: true,
     ),
     IrisRepositoryItem(
@@ -23695,11 +23695,11 @@ class IrisItemRepository {
       requiresVanguard: false,
       requiresIRISReview: false,
       deliveryNotes:
-          "Sports item. Standard handling. Recommended vehicle: Bike.",
+          "Sports item. Standard handling. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 25, widthCm: 18, heightCm: 8),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: true,
     ),
     IrisRepositoryItem(
@@ -23722,11 +23722,11 @@ class IrisItemRepository {
       requiresVanguard: false,
       requiresIRISReview: false,
       deliveryNotes:
-          "Sports item. Standard handling. Recommended vehicle: Bike.",
+          "Sports item. Standard handling. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 25, widthCm: 18, heightCm: 8),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: true,
     ),
     IrisRepositoryItem(
@@ -23749,11 +23749,11 @@ class IrisItemRepository {
       requiresVanguard: false,
       requiresIRISReview: false,
       deliveryNotes:
-          "Sports item. Standard handling. Recommended vehicle: Bike.",
+          "Sports item. Standard handling. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 25, widthCm: 18, heightCm: 8),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: true,
     ),
     IrisRepositoryItem(
@@ -23776,11 +23776,11 @@ class IrisItemRepository {
       requiresVanguard: false,
       requiresIRISReview: false,
       deliveryNotes:
-          "Sports item. Standard handling. Recommended vehicle: Bike.",
+          "Sports item. Standard handling. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 25, widthCm: 18, heightCm: 8),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: true,
     ),
     IrisRepositoryItem(
@@ -23803,11 +23803,11 @@ class IrisItemRepository {
       requiresVanguard: false,
       requiresIRISReview: false,
       deliveryNotes:
-          "Sports item. Standard handling. Recommended vehicle: Bike.",
+          "Sports item. Standard handling. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 25, widthCm: 18, heightCm: 8),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: true,
     ),
     IrisRepositoryItem(
@@ -23830,11 +23830,11 @@ class IrisItemRepository {
       requiresVanguard: false,
       requiresIRISReview: false,
       deliveryNotes:
-          "Sports item. Standard handling. Recommended vehicle: Bike.",
+          "Sports item. Standard handling. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 25, widthCm: 18, heightCm: 8),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: true,
     ),
     IrisRepositoryItem(
@@ -23857,11 +23857,11 @@ class IrisItemRepository {
       requiresVanguard: false,
       requiresIRISReview: false,
       deliveryNotes:
-          "Sports item. Standard handling. Recommended vehicle: Bike.",
+          "Sports item. Standard handling. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 25, widthCm: 18, heightCm: 8),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: true,
     ),
     IrisRepositoryItem(
@@ -23884,11 +23884,11 @@ class IrisItemRepository {
       requiresVanguard: false,
       requiresIRISReview: false,
       deliveryNotes:
-          "Sports item. Standard handling. Recommended vehicle: Bike.",
+          "Sports item. Standard handling. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 25, widthCm: 18, heightCm: 8),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: true,
     ),
     IrisRepositoryItem(
@@ -23911,11 +23911,11 @@ class IrisItemRepository {
       requiresVanguard: false,
       requiresIRISReview: false,
       deliveryNotes:
-          "Sports item. Standard handling. Recommended vehicle: Bike.",
+          "Sports item. Standard handling. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 25, widthCm: 18, heightCm: 8),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: true,
     ),
     IrisRepositoryItem(
@@ -23938,11 +23938,11 @@ class IrisItemRepository {
       requiresVanguard: false,
       requiresIRISReview: false,
       deliveryNotes:
-          "Sports item. Standard handling. Recommended vehicle: Bike.",
+          "Sports item. Standard handling. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 25, widthCm: 18, heightCm: 8),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: true,
     ),
     IrisRepositoryItem(
@@ -24500,11 +24500,11 @@ class IrisItemRepository {
       requiresVanguard: false,
       requiresIRISReview: false,
       deliveryNotes:
-          "Sports item. Standard handling. Recommended vehicle: Bike.",
+          "Sports item. Standard handling. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 45, widthCm: 35, heightCm: 25),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: true,
     ),
     IrisRepositoryItem(
@@ -24522,11 +24522,11 @@ class IrisItemRepository {
       requiresVanguard: false,
       requiresIRISReview: false,
       deliveryNotes:
-          "Sports item. Standard handling. Recommended vehicle: Bike.",
+          "Sports item. Standard handling. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 45, widthCm: 35, heightCm: 25),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: true,
     ),
     IrisRepositoryItem(
@@ -24549,11 +24549,11 @@ class IrisItemRepository {
       requiresVanguard: false,
       requiresIRISReview: false,
       deliveryNotes:
-          "Sports item. Standard handling. Recommended vehicle: Bike.",
+          "Sports item. Standard handling. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 45, widthCm: 35, heightCm: 25),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: true,
     ),
     IrisRepositoryItem(
@@ -24571,11 +24571,11 @@ class IrisItemRepository {
       requiresVanguard: false,
       requiresIRISReview: false,
       deliveryNotes:
-          "Sports item. Standard handling. Recommended vehicle: Bike.",
+          "Sports item. Standard handling. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 45, widthCm: 35, heightCm: 25),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: true,
     ),
     IrisRepositoryItem(
@@ -24593,11 +24593,11 @@ class IrisItemRepository {
       requiresVanguard: false,
       requiresIRISReview: false,
       deliveryNotes:
-          "Sports item. Standard handling. Recommended vehicle: Bike.",
+          "Sports item. Standard handling. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 45, widthCm: 35, heightCm: 25),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: true,
     ),
     IrisRepositoryItem(
@@ -24615,11 +24615,11 @@ class IrisItemRepository {
       requiresVanguard: false,
       requiresIRISReview: false,
       deliveryNotes:
-          "Sports item. Standard handling. Recommended vehicle: Bike.",
+          "Sports item. Standard handling. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 45, widthCm: 35, heightCm: 25),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: true,
     ),
     IrisRepositoryItem(
@@ -24642,11 +24642,11 @@ class IrisItemRepository {
       requiresVanguard: false,
       requiresIRISReview: false,
       deliveryNotes:
-          "Sports item. Standard handling. Recommended vehicle: Bike.",
+          "Sports item. Standard handling. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 45, widthCm: 35, heightCm: 25),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: true,
     ),
     IrisRepositoryItem(
@@ -24664,11 +24664,11 @@ class IrisItemRepository {
       requiresVanguard: false,
       requiresIRISReview: false,
       deliveryNotes:
-          "Sports item. Standard handling. Recommended vehicle: Bike.",
+          "Sports item. Standard handling. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 45, widthCm: 35, heightCm: 25),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: true,
     ),
     IrisRepositoryItem(
@@ -24686,11 +24686,11 @@ class IrisItemRepository {
       requiresVanguard: false,
       requiresIRISReview: false,
       deliveryNotes:
-          "Sports item. Standard handling. Recommended vehicle: Bike.",
+          "Sports item. Standard handling. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 45, widthCm: 35, heightCm: 25),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: true,
     ),
     IrisRepositoryItem(
@@ -24708,11 +24708,11 @@ class IrisItemRepository {
       requiresVanguard: false,
       requiresIRISReview: false,
       deliveryNotes:
-          "Sports item. Standard handling. Recommended vehicle: Bike.",
+          "Sports item. Standard handling. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 45, widthCm: 35, heightCm: 25),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: true,
     ),
     IrisRepositoryItem(
@@ -25480,11 +25480,11 @@ class IrisItemRepository {
       requiresVanguard: false,
       requiresIRISReview: false,
       deliveryNotes:
-          "Sports item. Standard handling. Recommended vehicle: Bike.",
+          "Sports item. Standard handling. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 45, widthCm: 35, heightCm: 25),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: true,
     ),
     IrisRepositoryItem(
@@ -25507,11 +25507,11 @@ class IrisItemRepository {
       requiresVanguard: false,
       requiresIRISReview: false,
       deliveryNotes:
-          "Sports item. Standard handling. Recommended vehicle: Bike.",
+          "Sports item. Standard handling. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 45, widthCm: 35, heightCm: 25),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: true,
     ),
     IrisRepositoryItem(
@@ -25534,11 +25534,11 @@ class IrisItemRepository {
       requiresVanguard: false,
       requiresIRISReview: false,
       deliveryNotes:
-          "Sports item. Standard handling. Recommended vehicle: Bike.",
+          "Sports item. Standard handling. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 45, widthCm: 35, heightCm: 25),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: true,
     ),
     IrisRepositoryItem(
@@ -25561,11 +25561,11 @@ class IrisItemRepository {
       requiresVanguard: false,
       requiresIRISReview: false,
       deliveryNotes:
-          "Sports item. Standard handling. Recommended vehicle: Bike.",
+          "Sports item. Standard handling. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 45, widthCm: 35, heightCm: 25),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: true,
     ),
     IrisRepositoryItem(
@@ -25588,11 +25588,11 @@ class IrisItemRepository {
       requiresVanguard: false,
       requiresIRISReview: false,
       deliveryNotes:
-          "Sports item. Standard handling. Recommended vehicle: Bike.",
+          "Sports item. Standard handling. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 45, widthCm: 35, heightCm: 25),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: true,
     ),
     IrisRepositoryItem(
@@ -25615,11 +25615,11 @@ class IrisItemRepository {
       requiresVanguard: false,
       requiresIRISReview: false,
       deliveryNotes:
-          "Sports item. Standard handling. Recommended vehicle: Bike.",
+          "Sports item. Standard handling. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 45, widthCm: 35, heightCm: 25),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: true,
     ),
     IrisRepositoryItem(
@@ -25642,11 +25642,11 @@ class IrisItemRepository {
       requiresVanguard: false,
       requiresIRISReview: false,
       deliveryNotes:
-          "Sports item. Standard handling. Recommended vehicle: Bike.",
+          "Sports item. Standard handling. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 45, widthCm: 35, heightCm: 25),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: true,
     ),
     IrisRepositoryItem(
@@ -25669,11 +25669,11 @@ class IrisItemRepository {
       requiresVanguard: false,
       requiresIRISReview: false,
       deliveryNotes:
-          "Sports item. Standard handling. Recommended vehicle: Bike.",
+          "Sports item. Standard handling. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 45, widthCm: 35, heightCm: 25),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: true,
     ),
     IrisRepositoryItem(
@@ -25696,11 +25696,11 @@ class IrisItemRepository {
       requiresVanguard: false,
       requiresIRISReview: false,
       deliveryNotes:
-          "Sports item. Standard handling. Recommended vehicle: Bike.",
+          "Sports item. Standard handling. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 45, widthCm: 35, heightCm: 25),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: true,
     ),
     IrisRepositoryItem(
@@ -25723,11 +25723,11 @@ class IrisItemRepository {
       requiresVanguard: false,
       requiresIRISReview: false,
       deliveryNotes:
-          "Sports item. Standard handling. Recommended vehicle: Bike.",
+          "Sports item. Standard handling. Recommended vehicle: Motorbike.",
       confidenceBaseline: 0.78,
       typicalDimensionsCm:
           IrisRepositoryDimensions(lengthCm: 45, widthCm: 35, heightCm: 25),
-      vehicleSuitability: "Bike",
+      vehicleSuitability: "Motorbike",
       stackable: true,
     ),
     IrisRepositoryItem(

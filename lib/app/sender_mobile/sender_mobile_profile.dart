@@ -1,5 +1,6 @@
 import 'dart:typed_data';
 import 'dart:async';
+import 'dart:convert';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:cloud_functions/cloud_functions.dart';
@@ -8,6 +9,7 @@ import 'package:firebase_storage/firebase_storage.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../sender_profile/sender_profile.dart';
@@ -15,6 +17,7 @@ import '../send_package/view/ride_chats.dart';
 import 'design_system/sender_design_system.dart';
 import 'sender_saved_addresses.dart';
 import 'sender_notifications.dart';
+import 'sender_page_shell.dart';
 import 'sender_wallet.dart';
 
 class SenderTrustActivity {
@@ -208,6 +211,63 @@ class SenderMobileProfileData {
       trustHistory: dedupedHistory,
     );
   }
+
+  factory SenderMobileProfileData.fromCurrentUser(User user) {
+    return SenderMobileProfileData.fromSources(user: user);
+  }
+
+  factory SenderMobileProfileData.fromCache(Map<String, dynamic> data) {
+    return SenderMobileProfileData(
+      userId: firstText([data['userId']]),
+      displayName: firstText([data['displayName']]),
+      username: firstText([data['username']]),
+      email: firstText([data['email']]),
+      phone: firstText([data['phone']]),
+      photoUrl: firstText([data['photoUrl']]),
+      accountType: 'sender',
+      createdAt: profileDate(data['createdAt']),
+      trustScore: (data['trustScore'] as num?)?.toInt() ?? 0,
+      hasTrustScore: data['hasTrustScore'] != false,
+      trustTier: SenderTrustPolicy.normalizeTier(data['trustTier']),
+      nextTier: firstText([data['nextTier']]).isEmpty
+          ? null
+          : SenderTrustPolicy.normalizeTier(data['nextTier']),
+      pointsToNextTier: (data['pointsToNextTier'] as num?)?.toInt() ?? 25,
+      completedDeliveries: (data['completedDeliveries'] as num?)?.toInt() ?? 0,
+      hasCompletedDeliveries: data['hasCompletedDeliveries'] != false,
+      trustHistory: (data['trustHistory'] as List? ?? const [])
+          .whereType<Map>()
+          .map((item) =>
+              SenderTrustActivity.fromMap(Map<String, dynamic>.from(item)))
+          .toList(growable: false),
+    );
+  }
+
+  Map<String, dynamic> toCacheMap() => {
+        'userId': userId,
+        'displayName': displayName,
+        'username': username,
+        'email': email,
+        'phone': phone,
+        'photoUrl': photoUrl,
+        'accountType': accountType,
+        if (createdAt != null) 'createdAt': createdAt!.toIso8601String(),
+        'trustScore': trustScore,
+        'hasTrustScore': hasTrustScore,
+        'trustTier': trustTier,
+        if (nextTier != null) 'nextTier': nextTier,
+        'pointsToNextTier': pointsToNextTier,
+        'completedDeliveries': completedDeliveries,
+        'hasCompletedDeliveries': hasCompletedDeliveries,
+        'trustHistory': trustHistory
+            .map((item) => {
+                  'points': item.points,
+                  'label': item.label,
+                  if (item.occurredAt != null)
+                    'occurredAt': item.occurredAt!.toIso8601String(),
+                })
+            .toList(),
+      };
 
   String get memberSinceLabel => createdAt == null
       ? 'Member since unavailable'
@@ -523,6 +583,16 @@ class SenderMobileProfileException implements Exception {
   String toString() => message;
 }
 
+String? _senderProfileCacheKey() {
+  String? uid;
+  try {
+    uid = FirebaseAuth.instance.currentUser?.uid;
+  } catch (_) {
+    uid = null;
+  }
+  return uid == null ? null : 'senderProfileSnapshot:$uid';
+}
+
 class SenderMobileProfileView extends StatefulWidget {
   final SenderMobileProfileRepository? repository;
   final SenderProfilePhotoPicker? photoPicker;
@@ -563,6 +633,7 @@ class _SenderMobileProfileViewState extends State<SenderMobileProfileView> {
     super.initState();
     _repository = widget.repository ?? FirebaseSenderMobileProfileRepository();
     _photoPicker = widget.photoPicker ?? ImagePickerSenderProfilePhotoPicker();
+    unawaited(_bootLocalProfile());
     _load();
   }
 
@@ -578,7 +649,7 @@ class _SenderMobileProfileViewState extends State<SenderMobileProfileView> {
   Future<void> _load() async {
     await _profileSubscription?.cancel();
     setState(() {
-      _loading = true;
+      _loading = _profile == null;
       _error = null;
     });
     try {
@@ -590,6 +661,7 @@ class _SenderMobileProfileViewState extends State<SenderMobileProfileView> {
         _loading = false;
         _error = null;
       });
+      unawaited(_cacheProfile(profile));
       _profileSubscription = _repository.watch().listen((liveProfile) {
         if (!mounted) return;
         if (!_editing && !_saving) _applyProfile(liveProfile);
@@ -597,21 +669,77 @@ class _SenderMobileProfileViewState extends State<SenderMobileProfileView> {
           _profile = liveProfile;
           _error = null;
         });
+        unawaited(_cacheProfile(liveProfile));
       }, onError: (_) {
         if (!mounted) return;
         setState(() {
-          _error = 'Live profile updates could not connect. Please try again.';
+          _error =
+              'Live profile updates are reconnecting. Showing your saved profile.';
         });
       });
     } catch (error) {
       if (!mounted) return;
+      final fallback = _profile ?? _profileFromAuth();
       setState(() {
+        if (fallback != null) {
+          _profile = fallback;
+          _applyProfile(fallback);
+        }
         _loading = false;
         _error = error is SenderMobileProfileException
             ? error.message
-            : 'We could not load your profile. Check your connection.';
+            : 'Profile refresh failed. Showing your saved profile.';
       });
     }
+  }
+
+  Future<void> _bootLocalProfile() async {
+    final cached = await _loadCachedProfile();
+    if (!mounted) return;
+    final profile = cached ?? _profileFromAuth();
+    if (profile == null) return;
+    _applyProfile(profile);
+    setState(() {
+      _profile = profile;
+      _loading = false;
+    });
+  }
+
+  SenderMobileProfileData? _profileFromAuth() {
+    User? user;
+    try {
+      user = FirebaseAuth.instance.currentUser;
+    } catch (_) {
+      user = null;
+    }
+    if (user == null) return null;
+    return SenderMobileProfileData.fromCurrentUser(user);
+  }
+
+  Future<SenderMobileProfileData?> _loadCachedProfile() async {
+    final key = _senderProfileCacheKey();
+    if (key == null) return null;
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final raw = prefs.getString(key);
+      if (raw == null || raw.isEmpty) return null;
+      final decoded = jsonDecode(raw);
+      if (decoded is! Map) return null;
+      return SenderMobileProfileData.fromCache(
+        Map<String, dynamic>.from(decoded),
+      );
+    } catch (_) {
+      return null;
+    }
+  }
+
+  Future<void> _cacheProfile(SenderMobileProfileData profile) async {
+    final key = _senderProfileCacheKey();
+    if (key == null) return;
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString(key, jsonEncode(profile.toCacheMap()));
+    } catch (_) {}
   }
 
   void _applyProfile(SenderMobileProfileData profile) {
@@ -695,9 +823,9 @@ class _SenderMobileProfileViewState extends State<SenderMobileProfileView> {
       context: context,
       builder: (dialogContext) => AlertDialog(
         backgroundColor: _ProfileTokens.panel,
-        title: const Text('Close your Circum account?'),
+        title: const Text('Close your profile?'),
         content: const Text(
-          'This permanently closes your Circum account. Active deliveries, '
+          'This permanently closes your profile. Active deliveries, '
           'open disputes or pending payments must be resolved first.',
         ),
         actions: [
@@ -742,8 +870,6 @@ class _SenderMobileProfileViewState extends State<SenderMobileProfileView> {
     final profile = _profile!;
     return LayoutBuilder(
       builder: (context, constraints) {
-        final wide = constraints.maxWidth >= 760;
-        final horizontalPadding = wide ? 28.0 : 18.0;
         final identity = _ProfileIdentityCard(
           profile: profile,
           uploadingPhoto: _uploadingPhoto,
@@ -773,82 +899,64 @@ class _SenderMobileProfileViewState extends State<SenderMobileProfileView> {
           onViewDetails: () => _showTrustDetails(profile),
           onViewHistory: () => _showTrustHistory(profile),
         );
-        return ListView(
-          key: const Key('sender-profile-view'),
-          padding: EdgeInsets.fromLTRB(
-            horizontalPadding,
-            22,
-            horizontalPadding,
-            104,
-          ),
+        return SenderScrollablePageShell(
+          scrollKey: const Key('sender-profile-view'),
           children: [
-            Align(
-              alignment: Alignment.topCenter,
-              child: ConstrainedBox(
-                key: const Key('sender-profile-constrained-layout'),
-                constraints: const BoxConstraints(maxWidth: 820),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    Text(
-                      'Profile',
-                      style: GoogleFonts.dmSerifDisplay(
-                        color: Colors.white,
-                        fontSize: wide ? 34 : 30,
-                      ),
-                    ),
-                    if (_error != null) ...[
-                      const SizedBox(height: 12),
-                      _ProfileMessage(message: _error!),
-                    ],
-                    const SizedBox(height: 20),
-                    identity,
-                    if (_editing) ...[
-                      const SizedBox(height: 18),
-                      details,
-                    ],
-                    const SizedBox(height: 24),
-                    trust,
-                    const SizedBox(height: 28),
-                    _circumShortcuts(),
-                    const SizedBox(height: 28),
-                    _accountSection(),
-                    const SizedBox(height: 28),
-                    _helpSection(),
-                    const SizedBox(height: 28),
-                    _ProfileGlassCard(
-                      padding: EdgeInsets.zero,
-                      child: Column(
-                        children: [
-                          _ProfileShortcut(
-                            key: const Key('sender-profile-close-account'),
-                            icon: Icons.delete_outline_rounded,
-                            title: 'Close account',
-                            subtitle: 'Permanently close your Circum account.',
-                            onTap: _confirmCloseAccount,
-                            danger: true,
-                            showDivider: false,
-                          ),
-                        ],
-                      ),
-                    ),
-                    const SizedBox(height: 18),
-                    _ProfileGlassCard(
-                      padding: EdgeInsets.zero,
-                      child: _ProfileShortcut(
-                        key: const Key('sender-profile-logout'),
-                        icon: Icons.logout_rounded,
-                        title: 'Log out',
-                        subtitle: 'Sign out of this device.',
-                        onTap: _logout,
-                        showDivider: false,
-                      ),
-                    ),
-                    const SizedBox(height: 26),
-                  ],
-                ),
+            Text(
+              'Profile',
+              style: GoogleFonts.dmSerifDisplay(
+                color: Colors.white,
+                fontSize: 30,
               ),
             ),
+            if (_error != null) ...[
+              const SizedBox(height: 12),
+              _ProfileMessage(message: _error!),
+            ],
+            const SizedBox(height: 20),
+            identity,
+            if (_editing) ...[
+              const SizedBox(height: 18),
+              details,
+            ],
+            const SizedBox(height: 24),
+            trust,
+            const SizedBox(height: 28),
+            _circumShortcuts(),
+            const SizedBox(height: 28),
+            _accountSection(),
+            const SizedBox(height: 28),
+            _helpSection(),
+            const SizedBox(height: 28),
+            _ProfileGlassCard(
+              padding: EdgeInsets.zero,
+              child: Column(
+                children: [
+                  _ProfileShortcut(
+                    key: const Key('sender-profile-close-account'),
+                    icon: Icons.delete_outline_rounded,
+                    title: 'Close account',
+                    subtitle: 'Permanently close your profile.',
+                    onTap: _confirmCloseAccount,
+                    danger: true,
+                    showDivider: false,
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 18),
+            _ProfileGlassCard(
+              padding: EdgeInsets.zero,
+              child: _ProfileShortcut(
+                key: const Key('sender-profile-logout'),
+                icon: Icons.logout_rounded,
+                title: 'Log out',
+                subtitle: 'Sign out of this device.',
+                onTap: _logout,
+                showDivider: false,
+              ),
+            ),
+            const SizedBox(height: 26),
           ],
         );
       },
@@ -901,7 +1009,7 @@ class _SenderMobileProfileViewState extends State<SenderMobileProfileView> {
                 _ProfileShortcut(
                   icon: Icons.notifications_none_rounded,
                   title: 'Notifications',
-                  subtitle: 'Choose how Circum keeps you informed.',
+                  subtitle: 'View delivery updates and account alerts.',
                   onTap: _openNotifications,
                 ),
                 _ProfileShortcut(
@@ -962,7 +1070,7 @@ class _SenderMobileProfileViewState extends State<SenderMobileProfileView> {
                 _ProfileShortcut(
                   icon: Icons.support_agent_rounded,
                   title: 'Help & Support',
-                  subtitle: 'Get help with your Circum account.',
+                  subtitle: 'Get help with your profile.',
                   onTap: _openSupport,
                 ),
                 _ProfileShortcut(
@@ -1515,7 +1623,7 @@ class _ProfileTrustCard extends StatelessWidget {
                 compact: true,
               ),
               _TrustMetric(
-                label: 'Trust Score',
+                label: 'Circum Trust Score',
                 value: profile.trustScoreLabel,
                 compact: true,
               ),
@@ -2912,7 +3020,7 @@ class _TrustDetailsSheet extends StatelessWidget {
                 value: profile.trustTierLabel,
               ),
               _ProfileDetail(
-                label: 'Trust Score',
+                label: 'Circum Trust Score',
                 value: profile.trustScoreLabel,
               ),
               _ProfileDetail(
@@ -2922,7 +3030,7 @@ class _TrustDetailsSheet extends StatelessWidget {
               ),
               const SizedBox(height: 16),
               Text(
-                'Trust Score reflects all qualifying account activity. '
+                'Circum Trust Score reflects all qualifying account activity. '
                 'Deliveries completed counts completed delivery records only, '
                 'so these totals may change independently.',
                 style: GoogleFonts.inter(
@@ -2990,7 +3098,7 @@ class _SenderLegalDocumentScreen extends StatelessWidget {
     return _SenderSettingsShell(
       title: title,
       subtitle: isTerms
-          ? 'Review the terms that apply to your Circum account.'
+          ? 'Review the terms that apply to your profile.'
           : 'Learn how Circum uses and protects your information.',
       children: [
         _ProfileGlassCard(

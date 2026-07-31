@@ -38,6 +38,19 @@ async function routeCheckoutSessionCompleted(
     return {handled: true, type};
   }
 
+  if (type === "sender_delivery_payment") {
+    if (!deps.senderBooking ||
+        typeof deps.senderBooking.handleSenderCheckoutSession !==
+        "function") {
+      throw new Error("sender checkout finalizer unavailable");
+    }
+    await deps.senderBooking.handleSenderCheckoutSession(
+        sessionData,
+        eventId,
+    );
+    return {handled: true, type};
+  }
+
   if (type === "gift_experience") {
     if (!deps.giftsPayment ||
         typeof deps.giftsPayment.finalizeGiftPaymentFromCheckoutSession !==

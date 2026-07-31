@@ -16,6 +16,8 @@ const websiteApp = fs.readFileSync(
 
 test("deliveryRequests reserves payment and lifecycle fields for backend/admin authority", () => {
   assert.match(rules, /function protectedDeliveryFields\(\)/);
+  assert.match(rules, /function directContactFields\(\)/);
+  assert.match(rules, /function publicDeliveryHasNoDirectContact\(data\)/);
   for (const field of [
     "paymentStatus",
     "stripePaymentIntentId",
@@ -37,6 +39,27 @@ test("deliveryRequests reserves payment and lifecycle fields for backend/admin a
       rules,
       /function isSafeDeliveryCreate\(\)[\s\S]*keys\(\)\.hasAny\(protectedFinancialCreateFields\(\)\)/,
   );
+  assert.match(
+      rules,
+      /function isSafeDeliveryCreate\(\)[\s\S]*publicDeliveryHasNoDirectContact\(request\.resource\.data\)/,
+  );
+  assert.match(
+      rules,
+      /function isOwnDeliveryUpdate\(\)[\s\S]*publicDeliveryHasNoDirectContact\(request\.resource\.data\)/,
+  );
+  for (const field of [
+    "phone",
+    "phoneNumber",
+    "mobile",
+    "contactNumber",
+    "riderPhone",
+    "senderPhone",
+    "driverPhone",
+    "courierPhone",
+    "receiverPhone",
+  ]) {
+    assert.match(rules, new RegExp(`'${field}'`));
+  }
 });
 
 test("assigned riders can only make non-authoritative offer preference updates directly", () => {
@@ -106,6 +129,17 @@ test("Stripe Connect webhook replay ledger is server-owned only", () => {
   assert.match(
       rules,
       /match \/stripeConnectWebhookEvents\/\{eventId\} \{[\s\S]*allow read, write: if false;/,
+  );
+});
+
+test("rider applications and documents are backend/admin write-authoritative", () => {
+  assert.match(
+      rules,
+      /match \/riderApplications\/\{applicationId\} \{[\s\S]*applicationId == request\.auth\.uid[\s\S]*resource\.data\.riderId == request\.auth\.uid[\s\S]*allow create, update: if isAdmin\(\);/,
+  );
+  assert.match(
+      rules,
+      /match \/riderDocuments\/\{documentId\} \{[\s\S]*allow read: if isAdmin\(\) \|\|[\s\S]*resource\.data\.riderId == request\.auth\.uid[\s\S]*allow create, update: if isAdmin\(\);/,
   );
 });
 

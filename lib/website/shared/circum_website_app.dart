@@ -1101,7 +1101,7 @@ class _HeroMockup extends StatelessWidget {
                           ),
                         ),
                         Text(
-                          'Bike courier arriving in 8 min',
+                          'Motorbike courier arriving in 8 min',
                           style: TextStyle(
                             color: colors.mutedText,
                             fontWeight: FontWeight.w600,
@@ -3168,8 +3168,8 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
   final _newEmail = TextEditingController();
   final _emailChangePassword = TextEditingController();
   final _postcode = TextEditingController(text: 'E1 6AN');
-  final _vehicle = TextEditingController(text: 'Bike');
-  final _vehicleMakeModel = TextEditingController(text: 'Volt London e-bike');
+  final _vehicle = TextEditingController(text: 'Motorbike');
+  final _vehicleMakeModel = TextEditingController(text: 'Honda PCX');
   final _vehicleColour = TextEditingController(text: 'Blue');
   final _plateNumber = TextEditingController(text: 'CIR 24K');
   final _availability = TextEditingController(text: 'Weekdays, evenings');
@@ -4671,7 +4671,10 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
                         labelText: 'Vehicle now required',
                       ),
                       items: const [
-                        DropdownMenuItem(value: 'bike', child: Text('Bike')),
+                        DropdownMenuItem(
+                          value: 'motorbike',
+                          child: Text('Motorbike'),
+                        ),
                         DropdownMenuItem(value: 'car', child: Text('Car')),
                         DropdownMenuItem(value: 'van', child: Text('Van')),
                       ],
@@ -5815,11 +5818,11 @@ class _RiderEnrollmentForm extends StatelessWidget {
                 colors: colors,
                 controller: vehicle,
                 label: 'Vehicle type',
-                options: const ['Bike', 'Car', 'Van'],
+                options: const ['Motorbike', 'Car', 'Van'],
               ),
               const SizedBox(height: 5),
               Text(
-                'Choose Bike Rider, Car Driver, or Van Driver.',
+                'Choose Motorbike Rider, Car Driver, or Van Driver.',
                 style: TextStyle(
                   color: colors.mutedText,
                   fontSize: 12,
@@ -7841,6 +7844,7 @@ class _CustomerPortalState extends State<_CustomerPortal> {
   bool _supportChat = false;
   bool _healthConsent = false;
   bool _healthSavePayment = true;
+  bool _deliveryUseRoth = false;
   bool _healthUseRoth = false;
   bool _healthSubmitting = false;
   bool _businessLoading = false;
@@ -7873,6 +7877,7 @@ class _CustomerPortalState extends State<_CustomerPortal> {
   bool _senderSecurityBusy = false;
   bool _senderProfileSaving = false;
   bool _senderSignupMode = false;
+  bool _senderCheckoutReturnHandled = false;
   bool _roleChoiceConfirmed = false;
   bool _differentCollectionContact = false;
   bool _parcelPhotoBusy = false;
@@ -8300,6 +8305,8 @@ class _CustomerPortalState extends State<_CustomerPortal> {
           pricingReason: _weightPricingReason,
           specialHandling: _specialHandling,
           vanguardEnabled: _webVanguardEnabled,
+          useRoth: _deliveryUseRoth,
+          rothBalance: _healthRothBalance,
           scheduledPickupDate: _scheduledPickupDate.text.trim(),
           scheduledPickupWindow: _scheduledPickupWindow.text.trim(),
           scheduledDropoffDate: _scheduledDropoffDate.text.trim(),
@@ -8311,6 +8318,9 @@ class _CustomerPortalState extends State<_CustomerPortal> {
             _step = _SenderStep.vehicle;
           }),
           onPay: _confirmPayment,
+          onUseRoth: (value) => setState(() {
+            _deliveryUseRoth = value ?? false;
+          }),
         ),
       _SenderStep.tracking => _TrackingStep(
           key: const ValueKey('tracking'),
@@ -8547,7 +8557,9 @@ class _CustomerPortalState extends State<_CustomerPortal> {
 
   double get _quoteTotal {
     return _quoteBreakdown.total +
-        (_webVanguardEnabled ? _webVanguardAddOnPriceGbp : 0);
+        (_webVanguardEnabled && !_webVanguardRequired
+            ? _webVanguardAddOnPriceGbp
+            : 0);
   }
 
   bool get _hasConfirmedWeight {
@@ -8750,7 +8762,7 @@ class _CustomerPortalState extends State<_CustomerPortal> {
           _vehicleSuitability,
         ) &&
         !(classification.finalWeightBand != 'Small Parcel' &&
-            _effectiveVehicle.name == 'Bike');
+            _effectiveVehicle.name == 'Motorbike');
   }
 
   _VehicleOption get _effectiveVehicle {
@@ -8803,7 +8815,6 @@ class _CustomerPortalState extends State<_CustomerPortal> {
         quantity: _irisQuantity,
         singleItemWeightKg: _irisSingleItemWeightKg,
         stackable: _irisStackable,
-        economy: _selectedSpeed == 'Economy',
         express: _selectedSpeed == 'Express',
       ),
     );
@@ -8999,11 +9010,80 @@ class _CustomerPortalState extends State<_CustomerPortal> {
       await _loadSenderDeliveries(user.uid);
       await _loadBusinessWorkspaces(user.uid);
       await _loadSenderRothBalance();
+      await _handleSenderCheckoutReturn();
     } catch (_) {
       if (!mounted) return;
       setState(() {
         _senderAuthLoading = false;
         _senderProfileMessage = 'We could not load your profile just now.';
+      });
+    }
+  }
+
+  Future<void> _handleSenderCheckoutReturn() async {
+    if (_senderCheckoutReturnHandled) return;
+    final result = Uri.base.queryParameters['sender_payment'];
+    if (result == null) return;
+    _senderCheckoutReturnHandled = true;
+    if (result == 'cancelled') {
+      if (!mounted) return;
+      setState(() {
+        _step = _SenderStep.payment;
+        _checkoutState = _CheckoutState.awaitingPayment;
+        _firebaseError =
+            'Payment was cancelled. Your delivery has not been created.';
+      });
+      return;
+    }
+    if (result != 'success') return;
+    final checkoutSessionId = Uri.base.queryParameters['checkoutSessionId'];
+    final paymentSessionId = Uri.base.queryParameters['paymentSessionId'];
+    if (checkoutSessionId == null || paymentSessionId == null) return;
+    if (!mounted) return;
+    setState(() {
+      _step = _SenderStep.payment;
+      _checkoutState = _CheckoutState.processingPayment;
+      _firebaseError = 'Confirming your payment with Stripe...';
+    });
+    try {
+      final result = await FirebaseFunctions.instanceFor(region: 'us-central1')
+          .httpsCallable('finalizeSenderWebCheckout')
+          .call({
+        'checkoutSessionId': checkoutSessionId,
+        'paymentSessionId': paymentSessionId,
+      });
+      final data = Map<String, dynamic>.from(result.data as Map);
+      final requestId = '${data['requestId'] ?? data['deliveryId'] ?? ''}';
+      if (requestId.isNotEmpty) {
+        _listenToRequest(requestId);
+        _listenToChat(requestId);
+      }
+      await _loadSenderDeliveries(_senderUser!.uid);
+      if (!mounted) return;
+      setState(() {
+        _activeOrderId = requestId;
+        _activeRequestDocId = requestId;
+        _checkoutState = _CheckoutState.matchingRiders;
+        _broadcasting = true;
+        _firebaseOnline = true;
+        _firebaseError = null;
+        _step = _SenderStep.tracking;
+      });
+    } on FirebaseFunctionsException catch (error) {
+      if (!mounted) return;
+      setState(() {
+        _checkoutState = _CheckoutState.failed;
+        _broadcasting = false;
+        _firebaseError = error.message ??
+            'Stripe payment could not be confirmed. Please contact support.';
+      });
+    } catch (_) {
+      if (!mounted) return;
+      setState(() {
+        _checkoutState = _CheckoutState.failed;
+        _broadcasting = false;
+        _firebaseError =
+            'Stripe payment could not be confirmed. Please contact support.';
       });
     }
   }
@@ -9257,7 +9337,12 @@ class _CustomerPortalState extends State<_CustomerPortal> {
                           error = null;
                         });
                         try {
-                          Stripe.publishableKey = Env.publishableTestKey;
+                          if (Env.stripePublishableKey.trim().isEmpty) {
+                            throw StateError(
+                              'Stripe publishable key is not configured.',
+                            );
+                          }
+                          Stripe.publishableKey = Env.stripePublishableKey;
                           await Stripe.instance.applySettings();
                           final payment = await FirebaseFunctions.instance
                               .httpsCallable('createDeliveryAdjustmentPayment')
@@ -11196,62 +11281,68 @@ class _CustomerPortalState extends State<_CustomerPortal> {
           return;
         }
       }
-      final sessionResult =
-          await functions.httpsCallable('createSenderPaymentSession').call({
-        'quoteId': quote['quoteId'],
-        'fallbackMethod': 'card',
-        'rothEnabled': false,
-      });
-      final session = Map<String, dynamic>.from(sessionResult.data as Map);
-      final clientSecret = '${session['clientSecret'] ?? ''}';
-      if (clientSecret.isNotEmpty) {
-        Stripe.publishableKey = Env.publishableTestKey;
-        await Stripe.instance.applySettings();
-        await Stripe.instance.initPaymentSheet(
-          paymentSheetParameters: SetupPaymentSheetParameters(
-            paymentIntentClientSecret: clientSecret,
-            customerId: '${session['customerId'] ?? ''}',
-            customerEphemeralKeySecret:
-                '${session['ephemeralKeySecret'] ?? ''}',
-            merchantDisplayName: 'Circum',
-            style: ThemeMode.dark,
-          ),
-        );
-        await Stripe.instance.presentPaymentSheet();
-      }
       final parcelPhotoData = await _uploadParcelPhoto(id);
       final request = _requestPayload(id, parcelPhotoData);
-      final paidDeliveryResult =
-          await functions.httpsCallable('createSenderPaidDelivery').call({
+      final deliveryPayload = {
         'requestId': id,
-        'quoteId': quote['quoteId'],
-        'paymentSessionId': session['paymentSessionId'],
-        'idempotencyKey': id,
         'pickup': _webCanonicalPickupPayload(request),
         'dropoff': _webCanonicalDropoffPayload(request),
         'recipient': _webCanonicalRecipientPayload(request),
         'parcel': _webCanonicalParcelPayload(request),
         'iris': _webCanonicalIrisPayload(),
         'deliveryTime': _webCanonicalDeliveryTimePayload(),
+      };
+      final sessionResult =
+          await functions.httpsCallable('createSenderPaymentSession').call({
+        'quoteId': quote['quoteId'],
+        'fallbackMethod': 'card',
+        'rothEnabled': _deliveryUseRoth,
+        'checkoutMode': 'web_checkout',
+        'requestId': id,
+        'idempotencyKey': id,
+        'returnUrl': 'https://circum-2797c.web.app/send',
+        'deliveryPayload': deliveryPayload,
       });
-      final paidDelivery = Map<String, dynamic>.from(
-        paidDeliveryResult.data as Map,
-      );
-      final requestId = '${paidDelivery['requestId'] ?? id}';
-      _activeVanguardData = request['vanguardEnabled'] == true
-          ? Map<String, dynamic>.from(request)
-          : null;
-      _listenToRequest(requestId);
-      _listenToChat(requestId);
-      if (!mounted) return;
+      final session = Map<String, dynamic>.from(sessionResult.data as Map);
+      if ('${session['paymentStatus'] ?? session['status']}' == 'succeeded') {
+        final paidDeliveryResult =
+            await functions.httpsCallable('createSenderPaidDelivery').call({
+          ...deliveryPayload,
+          'quoteId': quote['quoteId'],
+          'paymentSessionId': session['paymentSessionId'],
+          'idempotencyKey': id,
+        });
+        final paidDelivery = Map<String, dynamic>.from(
+          paidDeliveryResult.data as Map,
+        );
+        final requestId = '${paidDelivery['requestId'] ?? id}';
+        _activeVanguardData = request['vanguardEnabled'] == true
+            ? Map<String, dynamic>.from(request)
+            : null;
+        _listenToRequest(requestId);
+        _listenToChat(requestId);
+        if (!mounted) return;
+        setState(() {
+          _activeOrderId = requestId;
+          _activeRequestDocId = requestId;
+          _checkoutState = _CheckoutState.matchingRiders;
+          _broadcasting = true;
+          _firebaseOnline = true;
+          _step = _SenderStep.tracking;
+        });
+        return;
+      }
+      final checkoutUrl = Uri.tryParse('${session['checkoutUrl'] ?? ''}');
+      if (checkoutUrl == null || checkoutUrl.host.isEmpty) {
+        throw StateError('Secure Stripe Checkout could not be opened.');
+      }
       setState(() {
-        _activeOrderId = requestId;
-        _activeRequestDocId = requestId;
-        _checkoutState = _CheckoutState.matchingRiders;
-        _broadcasting = true;
-        _firebaseOnline = true;
-        _step = _SenderStep.tracking;
+        _firebaseError = 'Complete payment securely with Stripe.';
       });
+      final opened = await launchUrl(checkoutUrl, webOnlyWindowName: '_self');
+      if (!opened) {
+        throw StateError('Secure Stripe Checkout could not be opened.');
+      }
     } catch (_) {
       if (!mounted) return;
       setState(() {
@@ -11717,19 +11808,6 @@ class _CustomerPortalState extends State<_CustomerPortal> {
     final dropoffAddress = _validatedDropoff!;
     final distanceMiles = _confirmedRouteDistanceMiles!;
     final handling = _specialHandling;
-    final economyQuote = handling.applyTo(
-      DeliveryPricing.calculate(
-        DeliveryPricingInput(
-          distanceMiles: distanceMiles,
-          weightKg: classification.finalWeightKg,
-          vehicleType: _effectiveVehicle.name,
-          quantity: _irisQuantity,
-          singleItemWeightKg: _irisSingleItemWeightKg,
-          stackable: _irisStackable,
-          economy: true,
-        ),
-      ),
-    );
     final standardQuote = handling.applyTo(
       DeliveryPricing.calculate(
         DeliveryPricingInput(
@@ -11756,7 +11834,6 @@ class _CustomerPortalState extends State<_CustomerPortal> {
       ),
     );
     final selectedServiceLevel = switch (_selectedSpeed) {
-      'Economy' => 'economy',
       'Express' => 'express',
       _ => 'standard',
     };
@@ -11784,7 +11861,9 @@ class _CustomerPortalState extends State<_CustomerPortal> {
       manuallySelected: _webVanguardSelected,
     );
     final vanguardEnabled = vanguardFields['vanguardEnabled'] == true;
-    final vanguardAddOn = vanguardEnabled ? _webVanguardAddOnPriceGbp : 0.0;
+    final vanguardIncluded = _webVanguardRequired;
+    final vanguardAddOn =
+        vanguardEnabled && !vanguardIncluded ? _webVanguardAddOnPriceGbp : 0.0;
     final customerTotal = quote.total + vanguardAddOn;
     final hasPhoto = parcelPhotoData['hasPhoto'] == true;
     final parcelPhotoUrl =
@@ -11928,9 +12007,7 @@ class _CustomerPortalState extends State<_CustomerPortal> {
       'vanguardProtocolEnabled': vanguardEnabled,
       'serviceType': selectedServiceLevel == 'express'
           ? 'Express Delivery'
-          : selectedServiceLevel == 'economy'
-              ? 'Economy Delivery'
-              : 'Normal Delivery',
+          : 'Normal Delivery',
     };
     return {
       'requestId': id,
@@ -12052,7 +12129,6 @@ class _CustomerPortalState extends State<_CustomerPortal> {
       'selectedTier': selectedServiceLevel,
       'serviceLevel': selectedServiceLevel,
       'selectedServiceLevel': selectedServiceLevel,
-      'economyPrice': economyQuote.total,
       'standardPrice': standardQuote.total,
       'expressPrice': expressQuote.total,
       'basePrice': standardQuote.total,
@@ -18904,25 +18980,26 @@ class _HealthCheckoutPanel extends StatelessWidget {
             style: TextStyle(color: colors.text, fontWeight: FontWeight.w800),
           ),
         ),
-        CheckboxListTile(
-          contentPadding: EdgeInsets.zero,
-          value: useRoth,
-          onChanged: onUseRoth,
-          activeColor: colors.text,
-          title: Text(
-            'Apply Roth',
-            style: TextStyle(color: colors.text, fontWeight: FontWeight.w800),
-          ),
-          subtitle: Text(
-            frequency == HealthPlusFrequency.oneOff
-                ? 'Available: £${rothBalance.toStringAsFixed(2)}. Any remaining balance is paid securely by card.'
-                : 'Available: £${rothBalance.toStringAsFixed(2)}. Roth applies to the first subscription payment; future renewals continue securely by card.',
-            style: TextStyle(
-              color: colors.mutedText,
-              fontWeight: FontWeight.w700,
+        if (rothBalance > 0)
+          CheckboxListTile(
+            contentPadding: EdgeInsets.zero,
+            value: useRoth,
+            onChanged: onUseRoth,
+            activeColor: colors.text,
+            title: Text(
+              'Apply Roth balance',
+              style: TextStyle(color: colors.text, fontWeight: FontWeight.w800),
+            ),
+            subtitle: Text(
+              frequency == HealthPlusFrequency.oneOff
+                  ? 'Store credit available: £${rothBalance.toStringAsFixed(2)}. Any remaining amount is paid securely by card.'
+                  : 'Store credit available: £${rothBalance.toStringAsFixed(2)}. Roth applies to the first subscription payment; future renewals continue securely by card.',
+              style: TextStyle(
+                color: colors.mutedText,
+                fontWeight: FontWeight.w700,
+              ),
             ),
           ),
-        ),
         const SizedBox(height: 10),
         if (message != null)
           Padding(
@@ -20711,12 +20788,15 @@ class _PaymentStep extends StatelessWidget {
   final String? pricingReason;
   final SpecialHandlingResult specialHandling;
   final bool vanguardEnabled;
+  final bool useRoth;
+  final double rothBalance;
   final String scheduledPickupDate;
   final String scheduledPickupWindow;
   final String scheduledDropoffDate;
   final String scheduledDropoffWindow;
   final VoidCallback onBack;
   final VoidCallback onPay;
+  final ValueChanged<bool?> onUseRoth;
 
   const _PaymentStep({
     super.key,
@@ -20737,12 +20817,15 @@ class _PaymentStep extends StatelessWidget {
     required this.pricingReason,
     required this.specialHandling,
     required this.vanguardEnabled,
+    required this.useRoth,
+    required this.rothBalance,
     required this.scheduledPickupDate,
     required this.scheduledPickupWindow,
     required this.scheduledDropoffDate,
     required this.scheduledDropoffWindow,
     required this.onBack,
     required this.onPay,
+    required this.onUseRoth,
   });
 
   String _scheduleText(String date, String window) {
@@ -20759,6 +20842,8 @@ class _PaymentStep extends StatelessWidget {
         scheduledDropoffDate.isNotEmpty ||
         scheduledDropoffWindow.isNotEmpty;
     final processingPayment = checkoutState == _CheckoutState.processingPayment;
+    final rothApplied = useRoth ? math.min(rothBalance, total) : 0.0;
+    final stripeAmount = math.max(total - rothApplied, 0.0);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -20859,7 +20944,6 @@ class _PaymentStep extends StatelessWidget {
                 colors: colors,
                 label: 'Service',
                 value: switch (speed) {
-                  'Economy' => 'Economy - lowest price',
                   'Express' => 'Express - priority matching',
                   _ => 'Standard - flexible pickup',
                 },
@@ -20956,21 +21040,75 @@ class _PaymentStep extends StatelessWidget {
                 ),
                 child: Row(
                   children: [
-                    Icon(Icons.credit_card, color: colors.text),
+                    Icon(Icons.lock_outline, color: colors.text),
                     const SizedBox(width: 12),
                     Expanded(
                       child: Text(
-                        'Visa ending 4242',
+                        'Secure Stripe Checkout',
                         style: TextStyle(
                           color: colors.text,
                           fontWeight: FontWeight.w800,
                         ),
                       ),
                     ),
-                    Icon(Icons.check_circle, color: colors.success),
+                    Text(
+                      'Card or Apple Pay',
+                      style: TextStyle(
+                        color: colors.mutedText,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
                   ],
                 ),
               ),
+              if (rothBalance > 0) ...[
+                const SizedBox(height: 12),
+                Container(
+                  padding: const EdgeInsets.all(14),
+                  decoration: BoxDecoration(
+                    color: colors.field.withValues(alpha: 0.62),
+                    borderRadius: BorderRadius.circular(16),
+                    border: Border.all(color: colors.border),
+                  ),
+                  child: Row(
+                    children: [
+                      Icon(
+                        Icons.account_balance_wallet_outlined,
+                        color: colors.mutedText,
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'Apply Roth balance',
+                              style: TextStyle(
+                                color: colors.text,
+                                fontWeight: FontWeight.w800,
+                              ),
+                            ),
+                            const SizedBox(height: 4),
+                            Text(
+                              useRoth
+                                  ? 'Store credit covers £${rothApplied.toStringAsFixed(2)}. Stripe collects £${stripeAmount.toStringAsFixed(2)} if anything remains.'
+                                  : 'Store credit available: £${rothBalance.toStringAsFixed(2)}.',
+                              style: TextStyle(
+                                color: colors.mutedText,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      Switch.adaptive(
+                        value: useRoth,
+                        onChanged: processingPayment ? null : onUseRoth,
+                      ),
+                    ],
+                  ),
+                ),
+              ],
             ],
           ),
         ),
@@ -20995,7 +21133,9 @@ class _PaymentStep extends StatelessWidget {
                   : !locationsConfirmed
                       ? 'Confirm pickup and drop-off before payment'
                       : weightConfirmed
-                          ? 'Pay £${total.toStringAsFixed(2)} & Broadcast'
+                          ? stripeAmount > 0
+                              ? 'Pay £${stripeAmount.toStringAsFixed(2)} & Broadcast'
+                              : 'Confirm & Broadcast'
                           : 'Confirm parcel weight before payment',
             ),
             style: FilledButton.styleFrom(
@@ -24072,7 +24212,7 @@ class _VehicleTile extends StatelessWidget {
     final enabled = disabledReason == null;
     final surcharge = DeliveryPricing.calculateVehicleSurcharge(vehicle.name);
     final priceLabel = switch (vehicle.name) {
-      'Bike' => 'No surcharge',
+      'Motorbike' => 'No surcharge',
       'Car' => surcharge == 0
           ? 'Standard vehicle'
           : 'Standard vehicle · +£${surcharge.toStringAsFixed(2)}',
@@ -24168,15 +24308,13 @@ class _SpeedToggle extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     const serviceCopy = {
-      'Economy':
-          'Cheapest option. Slower matching. Best when the parcel is not urgent.',
       'Standard':
           'Balanced price. Normal rider broadcast. Best for everyday deliveries.',
       'Express':
           'Priority matching. Faster pickup. Best for urgent deliveries.',
     };
     return Column(
-      children: ['Economy', 'Standard', 'Express'].map((speed) {
+      children: ['Standard', 'Express'].map((speed) {
         final active = selected == speed;
         return Padding(
           padding: const EdgeInsets.only(bottom: 10),
@@ -24389,7 +24527,7 @@ class _DriverCard extends StatelessWidget {
               'fullName': 'Marcus A.',
               'vehicleType': vehicle.name,
               'vehicleMakeModel':
-                  vehicle.name == 'Bike' ? 'E-bike' : 'Toyota Prius',
+                  vehicle.name == 'Motorbike' ? 'Honda PCX' : 'Toyota Prius',
               'vehicleColour': 'Blue',
               'plateNumber': 'CIR 24K',
               'verificationStatus': 'verified',
@@ -27926,8 +28064,8 @@ class _ChatMessage {
 
 const _vehicles = [
   _VehicleOption(
-    name: 'Bike',
-    emoji: '🚲',
+    name: 'Motorbike',
+    emoji: '🏍️',
     caption: 'Small parcels and documents across town',
     eta: '8 min',
   ),

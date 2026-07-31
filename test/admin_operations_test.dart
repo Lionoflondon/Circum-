@@ -7,6 +7,21 @@ import 'package:flutter_test/flutter_test.dart';
 
 void main() {
   group('Admin operations', () {
+    test('Rider Application Centre records are connected to Admin', () {
+      final adminShell =
+          File('lib/app/admin/admin_phase1_shell.dart').readAsStringSync();
+
+      expect(adminShell, contains("collection('riderApplications')"));
+      expect(adminShell, contains("collection('riderDocuments')"));
+      expect(adminShell, contains("collection('riderOnboardingEvents')"));
+      expect(adminShell, contains('riderApplications'));
+      expect(adminShell, contains('riderOnboardingEvents'));
+      expect(adminShell, contains('Rider application review'));
+      expect(adminShell, contains('Application Centre'));
+      expect(adminShell, contains('Rider onboarding events'));
+      expect(adminShell, contains('_sectionStatusSummary'));
+    });
+
     test('support ticket actions reflect resolved status', () {
       expect(AdminSupportTools.actionsForStatus('open'), [
         'Assign',

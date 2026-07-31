@@ -6,12 +6,14 @@ import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
+import 'package:flutter_stripe/flutter_stripe.dart';
 
 import 'app.dart';
 import 'app/account/bloc/account_bloc.dart';
 import 'app/security/circum_app_check.dart';
 import 'app/sender_mobile/sender_notification_routing.dart';
 import 'app/send_package/bloc/send_package_bloc.dart';
+import 'env/env.dart';
 import 'helper/chats_help.dart';
 import 'helper/notifications_helper.dart';
 
@@ -26,6 +28,7 @@ final NotificationService _notificationService = NotificationService();
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  await _configureStripe();
   await Firebase.initializeApp();
   final appCheckStartup = await initializeCircumAppCheck();
   if (appCheckStartup.blockStartup) {
@@ -40,6 +43,13 @@ Future<void> main() async {
   }
 
   runApp(const App());
+}
+
+Future<void> _configureStripe() async {
+  final key = Env.stripePublishableKey.trim();
+  if (key.isEmpty) return;
+  Stripe.publishableKey = key;
+  await Stripe.instance.applySettings();
 }
 
 class CircumStartupBlocked extends StatelessWidget {

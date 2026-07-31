@@ -3,6 +3,7 @@ const functions = require("firebase-functions/v1");
 const {getFirestore, FieldValue} = require("firebase-admin/firestore");
 const {getStorage} = require("firebase-admin/storage");
 const {requireAdmin} = require("./admin-auth");
+const {payoutReadiness} = require("./rider-certification-policy");
 
 const RIDER_ACTIONS = new Set([
   "approve",
@@ -54,6 +55,13 @@ function assertRiderAdmin(context) {
       "permission-denied",
       "Rider manager access is required.",
   );
+}
+
+function isSuperAdminContext(context) {
+  const roles = roleValues(context.auth.token || {});
+  return context.auth.token.superAdmin === true ||
+    context.auth.token.super_admin === true ||
+    roles.has("super_admin");
 }
 
 function requestIdFor(data, actorId) {
@@ -225,6 +233,7 @@ exports.adminReviewRider = functions.https.onCall(async (data, context) => {
   const documentStatus = lower(data && data.documentStatus);
   const eligibilityState = lower(data && data.eligibilityState);
   const idempotencyKey = requestIdFor(data || {}, actorId);
+  const overrideCompliance = data && data.overrideCompliance === true;
 
   if (!riderId || !RIDER_ACTIONS.has(action)) {
     throw new functions.https.HttpsError("invalid-argument", "A Rider and supported action are required.");
@@ -299,6 +308,54 @@ exports.adminReviewRider = functions.https.onCall(async (data, context) => {
       eventAction = `eligibility_${eligibilityState}`;
     }
     if (patch) {
+      if (action === "approve") {
+        const documentSnapshot = await transaction.get(
+            db.collection("riderDocuments").where("riderId", "==", riderId).limit(100),
+        );
+        const readiness = payoutReadiness(
+            {
+              ...rider,
+              ...profile,
+              onboardingStatus: "approved",
+              approvalStatus: "approved",
+              verificationStatus: "approved",
+            },
+            documentSnapshot.docs.map((doc) => ({id: doc.id, ...doc.data()})),
+        );
+        const failedApprovalChecks = Object.entries(readiness.checks)
+            .filter(([key, ok]) => ok !== true && ![
+              "stripeAccountExists",
+              "stripeDetailsSubmitted",
+              "chargesEnabled",
+              "payoutsEnabled",
+              "noDisabledReason",
+              "noComplianceRestrictions",
+            ].includes(key))
+            .map(([key]) => key);
+        if (failedApprovalChecks.length > 0) {
+          if (!overrideCompliance || !isSuperAdminContext(context)) {
+            throw new functions.https.HttpsError(
+                "failed-precondition",
+                "Rider cannot be approved until mandatory application, identity and document requirements pass.",
+                {
+                  missingDocuments: readiness.missingDocuments,
+                  failedChecks: failedApprovalChecks,
+                },
+            );
+          }
+          if (!reason || reason.length < 12) {
+            throw new functions.https.HttpsError(
+                "invalid-argument",
+                "Super Admin compliance override requires a detailed reason.",
+            );
+          }
+          patch.complianceOverride = true;
+          patch.complianceOverrideBy = actor.uid;
+          patch.complianceOverrideReason = reason;
+          patch.complianceOverrideAt = FieldValue.serverTimestamp();
+          patch.complianceOverrideFailedChecks = failedApprovalChecks;
+        }
+      }
       transaction.set(riderRef, patch, {merge: true});
       transaction.set(profileRef, patch, {merge: true});
     }

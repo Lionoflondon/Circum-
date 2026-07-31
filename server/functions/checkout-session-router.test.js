@@ -63,6 +63,26 @@ test("wallet top-up checkout uses Roth ledger finalizer", async () => {
   assert.equal(calls[0].eventId, "evt_3");
 });
 
+test("Sender delivery checkout uses Sender finalizer for lost redirect recovery", async () => {
+  const calls = [];
+  const result = await routeCheckoutSessionCompleted(
+      {id: "cs_sender", metadata: {type: "sender_delivery_payment", paymentSessionId: "quote-1"}},
+      "evt_sender",
+      {
+        senderBooking: {
+          handleSenderCheckoutSession: async (session, eventId) => {
+            calls.push({session, eventId});
+          },
+        },
+      },
+  );
+
+  assert.deepEqual(result, {handled: true, type: "sender_delivery_payment"});
+  assert.equal(calls.length, 1);
+  assert.equal(calls[0].session.id, "cs_sender");
+  assert.equal(calls[0].eventId, "evt_sender");
+});
+
 test("gift checkout uses the Gifts finalizer for lost redirect recovery", async () => {
   const calls = [];
   const result = await routeCheckoutSessionCompleted(

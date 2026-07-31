@@ -5,9 +5,12 @@ import 'dart:ui';
 import 'package:cloud_functions/cloud_functions.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:google_maps_flutter/google_maps_flutter.dart';
 
 import '../delivery/proof_of_delivery.dart';
+import '../../helper/bitmap_descriptor_helper.dart';
 import '../send_package/bloc/send_package_bloc.dart';
+import '../send_package/models/place_coordinates.m.dart';
 import '../send_package/view/ride_chats.dart';
 import 'design_system/sender_design_system.dart';
 import 'sender_accessibility.dart';
@@ -82,7 +85,10 @@ class SenderTrackingContent {
   SenderTrackingContent copyWith({
     bool? showRider,
     bool? showAnonymousRiders,
+    bool? showCollectionPin,
+    bool? showReceiverPin,
     bool? showRiderCard,
+    bool? showVanguard,
   }) {
     return SenderTrackingContent(
       title: title,
@@ -96,11 +102,11 @@ class SenderTrackingContent {
       showDropoffPin: showDropoffPin,
       showRider: showRider ?? this.showRider,
       showAnonymousRiders: showAnonymousRiders ?? this.showAnonymousRiders,
-      showCollectionPin: showCollectionPin,
-      showReceiverPin: showReceiverPin,
+      showCollectionPin: showCollectionPin ?? this.showCollectionPin,
+      showReceiverPin: showReceiverPin ?? this.showReceiverPin,
       showRiderCard: showRiderCard ?? this.showRiderCard,
       showIris: showIris,
-      showVanguard: showVanguard,
+      showVanguard: showVanguard ?? this.showVanguard,
       quietVanguard: quietVanguard,
       issueVanguard: issueVanguard,
       deliveredVerified: deliveredVerified,
@@ -149,20 +155,18 @@ SenderDeliveryMapMode senderDeliveryMapModeFor({
 }
 
 SenderTrackingState senderTrackingStateForEngine(SendPackageState engine) {
-  final backendState = senderTrackingStateForBackendStatus(
-    engine.deliveryRequestStatus,
+  final backendState = senderTrackingStateForBackendData(
+    engine.activeDeliveryData,
+    fallbackStatus: engine.deliveryRequestStatus,
   );
   if (backendState != null) return backendState;
-  final data = engine.deliveryData;
   if (engine.senderDeliveryError.isNotEmpty) return SenderTrackingState.error;
   switch (engine.deliveryStatus) {
     case DeliveryStatus.deliveryConfirmed:
     case DeliveryStatus.reconnectingWithRider:
-      return data == null
-          ? SenderTrackingState.findingRider
-          : SenderTrackingState.riderAssigned;
+      return SenderTrackingState.findingRider;
     case DeliveryStatus.deliveryOnGoing:
-      return SenderTrackingState.inTransit;
+      return SenderTrackingState.findingRider;
     case DeliveryStatus.deliveryCompleted:
       return SenderTrackingState.delivered;
     case DeliveryStatus.inital:
@@ -241,8 +245,134 @@ SenderTrackingState? senderTrackingStateForBackendStatus(Object? status) {
     'failed_delivery' =>
       SenderTrackingState.issue,
     'error' => SenderTrackingState.error,
-    _ => SenderTrackingState.inTransit,
+    _ => null,
   };
+}
+
+SenderTrackingState? senderTrackingStateForBackendData(
+  Map<String, dynamic> data, {
+  Object? fallbackStatus,
+}) {
+  final status = _normalizeTrackingStatus(
+    data['status'] ??
+        data['deliveryStatus'] ??
+        data['deliveryStage'] ??
+        fallbackStatus,
+  );
+  if (status.isEmpty) return null;
+  final assigned = _senderHasBackendAssignment(data);
+  final collectionProof = _senderHasBackendCollectionProof(data);
+  final deliveryProof = _senderHasBackendDeliveryProof(data);
+
+  if ({
+    'requested',
+    'pending',
+    'unmatched',
+    'finding_rider',
+    'awaiting_rider',
+    'broadcast',
+    'broadcasted',
+    'broadcasting',
+    'available',
+  }.contains(status)) {
+    return SenderTrackingState.findingRider;
+  }
+  if (status == 'accepted' || status == 'rider_assigned') {
+    return assigned
+        ? SenderTrackingState.riderAssigned
+        : SenderTrackingState.findingRider;
+  }
+  if (status == 'navigating_to_pickup' || status == 'en_route_to_pickup') {
+    return assigned
+        ? SenderTrackingState.riderEnRouteToPickup
+        : SenderTrackingState.findingRider;
+  }
+  if ({
+    'arrived_at_pickup',
+    'waiting',
+    'waiting_for_collection',
+    'waiting_charge_active',
+    'waiting_charges_active',
+    'no_show_review',
+  }.contains(status)) {
+    return assigned
+        ? SenderTrackingState.riderArrivedAtPickup
+        : SenderTrackingState.findingRider;
+  }
+  if ({
+    'pickup_verification',
+    'pickup_verified',
+    'collected',
+  }.contains(status)) {
+    if (assigned && collectionProof) return SenderTrackingState.pickupComplete;
+    return assigned
+        ? SenderTrackingState.riderArrivedAtPickup
+        : SenderTrackingState.findingRider;
+  }
+  if ({
+    'delivery_on_going',
+    'outfordelivery',
+    'out_for_delivery',
+    'in_transit',
+    'navigating_to_dropoff',
+  }.contains(status)) {
+    if (assigned && collectionProof) return SenderTrackingState.inTransit;
+    return assigned
+        ? SenderTrackingState.riderArrivedAtPickup
+        : SenderTrackingState.findingRider;
+  }
+  if ({
+    'arrived_at_dropoff',
+    'pin_required',
+    'handover_pending',
+  }.contains(status)) {
+    if (assigned && collectionProof) {
+      return SenderTrackingState.riderArrivingAtDropoff;
+    }
+    return assigned
+        ? SenderTrackingState.riderArrivedAtPickup
+        : SenderTrackingState.findingRider;
+  }
+  if (status == 'delivered' ||
+      status == 'completed' ||
+      status == 'delivery_completed') {
+    return deliveryProof
+        ? SenderTrackingState.delivered
+        : SenderTrackingState.riderArrivingAtDropoff;
+  }
+  return senderTrackingStateForBackendStatus(status);
+}
+
+bool _senderHasBackendAssignment(Map<String, dynamic> data) {
+  return [
+    data['riderId'],
+    data['driverId'],
+    data['assignedRider'],
+    data['assignedRiderId'],
+    data['assignedDriverId'],
+    data['courierId'],
+  ].any((value) => '$value'.trim().isNotEmpty && '$value'.trim() != 'null');
+}
+
+bool _senderHasBackendCollectionProof(Map<String, dynamic> data) {
+  return data['collectionConfirmed'] == true ||
+      data['collectionPinVerified'] == true ||
+      data['pickupVerified'] == true ||
+      data['parcelCollected'] == true ||
+      data['collectedAt'] != null ||
+      data['collectionConfirmedAt'] != null ||
+      data['pickupCompletedAt'] != null ||
+      data['pickupVerifiedAt'] != null ||
+      data['collectionTimestamp'] != null;
+}
+
+bool _senderHasBackendDeliveryProof(Map<String, dynamic> data) {
+  return data['deliveryPinVerified'] == true ||
+      data['receiverPinVerified'] == true ||
+      data['deliveredAt'] != null ||
+      data['completedAt'] != null ||
+      data['deliveryCompletedAt'] != null ||
+      data['receiverPinVerifiedAt'] != null;
 }
 
 SenderTrackingContent senderTrackingContentFor(
@@ -528,11 +658,83 @@ String senderReceiverPinStatusFor(
 }
 
 bool senderVanguardCollectionPinVisible(SendPackageState engine) {
-  return senderVanguardCollectionPinFor(engine) != null;
+  return senderCollectionCredentialAvailableFor(engine);
 }
 
-String? senderVanguardCollectionPinFor(SendPackageState engine) {
-  return null;
+bool senderBackendVanguardEnabled(SendPackageState engine) {
+  final data = engine.activeDeliveryData;
+  final pricing = _mapFrom(data['pricingBreakdown']);
+  final dispatchProtocol = _mapFrom(data['dispatchProtocol']);
+  final backendEnabled = _truthy(data['vanguardProtocolEnabled']) ||
+      _truthy(data['vanguardEnabled']) ||
+      _truthy(data['requiresVanguard']) ||
+      _truthy(dispatchProtocol['vanguard']) ||
+      _truthy(pricing['vanguardProtocolEnabled']) ||
+      _truthy(pricing['vanguardRequired']);
+  if (!backendEnabled) return false;
+
+  final selectedOrRequired = _truthy(data['vanguardSelected']) ||
+      _truthy(data['vanguardRequested']) ||
+      _truthy(data['vanguardProtocolEnabled']) ||
+      _truthy(data['requiresVanguard']) ||
+      _truthy(pricing['vanguardProtocolEnabled']) ||
+      _truthy(pricing['vanguardRequired']);
+  if (!selectedOrRequired) return false;
+
+  final paidOrIncluded = _truthy(data['vanguardPaid']) ||
+      _truthy(data['vanguardIncluded']) ||
+      _truthy(pricing['vanguardIncluded']) ||
+      _moneyValue(data['vanguardFee']) > 0 ||
+      _moneyValue(data['vanguardPrice']) > 0 ||
+      _vanguardLineItemPresent(pricing['lineItems']);
+  return paidOrIncluded;
+}
+
+bool senderCollectionCredentialAvailableFor(SendPackageState engine) {
+  final data = engine.activeDeliveryData;
+  return _truthy(data['collectionPinGenerated']) ||
+      _truthy(data['collectionPinReady']) ||
+      _truthy(data['collectionCredentialReady']) ||
+      _truthy(data['pickupCredentialReady']) ||
+      _truthy(data['collectionVerificationReady']) ||
+      _truthy(data['collectionPinVerified']) ||
+      _truthy(data['pickupVerified']);
+}
+
+bool senderReceiverCredentialAvailableFor(SendPackageState engine) {
+  final data = engine.activeDeliveryData;
+  return _truthy(data['receiverPinGenerated']) ||
+      _truthy(data['receiverPinReady']) ||
+      _truthy(data['receiverCredentialReady']) ||
+      _truthy(data['dropoffCredentialReady']) ||
+      _truthy(data['handoverCredentialReady']) ||
+      _truthy(data['receiverPinVerified']) ||
+      _truthy(data['deliveryPinVerified']);
+}
+
+bool _truthy(Object? value) {
+  if (value == true) return true;
+  final text = '${value ?? ''}'.trim().toLowerCase();
+  return text == 'true' || text == 'yes' || text == '1';
+}
+
+double _moneyValue(Object? value) {
+  if (value is num) return value.toDouble();
+  if (value is String) {
+    final cleaned = value.replaceAll(RegExp(r'[^0-9.\-]'), '');
+    return double.tryParse(cleaned) ?? 0;
+  }
+  return 0;
+}
+
+bool _vanguardLineItemPresent(Object? value) {
+  if (value is! Iterable) return false;
+  for (final raw in value) {
+    final item = _mapFrom(raw);
+    final key = '${item['key'] ?? item['label'] ?? ''}'.toLowerCase();
+    if (key.contains('vanguard')) return true;
+  }
+  return false;
 }
 
 String _senderWaitingStateLabel({
@@ -682,10 +884,7 @@ String senderVehicleMarkerKindFor(String? vehicle) {
   return 'unknown';
 }
 
-String? senderLiveLocationStaleLabel(
-  DateTime? updatedAt, {
-  DateTime? now,
-}) {
+String? senderLiveLocationStaleLabel(DateTime? updatedAt, {DateTime? now}) {
   if (updatedAt == null) return null;
   final age = (now ?? DateTime.now()).difference(updatedAt);
   if (age.inMinutes >= 2) return 'Last seen ${age.inMinutes} min ago';
@@ -765,19 +964,23 @@ class _SenderMobileTrackingScreenState extends State<SenderMobileTrackingScreen>
     switch (state) {
       case SenderTrackingState.riderAssigned:
         await controller?.haptic(SenderFeedbackEvent.riderAccepted);
-        await controller
-            ?.announceDelivery(SenderDeliveryAnnouncement.riderAccepted);
+        await controller?.announceDelivery(
+          SenderDeliveryAnnouncement.riderAccepted,
+        );
       case SenderTrackingState.riderArrivedAtPickup:
         await controller?.haptic(SenderFeedbackEvent.riderArrived);
-        await controller
-            ?.announceDelivery(SenderDeliveryAnnouncement.riderArrived);
+        await controller?.announceDelivery(
+          SenderDeliveryAnnouncement.riderArrived,
+        );
       case SenderTrackingState.pickupComplete:
-        await controller
-            ?.announceDelivery(SenderDeliveryAnnouncement.pickupComplete);
+        await controller?.announceDelivery(
+          SenderDeliveryAnnouncement.pickupComplete,
+        );
       case SenderTrackingState.delivered:
         await controller?.haptic(SenderFeedbackEvent.deliveryCompleted);
-        await controller
-            ?.announceDelivery(SenderDeliveryAnnouncement.deliveryCompleted);
+        await controller?.announceDelivery(
+          SenderDeliveryAnnouncement.deliveryCompleted,
+        );
       case SenderTrackingState.error:
       case SenderTrackingState.issue:
         await controller?.haptic(SenderFeedbackEvent.error);
@@ -815,27 +1018,38 @@ class _SenderMobileTrackingScreenState extends State<SenderMobileTrackingScreen>
       paymentStatus: widget.engine.senderPaymentStatus,
       trackingState: state,
     );
-    final visibleContent = mapMode == SenderDeliveryMapMode.liveTracking
+    final baseVisibleContent = mapMode == SenderDeliveryMapMode.liveTracking
         ? content.copyWith(showAnonymousRiders: false)
         : state == SenderTrackingState.findingRider
-            ? content.copyWith(
-                showRider: false,
-                showRiderCard: false,
-              )
+            ? content.copyWith(showRider: false, showRiderCard: false)
             : content.copyWith(
                 showRider: false,
                 showAnonymousRiders: false,
                 showRiderCard: false,
               );
+    final collectionCredentialReady = senderCollectionCredentialAvailableFor(
+      widget.engine,
+    );
+    final receiverCredentialReady = senderReceiverCredentialAvailableFor(
+      widget.engine,
+    );
+    final visibleContent = baseVisibleContent.copyWith(
+      showVanguard: baseVisibleContent.showVanguard &&
+          senderBackendVanguardEnabled(widget.engine),
+      showCollectionPin:
+          baseVisibleContent.showCollectionPin && collectionCredentialReady,
+      showReceiverPin:
+          baseVisibleContent.showReceiverPin && receiverCredentialReady,
+    );
     final riderPosition = _riderPositionForEngine(widget.engine, content);
     final staleLabel = visibleContent.showRider
         ? senderLiveLocationStaleLabel(widget.engine.riderLiveLocationUpdatedAt)
         : null;
     final delivered = state == SenderTrackingState.delivered;
-    final vanguardPin = senderVanguardCollectionPinFor(widget.engine);
     return Stack(
       children: [
         SenderTrackingMapLayer(
+          engine: widget.engine,
           content: visibleContent,
           riderPosition: riderPosition,
           vehicleKind: senderVehicleMarkerKindFor(
@@ -853,19 +1067,6 @@ class _SenderMobileTrackingScreenState extends State<SenderMobileTrackingScreen>
               child: Padding(
                 padding: const EdgeInsets.only(top: 16),
                 child: _TopStatusPill(label: content.pill),
-              ),
-            ),
-          ),
-        if (vanguardPin != null)
-          SafeArea(
-            child: Align(
-              alignment: Alignment.topCenter,
-              child: Padding(
-                padding:
-                    EdgeInsets.only(top: content.pill.isNotEmpty ? 56 : 16),
-                child: VanguardCollectionPinCard(
-                  pin: vanguardPin,
-                ),
               ),
             ),
           ),
@@ -912,10 +1113,6 @@ class _SenderMobileTrackingScreenState extends State<SenderMobileTrackingScreen>
   }
 
   Future<void> _confirmCancelDelivery(SenderTrackingState state) async {
-    if (!senderCanCancelBeforeCollection(state)) {
-      _showActionMessage('This delivery can no longer be cancelled here.');
-      return;
-    }
     final deliveryId = senderActiveDeliveryIdFor(widget.engine);
     if (deliveryId.isEmpty) {
       _showActionMessage('Unable to identify the active delivery.');
@@ -923,10 +1120,10 @@ class _SenderMobileTrackingScreenState extends State<SenderMobileTrackingScreen>
     }
     Map<String, dynamic> quote;
     try {
-      quote = await _callFunction(
-        'previewSenderCancellation',
-        {'deliveryId': deliveryId, 'requestId': deliveryId},
-      );
+      quote = await _callFunction('previewSenderCancellation', {
+        'deliveryId': deliveryId,
+        'requestId': deliveryId,
+      });
     } catch (error) {
       _showActionMessage(
         _firebaseFunctionMessage(
@@ -934,6 +1131,13 @@ class _SenderMobileTrackingScreenState extends State<SenderMobileTrackingScreen>
           'Unable to retrieve the cancellation fee.',
         ),
       );
+      return;
+    }
+    final canCancel = quote['canCancel'] == true ||
+        (quote['decision'] is Map &&
+            (quote['decision'] as Map)['canCancel'] == true);
+    if (!canCancel) {
+      _openSupportChat();
       return;
     }
     if (!mounted) return;
@@ -944,10 +1148,10 @@ class _SenderMobileTrackingScreenState extends State<SenderMobileTrackingScreen>
     );
     if (confirmed != true) return;
     try {
-      await _callFunction(
-        'requestSenderCancellation',
-        {'deliveryId': deliveryId, 'requestId': deliveryId},
-      );
+      await _callFunction('requestSenderCancellation', {
+        'deliveryId': deliveryId,
+        'requestId': deliveryId,
+      });
       if (!mounted) return;
       _showActionMessage('Delivery cancellation sent.');
     } catch (error) {
@@ -960,10 +1164,26 @@ class _SenderMobileTrackingScreenState extends State<SenderMobileTrackingScreen>
 
   void _showActionMessage(String message) {
     if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(message)),
-    );
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text(message)));
   }
+}
+
+bool senderShouldRequestDeliveryIntervention(SenderTrackingState state) {
+  return switch (state) {
+    SenderTrackingState.pickupComplete ||
+    SenderTrackingState.inTransit ||
+    SenderTrackingState.riderArrivingAtDropoff ||
+    SenderTrackingState.delivered ||
+    SenderTrackingState.issue ||
+    SenderTrackingState.adjustmentUnderReview ||
+    SenderTrackingState.adjustmentMoreEvidence ||
+    SenderTrackingState.adjustmentApproved ||
+    SenderTrackingState.adjustmentRejected =>
+      true,
+    _ => false,
+  };
 }
 
 Offset _riderPositionForEngine(
@@ -991,6 +1211,7 @@ Offset _riderPositionForEngine(
 }
 
 class SenderTrackingMapLayer extends StatelessWidget {
+  final SendPackageState engine;
   final SenderTrackingContent content;
   final Offset riderPosition;
   final String vehicleKind;
@@ -1001,6 +1222,7 @@ class SenderTrackingMapLayer extends StatelessWidget {
 
   const SenderTrackingMapLayer({
     super.key,
+    required this.engine,
     required this.content,
     required this.riderPosition,
     required this.vehicleKind,
@@ -1020,16 +1242,34 @@ class SenderTrackingMapLayer extends StatelessWidget {
       builder: (context, _) {
         final drift = delivered ? 0.0 : (mapDrift.value - .5) * 10;
         final markerPulse = delivered ? 0.0 : pulse.value;
+        final googleMapSnapshot = SenderTrackingMapAdapter.snapshotFor(
+          engine,
+          content: content,
+          stateDelivered: delivered,
+        );
         return Stack(
           children: [
-            Transform.translate(
-              offset: Offset(drift, -drift / 2),
-              child: Container(
-                decoration: const BoxDecoration(
-                  gradient: LinearGradient(
-                    begin: Alignment.topCenter,
-                    end: Alignment.bottomCenter,
-                    colors: [Color(0xFF0A0D16), Color(0xFF07090F)],
+            if (googleMapSnapshot != null)
+              SenderGoogleTrackingMap(
+                snapshot: googleMapSnapshot,
+                content: content,
+                vehicleKind: vehicleKind,
+                headingDegrees: headingDegrees,
+                delivered: delivered,
+              ),
+            AnimatedOpacity(
+              opacity: googleMapSnapshot == null ? 1 : .26,
+              duration: const Duration(milliseconds: 320),
+              curve: Curves.easeOut,
+              child: Transform.translate(
+                offset: Offset(drift, -drift / 2),
+                child: Container(
+                  decoration: const BoxDecoration(
+                    gradient: LinearGradient(
+                      begin: Alignment.topCenter,
+                      end: Alignment.bottomCenter,
+                      colors: [Color(0xFF0A0D16), Color(0xFF07090F)],
+                    ),
                   ),
                 ),
               ),
@@ -1119,6 +1359,382 @@ class SenderTrackingMapLayer extends StatelessWidget {
     );
   }
 }
+
+@visibleForTesting
+class SenderTrackingMapSnapshot {
+  final LatLng pickup;
+  final LatLng dropoff;
+  final LatLng? rider;
+  final List<LatLng> route;
+  final int riderRouteIndex;
+
+  const SenderTrackingMapSnapshot({
+    required this.pickup,
+    required this.dropoff,
+    required this.route,
+    this.rider,
+    this.riderRouteIndex = 0,
+  });
+
+  List<LatLng> get completedRoute {
+    if (rider == null || route.isEmpty) return const [];
+    final safeIndex = riderRouteIndex.clamp(0, route.length - 1);
+    return <LatLng>[...route.take(safeIndex + 1), rider!];
+  }
+
+  List<LatLng> get remainingRoute {
+    if (route.isEmpty) {
+      return rider == null
+          ? <LatLng>[pickup, dropoff]
+          : <LatLng>[rider!, dropoff];
+    }
+    if (rider == null) return route;
+    final safeIndex = riderRouteIndex.clamp(0, route.length - 1);
+    return <LatLng>[rider!, ...route.skip(safeIndex + 1)];
+  }
+}
+
+@visibleForTesting
+class SenderTrackingMapAdapter {
+  static SenderTrackingMapSnapshot? snapshotFor(
+    SendPackageState engine, {
+    required SenderTrackingContent content,
+    required bool stateDelivered,
+  }) {
+    final pickup = _latLng(engine.pickupCoordinate) ??
+        _latLngFromMap(
+          engine.activeDeliveryData['pickup'] ??
+              engine.activeDeliveryData['pickupDetails'],
+        );
+    final dropoff = _latLng(engine.desinationCoordinate) ??
+        _latLngFromMap(
+          engine.activeDeliveryData['dropoff'] ??
+              engine.activeDeliveryData['dropoffDetails'] ??
+              engine.activeDeliveryData['destination'],
+        );
+    if (pickup == null || dropoff == null) return null;
+
+    final rider = _latLng(engine.riderLocation) ??
+        _latLngFromMap(
+          engine.activeDeliveryData['riderLocation'] ??
+              engine.activeDeliveryData['liveLocation'] ??
+              engine.activeDeliveryData['currentLocation'],
+        );
+    final route = engine.polylineCoordinates.isNotEmpty
+        ? engine.polylineCoordinates
+        : <LatLng>[pickup, if (rider != null) rider, dropoff];
+    final riderIndex = rider == null ? 0 : _nearestRouteIndex(route, rider);
+    return SenderTrackingMapSnapshot(
+      pickup: pickup,
+      dropoff: dropoff,
+      rider: content.showRider && !stateDelivered ? rider : null,
+      route: route,
+      riderRouteIndex: riderIndex,
+    );
+  }
+
+  static LatLng? _latLng(PlaceCoordinate? coordinate) {
+    if (coordinate == null) return null;
+    return LatLng(coordinate.lat, coordinate.lng);
+  }
+
+  static LatLng? _latLngFromMap(Object? value) {
+    if (value is! Map) return null;
+    final map = Map<Object?, Object?>.from(value);
+    final coordinate = map['coordinate'];
+    if (coordinate is Map) {
+      final fromCoordinate = _latLngFromMap(coordinate);
+      if (fromCoordinate != null) return fromCoordinate;
+    }
+    final geo = map['geopoint'] ?? map['geoPoint'] ?? map['location'];
+    if (geo is Map) {
+      final fromGeo = _latLngFromMap(geo);
+      if (fromGeo != null) return fromGeo;
+    }
+    final lat = _doubleValue(
+      map['lat'] ?? map['latitude'] ?? map['_latitude'] ?? map['y'],
+    );
+    final lng = _doubleValue(
+      map['lng'] ?? map['longitude'] ?? map['_longitude'] ?? map['x'],
+    );
+    if (lat == null || lng == null) return null;
+    return LatLng(lat, lng);
+  }
+
+  static double? _doubleValue(Object? value) {
+    if (value is num) return value.toDouble();
+    return double.tryParse('${value ?? ''}');
+  }
+
+  static int _nearestRouteIndex(List<LatLng> route, LatLng rider) {
+    if (route.isEmpty) return 0;
+    var bestIndex = 0;
+    var bestDistance = double.infinity;
+    for (var index = 0; index < route.length; index += 1) {
+      final point = route[index];
+      final distance = math.pow(point.latitude - rider.latitude, 2) +
+          math.pow(point.longitude - rider.longitude, 2);
+      if (distance < bestDistance) {
+        bestDistance = distance.toDouble();
+        bestIndex = index;
+      }
+    }
+    return bestIndex;
+  }
+}
+
+class SenderGoogleTrackingMap extends StatefulWidget {
+  final SenderTrackingMapSnapshot snapshot;
+  final SenderTrackingContent content;
+  final String vehicleKind;
+  final double? headingDegrees;
+  final bool delivered;
+
+  const SenderGoogleTrackingMap({
+    super.key,
+    required this.snapshot,
+    required this.content,
+    required this.vehicleKind,
+    this.headingDegrees,
+    this.delivered = false,
+  });
+
+  @override
+  State<SenderGoogleTrackingMap> createState() =>
+      _SenderGoogleTrackingMapState();
+}
+
+class _SenderGoogleTrackingMapState extends State<SenderGoogleTrackingMap> {
+  GoogleMapController? _controller;
+  LatLng? _lastRider;
+  LatLngBounds? _lastBounds;
+  BitmapDescriptor? _pickupIcon;
+  BitmapDescriptor? _dropoffIcon;
+  BitmapDescriptor? _riderIcon;
+  var _ready = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadCircumMarkerIcons();
+  }
+
+  @override
+  void didUpdateWidget(covariant SenderGoogleTrackingMap oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (_cameraInputsChanged(oldWidget.snapshot, widget.snapshot) ||
+        oldWidget.delivered != widget.delivered) {
+      WidgetsBinding.instance.addPostFrameCallback((_) => _moveCamera());
+    }
+  }
+
+  @override
+  void dispose() {
+    _controller?.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final snapshot = widget.snapshot;
+    return AnimatedOpacity(
+      opacity: _ready ? .88 : 0,
+      duration: const Duration(milliseconds: 360),
+      curve: Curves.easeOutCubic,
+      child: GoogleMap(
+        key: const ValueKey('sender-live-google-map'),
+        initialCameraPosition: CameraPosition(
+          target: snapshot.rider ?? snapshot.pickup,
+          zoom: snapshot.rider == null ? 13.2 : 14.4,
+        ),
+        onMapCreated: (controller) {
+          _controller = controller;
+          setState(() => _ready = true);
+          WidgetsBinding.instance.addPostFrameCallback((_) => _moveCamera());
+        },
+        markers: _markers(snapshot),
+        polylines: _polylines(snapshot),
+        zoomControlsEnabled: false,
+        myLocationButtonEnabled: false,
+        mapToolbarEnabled: false,
+        compassEnabled: false,
+        rotateGesturesEnabled: true,
+        tiltGesturesEnabled: false,
+        trafficEnabled: false,
+        buildingsEnabled: false,
+        style: _senderTrackingGoogleMapStyle,
+      ),
+    );
+  }
+
+  Set<Marker> _markers(SenderTrackingMapSnapshot snapshot) {
+    final pickupIcon = _pickupIcon;
+    final dropoffIcon = _dropoffIcon;
+    final riderIcon = _riderIcon;
+    if (pickupIcon == null ||
+        dropoffIcon == null ||
+        (snapshot.rider != null && riderIcon == null)) {
+      return const {};
+    }
+    return {
+      Marker(
+        markerId: const MarkerId('circum_pickup'),
+        position: snapshot.pickup,
+        icon: pickupIcon,
+        anchor: const Offset(.5, 1),
+      ),
+      Marker(
+        markerId: const MarkerId('circum_dropoff'),
+        position: snapshot.dropoff,
+        icon: dropoffIcon,
+        anchor: const Offset(.5, 1),
+      ),
+      if (snapshot.rider != null)
+        Marker(
+          markerId: const MarkerId('circum_rider'),
+          position: snapshot.rider!,
+          rotation: widget.headingDegrees ?? 0,
+          flat: true,
+          anchor: const Offset(.5, .5),
+          icon: riderIcon!,
+        ),
+    };
+  }
+
+  Future<void> _loadCircumMarkerIcons() async {
+    final pickupIcon =
+        await BitmapDescriptorHelper.getBitmapDescriptorFromSvgAsset(
+      'assets/svg/source_marker.svg',
+      const Size(27, 43),
+    );
+    final dropoffIcon =
+        await BitmapDescriptorHelper.getBitmapDescriptorFromSvgAsset(
+      'assets/svg/destination_marker.svg',
+      const Size(27, 43),
+    );
+    final riderIcon =
+        await BitmapDescriptorHelper.getBitmapDescriptorFromSvgAsset(
+      'assets/svg/bike_top.svg',
+    );
+    if (!mounted) return;
+    setState(() {
+      _pickupIcon = pickupIcon;
+      _dropoffIcon = dropoffIcon;
+      _riderIcon = riderIcon;
+    });
+  }
+
+  Set<Polyline> _polylines(SenderTrackingMapSnapshot snapshot) {
+    final remaining = snapshot.remainingRoute;
+    final completed = snapshot.completedRoute;
+    return {
+      if (remaining.length >= 2)
+        Polyline(
+          polylineId: const PolylineId('circum_remaining_route'),
+          points: remaining,
+          color: const Color(0xFF60A5FA).withValues(alpha: .86),
+          width: 5,
+          geodesic: true,
+          startCap: Cap.roundCap,
+          endCap: Cap.roundCap,
+        ),
+      if (completed.length >= 2)
+        Polyline(
+          polylineId: const PolylineId('circum_completed_route'),
+          points: completed,
+          color: const Color(0xFF34D399).withValues(alpha: .54),
+          width: 5,
+          geodesic: true,
+          startCap: Cap.roundCap,
+          endCap: Cap.roundCap,
+        ),
+    };
+  }
+
+  Future<void> _moveCamera() async {
+    final controller = _controller;
+    if (controller == null) return;
+    final snapshot = widget.snapshot;
+    final targetBounds = _cameraBounds(snapshot);
+    final rider = snapshot.rider;
+    if (rider != null &&
+        _lastRider != null &&
+        _jitterDistance(_lastRider!, rider) < .00006) {
+      return;
+    }
+    _lastRider = rider;
+    if (_lastBounds == targetBounds && rider == null) return;
+    _lastBounds = targetBounds;
+    await controller.animateCamera(
+      CameraUpdate.newLatLngBounds(targetBounds, 84),
+    );
+  }
+
+  LatLngBounds _cameraBounds(SenderTrackingMapSnapshot snapshot) {
+    final points = <LatLng>[
+      if (snapshot.rider != null) snapshot.rider!,
+      if (widget.content.showRoute && widget.content.progress < 55)
+        snapshot.pickup,
+      snapshot.dropoff,
+    ];
+    if (points.length == 1) points.add(snapshot.pickup);
+    var minLat = points.first.latitude;
+    var maxLat = points.first.latitude;
+    var minLng = points.first.longitude;
+    var maxLng = points.first.longitude;
+    for (final point in points.skip(1)) {
+      minLat = math.min(minLat, point.latitude);
+      maxLat = math.max(maxLat, point.latitude);
+      minLng = math.min(minLng, point.longitude);
+      maxLng = math.max(maxLng, point.longitude);
+    }
+    if ((maxLat - minLat).abs() < .0007) {
+      minLat -= .00035;
+      maxLat += .00035;
+    }
+    if ((maxLng - minLng).abs() < .0007) {
+      minLng -= .00035;
+      maxLng += .00035;
+    }
+    return LatLngBounds(
+      southwest: LatLng(minLat, minLng),
+      northeast: LatLng(maxLat, maxLng),
+    );
+  }
+
+  bool _cameraInputsChanged(
+    SenderTrackingMapSnapshot previous,
+    SenderTrackingMapSnapshot next,
+  ) {
+    return previous.pickup != next.pickup ||
+        previous.dropoff != next.dropoff ||
+        previous.rider != next.rider ||
+        previous.route.length != next.route.length ||
+        previous.riderRouteIndex != next.riderRouteIndex;
+  }
+
+  double _jitterDistance(LatLng a, LatLng b) => math.sqrt(
+        math.pow(a.latitude - b.latitude, 2) +
+            math.pow(a.longitude - b.longitude, 2),
+      );
+}
+
+const _senderTrackingGoogleMapStyle = '''
+[
+  {"elementType":"geometry","stylers":[{"color":"#0b1020"}]},
+  {"elementType":"labels.icon","stylers":[{"visibility":"off"}]},
+  {"elementType":"labels.text.fill","stylers":[{"color":"#7f8da3"}]},
+  {"elementType":"labels.text.stroke","stylers":[{"color":"#07090f"}]},
+  {"featureType":"administrative","elementType":"geometry","stylers":[{"visibility":"off"}]},
+  {"featureType":"poi","stylers":[{"visibility":"off"}]},
+  {"featureType":"road","elementType":"geometry","stylers":[{"color":"#1b2638"}]},
+  {"featureType":"road","elementType":"geometry.stroke","stylers":[{"color":"#111827"}]},
+  {"featureType":"road","elementType":"labels.text.fill","stylers":[{"color":"#9ca3af"}]},
+  {"featureType":"road.highway","elementType":"geometry","stylers":[{"color":"#24314a"}]},
+  {"featureType":"transit","stylers":[{"visibility":"off"}]},
+  {"featureType":"water","elementType":"geometry","stylers":[{"color":"#05070d"}]}
+]
+''';
 
 class FloatingGlassPanel extends StatelessWidget {
   final Widget child;
@@ -1230,9 +1846,7 @@ class _TrackingPanelContent extends StatelessWidget {
         ),
         if (state == SenderTrackingState.findingRider) ...[
           const SizedBox(height: 12),
-          MatchingSearchCard(
-            vanguardEnabled: content.showVanguard,
-          ),
+          MatchingSearchCard(vanguardEnabled: content.showVanguard),
         ],
         if (mapMode == SenderDeliveryMapMode.bookingPlanning &&
             senderRiderAcceptedForLiveMap(state)) ...[
@@ -1250,7 +1864,7 @@ class _TrackingPanelContent extends StatelessWidget {
         if (content.showCollectionPin && !hasProtectedVanguardCollection) ...[
           const SizedBox(height: 12),
           PINCard(
-            pin: engine.deliveryData?.code,
+            pin: null,
             label: 'Collection PIN',
             hint: 'Give this to your Circum Rider at pickup.',
             statusLabel: senderCollectionPinStatusFor(
@@ -1740,8 +2354,9 @@ class SenderWaitingSnapshot {
             ? 0.0
             : (elapsedSeconds / totalSeconds).clamp(0.0, 1.0)
         : ((totalSeconds - remainingSeconds) / totalSeconds).clamp(0.0, 1.0);
-    final waitingContext =
-        _normalizeTrackingStatus(data['waitingContextState']);
+    final waitingContext = _normalizeTrackingStatus(
+      data['waitingContextState'],
+    );
     final customerResponded = waitingContext == 'customer_responded' ||
         data['customerResponded'] == true ||
         waiting['customerResponded'] == true;
@@ -1883,7 +2498,16 @@ class _CancelDeliverySheet extends StatelessWidget {
           quote['chargeAmount'],
     );
     final refund = _numberFrom(
-      quote['amountToRefund'] ?? quote['refundAmount'] ?? quote['refund'],
+      quote['finalRefund'] ??
+          quote['amountToRefund'] ??
+          quote['refundAmount'] ??
+          quote['refund'],
+    );
+    final riderCompensation = _numberFrom(
+      quote['riderCompensation'] ??
+          (quote['decision'] is Map
+              ? (quote['decision'] as Map)['riderCompensation']
+              : null),
     );
     final currency = '${quote['currency'] ?? 'GBP'}';
     final reason =
@@ -1902,7 +2526,7 @@ class _CancelDeliverySheet extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               const Text(
-                'Cancel this delivery?',
+                'Cancel delivery?',
                 style: TextStyle(
                   color: Colors.white,
                   fontFamily: 'DM Serif Display',
@@ -1912,7 +2536,7 @@ class _CancelDeliverySheet extends StatelessWidget {
               ),
               const SizedBox(height: 8),
               const Text(
-                'The Circum Rider will be updated immediately if you confirm.',
+                'This will stop the live delivery if Circum policy still allows it. Your rider, activity and tracking will update immediately after backend confirmation.',
                 style: TextStyle(
                   color: _TrackingTokens.muted,
                   height: 1.4,
@@ -1926,9 +2550,15 @@ class _CancelDeliverySheet extends StatelessWidget {
                     ? 'Provided by Circum'
                     : _moneyText(fee, currency),
               ),
+              _CancellationQuoteLine(
+                label: 'Rider compensation',
+                value: riderCompensation == null
+                    ? 'Calculated by Circum'
+                    : _moneyText(riderCompensation, currency),
+              ),
               _CancellationQuoteLine(label: 'Reason', value: reason),
               _CancellationQuoteLine(
-                label: 'Amount to be charged/refunded',
+                label: 'Final refund',
                 value: refund == null
                     ? '${quote['amountSummary'] ?? 'Circum will finalise'}'
                     : _moneyText(refund, currency),
@@ -1939,7 +2569,7 @@ class _CancelDeliverySheet extends StatelessWidget {
                   Expanded(
                     child: TextButton(
                       onPressed: () => Navigator.of(context).pop(false),
-                      child: const Text('Keep delivery'),
+                      child: const Text('Continue Delivery'),
                     ),
                   ),
                   const SizedBox(width: 10),
@@ -1949,7 +2579,7 @@ class _CancelDeliverySheet extends StatelessWidget {
                         backgroundColor: const Color(0xFFF87171),
                       ),
                       onPressed: () => Navigator.of(context).pop(true),
-                      child: const Text('Confirm cancel'),
+                      child: const Text('Cancel Delivery'),
                     ),
                   ),
                 ],
@@ -1966,10 +2596,7 @@ class _CancellationQuoteLine extends StatelessWidget {
   final String label;
   final String value;
 
-  const _CancellationQuoteLine({
-    required this.label,
-    required this.value,
-  });
+  const _CancellationQuoteLine({required this.label, required this.value});
 
   @override
   Widget build(BuildContext context) {
@@ -2286,7 +2913,9 @@ class IRISChip extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return const _StatusChip(
-        label: 'IRIS parcel confirmed', color: Color(0xFF3B82F6));
+      label: 'IRIS parcel confirmed',
+      color: Color(0xFF3B82F6),
+    );
   }
 }
 
@@ -2377,9 +3006,7 @@ class _PINCardState extends State<PINCard> {
         decoration: BoxDecoration(
           color: widget.accent.withValues(alpha: .08),
           borderRadius: BorderRadius.circular(16),
-          border: Border.all(
-            color: widget.accent.withValues(alpha: .34),
-          ),
+          border: Border.all(color: widget.accent.withValues(alpha: .34)),
           boxShadow: [
             BoxShadow(
               color: widget.accent.withValues(alpha: .10),
@@ -2509,11 +3136,12 @@ class ProgressStepper extends StatelessWidget {
   final bool issue;
   final bool completed;
 
-  const ProgressStepper(
-      {super.key,
-      required this.progress,
-      this.issue = false,
-      this.completed = false});
+  const ProgressStepper({
+    super.key,
+    required this.progress,
+    this.issue = false,
+    this.completed = false,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -2706,10 +3334,7 @@ class LiveDeliveryTimeline extends StatelessWidget {
 class MatchingSearchCard extends StatelessWidget {
   final bool vanguardEnabled;
 
-  const MatchingSearchCard({
-    super.key,
-    required this.vanguardEnabled,
-  });
+  const MatchingSearchCard({super.key, required this.vanguardEnabled});
 
   @override
   Widget build(BuildContext context) {
@@ -2857,13 +3482,15 @@ class _SearchingOrbState extends State<_SearchingOrb>
             shape: BoxShape.circle,
             color: const Color(0xFF3B82F6).withValues(alpha: .13),
             border: Border.all(
-              color:
-                  const Color(0xFF3B82F6).withValues(alpha: .25 + pulse * .20),
+              color: const Color(
+                0xFF3B82F6,
+              ).withValues(alpha: .25 + pulse * .20),
             ),
             boxShadow: [
               BoxShadow(
-                color: const Color(0xFF3B82F6)
-                    .withValues(alpha: .14 + pulse * .12),
+                color: const Color(
+                  0xFF3B82F6,
+                ).withValues(alpha: .14 + pulse * .12),
                 blurRadius: 16 + pulse * 10,
               ),
             ],
@@ -2931,8 +3558,9 @@ class _ProgressiveMatchChecklistState extends State<ProgressiveMatchChecklist> {
           duration: const Duration(milliseconds: 250),
           opacity: 1,
           child: Padding(
-            padding:
-                EdgeInsets.only(bottom: index == _visibleCount - 1 ? 0 : 8),
+            padding: EdgeInsets.only(
+              bottom: index == _visibleCount - 1 ? 0 : 8,
+            ),
             child: Row(
               children: [
                 const Icon(
@@ -2971,23 +3599,23 @@ class _MatchAssuranceGrid extends StatelessWidget {
       (
         'Your parcel is secured.',
         Icons.lock_outline_rounded,
-        const Color(0xFF60A5FA)
+        const Color(0xFF60A5FA),
       ),
       (
-        'IRIS estimate confirmed.',
+        'Final weight confirmed.',
         Icons.auto_awesome_rounded,
-        const Color(0xFF3B82F6)
+        const Color(0xFF3B82F6),
       ),
       (
         'Vehicle recommendation ready.',
         Icons.pedal_bike_rounded,
-        const Color(0xFF34D399)
+        const Color(0xFF34D399),
       ),
       if (vanguardEnabled)
         (
           'Vanguard protection active.',
           Icons.shield_outlined,
-          const Color(0xFF34D399)
+          const Color(0xFF34D399),
         ),
     ];
     return Wrap(
@@ -3066,6 +3694,8 @@ class _TrackingActions extends StatelessWidget {
     final delivered = state == SenderTrackingState.delivered;
     final empty = state == SenderTrackingState.noActiveDelivery;
     final finding = state == SenderTrackingState.findingRider;
+    final canCancel = senderCanCancelBeforeCollection(state);
+    final intervention = senderShouldRequestDeliveryIntervention(state);
     return Row(
       children: [
         Expanded(
@@ -3088,14 +3718,16 @@ class _TrackingActions extends StatelessWidget {
         const SizedBox(width: 8),
         Expanded(
           child: _TrackingButton(
-            label: finding
+            label: canCancel
                 ? 'Cancel Delivery'
-                : delivered
-                    ? 'Done'
-                    : 'Support',
+                : intervention
+                    ? 'Request Delivery Intervention'
+                    : delivered
+                        ? 'Done'
+                        : 'Support',
             primary: delivered || state == SenderTrackingState.issue,
             success: delivered,
-            onTap: finding
+            onTap: canCancel
                 ? onCancelDelivery
                 : delivered
                     ? null
@@ -3147,8 +3779,9 @@ class _TrackingButton extends StatelessWidget {
                   boxShadow: success
                       ? [
                           BoxShadow(
-                            color:
-                                const Color(0xFF34D399).withValues(alpha: .20),
+                            color: const Color(
+                              0xFF34D399,
+                            ).withValues(alpha: .20),
                             blurRadius: 18,
                             offset: const Offset(0, 8),
                           ),
@@ -3168,8 +3801,9 @@ class _TrackingButton extends StatelessWidget {
                         widthFactor: value,
                         child: Container(
                           decoration: BoxDecoration(
-                            color: const Color(0xFF34D399)
-                                .withValues(alpha: .92 + value * .08),
+                            color: const Color(
+                              0xFF34D399,
+                            ).withValues(alpha: .92 + value * .08),
                           ),
                         ),
                       );
@@ -3363,8 +3997,10 @@ class _StaleLocationPill extends StatelessWidget {
             child: BackdropFilter(
               filter: ImageFilter.blur(sigmaX: 12, sigmaY: 12),
               child: Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 12,
+                  vertical: 6,
+                ),
                 decoration: BoxDecoration(
                   color: const Color(0xFFF5A623).withValues(alpha: .12),
                   borderRadius: BorderRadius.circular(999),
@@ -3553,11 +4189,7 @@ class _LiveMapPendingPaymentNote extends StatelessWidget {
       ),
       child: const Row(
         children: [
-          Icon(
-            Icons.lock_clock_outlined,
-            color: Color(0xFF60A5FA),
-            size: 18,
-          ),
+          Icon(Icons.lock_clock_outlined, color: Color(0xFF60A5FA), size: 18),
           SizedBox(width: 10),
           Expanded(
             child: Text(
@@ -3684,9 +4316,10 @@ class _AnonymousRiderDotState extends State<_AnonymousRiderDot>
     return Align(
       alignment: widget.alignment,
       child: FadeTransition(
-        opacity: Tween<double>(begin: .15, end: .72).animate(
-          CurvedAnimation(parent: _controller, curve: Curves.easeOut),
-        ),
+        opacity: Tween<double>(
+          begin: .15,
+          end: .72,
+        ).animate(CurvedAnimation(parent: _controller, curve: Curves.easeOut)),
         child: Container(
           width: 8,
           height: 8,
@@ -3872,14 +4505,19 @@ class _VehicleIconPainter extends CustomPainter {
         const Radius.circular(3),
       );
       canvas.drawRRect(
-          glass, accent..color = accent.color.withValues(alpha: .55));
+        glass,
+        accent..color = accent.color.withValues(alpha: .55),
+      );
       canvas.drawCircle(
         Offset(size.width * .30, size.height * .78),
         2.2,
         accent..color = const Color(0xFF3B82F6),
       );
       canvas.drawCircle(
-          Offset(size.width * .70, size.height * .78), 2.2, accent);
+        Offset(size.width * .70, size.height * .78),
+        2.2,
+        accent,
+      );
       return;
     }
 
@@ -3901,14 +4539,19 @@ class _VehicleIconPainter extends CustomPainter {
         size.height * .28,
       );
       canvas.drawRect(
-          glass, accent..color = accent.color.withValues(alpha: .55));
+        glass,
+        accent..color = accent.color.withValues(alpha: .55),
+      );
       canvas.drawCircle(
         Offset(size.width * .30, size.height * .78),
         2.3,
         accent..color = const Color(0xFF3B82F6),
       );
       canvas.drawCircle(
-          Offset(size.width * .72, size.height * .78), 2.3, accent);
+        Offset(size.width * .72, size.height * .78),
+        2.3,
+        accent,
+      );
       return;
     }
 
@@ -4005,7 +4648,10 @@ class _TrackingGridPainter extends CustomPainter {
         ],
       ).createShader(
         Rect.fromCircle(
-          center: Offset(size.width * (.35 + shimmer * .12), size.height * .25),
+          center: Offset(
+            size.width * (.35 + shimmer * .12),
+            size.height * .25,
+          ),
           radius: size.width * .55,
         ),
       );
@@ -4038,9 +4684,9 @@ class _SearchRingsPainter extends CustomPainter {
       final paint = Paint()
         ..style = PaintingStyle.stroke
         ..strokeWidth = highContrast ? 1.6 : 1.1
-        ..color = const Color(0xFF3B82F6).withValues(
-          alpha: (1 - phase) * (highContrast ? .34 : .20),
-        );
+        ..color = const Color(
+          0xFF3B82F6,
+        ).withValues(alpha: (1 - phase) * (highContrast ? .34 : .20));
       canvas.drawCircle(center, radius, paint);
     }
 
@@ -4048,9 +4694,9 @@ class _SearchRingsPainter extends CustomPainter {
       ..style = PaintingStyle.stroke
       ..strokeWidth = highContrast ? 2.2 : 1.5
       ..strokeCap = StrokeCap.round
-      ..color = const Color(0xFF60A5FA).withValues(
-        alpha: highContrast ? .46 : .28,
-      );
+      ..color = const Color(
+        0xFF60A5FA,
+      ).withValues(alpha: highContrast ? .46 : .28);
     final rect = Rect.fromCircle(
       center: center,
       radius: size.shortestSide * .32,
@@ -4105,16 +4751,8 @@ class _RouteLinePainter extends CustomPainter {
       ..strokeCap = StrokeCap.round
       ..shader = LinearGradient(
         colors: highContrast
-            ? const [
-                Color(0xFF34D399),
-                Color(0xFF60A5FA),
-                Color(0xFF34D399),
-              ]
-            : const [
-                Color(0x2234D399),
-                Color(0xFF3B82F6),
-                Color(0xFF34D399),
-              ],
+            ? const [Color(0xFF34D399), Color(0xFF60A5FA), Color(0xFF34D399)]
+            : const [Color(0x2234D399), Color(0xFF3B82F6), Color(0xFF34D399)],
       ).createShader(Offset.zero & size);
     canvas.drawPath(visiblePath, paint);
   }

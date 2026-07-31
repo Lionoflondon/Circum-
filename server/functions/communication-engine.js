@@ -19,11 +19,23 @@ const supportTicketStatuses = new Set(["open", "assigned", "pending", "resolved"
 const clean = (value) => `${value || ""}`.trim();
 const emailPattern = /\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b/gi;
 const phonePattern = /(?<!\w)(?:\+?\d[\d\s().-]{7,}\d)(?!\w)/g;
+const contactFieldPattern = /(phone|phonenumber|mobile|contactnumber|tel|userphone|riderphone|senderphone|driverphone|courierphone)/i;
 
 function maskContactDetails(value) {
   return clean(value)
       .replace(emailPattern, "[email removed]")
       .replace(phonePattern, "[phone number removed]");
+}
+
+function redactContactFields(value) {
+  if (Array.isArray(value)) return value.map((item) => redactContactFields(item));
+  if (!value || typeof value !== "object") {
+    return typeof value === "string" ? maskContactDetails(value) : value;
+  }
+  return Object.fromEntries(Object.entries(value).map(([key, item]) => {
+    if (contactFieldPattern.test(key)) return [key, ""];
+    return [key, redactContactFields(item)];
+  }));
 }
 
 function isAdmin(context) {
@@ -93,9 +105,10 @@ async function participantDisplayName(uid, role, context) {
 
 async function emitNotification({recipientId, recipientRole = "sender", type, title, body, data = {}}) {
   const db = getFirestore();
-  const destination = destinationFor(type, data);
+  const safeData = redactContactFields(data);
+  const destination = destinationFor(type, safeData);
   const ref = db.collection("notifications").doc();
-  const correlationId = clean(data.correlationId) || ref.id;
+  const correlationId = clean(safeData.correlationId) || ref.id;
   const payload = {
     notificationId: ref.id,
     correlationId,
@@ -106,7 +119,7 @@ async function emitNotification({recipientId, recipientRole = "sender", type, ti
     body: clean(body),
     message: clean(body),
     category: notificationCategory(type, data.category),
-    data: {...data, destination},
+    data: {...safeData, destination},
     destination,
     read: false,
     archived: false,

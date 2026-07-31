@@ -3,6 +3,7 @@ const functions = require("firebase-functions/v1");
 const {getFirestore, FieldValue, Timestamp} = require("firebase-admin/firestore");
 const {getMessaging} = require("firebase-admin/messaging");
 const {riderMatchesIris} = require("./iris-core");
+const riderPresenceCore = require("./rider-presence-core");
 const communicationEngine = require("./communication-engine");
 
 const text = (value) => `${value || ""}`.trim();
@@ -193,6 +194,62 @@ async function onlineCandidateRiderProfileDocs(db) {
   return [...byId.values()];
 }
 
+async function onlineCandidateRiderRecords(db) {
+  const byId = new Map();
+  const addCandidate = (id, patch = {}) => {
+    if (!id) return;
+    byId.set(id, {...(byId.get(id) || {id}), ...patch});
+  };
+  const [presenceOnline, profileStatus, profileAvailability, riderStatus, riderAvailability] =
+    await Promise.all([
+      db.collection("riderPresence")
+          .where("isOnline", "==", true)
+          .where("availabilityStatus", "==", "available")
+          .limit(250)
+          .get(),
+      db.collection("riderProfiles").where("status", "in", ["online", "available"]).limit(250).get(),
+      db.collection("riderProfiles").where("availabilityStatus", "in", ["online", "available"]).limit(250).get(),
+      db.collection("riders").where("status", "in", ["online", "available"]).limit(250).get(),
+      db.collection("riders").where("availabilityStatus", "in", ["online", "available"]).limit(250).get(),
+    ]);
+  presenceOnline.docs.forEach((doc) => addCandidate(doc.id, {presence: doc.data()}));
+  [...profileStatus.docs, ...profileAvailability.docs]
+      .forEach((doc) => addCandidate(doc.id, {profile: doc.data()}));
+  [...riderStatus.docs, ...riderAvailability.docs]
+      .forEach((doc) => addCandidate(doc.id, {rider: doc.data()}));
+
+  const records = await Promise.all([...byId.values()].map(async (record) => {
+    const [profileDoc, riderDoc, presenceDoc] = await Promise.all([
+      record.profile ? null : db.collection("riderProfiles").doc(record.id).get(),
+      record.rider ? null : db.collection("riders").doc(record.id).get(),
+      record.presence ? null : db.collection("riderPresence").doc(record.id).get(),
+    ]);
+    return {
+      id: record.id,
+      profile: record.profile || (profileDoc && profileDoc.exists ? profileDoc.data() : {}),
+      rider: record.rider || (riderDoc && riderDoc.exists ? riderDoc.data() : {}),
+      presence: record.presence || (presenceDoc && presenceDoc.exists ? presenceDoc.data() : {}),
+    };
+  }));
+  return records;
+}
+
+function dispatchCandidateDecision(record, delivery, now = Date.now()) {
+  const profile = {...(record.rider || {}), ...(record.profile || {})};
+  const presence = record.presence || {};
+  if (!riderPresenceCore.canReceiveDispatch({profile, presence, now})) {
+    const reason = riderPresenceCore.blockedReason(profile) ||
+      (presence.isOnline !== true ? "offline" :
+        presence.availabilityStatus !== "available" ? `availability_${text(presence.availabilityStatus || "unknown")}` :
+          presence.busy === true ? "busy" : "location_or_heartbeat_unhealthy");
+    return {eligible: false, reason, profile, presence};
+  }
+  if (!riderMatchesIris(profile, delivery)) {
+    return {eligible: false, reason: "vehicle_or_iris_mismatch", profile, presence};
+  }
+  return {eligible: true, reason: "eligible", profile, presence};
+}
+
 function moneyText(value, currency = "GBP") {
   const amount = Number(value || 0);
   if (!Number.isFinite(amount) || amount <= 0) return "";
@@ -255,23 +312,59 @@ exports.onDeliveryCreated = functions.firestore.document("deliveryRequests/{deli
   const delivery = snapshot.data();
   const ids = deliveryIds({...delivery, id: snapshot.id});
   if (ids.senderId) await notify({recipientId: ids.senderId, recipientRole: "shipper", type: "delivery_created", title: "Delivery created", body: "Your delivery request has been created.", bookingId: ids.bookingId, data: {category: "Deliveries"}});
-  const riders = await onlineCandidateRiderProfileDocs(getFirestore());
-  const eligible = riders.filter((doc) => {
-    const rider = doc.data();
-    const approval = text(rider.approvalStatus || rider.verificationStatus).toLowerCase();
-    const online = text(rider.status || rider.availabilityStatus).toLowerCase();
-    return ["approved", "verified"].includes(approval) &&
-      ["online", "available"].includes(online) &&
-      riderMatchesIris(rider, delivery);
-  });
-  await Promise.all(eligible.map((doc) => notify({
-    recipientId: doc.id,
+  const db = getFirestore();
+  const riders = await onlineCandidateRiderRecords(db);
+  const decisions = riders.map((record) => ({
+    riderId: record.id,
+    ...dispatchCandidateDecision(record, delivery),
+  }));
+  const eligible = decisions.filter((decision) => decision.eligible);
+  await db.collection("dispatchInspections").doc(ids.bookingId || snapshot.id).set({
+    deliveryId: snapshot.id,
+    bookingId: ids.bookingId || snapshot.id,
+    senderId: ids.senderId || null,
+    status: "broadcast_evaluated",
+    deliveryStatus: text(delivery.status || delivery.deliveryStatus),
+    dispatchStatus: text(delivery.dispatchStatus),
+    matchingStatus: text(delivery.matchingStatus),
+    ridersConsidered: decisions.length,
+    ridersMatched: eligible.length,
+    matchedRiderIds: eligible.map((decision) => decision.riderId),
+    excluded: decisions
+        .filter((decision) => !decision.eligible)
+        .slice(0, 100)
+        .map((decision) => ({
+          riderId: decision.riderId,
+          reason: decision.reason,
+        })),
+    createdAt: FieldValue.serverTimestamp(),
+    updatedAt: FieldValue.serverTimestamp(),
+  }, {merge: true});
+  await Promise.all(eligible.map((decision) => notify({
+    recipientId: decision.riderId,
     recipientRole: "rider",
     type: "new_delivery",
     title: "New delivery available",
     body: "A delivery matching your vehicle is ready to review.",
     bookingId: ids.bookingId,
+    data: {
+      category: "jobs",
+      route: "jobs",
+      deliveryId: snapshot.id,
+      dispatchInspectionId: ids.bookingId || snapshot.id,
+    },
   })));
+  if (eligible.length === 0) {
+    console.warn("delivery_dispatch_no_eligible_riders", {
+      deliveryId: snapshot.id,
+      bookingId: ids.bookingId,
+      ridersConsidered: decisions.length,
+      excluded: decisions.slice(0, 20).map((decision) => ({
+        riderId: decision.riderId,
+        reason: decision.reason,
+      })),
+    });
+  }
   const highValue = delivery.vanguardEnabled === true || Number(delivery.declaredValue || 0) > 250;
   if (highValue) await notify({recipientRole: "admin", type: "high_value_delivery", title: "High-value delivery created", body: "A Vanguard or high-value delivery needs visibility.", bookingId: ids.bookingId});
 });
@@ -411,16 +504,12 @@ exports.escalateUnclaimedDeliveries = functions.pubsub.schedule("every 1 minutes
       await notify({recipientRole: "admin", type: "unclaimed_delivery", title: "Unclaimed delivery", body: "A delivery remains unclaimed after five minutes.", bookingId: text(delivery.requestId || doc.id)});
     } else {
       if (!riderProfileDocs) {
-        riderProfileDocs = await onlineCandidateRiderProfileDocs(db);
+        riderProfileDocs = await onlineCandidateRiderRecords(db);
       }
-      await Promise.all(riderProfileDocs.filter((riderDoc) => {
-        const rider = riderDoc.data();
-        const approval = text(rider.approvalStatus || rider.verificationStatus).toLowerCase();
-        const online = text(rider.status || rider.availabilityStatus).toLowerCase();
-        return ["approved", "verified"].includes(approval) &&
-          ["online", "available"].includes(online) &&
-          riderMatchesIris(rider, delivery);
-      }).map((rider) => notify({recipientId: rider.id, recipientRole: "rider", type: "delivery_reminder", title: "Delivery still available", body: "An eligible delivery is still waiting for a rider.", bookingId: text(delivery.requestId || doc.id)})));
+      await Promise.all(riderProfileDocs
+          .map((record) => ({...dispatchCandidateDecision(record, delivery), riderId: record.id}))
+          .filter((decision) => decision.eligible)
+          .map((decision) => notify({recipientId: decision.riderId, recipientRole: "rider", type: "delivery_reminder", title: "Delivery still available", body: "An eligible delivery is still waiting for a rider.", bookingId: text(delivery.requestId || doc.id)})));
     }
     await doc.ref.set({notificationEscalationStage: stage, notificationEscalatedAt: FieldValue.serverTimestamp()}, {merge: true});
   }
@@ -433,4 +522,6 @@ exports._private = {
   giftStatus,
   giftStatusNotification,
   onlineCandidateRiderProfileDocs,
+  onlineCandidateRiderRecords,
+  dispatchCandidateDecision,
 };

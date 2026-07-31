@@ -24,6 +24,9 @@ test("canonical cancellation is exported, auditable and refund-review aware", ()
   for (const field of ["previousLifecycleState", "cancellationReason", "refundReviewRequired", "stripePaymentIntentId", "deliveryTimeline"]) {
     assert.match(cancellation, new RegExp(field));
   }
+  for (const field of ["matchingStatus", "dispatchStatus", "broadcastBlocked", "removedFromActiveQueues"]) {
+    assert.match(cancellation, new RegExp(field));
+  }
 });
 
 test("Sender clients wait for the cancellation callable and never delete the delivery", () => {
@@ -37,6 +40,23 @@ test("Sender clients wait for the cancellation callable and never delete the del
 test("payment intents and Stripe refunds map back to deliveries", () => {
   assert.match(senderBooking, /stripe\.paymentIntents\.retrieve/);
   assert.match(senderBooking, /updateSenderPaymentIntentStatus\(stripe, intent/);
+  assert.match(senderBooking, /async function handleSenderPaymentIntent\(stripe, intent, eventId = ""\)/);
+  assert.match(senderBooking, /createPaidDeliveryFromSession\(stripe, sender/);
+  assert.match(index, /senderBooking\.handleSenderPaymentIntent\(/);
   assert.match(senderBooking, /stripePaymentIntentId:\s*payment\.stripePaymentIntentId/);
   assert.match(index, /event\.type === "charge\.refunded"/);
+});
+
+test("Sender PaymentIntent webhook recovery does not depend on client return", () => {
+  assert.match(index, /event\.type === "payment_intent\.succeeded"/);
+  assert.match(index, /event\.type === "payment_intent\.payment_failed"/);
+  assert.match(index, /event\.type === "payment_intent\.canceled"/);
+  assert.match(senderBooking, /paymentType !== "delivery" && paymentType !== "sender_delivery_payment"/);
+  assert.match(senderBooking, /if \(intent\.status !== "succeeded"\)/);
+  assert.match(senderBooking, /Sender PaymentIntent metadata does not match payment session owner/);
+  assert.match(senderBooking, /Sender PaymentIntent currency does not match payment session/);
+  assert.match(senderBooking, /Sender PaymentIntent amount does not match payment session/);
+  assert.match(senderBooking, /payment\.deliveryPayload \|\| \{\}/);
+  assert.match(senderBooking, /idempotencyKey: payment\.idempotencyKey \|\| metadata\.idempotencyKey/);
+  assert.match(senderBooking, /webhookCompletedAt: FieldValue\.serverTimestamp\(\)/);
 });

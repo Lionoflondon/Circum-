@@ -16,11 +16,13 @@ test("Rider self-service authority callables are exported", () => {
   assert.match(source, /exports\.requestRiderEmailChange\s*=\s*functions\.https\.onCall/);
   assert.match(source, /exports\.createWeightAdjustedNotification\s*=\s*functions\.https\.onCall/);
   assert.match(source, /exports\.submitRiderApplication\s*=\s*functions\.https\.onCall/);
+  assert.match(source, /exports\.updateRiderApplicationSection\s*=\s*functions\.https\.onCall/);
   assert.match(source, /exports\.submitRiderDocument\s*=\s*functions\.https\.onCall/);
   assert.match(indexSource, /exports\.updateRiderProfile\s*=\s*riderAccount\.updateRiderProfile/);
   assert.match(indexSource, /exports\.requestRiderEmailChange\s*=\s*riderAccount\.requestRiderEmailChange/);
   assert.match(indexSource, /exports\.createWeightAdjustedNotification\s*=\s*riderAccount\.createWeightAdjustedNotification/);
   assert.match(indexSource, /exports\.submitRiderApplication\s*=\s*riderAccount\.submitRiderApplication/);
+  assert.match(indexSource, /exports\.updateRiderApplicationSection\s*=\s*riderAccount\.updateRiderApplicationSection/);
   assert.match(indexSource, /exports\.submitRiderDocument\s*=\s*riderAccount\.submitRiderDocument/);
 });
 
@@ -33,6 +35,23 @@ test("Rider self-service authority validates auth ownership documents and audit"
   assert.match(source, /rider_documents\/\$\{rider\.uid\}/);
   assert.match(source, /riderOnboardingEvents/);
   assert.match(source, /riderApplicationIdempotency/);
+  assert.match(source, /collection\("riderApplications"\)\.doc\(rider\.uid\)/);
+  assert.match(source, /ALLOWED_APPLICATION_SECTIONS/);
+  assert.match(source, /ALLOWED_SECTION_STATUSES/);
+  assert.match(source, /cleanApplicationSection\(data\.section\)/);
+  assert.match(source, /cleanSectionStatus\(data\.status \|\| "in_progress"\)/);
+  assert.doesNotMatch(source, /const status = cleanDocumentType\(data\.status/);
+  assert.match(source, /sectionStatus/);
+  assert.match(source, /rider_application_section_updated/);
+  assert.match(source, /data\.fullName \|\| existing\.fullName/);
+  assert.match(source, /data\.vehicleType \|\| existing\.vehicleType/);
+  assert.match(source, /function applicationPatchFromProfile/);
+  assert.match(source, /transaction\.set\(applicationRef/);
+  assert.match(source, /\{merge: true\}/);
+  assert.match(source, /sectionStatus:\s*\{\[section\]:\s*"submitted"\}/);
+  assert.match(source, /data\.phoneNumber \|\| data\.phone \|\| existing\.phoneNumber/);
+  assert.match(source, /data\.homeAddress \|\| data\.address \|\| existing\.homeAddress/);
+  assert.match(source, /approvalStatus:\s*existing\.approvalStatus \|\| "pending"/);
   assert.match(source, /Delivery is not assigned to this Rider/);
   assert.match(source, /runTransaction/);
 });

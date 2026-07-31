@@ -9,6 +9,7 @@ OUTPUT_DIR="$ROOT_DIR/build/sender_app_web"
 SYMBOLS_ROOT="$ROOT_DIR/build/release_symbols/sender_app_web"
 WEB_RECAPTCHA_SITE_KEY="${CIRCUM_WEB_RECAPTCHA_ENTERPRISE_SITE_KEY:-}"
 WEB_GOOGLE_MAPS_API_KEY="${CIRCUM_WEB_GOOGLE_MAPS_API_KEY:-}"
+STRIPE_PUBLISHABLE_KEY_VALUE="${STRIPE_PUBLISHABLE_KEY:-}"
 BUILD_HASH="$(git rev-parse HEAD)"
 RELEASE_TAG="${CIRCUM_RELEASE_TAG:-$(git describe --tags --exact-match HEAD 2>/dev/null || git describe --tags --always --dirty)}"
 DIAGNOSTICS_PANEL="${CIRCUM_WEB_DIAGNOSTICS_PANEL:-false}"
@@ -28,6 +29,11 @@ if [[ -z "$WEB_GOOGLE_MAPS_API_KEY" ]]; then
   exit 1
 fi
 
+if [[ -z "$STRIPE_PUBLISHABLE_KEY_VALUE" ]]; then
+  echo "Missing STRIPE_PUBLISHABLE_KEY for Sender App payments." >&2
+  exit 1
+fi
+
 echo "Project: circum-2797c"
 echo "Surface: Sender App"
 echo "Entrypoint: lib/app/sender_mobile/sender_mobile_preview.dart"
@@ -44,6 +50,7 @@ rm -rf "$OUTPUT_DIR"
   --no-wasm-dry-run \
   ${EXTRA_FLUTTER_BUILD_ARGS+"${EXTRA_FLUTTER_BUILD_ARGS[@]}"} \
   --dart-define=CIRCUM_WEB_RECAPTCHA_ENTERPRISE_SITE_KEY="$WEB_RECAPTCHA_SITE_KEY" \
+  --dart-define=STRIPE_PUBLISHABLE_KEY="$STRIPE_PUBLISHABLE_KEY_VALUE" \
   --dart-define=CIRCUM_BUILD_HASH="$BUILD_HASH" \
   --dart-define=CIRCUM_RELEASE_TAG="$RELEASE_TAG" \
   --dart-define=CIRCUM_WEB_DIAGNOSTICS_PANEL="$DIAGNOSTICS_PANEL" \

@@ -78,6 +78,7 @@ class SendPackageState {
   final double? senderQuoteTotal;
   final String? senderQuoteSpeed;
   final List<Map<String, dynamic>> senderQuoteLineItems;
+  final List<Map<String, dynamic>> senderQuoteSpeedOptions;
   final bool isSenderRothLoading;
   final String senderRothError;
   final double? senderRothBalance;
@@ -89,6 +90,7 @@ class SendPackageState {
   final String? senderPaymentIntentId;
   final String? senderPaymentCustomerId;
   final String? senderPaymentEphemeralKeySecret;
+  final String? senderPaymentCheckoutUrl;
   final bool isSenderDeliveryCreating;
   final String senderDeliveryError;
   final String? senderCreatedRequestId;
@@ -144,6 +146,7 @@ class SendPackageState {
     this.senderQuoteTotal,
     this.senderQuoteSpeed,
     this.senderQuoteLineItems = const [],
+    this.senderQuoteSpeedOptions = const [],
     this.isSenderRothLoading = false,
     this.senderRothError = '',
     this.senderRothBalance,
@@ -155,6 +158,7 @@ class SendPackageState {
     this.senderPaymentIntentId,
     this.senderPaymentCustomerId,
     this.senderPaymentEphemeralKeySecret,
+    this.senderPaymentCheckoutUrl,
     this.isSenderDeliveryCreating = false,
     this.senderDeliveryError = '',
     this.senderCreatedRequestId,
@@ -203,6 +207,9 @@ class SendPackageState {
     IrisWeightLookupResult? irisResult,
     CanonicalIrisResult? canonicalIrisResult,
     String? itemDescription,
+    bool clearIrisResult = false,
+    bool clearCanonicalIrisResult = false,
+    bool clearItemDescription = false,
     bool? isIrisResolving,
     String? irisErrorMessage,
     String? irisWeightReviewMessage,
@@ -212,6 +219,10 @@ class SendPackageState {
     double? senderQuoteTotal,
     String? senderQuoteSpeed,
     List<Map<String, dynamic>>? senderQuoteLineItems,
+    List<Map<String, dynamic>>? senderQuoteSpeedOptions,
+    bool clearSenderQuoteId = false,
+    bool clearSenderQuoteTotal = false,
+    bool clearSenderQuoteSpeed = false,
     bool? isSenderRothLoading,
     String? senderRothError,
     double? senderRothBalance,
@@ -223,9 +234,17 @@ class SendPackageState {
     String? senderPaymentIntentId,
     String? senderPaymentCustomerId,
     String? senderPaymentEphemeralKeySecret,
+    String? senderPaymentCheckoutUrl,
+    bool clearSenderPaymentSession = false,
+    bool clearSenderPaymentClientSecret = false,
+    bool clearSenderPaymentIntent = false,
+    bool clearSenderPaymentCustomer = false,
+    bool clearSenderPaymentEphemeralKey = false,
+    bool clearSenderPaymentCheckoutUrl = false,
     bool? isSenderDeliveryCreating,
     String? senderDeliveryError,
     String? senderCreatedRequestId,
+    bool clearSenderCreatedRequest = false,
   }) {
     return SendPackageState(
       suggestions: suggestions ?? this.suggestions,
@@ -274,41 +293,61 @@ class SendPackageState {
       maxDrawerHeight: maxDrawerHeight ?? this.maxDrawerHeight,
       message: message ?? this.message,
       lastHistoryId: lastHistoryId ?? this.lastHistoryId,
-      irisResult: irisResult ?? this.irisResult,
-      canonicalIrisResult: canonicalIrisResult ?? this.canonicalIrisResult,
-      itemDescription: itemDescription ?? this.itemDescription,
+      irisResult: clearIrisResult ? null : irisResult ?? this.irisResult,
+      canonicalIrisResult: clearCanonicalIrisResult
+          ? null
+          : canonicalIrisResult ?? this.canonicalIrisResult,
+      itemDescription:
+          clearItemDescription ? null : itemDescription ?? this.itemDescription,
       isIrisResolving: isIrisResolving ?? this.isIrisResolving,
       irisErrorMessage: irisErrorMessage ?? this.irisErrorMessage,
       irisWeightReviewMessage:
           irisWeightReviewMessage ?? this.irisWeightReviewMessage,
       isSenderQuoteLoading: isSenderQuoteLoading ?? this.isSenderQuoteLoading,
       senderQuoteError: senderQuoteError ?? this.senderQuoteError,
-      senderQuoteId: senderQuoteId ?? this.senderQuoteId,
-      senderQuoteTotal: senderQuoteTotal ?? this.senderQuoteTotal,
-      senderQuoteSpeed: senderQuoteSpeed ?? this.senderQuoteSpeed,
+      senderQuoteId:
+          clearSenderQuoteId ? null : senderQuoteId ?? this.senderQuoteId,
+      senderQuoteTotal: clearSenderQuoteTotal
+          ? null
+          : senderQuoteTotal ?? this.senderQuoteTotal,
+      senderQuoteSpeed: clearSenderQuoteSpeed
+          ? null
+          : senderQuoteSpeed ?? this.senderQuoteSpeed,
       senderQuoteLineItems: senderQuoteLineItems ?? this.senderQuoteLineItems,
+      senderQuoteSpeedOptions:
+          senderQuoteSpeedOptions ?? this.senderQuoteSpeedOptions,
       isSenderRothLoading: isSenderRothLoading ?? this.isSenderRothLoading,
       senderRothError: senderRothError ?? this.senderRothError,
       senderRothBalance: senderRothBalance ?? this.senderRothBalance,
       isSenderPaymentLoading:
           isSenderPaymentLoading ?? this.isSenderPaymentLoading,
       senderPaymentError: senderPaymentError ?? this.senderPaymentError,
-      senderPaymentSessionId:
-          senderPaymentSessionId ?? this.senderPaymentSessionId,
+      senderPaymentSessionId: clearSenderPaymentSession
+          ? null
+          : senderPaymentSessionId ?? this.senderPaymentSessionId,
       senderPaymentStatus: senderPaymentStatus ?? this.senderPaymentStatus,
-      senderPaymentClientSecret:
-          senderPaymentClientSecret ?? this.senderPaymentClientSecret,
-      senderPaymentIntentId:
-          senderPaymentIntentId ?? this.senderPaymentIntentId,
-      senderPaymentCustomerId:
-          senderPaymentCustomerId ?? this.senderPaymentCustomerId,
-      senderPaymentEphemeralKeySecret: senderPaymentEphemeralKeySecret ??
-          this.senderPaymentEphemeralKeySecret,
+      senderPaymentClientSecret: clearSenderPaymentClientSecret
+          ? null
+          : senderPaymentClientSecret ?? this.senderPaymentClientSecret,
+      senderPaymentIntentId: clearSenderPaymentIntent
+          ? null
+          : senderPaymentIntentId ?? this.senderPaymentIntentId,
+      senderPaymentCustomerId: clearSenderPaymentCustomer
+          ? null
+          : senderPaymentCustomerId ?? this.senderPaymentCustomerId,
+      senderPaymentEphemeralKeySecret: clearSenderPaymentEphemeralKey
+          ? null
+          : senderPaymentEphemeralKeySecret ??
+              this.senderPaymentEphemeralKeySecret,
+      senderPaymentCheckoutUrl: clearSenderPaymentCheckoutUrl
+          ? null
+          : senderPaymentCheckoutUrl ?? this.senderPaymentCheckoutUrl,
       isSenderDeliveryCreating:
           isSenderDeliveryCreating ?? this.isSenderDeliveryCreating,
       senderDeliveryError: senderDeliveryError ?? this.senderDeliveryError,
-      senderCreatedRequestId:
-          senderCreatedRequestId ?? this.senderCreatedRequestId,
+      senderCreatedRequestId: clearSenderCreatedRequest
+          ? null
+          : senderCreatedRequestId ?? this.senderCreatedRequestId,
     );
   }
 }

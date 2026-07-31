@@ -26,7 +26,7 @@ class DeliveryData {
     return DeliveryData(
         courierName:
             '${data['courierName'] ?? data['riderName'] ?? data['driverName'] ?? 'Your Circum Rider'}',
-        phoneNumber: '${data['phoneNumber'] ?? data['riderPhone'] ?? ''}',
+        phoneNumber: '',
         locality: data['locality'],
         typeOfVehicle:
             '${data['typeOfVehicle'] ?? data['driverVehicle'] ?? 'Circum Rider'}',

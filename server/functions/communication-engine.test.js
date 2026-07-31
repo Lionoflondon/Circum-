@@ -12,6 +12,10 @@ test("announcement recipients use JavaScript arrays correctly", () => {
 
 test("notifications record delivery status, failures, and retries", () => {
   assert.match(source, /async function emitNotification/);
+  assert.match(source, /function redactContactFields/);
+  assert.match(source, /const safeData = redactContactFields\(data\)/);
+  assert.match(source, /data: \{\.\.\.safeData, destination\}/);
+  assert.match(source, /contactFieldPattern/);
   assert.match(source, /notificationId:\s*ref\.id/);
   assert.match(source, /correlationId/);
   assert.match(source, /deliveryStatus:\s*"persisted"/);

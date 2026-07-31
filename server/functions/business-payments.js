@@ -210,6 +210,175 @@ async function markInvoicePaid({invoiceId, businessId, amount, method, stripeSes
   });
 }
 
+async function payBusinessInvoiceAtomically({
+  businessId,
+  invoiceId,
+  cardAmount = 0,
+  rothAmount = 0,
+  method,
+  stripeSessionId = null,
+  stripePaymentIntentId = null,
+  paymentId = null,
+  metadata = {},
+}) {
+  const db = getFirestore();
+  const paymentRef = db.collection("businessInvoicePayments")
+      .doc(paymentId || stripeSessionId || `roth_${invoiceId}`);
+  const invoiceRef = db.collection("businessInvoices").doc(invoiceId);
+  const walletRef = db.collection("business_wallets").doc(businessId);
+  const accountRef = db.collection("businessAccounts").doc(businessId);
+  const walletTxRef = walletRef.collection("transactions")
+      .doc(`invoice_roth_${invoiceId}_${paymentRef.id}`);
+  return db.runTransaction(async (transaction) => {
+    const reads = [
+      transaction.get(paymentRef),
+      transaction.get(invoiceRef),
+    ];
+    if (money(rothAmount) > 0) {
+      reads.push(transaction.get(walletRef));
+      reads.push(transaction.get(walletTxRef));
+    }
+    const [existingPaymentSnap, invoiceSnap, walletSnap, existingWalletTxSnap] =
+      await Promise.all(reads);
+    if (existingPaymentSnap.exists &&
+        `${existingPaymentSnap.data().status || ""}` === "paid") {
+      return {
+        paid: true,
+        duplicate: true,
+        paymentId: paymentRef.id,
+        invoiceId,
+      };
+    }
+    if (!invoiceSnap.exists) {
+      throw new functions.https.HttpsError("not-found", "Business invoice not found.");
+    }
+    const invoice = invoiceSnap.data() || {};
+    if (`${invoice.status || ""}` === "paid" ||
+        `${invoice.status || ""}` === "paid_manually") {
+      transaction.set(paymentRef, {
+        paymentId: paymentRef.id,
+        businessId,
+        invoiceId,
+        amount: money(cardAmount),
+        rothAmount: money(rothAmount),
+        method,
+        status: "paid",
+        duplicateOfPaidInvoice: true,
+        stripeCheckoutSessionId: stripeSessionId,
+        stripePaymentIntentId,
+        paidAt: FieldValue.serverTimestamp(),
+        createdAt: FieldValue.serverTimestamp(),
+      }, {merge: true});
+      return {
+        paid: true,
+        duplicate: true,
+        paymentId: paymentRef.id,
+        invoiceId,
+      };
+    }
+    const normalizedCardAmount = money(cardAmount);
+    const normalizedRothAmount = money(rothAmount);
+    const total = money(invoice.total || invoice.subtotal || invoice.balanceDue ||
+      normalizedCardAmount + normalizedRothAmount);
+    const previousPaid = money(invoice.amountPaid);
+    const paymentTotal = money(normalizedCardAmount + normalizedRothAmount);
+    const nextPaid = money(Math.min(total, previousPaid + paymentTotal));
+    const nextBalance = money(Math.max(0, total - nextPaid));
+    const nextStatus = nextBalance <= 0 ? "paid" : "partially_paid";
+    let previousWalletBalance = null;
+    let resultingWalletBalance = null;
+    if (normalizedRothAmount > 0) {
+      if (existingWalletTxSnap && existingWalletTxSnap.exists) {
+        throw new functions.https.HttpsError(
+            "already-exists",
+            "This Business Roth payment is already being processed.",
+        );
+      }
+      const wallet = walletSnap && walletSnap.exists ? walletSnap.data() || {} : {};
+      previousWalletBalance = money(wallet.balance || wallet.availableBalance);
+      resultingWalletBalance = money(previousWalletBalance - normalizedRothAmount);
+      if (resultingWalletBalance < 0) {
+        throw new functions.https.HttpsError("failed-precondition", "Business Roth balance is too low.");
+      }
+      transaction.set(walletRef, {
+        businessId,
+        balance: resultingWalletBalance,
+        availableBalance: resultingWalletBalance,
+        lifetimeSpent: FieldValue.increment(normalizedRothAmount),
+        updatedAt: FieldValue.serverTimestamp(),
+      }, {merge: true});
+      transaction.set(walletTxRef, {
+        transactionId: walletTxRef.id,
+        businessId,
+        direction: "debit",
+        amount: normalizedRothAmount,
+        type: "invoice_payment",
+        method: "roth",
+        invoiceId,
+        paymentId: paymentRef.id,
+        note: "Business invoice paid with Roth.",
+        createdAt: FieldValue.serverTimestamp(),
+        previousBalance: previousWalletBalance,
+        resultingBalance: resultingWalletBalance,
+        metadata,
+      }, {merge: false});
+    }
+    transaction.set(invoiceRef, {
+      status: nextStatus,
+      amountPaid: nextPaid,
+      balanceDue: nextBalance,
+      paymentMethod: method,
+      stripeCheckoutSessionId: stripeSessionId,
+      stripePaymentIntentId,
+      ...(nextStatus === "paid" ? {paidAt: FieldValue.serverTimestamp()} : {}),
+      updatedAt: FieldValue.serverTimestamp(),
+    }, {merge: true});
+    transaction.set(paymentRef, {
+      paymentId: paymentRef.id,
+      businessId,
+      invoiceId,
+      amount: normalizedCardAmount,
+      rothAmount: normalizedRothAmount,
+      method,
+      status: "paid",
+      stripeCheckoutSessionId: stripeSessionId,
+      stripePaymentIntentId,
+      paidAt: FieldValue.serverTimestamp(),
+      createdAt: FieldValue.serverTimestamp(),
+      metadata,
+    }, {merge: true});
+    transaction.set(accountRef, {
+      ...(normalizedRothAmount > 0 ? {
+        businessRothBalance: resultingWalletBalance,
+        rothBalance: resultingWalletBalance,
+      } : {}),
+      updatedAt: FieldValue.serverTimestamp(),
+    }, {merge: true});
+    transaction.set(db.collection("adminAuditLogs").doc(), {
+      action: nextStatus === "paid" ? "business_invoice_paid" : "business_invoice_part_payment",
+      actionType: nextStatus === "paid" ? "business_invoice_paid" : "business_invoice_part_payment",
+      businessId,
+      invoiceId,
+      amount: paymentTotal,
+      paymentMethod: method,
+      previousStatus: invoice.status || null,
+      newStatus: nextStatus,
+      balanceDue: nextBalance,
+      stripeCheckoutSessionId: stripeSessionId,
+      createdAt: FieldValue.serverTimestamp(),
+    });
+    return {
+      paid: true,
+      duplicate: false,
+      paymentId: paymentRef.id,
+      invoiceId,
+      status: nextStatus,
+      balanceDue: nextBalance,
+      rothBalance: resultingWalletBalance,
+    };
+  });
+}
+
 exports.adminCreateBusinessInvoice = functions.https.onCall(async (payload, context) => {
   const adminUid = requireAdmin(context, "Your Admin role cannot create Business invoices.");
   const data = payload || {};
@@ -389,10 +558,16 @@ exports.createBusinessInvoiceCheckout = (stripe) => functions.https.onCall(async
   const requestedMethod = ["apple_pay", "google_pay", "saved_card", "card"].includes(`${data.paymentMethod || ""}`) ? `${data.paymentMethod}` : "card";
   if (cardAmount <= 0) {
     const paymentId = `roth_${invoiceId}_${Math.round(paymentAmount * 100)}`;
-    const debited = await debitBusinessRoth({businessId, amount: rothAmount, invoiceId, metadata: {paymentId}});
-    if (!debited) return {paid: true, method: "roth", paymentAmount, duplicate: true};
-    await markInvoicePaid({invoiceId, businessId, amount: 0, rothAmount, method: "roth", paymentId});
-    return {paid: true, method: "roth", paymentAmount, totalInvoice: balanceDue, rothApplied: rothAmount, cardAmount: 0};
+    const result = await payBusinessInvoiceAtomically({
+      businessId,
+      invoiceId,
+      cardAmount: 0,
+      rothAmount,
+      method: "roth",
+      paymentId,
+      metadata: {paymentId, source: "business_invoice_roth_only"},
+    });
+    return {paid: true, method: "roth", paymentAmount, totalInvoice: balanceDue, rothApplied: rothAmount, cardAmount: 0, duplicate: result.duplicate === true};
   }
   const paymentRef = db.collection("businessInvoicePayments").doc();
   const baseUrl = `${data.returnUrl || "https://circumuk.com/?app=business&section=invoicing"}`;
@@ -577,19 +752,29 @@ exports.handleBusinessCheckoutSession = async (sessionData, eventId = null) => {
       expectedAmountGBP: payment.cardAmount,
     });
     const cardAmount = verifiedPayment.amountGBP;
-    if (rothAmount > 0) {
-      await debitBusinessRoth({businessId, amount: rothAmount, invoiceId, metadata: {paymentId, stripeCheckoutSessionId: sessionData.id}});
-    }
     const requestedMethod = `${payment.requestedPaymentMethod || metadata.requestedPaymentMethod || "card"}`;
-    await markInvoicePaid({
+    await payBusinessInvoiceAtomically({
       invoiceId,
       businessId,
-      amount: cardAmount,
+      cardAmount,
       rothAmount,
       method: rothAmount > 0 ? `roth_${requestedMethod}` : requestedMethod,
       stripeSessionId: sessionData.id,
       stripePaymentIntentId: sessionData.payment_intent || null,
       paymentId,
+      metadata: {
+        source: "business_invoice_stripe_finalizer",
+        stripeEventId: eventId,
+        stripeCheckoutSessionId: sessionData.id,
+        stripePaymentIntentId: sessionData.payment_intent || null,
+      },
     });
   }
+};
+
+exports._private = {
+  creditBusinessRoth,
+  debitBusinessRoth,
+  markInvoicePaid,
+  payBusinessInvoiceAtomically,
 };

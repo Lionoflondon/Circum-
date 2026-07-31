@@ -7,8 +7,10 @@ import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:flutter_stripe/flutter_stripe.dart';
 
 import '../../firebase_options.dart';
+import '../../env/env.dart';
 import '../security/circum_app_check.dart';
 import '../send_package/bloc/send_package_bloc.dart';
 import 'design_system/sender_design_system.dart';
@@ -48,11 +50,32 @@ Future<void> _startSenderWeb() async {
   WidgetsFlutterBinding.ensureInitialized();
   diagnostics.complete('Flutter initialization');
 
+  diagnostics.start('Stripe initialization');
+  await _configureStripe();
+  diagnostics.complete('Stripe initialization');
+
   if (kIsWeb) {
     diagnostics.start('Firebase.initializeApp()');
     await Firebase.initializeApp(options: DefaultFirebaseOptions.web);
     _firebaseInitialized = true;
     diagnostics.complete('Firebase.initializeApp()');
+    _refreshRuntimeHealth();
+
+    diagnostics.start('App Check initialization');
+    final appCheckStartup = await initializeCircumAppCheck();
+    if (appCheckStartup.blockStartup) {
+      _appCheckState = 'Blocking failure';
+      diagnostics.fail(
+        'App Check initialization',
+        appCheckStartup.message,
+        StackTrace.current,
+      );
+      _refreshRuntimeHealth();
+      _runSenderApp(const _SenderWebStartupRecovery());
+      return;
+    }
+    _appCheckState = 'Ready';
+    diagnostics.complete('App Check initialization');
     _refreshRuntimeHealth();
 
     diagnostics.start('Firebase Auth initialization');
@@ -72,23 +95,6 @@ Future<void> _startSenderWeb() async {
     _functionsConnected = true;
     diagnostics.complete('Callable initialization');
     _refreshRuntimeHealth();
-
-    diagnostics.start('App Check initialization');
-    final appCheckStartup = await initializeCircumAppCheck();
-    if (appCheckStartup.blockStartup) {
-      _appCheckState = 'Blocking failure';
-      diagnostics.fail(
-        'App Check initialization',
-        appCheckStartup.message,
-        StackTrace.current,
-      );
-      _refreshRuntimeHealth();
-      _runSenderApp(const _SenderWebStartupRecovery());
-      return;
-    }
-    _appCheckState = 'Ready';
-    diagnostics.complete('App Check initialization');
-    _refreshRuntimeHealth();
   } else {
     diagnostics.start('Firebase.initializeApp()');
     await Firebase.initializeApp();
@@ -105,12 +111,27 @@ Future<void> _startSenderWeb() async {
   });
 }
 
+Future<void> _configureStripe() async {
+  final key = Env.stripePublishableKey.trim();
+  if (key.isEmpty) return;
+  Stripe.publishableKey = key;
+  await Stripe.instance.applySettings();
+}
+
 void _runSenderApp(Widget app) {
   _senderAppStarted = true;
   runApp(app);
 }
 
 void _refreshRuntimeHealth() {
+  var authenticated = false;
+  if (_authInitialized) {
+    try {
+      authenticated = FirebaseAuth.instance.currentUser != null;
+    } catch (_) {
+      authenticated = false;
+    }
+  }
   SenderStartupDiagnostics.instance.updateHealth(SenderRuntimeHealthSnapshot(
     buildHash: senderBuildHash,
     releaseTag: senderReleaseTag,
@@ -121,7 +142,7 @@ void _refreshRuntimeHealth() {
     functionsConnected: _functionsConnected,
     mapsReady: false,
     stripeReady: false,
-    authenticated: FirebaseAuth.instance.currentUser != null,
+    authenticated: authenticated,
   ));
 }
 
