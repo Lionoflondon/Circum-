@@ -2,7 +2,7 @@ const fs = require("fs");
 const test = require("node:test");
 const assert = require("node:assert/strict");
 
-const source = fs.readFileSync("server/functions/sender-account.js", "utf8");
+const source = fs.readFileSync("sender-account.js", "utf8");
 
 test("ensureSenderAccount emits lifecycle diagnostics around the transaction", () => {
   assert.match(source, /function senderProfileLog\(event, payload = \{\}\)/);
