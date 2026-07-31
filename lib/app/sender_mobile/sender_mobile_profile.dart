@@ -382,6 +382,10 @@ class ImagePickerSenderProfilePhotoPicker implements SenderProfilePhotoPicker {
 
 class FirebaseSenderMobileProfileRepository
     implements SenderMobileProfileRepository {
+  static const _authRestoreTimeout = Duration(seconds: 8);
+  static const _profileReadTimeout = Duration(seconds: 8);
+  static const _senderAccountEnsureTimeout = Duration(seconds: 8);
+
   final FirebaseAuth auth;
   final FirebaseFirestore firestore;
   final FirebaseStorage storage;
@@ -397,71 +401,265 @@ class FirebaseSenderMobileProfileRepository
         storage = storage ?? FirebaseStorage.instance,
         functions = functions ?? FirebaseFunctions.instance;
 
+  Future<User> _requireRestoredUser(String phase) async {
+    final current = auth.currentUser;
+    if (current != null) return current;
+    try {
+      final restored = await auth
+          .authStateChanges()
+          .where((user) => user != null)
+          .cast<User>()
+          .first
+          .timeout(_authRestoreTimeout);
+      return restored;
+    } on TimeoutException {
+      throw SenderMobileProfileException(
+        code: SenderProfileDiagnosticCode.authUnavailable,
+        message: 'Sign in again to load your profile.',
+        phase: phase,
+      );
+    } catch (error, stack) {
+      _logProfileDiagnostic(
+        code: SenderProfileDiagnosticCode.repositoryFailure,
+        uid: null,
+        phase: phase,
+        path: 'FirebaseAuth.authStateChanges',
+        error: error,
+        stack: stack,
+      );
+      throw SenderMobileProfileException(
+        code: SenderProfileDiagnosticCode.repositoryFailure,
+        message: 'Profile startup failed. Please try again.',
+        phase: phase,
+      );
+    }
+  }
+
+  Future<void> _ensureCanonicalSenderAccount(User user, String phase) async {
+    try {
+      await functions
+          .httpsCallable('ensureSenderAccount')
+          .call<void>()
+          .timeout(_senderAccountEnsureTimeout);
+    } on TimeoutException catch (error, stack) {
+      _logProfileDiagnostic(
+        code: SenderProfileDiagnosticCode.startupRace,
+        uid: user.uid,
+        phase: phase,
+        path: 'functions/ensureSenderAccount',
+        error: error,
+        stack: stack,
+      );
+      throw SenderMobileProfileException(
+        code: SenderProfileDiagnosticCode.startupRace,
+        message: 'Profile setup is still completing. Please try again.',
+        phase: phase,
+        collection: 'users',
+        documentId: user.uid,
+      );
+    } on FirebaseFunctionsException catch (error, stack) {
+      final code = error.code == 'permission-denied'
+          ? SenderProfileDiagnosticCode.permissionDenied
+          : SenderProfileDiagnosticCode.repositoryFailure;
+      _logProfileDiagnostic(
+        code: code,
+        uid: user.uid,
+        phase: phase,
+        path: 'functions/ensureSenderAccount',
+        error: error,
+        stack: stack,
+      );
+      throw SenderMobileProfileException(
+        code: code,
+        message: _profileMessageFor(code),
+        phase: phase,
+        collection: 'users',
+        documentId: user.uid,
+      );
+    } catch (error, stack) {
+      _logProfileDiagnostic(
+        code: SenderProfileDiagnosticCode.repositoryFailure,
+        uid: user.uid,
+        phase: phase,
+        path: 'functions/ensureSenderAccount',
+        error: error,
+        stack: stack,
+      );
+      throw SenderMobileProfileException(
+        code: SenderProfileDiagnosticCode.repositoryFailure,
+        message: 'Profile setup failed. Please try again.',
+        phase: phase,
+        collection: 'users',
+        documentId: user.uid,
+      );
+    }
+  }
+
+  Future<DocumentSnapshot<Map<String, dynamic>>> _readCanonicalProfile(
+    User user,
+    String phase,
+  ) async {
+    final reference = firestore.collection('users').doc(user.uid);
+    try {
+      final snapshot = await reference.get().timeout(_profileReadTimeout);
+      if (!snapshot.exists) {
+        throw SenderMobileProfileException(
+          code: SenderProfileDiagnosticCode.notFound,
+          message: 'Your profile is being prepared. Please try again.',
+          phase: phase,
+          collection: 'users',
+          documentId: user.uid,
+        );
+      }
+      final data = snapshot.data() ?? const <String, dynamic>{};
+      final storedUid = SenderMobileProfileData.firstText([
+        data['uid'],
+        data['userId'],
+        data['senderId'],
+      ]);
+      if (storedUid.isNotEmpty && storedUid != user.uid) {
+        throw SenderMobileProfileException(
+          code: SenderProfileDiagnosticCode.uidMismatch,
+          message: 'Profile ownership could not be verified.',
+          phase: phase,
+          collection: 'users',
+          documentId: user.uid,
+        );
+      }
+      return snapshot;
+    } on SenderMobileProfileException catch (error, stack) {
+      _logProfileDiagnostic(
+        code: error.code,
+        uid: user.uid,
+        phase: phase,
+        path: error.path,
+        error: error,
+        stack: stack,
+      );
+      rethrow;
+    } on TimeoutException catch (error, stack) {
+      _logProfileDiagnostic(
+        code: SenderProfileDiagnosticCode.repositoryFailure,
+        uid: user.uid,
+        phase: phase,
+        path: reference.path,
+        error: error,
+        stack: stack,
+      );
+      throw SenderMobileProfileException(
+        code: SenderProfileDiagnosticCode.repositoryFailure,
+        message: 'Profile service timed out. Please try again.',
+        phase: phase,
+        collection: 'users',
+        documentId: user.uid,
+      );
+    } on FirebaseException catch (error, stack) {
+      final code = error.code == 'permission-denied'
+          ? SenderProfileDiagnosticCode.permissionDenied
+          : SenderProfileDiagnosticCode.repositoryFailure;
+      _logProfileDiagnostic(
+        code: code,
+        uid: user.uid,
+        phase: phase,
+        path: reference.path,
+        error: error,
+        stack: stack,
+      );
+      throw SenderMobileProfileException(
+        code: code,
+        message: _profileMessageFor(code),
+        phase: phase,
+        collection: 'users',
+        documentId: user.uid,
+      );
+    } catch (error, stack) {
+      _logProfileDiagnostic(
+        code: SenderProfileDiagnosticCode.repositoryFailure,
+        uid: user.uid,
+        phase: phase,
+        path: reference.path,
+        error: error,
+        stack: stack,
+      );
+      throw SenderMobileProfileException(
+        code: SenderProfileDiagnosticCode.repositoryFailure,
+        message: 'Profile refresh failed. Please try again.',
+        phase: phase,
+        collection: 'users',
+        documentId: user.uid,
+      );
+    }
+  }
+
   @override
   Future<SenderMobileProfileData> load() async {
-    final user = auth.currentUser;
-    if (user == null) {
-      throw const SenderMobileProfileException(
-        'Sign in again to load your profile.',
-      );
-    }
-    DocumentSnapshot<Map<String, dynamic>>? snapshot;
-    SenderMobileProfileException? profileReadError;
-    try {
-      snapshot = await firestore.collection('users').doc(user.uid).get();
-    } catch (_) {
-      profileReadError = const SenderMobileProfileException(
-        'Profile details are temporarily limited. Your account is still available.',
-      );
-    }
+    final user = await _requireRestoredUser('profile.load.auth');
+    await _ensureCanonicalSenderAccount(user, 'profile.load.ensure');
+    final snapshot = await _readCanonicalProfile(user, 'profile.load.read');
     List<Map<String, dynamic>> trustEvents = const [];
     try {
       final eventSnapshot = await firestore
           .collection('senderTrustEvents')
           .where('userId', isEqualTo: user.uid)
           .limit(20)
-          .get();
+          .get()
+          .timeout(_profileReadTimeout);
       trustEvents = eventSnapshot.docs
           .map((document) => document.data())
           .toList(growable: false);
-    } catch (_) {
+    } catch (error, stack) {
+      _logProfileDiagnostic(
+        code: SenderProfileDiagnosticCode.repositoryFailure,
+        uid: user.uid,
+        phase: 'profile.load.trustEvents',
+        path: 'senderTrustEvents?userId=${user.uid}',
+        error: error,
+        stack: stack,
+      );
       // The profile's embedded trust history remains the safe fallback.
     }
-    final profile = SenderMobileProfileData.fromSources(
+    return SenderMobileProfileData.fromSources(
       user: user,
-      data: snapshot?.data(),
+      data: snapshot.data(),
       trustEvents: trustEvents,
     );
-    if (profileReadError != null &&
-        profile.displayName.isEmpty &&
-        profile.email.isEmpty &&
-        profile.phone.isEmpty) {
-      throw profileReadError;
-    }
-    return profile;
   }
 
   @override
   Stream<SenderMobileProfileData> watch() async* {
-    final user = auth.currentUser;
-    if (user == null) {
-      throw const SenderMobileProfileException(
-        'Sign in again to load your profile.',
-      );
-    }
+    final user = await _requireRestoredUser('profile.watch.auth');
+    await _ensureCanonicalSenderAccount(user, 'profile.watch.ensure');
     await for (final snapshot
         in firestore.collection('users').doc(user.uid).snapshots()) {
+      if (!snapshot.exists) {
+        throw SenderMobileProfileException(
+          code: SenderProfileDiagnosticCode.notFound,
+          message: 'Your profile is being prepared. Please try again.',
+          phase: 'profile.watch.read',
+          collection: 'users',
+          documentId: user.uid,
+        );
+      }
       List<Map<String, dynamic>> trustEvents = const [];
       try {
         final eventSnapshot = await firestore
             .collection('senderTrustEvents')
             .where('userId', isEqualTo: user.uid)
             .limit(20)
-            .get();
+            .get()
+            .timeout(_profileReadTimeout);
         trustEvents = eventSnapshot.docs
             .map((document) => document.data())
             .toList(growable: false);
-      } catch (_) {
+      } catch (error, stack) {
+        _logProfileDiagnostic(
+          code: SenderProfileDiagnosticCode.repositoryFailure,
+          uid: user.uid,
+          phase: 'profile.watch.trustEvents',
+          path: 'senderTrustEvents?userId=${user.uid}',
+          error: error,
+          stack: stack,
+        );
         // The profile's embedded trust history remains the safe fallback.
       }
       yield SenderMobileProfileData.fromSources(
@@ -478,22 +676,17 @@ class FirebaseSenderMobileProfileRepository
     required String username,
     required String phone,
   }) async {
-    final user = auth.currentUser;
-    if (user == null) {
-      throw const SenderMobileProfileException(
-        'Sign in again before saving your profile.',
-      );
-    }
+    final user = await _requireRestoredUser('profile.save.auth');
     final normalizedUsername = username.trim().replaceFirst(RegExp(r'^@'), '');
     await functions.httpsCallable('updateSenderProfile').call({
       'displayName': displayName.trim(),
       'username': normalizedUsername,
       'phone': phone.trim(),
-    });
+    }).timeout(_senderAccountEnsureTimeout);
     if (user.displayName != displayName.trim()) {
       await user.updateDisplayName(displayName.trim());
     }
-    final updated = await firestore.collection('users').doc(user.uid).get();
+    final updated = await _readCanonicalProfile(user, 'profile.save.read');
     return SenderMobileProfileData.fromSources(
       user: user,
       data: {
@@ -511,15 +704,12 @@ class FirebaseSenderMobileProfileRepository
   Future<SenderMobileProfileData> uploadPhoto(
     SenderProfilePhoto photo,
   ) async {
-    final user = auth.currentUser;
-    if (user == null) {
-      throw const SenderMobileProfileException(
-        'Sign in again before uploading a profile photo.',
-      );
-    }
+    final user = await _requireRestoredUser('profile.photo.auth');
     if (photo.bytes.isEmpty || photo.bytes.lengthInBytes > 8 * 1024 * 1024) {
-      throw const SenderMobileProfileException(
-        'Choose a profile photo smaller than 8 MB.',
+      throw SenderMobileProfileException(
+        code: SenderProfileDiagnosticCode.schemaMismatch,
+        message: 'Choose a profile photo smaller than 8 MB.',
+        phase: 'profile.photo.validate',
       );
     }
     final extension = photo.contentType == 'image/png' ? 'png' : 'jpg';
@@ -540,7 +730,7 @@ class FirebaseSenderMobileProfileRepository
     final downloadUrl = await reference.getDownloadURL();
     await functions.httpsCallable('updateSenderProfilePhoto').call({
       'photoURL': downloadUrl,
-    });
+    }).timeout(_senderAccountEnsureTimeout);
     await user.updatePhotoURL(downloadUrl);
     final current = await load();
     return SenderMobileProfileData(
@@ -574,13 +764,86 @@ class FirebaseSenderMobileProfileRepository
   }
 }
 
-class SenderMobileProfileException implements Exception {
-  final String message;
+enum SenderProfileDiagnosticCode {
+  authUnavailable('PROFILE_AUTH_UNAVAILABLE'),
+  notFound('PROFILE_NOT_FOUND'),
+  permissionDenied('PROFILE_PERMISSION_DENIED'),
+  uidMismatch('PROFILE_UID_MISMATCH'),
+  schemaMismatch('PROFILE_SCHEMA_MISMATCH'),
+  startupRace('PROFILE_STARTUP_RACE'),
+  repositoryFailure('PROFILE_REPOSITORY_FAILURE');
 
-  const SenderMobileProfileException(this.message);
+  final String label;
+
+  const SenderProfileDiagnosticCode(this.label);
+}
+
+class SenderMobileProfileException implements Exception {
+  final SenderProfileDiagnosticCode code;
+  final String message;
+  final String phase;
+  final String collection;
+  final String documentId;
+  final String correlationId;
+
+  SenderMobileProfileException({
+    required this.code,
+    required this.message,
+    required this.phase,
+    this.collection = 'users',
+    this.documentId = '',
+    String? correlationId,
+  }) : correlationId = correlationId ?? _profileCorrelationId();
+
+  String get path =>
+      documentId.trim().isEmpty ? collection : '$collection/$documentId';
 
   @override
-  String toString() => message;
+  String toString() =>
+      '${code.label} phase=$phase path=$path correlationId=$correlationId';
+}
+
+String _profileMessageFor(SenderProfileDiagnosticCode code) {
+  switch (code) {
+    case SenderProfileDiagnosticCode.permissionDenied:
+      return 'Profile access was denied. Please sign in again.';
+    case SenderProfileDiagnosticCode.notFound:
+      return 'Your profile is being prepared. Please try again.';
+    case SenderProfileDiagnosticCode.uidMismatch:
+      return 'Profile ownership could not be verified.';
+    case SenderProfileDiagnosticCode.startupRace:
+      return 'Profile setup is still completing. Please try again.';
+    case SenderProfileDiagnosticCode.authUnavailable:
+      return 'Sign in again to load your profile.';
+    case SenderProfileDiagnosticCode.schemaMismatch:
+      return 'Profile details need attention. Please try again.';
+    case SenderProfileDiagnosticCode.repositoryFailure:
+      return 'Profile service is temporarily unavailable. Please try again.';
+  }
+}
+
+String _profileCorrelationId() =>
+    'sender-profile-${DateTime.now().microsecondsSinceEpoch}';
+
+void _logProfileDiagnostic({
+  required SenderProfileDiagnosticCode code,
+  required String? uid,
+  required String phase,
+  required String path,
+  required Object error,
+  StackTrace? stack,
+}) {
+  final correlationId = _profileCorrelationId();
+  debugPrint(
+    'Sender profile diagnostic '
+    'code=${code.label} '
+    'uid=${uid ?? 'unknown'} '
+    'path=$path '
+    'phase=$phase '
+    'correlationId=$correlationId '
+    'error=$error',
+  );
+  if (stack != null) debugPrint('$stack');
 }
 
 String? _senderProfileCacheKey() {
@@ -3162,7 +3425,7 @@ class _ProfileErrorState extends StatelessWidget {
               ),
               const SizedBox(height: 14),
               Text(
-                'Profile unavailable',
+                'Profile needs attention',
                 style: GoogleFonts.inter(
                   color: Colors.white,
                   fontSize: 18,

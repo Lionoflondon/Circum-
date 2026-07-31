@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:io';
 
 import 'package:circum/app/sender_mobile/sender_mobile_profile.dart';
 import 'package:flutter/material.dart';
@@ -64,8 +65,10 @@ class _FailingProfileRepository implements SenderMobileProfileRepository {
 
   @override
   Future<SenderMobileProfileData> load() {
-    throw const SenderMobileProfileException(
-      'Sign in again to load your profile.',
+    throw SenderMobileProfileException(
+      code: SenderProfileDiagnosticCode.authUnavailable,
+      message: 'Sign in again to load your profile.',
+      phase: 'test.auth',
     );
   }
 
@@ -182,9 +185,25 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(find.text('Profile unavailable'), findsOneWidget);
+    expect(find.text('Profile needs attention'), findsOneWidget);
     expect(find.text('Sign in again to load your profile.'), findsOneWidget);
     expect(find.text('We could not load your profile. Check your connection.'),
         findsNothing);
+  });
+
+  test('Sender profile diagnostics expose precise internal failure codes', () {
+    final source = File('lib/app/sender_mobile/sender_mobile_profile.dart')
+        .readAsStringSync();
+
+    expect(source, contains('PROFILE_NOT_FOUND'));
+    expect(source, contains('PROFILE_PERMISSION_DENIED'));
+    expect(source, contains('PROFILE_UID_MISMATCH'));
+    expect(source, contains('PROFILE_SCHEMA_MISMATCH'));
+    expect(source, contains('PROFILE_STARTUP_RACE'));
+    expect(source, contains('PROFILE_REPOSITORY_FAILURE'));
+    expect(source, contains("httpsCallable('ensureSenderAccount')"));
+    expect(source, contains('auth'));
+    expect(source, contains('authStateChanges()'));
+    expect(source, isNot(contains("'Profile unavailable'")));
   });
 }
