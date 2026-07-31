@@ -43,6 +43,10 @@ var _authInitialized = false;
 var _firestoreConnected = false;
 var _functionsConnected = false;
 var _appCheckState = 'Not started';
+var _stripeReady = false;
+
+const _optionalStartupTimeout = Duration(seconds: 4);
+const _requiredStartupTimeout = Duration(seconds: 12);
 
 Future<void> _startSenderWeb() async {
   final diagnostics = SenderStartupDiagnostics.instance;
@@ -50,19 +54,35 @@ Future<void> _startSenderWeb() async {
   WidgetsFlutterBinding.ensureInitialized();
   diagnostics.complete('Flutter initialization');
 
-  diagnostics.start('Stripe initialization');
-  await _configureStripe();
-  diagnostics.complete('Stripe initialization');
+  _stripeReady = await _runOptionalStartupStep(
+    'Stripe initialization',
+    _configureStripe,
+    timeout: _optionalStartupTimeout,
+  );
+  _refreshRuntimeHealth();
 
   if (kIsWeb) {
-    diagnostics.start('Firebase.initializeApp()');
-    await Firebase.initializeApp(options: DefaultFirebaseOptions.web);
+    final firebaseReady = await _runRequiredStartupStep(
+      'Firebase.initializeApp()',
+      () => Firebase.initializeApp(options: DefaultFirebaseOptions.web),
+      timeout: _requiredStartupTimeout,
+    );
+    if (!firebaseReady) return;
     _firebaseInitialized = true;
-    diagnostics.complete('Firebase.initializeApp()');
     _refreshRuntimeHealth();
 
-    diagnostics.start('App Check initialization');
-    final appCheckStartup = await initializeCircumAppCheck();
+    _appCheckState = 'Starting';
+    _refreshRuntimeHealth();
+    final appCheckStartup = await _runRequiredStartupValue(
+      'App Check initialization',
+      initializeCircumAppCheck,
+      timeout: _requiredStartupTimeout,
+    );
+    if (appCheckStartup == null) {
+      _appCheckState = 'Startup failed';
+      _refreshRuntimeHealth();
+      return;
+    }
     if (appCheckStartup.blockStartup) {
       _appCheckState = 'Blocking failure';
       diagnostics.fail(
@@ -75,31 +95,42 @@ Future<void> _startSenderWeb() async {
       return;
     }
     _appCheckState = 'Ready';
-    diagnostics.complete('App Check initialization');
     _refreshRuntimeHealth();
 
-    diagnostics.start('Firebase Auth initialization');
-    FirebaseAuth.instance;
+    final authReady = await _runRequiredStartupStep(
+      'Firebase Auth initialization',
+      () async => FirebaseAuth.instance,
+      timeout: _requiredStartupTimeout,
+    );
+    if (!authReady) return;
     _authInitialized = true;
-    diagnostics.complete('Firebase Auth initialization');
     _refreshRuntimeHealth();
 
-    diagnostics.start('Firestore initialization');
-    FirebaseFirestore.instance;
+    final firestoreReady = await _runRequiredStartupStep(
+      'Firestore initialization',
+      () async => FirebaseFirestore.instance,
+      timeout: _requiredStartupTimeout,
+    );
+    if (!firestoreReady) return;
     _firestoreConnected = true;
-    diagnostics.complete('Firestore initialization');
     _refreshRuntimeHealth();
 
-    diagnostics.start('Callable initialization');
-    FirebaseFunctions.instance;
+    final functionsReady = await _runRequiredStartupStep(
+      'Callable initialization',
+      () async => FirebaseFunctions.instance,
+      timeout: _requiredStartupTimeout,
+    );
+    if (!functionsReady) return;
     _functionsConnected = true;
-    diagnostics.complete('Callable initialization');
     _refreshRuntimeHealth();
   } else {
-    diagnostics.start('Firebase.initializeApp()');
-    await Firebase.initializeApp();
+    final firebaseReady = await _runRequiredStartupStep(
+      'Firebase.initializeApp()',
+      Firebase.initializeApp,
+      timeout: _requiredStartupTimeout,
+    );
+    if (!firebaseReady) return;
     _firebaseInitialized = true;
-    diagnostics.complete('Firebase.initializeApp()');
     _refreshRuntimeHealth();
   }
   diagnostics.start('runApp()');
@@ -116,6 +147,59 @@ Future<void> _configureStripe() async {
   if (key.isEmpty) return;
   Stripe.publishableKey = key;
   await Stripe.instance.applySettings();
+}
+
+Future<bool> _runOptionalStartupStep(
+  String stage,
+  Future<void> Function() step, {
+  required Duration timeout,
+}) async {
+  final diagnostics = SenderStartupDiagnostics.instance;
+  diagnostics.start(stage);
+  try {
+    await step().timeout(timeout);
+    diagnostics.complete(stage);
+    return true;
+  } catch (error, stackTrace) {
+    diagnostics.fail(stage, error, stackTrace);
+    return false;
+  }
+}
+
+Future<bool> _runRequiredStartupStep<T>(
+  String stage,
+  Future<T> Function() step, {
+  required Duration timeout,
+}) async {
+  final result = await _runRequiredStartupValue(
+    stage,
+    step,
+    timeout: timeout,
+  );
+  return result != null;
+}
+
+Future<T?> _runRequiredStartupValue<T>(
+  String stage,
+  Future<T> Function() step, {
+  required Duration timeout,
+}) async {
+  final diagnostics = SenderStartupDiagnostics.instance;
+  diagnostics.start(stage);
+  try {
+    final result = await step().timeout(timeout);
+    diagnostics.complete(stage);
+    return result;
+  } catch (error, stackTrace) {
+    diagnostics.fail(stage, error, stackTrace);
+    _runSenderStartupRecovery();
+    return null;
+  }
+}
+
+void _runSenderStartupRecovery() {
+  if (_senderAppStarted) return;
+  _runSenderApp(const _SenderWebStartupRecovery());
 }
 
 void _runSenderApp(Widget app) {
@@ -141,7 +225,7 @@ void _refreshRuntimeHealth() {
     firestoreConnected: _firestoreConnected,
     functionsConnected: _functionsConnected,
     mapsReady: false,
-    stripeReady: false,
+    stripeReady: _stripeReady,
     authenticated: authenticated,
   ));
 }
