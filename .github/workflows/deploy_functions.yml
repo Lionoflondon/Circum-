@@ -22,6 +22,7 @@ jobs:
         with:
           credentials_json: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_CIRCUM_2797C }}
       - run: npm install -g firebase-tools
+      - run: firebase experiments:enable legacyRuntimeConfigCommands
       - run: firebase functions:config:set google.places_api_key="$GOOGLE_PLACES_API_KEY" --project circum-2797c
         env:
           GOOGLE_PLACES_API_KEY: ${{ secrets.GOOGLE_PLACES_API_KEY }}
