@@ -18,6 +18,7 @@ import 'package:permission_handler/permission_handler.dart'
     as permission_handler;
 import 'package:sign_in_with_apple/sign_in_with_apple.dart';
 
+import '../../sender_mobile/sender_profile_authority.dart';
 import '../../../helper/location_helper.dart';
 import '../../../extension/email_validation.dart';
 // import '../../onboarding/view/onboarding.dart';
@@ -134,16 +135,6 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
           email: user.email,
           profilePhoto: user.photoURL,
           authenticatedStatus: AuthenticatedStatus.authenticated));
-
-      await Future.delayed(const Duration(seconds: 3));
-
-      final creationDate = DateTime.parse('${user.metadata.creationTime}');
-
-      final authChangeDate = DateTime.parse('2024-05-15');
-
-      if (authChangeDate.isAfter(creationDate)) {
-        add(SignOut());
-      }
     } else {
       emit(state.copyWith(currentState: AppState.unauthenticated));
     }
@@ -473,18 +464,19 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
               phoneNumber: userCredential.user?.phoneNumber,
               currentState: AppState.authenticated));
 
-          User? user = auth.currentUser;
-          final documentReference = db.collection('users').doc(user?.uid);
-          // Get the document snapshot
-          final documentSnapshot = await documentReference.get();
-
-          if (documentSnapshot.exists) {
-            // Document exists
-            final userdata = await db.collection("users").doc(user!.uid).get();
-            final doc = userdata.data();
-
-            await storage.write(key: 'phone', value: doc!['phone']);
-            emit(state.copyWith(phoneNumber: doc['phone']));
+          try {
+            final profile = await SenderProfileAuthority(
+              auth: auth,
+              firestore: db,
+              functions: functions,
+            ).load('auth.email.profile');
+            final phone = profile.data['phone'];
+            if (phone != null) {
+              await storage.write(key: 'phone', value: '$phone');
+              emit(state.copyWith(phoneNumber: '$phone'));
+            }
+          } catch (error, stack) {
+            _logRecoverableAuthError('auth.email.profile', error, stack);
           }
         }
       }

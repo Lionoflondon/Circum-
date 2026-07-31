@@ -34,6 +34,15 @@ function normalizeNotificationIds(value) {
       .slice(0, 100);
 }
 
+function senderProfileLog(event, payload = {}) {
+  console.info(JSON.stringify({
+    subsystem: "sender_profile",
+    event,
+    timestamp: new Date().toISOString(),
+    ...payload,
+  }));
+}
+
 function cleanSenderProfilePatch(data, context) {
   const firstName = cleanText(data.firstName, 80);
   const lastName = cleanText(data.lastName, 80);
@@ -78,6 +87,7 @@ exports.updateSenderProfile = functions.https.onCall(async (data, context) => {
   const uid = requireSender(context);
   const db = getFirestore();
   const ref = db.collection("users").doc(uid);
+  senderProfileLog("update_profile_begin", {uid, path: ref.path});
   const existing = await ref.get();
   const {patch, changedFields} = cleanSenderProfilePatch(data || {}, context);
   if (!existing.exists) patch.createdAt = FieldValue.serverTimestamp();
@@ -89,6 +99,12 @@ exports.updateSenderProfile = functions.https.onCall(async (data, context) => {
     changedFields,
     createdAt: FieldValue.serverTimestamp(),
   });
+  senderProfileLog("update_profile_complete", {
+    uid,
+    path: ref.path,
+    existed: existing.exists,
+    changedFields,
+  });
   return {ok: true};
 });
 
@@ -99,6 +115,7 @@ exports.ensureSenderAccount = functions.https.onCall(async (data, context) => {
   const riderRef = db.collection("riderProfiles").doc(uid);
   const adminRef = db.collection("adminUsers").doc(uid);
   const now = FieldValue.serverTimestamp();
+  senderProfileLog("ensure_begin", {uid, path: userRef.path});
 
   const result = await db.runTransaction(async (transaction) => {
     const [userSnap, riderSnap, adminSnap] = await Promise.all([
@@ -113,11 +130,19 @@ exports.ensureSenderAccount = functions.https.onCall(async (data, context) => {
       cleanText(existing.userType, 80).toLowerCase(),
       cleanText(existing.accountType, 80).toLowerCase(),
     ].filter(Boolean));
+    senderProfileLog("ensure_transaction_read", {
+      uid,
+      path: userRef.path,
+      userExists: userSnap.exists,
+      riderExists: riderSnap.exists,
+      adminExists: adminSnap.exists,
+      roles: Array.from(roles),
+    });
     if (roles.has("admin") || roles.has("rider") || riderSnap.exists || adminSnap.exists) {
       if (roles.has("sender") || roles.has("user") || roles.has("customer")) {
-        return {allowed: true, roles: Array.from(roles)};
+        return {allowed: true, roles: Array.from(roles), action: "existing_sender_role_allowed"};
       }
-      return {allowed: false, roles: Array.from(roles)};
+      return {allowed: false, roles: Array.from(roles), action: "blocked_conflicting_role"};
     }
     transaction.set(userRef, {
       uid,
@@ -136,9 +161,10 @@ exports.ensureSenderAccount = functions.https.onCall(async (data, context) => {
       source: "ensureSenderAccount",
       createdAt: now,
     });
-    return {allowed: true, roles: ["sender"]};
+    return {allowed: true, roles: ["sender"], action: userSnap.exists ? "merged_sender_role" : "created_sender_profile"};
   });
 
+  senderProfileLog("ensure_complete", {uid, path: userRef.path, ...result});
   return {ok: true, ...result};
 });
 
@@ -290,7 +316,9 @@ exports.updateSenderProfilePhoto = functions.https.onCall(async (data, context) 
     throw new functions.https.HttpsError("invalid-argument", "Profile photo URL is required.");
   }
   const db = getFirestore();
-  await db.collection("users").doc(uid).set({
+  const ref = db.collection("users").doc(uid);
+  senderProfileLog("update_profile_photo_begin", {uid, path: ref.path});
+  await ref.set({
     photoURL,
     accountType: "sender",
     updatedAt: FieldValue.serverTimestamp(),
@@ -301,6 +329,7 @@ exports.updateSenderProfilePhoto = functions.https.onCall(async (data, context) 
     source: "updateSenderProfilePhoto",
     createdAt: FieldValue.serverTimestamp(),
   });
+  senderProfileLog("update_profile_photo_complete", {uid, path: ref.path});
   return {ok: true, photoURL};
 });
 

@@ -16,6 +16,7 @@ import 'design_system/sender_design_system.dart';
 import 'sender_accessibility.dart';
 import 'sender_finance.dart';
 import 'sender_page_shell.dart';
+import 'sender_profile_authority.dart';
 
 class SenderWalletData {
   final double balance;
@@ -207,6 +208,7 @@ class FirebaseSenderWalletRepository implements SenderWalletRepository {
   final FirebaseAuth auth;
   final FirebaseFirestore firestore;
   final FirebaseFunctions functions;
+  final SenderProfileAuthority profileAuthority;
 
   FirebaseSenderWalletRepository({
     FirebaseAuth? auth,
@@ -214,7 +216,12 @@ class FirebaseSenderWalletRepository implements SenderWalletRepository {
     FirebaseFunctions? functions,
   })  : auth = auth ?? FirebaseAuth.instance,
         firestore = firestore ?? FirebaseFirestore.instance,
-        functions = functions ?? FirebaseFunctions.instance;
+        functions = functions ?? FirebaseFunctions.instance,
+        profileAuthority = SenderProfileAuthority(
+          auth: auth,
+          firestore: firestore,
+          functions: functions,
+        );
 
   User get _user {
     final user = auth.currentUser;
@@ -241,12 +248,7 @@ class FirebaseSenderWalletRepository implements SenderWalletRepository {
     final wallet = walletSnapshot.data() ?? const <String, dynamic>{};
     var profile = const <String, dynamic>{};
     try {
-      profile = await firestore
-          .collection('users')
-          .doc(user.uid)
-          .get()
-          .timeout(_firebaseReadTimeout)
-          .then((snapshot) => snapshot.data() ?? const <String, dynamic>{});
+      profile = (await profileAuthority.load('wallet.initialise.profile')).data;
     } catch (error) {
       debugPrint('Sender Wallet profile flag unavailable: $error');
     }
@@ -260,9 +262,9 @@ class FirebaseSenderWalletRepository implements SenderWalletRepository {
     final user = _user;
     final controller = StreamController<SenderWalletData>();
     DocumentSnapshot<Map<String, dynamic>>? latestWallet;
-    DocumentSnapshot<Map<String, dynamic>>? latestProfile;
+    SenderProfileAuthoritySnapshot? latestProfile;
     StreamSubscription<DocumentSnapshot<Map<String, dynamic>>>? walletSub;
-    StreamSubscription<DocumentSnapshot<Map<String, dynamic>>>? profileSub;
+    StreamSubscription<SenderProfileAuthoritySnapshot>? profileSub;
 
     void emitIfReady() {
       final wallet = latestWallet;
@@ -271,7 +273,7 @@ class FirebaseSenderWalletRepository implements SenderWalletRepository {
       controller.add(SenderWalletData.fromMap(
         wallet.data() ?? const {},
         onboardingCompleted:
-            profile?.data()?['senderWalletOnboardingCompleted'] == true,
+            profile?.data['senderWalletOnboardingCompleted'] == true,
       ));
     }
 
@@ -286,8 +288,7 @@ class FirebaseSenderWalletRepository implements SenderWalletRepository {
       }, onError: (error) {
         debugPrint('Sender Wallet live balance unavailable: $error');
       });
-      profileSub =
-          firestore.collection('users').doc(user.uid).snapshots().listen(
+      profileSub = profileAuthority.watch('wallet.watch.profile').listen(
         (snapshot) {
           latestProfile = snapshot;
           emitIfReady();

@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:cloud_functions/cloud_functions.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
@@ -10,6 +11,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:permission_handler/permission_handler.dart';
 
 import 'design_system/sender_design_system.dart';
+import 'sender_profile_authority.dart';
 
 enum SenderTextSize { small, standard, large, extraLarge }
 
@@ -147,52 +149,45 @@ class FirebaseSenderAccessibilityRepository
     implements SenderAccessibilityRepository {
   final FirebaseAuth auth;
   final FirebaseFirestore firestore;
+  final SenderProfileAuthority profileAuthority;
 
   FirebaseSenderAccessibilityRepository({
     FirebaseAuth? auth,
     FirebaseFirestore? firestore,
+    FirebaseFunctions? functions,
+    SenderProfileAuthority? profileAuthority,
   })  : auth = auth ?? FirebaseAuth.instance,
-        firestore = firestore ?? FirebaseFirestore.instance;
+        firestore = firestore ?? FirebaseFirestore.instance,
+        profileAuthority = profileAuthority ??
+            SenderProfileAuthority(
+              auth: auth,
+              firestore: firestore,
+              functions: functions,
+            );
 
-  DocumentReference<Map<String, dynamic>> get _profile {
-    final user = auth.currentUser;
-    if (user == null) throw StateError('Sign in to manage accessibility.');
-    return firestore.collection('users').doc(user.uid);
+  Future<DocumentReference<Map<String, dynamic>>> _profile(String phase) async {
+    final user = await profileAuthority.requireRestoredUser(phase);
+    await profileAuthority.ensureCanonicalSenderAccount(user, '$phase.ensure');
+    return profileAuthority.canonicalProfileReference(user);
   }
 
   @override
   Stream<SenderAccessibilitySettings> watch() {
-    return Stream<SenderAccessibilitySettings>.multi((output) {
-      StreamSubscription<DocumentSnapshot<Map<String, dynamic>>>? profile;
-      final authChanges = auth.authStateChanges().listen((user) {
-        unawaited(profile?.cancel());
-        if (user == null) {
-          output.add(const SenderAccessibilitySettings());
-          return;
-        }
-        profile =
-            firestore.collection('users').doc(user.uid).snapshots().listen(
-          (snapshot) {
-            final data = snapshot.data();
-            output.add(SenderAccessibilitySettings.fromMap(
-              data?['accessibilitySettings'] as Map<String, dynamic>?,
-            ));
-          },
-          onError: output.addError,
+    return profileAuthority.watch('accessibility.watch.profile').map(
+          (snapshot) => SenderAccessibilitySettings.fromMap(
+            snapshot.data['accessibilitySettings'] as Map<String, dynamic>?,
+          ),
         );
-      }, onError: output.addError);
-      output.onCancel = () async {
-        await authChanges.cancel();
-        await profile?.cancel();
-      };
-    });
   }
 
   @override
-  Future<void> save(SenderAccessibilitySettings settings) => _profile.set({
-        'accessibilitySettings': settings.toMap(),
-        'accessibilityUpdatedAt': FieldValue.serverTimestamp(),
-      }, SetOptions(merge: true));
+  Future<void> save(SenderAccessibilitySettings settings) async {
+    final profile = await _profile('accessibility.save.profile');
+    await profile.set({
+      'accessibilitySettings': settings.toMap(),
+      'accessibilityUpdatedAt': FieldValue.serverTimestamp(),
+    }, SetOptions(merge: true));
+  }
 }
 
 class SenderAccessibilityController extends ChangeNotifier {

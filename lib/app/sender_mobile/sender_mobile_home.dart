@@ -27,6 +27,7 @@ import 'sender_mobile_profile.dart';
 import 'sender_notification_routing.dart';
 import 'sender_notifications.dart';
 import 'sender_page_shell.dart';
+import 'sender_profile_authority.dart';
 import 'sender_ui_baseline.dart';
 import 'sender_wallet.dart';
 
@@ -1745,6 +1746,7 @@ class FirebaseSenderHomeRepository implements SenderHomeRepository {
   final FirebaseAuth auth;
   final FirebaseFirestore firestore;
   final FirebaseFunctions functions;
+  final SenderProfileAuthority profileAuthority;
 
   FirebaseSenderHomeRepository({
     FirebaseAuth? auth,
@@ -1752,7 +1754,12 @@ class FirebaseSenderHomeRepository implements SenderHomeRepository {
     FirebaseFunctions? functions,
   })  : auth = auth ?? FirebaseAuth.instance,
         firestore = firestore ?? FirebaseFirestore.instance,
-        functions = functions ?? FirebaseFunctions.instance;
+        functions = functions ?? FirebaseFunctions.instance,
+        profileAuthority = SenderProfileAuthority(
+          auth: auth,
+          firestore: firestore,
+          functions: functions,
+        );
 
   User? get _maybeUser => auth.currentUser;
 
@@ -1768,8 +1775,8 @@ class FirebaseSenderHomeRepository implements SenderHomeRepository {
       );
     }
     final email = (user.email ?? '').trim().toLowerCase();
+    final profileSnapshot = await profileAuthority.load('home.summary.profile');
     final results = await Future.wait([
-      firestore.collection('users').doc(user.uid).get(),
       firestore.collection('healthPlusProfiles').doc(user.uid).get(),
       firestore
           .collection('businessAccounts')
@@ -1790,13 +1797,11 @@ class FirebaseSenderHomeRepository implements SenderHomeRepository {
           .limit(20)
           .get(),
     ]);
-    final profileSnapshot =
-        results[0] as DocumentSnapshot<Map<String, dynamic>>;
-    final healthSnapshot = results[1] as DocumentSnapshot<Map<String, dynamic>>;
-    final ownedSnapshot = results[2] as QuerySnapshot<Map<String, dynamic>>;
-    final teamSnapshot = results[3] as QuerySnapshot<Map<String, dynamic>>;
-    final giftsSnapshot = results[4] as QuerySnapshot<Map<String, dynamic>>;
-    final profile = profileSnapshot.data() ?? const <String, dynamic>{};
+    final healthSnapshot = results[0] as DocumentSnapshot<Map<String, dynamic>>;
+    final ownedSnapshot = results[1] as QuerySnapshot<Map<String, dynamic>>;
+    final teamSnapshot = results[2] as QuerySnapshot<Map<String, dynamic>>;
+    final giftsSnapshot = results[3] as QuerySnapshot<Map<String, dynamic>>;
+    final profile = profileSnapshot.data;
     final ownedBusinesses = ownedSnapshot.docs.map((doc) => doc.id).toSet();
     final teamBusinesses = teamSnapshot.docs.map((doc) => doc.id).toSet();
     final trustPoints =

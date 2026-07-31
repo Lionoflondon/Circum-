@@ -18,6 +18,7 @@ import 'design_system/sender_design_system.dart';
 import 'sender_saved_addresses.dart';
 import 'sender_notifications.dart';
 import 'sender_page_shell.dart';
+import 'sender_profile_authority.dart';
 import 'sender_wallet.dart';
 
 class SenderTrustActivity {
@@ -382,91 +383,90 @@ class ImagePickerSenderProfilePhotoPicker implements SenderProfilePhotoPicker {
 
 class FirebaseSenderMobileProfileRepository
     implements SenderMobileProfileRepository {
-  final FirebaseAuth auth;
   final FirebaseFirestore firestore;
   final FirebaseStorage storage;
   final FirebaseFunctions functions;
+  final SenderProfileAuthority profileAuthority;
 
   FirebaseSenderMobileProfileRepository({
     FirebaseAuth? auth,
     FirebaseFirestore? firestore,
     FirebaseStorage? storage,
     FirebaseFunctions? functions,
-  })  : auth = auth ?? FirebaseAuth.instance,
-        firestore = firestore ?? FirebaseFirestore.instance,
+    SenderProfileAuthority? profileAuthority,
+  })  : firestore = firestore ?? FirebaseFirestore.instance,
         storage = storage ?? FirebaseStorage.instance,
-        functions = functions ?? FirebaseFunctions.instance;
+        functions = functions ?? FirebaseFunctions.instance,
+        profileAuthority = profileAuthority ??
+            SenderProfileAuthority(
+              auth: auth,
+              firestore: firestore,
+              functions: functions,
+            );
 
   @override
   Future<SenderMobileProfileData> load() async {
-    final user = auth.currentUser;
-    if (user == null) {
-      throw const SenderMobileProfileException(
-        'Sign in again to load your profile.',
-      );
-    }
-    DocumentSnapshot<Map<String, dynamic>>? snapshot;
-    SenderMobileProfileException? profileReadError;
-    try {
-      snapshot = await firestore.collection('users').doc(user.uid).get();
-    } catch (_) {
-      profileReadError = const SenderMobileProfileException(
-        'Profile details are temporarily limited. Your account is still available.',
-      );
-    }
+    final profileSnapshot = await profileAuthority.load('profile.load');
+    final user = profileSnapshot.user;
     List<Map<String, dynamic>> trustEvents = const [];
     try {
       final eventSnapshot = await firestore
           .collection('senderTrustEvents')
           .where('userId', isEqualTo: user.uid)
           .limit(20)
-          .get();
+          .get()
+          .timeout(SenderProfileAuthority.profileReadTimeout);
       trustEvents = eventSnapshot.docs
           .map((document) => document.data())
           .toList(growable: false);
-    } catch (_) {
+    } catch (error, stack) {
+      logSenderProfileDiagnostic(
+        code: SenderProfileDiagnosticCode.repositoryFailure,
+        uid: user.uid,
+        phase: 'profile.load.trustEvents',
+        path: 'senderTrustEvents?userId=${user.uid}',
+        error: error,
+        stack: stack,
+      );
       // The profile's embedded trust history remains the safe fallback.
     }
-    final profile = SenderMobileProfileData.fromSources(
+    return SenderMobileProfileData.fromSources(
       user: user,
-      data: snapshot?.data(),
+      data: profileSnapshot.data,
       trustEvents: trustEvents,
     );
-    if (profileReadError != null &&
-        profile.displayName.isEmpty &&
-        profile.email.isEmpty &&
-        profile.phone.isEmpty) {
-      throw profileReadError;
-    }
-    return profile;
   }
 
   @override
   Stream<SenderMobileProfileData> watch() async* {
-    final user = auth.currentUser;
-    if (user == null) {
-      throw const SenderMobileProfileException(
-        'Sign in again to load your profile.',
-      );
-    }
-    await for (final snapshot
-        in firestore.collection('users').doc(user.uid).snapshots()) {
+    await for (final profileSnapshot
+        in profileAuthority.watch('profile.watch')) {
+      final user = profileSnapshot.user;
       List<Map<String, dynamic>> trustEvents = const [];
       try {
         final eventSnapshot = await firestore
             .collection('senderTrustEvents')
             .where('userId', isEqualTo: user.uid)
             .limit(20)
-            .get();
+            .get()
+            .timeout(SenderProfileAuthority.profileReadTimeout);
         trustEvents = eventSnapshot.docs
             .map((document) => document.data())
             .toList(growable: false);
-      } catch (_) {
+      } catch (error, stack) {
+        logSenderProfileDiagnostic(
+          code: SenderProfileDiagnosticCode.repositoryFailure,
+          uid: user.uid,
+          phase: 'profile.watch.trustEvents',
+          path: 'senderTrustEvents?userId=${user.uid}',
+          error: error,
+          stack: stack,
+        );
         // The profile's embedded trust history remains the safe fallback.
       }
       yield SenderMobileProfileData.fromSources(
         user: user,
-        data: snapshot.data(),
+        data: profileSnapshot.data,
         trustEvents: trustEvents,
       );
     }
@@ -478,22 +478,21 @@ class FirebaseSenderMobileProfileRepository
     required String username,
     required String phone,
   }) async {
-    final user = auth.currentUser;
-    if (user == null) {
-      throw const SenderMobileProfileException(
-        'Sign in again before saving your profile.',
-      );
-    }
+    final user =
+        await profileAuthority.requireRestoredUser('profile.save.auth');
     final normalizedUsername = username.trim().replaceFirst(RegExp(r'^@'), '');
     await functions.httpsCallable('updateSenderProfile').call({
       'displayName': displayName.trim(),
       'username': normalizedUsername,
       'phone': phone.trim(),
-    });
+    }).timeout(SenderProfileAuthority.senderAccountEnsureTimeout);
     if (user.displayName != displayName.trim()) {
       await user.updateDisplayName(displayName.trim());
     }
-    final updated = await firestore.collection('users').doc(user.uid).get();
+    final updated = await profileAuthority.readCanonicalProfile(
+      user,
+      'profile.save.read',
+    );
     return SenderMobileProfileData.fromSources(
       user: user,
       data: {
@@ -511,15 +510,13 @@ class FirebaseSenderMobileProfileRepository
   Future<SenderMobileProfileData> uploadPhoto(
     SenderProfilePhoto photo,
   ) async {
-    final user = auth.currentUser;
-    if (user == null) {
-      throw const SenderMobileProfileException(
-        'Sign in again before uploading a profile photo.',
-      );
-    }
+    final user =
+        await profileAuthority.requireRestoredUser('profile.photo.auth');
     if (photo.bytes.isEmpty || photo.bytes.lengthInBytes > 8 * 1024 * 1024) {
-      throw const SenderMobileProfileException(
-        'Choose a profile photo smaller than 8 MB.',
+      throw SenderProfileAuthorityException(
+        code: SenderProfileDiagnosticCode.schemaMismatch,
+        message: 'Choose a profile photo smaller than 8 MB.',
+        phase: 'profile.photo.validate',
       );
     }
     final extension = photo.contentType == 'image/png' ? 'png' : 'jpg';
@@ -540,7 +537,7 @@ class FirebaseSenderMobileProfileRepository
     final downloadUrl = await reference.getDownloadURL();
     await functions.httpsCallable('updateSenderProfilePhoto').call({
       'photoURL': downloadUrl,
-    });
+    }).timeout(SenderProfileAuthority.senderAccountEnsureTimeout);
     await user.updatePhotoURL(downloadUrl);
     final current = await load();
     return SenderMobileProfileData(
@@ -563,24 +560,15 @@ class FirebaseSenderMobileProfileRepository
   }
 
   @override
-  Future<void> logout() => auth.signOut();
+  Future<void> logout() => profileAuthority.auth.signOut();
 
   @override
   Future<void> closeAccount() async {
     await functions.httpsCallable('closeCircumAccount').call<void>({
       'accountType': 'sender',
     });
-    await auth.signOut();
+    await profileAuthority.auth.signOut();
   }
-}
-
-class SenderMobileProfileException implements Exception {
-  final String message;
-
-  const SenderMobileProfileException(this.message);
-
-  @override
-  String toString() => message;
 }
 
 String? _senderProfileCacheKey() {
@@ -591,6 +579,14 @@ String? _senderProfileCacheKey() {
     uid = null;
   }
   return uid == null ? null : 'senderProfileSnapshot:$uid';
+}
+
+String? _safeSenderProfileCurrentUid() {
+  try {
+    return FirebaseAuth.instance.currentUser?.uid;
+  } catch (_) {
+    return null;
+  }
 }
 
 class SenderMobileProfileView extends StatefulWidget {
@@ -631,6 +627,12 @@ class _SenderMobileProfileViewState extends State<SenderMobileProfileView> {
   @override
   void initState() {
     super.initState();
+    logSenderProfileStage(
+      uid: _safeSenderProfileCurrentUid(),
+      phase: 'profile.widget.initState',
+      path: 'SenderMobileProfileView',
+      event: 'init',
+    );
     _repository = widget.repository ?? FirebaseSenderMobileProfileRepository();
     _photoPicker = widget.photoPicker ?? ImagePickerSenderProfilePhotoPicker();
     unawaited(_bootLocalProfile());
@@ -639,6 +641,12 @@ class _SenderMobileProfileViewState extends State<SenderMobileProfileView> {
 
   @override
   void dispose() {
+    logSenderProfileStage(
+      uid: _safeSenderProfileCurrentUid(),
+      phase: 'profile.widget.dispose',
+      path: 'SenderMobileProfileView',
+      event: 'dispose listenerAttached=${_profileSubscription != null}',
+    );
     _profileSubscription?.cancel();
     _nameController.dispose();
     _usernameController.dispose();
@@ -647,7 +655,19 @@ class _SenderMobileProfileViewState extends State<SenderMobileProfileView> {
   }
 
   Future<void> _load() async {
+    logSenderProfileStage(
+      uid: _safeSenderProfileCurrentUid(),
+      phase: 'profile.widget.load',
+      path: 'SenderMobileProfileView',
+      event: 'load_begin hasProfile=${_profile != null}',
+    );
     await _profileSubscription?.cancel();
+    logSenderProfileStage(
+      uid: _safeSenderProfileCurrentUid(),
+      phase: 'profile.widget.load',
+      path: 'SenderMobileProfileView',
+      event: 'previous_listener_detached',
+    );
     setState(() {
       _loading = _profile == null;
       _error = null;
@@ -655,6 +675,12 @@ class _SenderMobileProfileViewState extends State<SenderMobileProfileView> {
     try {
       final profile = await _repository.load();
       if (!mounted) return;
+      logSenderProfileStage(
+        uid: profile.userId,
+        phase: 'profile.widget.load',
+        path: 'SenderMobileProfileView',
+        event: 'repository_load_complete',
+      );
       _applyProfile(profile);
       setState(() {
         _profile = profile;
@@ -662,8 +688,20 @@ class _SenderMobileProfileViewState extends State<SenderMobileProfileView> {
         _error = null;
       });
       unawaited(_cacheProfile(profile));
+      logSenderProfileStage(
+        uid: profile.userId,
+        phase: 'profile.widget.watch',
+        path: 'SenderMobileProfileView',
+        event: 'listener_attach',
+      );
       _profileSubscription = _repository.watch().listen((liveProfile) {
         if (!mounted) return;
+        logSenderProfileStage(
+          uid: liveProfile.userId,
+          phase: 'profile.widget.watch',
+          path: 'SenderMobileProfileView',
+          event: 'live_profile_received editing=$_editing saving=$_saving',
+        );
         if (!_editing && !_saving) _applyProfile(liveProfile);
         setState(() {
           _profile = liveProfile;
@@ -672,6 +710,12 @@ class _SenderMobileProfileViewState extends State<SenderMobileProfileView> {
         unawaited(_cacheProfile(liveProfile));
       }, onError: (_) {
         if (!mounted) return;
+        logSenderProfileStage(
+          uid: _profile?.userId ?? _safeSenderProfileCurrentUid(),
+          phase: 'profile.widget.watch',
+          path: 'SenderMobileProfileView',
+          event: 'live_profile_error',
+        );
         setState(() {
           _error =
               'Live profile updates are reconnecting. Showing your saved profile.';
@@ -679,6 +723,12 @@ class _SenderMobileProfileViewState extends State<SenderMobileProfileView> {
       });
     } catch (error) {
       if (!mounted) return;
+      logSenderProfileStage(
+        uid: _profile?.userId ?? _safeSenderProfileCurrentUid(),
+        phase: 'profile.widget.load',
+        path: 'SenderMobileProfileView',
+        event: 'repository_load_error type=${error.runtimeType}',
+      );
       final fallback = _profile ?? _profileFromAuth();
       setState(() {
         if (fallback != null) {
@@ -686,7 +736,7 @@ class _SenderMobileProfileViewState extends State<SenderMobileProfileView> {
           _applyProfile(fallback);
         }
         _loading = false;
-        _error = error is SenderMobileProfileException
+        _error = error is SenderProfileAuthorityException
             ? error.message
             : 'Profile refresh failed. Showing your saved profile.';
       });
@@ -694,10 +744,39 @@ class _SenderMobileProfileViewState extends State<SenderMobileProfileView> {
   }
 
   Future<void> _bootLocalProfile() async {
+    logSenderProfileStage(
+      uid: _safeSenderProfileCurrentUid(),
+      phase: 'profile.widget.cache',
+      path: 'SharedPreferences',
+      event: 'cache_boot_begin',
+    );
     final cached = await _loadCachedProfile();
     if (!mounted) return;
+    if (_profile != null) {
+      logSenderProfileStage(
+        uid: _profile!.userId,
+        phase: 'profile.widget.cache',
+        path: 'SharedPreferences',
+        event: 'cache_boot_ignored_profile_already_loaded',
+      );
+      return;
+    }
     final profile = cached ?? _profileFromAuth();
-    if (profile == null) return;
+    if (profile == null) {
+      logSenderProfileStage(
+        uid: _safeSenderProfileCurrentUid(),
+        phase: 'profile.widget.cache',
+        path: 'SharedPreferences',
+        event: 'cache_boot_empty',
+      );
+      return;
+    }
+    logSenderProfileStage(
+      uid: profile.userId,
+      phase: 'profile.widget.cache',
+      path: 'SharedPreferences',
+      event: cached == null ? 'auth_fallback_boot' : 'cache_boot_hit',
+    );
     _applyProfile(profile);
     setState(() {
       _profile = profile;
@@ -718,17 +797,53 @@ class _SenderMobileProfileViewState extends State<SenderMobileProfileView> {
 
   Future<SenderMobileProfileData?> _loadCachedProfile() async {
     final key = _senderProfileCacheKey();
-    if (key == null) return null;
+    if (key == null) {
+      logSenderProfileStage(
+        uid: _safeSenderProfileCurrentUid(),
+        phase: 'profile.cache.read',
+        path: 'SharedPreferences',
+        event: 'cache_key_missing',
+      );
+      return null;
+    }
     try {
       final prefs = await SharedPreferences.getInstance();
       final raw = prefs.getString(key);
-      if (raw == null || raw.isEmpty) return null;
+      if (raw == null || raw.isEmpty) {
+        logSenderProfileStage(
+          uid: _safeSenderProfileCurrentUid(),
+          phase: 'profile.cache.read',
+          path: key,
+          event: 'cache_miss',
+        );
+        return null;
+      }
       final decoded = jsonDecode(raw);
-      if (decoded is! Map) return null;
+      if (decoded is! Map) {
+        logSenderProfileStage(
+          uid: _safeSenderProfileCurrentUid(),
+          phase: 'profile.cache.read',
+          path: key,
+          event: 'cache_schema_mismatch',
+        );
+        return null;
+      }
+      logSenderProfileStage(
+        uid: _safeSenderProfileCurrentUid(),
+        phase: 'profile.cache.read',
+        path: key,
+        event: 'cache_hit',
+      );
       return SenderMobileProfileData.fromCache(
         Map<String, dynamic>.from(decoded),
       );
-    } catch (_) {
+    } catch (error) {
+      logSenderProfileStage(
+        uid: _safeSenderProfileCurrentUid(),
+        phase: 'profile.cache.read',
+        path: key,
+        event: 'cache_error type=${error.runtimeType}',
+      );
       return null;
     }
   }
@@ -739,7 +854,20 @@ class _SenderMobileProfileViewState extends State<SenderMobileProfileView> {
     try {
       final prefs = await SharedPreferences.getInstance();
       await prefs.setString(key, jsonEncode(profile.toCacheMap()));
-    } catch (_) {}
+      logSenderProfileStage(
+        uid: profile.userId,
+        phase: 'profile.cache.write',
+        path: key,
+        event: 'cache_write_complete',
+      );
+    } catch (error) {
+      logSenderProfileStage(
+        uid: profile.userId,
+        phase: 'profile.cache.write',
+        path: key,
+        event: 'cache_write_error type=${error.runtimeType}',
+      );
+    }
   }
 
   void _applyProfile(SenderMobileProfileData profile) {
@@ -811,7 +939,7 @@ class _SenderMobileProfileViewState extends State<SenderMobileProfileView> {
       if (!mounted) return;
       setState(() {
         _uploadingPhoto = false;
-        _error = error is SenderMobileProfileException
+        _error = error is SenderProfileAuthorityException
             ? error.message
             : 'Your profile photo could not be saved. Please try again.';
       });
@@ -861,6 +989,13 @@ class _SenderMobileProfileViewState extends State<SenderMobileProfileView> {
 
   @override
   Widget build(BuildContext context) {
+    logSenderProfileStage(
+      uid: _profile?.userId ?? _safeSenderProfileCurrentUid(),
+      phase: 'profile.widget.build',
+      path: 'SenderMobileProfileView',
+      event: 'build loading=$_loading hasProfile=${_profile != null} '
+          'hasError=${_error != null}',
+    );
     if (_loading) {
       return const _ProfileLoadingState();
     }
@@ -3162,7 +3297,7 @@ class _ProfileErrorState extends StatelessWidget {
               ),
               const SizedBox(height: 14),
               Text(
-                'Profile unavailable',
+                'Profile needs attention',
                 style: GoogleFonts.inter(
                   color: Colors.white,
                   fontSize: 18,

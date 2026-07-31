@@ -1,6 +1,8 @@
 import 'dart:async';
+import 'dart:io';
 
 import 'package:circum/app/sender_mobile/sender_mobile_profile.dart';
+import 'package:circum/app/sender_mobile/sender_profile_authority.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -64,8 +66,10 @@ class _FailingProfileRepository implements SenderMobileProfileRepository {
 
   @override
   Future<SenderMobileProfileData> load() {
-    throw const SenderMobileProfileException(
-      'Sign in again to load your profile.',
+    throw SenderProfileAuthorityException(
+      code: SenderProfileDiagnosticCode.authUnavailable,
+      message: 'Sign in again to load your profile.',
+      phase: 'test.auth',
     );
   }
 
@@ -182,9 +186,98 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(find.text('Profile unavailable'), findsOneWidget);
+    expect(find.text('Profile needs attention'), findsOneWidget);
     expect(find.text('Sign in again to load your profile.'), findsOneWidget);
     expect(find.text('We could not load your profile. Check your connection.'),
         findsNothing);
+  });
+
+  test('Sender profile diagnostics expose precise internal failure codes', () {
+    final source = File('lib/app/sender_mobile/sender_profile_authority.dart')
+        .readAsStringSync();
+
+    expect(source, contains('PROFILE_NOT_FOUND'));
+    expect(source, contains('PROFILE_PERMISSION_DENIED'));
+    expect(source, contains('PROFILE_UID_MISMATCH'));
+    expect(source, contains('PROFILE_SCHEMA_MISMATCH'));
+    expect(source, contains('PROFILE_STARTUP_RACE'));
+    expect(source, contains('PROFILE_REPOSITORY_FAILURE'));
+    expect(source, contains('SenderProfileAuthority'));
+    expect(source, isNot(contains("'Profile unavailable'")));
+  });
+
+  test('Sender profile authority reads before repairing missing profiles', () {
+    final source = File('lib/app/sender_mobile/sender_profile_authority.dart')
+        .readAsStringSync();
+    final loadMethod = source.substring(
+      source.indexOf('Future<SenderProfileAuthoritySnapshot> load'),
+      source.indexOf('Stream<SenderProfileAuthoritySnapshot> watch'),
+    );
+    final repairMethod = source.substring(
+      source.indexOf('Future<DocumentSnapshot<Map<String, dynamic>>> '
+          'readCanonicalProfileWithRepair'),
+      source.indexOf('Future<DocumentSnapshot<Map<String, dynamic>>> '
+          'readCanonicalProfile('),
+    );
+
+    expect(loadMethod, contains('readCanonicalProfileWithRepair'));
+    expect(loadMethod, isNot(contains('ensureCanonicalSenderAccount')));
+    expect(
+      repairMethod.indexOf('readCanonicalProfile(user, readPhase)'),
+      lessThan(repairMethod.indexOf('ensureCanonicalSenderAccount')),
+      reason:
+          'Existing users/{uid} documents must not be hidden behind the ensure '
+          'callable. Ensure is only allowed after a confirmed missing profile.',
+    );
+    expect(repairMethod, contains('SenderProfileDiagnosticCode.notFound'));
+  });
+
+  test('Sender profile lifecycle instrumentation covers every boundary', () {
+    final authority =
+        File('lib/app/sender_mobile/sender_profile_authority.dart')
+            .readAsStringSync();
+    final profile = File('lib/app/sender_mobile/sender_mobile_profile.dart')
+        .readAsStringSync();
+    final source = '$authority\n$profile';
+
+    for (final marker in [
+      'auth_restore_begin',
+      'firestore_read_begin',
+      'firestore_read_complete',
+      'profile_missing_begin_ensure',
+      'ensure_begin',
+      'ensure_complete',
+      'listener_attach',
+      'snapshot exists=',
+      'cache_hit',
+      'cache_miss',
+      'cache_boot_ignored_profile_already_loaded',
+      'cache_write_complete',
+      'repository_load_complete',
+      'repository_load_error',
+      'build loading=',
+      'dispose listenerAttached=',
+    ]) {
+      expect(source, contains(marker));
+    }
+  });
+
+  test('Sender profile authority is the only users/{uid} reader in Sender tabs',
+      () {
+    final root = Directory('lib/app/sender_mobile');
+    final offenders = <String>[];
+    for (final file in root.listSync(recursive: true).whereType<File>()) {
+      if (!file.path.endsWith('.dart')) continue;
+      if (file.path.endsWith('sender_profile_authority.dart')) continue;
+      final source = file.readAsStringSync();
+      if (source.contains("collection('users').doc(user.uid)") ||
+          source.contains('collection("users").doc(user.uid)') ||
+          source.contains("collection('users').doc(uid)") ||
+          source.contains('collection("users").doc(uid)')) {
+        offenders.add(file.path);
+      }
+    }
+
+    expect(offenders, isEmpty);
   });
 }

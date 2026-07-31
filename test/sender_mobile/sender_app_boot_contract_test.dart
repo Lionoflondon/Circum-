@@ -22,6 +22,20 @@ void main() {
     expect(preview, isNot(contains('previewAuthEnabled: true')));
   });
 
+  test('Sender session restore never signs out existing users by account age',
+      () {
+    final authBloc =
+        File('lib/app/authentication/bloc/auth_bloc.dart').readAsStringSync();
+    final handler = authBloc.substring(
+      authBloc.indexOf('Future<void> _handleSortSessionState'),
+      authBloc.indexOf('void _handleResetStatus'),
+    );
+
+    expect(handler, isNot(contains('metadata.creationTime')));
+    expect(handler, isNot(contains('authChangeDate')));
+    expect(handler, isNot(contains('add(SignOut())')));
+  });
+
   test('Home, Wallet and Profile stay free of the booking route backdrop', () {
     final home = File('lib/app/sender_mobile/sender_mobile_home.dart')
         .readAsStringSync();
@@ -50,8 +64,8 @@ void main() {
       wallet,
       contains(RegExp(r'\.get\(\)\s*\.timeout\(_firebaseReadTimeout\)')),
     );
-    expect(wallet,
-        contains("profile?.data()?['senderWalletOnboardingCompleted']"));
+    expect(
+        wallet, contains("profile?.data['senderWalletOnboardingCompleted']"));
     expect(wallet, contains('_wallet ??= const SenderWalletData'));
     expect(wallet, contains('_scheduleWalletRetry'));
     expect(wallet,
@@ -80,8 +94,8 @@ void main() {
   });
 
   test('Sender page shell and bottom navigation do not scale the app', () {
-    final shell = File('lib/app/sender_mobile/sender_page_shell.dart')
-        .readAsStringSync();
+    final shell =
+        File('lib/app/sender_mobile/sender_page_shell.dart').readAsStringSync();
     final home = File('lib/app/sender_mobile/sender_mobile_home.dart')
         .readAsStringSync();
     final bottomNavStart = home.indexOf('class _SenderBottomNav');
