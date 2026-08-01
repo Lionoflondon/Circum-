@@ -45,5 +45,5 @@ jobs:
         env:
           GOOGLE_PLACES_API_KEY: ${{ secrets.GOOGLE_PLACES_API_KEY }}
       - run: firebase deploy --only firestore:rules --project circum-2797c
-      - run: firebase deploy --only "$(node scripts/scoped_functions_deploy_list.js)" --project circum-2797c
+      - run: node scripts/deploy_functions_batches.js --batch-size 10 --project circum-2797c
       - run: firebase deploy --only hosting:app,hosting:public,hosting:admin --project circum-2797c
