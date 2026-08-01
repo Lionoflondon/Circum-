@@ -119,6 +119,8 @@ abstract class SenderActivityRepository {
 }
 
 class FirebaseSenderActivityRepository implements SenderActivityRepository {
+  static const _optionalSourceTimeout = Duration(seconds: 4);
+
   final FirebaseAuth auth;
   final FirebaseFirestore firestore;
   final SenderWalletRepository walletRepository;
@@ -159,33 +161,43 @@ class FirebaseSenderActivityRepository implements SenderActivityRepository {
 
   @override
   Future<SenderActivityPage> history({String? pageToken}) async {
+    final totalStopwatch = Stopwatch()..start();
     final uid = _uid;
     if (uid == null) return const SenderActivityPage([], null);
     final page = int.tryParse(pageToken ?? '0') ?? 0;
     final sourceLimit = (page + 1) * 12;
-    final results = await Future.wait([
+    final deliveriesFuture = _timedActivityFuture(
+      'deliveryRequests',
       firestore
           .collection('deliveryRequests')
           .where('senderId', isEqualTo: uid)
           .limit(sourceLimit)
           .get(),
+    );
+    final giftsFuture = _optionalActivityDocs(
+      'giftRequests',
       firestore
           .collection('giftRequests')
           .where('senderId', isEqualTo: uid)
           .limit(sourceLimit)
           .get(),
+    );
+    final healthFuture = _optionalActivityDocs(
+      'prescriptionPickups',
       firestore
           .collection('prescriptionPickups')
           .where('profileId', isEqualTo: uid)
           .limit(sourceLimit)
           .get(),
-      walletRepository.transactions(),
-    ]);
-    final deliveries = results[0] as QuerySnapshot<Map<String, dynamic>>;
-    final gifts = results[1] as QuerySnapshot<Map<String, dynamic>>;
-    final health = results[2] as QuerySnapshot<Map<String, dynamic>>;
-    final wallet = results[3] as SenderWalletPage;
-    final riderProfiles = await _riderProfiles(deliveries.docs);
+    );
+    final walletFuture = _optionalWalletTransactions(pageToken);
+    final deliveries = await deliveriesFuture;
+    final riderProfilesFuture = _riderProfiles(deliveries.docs);
+    final gifts = await giftsFuture;
+    final health = await healthFuture;
+    final wallet = await walletFuture;
+    final riderProfiles = await riderProfilesFuture;
+    final mergeStopwatch = Stopwatch()..start();
     final deliveryItems = deliveries.docs
         .map((doc) => _delivery(
               doc.id,
@@ -204,8 +216,8 @@ class FirebaseSenderActivityRepository implements SenderActivityRepository {
       ...deliveryItems.map((item) => item.copyWith(
             repeatRider: (riderCounts[item.riderId] ?? 0) > 1,
           )),
-      ...gifts.docs.map((doc) => _gift(doc.id, doc.data())),
-      ...health.docs.map((doc) => _health(doc.id, doc.data())),
+      ...gifts.map((doc) => _gift(doc.id, doc.data())),
+      ...health.map((doc) => _health(doc.id, doc.data())),
       ...wallet.transactions.map(_roth),
     ]..removeWhere((item) => item.active);
     merged.sort((a, b) => (b.occurredAt ?? DateTime(1970))
@@ -216,10 +228,89 @@ class FirebaseSenderActivityRepository implements SenderActivityRepository {
         : merged.skip(start).take(20).toList();
     final hasMore = merged.length > start + items.length ||
         deliveries.docs.length == sourceLimit ||
-        gifts.docs.length == sourceLimit ||
-        health.docs.length == sourceLimit ||
+        gifts.length == sourceLimit ||
+        health.length == sourceLimit ||
         wallet.nextPageToken != null;
+    mergeStopwatch.stop();
+    totalStopwatch.stop();
+    debugPrint(
+      'Sender Activity performance stage=mergeSortRenderPrep '
+      'durationMs=${mergeStopwatch.elapsedMilliseconds} items=${items.length}',
+    );
+    debugPrint(
+      'Sender Activity performance stage=historyTotal '
+      'durationMs=${totalStopwatch.elapsedMilliseconds} '
+      'deliveries=${deliveries.docs.length} gifts=${gifts.length} '
+      'health=${health.length} wallet=${wallet.transactions.length}',
+    );
     return SenderActivityPage(items, hasMore ? '${page + 1}' : null);
+  }
+
+  Future<QuerySnapshot<Map<String, dynamic>>> _timedActivityFuture(
+    String source,
+    Future<QuerySnapshot<Map<String, dynamic>>> future,
+  ) async {
+    final stopwatch = Stopwatch()..start();
+    try {
+      return await future;
+    } finally {
+      stopwatch.stop();
+      debugPrint(
+        'Sender Activity performance source=$source '
+        'durationMs=${stopwatch.elapsedMilliseconds}',
+      );
+    }
+  }
+
+  Future<List<QueryDocumentSnapshot<Map<String, dynamic>>>>
+      _optionalActivityDocs(
+    String source,
+    Future<QuerySnapshot<Map<String, dynamic>>> query,
+  ) async {
+    final stopwatch = Stopwatch()..start();
+    try {
+      final snapshot = await query.timeout(_optionalSourceTimeout);
+      stopwatch.stop();
+      debugPrint(
+        'Sender Activity performance source=$source '
+        'durationMs=${stopwatch.elapsedMilliseconds}',
+      );
+      return snapshot.docs;
+    } catch (error, stackTrace) {
+      stopwatch.stop();
+      debugPrint(
+        'Sender Activity optional source unavailable '
+        'source=$source durationMs=${stopwatch.elapsedMilliseconds} '
+        'error=$error stack=$stackTrace',
+      );
+      return const [];
+    }
+  }
+
+  Future<SenderWalletPage> _optionalWalletTransactions(
+    String? pageToken,
+  ) async {
+    final stopwatch = Stopwatch()..start();
+    try {
+      final page = await walletRepository
+          .transactions(pageToken: pageToken)
+          .timeout(_optionalSourceTimeout);
+      stopwatch.stop();
+      debugPrint(
+        'Sender Activity performance source=senderWalletTransactions '
+        'durationMs=${stopwatch.elapsedMilliseconds}',
+      );
+      return page;
+    } catch (error, stackTrace) {
+      stopwatch.stop();
+      debugPrint(
+        'Sender Activity optional source unavailable '
+        'source=senderWalletTransactions '
+        'durationMs=${stopwatch.elapsedMilliseconds} '
+        'error=$error stack=$stackTrace',
+      );
+      return const SenderWalletPage([], null);
+    }
   }
 
   Future<Map<String, Map<String, dynamic>>> _riderProfiles(
@@ -399,6 +490,8 @@ class SenderActivityView extends StatefulWidget {
 }
 
 class _SenderActivityViewState extends State<SenderActivityView> {
+  static SenderActivityPage? _cachedHistoryPage;
+
   late final SenderActivityRepository _repository;
   StreamSubscription<List<SenderActivityItem>>? _activeSubscription;
   final _history = <SenderActivityItem>[];
@@ -410,11 +503,16 @@ class _SenderActivityViewState extends State<SenderActivityView> {
   bool _loading = true;
   bool _loadingMore = false;
   bool _activeLoaded = false;
+  bool _hasCachedHistory = false;
+  final Stopwatch _viewStopwatch = Stopwatch();
+  var _buildCount = 0;
 
   @override
   void initState() {
     super.initState();
+    _viewStopwatch.start();
     _repository = widget.repository ?? FirebaseSenderActivityRepository();
+    _restoreCachedHistory();
     _activeSubscription = _repository.watchActive().listen((items) {
       if (!mounted) return;
       final previousIds = _active.map((item) => item.id).toSet();
@@ -430,10 +528,28 @@ class _SenderActivityViewState extends State<SenderActivityView> {
     _load();
   }
 
+  void _restoreCachedHistory() {
+    final page = _cachedHistoryPage;
+    if (page == null) return;
+    _history
+      ..clear()
+      ..addAll(page.items);
+    _nextPage = page.nextPageToken;
+    _hasCachedHistory = true;
+    _loading = false;
+    debugPrint(
+      'Sender Activity performance stage=cacheRestore '
+      'durationMs=${_viewStopwatch.elapsedMilliseconds} '
+      'items=${page.items.length}',
+    );
+  }
+
   Future<void> _refreshHistory() async {
     try {
       final page = await _repository.history();
       if (!mounted) return;
+      _cachedHistoryPage = page;
+      _hasCachedHistory = true;
       setState(() {
         _history
           ..clear()
@@ -447,12 +563,14 @@ class _SenderActivityViewState extends State<SenderActivityView> {
 
   Future<void> _load() async {
     setState(() {
-      _loading = true;
+      _loading = !_hasCachedHistory && _history.isEmpty;
       _error = null;
     });
     try {
       final page = await _repository.history();
       if (!mounted) return;
+      _cachedHistoryPage = page;
+      _hasCachedHistory = true;
       setState(() {
         _history
           ..clear()
@@ -480,6 +598,8 @@ class _SenderActivityViewState extends State<SenderActivityView> {
           _history.addAll(page.items.where((item) => !_history.any((existing) =>
               existing.id == item.id && existing.type == item.type)));
           _nextPage = page.nextPageToken;
+          _cachedHistoryPage =
+              SenderActivityPage(List.unmodifiable(_history), _nextPage);
         });
       }
     } finally {
@@ -514,86 +634,94 @@ class _SenderActivityViewState extends State<SenderActivityView> {
   }
 
   @override
-  Widget build(BuildContext context) => SenderScrollablePageShell(
-        paddingBuilder: (_) => const EdgeInsets.fromLTRB(20, 18, 20, 30),
-        children: [
-          Text(
-            'Activity',
-            style: GoogleFonts.dmSerifDisplay(
-              color: Colors.white,
-              fontSize: 32,
+  Widget build(BuildContext context) {
+    _buildCount += 1;
+    debugPrint(
+      'Sender Activity performance stage=widgetBuild '
+      'durationMs=${_viewStopwatch.elapsedMilliseconds} '
+      'build=$_buildCount loading=$_loading cached=${_history.isNotEmpty}',
+    );
+    return SenderScrollablePageShell(
+      paddingBuilder: (_) => const EdgeInsets.fromLTRB(20, 18, 20, 30),
+      children: [
+        Text(
+          'Activity',
+          style: GoogleFonts.dmSerifDisplay(
+            color: Colors.white,
+            fontSize: 32,
+          ),
+        ),
+        const SizedBox(height: 22),
+        if (_loading) const _ActivitySkeleton(),
+        if (!_loading && _error != null) _ActivityError(onRetry: _load),
+        if (!_loading && _error == null) ...[
+          const ActivitySectionHeader(
+            title: 'Live Activity',
+            subtitle: 'Deliveries moving right now',
+          ),
+          const SizedBox(height: 12),
+          if (_active.isEmpty)
+            ActivityEmptyState(
+              title: 'No live deliveries',
+              subtitle:
+                  "When you send a parcel, gift or Health+ request, you'll be able to track it here.",
+              primaryLabel: 'Send a Parcel',
+              onPrimary: widget.onSendParcel,
+            )
+          else
+            ..._active.map((item) => Padding(
+                  padding: const EdgeInsets.only(bottom: 16),
+                  child: ActivityCard.live(item: item),
+                )),
+          const SizedBox(height: 24),
+          const ActivitySectionHeader(
+            title: 'History',
+            subtitle: 'Everything across Circum',
+          ),
+          const SizedBox(height: 14),
+          TextField(
+            onChanged: (value) => setState(() => _query = value),
+            decoration: const InputDecoration(
+              hintText: 'Search recipient, address, order ID or date',
+              prefixIcon: Icon(Icons.search_rounded),
             ),
           ),
-          const SizedBox(height: 22),
-          if (_loading) const _ActivitySkeleton(),
-          if (!_loading && _error != null) _ActivityError(onRetry: _load),
-          if (!_loading && _error == null) ...[
-            const ActivitySectionHeader(
-              title: 'Live Activity',
-              subtitle: 'Deliveries moving right now',
-            ),
-            const SizedBox(height: 12),
-            if (_active.isEmpty)
-              ActivityEmptyState(
-                title: 'No live deliveries',
-                subtitle:
-                    "When you send a parcel, gift or Health+ request, you'll be able to track it here.",
-                primaryLabel: 'Send a Parcel',
-                onPrimary: widget.onSendParcel,
-              )
-            else
-              ..._active.map((item) => Padding(
-                    padding: const EdgeInsets.only(bottom: 16),
-                    child: ActivityCard.live(item: item),
+          const SizedBox(height: 12),
+          SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            child: Row(children: [
+              _FilterChip('All',
+                  selected: _filter == null,
+                  onTap: () => setState(() => _filter = null)),
+              ...SenderActivityType.values.map((type) => _FilterChip(
+                    _filterLabel(type),
+                    selected: _filter == type,
+                    onTap: () => setState(() => _filter = type),
                   )),
-            const SizedBox(height: 24),
-            const ActivitySectionHeader(
-              title: 'History',
-              subtitle: 'Everything across Circum',
-            ),
-            const SizedBox(height: 14),
-            TextField(
-              onChanged: (value) => setState(() => _query = value),
-              decoration: const InputDecoration(
-                hintText: 'Search recipient, address, order ID or date',
-                prefixIcon: Icon(Icons.search_rounded),
-              ),
-            ),
-            const SizedBox(height: 12),
-            SingleChildScrollView(
-              scrollDirection: Axis.horizontal,
-              child: Row(children: [
-                _FilterChip('All',
-                    selected: _filter == null,
-                    onTap: () => setState(() => _filter = null)),
-                ...SenderActivityType.values.map((type) => _FilterChip(
-                      _filterLabel(type),
-                      selected: _filter == type,
-                      onTap: () => setState(() => _filter = type),
-                    )),
-              ]),
-            ),
-            const SizedBox(height: 18),
-            if (_visible.isEmpty)
-              const ActivityEmptyState(
-                title: 'No matching activity.',
-                subtitle: 'Try another search or filter.',
-              )
-            else
-              ActivityTimeline(groups: _grouped(_visible)),
-            if (_nextPage != null)
-              Padding(
-                padding: const EdgeInsets.only(top: 8),
-                child: TextButton(
-                  onPressed: _loadingMore ? null : _loadMore,
-                  child: Text(
-                    _loadingMore ? 'Loading…' : 'Load more activity',
-                  ),
+            ]),
+          ),
+          const SizedBox(height: 18),
+          if (_visible.isEmpty)
+            const ActivityEmptyState(
+              title: 'No matching activity.',
+              subtitle: 'Try another search or filter.',
+            )
+          else
+            ActivityTimeline(groups: _grouped(_visible)),
+          if (_nextPage != null)
+            Padding(
+              padding: const EdgeInsets.only(top: 8),
+              child: TextButton(
+                onPressed: _loadingMore ? null : _loadMore,
+                child: Text(
+                  _loadingMore ? 'Loading…' : 'Load more activity',
                 ),
               ),
-          ],
+            ),
         ],
-      );
+      ],
+    );
+  }
 }
 
 class ActivityCard extends StatefulWidget {
