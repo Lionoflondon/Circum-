@@ -1,7 +1,7 @@
 /* eslint-disable max-len, require-jsdoc */
 const functions = require("firebase-functions/v1");
 const {getFirestore} = require("firebase-admin/firestore");
-const {dispatchPriority, isDispatchable, riderCanViewDispatch, riderDispatchPriority, riderMatchesIris} = require("./iris-core");
+const {dispatchPriority, isDispatchable, riderCanViewDispatch, riderDispatchEligibilityReason, riderDispatchPriority, riderMatchesIris} = require("./iris-core");
 
 const REQUEST_SCAN_LIMIT = 100;
 const openStatuses = new Set(["requested", "pending", "broadcast", "broadcasted", "awaiting_rider", "finding_rider"]);
@@ -194,7 +194,13 @@ const getNearbyRequests = functions.https.onCall(async (data, context) => {
                   requestData.irisPrivate = privateDoc.data();
                 }
                 if (!riderCanViewDispatch(riderData, requestData)) {
-                  console.info("rider_offer_excluded", {riderId, bookingId: text(requestData.bookingId || requestData.requestId || doc.id), deliveryId: doc.id, reason: "rank_or_visibility"});
+                  console.info("rider_offer_excluded", {riderId, bookingId: text(requestData.bookingId || requestData.requestId || doc.id), deliveryId: doc.id, reason: riderDispatchEligibilityReason(riderData), eligibility: {
+                    approvalStatus: riderData.approvalStatus,
+                    verificationStatus: riderData.verificationStatus,
+                    adminApprovalStatus: riderData.adminApprovalStatus,
+                    accountStatus: riderData.accountStatus,
+                    onboardingStatus: riderData.onboardingStatus,
+                  }});
                   return null;
                 }
                 if (!riderMatchesIris(riderData, requestData)) {

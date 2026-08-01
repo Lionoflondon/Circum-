@@ -2459,6 +2459,29 @@ function isApprovedRiderForDispatch(rider = {}) {
   ].some((status) => APPROVED_RIDER_STATUSES.has(normalize(status)));
 }
 
+function riderDispatchEligibilityReason(rider = {}) {
+  const fields = {
+    approvalStatus: rider.approvalStatus,
+    verificationStatus: rider.verificationStatus,
+    adminApprovalStatus: rider.adminApprovalStatus,
+    accountStatus: rider.accountStatus,
+    onboardingStatus: rider.onboardingStatus,
+  };
+  if (isApprovedRiderForDispatch(rider)) return null;
+  const reasons = [
+    ["approvalStatus", "approval_pending"],
+    ["verificationStatus", "verification_pending"],
+    ["adminApprovalStatus", "admin_approval_required"],
+    ["accountStatus", "account_inactive"],
+    ["onboardingStatus", "onboarding_incomplete"],
+  ];
+  const failed = reasons.find(([field]) => {
+    const value = normalize(fields[field]);
+    return value && value !== "approved" && value !== "verified";
+  });
+  return failed ? failed[1] : "eligibility_incomplete";
+}
+
 function riderCanViewDispatch(rider, request, now = Date.now()) {
   return isApprovedRiderForDispatch(rider);
 }
@@ -2511,6 +2534,7 @@ module.exports = {
   dispatchPriority,
   normalizeRiderRank,
   riderCanViewDispatch,
+  riderDispatchEligibilityReason,
   riderDispatchPriority,
   deliveryProtocolState,
   normalizeVehicleClass: vehicleDispatch.normalizeVehicleClass,

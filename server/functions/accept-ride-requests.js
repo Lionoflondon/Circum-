@@ -2,7 +2,7 @@
 const functions = require("firebase-functions/v1");
 const {getFirestore, FieldValue} = require("firebase-admin/firestore");
 const {getMessaging} = require("firebase-admin/messaging");
-const {isDispatchable, riderCanViewDispatch, riderMatchesIris} = require("./iris-core");
+const {isDispatchable, riderCanViewDispatch, riderDispatchEligibilityReason, riderMatchesIris} = require("./iris-core");
 const {riderVehicleMatchesRequest} = require("./vehicle-dispatch");
 
 const cleanText = (value, fallback = "") => {
@@ -180,7 +180,19 @@ const acceptRideRequests = functions.https.onCall(async (data, context) => {
     }
 
     if (!riderCanViewDispatch(rider, deliveryRequest)) {
-      throw new functions.https.HttpsError("permission-denied", "This delivery is not available to the rider's current rank.");
+      console.info("rider_accept_ineligible", {
+        riderId,
+        deliveryId: found.id,
+        reason: riderDispatchEligibilityReason(rider),
+        eligibility: {
+          approvalStatus: rider.approvalStatus,
+          verificationStatus: rider.verificationStatus,
+          adminApprovalStatus: rider.adminApprovalStatus,
+          accountStatus: rider.accountStatus,
+          onboardingStatus: rider.onboardingStatus,
+        },
+      });
+      throw new functions.https.HttpsError("permission-denied", "This delivery is not currently available because your rider account is not yet eligible for dispatch.");
     }
 
     if (!riderVehicleMatchesRequest(rider, deliveryRequest) &&
