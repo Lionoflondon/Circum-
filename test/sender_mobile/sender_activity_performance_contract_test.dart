@@ -49,4 +49,15 @@ void main() {
     expect(source, contains('stage=historyTotal'));
     expect(source, contains('stage=mergeSortRenderPrep'));
   });
+
+  test('Sender Activity treats searching deliveries as live', () {
+    final source =
+        File('lib/app/sender_mobile/sender_activity.dart').readAsStringSync();
+
+    final liveStart = source.indexOf('const live = {');
+    final liveEnd = source.indexOf('};', liveStart);
+    expect(liveStart, isNonNegative);
+    expect(liveEnd, greaterThan(liveStart));
+    expect(source.substring(liveStart, liveEnd), contains("'searching'"));
+  });
 }

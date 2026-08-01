@@ -2421,6 +2421,7 @@ class _ActivityColors {
 bool senderActivityIsLiveDeliveryStatus(String value) {
   const live = {
     'requested',
+    'searching',
     'finding_rider',
     'broadcasting',
     'accepted',
