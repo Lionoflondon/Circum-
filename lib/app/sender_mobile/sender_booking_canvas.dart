@@ -5031,7 +5031,11 @@ class _PaymentPanelState extends State<_PaymentPanel> {
     final base = Uri.base.removeFragment();
     return base.replace(
       path: '/send',
-      queryParameters: {...base.queryParameters, 'app': 'sender'},
+      queryParameters: {
+        ...base.queryParameters,
+        'app': 'sender',
+        'tab': '1',
+      },
     ).toString();
   }
 
