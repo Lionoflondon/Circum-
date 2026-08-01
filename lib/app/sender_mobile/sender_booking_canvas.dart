@@ -5030,7 +5030,9 @@ class _PaymentPanelState extends State<_PaymentPanel> {
   String _senderAppCheckoutReturnUrl() {
     final base = Uri.base.removeFragment();
     return base.replace(
-        queryParameters: {...base.queryParameters, 'app': 'sender'}).toString();
+      path: '/send',
+      queryParameters: {...base.queryParameters, 'app': 'sender'},
+    ).toString();
   }
 
   Future<void> _confirmCardPayment(
