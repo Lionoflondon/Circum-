@@ -13,11 +13,13 @@ import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:url_launcher/url_launcher.dart';
+import 'package:uuid/uuid.dart';
 
 import '../business/business_journey_context.dart';
 import '../../helper/bitmap_descriptor_helper.dart';
 import '../send_package/bloc/send_package_bloc.dart';
 import '../send_package/models/place_coordinates.m.dart';
+import '../send_package/repo/place_api.dart';
 import 'sender_accessibility.dart';
 import 'sender_booking_state.dart';
 import 'sender_finance.dart';
@@ -654,8 +656,13 @@ class _SenderBookingCanvasState extends State<SenderBookingCanvas> {
     _scheduleDraftSave(const SenderBookingDraft());
   }
 
-  void _advance() {
+  void _advance() async {
     if (_draft.step == SenderBookingStep.payment) return;
+    if (_draft.step == SenderBookingStep.pickup ||
+        _draft.step == SenderBookingStep.dropoff) {
+      final resolved = await _resolveTypedAddressIfNeeded();
+      if (!resolved || !mounted) return;
+    }
     _restoreRouteFromDraftIfReady(_draft);
     if (_draft.step == SenderBookingStep.pickup ||
         _draft.step == SenderBookingStep.dropoff) {
@@ -707,6 +714,96 @@ class _SenderBookingCanvasState extends State<SenderBookingCanvas> {
       context.read<SendPackageBloc>().add(const LoadSenderRothBalance());
     }
     _setDraft(_draft.next());
+  }
+
+  Future<bool> _resolveTypedAddressIfNeeded() async {
+    final pickup = _draft.step == SenderBookingStep.pickup;
+    final address = (pickup ? _draft.pickupAddress : _draft.dropoffAddress)
+        .trim();
+    final hasCoordinates = pickup
+        ? _draft.pickupLat != null && _draft.pickupLng != null
+        : _draft.dropoffLat != null && _draft.dropoffLng != null;
+    if (address.isEmpty || hasCoordinates) return true;
+
+    setState(() {
+      _addressResolving = true;
+      _addressResolutionMessage = null;
+    });
+    try {
+      final provider = PlaceApiProvider(const Uuid());
+      final lang = Localizations.localeOf(context).languageCode;
+      final suggestions = await provider.fetchSuggestions(
+        address,
+        lang,
+      );
+      if (!mounted) return false;
+      final normalized = address.toLowerCase().replaceAll(RegExp(r'\s+'), ' ');
+      final match = suggestions.where((suggestion) {
+        final description = suggestion.description
+            .trim()
+            .toLowerCase()
+            .replaceAll(RegExp(r'\s+'), ' ');
+        final main = suggestion.mainText
+            .trim()
+            .toLowerCase()
+            .replaceAll(RegExp(r'\s+'), ' ');
+        return description == normalized || main == normalized;
+      }).firstOrNull;
+      if (match == null) {
+        throw StateError('No exact address match found');
+      }
+      final coordinate = await provider.fetchPlaceDetails(
+        match.placeId,
+        lang,
+      );
+      if (!mounted) return false;
+      if (pickup) {
+        context.read<SendPackageBloc>().add(
+              SetPickupAddress(
+                val: match.description,
+                pickupLocationSubAddress: match.subText,
+                placeId: match.placeId,
+                lang: lang,
+              ),
+            );
+        _setDraft(
+          _draft.copyWith(
+            pickupAddress: match.description,
+            pickupLat: coordinate.lat,
+            pickupLng: coordinate.lng,
+          ),
+        );
+      } else {
+        context.read<SendPackageBloc>().add(
+              SetDeliveryAddress(
+                val: match.description,
+                destinationLocationSubAddress: match.subText,
+                placeId: match.placeId,
+                lang: lang,
+              ),
+            );
+        _setDraft(
+          _draft.copyWith(
+            dropoffAddress: match.description,
+            dropoffLat: coordinate.lat,
+            dropoffLng: coordinate.lng,
+          ),
+        );
+      }
+      return true;
+    } catch (error, stackTrace) {
+      debugPrint('Typed Sender address resolution failed: $error');
+      debugPrintStack(stackTrace: stackTrace);
+      if (mounted) {
+        setState(() {
+          _addressResolutionMessage =
+              'Please choose a matching address suggestion before continuing.';
+        });
+      }
+      return false;
+    } finally {
+      if (mounted) setState(() => _addressResolving = false);
+    }
   }
 
   void _requestBackendQuote(SenderBookingDraft draft) {
