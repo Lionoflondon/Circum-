@@ -3002,7 +3002,7 @@ class _OptionsPanel extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final quoteTotal = engine.senderQuoteTotal;
-    final routeReady = _routeReadyForQuote(engine);
+    final routeReady = _routeReadyForQuote(engine, draft);
     final iris = engine.canonicalIrisResult;
     final business = BusinessJourneyScope.maybeOf(context);
     final includedVanguard = _irisRequiresIncludedVanguard(
