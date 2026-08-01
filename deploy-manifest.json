@@ -182,6 +182,7 @@
         ".github/workflows/architecture_review_gate.yml",
         ".github/workflows/ci.yml",
         ".github/workflows/deploy_functions.yml",
+        ".github/workflows/rc1_deploy.yml",
         ".github/workflows/rc1_release_build.yml",
         ".github/workflows/repository_flutter_ci.yml",
         "BREAK_GLASS_DEPLOY.md",
@@ -213,6 +214,7 @@
         "scripts/finalize_web_artifact.js",
         "scripts/firebase_tools.sh",
         "scripts/release_orchestrator.js",
+        "scripts/scoped_functions_deploy_list.js",
         "scripts/validate_web_artifacts.js",
         "scripts/verify_sender_deployment_governance.js"
       ],
@@ -226,6 +228,13 @@
     }
   },
   "sharedFiles": [],
+  "allowedDependencyIntersections": [
+    {
+      "products": ["sender-app", "website"],
+      "files": ["lib/env/env.dart"],
+      "reason": "Shared read-only build-time environment accessors."
+    }
+  ],
   "blockedPrefixes": [
     "lib/main_sender_web.dart",
     "scripts/deploy_main_web.sh"

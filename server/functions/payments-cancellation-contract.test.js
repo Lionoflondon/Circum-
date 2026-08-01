@@ -6,6 +6,7 @@ const path = require("node:path");
 
 const index = fs.readFileSync(path.join(__dirname, "index.js"), "utf8");
 const cancellation = fs.readFileSync(path.join(__dirname, "delivery-policy.js"), "utf8");
+const deliveryTracking = fs.readFileSync(path.join(__dirname, "delivery-tracking.js"), "utf8");
 const senderBooking = fs.readFileSync(path.join(__dirname, "sender-booking.js"), "utf8");
 const mobile = fs.readFileSync(path.join(__dirname, "../../lib/app/send_package/bloc/send_package_bloc.dart"), "utf8");
 const web = fs.readFileSync(path.join(
@@ -15,7 +16,8 @@ const web = fs.readFileSync(path.join(
 
 test("financial endpoints use CORS preflight and idempotent earnings", () => {
   assert.match(index, /function allowCors\(req, res\)/);
-  assert.match(index, /riderEarnings\.creditRiderEarnings/);
+  assert.match(index, /retired_delivery_completion_endpoint/);
+  assert.match(deliveryTracking, /riderEarningTransactions/);
   assert.doesNotMatch(index, /accountBalance:\s*riderBalance\s*\+/);
 });
 

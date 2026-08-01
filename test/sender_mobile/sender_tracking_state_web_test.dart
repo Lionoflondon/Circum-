@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:circum/app/send_package/bloc/send_package_bloc.dart';
 import 'package:circum/app/send_package/models/delivery_restoration_coordinates.dart';
 import 'package:circum/app/send_package/models/place_coordinates.m.dart';
+import 'package:circum/app/sender_mobile/sender_booking_canvas.dart';
 import 'package:circum/app/sender_mobile/sender_tracking_screen.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
@@ -241,6 +242,14 @@ void main() {
     expect(snapshot.rider?.latitude, 51.507);
     expect(snapshot.completedRoute, hasLength(3));
     expect(snapshot.remainingRoute.first, snapshot.rider);
+  });
+
+  test('Sender booking map is not disabled on Web when coordinates exist', () {
+    expect(
+      senderBookingMapShouldUseGoogle(const LatLng(51.501, -0.141)),
+      isTrue,
+    );
+    expect(senderBookingMapShouldUseGoogle(null), isFalse);
   });
 
   test(

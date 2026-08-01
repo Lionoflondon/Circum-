@@ -205,14 +205,9 @@ test("Sender Roth payments resolve and debit canonical plus legacy wallet record
   assert.match(senderBookingSource, /balance: walletBalanceAfter/);
 });
 
-test("legacy endTrip handles missing requests before reading delivery data", () => {
-  assert.match(
-      indexSource,
-      /collection\("deliveryRequests"\)\.where\("requestId", "==", requestId\)\.limit\(1\)\.get\(\)/,
-  );
-  assert.match(indexSource, /if \(ride\.empty\) \{\s*return res\.status\(404\)\.send\(\{msg: "Trip already completed"\}\);\s*\}/);
-  assert.doesNotMatch(
-      indexSource,
-      /const rideData = ride\.docs\[0\];\s*const rideDataRes = rideData\.data\(\);\s*if \(!rideData\.exists\)/,
-  );
+test("legacy endTrip cannot complete or settle deliveries", () => {
+  assert.match(indexSource, /exports\.endTrip = functions\.https\.onRequest/);
+  assert.match(indexSource, /res\.status\(410\)\.send/);
+  assert.match(indexSource, /retired_delivery_completion_endpoint/);
+  assert.match(indexSource, /Use updateDeliveryTrackingStatus/);
 });

@@ -8,9 +8,23 @@ import 'package:flutter_test/flutter_test.dart';
 
 class _FakeProfileRepository implements SenderMobileProfileRepository {
   SenderMobileProfileData profile;
-  final _controller = StreamController<SenderMobileProfileData>.broadcast();
+  late final StreamController<SenderMobileProfileData> _controller;
+  int activeWatchers = 0;
+  int maxActiveWatchers = 0;
 
-  _FakeProfileRepository(this.profile);
+  _FakeProfileRepository(this.profile) {
+    _controller = StreamController<SenderMobileProfileData>.broadcast(
+      onListen: () {
+        activeWatchers += 1;
+        if (activeWatchers > maxActiveWatchers) {
+          maxActiveWatchers = activeWatchers;
+        }
+      },
+      onCancel: () {
+        activeWatchers -= 1;
+      },
+    );
+  }
 
   @override
   Future<void> closeAccount() async {}
@@ -250,6 +264,8 @@ void main() {
       'listener_attach',
       'snapshot exists=',
       'cache_hit',
+      'cache_hit uid_verified',
+      'cache_uid_mismatch',
       'cache_miss',
       'cache_boot_ignored_profile_already_loaded',
       'cache_write_complete',
@@ -279,5 +295,64 @@ void main() {
     }
 
     expect(offenders, isEmpty);
+  });
+
+  test('Sender profile cache cannot replace authenticated UID', () {
+    final source = File('lib/app/sender_mobile/sender_mobile_profile.dart')
+        .readAsStringSync();
+    final cacheMethod = source.substring(
+      source.indexOf('Future<SenderMobileProfileData?> _loadCachedProfile'),
+      source.indexOf('Future<void> _cacheProfile'),
+    );
+
+    expect(cacheMethod,
+        contains('final currentUid = _safeSenderProfileCurrentUid();'));
+    expect(cacheMethod, contains('profile.userId != currentUid'));
+    expect(cacheMethod, contains('cache_uid_mismatch'));
+    expect(
+      cacheMethod.indexOf('SenderMobileProfileData.fromCache'),
+      lessThan(cacheMethod.indexOf('profile.userId != currentUid')),
+      reason: 'Decoded cache must be revalidated before becoming visible.',
+    );
+    expect(
+      cacheMethod.indexOf('profile.userId != currentUid'),
+      lessThan(cacheMethod.indexOf('return profile;')),
+      reason:
+          'A cached profile must not be returned until UID ownership is proven.',
+    );
+  });
+
+  testWidgets('Sender profile survives 100 open and dispose cycles',
+      (tester) async {
+    final repository = _FakeProfileRepository(
+      SenderMobileProfileData(
+        userId: 'sender-1',
+        displayName: 'Jason Sender',
+        username: 'jason',
+        email: 'jason@circum.app',
+        phone: '+44 7700 900123',
+        photoUrl: '',
+        createdAt: DateTime(2026, 7, 15),
+      ),
+    );
+    addTearDown(repository.dispose);
+
+    for (var cycle = 0; cycle < 100; cycle += 1) {
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: SenderMobileProfileView(repository: repository),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.text('Jason Sender'), findsOneWidget);
+      expect(repository.maxActiveWatchers, lessThanOrEqualTo(1));
+
+      await tester.pumpWidget(const SizedBox.shrink());
+      await tester.pumpAndSettle();
+      expect(repository.activeWatchers, 0);
+    }
   });
 }

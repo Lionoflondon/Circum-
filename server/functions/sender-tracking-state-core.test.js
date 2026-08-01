@@ -42,6 +42,17 @@ test("backend statuses map to Sender tracking states", () => {
   }
 });
 
+test("unknown backend statuses fail closed instead of inventing delivery progress", () => {
+  assert.equal(
+      tracking.senderTrackingStateForBackendStatus("unknown_future_status"),
+      tracking.SENDER_TRACKING_STATES.ISSUE,
+  );
+  assert.equal(
+      tracking.senderTrackingStateForBackendStatus(""),
+      tracking.SENDER_TRACKING_STATES.NO_ACTIVE_DELIVERY,
+  );
+});
+
 test("delivery status transition rules block unsafe jumps", () => {
   assert.equal(tracking.canTransitionDeliveryStatus("requested", "accepted"), true);
   assert.equal(tracking.canTransitionDeliveryStatus("accepted", "navigating_to_pickup"), true);

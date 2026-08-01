@@ -3664,6 +3664,7 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
           final jobs = snapshot.docs
               .map((doc) => {'id': doc.id, ...doc.data()})
               .where((job) {
+            if (!_isLiveRiderOffer(job)) return false;
             final matchingStatus =
                 '${job['matchingStatus'] ?? 'available'}'.toLowerCase();
             final ignoredBy = (job['ignoredByRiders'] as List?) ?? const [];
@@ -3736,7 +3737,98 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
     );
     if (pickupCompare != 0) return pickupCompare;
 
+    final createdCompare = _jobTimestampMillis(
+            b['createdAt'] ?? b['requestedAt'] ?? b['updatedAt'])
+        .compareTo(
+      _jobTimestampMillis(a['createdAt'] ?? a['requestedAt'] ?? a['updatedAt']),
+    );
+    if (createdCompare != 0) return createdCompare;
+
     return _jobDistanceMiles(a).compareTo(_jobDistanceMiles(b));
+  }
+
+  bool _isLiveRiderOffer(Map<String, dynamic> job) {
+    const terminalStatuses = {
+      'accepted',
+      'assigned',
+      'collected',
+      'picked_up',
+      'navigating_to_pickup',
+      'arrived_at_pickup',
+      'pickup_verified',
+      'navigating_to_dropoff',
+      'in_transit',
+      'arrived_at_dropoff',
+      'delivered',
+      'completed',
+      'cancelled',
+      'canceled',
+      'expired',
+      'failed',
+      'blocked',
+    };
+    const paidStatuses = {
+      '',
+      'paid',
+      'succeeded',
+      'payment_confirmed',
+      'confirmed',
+      'roth_paid',
+      'stripe_paid',
+    };
+    const openMatchingStatuses = {
+      '',
+      'available',
+      'requested',
+      'broadcast',
+      'broadcasted',
+    };
+    const openDispatchStatuses = {
+      '',
+      'requested',
+      'available',
+      'broadcast',
+      'broadcasted',
+      'queued',
+      'waiting',
+    };
+    final status = '${job['status'] ?? ''}'.toLowerCase();
+    final deliveryStatus =
+        '${job['deliveryStatus'] ?? job['deliveryStage'] ?? ''}'.toLowerCase();
+    final matchingStatus = '${job['matchingStatus'] ?? ''}'.toLowerCase();
+    final dispatchStatus = '${job['dispatchStatus'] ?? ''}'.toLowerCase();
+    final paymentStatus =
+        '${job['paymentStatus'] ?? job['paymentState'] ?? ''}'.toLowerCase();
+    final assignedRider =
+        '${job['riderId'] ?? job['driverId'] ?? job['assignedRider'] ?? job['assignedRiderId'] ?? job['assignedDriverId'] ?? job['courierId'] ?? ''}'
+            .trim();
+    if (terminalStatuses.contains(status) ||
+        terminalStatuses.contains(deliveryStatus) ||
+        terminalStatuses.contains(matchingStatus) ||
+        terminalStatuses.contains(dispatchStatus)) {
+      return false;
+    }
+    if (assignedRider.isNotEmpty) return false;
+    if (!paidStatuses.contains(paymentStatus)) return false;
+    if (!openMatchingStatuses.contains(matchingStatus)) return false;
+    if (!openDispatchStatuses.contains(dispatchStatus)) return false;
+    final expiry = _jobTimestampMillis(
+      job['offerExpiresAt'] ??
+          job['dispatchExpiresAt'] ??
+          job['expiresAt'] ??
+          job['matchingExpiresAt'],
+    );
+    return expiry <= 0 || expiry > DateTime.now().millisecondsSinceEpoch;
+  }
+
+  int _jobTimestampMillis(Object? value) {
+    if (value is Timestamp) return value.millisecondsSinceEpoch;
+    if (value is DateTime) return value.millisecondsSinceEpoch;
+    if (value is num) return value.toInt();
+    if (value is String) {
+      return DateTime.tryParse(value)?.millisecondsSinceEpoch ?? 0;
+    }
+    return 0;
   }
 
   void _listenToRiderJobs(String riderId) {
@@ -3749,12 +3841,20 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
           'status',
           whereIn: [
             'accepted',
+            'assigned',
+            'navigating_to_pickup',
             'en_route_to_pickup',
             'arrived_at_pickup',
+            'waiting',
+            'pickup_verification',
+            'pickup_verified',
             'collected',
             'picked_up',
+            'navigating_to_dropoff',
             'in_transit',
+            'arrived_at_dropoff',
             'arriving',
+            'issue_reported',
           ],
         )
         .limit(20)
@@ -12721,7 +12821,7 @@ class _CustomerPortalState extends State<_CustomerPortal> {
       'error': 'error',
     };
     if (normalized.isEmpty) return 'no_active_delivery';
-    return mapping[normalized] ?? 'in_transit';
+    return mapping[normalized] ?? 'issue';
   }
 
   String _formatMessageTime(dynamic timestamp, dynamic fallback) {

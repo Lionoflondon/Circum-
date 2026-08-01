@@ -48,7 +48,7 @@ test("IRIS dispatch callable requires delivery owner or admin", () => {
   assert.match(sendPackage, /const \{hasAdminClaim\} = require\("\.\/admin-auth"\)/);
   assert.match(sendPackage, /function senderOwnsRequest\(delivery, uid\)/);
   assert.match(sendPackage, /!senderOwnsRequest\(deliveryRequest\[0\], uid\)/);
-  assert.match(sendPackage, /!hasAdminClaim\(context\.auth\.token \|\| \{\}\)/);
+  assert.match(sendPackage, /!hasAdminClaim\(authToken \|\| \{\}\)/);
   assert.match(sendPackage, /Only the Sender or an administrator can dispatch this delivery/);
   assert.match(sendPackage, /e instanceof functions\.https\.HttpsError/);
 });
@@ -62,8 +62,18 @@ test("IRIS dispatch records audit when server recomputation blocks dispatch", ()
 test("legacy sendPackage request lookup remains bounded", () => {
   assert.match(
       sendPackage,
-      /collection\("deliveryRequests"\) \.where\("requestId", "==", requestId\)\.limit\(1\)\.get\(\)/,
+      /collection\("deliveryRequests"\)\.where\("requestId", "==", requestId\)\.limit\(1\)\.get\(\)/,
   );
+  assert.match(sendPackage, /async function dispatchDeliveryRequest/);
+});
+
+test("delivery dispatch is idempotent after broadcast or acceptance", () => {
+  assert.match(sendPackage, /currentDispatchStatus === "broadcasted"/);
+  assert.match(sendPackage, /currentDispatchStatus === "accepted"/);
+  assert.match(sendPackage, /currentMatchingStatus === "broadcasted"/);
+  assert.match(sendPackage, /currentMatchingStatus === "accepted"/);
+  assert.match(sendPackage, /status: "already_dispatched"/);
+  assert.match(sendPackage, /idempotent: true/);
 });
 
 test("Firestore rules reserve rider authority changes for driver managers", () => {

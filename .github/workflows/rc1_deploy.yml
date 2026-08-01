@@ -1,0 +1,49 @@
+name: RC1 Deploy
+
+on:
+  workflow_dispatch:
+
+jobs:
+  rc1-deploy:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+      - run: flutter pub get
+      - run: npm --prefix server/functions ci
+      - run: npm install -g firebase-tools
+      - run: node scripts/deploy_guard.self_test.js
+      - run: node scripts/absolute_product_ownership.js
+      - run: git diff --check
+      - run: flutter analyze --no-fatal-warnings --no-fatal-infos
+      - run: flutter test
+      - run: npm --prefix server/functions run lint
+      - run: npm --prefix server/functions test
+      - run: npm --prefix server/functions run test:rules
+      - run: PUBLIC_WEB_RECAPTCHA_ENTERPRISE_SITE_KEY="${{ secrets.PUBLIC_WEB_RECAPTCHA_ENTERPRISE_SITE_KEY }}" GOOGLE_PLACES_API_KEY="${{ secrets.GOOGLE_PLACES_API_KEY }}" scripts/build_public_web.sh
+      - run: CIRCUM_WEB_RECAPTCHA_ENTERPRISE_SITE_KEY="${{ secrets.CIRCUM_WEB_RECAPTCHA_ENTERPRISE_SITE_KEY }}" CIRCUM_WEB_GOOGLE_MAPS_API_KEY="${{ secrets.CIRCUM_WEB_GOOGLE_MAPS_API_KEY }}" STRIPE_PUBLISHABLE_KEY="${{ secrets.STRIPE_PUBLISHABLE_KEY }}" scripts/build_sender_app_web.sh
+      - run: CIRCUM_WEB_RECAPTCHA_ENTERPRISE_SITE_KEY="${{ secrets.CIRCUM_WEB_RECAPTCHA_ENTERPRISE_SITE_KEY }}" scripts/build_admin_web.sh
+      - run: node scripts/validate_web_artifacts.js --surface=website
+      - run: node scripts/validate_web_artifacts.js --surface=sender-app
+      - run: node scripts/validate_web_artifacts.js --surface=admin
+      - uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_CIRCUM_2797C }}
+      - run: printf "GOOGLE_PLACES_API_KEY=%s\n" "$GOOGLE_PLACES_API_KEY" > server/functions/.env
+        env:
+          GOOGLE_PLACES_API_KEY: ${{ secrets.GOOGLE_PLACES_API_KEY }}
+      - run: firebase deploy --only firestore:rules --project circum-2797c
+      - run: firebase deploy --only "$(node scripts/scoped_functions_deploy_list.js)" --project circum-2797c
+      - run: firebase deploy --only hosting:app,hosting:public,hosting:admin --project circum-2797c

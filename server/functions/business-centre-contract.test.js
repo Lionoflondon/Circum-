@@ -170,7 +170,7 @@ test("Business Roth invoice payment debits and marks invoice paid atomically", (
   assert.match(businessPaymentsSource, /transaction\.set\(invoiceRef,[\s\S]*?status: nextStatus/);
   assert.match(businessPaymentsSource, /transaction\.set\(paymentRef,[\s\S]*?status: "paid"/);
   const invoiceFinalizer = businessPaymentsSource.slice(
-      businessPaymentsSource.indexOf('if (metadata.type === "business_invoice_payment")'),
+      businessPaymentsSource.indexOf("if (metadata.type === \"business_invoice_payment\")"),
       businessPaymentsSource.indexOf("exports._private ="),
   );
   assert.doesNotMatch(invoiceFinalizer, /debitBusinessRoth\(/);

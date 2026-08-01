@@ -797,9 +797,10 @@ class _SenderMobileProfileViewState extends State<SenderMobileProfileView> {
 
   Future<SenderMobileProfileData?> _loadCachedProfile() async {
     final key = _senderProfileCacheKey();
+    final currentUid = _safeSenderProfileCurrentUid();
     if (key == null) {
       logSenderProfileStage(
-        uid: _safeSenderProfileCurrentUid(),
+        uid: currentUid,
         phase: 'profile.cache.read',
         path: 'SharedPreferences',
         event: 'cache_key_missing',
@@ -811,7 +812,7 @@ class _SenderMobileProfileViewState extends State<SenderMobileProfileView> {
       final raw = prefs.getString(key);
       if (raw == null || raw.isEmpty) {
         logSenderProfileStage(
-          uid: _safeSenderProfileCurrentUid(),
+          uid: currentUid,
           phase: 'profile.cache.read',
           path: key,
           event: 'cache_miss',
@@ -821,25 +822,35 @@ class _SenderMobileProfileViewState extends State<SenderMobileProfileView> {
       final decoded = jsonDecode(raw);
       if (decoded is! Map) {
         logSenderProfileStage(
-          uid: _safeSenderProfileCurrentUid(),
+          uid: currentUid,
           phase: 'profile.cache.read',
           path: key,
           event: 'cache_schema_mismatch',
         );
         return null;
       }
-      logSenderProfileStage(
-        uid: _safeSenderProfileCurrentUid(),
-        phase: 'profile.cache.read',
-        path: key,
-        event: 'cache_hit',
-      );
-      return SenderMobileProfileData.fromCache(
+      final profile = SenderMobileProfileData.fromCache(
         Map<String, dynamic>.from(decoded),
       );
+      if (currentUid == null || profile.userId != currentUid) {
+        logSenderProfileStage(
+          uid: currentUid,
+          phase: 'profile.cache.read',
+          path: key,
+          event: 'cache_uid_mismatch cachedUid=${profile.userId}',
+        );
+        return null;
+      }
+      logSenderProfileStage(
+        uid: currentUid,
+        phase: 'profile.cache.read',
+        path: key,
+        event: 'cache_hit uid_verified',
+      );
+      return profile;
     } catch (error) {
       logSenderProfileStage(
-        uid: _safeSenderProfileCurrentUid(),
+        uid: currentUid,
         phase: 'profile.cache.read',
         path: key,
         event: 'cache_error type=${error.runtimeType}',

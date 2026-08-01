@@ -6316,7 +6316,8 @@ class _SenderMobileMapState extends State<_SenderMobileMap>
     final engine = widget.engine;
     final pickup = _latLng(engine?.pickupCoordinate);
     final dropoff = _latLng(engine?.desinationCoordinate);
-    final showGoogleMap = pickup != null && !kIsWeb;
+    final showGoogleMap = senderBookingMapShouldUseGoogle(pickup);
+    final pickupForMap = pickup;
     return Stack(
       children: [
         AnimatedSwitcher(
@@ -6327,7 +6328,7 @@ class _SenderMobileMapState extends State<_SenderMobileMap>
               ? GoogleMap(
                   key: const ValueKey('sender-google-map'),
                   initialCameraPosition: CameraPosition(
-                    target: pickup,
+                    target: pickupForMap!,
                     zoom: dropoff == null ? 15.4 : 12.5,
                   ),
                   onMapCreated: (controller) {
@@ -6336,7 +6337,7 @@ class _SenderMobileMapState extends State<_SenderMobileMap>
                       (_) => _moveCamera(),
                     );
                   },
-                  markers: _markers(pickup, dropoff),
+                  markers: _markers(pickupForMap, dropoff),
                   polylines: _polylines(),
                   zoomControlsEnabled: false,
                   myLocationButtonEnabled: false,
@@ -6500,6 +6501,9 @@ class _SenderMobileMapState extends State<_SenderMobileMap>
     );
   }
 }
+
+@visibleForTesting
+bool senderBookingMapShouldUseGoogle(LatLng? pickup) => pickup != null;
 
 const _senderMapStyle = '''
 [

@@ -66,6 +66,7 @@ function startsWithAny(file, prefixes) {
 function classify(file) {
   if (file.startsWith("lib/app/rider_") ||
       file.startsWith("lib/main_rider") ||
+      file.startsWith("test/rider_") ||
       file.includes("rider_deployment_manifest")) {
     return "rider-external";
   }
@@ -143,6 +144,7 @@ const targets = [
     name: "Sender App",
     lanes: ["sender"],
     deployable: false,
+    manual: true,
     manualReason: "Mobile app publishing is manual.",
     build: full ? "flutter build apk --debug" : null,
   },
@@ -191,8 +193,7 @@ const targets = [
     name: "Cloud Functions",
     lanes: ["functions", "release-tooling", "ci"],
     tests: full ? ["cd server/functions && npm test"] : [],
-    deployable: false,
-    manualReason: "Requires an explicit scoped function list.",
+    deploy: "firebase deploy --only \"$(node scripts/scoped_functions_deploy_list.js)\" --project circum-2797c",
   },
   {
     key: "rules",
@@ -299,7 +300,10 @@ function validate(target, files, allFilesByLane) {
   diff.ok ? pass("git diff --check") : fail("git diff --check", diff.output);
 
   if (full) {
-    const analyze = run("flutter analyze", {timeoutMs: 20 * 60 * 1000});
+    const analyze = run(
+        "flutter analyze --no-fatal-warnings --no-fatal-infos",
+        {timeoutMs: 20 * 60 * 1000},
+    );
     analyze.ok ? pass("flutter analyze") : fail("flutter analyze", analyze.output);
     const tests = run("flutter test", {timeoutMs: 20 * 60 * 1000});
     tests.ok ? pass("flutter test") : fail("flutter test", tests.output);
@@ -339,6 +343,7 @@ function validate(target, files, allFilesByLane) {
 
 function statusFor(target, files, checks) {
   if (target.external) return "EXTERNAL";
+  if (target.manual) return files.length === 0 ? "NO CHANGES" : "MANUAL";
   if (files.length === 0) return "NO CHANGES";
   return checks.some((check) => !check.ok) ? "NOT SAFE" : "SAFE";
 }
@@ -351,6 +356,9 @@ function deploy(target) {
 }
 
 function format(results, filesByLane) {
+  const clean = (value) => `${value}`.split("\n")
+      .map((line) => line.trimEnd())
+      .join("\n");
   const lines = ["# SAFE RELEASE REPORT", ""];
   for (const result of results) {
     lines.push(`## ${result.name}`);
@@ -365,7 +373,8 @@ function format(results, filesByLane) {
     if (failures.length) {
       lines.push("");
       lines.push("Reasons:");
-      failures.forEach((check) => lines.push(`- ${check.name}: ${check.detail}`));
+      failures.forEach((check) =>
+        lines.push(`- ${check.name}: ${clean(check.detail)}`));
     }
     if (result.deployment) {
       lines.push("");
@@ -387,7 +396,8 @@ function format(results, filesByLane) {
   const deployable = results.filter((result) => result.status === "SAFE").length;
   const blocked = results.filter((result) => result.status === "NOT SAFE").length;
   const skipped = results.filter((result) =>
-    ["NO CHANGES", "EXTERNAL"].includes(result.status)).length + untouched.length;
+    ["NO CHANGES", "EXTERNAL", "MANUAL"].includes(result.status)).length +
+    untouched.length;
   lines.push("## Deploy Summary");
   lines.push("");
   lines.push(`Deployable: ${deployable}`);

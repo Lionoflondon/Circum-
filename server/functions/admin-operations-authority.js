@@ -521,25 +521,6 @@ function platformOperationPatch(status, actor, reason) {
   };
 }
 
-function duplicateDelivery(source, newId) {
-  const copy = {...source};
-  delete copy.historyId;
-  delete copy.driverRatingId;
-  delete copy.ratedAt;
-  delete copy.proofOfDelivery;
-  return {
-    ...copy,
-    requestId: newId,
-    status: "requested",
-    dispatchStatus: "requested",
-    matchingStatus: "available",
-    createdAt: FieldValue.serverTimestamp(),
-    updatedAt: FieldValue.serverTimestamp(),
-    source: `${source.source || "circum"}-admin-duplicate`,
-    adminDuplicatedFrom: source.requestId || source.id || null,
-  };
-}
-
 exports.adminResolveAccess = functions.https.onCall(async (data, context) => {
   const actor = await resolveActor(context);
   const db = getFirestore();
@@ -594,20 +575,17 @@ exports.adminDuplicateDelivery = functions.https.onCall(async (data, context) =>
   const actor = await resolveActor(context);
   requireOperations(actor);
   const id = clean(data.deliveryId);
-  const newId = clean(data.newId) || `CIR-ADM-${Date.now()}`;
-  if (!id) throw new functions.https.HttpsError("invalid-argument", "Delivery is required.");
   const db = getFirestore();
-  const sourceSnap = await db.collection("deliveryRequests").doc(id).get();
-  if (!sourceSnap.exists) throw new functions.https.HttpsError("not-found", "Delivery was not found.");
-  const duplicate = duplicateDelivery({...sourceSnap.data(), id: sourceSnap.id}, newId);
-  await db.collection("deliveryRequests").doc(newId).set(duplicate);
   await writeAudit(db, actor, {
-    actionType: "delivery_duplicate",
+    actionType: "delivery_duplicate_rejected",
     recordType: "deliveryRequests",
-    recordId: newId,
-    reason: clean(data.reason || "Admin duplicated delivery from operations console."),
-  }, {requestId: id}, {requestId: newId});
-  return {ok: true, deliveryId: newId};
+    recordId: id,
+    reason: clean(data.reason || "Admin duplicate delivery is retired; use Sender paid booking orchestration."),
+  }, {requestId: id}, {status: "rejected_duplicate_authority"});
+  throw new functions.https.HttpsError(
+      "failed-precondition",
+      "Delivery duplication is retired. Create deliveries through the Sender payment flow.",
+  );
 });
 
 exports.adminUpdateDeliveryOperation = functions.https.onCall(async (data, context) => {

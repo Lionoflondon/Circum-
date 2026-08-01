@@ -14,7 +14,10 @@ const canonicalVehicleType = (value) => {
   if (/(car|estate|suv|4x4|sedan|saloon|hatchback)/.test(normalized)) {
     return "Car";
   }
-  if (/(bike|bicycle|cycle|motorcycle|motorbike|moped|scooter)/.test(normalized)) {
+  if (
+    /(bike|bicycle|cycle|motorcycle|motorbike|moped|scooter)/
+        .test(normalized)
+  ) {
     return "Motorbike";
   }
   return raw;
@@ -23,7 +26,9 @@ const canonicalVehicleType = (value) => {
 const buildRiderVehicleSnapshot = (rider = {}) => {
   const vehicle = rider.vehicle || rider.vehicleDetails || {};
   const snapshot = {
-    type: canonicalVehicleType(vehicle.type || rider.vehicleType || rider.typeOfVehicle),
+    type: canonicalVehicleType(
+        vehicle.type || rider.vehicleType || rider.typeOfVehicle,
+    ),
     manufacturer: cleanText(vehicle.manufacturer || vehicle.make),
     model: cleanText(vehicle.model),
     colour: cleanText(vehicle.colour || vehicle.color),

@@ -15,7 +15,6 @@ const stripeRuntimeConfig = resolveStripeRuntimeConfig({
 });
 const stripe = require("stripe")(stripeRuntimeConfig.secretKey);
 const stripeConnectClient = () => stripe;
-const {v4: uuidv4} = require("uuid");
 
 const sendPackage = require("./send-package");
 const getAvaliableRequests = require("./get-avaliable-requests");
@@ -33,7 +32,6 @@ const communicationEngine = require("./communication-engine");
 const deliveryPolicy = require("./delivery-policy");
 const deliveryTracking = require("./delivery-tracking");
 const ratingsTipping = require("./ratings-tipping");
-const riderEarnings = require("./rider-earnings");
 const stripeRefunds = require("./stripe-refunds");
 const riderEarningsSummary = require("./rider-earnings-summary");
 const founderRiderAccess = require("./founder-rider-access");
@@ -723,92 +721,8 @@ exports.calculateEarnings = functions.https.onRequest(async (req, res) => {
 
 exports.endTrip = functions.https.onRequest(async (req, res) => {
   if (allowCors(req, res)) return;
-  try {
-    const {riderId, requestId, riderName} = req.body;
-
-    if (!requestId) {
-      return res.status(404).send({msg: "requestId is required"});
-    }
-
-    if (!riderId) {
-      return res.status(404).send({msg: "riderId is required"});
-    }
-
-    if (!riderName) {
-      return res.status(404).send({msg: "riderName is required"});
-    }
-
-    // Retrieve the 'history' database reference
-    const ride = await getFirestore().collection("deliveryRequests").where("requestId", "==", requestId).limit(1).get();
-    if (ride.empty) {
-      return res.status(404).send({msg: "Trip already completed"});
-    }
-    const rideData = ride.docs[0];
-    const rideDataRes = rideData.data();
-
-    if (rideDataRes.riderId != riderId) {
-      return res.status(400).send({msg: "riderId does not match"});
-    }
-
-    const rideCost = rideDataRes.price;
-
-    const uuid1 = uuidv4();
-    const uuid2 = uuidv4();
-    const uuiduuid = `${uuid1}${uuid2}`;
-    await riderEarnings.creditRiderEarnings({
-      db: getFirestore(),
-      riderId,
-      deliveryId: requestId,
-      amount: rideCost,
-    });
-
-    const irisData = require("./iris-core");
-    const privateIrisDoc = await getFirestore()
-        .collection("irisPrivate")
-        .doc(requestId)
-        .get();
-    const privateIrisData = privateIrisDoc.exists ? privateIrisDoc.data() : {};
-    const learningSnapshot = irisData.createLearningSnapshot(
-        {
-          ...(rideDataRes.iris || {}),
-          verification: privateIrisData.verification || {},
-        },
-        {
-          ...rideDataRes,
-          completedAt: Date.now(),
-        },
-    );
-
-    await getFirestore()
-        .collection("deliveryRequests")
-        .doc(rideData.id)
-        .update({
-          status: "completed",
-          historyId: uuiduuid,
-          updatedAt: Date.now(),
-        });
-    await getFirestore().collection("irisPrivate").doc(requestId).set(
-        {
-          requestId,
-          learningSnapshot,
-          updatedAt: Date.now(),
-        },
-        {merge: true},
-    );
-
-    const newRideData = rideDataRes;
-    newRideData.userId = rideData.id;
-    newRideData.riderName = riderName;
-    newRideData.status = "completed";
-    newRideData.timestamp = Date.now();
-
-    await getFirestore().collection("history").doc(uuiduuid).set(newRideData);
-
-    res.status(200).send({historyId: uuiduuid});
-  } catch (error) {
-    console.error("Error calculating total amount earned:", error);
-    res.status(500).send({
-      error: error,
-    });
-  }
+  return res.status(410).send({
+    error: "retired_delivery_completion_endpoint",
+    message: "Use updateDeliveryTrackingStatus for backend-authoritative delivery completion.",
+  });
 });

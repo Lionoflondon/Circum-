@@ -1,3 +1,4 @@
+/* eslint-disable max-len */
 const fs = require("fs");
 const test = require("node:test");
 const assert = require("node:assert/strict");

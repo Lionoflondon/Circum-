@@ -1,3 +1,4 @@
+/* eslint-disable max-len */
 const test = require("node:test");
 const assert = require("node:assert/strict");
 const {_private} = require("./sender-booking");
@@ -7,16 +8,16 @@ test("sender draft sanitizer keeps only canonical draft fields", () => {
     schemaVersion: 1,
     baseRevision: 0,
     draft: {
-    step: "recipient",
-    pickup: {address: "10 Downing Street", unknown: "x"},
-    dropoff: {address: "Buckingham Palace"},
-    recipient: {name: "Ada", phone: "+447700900123", deliveryNotes: "Ring bell"},
-    deliveryTime: {type: "scheduled", scheduledDate: "2026-08-01"},
-    parcel: {itemName: "Documents", fragile: true, highValue: true},
-    iris: {confidence: "High", recommendedVehicle: "Motorbike"},
-    deliveryOptions: {selectedOption: "Express", vanguard: true},
-    review: {amountDue: "12.50"},
-    paymentMethod: {type: "card", paymentMethodId: "pm_123", rothEnabled: true},
+      step: "recipient",
+      pickup: {address: "10 Downing Street", unknown: "x"},
+      dropoff: {address: "Buckingham Palace"},
+      recipient: {name: "Ada", phone: "+447700900123", deliveryNotes: "Ring bell"},
+      deliveryTime: {type: "scheduled", scheduledDate: "2026-08-01"},
+      parcel: {itemName: "Documents", fragile: true, highValue: true},
+      iris: {confidence: "High", recommendedVehicle: "Motorbike"},
+      deliveryOptions: {selectedOption: "Express", vanguard: true},
+      review: {amountDue: "12.50"},
+      paymentMethod: {type: "card", paymentMethodId: "pm_123", rothEnabled: true},
     },
   });
   const draft = saved.draft;

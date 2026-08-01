@@ -440,7 +440,7 @@ test("Sender cannot directly rewrite delivery weight after creation", async () =
   }, {merge: true}));
 });
 
-test("Sender cannot inject IRIS during direct delivery creation", async () => {
+test("Sender cannot directly create canonical delivery requests", async () => {
   const senderDb = testEnv.authenticatedContext("sender-1").firestore();
   await assertFails(setDoc(doc(senderDb, "deliveryRequests", "direct-forged-iris"), {
     senderId: "sender-1",
@@ -452,7 +452,7 @@ test("Sender cannot inject IRIS during direct delivery creation", async () => {
       serviceability: {status: "serviceable"},
     },
   }));
-  await assertSucceeds(setDoc(doc(senderDb, "deliveryRequests", "direct-no-iris"), {
+  await assertFails(setDoc(doc(senderDb, "deliveryRequests", "direct-no-iris"), {
     senderId: "sender-1",
     userId: "sender-1",
     packageDescription: "book",

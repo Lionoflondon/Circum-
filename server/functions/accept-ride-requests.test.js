@@ -1,3 +1,4 @@
+/* eslint-disable max-len */
 const test = require("node:test");
 const assert = require("node:assert/strict");
 const fs = require("node:fs");
@@ -27,4 +28,21 @@ test("accept rejects stale, assigned, unpaid, or terminal offers with diagnostic
   assert.match(source, /rider_offer_accept_attempt/);
   assert.match(source, /rider_offer_accept_rejected/);
   assert.match(source, /rider_offer_accept_success/);
+});
+
+test("accepted rider payload never exposes personal phone numbers to sender surfaces", () => {
+  const source = fs.readFileSync(
+      path.join(__dirname, "accept-ride-requests.js"),
+      "utf8",
+  );
+  const payloadStart = source.indexOf("const riderPayload =");
+  const payloadEnd = source.indexOf("const findDeliveryRequest", payloadStart);
+  const payloadSource = source.slice(payloadStart, payloadEnd);
+
+  assert.match(payloadSource, /phoneNumber: "",/);
+  assert.match(payloadSource, /contactMethod: "circum_relay"/);
+  assert.match(payloadSource, /maskedCommunicationOnly: true/);
+  assert.doesNotMatch(payloadSource, /cleanText\(rider\.phone/);
+  assert.doesNotMatch(payloadSource, /rider\.phoneNumber/);
+  assert.doesNotMatch(payloadSource, /rider\.mobile/);
 });

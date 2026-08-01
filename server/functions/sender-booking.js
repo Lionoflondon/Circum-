@@ -9,6 +9,7 @@ const {verifiedStripePaidGbpSession} = require("./roth-ledger-core");
 const vanguardProtocol = require("./vanguard-protocol-core");
 const {classifyIris} = require("./iris-core");
 const {verifiedPhotoAnalysis} = require("./iris-photo-analysis");
+const {dispatchDeliveryRequest} = require("./send-package");
 
 const BASE_FARE_GBP = 5;
 const ADDITIONAL_FARE_PER_MILE_GBP = 1.5;
@@ -1246,12 +1247,12 @@ exports.createSenderPaymentSession = (stripe) => functions.https.onCall(async (d
       ...sessionBase,
       status: "checkout_created",
       paymentStatus: "checkout_created",
-        paymentMethod: requestedFallback,
-        checkoutMode: "web_checkout",
-        checkoutKey: requestedSessionKey,
-        checkoutAttempt,
-        checkoutUrl: checkoutSession.url,
-        checkoutSessionId: checkoutSession.id,
+      paymentMethod: requestedFallback,
+      checkoutMode: "web_checkout",
+      checkoutKey: requestedSessionKey,
+      checkoutAttempt,
+      checkoutUrl: checkoutSession.url,
+      checkoutSessionId: checkoutSession.id,
       stripeCustomerId: customerId,
       requestId,
       draftId: draftId || null,
@@ -1924,7 +1925,48 @@ async function createPaidDeliveryFromSession(stripe, sender, data) {
     rothAppliedAmount,
     rothDebitStatus: walletDebitRequired ? "completed" : payment.rothDebitStatus || "not_required",
   });
-  return {requestId, deliveryId: deliveryRef.id, idempotencyKey};
+  let dispatchResult = null;
+  try {
+    dispatchResult = await dispatchDeliveryRequest({
+      db,
+      requestId,
+      uid: sender.uid,
+      source: "createSenderPaidDelivery",
+    });
+    logSenderPaymentStage("delivery_dispatch_attempted", {
+      userId: sender.uid,
+      quoteId,
+      paymentSessionId,
+      requestId,
+      deliveryId: deliveryRef.id,
+      matchedRiders: Array.isArray(dispatchResult.closestRiders) ?
+        dispatchResult.closestRiders.length : 0,
+    });
+  } catch (error) {
+    await db.collection("dispatchInspections").doc(deliveryRef.id).set({
+      deliveryId: deliveryRef.id,
+      requestId,
+      status: "dispatch_failed",
+      source: "createSenderPaidDelivery",
+      error: text(error && error.message),
+      updatedAt: FieldValue.serverTimestamp(),
+    }, {merge: true});
+    console.error("Sender paid delivery dispatch failed", {
+      userId: sender.uid,
+      quoteId,
+      paymentSessionId,
+      requestId,
+      deliveryId: deliveryRef.id,
+      message: text(error && error.message),
+      code: text(error && error.code),
+    });
+  }
+  return {
+    requestId,
+    deliveryId: deliveryRef.id,
+    idempotencyKey,
+    dispatchStatus: dispatchResult ? "attempted" : "failed",
+  };
 }
 
 exports.createSenderPaidDelivery = (stripe) => functions.https.onCall(async (data, context) => {

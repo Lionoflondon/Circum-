@@ -60,7 +60,9 @@ const riderPayload = (riderId, rider) => {
   const vehicle = rider.vehicle || rider.vehicleDetails || {};
   return {
     courierName: cleanText(rider.fullName || rider.name || rider.displayName || rider.email, "Circum rider"),
-    phoneNumber: cleanText(rider.phone || rider.phoneNumber || rider.mobile),
+    phoneNumber: "",
+    contactMethod: "circum_relay",
+    maskedCommunicationOnly: true,
     locality: cleanText(rider.locality || rider.city),
     typeOfVehicle: cleanText(rider.vehicleType || vehicle.type, "Vehicle"),
     plateNumber: cleanText(rider.plateNumber || rider.vehicleRegistration || vehicle.registration),

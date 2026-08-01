@@ -34,6 +34,11 @@ service cloud.firestore {
       return signedIn() && request.auth.uid == userId;
     }
 
+    function canReadSenderTrustEvent() {
+      return isAdmin() ||
+        (signedIn() && resource.data.userId == request.auth.uid);
+    }
+
     function authEmail() {
       return signedIn() && request.auth.token.email is string
         ? request.auth.token.email
@@ -904,7 +909,7 @@ service cloud.firestore {
         isAssignedRider() ||
         canReadBusinessId(resource.data.businessId) ||
         isAvailableRiderJob();
-      allow create: if isAdmin() || isSafeDeliveryCreate();
+      allow create: if isAdmin();
       allow update: if isAdmin() ||
         isOwnDeliveryUpdate() ||
         isAssignedRiderUpdate();
@@ -993,6 +998,16 @@ service cloud.firestore {
             !hasUnsafeSelfUserTypeUpdate()
           )));
       allow delete: if hasRole('super_admin');
+    }
+
+    match /senderTrustEvents/{eventId} {
+      allow read: if canReadSenderTrustEvent();
+      allow create, update, delete: if false;
+    }
+
+    match /{path=**}/senderTrustEvents/{eventId} {
+      allow read: if canReadSenderTrustEvent();
+      allow create, update, delete: if false;
     }
 
     match /platformStats/legends {
