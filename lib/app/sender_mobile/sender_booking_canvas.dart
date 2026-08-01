@@ -710,24 +710,10 @@ class _SenderBookingCanvasState extends State<SenderBookingCanvas> {
   }
 
   void _requestBackendQuote(SenderBookingDraft draft) {
-    debugPrint(
-      'TRACE ENTRY _requestBackendQuote auth=${_uid != null} '
-      'draftStep=${draft.step} pickup=${draft.pickupAddress} '
-      'dropoff=${draft.dropoffAddress} pickupCoords=${draft.pickupLat},${draft.pickupLng} '
-      'dropoffCoords=${draft.dropoffLat},${draft.dropoffLng}',
-    );
     _restoreRouteFromDraftIfReady(draft);
     final engine = context.read<SendPackageBloc>().state;
     final routeReady = _routeReadyForQuote(engine, draft);
-    debugPrint(
-      'TRACE STATE _requestBackendQuote routeReady=$routeReady '
-      'distance=${engine.distance} pickup=${engine.pickupCoordinate?.lat},${engine.pickupCoordinate?.lng} '
-      'dropoff=${engine.desinationCoordinate?.lat},${engine.desinationCoordinate?.lng} '
-      'iris=${engine.canonicalIrisResult != null} loading=${engine.isSenderQuoteLoading} '
-      'quoteError=${engine.senderQuoteError}',
-    );
     if (!routeReady) {
-      debugPrint('TRACE EARLY RETURN _requestBackendQuote reason=route-not-ready');
       return;
     }
     final business = BusinessJourneyScope.maybeOf(context);
@@ -748,11 +734,9 @@ class _SenderBookingCanvasState extends State<SenderBookingCanvas> {
       business?.businessId ?? '',
     ].join('|');
     if (_lastBackendQuoteKey == quoteKey && engine.senderQuoteError.isEmpty) {
-      debugPrint('TRACE EARLY RETURN _requestBackendQuote reason=duplicate-quote-key');
       return;
     }
     _lastBackendQuoteKey = quoteKey;
-    debugPrint('TRACE DISPATCH createSenderBookingQuote key=$quoteKey');
     context.read<SendPackageBloc>().add(
           RequestSenderBookingQuote(
             selectedSpeed: draft.selectedOption,
@@ -785,7 +769,6 @@ class _SenderBookingCanvasState extends State<SenderBookingCanvas> {
         weightLabel: parsed == null ? '' : '${parsed.toStringAsFixed(1)}kg',
       ),
     );
-    debugPrint('TRACE DISPATCH COMPLETE createSenderBookingQuote');
   }
 
   Future<void> _pickParcelPhoto() async {
@@ -3127,14 +3110,7 @@ class _OptionsPanel extends StatelessWidget {
 
   void _requestQuote(BuildContext context, SenderBookingDraft draft) {
     final engine = context.read<SendPackageBloc>().state;
-    debugPrint(
-      'TRACE ENTRY _OptionsPanel._requestQuote draftStep=${draft.step} '
-      'pickupCoords=${draft.pickupLat},${draft.pickupLng} '
-      'dropoffCoords=${draft.dropoffLat},${draft.dropoffLng} '
-      'distance=${engine.distance}',
-    );
     if (!_routeReadyForQuote(engine, draft)) {
-      debugPrint('TRACE EARLY RETURN _OptionsPanel._requestQuote reason=route-not-ready');
       return;
     }
     final iris = engine.canonicalIrisResult;
