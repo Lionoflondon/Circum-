@@ -4,53 +4,44 @@ This document is the permanent architecture law for Circum.
 
 Circum is one platform composed of independent products. Product source is isolated. The platform backend is intentionally shared.
 
-## Canonical Products
+## Products
 
-1. Sender Mobile App
-   - Repository: Circum-
-   - Entrypoint: `lib/main.dart`
-   - Surface identity: `circum-sender-mobile`
-   - Build/deployment: native Android/iOS only
-   - Must not share startup, routing, bootstrap, or hosting with Sender Web, Rider Mobile, Rider Web, Website, or Admin.
+1. Circum Website
+   - Sender Web
+   - Rider Web
+   - Website shell
+   - Website routing
+   - Website authentication
+   - Website assets
+   - Website deployment
 
-2. Sender Web
-   - Repository: Circum-
-   - Entrypoint: `lib/app/sender_mobile/sender_mobile_preview.dart`
-   - Hosting target: `hosting:app`
-   - Build directory: `build/sender_app_web`
-   - Surface identity: `circum-sender-web`
-   - Must not share startup, router, Flutter bootstrap, hosting target, or build directory with Sender Mobile, Rider Mobile, Rider Web, Website, or Admin.
+2. Sender App
+   - Sender mobile
+   - Wallet
+   - Booking
+   - Tracking
+   - Notifications
+   - Profile
+   - Payments
+   - Mobile navigation
 
-3. Rider Mobile App
-   - Repository: Circum-Rider
-   - Entrypoint: `lib/main.dart`
-   - Surface identity: `circum-rider-mobile`
-   - Build/deployment: native Android/iOS only
-   - Must not share startup, routing, bootstrap, or hosting with Rider Web, Sender Mobile, Sender Web, Website, or Admin.
+3. Rider App
+   - Rider mobile
+   - Jobs
+   - Tracking
+   - GPS
+   - Earnings
+   - Documents
+   - Vehicles
+   - Rider navigation
 
-4. Rider Web
-   - Repository: Circum-Rider
-   - Entrypoint: `lib/main_rider_web.dart`
-   - Hosting site: `circum-rider-2797c`
-   - Build directory: `build/web`
-   - Surface identity: `circum-rider-web`
-   - Must not share startup, router, Flutter bootstrap, hosting target, or build directory with Rider Mobile, Sender Mobile, Sender Web, Website, or Admin.
-
-5. Circum Website
-   - Repository: Circum-
-   - Entrypoint: `lib/main_public_web.dart`
-   - Hosting target: `hosting:public`
-   - Build directory: `build/public_web`
-   - Surface identity: `circum-public-web`
-   - May link to product entrypoints, but does not own Sender Web or Rider Web startup/runtime.
-
-6. Admin
+4. Admin
    - Admin UI
    - Review queues
    - Admin routing
    - Admin deployment
 
-7. Backend
+5. Backend
    - Cloud Functions
    - Firestore Rules
    - Storage Rules
@@ -75,57 +66,8 @@ Forbidden:
 
 - Shared product source between Website, Sender App, Rider App, and Admin.
 - Cross-product imports.
-- Shared startup entrypoints.
-- Shared Flutter web bootstrap files.
-- Shared hosting targets.
-- Shared build directories.
-- Shared product routers.
 - Shared widgets, screens, routes, navigation, controllers, blocs, providers, repositories, models, services, helpers, or utilities between products.
 - Product configuration imported by another product.
-
-## Backend Authority Rule
-
-Backend authority is mandatory for all operational state.
-
-Clients may render, validate user input for usability, hold local preferences,
-hold local cache, and save draft form state. Clients must not be authoritative
-for delivery lifecycle, dispatch, identity, verification, payments, Roth, Wallet,
-IRIS, Health+, Gifts, Vanguard, Business, chat, notifications, tracking, proof
-of delivery, or Admin recovery.
-
-New operational features must use this flow:
-
-```text
-Client -> Callable/backend trigger -> Backend validation -> Firestore/Storage -> Realtime update -> Client
-```
-
-New features must not use this flow:
-
-```text
-Client -> Firestore operational write
-```
-
-`scripts/backend_authority_guard.js` enforces this for new client-side code in
-CI. Existing legacy writes must be migrated behind backend authority as scoped
-production-hardening work.
-
-## Entrypoint Matrix
-
-| Product | Entrypoint | Hosting/build target | Identity |
-| --- | --- | --- | --- |
-| Sender Mobile App | `lib/main.dart` | Native Android/iOS | `circum-sender-mobile` |
-| Sender Web | `lib/app/sender_mobile/sender_mobile_preview.dart` | `hosting:app`, `build/sender_app_web` | `circum-sender-web` |
-| Rider Mobile App | `Circum-Rider/lib/main.dart` | Native Android/iOS | `circum-rider-mobile` |
-| Rider Web | `Circum-Rider/lib/main_rider_web.dart` | `circum-rider-2797c`, `build/web` | `circum-rider-web` |
-
-## Recovery Procedure
-
-1. Identify the affected product.
-2. Build only that product from its canonical entrypoint.
-3. Verify the generated artifact identity and `gitCommit` metadata.
-4. Run product ownership and deployment guards.
-5. Deploy only the product's hosting target or native release lane.
-6. If any cross-product file changes, stop and split the work before release.
 
 ## Certification Standard
 
@@ -138,9 +80,5 @@ Architecture passes only when:
 - Cross-product imports: 0.
 - Transitive dependency intersections: 0, excluding backend.
 - Product ownership violations: 0.
-- Entrypoint overlap: 0.
-- Build directory overlap: 0.
-- Hosting target overlap: 0.
-- Missing artifact metadata: 0.
 
 The backend is one platform. The products are independent. Shared product source code is never permitted.
