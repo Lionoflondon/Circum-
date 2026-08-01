@@ -4494,9 +4494,7 @@ class _PaymentPanelState extends State<_PaymentPanel> {
   @override
   void initState() {
     super.initState();
-    debugPrint('PAYTRACE ENTER sender_booking_canvas.dart:4495 payment-methods-init');
     _paymentMethodsFuture = _loadPaymentMethods();
-    debugPrint('PAYTRACE EXIT sender_booking_canvas.dart:4498 payment-methods-init');
   }
 
   @override
@@ -4526,7 +4524,6 @@ class _PaymentPanelState extends State<_PaymentPanel> {
 
   @override
   Widget build(BuildContext context) {
-    debugPrint('PAYTRACE ENTER sender_booking_canvas.dart:4527 payment-build status=${engine.senderPaymentStatus} loading=${engine.isSenderPaymentLoading} checkout=${engine.senderPaymentCheckoutUrl != null}');
     final total = engine.senderQuoteTotal;
     final backendRothCredits = engine.senderRothBalance;
     final rothAvailable = backendRothCredits != null;
@@ -4551,7 +4548,6 @@ class _PaymentPanelState extends State<_PaymentPanel> {
         engine.senderDeliveryError.isEmpty) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (!context.mounted) return;
-        debugPrint('PAYTRACE CALLBACK paid-delivery');
         _createPaidDelivery(context, engine);
       });
     }
@@ -4564,7 +4560,6 @@ class _PaymentPanelState extends State<_PaymentPanel> {
         !engine.isSenderDeliveryCreating) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (!context.mounted) return;
-        debugPrint('PAYTRACE CALLBACK confirm-card');
         onDraft(draft.copyWith(cardConfirmationStarted: true));
         _confirmCardPayment(context, engine.senderPaymentClientSecret!, engine);
       });
@@ -4577,7 +4572,6 @@ class _PaymentPanelState extends State<_PaymentPanel> {
         !draft.cardConfirmationStarted) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (!context.mounted) return;
-        debugPrint('PAYTRACE CALLBACK open-checkout url=${engine.senderPaymentCheckoutUrl}');
         onDraft(draft.copyWith(cardConfirmationStarted: true));
         _openStripeCheckout(context, engine.senderPaymentCheckoutUrl!);
       });
@@ -4968,7 +4962,6 @@ class _PaymentPanelState extends State<_PaymentPanel> {
     double? total,
     SenderPaymentSplit? split,
   ) async {
-    debugPrint('PAYTRACE ENTER sender_booking_canvas.dart:4965 start-payment total=$total split=$split');
     if (total == null || split == null || !split.canSubmit) return;
     final method = split.fullyCoveredByRoth
         ? 'Roth'
@@ -4981,7 +4974,6 @@ class _PaymentPanelState extends State<_PaymentPanel> {
       amount: '£${total.toStringAsFixed(2)}',
     );
     if (!confirmed || !context.mounted) return;
-    debugPrint('PAYTRACE CONFIRMED payment-method=$method');
     onDraft(
       draft.copyWith(
         paymentStatus: SenderPaymentStatus.processing,
@@ -5010,18 +5002,15 @@ class _PaymentPanelState extends State<_PaymentPanel> {
             deliveryPayload: kIsWeb ? _bookingPayload(engine) : const {},
           ),
         );
-    debugPrint('PAYTRACE EXIT start-payment dispatched');
   }
 
   Future<void> _openStripeCheckout(BuildContext context, String url) async {
-    debugPrint('PAYTRACE ENTER open-stripe-checkout url=$url');
     final checkoutUrl = Uri.tryParse(url);
     if (checkoutUrl == null || checkoutUrl.host.isEmpty) {
       onDraft(draft.copyWith(paymentStatus: SenderPaymentStatus.failed));
       return;
     }
     final opened = await launchUrl(checkoutUrl, webOnlyWindowName: '_self');
-    debugPrint('PAYTRACE AFTER open-stripe-checkout opened=$opened');
     if (!opened && context.mounted) {
       onDraft(draft.copyWith(paymentStatus: SenderPaymentStatus.failed));
     }

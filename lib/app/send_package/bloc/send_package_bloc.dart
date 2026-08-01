@@ -969,7 +969,6 @@ class SendPackageBloc extends Bloc<SendPackageEvent, SendPackageState> {
     StartSenderPaymentSession event,
     Emitter<SendPackageState> emit,
   ) async {
-    debugPrint('PAYTRACE ENTER send_package_bloc.dart:969 quote=${state.senderQuoteId}');
     if (state.senderQuoteId == null || state.senderQuoteId!.isEmpty) {
       emit(
         state.copyWith(
@@ -993,7 +992,6 @@ class SendPackageBloc extends Bloc<SendPackageEvent, SendPackageState> {
       ),
     );
     try {
-      debugPrint('PAYTRACE BEFORE createSenderPaymentSession');
       final data = await _callableMap('createSenderPaymentSession', {
         'quoteId': state.senderQuoteId,
         'rothEnabled': event.rothEnabled,
@@ -1007,14 +1005,11 @@ class SendPackageBloc extends Bloc<SendPackageEvent, SendPackageState> {
         if (event.deliveryPayload.isNotEmpty)
           'deliveryPayload': event.deliveryPayload,
       });
-      debugPrint('PAYTRACE AFTER createSenderPaymentSession keys=${data.keys.toList()} status=${data['paymentStatus'] ?? data['status']} requestId=${data['requestId'] ?? data['deliveryId']}');
       final requestId = '${data['requestId'] ?? data['deliveryId'] ?? ''}';
       final paymentStatus =
           '${data['paymentStatus'] ?? data['status'] ?? ''}'.toLowerCase();
       final paymentSucceeded = paymentStatus == 'succeeded';
-      debugPrint('PAYTRACE DECODE status=$paymentStatus succeeded=$paymentSucceeded requestId=$requestId');
       if (requestId.isNotEmpty && paymentSucceeded) {
-        debugPrint('PAYTRACE ENTER paid-dispatch');
         try {
           await FirebaseFunctions.instanceFor(
             region: 'us-central1',
@@ -1027,9 +1022,7 @@ class SendPackageBloc extends Bloc<SendPackageEvent, SendPackageState> {
         final prefs = await SharedPreferences.getInstance();
         await prefs.setString('activeRequest', requestId);
         add(WatchActiveDelivery(requestId: requestId));
-        debugPrint('PAYTRACE EXIT paid-dispatch');
       }
-      debugPrint('PAYTRACE BEFORE payment-state-emit');
       emit(
         state.copyWith(
           isSenderPaymentLoading: false,
@@ -1057,8 +1050,7 @@ class SendPackageBloc extends Bloc<SendPackageEvent, SendPackageState> {
           senderPaymentError: '',
         ),
       );
-      debugPrint('PAYTRACE AFTER payment-state-emit');
-      if (requestId.isNotEmpty) {
+      if (requestId.isNotEmpty && paymentSucceeded) {
         add(SetDrawerHeight(minDrawerHeight: 180, maxDrawerHeight: 0.5.sh));
       }
     } on FirebaseFunctionsException catch (error) {
@@ -1082,7 +1074,6 @@ class SendPackageBloc extends Bloc<SendPackageEvent, SendPackageState> {
         ),
       );
     } catch (error) {
-      debugPrint('PAYTRACE THROW createSenderPaymentSession error=$error stack=${StackTrace.current}');
       emit(
         state.copyWith(
           isSenderPaymentLoading: false,
