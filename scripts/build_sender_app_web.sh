@@ -42,7 +42,6 @@ echo "Identity: circum-sender-web"
 echo "Build hash: $BUILD_HASH"
 echo "Release tag: $RELEASE_TAG"
 
-"$FLUTTER_BIN" clean
 rm -rf "$OUTPUT_DIR"
 "$FLUTTER_BIN" build web \
   --release \
