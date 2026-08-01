@@ -130,16 +130,16 @@ class SendPackageBloc extends Bloc<SendPackageEvent, SendPackageState> {
   }
 
   @override
-  Future<void> close() {
-    _activeDeliverySubscription?.cancel();
-    _activeDeliveryLiveLocationSubscription?.cancel();
+  Future<void> close() async {
+    await _activeDeliverySubscription?.cancel();
+    await _activeDeliveryLiveLocationSubscription?.cancel();
     return super.close();
   }
 
-  void _listenToActiveDelivery(String requestId) {
+  Future<void> _listenToActiveDelivery(String requestId) async {
     final normalized = requestId.trim();
     if (normalized.isEmpty) return;
-    _activeDeliverySubscription?.cancel();
+    await _activeDeliverySubscription?.cancel();
     _activeDeliverySubscription =
         db.collection('deliveryRequests').doc(normalized).snapshots().listen(
       (doc) {
@@ -147,7 +147,7 @@ class SendPackageBloc extends Bloc<SendPackageEvent, SendPackageState> {
           unawaited(_resolveActiveDeliveryByRequestId(normalized));
           return;
         }
-        _listenToActiveDeliveryLiveLocation(doc.id);
+        unawaited(_listenToActiveDeliveryLiveLocation(doc.id));
         add(
           ActiveDeliverySnapshotChanged(
             data: {...?doc.data(), 'id': doc.id},
@@ -218,13 +218,13 @@ class SendPackageBloc extends Bloc<SendPackageEvent, SendPackageState> {
     }
   }
 
-  void _listenToActiveDeliveryLiveLocation(String deliveryId) {
+  Future<void> _listenToActiveDeliveryLiveLocation(String deliveryId) async {
     final normalized = deliveryId.trim();
     if (normalized.isEmpty || normalized == _activeDeliveryLiveLocationId) {
       return;
     }
     _activeDeliveryLiveLocationId = normalized;
-    _activeDeliveryLiveLocationSubscription?.cancel();
+    await _activeDeliveryLiveLocationSubscription?.cancel();
     _activeDeliveryLiveLocationSubscription = db
         .collection('activeDeliveries')
         .doc(normalized)
@@ -1349,11 +1349,11 @@ class SendPackageBloc extends Bloc<SendPackageEvent, SendPackageState> {
     }
   }
 
-  void _handleWatchActiveDeliveryEvent(
+  Future<void> _handleWatchActiveDeliveryEvent(
     WatchActiveDelivery event,
     Emitter<SendPackageState> emit,
-  ) {
-    _listenToActiveDelivery(event.requestId);
+  ) async {
+    await _listenToActiveDelivery(event.requestId);
   }
 
   void _handleActiveDeliverySnapshotChanged(
