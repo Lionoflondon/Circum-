@@ -6,7 +6,22 @@ const {getAuth} = require("firebase-admin/auth");
 const {FieldValue} = require("firebase-admin/firestore");
 const stripeConfig = functions.config().stripe || {};
 const {resolveStripeRuntimeConfig} = require("./stripe-config");
-const stripe = require("stripe")(resolveStripeRuntimeConfig({config: stripeConfig}).secretKey);
+let cachedStripe = null;
+
+function getStripeClient() {
+  if (!cachedStripe) {
+    const runtimeConfig = resolveStripeRuntimeConfig({config: stripeConfig});
+    cachedStripe = require("stripe")(runtimeConfig.secretKey);
+    cachedStripe._circumStripeMode = runtimeConfig.mode;
+  }
+  return cachedStripe;
+}
+
+const stripe = new Proxy({}, {
+  get(_target, property) {
+    return getStripeClient()[property];
+  },
+});
 const {
   calculateAuthoritativeHealthPlusPricing,
   healthPlusPricingInputFromBooking,

@@ -10,10 +10,32 @@ const {
   assertStripeEventMode,
   resolveStripeRuntimeConfig,
 } = require("./stripe-config");
-const stripeRuntimeConfig = resolveStripeRuntimeConfig({
-  config: stripeConfig,
+let cachedStripeRuntimeConfig = null;
+let cachedStripe = null;
+
+function getStripeRuntimeConfig() {
+  if (!cachedStripeRuntimeConfig) {
+    cachedStripeRuntimeConfig = resolveStripeRuntimeConfig({
+      config: stripeConfig,
+    });
+  }
+  return cachedStripeRuntimeConfig;
+}
+
+function getStripeClient() {
+  if (!cachedStripe) {
+    const runtimeConfig = getStripeRuntimeConfig();
+    cachedStripe = require("stripe")(runtimeConfig.secretKey);
+    cachedStripe._circumStripeMode = runtimeConfig.mode;
+  }
+  return cachedStripe;
+}
+
+const stripe = new Proxy({}, {
+  get(_target, property) {
+    return getStripeClient()[property];
+  },
 });
-const stripe = require("stripe")(stripeRuntimeConfig.secretKey);
 const stripeConnectClient = () => stripe;
 
 const sendPackage = require("./send-package");
@@ -407,8 +429,9 @@ exports.StripeWebhook = functions
         });
       } catch (error) {
         console.error("Stripe webhook configuration failed closed", {
-          mode: stripeRuntimeConfig.mode,
-          firebaseProject: stripeRuntimeConfig.firebaseProject,
+          mode: webhookRuntimeConfig && webhookRuntimeConfig.mode,
+          firebaseProject:
+            webhookRuntimeConfig && webhookRuntimeConfig.firebaseProject,
           reason:
           error && error.message ? error.message : "invalid_configuration",
         });
@@ -419,7 +442,7 @@ exports.StripeWebhook = functions
 
       let event;
       try {
-        event = stripe.webhooks.constructEvent(
+        event = getStripeClient().webhooks.constructEvent(
             req.rawBody,
             sig,
             webhookRuntimeConfig.webhookSecret,
