@@ -528,6 +528,17 @@ exports.submitRiderApplication = functions.https.onCall(async (data, context) =>
       termsAcceptedAt: now,
       updatedAt: now,
     }, {merge: true});
+    transaction.set(riderRef, {
+      vehicleType: application.vehicleType,
+      vehicleRegistration: application.vehicleRegistration,
+      vehicle: {
+        ...vehicle,
+        type: application.vehicleType,
+        registration: application.vehicleRegistration,
+        plateNumber: application.vehicleRegistration,
+      },
+      updatedAt: now,
+    }, {merge: true});
     transaction.set(eventRef, audit("rider_application_submitted", rider, {
       applicationId: applicationRef.id,
       status: "submitted",
