@@ -712,7 +712,7 @@ class _SenderBookingCanvasState extends State<SenderBookingCanvas> {
   void _requestBackendQuote(SenderBookingDraft draft) {
     _restoreRouteFromDraftIfReady(draft);
     final engine = context.read<SendPackageBloc>().state;
-    if (!_routeReadyForQuote(engine)) return;
+    if (!_routeReadyForQuote(engine, draft)) return;
     final business = BusinessJourneyScope.maybeOf(context);
     final iris = engine.canonicalIrisResult;
     final requiresVanguard =
@@ -914,7 +914,7 @@ class _SenderBookingCanvasState extends State<SenderBookingCanvas> {
         if ((_draft.step == SenderBookingStep.options ||
                 _draft.step == SenderBookingStep.review ||
                 _draft.step == SenderBookingStep.payment) &&
-            _routeReadyForQuote(engine) &&
+            _routeReadyForQuote(engine, _draft) &&
             !engine.isSenderQuoteLoading) {
           WidgetsBinding.instance.addPostFrameCallback((_) {
             if (!mounted) return;
@@ -2974,9 +2974,16 @@ List<String> _customerIrisReasons(dynamic iris, SenderBookingDraft draft) {
   return reasons.toSet().toList(growable: false);
 }
 
-bool _routeReadyForQuote(SendPackageState engine) {
+bool _routeReadyForQuote(
+  SendPackageState engine, [
+  SenderBookingDraft? draft,
+]) {
   return engine.distance != null ||
-      engine.pickupCoordinate != null && engine.desinationCoordinate != null;
+      engine.pickupCoordinate != null && engine.desinationCoordinate != null ||
+      draft?.pickupLat != null &&
+          draft?.pickupLng != null &&
+          draft?.dropoffLat != null &&
+          draft?.dropoffLng != null;
 }
 
 class _OptionsPanel extends StatelessWidget {
@@ -3100,7 +3107,7 @@ class _OptionsPanel extends StatelessWidget {
 
   void _requestQuote(BuildContext context, SenderBookingDraft draft) {
     final engine = context.read<SendPackageBloc>().state;
-    if (!_routeReadyForQuote(engine)) return;
+    if (!_routeReadyForQuote(engine, draft)) return;
     final iris = engine.canonicalIrisResult;
     final business = BusinessJourneyScope.maybeOf(context);
     final includedVanguard = _irisRequiresIncludedVanguard(
