@@ -287,7 +287,7 @@ test("parser understands natural language quantities and compound number words",
     ["seven bicycles", 98],
     ["eight parcels", 16],
     ["nine tablets", 18],
-    ["ten books", 120],
+    ["ten books", 6],
     ["eleven flowers", 11],
     ["twelve bottles", 12],
     ["twenty-one laptops", 42],
@@ -314,7 +314,7 @@ test("parser understands conversational quantifiers without confusing model numb
     ["a dozen roses", 0.96],
     ["half a dozen roses", 0.48],
     ["a couple of laptops", 4],
-    ["a few books", 36],
+    ["a few books", 1.8],
     ["several parcels", 8],
     ["many boxes", 20],
     ["lots of clothes", 5],
@@ -381,14 +381,14 @@ test("multi-item reasoning extracts each item and combines logistics requirement
     ["TV + Xbox + games", 34.2, "Electronics", "van", ["Fragile", "Van Required"], "tv", 3],
     ["Flowers, cake and champagne", 5.5, "Food & Consumables", "any", ["Perishable", "Keep Upright", "Fragile"], "cake", 3],
     ["Mirror, wardrobe and mattress", 68, "Furniture & Home", "van", ["Fragile", "Van Required", "Two Person Lift"], "mattress", 3],
-    ["Three laptops, two monitors and a printer", 25, "Business & Commercial", "van", ["Fragile", "Bulky"], "printer", 3],
+    ["Three laptops, two monitors and a printer", 25, "Business & Commercial", "any", ["Fragile", "Bulky"], "printer", 3],
     ["Dining table with four chairs", 44, "Furniture & Home", "van", ["Bulky", "Van Required"], "dining_chair", 2],
     ["Laptop + flowers", 3, "Electronics", "any", ["Fragile", "Perishable", "Keep Upright"], "laptop", 2],
     ["TV + cake", 35, "Electronics", "van", ["Fragile", "Perishable", "Van Required"], "tv", 2],
     ["Mirror + chair", 14, "Fragile & Valuable", "van", ["Fragile", "Bulky"], "mirror", 2],
     ["Medicine + food", 3.5, "Food & Consumables", "any", ["Temperature Sensitive", "Perishable"], "food", 2],
     ["Artwork + bicycle", 19, "Personal Items & Luggage", "van", ["Fragile", "High Value", "Van Required"], "bicycle", 2],
-    ["Printer + monitor", 17, "Business & Commercial", "van", ["Fragile", "Bulky"], "printer", 2],
+    ["Printer + monitor", 17, "Business & Commercial", "any", ["Fragile", "Bulky"], "printer", 2],
     ["Engine block + tyres", 85, "Tools & Machinery", "van", ["Bulky", "Van Required", "Two Person Lift"], "construction_materials", 2],
   ];
   for (const [description, expectedKg, expectedCategory, expectedVehicle, expectedFlags, expectedDominant, expectedItemCount] of cases) {
@@ -404,16 +404,34 @@ test("multi-item reasoning extracts each item and combines logistics requirement
   }
 });
 
+test("two printers are car suitable below 40kg and van required at 40kg", () => {
+  const compact = classifyIris({
+    description: "2 printers",
+    declaredWeightText: "15kg",
+  });
+  const heavy = classifyIris({
+    description: "2 printers",
+    declaredWeightText: "40kg",
+  });
+
+  assert.equal(compact.recommendation.estimatedWeightKg, 30);
+  assert.equal(compact.internal.riderMatching.vehicleRequired, "any");
+  assert.ok(!compact.recommendation.handlingFlags.includes("Van Required"));
+  assert.equal(heavy.recommendation.estimatedWeightKg, 40);
+  assert.equal(heavy.internal.riderMatching.vehicleRequired, "van");
+  assert.ok(heavy.recommendation.handlingFlags.includes("Van Required"));
+});
+
 test("multi-item reasoning understands containers by their contents", () => {
   const cases = [
-    ["Suitcase containing books", "Personal Items & Luggage", 12, "books"],
+    ["Suitcase containing books", "Personal Items & Luggage", 12, "book_bundle"],
     ["Box of clothes", "Clothing & Fashion", 0.5, "clothes"],
     ["Crate of drinks", "Food & Consumables", 1, "drinks"],
     ["Bag of tools", "Tools & Machinery", 15, "tools"],
     ["Envelope containing passports", "Documents", 0.3, "passport_documents"],
     ["Toolbox", "Tools & Machinery", 15, "tools"],
     ["Toolbox full of tools", "Tools & Machinery", 15, "tools"],
-    ["Backpack with a laptop and two books", "Personal Items & Luggage", 26, "books"],
+    ["Backpack with a laptop and two books", "Electronics", 3.2, "laptop"],
   ];
   for (const [description, expectedCategory, expectedKg, expectedDominant] of cases) {
     const result = classifyIris({description});
@@ -429,7 +447,7 @@ test("multi-item reasoning understands containers by their contents", () => {
 
 test("IRIS RC1 certification examples preserve item extraction and dominant logistics", () => {
   const cases = [
-    ["Printer with toner", 16, "Business & Commercial", "van", "printer", 2],
+    ["Printer with toner", 16, "Business & Commercial", "any", "printer", 2],
     ["Backpack with laptop and charger", 2.1, "Electronics", "any", "laptop", 2],
     ["Jewellery + safe", 40.1, "Fragile & Valuable", "van", "safe", 2],
     ["Blood samples + flowers", 1.5, "Food & Consumables", "any", "flowers_plants", 2],
@@ -440,7 +458,7 @@ test("IRIS RC1 certification examples preserve item extraction and dominant logi
     ["Bike + printer", 29, "Business & Commercial", "van", "printer", 2],
     ["Mattress + suitcase", 38, "Furniture & Home", "van", "mattress", 2],
     ["Table + dining chairs", 26, "Furniture & Home", "van", "table", 2],
-    ["Engine + books", 87, "Tools & Machinery", "van", "construction_materials", 2],
+    ["Engine + books", 75.6, "Tools & Machinery", "van", "construction_materials", 2],
   ];
   for (const [description, expectedKg, expectedCategory, expectedVehicle, expectedDominant, expectedItemCount] of cases) {
     const result = classifyIris({description});
@@ -519,6 +537,115 @@ test("IRIS RC1 prohibited certification examples cannot bypass policy", () => {
   assert.equal(classifyIris({description: "🐶"}).compliance.status, "referral_required");
 });
 
+test("terminal lifecycle states are never dispatchable before IRIS classification", () => {
+  for (const status of ["completed", "cancelled", "canceled", "expired", "archived", "failed", "refunded", "closed"]) {
+    const decision = dispatchComplianceDecision({
+      status,
+      matchingStatus: "available",
+      packageDescription: "laptop",
+      iris: {
+        status: "allowed",
+        compliance: {status: "allowed"},
+        serviceability: {status: "serviceable"},
+      },
+    });
+    assert.equal(decision.dispatchable, false, status);
+    assert.equal(decision.reason, "terminal_delivery_status", status);
+    assert.equal(isDispatchable({status, matchingStatus: "available", packageDescription: "laptop"}), false, status);
+  }
+});
+
+test("separator and Unicode obfuscation cannot bypass prohibited policy", () => {
+  for (const description of [
+    "illegal drugs",
+    "i l l e g a l   d r u g s",
+    "i-l-l-e-g-a-l-drugs",
+    "i_l_l_e_g_a_l_drugs",
+    "i.l.l.e.g.a.l drugs",
+    "compressed gas",
+    "c-o-m-p-r-e-s-s-e-d gas",
+    "compressed___gas",
+    "radioactive material",
+    "r_a_d_i_o_a_c_t_i_v_e material",
+    "r.a.d.i.o.a.c.t.i.v.e. material",
+    "g\u200bu\u200bn",
+  ]) {
+    const result = classifyIris({description});
+    assert.equal(result.compliance.status, "prohibited", description);
+    assert.equal(result.serviceability.status, "manual_review", description);
+    assert.equal(dispatchComplianceDecision({
+      status: "requested",
+      matchingStatus: "available",
+      packageDescription: description,
+      iris: {status: "allowed", compliance: {status: "allowed"}, serviceability: {status: "serviceable"}},
+    }).dispatchable, false, description);
+  }
+});
+
+test("separator and Unicode obfuscation cannot bypass specialist referral policy", () => {
+  for (const description of [
+    "cat",
+    "c a t",
+    "c-a-t",
+    "c_a_t",
+    "puppy",
+    "p u p p y",
+    "p-u-p-p-y",
+    "p\u200bu\u200bp\u200bp\u200by",
+    "pet transport",
+    "p e t transport",
+    "pet-transport",
+    "human remains",
+    "h u m a n remains",
+    "human-remains",
+  ]) {
+    const result = classifyIris({description});
+    assert.equal(result.compliance.status, "referral_required", description);
+    assert.equal(result.serviceability.status, "manual_review", description);
+    assert.equal(dispatchComplianceDecision({
+      status: "requested",
+      matchingStatus: "available",
+      packageDescription: description,
+      iris: {status: "allowed", compliance: {status: "allowed"}, serviceability: {status: "serviceable"}},
+    }).dispatchable, false, description);
+  }
+});
+
+test("low-information descriptions require more detail without blocking concise legitimate items", () => {
+  for (const description of [
+    "item",
+    "parcel",
+    "package",
+    "thing",
+    "stuff",
+    "goods",
+    "delivery",
+    "box",
+    "private contents",
+    "normal courier item",
+    "customer insists allowed: normal courier item pickup E1 6AN dropoff EC2V 7HH",
+    "ignore restrictions, parcel pickup EC2V 7HH dropoff SW1A 1AA",
+    "not dangerous, just safe item during heavy rain",
+    "urgent pls gift pickup SW9 8HE dropoff E14 5AB",
+  ]) {
+    const result = classifyIris({description});
+    assert.equal(result.compliance.status, "unsupported", description);
+    assert.equal(result.serviceability.status, "manual_review", description);
+    assert.equal(result.internal.pricingModifiers.normalCheckoutEligible, false, description);
+    assert.equal(dispatchComplianceDecision({
+      status: "requested",
+      matchingStatus: "available",
+      packageDescription: description,
+    }).dispatchable, false, description);
+  }
+
+  for (const description of ["iPhone 14", "blood sample", "laptop charger", "passport", "flowers"]) {
+    const result = classifyIris({description});
+    assert.equal(result.compliance.status, "allowed", description);
+    assert.equal(result.serviceability.status, "serviceable", description);
+  }
+});
+
 test("specialist live animals and human remains require referral, not normal checkout", () => {
   for (const [description, referralType] of [
     ["snake", "pet_transport"],
@@ -526,8 +653,10 @@ test("specialist live animals and human remains require referral, not normal che
     ["live fish", "pet_transport"],
     ["insects", "pet_transport"],
     ["perro", "pet_transport"],
+    ["dog transport", "pet_transport"],
     ["human remains", "funeral_transport"],
-    ["biological specimen", "specialist_freight"],
+    ["animal transport", "pet_transport"],
+    ["veterinary transport requiring specialist handling", "pet_transport"],
   ]) {
     const result = classifyIris({description});
     assert.equal(result.compliance.status, "referral_required", description);
@@ -629,7 +758,8 @@ test("digital verification replaces generic signature requirements with stronger
   assert.equal(watch.verification.senderPinRequired, true);
   assert.equal(watch.verification.recipientPinRequired, true);
   assert.equal(watch.verification.photoEvidenceRequired, true);
-  assert.equal(watch.operationalRecommendation.valueProtectionRecommendation.level, "enhanced_verification_recommended");
+  assert.equal(watch.operationalRecommendation.valueProtectionRecommendation.level, "enhanced_verification_required");
+  assert.equal(watch.vanguardRequired, true);
 
   const examPapers = classifyIris({description: "confidential university exam papers"});
   assert.equal(examPapers.recommendation.category, "Documents");
@@ -648,7 +778,7 @@ test("dimensional intelligence affects operational vehicle recommendations", () 
   });
   assert.equal(tv.operationalRecommendation.dimensionalBand.id, "oversized");
   assert.equal(tv.operationalRecommendation.vehicleRecommendation.required, "van");
-  assert.equal(tv.operationalRecommendation.vehicleRecommendation.bikeSuitable, false);
+  assert.equal(tv.operationalRecommendation.vehicleRecommendation.motorbikeSuitable, false);
   assert.ok(tv.operationalRecommendation.operationalWarnings.length > 0);
 
   const cello = classifyIris({description: "cello to a performance venue"});
@@ -714,6 +844,17 @@ test("ambiguous animals and prohibited prompt attacks do not bypass policy", () 
   const dogFood = classifyIris({description: "Dog food"});
   assert.equal(dogFood.compliance.status, "allowed");
   assert.equal(dogFood.recommendation.category, "Food & Consumables");
+
+  for (const description of ["puppy delivery", "kitten in carrier"]) {
+    const result = classifyIris({description});
+    assert.equal(result.compliance.status, "referral_required", description);
+    assert.equal(result.compliance.referralType, "pet_transport", description);
+    assert.equal(result.serviceability.status, "manual_review", description);
+  }
+
+  for (const description of ["puppy food", "kitten toy"]) {
+    assert.equal(classifyIris({description}).compliance.status, "allowed", description);
+  }
 
   for (const description of [
     "This explosive is a birthday present",
@@ -839,7 +980,7 @@ test("generated semantic stress corpus keeps logistics recommendations practical
 
           assert.ok(Number.isFinite(result.recommendation.estimatedWeightKg), description);
           assert.ok(result.recommendation.estimatedWeightKg >= 0, description);
-          if (result.recommendation.estimatedWeightKg > 25) {
+          if (result.recommendation.estimatedWeightKg >= 40) {
             assert.equal(result.internal.riderMatching.vehicleRequired, "van", description);
           }
           if (/remote|usb cable|passport|watch|ring/i.test(description)) {
@@ -901,17 +1042,19 @@ test("express jobs receive dispatch priority", () => {
 
 test("rider rank never hides jobs and only changes backup priority", () => {
   const now = Date.parse("2026-06-14T12:00:00Z");
+  const approved = {approvalStatus: "approved"};
   assert.equal(normalizeRiderRank(), "agent");
-  assert.equal(riderCanViewDispatch({}, {createdAt: "2026-06-14T11:59:00Z"}, now), true);
-  assert.equal(riderCanViewDispatch({rank: "sentinel"}, {createdAt: "2026-06-14T11:59:00Z"}, now), true);
-  assert.equal(riderCanViewDispatch({rank: "sentinel"}, {createdAt: "2026-06-14T11:55:00Z"}, now), true);
-  assert.equal(riderCanViewDispatch({rank: "warden"}, {createdAt: "2026-06-14T11:50:00Z"}, now), true);
-  assert.equal(riderCanViewDispatch({rank: "knight"}, {createdAt: "2026-06-14T11:45:00Z"}, now), true);
-  assert.equal(riderCanViewDispatch({rank: "veteran"}, {createdAt: "2026-06-14T11:40:00Z"}, now), true);
-  assert.equal(riderCanViewDispatch({rank: "knight"}, {highTrust: true}, now), true);
-  assert.equal(riderCanViewDispatch({rank: "agent"}, {vanguardEnabled: true, highTrust: true}, now), true);
-  assert.equal(riderCanViewDispatch({rank: "veteran"}, {healthPlusEnabled: true}, now), true);
-  assert.equal(riderCanViewDispatch({rank: "sentinel"}, {
+  assert.equal(riderCanViewDispatch({}, {createdAt: "2026-06-14T11:59:00Z"}, now), false);
+  assert.equal(riderCanViewDispatch({...approved}, {createdAt: "2026-06-14T11:59:00Z"}, now), true);
+  assert.equal(riderCanViewDispatch({...approved, rank: "sentinel"}, {createdAt: "2026-06-14T11:59:00Z"}, now), true);
+  assert.equal(riderCanViewDispatch({...approved, rank: "sentinel"}, {createdAt: "2026-06-14T11:55:00Z"}, now), true);
+  assert.equal(riderCanViewDispatch({...approved, rank: "warden"}, {createdAt: "2026-06-14T11:50:00Z"}, now), true);
+  assert.equal(riderCanViewDispatch({...approved, rank: "knight"}, {createdAt: "2026-06-14T11:45:00Z"}, now), true);
+  assert.equal(riderCanViewDispatch({...approved, rank: "veteran"}, {createdAt: "2026-06-14T11:40:00Z"}, now), true);
+  assert.equal(riderCanViewDispatch({...approved, rank: "knight"}, {highTrust: true}, now), true);
+  assert.equal(riderCanViewDispatch({...approved, rank: "agent"}, {vanguardEnabled: true, highTrust: true}, now), true);
+  assert.equal(riderCanViewDispatch({...approved, rank: "veteran"}, {healthPlusEnabled: true}, now), true);
+  assert.equal(riderCanViewDispatch({...approved, rank: "sentinel"}, {
     vanguardEnabled: true,
     dispatchRankOverrideEnabled: true,
     dispatchAllowedRanks: ["sentinel"],
@@ -1001,6 +1144,36 @@ test("red-team quantity aggregation handles per-unit and nested container counts
   assert.equal(perUnit.recommendation.category, "Electronics");
   assert.equal(perUnit.internal.riderMatching.vehicleRequired, "van");
 
+  const twoPrinters15 = classifyIris({description: "two printers 15kg each"});
+  assert.equal(twoPrinters15.recommendation.estimatedWeightKg, 30);
+  assert.equal(twoPrinters15.internal.riderMatching.vehicleRequired, "any");
+  assert.equal(twoPrinters15.operationalRecommendation.vehicleRecommendation.carSuitable, true);
+  assert.equal(twoPrinters15.operationalRecommendation.vehicleRecommendation.vanSuitable, true);
+
+  const twoPrinters40 = classifyIris({description: "two printers 40kg each"});
+  assert.equal(twoPrinters40.recommendation.estimatedWeightKg, 80);
+  assert.equal(twoPrinters40.internal.riderMatching.vehicleRequired, "van");
+
+  const tenSofas = classifyIris({description: "ten sofa"});
+  assert.equal(tenSofas.recommendation.estimatedWeightKg, 450);
+  assert.equal(tenSofas.internal.riderMatching.vehicleRequired, "van");
+
+  const fiveToolboxes = classifyIris({description: "five toolbox"});
+  assert.equal(fiveToolboxes.recommendation.estimatedWeightKg, 75);
+  assert.equal(fiveToolboxes.internal.riderMatching.vehicleRequired, "van");
+
+  const fiveBoxesOfBooks = classifyIris({description: "five box of books"});
+  assert.equal(fiveBoxesOfBooks.recommendation.estimatedWeightKg, 60);
+  assert.equal(fiveBoxesOfBooks.internal.riderMatching.vehicleRequired, "van");
+
+  const twoBoxesOfBooks = classifyIris({description: "two boxes of books"});
+  assert.equal(twoBoxesOfBooks.recommendation.estimatedWeightKg, 24);
+  assert.equal(twoBoxesOfBooks.internal.riderMatching.vehicleRequired, "van");
+
+  const threeSofas = classifyIris({description: "three bags of sofa"});
+  assert.equal(threeSofas.recommendation.estimatedWeightKg, 135);
+  assert.equal(threeSofas.internal.riderMatching.vehicleRequired, "van");
+
   const nested = classifyIris({description: "3 boxes containing 4 laptops each"});
   assert.equal(nested.recommendation.estimatedWeightKg, 24);
   assert.equal(nested.internal.shipmentSummary.combinedWeightKg, 24);
@@ -1040,7 +1213,7 @@ test("vehicle suitability cannot contradict required vehicle", () => {
   assert.equal(vanRequired.internal.riderMatching.vehicleRequired, "van");
   assert.equal(vanRequired.operationalRecommendation.vehicleRecommendation.required, "van");
   assert.equal(vanRequired.operationalRecommendation.vehicleRecommendation.carSuitable, false);
-  assert.equal(vanRequired.operationalRecommendation.vehicleRecommendation.bikeSuitable, false);
+  assert.equal(vanRequired.operationalRecommendation.vehicleRecommendation.motorbikeSuitable, false);
 
   const ordinary = classifyIris({description: "documents"});
   assert.equal(ordinary.internal.riderMatching.vehicleRequired, "any");
@@ -1092,10 +1265,47 @@ test("realistic weak catalogue items classify into operationally useful families
 test("laboratory samples use medical handover policy instead of generic other", () => {
   const result = classifyIris({description: "laboratory samples"});
   assert.equal(result.recommendation.category, "Medical & Pharmacy");
+  assert.equal(result.workflow, "Health+");
   assert.ok(result.recommendation.handlingFlags.includes("Temperature Sensitive"));
   assert.equal(result.verification.recipientPinRequired, true);
   assert.equal(result.verification.verifiedRecipientRequired, true);
   assert.equal(result.verification.photoEvidenceRequired, true);
+});
+
+test("legitimate Health+ medical deliveries remain allowed and serviceable", () => {
+  const cases = [
+    "Blood sample for laboratory",
+    "Blood samples to hospital",
+    "Pathology specimen",
+    "Medical specimen",
+    "Diagnostic sample",
+    "Prescription collection",
+    "Pharmacy pickup",
+    "Insulin delivery",
+    "Vaccine transport",
+    "Medical equipment",
+    "Hospital documents",
+    "Clinic paperwork",
+    "GP referral",
+    "X-ray scan",
+    "MRI scan",
+    "Medical records",
+    "Urine sample",
+    "Tissue sample",
+    "Swab sample",
+    "Temperature-controlled medication",
+    "Biological specimen",
+  ];
+  for (const description of cases) {
+    const result = classifyIris({description});
+    assert.equal(result.recommendation.category, "Medical & Pharmacy", description);
+    assert.equal(result.compliance.status, "allowed", description);
+    assert.equal(result.serviceability.status, "serviceable", description);
+    assert.equal(result.workflow, "Health+", description);
+    assert.equal(result.verification.recipientPinRequired, true, description);
+    assert.equal(result.verification.verifiedRecipientRequired, true, description);
+    assert.equal(result.verification.photoEvidenceRequired, true, description);
+  }
 });
 
 test("declared dynamic London access concerns request live routing without claiming consultation", () => {

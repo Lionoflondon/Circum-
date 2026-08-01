@@ -12,16 +12,53 @@ test("announcement recipients use JavaScript arrays correctly", () => {
 
 test("notifications record delivery status, failures, and retries", () => {
   assert.match(source, /async function emitNotification/);
+  assert.match(source, /function redactContactFields/);
+  assert.match(source, /const safeData = redactContactFields\(data\)/);
+  assert.match(source, /data: \{\.\.\.safeData, destination\}/);
+  assert.match(source, /contactFieldPattern/);
+  assert.match(source, /notificationId:\s*ref\.id/);
+  assert.match(source, /correlationId/);
   assert.match(source, /deliveryStatus:\s*"persisted"/);
+  assert.match(source, /deliveryState:\s*"persisted"/);
   assert.match(source, /pushDeliveryStatus:\s*"pending"/);
   assert.match(source, /pushDeliveryStatus:\s*"sent"/);
   assert.match(source, /pushDeliveryStatus:\s*"failed"/);
   assert.match(source, /failureReason:\s*"push_token_missing"/);
+  assert.match(source, /pushProvider:\s*"fcm"/);
+  assert.match(source, /retryCount:\s*0/);
   assert.match(
       source,
       /deliveryAttempts:\s*FieldValue\.increment\(1\)/,
   );
+  assert.match(source, /retryCount:\s*FieldValue\.increment\(1\)/);
+  assert.match(source, /lastDeliveryAttemptAt/);
   assert.match(source, /retryable:\s*true/);
+});
+
+test("messages include backend-only diagnostic metadata", () => {
+  assert.match(source, /messageId:\s*messageRef\.id/);
+  assert.match(source, /conversationId:\s*chatId/);
+  assert.match(source, /recipientIds/);
+  assert.match(source, /correlationId/);
+  assert.match(source, /participantDisplayName/);
+  assert.match(source, /senderName/);
+  assert.match(source, /senderDisplayName/);
+  assert.match(source, /deliveryState:\s*"persisted"/);
+  assert.match(source, /retryCount:\s*0/);
+  assert.match(source, /notificationId:\s*null/);
+});
+
+test("legacy sendMessage delegates to canonical communication handler", () => {
+  const legacySource = fs.readFileSync("send-message.js", "utf8");
+  assert.match(
+      legacySource,
+      /communicationEngine\._sendCircumMessageHandler\(mapped, context\)/,
+  );
+  assert.match(legacySource, /error instanceof functions\.https\.HttpsError/);
+  assert.doesNotMatch(
+      legacySource,
+      /throw new functions\.https\.HttpsError\("internal", error\.message\)/,
+  );
 });
 
 test("notification retry is backend-authoritative and audited", () => {

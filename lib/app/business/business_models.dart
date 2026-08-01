@@ -27,6 +27,7 @@ class BusinessAccount {
   final String billingEmail;
   final String businessAddress;
   final String companyNumber;
+  final String companyCode;
   final String defaultPickupAddress;
   final List<Map<String, dynamic>> teamMembers;
   final List<String> connectedProducts;
@@ -46,6 +47,7 @@ class BusinessAccount {
     required this.billingEmail,
     required this.businessAddress,
     required this.companyNumber,
+    required this.companyCode,
     required this.defaultPickupAddress,
     required this.teamMembers,
     required this.connectedProducts,
@@ -57,10 +59,12 @@ class BusinessAccount {
   });
 
   factory BusinessAccount.fromMap(String id, Map<String, dynamic> data) {
-    final recognitions =
-        Map<String, dynamic>.from(data['recognitions'] as Map? ?? {});
-    final patron =
-        Map<String, dynamic>.from(recognitions['patron'] as Map? ?? {});
+    final recognitions = Map<String, dynamic>.from(
+      data['recognitions'] as Map? ?? {},
+    );
+    final patron = Map<String, dynamic>.from(
+      recognitions['patron'] as Map? ?? {},
+    );
     final pickups = (data['defaultPickupAddresses'] as List? ?? const [])
         .map((item) => '$item'.trim())
         .where((item) => item.isNotEmpty)
@@ -68,13 +72,17 @@ class BusinessAccount {
     return BusinessAccount(
       id: id,
       name: '${data['businessName'] ?? 'Business'}'.trim(),
-      status: '${data['status'] ?? 'pending'}'.trim().toLowerCase(),
+      status:
+          '${data['approvalStatus'] ?? data['status'] ?? data['businessStatus'] ?? 'pending'}'
+              .trim()
+              .toLowerCase(),
       contactName: '${data['contactName'] ?? ''}'.trim(),
       contactEmail: '${data['contactEmail'] ?? ''}'.trim(),
       phone: '${data['phone'] ?? ''}'.trim(),
       billingEmail: '${data['billingEmail'] ?? ''}'.trim(),
       businessAddress: '${data['businessAddress'] ?? ''}'.trim(),
       companyNumber: '${data['companyNumber'] ?? ''}'.trim(),
+      companyCode: '${data['companyCode'] ?? ''}'.trim(),
       defaultPickupAddress: pickups.isEmpty ? '' : pickups.first,
       teamMembers: (data['teamMembers'] as List? ?? const [])
           .whereType<Map>()
@@ -90,15 +98,16 @@ class BusinessAccount {
       paymentPreferences: Map<String, dynamic>.from(
         data['paymentPreferences'] as Map? ?? const {},
       ),
-      irisMoments: ((data['irisMoments'] ??
-                  data['moments'] ??
-                  data['businessMoments']) as List? ??
-              const [])
-          .whereType<Map>()
-          .map((item) => Map<String, dynamic>.from(item))
-          .toList(growable: false),
+      irisMoments:
+          ((data['irisMoments'] ?? data['moments'] ?? data['businessMoments'])
+                      as List? ??
+                  const [])
+              .whereType<Map>()
+              .map((item) => Map<String, dynamic>.from(item))
+              .toList(growable: false),
       isPatron: patron['awarded'] == true || data['isPatron'] == true,
-      patronNumber: (patron['number'] as num?)?.toInt() ??
+      patronNumber:
+          (patron['number'] as num?)?.toInt() ??
           (data['patronNumber'] as num?)?.toInt(),
     );
   }
@@ -250,15 +259,13 @@ class BusinessDelivery {
           .toLowerCase(),
       bookedBy: '${data['bookedByName'] ?? data['senderName'] ?? ''}'.trim(),
       vehicle: '${data['vehicleType'] ?? data['vehicle'] ?? ''}'.trim(),
-      category:
-          '${data['category'] ?? data['itemCategory'] ?? 'Delivery'}'.trim(),
+      category: '${data['category'] ?? data['itemCategory'] ?? 'Delivery'}'
+          .trim(),
       amount: _money(
         data['totalAmount'] ?? data['price'] ?? data['amountPaid'],
       ),
       createdAt: _date(data['createdAt']),
-      scheduledAt: _date(
-        data['scheduledAt'] ?? data['preferredDeliveryDate'],
-      ),
+      scheduledAt: _date(data['scheduledAt'] ?? data['preferredDeliveryDate']),
       duration: data['durationMinutes'] is num
           ? Duration(minutes: (data['durationMinutes'] as num).round())
           : null,
@@ -266,11 +273,11 @@ class BusinessDelivery {
   }
 
   bool get isCompleted => const {
-        'delivered',
-        'completed',
-        'cancelled',
-        'cancelled_admin',
-      }.contains(status);
+    'delivered',
+    'completed',
+    'cancelled',
+    'cancelled_admin',
+  }.contains(status);
 
   bool get isScheduled =>
       !isCompleted &&
@@ -318,7 +325,8 @@ class BusinessInvoice {
       total: _money(data['total'] ?? data['subtotal']),
       balanceDue: _money(data['balanceDue'] ?? data['total']),
       rothApplied: _money(data['rothApplied'] ?? data['rothAmount']),
-      deliveryCount: (data['deliveryCount'] as num?)?.toInt() ??
+      deliveryCount:
+          (data['deliveryCount'] as num?)?.toInt() ??
           (data['deliveryIds'] as List?)?.length ??
           0,
       dueAt: _date(data['dueAt'] ?? data['dueDate']),

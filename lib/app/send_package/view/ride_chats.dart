@@ -33,6 +33,7 @@ class _RideChatPageViewState extends State<RideChatPageView> {
   final _scroll = ScrollController();
   String? _chatId;
   String? _markedReadChatId;
+  String? _deliveryChatTitle;
   String? _supportError;
   bool _sending = false;
   Timer? _typingDebounce;
@@ -54,12 +55,39 @@ class _RideChatPageViewState extends State<RideChatPageView> {
       return;
     }
     if (widget.chatId?.trim().isNotEmpty == true) {
-      setState(() => _chatId = widget.chatId!.trim());
+      final chatId = widget.chatId!.trim();
+      setState(() => _chatId = chatId);
+      unawaited(_loadDeliveryChatTitle(chatId));
       return;
     }
     final preferences = await SharedPreferences.getInstance();
     if (mounted) {
-      setState(() => _chatId = preferences.getString('activeRequest'));
+      final chatId = preferences.getString('activeRequest');
+      setState(() => _chatId = chatId);
+      if (chatId != null && chatId.trim().isNotEmpty) {
+        unawaited(_loadDeliveryChatTitle(chatId.trim()));
+      }
+    }
+  }
+
+  Future<void> _loadDeliveryChatTitle(String chatId) async {
+    if (widget.supportConversation) return;
+    try {
+      final snapshot = await FirebaseFirestore.instance
+          .collection('deliveryRequests')
+          .doc(chatId)
+          .get();
+      final data = snapshot.data();
+      if (data == null) return;
+      for (final key in ['riderName', 'driverName', 'courierName']) {
+        final name = '${data[key] ?? ''}'.trim();
+        if (name.isNotEmpty && mounted) {
+          setState(() => _deliveryChatTitle = name);
+          return;
+        }
+      }
+    } catch (_) {
+      // The chat still works when the delivery summary is temporarily offline.
     }
   }
 
@@ -156,7 +184,9 @@ class _RideChatPageViewState extends State<RideChatPageView> {
     return Scaffold(
       backgroundColor: AppTokens.background,
       appBar: AppBar(
-        title: Text(widget.title),
+        title: Text(_deliveryChatTitle?.trim().isNotEmpty == true
+            ? _deliveryChatTitle!.trim()
+            : widget.title),
         backgroundColor: AppTokens.background,
         foregroundColor: AppTokens.text,
         elevation: 0,
@@ -214,7 +244,7 @@ class _RideChatPageViewState extends State<RideChatPageView> {
                           const _ChatNotice(
                               'Delivery completed. This conversation is now read-only.'),
                         if (typingOther)
-                          const _ChatNotice('Rider is typing...'),
+                          const _ChatNotice('Circum Rider is typing...'),
                         Expanded(
                             child: _MessageStream(
                                 chatId: chatId, scrollController: _scroll)),
@@ -222,7 +252,7 @@ class _RideChatPageViewState extends State<RideChatPageView> {
                           controller: _input,
                           hintText: widget.supportConversation
                               ? 'Message Circum Support'
-                              : 'Message your rider',
+                              : 'Message your Circum Rider',
                           readOnly: readOnly,
                           sending: _sending,
                           role:
@@ -284,7 +314,7 @@ class _MessageStream extends StatelessWidget {
               icon: Icons.forum_outlined,
               title: 'Chat is ready',
               body:
-                  'Message your rider once there is something you need to clarify.',
+                  'Message your Circum Rider once there is something you need to clarify.',
             );
           }
           WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -515,7 +545,7 @@ class _UnavailableChat extends StatelessWidget {
         icon: Icons.lock_outline,
         title: 'Chat is not available yet',
         body:
-            'Delivery chat becomes available once your rider has accepted the delivery.',
+            'Delivery chat becomes available once your Circum Rider has accepted the delivery.',
         actionLabel: 'Back',
         onAction: onBack,
       );

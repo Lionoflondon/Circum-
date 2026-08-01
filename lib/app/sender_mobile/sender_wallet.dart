@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:cloud_functions/cloud_functions.dart';
 import 'package:firebase_auth/firebase_auth.dart';
@@ -7,12 +8,15 @@ import 'package:flutter/material.dart';
 import 'package:flutter_stripe/flutter_stripe.dart';
 import 'package:intl/intl.dart';
 import 'package:share_plus/share_plus.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import '../business/business_view.dart';
 import '../send_package/view/ride_chats.dart';
 import 'design_system/sender_design_system.dart';
 import 'sender_accessibility.dart';
 import 'sender_finance.dart';
+import 'sender_page_shell.dart';
+import 'sender_profile_authority.dart';
 
 class SenderWalletData {
   final double balance;
@@ -34,9 +38,16 @@ class SenderWalletData {
       balance: (map['balance'] as num?)?.toDouble() ?? 0,
       frozen: map['status'] == 'frozen',
       onboardingCompleted: onboardingCompleted,
-      updatedAt: timestamp is Timestamp ? timestamp.toDate() : null,
+      updatedAt: _walletDateTime(timestamp),
     );
   }
+
+  Map<String, dynamic> toCacheMap() => {
+        'balance': balance,
+        'status': frozen ? 'frozen' : 'active',
+        'onboardingCompleted': onboardingCompleted,
+        if (updatedAt != null) 'updatedAt': updatedAt!.toIso8601String(),
+      };
 }
 
 class SenderWalletTransaction {
@@ -87,12 +98,86 @@ class SenderWalletTransaction {
           '${map['paymentMethodLabel'] ?? metadata['paymentMethodLabel'] ?? metadata['paidWith'] ?? ''}',
       amount: (map['amount'] as num?)?.toDouble() ?? 0,
       balanceAfter: (map['balanceAfter'] as num?)?.toDouble() ?? 0,
-      createdAt: rawDate is Timestamp ? rawDate.toDate() : null,
-      completedAt:
-          rawCompletedDate is Timestamp ? rawCompletedDate.toDate() : null,
+      createdAt: _walletDateTime(rawDate),
+      completedAt: _walletDateTime(rawCompletedDate),
       referenceId: '${map['relatedEntityId'] ?? map['referenceId'] ?? ''}',
       createdBy: '${map['createdBy'] ?? 'system'}',
       source: '${map['source'] ?? metadata['source'] ?? ''}',
+    );
+  }
+
+  Map<String, dynamic> toCacheMap() => {
+        'transactionId': id,
+        'description': description,
+        'direction': direction,
+        'status': status,
+        'type': type,
+        'paymentMethodLabel': paymentMethodLabel,
+        'amount': amount,
+        'balanceAfter': balanceAfter,
+        if (createdAt != null) 'createdAt': createdAt!.toIso8601String(),
+        if (completedAt != null) 'completedAt': completedAt!.toIso8601String(),
+        'referenceId': referenceId,
+        'createdBy': createdBy,
+        'source': source,
+      };
+}
+
+DateTime? _walletDateTime(Object? value) {
+  if (value is Timestamp) return value.toDate();
+  if (value is DateTime) return value;
+  if (value is String) return DateTime.tryParse(value);
+  return null;
+}
+
+String? _senderWalletCacheKey() {
+  String? uid;
+  try {
+    uid = FirebaseAuth.instance.currentUser?.uid;
+  } catch (_) {
+    uid = null;
+  }
+  return uid == null ? null : 'senderWalletSnapshot:$uid';
+}
+
+class _CachedSenderWalletSnapshot {
+  final SenderWalletData wallet;
+  final List<SenderWalletTransaction> transactions;
+  final String? nextPageToken;
+  final DateTime cachedAt;
+
+  const _CachedSenderWalletSnapshot({
+    required this.wallet,
+    required this.transactions,
+    required this.nextPageToken,
+    required this.cachedAt,
+  });
+
+  Map<String, dynamic> toMap() => {
+        'wallet': wallet.toCacheMap(),
+        'transactions': transactions
+            .map((transaction) => transaction.toCacheMap())
+            .toList(),
+        if (nextPageToken != null) 'nextPageToken': nextPageToken,
+        'cachedAt': cachedAt.toIso8601String(),
+      };
+
+  static _CachedSenderWalletSnapshot? fromMap(Map<String, dynamic> data) {
+    final walletData = data['wallet'];
+    if (walletData is! Map) return null;
+    final transactions = (data['transactions'] as List? ?? const [])
+        .whereType<Map>()
+        .map((item) =>
+            SenderWalletTransaction.fromMap(Map<String, dynamic>.from(item)))
+        .toList(growable: false);
+    return _CachedSenderWalletSnapshot(
+      wallet: SenderWalletData.fromMap(
+        Map<String, dynamic>.from(walletData),
+        onboardingCompleted: walletData['onboardingCompleted'] == true,
+      ),
+      transactions: transactions,
+      nextPageToken: data['nextPageToken'] as String?,
+      cachedAt: _walletDateTime(data['cachedAt']) ?? DateTime.now(),
     );
   }
 }
@@ -118,9 +203,12 @@ abstract class SenderWalletRepository
 }
 
 class FirebaseSenderWalletRepository implements SenderWalletRepository {
+  static const _firebaseReadTimeout = Duration(seconds: 8);
+
   final FirebaseAuth auth;
   final FirebaseFirestore firestore;
   final FirebaseFunctions functions;
+  final SenderProfileAuthority profileAuthority;
 
   FirebaseSenderWalletRepository({
     FirebaseAuth? auth,
@@ -128,7 +216,12 @@ class FirebaseSenderWalletRepository implements SenderWalletRepository {
     FirebaseFunctions? functions,
   })  : auth = auth ?? FirebaseAuth.instance,
         firestore = firestore ?? FirebaseFirestore.instance,
-        functions = functions ?? FirebaseFunctions.instance;
+        functions = functions ?? FirebaseFunctions.instance,
+        profileAuthority = SenderProfileAuthority(
+          auth: auth,
+          firestore: firestore,
+          functions: functions,
+        );
 
   User get _user {
     final user = auth.currentUser;
@@ -139,28 +232,77 @@ class FirebaseSenderWalletRepository implements SenderWalletRepository {
   @override
   Future<SenderWalletData> initialise() async {
     final user = _user;
-    await functions.httpsCallable('initialiseSenderWallet').call();
-    final results = await Future.wait([
-      firestore.collection('senderWallets').doc(user.uid).get(),
-      firestore.collection('users').doc(user.uid).get(),
-    ]);
-    final wallet = results[0].data() ?? const <String, dynamic>{};
-    final profile = results[1].data() ?? const <String, dynamic>{};
+    try {
+      await functions
+          .httpsCallable('initialiseSenderWallet')
+          .call()
+          .timeout(_firebaseReadTimeout);
+    } catch (error) {
+      debugPrint('Sender Wallet initialise callable unavailable: $error');
+    }
+    final walletSnapshot = await firestore
+        .collection('senderWallets')
+        .doc(user.uid)
+        .get()
+        .timeout(_firebaseReadTimeout);
+    final wallet = walletSnapshot.data() ?? const <String, dynamic>{};
+    var profile = const <String, dynamic>{};
+    try {
+      profile = (await profileAuthority.load('wallet.initialise.profile')).data;
+    } catch (error) {
+      debugPrint('Sender Wallet profile flag unavailable: $error');
+    }
     return SenderWalletData.fromMap(wallet,
         onboardingCompleted:
             profile['senderWalletOnboardingCompleted'] == true);
   }
 
   @override
-  Stream<SenderWalletData> watch() async* {
+  Stream<SenderWalletData> watch() {
     final user = _user;
-    await for (final snapshot
-        in firestore.collection('senderWallets').doc(user.uid).snapshots()) {
-      final profile = await firestore.collection('users').doc(user.uid).get();
-      yield SenderWalletData.fromMap(snapshot.data() ?? const {},
-          onboardingCompleted:
-              profile.data()?['senderWalletOnboardingCompleted'] == true);
+    final controller = StreamController<SenderWalletData>();
+    DocumentSnapshot<Map<String, dynamic>>? latestWallet;
+    SenderProfileAuthoritySnapshot? latestProfile;
+    StreamSubscription<DocumentSnapshot<Map<String, dynamic>>>? walletSub;
+    StreamSubscription<SenderProfileAuthoritySnapshot>? profileSub;
+
+    void emitIfReady() {
+      final wallet = latestWallet;
+      if (wallet == null) return;
+      final profile = latestProfile;
+      controller.add(SenderWalletData.fromMap(
+        wallet.data() ?? const {},
+        onboardingCompleted:
+            profile?.data['senderWalletOnboardingCompleted'] == true,
+      ));
     }
+
+    controller.onListen = () {
+      walletSub = firestore
+          .collection('senderWallets')
+          .doc(user.uid)
+          .snapshots()
+          .listen((snapshot) {
+        latestWallet = snapshot;
+        emitIfReady();
+      }, onError: (error) {
+        debugPrint('Sender Wallet live balance unavailable: $error');
+      });
+      profileSub = profileAuthority.watch('wallet.watch.profile').listen(
+        (snapshot) {
+          latestProfile = snapshot;
+          emitIfReady();
+        },
+        onError: (error) {
+          debugPrint('Sender Wallet live profile flag unavailable: $error');
+        },
+      );
+    };
+    controller.onCancel = () async {
+      await walletSub?.cancel();
+      await profileSub?.cancel();
+    };
+    return controller.stream;
   }
 
   @override
@@ -252,81 +394,163 @@ class _SenderWalletViewState extends State<SenderWalletView> {
   final List<SenderWalletTransaction> _transactions = [];
   String? _nextPage;
   String? _error;
-  bool _loading = true;
+  bool _refreshing = false;
+  bool _showingCachedWallet = false;
   bool _paymentActionLoading = false;
+  int _loadGeneration = 0;
 
   @override
   void initState() {
     super.initState();
     _repository = widget.repository ?? FirebaseSenderWalletRepository();
+    unawaited(_loadCachedSnapshot());
     _load();
   }
 
+  Future<void> _loadCachedSnapshot() async {
+    final key = _senderWalletCacheKey();
+    if (key == null) return;
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final raw = prefs.getString(key);
+      if (raw == null || raw.isEmpty) return;
+      final decoded = jsonDecode(raw);
+      if (decoded is! Map) return;
+      final snapshot = _CachedSenderWalletSnapshot.fromMap(
+        Map<String, dynamic>.from(decoded),
+      );
+      if (snapshot == null || !mounted) return;
+      setState(() {
+        _wallet = snapshot.wallet;
+        _transactions
+          ..clear()
+          ..addAll(snapshot.transactions);
+        _nextPage = snapshot.nextPageToken;
+        _showingCachedWallet = true;
+      });
+    } catch (error) {
+      debugPrint('Sender Wallet cache unavailable: $error');
+    }
+  }
+
+  Future<void> _cacheSnapshot(
+    SenderWalletData wallet,
+    List<SenderWalletTransaction> transactions,
+    String? nextPageToken,
+  ) async {
+    final key = _senderWalletCacheKey();
+    if (key == null) return;
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final snapshot = _CachedSenderWalletSnapshot(
+        wallet: wallet,
+        transactions: transactions.take(20).toList(growable: false),
+        nextPageToken: nextPageToken,
+        cachedAt: DateTime.now().toUtc(),
+      );
+      await prefs.setString(key, jsonEncode(snapshot.toMap()));
+    } catch (error) {
+      debugPrint('Sender Wallet cache save failed: $error');
+    }
+  }
+
   Future<void> _load() async {
+    if (_refreshing) return;
+    final generation = ++_loadGeneration;
     Future<T> withWalletTimeout<T>(Future<T> operation) =>
         operation.timeout(_walletOperationTimeout);
 
+    final startedAt = DateTime.now();
     setState(() {
-      _loading = true;
+      _refreshing = true;
       _error = null;
     });
     try {
       final wallet = await withWalletTimeout(_repository.initialise());
-      final results = await Future.wait([
-        withWalletTimeout(_repository.transactions()),
-        withWalletTimeout(_repository.paymentMethods()),
-      ]).timeout(_walletOperationTimeout);
-      final page = results[0] as SenderWalletPage;
-      final methods = results[1] as SenderPaymentMethodsData;
-      if (!mounted) return;
+      SenderWalletPage? page;
+      var methods = SenderPaymentMethodsData.empty();
+      try {
+        page = await withWalletTimeout(_repository.transactions());
+      } catch (error) {
+        debugPrint('Sender Wallet transactions unavailable: $error');
+      }
+      try {
+        methods = await withWalletTimeout(_repository.paymentMethods());
+      } catch (error) {
+        debugPrint('Sender Wallet payment methods unavailable: $error');
+      }
+      if (!mounted || generation != _loadGeneration) return;
       setState(() {
         _wallet = wallet;
         _paymentMethods = methods;
-        _transactions
-          ..clear()
-          ..addAll(page.transactions);
-        _nextPage = page.nextPageToken;
-        _loading = false;
+        if (page != null) {
+          _transactions
+            ..clear()
+            ..addAll(page.transactions);
+          _nextPage = page.nextPageToken;
+        }
+        _refreshing = false;
+        _showingCachedWallet = false;
       });
+      unawaited(_cacheSnapshot(wallet, _transactions, _nextPage));
+      _walletTelemetry('fresh_load', startedAt);
       await _subscription?.cancel();
       _subscription = _repository
           .watch()
           .timeout(_walletOperationTimeout, onTimeout: (sink) => sink.close())
           .listen((value) {
-        if (mounted) setState(() => _wallet = value);
+        if (!mounted) return;
+        setState(() {
+          _wallet = value;
+          _showingCachedWallet = false;
+        });
+        unawaited(_cacheSnapshot(value, _transactions, _nextPage));
       }, onError: (_) {});
     } on TimeoutException {
-      if (mounted) {
+      _walletTelemetry('timeout', startedAt);
+      if (mounted && generation == _loadGeneration) {
         setState(() {
+          _wallet ??= const SenderWalletData(
+            balance: 0,
+            frozen: false,
+            onboardingCompleted: true,
+          );
           _error =
-              'Wallet is taking longer than expected. Check your connection and try again.';
-          _loading = false;
+              "You're offline or the network is slow. Showing your most recent wallet.";
+          _refreshing = false;
+          _showingCachedWallet = _wallet != null;
         });
+        _scheduleWalletRetry();
       }
     } catch (error) {
-      if (mounted) {
+      _walletTelemetry('failed', startedAt, error: error);
+      if (mounted && generation == _loadGeneration) {
         setState(() {
+          _wallet ??= const SenderWalletData(
+            balance: 0,
+            frozen: false,
+            onboardingCompleted: true,
+          );
           _error = '$error';
-          _loading = false;
+          _refreshing = false;
         });
+        _scheduleWalletRetry();
       }
     }
   }
 
-  Future<void> _continueOnboarding() async {
-    try {
-      await _repository.completeOnboarding();
-      if (mounted) {
-        setState(() => _wallet = SenderWalletData(
-              balance: _wallet?.balance ?? 0,
-              frozen: _wallet?.frozen ?? false,
-              onboardingCompleted: true,
-              updatedAt: _wallet?.updatedAt,
-            ));
-      }
-    } catch (error) {
-      if (mounted) setState(() => _error = '$error');
-    }
+  void _scheduleWalletRetry() {
+    Future<void>.delayed(const Duration(seconds: 6), () {
+      if (!mounted || _refreshing) return;
+      unawaited(_load());
+    });
+  }
+
+  void _walletTelemetry(String event, DateTime startedAt, {Object? error}) {
+    final elapsed = DateTime.now().difference(startedAt).inMilliseconds;
+    debugPrint(
+      'wallet_telemetry event=$event durationMs=$elapsed cached=$_showingCachedWallet error=${error == null ? '' : error.runtimeType}',
+    );
   }
 
   Future<void> _refreshPaymentMethods() async {
@@ -530,182 +754,195 @@ class _SenderWalletViewState extends State<SenderWalletView> {
 
   @override
   Widget build(BuildContext context) {
-    if (_loading) return const Center(child: CircularProgressIndicator());
-    if (_error != null && _wallet == null) {
-      final permission = _error!.toLowerCase().contains('permission');
-      final offline = _error!.toLowerCase().contains('network');
-      return _WalletMessage(
-        icon: permission
-            ? Icons.lock_outline
-            : offline
-                ? Icons.cloud_off
-                : Icons.error_outline,
-        title: permission
-            ? 'Wallet access unavailable'
-            : offline
-                ? 'You appear to be offline'
-                : 'Wallet could not load',
-        body: permission
-            ? 'Your account does not currently have permission to view this Wallet.'
-            : 'Your Roth is safe. Check your connection and try again.',
-        action: _load,
+    if (_wallet == null) {
+      return _WalletPageShell(
+        child: RefreshIndicator(
+          onRefresh: _load,
+          child: ListView(
+            physics: const AlwaysScrollableScrollPhysics(),
+            children: [
+              const Text(
+                'Wallet',
+                style: TextStyle(
+                  color: Colors.white,
+                  fontSize: 34,
+                  fontWeight: FontWeight.w900,
+                  height: 1,
+                ),
+              ),
+              const SizedBox(height: 10),
+              const Text(
+                'Loading your most recent wallet safely.',
+                style: TextStyle(
+                  color: _WalletColors.muted,
+                  fontSize: 16,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+              const SizedBox(height: 26),
+              const _WalletSkeletonCard(height: 170),
+              const SizedBox(height: 20),
+              const _WalletSkeletonCard(height: 120),
+              if (_error != null) ...[
+                const SizedBox(height: 14),
+                _WalletInlineStatus(
+                  icon: Icons.cloud_off_outlined,
+                  message: _walletSafeError(_error!),
+                  actionLabel: 'Retry',
+                  onAction: _load,
+                ),
+              ],
+            ],
+          ),
+        ),
       );
     }
     final wallet = _wallet!;
-    if (!wallet.onboardingCompleted) {
-      return _WalletOnboarding(onContinue: _continueOnboarding);
-    }
     final recentTransactions = _transactions.take(5).toList(growable: false);
     return _WalletPageShell(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          const Text(
-            'Wallet',
-            style: TextStyle(
-              color: Colors.white,
-              fontSize: 34,
-              fontWeight: FontWeight.w900,
-              height: 1,
+      child: RefreshIndicator(
+        onRefresh: _load,
+        child: ListView(
+          physics: const AlwaysScrollableScrollPhysics(),
+          children: [
+            const Text(
+              'Wallet',
+              style: TextStyle(
+                color: Colors.white,
+                fontSize: 34,
+                fontWeight: FontWeight.w900,
+                height: 1,
+              ),
             ),
-          ),
-          const SizedBox(height: 10),
-          const Text(
-            'Manage your Roth balance, payments and rewards.',
-            style: TextStyle(
-              color: _WalletColors.muted,
-              fontSize: 16,
-              fontWeight: FontWeight.w600,
+            const SizedBox(height: 10),
+            const Text(
+              'Manage your Roth balance, payments and rewards.',
+              style: TextStyle(
+                color: _WalletColors.muted,
+                fontSize: 16,
+                fontWeight: FontWeight.w600,
+              ),
             ),
-          ),
-          const SizedBox(height: 26),
-          _AvailableRothCard(wallet: wallet),
-          if (wallet.frozen) ...[
-            const SizedBox(height: 12),
-            const _WalletGlass(
-              child: Row(
-                children: [
-                  Icon(Icons.lock_outline, color: Color(0xFFFBBF24)),
-                  SizedBox(width: 12),
-                  Expanded(
-                    child: Text(
-                      'This Wallet is frozen. You can view activity, but Roth cannot be spent.',
-                      style: TextStyle(color: Colors.white, height: 1.4),
+            const SizedBox(height: 26),
+            if (_refreshing || _showingCachedWallet || _error != null) ...[
+              _WalletInlineStatus(
+                icon: _error == null
+                    ? Icons.sync_rounded
+                    : Icons.cloud_off_outlined,
+                message: _error == null
+                    ? 'Updating wallet...'
+                    : _walletSafeError(_error!),
+                actionLabel: _error == null ? null : 'Retry',
+                onAction: _error == null ? null : _load,
+              ),
+              const SizedBox(height: 14),
+            ],
+            _AvailableRothCard(wallet: wallet),
+            if (wallet.frozen) ...[
+              const SizedBox(height: 12),
+              const _WalletGlass(
+                child: Row(
+                  children: [
+                    Icon(Icons.lock_outline, color: Color(0xFFFBBF24)),
+                    SizedBox(width: 12),
+                    Expanded(
+                      child: Text(
+                        'This Wallet is frozen. You can view activity, but Roth cannot be spent.',
+                        style: TextStyle(color: Colors.white, height: 1.4),
+                      ),
                     ),
+                  ],
+                ),
+              ),
+            ],
+            const SizedBox(height: 22),
+            _PaymentMethodsSection(
+              sectionTitle: 'Payment Methods',
+              data: _paymentMethods,
+              wallet: wallet,
+              busy: _paymentActionLoading,
+              onAdd: _addPaymentMethod,
+              onSetDefault: _setDefaultPaymentMethod,
+              onRemove: _removePaymentMethod,
+              onOpenMethod: _openPaymentInformation,
+              onOpenRoth: _openRothInformation,
+            ),
+            const SizedBox(height: 20),
+            _WalletActionGrid(
+              onRedeem: _redeemRothCard,
+              onAddCard: _addPaymentMethod,
+              onManagePayments: _openManagePayments,
+            ),
+            const SizedBox(height: 22),
+            const _WalletSectionTitle('Recent Activity'),
+            const SizedBox(height: 10),
+            _WalletGlass(
+              padding: EdgeInsets.zero,
+              child: recentTransactions.isEmpty
+                  ? const Padding(
+                      padding: EdgeInsets.all(20),
+                      child: Text(
+                        'No Roth activity yet. Rewards and eligible purchases will appear here.',
+                        style:
+                            TextStyle(color: _WalletColors.muted, height: 1.45),
+                      ),
+                    )
+                  : Column(
+                      children: recentTransactions
+                          .map(
+                            (item) => Padding(
+                              padding: EdgeInsets.only(
+                                left: 12,
+                                right: 12,
+                                top: item == recentTransactions.first ? 12 : 0,
+                                bottom: 12,
+                              ),
+                              child: InkWell(
+                                borderRadius: BorderRadius.circular(20),
+                                onTap: () => Navigator.of(context).push(
+                                  MaterialPageRoute<void>(
+                                    builder: (_) => _TransactionDetailsScreen(
+                                      transaction: item,
+                                    ),
+                                  ),
+                                ),
+                                child: _WalletTransactionCard(item),
+                              ),
+                            ),
+                          )
+                          .toList(),
+                    ),
+            ),
+            Align(
+              alignment: Alignment.centerRight,
+              child: TextButton(
+                onPressed: () => Navigator.of(context).push(
+                  MaterialPageRoute<void>(
+                    builder: (_) => _WalletActivityScreen(
+                      repository: _repository,
+                      initialTransactions: List.of(_transactions),
+                      initialPageToken: _nextPage,
+                    ),
+                    settings: const RouteSettings(
+                        name: '/sender-mobile/wallet/activity'),
                   ),
-                ],
+                ),
+                child: const Text('View all activity'),
+              ),
+            ),
+            const SizedBox(height: 10),
+            const _WalletSectionTitle('Rewards & Offers'),
+            const SizedBox(height: 10),
+            _WalletGlass(
+              padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 16),
+              child: _OfferRow(
+                title: 'Rewards & Offers',
+                detail: 'Invite friends and earn 5 Roth.',
+                onTap: _openEarnRoth,
               ),
             ),
           ],
-          const SizedBox(height: 22),
-          LayoutBuilder(
-            builder: (context, constraints) {
-              final wide = constraints.maxWidth >= 900;
-              final paymentMethods = _PaymentMethodsSection(
-                sectionTitle: 'Payment Methods',
-                data: _paymentMethods,
-                wallet: wallet,
-                busy: _paymentActionLoading,
-                onAdd: _addPaymentMethod,
-                onSetDefault: _setDefaultPaymentMethod,
-                onRemove: _removePaymentMethod,
-                onOpenMethod: _openPaymentInformation,
-                onOpenRoth: _openRothInformation,
-              );
-              final actions = _WalletActionGrid(
-                onRedeem: _redeemRothCard,
-                onAddCard: _addPaymentMethod,
-                onManagePayments: _openManagePayments,
-              );
-              if (!wide) {
-                return Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    paymentMethods,
-                    const SizedBox(height: 20),
-                    actions,
-                  ],
-                );
-              }
-              return Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Expanded(flex: 6, child: paymentMethods),
-                  const SizedBox(width: 20),
-                  Expanded(flex: 5, child: actions),
-                ],
-              );
-            },
-          ),
-          const SizedBox(height: 22),
-          const _WalletSectionTitle('Recent Activity'),
-          const SizedBox(height: 10),
-          _WalletGlass(
-            padding: EdgeInsets.zero,
-            child: recentTransactions.isEmpty
-                ? const Padding(
-                    padding: EdgeInsets.all(20),
-                    child: Text(
-                      'No Roth activity yet. Rewards and eligible purchases will appear here.',
-                      style:
-                          TextStyle(color: _WalletColors.muted, height: 1.45),
-                    ),
-                  )
-                : Column(
-                    children: recentTransactions
-                        .map(
-                          (item) => Padding(
-                            padding: EdgeInsets.only(
-                              left: 12,
-                              right: 12,
-                              top: item == recentTransactions.first ? 12 : 0,
-                              bottom: 12,
-                            ),
-                            child: InkWell(
-                              borderRadius: BorderRadius.circular(20),
-                              onTap: () => Navigator.of(context).push(
-                                MaterialPageRoute<void>(
-                                  builder: (_) => _TransactionDetailsScreen(
-                                    transaction: item,
-                                  ),
-                                ),
-                              ),
-                              child: _WalletTransactionCard(item),
-                            ),
-                          ),
-                        )
-                        .toList(),
-                  ),
-          ),
-          Align(
-            alignment: Alignment.centerRight,
-            child: TextButton(
-              onPressed: () => Navigator.of(context).push(
-                MaterialPageRoute<void>(
-                  builder: (_) => _WalletActivityScreen(
-                    repository: _repository,
-                    initialTransactions: List.of(_transactions),
-                    initialPageToken: _nextPage,
-                  ),
-                  settings: const RouteSettings(
-                      name: '/sender-mobile/wallet/activity'),
-                ),
-              ),
-              child: const Text('View all activity'),
-            ),
-          ),
-          const SizedBox(height: 10),
-          const _WalletSectionTitle('Rewards & Offers'),
-          const SizedBox(height: 10),
-          _WalletGlass(
-            padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 16),
-            child: _OfferRow(
-              title: 'Rewards & Offers',
-              detail: 'Invite friends and earn 5 Roth.',
-              onTap: _openEarnRoth,
-            ),
-          ),
-        ],
+        ),
       ),
     );
   }
@@ -1293,6 +1530,8 @@ class _TransactionDetailsScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     final title = _walletTransactionDisplayTitle(transaction);
     final description = _walletTransactionDisplayDescription(transaction);
+    final completedDate =
+        _walletTransactionDate(transaction, includeStatus: false);
     return Scaffold(
       backgroundColor: const Color(0xFF07090F),
       appBar: AppBar(
@@ -1316,8 +1555,8 @@ class _TransactionDetailsScreen extends StatelessWidget {
                 _DetailRow(
                     'Amount', '${transaction.amount.toStringAsFixed(2)} Roth'),
                 _DetailRow('Status', _walletStatusLabel(transaction.status)),
-                _DetailRow('Completed date',
-                    _walletTransactionDate(transaction, includeStatus: false)),
+                if (completedDate != null)
+                  _DetailRow('Completed date', completedDate),
                 _DetailRow(
                     'Reference ID',
                     transaction.referenceId.isEmpty
@@ -1369,15 +1608,56 @@ class _SenderWalletHomeSummaryState extends State<SenderWalletHomeSummary> {
   late final SenderWalletRepository _repository;
   SenderWalletData? _wallet;
   String? _error;
+
   @override
   void initState() {
     super.initState();
     _repository = widget.repository ?? FirebaseSenderWalletRepository();
-    _repository.initialise().then((value) {
+    _loadCachedSummary();
+    _repository.initialise().timeout(const Duration(seconds: 10)).then((value) {
       if (mounted) setState(() => _wallet = value);
+      unawaited(_cacheSummary(value));
     }).catchError((_) {
-      if (mounted) setState(() => _error = 'Unavailable');
+      if (mounted && _wallet == null) setState(() => _error = 'Offline');
     });
+  }
+
+  Future<void> _loadCachedSummary() async {
+    final key = _senderWalletCacheKey();
+    if (key == null) return;
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final raw = prefs.getString(key);
+      if (raw == null) return;
+      final decoded = jsonDecode(raw);
+      if (decoded is! Map) return;
+      final snapshot = _CachedSenderWalletSnapshot.fromMap(
+        Map<String, dynamic>.from(decoded),
+      );
+      if (snapshot == null || !mounted) return;
+      setState(() => _wallet = snapshot.wallet);
+    } catch (_) {}
+  }
+
+  Future<void> _cacheSummary(SenderWalletData wallet) async {
+    final key = _senderWalletCacheKey();
+    if (key == null) return;
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final existing = prefs.getString(key);
+      final existingSnapshot = existing == null
+          ? null
+          : _CachedSenderWalletSnapshot.fromMap(
+              Map<String, dynamic>.from(jsonDecode(existing) as Map),
+            );
+      final snapshot = _CachedSenderWalletSnapshot(
+        wallet: wallet,
+        transactions: existingSnapshot?.transactions ?? const [],
+        nextPageToken: existingSnapshot?.nextPageToken,
+        cachedAt: DateTime.now().toUtc(),
+      );
+      await prefs.setString(key, jsonEncode(snapshot.toMap()));
+    } catch (_) {}
   }
 
   @override
@@ -1414,36 +1694,6 @@ class _SenderWalletHomeSummaryState extends State<SenderWalletHomeSummary> {
       ));
 }
 
-class _WalletOnboarding extends StatelessWidget {
-  final VoidCallback onContinue;
-  const _WalletOnboarding({required this.onContinue});
-  @override
-  Widget build(BuildContext context) =>
-      ListView(padding: const EdgeInsets.all(20), children: [
-        const SizedBox(height: 24),
-        const Icon(Icons.account_balance_wallet_outlined,
-            color: _WalletColors.lightBlue, size: 52),
-        const SizedBox(height: 20),
-        const Text('Meet Roth',
-            textAlign: TextAlign.center,
-            style: TextStyle(
-                color: Colors.white,
-                fontSize: 30,
-                fontWeight: FontWeight.w900)),
-        const SizedBox(height: 12),
-        const Text(
-            'Roth is Circum ecosystem credit. Earn it through referrals and approved rewards, then use it on eligible Circum purchases. Roth cannot be withdrawn as cash or transferred.',
-            textAlign: TextAlign.center,
-            style: TextStyle(color: _WalletColors.muted, height: 1.55)),
-        const SizedBox(height: 24),
-        SizedBox(
-            height: 52,
-            child: FilledButton(
-                onPressed: onContinue,
-                child: const Text('Continue to Wallet'))),
-      ]);
-}
-
 class _WalletMessage extends StatelessWidget {
   final IconData icon;
   final String title;
@@ -1477,6 +1727,94 @@ class _WalletMessage extends StatelessWidget {
           ]))));
 }
 
+class _WalletInlineStatus extends StatelessWidget {
+  final IconData icon;
+  final String message;
+  final String? actionLabel;
+  final VoidCallback? onAction;
+
+  const _WalletInlineStatus({
+    required this.icon,
+    required this.message,
+    this.actionLabel,
+    this.onAction,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return _WalletGlass(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+      child: Row(
+        children: [
+          Icon(icon, color: _WalletColors.lightBlue, size: 19),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(
+              message,
+              style: const TextStyle(
+                color: _WalletColors.muted,
+                fontWeight: FontWeight.w700,
+                height: 1.3,
+              ),
+            ),
+          ),
+          if (actionLabel != null && onAction != null) ...[
+            const SizedBox(width: 10),
+            TextButton(onPressed: onAction, child: Text(actionLabel!)),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+class _WalletSkeletonCard extends StatelessWidget {
+  final double height;
+
+  const _WalletSkeletonCard({required this.height});
+
+  @override
+  Widget build(BuildContext context) {
+    return _WalletGlass(
+      child: SizedBox(
+        height: height,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            _WalletSkeletonLine(width: 120),
+            const SizedBox(height: 16),
+            _WalletSkeletonLine(width: double.infinity, height: 26),
+            const SizedBox(height: 12),
+            _WalletSkeletonLine(width: 180),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _WalletSkeletonLine extends StatelessWidget {
+  final double width;
+  final double height;
+
+  const _WalletSkeletonLine({
+    required this.width,
+    this.height = 14,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: width,
+      height: height,
+      decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: .08),
+        borderRadius: BorderRadius.circular(999),
+      ),
+    );
+  }
+}
+
 class _TransactionRow extends StatelessWidget {
   final SenderWalletTransaction transaction;
   const _TransactionRow(this.transaction);
@@ -1485,6 +1823,8 @@ class _TransactionRow extends StatelessWidget {
     final credit = transaction.direction == 'credit';
     final title = _walletTransactionDisplayTitle(transaction);
     final status = _walletStatusLabel(transaction.status);
+    final date = _walletTransactionDate(transaction);
+    final statusLine = date == null ? status : '$status · $date';
     return Semantics(
         label:
             '${credit ? 'Credit' : 'Debit'} ${transaction.amount} Roth. $title. ${transaction.status}',
@@ -1520,11 +1860,7 @@ class _TransactionRow extends StatelessWidget {
                         style: const TextStyle(
                             color: Colors.white, fontWeight: FontWeight.w800)),
                     const SizedBox(height: 3),
-                    Text(
-                        [
-                          status,
-                          _walletTransactionDate(transaction),
-                        ].join(' · '),
+                    Text(statusLine,
                         style: TextStyle(
                             color: _walletStatusColor(transaction.status),
                             fontSize: 11,
@@ -1628,7 +1964,7 @@ class _PaymentMethodsSection extends StatelessWidget {
           child: Padding(
             padding: EdgeInsets.only(top: 10),
             child: Text(
-              'Add a card to make future Sender payments faster.',
+              'Add a card to make future Circum payments faster.',
               style: TextStyle(color: _WalletColors.muted, height: 1.4),
             ),
           ),
@@ -1678,7 +2014,7 @@ class _PaymentMethodsSection extends StatelessWidget {
                     child: Padding(
                       padding: EdgeInsets.only(top: 10),
                       child: Text(
-                        'Add a card to make future Sender payments faster.',
+                        'Add a card to make future Circum payments faster.',
                         style: TextStyle(
                           color: _WalletColors.muted,
                           height: 1.4,
@@ -1912,7 +2248,7 @@ class _WalletPageShell extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
+    return SenderPrimaryPageShell(
       decoration: const BoxDecoration(
         gradient: RadialGradient(
           center: Alignment(-.75, -.95),
@@ -1925,28 +2261,7 @@ class _WalletPageShell extends StatelessWidget {
           stops: [0, .42, 1],
         ),
       ),
-      child: LayoutBuilder(
-        builder: (context, constraints) {
-          final sidePadding = constraints.maxWidth < 720 ? 18.0 : 36.0;
-          return ListView(
-            padding: EdgeInsets.fromLTRB(
-              sidePadding,
-              constraints.maxWidth < 720 ? 24 : 32,
-              sidePadding,
-              28,
-            ),
-            children: [
-              Align(
-                alignment: Alignment.topCenter,
-                child: ConstrainedBox(
-                  constraints: const BoxConstraints(maxWidth: 1280),
-                  child: child,
-                ),
-              ),
-            ],
-          );
-        },
-      ),
+      child: child,
     );
   }
 }
@@ -2146,46 +2461,29 @@ class _WalletActionGrid extends StatelessWidget {
       children: [
         const _WalletSectionTitle('Wallet Actions'),
         const SizedBox(height: 10),
-        LayoutBuilder(
-          builder: (context, constraints) {
-            final columns = constraints.maxWidth >= 720
-                ? 3
-                : constraints.maxWidth >= 420
-                    ? 2
-                    : 1;
-            return GridView.count(
-              crossAxisCount: columns,
-              childAspectRatio: columns == 3
-                  ? 1.28
-                  : columns == 2
-                      ? 1.62
-                      : 3.8,
-              crossAxisSpacing: 12,
-              mainAxisSpacing: 12,
-              shrinkWrap: true,
-              physics: const NeverScrollableScrollPhysics(),
-              children: [
-                _WalletActionCard(
-                  icon: Icons.credit_card_outlined,
-                  title: 'Redeem Roth',
-                  detail: 'Apply approved Roth credit.',
-                  onTap: onRedeem,
-                ),
-                _WalletActionCard(
-                  icon: Icons.add_card_rounded,
-                  title: 'Add Card',
-                  detail: 'Save a payment card.',
-                  onTap: onAddCard,
-                ),
-                _WalletActionCard(
-                  icon: Icons.tune_rounded,
-                  title: 'Manage Payments',
-                  detail: 'Cards and checkout.',
-                  onTap: onManagePayments,
-                ),
-              ],
-            );
-          },
+        Column(
+          children: [
+            _WalletActionCard(
+              icon: Icons.credit_card_outlined,
+              title: 'Redeem Roth',
+              detail: 'Apply approved Roth credit.',
+              onTap: onRedeem,
+            ),
+            const SizedBox(height: 12),
+            _WalletActionCard(
+              icon: Icons.add_card_rounded,
+              title: 'Add Card',
+              detail: 'Save a payment card.',
+              onTap: onAddCard,
+            ),
+            const SizedBox(height: 12),
+            _WalletActionCard(
+              icon: Icons.tune_rounded,
+              title: 'Manage Payments',
+              detail: 'Cards and checkout.',
+              onTap: onManagePayments,
+            ),
+          ],
         ),
       ],
     );
@@ -2338,17 +2636,19 @@ class _WalletTransactionCard extends StatelessWidget {
                       fontWeight: FontWeight.w800,
                     ),
                   ),
-                  const SizedBox(height: 4),
-                  Text(
-                    date,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
-                      color: _WalletColors.muted,
-                      fontSize: 12,
-                      fontWeight: FontWeight.w600,
+                  if (date != null) ...[
+                    const SizedBox(height: 4),
+                    Text(
+                      date,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        color: _WalletColors.muted,
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                      ),
                     ),
-                  ),
+                  ],
                 ],
               ),
             ),
@@ -2875,6 +3175,23 @@ class _WalletColors {
   static const hairline = Color(0x14F5F7FB);
 }
 
+String _walletSafeError(String error) {
+  final lower = error.toLowerCase();
+  if (lower.contains('permission') || lower.contains('denied')) {
+    return 'Wallet access is unavailable for this account right now.';
+  }
+  if (lower.contains('network') ||
+      lower.contains('offline') ||
+      lower.contains('timeout') ||
+      lower.contains('unavailable')) {
+    return "You're offline. Showing your most recent wallet.";
+  }
+  if (lower.contains('sign in')) {
+    return 'Sign in again to refresh your wallet.';
+  }
+  return 'Wallet refresh failed. Your Roth is safe and you can retry.';
+}
+
 String _walletStatusLabel(String value) {
   final status = value.trim().toLowerCase();
   if (status == 'pending' || status == 'processing') return 'Pending';
@@ -2912,19 +3229,23 @@ String _walletFriendlyDate(DateTime date, {DateTime? now}) {
   return DateFormat('d MMM yyyy • HH:mm').format(date);
 }
 
-String _walletTransactionDate(
+String? _walletTransactionDate(
   SenderWalletTransaction transaction, {
   bool includeStatus = true,
 }) {
   final status = _walletStatusLabel(transaction.status);
+  final date = transaction.completedAt ?? transaction.createdAt;
   if (status == 'Pending') {
+    if (date != null) {
+      final dateLabel = _walletFriendlyDate(date);
+      return includeStatus ? '$status • $dateLabel' : dateLabel;
+    }
     return includeStatus
         ? 'Pending • Estimated completion'
         : 'Estimated completion';
   }
-  final date = transaction.completedAt ?? transaction.createdAt;
-  final dateLabel =
-      date == null ? 'Date unavailable' : _walletFriendlyDate(date);
+  if (date == null) return null;
+  final dateLabel = _walletFriendlyDate(date);
   return includeStatus ? '$status • $dateLabel' : dateLabel;
 }
 

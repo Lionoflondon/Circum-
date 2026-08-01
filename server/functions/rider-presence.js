@@ -57,6 +57,7 @@ function presencePatch({riderId, status, busy = false, location = null}) {
   const patch = {
     riderId,
     isOnline: status !== "offline",
+    status: status === "offline" ? "offline" : "online",
     availabilityStatus: status,
     busy,
     updatedAt: FieldValue.serverTimestamp(),
@@ -100,21 +101,43 @@ function signalQuality(accuracy) {
 }
 
 exports.goOnline = functions.https.onCall(async (data, context) => {
-  const riderId = requireAuth(context);
-  const db = getFirestore();
-  const profile = await riderProfile(db, riderId);
-  const founder = context.auth.token && context.auth.token.founderRider === true;
-  const reason = core.blockedReasonForAccess(profile, founder);
-  if (reason) {
-    throw new functions.https.HttpsError("failed-precondition", reason);
+  try {
+    const riderId = requireAuth(context);
+    const db = getFirestore();
+    const profile = await riderProfile(db, riderId);
+    const founder = context.auth.token && context.auth.token.founderRider === true;
+    const reason = core.blockedReasonForAccess(profile, founder);
+    if (reason) {
+      throw new functions.https.HttpsError("failed-precondition", reason);
+    }
+    const patch = presencePatch({riderId, status: "available", busy: false, location: data && data.location});
+    const batch = db.batch();
+    batch.set(db.collection("riderPresence").doc(riderId), {...patch, source: "goOnline"}, {merge: true});
+    batch.set(db.collection("riders").doc(riderId), {status: "online", availabilityStatus: "available", updatedAt: FieldValue.serverTimestamp()}, {merge: true});
+    batch.set(db.collection("riderProfiles").doc(riderId), {
+      status: "online",
+      availabilityStatus: "available",
+      isOnline: true,
+      dispatchEligible: patch.dispatchEligible === true,
+      lastHeartbeatAt: patch.lastHeartbeatAt,
+      lastOnlineAt: FieldValue.serverTimestamp(),
+      updatedAt: FieldValue.serverTimestamp(),
+    }, {merge: true});
+    batch.set(db.collection("riderOperationalAudit").doc(), {riderId, action: "go_online", founderOverride: founder, actorUid: riderId, createdAt: FieldValue.serverTimestamp()});
+    await batch.commit();
+    return {success: true, presence: {...patch, serverTimestampPending: true}};
+  } catch (error) {
+    if (error instanceof functions.https.HttpsError) throw error;
+    console.error("goOnline unexpected failure", {
+      riderId: context.auth && context.auth.uid,
+      code: error && error.code,
+      message: error && error.message,
+    });
+    throw new functions.https.HttpsError(
+        "failed-precondition",
+        "We could not switch you online. Check your connection and try again.",
+    );
   }
-  const patch = presencePatch({riderId, status: "available", busy: false, location: data && data.location});
-  const batch = db.batch();
-  batch.set(db.collection("riderPresence").doc(riderId), {...patch, source: "goOnline"}, {merge: true});
-  batch.set(db.collection("riders").doc(riderId), {status: "online", availabilityStatus: "available", updatedAt: FieldValue.serverTimestamp()}, {merge: true});
-  batch.set(db.collection("riderOperationalAudit").doc(), {riderId, action: "go_online", founderOverride: founder, actorUid: riderId, createdAt: FieldValue.serverTimestamp()});
-  await batch.commit();
-  return {success: true, presence: {...patch, serverTimestampPending: true}};
 });
 
 exports.goOffline = functions.https.onCall(async (data, context) => {
@@ -163,6 +186,14 @@ exports.goOffline = functions.https.onCall(async (data, context) => {
     source: staleRepair ? "goOfflineStaleReferenceRepair" : "goOffline",
   }, {merge: true});
   batch.set(db.collection("riders").doc(riderId), {status: "offline", availabilityStatus: "offline", updatedAt: FieldValue.serverTimestamp()}, {merge: true});
+  batch.set(db.collection("riderProfiles").doc(riderId), {
+    status: "offline",
+    availabilityStatus: "offline",
+    isOnline: false,
+    dispatchEligible: false,
+    lastOfflineAt: FieldValue.serverTimestamp(),
+    updatedAt: FieldValue.serverTimestamp(),
+  }, {merge: true});
   batch.set(db.collection("riderOperationalAudit").doc(), {riderId, action: "go_offline", actorUid: riderId, createdAt: FieldValue.serverTimestamp()});
   if (staleRepair) {
     batch.set(db.collection("riderOperationalAudit").doc(), {
@@ -188,10 +219,25 @@ exports.updateRiderPresence = functions.https.onCall(async (data, context) => {
   }
   const status = presence.busy === true ? "busy" : "available";
   const patch = presencePatch({riderId, status, busy: presence.busy === true, location: data && data.location});
-  await current.ref.set({
+  const batch = db.batch();
+  batch.set(current.ref, {
     ...patch,
     source: "heartbeat",
   }, {merge: true});
+  batch.set(db.collection("riders").doc(riderId), {
+    status: "online",
+    availabilityStatus: status,
+    updatedAt: FieldValue.serverTimestamp(),
+  }, {merge: true});
+  batch.set(db.collection("riderProfiles").doc(riderId), {
+    status: "online",
+    availabilityStatus: status,
+    isOnline: true,
+    dispatchEligible: patch.dispatchEligible === true,
+    lastHeartbeatAt: patch.lastHeartbeatAt,
+    updatedAt: FieldValue.serverTimestamp(),
+  }, {merge: true});
+  await batch.commit();
   return {success: true, presence: {...patch, serverTimestampPending: true}};
 });
 
@@ -207,6 +253,7 @@ exports.onDeliveryPresenceWrite = functions.firestore
       await getFirestore().collection("riderPresence").doc(riderId).set({
         riderId,
         isOnline: true,
+        status: "online",
         busy,
         availabilityStatus: next,
         activeDeliveryId: busy ? context.params.deliveryId : null,
@@ -259,6 +306,7 @@ exports.markStaleRiderPresenceOffline = functions.pubsub
       const batch = db.batch();
       snapshot.docs.forEach((doc) => {
         batch.set(doc.ref, {
+          status: "online",
           availabilityStatus: "connection_lost",
           connectionStatus: "lost",
           gpsStatus: "stale",

@@ -4,6 +4,7 @@ import 'dart:math' as math;
 
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:cloud_functions/cloud_functions.dart';
+import 'package:circum/website/shared/delivery/proof_of_delivery.dart';
 import 'package:circum/website/shared/health_plus/health_plus_pricing.dart';
 import 'package:circum/website/shared/health_plus/pickup_status.dart';
 import 'package:circum/website/shared/health_plus/recurring_pickup_schedule.dart';
@@ -23,11 +24,14 @@ import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:firebase_storage/firebase_storage.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:http/http.dart' as http;
 import 'package:image_picker/image_picker.dart';
 import 'package:flutter_stripe/flutter_stripe.dart';
+import 'package:url_launcher/link.dart';
 import 'package:url_launcher/url_launcher.dart';
+import 'package:web/web.dart' as web;
 
 import 'firebase/website_firebase_options.dart';
 import 'pricing/website_delivery_pricing.dart';
@@ -35,10 +39,9 @@ import 'pricing/website_special_handling_engine.dart';
 
 const _companyName = 'Circum';
 const _webQuoteDistanceMiles = 4.8;
+const _webVanguardAddOnPriceGbp = 1.99;
 const _desktopWebBreakpoint = 760.0;
-const _googlePlacesApiKey = String.fromEnvironment(
-  'GOOGLE_PLACES_API_KEY',
-);
+const _googlePlacesApiKey = String.fromEnvironment('GOOGLE_PLACES_API_KEY');
 const _spectrumGradient = [
   Color(0xffff8c00),
   Color(0xfff80032),
@@ -48,7 +51,7 @@ const _spectrumGradient = [
   Color(0xff19a0ff),
 ];
 
-enum _WebAppMode { landing, sender, rider, gifts }
+enum _WebAppMode { landing, sender, rider, gifts, vanguard }
 
 Future<void> _ensureCircumFirebaseReady() async {
   if (Firebase.apps.isEmpty) {
@@ -71,8 +74,9 @@ class _CircumWebsiteAppState extends State<CircumWebsiteApp> {
     publicHostingHost: true,
   );
   late _WebAppMode _mode = _modeFromRoute(_initialRoute);
-  late _SenderStep _senderInitialStep =
-      _senderStepFromRoute(_initialRoute.senderEntry);
+  late _SenderStep _senderInitialStep = _senderStepFromRoute(
+    _initialRoute.senderEntry,
+  );
 
   @override
   void initState() {
@@ -87,6 +91,7 @@ class _CircumWebsiteAppState extends State<CircumWebsiteApp> {
       CircumWebSurface.sender => _WebAppMode.sender,
       CircumWebSurface.rider => _WebAppMode.rider,
       CircumWebSurface.gifts => _WebAppMode.gifts,
+      CircumWebSurface.vanguard => _WebAppMode.vanguard,
       CircumWebSurface.admin => _WebAppMode.landing,
     };
   }
@@ -107,11 +112,15 @@ class _CircumWebsiteAppState extends State<CircumWebsiteApp> {
   }
 
   Future<void> _openCanonicalPath(String path) async {
-    final target = Uri.base.replace(path: path, queryParameters: {});
+    final target = _canonicalWebUri(path);
     final opened = await launchUrl(target, webOnlyWindowName: '_self');
     if (!opened) {
       debugPrint('Could not navigate to ${target.path}');
     }
+  }
+
+  static Uri _canonicalWebUri(String path) {
+    return Uri.base.replace(path: path, queryParameters: {}, fragment: '');
   }
 
   Future<void> _openSurface(
@@ -128,6 +137,7 @@ class _CircumWebsiteAppState extends State<CircumWebsiteApp> {
         },
       _WebAppMode.rider => '/rider',
       _WebAppMode.gifts => '/gifts',
+      _WebAppMode.vanguard => '/vanguard',
     };
     if (kIsWeb) {
       await _openCanonicalPath(path);
@@ -142,17 +152,13 @@ class _CircumWebsiteAppState extends State<CircumWebsiteApp> {
   Future<void> _logWebsiteVisit() async {
     try {
       await _ensureCircumFirebaseReady();
-      final user = FirebaseAuth.instance.currentUser;
-      await FirebaseFirestore.instance.collection('websiteVisitors').add({
+      await FirebaseFunctions.instanceFor(
+        region: 'us-central1',
+      ).httpsCallable('recordWebsiteVisit').call({
         'url': Uri.base.toString(),
         'path': Uri.base.path,
         'query': Uri.base.queryParameters,
         'appMode': _mode.name,
-        'userId': user?.uid,
-        'email': user?.email,
-        'signedIn': user != null,
-        'source': 'circum-web',
-        'createdAt': FieldValue.serverTimestamp(),
       });
     } catch (_) {
       // Visitor analytics must never block the app.
@@ -221,6 +227,11 @@ class _CircumWebsiteAppState extends State<CircumWebsiteApp> {
           colors: colors,
           onBack: () => _openSurface(_WebAppMode.landing),
         ),
+      _WebAppMode.vanguard => _VanguardLandingPage(
+          key: const ValueKey('vanguard-page'),
+          colors: colors,
+          onBack: () => _openSurface(_WebAppMode.landing),
+        ),
       _WebAppMode.landing => _LandingPage(
           key: const ValueKey(circumPublicWebIdentity),
           colors: colors,
@@ -231,6 +242,9 @@ class _CircumWebsiteAppState extends State<CircumWebsiteApp> {
             _WebAppMode.sender,
             senderStep: _SenderStep.healthPlus,
           ),
+          onBusiness: () => _openSurface(_WebAppMode.sender,
+              senderStep: _SenderStep.business),
+          onVanguard: () => _openSurface(_WebAppMode.vanguard),
           onGifts: () => _openSurface(_WebAppMode.gifts),
           onToggleTheme: () => setState(() => _darkMode = !_darkMode),
         ),
@@ -323,17 +337,12 @@ class _PlatformNotificationCenterState
       await messaging.requestPermission(provisional: true);
       final token = await messaging.getToken();
       if (token == null) return;
-      final collection = switch (widget.mode) {
-        _WebAppMode.rider => 'riderProfiles',
-        _ => 'users',
-      };
-      await FirebaseFirestore.instance
-          .collection(collection)
-          .doc(user.uid)
-          .set({
-        'fcmToken': token,
-        'notificationTokenUpdatedAt': FieldValue.serverTimestamp(),
-      }, SetOptions(merge: true));
+      final callable = widget.mode == _WebAppMode.rider
+          ? 'updateRiderPushToken'
+          : 'updateSenderPushToken';
+      await FirebaseFunctions.instanceFor(
+        region: 'us-central1',
+      ).httpsCallable(callable).call({'fcmToken': token});
     } catch (_) {
       // In-app notification history remains available if push is unavailable.
     }
@@ -343,26 +352,28 @@ class _PlatformNotificationCenterState
     QueryDocumentSnapshot<Map<String, dynamic>> item,
   ) async {
     if (item.data()['read'] == true) return;
-    await item.reference.set({
-      'read': true,
-      'readAt': FieldValue.serverTimestamp(),
-    }, SetOptions(merge: true));
+    await FirebaseFunctions.instanceFor(region: 'us-central1')
+        .httpsCallable(
+      widget.mode == _WebAppMode.rider
+          ? 'updateRiderNotificationState'
+          : 'updateSenderNotificationState',
+    )
+        .call({'notificationId': item.id, 'action': 'mark_read'});
   }
 
   Future<void> _markAllRead() async {
     final unread = _items.where((item) => item.data()['read'] != true).toList();
     if (unread.isEmpty) return;
-    final batch = FirebaseFirestore.instance.batch();
-    for (final item in unread) {
-      batch.set(
-          item.reference,
-          {
-            'read': true,
-            'readAt': FieldValue.serverTimestamp(),
-          },
-          SetOptions(merge: true));
-    }
-    await batch.commit();
+    await FirebaseFunctions.instanceFor(region: 'us-central1')
+        .httpsCallable(
+      widget.mode == _WebAppMode.rider
+          ? 'updateRiderNotificationState'
+          : 'updateSenderNotificationState',
+    )
+        .call({
+      'notificationIds': unread.map((item) => item.id).toList(),
+      'action': 'mark_read',
+    });
   }
 
   @override
@@ -423,8 +434,10 @@ class _PlatformNotificationCenterState
                     padding: const EdgeInsets.fromLTRB(18, 14, 8, 12),
                     child: Row(
                       children: [
-                        Icon(Icons.notifications_rounded,
-                            color: widget.colors.text),
+                        Icon(
+                          Icons.notifications_rounded,
+                          color: widget.colors.text,
+                        ),
                         const SizedBox(width: 10),
                         Expanded(
                           child: Text(
@@ -550,6 +563,8 @@ class _LandingPage extends StatelessWidget {
   final VoidCallback onStart;
   final VoidCallback onRider;
   final VoidCallback onHealthPlus;
+  final VoidCallback onBusiness;
+  final VoidCallback onVanguard;
   final VoidCallback? onGifts;
   final VoidCallback onToggleTheme;
 
@@ -560,6 +575,8 @@ class _LandingPage extends StatelessWidget {
     required this.onStart,
     required this.onRider,
     required this.onHealthPlus,
+    required this.onBusiness,
+    required this.onVanguard,
     this.onGifts,
     required this.onToggleTheme,
   });
@@ -575,6 +592,7 @@ class _LandingPage extends StatelessWidget {
             onStart: onStart,
             onRider: onRider,
             onHealthPlus: onHealthPlus,
+            onBusiness: onBusiness,
             onGifts: onGifts,
             onToggleTheme: onToggleTheme,
           ),
@@ -636,8 +654,8 @@ class _LandingPage extends StatelessWidget {
                             shadows: [
                               Shadow(
                                 color: colors.dark
-                                    ? Colors.black.withOpacity(0.32)
-                                    : Colors.white.withOpacity(0.78),
+                                    ? Colors.black.withValues(alpha: 0.32)
+                                    : Colors.white.withValues(alpha: 0.78),
                                 blurRadius: 24,
                                 offset: const Offset(0, 10),
                               ),
@@ -649,7 +667,7 @@ class _LandingPage extends StatelessWidget {
                   ),
                   const SizedBox(height: 24),
                   Text(
-                    'Book trusted riders for parcels, prescriptions, documents, and larger items. See the price, track the parcel, and stay in control.',
+                    'Book trusted Circum Riders for parcels, prescriptions, documents, and larger items. See the price, track the parcel, and stay in control.',
                     textAlign: TextAlign.center,
                     style: TextStyle(
                       color: colors.mutedText,
@@ -667,18 +685,23 @@ class _LandingPage extends StatelessWidget {
                     children: [
                       _PillButton(
                         label: 'Send a Parcel',
+                        uri: _CircumWebsiteAppState._canonicalWebUri('/send'),
                         icon: Icons.arrow_forward,
                         dark: true,
                         onPressed: onStart,
                       ),
                       _PillButton(
-                        label: 'Earn as a Rider',
+                        label: 'Earn as a Circum Rider',
+                        uri: _CircumWebsiteAppState._canonicalWebUri('/rider'),
                         icon: Icons.two_wheeler,
                         dark: false,
                         onPressed: onRider,
                       ),
                       _PillButton(
                         label: 'Get started with Health+',
+                        uri: _CircumWebsiteAppState._canonicalWebUri(
+                          '/send/health',
+                        ),
                         icon: Icons.health_and_safety,
                         dark: false,
                         onPressed: onHealthPlus,
@@ -691,8 +714,20 @@ class _LandingPage extends StatelessWidget {
               ),
             ),
           ),
-          _FeatureBand(colors: colors),
-          _LandingFooter(colors: colors),
+          _ServiceTrustBand(
+            colors: colors,
+            onHealthPlus: onHealthPlus,
+            onBusiness: onBusiness,
+            onVanguard: onVanguard,
+          ),
+          _LandingFooter(
+            colors: colors,
+            onDeliveries: onStart,
+            onHealthPlus: onHealthPlus,
+            onGifts: onGifts,
+            onBusiness: onBusiness,
+            onVanguard: onVanguard,
+          ),
         ],
       ),
     );
@@ -796,6 +831,22 @@ String _displayStatusLabel(String status) {
       .join(' ');
 }
 
+String _displayDeliveryReference(String reference) {
+  final value = reference.trim();
+  if (value.isEmpty) return 'Reference pending';
+  final normalized = value.toLowerCase();
+  final compact = value.replaceAll(RegExp(r'[^A-Za-z0-9]'), '');
+  final suffix = compact.length <= 6
+      ? compact.toUpperCase()
+      : compact.substring(compact.length - 6).toUpperCase();
+  if (normalized.startsWith('gift_')) return 'Gift #$suffix';
+  if (normalized.startsWith('health_')) return 'Health+ #$suffix';
+  if (normalized.contains('_') || compact.length > 18) {
+    return 'Delivery #$suffix';
+  }
+  return value;
+}
+
 String _adminDateText(dynamic value) {
   DateTime? date;
   if (value is Timestamp) date = value.toDate();
@@ -805,22 +856,13 @@ String _adminDateText(dynamic value) {
   return '${date.day.toString().padLeft(2, '0')}/${date.month.toString().padLeft(2, '0')}/${date.year}';
 }
 
-String _websiteRiderRankLabel(String rank) {
-  final normalized = rank.trim().toLowerCase().replaceAll('_', ' ');
-  if (normalized.isEmpty) return 'Standard';
-  return normalized
-      .split(RegExp(r'\s+'))
-      .where((part) => part.isNotEmpty)
-      .map((part) => '${part[0].toUpperCase()}${part.substring(1)}')
-      .join(' ');
-}
-
 class _LandingNav extends StatelessWidget {
   final _CircumColors colors;
   final bool darkMode;
   final VoidCallback onStart;
   final VoidCallback onRider;
   final VoidCallback onHealthPlus;
+  final VoidCallback onBusiness;
   final VoidCallback? onGifts;
   final VoidCallback onToggleTheme;
 
@@ -830,6 +872,7 @@ class _LandingNav extends StatelessWidget {
     required this.onStart,
     required this.onRider,
     required this.onHealthPlus,
+    required this.onBusiness,
     this.onGifts,
     required this.onToggleTheme,
   });
@@ -861,58 +904,77 @@ class _LandingNav extends StatelessWidget {
               ),
               const SizedBox(width: 8),
               if (MediaQuery.sizeOf(context).width >= 560)
-                TextButton(
+                _LandingNavLink(
+                  label: 'Rider',
+                  uri: _CircumWebsiteAppState._canonicalWebUri('/rider'),
+                  colors: colors,
                   onPressed: onRider,
-                  child: Text(
-                    'Rider',
-                    style: TextStyle(
-                      color: colors.text,
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
                 ),
               if (MediaQuery.sizeOf(context).width >= 680)
-                TextButton(
+                _LandingNavLink(
+                  label: 'Health+',
+                  uri: _CircumWebsiteAppState._canonicalWebUri('/send/health'),
+                  colors: colors,
                   onPressed: onHealthPlus,
-                  child: Text(
-                    'Health+',
-                    style: TextStyle(
-                      color: colors.text,
-                      fontWeight: FontWeight.w700,
-                    ),
+                ),
+              if (MediaQuery.sizeOf(context).width >= 760)
+                _LandingNavLink(
+                  label: 'Business',
+                  uri: _CircumWebsiteAppState._canonicalWebUri(
+                    '/send/business',
                   ),
+                  colors: colors,
+                  onPressed: onBusiness,
                 ),
               if (onGifts != null && MediaQuery.sizeOf(context).width >= 760)
-                TextButton.icon(
-                  onPressed: onGifts,
-                  icon: const Icon(Icons.card_giftcard, size: 18),
-                  label: Text(
-                    'Gifts',
-                    style: TextStyle(
-                      color: colors.text,
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
+                Link(
+                  uri: _CircumWebsiteAppState._canonicalWebUri('/gifts'),
+                  target: LinkTarget.self,
+                  builder: (context, followLink) {
+                    return TextButton.icon(
+                      onPressed: followLink ?? onGifts,
+                      icon: const Icon(Icons.card_giftcard, size: 18),
+                      label: Text(
+                        'Gifts',
+                        style: TextStyle(
+                          color: colors.text,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                    );
+                  },
                 )
               else if (onGifts != null)
-                IconButton(
-                  tooltip: 'Gifts',
-                  onPressed: onGifts,
-                  icon: Icon(Icons.card_giftcard, color: colors.text),
+                Link(
+                  uri: _CircumWebsiteAppState._canonicalWebUri('/gifts'),
+                  target: LinkTarget.self,
+                  builder: (context, followLink) {
+                    return IconButton(
+                      tooltip: 'Gifts',
+                      onPressed: followLink ?? onGifts,
+                      icon: Icon(Icons.card_giftcard, color: colors.text),
+                    );
+                  },
                 ),
               const SizedBox(width: 8),
-              FilledButton(
-                onPressed: onStart,
-                style: FilledButton.styleFrom(
-                  backgroundColor: colors.text,
-                  foregroundColor: colors.inverseText,
-                  shape: const StadiumBorder(),
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 20,
-                    vertical: 14,
-                  ),
-                ),
-                child: const Text('Send a Parcel'),
+              Link(
+                uri: _CircumWebsiteAppState._canonicalWebUri('/send'),
+                target: LinkTarget.self,
+                builder: (context, followLink) {
+                  return FilledButton(
+                    onPressed: followLink ?? onStart,
+                    style: FilledButton.styleFrom(
+                      backgroundColor: colors.text,
+                      foregroundColor: colors.inverseText,
+                      shape: const StadiumBorder(),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 20,
+                        vertical: 14,
+                      ),
+                    ),
+                    child: const Text('Send a Parcel'),
+                  );
+                },
               ),
             ],
           ),
@@ -974,6 +1036,37 @@ class _SpectrumSweepPainter extends CustomPainter {
   }
 }
 
+class _LandingNavLink extends StatelessWidget {
+  final String label;
+  final Uri uri;
+  final _CircumColors colors;
+  final VoidCallback onPressed;
+
+  const _LandingNavLink({
+    required this.label,
+    required this.uri,
+    required this.colors,
+    required this.onPressed,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Link(
+      uri: uri,
+      target: LinkTarget.self,
+      builder: (context, followLink) {
+        return TextButton(
+          onPressed: followLink ?? onPressed,
+          child: Text(
+            label,
+            style: TextStyle(color: colors.text, fontWeight: FontWeight.w700),
+          ),
+        );
+      },
+    );
+  }
+}
+
 class _HeroMockup extends StatelessWidget {
   final _CircumColors colors;
   final VoidCallback onStart;
@@ -1000,7 +1093,7 @@ class _HeroMockup extends StatelessWidget {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
-                          'Your rider is on the way',
+                          'Your Circum Rider is on the way',
                           style: TextStyle(
                             color: colors.text,
                             fontWeight: FontWeight.w900,
@@ -1008,7 +1101,7 @@ class _HeroMockup extends StatelessWidget {
                           ),
                         ),
                         Text(
-                          'Bike courier arriving in 8 min',
+                          'Motorbike courier arriving in 8 min',
                           style: TextStyle(
                             color: colors.mutedText,
                             fontWeight: FontWeight.w600,
@@ -1048,18 +1141,24 @@ class _HeroMockup extends StatelessWidget {
               const SizedBox(height: 18),
               SizedBox(
                 width: double.infinity,
-                child: FilledButton.icon(
-                  onPressed: onStart,
-                  icon: const Icon(Icons.send_rounded),
-                  label: const Text('Start a delivery'),
-                  style: FilledButton.styleFrom(
-                    backgroundColor: colors.text,
-                    foregroundColor: colors.inverseText,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(16),
-                    ),
-                    padding: const EdgeInsets.symmetric(vertical: 16),
-                  ),
+                child: Link(
+                  uri: _CircumWebsiteAppState._canonicalWebUri('/send'),
+                  target: LinkTarget.self,
+                  builder: (context, followLink) {
+                    return FilledButton.icon(
+                      onPressed: followLink ?? onStart,
+                      icon: const Icon(Icons.send_rounded),
+                      label: const Text('Start a delivery'),
+                      style: FilledButton.styleFrom(
+                        backgroundColor: colors.text,
+                        foregroundColor: colors.inverseText,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(16),
+                        ),
+                        padding: const EdgeInsets.symmetric(vertical: 16),
+                      ),
+                    );
+                  },
                 ),
               ),
             ],
@@ -1075,7 +1174,8 @@ class _HeroMockup extends StatelessWidget {
             border: Border.all(color: colors.border),
             boxShadow: [
               BoxShadow(
-                color: Colors.black.withOpacity(colors.dark ? 0.32 : 0.08),
+                color:
+                    Colors.black.withValues(alpha: colors.dark ? 0.32 : 0.08),
                 blurRadius: 36,
                 offset: const Offset(0, 18),
               ),
@@ -1096,60 +1196,612 @@ class _HeroMockup extends StatelessWidget {
   }
 }
 
-class _FeatureBand extends StatelessWidget {
+class _ServiceTrustBand extends StatelessWidget {
   final _CircumColors colors;
+  final VoidCallback onHealthPlus;
+  final VoidCallback onBusiness;
+  final VoidCallback onVanguard;
 
-  const _FeatureBand({required this.colors});
+  const _ServiceTrustBand({
+    required this.colors,
+    required this.onHealthPlus,
+    required this.onBusiness,
+    required this.onVanguard,
+  });
 
   @override
   Widget build(BuildContext context) {
     return Container(
       width: double.infinity,
       color: colors.band,
-      padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 70),
+      padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 76),
       child: Center(
         child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 1180),
-          child: LayoutBuilder(
+          constraints: const BoxConstraints(maxWidth: 1120),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              _ServiceIntroCard(
+                colors: colors,
+                icon: Icons.health_and_safety,
+                title: 'Health+',
+                headline: 'Care logistics without the loose ends.',
+                body:
+                    'Prescription pickups, recurring reminders, sealed handling, and the same trusted custody layer built into important deliveries.',
+                actionLabel: 'Open Health+',
+                uri: _CircumWebsiteAppState._canonicalWebUri('/send/health'),
+                badge: 'Vanguard Included',
+                highlights: const [
+                  'Prescription pickups',
+                  'Recurring reminders',
+                  'Sealed custody',
+                  'Priority handling',
+                ],
+                onPressed: onHealthPlus,
+              ),
+              const SizedBox(height: 24),
+              _ServiceIntroCard(
+                colors: colors,
+                icon: Icons.business_center,
+                title: 'Business',
+                headline: 'Operational delivery for teams.',
+                body:
+                    'Manage company deliveries, invoices, Health+, Gifts, Roth, and recurring work from one Circum workspace.',
+                actionLabel: 'Open Business',
+                uri: _CircumWebsiteAppState._canonicalWebUri('/send/business'),
+                badge: 'Corporate Gifts · Vanguard Included',
+                highlights: const [
+                  'Company deliveries',
+                  'Team access',
+                  'Invoices',
+                  'Recurring work',
+                ],
+                onPressed: onBusiness,
+              ),
+              const SizedBox(height: 24),
+              _VanguardHomepageSection(
+                colors: colors,
+                uri: _CircumWebsiteAppState._canonicalWebUri('/vanguard'),
+                onLearnMore: onVanguard,
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _ServiceIntroCard extends StatelessWidget {
+  final _CircumColors colors;
+  final IconData icon;
+  final String title;
+  final String headline;
+  final String body;
+  final String actionLabel;
+  final Uri uri;
+  final String badge;
+  final List<String> highlights;
+  final VoidCallback onPressed;
+
+  const _ServiceIntroCard({
+    required this.colors,
+    required this.icon,
+    required this.title,
+    required this.headline,
+    required this.body,
+    required this.actionLabel,
+    required this.uri,
+    required this.badge,
+    required this.highlights,
+    required this.onPressed,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final compact = constraints.maxWidth < 760;
+        final iconMark = Container(
+          width: compact ? 74 : 88,
+          height: compact ? 74 : 88,
+          decoration: BoxDecoration(
+            shape: BoxShape.circle,
+            gradient: RadialGradient(
+              colors: [
+                const Color(0xff1d4ed8).withValues(alpha: 0.34),
+                const Color(0xff0b2340).withValues(alpha: 0.8),
+              ],
+            ),
+            border: Border.all(
+              color: const Color(0xff3b82f6).withValues(alpha: 0.48),
+              width: 1.4,
+            ),
+            boxShadow: [
+              BoxShadow(
+                color: const Color(0xff0a84ff).withValues(alpha: 0.13),
+                blurRadius: 24,
+                offset: const Offset(0, 14),
+              ),
+            ],
+          ),
+          child: Icon(
+            icon,
+            color: const Color(0xff0a84ff),
+            size: compact ? 30 : 34,
+          ),
+        );
+
+        final action = _VanguardBlueActionButton(
+          label: actionLabel,
+          uri: uri,
+          onPressed: onPressed,
+        );
+
+        return Container(
+          width: double.infinity,
+          padding: EdgeInsets.all(compact ? 24 : 32),
+          decoration: BoxDecoration(
+            gradient: RadialGradient(
+              center: const Alignment(-0.78, -0.95),
+              radius: 1.35,
+              colors: [
+                const Color(0xff123d6f).withValues(alpha: 0.58),
+                const Color(0xff07192f).withValues(alpha: 0.94),
+                const Color(0xff040811).withValues(alpha: 0.98),
+              ],
+            ),
+            borderRadius: BorderRadius.circular(30),
+            border: Border.all(
+              color: const Color(0xff5b7fa8).withValues(alpha: 0.34),
+              width: 1.35,
+            ),
+            boxShadow: [
+              BoxShadow(
+                color: const Color(0xff0a84ff).withValues(alpha: 0.09),
+                blurRadius: 34,
+                offset: const Offset(0, 18),
+              ),
+              BoxShadow(
+                color: Colors.black.withValues(alpha: 0.26),
+                blurRadius: 28,
+                offset: const Offset(0, 16),
+              ),
+            ],
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  iconMark,
+                  const SizedBox(width: 18),
+                  Expanded(
+                    child: Wrap(
+                      spacing: 10,
+                      runSpacing: 8,
+                      crossAxisAlignment: WrapCrossAlignment.center,
+                      children: [
+                        _VanguardBlueChip(label: title),
+                        _VanguardBlueChip(label: badge),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+              SizedBox(height: compact ? 22 : 26),
+              Text(
+                headline,
+                style: TextStyle(
+                  color: Colors.white,
+                  fontFamily: 'Georgia',
+                  fontSize: compact ? 34 : 48,
+                  height: 1.08,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+              const SizedBox(height: 14),
+              Text(
+                body,
+                style: TextStyle(
+                  color: Colors.white.withValues(alpha: 0.72),
+                  fontSize: compact ? 16 : 18,
+                  height: 1.48,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+              const SizedBox(height: 22),
+              Wrap(
+                spacing: 12,
+                runSpacing: 12,
+                children: [
+                  for (final highlight in highlights)
+                    _ServiceHighlightPill(label: highlight),
+                ],
+              ),
+              const SizedBox(height: 24),
+              action,
+            ],
+          ),
+        );
+      },
+    );
+  }
+}
+
+class _VanguardBlueChip extends StatelessWidget {
+  final String label;
+
+  const _VanguardBlueChip({required this.label});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
+      decoration: BoxDecoration(
+        color: const Color(0xff0a84ff).withValues(alpha: 0.11),
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(
+          color: const Color(0xff3b82f6).withValues(alpha: 0.38),
+          width: 1.1,
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: const Color(0xff0a84ff).withValues(alpha: 0.1),
+            blurRadius: 18,
+            offset: const Offset(0, 8),
+          ),
+        ],
+      ),
+      child: Text(
+        label,
+        style: const TextStyle(
+          color: Color(0xffdbeafe),
+          fontSize: 12,
+          fontWeight: FontWeight.w900,
+          letterSpacing: 0.2,
+        ),
+      ),
+    );
+  }
+}
+
+class _VanguardBlueActionButton extends StatelessWidget {
+  final String label;
+  final Uri uri;
+  final VoidCallback onPressed;
+
+  const _VanguardBlueActionButton({
+    required this.label,
+    required this.uri,
+    required this.onPressed,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(999),
+        boxShadow: [
+          BoxShadow(
+            color: const Color(0xff0a84ff).withValues(alpha: 0.24),
+            blurRadius: 24,
+            offset: const Offset(0, 12),
+          ),
+        ],
+      ),
+      child: Link(
+        uri: uri,
+        target: LinkTarget.self,
+        builder: (context, followLink) {
+          return FilledButton.icon(
+            onPressed: followLink ?? onPressed,
+            icon: const Icon(Icons.arrow_forward, size: 18),
+            label: Text(label),
+            style: FilledButton.styleFrom(
+              backgroundColor: const Color(0xff0a84ff),
+              foregroundColor: Colors.white,
+              minimumSize: const Size(0, 50),
+              padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 15),
+              textStyle: const TextStyle(
+                fontFamily: 'Georgia',
+                fontSize: 16,
+                fontWeight: FontWeight.w700,
+                letterSpacing: 0,
+              ),
+              shape: const StadiumBorder(),
+            ),
+          );
+        },
+      ),
+    );
+  }
+}
+
+class _ServiceHighlightPill extends StatelessWidget {
+  final String label;
+
+  const _ServiceHighlightPill({required this.label});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
+      decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: 0.052),
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(
+          color: const Color(0xff5b7fa8).withValues(alpha: 0.26),
+        ),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const Icon(
+            Icons.check_circle_outline,
+            color: Color(0xff0a84ff),
+            size: 17,
+          ),
+          const SizedBox(width: 8),
+          Text(
+            label,
+            style: TextStyle(
+              color: Colors.white.withValues(alpha: 0.82),
+              fontSize: 13,
+              fontWeight: FontWeight.w900,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _VanguardHomepageSection extends StatelessWidget {
+  final _CircumColors colors;
+  final Uri uri;
+  final VoidCallback onLearnMore;
+
+  const _VanguardHomepageSection({
+    required this.colors,
+    required this.uri,
+    required this.onLearnMore,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final narrow = MediaQuery.sizeOf(context).width < 720;
+    return Container(
+      width: double.infinity,
+      padding: EdgeInsets.fromLTRB(
+        narrow ? 24 : 34,
+        narrow ? 36 : 42,
+        narrow ? 24 : 34,
+        narrow ? 30 : 36,
+      ),
+      decoration: BoxDecoration(
+        gradient: RadialGradient(
+          center: const Alignment(0, -0.72),
+          radius: 1.15,
+          colors: [
+            const Color(0xff0b3764).withValues(alpha: 0.72),
+            const Color(0xff07192f).withValues(alpha: 0.94),
+            const Color(0xff030812).withValues(alpha: 0.98),
+          ],
+        ),
+        borderRadius: BorderRadius.circular(30),
+        border: Border.all(
+          color: const Color(0xff5b7fa8).withValues(alpha: 0.36),
+          width: 1.4,
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: const Color(0xff0a84ff).withValues(alpha: 0.1),
+            blurRadius: 38,
+            offset: const Offset(0, 20),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.center,
+        children: [
+          const _VanguardShieldFallback(size: 94),
+          const SizedBox(height: 28),
+          Wrap(
+            spacing: 10,
+            runSpacing: 8,
+            crossAxisAlignment: WrapCrossAlignment.center,
+            alignment: WrapAlignment.center,
+            children: const [
+              _VanguardBlueChip(label: 'Vanguard'),
+              _VanguardBlueChip(label: 'Optional add-on at checkout — £1.99'),
+            ],
+          ),
+          const SizedBox(height: 18),
+          Text(
+            'Trust matters more than speed.',
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              color: Colors.white,
+              fontFamily: 'Georgia',
+              fontSize: narrow ? 34 : 50,
+              height: 1.12,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+          const SizedBox(height: 18),
+          Text(
+            'Add Vanguard for £1.99 and receive enhanced custody tracking, trusted Circum Rider prioritisation, priority support, and better handling for important deliveries.',
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              color: Colors.white.withValues(alpha: 0.72),
+              fontSize: narrow ? 17 : 19,
+              height: 1.48,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+          const SizedBox(height: 26),
+          LayoutBuilder(
             builder: (context, constraints) {
-              final cols = constraints.maxWidth < 760 ? 1 : 3;
+              final cols = constraints.maxWidth < 640 ? 1 : 4;
               return GridView.count(
                 shrinkWrap: true,
                 physics: const NeverScrollableScrollPhysics(),
                 crossAxisCount: cols,
-                mainAxisSpacing: 18,
-                crossAxisSpacing: 18,
-                childAspectRatio: cols == 1 ? 2.1 : 1.05,
-                children: [
-                  _FeatureCard(
-                    colors: colors,
-                    icon: Icons.tune,
-                    tint: const Color(0xffdbeafe),
-                    title: 'Iris matching',
-                    body:
-                        'Tell Iris what you are sending and it helps choose the right rider, vehicle, route, and price.',
-                  ),
-                  _FeatureCard(
-                    colors: colors,
+                mainAxisSpacing: 16,
+                crossAxisSpacing: 16,
+                childAspectRatio: cols == 1 ? 2.45 : 0.95,
+                children: const [
+                  _VanguardMiniCard(
                     icon: Icons.verified_user_outlined,
-                    tint: const Color(0xffdcfce7),
-                    title: 'Built-in reassurance',
+                    title: 'Trusted Rider Prioritisation',
                     body:
-                        'Follow the journey with live location, rider details, status updates, and delivery proof.',
+                        'Circum prioritises experienced and highly trusted Circum Riders during assignment. Customers do not choose riders.',
                   ),
-                  _FeatureCard(
-                    colors: colors,
-                    icon: Icons.bolt,
-                    tint: const Color(0xffede9fe),
-                    title: 'Ready when you are',
+                  _VanguardMiniCard(
+                    icon: Icons.timeline_outlined,
+                    title: 'Enhanced Custody Tracking',
                     body:
-                        'Send the job to nearby riders and choose the option that fits the delivery.',
+                        'Clear delivery milestones from assignment to delivery.',
+                  ),
+                  _VanguardMiniCard(
+                    icon: Icons.support_agent,
+                    title: 'Priority Support',
+                    body: 'Priority support and faster dispute review.',
+                  ),
+                  _VanguardMiniCard(
+                    icon: Icons.gavel_outlined,
+                    title: 'Priority Dispute Review',
+                    body: 'Priority review for Vanguard deliveries.',
                   ),
                 ],
               );
             },
           ),
-        ),
+          const SizedBox(height: 24),
+          const _VanguardHomepageTimeline(),
+          const SizedBox(height: 24),
+          Wrap(
+            spacing: 12,
+            runSpacing: 12,
+            alignment: WrapAlignment.center,
+            children: [
+              _VanguardBlueActionButton(
+                label: 'Learn more',
+                uri: uri,
+                onPressed: onLearnMore,
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _VanguardMiniCard extends StatelessWidget {
+  final IconData icon;
+  final String title;
+  final String body;
+
+  const _VanguardMiniCard({
+    required this.icon,
+    required this.title,
+    required this.body,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(20),
+      decoration: _vanguardCardDecoration(),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(icon, color: const Color(0xff0a84ff), size: 24),
+          const Spacer(),
+          Text(
+            title,
+            style: const TextStyle(
+              color: Colors.white,
+              height: 1.2,
+              fontWeight: FontWeight.w900,
+            ),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            body,
+            maxLines: 4,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(
+              color: Colors.white.withValues(alpha: 0.68),
+              height: 1.32,
+              fontSize: 13,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _VanguardHomepageTimeline extends StatelessWidget {
+  const _VanguardHomepageTimeline();
+
+  @override
+  Widget build(BuildContext context) {
+    final compact = MediaQuery.sizeOf(context).width < 720;
+    final steps = compact
+        ? const ['Assigned', 'Collected', 'In transit', 'Delivered']
+        : const [
+            'Circum Rider assigned',
+            'Item collected',
+            'In transit',
+            'Delivered',
+          ];
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 16),
+      decoration: _vanguardCardDecoration(darker: true),
+      child: Wrap(
+        alignment: WrapAlignment.center,
+        crossAxisAlignment: WrapCrossAlignment.center,
+        spacing: 12,
+        runSpacing: 12,
+        children: [
+          for (var index = 0; index < steps.length; index++) ...[
+            Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Container(
+                  width: 12,
+                  height: 12,
+                  decoration: const BoxDecoration(
+                    color: Color(0xff0a84ff),
+                    shape: BoxShape.circle,
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Text(
+                  steps[index],
+                  style: TextStyle(
+                    color: Colors.white.withValues(alpha: 0.86),
+                    fontWeight: FontWeight.w900,
+                    fontSize: 13,
+                  ),
+                ),
+              ],
+            ),
+            if (index != steps.length - 1 && !compact)
+              Container(
+                width: 28,
+                height: 1.2,
+                color: const Color(0xff5b7fa8).withValues(alpha: 0.48),
+              ),
+          ],
+        ],
       ),
     );
   }
@@ -1534,31 +2186,16 @@ String _pdfTextEscape(String value) {
       .replaceAll(')', r'\)');
 }
 
-Uri _circumOrderPdfUri() {
-  final rawLines = <String>[
-    'THE CIRCUM ORDER',
-    'Every Veteran Was Once An Agent.',
-    '',
-    'Founding Charter of the Driver Network',
-    '',
-    'Agent - I Have Joined The Network',
-    'Sentinel - I Have Proven Myself',
-    'Warden - Circum Trusts Me',
-    'Knight - I Defend The Network',
-    'Veteran - I Helped Build This',
-    '',
-    'Circum rewards contribution.',
-    'Those who create value, protect the network, serve customers and',
-    'help build the platform will be recognised and rewarded.',
-    '',
-    ..._circumOrderCharterSections.expand(
-      (section) => [
-        '',
-        section.title,
-        ...section.paragraphs.expand((paragraph) => [paragraph, '']),
-      ],
-    ),
-  ];
+String _pdfMoney(Object? value) {
+  final parsed = value is num ? value.toDouble() : double.tryParse('$value');
+  return (parsed ?? 0).toStringAsFixed(2);
+}
+
+Uri _pdfUriFromLines(
+  List<String> rawLines, {
+  String? title,
+  Set<String> sectionTitles = const {},
+}) {
   final lines = <String>[];
   for (final line in rawLines) {
     if (line.length <= 72) {
@@ -1598,10 +2235,8 @@ Uri _circumOrderPdfUri() {
     var y = 742;
     final stream = StringBuffer();
     for (final line in pageLines) {
-      final isTitle = line == 'THE CIRCUM ORDER';
-      final isSectionTitle = _circumOrderCharterSections.any(
-        (section) => section.title == line,
-      );
+      final isTitle = title != null && line == title;
+      final isSectionTitle = sectionTitles.contains(line);
       final size = isTitle ? 22 : (isSectionTitle ? 15 : 11);
       stream.writeln(
         'BT /F1 $size Tf 72 $y Td (${_pdfTextEscape(line)}) Tj ET',
@@ -1643,6 +2278,106 @@ Uri _circumOrderPdfUri() {
   return Uri.parse(
     'data:application/pdf;base64,${base64Encode(ascii.encode(buffer.toString()))}',
   );
+}
+
+Uri _circumOrderPdfUri() {
+  final rawLines = <String>[
+    'THE CIRCUM ORDER',
+    'Every Veteran Was Once An Agent.',
+    '',
+    'Founding Charter of the Driver Network',
+    '',
+    'Agent - I Have Joined The Network',
+    'Sentinel - I Have Proven Myself',
+    'Warden - Circum Trusts Me',
+    'Knight - I Defend The Network',
+    'Veteran - I Helped Build This',
+    '',
+    'Circum rewards contribution.',
+    'Those who create value, protect the network, serve customers and',
+    'help build the platform will be recognised and rewarded.',
+    '',
+    ..._circumOrderCharterSections.expand(
+      (section) => [
+        '',
+        section.title,
+        ...section.paragraphs.expand((paragraph) => [paragraph, '']),
+      ],
+    ),
+  ];
+  return _pdfUriFromLines(
+    rawLines,
+    title: 'THE CIRCUM ORDER',
+    sectionTitles:
+        _circumOrderCharterSections.map((section) => section.title).toSet(),
+  );
+}
+
+Uri _businessInvoicePdfUri(Map<String, dynamic> invoice) {
+  final id = '${invoice['id'] ?? ''}'.trim();
+  final invoiceNumber = '${invoice['invoiceNumber'] ?? id}'.trim();
+  final displayNumber =
+      invoiceNumber.isEmpty ? 'Business invoice' : invoiceNumber;
+  final status = _displayStatusLabel(
+    '${invoice['status'] ?? invoice['paymentStatus'] ?? 'open'}',
+  );
+  final total = _pdfMoney(invoice['total'] ?? invoice['subtotal']);
+  final paid = _pdfMoney(invoice['amountPaid']);
+  final balance = _pdfMoney(invoice['balanceDue'] ?? invoice['total']);
+  final roth = _pdfMoney(invoice['rothApplied'] ?? invoice['rothAmount']);
+  final deliveryCount = invoice['deliveryCount'] ??
+      (invoice['deliveryIds'] is List
+          ? (invoice['deliveryIds'] as List).length
+          : null);
+  final issued = _adminDateText(invoice['issuedAt'] ?? invoice['createdAt']);
+  final due = _adminDateText(invoice['dueAt'] ?? invoice['dueDate']);
+
+  return _pdfUriFromLines(
+    [
+      'CIRCUM BUSINESS INVOICE',
+      displayNumber,
+      '',
+      'Status: $status',
+      'Issued: $issued',
+      'Due: $due',
+      '',
+      'Summary',
+      'Total: GBP $total',
+      'Paid: GBP $paid',
+      'Roth applied: GBP $roth',
+      'Balance due: GBP $balance',
+      if (deliveryCount != null) 'Deliveries: $deliveryCount',
+      '',
+      'Payment',
+      'Business invoices are created by Circum Operations.',
+      'Use Stripe or Business Roth in the Business Centre to settle this invoice.',
+      '',
+      'Records',
+      'This copy is provided for business records and may be printed or saved as PDF.',
+    ],
+    title: 'CIRCUM BUSINESS INVOICE',
+    sectionTitles: const {'Summary', 'Payment', 'Records'},
+  );
+}
+
+String _businessInvoicePdfFileName(Map<String, dynamic> invoice) {
+  final id = '${invoice['invoiceNumber'] ?? invoice['id'] ?? 'invoice'}';
+  final safe = id
+      .trim()
+      .replaceAll(RegExp(r'[^A-Za-z0-9._-]+'), '-')
+      .replaceAll(RegExp(r'-+'), '-')
+      .replaceAll(RegExp(r'^-|-$'), '');
+  return 'circum-business-${safe.isEmpty ? 'invoice' : safe}.pdf';
+}
+
+void _downloadBusinessPdf(Uri uri, String fileName) {
+  final anchor = web.HTMLAnchorElement()
+    ..download = fileName
+    ..href = uri.toString()
+    ..style.display = 'none';
+  web.document.body?.append(anchor);
+  anchor.click();
+  anchor.remove();
 }
 
 class _CircumOrderContent extends StatefulWidget {
@@ -1719,7 +2454,8 @@ class _CircumOrderContentState extends State<_CircumOrderContent> {
                       Color(0xffffffff),
                     ],
             ),
-            border: Border.all(color: colors.adminAccent.withOpacity(0.18)),
+            border:
+                Border.all(color: colors.adminAccent.withValues(alpha: 0.18)),
           ),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -1786,7 +2522,7 @@ class _CircumOrderContentState extends State<_CircumOrderContent> {
                   TextButton.icon(
                     onPressed: widget.onBecomeRider,
                     icon: const Icon(Icons.two_wheeler),
-                    label: const Text('Become a Rider'),
+                    label: const Text('Become a Circum Rider'),
                   ),
                 ],
               ),
@@ -2057,7 +2793,7 @@ class _RiderOrderProfileCard extends StatelessWidget {
                   gradient: const LinearGradient(colors: _spectrumGradient),
                   boxShadow: [
                     BoxShadow(
-                      color: const Color(0xff8c28ff).withOpacity(0.28),
+                      color: const Color(0xff8c28ff).withValues(alpha: 0.28),
                       blurRadius: 22,
                     ),
                   ],
@@ -2130,11 +2866,7 @@ class _RiderOrderProfileCard extends StatelessWidget {
                 label: 'Deliveries',
                 value: '${performance.completedTrips}',
               ),
-              _RiderStatTile(
-                colors: colors,
-                label: 'Rating',
-                value: rating,
-              ),
+              _RiderStatTile(colors: colors, label: 'Rating', value: rating),
               if (memberSince != null)
                 _RiderStatTile(
                   colors: colors,
@@ -2318,7 +3050,7 @@ class _RiderEarningsTab extends StatelessWidget {
         _GlassPanel(
           colors: colors,
           child: Text(
-            'Drivers earn 65% of each completed delivery. Withdrawal requests and bank details remain available in your rider overview.',
+            'Drivers earn 65% of each completed delivery. Withdrawal requests and bank details remain available in your Circum Rider overview.',
             style: TextStyle(
               color: colors.mutedText,
               height: 1.4,
@@ -2390,15 +3122,12 @@ class _RiderReferralsTab extends StatelessWidget {
                 ),
               ),
               const SizedBox(height: 14),
-              SizedBox(
-                width: double.infinity,
-                child: FilledButton.icon(
-                  onPressed: null,
-                  icon: const Icon(Icons.ios_share),
-                  label: const Text('Share referral link'),
-                  style: FilledButton.styleFrom(
-                    padding: const EdgeInsets.symmetric(vertical: 16),
-                  ),
+              Text(
+                'Referral sharing becomes available after rider verification.',
+                style: TextStyle(
+                  color: colors.mutedText,
+                  height: 1.35,
+                  fontWeight: FontWeight.w700,
                 ),
               ),
             ],
@@ -2439,8 +3168,8 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
   final _newEmail = TextEditingController();
   final _emailChangePassword = TextEditingController();
   final _postcode = TextEditingController(text: 'E1 6AN');
-  final _vehicle = TextEditingController(text: 'Bike');
-  final _vehicleMakeModel = TextEditingController(text: 'Volt London e-bike');
+  final _vehicle = TextEditingController(text: 'Motorbike');
+  final _vehicleMakeModel = TextEditingController(text: 'Honda PCX');
   final _vehicleColour = TextEditingController(text: 'Blue');
   final _plateNumber = TextEditingController(text: 'CIR 24K');
   final _availability = TextEditingController(text: 'Weekdays, evenings');
@@ -2579,7 +3308,7 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
         if (!mounted) return;
         setState(
           () => _authMessage =
-              'Use a rider account here. Sender and admin accounts have their own sign-in.',
+              'Use a Circum Rider account here. Circum and admin accounts have their own sign-in.',
         );
         return;
       }
@@ -2620,8 +3349,9 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
 
     setState(() {
       _authSubmitting = true;
-      _authMessage =
-          _signupMode ? 'Creating your rider account...' : 'Signing you in...';
+      _authMessage = _signupMode
+          ? 'Creating your Circum Rider account...'
+          : 'Signing you in...';
     });
 
     try {
@@ -2647,7 +3377,7 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
         if (!mounted) return;
         setState(
           () => _authMessage =
-              'This account is not a rider account. Use sender login or the admin site instead.',
+              'This account is not a Circum Rider account. Use Circum login or the admin site instead.',
         );
         return;
       } else {
@@ -2667,8 +3397,9 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
       setState(() {
         _riderUser = user;
         _roleChoiceConfirmed = _availableRoles.length <= 1;
-        _authMessage =
-            _signupMode ? 'Your rider account is ready.' : 'You are signed in.';
+        _authMessage = _signupMode
+            ? 'Your Circum Rider account is ready.'
+            : 'You are signed in.';
       });
     } on FirebaseAuthException catch (error) {
       if (!mounted) return;
@@ -2704,7 +3435,7 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
       setState(
         () => _authMessage = switch (error.code) {
           'invalid-email' => 'Enter a valid email address.',
-          'user-not-found' => 'No rider account found for that email.',
+          'user-not-found' => 'No Circum Rider account found for that email.',
           _ =>
             'We could not send the reset email. Check the address and try again.',
         },
@@ -2791,13 +3522,9 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
         throw FirebaseAuthException(code: 'requires-recent-login');
       }
       await user.verifyBeforeUpdateEmail(nextEmail);
-      await FirebaseFirestore.instance
-          .collection('riderProfiles')
-          .doc(user.uid)
-          .set({
-        'pendingEmail': nextEmail,
-        'updatedAt': FieldValue.serverTimestamp(),
-      }, SetOptions(merge: true));
+      await FirebaseFunctions.instanceFor(region: 'us-central1')
+          .httpsCallable('requestRiderEmailChange')
+          .call({'pendingEmail': nextEmail});
       _newEmail.clear();
       _emailChangePassword.clear();
       if (!mounted) return;
@@ -2858,10 +3585,9 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
   }
 
   Future<void> _saveRiderProfile(User user) async {
-    final db = FirebaseFirestore.instance;
-    await db.collection('riderProfiles').doc(user.uid).set({
-      'uid': user.uid,
-      'riderId': user.uid,
+    await FirebaseFunctions.instanceFor(
+      region: 'us-central1',
+    ).httpsCallable('updateRiderProfile').call({
       'fullName': _fullName.text.trim().isEmpty
           ? user.displayName
           : _fullName.text.trim(),
@@ -2873,45 +3599,8 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
       'vehicleColour': _vehicleColour.text.trim(),
       'plateNumber': _plateNumber.text.trim(),
       'vehicleRegistration': _plateNumber.text.trim(),
-      'profilePhotoUrl': '',
-      'vehicle': DriverVehicle(
-        type: _vehicle.text.trim(),
-        makeModel: _vehicleMakeModel.text.trim(),
-        colour: _vehicleColour.text.trim(),
-        plateNumber: _plateNumber.text.trim(),
-      ).toJson(),
       'availability': _availability.text.trim(),
-      'approvalStatus': 'pending',
-      'onboardingStatus': 'not_started',
-      'verificationStatus': 'pending',
-      'riderRank': 'agent',
-      'driverStatus': 'active',
-      'role': 'rider',
-      'roles': ['rider'],
-      'source': 'circum-web',
-      'updatedAt': FieldValue.serverTimestamp(),
-      'createdAt': FieldValue.serverTimestamp(),
-    }, SetOptions(merge: true));
-    await db.collection('riders').doc(user.uid).set({
-      'name': _fullName.text.trim().isEmpty
-          ? user.displayName
-          : _fullName.text.trim(),
-      'phone': _phone.text.trim(),
-      'role': 'delivery',
-      'status': 'offline',
-      'rating': _performance.averageRating.toStringAsFixed(2),
-      'plateNumber': _plateNumber.text.trim(),
-      'typeOfVehicle': _vehicle.text.trim(),
-      'vehicleMakeModel': _vehicleMakeModel.text.trim(),
-      'vehicleColour': _vehicleColour.text.trim(),
-      'verificationStatus': 'pending',
-      'updatedAt': FieldValue.serverTimestamp(),
-    }, SetOptions(merge: true));
-    await db.collection('driverPerformanceMetrics').doc(user.uid).set(
-          DriverPerformanceMetric.empty(user.uid).toJson()
-            ..addAll({'updatedAt': FieldValue.serverTimestamp()}),
-          SetOptions(merge: true),
-        );
+    });
   }
 
   void _listenToRiderEarnings(String riderId) {
@@ -2975,6 +3664,7 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
           final jobs = snapshot.docs
               .map((doc) => {'id': doc.id, ...doc.data()})
               .where((job) {
+            if (!_isLiveRiderOffer(job)) return false;
             final matchingStatus =
                 '${job['matchingStatus'] ?? 'available'}'.toLowerCase();
             final ignoredBy = (job['ignoredByRiders'] as List?) ?? const [];
@@ -3029,10 +3719,9 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
     final rankPriority = RiderDispatchPolicy.priorityScore(
       riderRank: riderRank,
       job: b,
-    ).compareTo(RiderDispatchPolicy.priorityScore(
-      riderRank: riderRank,
-      job: a,
-    ));
+    ).compareTo(
+      RiderDispatchPolicy.priorityScore(riderRank: riderRank, job: a),
+    );
     if (rankPriority != 0) return rankPriority;
     final serviceA = '${a['selectedServiceLevel'] ?? a['serviceLevel'] ?? ''}';
     final serviceB = '${b['selectedServiceLevel'] ?? b['serviceLevel'] ?? ''}';
@@ -3048,7 +3737,98 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
     );
     if (pickupCompare != 0) return pickupCompare;
 
+    final createdCompare = _jobTimestampMillis(
+            b['createdAt'] ?? b['requestedAt'] ?? b['updatedAt'])
+        .compareTo(
+      _jobTimestampMillis(a['createdAt'] ?? a['requestedAt'] ?? a['updatedAt']),
+    );
+    if (createdCompare != 0) return createdCompare;
+
     return _jobDistanceMiles(a).compareTo(_jobDistanceMiles(b));
+  }
+
+  bool _isLiveRiderOffer(Map<String, dynamic> job) {
+    const terminalStatuses = {
+      'accepted',
+      'assigned',
+      'collected',
+      'picked_up',
+      'navigating_to_pickup',
+      'arrived_at_pickup',
+      'pickup_verified',
+      'navigating_to_dropoff',
+      'in_transit',
+      'arrived_at_dropoff',
+      'delivered',
+      'completed',
+      'cancelled',
+      'canceled',
+      'expired',
+      'failed',
+      'blocked',
+    };
+    const paidStatuses = {
+      '',
+      'paid',
+      'succeeded',
+      'payment_confirmed',
+      'confirmed',
+      'roth_paid',
+      'stripe_paid',
+    };
+    const openMatchingStatuses = {
+      '',
+      'available',
+      'requested',
+      'broadcast',
+      'broadcasted',
+    };
+    const openDispatchStatuses = {
+      '',
+      'requested',
+      'available',
+      'broadcast',
+      'broadcasted',
+      'queued',
+      'waiting',
+    };
+    final status = '${job['status'] ?? ''}'.toLowerCase();
+    final deliveryStatus =
+        '${job['deliveryStatus'] ?? job['deliveryStage'] ?? ''}'.toLowerCase();
+    final matchingStatus = '${job['matchingStatus'] ?? ''}'.toLowerCase();
+    final dispatchStatus = '${job['dispatchStatus'] ?? ''}'.toLowerCase();
+    final paymentStatus =
+        '${job['paymentStatus'] ?? job['paymentState'] ?? ''}'.toLowerCase();
+    final assignedRider =
+        '${job['riderId'] ?? job['driverId'] ?? job['assignedRider'] ?? job['assignedRiderId'] ?? job['assignedDriverId'] ?? job['courierId'] ?? ''}'
+            .trim();
+    if (terminalStatuses.contains(status) ||
+        terminalStatuses.contains(deliveryStatus) ||
+        terminalStatuses.contains(matchingStatus) ||
+        terminalStatuses.contains(dispatchStatus)) {
+      return false;
+    }
+    if (assignedRider.isNotEmpty) return false;
+    if (!paidStatuses.contains(paymentStatus)) return false;
+    if (!openMatchingStatuses.contains(matchingStatus)) return false;
+    if (!openDispatchStatuses.contains(dispatchStatus)) return false;
+    final expiry = _jobTimestampMillis(
+      job['offerExpiresAt'] ??
+          job['dispatchExpiresAt'] ??
+          job['expiresAt'] ??
+          job['matchingExpiresAt'],
+    );
+    return expiry <= 0 || expiry > DateTime.now().millisecondsSinceEpoch;
+  }
+
+  int _jobTimestampMillis(Object? value) {
+    if (value is Timestamp) return value.millisecondsSinceEpoch;
+    if (value is DateTime) return value.millisecondsSinceEpoch;
+    if (value is num) return value.toInt();
+    if (value is String) {
+      return DateTime.tryParse(value)?.millisecondsSinceEpoch ?? 0;
+    }
+    return 0;
   }
 
   void _listenToRiderJobs(String riderId) {
@@ -3061,12 +3841,20 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
           'status',
           whereIn: [
             'accepted',
+            'assigned',
+            'navigating_to_pickup',
             'en_route_to_pickup',
             'arrived_at_pickup',
+            'waiting',
+            'pickup_verification',
+            'pickup_verified',
             'collected',
             'picked_up',
+            'navigating_to_dropoff',
             'in_transit',
+            'arrived_at_dropoff',
             'arriving',
+            'issue_reported',
           ],
         )
         .limit(20)
@@ -3113,8 +3901,10 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
       profile: _riderProfile,
       verifiedSuperAdmin: _superAdminRiderBypass,
     )) {
-      setState(() => _jobMessage =
-          'Your rider account must be approved before accepting jobs.');
+      setState(
+        () => _jobMessage =
+            'Your Circum Rider account must be approved before accepting jobs.',
+      );
       return;
     }
     final requestId = '${job['requestId'] ?? job['id'] ?? ''}'.trim();
@@ -3122,9 +3912,9 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
     setState(() => _jobMessage = 'Accepting job $requestId...');
     try {
       await _ensureCircumFirebaseReady();
-      await FirebaseFunctions.instanceFor(region: 'us-central1')
-          .httpsCallable('acceptRideRequests')
-          .call({'requestId': requestId});
+      await FirebaseFunctions.instanceFor(
+        region: 'us-central1',
+      ).httpsCallable('acceptRideRequests').call({'requestId': requestId});
       await _startRiderLiveLocationPublishing(requestId, user.uid, 'accepted');
       if (!mounted) return;
       setState(() => _jobMessage = 'Job accepted. Head to pickup.');
@@ -3219,9 +4009,9 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
           timeLimit: Duration(seconds: 6),
         ),
       );
-      await FirebaseFunctions.instanceFor(region: 'us-central1')
-          .httpsCallable('updateDeliveryLiveLocation')
-          .call({
+      await FirebaseFunctions.instanceFor(
+        region: 'us-central1',
+      ).httpsCallable('updateDeliveryLiveLocation').call({
         'deliveryId': deliveryId,
         'status': status,
         'location': {
@@ -3251,17 +4041,10 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
     }
     final requestId = '${job['requestId'] ?? job['id'] ?? ''}'.trim();
     if (requestId.isEmpty) return;
-    final field = action == 'reject' ? 'rejectedByRiders' : 'ignoredByRiders';
-    final timestampField = action == 'reject' ? 'rejectedAt' : 'ignoredAt';
     try {
-      await FirebaseFirestore.instance
-          .collection('deliveryRequests')
-          .doc(requestId)
-          .set({
-        field: FieldValue.arrayUnion([user.uid]),
-        timestampField: FieldValue.serverTimestamp(),
-        'updatedAt': FieldValue.serverTimestamp(),
-      }, SetOptions(merge: true));
+      await FirebaseFunctions.instanceFor(region: 'us-central1')
+          .httpsCallable('recordRiderJobDecision')
+          .call({'requestId': requestId, 'action': action});
       if (!mounted) return;
       setState(
         () => _jobMessage =
@@ -3334,13 +4117,15 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
     Map<String, dynamic>? verificationPatch,
   }) async {
     final currentStatus = _canonicalRiderBackendStatus(
-        '${job['status'] ?? 'accepted'}'
-            .trim()
-            .toLowerCase()
-            .replaceAll(RegExp(r'[-\s]+'), '_'));
+      '${job['status'] ?? 'accepted'}'.trim().toLowerCase().replaceAll(
+            RegExp(r'[-\s]+'),
+            '_',
+          ),
+    );
     final actions = _backendActionsForRiderTarget(currentStatus, targetStatus);
-    final callable = FirebaseFunctions.instanceFor(region: 'us-central1')
-        .httpsCallable('updateDeliveryTrackingStatus');
+    final callable = FirebaseFunctions.instanceFor(
+      region: 'us-central1',
+    ).httpsCallable('updateDeliveryTrackingStatus');
     for (final action in actions) {
       await callable.call({
         'deliveryId': requestId,
@@ -3388,8 +4173,9 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
     if (targetStatus == 'in_transit') {
       if (currentStatus != 'collected' &&
           currentStatus != 'navigating_to_dropoff') {
-        actions
-            .addAll(_backendActionsForRiderTarget(currentStatus, 'picked_up'));
+        actions.addAll(
+          _backendActionsForRiderTarget(currentStatus, 'picked_up'),
+        );
       }
       if (currentStatus != 'navigating_to_dropoff') {
         actions.add('start_delivery');
@@ -3400,8 +4186,9 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
       if (currentStatus != 'navigating_to_dropoff' &&
           currentStatus != 'arrived_at_dropoff' &&
           currentStatus != 'pin_required') {
-        actions
-            .addAll(_backendActionsForRiderTarget(currentStatus, 'in_transit'));
+        actions.addAll(
+          _backendActionsForRiderTarget(currentStatus, 'in_transit'),
+        );
       }
       if (currentStatus != 'arrived_at_dropoff' &&
           currentStatus != 'pin_required') {
@@ -3580,29 +4367,30 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
                   style: TextStyle(color: Theme.of(context).hintColor),
                 ),
                 const SizedBox(height: 12),
-                RadioListTile<String>(
-                  value: 'accurate',
+                RadioGroup<String>(
                   groupValue: option,
                   onChanged: (value) =>
                       setDialogState(() => option = value ?? option),
-                  title: const Text('Confirm weight is accurate'),
-                  contentPadding: EdgeInsets.zero,
-                ),
-                RadioListTile<String>(
-                  value: 'heavier',
-                  groupValue: option,
-                  onChanged: (value) =>
-                      setDialogState(() => option = value ?? option),
-                  title: const Text('Weight is heavier than declared'),
-                  contentPadding: EdgeInsets.zero,
-                ),
-                RadioListTile<String>(
-                  value: 'significant',
-                  groupValue: option,
-                  onChanged: (value) =>
-                      setDialogState(() => option = value ?? option),
-                  title: const Text('Weight is significantly heavier'),
-                  contentPadding: EdgeInsets.zero,
+                  child: const Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      RadioListTile<String>(
+                        value: 'accurate',
+                        title: Text('Confirm weight is accurate'),
+                        contentPadding: EdgeInsets.zero,
+                      ),
+                      RadioListTile<String>(
+                        value: 'heavier',
+                        title: Text('Weight is heavier than declared'),
+                        contentPadding: EdgeInsets.zero,
+                      ),
+                      RadioListTile<String>(
+                        value: 'significant',
+                        title: Text('Weight is significantly heavier'),
+                        contentPadding: EdgeInsets.zero,
+                      ),
+                    ],
+                  ),
                 ),
                 const SizedBox(height: 8),
                 TextField(
@@ -3732,13 +4520,15 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
       pickupAccess: accessValue(job['pickupAccess']),
       dropoffAccess: accessValue(job['dropoffAccess']),
     );
-    final revisedQuote = revisedHandling.applyTo(DeliveryPricing.calculate(
-      DeliveryPricingInput(
-        distanceMiles: distanceMiles,
-        weightKg: finalWeightUsed,
-        vehicleType: vehicle,
+    final revisedQuote = revisedHandling.applyTo(
+      DeliveryPricing.calculate(
+        DeliveryPricingInput(
+          distanceMiles: distanceMiles,
+          weightKg: finalWeightUsed,
+          vehicleType: vehicle,
+        ),
       ),
-    ));
+    );
     final revisedPayout = revisedQuote.totalRiderEarnings;
     final revisedPlatformRevenue = revisedQuote.totalCircumRevenue;
     final heavier = finalWeightUsed > currentFinalWeight + 0.01;
@@ -3747,17 +4537,9 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
             const <String, dynamic>{};
 
     if (heavier) {
-      await FirebaseFirestore.instance.collection('notifications').add({
-        'recipientId': job['senderId'] ?? job['userId'],
-        'requestId': requestId,
-        'type': 'weight_adjusted',
-        'title': 'Parcel weight updated',
-        'message':
-            'Parcel weight differs from original declaration. Pricing has been adjusted.',
-        'createdAt': FieldValue.serverTimestamp(),
-        'read': false,
-        'source': 'circum-web',
-      });
+      await FirebaseFunctions.instanceFor(region: 'us-central1')
+          .httpsCallable('createWeightAdjustedNotification')
+          .call({'requestId': requestId});
     }
 
     return {
@@ -3898,12 +4680,16 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
           .httpsCallable('reportLoadDiscrepancy')
           .call(reason);
       if (!mounted) return;
-      setState(() => _jobMessage =
-          'Discrepancy reported. Collection is paused for the sender.');
+      setState(
+        () => _jobMessage =
+            'Discrepancy reported. Collection is paused for the sender.',
+      );
     } on FirebaseFunctionsException catch (error) {
       if (!mounted) return;
-      setState(() => _jobMessage =
-          error.message ?? 'Could not report this discrepancy. Try again.');
+      setState(
+        () => _jobMessage =
+            error.message ?? 'Could not report this discrepancy. Try again.',
+      );
     }
   }
 
@@ -3939,17 +4725,21 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
                     decoration: const InputDecoration(labelText: 'Reason'),
                     items: const [
                       DropdownMenuItem(
-                          value: 'weight_exceeded',
-                          child: Text('Weight exceeded')),
+                        value: 'weight_exceeded',
+                        child: Text('Weight exceeded'),
+                      ),
                       DropdownMenuItem(
-                          value: 'dimensions_exceeded',
-                          child: Text('Dimensions exceeded')),
+                        value: 'dimensions_exceeded',
+                        child: Text('Dimensions exceeded'),
+                      ),
                       DropdownMenuItem(
-                          value: 'additional_undeclared_items',
-                          child: Text('Additional undeclared items')),
+                        value: 'additional_undeclared_items',
+                        child: Text('Additional undeclared items'),
+                      ),
                       DropdownMenuItem(
-                          value: 'item_differs_from_booking',
-                          child: Text('Item differs from booking')),
+                        value: 'item_differs_from_booking',
+                        child: Text('Item differs from booking'),
+                      ),
                     ],
                     onChanged: (value) =>
                         setDialogState(() => reason = value ?? reason),
@@ -3958,16 +4748,19 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
                   if (reason == 'weight_exceeded')
                     TextField(
                       controller: weight,
-                      keyboardType:
-                          const TextInputType.numberWithOptions(decimal: true),
+                      keyboardType: const TextInputType.numberWithOptions(
+                        decimal: true,
+                      ),
                       decoration: const InputDecoration(
-                          labelText: 'Observed weight (kg)'),
+                        labelText: 'Observed weight (kg)',
+                      ),
                     ),
                   if (reason == 'dimensions_exceeded')
                     TextField(
                       controller: dimensions,
                       decoration: const InputDecoration(
-                          labelText: 'Observed dimensions'),
+                        labelText: 'Observed dimensions',
+                      ),
                     ),
                   if (reason == 'dimensions_exceeded' ||
                       reason == 'item_differs_from_booking') ...[
@@ -3975,9 +4768,13 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
                     DropdownButtonFormField<String>(
                       initialValue: observedVehicleType,
                       decoration: const InputDecoration(
-                          labelText: 'Vehicle now required'),
+                        labelText: 'Vehicle now required',
+                      ),
                       items: const [
-                        DropdownMenuItem(value: 'bike', child: Text('Bike')),
+                        DropdownMenuItem(
+                          value: 'motorbike',
+                          child: Text('Motorbike'),
+                        ),
                         DropdownMenuItem(value: 'car', child: Text('Car')),
                         DropdownMenuItem(value: 'van', child: Text('Van')),
                       ],
@@ -3990,14 +4787,16 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
                     TextField(
                       controller: description,
                       decoration: const InputDecoration(
-                          labelText: 'What is actually present?'),
+                        labelText: 'What is actually present?',
+                      ),
                     ),
                   const SizedBox(height: 12),
                   TextField(
                     controller: notes,
                     maxLines: 2,
-                    decoration:
-                        const InputDecoration(labelText: 'Optional note'),
+                    decoration: const InputDecoration(
+                      labelText: 'Optional note',
+                    ),
                   ),
                   const SizedBox(height: 12),
                   OutlinedButton.icon(
@@ -4008,19 +4807,25 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
                               imageQuality: 75,
                               limit: 4,
                             );
-                            setDialogState(() => photos
-                              ..clear()
-                              ..addAll(selected));
+                            setDialogState(
+                              () => photos
+                                ..clear()
+                                ..addAll(selected),
+                            );
                           },
                     icon: const Icon(Icons.add_a_photo_outlined),
-                    label: Text(photos.isEmpty
-                        ? 'Add evidence photo'
-                        : '${photos.length} photo(s) selected'),
+                    label: Text(
+                      photos.isEmpty
+                          ? 'Add evidence photo'
+                          : '${photos.length} photo(s) selected',
+                    ),
                   ),
                   if (error != null) ...[
                     const SizedBox(height: 8),
-                    Text(error!,
-                        style: const TextStyle(color: Colors.redAccent)),
+                    Text(
+                      error!,
+                      style: const TextStyle(color: Colors.redAccent),
+                    ),
                   ],
                 ],
               ),
@@ -4036,23 +4841,28 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
               onPressed: uploading
                   ? null
                   : () async {
-                      final observedWeight =
-                          double.tryParse(weight.text.trim());
+                      final observedWeight = double.tryParse(
+                        weight.text.trim(),
+                      );
                       if (photos.isEmpty) {
                         setDialogState(
-                            () => error = 'Add at least one evidence photo.');
+                          () => error = 'Add at least one evidence photo.',
+                        );
                         return;
                       }
                       if (reason == 'weight_exceeded' &&
                           (observedWeight == null || observedWeight <= 0)) {
                         setDialogState(
-                            () => error = 'Enter the observed weight.');
+                          () => error = 'Enter the observed weight.',
+                        );
                         return;
                       }
                       if (reason == 'dimensions_exceeded' &&
                           observedVehicleType == null) {
-                        setDialogState(() => error =
-                            'Select the vehicle now required for this load.');
+                        setDialogState(
+                          () => error =
+                              'Select the vehicle now required for this load.',
+                        );
                         return;
                       }
                       setDialogState(() {
@@ -4066,8 +4876,10 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
                           final ref = FirebaseStorage.instance.ref(
                             'delivery-discrepancies/$requestId/${user.uid}/${DateTime.now().millisecondsSinceEpoch}-$index.jpg',
                           );
-                          await ref.putData(await photo.readAsBytes(),
-                              SettableMetadata(contentType: photo.mimeType));
+                          await ref.putData(
+                            await photo.readAsBytes(),
+                            SettableMetadata(contentType: photo.mimeType),
+                          );
                           urls.add(await ref.getDownloadURL());
                         }
                         if (!dialogContext.mounted) return;
@@ -4168,11 +4980,7 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
       await _ensureCircumFirebaseReady();
       await FirebaseFunctions.instanceFor(region: 'us-central1')
           .httpsCallable('sendCircumMessage')
-          .call({
-        'chatId': requestId,
-        'requestId': requestId,
-        'message': text,
-      });
+          .call({'chatId': requestId, 'requestId': requestId, 'message': text});
     } catch (_) {
       if (!mounted) return;
       setState(() => _jobMessage = 'Message could not be sent.');
@@ -4230,15 +5038,15 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
       profile: _riderProfile,
       verifiedSuperAdmin: _superAdminRiderBypass,
     )) {
-      setState(() => _withdrawMessage =
-          'Your rider account must be approved before requesting a withdrawal.');
+      setState(
+        () => _withdrawMessage =
+            'Your Circum Rider account must be approved before requesting a withdrawal.',
+      );
       return;
     }
     final amount = double.tryParse(_withdrawAmount.text.trim()) ?? 0;
     if (amount <= 0) {
-      setState(
-        () => _withdrawMessage = 'Enter the amount first.',
-      );
+      setState(() => _withdrawMessage = 'Enter the amount first.');
       return;
     }
     if (amount > _earnings.availableBalance) {
@@ -4256,9 +5064,9 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
 
     try {
       await _ensureCircumFirebaseReady();
-      await FirebaseFunctions.instanceFor(region: 'us-central1')
-          .httpsCallable('requestRiderWithdrawal')
-          .call({'amount': amount});
+      await FirebaseFunctions.instanceFor(
+        region: 'us-central1',
+      ).httpsCallable('requestRiderWithdrawal').call({'amount': amount});
       if (!mounted) return;
       setState(
         () => _withdrawMessage =
@@ -4298,46 +5106,16 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
 
       await _ensureCircumFirebaseReady();
       final bytes = await picked.readAsBytes();
-      final safeName = picked.name.replaceAll(RegExp(r'[^A-Za-z0-9._-]'), '_');
-      final path =
-          'rider_documents/${user.uid}/${DateTime.now().millisecondsSinceEpoch}_$safeName';
-      final storageRef = FirebaseStorage.instance.ref(path);
-      await storageRef.putData(bytes);
-      final downloadUrl = await storageRef.getDownloadURL();
-
-      final documentRef =
-          FirebaseFirestore.instance.collection('riderDocuments').doc();
       final documentType = _riderDocumentType(_documentType.text);
-      await documentRef.set({
-        'documentId': documentRef.id,
-        'riderId': user.uid,
-        'riderEmail': user.email,
-        'type': documentType,
+      final contentType = picked.mimeType ?? 'image/jpeg';
+      await FirebaseFunctions.instanceFor(
+        region: 'us-central1',
+      ).httpsCallable('submitRiderDocument').call({
+        'documentType': documentType,
         'notes': _documentNotes.text.trim(),
         'fileName': picked.name,
-        'storagePath': path,
-        'downloadUrl': downloadUrl,
-        'fileUrl': downloadUrl,
-        'uploadedAt': FieldValue.serverTimestamp(),
-        'status': 'pending',
-        'verificationStatus': 'pending',
-        'source': 'circum-web',
-        'createdAt': FieldValue.serverTimestamp(),
-        'updatedAt': FieldValue.serverTimestamp(),
-      });
-      await FirebaseFirestore.instance
-          .collection('riderProfiles')
-          .doc(user.uid)
-          .update({
-        'verificationStatus': 'pending',
-        'verificationDocuments.$documentType': {
-          'type': documentType,
-          'fileUrl': downloadUrl,
-          'uploadedAt': FieldValue.serverTimestamp(),
-          'status': 'pending',
-        },
-        'lastDocumentUploadedAt': FieldValue.serverTimestamp(),
-        'updatedAt': FieldValue.serverTimestamp(),
+        'contentType': contentType,
+        'fileBase64': base64Encode(bytes),
       });
       _riderProfile = await _loadRiderProfile(user.uid);
       if (!mounted) return;
@@ -4368,8 +5146,9 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
 
   String _friendlyAuthMessage(FirebaseAuthException error) {
     return switch (error.code) {
-      'email-already-in-use' => 'That email already has a rider account.',
-      'user-not-found' => 'No rider account found for that email.',
+      'email-already-in-use' =>
+        'That email already has a Circum Rider account.',
+      'user-not-found' => 'No Circum Rider account found for that email.',
       'wrong-password' ||
       'invalid-credential' =>
         'The sign-in details are not right.',
@@ -4397,70 +5176,37 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
       return;
     }
 
-    final now = DateTime.now();
-    final id = 'RWEB-${now.millisecondsSinceEpoch.toString().substring(6)}';
     setState(() {
       _submitting = true;
-      _message = 'Sending your rider application...';
+      _message = 'Sending your Circum Rider application...';
     });
 
     try {
       await _ensureCircumFirebaseReady();
-      final db = FirebaseFirestore.instance;
-      final batch = db.batch();
-      final application = {
-        'id': id,
-        'riderId': _riderUser?.uid,
+      final result = await FirebaseFunctions.instanceFor(region: 'us-central1')
+          .httpsCallable('submitRiderApplication')
+          .call<Map<String, dynamic>>({
         'fullName': _fullName.text.trim(),
         'phoneNumber': _phone.text.trim(),
         'email': _email.text.trim(),
         'postcode': _postcode.text.trim(),
         'vehicleType': _vehicle.text.trim(),
+        'vehicleRegistration': _plateNumber.text.trim(),
         'availability': _availability.text.trim(),
         'notes': _notes.text.trim(),
         'rightToWorkConfirmed': _rightToWork,
         'sealedPackageConsent': _sealedPackageConsent,
-        'status': 'submitted',
-        'source': 'circum-web',
-        'createdAt': FieldValue.serverTimestamp(),
-        'updatedAt': FieldValue.serverTimestamp(),
-      };
-      batch.set(db.collection('riderApplications').doc(id), application);
-      if (_riderUser != null) {
-        batch.set(
-          db.collection('riderProfiles').doc(_riderUser!.uid),
-          {
-            'fullName': _fullName.text.trim(),
-            'email': _riderUser!.email ?? _email.text.trim(),
-            'phoneNumber': _phone.text.trim(),
-            'vehicleType': _vehicle.text.trim().toLowerCase(),
-            'vehicleRegistration': _plateNumber.text.trim(),
-            'onboardingStatus': 'pending_review',
-            'approvalStatus': 'pending',
-            'riderRank': 'agent',
-            'onboardingSubmittedAt': FieldValue.serverTimestamp(),
-            'termsAcceptedAt': FieldValue.serverTimestamp(),
-            'updatedAt': FieldValue.serverTimestamp(),
-          },
-          SetOptions(merge: true),
-        );
-      }
-      batch.set(db.collection('riderOnboardingEvents').doc(), {
-        'applicationId': id,
-        'type': 'rider_application_submitted',
-        'status': 'submitted',
-        'source': 'circum-web',
-        'createdAt': FieldValue.serverTimestamp(),
+        'idempotencyKey': 'web-rider-application:${_riderUser?.uid}',
       });
-      await batch.commit();
+      final applicationId = '${result.data['applicationId'] ?? ''}'.trim();
       if (_riderUser != null) {
         _riderProfile = await _loadRiderProfile(_riderUser!.uid);
       }
       if (!mounted) return;
       setState(() {
-        _applicationId = id;
+        _applicationId = applicationId;
         _message =
-            'Thanks. Your rider application has been sent to the Circum team.';
+            'Thanks. Your Circum Rider application has been sent to the Circum team.';
       });
     } catch (_) {
       if (!mounted) return;
@@ -4791,7 +5537,7 @@ class _RiderPublicIntro extends StatelessWidget {
           ),
           const SizedBox(height: 8),
           Text(
-            'Create a rider account to apply, upload documents, accept jobs, and manage payouts. Drivers earn 65% of each completed delivery.',
+            'Create a Circum Rider account to apply, upload documents, accept jobs, and manage payouts. Drivers earn 65% of each completed delivery.',
             style: TextStyle(
               color: colors.mutedText,
               height: 1.45,
@@ -4805,7 +5551,7 @@ class _RiderPublicIntro extends StatelessWidget {
             children: [
               Chip(
                 avatar: const Icon(Icons.verified_user_outlined, size: 18),
-                label: const Text('Verified riders only'),
+                label: const Text('Verified Circum Riders only'),
                 backgroundColor: colors.field,
               ),
               Chip(
@@ -4863,7 +5609,7 @@ class _RiderAccessPanel extends StatelessWidget {
         children: [
           _SectionTitle(
             colors: colors,
-            title: signedIn ? 'Rider account' : 'Rider sign in',
+            title: signedIn ? 'Circum Rider account' : 'Circum Rider sign in',
           ),
           const SizedBox(height: 10),
           Text(
@@ -4970,9 +5716,9 @@ class _RiderApprovalStatusPanel extends StatelessWidget {
       'rejected' =>
         'Circum could not approve this rider profile yet. Check the note below and contact support if you need help.',
       'suspended' =>
-        'This rider account cannot accept jobs right now. Contact Circum support for the next step.',
+        'This Circum Rider account cannot accept jobs right now. Contact Circum support for the next step.',
       _ =>
-        'Your rider profile has been created. Circum will review your details and documents before jobs appear here.',
+        'Your Circum Rider profile has been created. Circum will review your details and documents before jobs appear here.',
     };
     final note = [
       profile['adminMessage'],
@@ -5112,7 +5858,11 @@ class _RiderEnrollmentForm extends StatelessWidget {
       physics: nested ? const NeverScrollableScrollPhysics() : null,
       padding: const EdgeInsets.fromLTRB(28, 28, 28, 34),
       children: [
-        _StepTopBar(colors: colors, title: 'Earn as a Rider', onBack: null),
+        _StepTopBar(
+          colors: colors,
+          title: 'Earn as a Circum Rider',
+          onBack: null,
+        ),
         const SizedBox(height: 14),
         _GlassPanel(
           colors: colors,
@@ -5146,7 +5896,7 @@ class _RiderEnrollmentForm extends StatelessWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              _SectionTitle(colors: colors, title: 'Rider details'),
+              _SectionTitle(colors: colors, title: 'Circum Rider details'),
               const SizedBox(height: 12),
               _InputBox(
                 colors: colors,
@@ -5168,11 +5918,11 @@ class _RiderEnrollmentForm extends StatelessWidget {
                 colors: colors,
                 controller: vehicle,
                 label: 'Vehicle type',
-                options: const ['Bike', 'Car', 'Van'],
+                options: const ['Motorbike', 'Car', 'Van'],
               ),
               const SizedBox(height: 5),
               Text(
-                'Choose Bike Rider, Car Driver, or Van Driver.',
+                'Choose Motorbike Rider, Car Driver, or Van Driver.',
                 style: TextStyle(
                   color: colors.mutedText,
                   fontSize: 12,
@@ -5382,7 +6132,7 @@ class _RiderWorkspace extends StatelessWidget {
             children: [
               Expanded(
                 child: Text(
-                  'Rider dashboard',
+                  'Circum Rider dashboard',
                   style: TextStyle(
                     color: colors.text,
                     fontSize: compact ? 28 : 34,
@@ -5774,7 +6524,7 @@ class _RiderWorkspace extends StatelessWidget {
                   colors: colors,
                   icon: Icons.route,
                   label: 'Jobs you can receive',
-                  value: 'Sender requests and Health+ pickups',
+                  value: 'Circum requests and Health+ pickups',
                 ),
               ],
             ),
@@ -6120,7 +6870,7 @@ class _AvailableDriverJobsPanel extends StatelessWidget {
           const SizedBox(height: 12),
           if (jobs.isEmpty)
             Text(
-              'No sender requests are waiting right now.',
+              'No Circum requests are waiting right now.',
               style: TextStyle(color: colors.mutedText),
             )
           else
@@ -6332,6 +7082,7 @@ class _DriverJobCard extends StatelessWidget {
         summary['collectionContactDifferent'] == true ||
         ((job['collectionContact'] as Map?)?['differentFromSender'] == true));
     final jobStatus = '${job['status'] ?? ''}'.toLowerCase();
+    final proof = proofOfDeliveryFromRecord(job);
     final canReportDiscrepancy = const {
       'accepted',
       'rider_assigned',
@@ -6518,9 +7269,35 @@ class _DriverJobCard extends StatelessWidget {
             _JobInfoLine(
               colors: colors,
               icon: Icons.security,
-              label: 'Vanguard',
+              label: 'Vanguard Handling',
               value:
-                  'PIN verification required at collection and final delivery.',
+                  'Enhanced custody tracking and trusted Circum Rider prioritisation.',
+            ),
+          ],
+          if (completed) ...[
+            const SizedBox(height: 8),
+            _JobInfoLine(
+              colors: colors,
+              icon: Icons.fact_check_outlined,
+              label: 'Proof of delivery',
+              value: proof.hasAnyProof
+                  ? 'Proof submitted - ${proof.statusLabel}'
+                  : 'Proof missing',
+            ),
+            if (proof.vanguardIncomplete)
+              _JobInfoLine(
+                colors: colors,
+                icon: Icons.warning_amber_rounded,
+                label: 'Vanguard review',
+                value: 'Vanguard proof is incomplete.',
+              ),
+          ] else if (vanguardEnabled && !proof.hasAnyProof) ...[
+            const SizedBox(height: 8),
+            _JobInfoLine(
+              colors: colors,
+              icon: Icons.fact_check_outlined,
+              label: 'Proof required',
+              value: 'Proof required to complete this delivery.',
             ),
           ],
           const SizedBox(height: 12),
@@ -7141,6 +7918,7 @@ class _CustomerPortalState extends State<_CustomerPortal> {
   bool _irisFragile = false;
   bool _irisValueSensitive = false;
   bool _irisVanguardRecommended = false;
+  bool _webVanguardSelected = false;
   bool _irisStackable = true;
   String? _irisHandlingNotes;
   double? _senderEnteredWeightKg;
@@ -7166,6 +7944,8 @@ class _CustomerPortalState extends State<_CustomerPortal> {
   bool _supportChat = false;
   bool _healthConsent = false;
   bool _healthSavePayment = true;
+  bool _deliveryUseRoth = false;
+  bool _healthUseRoth = false;
   bool _healthSubmitting = false;
   bool _businessLoading = false;
   bool _businessBusy = false;
@@ -7176,10 +7956,10 @@ class _CustomerPortalState extends State<_CustomerPortal> {
   String? _activeOrderId;
   String? _activeRequestDocId;
   String? _assignedDriverId;
-  String? _healthProfileId;
   String? _healthScheduleId;
   String? _healthMessage;
   String? _healthCheckoutUrl;
+  double _healthRothBalance = 0;
   String? _businessMessage;
   String? _selectedBusinessId;
   String? _firebaseError;
@@ -7189,12 +7969,15 @@ class _CustomerPortalState extends State<_CustomerPortal> {
   String? _senderSecurityMessage;
   _ValidatedAddress? _validatedPickup;
   _ValidatedAddress? _validatedDropoff;
+  _ValidatedAddress? _validatedHealthPharmacy;
+  _ValidatedAddress? _validatedHealthDelivery;
   bool _firebaseOnline = false;
   bool _senderAuthLoading = true;
   bool _senderAuthBusy = false;
   bool _senderSecurityBusy = false;
   bool _senderProfileSaving = false;
   bool _senderSignupMode = false;
+  bool _senderCheckoutReturnHandled = false;
   bool _roleChoiceConfirmed = false;
   bool _differentCollectionContact = false;
   bool _parcelPhotoBusy = false;
@@ -7214,6 +7997,7 @@ class _CustomerPortalState extends State<_CustomerPortal> {
   XFile? _parcelPhoto;
   DateTime? _parcelPhotoCapturedAt;
   String? _parcelPhotoMessage;
+  String? _irisPhotoAnalysisId;
   _IrisImageInsight? _irisImageInsight;
   DateTime? _activeRequestReceivedAt;
   Set<String> _selectedRatingTags = {};
@@ -7267,7 +8051,20 @@ class _CustomerPortalState extends State<_CustomerPortal> {
     _receiverPhone.addListener(_handleContactDetailsChanged);
     _collectionContactName.addListener(_handleContactDetailsChanged);
     _collectionContactPhone.addListener(_handleContactDetailsChanged);
+    _applyHealthPlusReturnState();
     _restoreSenderSession();
+  }
+
+  void _applyHealthPlusReturnState() {
+    if (widget.initialStep != _SenderStep.healthPlus) return;
+    final result = Uri.base.queryParameters['health'];
+    if (result == 'success') {
+      _healthMessage =
+          'Health+ payment confirmed. Your pickup is being updated.';
+    } else if (result == 'cancelled') {
+      _healthMessage =
+          'Health+ payment was cancelled. You can continue checkout when ready.';
+    }
   }
 
   @override
@@ -7346,8 +8143,7 @@ class _CustomerPortalState extends State<_CustomerPortal> {
       children: [
         LayoutBuilder(
           builder: (context, constraints) {
-            final desktop = constraints.maxWidth >= _desktopWebBreakpoint &&
-                _step != _SenderStep.healthPlus;
+            final desktop = constraints.maxWidth >= _desktopWebBreakpoint;
             return Column(
               children: [
                 _PortalHeader(
@@ -7396,8 +8192,16 @@ class _CustomerPortalState extends State<_CustomerPortal> {
         if (_chatOpen)
           _ChatSheet(
             colors: colors,
-            title: _supportChat ? 'Iris Support' : 'Marcus A.',
-            recipient: _supportChat ? 'Iris' : 'Rider',
+            title: _supportChat
+                ? 'Iris Support'
+                : _assignedDriver?.fullName.trim().isNotEmpty == true
+                    ? _assignedDriver!.fullName.trim()
+                    : 'Delivery chat',
+            recipient: _supportChat
+                ? 'Iris'
+                : _assignedDriver?.fullName.trim().isNotEmpty == true
+                    ? 'Your Circum Rider'
+                    : 'Rider not assigned yet',
             messages: _supportChat ? _supportMessages : _driverMessages,
             input: _chatInput,
             onClose: () => setState(() => _chatOpen = false),
@@ -7520,6 +8324,7 @@ class _CustomerPortalState extends State<_CustomerPortal> {
           onRemoveParcelPhoto: () => setState(() {
             _parcelPhoto = null;
             _parcelPhotoCapturedAt = null;
+            _irisPhotoAnalysisId = null;
             _irisImageInsight = null;
             _parcelPhotoMessage = 'Parcel photo removed.';
           }),
@@ -7545,6 +8350,10 @@ class _CustomerPortalState extends State<_CustomerPortal> {
           priceReady: _quoteTotal > 0,
           weightReady: _deliveryClassification.finalWeightKg > 0,
           specialHandling: _specialHandling,
+          vanguardRequired: _webVanguardRequired,
+          vanguardEnabled: _webVanguardEnabled,
+          onVanguardChanged: (value) =>
+              setState(() => _webVanguardSelected = value),
           pickupAccess: _pickupAccess,
           dropoffAccess: _dropoffAccess,
           onPickupAccess: (value) => setState(() => _pickupAccess = value),
@@ -7595,6 +8404,9 @@ class _CustomerPortalState extends State<_CustomerPortal> {
           weightSource: _weightSourceText,
           pricingReason: _weightPricingReason,
           specialHandling: _specialHandling,
+          vanguardEnabled: _webVanguardEnabled,
+          useRoth: _deliveryUseRoth,
+          rothBalance: _healthRothBalance,
           scheduledPickupDate: _scheduledPickupDate.text.trim(),
           scheduledPickupWindow: _scheduledPickupWindow.text.trim(),
           scheduledDropoffDate: _scheduledDropoffDate.text.trim(),
@@ -7606,6 +8418,9 @@ class _CustomerPortalState extends State<_CustomerPortal> {
             _step = _SenderStep.vehicle;
           }),
           onPay: _confirmPayment,
+          onUseRoth: (value) => setState(() {
+            _deliveryUseRoth = value ?? false;
+          }),
         ),
       _SenderStep.tracking => _TrackingStep(
           key: const ValueKey('tracking'),
@@ -7670,6 +8485,8 @@ class _CustomerPortalState extends State<_CustomerPortal> {
           pharmacyName: _healthPharmacyName,
           pharmacyAddress: _healthPharmacy,
           deliveryAddress: _healthDelivery,
+          pharmacyVerified: _validatedHealthPharmacy?.isVerified == true,
+          deliveryVerified: _validatedHealthDelivery?.isVerified == true,
           notes: _healthNotes,
           preferredDay: _healthPreferredDay,
           preferredTime: _healthPreferredTime,
@@ -7679,6 +8496,8 @@ class _CustomerPortalState extends State<_CustomerPortal> {
           subscriptionPlan: _healthSubscriptionPlan,
           consent: _healthConsent,
           savePayment: _healthSavePayment,
+          useRoth: _healthUseRoth,
+          rothBalance: _healthRothBalance,
           submitting: _healthSubmitting,
           message: _healthMessage,
           checkoutUrl: _healthCheckoutUrl,
@@ -7708,6 +8527,19 @@ class _CustomerPortalState extends State<_CustomerPortal> {
           onConsent: (value) => setState(() => _healthConsent = value ?? false),
           onSavePayment: (value) =>
               setState(() => _healthSavePayment = value ?? false),
+          onUseRoth: (value) => setState(() => _healthUseRoth = value ?? false),
+          onPharmacySelected: (address) => setState(() {
+            _validatedHealthPharmacy = address;
+            _healthPharmacy.text = address.displayAddress;
+          }),
+          onPharmacyEdited: (_) =>
+              setState(() => _validatedHealthPharmacy = null),
+          onDeliverySelected: (address) => setState(() {
+            _validatedHealthDelivery = address;
+            _healthDelivery.text = address.displayAddress;
+          }),
+          onDeliveryEdited: (_) =>
+              setState(() => _validatedHealthDelivery = null),
           onSubmit: _bookHealthPlus,
           onPauseSchedule: _pauseHealthPlusSchedule,
           onResumeSchedule: _resumeHealthPlusSchedule,
@@ -7725,6 +8557,8 @@ class _CustomerPortalState extends State<_CustomerPortal> {
           accounts: _businessAccounts,
           selectedBusinessId: _selectedBusinessId,
           account: _selectedBusinessAccount,
+          currentUserId: _senderUser?.uid,
+          currentUserEmail: _senderUser?.email,
           invoices: _businessInvoices,
           deliveries: _senderDeliveries,
           joinRequests: _businessJoinRequests,
@@ -7755,6 +8589,8 @@ class _CustomerPortalState extends State<_CustomerPortal> {
           },
           onCreateBusiness: _createBusinessAccount,
           onJoinBusiness: _joinBusinessByCode,
+          onEnsureCompanyCode: _ensureBusinessCompanyCode,
+          onRotateCompanyCode: () => _ensureBusinessCompanyCode(rotate: true),
           onSaveProfile: _saveBusinessProfile,
           onReviewRequest: _reviewBusinessRequest,
           onUpdateMemberRole: _updateBusinessMemberRole,
@@ -7762,6 +8598,7 @@ class _CustomerPortalState extends State<_CustomerPortal> {
           onPayInvoice: (invoiceId) => _openBusinessInvoiceCheckout(invoiceId),
           onPayInvoiceWithRoth: (invoiceId) =>
               _openBusinessInvoiceCheckout(invoiceId, useRoth: true),
+          onDownloadInvoice: _downloadBusinessInvoice,
           onBuyRoth: _openBusinessRothCheckout,
           onCreateDelivery: () => setState(() => _step = _SenderStep.details),
           onHealthPlus: () => setState(() => _step = _SenderStep.healthPlus),
@@ -7819,7 +8656,10 @@ class _CustomerPortalState extends State<_CustomerPortal> {
   }
 
   double get _quoteTotal {
-    return _quoteBreakdown.total;
+    return _quoteBreakdown.total +
+        (_webVanguardEnabled && !_webVanguardRequired
+            ? _webVanguardAddOnPriceGbp
+            : 0);
   }
 
   bool get _hasConfirmedWeight {
@@ -8022,7 +8862,7 @@ class _CustomerPortalState extends State<_CustomerPortal> {
           _vehicleSuitability,
         ) &&
         !(classification.finalWeightBand != 'Small Parcel' &&
-            _effectiveVehicle.name == 'Bike');
+            _effectiveVehicle.name == 'Motorbike');
   }
 
   _VehicleOption get _effectiveVehicle {
@@ -8075,7 +8915,6 @@ class _CustomerPortalState extends State<_CustomerPortal> {
         quantity: _irisQuantity,
         singleItemWeightKg: _irisSingleItemWeightKg,
         stackable: _irisStackable,
-        economy: _selectedSpeed == 'Economy',
         express: _selectedSpeed == 'Express',
       ),
     );
@@ -8091,11 +8930,14 @@ class _CustomerPortalState extends State<_CustomerPortal> {
     debugPrint('[CIRCUM pricing] userEnteredWeight=$_senderEnteredWeightKg');
     debugPrint('[CIRCUM pricing] irisEstimatedWeight=$_irisEstimatedWeightKg');
     debugPrint(
-        '[CIRCUM pricing] matchedCatalogueWeight=$_matchedCatalogueWeightKg');
+      '[CIRCUM pricing] matchedCatalogueWeight=$_matchedCatalogueWeightKg',
+    );
     debugPrint(
-        '[CIRCUM pricing] finalPricingWeightKg=${classification.finalWeightKg}');
+      '[CIRCUM pricing] finalPricingWeightKg=${classification.finalWeightKg}',
+    );
     debugPrint(
-        '[CIRCUM pricing] pricingWeightKg=${classification.finalWeightKg}');
+      '[CIRCUM pricing] pricingWeightKg=${classification.finalWeightKg}',
+    );
     debugPrint('[CIRCUM pricing] weightBand=${quote.weightCategory}');
     debugPrint('[CIRCUM pricing] vehicleType=${_effectiveVehicle.name}');
     debugPrint('[CIRCUM pricing] finalCheckoutPrice=${quote.total}');
@@ -8207,7 +9049,7 @@ class _CustomerPortalState extends State<_CustomerPortal> {
   void _debugPricingInputs() {
     assert(() {
       debugPrint(
-        'Circum booking debug: pickup=${_validatedPickup?.displayAddress}, '
+        'Circum booking check: pickup=${_validatedPickup?.displayAddress}, '
         'dropoff=${_validatedDropoff?.displayAddress}, '
         'pickupLatLng=${_validatedPickup?.lat}/${_validatedPickup?.lng}, '
         'dropoffLatLng=${_validatedDropoff?.lat}/${_validatedDropoff?.lng}, '
@@ -8245,24 +9087,103 @@ class _CustomerPortalState extends State<_CustomerPortal> {
         setState(() => _senderAuthLoading = false);
         return;
       }
-      if (!await _allowSenderUser(user)) {
+      var senderRestoreTimedOut = false;
+      final senderAllowed = await _allowSenderUser(user).timeout(
+        const Duration(seconds: 8),
+        onTimeout: () {
+          senderRestoreTimedOut = true;
+          return false;
+        },
+      );
+      if (!senderAllowed) {
         await FirebaseAuth.instance.signOut();
         if (!mounted) return;
         setState(() {
           _senderAuthLoading = false;
-          _senderProfileMessage =
-              'Use a sender account here. Rider and admin accounts have their own sign-in.';
+          _senderProfileMessage = senderRestoreTimedOut
+              ? 'We could not restore your session. Sign in again to continue.'
+              : 'Use a Circum account here. Circum Rider and admin accounts have their own sign-in.';
         });
         return;
       }
       _attachSender(user);
       await _loadSenderDeliveries(user.uid);
       await _loadBusinessWorkspaces(user.uid);
+      await _loadSenderRothBalance();
+      await _handleSenderCheckoutReturn();
     } catch (_) {
       if (!mounted) return;
       setState(() {
         _senderAuthLoading = false;
         _senderProfileMessage = 'We could not load your profile just now.';
+      });
+    }
+  }
+
+  Future<void> _handleSenderCheckoutReturn() async {
+    if (_senderCheckoutReturnHandled) return;
+    final result = Uri.base.queryParameters['sender_payment'];
+    if (result == null) return;
+    _senderCheckoutReturnHandled = true;
+    if (result == 'cancelled') {
+      if (!mounted) return;
+      setState(() {
+        _step = _SenderStep.payment;
+        _checkoutState = _CheckoutState.awaitingPayment;
+        _firebaseError =
+            'Payment was cancelled. Your delivery has not been created.';
+      });
+      return;
+    }
+    if (result != 'success') return;
+    final checkoutSessionId = Uri.base.queryParameters['checkoutSessionId'];
+    final paymentSessionId = Uri.base.queryParameters['paymentSessionId'];
+    if (checkoutSessionId == null || paymentSessionId == null) return;
+    if (!mounted) return;
+    setState(() {
+      _step = _SenderStep.payment;
+      _checkoutState = _CheckoutState.processingPayment;
+      _firebaseError = 'Confirming your payment with Stripe...';
+    });
+    try {
+      final result = await FirebaseFunctions.instanceFor(region: 'us-central1')
+          .httpsCallable('finalizeSenderWebCheckout')
+          .call({
+        'checkoutSessionId': checkoutSessionId,
+        'paymentSessionId': paymentSessionId,
+      });
+      final data = Map<String, dynamic>.from(result.data as Map);
+      final requestId = '${data['requestId'] ?? data['deliveryId'] ?? ''}';
+      if (requestId.isNotEmpty) {
+        _listenToRequest(requestId);
+        _listenToChat(requestId);
+      }
+      await _loadSenderDeliveries(_senderUser!.uid);
+      if (!mounted) return;
+      setState(() {
+        _activeOrderId = requestId;
+        _activeRequestDocId = requestId;
+        _checkoutState = _CheckoutState.matchingRiders;
+        _broadcasting = true;
+        _firebaseOnline = true;
+        _firebaseError = null;
+        _step = _SenderStep.tracking;
+      });
+    } on FirebaseFunctionsException catch (error) {
+      if (!mounted) return;
+      setState(() {
+        _checkoutState = _CheckoutState.failed;
+        _broadcasting = false;
+        _firebaseError = error.message ??
+            'Stripe payment could not be confirmed. Please contact support.';
+      });
+    } catch (_) {
+      if (!mounted) return;
+      setState(() {
+        _checkoutState = _CheckoutState.failed;
+        _broadcasting = false;
+        _firebaseError =
+            'Stripe payment could not be confirmed. Please contact support.';
       });
     }
   }
@@ -8308,6 +9229,26 @@ class _CustomerPortalState extends State<_CustomerPortal> {
       }
     });
     _listenForDeliveryAdjustments(user.uid);
+    _loadSenderRothBalance();
+  }
+
+  Future<void> _loadSenderRothBalance() async {
+    try {
+      await _ensureFirebaseReady();
+      final result = await FirebaseFunctions.instanceFor(
+        region: 'us-central1',
+      ).httpsCallable('getSenderRothBalance').call<Map<String, dynamic>>();
+      final data = Map<String, dynamic>.from(result.data);
+      if (!mounted) return;
+      setState(() {
+        _healthRothBalance = (data['availableRoth'] as num?)?.toDouble() ??
+            (data['balance'] as num?)?.toDouble() ??
+            0;
+      });
+    } catch (_) {
+      if (!mounted) return;
+      setState(() => _healthRothBalance = 0);
+    }
   }
 
   Future<void> _showLegendCelebration(SenderProfile profile) async {
@@ -8331,10 +9272,13 @@ class _CustomerPortalState extends State<_CustomerPortal> {
         ),
       ),
     );
-    await FirebaseFirestore.instance.collection('users').doc(profile.id).set({
-      'legendCelebrationSeenAt': FieldValue.serverTimestamp(),
-    }, SetOptions(merge: true));
-    _legendCelebrationShowing = false;
+    try {
+      await FirebaseFunctions.instanceFor(region: 'us-central1')
+          .httpsCallable('markSenderLegendCelebrationSeen')
+          .call({'profileId': profile.id});
+    } finally {
+      _legendCelebrationShowing = false;
+    }
   }
 
   void _listenForDeliveryAdjustments(String senderId) {
@@ -8344,29 +9288,35 @@ class _CustomerPortalState extends State<_CustomerPortal> {
         .where('senderId', isEqualTo: senderId)
         .limit(20)
         .snapshots()
-        .listen((snapshot) {
-      if (!mounted) return;
-      final pending = snapshot.docs.where((doc) {
-        final status = '${doc.data()['status'] ?? ''}';
-        return {
-          'awaiting_admin_review',
-          'more_evidence_requested',
-          'awaiting_sender_payment',
-          'rejected_by_admin',
-        }.contains(status);
-      }).toList();
-      if (pending.isEmpty) return;
-      pending.sort((a, b) => _timestampMillis(b.data()['createdAt'])
-          .compareTo(_timestampMillis(a.data()['createdAt'])));
-      final doc = pending.first;
-      if (_visibleAdjustmentId == doc.id) return;
-      _visibleAdjustmentId = doc.id;
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (mounted) _showSenderAdjustmentDialog(doc.id, doc.data());
-      });
-    }, onError: (error) {
-      debugPrint('Could not load delivery adjustment: $error');
-    });
+        .listen(
+      (snapshot) {
+        if (!mounted) return;
+        final pending = snapshot.docs.where((doc) {
+          final status = '${doc.data()['status'] ?? ''}';
+          return {
+            'awaiting_admin_review',
+            'more_evidence_requested',
+            'awaiting_sender_payment',
+            'rejected_by_admin',
+          }.contains(status);
+        }).toList();
+        if (pending.isEmpty) return;
+        pending.sort(
+          (a, b) => _timestampMillis(
+            b.data()['createdAt'],
+          ).compareTo(_timestampMillis(a.data()['createdAt'])),
+        );
+        final doc = pending.first;
+        if (_visibleAdjustmentId == doc.id) return;
+        _visibleAdjustmentId = doc.id;
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (mounted) _showSenderAdjustmentDialog(doc.id, doc.data());
+        });
+      },
+      onError: (error) {
+        debugPrint('Could not load delivery adjustment: $error');
+      },
+    );
   }
 
   static int _timestampMillis(Object? value) {
@@ -8408,29 +9358,39 @@ class _CustomerPortalState extends State<_CustomerPortal> {
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(_senderAdjustmentStateCopy(
-                  status: status,
-                  note: '${adjustment['adminReviewNote'] ?? ''}',
-                )),
+                Text(
+                  _senderAdjustmentStateCopy(
+                    status: status,
+                    note: '${adjustment['adminReviewNote'] ?? ''}',
+                  ),
+                ),
                 const SizedBox(height: 16),
                 _adjustmentTimeline(status),
                 const SizedBox(height: 16),
-                Text(_discrepancyReasonLabel(
-                    '${adjustment['riderReason'] ?? ''}')),
+                Text(
+                  _discrepancyReasonLabel('${adjustment['riderReason'] ?? ''}'),
+                ),
                 const SizedBox(height: 10),
                 _adjustmentPriceRow(
-                    'Original quote', adjustment['originalQuote']),
+                  'Original quote',
+                  adjustment['originalQuote'],
+                ),
                 _adjustmentPriceRow(
-                    'Revised quote', adjustment['revisedQuote']),
+                  'Revised quote',
+                  adjustment['revisedQuote'],
+                ),
                 _adjustmentPriceRow(
-                    'Additional amount', adjustment['additionalAmount'],
-                    emphasized: true),
+                  'Additional amount',
+                  adjustment['additionalAmount'],
+                  emphasized: true,
+                ),
                 if ('${adjustment['observations'] ?? ''}'
                     .trim()
                     .isNotEmpty) ...[
                   const SizedBox(height: 10),
                   Text(
-                      'Updated delivery evidence is attached for Admin review.'),
+                    'Updated delivery evidence is attached for Admin review.',
+                  ),
                 ],
                 if (error != null) ...[
                   const SizedBox(height: 12),
@@ -8477,13 +9437,19 @@ class _CustomerPortalState extends State<_CustomerPortal> {
                           error = null;
                         });
                         try {
-                          Stripe.publishableKey = Env.publishableTestKey;
+                          if (Env.stripePublishableKey.trim().isEmpty) {
+                            throw StateError(
+                              'Stripe publishable key is not configured.',
+                            );
+                          }
+                          Stripe.publishableKey = Env.stripePublishableKey;
                           await Stripe.instance.applySettings();
                           final payment = await FirebaseFunctions.instance
                               .httpsCallable('createDeliveryAdjustmentPayment')
                               .call({'adjustmentId': adjustmentId});
-                          final data =
-                              Map<String, dynamic>.from(payment.data as Map);
+                          final data = Map<String, dynamic>.from(
+                            payment.data as Map,
+                          );
                           await Stripe.instance.initPaymentSheet(
                             paymentSheetParameters: SetupPaymentSheetParameters(
                               paymentIntentClientSecret:
@@ -8495,7 +9461,8 @@ class _CustomerPortalState extends State<_CustomerPortal> {
                           await Stripe.instance.presentPaymentSheet();
                           await FirebaseFunctions.instance
                               .httpsCallable(
-                                  'finalizeDeliveryAdjustmentPayment')
+                            'finalizeDeliveryAdjustmentPayment',
+                          )
                               .call({'adjustmentId': adjustmentId});
                           if (!dialogContext.mounted) return;
                           Navigator.of(dialogContext).pop();
@@ -8570,17 +9537,23 @@ class _CustomerPortalState extends State<_CustomerPortal> {
     );
   }
 
-  Widget _adjustmentPriceRow(String label, Object? value,
-      {bool emphasized = false}) {
+  Widget _adjustmentPriceRow(
+    String label,
+    Object? value, {
+    bool emphasized = false,
+  }) {
     final amount = value is num ? value.toDouble() : double.tryParse('$value');
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 4),
       child: Row(
         children: [
           Expanded(child: Text(label)),
-          Text('£${(amount ?? 0).toStringAsFixed(2)}',
-              style: TextStyle(
-                  fontWeight: emphasized ? FontWeight.w900 : FontWeight.w700)),
+          Text(
+            '£${(amount ?? 0).toStringAsFixed(2)}',
+            style: TextStyle(
+              fontWeight: emphasized ? FontWeight.w900 : FontWeight.w700,
+            ),
+          ),
         ],
       ),
     );
@@ -8614,7 +9587,7 @@ class _CustomerPortalState extends State<_CustomerPortal> {
         await FirebaseAuth.instance.signOut();
         setState(
           () => _senderProfileMessage =
-              'This account is not a sender account. Use the rider or admin sign-in instead.',
+              'This account is not a Circum account. Use the Circum Rider or admin sign-in instead.',
         );
         return;
       }
@@ -8642,23 +9615,16 @@ class _CustomerPortalState extends State<_CustomerPortal> {
         password: _senderPassword.text.trim(),
       );
       final user = credential.user!;
-      await FirebaseFirestore.instance.collection('users').doc(user.uid).set({
-        'fullName': _senderName.text.trim(),
-        'fullname': _senderName.text.trim(),
-        'email': user.email,
-        'phoneNumber': _senderPhone.text.trim(),
-        'role': 'user',
-        'roles': ['sender'],
-        'userType': 'sender',
-        'status': 'active',
-        'verificationStatus': user.emailVerified ? 'verified' : 'unverified',
-        'createdAt': FieldValue.serverTimestamp(),
-        'updatedAt': FieldValue.serverTimestamp(),
-      }, SetOptions(merge: true));
+      await FirebaseFunctions.instanceFor(
+        region: 'us-central1',
+      ).httpsCallable('updateSenderProfile').call({
+        'displayName': _senderName.text.trim(),
+        'phone': _senderPhone.text.trim(),
+      });
       _availableRoles = {CircumRole.sender};
       _attachSender(user);
       await _loadSenderDeliveries(user.uid);
-      setState(() => _senderProfileMessage = 'Your sender profile is ready.');
+      setState(() => _senderProfileMessage = 'Your Circum profile is ready.');
     } on FirebaseAuthException catch (error) {
       setState(() => _senderProfileMessage = _friendlySenderAuthMessage(error));
     } finally {
@@ -8689,7 +9655,7 @@ class _CustomerPortalState extends State<_CustomerPortal> {
       setState(
         () => _senderProfileMessage = switch (error.code) {
           'invalid-email' => 'Enter a valid email address.',
-          'user-not-found' => 'No Circum sender profile found for that email.',
+          'user-not-found' => 'No Circum profile found for that email.',
           _ =>
             'We could not send the reset email. Check the address and try again.',
         },
@@ -8776,10 +9742,9 @@ class _CustomerPortalState extends State<_CustomerPortal> {
         throw FirebaseAuthException(code: 'requires-recent-login');
       }
       await user.verifyBeforeUpdateEmail(nextEmail);
-      await FirebaseFirestore.instance.collection('users').doc(user.uid).set({
-        'pendingEmail': nextEmail,
-        'updatedAt': FieldValue.serverTimestamp(),
-      }, SetOptions(merge: true));
+      await FirebaseFunctions.instanceFor(region: 'us-central1')
+          .httpsCallable('requestSenderEmailChange')
+          .call({'pendingEmail': nextEmail});
       _senderNewEmail.clear();
       _senderEmailChangePassword.clear();
       if (!mounted) return;
@@ -8805,23 +9770,16 @@ class _CustomerPortalState extends State<_CustomerPortal> {
     if (!mounted) return false;
     setState(() => _availableRoles = roles);
     if (RoleAccessPolicy.rolesCanAccessSender(roles)) return true;
-    final db = FirebaseFirestore.instance;
-    final riderDoc = await db.collection('riderProfiles').doc(user.uid).get();
-    final adminDoc = await db.collection('adminUsers').doc(user.uid).get();
     if (!roles.contains(CircumRole.rider) &&
-        !roles.contains(CircumRole.admin) &&
-        !riderDoc.exists &&
-        !adminDoc.exists) {
-      await db.collection('users').doc(user.uid).set({
-        'email': user.email,
-        'role': 'user',
-        'roles': ['sender'],
-        'userType': 'sender',
-        'status': 'active',
-        'updatedAt': FieldValue.serverTimestamp(),
-      }, SetOptions(merge: true));
-      setState(() => _availableRoles = {CircumRole.sender});
-      return true;
+        !roles.contains(CircumRole.admin)) {
+      final result = await FirebaseFunctions.instanceFor(
+        region: 'us-central1',
+      ).httpsCallable('ensureSenderAccount').call();
+      final data = Map<String, dynamic>.from(result.data as Map);
+      if (data['allowed'] == true) {
+        setState(() => _availableRoles = {CircumRole.sender});
+        return true;
+      }
     }
     return false;
   }
@@ -8830,15 +9788,35 @@ class _CustomerPortalState extends State<_CustomerPortal> {
     final token = await user.getIdTokenResult(true);
     final claims = token.claims ?? const <String, dynamic>{};
     final db = FirebaseFirestore.instance;
-    final userDoc = await db.collection('users').doc(user.uid).get();
-    final riderDoc = await db.collection('riderProfiles').doc(user.uid).get();
-    final adminDoc = await db.collection('adminUsers').doc(user.uid).get();
+    final userDoc = await _safeRoleDocument(
+      db.collection('users').doc(user.uid),
+    );
+    final riderDoc = await _safeRoleDocument(
+      db.collection('riderProfiles').doc(user.uid),
+    );
+    final adminDoc = await _safeRoleDocument(
+      db.collection('adminUsers').doc(user.uid),
+    );
     return RoleAccessPolicy.resolveRoles(
       claims: claims,
-      user: userDoc.data() ?? const {},
-      rider: riderDoc.data() ?? const {},
-      adminUser: adminDoc.data() ?? const {},
+      user: userDoc,
+      rider: riderDoc,
+      adminUser: adminDoc,
     );
+  }
+
+  Future<Map<String, dynamic>> _safeRoleDocument(
+    DocumentReference<Map<String, dynamic>> reference,
+  ) async {
+    try {
+      final snapshot = await reference.get();
+      return snapshot.data() ?? const {};
+    } on FirebaseException catch (error) {
+      if (error.code == 'permission-denied' || error.code == 'not-found') {
+        return const {};
+      }
+      rethrow;
+    }
   }
 
   Future<void> _signOutSender() async {
@@ -8870,17 +9848,15 @@ class _CustomerPortalState extends State<_CustomerPortal> {
             'fullName': _senderName.text.trim(),
             'phoneNumber': _senderPhone.text.trim(),
           });
-      await FirebaseFirestore.instance.collection('users').doc(user.uid).set(
-            profile.safeUpdatePatch(
-              fullName: _senderName.text.trim(),
-              phoneNumber: _senderPhone.text.trim(),
-              savedAddresses: profile.savedAddresses,
-              communicationPreferences: profile.communicationPreferences.isEmpty
-                  ? const {'email': true, 'sms': true}
-                  : profile.communicationPreferences,
-            ),
-            SetOptions(merge: true),
-          );
+      await FirebaseFunctions.instanceFor(
+        region: 'us-central1',
+      ).httpsCallable('updateSenderProfile').call({
+        'displayName': _senderName.text.trim(),
+        'phone': _senderPhone.text.trim(),
+        'communicationPreferences': profile.communicationPreferences.isEmpty
+            ? const {'email': true, 'sms': true}
+            : profile.communicationPreferences,
+      });
       setState(() => _senderProfileMessage = 'Profile saved.');
     } catch (_) {
       setState(() => _senderProfileMessage = 'Could not save the profile.');
@@ -8900,29 +9876,53 @@ class _CustomerPortalState extends State<_CustomerPortal> {
       );
       return;
     }
-    final next = [
-      ...?_senderProfile?.savedAddresses,
-      SavedSenderAddress(
-        label: _savedAddressLabel.text.trim().isEmpty
-            ? 'Saved address'
-            : _savedAddressLabel.text.trim(),
-        address: address,
-        addressType: _savedAddressType,
-        postcode: validated.postcode,
-        lat: validated.lat,
-        lng: validated.lng,
-        placeId: validated.placeId,
-        provider: validated.provider,
-        locationId: validated.locationId,
-      ),
-    ];
+    final labelText = _savedAddressLabel.text.trim();
+    final normalizedLabel = switch (labelText.toLowerCase()) {
+      'home' => 'home',
+      'work' => 'work',
+      _ => 'other',
+    };
+    final customLabel = normalizedLabel == 'other'
+        ? (labelText.isEmpty ? 'Saved address' : labelText)
+        : '';
+    final addressLine1 = [
+      validated.buildingNumber,
+      validated.street,
+    ].whereType<String>().where((value) => value.trim().isNotEmpty).join(' ');
+    final city = (validated.city?.trim().isNotEmpty == true
+            ? validated.city!.trim()
+            : _cityFromAddress(validated.displayAddress)) ??
+        'United Kingdom';
     setState(() => _senderProfileSaving = true);
     try {
-      await FirebaseFirestore.instance.collection('users').doc(user.uid).set({
-        'savedAddresses':
-            next.map((senderAddress) => senderAddress.toJson()).toList(),
-        'updatedAt': FieldValue.serverTimestamp(),
-      }, SetOptions(merge: true));
+      await FirebaseFunctions.instanceFor(
+        region: 'us-central1',
+      ).httpsCallable('saveSenderSavedAddress').call({
+        'label': normalizedLabel,
+        'customLabel': customLabel,
+        'address': {
+          'formattedAddress': validated.displayAddress,
+          'addressLine1': addressLine1.isEmpty ? address : addressLine1,
+          if (validated.street?.trim().isNotEmpty == true)
+            'addressLine2': validated.street!.trim(),
+          'city': city,
+          if (validated.county?.trim().isNotEmpty == true)
+            'county': validated.county!.trim(),
+          'postcode': validated.postcode ?? '',
+          'country': validated.country?.trim().isNotEmpty == true
+              ? validated.country!.trim()
+              : 'United Kingdom',
+          'latitude': validated.lat,
+          'longitude': validated.lng,
+          if (validated.placeId?.trim().isNotEmpty == true)
+            'placeId': validated.placeId,
+          'provider': validated.provider,
+          'locationId': validated.locationId,
+        },
+        'deliveryInstructions': '',
+        'isDefaultPickup': _savedAddressType == 'pickup',
+        'isDefaultDropoff': _savedAddressType == 'dropoff',
+      });
       _savedAddress.clear();
       _validatedSavedAddress = null;
       setState(() => _senderProfileMessage = 'Saved address added.');
@@ -8981,6 +9981,7 @@ class _CustomerPortalState extends State<_CustomerPortal> {
       final db = FirebaseFirestore.instance;
       final userSnap = await db.collection('users').doc(uid).get();
       final userData = userSnap.data() ?? <String, dynamic>{};
+      final userEmail = (_senderUser?.email ?? '').trim().toLowerCase();
       final ids = <String>{
         for (final id
             in (userData['businessWorkspaceIds'] as List? ?? const []))
@@ -8988,6 +9989,23 @@ class _CustomerPortalState extends State<_CustomerPortal> {
         if ('${userData['lastBusinessWorkspaceId'] ?? ''}'.trim().isNotEmpty)
           '${userData['lastBusinessWorkspaceId']}',
       };
+      final ownedAccounts = await db
+          .collection('businessAccounts')
+          .where('createdByUserId', isEqualTo: uid)
+          .limit(20)
+          .get();
+      for (final doc in ownedAccounts.docs) {
+        ids.add(doc.id);
+      }
+      final teamLookupValues = [uid, if (userEmail.isNotEmpty) userEmail];
+      final teamAccounts = await db
+          .collection('businessAccounts')
+          .where('teamMemberIds', arrayContainsAny: teamLookupValues)
+          .limit(20)
+          .get();
+      for (final doc in teamAccounts.docs) {
+        ids.add(doc.id);
+      }
       final memberships = await db
           .collection('businessMemberships')
           .where('userId', isEqualTo: uid)
@@ -9036,18 +10054,25 @@ class _CustomerPortalState extends State<_CustomerPortal> {
             .where('businessId', isEqualTo: selectedId)
             .limit(30)
             .get();
-        audits
-            .addAll(auditSnap.docs.map((doc) => {'id': doc.id, ...doc.data()}));
+        audits.addAll(
+          auditSnap.docs.map((doc) => {'id': doc.id, ...doc.data()}),
+        );
         final walletSnap =
             await db.collection('business_wallets').doc(selectedId).get();
         if (walletSnap.exists) {
           wallet = {'id': walletSnap.id, ...walletSnap.data()!};
         }
       }
-      invoices.sort((a, b) => _timestampMillis(b['createdAt'])
-          .compareTo(_timestampMillis(a['createdAt'])));
-      audits.sort((a, b) => _timestampMillis(b['createdAt'])
-          .compareTo(_timestampMillis(a['createdAt'])));
+      invoices.sort(
+        (a, b) => _timestampMillis(
+          b['createdAt'],
+        ).compareTo(_timestampMillis(a['createdAt'])),
+      );
+      audits.sort(
+        (a, b) => _timestampMillis(
+          b['createdAt'],
+        ).compareTo(_timestampMillis(a['createdAt'])),
+      );
       if (!mounted) return;
       setState(() {
         _businessAccounts = accounts;
@@ -9132,12 +10157,16 @@ class _CustomerPortalState extends State<_CustomerPortal> {
       _selectedBusinessId = '${data['businessId']}';
       await _loadBusinessWorkspaces(_senderUser!.uid);
       if (!mounted) return;
-      setState(() => _businessMessage =
-          'Business workspace created. Company code ${data['companyCode']}.');
+      setState(
+        () => _businessMessage =
+            'Business workspace created. Company code ${data['companyCode']}.',
+      );
     } on FirebaseFunctionsException catch (error) {
       if (!mounted) return;
-      setState(() => _businessMessage =
-          error.message ?? 'Business workspace could not be created.');
+      setState(
+        () => _businessMessage =
+            error.message ?? 'Business workspace could not be created.',
+      );
     } finally {
       if (mounted) setState(() => _businessBusy = false);
     }
@@ -9151,22 +10180,25 @@ class _CustomerPortalState extends State<_CustomerPortal> {
     });
     try {
       final functions = FirebaseFunctions.instanceFor(region: 'us-central1');
-      final lookup =
-          await functions.httpsCallable('lookupBusinessByCompanyCode').call({
-        'companyCode': _businessCompanyCode.text.trim(),
-      });
+      final lookup = await functions
+          .httpsCallable('lookupBusinessByCompanyCode')
+          .call({'companyCode': _businessCompanyCode.text.trim()});
       final found = Map<String, dynamic>.from(lookup.data as Map);
       await functions.httpsCallable('requestBusinessAccess').call({
         'businessId': found['businessId'],
         'role': 'member',
       });
       if (!mounted) return;
-      setState(() => _businessMessage =
-          'Access request sent to ${found['companyName'] ?? 'the company'}.');
+      setState(
+        () => _businessMessage =
+            'Access request sent to ${found['companyName'] ?? 'the company'}.',
+      );
     } on FirebaseFunctionsException catch (error) {
       if (!mounted) return;
-      setState(() => _businessMessage =
-          error.message ?? 'Business access request could not be sent.');
+      setState(
+        () => _businessMessage =
+            error.message ?? 'Business access request could not be sent.',
+      );
     } finally {
       if (mounted) setState(() => _businessBusy = false);
     }
@@ -9181,8 +10213,11 @@ class _CustomerPortalState extends State<_CustomerPortal> {
           .call({'requestId': requestId, 'approved': approved});
       await _loadBusinessWorkspaces(_senderUser!.uid);
       if (!mounted) return;
-      setState(() => _businessMessage =
-          approved ? 'Business access approved.' : 'Business access rejected.');
+      setState(
+        () => _businessMessage = approved
+            ? 'Business access approved.'
+            : 'Business access rejected.',
+      );
     } finally {
       if (mounted) setState(() => _businessBusy = false);
     }
@@ -9193,9 +10228,9 @@ class _CustomerPortalState extends State<_CustomerPortal> {
     if (_senderUser == null || businessId == null || _businessBusy) return;
     setState(() => _businessBusy = true);
     try {
-      await FirebaseFunctions.instanceFor(region: 'us-central1')
-          .httpsCallable('updateBusinessProfile')
-          .call({
+      await FirebaseFunctions.instanceFor(
+        region: 'us-central1',
+      ).httpsCallable('updateBusinessProfile').call({
         'businessId': businessId,
         'businessName': _businessCompanyName.text.trim(),
         'businessType': _businessType.text.trim(),
@@ -9214,6 +10249,48 @@ class _CustomerPortalState extends State<_CustomerPortal> {
     }
   }
 
+  Future<void> _ensureBusinessCompanyCode({bool rotate = false}) async {
+    final businessId = _selectedBusinessId;
+    if (_senderUser == null || businessId == null || _businessBusy) return;
+    setState(() => _businessBusy = true);
+    try {
+      final result = await FirebaseFunctions.instanceFor(region: 'us-central1')
+          .httpsCallable('ensureBusinessCompanyCode')
+          .call<Map<String, dynamic>>({
+        'businessId': businessId,
+        'rotate': rotate,
+      });
+      final data = Map<String, dynamic>.from(result.data);
+      final code = '${data['companyCode'] ?? ''}'.trim();
+      if (code.isEmpty) {
+        setState(
+          () => _businessMessage =
+              'We could not retrieve the company code just now.',
+        );
+        return;
+      }
+      setState(() {
+        _businessAccounts = _businessAccounts
+            .map(
+              (account) => account['id'] == businessId
+                  ? {...account, 'companyCode': code}
+                  : account,
+            )
+            .toList(growable: false);
+        _businessMessage = rotate
+            ? 'Company code changed: $code'
+            : 'Company code ready: $code';
+      });
+    } on FirebaseFunctionsException catch (error) {
+      setState(
+        () => _businessMessage =
+            error.message ?? 'We could not retrieve the company code just now.',
+      );
+    } finally {
+      if (mounted) setState(() => _businessBusy = false);
+    }
+  }
+
   Future<void> _updateBusinessMemberRole(
     String memberUserId,
     String role,
@@ -9222,12 +10299,12 @@ class _CustomerPortalState extends State<_CustomerPortal> {
     if (_senderUser == null || businessId == null || _businessBusy) return;
     setState(() => _businessBusy = true);
     try {
-      await FirebaseFunctions.instanceFor(region: 'us-central1')
-          .httpsCallable('updateBusinessMemberRole')
-          .call({
+      await FirebaseFunctions.instanceFor(
+        region: 'us-central1',
+      ).httpsCallable('updateBusinessMemberRole').call({
         'businessId': businessId,
         'memberUserId': memberUserId,
-        'role': role
+        'role': role,
       });
       await _loadBusinessWorkspaces(_senderUser!.uid);
       if (!mounted) return;
@@ -9286,6 +10363,17 @@ class _CustomerPortalState extends State<_CustomerPortal> {
     }
   }
 
+  Future<void> _downloadBusinessInvoice(Map<String, dynamic> invoice) async {
+    _downloadBusinessPdf(
+      _businessInvoicePdfUri(invoice),
+      _businessInvoicePdfFileName(invoice),
+    );
+    if (!mounted) return;
+    setState(() {
+      _businessMessage = 'Invoice PDF downloaded. Open it to print or save.';
+    });
+  }
+
   Future<void> _openBusinessRothCheckout() async {
     final businessId = _selectedBusinessId;
     final amount = double.tryParse(_businessRothAmount.text.trim()) ?? 0;
@@ -9340,16 +10428,17 @@ class _CustomerPortalState extends State<_CustomerPortal> {
     if (confirmed != true) return;
 
     try {
-      final response =
-          await FirebaseFunctions.instanceFor(region: 'us-central1')
-              .httpsCallable('cancelDelivery')
-              .call({'deliveryId': delivery.id});
+      final response = await FirebaseFunctions.instanceFor(
+        region: 'us-central1',
+      ).httpsCallable('cancelDelivery').call({'deliveryId': delivery.id});
       final data = Map<String, dynamic>.from(response.data as Map);
       if (data['success'] != true) {
-        final decision =
-            Map<String, dynamic>.from(data['decision'] as Map? ?? {});
+        final decision = Map<String, dynamic>.from(
+          data['decision'] as Map? ?? {},
+        );
         throw StateError(
-            '${decision['userFacingMessage'] ?? 'This delivery requires support review.'}');
+          '${decision['userFacingMessage'] ?? 'This delivery requires support review.'}',
+        );
       }
       await _loadSenderDeliveries(user.uid);
       if (!mounted) return;
@@ -9357,11 +10446,57 @@ class _CustomerPortalState extends State<_CustomerPortal> {
         _selectedSenderDelivery = null;
         _senderProfileMessage = 'Booking cancelled.';
       });
+    } on FirebaseFunctionsException catch (error) {
+      if (!mounted) return;
+      setState(
+        () => _senderProfileMessage = _friendlySenderFunctionMessage(
+          error,
+          'We could not cancel this booking. Please try again or contact Circum support.',
+        ),
+      );
     } catch (error) {
       if (!mounted) return;
-      setState(() =>
-          _senderProfileMessage = '$error'.replaceFirst('Bad state: ', ''));
+      setState(
+        () => _senderProfileMessage = _friendlySenderErrorMessage(
+          error,
+          'We could not cancel this booking. Please try again or contact Circum support.',
+        ),
+      );
     }
+  }
+
+  String _friendlySenderFunctionMessage(
+    FirebaseFunctionsException error,
+    String fallback,
+  ) {
+    final message = error.message?.trim();
+    if (message != null &&
+        message.isNotEmpty &&
+        !_looksLikeTechnicalError(message)) {
+      return message;
+    }
+    return fallback;
+  }
+
+  String _friendlySenderErrorMessage(Object error, String fallback) {
+    final message = '$error'.replaceFirst('Bad state: ', '').trim();
+    if (message.isNotEmpty && !_looksLikeTechnicalError(message)) {
+      return message;
+    }
+    return fallback;
+  }
+
+  bool _looksLikeTechnicalError(String message) {
+    final value = message.toLowerCase();
+    return value.contains('firebase') ||
+        value.contains('internal') ||
+        value.contains('exception') ||
+        value.contains('platformexception') ||
+        value.contains('cloud functions') ||
+        value.contains('https callable') ||
+        value.contains('stack trace') ||
+        value.contains('null check operator') ||
+        value.contains('bad state');
   }
 
   String _friendlySenderAuthMessage(FirebaseAuthException error) {
@@ -9456,6 +10591,12 @@ class _CustomerPortalState extends State<_CustomerPortal> {
         reason: decision.reason,
         verificationRequired: decision.verificationRequired,
       );
+      if (mounted) {
+        setState(() {
+          _checkoutState = _CheckoutState.awaitingPayment;
+          _step = _SenderStep.vehicle;
+        });
+      }
       _logCheckoutPricing();
     }
   }
@@ -9475,6 +10616,7 @@ class _CustomerPortalState extends State<_CustomerPortal> {
         setState(() {
           _parcelPhoto = null;
           _parcelPhotoCapturedAt = null;
+          _irisPhotoAnalysisId = null;
           _irisImageInsight = null;
           _parcelPhotoMessage =
               'Choose a JPG, PNG, WebP, or HEIC image under 10MB.';
@@ -9487,6 +10629,7 @@ class _CustomerPortalState extends State<_CustomerPortal> {
       setState(() {
         _parcelPhoto = picked;
         _parcelPhotoCapturedAt = picked == null ? null : DateTime.now();
+        _irisPhotoAnalysisId = insight?.analysisId;
         _irisImageInsight = insight;
         _parcelPhotoMessage = picked == null
             ? 'No parcel photo selected.'
@@ -9521,97 +10664,22 @@ class _CustomerPortalState extends State<_CustomerPortal> {
 
   Future<_IrisImageInsight> _analyseParcelPhotoForIris(XFile photo) async {
     try {
-      final sizeBytes = await photo.length();
-      final name = photo.name.toLowerCase();
-      final details = '${_description.text} $name'.toLowerCase();
-      var inferredItem = 'Parcel photo';
-      var category = 'Parcel';
-      var weightKg = 2.0;
-      var confidence = 0.45;
-      var fragilityRisk = 'medium';
-      var valueRisk = 'low';
-      var handlingNotes = 'Photo attached for rider handling context.';
-      var riderGuidance = 'Check parcel size and condition at pickup.';
-      var needsReview = false;
-
-      final repository = _knownProductWeightEstimate(details);
-      if (repository != null) {
-        inferredItem = repository.matchedItemName ?? repository.packageType;
-        category = repository.packageType;
-        weightKg = repository.weightKg;
-        confidence = (repository.confidenceScore ?? 0.7).clamp(0.0, 1.0);
-        fragilityRisk = repository.fragile ? 'high' : 'medium';
-        valueRisk = _looksHighValue(details, repository.packageType)
-            ? 'high'
-            : 'medium';
-        handlingNotes =
-            repository.handlingNotes ?? 'Handle according to item type.';
-        riderGuidance =
-            'Photo and item details suggest $inferredItem. Verify condition and weight at pickup.';
-      } else if (_containsAny(details, const [
-        'phone',
-        'iphone',
-        'ipad',
-        'laptop',
-        'macbook',
-        'camera',
-        'watch',
-        'console',
-      ])) {
-        inferredItem = 'Consumer electronics';
-        category = 'Electronics';
-        weightKg = 2.5;
-        confidence = 0.58;
-        fragilityRisk = 'high';
-        valueRisk = 'high';
-        handlingNotes = 'Likely fragile or high-value electronics.';
-        riderGuidance = 'Keep sealed, avoid stacking, and verify handover.';
-        needsReview = true;
-      } else if (_containsAny(details, const [
-        'sofa',
-        'chair',
-        'table',
-        'tv',
-        'furniture',
-        'mattress',
-        'bike',
-      ])) {
-        inferredItem = 'Large item';
-        category = 'Large item';
-        weightKg = 15;
-        confidence = 0.55;
-        fragilityRisk = details.contains('tv') ? 'high' : 'medium';
-        valueRisk = 'medium';
-        handlingNotes = 'Bulky item; check vehicle suitability.';
-        riderGuidance = 'Confirm dimensions and safe loading before pickup.';
-        needsReview = true;
-      } else if (sizeBytes > 7 * 1024 * 1024) {
-        inferredItem = 'Detailed parcel photo';
-        category = 'Parcel';
-        weightKg = 5;
-        confidence = 0.42;
-        fragilityRisk = 'medium';
-        valueRisk = 'low';
-        handlingNotes = 'Photo quality is high, but item type is unclear.';
-        riderGuidance = 'Use the photo to confirm parcel condition at pickup.';
-        needsReview = true;
-      }
-
-      final band = DeliveryPricing.weightBandFor(weightKg).category;
-      return _IrisImageInsight(
-        inferredItemName: inferredItem,
-        inferredCategory: category,
-        estimatedWeightKg: weightKg,
-        weightClass: band,
-        confidenceScore: confidence,
-        fragilityRisk: fragilityRisk,
-        valueRisk: valueRisk,
-        handlingNotes: handlingNotes,
-        riderGuidance: riderGuidance,
-        needsHumanReview: needsReview || confidence < 0.5,
-        fileName: photo.name,
-        fileSizeBytes: sizeBytes,
-      );
+      await _ensureFirebaseReady();
+      final bytes = await photo.readAsBytes();
+      final result = await FirebaseFunctions.instanceFor(region: 'us-central1')
+          .httpsCallable('analyseParcelPhotoForIris')
+          .call({
+        'imageBase64': base64Encode(bytes),
+        'contentType': photo.mimeType,
+        'fileName': photo.name,
+        'description': _description.text.trim(),
+        'declaredWeightText': _weight.text.trim(),
+        'distanceMiles': _confirmedRouteDistanceMiles,
+        'selectedSpeed': _selectedSpeed,
+        'vehicleType': _effectiveVehicle.name,
+      });
+      final data = Map<String, dynamic>.from(result.data as Map);
+      return _IrisImageInsight.fromBackend(data, fallbackFileName: photo.name);
     } catch (_) {
       return _IrisImageInsight.fallback(photo.name);
     }
@@ -9842,7 +10910,7 @@ class _CustomerPortalState extends State<_CustomerPortal> {
         weightBand: higherBand.category,
         source: classification.selectedWeightSource,
         message: significantDifference
-            ? 'Iris is not confident and the details may indicate a different weight band. Confirm your weight to continue; the rider will verify at pickup.'
+            ? 'Iris is not confident and the details may indicate a different weight band. Confirm your weight to continue; the Circum Rider will verify at pickup.'
             : 'IRIS has analysed this item and selected the most reliable weight available.',
         reason: classification.resolutionReason,
         verificationRequired: true,
@@ -9971,9 +11039,7 @@ class _CustomerPortalState extends State<_CustomerPortal> {
     if (imageInsight == null) return textEstimate;
     final imageTotalWeight =
         imageInsight.estimatedWeightKg * textEstimate.quantity;
-    final imageBand = DeliveryPricing.weightBandFor(
-      imageTotalWeight,
-    ).category;
+    final imageBand = DeliveryPricing.weightBandFor(imageTotalWeight).category;
     final textBand = DeliveryPricing.weightBandFor(textEstimate.weightKg);
     final imageBandRank =
         DeliveryPricing.weightBandFor(imageTotalWeight).maxKg ??
@@ -10050,17 +11116,14 @@ class _CustomerPortalState extends State<_CustomerPortal> {
             .where((weight) => weight > base.weightKg * 5)
             .toList(growable: false);
         if (outliers.isNotEmpty) {
-          await FirebaseFirestore.instance
-              .collection('irisLearningOutliers')
-              .add({
-            'senderId': user.uid,
+          await FirebaseFunctions.instanceFor(
+            region: 'us-central1',
+          ).httpsCallable('recordIrisLearningOutlier').call({
             'description': _description.text.trim(),
             'matchedItemName': base.matchedItemName,
             'trustedWeightKg': base.weightKg,
             'outlierWeightsKg': outliers,
             'reason': 'historical_weight_above_5x_catalogue_weight',
-            'status': 'pending_review',
-            'createdAt': FieldValue.serverTimestamp(),
           });
         }
         return base.copyWith(
@@ -10223,30 +11286,6 @@ class _CustomerPortalState extends State<_CustomerPortal> {
     };
   }
 
-  bool _containsAny(String text, Iterable<String> needles) {
-    return needles.any(text.contains);
-  }
-
-  bool _looksHighValue(String text, String category) {
-    final combined = '$text $category'.toLowerCase();
-    return _containsAny(combined, const [
-      'iphone',
-      'phone',
-      'macbook',
-      'laptop',
-      'camera',
-      'watch',
-      'jewellery',
-      'jewelry',
-      'console',
-      'playstation',
-      'xbox',
-      'designer',
-      'gold',
-      'diamond',
-    ]);
-  }
-
   String _formatWeight(double weightKg) {
     return weightKg.truncateToDouble() == weightKg
         ? weightKg.toStringAsFixed(0)
@@ -10308,7 +11347,15 @@ class _CustomerPortalState extends State<_CustomerPortal> {
         'distanceMiles': _confirmedRouteDistanceMiles,
         'weightKg': _deliveryClassification.finalWeightKg,
         'selectedSpeed': _selectedSpeed,
-        'vanguard': _webVanguardRequired,
+        'vanguard': _webVanguardEnabled,
+        'vanguardProtocolEnabled': _webVanguardEnabled,
+        'parcel': {
+          'itemName': _irisMatchedItemName ?? _inferPackageType(),
+          'description': _description.text.trim(),
+          'weightKg': _deliveryClassification.finalWeightKg,
+        },
+        if (_irisPhotoAnalysisId != null)
+          'irisPhotoAnalysisId': _irisPhotoAnalysisId,
         'iris': _webCanonicalIrisPayload(),
         'clientDisplayQuote': {
           'amount': _quoteTotal,
@@ -10334,61 +11381,68 @@ class _CustomerPortalState extends State<_CustomerPortal> {
           return;
         }
       }
-      final sessionResult =
-          await functions.httpsCallable('createSenderPaymentSession').call({
-        'quoteId': quote['quoteId'],
-        'fallbackMethod': 'card',
-        'rothEnabled': false,
-      });
-      final session = Map<String, dynamic>.from(sessionResult.data as Map);
-      final clientSecret = '${session['clientSecret'] ?? ''}';
-      if (clientSecret.isNotEmpty) {
-        Stripe.publishableKey = Env.publishableTestKey;
-        await Stripe.instance.applySettings();
-        await Stripe.instance.initPaymentSheet(
-          paymentSheetParameters: SetupPaymentSheetParameters(
-            paymentIntentClientSecret: clientSecret,
-            customerId: '${session['customerId'] ?? ''}',
-            customerEphemeralKeySecret:
-                '${session['ephemeralKeySecret'] ?? ''}',
-            merchantDisplayName: 'Circum',
-            style: ThemeMode.dark,
-          ),
-        );
-        await Stripe.instance.presentPaymentSheet();
-      }
       final parcelPhotoData = await _uploadParcelPhoto(id);
       final request = _requestPayload(id, parcelPhotoData);
-      final paidDeliveryResult =
-          await functions.httpsCallable('createSenderPaidDelivery').call({
+      final deliveryPayload = {
         'requestId': id,
-        'quoteId': quote['quoteId'],
-        'paymentSessionId': session['paymentSessionId'],
-        'idempotencyKey': id,
         'pickup': _webCanonicalPickupPayload(request),
         'dropoff': _webCanonicalDropoffPayload(request),
         'recipient': _webCanonicalRecipientPayload(request),
         'parcel': _webCanonicalParcelPayload(request),
         'iris': _webCanonicalIrisPayload(),
         'deliveryTime': _webCanonicalDeliveryTimePayload(),
+      };
+      final sessionResult =
+          await functions.httpsCallable('createSenderPaymentSession').call({
+        'quoteId': quote['quoteId'],
+        'fallbackMethod': 'card',
+        'rothEnabled': _deliveryUseRoth,
+        'checkoutMode': 'web_checkout',
+        'requestId': id,
+        'idempotencyKey': id,
+        'returnUrl': 'https://circum-2797c.web.app/send',
+        'deliveryPayload': deliveryPayload,
       });
-      final paidDelivery =
-          Map<String, dynamic>.from(paidDeliveryResult.data as Map);
-      final requestId = '${paidDelivery['requestId'] ?? id}';
-      _activeVanguardData = request['vanguardEnabled'] == true
-          ? Map<String, dynamic>.from(request)
-          : null;
-      _listenToRequest(requestId);
-      _listenToChat(requestId);
-      if (!mounted) return;
+      final session = Map<String, dynamic>.from(sessionResult.data as Map);
+      if ('${session['paymentStatus'] ?? session['status']}' == 'succeeded') {
+        final paidDeliveryResult =
+            await functions.httpsCallable('createSenderPaidDelivery').call({
+          ...deliveryPayload,
+          'quoteId': quote['quoteId'],
+          'paymentSessionId': session['paymentSessionId'],
+          'idempotencyKey': id,
+        });
+        final paidDelivery = Map<String, dynamic>.from(
+          paidDeliveryResult.data as Map,
+        );
+        final requestId = '${paidDelivery['requestId'] ?? id}';
+        _activeVanguardData = request['vanguardEnabled'] == true
+            ? Map<String, dynamic>.from(request)
+            : null;
+        _listenToRequest(requestId);
+        _listenToChat(requestId);
+        if (!mounted) return;
+        setState(() {
+          _activeOrderId = requestId;
+          _activeRequestDocId = requestId;
+          _checkoutState = _CheckoutState.matchingRiders;
+          _broadcasting = true;
+          _firebaseOnline = true;
+          _step = _SenderStep.tracking;
+        });
+        return;
+      }
+      final checkoutUrl = Uri.tryParse('${session['checkoutUrl'] ?? ''}');
+      if (checkoutUrl == null || checkoutUrl.host.isEmpty) {
+        throw StateError('Secure Stripe Checkout could not be opened.');
+      }
       setState(() {
-        _activeOrderId = requestId;
-        _activeRequestDocId = requestId;
-        _checkoutState = _CheckoutState.matchingRiders;
-        _broadcasting = true;
-        _firebaseOnline = true;
-        _step = _SenderStep.tracking;
+        _firebaseError = 'Complete payment securely with Stripe.';
       });
+      final opened = await launchUrl(checkoutUrl, webOnlyWindowName: '_self');
+      if (!opened) {
+        throw StateError('Secure Stripe Checkout could not be opened.');
+      }
     } catch (_) {
       if (!mounted) return;
       setState(() {
@@ -10484,6 +11538,7 @@ class _CustomerPortalState extends State<_CustomerPortal> {
       'quantity': request['quantity'],
       'photoUrl': request['photoUrl'],
       'photoStoragePath': request['photoStoragePath'],
+      'irisPhotoAnalysisId': request['irisPhotoAnalysisId'],
     };
   }
 
@@ -10496,12 +11551,15 @@ class _CustomerPortalState extends State<_CustomerPortal> {
       'weightBand': _deliveryClassification.finalWeightBand,
       'confidence': _irisWeightConfidence,
       'source': _irisWeightSource,
+      'photoAnalysisId': _irisPhotoAnalysisId,
       'vanguardRequired': _webVanguardRequired,
       'vanguardRequiredReason': _webVanguardRequired
           ? 'Vanguard protection selected by item value policy.'
           : '',
     };
   }
+
+  bool get _webVanguardEnabled => _webVanguardRequired || _webVanguardSelected;
 
   bool get _webVanguardRequired {
     return VanguardProtection.initialFields(
@@ -10532,8 +11590,14 @@ class _CustomerPortalState extends State<_CustomerPortal> {
       validationMessage = 'Add an email address for your receipt.';
     } else if (_healthPharmacy.text.trim().isEmpty) {
       validationMessage = 'Add the pharmacy pickup address.';
+    } else if (_validatedHealthPharmacy?.isVerified != true) {
+      validationMessage =
+          'Select a verified pharmacy address from the address results.';
     } else if (_healthDelivery.text.trim().isEmpty) {
       validationMessage = 'Add the delivery address.';
+    } else if (_validatedHealthDelivery?.isVerified != true) {
+      validationMessage =
+          'Select a verified delivery address from the address results.';
     } else if (_healthPrescriptionType.trim().isEmpty) {
       validationMessage = 'Choose the prescription type.';
     } else if (_healthFrequency == HealthPlusFrequency.custom &&
@@ -10550,14 +11614,6 @@ class _CustomerPortalState extends State<_CustomerPortal> {
       return;
     }
 
-    final now = DateTime.now();
-    final senderId = _senderUser?.uid ?? FirebaseAuth.instance.currentUser?.uid;
-    final id = 'HP-${now.millisecondsSinceEpoch.toString().substring(6)}';
-    final scheduleId = _healthFrequency == HealthPlusFrequency.oneOff
-        ? null
-        : 'HPS-${now.millisecondsSinceEpoch.toString().substring(6)}';
-    final pickupId =
-        'HPP-${now.millisecondsSinceEpoch.toString().substring(6)}';
     final quote = _healthQuote;
 
     setState(() {
@@ -10568,52 +11624,50 @@ class _CustomerPortalState extends State<_CustomerPortal> {
 
     try {
       await _ensureFirebaseReady();
-      final db = FirebaseFirestore.instance;
-      final batch = db.batch();
-      final profileRef = db.collection('healthPlusProfiles').doc(id);
-      final pickupRef = db.collection('prescriptionPickups').doc(pickupId);
-
-      final profile = {
-        'id': id,
-        'senderId': senderId,
-        'userId': senderId,
+      final result = await FirebaseFunctions.instanceFor(region: 'us-central1')
+          .httpsCallable('createHealthPlusBooking')
+          .call<Map<String, dynamic>>({
         'fullName': _healthName.text.trim(),
         'phoneNumber': _healthPhone.text.trim(),
         'email': _healthEmail.text.trim(),
         'pharmacyName': _healthPharmacyName.text.trim(),
         'pharmacyAddress': _healthPharmacy.text.trim(),
+        'pharmacyAddressCanonical': _validatedHealthPharmacy?.toJson(),
         'deliveryAddress': _healthDelivery.text.trim(),
+        'deliveryAddressCanonical': _validatedHealthDelivery?.toJson(),
         'notes': _healthNotes.text.trim(),
-        'prescriptionNotes': _healthNotes.text.trim(),
         'prescriptionType': _healthPrescriptionType,
         'subscriptionPlan': _healthSubscriptionPlan,
         'healthPlusPlan': _healthSubscriptionPlan,
         'preferredDay': _healthPreferredDay.text.trim(),
-        'preferredTime': _healthPreferredTime.text.trim(),
         'preferredPickupDay': _healthPreferredDay.text.trim(),
         'preferredPickupTime': _healthPreferredTime.text.trim(),
-        'frequency': _healthFrequency.value,
-        'recurring': scheduleId != null,
-        'customSchedule': _healthCustomSchedule.text.trim(),
-        'priorityRiderMatching': _healthSubscriptionPlan == 'priority',
         'consentConfirmed': _healthConsent,
-        'consentAccepted': _healthConsent,
-        'status': scheduleId == null ? 'one_off' : 'active',
-        'source': 'circum-web',
-        'createdAt': FieldValue.serverTimestamp(),
-        'updatedAt': FieldValue.serverTimestamp(),
-      };
+        'frequency': _healthFrequency.value,
+        'customSchedule': _healthCustomSchedule.text.trim(),
+        'savedPaymentMethod': _healthSavePayment,
+        'pricingInputs': {
+          'distanceMiles': HealthPlusPricing.defaultDistanceMiles,
+          'medicationWeightKg': HealthPlusPricing.defaultMedicationWeightKg,
+        },
+        'idempotencyKey':
+            'web-healthplus:${FirebaseAuth.instance.currentUser?.uid}:${_healthFrequency.value}:${_healthPreferredTime.text.trim()}:$_healthSubscriptionPlan',
+      });
+      final data = Map<String, dynamic>.from(result.data);
+      final id = '${data['profileId'] ?? ''}'.trim();
+      final scheduleId = '${data['scheduleId'] ?? ''}'.trim();
+      final pickupId = '${data['pickupId'] ?? ''}'.trim();
+      final amount = (data['amount'] as num?)?.toDouble() ?? quote.total;
       final pickup = {
         'id': pickupId,
-        'senderId': senderId,
-        'userId': senderId,
         'profileId': id,
-        'scheduleId': scheduleId,
         'fullName': _healthName.text.trim(),
         'phoneNumber': _healthPhone.text.trim(),
         'pharmacyName': _healthPharmacyName.text.trim(),
         'pharmacyAddress': _healthPharmacy.text.trim(),
+        'pharmacyAddressCanonical': _validatedHealthPharmacy?.toJson(),
         'deliveryAddress': _healthDelivery.text.trim(),
+        'deliveryAddressCanonical': _validatedHealthDelivery?.toJson(),
         'notes': _healthNotes.text.trim(),
         'prescriptionNotes': _healthNotes.text.trim(),
         'prescriptionType': _healthPrescriptionType,
@@ -10629,132 +11683,51 @@ class _CustomerPortalState extends State<_CustomerPortal> {
         'scheduledDropoffDate': _healthPreferredDay.text.trim(),
         'scheduledDropoffWindow': _healthPreferredTime.text.trim(),
         'frequency': _healthFrequency.value,
-        'recurring': scheduleId != null,
+        'recurring': scheduleId.isNotEmpty,
         'customSchedule': _healthCustomSchedule.text.trim(),
         'priorityRiderMatching': _healthSubscriptionPlan == 'priority',
         'status': PickupStatus.scheduled.value,
-        'price': quote.total,
+        'price': amount,
         'currency': 'GBP',
         'pricingBreakdown': quote.toJson(),
-        'pricingInputs': {
-          'distanceMiles': HealthPlusPricing.defaultDistanceMiles,
-          'medicationWeightKg': HealthPlusPricing.defaultMedicationWeightKg,
-        },
         'type': 'health_plus_prescription_pickup',
         'source': 'circum-web',
-        'createdAt': FieldValue.serverTimestamp(),
-        'updatedAt': FieldValue.serverTimestamp(),
       };
-      batch.set(profileRef, profile, SetOptions(merge: true));
-      batch.set(pickupRef, pickup, SetOptions(merge: true));
-
-      if (scheduleId != null) {
-        batch.set(db.collection('recurringPickupSchedules').doc(scheduleId), {
-          'id': scheduleId,
-          'senderId': senderId,
-          'userId': senderId,
-          'profileId': id,
-          'frequency': _healthFrequency.value,
-          'pharmacyName': _healthPharmacyName.text.trim(),
-          'pharmacyAddress': _healthPharmacy.text.trim(),
-          'deliveryAddress': _healthDelivery.text.trim(),
-          'prescriptionType': _healthPrescriptionType,
-          'subscriptionPlan': _healthSubscriptionPlan,
-          'healthPlusPlan': _healthSubscriptionPlan,
-          'preferredDay': _healthPreferredDay.text.trim(),
-          'preferredTime': _healthPreferredTime.text.trim(),
-          'prescriptionNotes': _healthNotes.text.trim(),
-          'consentAccepted': _healthConsent,
-          'status': 'active',
-          'preferredDayTime':
-              '${_healthPreferredDay.text.trim()} ${_healthPreferredTime.text.trim()}'
-                  .trim(),
-          'scheduledPickupDate': _healthPreferredDay.text.trim(),
-          'scheduledPickupWindow': _healthPreferredTime.text.trim(),
-          'scheduledDropoffDate': _healthPreferredDay.text.trim(),
-          'scheduledDropoffWindow': _healthPreferredTime.text.trim(),
-          'customSchedule': _healthCustomSchedule.text.trim(),
-          'paused': false,
-          'nextPickupAt':
-              '${_healthPreferredDay.text.trim()} ${_healthPreferredTime.text.trim()}'
-                  .trim(),
-          'stripeCustomerId': null,
-          'stripeSubscriptionId': null,
-          'createdAt': FieldValue.serverTimestamp(),
-          'updatedAt': FieldValue.serverTimestamp(),
-        });
-      }
-
-      batch.set(db.collection('healthPlusPayments').doc(pickupId), {
-        'id': pickupId,
-        'senderId': senderId,
-        'userId': senderId,
-        'profileId': id,
-        'pickupId': pickupId,
-        'amount': quote.total,
-        'currency': 'GBP',
-        'status': 'pending_secure_checkout',
-        'savedPaymentMethod': _healthSavePayment,
-        'frequency': _healthFrequency.value,
-        'subscriptionPlan': _healthSubscriptionPlan,
-        'paymentType':
-            scheduleId == null ? 'one_time_checkout' : 'subscription_checkout',
-        'createdAt': FieldValue.serverTimestamp(),
-      });
-      batch.set(db.collection('healthPlusNotifications').doc(), {
-        'senderId': senderId,
-        'userId': senderId,
-        'profileId': id,
-        'pickupId': pickupId,
-        'type': 'pickup_scheduled',
-        'title': 'Health+ pickup scheduled',
-        'body': 'Your prescription pickup has been scheduled.',
-        'createdAt': FieldValue.serverTimestamp(),
-      });
-      batch.set(db.collection('healthPlusUsageEvents').doc(), {
-        'type': 'pickup_created',
-        'senderId': senderId,
-        'userId': senderId,
-        'profileId': id,
-        'pickupId': pickupId,
-        'scheduleId': scheduleId,
-        'frequency': _healthFrequency.value,
-        'prescriptionType': _healthPrescriptionType,
-        'subscriptionPlan': _healthSubscriptionPlan,
-        'status': PickupStatus.scheduled.value,
-        'amount': quote.total,
-        'currency': 'GBP',
-        'source': 'circum-web',
-        'createdAt': FieldValue.serverTimestamp(),
-      });
-
-      await batch.commit();
-      final checkoutUrl = await _createHealthPlusCheckoutSession(
+      final checkout = await _createHealthPlusCheckoutSession(
         pickupId: pickupId,
         profileId: id,
         quote: quote,
       );
+      final checkoutUrl =
+          checkout == null ? null : '${checkout['checkoutUrl'] ?? ''}'.trim();
+      final paid = checkout != null && checkout['paid'] == true;
+      final hasCheckoutUrl = checkoutUrl != null && checkoutUrl.isNotEmpty;
 
       if (!mounted) return;
       setState(() {
-        _healthProfileId = id;
-        _healthScheduleId = scheduleId;
+        _healthScheduleId = scheduleId.isEmpty ? null : scheduleId;
         _healthCheckoutUrl = checkoutUrl;
         _healthPickups.insert(0, pickup);
         _healthPayments.insert(0, {
           'pickupId': pickupId,
-          'amount': quote.total,
-          'status': checkoutUrl == null
-              ? 'pending_secure_checkout'
-              : 'checkout_created',
+          'amount': amount,
+          'status': paid
+              ? 'paid'
+              : !hasCheckoutUrl
+                  ? 'pending_secure_checkout'
+                  : 'checkout_created',
+          'rothApplied': checkout?['rothApplied'],
+          'cardAmount': checkout?['cardAmount'],
         });
-        _healthMessage = checkoutUrl == null
-            ? 'Your Health+ pickup is saved. Payment setup is not ready yet.'
-            : 'Your Health+ pickup is saved. Payment is ready.';
+        _healthMessage = paid
+            ? 'Your Health+ pickup has been paid with Roth.'
+            : !hasCheckoutUrl
+                ? 'Your Health+ pickup is saved. Payment setup is not ready yet.'
+                : 'Your Health+ pickup is saved. Payment is ready.';
         _firebaseOnline = true;
       });
 
-      if (checkoutUrl != null) {
+      if (hasCheckoutUrl) {
         await launchUrl(
           Uri.parse(checkoutUrl),
           mode: LaunchMode.externalApplication,
@@ -10772,7 +11745,7 @@ class _CustomerPortalState extends State<_CustomerPortal> {
     }
   }
 
-  Future<String?> _createHealthPlusCheckoutSession({
+  Future<Map<String, dynamic>?> _createHealthPlusCheckoutSession({
     required String pickupId,
     required String profileId,
     required HealthPlusPriceBreakdown quote,
@@ -10796,18 +11769,19 @@ class _CustomerPortalState extends State<_CustomerPortal> {
               : _healthFrequency.value,
           'subscriptionPlan': _healthSubscriptionPlan,
           'prescriptionType': _healthPrescriptionType,
+          'useRoth': _healthUseRoth,
           'priceBreakdown': quote.toJson(),
           'successUrl':
-              'https://circum-app-2797c.web.app/?app=sender&health=success',
+              'https://circum-2797c.web.app/send/health?health=success',
           'cancelUrl':
-              'https://circum-app-2797c.web.app/?app=sender&health=cancelled',
+              'https://circum-2797c.web.app/send/health?health=cancelled',
         }),
       );
       if (response.statusCode < 200 || response.statusCode >= 300) {
         return null;
       }
       final data = jsonDecode(response.body) as Map<String, dynamic>;
-      return data['checkoutUrl'] as String?;
+      return data;
     } catch (_) {
       return null;
     }
@@ -10832,21 +11806,12 @@ class _CustomerPortalState extends State<_CustomerPortal> {
       return;
     }
     await _ensureFirebaseReady();
-    await FirebaseFirestore.instance
-        .collection('recurringPickupSchedules')
-        .doc(scheduleId)
-        .set({
-      'paused': true,
-      'status': 'paused',
-      'updatedAt': FieldValue.serverTimestamp(),
-    }, SetOptions(merge: true));
-    await FirebaseFirestore.instance.collection('healthPlusUsageEvents').add({
-      'type': 'recurring_pickup_paused',
-      'profileId': _healthProfileId,
+    await FirebaseFunctions.instanceFor(
+      region: 'us-central1',
+    ).httpsCallable('updateSenderHealthPlusBooking').call({
+      'action': 'pause_schedule',
       'scheduleId': scheduleId,
-      'status': 'paused',
-      'source': 'circum-web',
-      'createdAt': FieldValue.serverTimestamp(),
+      'idempotencyKey': 'web-healthplus:pause:$scheduleId',
     });
     setState(() => _healthMessage = 'Your repeat Health+ pickup is paused.');
   }
@@ -10858,21 +11823,12 @@ class _CustomerPortalState extends State<_CustomerPortal> {
       return;
     }
     await _ensureFirebaseReady();
-    await FirebaseFirestore.instance
-        .collection('recurringPickupSchedules')
-        .doc(scheduleId)
-        .set({
-      'paused': false,
-      'status': 'active',
-      'updatedAt': FieldValue.serverTimestamp(),
-    }, SetOptions(merge: true));
-    await FirebaseFirestore.instance.collection('healthPlusUsageEvents').add({
-      'type': 'recurring_pickup_resumed',
-      'profileId': _healthProfileId,
+    await FirebaseFunctions.instanceFor(
+      region: 'us-central1',
+    ).httpsCallable('updateSenderHealthPlusBooking').call({
+      'action': 'resume_schedule',
       'scheduleId': scheduleId,
-      'status': 'active',
-      'source': 'circum-web',
-      'createdAt': FieldValue.serverTimestamp(),
+      'idempotencyKey': 'web-healthplus:resume:$scheduleId',
     });
     setState(() => _healthMessage = 'Your repeat Health+ pickup is active.');
   }
@@ -10884,22 +11840,12 @@ class _CustomerPortalState extends State<_CustomerPortal> {
       return;
     }
     await _ensureFirebaseReady();
-    await FirebaseFirestore.instance
-        .collection('recurringPickupSchedules')
-        .doc(scheduleId)
-        .set({
-      'paused': true,
-      'status': 'cancelled',
-      'cancelledAt': FieldValue.serverTimestamp(),
-      'updatedAt': FieldValue.serverTimestamp(),
-    }, SetOptions(merge: true));
-    await FirebaseFirestore.instance.collection('healthPlusUsageEvents').add({
-      'type': 'recurring_pickup_cancelled',
-      'profileId': _healthProfileId,
+    await FirebaseFunctions.instanceFor(
+      region: 'us-central1',
+    ).httpsCallable('updateSenderHealthPlusBooking').call({
+      'action': 'cancel_schedule',
       'scheduleId': scheduleId,
-      'status': 'cancelled',
-      'source': 'circum-web',
-      'createdAt': FieldValue.serverTimestamp(),
+      'idempotencyKey': 'web-healthplus:cancel-schedule:$scheduleId',
     });
     setState(() => _healthMessage = 'Your repeat Health+ pickup is cancelled.');
   }
@@ -10909,21 +11855,12 @@ class _CustomerPortalState extends State<_CustomerPortal> {
     final pickupId = _healthPickups.first['id'] as String?;
     if (pickupId == null) return;
     await _ensureFirebaseReady();
-    await FirebaseFirestore.instance
-        .collection('prescriptionPickups')
-        .doc(pickupId)
-        .set({
-      'status': PickupStatus.cancelled.value,
-      'updatedAt': FieldValue.serverTimestamp(),
-    }, SetOptions(merge: true));
-    await FirebaseFirestore.instance.collection('healthPlusUsageEvents').add({
-      'type': 'pickup_cancelled',
-      'profileId': _healthProfileId,
+    await FirebaseFunctions.instanceFor(
+      region: 'us-central1',
+    ).httpsCallable('updateSenderHealthPlusBooking').call({
+      'action': 'cancel_pickup',
       'pickupId': pickupId,
-      'scheduleId': _healthScheduleId,
-      'status': PickupStatus.cancelled.value,
-      'source': 'circum-web',
-      'createdAt': FieldValue.serverTimestamp(),
+      'idempotencyKey': 'web-healthplus:cancel-pickup:$pickupId',
     });
     setState(() {
       _healthPickups.first['status'] = PickupStatus.cancelled.value;
@@ -10936,23 +11873,25 @@ class _CustomerPortalState extends State<_CustomerPortal> {
     final pickupId = _healthPickups.first['id'] as String?;
     if (pickupId == null) return;
     await _ensureFirebaseReady();
-    await FirebaseFirestore.instance
-        .collection('prescriptionPickups')
-        .doc(pickupId)
-        .set({
-      'status': status,
-      'adminUpdatedAt': FieldValue.serverTimestamp(),
-      'updatedAt': FieldValue.serverTimestamp(),
-    }, SetOptions(merge: true));
-    await FirebaseFirestore.instance.collection('healthPlusUsageEvents').add({
-      'type': 'admin_status_updated',
-      'profileId': _healthProfileId,
-      'pickupId': pickupId,
-      'scheduleId': _healthScheduleId,
-      'status': status,
-      'source': 'circum-web',
-      'createdAt': FieldValue.serverTimestamp(),
-    });
+    final token = await FirebaseAuth.instance.currentUser?.getIdToken();
+    final response = await http.post(
+      Uri.parse(
+        'https://us-central1-circum-2797c.cloudfunctions.net/updateHealthPlusPickupStatus',
+      ),
+      headers: {
+        'Content-Type': 'application/json',
+        if (token != null) 'Authorization': 'Bearer $token',
+      },
+      body: jsonEncode({
+        'pickupId': pickupId,
+        'status': status,
+        'note': 'Updated from Circum Website Health+ operations.',
+      }),
+    );
+    if (response.statusCode < 200 || response.statusCode >= 300) {
+      setState(() => _healthMessage = 'Admin status update failed.');
+      return;
+    }
     setState(() {
       _healthPickups.first['status'] = status;
       _healthMessage = 'Admin status updated to $status.';
@@ -10969,40 +11908,32 @@ class _CustomerPortalState extends State<_CustomerPortal> {
     final dropoffAddress = _validatedDropoff!;
     final distanceMiles = _confirmedRouteDistanceMiles!;
     final handling = _specialHandling;
-    final economyQuote = handling.applyTo(DeliveryPricing.calculate(
-      DeliveryPricingInput(
-        distanceMiles: distanceMiles,
-        weightKg: classification.finalWeightKg,
-        vehicleType: _effectiveVehicle.name,
-        quantity: _irisQuantity,
-        singleItemWeightKg: _irisSingleItemWeightKg,
-        stackable: _irisStackable,
-        economy: true,
+    final standardQuote = handling.applyTo(
+      DeliveryPricing.calculate(
+        DeliveryPricingInput(
+          distanceMiles: distanceMiles,
+          weightKg: classification.finalWeightKg,
+          vehicleType: _effectiveVehicle.name,
+          quantity: _irisQuantity,
+          singleItemWeightKg: _irisSingleItemWeightKg,
+          stackable: _irisStackable,
+        ),
       ),
-    ));
-    final standardQuote = handling.applyTo(DeliveryPricing.calculate(
-      DeliveryPricingInput(
-        distanceMiles: distanceMiles,
-        weightKg: classification.finalWeightKg,
-        vehicleType: _effectiveVehicle.name,
-        quantity: _irisQuantity,
-        singleItemWeightKg: _irisSingleItemWeightKg,
-        stackable: _irisStackable,
+    );
+    final expressQuote = handling.applyTo(
+      DeliveryPricing.calculate(
+        DeliveryPricingInput(
+          distanceMiles: distanceMiles,
+          weightKg: classification.finalWeightKg,
+          vehicleType: _effectiveVehicle.name,
+          quantity: _irisQuantity,
+          singleItemWeightKg: _irisSingleItemWeightKg,
+          stackable: _irisStackable,
+          express: true,
+        ),
       ),
-    ));
-    final expressQuote = handling.applyTo(DeliveryPricing.calculate(
-      DeliveryPricingInput(
-        distanceMiles: distanceMiles,
-        weightKg: classification.finalWeightKg,
-        vehicleType: _effectiveVehicle.name,
-        quantity: _irisQuantity,
-        singleItemWeightKg: _irisSingleItemWeightKg,
-        stackable: _irisStackable,
-        express: true,
-      ),
-    ));
+    );
     final selectedServiceLevel = switch (_selectedSpeed) {
-      'Economy' => 'economy',
       'Express' => 'express',
       _ => 'standard',
     };
@@ -11027,8 +11958,13 @@ class _CustomerPortalState extends State<_CustomerPortal> {
       description: _description.text.trim(),
       packageType: packageType,
       declaredValueGbp: null,
+      manuallySelected: _webVanguardSelected,
     );
     final vanguardEnabled = vanguardFields['vanguardEnabled'] == true;
+    final vanguardIncluded = _webVanguardRequired;
+    final vanguardAddOn =
+        vanguardEnabled && !vanguardIncluded ? _webVanguardAddOnPriceGbp : 0.0;
+    final customerTotal = quote.total + vanguardAddOn;
     final hasPhoto = parcelPhotoData['hasPhoto'] == true;
     final parcelPhotoUrl =
         parcelPhotoData['imageUrl'] ?? parcelPhotoData['photoUrl'];
@@ -11040,7 +11976,7 @@ class _CustomerPortalState extends State<_CustomerPortal> {
       irisRecommendedVehicle,
     );
     final driverPayout = quote.totalRiderEarnings;
-    final platformRevenue = quote.totalCircumRevenue;
+    final platformRevenue = quote.totalCircumRevenue + vanguardAddOn;
     final driverJobSummary = {
       'pickupDisplay': pickupAddress.compactDisplay,
       'dropoffDisplay': dropoffAddress.compactDisplay,
@@ -11096,12 +12032,13 @@ class _CustomerPortalState extends State<_CustomerPortal> {
       'hasPhoto': hasPhoto,
       'photoUrl': parcelPhotoUrl,
       'irisImageAnalysis': _irisImageInsight?.toJson(),
+      'irisPhotoAnalysisId': _irisPhotoAnalysisId,
       'imageAnalysisStatus': _irisImageInsight == null
           ? parcelPhotoData['analysisStatus']
           : 'analysed_by_iris',
       'deliveryInstructions': _description.text.trim(),
       'vehicleType': safeVehicleName,
-      'totalFare': quote.total,
+      'totalFare': customerTotal,
       'driverPayout': driverPayout,
       'riderPayout': driverPayout,
       'baseFare': quote.total - handling.labourPremium,
@@ -11117,6 +12054,8 @@ class _CustomerPortalState extends State<_CustomerPortal> {
       'riderBaseShare': quote.riderBaseShare,
       'riderLabourShare': quote.riderLabourShare,
       'totalRiderEarnings': quote.totalRiderEarnings,
+      'vanguardAddOnFee': vanguardAddOn,
+      'vanguardFee': vanguardAddOn,
       'specialHandlingClass': handling.handlingClass.name,
       'specialHandlingBadges': [
         if (quote.assistedFee > 0) 'Assisted Delivery',
@@ -11165,11 +12104,10 @@ class _CustomerPortalState extends State<_CustomerPortal> {
                   ? 'Vanguard protected delivery. PIN verification required at pickup and delivery.'
                   : ''),
       'vanguardEnabled': vanguardEnabled,
+      'vanguardProtocolEnabled': vanguardEnabled,
       'serviceType': selectedServiceLevel == 'express'
           ? 'Express Delivery'
-          : selectedServiceLevel == 'economy'
-              ? 'Economy Delivery'
-              : 'Normal Delivery',
+          : 'Normal Delivery',
     };
     return {
       'requestId': id,
@@ -11204,6 +12142,7 @@ class _CustomerPortalState extends State<_CustomerPortal> {
           ? parcelPhotoData['analysisStatus']
           : 'analysed_by_iris',
       'irisImageAnalysis': _irisImageInsight?.toJson(),
+      'irisPhotoAnalysisId': _irisPhotoAnalysisId,
       'parcelPhoto': {
         ...parcelPhotoData,
         'irisImageAnalysis': _irisImageInsight?.toJson(),
@@ -11290,12 +12229,11 @@ class _CustomerPortalState extends State<_CustomerPortal> {
       'selectedTier': selectedServiceLevel,
       'serviceLevel': selectedServiceLevel,
       'selectedServiceLevel': selectedServiceLevel,
-      'economyPrice': economyQuote.total,
       'standardPrice': standardQuote.total,
       'expressPrice': expressQuote.total,
       'basePrice': standardQuote.total,
-      'finalPrice': quote.total,
-      'finalCustomerPrice': quote.total,
+      'finalPrice': customerTotal,
+      'finalCustomerPrice': customerTotal,
       'assistedFee': quote.assistedFee,
       'heavyDutyFee': quote.heavyDutyFee,
       'twoPersonFee': quote.twoPersonFee,
@@ -11314,7 +12252,7 @@ class _CustomerPortalState extends State<_CustomerPortal> {
       'circumBaseShare': quote.circumBaseShare,
       'circumLabourShare': quote.circumLabourShare,
       'totalRiderEarnings': quote.totalRiderEarnings,
-      'totalCircumRevenue': quote.totalCircumRevenue,
+      'totalCircumRevenue': platformRevenue,
       'serviceLevelSurcharge':
           serviceLevelSurcharge < 0 ? 0 : serviceLevelSurcharge,
       'priority': selectedServiceLevel == 'express',
@@ -11322,9 +12260,9 @@ class _CustomerPortalState extends State<_CustomerPortal> {
       'broadcastRank': DeliveryPricing.matchingPriorityRank(
         selectedServiceLevel,
       ),
-      'quote': quote.total,
-      'price': quote.total,
-      'fare': quote.total,
+      'quote': customerTotal,
+      'price': customerTotal,
+      'fare': customerTotal,
       'driverPayout': driverPayout,
       'riderPayout': driverPayout,
       'platformRevenue': platformRevenue,
@@ -11332,6 +12270,7 @@ class _CustomerPortalState extends State<_CustomerPortal> {
       'driverShare': DeliveryPricing.riderDeliveryFareShare,
       'pricingBreakdown': quote.toJson(),
       ...vanguardFields,
+      'vanguardProtocolEnabled': vanguardEnabled,
       'currency': 'GBP',
       'status': 'requested',
       'dispatchStatus': 'requested',
@@ -11480,7 +12419,7 @@ class _CustomerPortalState extends State<_CustomerPortal> {
           _checkoutState = _CheckoutState.failed;
           _broadcasting = false;
           _firebaseOnline = false;
-          _firebaseError = 'Could not listen to this delivery in Firestore.';
+          _firebaseError = 'Could not keep this delivery up to date.';
         });
       },
     );
@@ -11841,8 +12780,10 @@ class _CustomerPortalState extends State<_CustomerPortal> {
   }
 
   String _senderTrackingStateForBackendStatus(String status) {
-    final normalized =
-        status.trim().toLowerCase().replaceAll(RegExp(r'[-\s]+'), '_');
+    final normalized = status.trim().toLowerCase().replaceAll(
+          RegExp(r'[-\s]+'),
+          '_',
+        );
     const mapping = {
       'requested': 'finding_rider',
       'pending': 'finding_rider',
@@ -11880,7 +12821,7 @@ class _CustomerPortalState extends State<_CustomerPortal> {
       'error': 'error',
     };
     if (normalized.isEmpty) return 'no_active_delivery';
-    return mapping[normalized] ?? 'in_transit';
+    return mapping[normalized] ?? 'issue';
   }
 
   String _formatMessageTime(dynamic timestamp, dynamic fallback) {
@@ -11910,11 +12851,7 @@ class _CustomerPortalState extends State<_CustomerPortal> {
       await _ensureFirebaseReady();
       await FirebaseFunctions.instanceFor(region: 'us-central1')
           .httpsCallable('sendCircumMessage')
-          .call({
-        'chatId': requestId,
-        'requestId': requestId,
-        'message': text,
-      });
+          .call({'chatId': requestId, 'requestId': requestId, 'message': text});
     } catch (_) {
       if (!mounted) return;
       setState(
@@ -11999,6 +12936,16 @@ class _DesktopPortalLayout extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final wideStep = switch (step) {
+      _SenderStep.details ||
+      _SenderStep.vehicle ||
+      _SenderStep.payment ||
+      _SenderStep.tracking ||
+      _SenderStep.healthPlus ||
+      _SenderStep.business =>
+        true,
+      _ => false,
+    };
     if (step == _SenderStep.dashboard) {
       return Row(
         crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -12016,7 +12963,7 @@ class _DesktopPortalLayout extends StatelessWidget {
           Container(width: 1, color: colors.border),
           Expanded(
             child: Container(
-              color: colors.field.withOpacity(colors.dark ? 0.22 : 0.38),
+              color: colors.field.withValues(alpha: colors.dark ? 0.22 : 0.38),
               child: SingleChildScrollView(
                 padding: const EdgeInsets.all(28),
                 child: deliveryLoadError != null
@@ -12041,241 +12988,21 @@ class _DesktopPortalLayout extends StatelessWidget {
         ],
       );
     }
-    final status = _trackingStatuses[
-        statusIndex.clamp(0, _trackingStatuses.length - 1).toInt()];
-
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        SizedBox(
-          width: MediaQuery.sizeOf(context).width >= 1100 ? 560 : 430,
-          child: SingleChildScrollView(
-            padding: const EdgeInsets.fromLTRB(28, 28, 24, 36),
+    return Container(
+      color: colors.field.withValues(alpha: colors.dark ? 0.16 : 0.28),
+      child: SingleChildScrollView(
+        padding: const EdgeInsets.fromLTRB(28, 28, 28, 36),
+        child: Center(
+          child: ConstrainedBox(
+            constraints: BoxConstraints(maxWidth: wideStep ? 1180 : 680),
             child: AnimatedSwitcher(
               duration: const Duration(milliseconds: 260),
               child: child,
             ),
           ),
         ),
-        Container(width: 1, color: colors.border),
-        Expanded(
-          child: Container(
-            color: colors.field.withOpacity(colors.dark ? 0.22 : 0.38),
-            child: SingleChildScrollView(
-              padding: const EdgeInsets.all(28),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    children: [
-                      Expanded(
-                        child: Text(
-                          'Delivery Status',
-                          style: TextStyle(
-                            color: colors.text,
-                            fontSize: 28,
-                            fontWeight: FontWeight.w900,
-                          ),
-                        ),
-                      ),
-                      _StepBadge(colors: colors, step: step),
-                    ],
-                  ),
-                  const SizedBox(height: 8),
-                  Text(
-                    'See the current milestone, route summary, price, rider match, and delivery status in one place.',
-                    style: TextStyle(
-                      color: colors.mutedText,
-                      height: 1.4,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                  if (receivedAt != null) ...[
-                    const SizedBox(height: 8),
-                    Text(
-                      _jobReceivedTextFromDate(receivedAt),
-                      style: TextStyle(
-                        color: colors.mutedText,
-                        fontWeight: FontWeight.w800,
-                      ),
-                    ),
-                  ],
-                  const SizedBox(height: 20),
-                  _GlassPanel(
-                    colors: colors,
-                    child: Row(
-                      children: [
-                        Icon(Icons.flag_circle, color: colors.text),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                status.title,
-                                style: TextStyle(
-                                  color: colors.text,
-                                  fontSize: 18,
-                                  fontWeight: FontWeight.w900,
-                                ),
-                              ),
-                              const SizedBox(height: 3),
-                              Text(
-                                status.body,
-                                style: TextStyle(
-                                  color: colors.mutedText,
-                                  height: 1.35,
-                                  fontWeight: FontWeight.w700,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  const SizedBox(height: 18),
-                  _GlassPanel(
-                    colors: colors,
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        _RouteLine(
-                          colors: colors,
-                          icon: Icons.radio_button_checked,
-                          label: 'Pickup',
-                          value: pickup.isEmpty ? 'Pickup location' : pickup,
-                          iconColor: const Color(0xff2563eb),
-                        ),
-                        const SizedBox(height: 14),
-                        _RouteLine(
-                          colors: colors,
-                          icon: Icons.location_on,
-                          label: 'Drop-off',
-                          value:
-                              dropoff.isEmpty ? 'Drop-off location' : dropoff,
-                          iconColor: const Color(0xff22c55e),
-                        ),
-                      ],
-                    ),
-                  ),
-                  const SizedBox(height: 18),
-                  _GlassPanel(
-                    colors: colors,
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          'Price breakdown',
-                          style: TextStyle(
-                            color: colors.text,
-                            fontSize: 18,
-                            fontWeight: FontWeight.w900,
-                          ),
-                        ),
-                        const SizedBox(height: 12),
-                        _PriceLine(
-                          colors: colors,
-                          label: 'Base fare',
-                          value: '£${breakdown.baseFare.toStringAsFixed(2)}',
-                        ),
-                        _PriceLine(
-                          colors: colors,
-                          label: 'Distance fare',
-                          value:
-                              '£${breakdown.distanceFare.toStringAsFixed(2)}',
-                        ),
-                        _PriceLine(
-                          colors: colors,
-                          label:
-                              '${breakdown.weightCategory} (${_formatWeight(weightKg)} kg)',
-                          value:
-                              '£${breakdown.weightSurcharge.toStringAsFixed(2)}',
-                        ),
-                        _PriceLine(
-                          colors: colors,
-                          label: '${vehicle.name} vehicle',
-                          value:
-                              '£${breakdown.vehicleSurcharge.toStringAsFixed(2)}',
-                        ),
-                        if (breakdown.heavyHandlingSurcharge > 0)
-                          _PriceLine(
-                            colors: colors,
-                            label: 'Heavy Handling Surcharge',
-                            value:
-                                '£${breakdown.heavyHandlingSurcharge.toStringAsFixed(2)}',
-                          ),
-                        if (breakdown.specialConditions > 0)
-                          _PriceLine(
-                            colors: colors,
-                            label: speed == 'Express'
-                                ? 'Express service'
-                                : 'Special conditions',
-                            value:
-                                '£${breakdown.specialConditions.toStringAsFixed(2)}',
-                          ),
-                        Divider(color: colors.border, height: 24),
-                        _PriceLine(
-                          colors: colors,
-                          label: 'Total',
-                          value: '£${breakdown.total.toStringAsFixed(2)}',
-                          strong: true,
-                        ),
-                      ],
-                    ),
-                  ),
-                  const SizedBox(height: 18),
-                  _FirebaseStatusBanner(
-                    colors: colors,
-                    online: firebaseOnline,
-                    error: firebaseError,
-                    checkoutState: checkoutState,
-                  ),
-                  const SizedBox(height: 18),
-                  _GlassPanel(
-                    colors: colors,
-                    child: Row(
-                      children: [
-                        Icon(Icons.radar, color: colors.text),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                status.title,
-                                style: TextStyle(
-                                  color: colors.text,
-                                  fontWeight: FontWeight.w900,
-                                ),
-                              ),
-                              Text(
-                                status.body,
-                                style: TextStyle(
-                                  color: colors.mutedText,
-                                  height: 1.3,
-                                  fontWeight: FontWeight.w600,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
-        ),
-      ],
+      ),
     );
-  }
-
-  static String _formatWeight(double weightKg) {
-    return weightKg.truncateToDouble() == weightKg
-        ? weightKg.toStringAsFixed(0)
-        : weightKg.toStringAsFixed(1);
   }
 }
 
@@ -12413,7 +13140,7 @@ class _DesktopActiveDeliveryStatus extends StatelessWidget {
         ),
         const SizedBox(height: 8),
         Text(
-          'Reference ${delivery.trackingReference.isEmpty ? delivery.requestId : delivery.trackingReference}',
+          'Reference ${_displayDeliveryReference(delivery.trackingReference.isEmpty ? delivery.requestId : delivery.trackingReference)}',
           style: TextStyle(
             color: colors.mutedText,
             fontWeight: FontWeight.w800,
@@ -12493,7 +13220,9 @@ class _DesktopActiveDeliveryStatus extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      hasDriver ? 'Rider assigned' : 'Rider not assigned yet',
+                      hasDriver
+                          ? 'Circum Rider assigned'
+                          : 'Circum Rider not assigned yet',
                       style: TextStyle(
                         color: colors.text,
                         fontWeight: FontWeight.w900,
@@ -12503,7 +13232,7 @@ class _DesktopActiveDeliveryStatus extends StatelessWidget {
                     Text(
                       hasDriver
                           ? delivery.assignedDriverName
-                          : 'Circum will show rider details once this delivery has been assigned.',
+                          : 'Circum will show Circum Rider details once this delivery has been assigned.',
                       style: TextStyle(
                         color: colors.mutedText,
                         height: 1.35,
@@ -12537,43 +13266,6 @@ class _StatusPill extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-      decoration: BoxDecoration(
-        color: colors.text,
-        borderRadius: BorderRadius.circular(999),
-      ),
-      child: Text(
-        label,
-        style: TextStyle(
-          color: colors.inverseText,
-          fontSize: 12,
-          fontWeight: FontWeight.w900,
-        ),
-      ),
-    );
-  }
-}
-
-class _StepBadge extends StatelessWidget {
-  final _CircumColors colors;
-  final _SenderStep step;
-
-  const _StepBadge({required this.colors, required this.step});
-
-  @override
-  Widget build(BuildContext context) {
-    final label = switch (step) {
-      _SenderStep.dashboard => 'Dashboard',
-      _SenderStep.details => 'Details',
-      _SenderStep.vehicle => 'Vehicle',
-      _SenderStep.payment => 'Payment',
-      _SenderStep.tracking => 'Tracking',
-      _SenderStep.healthPlus => 'Health+',
-      _SenderStep.business => 'Business',
-      _SenderStep.profile => 'Profile',
-    };
-
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
       decoration: BoxDecoration(
@@ -12682,7 +13374,7 @@ class _SenderAccessGate extends StatelessWidget {
             children: [
               _SectionTitle(
                 colors: colors,
-                title: signupMode ? 'Create a sender account' : 'Sender login',
+                title: signupMode ? 'Create a Circum account' : 'Circum login',
               ),
               const SizedBox(height: 8),
               Text(
@@ -12825,7 +13517,7 @@ class _MultiRoleChoicePanel extends StatelessWidget {
                 _RoleChoiceButton(
                   colors: colors,
                   icon: Icons.inventory_2_outlined,
-                  label: 'Continue as Sender',
+                  label: 'Continue as Circum',
                   onTap: onSender,
                 ),
               if (roles.contains(CircumRole.rider)) ...[
@@ -12833,7 +13525,7 @@ class _MultiRoleChoicePanel extends StatelessWidget {
                 _RoleChoiceButton(
                   colors: colors,
                   icon: Icons.delivery_dining,
-                  label: 'Continue as Rider',
+                  label: 'Continue as Circum Rider',
                   onTap: onRider,
                 ),
               ],
@@ -13058,7 +13750,7 @@ class _WeightConfirmationPanel extends StatelessWidget {
           if (verificationRequired) ...[
             const SizedBox(height: 6),
             Text(
-              'Rider will verify weight at pickup.',
+              'Circum Rider will verify weight at pickup.',
               style: TextStyle(
                 color: colors.warning,
                 fontWeight: FontWeight.w800,
@@ -13071,7 +13763,7 @@ class _WeightConfirmationPanel extends StatelessWidget {
               onPressed: onConfirm,
               icon: const Icon(Icons.check_circle_outline),
               label: const Text(
-                'IRIS has calculated the pricing weight. Rider will verify at collection.',
+                'IRIS has calculated the pricing weight. Circum Rider will verify at collection.',
               ),
             ),
           ],
@@ -13083,18 +13775,22 @@ class _WeightConfirmationPanel extends StatelessWidget {
   static String _cleanMatchedItemName(String value) {
     return value
         .replaceFirst(
-            RegExp(r'^(urgent|sealed|return)\s+', caseSensitive: false), '')
+          RegExp(r'^(urgent|sealed|return)\s+', caseSensitive: false),
+          '',
+        )
         .trim();
   }
 
   String _confidenceDisplayText() {
     final source = weightSource.toLowerCase();
     if (truthBand == 'Exact Match') return 'Exact Match (High Confidence)';
-    if (source == 'repository match')
+    if (source == 'repository match') {
       return 'Repository Match (Medium Confidence)';
+    }
     if (source == 'photo match') return 'Image Estimate (Medium Confidence)';
-    if (source == 'customer declared')
+    if (source == 'customer declared') {
       return 'User Declared Only (Low Confidence)';
+    }
     return '$truthBand${confidence == null ? '' : ' (${confidence!} confidence)'}';
   }
 
@@ -13294,6 +13990,8 @@ class _BusinessCentreStep extends StatelessWidget {
   final List<Map<String, dynamic>> accounts;
   final String? selectedBusinessId;
   final Map<String, dynamic>? account;
+  final String? currentUserId;
+  final String? currentUserEmail;
   final List<Map<String, dynamic>> invoices;
   final List<SenderDeliveryRecord> deliveries;
   final List<Map<String, dynamic>> joinRequests;
@@ -13313,12 +14011,15 @@ class _BusinessCentreStep extends StatelessWidget {
   final ValueChanged<String> onSelectBusiness;
   final VoidCallback onCreateBusiness;
   final VoidCallback onJoinBusiness;
+  final VoidCallback onEnsureCompanyCode;
+  final VoidCallback onRotateCompanyCode;
   final VoidCallback onSaveProfile;
   final void Function(String requestId, bool approved) onReviewRequest;
   final void Function(String memberUserId, String role) onUpdateMemberRole;
   final ValueChanged<String> onRemoveMember;
   final ValueChanged<String> onPayInvoice;
   final ValueChanged<String> onPayInvoiceWithRoth;
+  final ValueChanged<Map<String, dynamic>> onDownloadInvoice;
   final VoidCallback onBuyRoth;
   final VoidCallback onCreateDelivery;
   final VoidCallback onHealthPlus;
@@ -13333,6 +14034,8 @@ class _BusinessCentreStep extends StatelessWidget {
     required this.accounts,
     required this.selectedBusinessId,
     required this.account,
+    required this.currentUserId,
+    required this.currentUserEmail,
     required this.invoices,
     required this.deliveries,
     required this.joinRequests,
@@ -13352,12 +14055,15 @@ class _BusinessCentreStep extends StatelessWidget {
     required this.onSelectBusiness,
     required this.onCreateBusiness,
     required this.onJoinBusiness,
+    required this.onEnsureCompanyCode,
+    required this.onRotateCompanyCode,
     required this.onSaveProfile,
     required this.onReviewRequest,
     required this.onUpdateMemberRole,
     required this.onRemoveMember,
     required this.onPayInvoice,
     required this.onPayInvoiceWithRoth,
+    required this.onDownloadInvoice,
     required this.onBuyRoth,
     required this.onCreateDelivery,
     required this.onHealthPlus,
@@ -13371,8 +14077,12 @@ class _BusinessCentreStep extends StatelessWidget {
         .where((delivery) => _isActiveSenderDeliveryStatus(delivery.status))
         .toList();
     final completedDeliveries = businessDeliveries
-        .where((delivery) =>
-            ['completed', 'delivered'].contains(delivery.status.toLowerCase()))
+        .where(
+          (delivery) => [
+            'completed',
+            'delivered',
+          ].contains(delivery.status.toLowerCase()),
+        )
         .toList();
     final outstandingInvoices =
         invoices.where((invoice) => !_invoicePaid(invoice)).toList();
@@ -13382,63 +14092,36 @@ class _BusinessCentreStep extends StatelessWidget {
     );
     final members = _teamMembers;
     final accountName = '${account?['businessName'] ?? 'Circum Business'}';
+    final recognitionLabel =
+        account == null ? null : _businessRecognitionLabel(account!);
+
+    final teamMemberCount =
+        members.where((member) => member['status'] != 'removed').length;
+    final rothBalance = _money(
+      wallet?['balance'] ?? wallet?['availableBalance'],
+    );
 
     return SingleChildScrollView(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          _StepTopBar(colors: colors, title: 'Business Centre', onBack: onBack),
-          const SizedBox(height: 12),
-          _GlassPanel(
+          _BusinessSenderSuiteHeader(
             colors: colors,
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  children: [
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            account == null
-                                ? 'Set up Circum Business'
-                                : accountName,
-                            style: TextStyle(
-                              color: colors.text,
-                              fontSize: 28,
-                              fontWeight: FontWeight.w900,
-                            ),
-                          ),
-                          const SizedBox(height: 6),
-                          Text(
-                            account == null
-                                ? 'Create or join a company workspace to manage team deliveries, invoices, Roth, Health+, Gifts, and Vanguard.'
-                                : 'Manage company deliveries, teams, invoices, analytics, and premium services from one backend-authoritative workspace.',
-                            style: TextStyle(
-                              color: colors.mutedText,
-                              height: 1.45,
-                              fontWeight: FontWeight.w700,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                    IconButton(
-                      tooltip: 'Refresh Business',
-                      onPressed: busy ? null : onRefresh,
-                      icon: Icon(Icons.refresh, color: colors.text),
-                    ),
-                  ],
-                ),
-                if (message != null && message!.trim().isNotEmpty) ...[
-                  const SizedBox(height: 12),
-                  _BusinessNotice(colors: colors, message: message!),
-                ],
-              ],
-            ),
+            accountName: account == null ? 'Circum Business' : accountName,
+            accountStatus: '${account?['status'] ?? 'pending'}',
+            recognitionLabel: recognitionLabel,
+            accounts: accounts,
+            selectedBusinessId: selectedBusinessId,
+            busy: busy,
+            onBack: onBack,
+            onRefresh: onRefresh,
+            onSelectBusiness: onSelectBusiness,
           ),
-          const SizedBox(height: 14),
+          if (message != null && message!.trim().isNotEmpty) ...[
+            const SizedBox(height: 12),
+            _BusinessNotice(colors: colors, message: message!),
+          ],
+          const SizedBox(height: 12),
           if (loading)
             _BusinessSkeleton(colors: colors)
           else if (account == null)
@@ -13455,87 +14138,27 @@ class _BusinessCentreStep extends StatelessWidget {
               onCreateBusiness: onCreateBusiness,
               onJoinBusiness: onJoinBusiness,
             )
-          else ...[
-            if (accounts.length > 1)
-              _GlassPanel(
-                colors: colors,
-                child: DropdownButtonFormField<String>(
-                  value: selectedBusinessId,
-                  dropdownColor: colors.panel,
-                  decoration: const InputDecoration(labelText: 'Workspace'),
-                  items: accounts
-                      .map(
-                        (item) => DropdownMenuItem<String>(
-                          value: '${item['id']}',
-                          child: Text('${item['businessName'] ?? item['id']}'),
-                        ),
-                      )
-                      .toList(),
-                  onChanged: busy || loading || selectedBusinessId == null
-                      ? null
-                      : (value) {
-                          if (value != null) onSelectBusiness(value);
-                        },
-                ),
-              ),
-            if (accounts.length > 1) const SizedBox(height: 14),
-            _BusinessOverviewGrid(
-              colors: colors,
-              activeDeliveries: activeDeliveries.length,
-              completedDeliveries: completedDeliveries.length,
-              outstandingInvoices: outstandingInvoices.length,
-              monthlySpend: monthlySpend,
-              teamMembers: members
-                  .where((member) => member['status'] != 'removed')
-                  .length,
-              rothBalance:
-                  _money(wallet?['balance'] ?? wallet?['availableBalance']),
-            ),
-            const SizedBox(height: 14),
-            _BusinessQuickActions(
-              colors: colors,
-              onCreateDelivery: onCreateDelivery,
-              onHealthPlus: onHealthPlus,
-              onGifts: onGifts,
-              onBuyRoth: onBuyRoth,
-              rothAmount: rothAmount,
-              busy: busy,
-            ),
-            const SizedBox(height: 14),
-            _BusinessDeliveriesPanel(
-              colors: colors,
-              deliveries: businessDeliveries,
-              activeDeliveries: activeDeliveries,
-              onCreateDelivery: onCreateDelivery,
-            ),
-            const SizedBox(height: 14),
-            _BusinessInvoicesPanel(
-              colors: colors,
-              invoices: invoices,
-              onPayInvoice: onPayInvoice,
-              onPayInvoiceWithRoth: onPayInvoiceWithRoth,
-            ),
-            const SizedBox(height: 14),
-            _BusinessTeamPanel(
+          else
+            _BusinessSectionTabs(
               colors: colors,
               members: members,
               joinRequests: joinRequests,
-              busy: busy,
-              onReviewRequest: onReviewRequest,
-              onUpdateMemberRole: onUpdateMemberRole,
-              onRemoveMember: onRemoveMember,
-            ),
-            const SizedBox(height: 14),
-            _BusinessAnalyticsPanel(
-              colors: colors,
+              auditLogs: auditLogs,
               deliveries: businessDeliveries,
+              activeDeliveries: activeDeliveries,
               invoices: invoices,
-            ),
-            const SizedBox(height: 14),
-            _BusinessSettingsPanel(
-              colors: colors,
+              wallet: wallet,
+              activeDeliveryCount: activeDeliveries.length,
+              completedDeliveryCount: completedDeliveries.length,
+              outstandingInvoiceCount: outstandingInvoices.length,
+              monthlySpend: monthlySpend,
+              teamMemberCount: teamMemberCount,
+              rothBalance: rothBalance,
               busy: busy,
               account: account!,
+              currentUserId: currentUserId,
+              currentUserEmail: currentUserEmail,
+              rothAmount: rothAmount,
               companyName: companyName,
               businessType: businessType,
               businessEmail: businessEmail,
@@ -13543,11 +14166,20 @@ class _BusinessCentreStep extends StatelessWidget {
               businessAddress: businessAddress,
               vatNumber: vatNumber,
               website: website,
+              onCreateDelivery: onCreateDelivery,
+              onHealthPlus: onHealthPlus,
+              onGifts: onGifts,
+              onBuyRoth: onBuyRoth,
+              onPayInvoice: onPayInvoice,
+              onPayInvoiceWithRoth: onPayInvoiceWithRoth,
+              onDownloadInvoice: onDownloadInvoice,
+              onReviewRequest: onReviewRequest,
+              onUpdateMemberRole: onUpdateMemberRole,
+              onRemoveMember: onRemoveMember,
+              onEnsureCompanyCode: onEnsureCompanyCode,
+              onRotateCompanyCode: onRotateCompanyCode,
               onSaveProfile: onSaveProfile,
             ),
-            const SizedBox(height: 14),
-            _BusinessAuditPanel(colors: colors, auditLogs: auditLogs),
-          ],
         ],
       ),
     );
@@ -13557,10 +14189,12 @@ class _BusinessCentreStep extends StatelessWidget {
     final businessId = selectedBusinessId;
     if (businessId == null) return const [];
     return deliveries
-        .where((delivery) =>
-            delivery.raw['businessId'] == businessId ||
-            delivery.raw['businessAccountId'] == businessId ||
-            delivery.raw['businessMode'] == true)
+        .where(
+          (delivery) =>
+              delivery.raw['businessId'] == businessId ||
+              delivery.raw['businessAccountId'] == businessId ||
+              delivery.raw['businessMode'] == true,
+        )
         .toList(growable: false);
   }
 
@@ -13581,6 +14215,187 @@ class _BusinessCentreStep extends StatelessWidget {
 
   static double _money(dynamic value) =>
       value is num ? value.toDouble() : double.tryParse('$value') ?? 0;
+
+  static String? _businessRecognitionLabel(Map<String, dynamic> account) {
+    final recognitions = Map<String, dynamic>.from(
+      account['recognitions'] as Map? ?? {},
+    );
+    final patron = Map<String, dynamic>.from(
+      recognitions['patron'] as Map? ?? {},
+    );
+    final awarded = patron['awarded'] == true || account['isPatron'] == true;
+    if (!awarded) return null;
+    final number = (patron['number'] as num?)?.toInt() ??
+        (account['patronNumber'] as num?)?.toInt();
+    return number == null
+        ? 'Patron'
+        : 'Patron #${number.toString().padLeft(3, '0')}';
+  }
+}
+
+class _BusinessSenderSuiteHeader extends StatelessWidget {
+  final _CircumColors colors;
+  final String accountName;
+  final String accountStatus;
+  final String? recognitionLabel;
+  final List<Map<String, dynamic>> accounts;
+  final String? selectedBusinessId;
+  final bool busy;
+  final VoidCallback onBack;
+  final VoidCallback onRefresh;
+  final ValueChanged<String> onSelectBusiness;
+
+  const _BusinessSenderSuiteHeader({
+    required this.colors,
+    required this.accountName,
+    required this.accountStatus,
+    required this.recognitionLabel,
+    required this.accounts,
+    required this.selectedBusinessId,
+    required this.busy,
+    required this.onBack,
+    required this.onRefresh,
+    required this.onSelectBusiness,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final initial = accountName.trim().isEmpty
+        ? 'C'
+        : accountName.trim().characters.first.toUpperCase();
+    final active = accountStatus.toLowerCase() == 'approved' ||
+        accountStatus.toLowerCase() == 'active';
+    return _BusinessSurface(
+      colors: colors,
+      padding: const EdgeInsets.fromLTRB(18, 16, 18, 18),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              IconButton(
+                tooltip: 'Back',
+                onPressed: onBack,
+                icon: Icon(Icons.arrow_back, color: colors.text),
+              ),
+              const SizedBox(width: 4),
+              Text(
+                'CIRCUM · BUSINESS',
+                style: TextStyle(
+                  color: colors.mutedText,
+                  fontSize: 11,
+                  fontWeight: FontWeight.w900,
+                  letterSpacing: 1.4,
+                ),
+              ),
+              const Spacer(),
+              IconButton(
+                tooltip: 'Refresh Business',
+                onPressed: busy ? null : onRefresh,
+                icon: Icon(Icons.refresh, color: colors.text),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          if (accounts.length > 1) ...[
+            Align(
+              alignment: Alignment.centerRight,
+              child: Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 12,
+                  vertical: 4,
+                ),
+                decoration: BoxDecoration(
+                  color: colors.field,
+                  borderRadius: BorderRadius.circular(999),
+                  border: Border.all(color: colors.border),
+                ),
+                child: DropdownButtonHideUnderline(
+                  child: DropdownButton<String>(
+                    value: selectedBusinessId,
+                    dropdownColor: colors.panel,
+                    iconEnabledColor: colors.mutedText,
+                    style: TextStyle(
+                      color: colors.text,
+                      fontWeight: FontWeight.w800,
+                    ),
+                    items: accounts
+                        .map(
+                          (item) => DropdownMenuItem<String>(
+                            value: '${item['id']}',
+                            child: Text(
+                              '${item['businessName'] ?? item['id']}',
+                            ),
+                          ),
+                        )
+                        .toList(),
+                    onChanged: busy
+                        ? null
+                        : (value) {
+                            if (value != null) onSelectBusiness(value);
+                          },
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(height: 12),
+          ],
+          Row(
+            children: [
+              Container(
+                width: 42,
+                height: 42,
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(12),
+                  gradient: const LinearGradient(
+                    colors: [Color(0xff3b82f6), Color(0xff1e4fbf)],
+                  ),
+                ),
+                child: Center(
+                  child: Text(
+                    initial,
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 20,
+                      fontWeight: FontWeight.w900,
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Text(
+                  'Good afternoon, $accountName.',
+                  style: TextStyle(
+                    color: colors.text,
+                    fontSize: 26,
+                    fontWeight: FontWeight.w900,
+                    height: 1.08,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          _BusinessOperationalPill(
+            colors: colors,
+            label: active
+                ? 'Active Business workspace'
+                : 'Pending Circum approval',
+            tone: active ? _BusinessTone.success : _BusinessTone.warning,
+          ),
+          if (recognitionLabel != null) ...[
+            const SizedBox(height: 8),
+            _BusinessOperationalPill(
+              colors: colors,
+              label: recognitionLabel!,
+              tone: _BusinessTone.roth,
+            ),
+          ],
+        ],
+      ),
+    );
+  }
 }
 
 class _BusinessNotice extends StatelessWidget {
@@ -13668,34 +14483,40 @@ class _BusinessOnboardingPanel extends StatelessWidget {
                 _SectionTitle(colors: colors, title: 'Create company'),
                 const SizedBox(height: 10),
                 _InputBox(
-                    colors: colors,
-                    controller: companyName,
-                    hint: 'Company name'),
+                  colors: colors,
+                  controller: companyName,
+                  hint: 'Company name',
+                ),
                 const SizedBox(height: 10),
                 _InputBox(
-                    colors: colors,
-                    controller: businessType,
-                    hint: 'Business type'),
+                  colors: colors,
+                  controller: businessType,
+                  hint: 'Business type',
+                ),
                 const SizedBox(height: 10),
                 _InputBox(
-                    colors: colors,
-                    controller: businessEmail,
-                    hint: 'Business email'),
+                  colors: colors,
+                  controller: businessEmail,
+                  hint: 'Business email',
+                ),
                 const SizedBox(height: 10),
                 _InputBox(
-                    colors: colors,
-                    controller: businessPhone,
-                    hint: 'Business phone'),
+                  colors: colors,
+                  controller: businessPhone,
+                  hint: 'Business phone',
+                ),
                 const SizedBox(height: 10),
                 _InputBox(
-                    colors: colors,
-                    controller: businessAddress,
-                    hint: 'Registered address'),
+                  colors: colors,
+                  controller: businessAddress,
+                  hint: 'Registered address',
+                ),
                 const SizedBox(height: 10),
                 _InputBox(
-                    colors: colors,
-                    controller: vatNumber,
-                    hint: 'VAT number optional'),
+                  colors: colors,
+                  controller: vatNumber,
+                  hint: 'VAT number optional',
+                ),
                 const SizedBox(height: 14),
                 SizedBox(
                   width: double.infinity,
@@ -13721,9 +14542,10 @@ class _BusinessOnboardingPanel extends StatelessWidget {
                 ),
                 const SizedBox(height: 10),
                 _InputBox(
-                    colors: colors,
-                    controller: companyCode,
-                    hint: 'Company code'),
+                  colors: colors,
+                  controller: companyCode,
+                  hint: 'Company code',
+                ),
                 const SizedBox(height: 14),
                 SizedBox(
                   width: double.infinity,
@@ -13751,128 +14573,122 @@ class _BusinessOnboardingPanel extends StatelessWidget {
       );
 }
 
-class _BusinessOverviewGrid extends StatelessWidget {
-  final _CircumColors colors;
-  final int activeDeliveries;
-  final int completedDeliveries;
-  final int outstandingInvoices;
-  final double monthlySpend;
-  final int teamMembers;
-  final double rothBalance;
+enum _BusinessTone { neutral, success, warning, danger, blue, roth }
 
-  const _BusinessOverviewGrid({
+class _BusinessSurface extends StatelessWidget {
+  final _CircumColors colors;
+  final Widget child;
+  final EdgeInsetsGeometry padding;
+
+  const _BusinessSurface({
     required this.colors,
-    required this.activeDeliveries,
-    required this.completedDeliveries,
-    required this.outstandingInvoices,
-    required this.monthlySpend,
-    required this.teamMembers,
-    required this.rothBalance,
+    required this.child,
+    this.padding = const EdgeInsets.all(16),
   });
 
   @override
-  Widget build(BuildContext context) => GridView.count(
-        shrinkWrap: true,
-        crossAxisCount: MediaQuery.sizeOf(context).width < 720 ? 2 : 3,
-        crossAxisSpacing: 10,
-        mainAxisSpacing: 10,
-        childAspectRatio: 1.65,
-        physics: const NeverScrollableScrollPhysics(),
-        children: [
-          _MetricPill(
-              colors: colors,
-              label: "Today's deliveries",
-              value: '$activeDeliveries'),
-          _MetricPill(
-              colors: colors,
-              label: 'Completed',
-              value: '$completedDeliveries'),
-          _MetricPill(
-              colors: colors,
-              label: 'Outstanding invoices',
-              value: '$outstandingInvoices'),
-          _MetricPill(
-              colors: colors,
-              label: 'Monthly spend',
-              value: '£${monthlySpend.toStringAsFixed(2)}'),
-          _MetricPill(
-              colors: colors, label: 'Team members', value: '$teamMembers'),
-          _MetricPill(
-              colors: colors,
-              label: 'Business Roth',
-              value: '£${rothBalance.toStringAsFixed(2)}'),
-        ],
-      );
-}
-
-class _BusinessQuickActions extends StatelessWidget {
-  final _CircumColors colors;
-  final VoidCallback onCreateDelivery;
-  final VoidCallback onHealthPlus;
-  final VoidCallback onGifts;
-  final VoidCallback onBuyRoth;
-  final TextEditingController rothAmount;
-  final bool busy;
-
-  const _BusinessQuickActions({
-    required this.colors,
-    required this.onCreateDelivery,
-    required this.onHealthPlus,
-    required this.onGifts,
-    required this.onBuyRoth,
-    required this.rothAmount,
-    required this.busy,
-  });
-
-  @override
-  Widget build(BuildContext context) => _GlassPanel(
-        colors: colors,
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            _SectionTitle(colors: colors, title: 'Quick actions'),
-            const SizedBox(height: 12),
-            Wrap(
-              spacing: 10,
-              runSpacing: 10,
-              children: [
-                FilledButton.icon(
-                    onPressed: onCreateDelivery,
-                    icon: const Icon(Icons.add_box_outlined),
-                    label: const Text('Create delivery')),
-                OutlinedButton.icon(
-                    onPressed: onHealthPlus,
-                    icon: const Icon(Icons.local_pharmacy_outlined),
-                    label: const Text('Health+ for Business')),
-                OutlinedButton.icon(
-                    onPressed: onGifts,
-                    icon: const Icon(Icons.card_giftcard),
-                    label: const Text('Gifts for Business')),
-                OutlinedButton.icon(
-                    onPressed: onCreateDelivery,
-                    icon: const Icon(Icons.verified_user_outlined),
-                    label: const Text('Vanguard delivery')),
-              ],
-            ),
-            const SizedBox(height: 12),
-            Row(
-              children: [
-                SizedBox(
-                  width: 120,
-                  child: _InputBox(
-                      colors: colors, controller: rothAmount, hint: 'Roth £'),
-                ),
-                const SizedBox(width: 10),
-                OutlinedButton.icon(
-                  onPressed: busy ? null : onBuyRoth,
-                  icon: const Icon(Icons.account_balance_wallet_outlined),
-                  label: const Text('Add Business Roth'),
-                ),
-              ],
+  Widget build(BuildContext context) => Container(
+        width: double.infinity,
+        padding: padding,
+        decoration: BoxDecoration(
+          color: colors.dark
+              ? const Color(0xff0d111c).withValues(alpha: 0.92)
+              : colors.panel,
+          borderRadius: BorderRadius.circular(18),
+          border: Border.all(color: colors.border),
+          boxShadow: [
+            BoxShadow(
+              color: const Color(0xff3b82f6).withValues(alpha: 0.08),
+              blurRadius: 26,
+              offset: const Offset(0, 16),
             ),
           ],
         ),
+        child: child,
       );
+}
+
+class _BusinessSectionLabel extends StatelessWidget {
+  final _CircumColors colors;
+  final String label;
+
+  const _BusinessSectionLabel({required this.colors, required this.label});
+
+  @override
+  Widget build(BuildContext context) => Padding(
+        padding: const EdgeInsets.only(bottom: 10),
+        child: Text(
+          label.toUpperCase(),
+          style: TextStyle(
+            color: colors.mutedText,
+            fontSize: 10.5,
+            fontWeight: FontWeight.w900,
+            letterSpacing: 1.2,
+          ),
+        ),
+      );
+}
+
+class _BusinessOperationalPill extends StatelessWidget {
+  final _CircumColors colors;
+  final String label;
+  final _BusinessTone tone;
+
+  const _BusinessOperationalPill({
+    required this.colors,
+    required this.label,
+    this.tone = _BusinessTone.neutral,
+  });
+
+  Color get _toneColor {
+    switch (tone) {
+      case _BusinessTone.success:
+        return const Color(0xff22c55e);
+      case _BusinessTone.warning:
+        return const Color(0xfff5a623);
+      case _BusinessTone.danger:
+        return const Color(0xfff0555b);
+      case _BusinessTone.blue:
+        return const Color(0xff3b82f6);
+      case _BusinessTone.roth:
+        return const Color(0xffc9a227);
+      case _BusinessTone.neutral:
+        return colors.mutedText;
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final toneColor = _toneColor;
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      decoration: BoxDecoration(
+        color: toneColor.withValues(alpha: 0.12),
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(color: toneColor.withValues(alpha: 0.35)),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(
+            width: 6,
+            height: 6,
+            decoration: BoxDecoration(color: toneColor, shape: BoxShape.circle),
+          ),
+          const SizedBox(width: 7),
+          Text(
+            label.toUpperCase(),
+            style: TextStyle(
+              color: toneColor,
+              fontSize: 10.5,
+              fontWeight: FontWeight.w900,
+              letterSpacing: 0.5,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
 }
 
 class _BusinessDeliveriesPanel extends StatelessWidget {
@@ -13910,16 +14726,20 @@ class _BusinessDeliveriesPanel extends StatelessWidget {
               Text(
                 '${activeDeliveries.length} active · ${deliveries.length} total',
                 style: TextStyle(
-                    color: colors.mutedText, fontWeight: FontWeight.w800),
+                  color: colors.mutedText,
+                  fontWeight: FontWeight.w800,
+                ),
               ),
               const SizedBox(height: 10),
               ...deliveries.take(8).map(
                     (delivery) => _BusinessRecordRow(
                       colors: colors,
                       icon: Icons.route_outlined,
-                      title: delivery.trackingReference.isEmpty
-                          ? delivery.requestId
-                          : delivery.trackingReference,
+                      title: _displayDeliveryReference(
+                        delivery.trackingReference.isEmpty
+                            ? delivery.requestId
+                            : delivery.trackingReference,
+                      ),
                       subtitle:
                           '${delivery.pickupAddress} → ${delivery.dropoffAddress}',
                       trailing: _displayStatusLabel(delivery.status),
@@ -13936,12 +14756,14 @@ class _BusinessInvoicesPanel extends StatelessWidget {
   final List<Map<String, dynamic>> invoices;
   final ValueChanged<String> onPayInvoice;
   final ValueChanged<String> onPayInvoiceWithRoth;
+  final ValueChanged<Map<String, dynamic>> onDownloadInvoice;
 
   const _BusinessInvoicesPanel({
     required this.colors,
     required this.invoices,
     required this.onPayInvoice,
     required this.onPayInvoiceWithRoth,
+    required this.onDownloadInvoice,
   });
 
   @override
@@ -13966,7 +14788,8 @@ class _BusinessInvoicesPanel extends StatelessWidget {
                 final status =
                     '${invoice['status'] ?? invoice['paymentStatus'] ?? 'open'}';
                 final total = _BusinessCentreStep._money(
-                    invoice['balanceDue'] ?? invoice['total']);
+                  invoice['balanceDue'] ?? invoice['total'],
+                );
                 final paid = status.toLowerCase() == 'paid';
                 return _BusinessRecordRow(
                   colors: colors,
@@ -13975,16 +14798,22 @@ class _BusinessInvoicesPanel extends StatelessWidget {
                   subtitle:
                       'Balance £${total.toStringAsFixed(2)} · ${_displayStatusLabel(status)}',
                   trailing: paid ? 'Paid' : 'Pay',
-                  actions: paid
-                      ? const []
-                      : [
-                          TextButton(
-                              onPressed: () => onPayInvoice(id),
-                              child: const Text('Stripe')),
-                          TextButton(
-                              onPressed: () => onPayInvoiceWithRoth(id),
-                              child: const Text('Roth')),
-                        ],
+                  actions: [
+                    TextButton(
+                      onPressed: () => onDownloadInvoice(invoice),
+                      child: const Text('Download PDF'),
+                    ),
+                    if (!paid) ...[
+                      TextButton(
+                        onPressed: () => onPayInvoice(id),
+                        child: const Text('Stripe'),
+                      ),
+                      TextButton(
+                        onPressed: () => onPayInvoiceWithRoth(id),
+                        child: const Text('Roth'),
+                      ),
+                    ],
+                  ],
                 );
               }),
           ],
@@ -13994,86 +14823,253 @@ class _BusinessInvoicesPanel extends StatelessWidget {
 
 class _BusinessTeamPanel extends StatelessWidget {
   final _CircumColors colors;
+  final Map<String, dynamic> account;
+  final String? currentUserId;
+  final String? currentUserEmail;
   final List<Map<String, dynamic>> members;
   final List<Map<String, dynamic>> joinRequests;
   final bool busy;
   final void Function(String requestId, bool approved) onReviewRequest;
   final void Function(String memberUserId, String role) onUpdateMemberRole;
   final ValueChanged<String> onRemoveMember;
+  final VoidCallback onEnsureCompanyCode;
+  final VoidCallback onRotateCompanyCode;
 
   const _BusinessTeamPanel({
     required this.colors,
+    required this.account,
+    required this.currentUserId,
+    required this.currentUserEmail,
     required this.members,
     required this.joinRequests,
     required this.busy,
     required this.onReviewRequest,
     required this.onUpdateMemberRole,
     required this.onRemoveMember,
+    required this.onEnsureCompanyCode,
+    required this.onRotateCompanyCode,
   });
 
   @override
-  Widget build(BuildContext context) => _GlassPanel(
-        colors: colors,
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            _SectionTitle(colors: colors, title: 'Team management'),
-            const SizedBox(height: 8),
-            if (members.isEmpty)
-              _BusinessEmptyState(
-                colors: colors,
-                icon: Icons.groups_outlined,
-                title: 'No team records',
-                body:
-                    'Team members and roles appear after onboarding or access approval.',
-              )
-            else
-              ...members.where((member) => member['status'] != 'removed').map(
-                    (member) => _BusinessTeamRow(
-                      colors: colors,
-                      member: member,
-                      busy: busy,
-                      onRole: (role) =>
-                          onUpdateMemberRole('${member['userId']}', role),
-                      onRemove: () => onRemoveMember('${member['userId']}'),
-                    ),
-                  ),
-            if (joinRequests
-                .any((request) => '${request['status']}' == 'pending')) ...[
-              const SizedBox(height: 12),
-              _SectionTitle(colors: colors, title: 'Access requests'),
-              const SizedBox(height: 8),
-              ...joinRequests
-                  .where((request) => '${request['status']}' == 'pending')
-                  .map(
-                    (request) => _BusinessRecordRow(
-                      colors: colors,
-                      icon: Icons.person_add_alt_1_outlined,
-                      title:
-                          '${request['name'] ?? request['email'] ?? 'Requester'}',
-                      subtitle:
-                          'Requested role: ${request['roleRequested'] ?? 'member'}',
-                      trailing: 'Pending',
-                      actions: [
-                        TextButton(
-                            onPressed: busy
-                                ? null
-                                : () =>
-                                    onReviewRequest('${request['id']}', true),
-                            child: const Text('Approve')),
-                        TextButton(
-                            onPressed: busy
-                                ? null
-                                : () =>
-                                    onReviewRequest('${request['id']}', false),
-                            child: const Text('Reject')),
-                      ],
-                    ),
-                  ),
-            ],
+  Widget build(BuildContext context) {
+    final canManageCodes = _canManageCompanyCode;
+    return _GlassPanel(
+      colors: colors,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _SectionTitle(colors: colors, title: 'Team management'),
+          const SizedBox(height: 8),
+          if (canManageCodes) ...[
+            _BusinessCompanyCodeCard(
+              colors: colors,
+              account: account,
+              busy: busy,
+              onEnsureCompanyCode: onEnsureCompanyCode,
+              onRotateCompanyCode: onRotateCompanyCode,
+            ),
+            const SizedBox(height: 12),
           ],
+          if (members.isEmpty)
+            _BusinessEmptyState(
+              colors: colors,
+              icon: Icons.groups_outlined,
+              title: 'No team records',
+              body:
+                  'Team members and roles appear after onboarding or access approval.',
+            )
+          else
+            ...members.where((member) => member['status'] != 'removed').map(
+                  (member) => _BusinessTeamRow(
+                    colors: colors,
+                    member: member,
+                    busy: busy,
+                    onRole: (role) =>
+                        onUpdateMemberRole('${member['userId']}', role),
+                    onRemove: () => onRemoveMember('${member['userId']}'),
+                  ),
+                ),
+          if (joinRequests.any(
+            (request) => '${request['status']}' == 'pending',
+          )) ...[
+            const SizedBox(height: 12),
+            _SectionTitle(colors: colors, title: 'Access requests'),
+            const SizedBox(height: 8),
+            ...joinRequests
+                .where((request) => '${request['status']}' == 'pending')
+                .map(
+                  (request) => _BusinessRecordRow(
+                    colors: colors,
+                    icon: Icons.person_add_alt_1_outlined,
+                    title:
+                        '${request['name'] ?? request['email'] ?? 'Requester'}',
+                    subtitle:
+                        'Requested role: ${request['roleRequested'] ?? 'member'}',
+                    trailing: 'Pending',
+                    actions: [
+                      TextButton(
+                        onPressed: busy
+                            ? null
+                            : () => onReviewRequest('${request['id']}', true),
+                        child: const Text('Approve'),
+                      ),
+                      TextButton(
+                        onPressed: busy
+                            ? null
+                            : () => onReviewRequest('${request['id']}', false),
+                        child: const Text('Reject'),
+                      ),
+                    ],
+                  ),
+                ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  bool get _canManageCompanyCode {
+    final uid = (currentUserId ?? '').trim();
+    final email = (currentUserEmail ?? '').trim().toLowerCase();
+    if (uid.isNotEmpty &&
+        (account['createdByUserId'] == uid || account['ownerUid'] == uid)) {
+      return true;
+    }
+    for (final member in members) {
+      final role = '${member['role'] ?? ''}'.trim().toLowerCase();
+      final status = '${member['status'] ?? 'active'}'.trim().toLowerCase();
+      final sameUser = uid.isNotEmpty && member['userId'] == uid;
+      final sameEmail = email.isNotEmpty &&
+          '${member['email'] ?? ''}'.trim().toLowerCase() == email;
+      if ((sameUser || sameEmail) &&
+          status != 'removed' &&
+          status != 'rejected' &&
+          (role == 'owner' || role == 'admin')) {
+        return true;
+      }
+    }
+    return false;
+  }
+}
+
+class _BusinessCompanyCodeCard extends StatelessWidget {
+  final _CircumColors colors;
+  final Map<String, dynamic> account;
+  final bool busy;
+  final VoidCallback onEnsureCompanyCode;
+  final VoidCallback onRotateCompanyCode;
+
+  const _BusinessCompanyCodeCard({
+    required this.colors,
+    required this.account,
+    required this.busy,
+    required this.onEnsureCompanyCode,
+    required this.onRotateCompanyCode,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final code = '${account['companyCode'] ?? ''}'.trim();
+    final hasCode = code.isNotEmpty;
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: colors.field.withValues(alpha: .72),
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(
+          color: hasCode
+              ? colors.adminAccent.withValues(alpha: .45)
+              : colors.border,
         ),
-      );
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            width: 42,
+            height: 42,
+            decoration: BoxDecoration(
+              color: colors.adminAccent.withValues(alpha: .16),
+              borderRadius: BorderRadius.circular(14),
+            ),
+            child: Icon(Icons.group_add_outlined, color: colors.text, size: 20),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Company code',
+                  style: TextStyle(
+                    color: colors.text,
+                    fontWeight: FontWeight.w900,
+                    fontSize: 15,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  hasCode
+                      ? 'Share this with team members so they can request access to your business.'
+                      : 'Generate a company code so team members can request access to your business.',
+                  style: TextStyle(
+                    color: colors.mutedText,
+                    fontWeight: FontWeight.w700,
+                    height: 1.35,
+                  ),
+                ),
+                if (hasCode) ...[
+                  const SizedBox(height: 10),
+                  SelectableText(
+                    code,
+                    style: TextStyle(
+                      color: colors.text,
+                      fontWeight: FontWeight.w900,
+                      fontSize: 22,
+                      letterSpacing: 1.6,
+                    ),
+                  ),
+                ],
+              ],
+            ),
+          ),
+          Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: [
+              TextButton.icon(
+                onPressed: busy
+                    ? null
+                    : () async {
+                        if (!hasCode) {
+                          onEnsureCompanyCode();
+                          return;
+                        }
+                        await Clipboard.setData(ClipboardData(text: code));
+                        if (!context.mounted) return;
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(content: Text('Company code copied.')),
+                        );
+                      },
+                icon: Icon(
+                  hasCode ? Icons.copy_rounded : Icons.add_circle_outline,
+                  size: 18,
+                ),
+                label: Text(hasCode ? 'Copy' : 'Generate code'),
+              ),
+              if (hasCode)
+                TextButton.icon(
+                  onPressed: busy ? null : onRotateCompanyCode,
+                  icon: const Icon(Icons.refresh_rounded, size: 18),
+                  label: const Text('Change code'),
+                ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
 }
 
 class _BusinessTeamRow extends StatelessWidget {
@@ -14111,7 +15107,7 @@ class _BusinessTeamRow extends StatelessWidget {
                   'dispatcher',
                   'finance',
                   'viewer',
-                  'member'
+                  'member',
                 ].contains(role)
                     ? role
                     : 'member',
@@ -14120,7 +15116,9 @@ class _BusinessTeamRow extends StatelessWidget {
                   DropdownMenuItem(value: 'admin', child: Text('Admin')),
                   DropdownMenuItem(value: 'manager', child: Text('Manager')),
                   DropdownMenuItem(
-                      value: 'dispatcher', child: Text('Dispatcher')),
+                    value: 'dispatcher',
+                    child: Text('Dispatcher'),
+                  ),
                   DropdownMenuItem(value: 'finance', child: Text('Finance')),
                   DropdownMenuItem(value: 'viewer', child: Text('Viewer')),
                   DropdownMenuItem(value: 'member', child: Text('Member')),
@@ -14132,11 +15130,1136 @@ class _BusinessTeamRow extends StatelessWidget {
                       },
               ),
               TextButton(
-                  onPressed: busy ? null : onRemove,
-                  child: const Text('Remove')),
+                onPressed: busy ? null : onRemove,
+                child: const Text('Remove'),
+              ),
             ],
     );
   }
+}
+
+enum _BusinessWebSection {
+  overview,
+  deliveries,
+  invoices,
+  team,
+  healthPlus,
+  gifts,
+  vanguard,
+  analytics,
+  finance,
+  settings,
+}
+
+extension _BusinessWebSectionCopy on _BusinessWebSection {
+  String get label {
+    switch (this) {
+      case _BusinessWebSection.overview:
+        return 'Overview';
+      case _BusinessWebSection.deliveries:
+        return 'Deliveries';
+      case _BusinessWebSection.invoices:
+        return 'Invoices';
+      case _BusinessWebSection.team:
+        return 'Team';
+      case _BusinessWebSection.healthPlus:
+        return 'Health+';
+      case _BusinessWebSection.gifts:
+        return 'Gifts';
+      case _BusinessWebSection.vanguard:
+        return 'Vanguard';
+      case _BusinessWebSection.analytics:
+        return 'Analytics';
+      case _BusinessWebSection.finance:
+        return 'Finance';
+      case _BusinessWebSection.settings:
+        return 'Settings';
+    }
+  }
+
+  IconData get icon {
+    switch (this) {
+      case _BusinessWebSection.overview:
+        return Icons.home_outlined;
+      case _BusinessWebSection.deliveries:
+        return Icons.local_shipping_outlined;
+      case _BusinessWebSection.invoices:
+        return Icons.receipt_long_outlined;
+      case _BusinessWebSection.team:
+        return Icons.groups_outlined;
+      case _BusinessWebSection.healthPlus:
+        return Icons.health_and_safety_outlined;
+      case _BusinessWebSection.gifts:
+        return Icons.card_giftcard_outlined;
+      case _BusinessWebSection.vanguard:
+        return Icons.shield_outlined;
+      case _BusinessWebSection.analytics:
+        return Icons.analytics_outlined;
+      case _BusinessWebSection.finance:
+        return Icons.account_balance_wallet_outlined;
+      case _BusinessWebSection.settings:
+        return Icons.settings_outlined;
+    }
+  }
+}
+
+class _BusinessSectionTabs extends StatefulWidget {
+  final _CircumColors colors;
+  final List<Map<String, dynamic>> members;
+  final List<Map<String, dynamic>> joinRequests;
+  final List<Map<String, dynamic>> auditLogs;
+  final List<SenderDeliveryRecord> deliveries;
+  final List<SenderDeliveryRecord> activeDeliveries;
+  final List<Map<String, dynamic>> invoices;
+  final Map<String, dynamic>? wallet;
+  final int activeDeliveryCount;
+  final int completedDeliveryCount;
+  final int outstandingInvoiceCount;
+  final double monthlySpend;
+  final int teamMemberCount;
+  final double rothBalance;
+  final bool busy;
+  final Map<String, dynamic> account;
+  final String? currentUserId;
+  final String? currentUserEmail;
+  final TextEditingController rothAmount;
+  final TextEditingController companyName;
+  final TextEditingController businessType;
+  final TextEditingController businessEmail;
+  final TextEditingController businessPhone;
+  final TextEditingController businessAddress;
+  final TextEditingController vatNumber;
+  final TextEditingController website;
+  final VoidCallback onCreateDelivery;
+  final VoidCallback onHealthPlus;
+  final VoidCallback onGifts;
+  final VoidCallback onBuyRoth;
+  final ValueChanged<String> onPayInvoice;
+  final ValueChanged<String> onPayInvoiceWithRoth;
+  final ValueChanged<Map<String, dynamic>> onDownloadInvoice;
+  final void Function(String requestId, bool approved) onReviewRequest;
+  final void Function(String memberUserId, String role) onUpdateMemberRole;
+  final ValueChanged<String> onRemoveMember;
+  final VoidCallback onEnsureCompanyCode;
+  final VoidCallback onRotateCompanyCode;
+  final VoidCallback onSaveProfile;
+
+  const _BusinessSectionTabs({
+    required this.colors,
+    required this.members,
+    required this.joinRequests,
+    required this.auditLogs,
+    required this.deliveries,
+    required this.activeDeliveries,
+    required this.invoices,
+    required this.wallet,
+    required this.activeDeliveryCount,
+    required this.completedDeliveryCount,
+    required this.outstandingInvoiceCount,
+    required this.monthlySpend,
+    required this.teamMemberCount,
+    required this.rothBalance,
+    required this.busy,
+    required this.account,
+    required this.currentUserId,
+    required this.currentUserEmail,
+    required this.rothAmount,
+    required this.companyName,
+    required this.businessType,
+    required this.businessEmail,
+    required this.businessPhone,
+    required this.businessAddress,
+    required this.vatNumber,
+    required this.website,
+    required this.onCreateDelivery,
+    required this.onHealthPlus,
+    required this.onGifts,
+    required this.onBuyRoth,
+    required this.onPayInvoice,
+    required this.onPayInvoiceWithRoth,
+    required this.onDownloadInvoice,
+    required this.onReviewRequest,
+    required this.onUpdateMemberRole,
+    required this.onRemoveMember,
+    required this.onEnsureCompanyCode,
+    required this.onRotateCompanyCode,
+    required this.onSaveProfile,
+  });
+
+  @override
+  State<_BusinessSectionTabs> createState() => _BusinessSectionTabsState();
+}
+
+class _BusinessSectionTabsState extends State<_BusinessSectionTabs> {
+  var _section = _BusinessWebSection.overview;
+
+  static const _sections = [
+    _BusinessWebSection.overview,
+    _BusinessWebSection.deliveries,
+    _BusinessWebSection.invoices,
+    _BusinessWebSection.team,
+    _BusinessWebSection.healthPlus,
+    _BusinessWebSection.gifts,
+    _BusinessWebSection.vanguard,
+    _BusinessWebSection.analytics,
+    _BusinessWebSection.settings,
+  ];
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Semantics(
+          label: 'Business sections',
+          child: SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            child: Row(
+              children: _sections
+                  .map(
+                    (section) => Padding(
+                      padding: const EdgeInsets.only(right: 8),
+                      child: _BusinessTabChip(
+                        colors: widget.colors,
+                        selected: _section == section,
+                        icon: section.icon,
+                        label: section.label,
+                        onPressed: () => setState(() => _section = section),
+                      ),
+                    ),
+                  )
+                  .toList(),
+            ),
+          ),
+        ),
+        const SizedBox(height: 12),
+        _selectedSection(),
+      ],
+    );
+  }
+
+  Widget _selectedSection() {
+    switch (_section) {
+      case _BusinessWebSection.overview:
+        return _BusinessSuiteOverviewPanel(
+          colors: widget.colors,
+          activeDeliveryCount: widget.activeDeliveryCount,
+          completedDeliveryCount: widget.completedDeliveryCount,
+          outstandingInvoiceCount: widget.outstandingInvoiceCount,
+          monthlySpend: widget.monthlySpend,
+          teamMemberCount: widget.teamMemberCount,
+          rothBalance: widget.rothBalance,
+          deliveries: widget.deliveries,
+          invoices: widget.invoices,
+          rothAmount: widget.rothAmount,
+          busy: widget.busy,
+          onCreateDelivery: widget.onCreateDelivery,
+          onTeam: () => setState(() => _section = _BusinessWebSection.team),
+          onHealthPlus: widget.onHealthPlus,
+          onGifts: widget.onGifts,
+          onBuyRoth: widget.onBuyRoth,
+        );
+      case _BusinessWebSection.deliveries:
+        return _BusinessDeliveriesPanel(
+          colors: widget.colors,
+          deliveries: widget.deliveries,
+          activeDeliveries: widget.activeDeliveries,
+          onCreateDelivery: widget.onCreateDelivery,
+        );
+      case _BusinessWebSection.invoices:
+        return _BusinessInvoicesPanel(
+          colors: widget.colors,
+          invoices: widget.invoices,
+          onPayInvoice: widget.onPayInvoice,
+          onPayInvoiceWithRoth: widget.onPayInvoiceWithRoth,
+          onDownloadInvoice: widget.onDownloadInvoice,
+        );
+      case _BusinessWebSection.team:
+        return _BusinessTeamPanel(
+          colors: widget.colors,
+          account: widget.account,
+          currentUserId: widget.currentUserId,
+          currentUserEmail: widget.currentUserEmail,
+          members: widget.members,
+          joinRequests: widget.joinRequests,
+          busy: widget.busy,
+          onReviewRequest: widget.onReviewRequest,
+          onUpdateMemberRole: widget.onUpdateMemberRole,
+          onRemoveMember: widget.onRemoveMember,
+          onEnsureCompanyCode: widget.onEnsureCompanyCode,
+          onRotateCompanyCode: widget.onRotateCompanyCode,
+        );
+      case _BusinessWebSection.healthPlus:
+        return _BusinessProductParityPanel(
+          colors: widget.colors,
+          deliveries: widget.deliveries,
+          invoices: const [],
+          wallet: widget.wallet,
+          onCreateDelivery: widget.onCreateDelivery,
+          onHealthPlus: widget.onHealthPlus,
+          onGifts: widget.onGifts,
+          onBuyRoth: widget.onBuyRoth,
+          initialProduct: 'Health+',
+        );
+      case _BusinessWebSection.gifts:
+        return _BusinessProductParityPanel(
+          colors: widget.colors,
+          deliveries: widget.deliveries,
+          invoices: const [],
+          wallet: widget.wallet,
+          onCreateDelivery: widget.onCreateDelivery,
+          onHealthPlus: widget.onHealthPlus,
+          onGifts: widget.onGifts,
+          onBuyRoth: widget.onBuyRoth,
+          initialProduct: 'Gifts',
+        );
+      case _BusinessWebSection.vanguard:
+        return _BusinessProductParityPanel(
+          colors: widget.colors,
+          deliveries: widget.deliveries,
+          invoices: const [],
+          wallet: widget.wallet,
+          onCreateDelivery: widget.onCreateDelivery,
+          onHealthPlus: widget.onHealthPlus,
+          onGifts: widget.onGifts,
+          onBuyRoth: widget.onBuyRoth,
+          initialProduct: 'Vanguard',
+        );
+      case _BusinessWebSection.analytics:
+        return _BusinessAnalyticsPanel(
+          colors: widget.colors,
+          deliveries: widget.deliveries,
+          invoices: widget.invoices,
+        );
+      case _BusinessWebSection.finance:
+        return _BusinessFinanceProductCard(
+          colors: widget.colors,
+          rothBalance: _BusinessCentreStep._money(
+            widget.wallet?['balance'] ?? widget.wallet?['availableBalance'],
+          ),
+          outstandingInvoices: widget.invoices
+              .where((invoice) => !_BusinessCentreStep._invoicePaid(invoice))
+              .length,
+          invoiceCount: widget.invoices.length,
+          onBuyRoth: widget.onBuyRoth,
+        );
+      case _BusinessWebSection.settings:
+        return Column(
+          children: [
+            _BusinessSettingsPanel(
+              colors: widget.colors,
+              busy: widget.busy,
+              account: widget.account,
+              companyName: widget.companyName,
+              businessType: widget.businessType,
+              businessEmail: widget.businessEmail,
+              businessPhone: widget.businessPhone,
+              businessAddress: widget.businessAddress,
+              vatNumber: widget.vatNumber,
+              website: widget.website,
+              onSaveProfile: widget.onSaveProfile,
+            ),
+            const SizedBox(height: 14),
+            _BusinessAuditPanel(
+              colors: widget.colors,
+              auditLogs: widget.auditLogs,
+            ),
+          ],
+        );
+    }
+  }
+}
+
+class _BusinessTabChip extends StatelessWidget {
+  final _CircumColors colors;
+  final bool selected;
+  final IconData icon;
+  final String label;
+  final VoidCallback onPressed;
+
+  const _BusinessTabChip({
+    required this.colors,
+    required this.selected,
+    required this.icon,
+    required this.label,
+    required this.onPressed,
+  });
+
+  @override
+  Widget build(BuildContext context) => InkWell(
+        borderRadius: BorderRadius.circular(999),
+        onTap: onPressed,
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 160),
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+          decoration: BoxDecoration(
+            color: selected
+                ? const Color(0xff3b82f6).withValues(alpha: 0.14)
+                : colors.panel,
+            borderRadius: BorderRadius.circular(999),
+            border: Border.all(
+              color: selected
+                  ? const Color(0xff3b82f6).withValues(alpha: 0.5)
+                  : colors.border,
+            ),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(
+                icon,
+                color: selected ? const Color(0xffdce7ff) : colors.mutedText,
+                size: 16,
+              ),
+              const SizedBox(width: 7),
+              Text(
+                label,
+                style: TextStyle(
+                  color: selected ? const Color(0xffdce7ff) : colors.mutedText,
+                  fontWeight: FontWeight.w900,
+                  fontSize: 12.5,
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+}
+
+class _BusinessSuiteOverviewPanel extends StatelessWidget {
+  final _CircumColors colors;
+  final int activeDeliveryCount;
+  final int completedDeliveryCount;
+  final int outstandingInvoiceCount;
+  final double monthlySpend;
+  final int teamMemberCount;
+  final double rothBalance;
+  final List<SenderDeliveryRecord> deliveries;
+  final List<Map<String, dynamic>> invoices;
+  final TextEditingController rothAmount;
+  final bool busy;
+  final VoidCallback onCreateDelivery;
+  final VoidCallback onTeam;
+  final VoidCallback onHealthPlus;
+  final VoidCallback onGifts;
+  final VoidCallback onBuyRoth;
+
+  const _BusinessSuiteOverviewPanel({
+    required this.colors,
+    required this.activeDeliveryCount,
+    required this.completedDeliveryCount,
+    required this.outstandingInvoiceCount,
+    required this.monthlySpend,
+    required this.teamMemberCount,
+    required this.rothBalance,
+    required this.deliveries,
+    required this.invoices,
+    required this.rothAmount,
+    required this.busy,
+    required this.onCreateDelivery,
+    required this.onTeam,
+    required this.onHealthPlus,
+    required this.onGifts,
+    required this.onBuyRoth,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final recent = deliveries.take(2).toList(growable: false);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Padding(
+          padding: const EdgeInsets.only(left: 2, right: 2, bottom: 14),
+          child: Text(
+            'Your command centre for deliveries, invoices, team access, Health+, Gifts, Vanguard and IRIS insights.',
+            style: TextStyle(
+              color: colors.mutedText,
+              height: 1.5,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+        ),
+        _BusinessSectionLabel(colors: colors, label: 'This month'),
+        LayoutBuilder(
+          builder: (context, constraints) {
+            final columns = constraints.maxWidth < 720 ? 2 : 4;
+            return GridView.count(
+              shrinkWrap: true,
+              physics: const NeverScrollableScrollPhysics(),
+              crossAxisCount: columns,
+              crossAxisSpacing: 10,
+              mainAxisSpacing: 10,
+              childAspectRatio: columns == 2 ? 1.32 : 1.45,
+              children: [
+                _BusinessStatCard(
+                  colors: colors,
+                  label: 'Deliveries',
+                  value: '$activeDeliveryCount',
+                  delta: '$completedDeliveryCount completed',
+                ),
+                _BusinessStatCard(
+                  colors: colors,
+                  label: 'Outstanding',
+                  value: '£${_outstandingAmount.toStringAsFixed(2)}',
+                  delta: '$outstandingInvoiceCount invoices due',
+                  tone: _BusinessTone.warning,
+                ),
+                _BusinessStatCard(
+                  colors: colors,
+                  label: 'Team members',
+                  value: '$teamMemberCount',
+                  delta: 'Active workspace',
+                ),
+                _BusinessStatCard(
+                  colors: colors,
+                  label: 'Roth offset',
+                  value: '£${rothBalance.toStringAsFixed(2)}',
+                  delta: 'Applied at invoicing',
+                  tone: _BusinessTone.roth,
+                ),
+              ],
+            );
+          },
+        ),
+        const SizedBox(height: 18),
+        _BusinessSectionLabel(colors: colors, label: 'Quick actions'),
+        LayoutBuilder(
+          builder: (context, constraints) {
+            final columns = constraints.maxWidth < 640 ? 2 : 4;
+            return GridView.count(
+              shrinkWrap: true,
+              physics: const NeverScrollableScrollPhysics(),
+              crossAxisCount: columns,
+              crossAxisSpacing: 10,
+              mainAxisSpacing: 10,
+              childAspectRatio: columns == 2 ? 1.12 : 1.08,
+              children: [
+                _BusinessActionTile(
+                  colors: colors,
+                  icon: Icons.local_shipping_outlined,
+                  title: 'Book a delivery',
+                  subtitle: 'New job on a default pickup address',
+                  onPressed: onCreateDelivery,
+                ),
+                _BusinessActionTile(
+                  colors: colors,
+                  icon: Icons.group_add_outlined,
+                  title: 'Invite teammate',
+                  subtitle: 'Add booking or admin access',
+                  onPressed: onTeam,
+                ),
+                _BusinessActionTile(
+                  colors: colors,
+                  icon: Icons.health_and_safety_outlined,
+                  title: 'Health+ request',
+                  subtitle: 'Vanguard-covered by default',
+                  onPressed: onHealthPlus,
+                ),
+                _BusinessActionTile(
+                  colors: colors,
+                  icon: Icons.card_giftcard_outlined,
+                  title: 'Corporate gift',
+                  subtitle: 'Contents stay undisclosed',
+                  onPressed: onGifts,
+                ),
+              ],
+            );
+          },
+        ),
+        const SizedBox(height: 18),
+        _BusinessSectionLabel(colors: colors, label: 'Business Roth'),
+        _BusinessSurface(
+          colors: colors,
+          padding: const EdgeInsets.all(14),
+          child: Row(
+            children: [
+              SizedBox(
+                width: 110,
+                child: _InputBox(
+                  colors: colors,
+                  controller: rothAmount,
+                  hint: 'Roth £',
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: FilledButton.icon(
+                  onPressed: busy ? null : onBuyRoth,
+                  icon: const Icon(Icons.account_balance_wallet_outlined),
+                  label: const Text('Add Business Roth'),
+                ),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 18),
+        _BusinessSectionLabel(colors: colors, label: 'Recent activity'),
+        if (recent.isEmpty)
+          _BusinessEmptyState(
+            colors: colors,
+            icon: Icons.history_outlined,
+            title: 'No Business activity yet',
+            body:
+                'Business deliveries, invoice events and premium service activity will appear here.',
+          )
+        else
+          ...recent.map(
+            (delivery) => _BusinessRecordRow(
+              colors: colors,
+              icon: _BusinessProductParityPanel._hasVanguard(delivery)
+                  ? Icons.shield_outlined
+                  : Icons.local_shipping_outlined,
+              title: _displayDeliveryReference(
+                delivery.trackingReference.isEmpty
+                    ? delivery.requestId
+                    : delivery.trackingReference,
+              ),
+              subtitle:
+                  '${delivery.pickupAddress} → ${delivery.dropoffAddress}',
+              trailing: _displayStatusLabel(delivery.status),
+            ),
+          ),
+      ],
+    );
+  }
+
+  double get _outstandingAmount {
+    return invoices
+        .where((invoice) => !_BusinessCentreStep._invoicePaid(invoice))
+        .fold<double>(
+          0,
+          (total, invoice) =>
+              total +
+              _BusinessCentreStep._money(
+                invoice['balanceDue'] ?? invoice['total'] ?? invoice['amount'],
+              ),
+        );
+  }
+}
+
+class _BusinessStatCard extends StatelessWidget {
+  final _CircumColors colors;
+  final String label;
+  final String value;
+  final String delta;
+  final _BusinessTone tone;
+
+  const _BusinessStatCard({
+    required this.colors,
+    required this.label,
+    required this.value,
+    required this.delta,
+    this.tone = _BusinessTone.neutral,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final valueColor =
+        tone == _BusinessTone.roth ? const Color(0xffc9a227) : colors.text;
+    return _BusinessSurface(
+      colors: colors,
+      padding: const EdgeInsets.all(14),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Text(
+            label,
+            style: TextStyle(
+              color: colors.mutedText,
+              fontSize: 11.5,
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            value,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(
+              color: valueColor,
+              fontSize: 22,
+              fontWeight: FontWeight.w900,
+            ),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            delta,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(
+              color: tone == _BusinessTone.warning
+                  ? const Color(0xfff5a623)
+                  : colors.mutedText,
+              fontSize: 10.5,
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _BusinessActionTile extends StatelessWidget {
+  final _CircumColors colors;
+  final IconData icon;
+  final String title;
+  final String subtitle;
+  final VoidCallback onPressed;
+
+  const _BusinessActionTile({
+    required this.colors,
+    required this.icon,
+    required this.title,
+    required this.subtitle,
+    required this.onPressed,
+  });
+
+  @override
+  Widget build(BuildContext context) => _BusinessSurface(
+        colors: colors,
+        padding: EdgeInsets.zero,
+        child: InkWell(
+          borderRadius: BorderRadius.circular(18),
+          onTap: onPressed,
+          child: Padding(
+            padding: const EdgeInsets.all(14),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Container(
+                  width: 34,
+                  height: 34,
+                  decoration: BoxDecoration(
+                    color: colors.field,
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: Icon(icon, color: colors.text, size: 18),
+                ),
+                const SizedBox(height: 10),
+                Text(
+                  title,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    color: colors.text,
+                    fontWeight: FontWeight.w900,
+                    fontSize: 13.5,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  subtitle,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    color: colors.mutedText,
+                    height: 1.3,
+                    fontSize: 11,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+}
+
+class _BusinessProductParityPanel extends StatelessWidget {
+  final _CircumColors colors;
+  final List<SenderDeliveryRecord> deliveries;
+  final List<Map<String, dynamic>> invoices;
+  final Map<String, dynamic>? wallet;
+  final VoidCallback onCreateDelivery;
+  final VoidCallback onHealthPlus;
+  final VoidCallback onGifts;
+  final VoidCallback onBuyRoth;
+  final String? initialProduct;
+
+  const _BusinessProductParityPanel({
+    required this.colors,
+    required this.deliveries,
+    required this.invoices,
+    required this.wallet,
+    required this.onCreateDelivery,
+    required this.onHealthPlus,
+    required this.onGifts,
+    required this.onBuyRoth,
+    this.initialProduct,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final health = _matchingDeliveries(const [
+      'health',
+      'pharmacy',
+      'prescription',
+      'medical',
+    ]);
+    final gifts = _matchingDeliveries(const ['gift', 'gifts']);
+    final vanguard = deliveries.where(_hasVanguard).toList(growable: false);
+    final outstanding = invoices
+        .where((invoice) => !_BusinessCentreStep._invoicePaid(invoice))
+        .length;
+    final roth = _BusinessCentreStep._money(
+      wallet?['balance'] ?? wallet?['availableBalance'],
+    );
+
+    final cards = [
+      _BusinessProductCard(
+        colors: colors,
+        icon: Icons.health_and_safety_outlined,
+        title: 'Health+',
+        subtitle:
+            'Business prescription pickups and medical deliveries with Vanguard included.',
+        primaryMetric: '${health.length}',
+        primaryLabel: 'Health+ records',
+        secondaryMetric:
+            '${health.where((item) => _active(item.status)).length}',
+        secondaryLabel: 'Active',
+        actionLabel: 'New Health+ request',
+        onAction: onHealthPlus,
+        records: health,
+        badgeLabel: 'Vanguard Included',
+      ),
+      _BusinessProductCard(
+        colors: colors,
+        icon: Icons.card_giftcard_outlined,
+        title: 'Gifts',
+        subtitle:
+            'Corporate gift requests, recipient status and protected delivery history.',
+        primaryMetric: '${gifts.length}',
+        primaryLabel: 'Gift records',
+        secondaryMetric:
+            '${gifts.where((item) => _active(item.status)).length}',
+        secondaryLabel: 'Active',
+        actionLabel: 'Start corporate gift',
+        onAction: onGifts,
+        records: gifts,
+        badgeLabel: 'Vanguard Included',
+      ),
+      _BusinessProductCard(
+        colors: colors,
+        icon: Icons.shield_outlined,
+        title: 'Vanguard',
+        subtitle:
+            'Important deliveries with enhanced custody tracking and trusted Circum Rider prioritisation.',
+        primaryMetric: '${vanguard.length}',
+        primaryLabel: 'Vanguard deliveries',
+        secondaryMetric:
+            '${vanguard.where((item) => _active(item.status)).length}',
+        secondaryLabel: 'Active',
+        actionLabel: 'Create Vanguard delivery',
+        onAction: onCreateDelivery,
+        records: vanguard,
+        badgeLabel: 'Custody tracking',
+      ),
+      _BusinessFinanceProductCard(
+        colors: colors,
+        rothBalance: roth,
+        outstandingInvoices: outstanding,
+        invoiceCount: invoices.length,
+        onBuyRoth: onBuyRoth,
+      ),
+    ];
+    final visibleCards = initialProduct == null
+        ? cards
+        : cards.where((card) {
+            if (card is _BusinessProductCard) {
+              return card.title == initialProduct;
+            }
+            return initialProduct == 'Finance';
+          }).toList();
+
+    return _GlassPanel(
+      colors: colors,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _SectionTitle(colors: colors, title: 'Business products'),
+          const SizedBox(height: 8),
+          Text(
+            'The web centre now exposes the same operational areas as the app: Health+, Gifts, Vanguard and Finance.',
+            style: TextStyle(
+              color: colors.mutedText,
+              height: 1.4,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+          const SizedBox(height: 12),
+          LayoutBuilder(
+            builder: (context, constraints) {
+              final columns = constraints.maxWidth < 760 ? 1 : 2;
+              return GridView.count(
+                shrinkWrap: true,
+                physics: const NeverScrollableScrollPhysics(),
+                crossAxisCount: columns,
+                crossAxisSpacing: 10,
+                mainAxisSpacing: 10,
+                childAspectRatio: columns == 1 ? 1.55 : 1.35,
+                children: visibleCards,
+              );
+            },
+          ),
+        ],
+      ),
+    );
+  }
+
+  List<SenderDeliveryRecord> _matchingDeliveries(List<String> needles) {
+    return deliveries.where((delivery) {
+      final haystack = [
+        delivery.status,
+        delivery.raw['category'],
+        delivery.raw['deliveryCategory'],
+        delivery.raw['service'],
+        delivery.raw['product'],
+        delivery.raw['workflow'],
+        delivery.raw['deliveryType'],
+        delivery.raw['requestType'],
+        delivery.raw['notes'],
+      ].join(' ').toLowerCase();
+      return needles.any(haystack.contains);
+    }).toList(growable: false);
+  }
+
+  static bool _active(String status) {
+    final normalized = status.toLowerCase();
+    return !const {
+      'completed',
+      'delivered',
+      'cancelled',
+      'canceled',
+      'failed',
+    }.contains(normalized);
+  }
+
+  static bool _hasVanguard(SenderDeliveryRecord delivery) {
+    final raw = delivery.raw;
+    final category =
+        '${raw['category'] ?? raw['deliveryCategory'] ?? ''}'.toLowerCase();
+    final protection = raw['vanguardProtection'];
+    return raw['vanguardEnabled'] == true ||
+        raw['vanguardRequired'] == true ||
+        category.contains('vanguard') ||
+        (protection is Map && protection['enabled'] == true);
+  }
+}
+
+class _BusinessProductCard extends StatelessWidget {
+  final _CircumColors colors;
+  final IconData icon;
+  final String title;
+  final String subtitle;
+  final String primaryMetric;
+  final String primaryLabel;
+  final String secondaryMetric;
+  final String secondaryLabel;
+  final String actionLabel;
+  final VoidCallback onAction;
+  final List<SenderDeliveryRecord> records;
+  final String? badgeLabel;
+
+  const _BusinessProductCard({
+    required this.colors,
+    required this.icon,
+    required this.title,
+    required this.subtitle,
+    required this.primaryMetric,
+    required this.primaryLabel,
+    required this.secondaryMetric,
+    required this.secondaryLabel,
+    required this.actionLabel,
+    required this.onAction,
+    required this.records,
+    this.badgeLabel,
+  });
+
+  @override
+  Widget build(BuildContext context) => Container(
+        padding: const EdgeInsets.all(14),
+        decoration: BoxDecoration(
+          color: colors.field,
+          borderRadius: BorderRadius.circular(18),
+          border: Border.all(color: colors.border),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Icon(icon, color: colors.text),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    title,
+                    style: TextStyle(
+                      color: colors.text,
+                      fontSize: 18,
+                      fontWeight: FontWeight.w900,
+                    ),
+                  ),
+                ),
+                if (badgeLabel != null) _HealthChip(label: badgeLabel!),
+              ],
+            ),
+            const SizedBox(height: 8),
+            Text(
+              subtitle,
+              style: TextStyle(
+                color: colors.mutedText,
+                height: 1.35,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+            const SizedBox(height: 10),
+            Row(
+              children: [
+                Expanded(
+                  child: _MetricPill(
+                    colors: colors,
+                    label: primaryLabel,
+                    value: primaryMetric,
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: _MetricPill(
+                    colors: colors,
+                    label: secondaryLabel,
+                    value: secondaryMetric,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 10),
+            if (records.isEmpty)
+              Text(
+                'No ${title.toLowerCase()} records yet.',
+                style: TextStyle(color: colors.mutedText),
+              )
+            else
+              ...records.take(2).map(
+                    (record) => _BusinessRecordRow(
+                      colors: colors,
+                      icon: Icons.route_outlined,
+                      title: _displayDeliveryReference(
+                        record.trackingReference.isEmpty
+                            ? record.requestId
+                            : record.trackingReference,
+                      ),
+                      subtitle: record.dropoffAddress,
+                      trailing: _displayStatusLabel(record.status),
+                    ),
+                  ),
+            const SizedBox(height: 10),
+            Align(
+              alignment: Alignment.centerLeft,
+              child: OutlinedButton.icon(
+                onPressed: onAction,
+                icon: const Icon(Icons.arrow_forward),
+                label: Text(actionLabel),
+              ),
+            ),
+          ],
+        ),
+      );
+}
+
+class _BusinessFinanceProductCard extends StatelessWidget {
+  final _CircumColors colors;
+  final double rothBalance;
+  final int outstandingInvoices;
+  final int invoiceCount;
+  final VoidCallback onBuyRoth;
+
+  const _BusinessFinanceProductCard({
+    required this.colors,
+    required this.rothBalance,
+    required this.outstandingInvoices,
+    required this.invoiceCount,
+    required this.onBuyRoth,
+  });
+
+  @override
+  Widget build(BuildContext context) => Container(
+        padding: const EdgeInsets.all(14),
+        decoration: BoxDecoration(
+          color: colors.field,
+          borderRadius: BorderRadius.circular(18),
+          border: Border.all(color: colors.border),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Icon(Icons.account_balance_wallet_outlined, color: colors.text),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    'Finance',
+                    style: TextStyle(
+                      color: colors.text,
+                      fontSize: 18,
+                      fontWeight: FontWeight.w900,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 8),
+            Text(
+              'Business invoices, printable records, Stripe payment and Roth payment are available from web.',
+              style: TextStyle(
+                color: colors.mutedText,
+                height: 1.35,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+            const SizedBox(height: 10),
+            Row(
+              children: [
+                Expanded(
+                  child: _MetricPill(
+                    colors: colors,
+                    label: 'Business Roth',
+                    value: '£${rothBalance.toStringAsFixed(2)}',
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: _MetricPill(
+                    colors: colors,
+                    label: 'Outstanding',
+                    value: '$outstandingInvoices',
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 10),
+            _BusinessRecordRow(
+              colors: colors,
+              icon: Icons.receipt_long_outlined,
+              title: 'Invoice records',
+              subtitle: '$invoiceCount invoices available for print or PDF',
+              trailing: '$invoiceCount',
+            ),
+            const SizedBox(height: 10),
+            Align(
+              alignment: Alignment.centerLeft,
+              child: OutlinedButton.icon(
+                onPressed: onBuyRoth,
+                icon: const Icon(Icons.add_card_outlined),
+                label: const Text('Add Business Roth'),
+              ),
+            ),
+          ],
+        ),
+      );
 }
 
 class _BusinessAnalyticsPanel extends StatelessWidget {
@@ -14153,13 +16276,19 @@ class _BusinessAnalyticsPanel extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final completed = deliveries
-        .where((delivery) =>
-            ['completed', 'delivered'].contains(delivery.status.toLowerCase()))
+        .where(
+          (delivery) => [
+            'completed',
+            'delivered',
+          ].contains(delivery.status.toLowerCase()),
+        )
         .length;
     final successRate =
         deliveries.isEmpty ? 0 : completed / deliveries.length * 100;
     final spend = deliveries.fold<double>(
-        0, (total, delivery) => total + delivery.pricePaid);
+      0,
+      (total, delivery) => total + delivery.pricePaid,
+    );
     final average = deliveries.isEmpty ? 0 : spend / deliveries.length;
     final destinations = <String, int>{};
     for (final delivery in deliveries) {
@@ -14182,40 +16311,48 @@ class _BusinessAnalyticsPanel extends StatelessWidget {
             runSpacing: 10,
             children: [
               _BusinessMiniMetric(
-                  colors: colors,
-                  label: 'Spend',
-                  value: '£${spend.toStringAsFixed(2)}'),
+                colors: colors,
+                label: 'Spend',
+                value: '£${spend.toStringAsFixed(2)}',
+              ),
               _BusinessMiniMetric(
-                  colors: colors,
-                  label: 'Deliveries',
-                  value: '${deliveries.length}'),
+                colors: colors,
+                label: 'Deliveries',
+                value: '${deliveries.length}',
+              ),
               _BusinessMiniMetric(
-                  colors: colors,
-                  label: 'Success rate',
-                  value: '${successRate.toStringAsFixed(0)}%'),
+                colors: colors,
+                label: 'Success rate',
+                value: '${successRate.toStringAsFixed(0)}%',
+              ),
               _BusinessMiniMetric(
-                  colors: colors,
-                  label: 'Average cost',
-                  value: '£${average.toStringAsFixed(2)}'),
+                colors: colors,
+                label: 'Average cost',
+                value: '£${average.toStringAsFixed(2)}',
+              ),
               _BusinessMiniMetric(
-                  colors: colors,
-                  label: 'Invoices',
-                  value: '${invoices.length}'),
+                colors: colors,
+                label: 'Invoices',
+                value: '${invoices.length}',
+              ),
             ],
           ),
           const SizedBox(height: 12),
           if (topDestinations.isEmpty)
             Text(
-                'Top destinations will appear after Business deliveries complete.',
-                style: TextStyle(color: colors.mutedText))
+              'Top destinations will appear after Business deliveries complete.',
+              style: TextStyle(color: colors.mutedText),
+            )
           else
-            ...topDestinations.take(3).map((entry) => _BusinessRecordRow(
-                  colors: colors,
-                  icon: Icons.place_outlined,
-                  title: entry.key,
-                  subtitle: 'Destination frequency',
-                  trailing: '${entry.value}',
-                )),
+            ...topDestinations.take(3).map(
+                  (entry) => _BusinessRecordRow(
+                    colors: colors,
+                    icon: Icons.place_outlined,
+                    title: entry.key,
+                    subtitle: 'Destination frequency',
+                    trailing: '${entry.value}',
+                  ),
+                ),
         ],
       ),
     );
@@ -14258,32 +16395,39 @@ class _BusinessSettingsPanel extends StatelessWidget {
             _SectionTitle(colors: colors, title: 'Settings'),
             const SizedBox(height: 10),
             _InputBox(
-                colors: colors, controller: companyName, hint: 'Company name'),
+              colors: colors,
+              controller: companyName,
+              hint: 'Company name',
+            ),
             const SizedBox(height: 10),
             _InputBox(
-                colors: colors,
-                controller: businessType,
-                hint: 'Business type'),
+              colors: colors,
+              controller: businessType,
+              hint: 'Business type',
+            ),
             const SizedBox(height: 10),
             _InputBox(
-                colors: colors,
-                controller: businessEmail,
-                hint: 'Billing email'),
+              colors: colors,
+              controller: businessEmail,
+              hint: 'Billing email',
+            ),
             const SizedBox(height: 10),
             _InputBox(colors: colors, controller: businessPhone, hint: 'Phone'),
             const SizedBox(height: 10),
             _InputBox(
-                colors: colors,
-                controller: businessAddress,
-                hint: 'Business address'),
+              colors: colors,
+              controller: businessAddress,
+              hint: 'Business address',
+            ),
             const SizedBox(height: 10),
             _InputBox(
                 colors: colors, controller: vatNumber, hint: 'VAT number'),
             const SizedBox(height: 10),
             _InputBox(
-                colors: colors,
-                controller: website,
-                hint: 'Website / brand URL'),
+              colors: colors,
+              controller: website,
+              hint: 'Website / brand URL',
+            ),
             const SizedBox(height: 14),
             Wrap(
               spacing: 10,
@@ -14295,8 +16439,10 @@ class _BusinessSettingsPanel extends StatelessWidget {
                   label: const Text('Save Business settings'),
                 ),
                 _StatusPill(
-                    colors: colors,
-                    label: '${account['status'] ?? 'approved'}'),
+                  colors: colors,
+                  label:
+                      '${account['approvalStatus'] ?? account['status'] ?? 'pending'}',
+                ),
               ],
             ),
           ],
@@ -14319,8 +16465,10 @@ class _BusinessAuditPanel extends StatelessWidget {
             _SectionTitle(colors: colors, title: 'Audit history'),
             const SizedBox(height: 8),
             if (auditLogs.isEmpty)
-              Text('Business audit events will appear here.',
-                  style: TextStyle(color: colors.mutedText))
+              Text(
+                'Business audit events will appear here.',
+                style: TextStyle(color: colors.mutedText),
+              )
             else
               ...auditLogs.take(8).map(
                     (log) => _BusinessRecordRow(
@@ -14391,19 +16539,27 @@ class _BusinessRecordRow extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(title,
-                      style: TextStyle(
-                          color: colors.text, fontWeight: FontWeight.w900)),
+                  Text(
+                    title,
+                    style: TextStyle(
+                      color: colors.text,
+                      fontWeight: FontWeight.w900,
+                    ),
+                  ),
                   const SizedBox(height: 3),
-                  Text(subtitle,
-                      style: TextStyle(color: colors.mutedText, height: 1.35)),
+                  Text(
+                    subtitle,
+                    style: TextStyle(color: colors.mutedText, height: 1.35),
+                  ),
                 ],
               ),
             ),
             if (actions.isEmpty)
-              Text(trailing,
-                  style: TextStyle(
-                      color: colors.text, fontWeight: FontWeight.w900))
+              Text(
+                trailing,
+                style:
+                    TextStyle(color: colors.text, fontWeight: FontWeight.w900),
+              )
             else
               Wrap(spacing: 4, children: actions),
           ],
@@ -14442,9 +16598,10 @@ class _BusinessEmptyState extends StatelessWidget {
           children: [
             Icon(icon, color: colors.text),
             const SizedBox(height: 10),
-            Text(title,
-                style:
-                    TextStyle(color: colors.text, fontWeight: FontWeight.w900)),
+            Text(
+              title,
+              style: TextStyle(color: colors.text, fontWeight: FontWeight.w900),
+            ),
             const SizedBox(height: 4),
             Text(body, style: TextStyle(color: colors.mutedText, height: 1.4)),
             if (action != null && onAction != null) ...[
@@ -14506,7 +16663,7 @@ class _LegendCard extends StatelessWidget {
           borderRadius: BorderRadius.circular(22),
           border: Border.all(color: const Color(0xff7dd3fc)),
           boxShadow: const [
-            BoxShadow(color: Color(0x5538bdf8), blurRadius: 30),
+            BoxShadow(color: Color(0x5538bdf8), blurRadius: 30)
           ],
         ),
         child: Column(
@@ -14785,7 +16942,7 @@ class _SenderProfileStep extends StatelessWidget {
                           Text(
                             profile?.fullName.isNotEmpty == true
                                 ? profile!.fullName
-                                : user!.email ?? 'Circum sender',
+                                : user!.email ?? 'Circum',
                             style: TextStyle(
                               color: colors.text,
                               fontSize: 22,
@@ -15232,9 +17389,17 @@ class _SenderDeliveryDetails extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final proof = proofOfDeliveryFromRecord(
+      delivery.raw,
+      fallbackReference: delivery.trackingReference,
+    );
     final rows = {
-      'Tracking reference': delivery.trackingReference,
-      'Status': delivery.status,
+      'Delivery reference': _displayDeliveryReference(
+        delivery.trackingReference.isEmpty
+            ? delivery.requestId
+            : delivery.trackingReference,
+      ),
+      'Status': _displayStatusLabel(delivery.status),
       'Pickup': delivery.pickupAddress,
       'Drop-off': delivery.dropoffAddress,
       'Received': _jobReceivedTextFromDate(delivery.createdAt),
@@ -15289,11 +17454,7 @@ class _SenderDeliveryDetails extends StatelessWidget {
             ),
           ),
         ),
-        if (delivery.proofOfDelivery.isNotEmpty)
-          Text(
-            'Proof of delivery is attached.',
-            style: TextStyle(color: colors.mutedText),
-          ),
+        _SenderProofOfDeliveryPanel(colors: colors, proof: proof),
         if (BookingCancellationPolicy.canSenderCancel(delivery.status)) ...[
           const SizedBox(height: 16),
           OutlinedButton.icon(
@@ -15303,6 +17464,142 @@ class _SenderDeliveryDetails extends StatelessWidget {
           ),
         ],
       ],
+    );
+  }
+}
+
+class _SenderProofOfDeliveryPanel extends StatelessWidget {
+  final _CircumColors colors;
+  final ProofOfDeliveryDetails proof;
+
+  const _SenderProofOfDeliveryPanel({
+    required this.colors,
+    required this.proof,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final badgeColor = proof.statusLabel.toLowerCase().contains('available')
+        ? const Color(0xFF34D399)
+        : proof.statusLabel.toLowerCase().contains('review')
+            ? const Color(0xFFFBBF24)
+            : const Color(0xFFF87171);
+    return Container(
+      width: double.infinity,
+      margin: const EdgeInsets.only(top: 4),
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: colors.field,
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: colors.border),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  'Proof of Delivery',
+                  style: TextStyle(
+                    color: colors.text,
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+              ),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
+                decoration: BoxDecoration(
+                  color: badgeColor.withValues(alpha: .12),
+                  borderRadius: BorderRadius.circular(999),
+                  border: Border.all(color: badgeColor.withValues(alpha: .24)),
+                ),
+                child: Text(
+                  proof.statusLabel,
+                  style: TextStyle(
+                    color: badgeColor,
+                    fontSize: 11,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          if (!proof.hasAnyProof)
+            Text(
+              'Proof of delivery is not available for this delivery.',
+              style: TextStyle(color: colors.mutedText, height: 1.45),
+            )
+          else ...[
+            if (proof.hasPhoto) ...[
+              ClipRRect(
+                borderRadius: BorderRadius.circular(14),
+                child: AspectRatio(
+                  aspectRatio: 16 / 9,
+                  child: Image.network(
+                    proof.photoUrl,
+                    fit: BoxFit.cover,
+                    errorBuilder: (_, __, ___) => Container(
+                      color: colors.border.withValues(alpha: .18),
+                      alignment: Alignment.center,
+                      child: Icon(
+                        Icons.broken_image_outlined,
+                        color: colors.mutedText,
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 10),
+              OutlinedButton.icon(
+                onPressed: () => showDialog<void>(
+                  context: context,
+                  builder: (_) => Dialog(
+                    backgroundColor: colors.appBackground,
+                    child: ClipRRect(
+                      borderRadius: BorderRadius.circular(18),
+                      child: Image.network(
+                        proof.photoUrl,
+                        fit: BoxFit.contain,
+                        errorBuilder: (_, __, ___) => Padding(
+                          padding: const EdgeInsets.all(24),
+                          child: Text(
+                            'Proof photo could not be loaded.',
+                            style: TextStyle(color: colors.text),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+                icon: const Icon(Icons.open_in_full_rounded),
+                label: const Text('View full proof'),
+              ),
+              const SizedBox(height: 10),
+            ],
+            for (final row in proof.visibleRows)
+              Padding(
+                padding: const EdgeInsets.only(bottom: 7),
+                child: RichText(
+                  text: TextSpan(
+                    style: TextStyle(color: colors.mutedText, height: 1.35),
+                    children: [
+                      TextSpan(
+                        text: '${row.$1}: ',
+                        style: TextStyle(
+                          color: colors.text,
+                          fontWeight: FontWeight.w900,
+                        ),
+                      ),
+                      TextSpan(text: row.$2),
+                    ],
+                  ),
+                ),
+              ),
+          ],
+        ],
+      ),
     );
   }
 }
@@ -15336,7 +17633,7 @@ class _PortalHeader extends StatelessWidget {
       child: Container(
         padding: const EdgeInsets.fromLTRB(18, 14, 18, 14),
         decoration: BoxDecoration(
-          color: colors.appBackground.withOpacity(0.95),
+          color: colors.appBackground.withValues(alpha: 0.95),
           border: Border(bottom: BorderSide(color: colors.border)),
         ),
         child: Row(
@@ -15631,7 +17928,7 @@ class _DetailsStep extends StatelessWidget {
                       child: _InputBox(
                         colors: colors,
                         controller: senderName,
-                        hint: 'Sender name',
+                        hint: 'Circum name',
                       ),
                     ),
                     const SizedBox(width: 12),
@@ -15639,7 +17936,7 @@ class _DetailsStep extends StatelessWidget {
                       child: _InputBox(
                         colors: colors,
                         controller: senderPhone,
-                        hint: 'Sender phone',
+                        hint: 'Circum phone',
                       ),
                     ),
                   ],
@@ -15926,7 +18223,7 @@ class _DetailsStep extends StatelessWidget {
             style: FilledButton.styleFrom(
               backgroundColor: colors.text,
               foregroundColor: colors.inverseText,
-              disabledBackgroundColor: colors.text.withOpacity(0.45),
+              disabledBackgroundColor: colors.text.withValues(alpha: 0.45),
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(16),
               ),
@@ -15975,7 +18272,7 @@ class _ContactSummaryLine extends StatelessWidget {
   }
 }
 
-class _HealthPlusStep extends StatelessWidget {
+class _HealthPlusStep extends StatefulWidget {
   final _CircumColors colors;
   final TextEditingController fullName;
   final TextEditingController phone;
@@ -15983,6 +18280,8 @@ class _HealthPlusStep extends StatelessWidget {
   final TextEditingController pharmacyName;
   final TextEditingController pharmacyAddress;
   final TextEditingController deliveryAddress;
+  final bool pharmacyVerified;
+  final bool deliveryVerified;
   final TextEditingController notes;
   final TextEditingController preferredDay;
   final TextEditingController preferredTime;
@@ -15992,6 +18291,8 @@ class _HealthPlusStep extends StatelessWidget {
   final String subscriptionPlan;
   final bool consent;
   final bool savePayment;
+  final bool useRoth;
+  final double rothBalance;
   final bool submitting;
   final String? message;
   final String? checkoutUrl;
@@ -16006,6 +18307,11 @@ class _HealthPlusStep extends StatelessWidget {
   final VoidCallback onContinueOneOff;
   final ValueChanged<bool?> onConsent;
   final ValueChanged<bool?> onSavePayment;
+  final ValueChanged<bool?> onUseRoth;
+  final ValueChanged<_ValidatedAddress> onPharmacySelected;
+  final ValueChanged<String> onPharmacyEdited;
+  final ValueChanged<_ValidatedAddress> onDeliverySelected;
+  final ValueChanged<String> onDeliveryEdited;
   final VoidCallback onSubmit;
   final VoidCallback onPauseSchedule;
   final VoidCallback onResumeSchedule;
@@ -16023,6 +18329,8 @@ class _HealthPlusStep extends StatelessWidget {
     required this.pharmacyName,
     required this.pharmacyAddress,
     required this.deliveryAddress,
+    required this.pharmacyVerified,
+    required this.deliveryVerified,
     required this.notes,
     required this.preferredDay,
     required this.preferredTime,
@@ -16032,6 +18340,8 @@ class _HealthPlusStep extends StatelessWidget {
     required this.subscriptionPlan,
     required this.consent,
     required this.savePayment,
+    required this.useRoth,
+    required this.rothBalance,
     required this.submitting,
     required this.message,
     required this.checkoutUrl,
@@ -16046,6 +18356,11 @@ class _HealthPlusStep extends StatelessWidget {
     required this.onContinueOneOff,
     required this.onConsent,
     required this.onSavePayment,
+    required this.onUseRoth,
+    required this.onPharmacySelected,
+    required this.onPharmacyEdited,
+    required this.onDeliverySelected,
+    required this.onDeliveryEdited,
     required this.onSubmit,
     required this.onPauseSchedule,
     required this.onResumeSchedule,
@@ -16056,18 +18371,97 @@ class _HealthPlusStep extends StatelessWidget {
   });
 
   @override
+  State<_HealthPlusStep> createState() => _HealthPlusStepState();
+}
+
+class _HealthPlusStepState extends State<_HealthPlusStep> {
+  int _currentStep = 0;
+
+  static const _steps = [
+    ('Status', 'HEALTH+', 'Your prescription pickups'),
+    ('Details', 'STEP 01 - YOUR DETAILS', 'Confirm who this is for'),
+    ('Pharmacy', 'STEP 02 - PHARMACY', "Where's the prescription?"),
+    ('Delivery', 'STEP 03 - DELIVERY', 'Where should it go?'),
+    ('Frequency', 'STEP 04 - FREQUENCY', 'How often?'),
+    ('Plan', 'STEP 05 - PLAN', 'Choose your plan'),
+    ('Notes', 'STEP 06 - NOTES & CONSENT', 'Anything the rider should know?'),
+    ('Review', 'STEP 07 - REVIEW', 'Review your pickup'),
+    ('Checkout', 'STEP 08 - CHECKOUT', 'Secure payment'),
+    ('Confirmed', 'STEP 09 - CONFIRMED', 'Pickup scheduled'),
+  ];
+
+  void _goTo(int step) {
+    setState(() => _currentStep = step.clamp(0, _steps.length - 1));
+  }
+
+  void _next() => _goTo(_currentStep + 1);
+
+  void _previous() {
+    if (_currentStep == 0) {
+      widget.onBack();
+      return;
+    }
+    _goTo(_currentStep - 1);
+  }
+
+  @override
   Widget build(BuildContext context) {
-    final nextPickup = pickups.isEmpty ? null : pickups.first;
+    final colors = widget.colors;
+    final nextPickup = widget.pickups.isEmpty ? null : widget.pickups.first;
+    final current = _steps[_currentStep];
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        _StepTopBar(colors: colors, title: 'Health+', onBack: onBack),
+        _StepTopBar(colors: colors, title: 'Health+', onBack: _previous),
         const SizedBox(height: 14),
         _GlassPanel(
           colors: colors,
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
+              Text(
+                'CIRCUM',
+                style: TextStyle(
+                  color: const Color(0xff2fae8c),
+                  fontSize: 20,
+                  fontWeight: FontWeight.w900,
+                  fontFamily: 'serif',
+                ),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                'HEALTH+ - GUIDED PICKUP',
+                style: TextStyle(
+                  color: colors.mutedText,
+                  letterSpacing: .12,
+                  fontWeight: FontWeight.w900,
+                  fontSize: 11,
+                ),
+              ),
+              const SizedBox(height: 14),
+              _HealthGuidedProgress(
+                colors: colors,
+                currentStep: _currentStep,
+                totalSteps: _steps.length,
+              ),
+              const SizedBox(height: 14),
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: [
+                  for (var index = 0; index < _steps.length; index++)
+                    _HealthGuidedChip(
+                      colors: colors,
+                      label:
+                          '${index.toString().padLeft(2, '0')} ${_steps[index].$1}',
+                      active: index == _currentStep,
+                      complete: _healthStepComplete(index),
+                      onTap: () => _goTo(index),
+                    ),
+                ],
+              ),
+              const SizedBox(height: 18),
               Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
@@ -16089,7 +18483,17 @@ class _HealthPlusStep extends StatelessWidget {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
-                          'Get your meds before you run out.',
+                          current.$2,
+                          style: TextStyle(
+                            color: const Color(0xff2fae8c),
+                            fontSize: 11,
+                            letterSpacing: .12,
+                            fontWeight: FontWeight.w900,
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                        Text(
+                          current.$3,
                           style: TextStyle(
                             color: colors.text,
                             fontSize: 26,
@@ -16099,7 +18503,7 @@ class _HealthPlusStep extends StatelessWidget {
                         ),
                         const SizedBox(height: 8),
                         Text(
-                          'Arrange one-off or recurring prescription pickups from a pharmacy to your door. From £11.',
+                          'Guided prescription pickup, step by step, using the same Health+ pricing and checkout already live in Circum.',
                           style: TextStyle(
                             color: colors.mutedText,
                             height: 1.4,
@@ -16120,220 +18524,582 @@ class _HealthPlusStep extends StatelessWidget {
                   _HealthChip(label: 'Recurring reminders'),
                   _HealthChip(label: 'Secure checkout'),
                   _HealthChip(label: 'Sealed packages only'),
+                  _HealthChip(label: 'Vanguard Included'),
                 ],
               ),
             ],
           ),
         ),
         const SizedBox(height: 14),
-        _GlassPanel(
-          colors: colors,
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              _SectionTitle(colors: colors, title: 'Pharmacy / pickup details'),
-              const SizedBox(height: 12),
-              _InputBox(
-                colors: colors,
-                controller: fullName,
-                hint: 'Full name',
-              ),
-              const SizedBox(height: 10),
-              _InputBox(
-                colors: colors,
-                controller: phone,
-                hint: 'Phone number',
-              ),
-              const SizedBox(height: 10),
-              _InputBox(colors: colors, controller: email, hint: 'Email'),
-              const SizedBox(height: 10),
-              _InputBox(
-                colors: colors,
-                controller: pharmacyName,
-                hint: 'Pharmacy name',
-              ),
-              const SizedBox(height: 10),
-              _AddressField(
-                colors: colors,
-                icon: Icons.local_pharmacy,
-                controller: pharmacyAddress,
-                label: 'Pharmacy pickup address',
-                pharmacyMode: true,
-              ),
-              const SizedBox(height: 10),
-              _AddressField(
-                colors: colors,
-                icon: Icons.home_outlined,
-                controller: deliveryAddress,
-                label: 'Delivery address',
-              ),
-            ],
-          ),
-        ),
-        const SizedBox(height: 14),
-        _GlassPanel(
-          colors: colors,
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              _SectionTitle(colors: colors, title: 'Prescription details'),
-              const SizedBox(height: 12),
-              _PrescriptionTypePicker(
-                colors: colors,
-                selected: prescriptionType,
-                onChanged: onPrescriptionType,
-              ),
-              const SizedBox(height: 10),
-              _InputBox(
-                colors: colors,
-                controller: notes,
-                hint: 'Prescription or pickup notes',
-                maxLines: 3,
-              ),
-            ],
-          ),
-        ),
-        const SizedBox(height: 14),
-        _GlassPanel(
-          colors: colors,
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              _SectionTitle(colors: colors, title: 'Recurring schedule'),
-              const SizedBox(height: 12),
-              _HealthFrequencyPicker(
-                colors: colors,
-                selected: frequency,
-                onChanged: onFrequency,
-              ),
-              const SizedBox(height: 10),
-              _InputBox(
-                colors: colors,
-                controller: preferredDay,
-                hint: 'Preferred pickup day',
-              ),
-              const SizedBox(height: 10),
-              _InputBox(
-                colors: colors,
-                controller: preferredTime,
-                hint: 'Preferred pickup time',
-              ),
-              if (frequency == HealthPlusFrequency.custom) ...[
-                const SizedBox(height: 10),
-                _InputBox(
-                  colors: colors,
-                  controller: customSchedule,
-                  hint: 'Custom pickup date or repeat pattern',
-                ),
-              ],
-            ],
-          ),
-        ),
-        const SizedBox(height: 14),
-        _GlassPanel(
-          colors: colors,
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              _SectionTitle(colors: colors, title: 'Subscription plan'),
-              const SizedBox(height: 12),
-              _HealthPlanGrid(
-                colors: colors,
-                selectedPlan: subscriptionPlan,
-                onSelect: onSubscriptionPlan,
-                onStartSubscription: onStartSubscription,
-                onContinueOneOff: onContinueOneOff,
-              ),
-            ],
-          ),
-        ),
-        const SizedBox(height: 14),
-        _GlassPanel(
-          colors: colors,
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              _SectionTitle(colors: colors, title: 'Price breakdown'),
-              const SizedBox(height: 10),
-              _PriceLine(
-                colors: colors,
-                label: 'Base pickup fee',
-                value: '£${quote.delivery.baseFare.toStringAsFixed(2)}',
-              ),
-              _PriceLine(
-                colors: colors,
-                label: 'Distance estimate',
-                value: '£${quote.delivery.distanceFare.toStringAsFixed(2)}',
-              ),
-              _PriceLine(
-                colors: colors,
-                label: 'Health+ care fee',
-                value: '£${quote.serviceFee.toStringAsFixed(2)}',
-              ),
-              if (quote.priorityFee > 0)
-                _PriceLine(
-                  colors: colors,
-                  label: 'Priority fee',
-                  value: '£${quote.priorityFee.toStringAsFixed(2)}',
-                ),
-              if (quote.familySupportFee > 0)
-                _PriceLine(
-                  colors: colors,
-                  label: 'Family support',
-                  value: '£${quote.familySupportFee.toStringAsFixed(2)}',
-                ),
-              if (quote.recurringDiscount > 0)
-                _PriceLine(
-                  colors: colors,
-                  label: 'Recurring discount',
-                  value: '-£${quote.recurringDiscount.toStringAsFixed(2)}',
-                ),
-              if (quote.minimumAdjustment > 0)
-                _PriceLine(
-                  colors: colors,
-                  label: 'Health+ minimum adjustment',
-                  value: '£${quote.minimumAdjustment.toStringAsFixed(2)}',
-                ),
-              Divider(color: colors.border, height: 24),
-              _PriceLine(
-                colors: colors,
-                label: frequency == HealthPlusFrequency.oneOff
-                    ? 'One-off total'
-                    : 'Recurring pickup total',
-                value: '£${quote.total.toStringAsFixed(2)}',
-                strong: true,
-              ),
-              CheckboxListTile(
-                contentPadding: EdgeInsets.zero,
-                value: savePayment,
-                onChanged: onSavePayment,
-                activeColor: colors.text,
-                title: Text(
-                  'Save this payment method',
-                  style: TextStyle(
-                    color: colors.text,
-                    fontWeight: FontWeight.w800,
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ),
+        _buildGuidedPanel(nextPickup),
         const SizedBox(height: 14),
         _HealthTrustGrid(colors: colors),
-        const SizedBox(height: 14),
-        _HealthDisclaimer(colors: colors),
-        const SizedBox(height: 10),
-        CheckboxListTile(
-          contentPadding: EdgeInsets.zero,
-          value: consent,
-          onChanged: onConsent,
-          activeColor: colors.text,
-          title: Text(
-            'I confirm the prescription is valid and ready, or will be ready, for collection.',
-            style: TextStyle(color: colors.text, fontWeight: FontWeight.w700),
+      ],
+    );
+  }
+
+  bool _healthStepComplete(int step) {
+    return switch (step) {
+      0 => widget.pickups.isNotEmpty,
+      1 => widget.fullName.text.trim().isNotEmpty &&
+          widget.phone.text.trim().isNotEmpty &&
+          widget.email.text.trim().isNotEmpty,
+      2 => widget.pharmacyVerified,
+      3 => widget.deliveryVerified,
+      4 => true,
+      5 => widget.subscriptionPlan.trim().isNotEmpty,
+      6 => widget.notes.text.trim().isNotEmpty && widget.consent,
+      7 => widget.consent,
+      8 => widget.payments.isNotEmpty || widget.checkoutUrl != null,
+      9 => widget.pickups.isNotEmpty,
+      _ => false,
+    };
+  }
+
+  Widget _buildGuidedPanel(Map<String, dynamic>? nextPickup) {
+    final colors = widget.colors;
+    return _GlassPanel(
+      colors: colors,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          AnimatedSwitcher(
+            duration: const Duration(milliseconds: 220),
+            child: KeyedSubtree(
+              key: ValueKey(_currentStep),
+              child: _stepBody(nextPickup),
+            ),
+          ),
+          const SizedBox(height: 16),
+          Row(
+            children: [
+              if (_currentStep > 0)
+                OutlinedButton.icon(
+                  onPressed: _previous,
+                  icon: const Icon(Icons.chevron_left),
+                  label: const Text('Back'),
+                ),
+              const Spacer(),
+              if (_currentStep < _steps.length - 2)
+                FilledButton.icon(
+                  onPressed: _next,
+                  icon: const Icon(Icons.chevron_right),
+                  label: const Text('Continue'),
+                ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _stepBody(Map<String, dynamic>? nextPickup) {
+    final colors = widget.colors;
+    switch (_currentStep) {
+      case 0:
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            _HealthDashboard(
+              colors: colors,
+              pickup: nextPickup,
+              payments: widget.payments,
+              onPauseSchedule: widget.onPauseSchedule,
+              onResumeSchedule: widget.onResumeSchedule,
+              onCancelSchedule: widget.onCancelSchedule,
+              onCancelPickup: widget.onCancelPickup,
+              onUpdatePayment: widget.onUpdatePayment,
+            ),
+            const SizedBox(height: 12),
+            SizedBox(
+              width: double.infinity,
+              child: FilledButton.icon(
+                onPressed: () => _goTo(1),
+                icon: const Icon(Icons.medical_services_outlined),
+                label: const Text('Book a new pickup'),
+              ),
+            ),
+          ],
+        );
+      case 1:
+        return Column(
+          children: [
+            _InputBox(
+              colors: colors,
+              controller: widget.fullName,
+              hint: 'Full name',
+            ),
+            const SizedBox(height: 10),
+            _InputBox(
+              colors: colors,
+              controller: widget.phone,
+              hint: 'Phone number',
+            ),
+            const SizedBox(height: 10),
+            _InputBox(colors: colors, controller: widget.email, hint: 'Email'),
+          ],
+        );
+      case 2:
+        return Column(
+          children: [
+            _InputBox(
+              colors: colors,
+              controller: widget.pharmacyName,
+              hint: 'Pharmacy name',
+            ),
+            const SizedBox(height: 10),
+            _AddressField(
+              colors: colors,
+              icon: Icons.local_pharmacy,
+              controller: widget.pharmacyAddress,
+              label: 'Pharmacy pickup address',
+              pharmacyMode: true,
+              verified: widget.pharmacyVerified,
+              verifiedMessage: 'Verified pharmacy address selected',
+              onSelected: widget.onPharmacySelected,
+              onEdited: widget.onPharmacyEdited,
+            ),
+            const SizedBox(height: 8),
+            _HealthAddressVerificationHint(
+              colors: colors,
+              verified: widget.pharmacyVerified,
+              label: 'Choose a verified address result before continuing.',
+            ),
+          ],
+        );
+      case 3:
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            _AddressField(
+              colors: colors,
+              icon: Icons.home_outlined,
+              controller: widget.deliveryAddress,
+              label: 'Delivery address',
+              verified: widget.deliveryVerified,
+              verifiedMessage: 'Verified delivery address selected',
+              onSelected: widget.onDeliverySelected,
+              onEdited: widget.onDeliveryEdited,
+            ),
+            const SizedBox(height: 8),
+            _HealthAddressVerificationHint(
+              colors: colors,
+              verified: widget.deliveryVerified,
+              label: 'Choose a verified address result before continuing.',
+            ),
+          ],
+        );
+      case 4:
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            _HealthFrequencyPicker(
+              colors: colors,
+              selected: widget.frequency,
+              onChanged: widget.onFrequency,
+            ),
+            const SizedBox(height: 12),
+            _InputBox(
+              colors: colors,
+              controller: widget.preferredDay,
+              hint: 'Preferred pickup day',
+            ),
+            const SizedBox(height: 10),
+            _InputBox(
+              colors: colors,
+              controller: widget.preferredTime,
+              hint: 'Preferred pickup time',
+            ),
+            if (widget.frequency == HealthPlusFrequency.custom) ...[
+              const SizedBox(height: 10),
+              _InputBox(
+                colors: colors,
+                controller: widget.customSchedule,
+                hint: 'Custom pickup date or repeat pattern',
+              ),
+            ],
+          ],
+        );
+      case 5:
+        return _HealthPlanGrid(
+          colors: colors,
+          selectedPlan: widget.subscriptionPlan,
+          onSelect: widget.onSubscriptionPlan,
+          onStartSubscription: widget.onStartSubscription,
+          onContinueOneOff: widget.onContinueOneOff,
+        );
+      case 6:
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            _PrescriptionTypePicker(
+              colors: colors,
+              selected: widget.prescriptionType,
+              onChanged: widget.onPrescriptionType,
+            ),
+            const SizedBox(height: 10),
+            _InputBox(
+              colors: colors,
+              controller: widget.notes,
+              hint: 'Prescription or pickup notes',
+              maxLines: 3,
+            ),
+            const SizedBox(height: 10),
+            CheckboxListTile(
+              contentPadding: EdgeInsets.zero,
+              value: widget.consent,
+              onChanged: widget.onConsent,
+              activeColor: colors.text,
+              title: Text(
+                'I confirm the prescription is valid and ready, or will be ready, for collection.',
+                style: TextStyle(
+                  color: colors.text,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ),
+          ],
+        );
+      case 7:
+        return _HealthReviewPanel(
+          colors: colors,
+          frequency: widget.frequency,
+          prescriptionType: widget.prescriptionType,
+          subscriptionPlan: widget.subscriptionPlan,
+          quote: widget.quote,
+          fullName: widget.fullName.text,
+          pharmacy: widget.pharmacyAddress.text,
+          delivery: widget.deliveryAddress.text,
+        );
+      case 8:
+        return _HealthCheckoutPanel(
+          colors: colors,
+          frequency: widget.frequency,
+          quote: widget.quote,
+          savePayment: widget.savePayment,
+          useRoth: widget.useRoth,
+          rothBalance: widget.rothBalance,
+          submitting: widget.submitting,
+          message: widget.message,
+          checkoutUrl: widget.checkoutUrl,
+          onSavePayment: widget.onSavePayment,
+          onUseRoth: widget.onUseRoth,
+          onSubmit: widget.onSubmit,
+          onUpdatePayment: widget.onUpdatePayment,
+        );
+      default:
+        return _HealthDashboard(
+          colors: colors,
+          pickup: nextPickup,
+          payments: widget.payments,
+          onPauseSchedule: widget.onPauseSchedule,
+          onResumeSchedule: widget.onResumeSchedule,
+          onCancelSchedule: widget.onCancelSchedule,
+          onCancelPickup: widget.onCancelPickup,
+          onUpdatePayment: widget.onUpdatePayment,
+        );
+    }
+  }
+}
+
+class _HealthGuidedProgress extends StatelessWidget {
+  final _CircumColors colors;
+  final int currentStep;
+  final int totalSteps;
+
+  const _HealthGuidedProgress({
+    required this.colors,
+    required this.currentStep,
+    required this.totalSteps,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        for (var index = 0; index < totalSteps - 1; index++)
+          Expanded(
+            child: Container(
+              height: 4,
+              margin: EdgeInsets.only(right: index == totalSteps - 2 ? 0 : 4),
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(999),
+                color: index < currentStep
+                    ? const Color(0xff2fae8c)
+                    : colors.border.withValues(alpha: .55),
+              ),
+            ),
+          ),
+      ],
+    );
+  }
+}
+
+class _HealthAddressVerificationHint extends StatelessWidget {
+  final _CircumColors colors;
+  final bool verified;
+  final String label;
+
+  const _HealthAddressVerificationHint({
+    required this.colors,
+    required this.verified,
+    required this.label,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        Icon(
+          verified ? Icons.verified_rounded : Icons.info_outline_rounded,
+          color: verified ? colors.success : colors.warning,
+          size: 16,
+        ),
+        const SizedBox(width: 8),
+        Expanded(
+          child: Text(
+            verified ? 'Address verified.' : label,
+            style: TextStyle(
+              color: verified ? colors.success : colors.mutedText,
+              fontSize: 12,
+              fontWeight: FontWeight.w800,
+              height: 1.35,
+            ),
           ),
         ),
+      ],
+    );
+  }
+}
+
+class _HealthGuidedChip extends StatelessWidget {
+  final _CircumColors colors;
+  final String label;
+  final bool active;
+  final bool complete;
+  final VoidCallback onTap;
+
+  const _HealthGuidedChip({
+    required this.colors,
+    required this.label,
+    required this.active,
+    required this.complete,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final health = const Color(0xff2fae8c);
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(999),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+        decoration: BoxDecoration(
+          color: active ? health.withValues(alpha: .14) : colors.field,
+          borderRadius: BorderRadius.circular(999),
+          border: Border.all(color: active ? health : colors.border),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              label,
+              style: TextStyle(
+                color: active ? colors.text : colors.mutedText,
+                fontSize: 11,
+                fontWeight: FontWeight.w900,
+              ),
+            ),
+            const SizedBox(width: 6),
+            Container(
+              width: 6,
+              height: 6,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: complete ? health : const Color(0xffe0a93a),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _HealthReviewPanel extends StatelessWidget {
+  final _CircumColors colors;
+  final HealthPlusFrequency frequency;
+  final String prescriptionType;
+  final String subscriptionPlan;
+  final HealthPlusPriceBreakdown quote;
+  final String fullName;
+  final String pharmacy;
+  final String delivery;
+
+  const _HealthReviewPanel({
+    required this.colors,
+    required this.frequency,
+    required this.prescriptionType,
+    required this.subscriptionPlan,
+    required this.quote,
+    required this.fullName,
+    required this.pharmacy,
+    required this.delivery,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      children: [
+        _PriceLine(
+          colors: colors,
+          label: 'For',
+          value: fullName.trim().isEmpty ? 'Not added' : fullName.trim(),
+        ),
+        _PriceLine(
+          colors: colors,
+          label: 'Pharmacy',
+          value: pharmacy.trim().isEmpty ? 'Not added' : pharmacy.trim(),
+        ),
+        _PriceLine(
+          colors: colors,
+          label: 'Delivery',
+          value: delivery.trim().isEmpty ? 'Not added' : delivery.trim(),
+        ),
+        _PriceLine(colors: colors, label: 'Frequency', value: frequency.label),
+        _PriceLine(
+          colors: colors,
+          label: 'Prescription',
+          value: prescriptionType,
+        ),
+        _PriceLine(
+          colors: colors,
+          label: 'Plan',
+          value: _HealthParityMap.planLabel(subscriptionPlan),
+        ),
+        Divider(color: colors.border, height: 24),
+        _PriceLine(
+          colors: colors,
+          label: frequency == HealthPlusFrequency.oneOff
+              ? 'One-off total'
+              : 'Recurring pickup total',
+          value: '£${quote.total.toStringAsFixed(2)}',
+          strong: true,
+        ),
+      ],
+    );
+  }
+}
+
+class _HealthCheckoutPanel extends StatelessWidget {
+  final _CircumColors colors;
+  final HealthPlusFrequency frequency;
+  final HealthPlusPriceBreakdown quote;
+  final bool savePayment;
+  final bool useRoth;
+  final double rothBalance;
+  final bool submitting;
+  final String? message;
+  final String? checkoutUrl;
+  final ValueChanged<bool?> onSavePayment;
+  final ValueChanged<bool?> onUseRoth;
+  final VoidCallback onSubmit;
+  final VoidCallback onUpdatePayment;
+
+  const _HealthCheckoutPanel({
+    required this.colors,
+    required this.frequency,
+    required this.quote,
+    required this.savePayment,
+    required this.useRoth,
+    required this.rothBalance,
+    required this.submitting,
+    required this.message,
+    required this.checkoutUrl,
+    required this.onSavePayment,
+    required this.onUseRoth,
+    required this.onSubmit,
+    required this.onUpdatePayment,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _PriceLine(
+          colors: colors,
+          label: 'Base pickup fee',
+          value: '£${quote.delivery.baseFare.toStringAsFixed(2)}',
+        ),
+        _PriceLine(
+          colors: colors,
+          label: 'Distance estimate',
+          value: '£${quote.delivery.distanceFare.toStringAsFixed(2)}',
+        ),
+        _PriceLine(
+          colors: colors,
+          label: 'Health+ care fee',
+          value: '£${quote.serviceFee.toStringAsFixed(2)}',
+        ),
+        if (quote.priorityFee > 0)
+          _PriceLine(
+            colors: colors,
+            label: 'Priority fee',
+            value: '£${quote.priorityFee.toStringAsFixed(2)}',
+          ),
+        if (quote.familySupportFee > 0)
+          _PriceLine(
+            colors: colors,
+            label: 'Family support',
+            value: '£${quote.familySupportFee.toStringAsFixed(2)}',
+          ),
+        if (quote.recurringDiscount > 0)
+          _PriceLine(
+            colors: colors,
+            label: 'Recurring discount',
+            value: '-£${quote.recurringDiscount.toStringAsFixed(2)}',
+          ),
+        Divider(color: colors.border, height: 24),
+        _PriceLine(
+          colors: colors,
+          label: frequency == HealthPlusFrequency.oneOff
+              ? 'One-off total'
+              : 'Recurring pickup total',
+          value: '£${quote.total.toStringAsFixed(2)}',
+          strong: true,
+        ),
+        CheckboxListTile(
+          contentPadding: EdgeInsets.zero,
+          value: savePayment,
+          onChanged: onSavePayment,
+          activeColor: colors.text,
+          title: Text(
+            'Save this payment method',
+            style: TextStyle(color: colors.text, fontWeight: FontWeight.w800),
+          ),
+        ),
+        if (rothBalance > 0)
+          CheckboxListTile(
+            contentPadding: EdgeInsets.zero,
+            value: useRoth,
+            onChanged: onUseRoth,
+            activeColor: colors.text,
+            title: Text(
+              'Apply Roth balance',
+              style: TextStyle(color: colors.text, fontWeight: FontWeight.w800),
+            ),
+            subtitle: Text(
+              frequency == HealthPlusFrequency.oneOff
+                  ? 'Store credit available: £${rothBalance.toStringAsFixed(2)}. Any remaining amount is paid securely by card.'
+                  : 'Store credit available: £${rothBalance.toStringAsFixed(2)}. Roth applies to the first subscription payment; future renewals continue securely by card.',
+              style: TextStyle(
+                color: colors.mutedText,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+          ),
         const SizedBox(height: 10),
         if (message != null)
           Padding(
@@ -16359,14 +19125,6 @@ class _HealthPlusStep extends StatelessWidget {
                   ? 'Setting up Health+...'
                   : 'Pay £${quote.total.toStringAsFixed(2)} securely',
             ),
-            style: FilledButton.styleFrom(
-              backgroundColor: colors.text,
-              foregroundColor: colors.inverseText,
-              padding: const EdgeInsets.symmetric(vertical: 17),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(16),
-              ),
-            ),
           ),
         ),
         if (checkoutUrl != null) ...[
@@ -16380,26 +19138,280 @@ class _HealthPlusStep extends StatelessWidget {
             ),
           ),
         ],
-        const SizedBox(height: 18),
-        _HealthDashboard(
-          colors: colors,
-          pickup: nextPickup,
-          payments: payments,
-          onPauseSchedule: onPauseSchedule,
-          onResumeSchedule: onResumeSchedule,
-          onCancelSchedule: onCancelSchedule,
-          onCancelPickup: onCancelPickup,
-          onUpdatePayment: onUpdatePayment,
-        ),
-        const SizedBox(height: 14),
-        _HealthAdminPanel(
-          colors: colors,
-          pickup: nextPickup,
-          onStatus: onAdminStatus,
-        ),
       ],
     );
   }
+}
+
+class _HealthParityMap extends StatelessWidget {
+  final _CircumColors colors;
+  final HealthPlusFrequency frequency;
+  final String subscriptionPlan;
+  final String prescriptionType;
+  final HealthPlusPriceBreakdown quote;
+  final Map<String, dynamic>? pickup;
+  final List<Map<String, dynamic>> payments;
+  final bool hasContactDetails;
+  final bool hasPharmacy;
+  final bool hasDelivery;
+  final bool hasNotes;
+  final bool consent;
+  final bool savePayment;
+  final bool useRoth;
+  final ValueChanged<String>? onSelectSection;
+
+  const _HealthParityMap({
+    required this.colors,
+    required this.frequency,
+    required this.subscriptionPlan,
+    required this.prescriptionType,
+    required this.quote,
+    required this.pickup,
+    required this.payments,
+    required this.hasContactDetails,
+    required this.hasPharmacy,
+    required this.hasDelivery,
+    required this.hasNotes,
+    required this.consent,
+    required this.savePayment,
+    required this.useRoth,
+  }) : onSelectSection = null;
+
+  @override
+  Widget build(BuildContext context) {
+    final pickupStatus = pickup == null
+        ? 'No active pickup'
+        : _displayStatusLabel('${pickup!['status'] ?? 'scheduled'}');
+    final paymentStatus = payments.isEmpty
+        ? 'Ready at checkout'
+        : _displayStatusLabel('${payments.first['status'] ?? 'recorded'}');
+    final sections = [
+      _HealthParitySection(
+        icon: Icons.monitor_heart_outlined,
+        title: 'Status',
+        value: pickupStatus,
+        complete: pickup != null,
+      ),
+      _HealthParitySection(
+        icon: Icons.person_outline,
+        title: 'Details',
+        value: hasContactDetails ? 'Contact details ready' : 'Add contact',
+        complete: hasContactDetails,
+      ),
+      _HealthParitySection(
+        icon: Icons.local_pharmacy_outlined,
+        title: 'Pharmacy',
+        value: hasPharmacy ? 'Pickup address ready' : 'Add pharmacy',
+        complete: hasPharmacy,
+      ),
+      _HealthParitySection(
+        icon: Icons.home_outlined,
+        title: 'Delivery',
+        value: hasDelivery ? 'Delivery address ready' : 'Add delivery address',
+        complete: hasDelivery,
+      ),
+      _HealthParitySection(
+        icon: Icons.event_repeat_outlined,
+        title: 'Frequency',
+        value: frequency.label,
+        complete: true,
+      ),
+      _HealthParitySection(
+        icon: Icons.workspace_premium_outlined,
+        title: 'Plan',
+        value: _planLabel(subscriptionPlan),
+        complete: subscriptionPlan.trim().isNotEmpty,
+      ),
+      _HealthParitySection(
+        icon: Icons.notes_outlined,
+        title: 'Notes',
+        value: hasNotes ? prescriptionType : 'Optional notes',
+        complete: hasNotes,
+      ),
+      _HealthParitySection(
+        icon: Icons.fact_check_outlined,
+        title: 'Review',
+        value: consent ? 'Consent confirmed' : 'Consent needed',
+        complete: consent,
+      ),
+      _HealthParitySection(
+        icon: Icons.lock_outline,
+        title: 'Checkout',
+        value: paymentStatus,
+        complete: payments.isNotEmpty,
+      ),
+      _HealthParitySection(
+        icon: Icons.verified_outlined,
+        title: 'Confirmed',
+        value: pickup == null ? 'After booking' : 'Pickup saved',
+        complete: pickup != null,
+      ),
+    ];
+
+    return _GlassPanel(
+      colors: colors,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _SectionTitle(colors: colors, title: 'Health+ sections'),
+          const SizedBox(height: 8),
+          Text(
+            'The web flow exposes the same Health+ areas as the app: status, details, pharmacy, delivery, frequency, plan, notes, review, checkout and confirmation.',
+            style: TextStyle(
+              color: colors.mutedText,
+              height: 1.4,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+          const SizedBox(height: 12),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              _HealthChip(label: frequency.label),
+              _HealthChip(label: planLabel(subscriptionPlan)),
+              if (useRoth) const _HealthChip(label: 'Roth selected'),
+              if (savePayment) const _HealthChip(label: 'Saved payment ready'),
+              const _HealthChip(label: 'Vanguard Included'),
+            ],
+          ),
+          const SizedBox(height: 12),
+          LayoutBuilder(
+            builder: (context, constraints) {
+              final columns = constraints.maxWidth < 720 ? 2 : 5;
+              return GridView.count(
+                shrinkWrap: true,
+                physics: const NeverScrollableScrollPhysics(),
+                crossAxisCount: columns,
+                crossAxisSpacing: 8,
+                mainAxisSpacing: 8,
+                childAspectRatio: columns == 2 ? 1.18 : 1.08,
+                children: sections
+                    .map(
+                      (section) => _HealthParityTile(
+                        colors: colors,
+                        section: section,
+                        onTap: onSelectSection == null
+                            ? null
+                            : () => onSelectSection!(section.title),
+                      ),
+                    )
+                    .toList(),
+              );
+            },
+          ),
+          const SizedBox(height: 12),
+          _PriceLine(
+            colors: colors,
+            label: frequency == HealthPlusFrequency.oneOff
+                ? 'One-off total'
+                : 'Recurring pickup total',
+            value: '£${quote.total.toStringAsFixed(2)}',
+            strong: true,
+          ),
+        ],
+      ),
+    );
+  }
+
+  static String _planLabel(String value) {
+    switch (value) {
+      case 'priority':
+        return 'Priority';
+      case 'family':
+        return 'Family';
+      case 'basic':
+        return 'Basic';
+      default:
+        return value.trim().isEmpty ? 'Basic' : value;
+    }
+  }
+
+  static String planLabel(String value) => _planLabel(value);
+}
+
+class _HealthParitySection {
+  final IconData icon;
+  final String title;
+  final String value;
+  final bool complete;
+
+  const _HealthParitySection({
+    required this.icon,
+    required this.title,
+    required this.value,
+    required this.complete,
+  });
+}
+
+class _HealthParityTile extends StatelessWidget {
+  final _CircumColors colors;
+  final _HealthParitySection section;
+  final VoidCallback? onTap;
+
+  const _HealthParityTile({
+    required this.colors,
+    required this.section,
+    this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) => InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(16),
+        child: Container(
+          padding: const EdgeInsets.all(11),
+          decoration: BoxDecoration(
+            color: colors.field,
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(
+              color: section.complete
+                  ? colors.success.withValues(alpha: .42)
+                  : colors.border,
+            ),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Icon(
+                    section.icon,
+                    color: section.complete ? colors.success : colors.text,
+                    size: 19,
+                  ),
+                  const Spacer(),
+                  Icon(
+                    section.complete
+                        ? Icons.check_circle
+                        : Icons.radio_button_unchecked,
+                    color: section.complete ? colors.success : colors.mutedText,
+                    size: 17,
+                  ),
+                ],
+              ),
+              const SizedBox(height: 8),
+              Text(
+                section.title,
+                style:
+                    TextStyle(color: colors.text, fontWeight: FontWeight.w900),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                section.value,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  color: colors.mutedText,
+                  fontSize: 12,
+                  height: 1.25,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
 }
 
 class _HealthChip extends StatelessWidget {
@@ -16528,9 +19540,9 @@ class _HealthPlanGrid extends StatelessWidget {
       _HealthPlanCopy(
         id: 'basic',
         title: 'Health+ Basic',
-        price: 'From £11',
+        price: '£11/month',
         benefits: [
-          'Discounted recurring pickups',
+          '2 Health+ prescription pickups every calendar month',
           'Medicine delivery reminders',
           'Secure sealed-package handover',
         ],
@@ -16538,21 +19550,24 @@ class _HealthPlanGrid extends StatelessWidget {
       _HealthPlanCopy(
         id: 'priority',
         title: 'Health+ Priority',
-        price: 'Priority matching',
+        price: '£25/month',
         benefits: [
-          'Priority rider matching',
+          '4 Health+ prescription pickups every calendar month',
+          'Priority Circum Rider matching',
           'Faster pickup target',
-          'Recurring prescription reminders',
+          'Medicine reminders',
         ],
       ),
       _HealthPlanCopy(
         id: 'family',
         title: 'Health+ Family',
-        price: 'Family support',
+        price: '£40/month',
         benefits: [
-          'Support for elderly relatives',
+          'Unlimited Health+ prescription pickups',
+          'Family member support',
           'Shared pickup notes',
           'Repeat medicine reminders',
+          'Priority support',
         ],
       ),
     ];
@@ -16709,7 +19724,7 @@ class _HealthTrustGrid extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     const cards = [
-      (Icons.verified_user, 'Verified rider'),
+      (Icons.verified_user, 'Verified Circum Rider'),
       (Icons.inventory_2_outlined, 'Sealed package only'),
       (Icons.handshake_outlined, 'Secure handover'),
       (Icons.medical_information_outlined, 'No medical advice provided'),
@@ -16758,53 +19773,6 @@ class _HealthTrustGrid extends StatelessWidget {
                   ),
                 )
                 .toList(),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _HealthDisclaimer extends StatelessWidget {
-  final _CircumColors colors;
-
-  const _HealthDisclaimer({required this.colors});
-
-  @override
-  Widget build(BuildContext context) {
-    return _GlassPanel(
-      colors: colors,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          _SectionTitle(colors: colors, title: 'Safety and compliance'),
-          const SizedBox(height: 8),
-          ...[
-            'Health+ is a prescription pickup and delivery service only.',
-            'Circum does not prescribe medication or provide medical advice.',
-            'Users are responsible for ensuring prescriptions are valid and ready for collection.',
-            'Riders only collect and deliver sealed pharmacy packages.',
-          ].map(
-            (copy) => Padding(
-              padding: const EdgeInsets.only(bottom: 6),
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Icon(Icons.check_circle, color: colors.success, size: 18),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: Text(
-                      copy,
-                      style: TextStyle(
-                        color: colors.mutedText,
-                        height: 1.35,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
           ),
         ],
       ),
@@ -16943,64 +19911,6 @@ class _HealthDashboardRow extends StatelessWidget {
   }
 }
 
-class _HealthAdminPanel extends StatelessWidget {
-  final _CircumColors colors;
-  final Map<String, dynamic>? pickup;
-  final ValueChanged<String> onStatus;
-
-  const _HealthAdminPanel({
-    required this.colors,
-    required this.pickup,
-    required this.onStatus,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final statuses = [
-      PickupStatus.assigned.value,
-      PickupStatus.awaitingPharmacyCollection.value,
-      PickupStatus.collected.value,
-      PickupStatus.outForDelivery.value,
-      PickupStatus.delivered.value,
-      PickupStatus.failed.value,
-    ];
-
-    return _GlassPanel(
-      colors: colors,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          _SectionTitle(colors: colors, title: 'Admin operations'),
-          const SizedBox(height: 8),
-          Text(
-            pickup == null
-                ? 'Create a Health+ booking to see the operations controls.'
-                : 'Assign a rider, update pickup and delivery status, flag problems, or contact the user.',
-            style: TextStyle(
-              color: colors.mutedText,
-              height: 1.4,
-              fontWeight: FontWeight.w600,
-            ),
-          ),
-          const SizedBox(height: 10),
-          Wrap(
-            spacing: 8,
-            runSpacing: 8,
-            children: statuses
-                .map(
-                  (status) => ActionChip(
-                    onPressed: pickup == null ? null : () => onStatus(status),
-                    label: Text(status.replaceAll('_', ' ')),
-                  ),
-                )
-                .toList(),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
 class _IrisWeightEstimate {
   final double weightKg;
   final int quantity;
@@ -17100,6 +20010,7 @@ class _IrisWeightEstimate {
 }
 
 class _IrisImageInsight {
+  final String? analysisId;
   final String inferredItemName;
   final String inferredCategory;
   final double estimatedWeightKg;
@@ -17114,6 +20025,7 @@ class _IrisImageInsight {
   final int fileSizeBytes;
 
   const _IrisImageInsight({
+    this.analysisId,
     required this.inferredItemName,
     required this.inferredCategory,
     required this.estimatedWeightKg,
@@ -17130,6 +20042,7 @@ class _IrisImageInsight {
 
   factory _IrisImageInsight.fallback(String fileName) {
     return _IrisImageInsight(
+      analysisId: null,
       inferredItemName: 'Parcel photo',
       inferredCategory: 'Parcel',
       estimatedWeightKg: 2,
@@ -17146,7 +20059,38 @@ class _IrisImageInsight {
     );
   }
 
+  factory _IrisImageInsight.fromBackend(
+    Map<String, dynamic> data, {
+    required String fallbackFileName,
+  }) {
+    final weightKg = (data['estimatedWeightKg'] as num?)?.toDouble() ?? 2.0;
+    final score = (data['confidenceScore'] as num?)?.toDouble() ?? 0.25;
+    return _IrisImageInsight(
+      analysisId: '${data['analysisId'] ?? ''}'.trim().isEmpty
+          ? null
+          : '${data['analysisId']}',
+      inferredItemName:
+          '${data['inferredItemName'] ?? data['detectedItem'] ?? 'Parcel'}',
+      inferredCategory: '${data['inferredCategory'] ?? 'Parcel'}',
+      estimatedWeightKg: weightKg,
+      weightClass: '${data['weightClass'] ?? ''}'.trim().isEmpty
+          ? DeliveryPricing.weightBandFor(weightKg).category
+          : '${data['weightClass']}',
+      confidenceScore: score.clamp(0.0, 1.0),
+      fragilityRisk: '${data['fragilityRisk'] ?? 'medium'}',
+      valueRisk: '${data['valueRisk'] ?? 'low'}',
+      handlingNotes:
+          '${data['handlingNotes'] ?? 'Backend verified the parcel photo before using it as an IRIS visual signal.'}',
+      riderGuidance:
+          '${data['riderGuidance'] ?? 'Use the parcel photo to verify condition at pickup.'}',
+      needsHumanReview: data['needsHumanReview'] == true,
+      fileName: '${data['fileName'] ?? fallbackFileName}',
+      fileSizeBytes: (data['sizeBytes'] as num?)?.toInt() ?? 0,
+    );
+  }
+
   Map<String, dynamic> toJson() => {
+        'analysisId': analysisId,
         'inferredItemName': inferredItemName,
         'inferredCategory': inferredCategory,
         'estimatedWeightKg': estimatedWeightKg,
@@ -17159,7 +20103,9 @@ class _IrisImageInsight {
         'needsHumanReview': needsHumanReview,
         'fileName': fileName,
         'fileSizeBytes': fileSizeBytes,
-        'source': 'parcel_photo_and_item_details',
+        'source': analysisId == null
+            ? 'parcel_photo_and_item_details'
+            : 'backend_parcel_photo_analysis',
       };
 }
 
@@ -17276,14 +20222,14 @@ class _ValidatedAddress {
   }
 
   String get compactDisplay {
-    final primary = [buildingNumber, street]
-        .whereType<String>()
-        .where((value) => value.trim().isNotEmpty)
-        .join(' ');
-    final locality = [city, postcode]
-        .whereType<String>()
-        .where((value) => value.trim().isNotEmpty)
-        .join(' ');
+    final primary = [
+      buildingNumber,
+      street,
+    ].whereType<String>().where((value) => value.trim().isNotEmpty).join(' ');
+    final locality = [
+      city,
+      postcode,
+    ].whereType<String>().where((value) => value.trim().isNotEmpty).join(' ');
     if (primary.isNotEmpty && locality.isNotEmpty) return '$primary\n$locality';
     if (street?.trim().isNotEmpty == true &&
         postcode?.trim().isNotEmpty == true) {
@@ -17510,6 +20456,9 @@ class _VehicleStep extends StatelessWidget {
   final bool priceReady;
   final bool weightReady;
   final SpecialHandlingResult specialHandling;
+  final bool vanguardRequired;
+  final bool vanguardEnabled;
+  final ValueChanged<bool> onVanguardChanged;
   final DeliveryAccess pickupAccess;
   final DeliveryAccess dropoffAccess;
   final ValueChanged<DeliveryAccess> onPickupAccess;
@@ -17532,6 +20481,9 @@ class _VehicleStep extends StatelessWidget {
     required this.priceReady,
     required this.weightReady,
     required this.specialHandling,
+    required this.vanguardRequired,
+    required this.vanguardEnabled,
+    required this.onVanguardChanged,
     required this.pickupAccess,
     required this.dropoffAccess,
     required this.onPickupAccess,
@@ -17648,29 +20600,34 @@ class _VehicleStep extends StatelessWidget {
         const SizedBox(height: 12),
         _RouteSummary(colors: colors, pickup: pickup, dropoff: dropoff),
         const SizedBox(height: 14),
-        ..._vehicles.map(
-          (vehicle) {
-            final disabledReason = DeliveryPricing.vehicleDisabledReason(
-              vehicle.name,
-              vehicleSuitability,
-            );
-            return Padding(
-              padding: const EdgeInsets.only(bottom: 10),
-              child: _VehicleTile(
-                colors: colors,
-                vehicle: vehicle,
-                selected: vehicle.name == selectedVehicle.name,
-                disabledReason: disabledReason,
-                onTap: () => onVehicle(vehicle),
-              ),
-            );
-          },
-        ),
+        ..._vehicles.map((vehicle) {
+          final disabledReason = DeliveryPricing.vehicleDisabledReason(
+            vehicle.name,
+            vehicleSuitability,
+          );
+          return Padding(
+            padding: const EdgeInsets.only(bottom: 10),
+            child: _VehicleTile(
+              colors: colors,
+              vehicle: vehicle,
+              selected: vehicle.name == selectedVehicle.name,
+              disabledReason: disabledReason,
+              onTap: () => onVehicle(vehicle),
+            ),
+          );
+        }),
         const SizedBox(height: 8),
         _SpeedToggle(
           colors: colors,
           selected: selectedSpeed,
           onChanged: onSpeed,
+        ),
+        const SizedBox(height: 14),
+        _VanguardBookingNotice(
+          colors: colors,
+          selected: vanguardEnabled,
+          requiredByPolicy: vanguardRequired,
+          onChanged: onVanguardChanged,
         ),
         if (specialHandling.requiresAccessQuestions) ...[
           const SizedBox(height: 14),
@@ -17786,14 +20743,129 @@ class _AccessDropdown extends StatelessWidget {
           value: DeliveryAccess.liftAvailable,
           child: Text('Lift available'),
         ),
-        DropdownMenuItem(
-          value: DeliveryAccess.stairs,
-          child: Text('Stairs'),
-        ),
+        DropdownMenuItem(value: DeliveryAccess.stairs, child: Text('Stairs')),
       ],
       onChanged: (next) {
         if (next != null) onChanged(next);
       },
+    );
+  }
+}
+
+class _VanguardBookingNotice extends StatelessWidget {
+  final _CircumColors colors;
+  final bool selected;
+  final bool requiredByPolicy;
+  final ValueChanged<bool> onChanged;
+
+  const _VanguardBookingNotice({
+    required this.colors,
+    required this.selected,
+    required this.requiredByPolicy,
+    required this.onChanged,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    const vanguardBlue = Color(0xff168bff);
+    final borderColor = selected
+        ? vanguardBlue.withValues(alpha: 0.94)
+        : const Color(0xff38bdf8).withValues(alpha: 0.28);
+    return Container(
+      padding: const EdgeInsets.all(18),
+      decoration: BoxDecoration(
+        color: const Color(
+          0xff0b1530,
+        ).withValues(alpha: selected ? 0.92 : (colors.dark ? 0.82 : 0.08)),
+        borderRadius: BorderRadius.circular(22),
+        border: Border.all(color: borderColor, width: selected ? 2 : 1.2),
+        boxShadow: [
+          BoxShadow(
+            color: vanguardBlue.withValues(alpha: selected ? 0.28 : 0.14),
+            blurRadius: selected ? 34 : 26,
+            offset: const Offset(0, 16),
+          ),
+        ],
+      ),
+      child: InkWell(
+        onTap: requiredByPolicy ? null : () => onChanged(!selected),
+        borderRadius: BorderRadius.circular(20),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Container(
+              width: 46,
+              height: 46,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: selected
+                    ? vanguardBlue.withValues(alpha: 0.22)
+                    : Colors.transparent,
+                border: Border.all(
+                  color: selected
+                      ? vanguardBlue
+                      : const Color(0xff38bdf8).withValues(alpha: 0.24),
+                ),
+              ),
+              child: const Icon(Icons.security, color: Color(0xff93c5fd)),
+            ),
+            const SizedBox(width: 14),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    crossAxisAlignment: WrapCrossAlignment.center,
+                    children: [
+                      const Text(
+                        'Vanguard',
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontSize: 20,
+                          fontWeight: FontWeight.w900,
+                        ),
+                      ),
+                      _VanguardBlueChip(
+                        label: requiredByPolicy
+                            ? 'Required'
+                            : 'Optional add-on - £${_webVanguardAddOnPriceGbp.toStringAsFixed(2)}',
+                      ),
+                      if (selected) const _VanguardBlueChip(label: 'Selected'),
+                    ],
+                  ),
+                  const SizedBox(height: 5),
+                  Text(
+                    selected
+                        ? 'Vanguard will be added to this delivery.'
+                        : 'Trust matters more than speed.',
+                    style: TextStyle(
+                      color: colors.text,
+                      fontWeight: FontWeight.w900,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    'Add enhanced custody tracking, trusted Circum Rider prioritisation, priority support, and better handling for important items.',
+                    style: TextStyle(
+                      color: colors.mutedText,
+                      height: 1.42,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            Switch.adaptive(
+              value: selected,
+              onChanged: requiredByPolicy ? null : onChanged,
+              activeThumbColor: vanguardBlue,
+              activeTrackColor: vanguardBlue.withValues(alpha: 0.34),
+            ),
+          ],
+        ),
+      ),
     );
   }
 }
@@ -17815,12 +20887,16 @@ class _PaymentStep extends StatelessWidget {
   final String weightSource;
   final String? pricingReason;
   final SpecialHandlingResult specialHandling;
+  final bool vanguardEnabled;
+  final bool useRoth;
+  final double rothBalance;
   final String scheduledPickupDate;
   final String scheduledPickupWindow;
   final String scheduledDropoffDate;
   final String scheduledDropoffWindow;
   final VoidCallback onBack;
   final VoidCallback onPay;
+  final ValueChanged<bool?> onUseRoth;
 
   const _PaymentStep({
     super.key,
@@ -17840,12 +20916,16 @@ class _PaymentStep extends StatelessWidget {
     required this.weightSource,
     required this.pricingReason,
     required this.specialHandling,
+    required this.vanguardEnabled,
+    required this.useRoth,
+    required this.rothBalance,
     required this.scheduledPickupDate,
     required this.scheduledPickupWindow,
     required this.scheduledDropoffDate,
     required this.scheduledDropoffWindow,
     required this.onBack,
     required this.onPay,
+    required this.onUseRoth,
   });
 
   String _scheduleText(String date, String window) {
@@ -17862,6 +20942,8 @@ class _PaymentStep extends StatelessWidget {
         scheduledDropoffDate.isNotEmpty ||
         scheduledDropoffWindow.isNotEmpty;
     final processingPayment = checkoutState == _CheckoutState.processingPayment;
+    final rothApplied = useRoth ? math.min(rothBalance, total) : 0.0;
+    final stripeAmount = math.max(total - rothApplied, 0.0);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -17962,7 +21044,6 @@ class _PaymentStep extends StatelessWidget {
                 colors: colors,
                 label: 'Service',
                 value: switch (speed) {
-                  'Economy' => 'Economy - lowest price',
                   'Express' => 'Express - priority matching',
                   _ => 'Standard - flexible pickup',
                 },
@@ -18037,6 +21118,12 @@ class _PaymentStep extends StatelessWidget {
                       : 'Special conditions',
                   value: '£${breakdown.specialConditions.toStringAsFixed(2)}',
                 ),
+              if (vanguardEnabled)
+                _PriceLine(
+                  colors: colors,
+                  label: 'Vanguard',
+                  value: '£${_webVanguardAddOnPriceGbp.toStringAsFixed(2)}',
+                ),
               Divider(color: colors.border, height: 26),
               _PriceLine(
                 colors: colors,
@@ -18053,21 +21140,75 @@ class _PaymentStep extends StatelessWidget {
                 ),
                 child: Row(
                   children: [
-                    Icon(Icons.credit_card, color: colors.text),
+                    Icon(Icons.lock_outline, color: colors.text),
                     const SizedBox(width: 12),
                     Expanded(
                       child: Text(
-                        'Visa ending 4242',
+                        'Secure Stripe Checkout',
                         style: TextStyle(
                           color: colors.text,
                           fontWeight: FontWeight.w800,
                         ),
                       ),
                     ),
-                    Icon(Icons.check_circle, color: colors.success),
+                    Text(
+                      'Card or Apple Pay',
+                      style: TextStyle(
+                        color: colors.mutedText,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
                   ],
                 ),
               ),
+              if (rothBalance > 0) ...[
+                const SizedBox(height: 12),
+                Container(
+                  padding: const EdgeInsets.all(14),
+                  decoration: BoxDecoration(
+                    color: colors.field.withValues(alpha: 0.62),
+                    borderRadius: BorderRadius.circular(16),
+                    border: Border.all(color: colors.border),
+                  ),
+                  child: Row(
+                    children: [
+                      Icon(
+                        Icons.account_balance_wallet_outlined,
+                        color: colors.mutedText,
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'Apply Roth balance',
+                              style: TextStyle(
+                                color: colors.text,
+                                fontWeight: FontWeight.w800,
+                              ),
+                            ),
+                            const SizedBox(height: 4),
+                            Text(
+                              useRoth
+                                  ? 'Store credit covers £${rothApplied.toStringAsFixed(2)}. Stripe collects £${stripeAmount.toStringAsFixed(2)} if anything remains.'
+                                  : 'Store credit available: £${rothBalance.toStringAsFixed(2)}.',
+                              style: TextStyle(
+                                color: colors.mutedText,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      Switch.adaptive(
+                        value: useRoth,
+                        onChanged: processingPayment ? null : onUseRoth,
+                      ),
+                    ],
+                  ),
+                ),
+              ],
             ],
           ),
         ),
@@ -18092,7 +21233,9 @@ class _PaymentStep extends StatelessWidget {
                   : !locationsConfirmed
                       ? 'Confirm pickup and drop-off before payment'
                       : weightConfirmed
-                          ? 'Pay £${total.toStringAsFixed(2)} & Broadcast'
+                          ? stripeAmount > 0
+                              ? 'Pay £${stripeAmount.toStringAsFixed(2)} & Broadcast'
+                              : 'Confirm & Broadcast'
                           : 'Confirm parcel weight before payment',
             ),
             style: FilledButton.styleFrom(
@@ -18201,53 +21344,21 @@ class _TrackingStep extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final analysedItemName = irisItemName?.trim();
+    final status = _trackingStatuses[
+        statusIndex.clamp(0, _trackingStatuses.length - 1).toInt()];
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Row(
-          children: [
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    'Delivery Status',
-                    style: TextStyle(
-                      color: colors.text,
-                      fontSize: 28,
-                      fontWeight: FontWeight.w900,
-                    ),
-                  ),
-                  Text(
-                    orderId,
-                    style: TextStyle(
-                      color: colors.mutedText,
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
-                  Text(
-                    _jobReceivedTextFromDate(receivedAt),
-                    style: TextStyle(
-                      color: colors.mutedText,
-                      fontWeight: FontWeight.w800,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            IconButton(
-              tooltip: 'New order',
-              onPressed: onNewOrder,
-              icon: Icon(Icons.add_circle_outline, color: colors.text),
-            ),
-          ],
+        _WebDeliveryStatusHeader(
+          colors: colors,
+          trackingReference: orderId,
+          onNewOrder: onNewOrder,
         ),
         const SizedBox(height: 14),
-        _FirebaseStatusBanner(
+        _WebDeliveryStatusCard(
           colors: colors,
-          online: firebaseOnline,
-          error: firebaseError,
-          checkoutState: checkoutState,
+          title: status.title,
+          body: status.body,
         ),
         if (vanguardData?['vanguardEnabled'] == true) ...[
           const SizedBox(height: 14),
@@ -18291,7 +21402,19 @@ class _TrackingStep extends StatelessWidget {
           ),
         ],
         const SizedBox(height: 14),
-        _RouteSummary(colors: colors, pickup: pickup, dropoff: dropoff),
+        _WebDeliveryRouteCard(
+          colors: colors,
+          pickup: pickup.isEmpty ? 'Not yet entered' : pickup,
+          dropoff: dropoff.isEmpty ? 'Not yet entered' : dropoff,
+        ),
+        const SizedBox(height: 14),
+        _WebDeliveryPriceCard(
+          colors: colors,
+          breakdown: breakdown,
+          weightKg: irisWeightKg,
+          vehicleName: vehicle.name,
+          tipAmount: selectedTipAmount,
+        ),
         if (statusIndex >= 3 && analysedItemName?.isNotEmpty == true) ...[
           const SizedBox(height: 14),
           _IrisDeliveryAnalysisCard(
@@ -18309,20 +21432,25 @@ class _TrackingStep extends StatelessWidget {
         ],
         if (statusIndex >= 3) ...[
           const SizedBox(height: 14),
-          _CompletedPriceSummary(
-            colors: colors,
-            breakdown: breakdown,
-            weightKg: irisWeightKg,
-            vehicleName: vehicle.name,
-            tipAmount: selectedTipAmount,
-          ),
-          const SizedBox(height: 14),
           _CompletedDeliveryActions(
             colors: colors,
             onBookAgain: onNewOrder,
             onViewHistory: onViewHistory,
           ),
         ],
+        const SizedBox(height: 14),
+        _FirebaseStatusBanner(
+          colors: colors,
+          online: firebaseOnline,
+          error: firebaseError,
+          checkoutState: checkoutState,
+        ),
+        const SizedBox(height: 14),
+        _WebDeliveryInfoBanner(
+          text: checkoutState == _CheckoutState.riderAssigned
+              ? 'Tracking is live. You can message your Circum Rider or contact Circum support from here.'
+              : 'Estimated rider availability: usually within 8-12 minutes in this area.',
+        ),
         const SizedBox(height: 14),
         SizedBox(
           width: double.infinity,
@@ -18343,6 +21471,424 @@ class _TrackingStep extends StatelessWidget {
       ],
     );
   }
+}
+
+class _WebDeliveryStatusHeader extends StatelessWidget {
+  final _CircumColors colors;
+  final String trackingReference;
+  final VoidCallback onNewOrder;
+
+  const _WebDeliveryStatusHeader({
+    required this.colors,
+    required this.trackingReference,
+    required this.onNewOrder,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.end,
+      children: [
+        Expanded(
+          child: Text(
+            'Delivery status',
+            style: TextStyle(
+              color: colors.text,
+              fontFamily: 'DM Serif Display',
+              fontSize: 30,
+              height: 1.15,
+              fontWeight: FontWeight.w400,
+            ),
+          ),
+        ),
+        Text(
+          _displayDeliveryReference(trackingReference),
+          style: TextStyle(
+            color: colors.mutedText,
+            fontFamily: 'JetBrains Mono',
+            fontSize: 12,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+        const SizedBox(width: 8),
+        Tooltip(
+          message: 'New delivery',
+          child: IconButton(
+            onPressed: onNewOrder,
+            icon: Icon(Icons.add_circle_outline, color: colors.mutedText),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _WebDeliveryStatusCard extends StatelessWidget {
+  final _CircumColors colors;
+  final String title;
+  final String body;
+
+  const _WebDeliveryStatusCard({
+    required this.colors,
+    required this.title,
+    required this.body,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return _WebDeliveryPanel(
+      child: Row(
+        children: [
+          Container(
+            width: 44,
+            height: 44,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              color: const Color(0xff3b82f6).withValues(alpha: 0.14),
+              border: Border.all(
+                color: const Color(0xff3b82f6).withValues(alpha: 0.40),
+              ),
+            ),
+            child: Center(
+              child: Container(
+                width: 9,
+                height: 9,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: const Color(0xff60a5fa),
+                  boxShadow: [
+                    BoxShadow(
+                      color: const Color(0xff60a5fa).withValues(alpha: 0.55),
+                      blurRadius: 12,
+                      spreadRadius: 4,
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+          const SizedBox(width: 16),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  title,
+                  style: const TextStyle(
+                    color: Color(0xfff5f7fb),
+                    fontSize: 17,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                const SizedBox(height: 3),
+                Text(
+                  body,
+                  style: const TextStyle(
+                    color: Color(0xff9ca3af),
+                    fontSize: 13,
+                    height: 1.35,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _WebDeliveryRouteCard extends StatelessWidget {
+  final _CircumColors colors;
+  final String pickup;
+  final String dropoff;
+
+  const _WebDeliveryRouteCard({
+    required this.colors,
+    required this.pickup,
+    required this.dropoff,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return _WebDeliveryPanel(
+      child: Column(
+        children: [
+          _WebDeliveryRouteRow(
+            label: 'Pickup',
+            value: pickup,
+            accent: const Color(0xff60a5fa),
+          ),
+          Padding(
+            padding: const EdgeInsets.symmetric(vertical: 18),
+            child: Divider(
+              height: 1,
+              color: Colors.white.withValues(alpha: 0.08),
+            ),
+          ),
+          _WebDeliveryRouteRow(
+            label: 'Drop-off',
+            value: dropoff,
+            accent: const Color(0xff22c55e),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _WebDeliveryRouteRow extends StatelessWidget {
+  final String label;
+  final String value;
+  final Color accent;
+
+  const _WebDeliveryRouteRow({
+    required this.label,
+    required this.value,
+    required this.accent,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final pending = value == 'Not yet entered';
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Container(
+          width: 11,
+          height: 11,
+          margin: const EdgeInsets.only(top: 5),
+          decoration: BoxDecoration(
+            shape: BoxShape.circle,
+            color: accent,
+            boxShadow: [
+              BoxShadow(color: accent.withValues(alpha: 0.18), spreadRadius: 3),
+            ],
+          ),
+        ),
+        const SizedBox(width: 14),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                label.toUpperCase(),
+                style: const TextStyle(
+                  color: Color(0xff9ca3af),
+                  fontFamily: 'JetBrains Mono',
+                  fontSize: 10.5,
+                  fontWeight: FontWeight.w600,
+                  letterSpacing: 1.1,
+                ),
+              ),
+              const SizedBox(height: 3),
+              Text(
+                value,
+                style: TextStyle(
+                  color: pending
+                      ? const Color(0xff9ca3af)
+                      : const Color(0xfff5f7fb),
+                  fontSize: 15,
+                  height: 1.35,
+                  fontWeight: pending ? FontWeight.w400 : FontWeight.w600,
+                  fontStyle: pending ? FontStyle.italic : FontStyle.normal,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _WebDeliveryPriceCard extends StatelessWidget {
+  final _CircumColors colors;
+  final DeliveryPricingBreakdown breakdown;
+  final double weightKg;
+  final String vehicleName;
+  final double tipAmount;
+
+  const _WebDeliveryPriceCard({
+    required this.colors,
+    required this.breakdown,
+    required this.weightKg,
+    required this.vehicleName,
+    required this.tipAmount,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return _WebDeliveryPanel(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            'Price breakdown',
+            style: TextStyle(
+              color: Color(0xfff5f7fb),
+              fontSize: 16,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+          const SizedBox(height: 16),
+          _WebDeliveryPriceLine(
+            label: 'Base fare',
+            value: '£${breakdown.baseFare.toStringAsFixed(2)}',
+          ),
+          _WebDeliveryPriceLine(
+            label: 'Distance fare',
+            value: '£${breakdown.distanceFare.toStringAsFixed(2)}',
+          ),
+          _WebDeliveryPriceLine(
+            label:
+                '${breakdown.weightCategory} (${_webDeliveryFormatWeight(weightKg)} kg)',
+            value: '£${breakdown.weightSurcharge.toStringAsFixed(2)}',
+          ),
+          _WebDeliveryPriceLine(
+            label: '$vehicleName vehicle',
+            value: '£${breakdown.vehicleSurcharge.toStringAsFixed(2)}',
+          ),
+          if (breakdown.heavyHandlingSurcharge > 0)
+            _WebDeliveryPriceLine(
+              label: 'Heavy handling',
+              value: '£${breakdown.heavyHandlingSurcharge.toStringAsFixed(2)}',
+            ),
+          if (breakdown.specialConditions > 0)
+            _WebDeliveryPriceLine(
+              label: 'Special conditions',
+              value: '£${breakdown.specialConditions.toStringAsFixed(2)}',
+            ),
+          if (tipAmount > 0)
+            _WebDeliveryPriceLine(
+              label: 'Circum Rider tip',
+              value: '£${tipAmount.toStringAsFixed(2)}',
+            ),
+          Padding(
+            padding: const EdgeInsets.only(top: 8, bottom: 7),
+            child: Divider(color: Colors.white.withValues(alpha: 0.10)),
+          ),
+          _WebDeliveryPriceLine(
+            label: 'Total',
+            value: '£${(breakdown.total + tipAmount).toStringAsFixed(2)}',
+            strong: true,
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _WebDeliveryPriceLine extends StatelessWidget {
+  final String label;
+  final String value;
+  final bool strong;
+
+  const _WebDeliveryPriceLine({
+    required this.label,
+    required this.value,
+    this.strong = false,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: EdgeInsets.symmetric(vertical: strong ? 3 : 7),
+      child: Row(
+        children: [
+          Expanded(
+            child: Text(
+              label,
+              style: TextStyle(
+                color:
+                    strong ? const Color(0xfff5f7fb) : const Color(0xff9ca3af),
+                fontSize: strong ? 16 : 13.5,
+                fontWeight: strong ? FontWeight.w700 : FontWeight.w500,
+              ),
+            ),
+          ),
+          Text(
+            value,
+            style: TextStyle(
+              color: strong ? const Color(0xfff5f7fb) : const Color(0xff9ca3af),
+              fontFamily: 'JetBrains Mono',
+              fontSize: strong ? 16 : 13.5,
+              fontWeight: strong ? FontWeight.w700 : FontWeight.w500,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _WebDeliveryInfoBanner extends StatelessWidget {
+  final String text;
+
+  const _WebDeliveryInfoBanner({required this.text});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      decoration: BoxDecoration(
+        color: const Color(0xff3b82f6).withValues(alpha: 0.08),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(
+          color: const Color(0xff3b82f6).withValues(alpha: 0.25),
+        ),
+      ),
+      child: Row(
+        children: [
+          const Icon(
+            Icons.info_outline_rounded,
+            color: Color(0xff60a5fa),
+            size: 18,
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(
+              text,
+              style: const TextStyle(
+                color: Color(0xff60a5fa),
+                fontSize: 13,
+                height: 1.35,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _WebDeliveryPanel extends StatelessWidget {
+  final Widget child;
+
+  const _WebDeliveryPanel({required this.child});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 22),
+      decoration: BoxDecoration(
+        color: const Color(0xfff5f7fb).withValues(alpha: 0.055),
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.13)),
+      ),
+      child: child,
+    );
+  }
+}
+
+String _webDeliveryFormatWeight(double weightKg) {
+  return weightKg.truncateToDouble() == weightKg
+      ? weightKg.toStringAsFixed(0)
+      : weightKg.toStringAsFixed(1);
 }
 
 class _LiveDeliveryTrackingPanel extends StatelessWidget {
@@ -18387,7 +21933,7 @@ class _LiveDeliveryTrackingPanel extends StatelessWidget {
                 const SizedBox(width: 10),
                 Expanded(
                   child: Text(
-                    'Tracking temporarily unavailable',
+                    'Waiting for live Circum Rider location',
                     style: TextStyle(
                       color: colors.text,
                       fontSize: 18,
@@ -18440,7 +21986,7 @@ class _LiveDeliveryTrackingPanel extends StatelessWidget {
               const SizedBox(width: 10),
               Expanded(
                 child: Text(
-                  'Live rider location',
+                  'Live Circum Rider location',
                   style: TextStyle(
                     color: colors.text,
                     fontSize: 18,
@@ -18563,7 +22109,8 @@ class _FirebaseStatusBanner extends StatelessWidget {
       _CheckoutState.bookingCreated =>
         'Booking created. Preparing rider search.',
       _CheckoutState.matchingRiders => 'Connecting this delivery...',
-      _CheckoutState.riderAssigned => 'Rider assigned. Tracking is live.',
+      _CheckoutState.riderAssigned =>
+        'Circum Rider assigned. Tracking is live.',
       _CheckoutState.failed => error ?? 'This delivery could not be started.',
       _ => error ?? 'Estimated rider availability',
     };
@@ -18766,7 +22313,7 @@ class _ChatSheet extends StatelessWidget {
     final desktop = MediaQuery.sizeOf(context).width >= 720;
     return Positioned.fill(
       child: Material(
-        color: Colors.black.withOpacity(0.45),
+        color: Colors.black.withValues(alpha: 0.45),
         child: Align(
           alignment: desktop ? Alignment.centerRight : Alignment.bottomCenter,
           child: Container(
@@ -19027,8 +22574,8 @@ class _MapPainter extends CustomPainter {
 
     final grid = Paint()
       ..color = colors.dark
-          ? Colors.white.withOpacity(0.04)
-          : Colors.black.withOpacity(0.04)
+          ? Colors.white.withValues(alpha: 0.04)
+          : Colors.black.withValues(alpha: 0.04)
       ..strokeWidth = 1;
     for (double x = 30; x < size.width; x += 52) {
       canvas.drawLine(Offset(x, 0), Offset(x - 40, size.height), grid);
@@ -19056,7 +22603,7 @@ class _MapPin extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
       decoration: BoxDecoration(
-        color: colors.panel.withOpacity(0.92),
+        color: colors.panel.withValues(alpha: 0.92),
         borderRadius: BorderRadius.circular(999),
         border: Border.all(color: colors.border),
       ),
@@ -19135,12 +22682,18 @@ class _AddressFieldState extends State<_AddressField> {
   List<_AddressSuggestion> _initialPopularSuggestions() {
     final places = widget.pharmacyMode
         ? _circumPopularPlaces.where(
-            (place) => const {'hospital', 'pharmacy', 'nhs facility'}
-                .contains(place.category),
+            (place) => const {
+              'hospital',
+              'pharmacy',
+              'nhs facility',
+            }.contains(place.category),
           )
         : _circumPopularPlaces.where(
-            (place) => const {'station', 'airport', 'landmark'}
-                .contains(place.category),
+            (place) => const {
+              'station',
+              'airport',
+              'landmark',
+            }.contains(place.category),
           );
     return places
         .take(4)
@@ -20004,6 +23557,17 @@ String _normalizePlaceQuery(String value) {
       .trim();
 }
 
+String? _cityFromAddress(String value) {
+  final parts = value
+      .split(',')
+      .map((part) => part.trim())
+      .where((part) => part.isNotEmpty)
+      .toList();
+  if (parts.length >= 3) return parts[parts.length - 2];
+  if (parts.length >= 2) return parts.last;
+  return null;
+}
+
 bool _sameSuggestionText(String left, String right) {
   return _normalizePlaceQuery(left) == _normalizePlaceQuery(right);
 }
@@ -20280,7 +23844,7 @@ class _DeliveryTimingCard extends StatelessWidget {
           padding: const EdgeInsets.all(15),
           decoration: BoxDecoration(
             color: selected
-                ? const Color(0xff2563eb).withOpacity(0.16)
+                ? const Color(0xff2563eb).withValues(alpha: 0.16)
                 : colors.field,
             borderRadius: BorderRadius.circular(18),
             border: Border.all(
@@ -20617,7 +24181,7 @@ class _IrisTag extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 6),
       decoration: BoxDecoration(
-        color: const Color(0xff2563eb).withOpacity(0.12),
+        color: const Color(0xff2563eb).withValues(alpha: 0.12),
         borderRadius: BorderRadius.circular(999),
       ),
       child: const Text(
@@ -20748,7 +24312,7 @@ class _VehicleTile extends StatelessWidget {
     final enabled = disabledReason == null;
     final surcharge = DeliveryPricing.calculateVehicleSurcharge(vehicle.name);
     final priceLabel = switch (vehicle.name) {
-      'Bike' => 'No surcharge',
+      'Motorbike' => 'No surcharge',
       'Car' => surcharge == 0
           ? 'Standard vehicle'
           : 'Standard vehicle · +£${surcharge.toStringAsFixed(2)}',
@@ -20792,7 +24356,7 @@ class _VehicleTile extends StatelessWidget {
                     disabledReason ?? vehicle.caption,
                     style: TextStyle(
                       color: selected
-                          ? colors.inverseText.withOpacity(0.72)
+                          ? colors.inverseText.withValues(alpha: 0.72)
                           : colors.mutedText,
                       fontSize: 12,
                       fontWeight: FontWeight.w600,
@@ -20815,7 +24379,7 @@ class _VehicleTile extends StatelessWidget {
                   priceLabel,
                   style: TextStyle(
                     color: selected
-                        ? colors.inverseText.withOpacity(0.72)
+                        ? colors.inverseText.withValues(alpha: 0.72)
                         : colors.mutedText,
                     fontSize: 12,
                     fontWeight: FontWeight.w700,
@@ -20844,15 +24408,13 @@ class _SpeedToggle extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     const serviceCopy = {
-      'Economy':
-          'Cheapest option. Slower matching. Best when the parcel is not urgent.',
       'Standard':
           'Balanced price. Normal rider broadcast. Best for everyday deliveries.',
       'Express':
           'Priority matching. Faster pickup. Best for urgent deliveries.',
     };
     return Column(
-      children: ['Economy', 'Standard', 'Express'].map((speed) {
+      children: ['Standard', 'Express'].map((speed) {
         final active = selected == speed;
         return Padding(
           padding: const EdgeInsets.only(bottom: 10),
@@ -20892,7 +24454,7 @@ class _SpeedToggle extends StatelessWidget {
                           serviceCopy[speed]!,
                           style: TextStyle(
                             color: active
-                                ? colors.inverseText.withOpacity(0.76)
+                                ? colors.inverseText.withValues(alpha: 0.76)
                                 : colors.mutedText,
                             fontWeight: FontWeight.w700,
                             height: 1.25,
@@ -21008,7 +24570,7 @@ class _BroadcastCard extends StatelessWidget {
                 width: 72,
                 height: 72,
                 decoration: BoxDecoration(
-                  color: const Color(0xff2563eb).withOpacity(0.14),
+                  color: const Color(0xff2563eb).withValues(alpha: 0.14),
                   shape: BoxShape.circle,
                 ),
               ),
@@ -21065,7 +24627,7 @@ class _DriverCard extends StatelessWidget {
               'fullName': 'Marcus A.',
               'vehicleType': vehicle.name,
               'vehicleMakeModel':
-                  vehicle.name == 'Bike' ? 'E-bike' : 'Toyota Prius',
+                  vehicle.name == 'Motorbike' ? 'Honda PCX' : 'Toyota Prius',
               'vehicleColour': 'Blue',
               'plateNumber': 'CIR 24K',
               'verificationStatus': 'verified',
@@ -21358,7 +24920,7 @@ class _DriverRatingPrompt extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final name = driver?.fullName ?? 'your rider';
+    final name = driver?.fullName ?? 'your Circum Rider';
     return _GlassPanel(
       colors: colors,
       child: Column(
@@ -21523,11 +25085,7 @@ class _IrisDeliveryAnalysisCard extends StatelessWidget {
           _SectionTitle(colors: colors, title: 'IRIS Delivery Analysis'),
           const SizedBox(height: 10),
           _AnalysisLine(colors: colors, label: 'Item', value: itemName),
-          _AnalysisLine(
-            colors: colors,
-            label: 'Quantity',
-            value: '$quantity',
-          ),
+          _AnalysisLine(colors: colors, label: 'Quantity', value: '$quantity'),
           _AnalysisLine(
             colors: colors,
             label: 'Pricing weight',
@@ -21612,85 +25170,6 @@ class _AnalysisLine extends StatelessWidget {
                 ],
               ),
             ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _CompletedPriceSummary extends StatelessWidget {
-  final _CircumColors colors;
-  final DeliveryPricingBreakdown breakdown;
-  final double weightKg;
-  final String vehicleName;
-  final double tipAmount;
-
-  const _CompletedPriceSummary({
-    required this.colors,
-    required this.breakdown,
-    required this.weightKg,
-    required this.vehicleName,
-    required this.tipAmount,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final totalCharged = breakdown.total + tipAmount;
-    return _GlassPanel(
-      colors: colors,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          _SectionTitle(colors: colors, title: 'Price breakdown'),
-          const SizedBox(height: 10),
-          _PriceLine(
-            colors: colors,
-            label: 'Base fare',
-            value: '£${breakdown.baseFare.toStringAsFixed(2)}',
-          ),
-          if (breakdown.distanceFare > 0)
-            _PriceLine(
-              colors: colors,
-              label: 'Distance fare',
-              value: '£${breakdown.distanceFare.toStringAsFixed(2)}',
-            ),
-          _PriceLine(
-            colors: colors,
-            label:
-                '${breakdown.weightCategory} (${_IrisDeliveryAnalysisCard._formatDisplayWeight(weightKg)})',
-            value: '£${breakdown.weightSurcharge.toStringAsFixed(2)}',
-          ),
-          if (breakdown.vehicleSurcharge > 0)
-            _PriceLine(
-              colors: colors,
-              label: '$vehicleName vehicle',
-              value: '£${breakdown.vehicleSurcharge.toStringAsFixed(2)}',
-            ),
-          if (breakdown.heavyHandlingSurcharge > 0)
-            _PriceLine(
-              colors: colors,
-              label: 'Heavy Handling Surcharge',
-              value: '£${breakdown.heavyHandlingSurcharge.toStringAsFixed(2)}',
-            ),
-          if (breakdown.specialConditions > 0)
-            _PriceLine(
-              colors: colors,
-              label: 'Surcharge',
-              value: '£${breakdown.specialConditions.toStringAsFixed(2)}',
-            ),
-          if (tipAmount > 0)
-            _PriceLine(
-              colors: colors,
-              label: 'Tip',
-              value: '£${tipAmount.toStringAsFixed(2)}',
-            ),
-          Divider(color: colors.border, height: 24),
-          _PriceLine(
-            colors: colors,
-            label: 'Total charged',
-            value: '£${totalCharged.toStringAsFixed(2)}',
-            strong: true,
           ),
         ],
       ),
@@ -21826,82 +25305,28 @@ class _GlassPanel extends StatelessWidget {
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
           colors: [
-            colors.panel.withOpacity(colors.dark ? 0.92 : 0.96),
-            colors.adminAccent.withOpacity(colors.dark ? 0.10 : 0.06),
-            colors.panel.withOpacity(colors.dark ? 0.86 : 0.94),
+            colors.panel.withValues(alpha: colors.dark ? 0.92 : 0.96),
+            colors.adminAccent.withValues(alpha: colors.dark ? 0.10 : 0.06),
+            colors.panel.withValues(alpha: colors.dark ? 0.86 : 0.94),
           ],
         ),
         borderRadius: BorderRadius.circular(24),
-        border: Border.all(color: colors.adminAccent.withOpacity(0.18)),
+        border: Border.all(color: colors.adminAccent.withValues(alpha: 0.18)),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(colors.dark ? 0.18 : 0.05),
+            color: Colors.black.withValues(alpha: colors.dark ? 0.18 : 0.05),
             blurRadius: 18,
             offset: const Offset(0, 8),
           ),
           BoxShadow(
-            color: colors.adminGlow.withOpacity(colors.dark ? 0.12 : 0.08),
+            color:
+                colors.adminGlow.withValues(alpha: colors.dark ? 0.12 : 0.08),
             blurRadius: 24,
             offset: const Offset(0, 12),
           ),
         ],
       ),
       child: child,
-    );
-  }
-}
-
-class _FeatureCard extends StatelessWidget {
-  final _CircumColors colors;
-  final IconData icon;
-  final Color tint;
-  final String title;
-  final String body;
-
-  const _FeatureCard({
-    required this.colors,
-    required this.icon,
-    required this.tint,
-    required this.title,
-    required this.body,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return _GlassPanel(
-      colors: colors,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Container(
-            width: 54,
-            height: 54,
-            decoration: BoxDecoration(
-              color: tint,
-              borderRadius: BorderRadius.circular(18),
-            ),
-            child: Icon(icon, color: const Color(0xff2563eb)),
-          ),
-          const SizedBox(height: 18),
-          Text(
-            title,
-            style: TextStyle(
-              color: colors.text,
-              fontSize: 22,
-              fontWeight: FontWeight.w900,
-            ),
-          ),
-          const SizedBox(height: 8),
-          Text(
-            body,
-            style: TextStyle(
-              color: colors.mutedText,
-              height: 1.45,
-              fontWeight: FontWeight.w600,
-            ),
-          ),
-        ],
-      ),
     );
   }
 }
@@ -21971,12 +25396,14 @@ class _LogoTile extends StatelessWidget {
 
 class _PillButton extends StatelessWidget {
   final String label;
+  final Uri uri;
   final IconData icon;
   final bool dark;
   final VoidCallback onPressed;
 
   const _PillButton({
     required this.label,
+    required this.uri,
     required this.icon,
     required this.dark,
     required this.onPressed,
@@ -21984,25 +25411,530 @@ class _PillButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return FilledButton.icon(
-      onPressed: onPressed,
-      icon: Icon(icon),
-      label: Text(label),
-      style: FilledButton.styleFrom(
-        backgroundColor: dark ? Colors.black : const Color(0xfff3f4f6),
-        foregroundColor: dark ? Colors.white : Colors.black,
-        shape: const StadiumBorder(),
-        padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 18),
-        textStyle: const TextStyle(fontSize: 17, fontWeight: FontWeight.w900),
+    return Link(
+      uri: uri,
+      target: LinkTarget.self,
+      builder: (context, followLink) {
+        return FilledButton.icon(
+          onPressed: followLink ?? onPressed,
+          icon: Icon(icon),
+          label: Text(label),
+          style: FilledButton.styleFrom(
+            backgroundColor: dark ? Colors.black : const Color(0xfff3f4f6),
+            foregroundColor: dark ? Colors.white : Colors.black,
+            shape: const StadiumBorder(),
+            padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 18),
+            textStyle: const TextStyle(
+              fontSize: 17,
+              fontWeight: FontWeight.w900,
+            ),
+          ),
+        );
+      },
+    );
+  }
+}
+
+class _VanguardLandingPage extends StatelessWidget {
+  final _CircumColors colors;
+  final VoidCallback onBack;
+
+  const _VanguardLandingPage({
+    super.key,
+    required this.colors,
+    required this.onBack,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final narrow = MediaQuery.sizeOf(context).width < 760;
+    return Scaffold(
+      backgroundColor: const Color(0xff030812),
+      body: SafeArea(
+        child: Stack(
+          children: [
+            Positioned.fill(
+              child: DecoratedBox(
+                decoration: BoxDecoration(
+                  gradient: RadialGradient(
+                    center: const Alignment(0, -0.78),
+                    radius: 1.08,
+                    colors: [
+                      const Color(0xff0b3764).withValues(alpha: 0.74),
+                      const Color(0xff07192f).withValues(alpha: 0.93),
+                      const Color(0xff030812),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+            ListView(
+              padding: EdgeInsets.fromLTRB(
+                narrow ? 22 : 40,
+                narrow ? 42 : 30,
+                narrow ? 22 : 40,
+                72,
+              ),
+              children: [
+                Row(
+                  children: [
+                    if (!narrow) ...[
+                      IconButton(
+                        tooltip: 'Back',
+                        onPressed: onBack,
+                        icon: const Icon(Icons.arrow_back, color: Colors.white),
+                      ),
+                      const SizedBox(width: 6),
+                    ],
+                    Image.asset(
+                      'assets/images/circum_wordmark.png',
+                      width: narrow ? 142 : 154,
+                      errorBuilder: (context, error, stackTrace) => const Text(
+                        'CIRCUM',
+                        style: TextStyle(
+                          color: Color(0xff0a84ff),
+                          fontWeight: FontWeight.w900,
+                          letterSpacing: 3,
+                          fontSize: 24,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                SizedBox(height: narrow ? 118 : 64),
+                Center(
+                  child: ConstrainedBox(
+                    constraints: const BoxConstraints(maxWidth: 860),
+                    child: Column(
+                      children: [
+                        const _VanguardShieldFallback(size: 148),
+                        const SizedBox(height: 54),
+                        Text(
+                          'Vanguard',
+                          textAlign: TextAlign.center,
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontFamily: 'Georgia',
+                            fontSize: narrow ? 68 : 88,
+                            height: 0.96,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                        const SizedBox(height: 24),
+                        Text(
+                          'Vanguard gives your delivery enhanced\nhandling, priority support, trusted Circum Rider\nprioritisation, and stronger custody tracking\nfor important items.',
+                          textAlign: TextAlign.center,
+                          style: TextStyle(
+                            color: Colors.white.withValues(alpha: 0.73),
+                            fontSize: narrow ? 26 : 30,
+                            height: 1.55,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                        const SizedBox(height: 22),
+                        Text(
+                          'Optional add-on at checkout — £1.99',
+                          textAlign: TextAlign.center,
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontSize: narrow ? 20 : 23,
+                            fontWeight: FontWeight.w900,
+                          ),
+                        ),
+                        SizedBox(height: narrow ? 88 : 78),
+                        Text(
+                          'Vanguard exists for\ndeliveries where trust\nmatters more than speed.',
+                          textAlign: TextAlign.center,
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontFamily: 'Georgia',
+                            fontSize: narrow ? 45 : 62,
+                            height: 1.18,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                        const SizedBox(height: 46),
+                        _VanguardFeatureCard(
+                          icon: Icons.verified_user_outlined,
+                          title: 'Trusted Rider Prioritisation',
+                          body:
+                              'Circum prioritises experienced and highly trusted Circum Riders during assignment. Customers do not choose Circum Riders.',
+                        ),
+                        const SizedBox(height: 24),
+                        _VanguardFeatureCard(
+                          icon: Icons.support_agent,
+                          title: 'Priority support',
+                          body:
+                              'Vanguard deliveries receive priority support and dispute review.',
+                        ),
+                        const SizedBox(height: 24),
+                        _VanguardFeatureCard(
+                          icon: Icons.timeline_outlined,
+                          title: 'Enhanced custody tracking',
+                          body:
+                              'Clearer delivery milestones create stronger visibility from assignment to delivery.',
+                        ),
+                        const SizedBox(height: 40),
+                        const _VanguardTimelineCard(),
+                        const SizedBox(height: 40),
+                        const _VanguardChecklistCard(
+                          title: 'When to use it',
+                          items: [
+                            'Gifts and keepsakes',
+                            'Signed documents',
+                            'Passports and travel documents',
+                            'Electronics and valuable items',
+                            'Fragile items',
+                            'Sentimental items',
+                          ],
+                        ),
+                        const SizedBox(height: 32),
+                        const _VanguardChecklistCard(
+                          title: 'What £1.99 adds',
+                          items: [
+                            'Trusted Rider Prioritisation',
+                            'Priority support',
+                            'Enhanced custody tracking',
+                            'Priority dispute review',
+                            'Better handling for important items',
+                          ],
+                        ),
+                        const SizedBox(height: 32),
+                        const _VanguardImportantCard(),
+                      ],
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
       ),
     );
   }
 }
 
+class _VanguardShieldFallback extends StatelessWidget {
+  final double size;
+
+  const _VanguardShieldFallback({this.size = 170});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: size,
+      height: size,
+      decoration: BoxDecoration(
+        shape: BoxShape.circle,
+        gradient: RadialGradient(
+          colors: [
+            const Color(0xff1e88ff).withValues(alpha: 0.22),
+            const Color(0xff1e3a8a).withValues(alpha: 0.12),
+            const Color(0xff0a84ff).withValues(alpha: 0.03),
+          ],
+        ),
+        border: Border.all(
+          color: const Color(0xff0a84ff).withValues(alpha: 0.5),
+          width: 1.4,
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: const Color(0xff0a84ff).withValues(alpha: 0.13),
+            blurRadius: 48,
+          ),
+        ],
+      ),
+      child: Center(
+        child: Icon(
+          Icons.shield_outlined,
+          size: size * 0.48,
+          color: const Color(0xff0a84ff),
+        ),
+      ),
+    );
+  }
+}
+
+class _VanguardFeatureCard extends StatelessWidget {
+  final IconData icon;
+  final String title;
+  final String body;
+
+  const _VanguardFeatureCard({
+    required this.icon,
+    required this.title,
+    required this.body,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final narrow = MediaQuery.sizeOf(context).width < 760;
+    return Container(
+      width: double.infinity,
+      constraints: BoxConstraints(minHeight: narrow ? 216 : 190),
+      padding: EdgeInsets.all(narrow ? 30 : 34),
+      decoration: _vanguardCardDecoration(),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(icon, color: const Color(0xff0a84ff), size: 34),
+          const SizedBox(height: 28),
+          Text(
+            title,
+            style: TextStyle(
+              color: Colors.white,
+              fontSize: narrow ? 26 : 30,
+              height: 1.14,
+              fontWeight: FontWeight.w900,
+            ),
+          ),
+          const SizedBox(height: 18),
+          Text(
+            body,
+            style: TextStyle(
+              color: Colors.white.withValues(alpha: 0.68),
+              fontSize: narrow ? 21 : 24,
+              height: 1.42,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _VanguardTimelineCard extends StatelessWidget {
+  const _VanguardTimelineCard();
+
+  @override
+  Widget build(BuildContext context) {
+    final narrow = MediaQuery.sizeOf(context).width < 760;
+    const steps = [
+      'Circum Rider assigned',
+      'Item collected',
+      'In transit',
+      'Delivery attempt',
+      'Delivered',
+    ];
+    return Container(
+      width: double.infinity,
+      padding: EdgeInsets.fromLTRB(
+        narrow ? 34 : 42,
+        narrow ? 44 : 48,
+        narrow ? 34 : 42,
+        narrow ? 44 : 48,
+      ),
+      decoration: _vanguardCardDecoration(darker: true),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Custody preview',
+            style: TextStyle(
+              color: Colors.white,
+              fontFamily: 'Georgia',
+              fontSize: narrow ? 42 : 52,
+              height: 1.02,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+          const SizedBox(height: 34),
+          ...List.generate(steps.length, (index) {
+            final last = index == steps.length - 1;
+            return Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Column(
+                  children: [
+                    Container(
+                      width: 28,
+                      height: 28,
+                      decoration: const BoxDecoration(
+                        shape: BoxShape.circle,
+                        color: Color(0xff0a84ff),
+                      ),
+                    ),
+                    if (!last)
+                      Container(
+                        width: 2,
+                        height: 48,
+                        color: const Color(0xff475569).withValues(alpha: 0.5),
+                      ),
+                  ],
+                ),
+                const SizedBox(width: 24),
+                Padding(
+                  padding: const EdgeInsets.only(top: 1),
+                  child: Text(
+                    steps[index],
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontSize: narrow ? 22 : 26,
+                      fontWeight: FontWeight.w900,
+                    ),
+                  ),
+                ),
+              ],
+            );
+          }),
+        ],
+      ),
+    );
+  }
+}
+
+class _VanguardChecklistCard extends StatelessWidget {
+  final String title;
+  final List<String> items;
+
+  const _VanguardChecklistCard({required this.title, required this.items});
+
+  @override
+  Widget build(BuildContext context) {
+    final narrow = MediaQuery.sizeOf(context).width < 760;
+    return Container(
+      width: double.infinity,
+      padding: EdgeInsets.fromLTRB(
+        narrow ? 34 : 42,
+        narrow ? 44 : 48,
+        narrow ? 34 : 42,
+        narrow ? 44 : 48,
+      ),
+      decoration: _vanguardCardDecoration(),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            title,
+            style: TextStyle(
+              color: Colors.white,
+              fontFamily: 'Georgia',
+              fontSize: narrow ? 42 : 52,
+              height: 1.04,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+          const SizedBox(height: 34),
+          ...items.map(
+            (item) => Padding(
+              padding: const EdgeInsets.only(bottom: 18),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Icon(
+                    Icons.check_circle_outline,
+                    color: Color(0xff0a84ff),
+                    size: 28,
+                  ),
+                  const SizedBox(width: 18),
+                  Expanded(
+                    child: Text(
+                      item,
+                      style: TextStyle(
+                        color: Colors.white.withValues(alpha: 0.74),
+                        fontSize: narrow ? 23 : 27,
+                        height: 1.18,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _VanguardImportantCard extends StatelessWidget {
+  const _VanguardImportantCard();
+
+  @override
+  Widget build(BuildContext context) {
+    final narrow = MediaQuery.sizeOf(context).width < 760;
+    return Container(
+      width: double.infinity,
+      padding: EdgeInsets.fromLTRB(
+        narrow ? 34 : 42,
+        narrow ? 44 : 48,
+        narrow ? 34 : 42,
+        narrow ? 44 : 48,
+      ),
+      decoration: _vanguardCardDecoration(darker: true),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Important',
+            style: TextStyle(
+              color: Colors.white,
+              fontFamily: 'Georgia',
+              fontSize: narrow ? 42 : 52,
+              height: 1.04,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+          const SizedBox(height: 28),
+          Text(
+            'Vanguard is not insurance. It does not provide reimbursement, financial cover, or guarantees.\n\nVanguard provides a higher standard of handling, visibility, verification, rider prioritisation, and support.',
+            style: TextStyle(
+              color: Colors.white.withValues(alpha: 0.72),
+              fontSize: narrow ? 22 : 27,
+              height: 1.45,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+BoxDecoration _vanguardCardDecoration({bool darker = false}) {
+  return BoxDecoration(
+    gradient: LinearGradient(
+      begin: Alignment.topLeft,
+      end: Alignment.bottomRight,
+      colors: [
+        Color(darker ? 0xff101722 : 0xff102845).withValues(alpha: 0.86),
+        Color(darker ? 0xff0b1019 : 0xff0b1a2c).withValues(alpha: 0.92),
+      ],
+    ),
+    borderRadius: BorderRadius.circular(28),
+    border: Border.all(
+      color: const Color(0xff5b7fa8).withValues(alpha: 0.34),
+      width: 1.4,
+    ),
+    boxShadow: [
+      BoxShadow(
+        color: const Color(0xff0a84ff).withValues(alpha: 0.08),
+        blurRadius: 34,
+        offset: const Offset(0, 18),
+      ),
+    ],
+  );
+}
+
 class _LandingFooter extends StatelessWidget {
   final _CircumColors colors;
+  final VoidCallback onDeliveries;
+  final VoidCallback onHealthPlus;
+  final VoidCallback? onGifts;
+  final VoidCallback onBusiness;
+  final VoidCallback onVanguard;
 
-  const _LandingFooter({required this.colors});
+  const _LandingFooter({
+    required this.colors,
+    required this.onDeliveries,
+    required this.onHealthPlus,
+    required this.onGifts,
+    required this.onBusiness,
+    required this.onVanguard,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -22016,33 +25948,126 @@ class _LandingFooter extends StatelessWidget {
       child: Center(
         child: ConstrainedBox(
           constraints: const BoxConstraints(maxWidth: 1180),
-          child: Wrap(
-            alignment: WrapAlignment.spaceBetween,
-            crossAxisAlignment: WrapCrossAlignment.center,
-            spacing: 24,
-            runSpacing: 18,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Image.asset(
-                'assets/images/circum_wordmark.png',
-                width: 118,
-                height: 28,
-                fit: BoxFit.contain,
+              Wrap(
+                alignment: WrapAlignment.spaceBetween,
+                crossAxisAlignment: WrapCrossAlignment.center,
+                spacing: 24,
+                runSpacing: 18,
+                children: [
+                  Image.asset(
+                    'assets/images/circum_wordmark.png',
+                    width: 118,
+                    height: 28,
+                    fit: BoxFit.contain,
+                  ),
+                  Wrap(
+                    spacing: 14,
+                    runSpacing: 8,
+                    children: [
+                      _FooterServiceLink(
+                        label: 'Privacy Policy',
+                        uri: _CircumWebsiteAppState._canonicalWebUri(
+                          '/privacy',
+                        ),
+                        onPressed: () {},
+                      ),
+                      _FooterServiceLink(
+                        label: 'Terms of Service',
+                        uri: _CircumWebsiteAppState._canonicalWebUri('/terms'),
+                        onPressed: () {},
+                      ),
+                    ],
+                  ),
+                  Text(
+                    '© ${DateTime.now().year} Circum Technologies Ltd.',
+                    style: TextStyle(color: colors.mutedText),
+                  ),
+                ],
               ),
+              const SizedBox(height: 22),
               Text(
-                'Privacy Policy   Terms of Service',
+                'Services',
                 style: TextStyle(
-                  color: colors.mutedText,
-                  fontWeight: FontWeight.w700,
+                  color: colors.text,
+                  fontWeight: FontWeight.w900,
+                  fontSize: 14,
                 ),
               ),
-              Text(
-                '© ${DateTime.now().year} Circum Technologies Ltd.',
-                style: TextStyle(color: colors.mutedText),
+              const SizedBox(height: 8),
+              Wrap(
+                spacing: 16,
+                runSpacing: 8,
+                children: [
+                  _FooterServiceLink(
+                    label: 'Deliveries',
+                    uri: _CircumWebsiteAppState._canonicalWebUri('/send'),
+                    onPressed: onDeliveries,
+                  ),
+                  _FooterServiceLink(
+                    label: 'Health+',
+                    uri: _CircumWebsiteAppState._canonicalWebUri(
+                      '/send/health',
+                    ),
+                    onPressed: onHealthPlus,
+                  ),
+                  if (onGifts != null)
+                    _FooterServiceLink(
+                      label: 'Gifts by Circum',
+                      uri: _CircumWebsiteAppState._canonicalWebUri('/gifts'),
+                      onPressed: onGifts!,
+                    ),
+                  _FooterServiceLink(
+                    label: 'Business',
+                    uri: _CircumWebsiteAppState._canonicalWebUri(
+                      '/send/business',
+                    ),
+                    onPressed: onBusiness,
+                  ),
+                  _FooterServiceLink(
+                    label: 'Vanguard',
+                    uri: _CircumWebsiteAppState._canonicalWebUri('/vanguard'),
+                    onPressed: onVanguard,
+                  ),
+                ],
               ),
             ],
           ),
         ),
       ),
+    );
+  }
+}
+
+class _FooterServiceLink extends StatelessWidget {
+  final String label;
+  final Uri uri;
+  final VoidCallback onPressed;
+
+  const _FooterServiceLink({
+    required this.label,
+    required this.uri,
+    required this.onPressed,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Link(
+      uri: uri,
+      target: LinkTarget.self,
+      builder: (context, followLink) {
+        return TextButton(
+          onPressed: followLink ?? onPressed,
+          style: TextButton.styleFrom(
+            padding: EdgeInsets.zero,
+            minimumSize: const Size(0, 36),
+            tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+          ),
+          child: Text(label),
+        );
+      },
     );
   }
 }
@@ -22111,7 +26136,7 @@ class _GiftsRequestPageState extends State<_GiftsRequestPage> {
     'Colleague',
     'Mentor',
     'Client',
-    'Teacher'
+    'Teacher',
   ];
   static const _occasions = [
     'Birthday',
@@ -22144,7 +26169,7 @@ class _GiftsRequestPageState extends State<_GiftsRequestPage> {
     'Just Because',
     'Bank Holiday Surprise',
     'Leaving Gift',
-    'Achievement Reward'
+    'Achievement Reward',
   ];
   static const _interestOptions = [
     'Fashion',
@@ -22191,7 +26216,7 @@ class _GiftsRequestPageState extends State<_GiftsRequestPage> {
     'Animals',
     'Nature',
     'Sustainability',
-    'Collectibles'
+    'Collectibles',
   ];
 
   @override
@@ -22220,7 +26245,7 @@ class _GiftsRequestPageState extends State<_GiftsRequestPage> {
       _likedBrands,
       _dislikedBrands,
       _previewEmail,
-      _previewPassword
+      _previewPassword,
     ]) {
       controller.dispose();
     }
@@ -22240,9 +26265,11 @@ class _GiftsRequestPageState extends State<_GiftsRequestPage> {
           .limit(20)
           .get();
       if (!mounted) return;
-      setState(() => _requests = snapshot.docs
-          .map((doc) => <String, dynamic>{'id': doc.id, ...doc.data()})
-          .toList());
+      setState(
+        () => _requests = snapshot.docs
+            .map((doc) => <String, dynamic>{'id': doc.id, ...doc.data()})
+            .toList(),
+      );
       await _handleGiftPaymentReturn();
     } catch (error) {
       debugPrint('Gift request history error: $error');
@@ -22266,19 +26293,23 @@ class _GiftsRequestPageState extends State<_GiftsRequestPage> {
       if (mounted) setState(() => _message = 'Signed in.');
     } on FirebaseAuthException catch (error) {
       if (mounted) {
-        setState(() => _message = switch (error.code) {
-              'invalid-credential' ||
-              'wrong-password' =>
-                'The email or password is incorrect.',
-              'invalid-email' => 'Enter a valid email address.',
-              _ => 'We could not sign you in. Please try again.',
-            });
+        setState(
+          () => _message = switch (error.code) {
+            'invalid-credential' ||
+            'wrong-password' =>
+              'The email or password is incorrect.',
+            'invalid-email' => 'Enter a valid email address.',
+            _ => 'We could not sign you in. Please try again.',
+          },
+        );
       }
     } catch (error) {
       debugPrint('Gifts sign-in error: $error');
-      if (mounted)
+      if (mounted) {
         setState(
-            () => _message = 'We could not sign you in. Please try again.');
+          () => _message = 'We could not sign you in. Please try again.',
+        );
+      }
     } finally {
       if (mounted) setState(() => _signingIn = false);
     }
@@ -22287,9 +26318,12 @@ class _GiftsRequestPageState extends State<_GiftsRequestPage> {
   Future<void> _handleGiftPaymentReturn() async {
     final result = Uri.base.queryParameters['gift_payment'];
     if (result == 'cancelled') {
-      if (mounted)
-        setState(() => _message =
-            'Payment was cancelled. Your gift has not been submitted.');
+      if (mounted) {
+        setState(
+          () => _message =
+              'Payment was cancelled. Your gift has not been submitted.',
+        );
+      }
       return;
     }
     if (result != 'success') return;
@@ -22299,19 +26333,23 @@ class _GiftsRequestPageState extends State<_GiftsRequestPage> {
     try {
       await FirebaseFunctions.instance
           .httpsCallable('finalizeGiftPayment')
-          .call({
-        'giftDraftId': giftDraftId,
-        'sessionId': sessionId,
-      });
-      if (mounted)
-        setState(() => _message =
-            'Payment received. Your gift experience is now submitted for review.');
+          .call({'giftDraftId': giftDraftId, 'sessionId': sessionId});
+      if (mounted) {
+        setState(
+          () => _message =
+              'Payment received. Your gift experience is now submitted for review.',
+        );
+      }
     } on FirebaseFunctionsException catch (error) {
       debugPrint(
-          'Gift payment finalization error: ${error.code} ${error.message}');
-      if (mounted)
-        setState(() => _message = error.message ??
-            'We could not confirm payment yet. Please refresh shortly.');
+        'Gift payment finalization error: ${error.code} ${error.message}',
+      );
+      if (mounted) {
+        setState(
+          () => _message = error.message ??
+              'We could not confirm payment yet. Please refresh shortly.',
+        );
+      }
     }
   }
 
@@ -22347,8 +26385,10 @@ class _GiftsRequestPageState extends State<_GiftsRequestPage> {
       return;
     }
     if (_validatedGiftAddress == null) {
-      setState(() => _message =
-          'Please select a verified address from the suggestions, or confirm the manual address.');
+      setState(
+        () => _message =
+            'Please select a verified address from the suggestions, or confirm the manual address.',
+      );
       return;
     }
     final proceed = await showDialog<bool>(
@@ -22356,29 +26396,35 @@ class _GiftsRequestPageState extends State<_GiftsRequestPage> {
       builder: (context) => AlertDialog(
         title: const Text('Review your gift experience'),
         content: SingleChildScrollView(
-          child:
-              Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Text('Occasion: $_occasion'),
-            Text('Recipient: ${_recipientName.text.trim()}'),
-            Text(
-                'Contact: ${_recipientPhone.text.trim()} · ${_recipientEmail.text.trim()}'),
-            Text('Delivery: ${_deliveryAddress.text.trim()}'),
-            Text('Date: ${_adminDateText(_deliveryDate)} · $_timeWindow'),
-            Text('Gift budget: £${grossBudget!.toStringAsFixed(2)}'),
-            if (_personalMessage.text.trim().isNotEmpty)
-              Text('Message: ${_personalMessage.text.trim()}'),
-            const SizedBox(height: 12),
-            const Text(
-                'Gift contents remain confidential before delivery. No products, brands, retailers or basket details are shown.'),
-          ]),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text('Occasion: $_occasion'),
+              Text('Recipient: ${_recipientName.text.trim()}'),
+              Text(
+                'Contact: ${_recipientPhone.text.trim()} · ${_recipientEmail.text.trim()}',
+              ),
+              Text('Delivery: ${_deliveryAddress.text.trim()}'),
+              Text('Date: ${_adminDateText(_deliveryDate)} · $_timeWindow'),
+              Text('Gift budget: £${grossBudget!.toStringAsFixed(2)}'),
+              if (_personalMessage.text.trim().isNotEmpty)
+                Text('Message: ${_personalMessage.text.trim()}'),
+              const SizedBox(height: 12),
+              const Text(
+                'Gift contents remain confidential before delivery. No products, brands, retailers or basket details are shown.',
+              ),
+            ],
+          ),
         ),
         actions: [
           TextButton(
-              onPressed: () => Navigator.pop(context, false),
-              child: const Text('Back')),
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Back'),
+          ),
           FilledButton(
-              onPressed: () => Navigator.pop(context, true),
-              child: const Text('Proceed to Payment')),
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Proceed to Payment'),
+          ),
         ],
       ),
     );
@@ -22388,20 +26434,21 @@ class _GiftsRequestPageState extends State<_GiftsRequestPage> {
       _message = null;
     });
     try {
-      final doc =
-          FirebaseFirestore.instance.collection('giftPaymentDrafts').doc();
+      final giftDraftId =
+          FirebaseFirestore.instance.collection('giftPaymentDrafts').doc().id;
       final photoUrls = <String>[];
       if (_photo != null) {
         final bytes = await _photo!.readAsBytes();
         if (bytes.length > 8 * 1024 * 1024) {
           throw StateError('Photo must be smaller than 8 MB.');
         }
-        final ref = FirebaseStorage.instance
-            .ref('gift_requests/${user.uid}/${doc.id}.jpg');
+        final ref = FirebaseStorage.instance.ref(
+          'gift_requests/${user.uid}/$giftDraftId.jpg',
+        );
         await ref.putData(bytes, SettableMetadata(contentType: 'image/jpeg'));
         photoUrls.add(await ref.getDownloadURL());
       }
-      await doc.set({
+      final giftDraft = {
         'senderId': user.uid,
         'senderName': _senderName.text.trim(),
         'senderEmail': _senderEmail.text.trim().toLowerCase(),
@@ -22433,12 +26480,15 @@ class _GiftsRequestPageState extends State<_GiftsRequestPage> {
         'budget': grossBudget,
         'grossBudget': grossBudget,
         'grossGiftBudget': grossBudget,
-        'estimatedStripeFee':
-            GiftRequestPolicy.estimatedStripeFee(grossBudget!),
-        'netGiftBudgetAfterFees':
-            GiftRequestPolicy.estimatedNetGiftBudget(grossBudget),
-        'estimatedNetGiftBudget':
-            GiftRequestPolicy.estimatedNetGiftBudget(grossBudget),
+        'estimatedStripeFee': GiftRequestPolicy.estimatedStripeFee(
+          grossBudget!,
+        ),
+        'netGiftBudgetAfterFees': GiftRequestPolicy.estimatedNetGiftBudget(
+          grossBudget,
+        ),
+        'estimatedNetGiftBudget': GiftRequestPolicy.estimatedNetGiftBudget(
+          grossBudget,
+        ),
         'budgetStatus': 'pending_allocation',
         'personalMessage': _personalMessage.text.trim(),
         'interests': _interests.toList(),
@@ -22491,33 +26541,38 @@ class _GiftsRequestPageState extends State<_GiftsRequestPage> {
         'recordingConsentRequired': _anonymousGiftType == 'campaign',
         'mutualRevealAllowed': _anonymousGiftType == 'campaign',
         'anonymousByDefault': _giftMode == 'anonymous_gift',
-        'createdAt': FieldValue.serverTimestamp(),
-        'updatedAt': FieldValue.serverTimestamp(),
-      });
+      };
       final payment = await FirebaseFunctions.instance
           .httpsCallable('createGiftPayment')
-          .call({'giftDraftId': doc.id});
+          .call({'giftDraftId': giftDraftId, 'giftDraft': giftDraft});
       final paymentData = Map<String, dynamic>.from(payment.data as Map);
       final checkoutUrl = Uri.tryParse('${paymentData['url'] ?? ''}');
       if (checkoutUrl == null || checkoutUrl.host.isEmpty) {
         throw StateError(
-            'Stripe Checkout could not be opened. Please try again.');
+          'Stripe Checkout could not be opened. Please try again.',
+        );
       }
       setState(
-          () => _message = 'Complete payment to submit your gift request.');
+        () => _message = 'Complete payment to submit your gift request.',
+      );
       final opened = await launchUrl(checkoutUrl, webOnlyWindowName: '_self');
-      if (!opened)
+      if (!opened) {
         throw StateError(
-            'Stripe Checkout could not be opened. Please try again.');
+          'Stripe Checkout could not be opened. Please try again.',
+        );
+      }
     } catch (error) {
       debugPrint('Gift request submit error: $error');
-      if (mounted)
-        setState(() => _message = error is StateError
-            ? error.message
-            : error is FirebaseFunctionsException
-                ? (error.message ??
-                    'Could not start Stripe Checkout. Please try again.')
-                : 'Could not start Stripe Checkout. Please try again.');
+      if (mounted) {
+        setState(
+          () => _message = error is StateError
+              ? error.message
+              : error is FirebaseFunctionsException
+                  ? (error.message ??
+                      'Could not start Stripe Checkout. Please try again.')
+                  : 'Could not start Stripe Checkout. Please try again.',
+        );
+      }
     } finally {
       if (mounted) setState(() => _saving = false);
     }
@@ -22532,559 +26587,749 @@ class _GiftsRequestPageState extends State<_GiftsRequestPage> {
       backgroundColor: colors.background,
       body: SafeArea(
         child: ListView(
-          padding:
-              EdgeInsets.fromLTRB(narrow ? 16 : 28, 16, narrow ? 16 : 28, 48),
+          padding: EdgeInsets.fromLTRB(
+            narrow ? 16 : 28,
+            16,
+            narrow ? 16 : 28,
+            48,
+          ),
           children: [
-            Row(children: [
-              IconButton(
-                  onPressed: widget.onBack, icon: const Icon(Icons.arrow_back)),
-              Image.asset('assets/images/circum_wordmark.png', width: 126),
-            ]),
+            Row(
+              children: [
+                IconButton(
+                  onPressed: widget.onBack,
+                  icon: const Icon(Icons.arrow_back),
+                ),
+                Image.asset('assets/images/circum_wordmark.png', width: 126),
+              ],
+            ),
             const SizedBox(height: 22),
             Center(
               child: ConstrainedBox(
                 constraints: const BoxConstraints(maxWidth: 980),
                 child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      Center(
-                          child: Image.asset(
-                              'assets/images/gifts_by_circum_logo.jpg',
-                              width: narrow ? 280 : 390,
-                              semanticLabel: 'Gifts by Circum logo')),
-                      const SizedBox(height: 12),
-                      Text('Thoughtful gifting, delivered by Circum',
-                          textAlign: TextAlign.center,
-                          style: TextStyle(
-                              color: colors.mutedText,
-                              fontSize: 18,
-                              fontWeight: FontWeight.w600)),
-                      const SizedBox(height: 28),
-                      Text(
-                          'Tell us the occasion, the person, and your budget. Circum creates and delivers a thoughtful gift experience.',
-                          textAlign: TextAlign.center,
-                          style: TextStyle(
-                              color: colors.text,
-                              fontSize: narrow ? 25 : 34,
-                              height: 1.2,
-                              fontWeight: FontWeight.w900)),
-                      const SizedBox(height: 24),
-                      Center(
-                        child: Chip(
-                          avatar: const Icon(Icons.lock_clock, size: 18),
-                          label: const Text('Early Access Beta'),
-                          backgroundColor:
-                              colors.adminAccent.withValues(alpha: 0.16),
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Center(
+                      child: Image.asset(
+                        'assets/images/gifts_by_circum_logo.jpg',
+                        width: narrow ? 280 : 390,
+                        semanticLabel: 'Gifts by Circum logo',
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    Text(
+                      'Thoughtful gifting, delivered by Circum',
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                        color: colors.mutedText,
+                        fontSize: 18,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    const SizedBox(height: 28),
+                    Text(
+                      'Tell us the occasion, the person, and your budget. Circum creates and delivers a thoughtful gift experience.',
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                        color: colors.text,
+                        fontSize: narrow ? 25 : 34,
+                        height: 1.2,
+                        fontWeight: FontWeight.w900,
+                      ),
+                    ),
+                    const SizedBox(height: 24),
+                    Center(
+                      child: Chip(
+                        avatar: const Icon(Icons.lock_clock, size: 18),
+                        label: const Text('Early Access Beta'),
+                        backgroundColor: colors.adminAccent.withValues(
+                          alpha: 0.16,
                         ),
                       ),
-                      const SizedBox(height: 16),
-                      if (!signedIn)
-                        _GlassPanel(
-                          colors: colors,
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.stretch,
-                            children: [
+                    ),
+                    const SizedBox(height: 10),
+                    const Center(
+                      child: _HealthChip(label: 'Vanguard Included'),
+                    ),
+                    const SizedBox(height: 16),
+                    if (!signedIn)
+                      _GlassPanel(
+                        colors: colors,
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: [
+                            Text(
+                              'Sign in to Gifts',
+                              style: TextStyle(
+                                color: colors.text,
+                                fontSize: 24,
+                                fontWeight: FontWeight.w900,
+                              ),
+                            ),
+                            const SizedBox(height: 6),
+                            Text(
+                              'Sign in to create and pay for a curated gift experience.',
+                              style: TextStyle(
+                                color: colors.mutedText,
+                                height: 1.4,
+                              ),
+                            ),
+                            const SizedBox(height: 16),
+                            _giftField(
+                              _previewEmail,
+                              'Email address',
+                              Icons.email_outlined,
+                              type: TextInputType.emailAddress,
+                            ),
+                            _giftField(
+                              _previewPassword,
+                              'Password',
+                              Icons.lock_outline,
+                              obscure: true,
+                            ),
+                            if (_message != null) ...[
+                              const SizedBox(height: 4),
                               Text(
-                                'Sign in to Gifts',
+                                _message!,
                                 style: TextStyle(
                                   color: colors.text,
-                                  fontSize: 24,
-                                  fontWeight: FontWeight.w900,
+                                  fontWeight: FontWeight.w700,
                                 ),
                               ),
-                              const SizedBox(height: 6),
+                            ],
+                            const SizedBox(height: 12),
+                            FilledButton.icon(
+                              onPressed: _signingIn ? null : _signInToPreview,
+                              icon: _signingIn
+                                  ? const SizedBox.square(
+                                      dimension: 18,
+                                      child: CircularProgressIndicator(
+                                        strokeWidth: 2,
+                                      ),
+                                    )
+                                  : const Icon(Icons.lock_open),
+                              label: Text(
+                                _signingIn
+                                    ? 'Signing in...'
+                                    : 'Sign in and continue',
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    if (signedIn) ...[
+                      _GlassPanel(
+                        colors: colors,
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'How Gifts Works',
+                              style: TextStyle(
+                                color: colors.text,
+                                fontSize: 22,
+                                fontWeight: FontWeight.w900,
+                              ),
+                            ),
+                            const SizedBox(height: 10),
+                            ...const [
+                              '1. Tell us about the recipient.',
+                              '2. Set your budget.',
+                              '3. IRIS creates private recommendations.',
+                              '4. The Gifts Team reviews and approves the experience.',
+                              '5. We source, prepare and deliver.',
+                              '6. The recipient discovers the surprise.',
+                            ].map(
+                              (step) => Padding(
+                                padding: const EdgeInsets.only(bottom: 6),
+                                child: Text(step),
+                              ),
+                            ),
+                            const SizedBox(height: 8),
+                            const Text(
+                              'Gift contents are intentionally kept confidential before delivery. Gifts by Circum is a curated gifting experience, not a traditional online shop.',
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(height: 14),
+                      _GlassPanel(
+                        colors: colors,
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: [
+                            Text(
+                              'Create the experience',
+                              style: TextStyle(
+                                color: colors.text,
+                                fontSize: 26,
+                                fontWeight: FontWeight.w900,
+                              ),
+                            ),
+                            const SizedBox(height: 16),
+                            DropdownButtonFormField<String>(
+                              initialValue: _giftMode,
+                              decoration: const InputDecoration(
+                                labelText: 'Gift mode',
+                              ),
+                              items: const {
+                                'gift_someone': 'Gift someone',
+                                'gift_myself': 'Gift myself',
+                                'anonymous_gift': 'Anonymous gift',
+                              }
+                                  .entries
+                                  .map(
+                                    (entry) => DropdownMenuItem(
+                                      value: entry.key,
+                                      child: Text(entry.value),
+                                    ),
+                                  )
+                                  .toList(),
+                              onChanged: (value) => setState(
+                                () => _giftMode = value ?? _giftMode,
+                              ),
+                            ),
+                            if (_giftMode == 'anonymous_gift') ...[
+                              const SizedBox(height: 12),
+                              DropdownButtonFormField<String>(
+                                initialValue: _anonymousGiftType,
+                                decoration: const InputDecoration(
+                                  labelText: 'Anonymous gift type',
+                                ),
+                                items: const {
+                                  'direct': 'Direct anonymous gift',
+                                  'campaign':
+                                      'Campaign · Bringing London Closer',
+                                }
+                                    .entries
+                                    .map(
+                                      (entry) => DropdownMenuItem(
+                                        value: entry.key,
+                                        child: Text(entry.value),
+                                      ),
+                                    )
+                                    .toList(),
+                                onChanged: (value) => setState(
+                                  () => _anonymousGiftType =
+                                      value ?? _anonymousGiftType,
+                                ),
+                              ),
+                              const SizedBox(height: 12),
+                              DropdownButtonFormField<String>(
+                                initialValue: _senderRevealMode,
+                                decoration: const InputDecoration(
+                                  labelText: 'Identity reveal',
+                                ),
+                                items: const {
+                                  'anonymous_forever': 'Anonymous forever',
+                                  'reveal_after_delivery':
+                                      'Reveal after delivery',
+                                  'anonymous_until_consent':
+                                      'Reveal only with later consent',
+                                  'reveal_immediately': 'Reveal immediately',
+                                }
+                                    .entries
+                                    .map(
+                                      (entry) => DropdownMenuItem(
+                                        value: entry.key,
+                                        child: Text(entry.value),
+                                      ),
+                                    )
+                                    .toList(),
+                                onChanged: (value) => setState(
+                                  () => _senderRevealMode =
+                                      value ?? _senderRevealMode,
+                                ),
+                              ),
+                              const SizedBox(height: 8),
                               Text(
-                                'Sign in to create and pay for a curated gift experience.',
+                                'Circum knows who arranged the gift for safety and fraud prevention. The recipient only sees the sender identity when consent permits or disclosure is legally required.',
                                 style: TextStyle(
                                   color: colors.mutedText,
-                                  height: 1.4,
+                                  fontSize: 12,
                                 ),
                               ),
-                              const SizedBox(height: 16),
-                              _giftField(
-                                _previewEmail,
-                                'Email address',
-                                Icons.email_outlined,
-                                type: TextInputType.emailAddress,
+                            ],
+                            if (_giftMode == 'gift_myself') ...[
+                              const SizedBox(height: 12),
+                              DropdownButtonFormField<String>(
+                                initialValue: _selfGiftFrequency,
+                                decoration: const InputDecoration(
+                                  labelText: 'Self-gift frequency',
+                                ),
+                                items: const {
+                                  'one_off': 'One-off',
+                                  'monthly': 'Monthly',
+                                  'quarterly': 'Quarterly',
+                                  'custom': 'Custom',
+                                }
+                                    .entries
+                                    .map(
+                                      (entry) => DropdownMenuItem(
+                                        value: entry.key,
+                                        child: Text(entry.value),
+                                      ),
+                                    )
+                                    .toList(),
+                                onChanged: (value) => setState(
+                                  () => _selfGiftFrequency =
+                                      value ?? _selfGiftFrequency,
+                                ),
                               ),
-                              _giftField(
-                                _previewPassword,
-                                'Password',
-                                Icons.lock_outline,
-                                obscure: true,
+                            ],
+                            const SizedBox(height: 12),
+                            Text(
+                              'Who is receiving?',
+                              style: TextStyle(
+                                color: colors.text,
+                                fontSize: 18,
+                                fontWeight: FontWeight.w900,
                               ),
-                              if (_message != null) ...[
-                                const SizedBox(height: 4),
-                                Text(
+                            ),
+                            const SizedBox(height: 10),
+                            _giftField(
+                              _senderName,
+                              'Circum name',
+                              Icons.person_outline,
+                            ),
+                            _giftField(
+                              _senderEmail,
+                              'Sender email',
+                              Icons.email_outlined,
+                              type: TextInputType.emailAddress,
+                            ),
+                            _giftField(
+                              _recipientName,
+                              'Recipient name',
+                              Icons.redeem_outlined,
+                            ),
+                            _giftField(
+                              _recipientPhone,
+                              'Recipient phone',
+                              Icons.contact_phone_outlined,
+                            ),
+                            _giftField(
+                              _recipientEmail,
+                              'Recipient email',
+                              Icons.email_outlined,
+                              type: TextInputType.emailAddress,
+                            ),
+                            Text(
+                              'Tell us about them',
+                              style: TextStyle(
+                                color: colors.text,
+                                fontSize: 18,
+                                fontWeight: FontWeight.w900,
+                              ),
+                            ),
+                            const SizedBox(height: 10),
+                            Row(
+                              children: [
+                                Expanded(
+                                  child: DropdownButtonFormField<String>(
+                                    initialValue: _relationship,
+                                    decoration: const InputDecoration(
+                                      labelText: 'Relationship',
+                                    ),
+                                    items: _relationships
+                                        .map(
+                                          (v) => DropdownMenuItem(
+                                            value: v,
+                                            child: Text(v),
+                                          ),
+                                        )
+                                        .toList(),
+                                    onChanged: (v) => setState(
+                                      () => _relationship = v ?? _relationship,
+                                    ),
+                                  ),
+                                ),
+                                const SizedBox(width: 12),
+                                Expanded(
+                                  child: DropdownButtonFormField<String>(
+                                    initialValue: _occasion,
+                                    decoration: const InputDecoration(
+                                      labelText: 'Occasion',
+                                    ),
+                                    items: _occasions
+                                        .map(
+                                          (v) => DropdownMenuItem(
+                                            value: v,
+                                            child: Text(v),
+                                          ),
+                                        )
+                                        .toList(),
+                                    onChanged: (v) => setState(
+                                      () => _occasion = v ?? _occasion,
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 12),
+                            Text(
+                              'Sizes and preferences',
+                              style: TextStyle(
+                                color: colors.text,
+                                fontSize: 18,
+                                fontWeight: FontWeight.w900,
+                              ),
+                            ),
+                            const SizedBox(height: 10),
+                            Wrap(
+                              spacing: 10,
+                              runSpacing: 10,
+                              children: [
+                                SizedBox(
+                                  width: 180,
+                                  child: _giftField(
+                                    _clothingSize,
+                                    'Clothing size',
+                                    Icons.checkroom,
+                                  ),
+                                ),
+                                SizedBox(
+                                  width: 180,
+                                  child: _giftField(
+                                    _shoeSize,
+                                    'Shoe size',
+                                    Icons.hiking,
+                                  ),
+                                ),
+                                SizedBox(
+                                  width: 180,
+                                  child: _giftField(
+                                    _ringSize,
+                                    'Ring size',
+                                    Icons.circle_outlined,
+                                  ),
+                                ),
+                                SizedBox(
+                                  width: 180,
+                                  child: _giftField(
+                                    _height,
+                                    'Height',
+                                    Icons.height,
+                                  ),
+                                ),
+                              ],
+                            ),
+                            DropdownButtonFormField<String>(
+                              initialValue: _preferredFit,
+                              decoration: const InputDecoration(
+                                labelText: 'Preferred fit',
+                              ),
+                              items: const [
+                                'Slim',
+                                'Regular',
+                                'Relaxed',
+                                'Oversized',
+                              ]
+                                  .map(
+                                    (v) => DropdownMenuItem(
+                                      value: v,
+                                      child: Text(v),
+                                    ),
+                                  )
+                                  .toList(),
+                              onChanged: (v) => setState(
+                                () => _preferredFit = v ?? _preferredFit,
+                              ),
+                            ),
+                            _giftField(
+                              _favouriteColours,
+                              'Favourite colours',
+                              Icons.palette_outlined,
+                            ),
+                            _giftField(
+                              _likedBrands,
+                              'Brands they like',
+                              Icons.favorite_border,
+                            ),
+                            _giftField(
+                              _dislikedBrands,
+                              'Brands they dislike',
+                              Icons.block,
+                            ),
+                            Text(
+                              'Delivery details',
+                              style: TextStyle(
+                                color: colors.text,
+                                fontSize: 18,
+                                fontWeight: FontWeight.w900,
+                              ),
+                            ),
+                            const SizedBox(height: 10),
+                            _AddressField(
+                              colors: colors,
+                              icon: Icons.location_on_outlined,
+                              label: 'Delivery address',
+                              controller: _deliveryAddress,
+                              verified:
+                                  _validatedGiftAddress?.isVerified == true,
+                              onSelected: (address) => setState(
+                                () => _validatedGiftAddress = address,
+                              ),
+                              onEdited: (_) =>
+                                  setState(() => _validatedGiftAddress = null),
+                              verifiedMessage:
+                                  'Verified delivery address selected',
+                            ),
+                            Row(
+                              children: [
+                                Expanded(
+                                  child: OutlinedButton.icon(
+                                    onPressed: () async {
+                                      final date = await showDatePicker(
+                                        context: context,
+                                        firstDate: DateTime.now(),
+                                        lastDate: DateTime.now().add(
+                                          const Duration(days: 365),
+                                        ),
+                                        initialDate: _deliveryDate ??
+                                            DateTime.now().add(
+                                              const Duration(days: 2),
+                                            ),
+                                      );
+                                      if (date != null) {
+                                        setState(() => _deliveryDate = date);
+                                      }
+                                    },
+                                    icon: const Icon(Icons.calendar_month),
+                                    label: Text(
+                                      _deliveryDate == null
+                                          ? 'Preferred delivery date'
+                                          : _adminDateText(_deliveryDate),
+                                    ),
+                                  ),
+                                ),
+                                const SizedBox(width: 12),
+                                Expanded(
+                                  child: DropdownButtonFormField<String>(
+                                    initialValue: _timeWindow,
+                                    decoration: const InputDecoration(
+                                      labelText: 'Time window',
+                                    ),
+                                    items: const [
+                                      'Morning',
+                                      'Afternoon',
+                                      'Evening',
+                                    ]
+                                        .map(
+                                          (v) => DropdownMenuItem(
+                                            value: v,
+                                            child: Text(v),
+                                          ),
+                                        )
+                                        .toList(),
+                                    onChanged: (v) => setState(
+                                      () => _timeWindow = v ?? _timeWindow,
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 12),
+                            Text(
+                              'Gift budget',
+                              style: TextStyle(
+                                color: colors.text,
+                                fontSize: 18,
+                                fontWeight: FontWeight.w900,
+                              ),
+                            ),
+                            const SizedBox(height: 8),
+                            Wrap(
+                              spacing: 8,
+                              runSpacing: 8,
+                              children: [50, 100, 250, 500, 1000, 1500]
+                                  .map(
+                                    (value) => ChoiceChip(
+                                      label: Text('£$value'),
+                                      selected: _budget.text == '$value',
+                                      onSelected: (_) => setState(
+                                        () => _budget.text = '$value',
+                                      ),
+                                    ),
+                                  )
+                                  .toList(),
+                            ),
+                            const SizedBox(height: 8),
+                            _giftField(
+                              _budget,
+                              'Gift budget (minimum £50)',
+                              Icons.payments_outlined,
+                              type: const TextInputType.numberWithOptions(
+                                decimal: true,
+                              ),
+                            ),
+                            Text(
+                              'Interests',
+                              style: TextStyle(
+                                color: colors.text,
+                                fontWeight: FontWeight.w800,
+                              ),
+                            ),
+                            const SizedBox(height: 8),
+                            Wrap(
+                              spacing: 8,
+                              runSpacing: 8,
+                              children: _interestOptions
+                                  .map(
+                                    (interest) => FilterChip(
+                                      label: Text(interest),
+                                      selected: _interests.contains(interest),
+                                      onSelected: (selected) => setState(
+                                        () => selected
+                                            ? _interests.add(interest)
+                                            : _interests.remove(interest),
+                                      ),
+                                    ),
+                                  )
+                                  .toList(),
+                            ),
+                            const SizedBox(height: 12),
+                            Text(
+                              'Additional information',
+                              style: TextStyle(
+                                color: colors.text,
+                                fontSize: 18,
+                                fontWeight: FontWeight.w900,
+                              ),
+                            ),
+                            const SizedBox(height: 8),
+                            _giftField(
+                              _personalMessage,
+                              'Personal message',
+                              Icons.chat_bubble_outline,
+                              lines: 3,
+                            ),
+                            _giftField(
+                              _notes,
+                              'Additional Information',
+                              Icons.notes,
+                              lines: 3,
+                            ),
+                            Text(
+                              'Record allergies, medical conditions, dietary requirements, religious considerations, sensitivities, accessibility requirements, favourite colours, favourite brands, dislikes, or any special requests.',
+                              style: TextStyle(
+                                color: colors.mutedText,
+                                fontSize: 12,
+                              ),
+                            ),
+                            OutlinedButton.icon(
+                              onPressed: _pickPhoto,
+                              icon: const Icon(Icons.add_a_photo_outlined),
+                              label: Text(
+                                _photo == null
+                                    ? 'Add optional recipient photo'
+                                    : 'Photo selected · Replace',
+                              ),
+                            ),
+                            if (_photo != null)
+                              Align(
+                                alignment: Alignment.centerLeft,
+                                child: TextButton.icon(
+                                  onPressed: () =>
+                                      setState(() => _photo = null),
+                                  icon: const Icon(Icons.close),
+                                  label: const Text('Remove photo'),
+                                ),
+                              ),
+                            if (_message != null)
+                              Padding(
+                                padding: const EdgeInsets.only(top: 12),
+                                child: Text(
                                   _message!,
                                   style: TextStyle(
                                     color: colors.text,
                                     fontWeight: FontWeight.w700,
                                   ),
                                 ),
-                              ],
-                              const SizedBox(height: 12),
-                              FilledButton.icon(
-                                onPressed: _signingIn ? null : _signInToPreview,
-                                icon: _signingIn
-                                    ? const SizedBox.square(
-                                        dimension: 18,
-                                        child: CircularProgressIndicator(
-                                            strokeWidth: 2),
-                                      )
-                                    : const Icon(Icons.lock_open),
-                                label: Text(_signingIn
-                                    ? 'Signing in...'
-                                    : 'Sign in and continue'),
                               ),
-                            ],
-                          ),
-                        ),
-                      if (signedIn) ...[
-                        _GlassPanel(
-                          colors: colors,
-                          child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text('How Gifts Works',
-                                    style: TextStyle(
-                                        color: colors.text,
-                                        fontSize: 22,
-                                        fontWeight: FontWeight.w900)),
-                                const SizedBox(height: 10),
-                                ...const [
-                                  '1. Tell us about the recipient.',
-                                  '2. Set your budget.',
-                                  '3. IRIS creates private recommendations.',
-                                  '4. The Gifts Team reviews and approves the experience.',
-                                  '5. We source, prepare and deliver.',
-                                  '6. The recipient discovers the surprise.',
-                                ].map((step) => Padding(
-                                    padding: const EdgeInsets.only(bottom: 6),
-                                    child: Text(step))),
-                                const SizedBox(height: 8),
-                                const Text(
-                                    'Gift contents are intentionally kept confidential before delivery. Gifts by Circum is a curated gifting experience, not a traditional online shop.'),
-                              ]),
-                        ),
-                        const SizedBox(height: 14),
-                        _GlassPanel(
-                            colors: colors,
-                            child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.stretch,
-                                children: [
-                                  Text('Create the experience',
-                                      style: TextStyle(
-                                          color: colors.text,
-                                          fontSize: 26,
-                                          fontWeight: FontWeight.w900)),
-                                  const SizedBox(height: 16),
-                                  DropdownButtonFormField<String>(
-                                    initialValue: _giftMode,
-                                    decoration: const InputDecoration(
-                                        labelText: 'Gift mode'),
-                                    items: const {
-                                      'gift_someone': 'Gift someone',
-                                      'gift_myself': 'Gift myself',
-                                      'anonymous_gift': 'Anonymous gift',
-                                    }
-                                        .entries
-                                        .map((entry) => DropdownMenuItem(
-                                            value: entry.key,
-                                            child: Text(entry.value)))
-                                        .toList(),
-                                    onChanged: (value) => setState(
-                                        () => _giftMode = value ?? _giftMode),
-                                  ),
-                                  if (_giftMode == 'anonymous_gift') ...[
-                                    const SizedBox(height: 12),
-                                    DropdownButtonFormField<String>(
-                                      initialValue: _anonymousGiftType,
-                                      decoration: const InputDecoration(
-                                          labelText: 'Anonymous gift type'),
-                                      items: const {
-                                        'direct': 'Direct anonymous gift',
-                                        'campaign':
-                                            'Campaign · Bringing London Closer',
-                                      }
-                                          .entries
-                                          .map((entry) => DropdownMenuItem(
-                                              value: entry.key,
-                                              child: Text(entry.value)))
-                                          .toList(),
-                                      onChanged: (value) => setState(() =>
-                                          _anonymousGiftType =
-                                              value ?? _anonymousGiftType),
-                                    ),
-                                    const SizedBox(height: 12),
-                                    DropdownButtonFormField<String>(
-                                      initialValue: _senderRevealMode,
-                                      decoration: const InputDecoration(
-                                          labelText: 'Identity reveal'),
-                                      items: const {
-                                        'anonymous_forever':
-                                            'Anonymous forever',
-                                        'reveal_after_delivery':
-                                            'Reveal after delivery',
-                                        'anonymous_until_consent':
-                                            'Reveal only with later consent',
-                                        'reveal_immediately':
-                                            'Reveal immediately',
-                                      }
-                                          .entries
-                                          .map((entry) => DropdownMenuItem(
-                                              value: entry.key,
-                                              child: Text(entry.value)))
-                                          .toList(),
-                                      onChanged: (value) => setState(() =>
-                                          _senderRevealMode =
-                                              value ?? _senderRevealMode),
-                                    ),
-                                    const SizedBox(height: 8),
-                                    Text(
-                                      'Circum knows who arranged the gift for safety and fraud prevention. The recipient only sees the sender identity when consent permits or disclosure is legally required.',
-                                      style: TextStyle(
-                                          color: colors.mutedText,
-                                          fontSize: 12),
-                                    ),
-                                  ],
-                                  if (_giftMode == 'gift_myself') ...[
-                                    const SizedBox(height: 12),
-                                    DropdownButtonFormField<String>(
-                                      initialValue: _selfGiftFrequency,
-                                      decoration: const InputDecoration(
-                                          labelText: 'Self-gift frequency'),
-                                      items: const {
-                                        'one_off': 'One-off',
-                                        'monthly': 'Monthly',
-                                        'quarterly': 'Quarterly',
-                                        'custom': 'Custom',
-                                      }
-                                          .entries
-                                          .map((entry) => DropdownMenuItem(
-                                              value: entry.key,
-                                              child: Text(entry.value)))
-                                          .toList(),
-                                      onChanged: (value) => setState(() =>
-                                          _selfGiftFrequency =
-                                              value ?? _selfGiftFrequency),
-                                    ),
-                                  ],
-                                  const SizedBox(height: 12),
-                                  Text('Who is receiving?',
-                                      style: TextStyle(
-                                          color: colors.text,
-                                          fontSize: 18,
-                                          fontWeight: FontWeight.w900)),
-                                  const SizedBox(height: 10),
-                                  _giftField(_senderName, 'Sender name',
-                                      Icons.person_outline),
-                                  _giftField(_senderEmail, 'Sender email',
-                                      Icons.email_outlined,
-                                      type: TextInputType.emailAddress),
-                                  _giftField(_recipientName, 'Recipient name',
-                                      Icons.redeem_outlined),
-                                  _giftField(_recipientPhone, 'Recipient phone',
-                                      Icons.contact_phone_outlined),
-                                  _giftField(_recipientEmail, 'Recipient email',
-                                      Icons.email_outlined,
-                                      type: TextInputType.emailAddress),
-                                  Text('Tell us about them',
-                                      style: TextStyle(
-                                          color: colors.text,
-                                          fontSize: 18,
-                                          fontWeight: FontWeight.w900)),
-                                  const SizedBox(height: 10),
-                                  Row(children: [
-                                    Expanded(
-                                        child: DropdownButtonFormField<String>(
-                                            initialValue: _relationship,
-                                            decoration: const InputDecoration(
-                                                labelText: 'Relationship'),
-                                            items: _relationships
-                                                .map((v) => DropdownMenuItem(
-                                                    value: v, child: Text(v)))
-                                                .toList(),
-                                            onChanged: (v) => setState(() =>
-                                                _relationship =
-                                                    v ?? _relationship))),
-                                    const SizedBox(width: 12),
-                                    Expanded(
-                                        child: DropdownButtonFormField<String>(
-                                            initialValue: _occasion,
-                                            decoration: const InputDecoration(
-                                                labelText: 'Occasion'),
-                                            items: _occasions
-                                                .map((v) => DropdownMenuItem(
-                                                    value: v, child: Text(v)))
-                                                .toList(),
-                                            onChanged: (v) => setState(() =>
-                                                _occasion = v ?? _occasion))),
-                                  ]),
-                                  const SizedBox(height: 12),
-                                  Text('Sizes and preferences',
-                                      style: TextStyle(
-                                          color: colors.text,
-                                          fontSize: 18,
-                                          fontWeight: FontWeight.w900)),
-                                  const SizedBox(height: 10),
-                                  Wrap(spacing: 10, runSpacing: 10, children: [
-                                    SizedBox(
-                                        width: 180,
-                                        child: _giftField(_clothingSize,
-                                            'Clothing size', Icons.checkroom)),
-                                    SizedBox(
-                                        width: 180,
-                                        child: _giftField(_shoeSize,
-                                            'Shoe size', Icons.hiking)),
-                                    SizedBox(
-                                        width: 180,
-                                        child: _giftField(
-                                            _ringSize,
-                                            'Ring size',
-                                            Icons.circle_outlined)),
-                                    SizedBox(
-                                        width: 180,
-                                        child: _giftField(
-                                            _height, 'Height', Icons.height)),
-                                  ]),
-                                  DropdownButtonFormField<String>(
-                                      initialValue: _preferredFit,
-                                      decoration: const InputDecoration(
-                                          labelText: 'Preferred fit'),
-                                      items: const [
-                                        'Slim',
-                                        'Regular',
-                                        'Relaxed',
-                                        'Oversized'
-                                      ]
-                                          .map((v) => DropdownMenuItem(
-                                              value: v, child: Text(v)))
-                                          .toList(),
-                                      onChanged: (v) => setState(() =>
-                                          _preferredFit = v ?? _preferredFit)),
-                                  _giftField(
-                                      _favouriteColours,
-                                      'Favourite colours',
-                                      Icons.palette_outlined),
-                                  _giftField(_likedBrands, 'Brands they like',
-                                      Icons.favorite_border),
-                                  _giftField(_dislikedBrands,
-                                      'Brands they dislike', Icons.block),
-                                  Text('Delivery details',
-                                      style: TextStyle(
-                                          color: colors.text,
-                                          fontSize: 18,
-                                          fontWeight: FontWeight.w900)),
-                                  const SizedBox(height: 10),
-                                  _AddressField(
-                                      colors: colors,
-                                      icon: Icons.location_on_outlined,
-                                      label: 'Delivery address',
-                                      controller: _deliveryAddress,
-                                      verified:
-                                          _validatedGiftAddress?.isVerified ==
-                                              true,
-                                      onSelected: (address) => setState(() =>
-                                          _validatedGiftAddress = address),
-                                      onEdited: (_) => setState(
-                                          () => _validatedGiftAddress = null),
-                                      verifiedMessage:
-                                          'Verified delivery address selected'),
-                                  Row(children: [
-                                    Expanded(
-                                        child: OutlinedButton.icon(
-                                            onPressed: () async {
-                                              final date = await showDatePicker(
-                                                  context: context,
-                                                  firstDate: DateTime.now(),
-                                                  lastDate: DateTime.now().add(
-                                                      const Duration(
-                                                          days: 365)),
-                                                  initialDate: _deliveryDate ??
-                                                      DateTime.now().add(
-                                                          const Duration(
-                                                              days: 2)));
-                                              if (date != null)
-                                                setState(
-                                                    () => _deliveryDate = date);
-                                            },
-                                            icon: const Icon(
-                                                Icons.calendar_month),
-                                            label: Text(_deliveryDate == null
-                                                ? 'Preferred delivery date'
-                                                : _adminDateText(
-                                                    _deliveryDate)))),
-                                    const SizedBox(width: 12),
-                                    Expanded(
-                                        child: DropdownButtonFormField<String>(
-                                            initialValue: _timeWindow,
-                                            decoration: const InputDecoration(
-                                                labelText: 'Time window'),
-                                            items: const [
-                                              'Morning',
-                                              'Afternoon',
-                                              'Evening'
-                                            ]
-                                                .map((v) => DropdownMenuItem(
-                                                    value: v, child: Text(v)))
-                                                .toList(),
-                                            onChanged: (v) => setState(() =>
-                                                _timeWindow =
-                                                    v ?? _timeWindow))),
-                                  ]),
-                                  const SizedBox(height: 12),
-                                  Text('Gift budget',
-                                      style: TextStyle(
-                                          color: colors.text,
-                                          fontSize: 18,
-                                          fontWeight: FontWeight.w900)),
-                                  const SizedBox(height: 8),
-                                  Wrap(
-                                      spacing: 8,
-                                      runSpacing: 8,
-                                      children: [50, 100, 250, 500, 1000, 1500]
-                                          .map((value) => ChoiceChip(
-                                              label: Text('£$value'),
-                                              selected:
-                                                  _budget.text == '$value',
-                                              onSelected: (_) => setState(() =>
-                                                  _budget.text = '$value')))
-                                          .toList()),
-                                  const SizedBox(height: 8),
-                                  _giftField(
-                                      _budget,
-                                      'Gift budget (minimum £50)',
-                                      Icons.payments_outlined,
-                                      type:
-                                          const TextInputType.numberWithOptions(
-                                              decimal: true)),
-                                  Text('Interests',
-                                      style: TextStyle(
-                                          color: colors.text,
-                                          fontWeight: FontWeight.w800)),
-                                  const SizedBox(height: 8),
-                                  Wrap(
-                                      spacing: 8,
-                                      runSpacing: 8,
-                                      children: _interestOptions
-                                          .map((interest) => FilterChip(
-                                              label: Text(interest),
-                                              selected:
-                                                  _interests.contains(interest),
-                                              onSelected: (selected) =>
-                                                  setState(() => selected
-                                                      ? _interests.add(interest)
-                                                      : _interests
-                                                          .remove(interest))))
-                                          .toList()),
-                                  const SizedBox(height: 12),
-                                  Text('Additional information',
-                                      style: TextStyle(
-                                          color: colors.text,
-                                          fontSize: 18,
-                                          fontWeight: FontWeight.w900)),
-                                  const SizedBox(height: 8),
-                                  _giftField(
-                                      _personalMessage,
-                                      'Personal message',
-                                      Icons.chat_bubble_outline,
-                                      lines: 3),
-                                  _giftField(_notes, 'Additional Information',
-                                      Icons.notes,
-                                      lines: 3),
-                                  Text(
-                                      'Record allergies, medical conditions, dietary requirements, religious considerations, sensitivities, accessibility requirements, favourite colours, favourite brands, dislikes, or any special requests.',
-                                      style: TextStyle(
-                                          color: colors.mutedText,
-                                          fontSize: 12)),
-                                  OutlinedButton.icon(
-                                      onPressed: _pickPhoto,
-                                      icon: const Icon(
-                                          Icons.add_a_photo_outlined),
-                                      label: Text(_photo == null
-                                          ? 'Add optional recipient photo'
-                                          : 'Photo selected · Replace')),
-                                  if (_photo != null)
-                                    Align(
-                                        alignment: Alignment.centerLeft,
-                                        child: TextButton.icon(
-                                            onPressed: () =>
-                                                setState(() => _photo = null),
-                                            icon: const Icon(Icons.close),
-                                            label: const Text('Remove photo'))),
-                                  if (_message != null)
-                                    Padding(
-                                        padding: const EdgeInsets.only(top: 12),
-                                        child: Text(_message!,
-                                            style: TextStyle(
-                                                color: colors.text,
-                                                fontWeight: FontWeight.w700))),
-                                  const SizedBox(height: 16),
-                                  FilledButton.icon(
-                                      onPressed: _saving ? null : _submit,
-                                      icon: _saving
-                                          ? const SizedBox.square(
-                                              dimension: 18,
-                                              child: CircularProgressIndicator(
-                                                  strokeWidth: 2))
-                                          : const Icon(Icons.card_giftcard),
-                                      label: Text(_saving
-                                          ? 'Preparing payment...'
-                                          : 'Create Gift Experience'),
-                                      style: FilledButton.styleFrom(
-                                          padding: const EdgeInsets.symmetric(
-                                              vertical: 17))),
-                                  const SizedBox(height: 8),
-                                  Text(
-                                      'The exact gift contents, supplier costs, and internal fulfilment plan remain private until delivery.',
-                                      textAlign: TextAlign.center,
-                                      style: TextStyle(
-                                          color: colors.mutedText,
-                                          fontSize: 12)),
-                                  const SizedBox(height: 6),
-                                  Text(
-                                    'Circum may ask to record or share a gift reaction. This is optional, and the gift can still be received if filming or public posting is declined.',
-                                    textAlign: TextAlign.center,
-                                    style: TextStyle(
-                                        color: colors.mutedText, fontSize: 12),
-                                  ),
-                                ])),
-                      ],
-                      if (_requests.isNotEmpty) ...[
-                        const SizedBox(height: 22),
-                        Text('Your gift requests',
-                            style: TextStyle(
-                                color: colors.text,
-                                fontSize: 22,
-                                fontWeight: FontWeight.w900)),
-                        const SizedBox(height: 10),
-                        ..._requests.map(
-                          (request) => Container(
-                            margin: const EdgeInsets.only(bottom: 8),
-                            decoration: BoxDecoration(
-                              color: colors.field,
-                              borderRadius: BorderRadius.circular(12),
-                              border: Border.all(color: colors.border),
-                            ),
-                            child: ListTile(
-                              leading: const Icon(Icons.card_giftcard),
-                              title: Text(
-                                '${request['occasion']} for ${request['recipientName']}',
+                            const SizedBox(height: 16),
+                            FilledButton.icon(
+                              onPressed: _saving ? null : _submit,
+                              icon: _saving
+                                  ? const SizedBox.square(
+                                      dimension: 18,
+                                      child: CircularProgressIndicator(
+                                        strokeWidth: 2,
+                                      ),
+                                    )
+                                  : const Icon(Icons.card_giftcard),
+                              label: Text(
+                                _saving
+                                    ? 'Preparing payment...'
+                                    : 'Create Gift Experience',
                               ),
-                              subtitle: Text(
-                                GiftRequestPolicy.senderStatus(
-                                  '${request['status']}',
+                              style: FilledButton.styleFrom(
+                                padding: const EdgeInsets.symmetric(
+                                  vertical: 17,
                                 ),
                               ),
-                              trailing: Text(
-                                '£${((request['grossBudget'] as num?)?.toDouble() ?? 0).toStringAsFixed(0)}',
+                            ),
+                            const SizedBox(height: 8),
+                            Text(
+                              'The exact gift contents, supplier costs, and internal fulfilment plan remain private until delivery.',
+                              textAlign: TextAlign.center,
+                              style: TextStyle(
+                                color: colors.mutedText,
+                                fontSize: 12,
                               ),
+                            ),
+                            const SizedBox(height: 6),
+                            Text(
+                              'Circum may ask to record or share a gift reaction. This is optional, and the gift can still be received if filming or public posting is declined.',
+                              textAlign: TextAlign.center,
+                              style: TextStyle(
+                                color: colors.mutedText,
+                                fontSize: 12,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                    if (_requests.isNotEmpty) ...[
+                      const SizedBox(height: 22),
+                      Text(
+                        'Your gift requests',
+                        style: TextStyle(
+                          color: colors.text,
+                          fontSize: 22,
+                          fontWeight: FontWeight.w900,
+                        ),
+                      ),
+                      const SizedBox(height: 10),
+                      ..._requests.map(
+                        (request) => Container(
+                          margin: const EdgeInsets.only(bottom: 8),
+                          decoration: BoxDecoration(
+                            color: colors.field,
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(color: colors.border),
+                          ),
+                          child: ListTile(
+                            leading: const Icon(Icons.card_giftcard),
+                            title: Text(
+                              '${request['occasion']} for ${request['recipientName']}',
+                            ),
+                            subtitle: Text(
+                              GiftRequestPolicy.senderStatus(
+                                '${request['status']}',
+                              ),
+                            ),
+                            trailing: Text(
+                              '£${((request['grossBudget'] as num?)?.toDouble() ?? 0).toStringAsFixed(0)}',
                             ),
                           ),
                         ),
-                      ],
-                    ]),
+                      ),
+                    ],
+                  ],
+                ),
               ),
             ),
           ],
@@ -23094,17 +27339,22 @@ class _GiftsRequestPageState extends State<_GiftsRequestPage> {
   }
 
   Widget _giftField(
-      TextEditingController controller, String label, IconData icon,
-      {TextInputType? type, int lines = 1, bool obscure = false}) {
+    TextEditingController controller,
+    String label,
+    IconData icon, {
+    TextInputType? type,
+    int lines = 1,
+    bool obscure = false,
+  }) {
     return Padding(
       padding: const EdgeInsets.only(bottom: 12),
       child: TextField(
-          controller: controller,
-          keyboardType: type,
-          maxLines: lines,
-          obscureText: obscure,
-          decoration:
-              InputDecoration(labelText: label, prefixIcon: Icon(icon))),
+        controller: controller,
+        keyboardType: type,
+        maxLines: lines,
+        obscureText: obscure,
+        decoration: InputDecoration(labelText: label, prefixIcon: Icon(icon)),
+      ),
     );
   }
 }
@@ -23114,7 +27364,6 @@ class _GiftsComingSoonPage extends StatefulWidget {
   final VoidCallback onBack;
 
   const _GiftsComingSoonPage({
-    super.key,
     required this.colors,
     required this.onBack,
   });
@@ -23182,8 +27431,10 @@ class _GiftsComingSoonPageState extends State<_GiftsComingSoonPage> {
     } catch (error) {
       debugPrint('Gifts waitlist error: $error');
       if (mounted) {
-        setState(() => _message =
-            'We could not add you just now. Please try again shortly.');
+        setState(
+          () => _message =
+              'We could not add you just now. Please try again shortly.',
+        );
       }
     } finally {
       if (mounted) setState(() => _saving = false);
@@ -23198,8 +27449,12 @@ class _GiftsComingSoonPageState extends State<_GiftsComingSoonPage> {
       backgroundColor: colors.background,
       body: SafeArea(
         child: ListView(
-          padding:
-              EdgeInsets.fromLTRB(narrow ? 18 : 28, 16, narrow ? 18 : 28, 42),
+          padding: EdgeInsets.fromLTRB(
+            narrow ? 18 : 28,
+            16,
+            narrow ? 18 : 28,
+            42,
+          ),
           children: [
             ConstrainedBox(
               constraints: const BoxConstraints(maxWidth: 1100),
@@ -23235,13 +27490,15 @@ class _GiftsComingSoonPageState extends State<_GiftsComingSoonPage> {
                           borderRadius: BorderRadius.circular(28),
                           color: Colors.black,
                           border: Border.all(
-                            color:
-                                const Color(0xff70f5d0).withValues(alpha: 0.24),
+                            color: const Color(
+                              0xff70f5d0,
+                            ).withValues(alpha: 0.24),
                           ),
                           boxShadow: [
                             BoxShadow(
-                              color: const Color(0xff9b72ff)
-                                  .withValues(alpha: 0.24),
+                              color: const Color(
+                                0xff9b72ff,
+                              ).withValues(alpha: 0.24),
                               blurRadius: 46,
                               offset: const Offset(0, 18),
                             ),
@@ -23295,11 +27552,12 @@ class _GiftsComingSoonPageState extends State<_GiftsComingSoonPage> {
                       spacing: 9,
                       runSpacing: 9,
                       children: _interests
-                          .map((label) => Chip(
-                                avatar:
-                                    const Icon(Icons.auto_awesome, size: 16),
-                                label: Text(label),
-                              ))
+                          .map(
+                            (label) => Chip(
+                              avatar: const Icon(Icons.auto_awesome, size: 16),
+                              label: Text(label),
+                            ),
+                          )
                           .toList(),
                     ),
                     const SizedBox(height: 34),
@@ -23360,11 +27618,13 @@ class _GiftsComingSoonPageState extends State<_GiftsComingSoonPage> {
                                 ? const SizedBox.square(
                                     dimension: 18,
                                     child: CircularProgressIndicator(
-                                        strokeWidth: 2),
+                                      strokeWidth: 2,
+                                    ),
                                   )
                                 : const Icon(Icons.card_giftcard),
-                            label:
-                                Text(_saving ? 'Joining...' : 'Join waitlist'),
+                            label: Text(
+                              _saving ? 'Joining...' : 'Join waitlist',
+                            ),
                             style: FilledButton.styleFrom(
                               padding: const EdgeInsets.symmetric(vertical: 17),
                             ),
@@ -23393,7 +27653,8 @@ class _CompanyLiveChatButton extends StatefulWidget {
 }
 
 class _CompanyLiveChatButtonState extends State<_CompanyLiveChatButton> {
-  final _name = TextEditingController();
+  final _firstName = TextEditingController();
+  final _lastName = TextEditingController();
   final _email = TextEditingController();
   final _message = TextEditingController();
   bool _open = false;
@@ -23402,7 +27663,8 @@ class _CompanyLiveChatButtonState extends State<_CompanyLiveChatButton> {
 
   @override
   void dispose() {
-    _name.dispose();
+    _firstName.dispose();
+    _lastName.dispose();
     _email.dispose();
     _message.dispose();
     super.dispose();
@@ -23489,127 +27751,270 @@ class _CompanyLiveChatButtonState extends State<_CompanyLiveChatButton> {
         child: Material(
           color: Colors.transparent,
           child: Container(
-            width: compact ? double.infinity : 400,
+            width: compact ? double.infinity : 560,
             height: compact ? size.height * 0.92 : double.infinity,
-            padding: const EdgeInsets.all(18),
+            padding: EdgeInsets.zero,
             decoration: BoxDecoration(
-              color: colors.panel,
+              color: const Color(0xff07090f),
               borderRadius: compact
                   ? BorderRadius.circular(24)
                   : const BorderRadius.horizontal(left: Radius.circular(24)),
-              border: Border.all(color: colors.border),
+              border: Border.all(color: Colors.white.withValues(alpha: 0.14)),
               boxShadow: [
                 BoxShadow(
-                  color:
-                      Colors.black.withValues(alpha: colors.dark ? 0.34 : 0.16),
-                  blurRadius: 28,
-                  offset: const Offset(0, 16),
+                  color: const Color(0xff3b82f6).withValues(alpha: 0.12),
+                  blurRadius: 34,
+                  offset: const Offset(0, 20),
                 ),
               ],
             ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisSize: MainAxisSize.min,
+            child: Stack(
               children: [
-                Row(
+                Positioned(
+                  left: -80,
+                  top: 120,
+                  child: Container(
+                    width: 260,
+                    height: 260,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      color: const Color(0xff3b82f6).withValues(alpha: 0.08),
+                    ),
+                  ),
+                ),
+                Column(
                   children: [
                     Container(
-                      width: 38,
-                      height: 38,
+                      height: 3,
+                      alignment: Alignment.centerLeft,
                       decoration: BoxDecoration(
-                        gradient:
-                            const LinearGradient(colors: _spectrumGradient),
-                        borderRadius: BorderRadius.circular(14),
+                        color: Colors.white.withValues(alpha: 0.08),
+                        borderRadius: const BorderRadius.vertical(
+                          top: Radius.circular(24),
+                        ),
                       ),
-                      child:
-                          const Icon(Icons.support_agent, color: Colors.white),
+                      child: FractionallySizedBox(
+                        widthFactor: 1,
+                        child: Container(color: const Color(0xff3b82f6)),
+                      ),
                     ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
+                    Padding(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 24,
+                        vertical: 14,
+                      ),
+                      child: Row(
                         children: [
-                          Text(
-                            'Talk to Circum',
-                            style: TextStyle(
-                              color: colors.text,
-                              fontSize: 18,
-                              fontWeight: FontWeight.w900,
+                          Container(
+                            width: 7,
+                            height: 7,
+                            decoration: BoxDecoration(
+                              color: const Color(0xff3b82f6),
+                              borderRadius: BorderRadius.circular(99),
+                              boxShadow: [
+                                BoxShadow(
+                                  color: const Color(
+                                    0xff3b82f6,
+                                  ).withValues(alpha: 0.65),
+                                  blurRadius: 10,
+                                ),
+                              ],
                             ),
                           ),
+                          const SizedBox(width: 8),
                           Text(
-                            'Send us a note and the team will pick it up.',
+                            'Circum',
                             style: TextStyle(
-                              color: colors.mutedText,
-                              fontWeight: FontWeight.w600,
+                              color: Colors.white.withValues(alpha: 0.68),
+                              fontFamily: 'JetBrains Mono',
+                              fontSize: 12,
+                              fontWeight: FontWeight.w700,
+                              letterSpacing: 1.2,
+                            ),
+                          ),
+                          const Spacer(),
+                          IconButton(
+                            tooltip: 'Close contact form',
+                            onPressed: () => setState(() => _open = false),
+                            icon: Icon(
+                              Icons.close,
+                              color: Colors.white.withValues(alpha: 0.68),
                             ),
                           ),
                         ],
                       ),
                     ),
-                    IconButton(
-                      tooltip: 'Close live chat',
-                      onPressed: () => setState(() => _open = false),
-                      icon: Icon(Icons.close, color: colors.text),
+                    Expanded(
+                      child: SingleChildScrollView(
+                        padding: const EdgeInsets.fromLTRB(28, 52, 28, 28),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'Contact Circum',
+                              style: TextStyle(
+                                color: const Color(0xff60a5fa),
+                                fontFamily: 'JetBrains Mono',
+                                fontSize: 12,
+                                fontWeight: FontWeight.w700,
+                                letterSpacing: 1,
+                              ),
+                            ),
+                            const SizedBox(height: 18),
+                            const Text(
+                              'How can we help you?',
+                              style: TextStyle(
+                                color: Color(0xfff5f7fb),
+                                fontFamily: 'DM Serif Display',
+                                fontSize: 34,
+                                height: 1.25,
+                                fontWeight: FontWeight.w400,
+                              ),
+                            ),
+                            const SizedBox(height: 12),
+                            Text(
+                              'Send Circum a message about deliveries, riders, accounts, payments, partnerships, or anything else you need help with.',
+                              style: TextStyle(
+                                color: Colors.white.withValues(alpha: 0.62),
+                                fontSize: 15,
+                                height: 1.55,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                            const SizedBox(height: 32),
+                            if (compact) ...[
+                              _LiveChatField(
+                                colors: colors,
+                                controller: _firstName,
+                                label: 'First name',
+                                icon: Icons.person_outline,
+                              ),
+                              const SizedBox(height: 14),
+                              _LiveChatField(
+                                colors: colors,
+                                controller: _lastName,
+                                label: 'Last name',
+                                icon: Icons.person_outline,
+                              ),
+                            ] else
+                              Row(
+                                children: [
+                                  Expanded(
+                                    child: _LiveChatField(
+                                      colors: colors,
+                                      controller: _firstName,
+                                      label: 'First name',
+                                      icon: Icons.person_outline,
+                                    ),
+                                  ),
+                                  const SizedBox(width: 14),
+                                  Expanded(
+                                    child: _LiveChatField(
+                                      colors: colors,
+                                      controller: _lastName,
+                                      label: 'Last name',
+                                      icon: Icons.person_outline,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            const SizedBox(height: 14),
+                            _LiveChatField(
+                              colors: colors,
+                              controller: _email,
+                              label: 'Email or phone',
+                              icon: Icons.alternate_email,
+                            ),
+                            const SizedBox(height: 14),
+                            _LiveChatField(
+                              colors: colors,
+                              controller: _message,
+                              label: 'Message',
+                              icon: Icons.message_outlined,
+                              minLines: 4,
+                              maxLines: 6,
+                            ),
+                            const SizedBox(height: 20),
+                            Text(
+                              'If your message is about an existing delivery, include your delivery reference if you have it.',
+                              style: TextStyle(
+                                color: Colors.white.withValues(alpha: 0.58),
+                                fontSize: 14,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                            if (_note != null) ...[
+                              const SizedBox(height: 16),
+                              Text(
+                                _note!,
+                                style: TextStyle(
+                                  color: _note!.startsWith('Sent')
+                                      ? colors.success
+                                      : const Color(0xffef4444),
+                                  fontWeight: FontWeight.w800,
+                                ),
+                              ),
+                            ],
+                            const SizedBox(height: 46),
+                            Container(
+                              padding: const EdgeInsets.only(top: 20),
+                              decoration: BoxDecoration(
+                                border: Border(
+                                  top: BorderSide(
+                                    color: Colors.white.withValues(alpha: 0.14),
+                                  ),
+                                ),
+                              ),
+                              child: Row(
+                                mainAxisAlignment: MainAxisAlignment.end,
+                                children: [
+                                  Text(
+                                    'Press enter or',
+                                    style: TextStyle(
+                                      color: Colors.white.withValues(
+                                        alpha: 0.56,
+                                      ),
+                                      fontSize: 13,
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                                  ),
+                                  const SizedBox(width: 16),
+                                  FilledButton.icon(
+                                    onPressed: _sending ? null : _send,
+                                    icon: _sending
+                                        ? const SizedBox(
+                                            width: 18,
+                                            height: 18,
+                                            child: CircularProgressIndicator(
+                                              strokeWidth: 2,
+                                              color: Colors.white,
+                                            ),
+                                          )
+                                        : const Icon(Icons.arrow_forward),
+                                    label: Text(
+                                      _sending ? 'Sending' : 'Send message',
+                                    ),
+                                    style: FilledButton.styleFrom(
+                                      backgroundColor: const Color(0xff3b82f6),
+                                      foregroundColor: Colors.white,
+                                      padding: const EdgeInsets.symmetric(
+                                        horizontal: 22,
+                                        vertical: 14,
+                                      ),
+                                      shape: RoundedRectangleBorder(
+                                        borderRadius: BorderRadius.circular(12),
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
                     ),
                   ],
                 ),
-                const SizedBox(height: 14),
-                _LiveChatField(
-                  colors: colors,
-                  controller: _name,
-                  label: 'Name',
-                  icon: Icons.person_outline,
-                ),
-                const SizedBox(height: 10),
-                _LiveChatField(
-                  colors: colors,
-                  controller: _email,
-                  label: 'Email or phone',
-                  icon: Icons.alternate_email,
-                ),
-                const SizedBox(height: 10),
-                _LiveChatField(
-                  colors: colors,
-                  controller: _message,
-                  label: 'How can we help?',
-                  icon: Icons.message_outlined,
-                  minLines: 3,
-                  maxLines: 5,
-                ),
-                if (_note != null) ...[
-                  const SizedBox(height: 10),
-                  Text(
-                    _note!,
-                    style: TextStyle(
-                      color: _note!.startsWith('Sent')
-                          ? colors.success
-                          : const Color(0xffef4444),
-                      fontWeight: FontWeight.w800,
-                    ),
-                  ),
-                ],
-                const SizedBox(height: 14),
-                SizedBox(
-                  width: double.infinity,
-                  child: FilledButton.icon(
-                    onPressed: _sending ? null : _send,
-                    icon: _sending
-                        ? const SizedBox(
-                            width: 18,
-                            height: 18,
-                            child: CircularProgressIndicator(strokeWidth: 2),
-                          )
-                        : const Icon(Icons.send),
-                    label: Text(_sending ? 'Sending' : 'Send message'),
-                    style: FilledButton.styleFrom(
-                      backgroundColor: colors.text,
-                      foregroundColor: colors.inverseText,
-                      padding: const EdgeInsets.symmetric(vertical: 14),
-                    ),
-                  ),
-                ),
-                if (!compact) const Spacer(),
               ],
             ),
           ),
@@ -23631,55 +28036,18 @@ class _CompanyLiveChatButtonState extends State<_CompanyLiveChatButton> {
     });
     try {
       await _ensureCircumFirebaseReady();
-      final db = FirebaseFirestore.instance;
-      final ticketRef = db.collection('supportTickets').doc();
-      final user = FirebaseAuth.instance.currentUser;
-      final chatId = 'support_${ticketRef.id}';
-      await ticketRef.set({
-        'channel': 'web_live_chat',
-        'status': 'open',
-        'priority': 'normal',
-        'name': _name.text.trim(),
+      await FirebaseFunctions.instanceFor(
+        region: 'us-central1',
+      ).httpsCallable('submitWebsiteSupportRequest').call({
+        'name': [
+          _firstName.text.trim(),
+          _lastName.text.trim(),
+        ].where((part) => part.isNotEmpty).join(' '),
         'email': contact,
         'message': message,
-        'lastMessage': message,
-        'lastMessageAt': FieldValue.serverTimestamp(),
-        'adminUnreadCount': 1,
         'pageUrl': Uri.base.toString(),
-        'chatId': chatId,
-        if (user != null) 'userId': user.uid,
-        'createdAt': FieldValue.serverTimestamp(),
-        'updatedAt': FieldValue.serverTimestamp(),
+        'participantRole': 'visitor',
       });
-      if (user != null) {
-        final chatRef = db.collection('chats').doc(chatId);
-        await chatRef.set({
-          'threadId': chatId,
-          'type': 'support',
-          'ticketId': ticketRef.id,
-          'participants': [user.uid, 'circum-support'],
-          'participantRoles': {
-            user.uid: 'shipper',
-            'circum-support': 'admin',
-          },
-          'status': 'open',
-          'createdAt': FieldValue.serverTimestamp(),
-          'updatedAt': FieldValue.serverTimestamp(),
-          'lastMessage': message,
-        });
-        await chatRef.collection('messages').add({
-          'threadId': chatId,
-          'ticketId': ticketRef.id,
-          'senderId': user.uid,
-          'senderRole': 'shipper',
-          'messageText': message,
-          'message': message,
-          'attachments': const [],
-          'initialSupportRequest': true,
-          'readBy': [user.uid],
-          'createdAt': FieldValue.serverTimestamp(),
-        });
-      }
       _message.clear();
       setState(() => _note = 'Sent. Circum support has your message.');
     } catch (_) {
@@ -23773,43 +28141,6 @@ class _VehicleOption {
   });
 }
 
-String _riderRankLabel(String rank) {
-  final normalized = _websiteRiderRankLabel(rank);
-  return '${normalized[0].toUpperCase()}${normalized.substring(1)}';
-}
-
-class _RiderRankBadge extends StatelessWidget {
-  final String rank;
-
-  const _RiderRankBadge({required this.rank});
-
-  @override
-  Widget build(BuildContext context) {
-    final normalized = _websiteRiderRankLabel(rank);
-    final colors = switch (normalized) {
-      'sentinel' => const [Color(0xff2563eb), Color(0xff38bdf8)],
-      'warden' => const [Color(0xffb7791f), Color(0xfff6c453)],
-      'knight' => const [Color(0xff7c3aed), Color(0xffc084fc)],
-      'veteran' => const [Color(0xff8b5cf6), Color(0xff5eead4)],
-      _ => const [Color(0xff64748b), Color(0xffe2e8f0)],
-    };
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
-      decoration: BoxDecoration(
-        gradient: LinearGradient(colors: colors),
-        borderRadius: BorderRadius.circular(8),
-      ),
-      child: Text(
-        _riderRankLabel(normalized).toUpperCase(),
-        style: const TextStyle(
-          color: Colors.white,
-          fontWeight: FontWeight.w900,
-        ),
-      ),
-    );
-  }
-}
-
 class _TrackingStatus {
   final String title;
   final String body;
@@ -23833,8 +28164,8 @@ class _ChatMessage {
 
 const _vehicles = [
   _VehicleOption(
-    name: 'Bike',
-    emoji: '🚲',
+    name: 'Motorbike',
+    emoji: '🏍️',
     caption: 'Small parcels and documents across town',
     eta: '8 min',
   ),
@@ -23858,39 +28189,33 @@ const _trackingStatuses = [
     'Iris is checking nearby riders for this delivery.',
   ),
   _TrackingStatus(
-    'Rider assigned',
+    'Circum Rider assigned',
     'CIRCUM has assigned a rider to this delivery.',
   ),
   _TrackingStatus(
     'Travelling to pickup',
-    'Your rider is heading to the pickup location.',
+    'Your Circum Rider is heading to the pickup location.',
   ),
   _TrackingStatus(
     'Arrived at pickup',
-    'Your rider has arrived and is waiting for collection.',
+    'Your Circum Rider has arrived and is waiting for collection.',
   ),
   _TrackingStatus(
     'Pickup verified',
-    'Collection has been verified and the parcel is with your rider.',
+    'Collection has been verified and the parcel is with your Circum Rider.',
   ),
   _TrackingStatus(
     'In transit',
-    'Your rider is travelling to the drop-off location.',
+    'Your Circum Rider is travelling to the drop-off location.',
   ),
   _TrackingStatus(
     'Arrived at drop-off',
-    'Your rider is at the destination and ready for handover.',
+    'Your Circum Rider is at the destination and ready for handover.',
   ),
   _TrackingStatus(
     'Delivered',
-    'Proof of delivery is saved in your Circum history.',
+    'Delivery completed. Open the delivery record to view available proof.',
   ),
-  _TrackingStatus(
-    'Closed',
-    'This delivery is no longer active.',
-  ),
-  _TrackingStatus(
-    'Needs attention',
-    'Circum is reviewing this delivery.',
-  ),
+  _TrackingStatus('Closed', 'This delivery is no longer active.'),
+  _TrackingStatus('Needs attention', 'Circum is reviewing this delivery.'),
 ];

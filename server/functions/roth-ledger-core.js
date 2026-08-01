@@ -1,4 +1,4 @@
-/* eslint-disable max-len */
+/* eslint-disable max-len, require-jsdoc */
 "use strict";
 
 const BALANCE_TYPES = Object.freeze({
@@ -46,6 +46,51 @@ function roundMoney(value) {
   const amount = Number(value || 0);
   if (!Number.isFinite(amount)) return 0;
   return Math.round(amount * 100) / 100;
+}
+
+function verifiedStripePaidGbpSession(sessionData, {
+  ownerId = "",
+  ownerEmail = "",
+  expectedAmountGBP = null,
+} = {}) {
+  const session = sessionData || {};
+  if (`${session.payment_status || ""}`.toLowerCase() !== "paid") {
+    throw new Error("Stripe payment has not been verified as paid.");
+  }
+  const currency = `${session.currency || ""}`.toLowerCase();
+  if (currency !== "gbp") {
+    throw new Error("Stripe payment must be paid in GBP.");
+  }
+  const amountPence = Number(session.amount_total || 0);
+  if (!Number.isInteger(amountPence) || amountPence <= 0) {
+    throw new Error("Stripe payment amount must be greater than zero.");
+  }
+  if (!`${ownerId || ""}`.trim() && !`${ownerEmail || ""}`.trim()) {
+    throw new Error("Stripe payment owner could not be verified.");
+  }
+  const referenceOwner = `${session.client_reference_id || ""}`.trim();
+  if (referenceOwner && `${ownerId || ""}`.trim() &&
+      referenceOwner !== `${ownerId || ""}`.trim()) {
+    throw new Error("Stripe payment owner does not match the session.");
+  }
+  const amountGBP = roundMoney(amountPence / 100);
+  if (expectedAmountGBP != null && amountGBP !== roundMoney(expectedAmountGBP)) {
+    throw new Error("Stripe payment amount does not match the expected charge.");
+  }
+  return {
+    amountGBP,
+    currency: "GBP",
+    paymentIntentId: session.payment_intent || null,
+    checkoutSessionId: session.id || null,
+  };
+}
+
+function verifiedStripeRothPurchase(sessionData, {ownerId = "", ownerEmail = ""} = {}) {
+  const payment = verifiedStripePaidGbpSession(sessionData, {ownerId, ownerEmail});
+  return {
+    ...payment,
+    rothIssued: payment.amountGBP,
+  };
 }
 
 function assertBalanceType(balanceType) {
@@ -199,6 +244,8 @@ module.exports = {
   LEDGER_EVENTS,
   TRANSACTION_TYPES,
   roundMoney,
+  verifiedStripePaidGbpSession,
+  verifiedStripeRothPurchase,
   assertBalanceType,
   assertTransactionType,
   canWithdraw,

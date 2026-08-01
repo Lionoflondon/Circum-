@@ -4,7 +4,7 @@ import 'package:flutter/material.dart';
 import '../../../utils/theme/colors.dart';
 
 class IndexPage extends StatelessWidget {
-  const IndexPage({Key? key}) : super(key: key);
+  const IndexPage({super.key});
 
   static Page<void> page() => const MaterialPage<void>(child: IndexPage());
 

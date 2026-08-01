@@ -38,6 +38,19 @@ async function routeCheckoutSessionCompleted(
     return {handled: true, type};
   }
 
+  if (type === "sender_delivery_payment") {
+    if (!deps.senderBooking ||
+        typeof deps.senderBooking.handleSenderCheckoutSession !==
+        "function") {
+      throw new Error("sender checkout finalizer unavailable");
+    }
+    await deps.senderBooking.handleSenderCheckoutSession(
+        sessionData,
+        eventId,
+    );
+    return {handled: true, type};
+  }
+
   if (type === "gift_experience") {
     if (!deps.giftsPayment ||
         typeof deps.giftsPayment.finalizeGiftPaymentFromCheckoutSession !==
@@ -50,6 +63,19 @@ async function routeCheckoutSessionCompleted(
       eventId,
     });
     return {handled: true, type};
+  }
+
+  if (type === "health_plus_payment" || metadata.feature === "health_plus") {
+    if (!deps.healthPlus ||
+        typeof deps.healthPlus.handleHealthPlusCheckoutSession !==
+        "function") {
+      throw new Error("health plus checkout finalizer unavailable");
+    }
+    await deps.healthPlus.handleHealthPlusCheckoutSession(
+        sessionData,
+        eventId,
+    );
+    return {handled: true, type: type || "health_plus_payment"};
   }
 
   logger.info(

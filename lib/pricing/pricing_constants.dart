@@ -5,9 +5,8 @@ class PricingConstants {
   static const double shortTripFareFloorMiles = 1.6;
   static const double longDistanceThresholdMiles = 20;
   static const double longDistanceMileageMultiplier = 1.2;
-  static const double fixedExpressSurchargeGbp = 2.99;
+  static const double fixedExpressSurchargeGbp = 5;
   static const double expressMultiplier = 1.2;
-  static const double economyDiscountGbp = 1.5;
   static const double heavyDutySurchargeGbp = 25;
   static const double twoPersonThresholdKg = 40;
 
@@ -19,7 +18,7 @@ class PricingConstants {
     'stairsOneToTwoFloors': 3,
     'stairsThreePlusFloors': 7,
     'priority': 5,
-    'express': 10,
+    'express': fixedExpressSurchargeGbp,
     'waitingAdditionalFiveMinutes': 2,
   };
 
@@ -57,14 +56,9 @@ class PricingConstants {
   ];
 
   static const Map<String, double> vehicleSurchargesGbp = {
-    'bike': 0,
-    'bicycle': 0,
+    'motorbike': 0,
     'car': 2,
-    'estate': 5,
-    'suv': 5,
-    'estate/suv': 5,
     'van': 10,
-    'luton van': 0,
   };
 
   // Vehicle selection is based on parcel safety, not current rider supply.

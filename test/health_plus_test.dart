@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:circum/app/health_plus/health_plus_pricing.dart';
 import 'package:circum/app/health_plus/models/health_plus_profile.dart';
 import 'package:circum/app/health_plus/models/pickup_status.dart';
@@ -94,13 +96,93 @@ void main() {
 
       expect(
           quote.total, greaterThan(HealthPlusPricing.minimumStartingPriceGbp));
-      expect(quote.priorityFee, HealthPlusPricing.priorityFeeGbp);
+      expect(quote.priorityFee, 0);
       expect(quote.minimumAdjustment, lessThanOrEqualTo(0));
+    });
+
+    test('subscriptions use the locked Health+ monthly plan model', () {
+      final basic = HealthPlusPricing.calculate(
+        recurring: true,
+        subscriptionPlan: 'basic',
+      );
+      final priority = HealthPlusPricing.calculate(
+        recurring: true,
+        subscriptionPlan: 'priority',
+      );
+      final family = HealthPlusPricing.calculate(
+        recurring: true,
+        subscriptionPlan: 'family',
+      );
+
+      expect(basic.total, 11);
+      expect(basic.includedPickups, 2);
+      expect(priority.total, 25);
+      expect(priority.includedPickups, 4);
+      expect(family.total, 40);
+      expect(family.unlimitedPickups, isTrue);
+      expect(family.fairUseMonitored, isTrue);
+      expect(priority.priorityFee, 0);
+      expect(family.familySupportFee, 0);
+      expect(family.recurringDiscount, 0);
     });
 
     test('cancelling or pausing uses explicit status fields', () {
       expect(PickupStatusValue.fromValue('cancelled'), PickupStatus.cancelled);
       expect(PickupStatus.failed.value, 'failed');
+    });
+
+    test('app pickup preference requires full date and time selection', () {
+      final source =
+          File('lib/app/health_plus/view/health_plus.dart').readAsStringSync();
+
+      expect(source, contains('_HealthDateTimeInput'));
+      expect(source, contains('showDatePicker'));
+      expect(source, contains('showTimePicker'));
+      expect(source, contains('Preferred pickup date and time'));
+      expect(source, contains('Choose day, month, year and time.'));
+      expect(source, contains("_formatHealthPickupDateTime"));
+      expect(source, isNot(contains("Tuesday, 10:00 AM")));
+    });
+
+    test('app booking plans match the public Health+ plan copy', () {
+      final source =
+          File('lib/app/health_plus/view/health_plus.dart').readAsStringSync();
+
+      expect(source, contains('Health+ Basic'));
+      expect(source,
+          contains('2 Health+ prescription pickups every calendar month'));
+      expect(source, contains('Medicine delivery reminders'));
+      expect(source, contains('Secure sealed-package handover'));
+      expect(source, contains('Health+ Priority'));
+      expect(source, contains('£25/month'));
+      expect(source,
+          contains('4 Health+ prescription pickups every calendar month'));
+      expect(source, contains('Priority Circum Rider matching'));
+      expect(source, contains('Faster pickup target'));
+      expect(source, contains('Medicine reminders'));
+      expect(source, contains('Health+ Family'));
+      expect(source, contains('£40/month'));
+      expect(source, contains('Unlimited Health+ prescription pickups'));
+      expect(source, contains('Family member support'));
+      expect(source, contains('Shared pickup notes'));
+      expect(source, contains('Repeat medicine reminders'));
+      expect(source, contains('Priority support'));
+      expect(source, contains('Start subscription'));
+      expect(source, contains('Continue one-off pickup'));
+      expect(source, contains('£11/month'));
+      expect(source, isNot(contains('Standard prescription delivery')));
+      expect(source, isNot(contains('Faster Circum Rider assignment')));
+      expect(source, isNot(contains('Household pickup support')));
+    });
+
+    test('app Health+ checkout opens Stripe correctly on web', () {
+      final source =
+          File('lib/app/health_plus/view/health_plus.dart').readAsStringSync();
+
+      expect(source, contains("_openStripeCheckoutUrl(checkoutUrl)"));
+      expect(source, contains("webOnlyWindowName: kIsWeb ? '_self' : null"));
+      expect(source, contains("'subscriptionPlan': _plan"));
+      expect(source, contains('_HealthCheckoutException'));
     });
   });
 }

@@ -3,12 +3,12 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_svg/svg.dart';
 
+import '../../send_package/view/ride_chats.dart';
 import '../../../utils/theme/theme.dart';
 import '../bloc/support_bloc.dart';
-import 'chat.dart';
 
 class SupportView extends StatelessWidget {
-  const SupportView({Key? key}) : super(key: key);
+  const SupportView({super.key});
 
   @override
   Widget build(BuildContext context) {
@@ -58,7 +58,7 @@ class SupportView extends StatelessWidget {
                       ),
                       Icon(
                         Icons.keyboard_arrow_right_rounded,
-                        color: Colors.white.withOpacity(0.15),
+                        color: Colors.white.withValues(alpha: 0.15),
                       )
                     ],
                   ),
@@ -66,12 +66,15 @@ class SupportView extends StatelessWidget {
                     Navigator.push(
                         context,
                         MaterialPageRoute(
-                            builder: (_) => const ChatPageView()));
+                            builder: (_) => const RideChatPageView(
+                                  title: 'Circum Support',
+                                  supportConversation: true,
+                                )));
                   }),
               Divider(
                   height: 1,
                   thickness: 1,
-                  color: Colors.white.withOpacity(0.15)),
+                  color: Colors.white.withValues(alpha: 0.15)),
               TextButton(
                   // borderSide: BorderSide.none,
                   // backgroundColor: AppColors.secondary,
@@ -93,7 +96,7 @@ class SupportView extends StatelessWidget {
                       ),
                       Icon(
                         Icons.keyboard_arrow_right_rounded,
-                        color: Colors.white.withOpacity(0.15),
+                        color: Colors.white.withValues(alpha: 0.15),
                       )
                     ],
                   ),

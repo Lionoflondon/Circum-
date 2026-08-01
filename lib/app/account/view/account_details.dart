@@ -1,9 +1,4 @@
-import 'dart:convert';
-
-import 'package:circum/app.dart';
-import 'package:circum/app/onboarding/onboarding.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter/scheduler.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:image_picker/image_picker.dart';
@@ -11,13 +6,12 @@ import 'package:image_picker/image_picker.dart';
 import '../../../utils/app_state/app_state.dart';
 import '../../../utils/theme/theme.dart';
 import '../../authentication/bloc/auth_bloc.dart';
-import '../../authentication/view/enter_otp.dart';
 import 'bottom_sheets/bottom_sheets.dart';
 import 'bottom_sheets/image_bs.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 
 class AccountDetails extends StatefulWidget {
-  const AccountDetails({Key? key}) : super(key: key);
+  const AccountDetails({super.key});
 
   @override
   State<AccountDetails> createState() => _AccountDetailsState();
@@ -62,17 +56,17 @@ class _AccountDetailsState extends State<AccountDetails> {
                       Divider(
                           height: 10,
                           thickness: 1,
-                          color: Colors.white.withOpacity(0.15)),
+                          color: Colors.white.withValues(alpha: 0.15)),
                       surname(),
                       Divider(
                           height: 10,
                           thickness: 1,
-                          color: Colors.white.withOpacity(0.15)),
+                          color: Colors.white.withValues(alpha: 0.15)),
                       email(),
                       Divider(
                           height: 10,
                           thickness: 1,
-                          color: Colors.white.withOpacity(0.15)),
+                          color: Colors.white.withValues(alpha: 0.15)),
                       phone(),
                       const Spacer(),
                       logout(),
@@ -87,7 +81,7 @@ class _AccountDetailsState extends State<AccountDetails> {
       return state.status == Status.loading
           ? LinearProgressIndicator(
               color: Colors.white,
-              backgroundColor: Colors.white.withOpacity(0.7),
+              backgroundColor: Colors.white.withValues(alpha: 0.7),
             )
           : Container();
     });
@@ -221,7 +215,7 @@ class _AccountDetailsState extends State<AccountDetails> {
               ),
               Icon(
                 Icons.keyboard_arrow_right_rounded,
-                color: Colors.white.withOpacity(0.15),
+                color: Colors.white.withValues(alpha: 0.15),
               )
             ],
           ),
@@ -266,7 +260,7 @@ class _AccountDetailsState extends State<AccountDetails> {
               ),
               Icon(
                 Icons.keyboard_arrow_right_rounded,
-                color: Colors.white.withOpacity(0.15),
+                color: Colors.white.withValues(alpha: 0.15),
               )
             ],
           ),
@@ -288,32 +282,18 @@ class _AccountDetailsState extends State<AccountDetails> {
   Widget email() {
     return BlocBuilder<AuthBloc, AuthState>(builder: (context, state) {
       return state.email != null && state.email != ''
-          ? TextButton(
-              // borderSide: BorderSide.none,
-              // backgroundColor: AppColors.secondary,
-              style: TextButton.styleFrom(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
-              ),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          ? Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      AppText.text('Email address',
-                          color: AppColors.textGrey, fontSize: 12),
-                      AppText.text('${state.email}',
-                          fontSize: 16, color: AppColors.textGrey)
-                    ],
-                  ),
-                  Icon(
-                    Icons.keyboard_arrow_right_rounded,
-                    color: Colors.white.withOpacity(0.15),
-                  )
+                  AppText.text('Email address',
+                      color: AppColors.textGrey, fontSize: 12),
+                  AppText.text('${state.email}',
+                      fontSize: 16, color: AppColors.textGrey)
                 ],
               ),
-              onPressed: () {})
+            )
           : Container();
     });
   }
@@ -340,7 +320,7 @@ class _AccountDetailsState extends State<AccountDetails> {
               ),
               Icon(
                 Icons.keyboard_arrow_right_rounded,
-                color: Colors.white.withOpacity(0.15),
+                color: Colors.white.withValues(alpha: 0.15),
               )
             ],
           ),
@@ -362,7 +342,7 @@ class _AccountDetailsState extends State<AccountDetails> {
           padding: const EdgeInsets.only(bottom: 0),
           child: TextButton(
             style: TextButton.styleFrom(
-                backgroundColor: AppColors.danger.withOpacity(0.5),
+                backgroundColor: AppColors.danger.withValues(alpha: 0.5),
                 shape: RoundedRectangleBorder(),
                 padding: const EdgeInsets.symmetric(vertical: 20)),
             onPressed: () {

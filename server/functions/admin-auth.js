@@ -1,7 +1,14 @@
 /* eslint-disable require-jsdoc */
 const functions = require("firebase-functions/v1");
 
-const ADMIN_ROLES = new Set(["admin", "super_admin", "operations_admin"]);
+const ADMIN_ROLES = new Set([
+  "admin",
+  "super_admin",
+  "operations_admin",
+  "support_agent",
+  "finance_admin",
+  "driver_manager",
+]);
 
 function clean(value) {
   return `${value || ""}`.trim().toLowerCase();

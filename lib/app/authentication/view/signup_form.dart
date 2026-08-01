@@ -1,18 +1,16 @@
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
-import 'package:flutter_svg/svg.dart';
 import 'package:intl_phone_field/countries.dart';
 import 'package:intl_phone_field/intl_phone_field.dart';
 
 import '../../../utils/theme/text_field.dart';
 import '../../../utils/theme/theme.dart';
-import '../../../extension/email_validation.dart';
 import '../bloc/auth_bloc.dart';
 import 'signin.dart';
 
 class SignupForm extends StatefulWidget {
-  SignupForm({Key? key}) : super(key: key);
+  const SignupForm({super.key});
 
   @override
   SignupFormState createState() => SignupFormState();
@@ -25,6 +23,13 @@ class SignupFormState extends State<SignupForm> {
   final TextEditingController passwordController = TextEditingController();
 
   // final BuildContext authBlocContext;
+
+  @override
+  void dispose() {
+    emailController.dispose();
+    passwordController.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -68,9 +73,9 @@ class SignupFormState extends State<SignupForm> {
   }
 
   Widget phoneInput() {
-    const _initialCountryCode = 'GB';
-    var _country =
-        countries.firstWhere((element) => element.code == _initialCountryCode);
+    const initialCountryCode = 'GB';
+    var country =
+        countries.firstWhere((element) => element.code == initialCountryCode);
     return BlocBuilder<AuthBloc, AuthState>(builder: (context, state) {
       return Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -92,7 +97,7 @@ class SignupFormState extends State<SignupForm> {
                   color: AppColors.grey),
               // hintText: '9020020222',
               hintStyle: TextStyle(
-                  color: const Color(0xFF050529).withOpacity(0.25),
+                  color: const Color(0xFF050529).withValues(alpha: 0.25),
                   fontFamily: 'Helvetica'),
               focusedBorder: const OutlineInputBorder(
                 borderRadius: BorderRadius.all(Radius.circular(0)),
@@ -103,14 +108,18 @@ class SignupFormState extends State<SignupForm> {
                 borderSide: BorderSide(color: Color(0xFF050529)),
               ),
             ),
-            initialCountryCode: _initialCountryCode,
-            onCountryChanged: (country) {
-              _country = country;
+            initialCountryCode: initialCountryCode,
+            onCountryChanged: (selectedCountry) {
+              country = selectedCountry;
               if (state.phoneNumber != null) {
-                if (state.phoneNumber!.length - country.dialCode.length - 1 >=
-                        country.minLength &&
-                    state.phoneNumber!.length - country.dialCode.length - 1 <=
-                        country.maxLength) {
+                if (state.phoneNumber!.length -
+                            selectedCountry.dialCode.length -
+                            1 >=
+                        selectedCountry.minLength &&
+                    state.phoneNumber!.length -
+                            selectedCountry.dialCode.length -
+                            1 <=
+                        selectedCountry.maxLength) {
                   context
                       .read<AuthBloc>()
                       .add(const ValidatePhoneNumber(val: true));
@@ -123,8 +132,8 @@ class SignupFormState extends State<SignupForm> {
             },
             onChanged: (val) {
               // print('Changed');
-              if (val.number.length >= _country.minLength &&
-                  val.number.length <= _country.maxLength) {
+              if (val.number.length >= country.minLength &&
+                  val.number.length <= country.maxLength) {
                 context
                     .read<AuthBloc>()
                     .add(const ValidatePhoneNumber(val: true));
@@ -159,10 +168,7 @@ class SignupFormState extends State<SignupForm> {
                 width: 80,
                 child: Align(
                     alignment: Alignment.centerRight,
-                    child: GestureDetector(
-                      onTap: () => context
-                          .read<AuthBloc>()
-                          .add(SetShowPassword(val: !state.showPassword)),
+                    child: ExcludeSemantics(
                       child: state.isEmailValid == true
                           ? const Icon(CupertinoIcons.check_mark_circled,
                               color: AppColors.primary)
@@ -198,11 +204,14 @@ class SignupFormState extends State<SignupForm> {
                   width: 80,
                   child: Align(
                       alignment: Alignment.centerRight,
-                      child: GestureDetector(
-                        onTap: () => context
+                      child: IconButton(
+                        tooltip: state.showPassword
+                            ? 'Hide password'
+                            : 'Show password',
+                        onPressed: () => context
                             .read<AuthBloc>()
                             .add(SetShowPassword(val: !state.showPassword)),
-                        child: state.showPassword == true
+                        icon: state.showPassword == true
                             ? const Icon(CupertinoIcons.eye,
                                 color: AppColors.primary)
                             : const Icon(CupertinoIcons.eye_slash,
@@ -233,8 +242,9 @@ class SignupFormState extends State<SignupForm> {
                     state.password != null &&
                     state.password!.length >= 8
                 ? null
-                : Colors.white.withOpacity(0.3),
+                : Colors.white.withValues(alpha: 0.3),
             onPressed: () {
+              if (state.status == Status.loading || state.isLoading) return;
               // if (state.isPhoneNumberValid == true) {
               //   context.read<AuthBloc>().add(RequestForOTP());
               // }
@@ -251,7 +261,7 @@ class SignupFormState extends State<SignupForm> {
             },
             widget: AppText.text('Create Account',
                 fontWeight: FontWeight.w700, color: Colors.white),
-            // isLoading: state.status == Status.loading
+            isLoading: state.status == Status.loading || state.isLoading,
           ));
     });
   }

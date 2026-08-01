@@ -38,7 +38,7 @@ void main() {
     expect(source, contains("httpsCallable('submitDeliveryTip')"));
     expect(source, contains('Stripe.instance.presentPaymentSheet()'));
     expect(source, contains('Submit Appreciation'));
-    expect(source, contains('100% of your tip goes directly to your rider.'));
+    expect(source, contains('100% of your tip goes directly to your Circum Rider.'));
     expect(source, isNot(contains("collection('driverRatings').doc")));
     expect(source, isNot(contains("collection('deliveryTips').doc")));
   });

@@ -238,12 +238,12 @@ class _RatingsViewState extends State<RatingsView> {
             data['driverName'] ??
             rider['riderName'] ??
             data['courierName'],
-        fallback: 'Your rider');
+        fallback: 'Your Circum Rider');
     final photo =
         _text(data['riderPhotoUrl'] ?? data['photoURL'] ?? rider['photoUrl']);
     final vehicle = _text(
         rider['vehicleType'] ?? data['driverVehicle'] ?? data['typeOfVehicle'],
-        fallback: 'Verified Rider');
+        fallback: 'Verified Circum Rider');
     final registration = _text(rider['registration'] ??
         data['driverPlateNumber'] ??
         data['plateNumber']);
@@ -346,7 +346,7 @@ class _RatingsViewState extends State<RatingsView> {
                 fontSize: 18,
                 fontWeight: FontWeight.w700)),
         const SizedBox(height: 6),
-        Text('How was your Rider?',
+        Text('How was your Circum Rider?',
             style: TextStyle(color: Colors.white.withValues(alpha: .55))),
         const SizedBox(height: 14),
         Row(
@@ -429,7 +429,7 @@ class _RatingsViewState extends State<RatingsView> {
                 fontWeight: FontWeight.w700,
                 fontSize: 15)),
         const SizedBox(height: 4),
-        Text('100% of your tip goes directly to your rider.',
+        Text('100% of your tip goes directly to your Circum Rider.',
             style: TextStyle(
                 color: Colors.white.withValues(alpha: .55), fontSize: 12.5)),
         const SizedBox(height: 12),
@@ -667,7 +667,7 @@ class _RatingsViewState extends State<RatingsView> {
                         fontSize: 30,
                         fontWeight: FontWeight.w700)),
                 const SizedBox(height: 9),
-                Text('Your rider has received your appreciation.',
+                Text('Your Circum Rider has received your appreciation.',
                     textAlign: TextAlign.center,
                     style: TextStyle(
                         color: Colors.white.withValues(alpha: .62),

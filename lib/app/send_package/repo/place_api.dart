@@ -16,7 +16,10 @@ class PlaceApiProvider {
     if (query.length < 3) return [];
     final response = await FirebaseFunctions.instance
         .httpsCallable('searchFreeUkAddresses')
-        .call({'query': query});
+        .call({
+      'query': query,
+      'sessionToken': '$sessionToken',
+    }).timeout(const Duration(seconds: 8));
     final data = response.data is Map
         ? Map<String, dynamic>.from(response.data as Map)
         : <String, dynamic>{};
@@ -38,6 +41,21 @@ class PlaceApiProvider {
     final suggestion = _suggestionCache[placeId];
     if (suggestion?.lat != null && suggestion?.lng != null) {
       return PlaceCoordinate(lat: suggestion!.lat!, lng: suggestion.lng!);
+    }
+    final response = await FirebaseFunctions.instance
+        .httpsCallable('resolveUkAddressPlace')
+        .call({
+      'placeId': placeId,
+      'sessionToken': '$sessionToken',
+    }).timeout(const Duration(seconds: 8));
+    final data = response.data is Map
+        ? Map<String, dynamic>.from(response.data as Map)
+        : <String, dynamic>{};
+    final resolved = AddressEngine.suggestionFromBackend(data);
+    _suggestionCache[resolved.placeId] = resolved;
+    _suggestionCache[placeId] = resolved;
+    if (resolved.lat != null && resolved.lng != null) {
+      return PlaceCoordinate(lat: resolved.lat!, lng: resolved.lng!);
     }
     throw Exception("Couldn't fetch location details");
   }

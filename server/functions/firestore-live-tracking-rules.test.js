@@ -230,6 +230,29 @@ test("Rider earnings remain readable by owner but never client writable", async 
   }));
 });
 
+test("Rider earnings reconciliation audit records are admin readable and never client writable", async () => {
+  await testEnv.withSecurityRulesDisabled(async (context) => {
+    await setDoc(doc(context.firestore(), "riderEarningsReconciliations", "rec-1"), {
+      riderId: "rider-1",
+      status: "review_required",
+    });
+  });
+  const riderDb = testEnv.authenticatedContext("rider-1").firestore();
+  const adminDb = testEnv.authenticatedContext("admin-1", {
+    roles: ["finance_admin"],
+  }).firestore();
+  await assertFails(getDoc(doc(riderDb, "riderEarningsReconciliations", "rec-1")));
+  await assertSucceeds(getDoc(doc(adminDb, "riderEarningsReconciliations", "rec-1")));
+  await assertFails(setDoc(doc(riderDb, "riderEarningsReconciliations", "rec-2"), {
+    riderId: "rider-1",
+    status: "reconciled",
+  }));
+  await assertFails(setDoc(doc(adminDb, "riderEarningsReconciliations", "rec-2"), {
+    riderId: "rider-1",
+    status: "reconciled",
+  }));
+});
+
 test("Rider profile self-writes are explicitly allowlisted", async () => {
   const riderDb = testEnv.authenticatedContext("rider-1").firestore();
   await assertSucceeds(setDoc(doc(riderDb, "riders", "rider-1"), {
@@ -266,6 +289,9 @@ test("Rider profile self-writes cannot alter admin payment or trust authority", 
     "roles",
     "driverStatus",
     "riderRank",
+    "rank",
+    "trustPoints",
+    "riderTrustPoints",
     "rating",
     "availableBalance",
     "stripeConnectAccountId",
@@ -276,6 +302,44 @@ test("Rider profile self-writes cannot alter admin payment or trust authority", 
       updatedAt: serverTimestamp(),
     }, {merge: true}));
   }
+});
+
+test("Rider cannot self-write admin authority on riderProfiles", async () => {
+  await testEnv.withSecurityRulesDisabled(async (context) => {
+    await setDoc(doc(context.firestore(), "riderProfiles", "rider-1"), {
+      uid: "rider-1",
+      name: "Rider One",
+      approvalStatus: "pending",
+      rank: "agent",
+      trustPoints: 0,
+    });
+  });
+  const riderDb = testEnv.authenticatedContext("rider-1").firestore();
+  for (const field of [
+    "approvalStatus",
+    "verificationStatus",
+    "role",
+    "roles",
+    "driverStatus",
+    "riderRank",
+    "rank",
+    "trustPoints",
+    "riderTrustPoints",
+    "rating",
+    "availableBalance",
+    "stripeConnectAccountId",
+    "admin",
+  ]) {
+    await assertFails(setDoc(doc(riderDb, "riderProfiles", "rider-1"), {
+      [field]: field === "roles" ? ["driver_manager"] : "forged",
+      updatedAt: serverTimestamp(),
+    }, {merge: true}));
+  }
+  await assertSucceeds(setDoc(doc(riderDb, "riderProfiles", "rider-1"), {
+    phone: "+447700900001",
+    vehicleType: "bike",
+    updatedAt: serverTimestamp(),
+  }, {merge: true}));
 });
 
 test("Driver manager can update Rider admin fields", async () => {
@@ -294,6 +358,40 @@ test("Driver manager can update Rider admin fields", async () => {
     verificationStatus: "approved",
     driverStatus: "active",
     riderRank: "sentinel",
+    trustPoints: 100,
+    updatedAt: serverTimestamp(),
+  }, {merge: true}));
+  await assertSucceeds(setDoc(doc(adminDb, "riderProfiles", "rider-1"), {
+    approvalStatus: "approved",
+    verificationStatus: "approved",
+    driverStatus: "active",
+    rank: "sentinel",
+    riderRank: "sentinel",
+    trustPoints: 100,
+    riderTrustPoints: 100,
+    updatedAt: serverTimestamp(),
+  }, {merge: true}));
+});
+
+test("Sender profile self-writes cannot escalate roles", async () => {
+  const senderDb = testEnv.authenticatedContext("sender-1").firestore();
+  await assertSucceeds(setDoc(doc(senderDb, "users", "sender-1"), {
+    uid: "sender-1",
+    email: "sender@example.com",
+    role: "user",
+    userType: "sender",
+    updatedAt: serverTimestamp(),
+  }));
+  await assertFails(setDoc(doc(senderDb, "users", "sender-1"), {
+    role: "admin",
+    updatedAt: serverTimestamp(),
+  }, {merge: true}));
+  await assertFails(setDoc(doc(senderDb, "users", "sender-1"), {
+    userType: "rider",
+    updatedAt: serverTimestamp(),
+  }, {merge: true}));
+  await assertFails(setDoc(doc(senderDb, "users", "sender-1"), {
+    roles: ["super_admin"],
     updatedAt: serverTimestamp(),
   }, {merge: true}));
 });
@@ -320,7 +418,29 @@ test("Sender and Rider cannot directly mutate authoritative delivery fields", as
   }, {merge: true}));
 });
 
-test("Sender cannot inject IRIS during direct delivery creation", async () => {
+test("Sender cannot directly rewrite delivery weight after creation", async () => {
+  const deliveryId = "delivery-weight-authority";
+  await seedDelivery(deliveryId, {
+    senderId: "sender-1",
+    userId: "sender-1",
+    weightKg: 2,
+    finalWeightKg: 2,
+    confirmedWeightKg: 2,
+  });
+  const senderDb = testEnv.authenticatedContext("sender-1").firestore();
+  for (const field of ["weightKg", "finalWeightKg", "confirmedWeightKg"]) {
+    await assertFails(setDoc(doc(senderDb, "deliveryRequests", deliveryId), {
+      [field]: 50,
+      updatedAt: serverTimestamp(),
+    }, {merge: true}));
+  }
+  await assertSucceeds(setDoc(doc(senderDb, "deliveryRequests", deliveryId), {
+    recipientNotes: "Please use the side entrance.",
+    updatedAt: serverTimestamp(),
+  }, {merge: true}));
+});
+
+test("Sender cannot directly create canonical delivery requests", async () => {
   const senderDb = testEnv.authenticatedContext("sender-1").firestore();
   await assertFails(setDoc(doc(senderDb, "deliveryRequests", "direct-forged-iris"), {
     senderId: "sender-1",
@@ -332,7 +452,7 @@ test("Sender cannot inject IRIS during direct delivery creation", async () => {
       serviceability: {status: "serviceable"},
     },
   }));
-  await assertSucceeds(setDoc(doc(senderDb, "deliveryRequests", "direct-no-iris"), {
+  await assertFails(setDoc(doc(senderDb, "deliveryRequests", "direct-no-iris"), {
     senderId: "sender-1",
     userId: "sender-1",
     packageDescription: "book",

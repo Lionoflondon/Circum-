@@ -4,11 +4,10 @@ import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:flutter_svg/svg.dart';
 
 import '../../../utils/theme/theme.dart';
-import '../../bottom_nav/view/app_nav.dart';
 import '../bloc/auth_bloc.dart';
 
 class EnableLocation extends StatelessWidget {
-  const EnableLocation({Key? key}) : super(key: key);
+  const EnableLocation({super.key});
 
   final FlutterSecureStorage storage = const FlutterSecureStorage();
 
@@ -34,11 +33,8 @@ class EnableLocation extends StatelessWidget {
                 // );
               }
             },
-            child: WillPopScope(
-              // Intercept the back button press
-              onWillPop: () async {
-                return false;
-              },
+            child: PopScope(
+              canPop: false,
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [

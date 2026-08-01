@@ -9,13 +9,11 @@ const surfaces = {
   website: {
     target: 'public',
     output: 'build/public_web',
-    identity: 'circum-website',
+    identity: 'circum-public-web',
     manifestName: 'Circum Website',
     must: [
-      'circum-website',
-      'circum-sender-web',
-      'circum-rider-web',
-      'Earn as a Rider',
+      'circum-public-web',
+      'Earn as a Circum Rider',
       'Send a Parcel',
     ],
     forbidden: [
@@ -35,7 +33,7 @@ const surfaces = {
       'Your Circum',
     ],
     forbidden: [
-      'circum-website',
+      'circum-public-web',
       'circum-admin-web',
       'Admin surface',
       'Circum Website',

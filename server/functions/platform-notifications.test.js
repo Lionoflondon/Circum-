@@ -1,3 +1,4 @@
+/* eslint-disable max-len */
 const test = require("node:test");
 const assert = require("node:assert/strict");
 const {
@@ -5,6 +6,8 @@ const {
   giftNotificationRecordsForTransition,
   _private,
 } = require("./platform-notifications");
+const fs = require("node:fs");
+const path = require("node:path");
 
 test("Gifts in-app notification record is always created", () => {
   const record = giftNotificationRecord({
@@ -77,4 +80,46 @@ test("Gift request statuses map to backend-owned notification events", () => {
       ["campaign_waiting_for_match", "Gift match requested", "We are looking for a compatible gift match."],
   );
   assert.equal(_private.giftStatusNotification("draft"), null);
+});
+
+test("unclaimed delivery reminder reuses the rider profile snapshot per run", () => {
+  const source = fs.readFileSync(path.join(__dirname, "platform-notifications.js"), "utf8");
+  assert.match(source, /let riderProfileDocs = null;/);
+  assert.match(source, /if \(!riderProfileDocs\) \{/);
+  assert.match(source, /riderProfileDocs = await onlineCandidateRiderRecords\(db\);/);
+  assert.match(source, /dispatchCandidateDecision\(record, delivery\)/);
+});
+
+test("delivery creation notifies merged online rider candidates", () => {
+  const source = fs.readFileSync(path.join(__dirname, "platform-notifications.js"), "utf8");
+  assert.match(source, /async function onlineCandidateRiderRecords\(db\)/);
+  assert.match(source, /collection\("riderPresence"\)/);
+  assert.match(source, /where\("isOnline", "==", true\)/);
+  assert.match(source, /collection\("riders"\)/);
+  assert.match(source, /collection\("riderProfiles"\)/);
+  assert.match(source, /where\("status", "in", \["online", "available"\]\)/);
+  assert.match(source, /where\("availabilityStatus", "in", \["online", "available"\]\)/);
+  assert.match(source, /const riders = await onlineCandidateRiderRecords\(db\);/);
+  assert.match(source, /collection\("dispatchInspections"\)/);
+  assert.doesNotMatch(source, /const riders = await getFirestore\(\)\.collection\("riderProfiles"\)\.get\(\);/);
+});
+
+test("dispatch candidate decision rejects offline presence even when profile is stale online", () => {
+  const decision = _private.dispatchCandidateDecision({
+    id: "rider-1",
+    profile: {
+      approvalStatus: "approved",
+      vehicleStatus: "approved",
+      status: "online",
+      availabilityStatus: "available",
+    },
+    rider: {},
+    presence: {
+      isOnline: false,
+      availabilityStatus: "offline",
+      busy: false,
+    },
+  }, {iris: {recommendedVehicle: "motorbike"}});
+  assert.equal(decision.eligible, false);
+  assert.equal(decision.reason, "offline");
 });

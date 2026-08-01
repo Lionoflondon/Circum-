@@ -1,4 +1,4 @@
-/* eslint-disable max-len, require-jsdoc */
+/* eslint-disable max-len, require-jsdoc, no-unused-vars */
 "use strict";
 
 const crypto = require("crypto");
@@ -51,6 +51,18 @@ function giftStoryStoragePaths(giftId) {
   };
 }
 
+function giftStoryVideoPaths(gift = {}, giftId = "") {
+  const allowedPrefixes = giftId ? [
+    `gifts/${giftId}/story/exports/silent/`,
+    `gifts/${giftId}/story/exports/sound/`,
+  ] : ["gifts/"];
+  return [...new Set([
+    text(gift.giftStoryRenderedVideoPath),
+    text(gift.giftStorySilentVersionUrl),
+    text(gift.giftStorySoundVersionUrl),
+  ].filter((path) => path && allowedPrefixes.some((prefix) => path.startsWith(prefix))))];
+}
+
 function cleanSkin(value) {
   const skin = text(value).toLowerCase().replace(/-/g, "_");
   return STORY_SKINS.has(skin) ? skin : "iridescent";
@@ -88,7 +100,7 @@ function buildGiftStorySlides(gift = {}) {
     },
   ];
   const voice = gift.voiceNote && typeof gift.voiceNote === "object" ? gift.voiceNote : {};
-  const voiceUrl = text(voice.downloadUrl || voice.storagePath);
+  const voiceUrl = text(voice.downloadUrl || voice.url || gift.voiceNoteUrl || gift.giftStorySenderVoiceNoteUrl);
   if (voiceUrl) {
     slides.push({
       type: "voice_note",
@@ -183,9 +195,13 @@ function renderGiftStoryHtml({token, giftId, gift, role}) {
   });
   const slidesJson = JSON.stringify(slides).replace(/</g, "\\u003c");
   const appDeepLink = `https://circum-app-2797c.web.app/?app=sender&giftStoryToken=${encodeURIComponent(token)}#/sender-mobile/gifts/story`;
+  const recipientNeedsAccount = role === "recipient" && !text(gift.recipientUserId);
+  const recipientJoinPromptHtml = recipientNeedsAccount ?
+    `<section class="join" id="joinPrompt" style="display:none"><div class="eyebrow">Your Gift Story is ready.</div><div class="body">Create your free Circum account to save this Gift Story forever in your Vault, rewatch it anytime, send your own Gift Stories, thank the sender, leave a message, and build your own collection of memories.</div><a class="cta primary" href="${appDeepLink}" onclick="recordGuestEvent('guest_clicked_join_circum')" style="text-align:center;text-decoration:none">Join Circum</a><button class="cta secondary" onclick="dismissJoinPrompt()">Maybe later</button></section>` :
+    "";
   return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="noindex,nofollow,noarchive"><title>Gifts by Circum Story</title><link rel="preconnect" href="https://fonts.googleapis.com"><link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet"><style>
-:root{--void:#090B1D;--void-2:#10122A;--ink:#F5F3ED;--ink-dim:rgba(245,243,237,.58);--hairline:rgba(245,243,237,.14);--violet:${vars.violet};--violet-2:${vars.violet2};--rosegold:${vars.rosegold};--champagne:${vars.champagne};--lilac:${vars.lilac};--foil:conic-gradient(from 200deg,var(--violet),var(--violet-2),var(--rosegold),var(--champagne),var(--lilac),var(--violet));--serif:'DM Serif Display',serif;--sans:'Inter',-apple-system,sans-serif;--mono:'JetBrains Mono',monospace}*{box-sizing:border-box}html,body{margin:0;height:100%;background:var(--void);color:var(--ink);font-family:var(--sans);overflow:hidden}.story{position:fixed;inset:0;background:radial-gradient(ellipse 430px 360px at 50% 30%,color-mix(in srgb,var(--violet) 28%,transparent),transparent 70%),var(--void);isolation:isolate}.progress{position:absolute;top:12px;left:12px;right:12px;z-index:20;display:flex;gap:5px}.bar{height:2.5px;flex:1;background:rgba(245,243,237,.22);border-radius:3px;overflow:hidden}.fill{height:100%;width:0;background:linear-gradient(90deg,var(--violet-2),var(--champagne))}.head{position:absolute;top:24px;left:14px;right:14px;z-index:20;display:flex;align-items:center;justify-content:space-between}.who{display:flex;gap:8px;align-items:center}.avatar{width:24px;height:24px;border-radius:50%;background:var(--foil)}.name{font-size:12px;font-weight:700}.time{font-family:var(--mono);font-size:9.5px;color:var(--ink-dim)}button{font-family:inherit}.sound{width:30px;height:30px;border-radius:50%;border:1px solid rgba(245,243,237,.25);background:rgba(0,0,0,.25);color:var(--ink)}.slide{position:absolute;inset:0;display:flex;flex-direction:column;justify-content:flex-end;padding:24px 20px 30px;opacity:0;transform:scale(1.02);transition:opacity .25s ease}.slide.show{opacity:1;transform:scale(1)}.eyebrow{font-family:var(--mono);font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:var(--violet-2);margin-bottom:10px}.headline{font-family:var(--serif);font-size:29px;line-height:1.14}.body{font-size:13px;color:var(--ink-dim);margin-top:10px;line-height:1.5}.center{justify-content:center;text-align:center;align-items:center}.orb{width:104px;height:104px;border-radius:50%;margin-bottom:26px;background:var(--foil);box-shadow:0 0 60px color-mix(in srgb,var(--violet) 55%,transparent);animation:spin 7s linear infinite;position:relative}.orb:after{content:'';position:absolute;inset:14px;border-radius:50%;background:var(--void);opacity:.9}@keyframes spin{to{transform:rotate(360deg)}}.note{background:rgba(245,243,237,.05);border:1px solid var(--hairline);border-radius:4px;padding:28px 22px;position:relative}.note:before{content:'';position:absolute;top:0;left:22px;width:34px;height:8px;background:color-mix(in srgb,var(--champagne) 45%,transparent);transform:rotate(-3deg)}.quote{font-family:var(--serif);font-style:italic;font-size:18px;line-height:1.55}.meta{margin-top:16px;font-family:var(--mono);font-size:10.5px;color:var(--ink-dim)}.voice{margin-top:18px;width:100%;filter:drop-shadow(0 10px 24px rgba(0,0,0,.25));accent-color:var(--violet-2)}.candle{width:78px;height:118px;position:relative;margin:0 auto}.glass{position:absolute;bottom:0;left:0;right:0;height:88px;border-radius:6px 6px 10px 10px;background:linear-gradient(180deg,color-mix(in srgb,var(--rosegold) 18%,transparent),color-mix(in srgb,var(--violet) 14%,transparent));border:1px solid rgba(245,243,237,.18)}.wax{position:absolute;bottom:6px;left:6px;right:6px;height:40px;border-radius:3px;background:linear-gradient(180deg,var(--rosegold),var(--lilac));opacity:.9}.wick{position:absolute;bottom:44px;left:50%;width:2px;height:14px;background:#3a2c22;transform:translateX(-50%)}.flame{position:absolute;bottom:56px;left:50%;width:9px;height:16px;border-radius:50% 50% 50% 50%/60% 60% 40% 40%;background:radial-gradient(circle at 50% 70%,#fff,var(--violet-2) 50%,var(--lilac));transform:translateX(-50%);animation:flicker 2.4s ease-in-out infinite}@keyframes flicker{0%,100%{transform:translateX(-50%) scale(1)}30%{transform:translateX(-50%) scale(.94,1.05) rotate(-2deg)}60%{transform:translateX(-50%) scale(1.05,.96) rotate(2deg)}}.cta{display:block;width:100%;border:0;border-radius:14px;padding:14px;margin-top:10px;font-weight:800}.primary{background:var(--ink);color:#090B1D}.secondary{background:rgba(245,243,237,.08);color:var(--ink);border:1px solid var(--hairline)}.thank{display:none;position:absolute;inset:auto 16px 18px;z-index:30;background:#10122A;border:1px solid var(--hairline);border-radius:18px;padding:16px}.thank textarea{width:100%;min-height:80px;border-radius:12px;border:1px solid var(--hairline);background:#161A3A;color:var(--ink);padding:12px}.ribbon{position:absolute;inset:0;pointer-events:none;background:linear-gradient(115deg,transparent 35%,color-mix(in srgb,var(--violet-2) 22%,transparent),transparent 65%);transform:translateX(-120%);animation:ribbon 900ms ease}@keyframes ribbon{to{transform:translateX(120%)}}</style></head><body><main class="story" id="story"><div class="progress" id="progress"></div><div class="head"><div class="who"><div class="avatar"></div><div><div class="name">Gifts by Circum</div><div class="time">just now</div></div></div><button class="sound" id="sound">♪</button></div><div id="slides"></div><section class="thank" id="thank"><textarea id="thanks" placeholder="Write a thank-you message..."></textarea><button class="cta primary" id="sendThanks">Send thank you</button><a class="cta secondary" href="${appDeepLink}" style="text-align:center;text-decoration:none">Keep this story in the Circum app</a></section></main><script>
-const slides=${slidesJson};const token=${JSON.stringify(token)};let i=0,timer=null,paused=false,muted=false;const root=document.getElementById('slides'),progress=document.getElementById('progress');function build(){progress.innerHTML=slides.map(()=>'<div class="bar"><div class="fill"></div></div>').join('');root.innerHTML=slides.map((s,idx)=>'<section class="slide '+(idx===0?'show':'')+'" data-type="'+s.type+'"></section>').join('');slides.forEach((s,idx)=>renderSlide(root.children[idx],s));run()}function renderSlide(el,s){if(s.type==='arrival'){el.className+=' center';el.innerHTML='<div class="orb"></div><div class="headline">'+esc(s.headline)+'</div><div class="body">'+esc(s.body)+'</div>';return}if(s.type==='voice_note'){el.style.justifyContent='center';const audio=s.mediaUrl?'<audio class="voice" controls preload="metadata" src="'+escAttr(s.mediaUrl)+'"></audio>':'';el.innerHTML='<div class="note"><div class="quote">'+esc(s.headline)+'</div><div class="meta">'+esc(s.body)+'</div>'+audio+'</div>';return}if(s.type==='note'){el.style.justifyContent='center';el.innerHTML='<div class="note"><div class="quote">'+esc(s.headline)+'</div><div class="meta">'+esc(s.body)+'</div></div>';return}if(s.type==='gift_reveal'){el.style.justifyContent='space-between';el.style.paddingTop='70px';el.style.textAlign='center';el.innerHTML='<div class="candle"><div class="glass"></div><div class="wax"></div><div class="wick"></div><div class="flame"></div></div><div><div class="eyebrow">'+esc(s.eyebrow)+'</div><div class="headline">'+esc(s.headline)+'</div><div class="body">'+esc(s.body)+'</div></div>';return}if(s.type==='finale'){el.innerHTML='<div><div class="eyebrow">Finale</div><div class="headline">Tell sender thank you</div><div class="body">Replay story. Keep this story in the Circum app.</div><button class="cta primary" onclick="openThanks()">Tell sender thank you</button><button class="cta secondary" onclick="replay()">Replay story</button><a class="cta secondary" href="${appDeepLink}" style="text-align:center;text-decoration:none">Keep this story in the Circum app</a></div>';return}el.style.justifyContent='center';el.innerHTML='<div class="eyebrow">'+esc(s.eyebrow)+'</div><div class="headline">'+esc(s.headline)+'</div><div class="body">'+esc(s.body)+'</div>'}function esc(v){return String(v||'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]))}function escAttr(v){return esc(v)}function show(n){i=Math.max(0,Math.min(slides.length-1,n));[...root.children].forEach((el,idx)=>el.classList.toggle('show',idx===i));run();const rib=document.createElement('div');rib.className='ribbon';document.body.appendChild(rib);setTimeout(()=>rib.remove(),900)}function run(){clearTimeout(timer);[...progress.children].forEach((b,idx)=>{const f=b.firstChild;f.style.transition='none';f.style.width=idx<i?'100%':'0%';if(idx===i){requestAnimationFrame(()=>{f.style.transition='width '+(slides[i].durationMs||5200)+'ms linear';f.style.width='100%'})}});timer=setTimeout(()=>{if(i<slides.length-1)show(i+1)},slides[i].durationMs||5200)}function replay(){show(0)}function openThanks(){document.getElementById('thank').style.display='block'}document.getElementById('story').addEventListener('pointerdown',e=>{paused=true;clearTimeout(timer)});document.getElementById('story').addEventListener('pointerup',e=>{if(document.getElementById('thank').style.display==='block')return; if(paused){paused=false; if(e.clientX<innerWidth/2)show(i-1); else show(i+1)}});document.getElementById('sound').onclick=()=>{muted=!muted;document.getElementById('sound').textContent=muted?'×':'♪'};document.getElementById('sendThanks').onclick=async()=>{const thankYouMessage=document.getElementById('thanks').value.trim();if(!thankYouMessage)return;await fetch('${submitThankYouUrl()}',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({token,thankYouMessage})}).catch(()=>null);document.getElementById('thank').innerHTML='<div class="headline" style="font-size:24px">Thank you sent.</div><div class="body">You can still keep this story in the Circum app.</div><a class="cta secondary" href="${appDeepLink}" style="text-align:center;text-decoration:none">Keep this story in the Circum app</a>'};build();
+:root{--void:#090B1D;--void-2:#10122A;--ink:#F5F3ED;--ink-dim:rgba(245,243,237,.58);--hairline:rgba(245,243,237,.14);--violet:${vars.violet};--violet-2:${vars.violet2};--rosegold:${vars.rosegold};--champagne:${vars.champagne};--lilac:${vars.lilac};--foil:conic-gradient(from 200deg,var(--violet),var(--violet-2),var(--rosegold),var(--champagne),var(--lilac),var(--violet));--serif:'DM Serif Display',serif;--sans:'Inter',-apple-system,sans-serif;--mono:'JetBrains Mono',monospace}*{box-sizing:border-box}html,body{margin:0;height:100%;background:var(--void);color:var(--ink);font-family:var(--sans);overflow:hidden}.story{position:fixed;inset:0;background:radial-gradient(ellipse 430px 360px at 50% 30%,color-mix(in srgb,var(--violet) 28%,transparent),transparent 70%),var(--void);isolation:isolate}.progress{position:absolute;top:12px;left:12px;right:12px;z-index:20;display:flex;gap:5px}.bar{height:2.5px;flex:1;background:rgba(245,243,237,.22);border-radius:3px;overflow:hidden}.fill{height:100%;width:0;background:linear-gradient(90deg,var(--violet-2),var(--champagne))}.head{position:absolute;top:24px;left:14px;right:14px;z-index:20;display:flex;align-items:center;justify-content:space-between}.who{display:flex;gap:8px;align-items:center}.avatar{width:24px;height:24px;border-radius:50%;background:var(--foil)}.name{font-size:12px;font-weight:700}.time{font-family:var(--mono);font-size:9.5px;color:var(--ink-dim)}button{font-family:inherit}.sound{width:30px;height:30px;border-radius:50%;border:1px solid rgba(245,243,237,.25);background:rgba(0,0,0,.25);color:var(--ink)}.slide{position:absolute;inset:0;display:flex;flex-direction:column;justify-content:flex-end;padding:24px 20px 30px;opacity:0;transform:scale(1.02);transition:opacity .25s ease}.slide.show{opacity:1;transform:scale(1)}.eyebrow{font-family:var(--mono);font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:var(--violet-2);margin-bottom:10px}.headline{font-family:var(--serif);font-size:29px;line-height:1.14}.body{font-size:13px;color:var(--ink-dim);margin-top:10px;line-height:1.5}.center{justify-content:center;text-align:center;align-items:center}.orb{width:104px;height:104px;border-radius:50%;margin-bottom:26px;background:var(--foil);box-shadow:0 0 60px color-mix(in srgb,var(--violet) 55%,transparent);animation:spin 7s linear infinite;position:relative}.orb:after{content:'';position:absolute;inset:14px;border-radius:50%;background:var(--void);opacity:.9}@keyframes spin{to{transform:rotate(360deg)}}.note{background:rgba(245,243,237,.05);border:1px solid var(--hairline);border-radius:4px;padding:28px 22px;position:relative}.note:before{content:'';position:absolute;top:0;left:22px;width:34px;height:8px;background:color-mix(in srgb,var(--champagne) 45%,transparent);transform:rotate(-3deg)}.quote{font-family:var(--serif);font-style:italic;font-size:18px;line-height:1.55}.meta{margin-top:16px;font-family:var(--mono);font-size:10.5px;color:var(--ink-dim)}.voice{margin-top:18px;width:100%;filter:drop-shadow(0 10px 24px rgba(0,0,0,.25));accent-color:var(--violet-2)}.candle{width:78px;height:118px;position:relative;margin:0 auto}.glass{position:absolute;bottom:0;left:0;right:0;height:88px;border-radius:6px 6px 10px 10px;background:linear-gradient(180deg,color-mix(in srgb,var(--rosegold) 18%,transparent),color-mix(in srgb,var(--violet) 14%,transparent));border:1px solid rgba(245,243,237,.18)}.wax{position:absolute;bottom:6px;left:6px;right:6px;height:40px;border-radius:3px;background:linear-gradient(180deg,var(--rosegold),var(--lilac));opacity:.9}.wick{position:absolute;bottom:44px;left:50%;width:2px;height:14px;background:#3a2c22;transform:translateX(-50%)}.flame{position:absolute;bottom:56px;left:50%;width:9px;height:16px;border-radius:50% 50% 50% 50%/60% 60% 40% 40%;background:radial-gradient(circle at 50% 70%,#fff,var(--violet-2) 50%,var(--lilac));transform:translateX(-50%);animation:flicker 2.4s ease-in-out infinite}@keyframes flicker{0%,100%{transform:translateX(-50%) scale(1)}30%{transform:translateX(-50%) scale(.94,1.05) rotate(-2deg)}60%{transform:translateX(-50%) scale(1.05,.96) rotate(2deg)}}.cta{display:block;width:100%;border:0;border-radius:14px;padding:14px;margin-top:10px;font-weight:800}.primary{background:var(--ink);color:#090B1D}.secondary{background:rgba(245,243,237,.08);color:var(--ink);border:1px solid var(--hairline)}.join{position:absolute;left:16px;right:16px;bottom:18px;z-index:28;background:rgba(16,18,42,.86);border:1px solid var(--hairline);border-radius:18px;padding:14px;backdrop-filter:blur(16px)}.thank{display:none;position:absolute;inset:auto 16px 18px;z-index:30;background:#10122A;border:1px solid var(--hairline);border-radius:18px;padding:16px}.thank textarea{width:100%;min-height:80px;border-radius:12px;border:1px solid var(--hairline);background:#161A3A;color:var(--ink);padding:12px}.ribbon{position:absolute;inset:0;pointer-events:none;background:linear-gradient(115deg,transparent 35%,color-mix(in srgb,var(--violet-2) 22%,transparent),transparent 65%);transform:translateX(-120%);animation:ribbon 900ms ease}@keyframes ribbon{to{transform:translateX(120%)}}</style></head><body><main class="story" id="story"><div class="progress" id="progress"></div><div class="head"><div class="who"><div class="avatar"></div><div><div class="name">Gifts by Circum</div><div class="time">just now</div></div></div><button class="sound" id="sound">♪</button></div><div id="slides"></div>${recipientJoinPromptHtml}<section class="thank" id="thank"><textarea id="thanks" placeholder="Write a thank-you message..."></textarea><button class="cta primary" id="sendThanks">Send thank you</button><a class="cta secondary" href="${appDeepLink}" style="text-align:center;text-decoration:none">Keep this story in the Circum app</a></section></main><script>
+const slides=${slidesJson};const token=${JSON.stringify(token)};const guestRecipient=${recipientNeedsAccount ? "true" : "false"};const guestEventUrl='${recordGuestEventUrl()}';let i=0,timer=null,paused=false,muted=false,guestViewRecorded=false,guestCompletionRecorded=false;const root=document.getElementById('slides'),progress=document.getElementById('progress');function build(){progress.innerHTML=slides.map(()=>'<div class="bar"><div class="fill"></div></div>').join('');root.innerHTML=slides.map((s,idx)=>'<section class="slide '+(idx===0?'show':'')+'" data-type="'+s.type+'"></section>').join('');slides.forEach((s,idx)=>renderSlide(root.children[idx],s));recordGuestEvent('guest_viewed_story');run()}function renderSlide(el,s){if(s.type==='arrival'){el.className+=' center';el.innerHTML='<div class="orb"></div><div class="headline">'+esc(s.headline)+'</div><div class="body">'+esc(s.body)+'</div>';return}if(s.type==='voice_note'){el.style.justifyContent='center';const audio=s.mediaUrl?'<audio class="voice" controls preload="metadata" src="'+escAttr(s.mediaUrl)+'" onplay="recordGuestEvent(\\'guest_watched_video\\')"></audio>':'';el.innerHTML='<div class="note"><div class="quote">'+esc(s.headline)+'</div><div class="meta">'+esc(s.body)+'</div>'+audio+'</div>';return}if(s.type==='note'){el.style.justifyContent='center';el.innerHTML='<div class="note"><div class="quote">'+esc(s.headline)+'</div><div class="meta">'+esc(s.body)+'</div></div>';return}if(s.type==='gift_reveal'){el.style.justifyContent='space-between';el.style.paddingTop='70px';el.style.textAlign='center';el.innerHTML='<div class="candle"><div class="glass"></div><div class="wax"></div><div class="wick"></div><div class="flame"></div></div><div><div class="eyebrow">'+esc(s.eyebrow)+'</div><div class="headline">'+esc(s.headline)+'</div><div class="body">'+esc(s.body)+'</div></div>';return}if(s.type==='finale'){el.innerHTML='<div><div class="eyebrow">Finale</div><div class="headline">Tell sender thank you</div><div class="body">Replay story. Keep this story in the Circum app.</div><button class="cta primary" onclick="openThanks()">Tell sender thank you</button><button class="cta secondary" onclick="replay()">Replay story</button><a class="cta secondary" href="${appDeepLink}" onclick="recordGuestEvent(\\'guest_clicked_join_circum\\')" style="text-align:center;text-decoration:none">Keep this story in the Circum app</a></div>';return}el.style.justifyContent='center';el.innerHTML='<div class="eyebrow">'+esc(s.eyebrow)+'</div><div class="headline">'+esc(s.headline)+'</div><div class="body">'+esc(s.body)+'</div>'}function esc(v){return String(v||'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]))}function escAttr(v){return esc(v)}function recordGuestEvent(event){if(!guestRecipient)return Promise.resolve();if(event==='guest_viewed_story'&&guestViewRecorded)return Promise.resolve();if(event==='guest_viewed_story')guestViewRecorded=true;return fetch(guestEventUrl,{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({token,event})}).catch(()=>null)}function showJoinPrompt(){const join=document.getElementById('joinPrompt');if(join)join.style.display='block'}function dismissJoinPrompt(){const join=document.getElementById('joinPrompt');if(join)join.style.display='none'}function show(n){i=Math.max(0,Math.min(slides.length-1,n));[...root.children].forEach((el,idx)=>el.classList.toggle('show',idx===i));run();if(guestRecipient&&i===slides.length-1){if(!guestCompletionRecorded){guestCompletionRecorded=true;recordGuestEvent('guest_completed_video')}showJoinPrompt()}const rib=document.createElement('div');rib.className='ribbon';document.body.appendChild(rib);setTimeout(()=>rib.remove(),900)}function run(){clearTimeout(timer);[...progress.children].forEach((b,idx)=>{const f=b.firstChild;f.style.transition='none';f.style.width=idx<i?'100%':'0%';if(idx===i){requestAnimationFrame(()=>{f.style.transition='width '+(slides[i].durationMs||5200)+'ms linear';f.style.width='100%'})}});timer=setTimeout(()=>{if(i<slides.length-1)show(i+1)},slides[i].durationMs||5200)}function replay(){if(document.getElementById('joinPrompt'))document.getElementById('joinPrompt').style.display='none';show(0)}function openThanks(){if(guestRecipient){showJoinPrompt();return}document.getElementById('thank').style.display='block'}document.getElementById('story').addEventListener('pointerdown',e=>{paused=true;clearTimeout(timer)});document.getElementById('story').addEventListener('pointerup',e=>{if(document.getElementById('thank').style.display==='block')return; if(paused){paused=false; if(e.clientX<innerWidth/2)show(i-1); else show(i+1)}});document.getElementById('sound').onclick=()=>{muted=!muted;document.getElementById('sound').textContent=muted?'×':'♪'};document.getElementById('sendThanks').onclick=async()=>{const thankYouMessage=document.getElementById('thanks').value.trim();if(!thankYouMessage)return;await fetch('${submitThankYouUrl()}',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({token,thankYouMessage})}).catch(()=>null);document.getElementById('thank').innerHTML='<div class="headline" style="font-size:24px">Thank you sent.</div><div class="body">You can still keep this story in the Circum app.</div><a class="cta secondary" href="${appDeepLink}" style="text-align:center;text-decoration:none">Keep this story in the Circum app</a>'};build();
 </script></body></html>`;
 }
 
@@ -408,7 +424,7 @@ async function findGift(db, delivery) {
   return query.empty ? null : query.docs[0];
 }
 
-async function queueStoryEmail(db, {giftId, role, email, token, retryId = "", userId = "", phone = ""}) {
+async function queueStoryEmail(db, {giftId, role, email, token, retryId = "", userId = "", phone = "", phoneDeliveryChannel = ""}) {
   if (!email || !email.includes("@")) return false;
   const sender = role === "sender";
   const suffix = retryId ? `_${retryId}` : "";
@@ -434,6 +450,7 @@ async function queueStoryEmail(db, {giftId, role, email, token, retryId = "", us
     userId: text(userId),
     email,
     phone: text(phone),
+    phoneDeliveryChannel: text(phoneDeliveryChannel),
     channel: "email",
     status: "queued",
     priority: 1,
@@ -442,30 +459,115 @@ async function queueStoryEmail(db, {giftId, role, email, token, retryId = "", us
   return true;
 }
 
+function giftStoryReadyMessage(url) {
+  return `🎁 Your Circum Gift Story is ready.\n\nView your secure story here:\n\n${url}\n\nThis private link has been created just for you.`;
+}
+
+function chooseRecipientLinkChannel(gift = {}) {
+  const preferred = text(gift.recipientStoryChannel ||
+    gift.recipientPreferredMessagingChannel ||
+    gift.recipientPreferredChannel ||
+    gift.preferredMessagingChannel).toLowerCase();
+  const channels = new Set([
+    ...list(gift.recipientMessagingChannels),
+    ...list(gift.recipientAvailableMessagingChannels),
+    ...list(gift.recipientContactChannels),
+    ...list(gift.availableMessagingChannels),
+  ].map((channel) => channel.toLowerCase()));
+  const hasImessage = channels.has("imessage") || channels.has("iMessage".toLowerCase()) ||
+    preferred === "imessage" || preferred === "ios_messages";
+  const hasWhatsapp = channels.has("whatsapp") || channels.has("whats_app") ||
+    preferred === "whatsapp" || preferred === "whats_app";
+  if (preferred === "imessage" && hasImessage) return "imessage";
+  if ((preferred === "whatsapp" || preferred === "whats_app") && hasWhatsapp) return "whatsapp";
+  if (hasImessage && !hasWhatsapp) return "imessage";
+  if (hasWhatsapp && !hasImessage) return "whatsapp";
+  return "whatsapp";
+}
+
+async function queueRecipientPhoneChannel(db, {giftId, userId = "", phone, url, channel, retryId = "", failedReason = "", retryCount = 0}) {
+  const suffix = retryId ? `_${retryId}` : "";
+  const normalizedChannel = channel === "imessage" ? "imessage" : "whatsapp";
+  const queue = normalizedChannel === "imessage" ? "imessageQueue" : "whatsappQueue";
+  const notificationChannel = `${normalizedChannel}_recipient`;
+  const notificationId = failedReason ?
+    storyNotificationId(giftId, `${normalizedChannel}_fallback`) :
+    storyNotificationId(giftId, notificationChannel, retryId);
+  await db.collection(queue).doc(failedReason ? notificationId : `gift_story_${giftId}_recipient${suffix}`).set({
+    to: phone,
+    body: giftStoryReadyMessage(url),
+    type: "gift_story_ready",
+    channel: normalizedChannel,
+    giftRequestId: giftId,
+    status: "queued",
+    createdAt: FieldValue.serverTimestamp(),
+    updatedAt: FieldValue.serverTimestamp(),
+  }, {merge: true});
+  await writeStoryNotification(db, {
+    notificationId,
+    giftStoryId: giftId,
+    userId: text(userId),
+    phone,
+    channel: normalizedChannel,
+    status: "queued",
+    priority: 2,
+    retryCount,
+    failedReason,
+    secureStoryUrl: url,
+    phoneDeliveryChannel: normalizedChannel,
+  });
+}
+
+async function queueSenderStoryAppNotification(db, {giftId, userId, token, retryId = ""}) {
+  const uid = text(userId);
+  if (!uid) return false;
+  const url = storyLink(token);
+  const notificationId = storyNotificationId(giftId, "sender_app", retryId);
+  await writeStoryNotification(db, {
+    notificationId,
+    giftStoryId: giftId,
+    userId: uid,
+    channel: "sender_app",
+    status: "queued",
+    priority: 1,
+    secureStoryUrl: url,
+  });
+  await db.collection("notifications").doc(notificationId).set({
+    notificationId,
+    recipientId: uid,
+    recipientRole: "sender",
+    type: "gift_story_ready",
+    title: "Your Gift Story is ready",
+    body: "Your Circum Gift Story is ready.",
+    message: "Your Circum Gift Story is ready.",
+    category: "gifts",
+    giftId,
+    data: {giftId, secureStoryUrl: url, destination: {route: "gift", giftId}},
+    read: false,
+    archived: false,
+    deliveryStatus: "persisted",
+    pushDeliveryStatus: "pending",
+    pushProvider: "fcm",
+    retryCount: 0,
+    createdAt: FieldValue.serverTimestamp(),
+    updatedAt: FieldValue.serverTimestamp(),
+  }, {merge: true});
+  return true;
+}
+
 async function queueRecipientLinkNotification(db, {giftId, gift, token, retryId = ""}) {
   const contact = text(gift.recipientPhone || gift.recipientContactPhone || gift.recipientContact);
   const url = recipientStoryLink(token);
-  const suffix = retryId ? `_${retryId}` : "";
   const writes = [];
   if (/^\+?[0-9 ]{8,}$/.test(contact)) {
-    writes.push(db.collection("whatsappQueue").doc(`gift_story_${giftId}_recipient${suffix}`).set({
-      to: contact,
-      body: `🎁 Your Circum Gift Story is ready.\n\nView your secure story here:\n\n${url}\n\nThis private link has been created just for you.`,
-      type: "gift_story_ready",
-      giftRequestId: giftId,
-      status: "queued",
-      createdAt: FieldValue.serverTimestamp(),
-      updatedAt: FieldValue.serverTimestamp(),
-    }, {merge: true}));
-    writes.push(writeStoryNotification(db, {
-      notificationId: storyNotificationId(giftId, "whatsapp_recipient", retryId),
-      giftStoryId: giftId,
+    const channel = chooseRecipientLinkChannel(gift);
+    writes.push(queueRecipientPhoneChannel(db, {
+      giftId,
       userId: text(gift.recipientUserId),
       phone: contact,
-      channel: "whatsapp",
-      status: "queued",
-      priority: 2,
-      secureStoryUrl: url,
+      url,
+      channel,
+      retryId,
     }));
   }
   await Promise.all(writes);
@@ -474,6 +576,10 @@ async function queueRecipientLinkNotification(db, {giftId, gift, token, retryId 
 
 function submitThankYouUrl() {
   return "https://us-central1-circum-2797c.cloudfunctions.net/submitGiftStoryThankYou";
+}
+
+function recordGuestEventUrl() {
+  return "https://us-central1-circum-2797c.cloudfunctions.net/recordGiftStoryGuestEvent";
 }
 
 function storyNotificationId(giftId, channel, retryId = "") {
@@ -486,6 +592,7 @@ function storyNotificationRecord({
   userId = "",
   email = "",
   phone = "",
+  phoneDeliveryChannel = "",
   channel,
   status = "queued",
   retryCount = 0,
@@ -500,6 +607,7 @@ function storyNotificationRecord({
     userId,
     email,
     phone,
+    phoneDeliveryChannel,
     channel,
     status,
     priority,
@@ -593,11 +701,13 @@ async function unlockGiftStory(db, giftSnap, deliveryId, {forceNewToken = false,
   const senderEmail = normalizeEmail(gift.senderEmail);
   const recipientEmail = normalizeEmail(gift.recipientEmail || gift.recipientContact);
   const recipientPhone = text(gift.recipientPhone || gift.recipientContactPhone || gift.recipientContact);
+  const recipientPhoneChannel = chooseRecipientLinkChannel(gift);
   const retryId = retryEmails ? `${Date.now()}` : "";
   const emailResults = await Promise.allSettled([
     queueStoryEmail(db, {giftId, role: "sender", email: senderEmail, token, retryId, userId: text(gift.senderId || gift.userId)}),
-    queueStoryEmail(db, {giftId, role: "recipient", email: recipientEmail, token: recipientToken, retryId, userId: text(gift.recipientUserId), phone: recipientPhone}),
+    queueStoryEmail(db, {giftId, role: "recipient", email: recipientEmail, token: recipientToken, retryId, userId: text(gift.recipientUserId), phone: recipientPhone, phoneDeliveryChannel: recipientPhoneChannel}),
     queueRecipientLinkNotification(db, {giftId, gift, token: recipientToken, retryId}),
+    queueSenderStoryAppNotification(db, {giftId, userId: text(gift.senderId || gift.userId), token, retryId}),
   ]);
   const failures = emailResults.filter((result) => result.status === "rejected");
   if (failures.length) {
@@ -735,6 +845,7 @@ async function sendThankYouPush(giftId, gift, notificationId) {
 }
 
 async function acknowledgeGiftStory(db, access) {
+  const thankYouMessage = text(access.thankYouMessage).slice(0, 1000);
   const ids = giftStoryActionIds(access.giftId);
   const eventRef = access.giftRef.collection("timeline").doc(ids.thankYou);
   const auditRef = db.collection("auditLogs").doc(ids.thankYouAudit);
@@ -751,6 +862,7 @@ async function acknowledgeGiftStory(db, access) {
       giftRequestId: access.giftId,
       actorRole: "recipient",
       actorId: access.uid || null,
+      message: thankYouMessage || null,
       createdAt: FieldValue.serverTimestamp(),
     };
     transaction.set(eventRef, event);
@@ -761,8 +873,8 @@ async function acknowledgeGiftStory(db, access) {
         recipientRole: "sender",
         type: "gift_story_thank_you",
         title: "A thank you for your gift",
-        body: "Your recipient sent a thank you for their Gift Story.",
-        message: "Your recipient sent a thank you for their Gift Story.",
+        body: thankYouMessage || "Your recipient sent a thank you for their Gift Story.",
+        message: thankYouMessage || "Your recipient sent a thank you for their Gift Story.",
         category: "gifts",
         giftId: access.giftId,
         data: {giftId: access.giftId, destination: {route: "gift", giftId: access.giftId}},
@@ -774,6 +886,7 @@ async function acknowledgeGiftStory(db, access) {
     }
     transaction.set(access.giftRef, {
       giftStoryThankYouSent: true,
+      giftStoryThankYouMessage: thankYouMessage || FieldValue.delete(),
       giftStoryThankYouSentAt: FieldValue.serverTimestamp(),
       giftStoryUpdatedAt: FieldValue.serverTimestamp(),
     }, {merge: true});
@@ -785,7 +898,8 @@ async function acknowledgeGiftStory(db, access) {
 
 exports.acknowledgeGiftStory = functions.https.onCall(async (data, context) => {
   const db = getFirestore();
-  return acknowledgeGiftStory(db, await resolveGiftStoryActionAccess(db, data, context));
+  const access = await resolveGiftStoryActionAccess(db, data, context, {requireAccount: true});
+  return acknowledgeGiftStory(db, {...access, thankYouMessage: data && data.thankYouMessage});
 });
 
 exports.saveGiftStoryToVault = functions.https.onCall(async (data, context) => {
@@ -819,6 +933,13 @@ exports.saveGiftStoryToVault = functions.https.onCall(async (data, context) => {
     }, {merge: true});
     return true;
   });
+  if (created && access.tokenAccess) {
+    await recordGiftStoryGuestAnalytics(db, {
+      token: text(data.token),
+      event: "guest_claimed_gift_story",
+      uid: access.uid,
+    }).catch((error) => console.error("Gift Story claim analytics failed", error));
+  }
   return {ok: true, alreadySaved: !created};
 });
 
@@ -863,6 +984,67 @@ exports.resolveGiftStoryAccess = functions.https.onCall(async (data, context) =>
   await giftSnap.ref.set(storyViewPatch, {merge: true});
   await maybeCreateRevealedCampaignMatch(db, giftSnap.ref, giftSnap.id, gift, viewerUserId);
   return {story: safeStory(giftSnap.id, gift), expiresAt: record.data.expiresAt.toMillis()};
+});
+
+const GUEST_STORY_EVENTS = {
+  guest_viewed_story: "guestStoryViews",
+  guest_watched_video: "guestStoryVideoStarts",
+  guest_completed_video: "guestStoryVideoCompletions",
+  guest_clicked_join_circum: "guestStoryJoinClicks",
+  guest_registered: "guestStoryGuestRegistrations",
+  guest_claimed_gift_story: "giftStoryGuestClaims",
+};
+
+async function recordGiftStoryGuestAnalytics(db, {token, event, uid = ""} = {}) {
+  const record = await tokenRecord(db, token);
+  if (!record) throw new functions.https.HttpsError("permission-denied", "Gift Story access expired.");
+  const metric = GUEST_STORY_EVENTS[text(event)];
+  if (!metric) throw new functions.https.HttpsError("invalid-argument", "Unknown Gift Story event.");
+  if (text(record.data.role || "recipient") !== "recipient") {
+    throw new functions.https.HttpsError("permission-denied", "Recipient Gift Story access required.");
+  }
+  const giftId = text(record.data.giftRequestId);
+  const giftRef = db.collection("giftRequests").doc(giftId);
+  const auditRef = db.collection("giftStoryAnalytics").doc(`${giftId}_${text(event)}_${Date.now()}_${crypto.randomBytes(4).toString("hex")}`);
+  await Promise.all([
+    record.snap.ref.set({
+      [metric]: FieldValue.increment(1),
+      lastGuestEventAt: FieldValue.serverTimestamp(),
+      updatedAt: FieldValue.serverTimestamp(),
+    }, {merge: true}),
+    giftRef.set({
+      [metric]: FieldValue.increment(1),
+      giftStoryUpdatedAt: FieldValue.serverTimestamp(),
+    }, {merge: true}),
+    auditRef.set({
+      giftRequestId: giftId,
+      event: text(event),
+      actorRole: uid ? "recipient" : "guest_recipient",
+      actorId: uid || null,
+      tokenRole: text(record.data.role || "recipient"),
+      source: "gift_story_guest_access",
+      createdAt: FieldValue.serverTimestamp(),
+    }),
+  ]);
+  return {ok: true};
+}
+
+exports.recordGiftStoryGuestEvent = functions.https.onRequest(async (req, res) => {
+  res.set("Access-Control-Allow-Origin", "*");
+  res.set("Access-Control-Allow-Headers", "content-type");
+  if (req.method === "OPTIONS") return res.status(204).send("");
+  if (req.method !== "POST") return res.status(405).json({ok: false});
+  try {
+    const db = getFirestore();
+    const result = await recordGiftStoryGuestAnalytics(db, {
+      token: text(req.body && req.body.token),
+      event: text(req.body && req.body.event),
+    });
+    return res.status(200).json(result);
+  } catch (error) {
+    const status = error.code === "invalid-argument" ? 400 : error.code === "permission-denied" ? 403 : 500;
+    return res.status(status).json({ok: false, error: error.code || "gift_story_guest_event_failed"});
+  }
 });
 
 exports.recordGiftStoryEvent = functions.https.onCall(async (data, context) => {
@@ -999,14 +1181,21 @@ exports.finalizeGiftStoryVideoUpload = functions.https.onCall(async (data, conte
 exports.getGiftStoryVideoDownload = functions.https.onCall(async (data, context) => {
   const db = getFirestore();
   const giftId = text(data.giftRequestId);
+  const suppliedToken = text(data.token);
   const giftSnap = await db.collection("giftRequests").doc(giftId).get();
   if (!giftSnap.exists) throw new functions.https.HttpsError("not-found", "Gift Story not found.");
   const gift = {...(giftSnap.data() || {}), id: giftId};
-  if (!await participantAuthorized(context, gift, text(data.token))) throw new functions.https.HttpsError("permission-denied", "Gift Story access required.");
+  if (!await participantAuthorized(context, gift, suppliedToken)) throw new functions.https.HttpsError("permission-denied", "Gift Story access required.");
   const storagePath = text(gift.giftStoryRenderedVideoPath);
   if (!storagePath || gift.giftStoryVideoStatus !== "ready") throw new functions.https.HttpsError("failed-precondition", "Gift Story video is still processing.");
   const expiry = gift.giftStoryVideoExpiresAt && gift.giftStoryVideoExpiresAt.toMillis ? gift.giftStoryVideoExpiresAt.toMillis() : 0;
   if (!expiry || expiry <= Date.now()) throw new functions.https.HttpsError("failed-precondition", "Gift Story video has expired.");
+  if (!context.auth && suppliedToken) {
+    await recordGiftStoryGuestAnalytics(db, {
+      token: suppliedToken,
+      event: "guest_watched_video",
+    }).catch((error) => console.error("Gift Story guest video analytics failed", error));
+  }
   const [downloadUrl] = await getStorage().bucket().file(storagePath).getSignedUrl({version: "v4", action: "read", expires: Math.min(expiry, Date.now() + 15 * 60 * 1000)});
   return {downloadUrl, mime: gift.giftStoryVideoMime || "video/webm", expiresAt: expiry};
 });
@@ -1035,17 +1224,30 @@ exports.manageGiftStoryAccess = functions.https.onCall(async (data, context) => 
   if (!giftSnap.exists) throw new functions.https.HttpsError("not-found", "Gift request not found.");
   const gift = giftSnap.data() || {};
   const hash = text(gift.giftStoryAccessTokenHash);
+  const recipientHash = text(gift.recipientStoryTokenHash);
+  const tokenHashes = [...new Set([hash, recipientHash].filter(Boolean))];
   if (action === "revoke") {
-    if (hash) await db.collection("giftStoryAccessTokens").doc(hash).set({status: "revoked", revokedAt: FieldValue.serverTimestamp()}, {merge: true});
+    await Promise.all(tokenHashes.map((tokenHashValue) =>
+      db.collection("giftStoryAccessTokens").doc(tokenHashValue).set({status: "revoked", revokedAt: FieldValue.serverTimestamp()}, {merge: true}),
+    ));
     await giftRef.set({giftStoryShareEnabled: false, giftStoryAccessStatus: "revoked", giftStoryUpdatedAt: FieldValue.serverTimestamp()}, {merge: true});
   } else if (action === "extend") {
     const expiresAt = Timestamp.fromMillis(Date.now() + STORY_RETENTION_HOURS * 60 * 60 * 1000);
-    if (hash) await db.collection("giftStoryAccessTokens").doc(hash).set({expiresAt, status: "active", updatedAt: FieldValue.serverTimestamp()}, {merge: true});
+    await Promise.all(tokenHashes.map((tokenHashValue) =>
+      db.collection("giftStoryAccessTokens").doc(tokenHashValue).set({expiresAt, status: "active", updatedAt: FieldValue.serverTimestamp()}, {merge: true}),
+    ));
     await giftRef.set({giftStoryAccessExpiresAt: expiresAt, giftStoryVideoExpiresAt: expiresAt, giftStoryUpdatedAt: FieldValue.serverTimestamp()}, {merge: true});
   } else if (action === "delete_assets") {
-    const path = text(gift.giftStoryRenderedVideoPath);
-    if (path) await getStorage().bucket().file(path).delete({ignoreNotFound: true});
-    await giftRef.set({giftStoryRenderedVideoPath: FieldValue.delete(), giftStoryVideoStatus: "deleted", giftStoryUpdatedAt: FieldValue.serverTimestamp()}, {merge: true});
+    await Promise.all(giftStoryVideoPaths(gift, giftId).map((path) =>
+      getStorage().bucket().file(path).delete({ignoreNotFound: true}),
+    ));
+    await giftRef.set({
+      giftStoryRenderedVideoPath: FieldValue.delete(),
+      giftStorySilentVersionUrl: FieldValue.delete(),
+      giftStorySoundVersionUrl: FieldValue.delete(),
+      giftStoryVideoStatus: "deleted",
+      giftStoryUpdatedAt: FieldValue.serverTimestamp(),
+    }, {merge: true});
   } else {
     throw new functions.https.HttpsError("invalid-argument", "Unknown Gift Story action.");
   }
@@ -1061,6 +1263,9 @@ exports.giftStoryLanding = functions.https.onRequest(async (req, res) => {
   const giftSnap = await getFirestore().collection("giftRequests").doc(record.data.giftRequestId).get();
   if (!giftSnap.exists) return res.status(404).send("Gift Story not found.");
   const gift = giftSnap.data() || {};
+  if (gift.giftStoryEnabled === false || gift.giftStoryApproved === false) {
+    return res.status(423).send("<!doctype html><title>Gift Story unavailable</title><meta name=robots content=noindex><body style='background:#090B1D;color:#F5F3ED;font-family:Helvetica;padding:48px'><h1>Gift Story unavailable</h1><p>This story is not currently available.</p></body>");
+  }
   if (text(gift.giftStoryStatus) === "locked" || text(gift.giftStoryAccessStatus) === "revoked") {
     return res.status(423).send("<!doctype html><title>Gift Story locked</title><meta name=robots content=noindex><body style='background:#090B1D;color:#F5F3ED;font-family:Helvetica;padding:48px'><h1>Gift Story locked</h1><p>This story is currently under review.</p></body>");
   }
@@ -1084,10 +1289,10 @@ exports.submitGiftStoryThankYou = functions.https.onRequest(async (req, res) => 
   const token = text(req.body && req.body.token);
   const db = getFirestore();
   try {
-    const access = await resolveGiftStoryActionAccess(db, {token}, {auth: null});
-    return res.status(200).json(await acknowledgeGiftStory(db, access));
+    await resolveGiftStoryActionAccess(db, {token}, {auth: null});
+    return res.status(401).json({ok: false, error: "account_required"});
   } catch (error) {
-    const status = error.code === "not-found" ? 404 : error.code === "failed-precondition" ? 423 : 403;
+    const status = error.code === "unauthenticated" ? 401 : error.code === "not-found" ? 404 : error.code === "failed-precondition" ? 423 : 403;
     return res.status(status).json({ok: false, error: error.code || "gift_story_action_failed"});
   }
 });
@@ -1102,29 +1307,17 @@ exports.onStoryNotificationWrite = functions.firestore.document("storyNotificati
   const giftStoryId = text(after.giftStoryId);
   if (!phone || !secureStoryUrl || !giftStoryId) return null;
   const db = getFirestore();
-  const fallbackId = storyNotificationId(giftStoryId, "whatsapp_fallback");
-  await db.collection("storyNotifications").doc(fallbackId).set(storyNotificationRecord({
-    notificationId: fallbackId,
-    giftStoryId,
+  const channel = text(after.phoneDeliveryChannel).toLowerCase() === "imessage" ? "imessage" : "whatsapp";
+  await queueRecipientPhoneChannel(db, {
+    giftId: giftStoryId,
     userId: text(after.userId),
     phone,
-    channel: "whatsapp",
-    status: "queued",
-    priority: 2,
-    retryCount: Number(after.retryCount || 0),
+    url: secureStoryUrl,
+    channel,
+    retryId: `${Number(after.retryCount || 0)}`,
     failedReason: "email_failed",
-    secureStoryUrl,
-    createdAt: FieldValue.serverTimestamp(),
-  }), {merge: true});
-  await db.collection("whatsappQueue").doc(fallbackId).set({
-    to: phone,
-    body: `🎁 Your Circum Gift Story is ready.\n\nView your secure story here:\n\n${secureStoryUrl}\n\nThis private link has been created just for you.`,
-    type: "gift_story_ready",
-    giftRequestId: giftStoryId,
-    status: "queued",
-    createdAt: FieldValue.serverTimestamp(),
-    updatedAt: FieldValue.serverTimestamp(),
-  }, {merge: true});
+    retryCount: Number(after.retryCount || 0),
+  });
   return null;
 });
 
@@ -1137,12 +1330,19 @@ exports.cleanupExpiredGiftStories = functions.pubsub.schedule("every 60 minutes"
     const giftSnap = await giftRef.get();
     if (giftSnap.exists) {
       const gift = giftSnap.data() || {};
-      const path = text(gift.giftStoryRenderedVideoPath);
-      if (path) await getStorage().bucket().file(path).delete({ignoreNotFound: true}).catch((error) => console.error("Gift Story asset cleanup failed", error));
+      await Promise.all(giftStoryVideoPaths(gift, data.giftRequestId).map((path) =>
+        getStorage().bucket().file(path).delete({ignoreNotFound: true})
+            .catch((error) => console.error("Gift Story asset cleanup failed", error)),
+      ));
       await giftRef.set({
         giftStoryRenderedVideoPath: FieldValue.delete(),
+        giftStorySilentVersionUrl: FieldValue.delete(),
+        giftStorySoundVersionUrl: FieldValue.delete(),
         giftStoryAccessToken: FieldValue.delete(),
         giftStoryAccessTokenHash: FieldValue.delete(),
+        recipientStoryToken: FieldValue.delete(),
+        recipientStoryTokenHash: FieldValue.delete(),
+        recipientStoryUrl: FieldValue.delete(),
         giftStoryAccessStatus: "expired",
         giftStoryVideoStatus: "expired",
         giftStoryUpdatedAt: FieldValue.serverTimestamp(),
@@ -1159,9 +1359,11 @@ module.exports.tokenHash = tokenHash;
 module.exports.safeStory = safeStory;
 module.exports.buildGiftStorySlides = buildGiftStorySlides;
 module.exports.giftStoryStoragePaths = giftStoryStoragePaths;
+module.exports.giftStoryVideoPaths = giftStoryVideoPaths;
 module.exports.cleanSkin = cleanSkin;
 module.exports.renderGiftStoryHtml = renderGiftStoryHtml;
 module.exports.storyNotificationRecord = storyNotificationRecord;
+module.exports.chooseRecipientLinkChannel = chooseRecipientLinkChannel;
 module.exports.hasActiveGiftDispute = hasActiveGiftDispute;
 module.exports.revealPolicyAllowsMutualReveal = revealPolicyAllowsMutualReveal;
 module.exports.campaignRevealMatchDecision = campaignRevealMatchDecision;

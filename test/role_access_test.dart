@@ -66,8 +66,8 @@ void main() {
       );
     });
 
-    test('supports accounts with sender and rider roles', () {
-      final roles = RoleAccessPolicy.resolveRoles(user: {
+    test('supports trusted accounts with sender and rider roles', () {
+      final roles = RoleAccessPolicy.resolveRoles(claims: {
         'roles': ['sender', 'rider'],
       });
 
@@ -77,11 +77,11 @@ void main() {
       expect(RoleAccessPolicy.rolesCanAccessRider(roles), isTrue);
     });
 
-    test('treats unknown roles as blocked', () {
+    test('ignores unknown client role values and keeps sender profile access', () {
       final role = RoleAccessPolicy.resolve(user: {'role': 'guest'});
 
-      expect(role, CircumRole.unknown);
-      expect(RoleAccessPolicy.canAccessSender(role), isFalse);
+      expect(role, CircumRole.sender);
+      expect(RoleAccessPolicy.canAccessSender(role), isTrue);
       expect(RoleAccessPolicy.canAccessRider(role), isFalse);
     });
   });

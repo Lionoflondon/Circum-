@@ -1,9 +1,11 @@
+/* eslint-disable max-len, require-jsdoc */
 const functions = require("firebase-functions/v1");
 const {getAuth} = require("firebase-admin/auth");
 const {
   FieldValue,
   getFirestore,
 } = require("firebase-admin/firestore");
+const giftVoiceMedia = require("./gift-voice-media");
 
 const ACTIVE_DELIVERY_STATUSES = [
   "accepted",
@@ -214,6 +216,9 @@ async function closeAccount(data, context) {
   await deleteCollectionDocs("senderSavedAddresses", "userId", uid, batch);
   await deleteCollectionDocs("draftBookings", "userId", uid, batch);
   await deleteCollectionDocs("riderDrafts", "riderId", uid, batch);
+  if (accountType === "sender") {
+    await giftVoiceMedia.cleanupGiftVoiceMediaForAccount({db, uid, batch});
+  }
 
   await batch.commit();
 

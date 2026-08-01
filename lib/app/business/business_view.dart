@@ -1,4 +1,6 @@
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -607,8 +609,13 @@ class _BusinessViewState extends State<BusinessView> {
         members.where((item) => item['status'] != 'invited').toList();
     final pending =
         members.where((item) => item['status'] == 'invited').toList();
+    final canManageCompanyCode = _canManageCompanyCode(_workspace!.account);
     return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
       const _Subtitle('Invite, suspend and permission team members by role.'),
+      if (canManageCompanyCode) ...[
+        _companyCodeCard(_workspace!.account),
+        const SizedBox(height: 12),
+      ],
       _PrimaryButton(
           label: 'Invite teammate',
           icon: Icons.person_add_alt_1_rounded,
@@ -658,6 +665,90 @@ class _BusinessViewState extends State<BusinessView> {
       else
         ..._accessRequests.map(_accessRequestRow),
     ]);
+  }
+
+  Widget _companyCodeCard(BusinessAccount account) {
+    final code = account.companyCode.trim();
+    final hasCode = code.isNotEmpty;
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: _panel,
+        border: Border.all(color: hasCode ? _blue : _border),
+        borderRadius: BorderRadius.circular(16),
+      ),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Row(children: [
+          const Icon(Icons.group_add_rounded, color: _blue),
+          const SizedBox(width: 10),
+          Text('Company code', style: Theme.of(context).textTheme.titleMedium),
+        ]),
+        const SizedBox(height: 8),
+        Text(
+          hasCode
+              ? 'Share this code with team members so they can request access.'
+              : 'Generate a company code so team members can request access.',
+          style: const TextStyle(color: _muted, height: 1.35),
+        ),
+        if (hasCode) ...[
+          const SizedBox(height: 10),
+          SelectableText(
+            code,
+            style: GoogleFonts.jetBrainsMono(
+              color: _text,
+              fontSize: 24,
+              fontWeight: FontWeight.w900,
+              letterSpacing: 1.4,
+            ),
+          ),
+        ],
+        const SizedBox(height: 12),
+        Wrap(spacing: 10, runSpacing: 10, children: [
+          OutlinedButton.icon(
+            onPressed: _working
+                ? null
+                : () async {
+                    if (!hasCode) {
+                      await _ensureCompanyCode();
+                      return;
+                    }
+                    await Clipboard.setData(ClipboardData(text: code));
+                    _showMessage('Company code copied.');
+                  },
+            icon: Icon(hasCode ? Icons.copy_rounded : Icons.add_rounded),
+            label: Text(hasCode ? 'Copy' : 'Generate code'),
+          ),
+          if (hasCode)
+            OutlinedButton.icon(
+              onPressed:
+                  _working ? null : () => _ensureCompanyCode(rotate: true),
+              icon: const Icon(Icons.refresh_rounded),
+              label: const Text('Change code'),
+            ),
+        ]),
+      ]),
+    );
+  }
+
+  bool _canManageCompanyCode(BusinessAccount account) {
+    final user = FirebaseAuth.instance.currentUser;
+    final uid = user?.uid ?? '';
+    final email = (user?.email ?? '').trim().toLowerCase();
+    for (final member in account.teamMembers) {
+      final role = '${member['role'] ?? ''}'.trim().toLowerCase();
+      final status = '${member['status'] ?? 'active'}'.trim().toLowerCase();
+      final sameUid = uid.isNotEmpty && member['userId'] == uid;
+      final sameEmail = email.isNotEmpty &&
+          '${member['email'] ?? ''}'.trim().toLowerCase() == email;
+      if ((sameUid || sameEmail) &&
+          status != 'removed' &&
+          status != 'rejected' &&
+          (role == 'owner' || role == 'admin')) {
+        return true;
+      }
+    }
+    return false;
   }
 
   Widget _productRequests({required bool isHealth}) {
@@ -1391,6 +1482,26 @@ class _BusinessViewState extends State<BusinessView> {
     }
   }
 
+  Future<void> _ensureCompanyCode({bool rotate = false}) async {
+    final account = _account;
+    if (account == null || _working) return;
+    setState(() => _working = true);
+    try {
+      final code =
+          await _repository.ensureCompanyCode(account: account, rotate: rotate);
+      if (code.isEmpty) {
+        _showMessage('Company code could not be retrieved.');
+        return;
+      }
+      await _load(accountId: account.id);
+      _showMessage(rotate ? 'Company code changed.' : 'Company code ready.');
+    } catch (error) {
+      _showMessage('Company code could not be retrieved: $error');
+    } finally {
+      if (mounted) setState(() => _working = false);
+    }
+  }
+
   Future<void> _saveNotificationPreference(String key, bool value) async {
     final account = _account!;
     final updated = BusinessAccount(
@@ -1403,6 +1514,7 @@ class _BusinessViewState extends State<BusinessView> {
       billingEmail: account.billingEmail,
       businessAddress: account.businessAddress,
       companyNumber: account.companyNumber,
+      companyCode: account.companyCode,
       defaultPickupAddress: account.defaultPickupAddress,
       teamMembers: account.teamMembers,
       connectedProducts: account.connectedProducts,
@@ -1648,6 +1760,7 @@ class _SettingsFormState extends State<_SettingsForm> {
                     billingEmail: billing.text.trim(),
                     businessAddress: address.text.trim(),
                     companyNumber: company.text.trim(),
+                    companyCode: widget.account.companyCode,
                     defaultPickupAddress: pickup.text.trim(),
                     teamMembers: widget.account.teamMembers,
                     connectedProducts: widget.account.connectedProducts,

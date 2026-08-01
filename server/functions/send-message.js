@@ -1,96 +1,30 @@
 const functions = require("firebase-functions/v1");
-const {getFirestore} = require("firebase-admin/firestore");
+const communicationEngine = require("./communication-engine");
 
 const sendMessage = functions.https.onCall(async (data, context) => {
   try {
-    // Check authentication
-    if (!context.auth) {
-      throw new functions.https.HttpsError("unauthenticated",
-          "User must be authenticated to send messages.");
-    }
-
-    // Validate input data
-    const {recipientId, message, requestId} = data;
-    if (!recipientId || !message || !requestId) {
-      throw new functions.https.HttpsError("invalid-argument",
-          "Must provide recipientId, message, and requestId");
-    }
-
-    const senderId = context.auth.uid;
-    const timestamp = new Date();
-
-    // Determine if sender is rider or user by checking collections
-    const riderDoc = await getFirestore()
-        .collection("riders")
-        .doc(senderId)
-        .get();
-
-    const senderType = riderDoc.exists ? "rider" : "user";
-    const senderRole = senderType === "rider" ? "rider" : "shipper";
-    const recipientType = senderType === "rider" ? "user" : "rider";
-    const recipientRole = recipientType === "rider" ? "rider" : "shipper";
-
-    // Get recipient's FCM token
-    const recipientDoc = await getFirestore()
-        .collection(recipientType + "s")
-        .doc(recipientId)
-        .get();
-
-    if (!recipientDoc.exists) {
-      throw new functions.https.HttpsError("not-found", "Recipient not found");
-    }
-
-    // Create message document
-    const messageData = {
-      senderId,
-      senderType,
-      senderRole,
-      recipientId,
-      recipientType,
-      messageText: message,
-      message,
+    const legacyChatId = data.requestId || data.bookingId || data.chatId || "";
+    const requestId = `${legacyChatId}`.trim();
+    const mapped = {
+      ...data,
+      chatId: requestId,
       requestId,
-      bookingId: requestId,
-      attachments: [],
-      readBy: [senderId],
-      createdAt: timestamp,
-      timeStamp: timestamp.toISOString(),
-      status: "sent",
+      message: data.message,
+      messageType: data.messageType || "text",
     };
-
-    // Store message in Firestore
-    const chatRef = getFirestore()
-        .collection("chats")
-        .doc(requestId)
-        .collection("messages");
-
-    const messageRef = await chatRef.add(messageData);
-
-    // Update last message in chat document
-    await getFirestore().collection("chats").doc(requestId).set({
-      lastMessage: message,
-      lastMessageTimestamp: timestamp,
-      participants: [senderId, recipientId],
-      participantRoles: {
-        [senderId]: senderRole,
-        [recipientId]: recipientRole,
-      },
-      type: "delivery",
-      status: "open",
-      bookingId: requestId,
-      requestId,
-      updatedAt: timestamp,
-      unreadBy: [recipientId],
-    }, {merge: true});
-
-    return {
-      success: true,
-      messageId: messageRef.id,
-      timestamp: timestamp.toISOString(),
-    };
+    return await communicationEngine._sendCircumMessageHandler(mapped, context);
   } catch (error) {
-    console.error("Error in sendMessage:", error);
-    throw new functions.https.HttpsError("internal", error.message);
+    if (error instanceof functions.https.HttpsError) {
+      throw error;
+    }
+    console.error(
+        "Unexpected error in legacy sendMessage compatibility wrapper:",
+        error,
+    );
+    throw new functions.https.HttpsError(
+        "internal",
+        "Message could not be sent.",
+    );
   }
 });
 

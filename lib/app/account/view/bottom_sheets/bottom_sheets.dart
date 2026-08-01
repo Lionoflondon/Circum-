@@ -38,7 +38,6 @@ class ButtSheetState extends State<ButtSheet> {
 
   @override
   void initState() {
-    // TODO: implement initState
     super.initState();
     _textFieldController.text = widget.val ?? '';
   }

@@ -1,5 +1,5 @@
 /* eslint-disable max-len, require-jsdoc */
-const VEHICLE_ORDER = ["bike", "car", "estate_suv", "van", "luton_van"];
+const VEHICLE_ORDER = ["motorbike", "car", "van"];
 
 function normalizeText(value) {
   return String(value || "").trim().toLowerCase().replace(/[_-]+/g, " ");
@@ -9,11 +9,9 @@ function normalizeVehicleClass(value, fallback = "any") {
   const text = normalizeText(value);
   if (!text) return fallback;
   if (["any", "all", "none", "no preference"].includes(text)) return "any";
-  if (/(luton|lorry|box truck|large van)/.test(text)) return "luton_van";
-  if (/(van|small van|transit|sprinter)/.test(text)) return "van";
-  if (/(estate|suv|4x4|estate suv|estate car)/.test(text)) return "estate_suv";
-  if (/(car|driver|sedan|saloon|hatchback)/.test(text)) return "car";
-  if (/(bike|bicycle|cycle|motorbike|motorcycle|scooter|moped)/.test(text)) return "bike";
+  if (/(luton|lorry|box truck|large van|van|small van|transit|sprinter)/.test(text)) return "van";
+  if (/(estate|suv|4x4|estate suv|estate car|car|driver|sedan|saloon|hatchback)/.test(text)) return "car";
+  if (/(bike|bicycle|cycle|e bike|ebike|electric bike|motorbike|motorcycle|scooter|moped)/.test(text)) return "motorbike";
   return fallback;
 }
 

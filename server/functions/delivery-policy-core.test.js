@@ -9,15 +9,17 @@ const nearby = {lat: 51.51555, lng: -0.14185};
 const farAway = {lat: 51.517, lng: -0.145};
 
 test("cancellation policy is free before rider acceptance", () => {
-  const decision = policy.cancellationDecision({state: "finding_rider", serverNow: now});
-  assert.equal(decision.canCancel, true);
-  assert.equal(decision.feeAmount, 0);
-  assert.equal(decision.riderCompensation, 0);
-  assert.equal(decision.userFacingMessage, "You can cancel this delivery at no charge.");
+  for (const state of ["requested", "pending", "unmatched", "finding_rider", "broadcasting", "available", "awaiting_rider"]) {
+    const decision = policy.cancellationDecision({state, serverNow: now});
+    assert.equal(decision.canCancel, true);
+    assert.equal(decision.feeAmount, 0);
+    assert.equal(decision.riderCompensation, 0);
+    assert.equal(decision.userFacingMessage, "You can cancel this delivery at no charge.");
+  }
 });
 
 test("cancellation after acceptance applies rider compensation and platform retained amount", () => {
-  for (const state of ["accepted", "navigating_to_pickup"]) {
+  for (const state of ["accepted", "rider_assigned", "navigating_to_pickup", "en_route_to_pickup"]) {
     const decision = policy.cancellationDecision({state, serverNow: now});
     assert.equal(decision.canCancel, true);
     assert.equal(decision.feeAmount, 3);

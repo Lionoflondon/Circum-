@@ -94,7 +94,7 @@ function normalizeStatus(value) {
 function senderTrackingStateForBackendStatus(status) {
   const normalized = normalizeStatus(status);
   if (!normalized) return SENDER_TRACKING_STATES.NO_ACTIVE_DELIVERY;
-  return BACKEND_STATUS_TO_SENDER_STATE[normalized] || SENDER_TRACKING_STATES.IN_TRANSIT;
+  return BACKEND_STATUS_TO_SENDER_STATE[normalized] || SENDER_TRACKING_STATES.ISSUE;
 }
 
 function canTransitionDeliveryStatus(from, to) {

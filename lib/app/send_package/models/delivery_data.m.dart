@@ -25,11 +25,11 @@ class DeliveryData {
   factory DeliveryData.fromJson(data) {
     return DeliveryData(
         courierName:
-            '${data['courierName'] ?? data['riderName'] ?? data['driverName'] ?? 'Your rider'}',
-        phoneNumber: '${data['phoneNumber'] ?? data['riderPhone'] ?? ''}',
+            '${data['courierName'] ?? data['riderName'] ?? data['driverName'] ?? 'Your Circum Rider'}',
+        phoneNumber: '',
         locality: data['locality'],
         typeOfVehicle:
-            '${data['typeOfVehicle'] ?? data['driverVehicle'] ?? 'Rider'}',
+            '${data['typeOfVehicle'] ?? data['driverVehicle'] ?? 'Circum Rider'}',
         estimatedDeliveryTime:
             '${data['estimatedDeliveryTime'] ?? data['eta'] ?? ''}',
         code: '${data['code'] ?? ''}'.trim(),

@@ -28,7 +28,7 @@ class _SenderTrackingStateGalleryState
     deliveryData: DeliveryData(
       courierName: 'Maya Stone',
       phoneNumber: '+447000000000',
-      typeOfVehicle: 'Bike',
+      typeOfVehicle: 'Motorbike',
       estimatedDeliveryTime: '7 min',
       plateNumber: '',
       code: '427158',

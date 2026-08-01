@@ -101,13 +101,22 @@ function dependencyGraph(productName) {
 }
 
 function pairwiseIntersections(graphs) {
+  const allowed = new Set((manifest.allowedDependencyIntersections || [])
+    .flatMap((entry) => {
+      const products = [...(entry.products || [])].sort().join('|');
+      return (entry.files || []).map((file) => `${products}:${file}`);
+    }));
   const entries = Object.entries(graphs);
   const intersections = [];
   for (let i = 0; i < entries.length; i += 1) {
     for (let j = i + 1; j < entries.length; j += 1) {
       const [leftName, leftFiles] = entries[i];
       const [rightName, rightFiles] = entries[j];
-      const overlap = [...leftFiles].filter((file) => rightFiles.has(file)).sort();
+      const products = [leftName, rightName].sort().join('|');
+      const overlap = [...leftFiles]
+        .filter((file) => rightFiles.has(file))
+        .filter((file) => !allowed.has(`${products}:${file}`))
+        .sort();
       if (overlap.length > 0) {
         intersections.push({ products: [leftName, rightName], files: overlap });
       }

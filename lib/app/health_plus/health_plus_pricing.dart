@@ -2,12 +2,42 @@ import '../../pricing/delivery_pricing.dart';
 
 class HealthPlusPricing {
   static const double serviceFeeGbp = 1.2;
-  static const double priorityFeeGbp = 2.99;
-  static const double familySupportFeeGbp = 3.99;
-  static const double recurringDiscountGbp = 1.5;
+  static const double basicMonthlyPriceGbp = 11;
+  static const double priorityMonthlyPriceGbp = 25;
+  static const double familyMonthlyPriceGbp = 40;
   static const double minimumStartingPriceGbp = 11;
   static const double defaultMedicationWeightKg = 0.5;
   static const double defaultDistanceMiles = 4.8;
+
+  static HealthPlusPlan planFor(String subscriptionPlan) {
+    final id = subscriptionPlan.toLowerCase().trim();
+    return switch (id) {
+      'priority' => const HealthPlusPlan(
+          id: 'priority',
+          title: 'Health+ Priority',
+          monthlyPrice: priorityMonthlyPriceGbp,
+          includedPickups: 4,
+          unlimited: false,
+          fairUseMonitored: false,
+        ),
+      'family' => const HealthPlusPlan(
+          id: 'family',
+          title: 'Health+ Family',
+          monthlyPrice: familyMonthlyPriceGbp,
+          includedPickups: null,
+          unlimited: true,
+          fairUseMonitored: true,
+        ),
+      _ => const HealthPlusPlan(
+          id: 'basic',
+          title: 'Health+ Basic',
+          monthlyPrice: basicMonthlyPriceGbp,
+          includedPickups: 2,
+          unlimited: false,
+          fairUseMonitored: false,
+        ),
+    };
+  }
 
   static HealthPlusPriceBreakdown calculate({
     double distanceMiles = defaultDistanceMiles,
@@ -22,33 +52,49 @@ class HealthPlusPricing {
         vehicleType: 'bike',
       ),
     );
-    final normalizedPlan = subscriptionPlan.toLowerCase().trim();
-    final priorityFee =
-        normalizedPlan == 'priority' ? priorityFeeGbp : 0.toDouble();
-    final familyFee =
-        normalizedPlan == 'family' ? familySupportFeeGbp : 0.toDouble();
-    final recurringDiscount = recurring ? recurringDiscountGbp : 0.toDouble();
-    final subtotal = delivery.total +
-        serviceFeeGbp +
-        priorityFee +
-        familyFee -
-        recurringDiscount;
-    final total = subtotal < minimumStartingPriceGbp
+    final plan = planFor(subscriptionPlan);
+    final subtotal = delivery.total + serviceFeeGbp;
+    final oneOffTotal = subtotal < minimumStartingPriceGbp
         ? minimumStartingPriceGbp
         : double.parse(subtotal.toStringAsFixed(2));
+    final total = recurring ? plan.monthlyPrice : oneOffTotal;
 
     return HealthPlusPriceBreakdown(
       delivery: delivery,
       serviceFee: serviceFeeGbp,
-      priorityFee: priorityFee,
-      familySupportFee: familyFee,
-      recurringDiscount: recurringDiscount,
-      minimumAdjustment: double.parse((total - subtotal).toStringAsFixed(2)),
+      priorityFee: 0,
+      familySupportFee: 0,
+      recurringDiscount: 0,
+      minimumAdjustment: recurring
+          ? 0
+          : double.parse((oneOffTotal - subtotal).toStringAsFixed(2)),
       total: total,
       recurring: recurring,
-      subscriptionPlan: normalizedPlan.isEmpty ? 'basic' : normalizedPlan,
+      subscriptionPlan: plan.id,
+      monthlyPlanPrice: plan.monthlyPrice,
+      includedPickups: plan.includedPickups,
+      unlimitedPickups: plan.unlimited,
+      fairUseMonitored: plan.fairUseMonitored,
     );
   }
+}
+
+class HealthPlusPlan {
+  final String id;
+  final String title;
+  final double monthlyPrice;
+  final int? includedPickups;
+  final bool unlimited;
+  final bool fairUseMonitored;
+
+  const HealthPlusPlan({
+    required this.id,
+    required this.title,
+    required this.monthlyPrice,
+    required this.includedPickups,
+    required this.unlimited,
+    required this.fairUseMonitored,
+  });
 }
 
 class HealthPlusPriceBreakdown {
@@ -61,6 +107,10 @@ class HealthPlusPriceBreakdown {
   final double total;
   final bool recurring;
   final String subscriptionPlan;
+  final double monthlyPlanPrice;
+  final int? includedPickups;
+  final bool unlimitedPickups;
+  final bool fairUseMonitored;
 
   const HealthPlusPriceBreakdown({
     required this.delivery,
@@ -72,6 +122,10 @@ class HealthPlusPriceBreakdown {
     required this.total,
     required this.recurring,
     required this.subscriptionPlan,
+    required this.monthlyPlanPrice,
+    required this.includedPickups,
+    required this.unlimitedPickups,
+    required this.fairUseMonitored,
   });
 
   int get amountPence => (total * 100).round();
@@ -88,5 +142,9 @@ class HealthPlusPriceBreakdown {
         'total': total,
         'recurring': recurring,
         'subscriptionPlan': subscriptionPlan,
+        'monthlyPlanPrice': monthlyPlanPrice,
+        'includedPickups': includedPickups,
+        'unlimitedPickups': unlimitedPickups,
+        'fairUseMonitored': fairUseMonitored,
       };
 }

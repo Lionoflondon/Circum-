@@ -33,6 +33,8 @@ migrate_working_dir/
 .pub-cache/
 .pub/
 /build/
+server/functions/.env
+server/functions/.env.*
 
 # Symbolication related
 app.*.symbols

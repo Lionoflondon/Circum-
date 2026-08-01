@@ -1,0 +1,21 @@
+name: Circum Flutter CI
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+jobs:
+  flutter:
+    name: Circum Flutter CI
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+      - run: flutter pub get
+      - run: flutter analyze --no-fatal-warnings --no-fatal-infos
+      - run: flutter test

@@ -97,8 +97,12 @@ class AdminRatingsTipsPolicy {
   }) {
     final query = search.trim().toLowerCase();
     return records.where((record) {
-      if (stars != null && record.stars != stars) return false;
-      if (filter == AdminRatingTipFilter.tipped && !record.tipped) return false;
+      if (stars != null && record.stars != stars) {
+        return false;
+      }
+      if (filter == AdminRatingTipFilter.tipped && !record.tipped) {
+        return false;
+      }
       if (filter == AdminRatingTipFilter.notTipped && record.tipped) {
         return false;
       }
@@ -106,8 +110,11 @@ class AdminRatingsTipsPolicy {
         return false;
       }
       return query.isEmpty ||
-          [record.riderId, record.senderId, record.deliveryId]
-              .any((value) => value.toLowerCase().contains(query));
+          [
+            record.riderId,
+            record.senderId,
+            record.deliveryId,
+          ].any((value) => value.toLowerCase().contains(query));
     }).toList(growable: false);
   }
 
@@ -319,13 +326,22 @@ class AdminAccountTools {
     required String updatedBy,
     required Object updatedAt,
   }) {
-    if (!['approved', 'rejected', 'suspended', 'reactivated']
-        .contains(status)) {
+    if (![
+      'approved',
+      'rejected',
+      'suspended',
+      'reactivated',
+    ].contains(status)) {
       throw ArgumentError('Unsupported business account status.');
     }
+    final approved = status == 'approved' || status == 'reactivated';
+    final canonicalStatus = status == 'reactivated' ? 'approved' : status;
     return {
-      'status': status == 'reactivated' ? 'approved' : status,
-      'verificationStatus': status == 'approved' ? 'approved' : status,
+      'status': canonicalStatus,
+      'approvalStatus': canonicalStatus,
+      'businessStatus': canonicalStatus,
+      'verificationStatus': approved ? 'approved' : canonicalStatus,
+      'isApproved': approved,
       'adminStatusUpdatedBy': updatedBy,
       'adminStatusUpdatedAt': updatedAt,
     };
@@ -616,8 +632,10 @@ class AdminMetricSnapshot {
     final failed = deliveries.where(_isFailed).toList();
     final cancelled = deliveries.where(_isCancelled).toList();
     final active = deliveries
-        .where((item) =>
-            !_isCompleted(item) && !_isFailed(item) && !_isCancelled(item))
+        .where(
+          (item) =>
+              !_isCompleted(item) && !_isFailed(item) && !_isCancelled(item),
+        )
         .toList();
     final revenueToday = _sumSince(payments, today);
     final revenueThisWeek = _sumSince(payments, weekStart);
@@ -660,9 +678,11 @@ class AdminMetricSnapshot {
       averageDriverRating: _round2(averageRating),
       customerSatisfactionScore: _round2((averageRating / 5) * 100),
       complaintsCount: ratings
-          .where((rating) =>
-              '${rating['feedbackTags']}'.contains('issue') ||
-              '${rating['feedbackTags']}'.contains('damaged'))
+          .where(
+            (rating) =>
+                '${rating['feedbackTags']}'.contains('issue') ||
+                '${rating['feedbackTags']}'.contains('damaged'),
+          )
           .length,
       refundRequests: supportTickets
           .where((ticket) => '${ticket['type']}'.contains('refund'))
@@ -680,10 +700,12 @@ class AdminMetricSnapshot {
       ),
       healthPlusRecurringRevenue: _round2(
         healthPlusPayments
-            .where((item) =>
-                '${item['frequency']}'.contains('monthly') ||
-                item['recurring'] == true ||
-                item['savedPaymentMethod'] == true)
+            .where(
+              (item) =>
+                  '${item['frequency']}'.contains('monthly') ||
+                  item['recurring'] == true ||
+                  item['savedPaymentMethod'] == true,
+            )
             .fold<double>(0, (total, item) => total + _moneyValue(item)),
       ),
     );
@@ -769,41 +791,47 @@ class AdminPlatformHealthSnapshot {
     required List<Map<String, dynamic>> giftOrders,
   }) {
     final activeDeliveries = deliveries
-        .where((item) =>
-            !_isCompleted(item) && !_isFailed(item) && !_isCancelled(item))
+        .where(
+          (item) =>
+              !_isCompleted(item) && !_isFailed(item) && !_isCancelled(item),
+        )
         .toList();
     final waiting = activeDeliveries
-        .where((item) => _hasStatus(item, const [
-              'waiting',
-              'no_show',
-              'no-show',
-            ]))
+        .where(
+          (item) => _hasStatus(item, const ['waiting', 'no_show', 'no-show']),
+        )
         .length;
     final vanguard = activeDeliveries
         .where((item) => _containsAny(item, const ['vanguard']))
         .length;
     final discrepancies = deliveries
-        .where((item) => _containsAny(item, const [
-              'discrepancy',
-              'adjustment_pending',
-              'awaiting_review',
-              'iris_review'
-            ]))
+        .where(
+          (item) => _containsAny(item, const [
+            'discrepancy',
+            'adjustment_pending',
+            'awaiting_review',
+            'iris_review',
+          ]),
+        )
         .length;
     final financeReview = payments
-        .where((item) => _containsAny(item, const [
-              'review',
-              'refund',
-              'dispute',
-              'escalated',
-              'pending_verification'
-            ]))
+        .where(
+          (item) => _containsAny(item, const [
+            'review',
+            'refund',
+            'dispute',
+            'escalated',
+            'pending_verification',
+          ]),
+        )
         .length;
     final supportOpen =
         supportTickets.where((ticket) => !_isResolved(ticket)).length;
     final healthOpen = healthPlusPickups
-        .where((item) =>
-            !_containsAny(item, const ['completed', 'cancelled', 'closed']))
+        .where(
+          (item) =>
+              !_containsAny(item, const ['completed', 'cancelled', 'closed']),
+        )
         .length;
     final businessPending = businessAccounts
         .where((item) => _containsAny(item, const ['pending', 'review']))
@@ -973,7 +1001,7 @@ class AdminSupportTools {
           'Escalate',
           'Request Information',
           'Resolve',
-          'Open Chat'
+          'Open Chat',
         ];
 
   static Map<String, dynamic> statusPatch({
@@ -1061,7 +1089,7 @@ class AdminGiftTools {
       'paused',
       'suspended',
       'inactive',
-      'history_reviewed'
+      'history_reviewed',
     ].contains(status)) {
       throw ArgumentError('Unsupported brand partner status.');
     }
@@ -1109,7 +1137,7 @@ class AdminGiftTools {
         secondBlocked) {
       return (
         score: 0,
-        reason: 'This match is not eligible for safety reasons.'
+        reason: 'This match is not eligible for safety reasons.',
       );
     }
     final firstTerms = _campaignTerms(first);
@@ -1146,10 +1174,12 @@ class AdminGiftTools {
     Map<String, dynamic> second,
   ) {
     final allergies = <String>{
-      ...?((first['allergies'] as List?)
-          ?.map((value) => '$value'.toLowerCase())),
-      ...?((second['allergies'] as List?)
-          ?.map((value) => '$value'.toLowerCase())),
+      ...?((first['allergies'] as List?)?.map(
+        (value) => '$value'.toLowerCase(),
+      )),
+      ...?((second['allergies'] as List?)?.map(
+        (value) => '$value'.toLowerCase(),
+      )),
     };
     final preferences = {..._campaignTerms(first), ..._campaignTerms(second)};
     for (final allergy in allergies) {
@@ -1414,7 +1444,8 @@ List<Map<String, dynamic>> adminSearch(
   if (normalized.isEmpty) return records;
   return records.where((record) {
     return fields.any(
-        (field) => '${record[field] ?? ''}'.toLowerCase().contains(normalized));
+      (field) => '${record[field] ?? ''}'.toLowerCase().contains(normalized),
+    );
   }).toList();
 }
 
@@ -1467,7 +1498,8 @@ double _sumSince(List<Map<String, dynamic>> records, DateTime since) {
 
 double _moneyValue(Map<String, dynamic> item) {
   return _number(
-      item['amount'] ?? item['price'] ?? item['quote'] ?? item['total']);
+    item['amount'] ?? item['price'] ?? item['quote'] ?? item['total'],
+  );
 }
 
 double _number(dynamic value) {

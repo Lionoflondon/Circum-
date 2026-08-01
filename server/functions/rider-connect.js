@@ -1,6 +1,7 @@
 /* eslint-disable max-len, require-jsdoc */
 const functions = require("firebase-functions/v1");
 const {getFirestore, FieldValue} = require("firebase-admin/firestore");
+const {payoutReadiness} = require("./rider-certification-policy");
 
 const safeConfig = functions.config() || {};
 const appBaseUrl = process.env.APP_BASE_URL || (safeConfig.app && safeConfig.app.base_url) || "https://circumuk.com";
@@ -112,11 +113,32 @@ function resolveRiderPayoutBreakdown(input = {}) {
   };
 }
 
+function stripeTransferIdempotencyKey(requestId) {
+  return `rider_payout_transfer_${text(requestId)}`;
+}
+
 function hasRawBankFields(data) {
   return rawBankFields.some((field) => {
     const value = text(data && data[field]);
     return value.length > 0 && value !== "REMOVED";
   });
+}
+
+async function riderIdForStripeAccount(db, account = {}) {
+  const metadataRiderId = text(account.metadata && account.metadata.riderId);
+  if (metadataRiderId) return metadataRiderId;
+  const accountId = text(account.id);
+  if (!accountId) return "";
+  const direct = await db.collection("riderProfiles")
+      .where("stripeAccountId", "==", accountId)
+      .limit(1)
+      .get();
+  if (!direct.empty) return direct.docs[0].id;
+  const connect = await db.collection("riderProfiles")
+      .where("stripeConnectAccountId", "==", accountId)
+      .limit(1)
+      .get();
+  return connect.empty ? "" : connect.docs[0].id;
 }
 
 function riderWithdrawalFailure({
@@ -166,11 +188,6 @@ async function assertActor(context, riderId, {adminOnly = false} = {}) {
   return {uid, admin};
 }
 
-function approved(profile) {
-  const status = text(profile && (profile.approvalStatus || profile.verificationStatus || profile.onboardingStatus)).toLowerCase();
-  return status === "approved" || status === "verified";
-}
-
 async function loadRider(riderId) {
   const db = getFirestore();
   const profileRef = db.collection("riderProfiles").doc(riderId);
@@ -180,6 +197,20 @@ async function loadRider(riderId) {
     throw new functions.https.HttpsError("not-found", "Rider profile not found.");
   }
   return {profileRef, profile};
+}
+
+async function loadRiderDocuments(riderId) {
+  const snapshot = await getFirestore().collection("riderDocuments")
+      .where("riderId", "==", riderId)
+      .limit(100)
+      .get();
+  return snapshot.docs.map((doc) => ({id: doc.id, ...doc.data()}));
+}
+
+async function computeRiderPayoutReadiness(riderId) {
+  const {profile} = await loadRider(riderId);
+  const documents = await loadRiderDocuments(riderId);
+  return payoutReadiness(profile, documents);
 }
 
 function stripeStatusFromAccount(account) {
@@ -506,6 +537,33 @@ function syncStripeConnectStatus(stripeOrFactory) {
   });
 }
 
+function riderPayoutReadiness() {
+  return functions.https.onCall(async (data, context) => {
+    const riderId = text((data && data.riderId) || (context.auth && context.auth.uid));
+    await assertActor(context, riderId);
+    const readiness = await computeRiderPayoutReadiness(riderId);
+    await updateRiderConnectFields(riderId, {
+      payoutReadinessStatus: readiness.status,
+      payoutReady: readiness.ready,
+      payoutReadinessChecks: readiness.checks,
+      payoutReadinessMissingDocuments: readiness.missingDocuments,
+      payoutReadinessUpdatedAt: FieldValue.serverTimestamp(),
+    });
+    return {
+      riderId,
+      ...readiness,
+      labels: {
+        not_started: "Not started",
+        in_progress: "In progress",
+        additional_information_required: "Additional information required",
+        charges_enabled: "Charges enabled",
+        payouts_enabled: "Payouts enabled",
+        fully_payout_ready: "Fully payout ready",
+      },
+    };
+  });
+}
+
 function resetRiderTestStripeAccount() {
   return functions.https.onCall(async (data, context) => {
     const riderId = text(data && data.riderId);
@@ -554,19 +612,14 @@ function createRiderTransferOrPayout(stripeOrFactory) {
     }
     const db = getFirestore();
     const {profile} = await loadRider(riderId);
-    if (!approved(profile)) {
-      throw new functions.https.HttpsError("failed-precondition", "Rider must be approved first.");
+    const readiness = await computeRiderPayoutReadiness(riderId);
+    if (!readiness.ready) {
+      throw new functions.https.HttpsError("failed-precondition", `Rider payout setup is not ready: ${readiness.status}.`);
     }
     const stripeAccountId = text(profile.stripeConnectAccountId || profile.stripeAccountId);
-    if (!stripeAccountId ||
-      profile.stripeStatus !== "payouts_enabled" ||
-      profile.stripePayoutsEnabled !== true ||
-      profile.payoutPaused === true) {
-      throw new functions.https.HttpsError("failed-precondition", "Rider Stripe payout setup is not ready.");
-    }
     const walletRef = db.collection("riderEarnings").doc(riderId);
     const requestRef = requestId ? db.collection("payoutRequests").doc(requestId) : db.collection("payoutRequests").doc();
-    const transfer = await db.runTransaction(async (transaction) => {
+    const reservation = await db.runTransaction(async (transaction) => {
       const wallet = await transaction.get(walletRef);
       const existingRequest = await transaction.get(requestRef);
       const walletData = wallet.data() || {};
@@ -578,6 +631,23 @@ function createRiderTransferOrPayout(stripeOrFactory) {
         riderGrossShare: requestData.riderGrossShare || data.riderGrossShare || amount,
       };
       const breakdown = resolveRiderPayoutBreakdown(payoutInput);
+      const existingStatus = text(requestData.status || requestData.payoutStatus).toLowerCase();
+      const existingTransferId = text(requestData.stripeTransferId);
+      if (existingRequest.exists &&
+        existingTransferId &&
+        ["processing", "scheduled", "paid"].includes(existingStatus)) {
+        return {
+          id: existingTransferId,
+          idempotent: true,
+          metadata: {
+            stripeFeeDeductedFromRider: String(requestData.stripeFeeDeductedFromRider || breakdown.stripeFeeDeductedFromRider),
+            riderNetPayout: String(requestData.riderNetPayout || breakdown.riderNetPayout),
+          },
+        };
+      }
+      if (existingRequest.exists && existingTransferId && existingStatus === "failed") {
+        throw new functions.https.HttpsError("failed-precondition", "This payout transfer failed and must be retried with a new request.");
+      }
       if (breakdown.riderNetPayout <= 0) {
         transaction.set(requestRef, {
           ...breakdown,
@@ -604,10 +674,10 @@ function createRiderTransferOrPayout(stripeOrFactory) {
         };
       }
       const available = Number(walletData.availableBalance || 0);
-      if (available < breakdown.riderGrossShare) {
+      const pendingDelta = requestData.fundsReserved === true ? 0 : breakdown.riderGrossShare;
+      if (pendingDelta > 0 && available < breakdown.riderGrossShare) {
         throw new functions.https.HttpsError("failed-precondition", "Withdrawal exceeds available balance.");
       }
-      const pendingDelta = existingRequest.exists ? 0 : breakdown.riderGrossShare;
       const deliveryDocId = deliveryId || text(requestData.deliveryId || requestData.bookingId || requestData.orderId);
       const deliveryRefs = deliveryDocId ? [
         db.collection("deliveryRequests").doc(deliveryDocId),
@@ -619,20 +689,6 @@ function createRiderTransferOrPayout(stripeOrFactory) {
       for (const ref of deliveryRefs) {
         deliveryDocs.push(await transaction.get(ref));
       }
-      const created = await stripe.transfers.create({
-        amount: Math.round(breakdown.riderNetPayout * 100),
-        currency: "gbp",
-        destination: stripeAccountId,
-        metadata: {
-          riderId,
-          payoutRequestId: requestRef.id,
-          deliveryId: deliveryDocId || "",
-          payoutFeePayer: "rider",
-          riderGrossShare: String(breakdown.riderGrossShare),
-          stripeFeeDeductedFromRider: String(breakdown.stripeFeeDeductedFromRider),
-          riderNetPayout: String(breakdown.riderNetPayout),
-        },
-      });
       const payoutPatch = {
         totalCustomerPaid: breakdown.totalCustomerPaid,
         circumPlatformCommission: breakdown.circumPlatformCommission,
@@ -642,8 +698,8 @@ function createRiderTransferOrPayout(stripeOrFactory) {
         riderNetPayout: breakdown.riderNetPayout,
         stripeAccountId,
         stripeMode: mode,
-        payoutStatus: "processing",
-        payoutCreatedAt: FieldValue.serverTimestamp(),
+        payoutStatus: "reserved",
+        payoutReservedAt: FieldValue.serverTimestamp(),
         payoutFeePolicy: breakdown.payoutFeePolicy,
         payoutFeePayer: "rider",
         feePayer: "rider",
@@ -656,11 +712,11 @@ function createRiderTransferOrPayout(stripeOrFactory) {
         riderEmail: profile.email || null,
         deliveryId: deliveryDocId || requestData.deliveryId || requestData.bookingId || null,
         amount: breakdown.riderGrossShare,
-        status: "processing",
+        status: "reserved",
+        fundsReserved: true,
         ...payoutPatch,
-        stripeTransferId: created.id,
-        createdAt: FieldValue.serverTimestamp(),
-        processedAt: FieldValue.serverTimestamp(),
+        createdAt: existingRequest.exists ? requestData.createdAt || FieldValue.serverTimestamp() : FieldValue.serverTimestamp(),
+        reservedAt: FieldValue.serverTimestamp(),
         processedBy: context.auth.uid,
       }, {merge: true});
       deliveryDocs.forEach((doc) => {
@@ -668,7 +724,6 @@ function createRiderTransferOrPayout(stripeOrFactory) {
         transaction.set(doc.ref, {
           ...payoutPatch,
           payoutRequestId: requestRef.id,
-          stripeTransferId: created.id,
         }, {merge: true});
       });
       transaction.set(walletRef, {
@@ -676,37 +731,25 @@ function createRiderTransferOrPayout(stripeOrFactory) {
         pendingWithdrawal: FieldValue.increment(pendingDelta),
         updatedAt: FieldValue.serverTimestamp(),
       }, {merge: true});
-      transaction.set(db.collection("riderWalletTransactions").doc(`stripe_transfer_${requestRef.id}`), {
-        id: `stripe_transfer_${requestRef.id}`,
+      return {
+        requestId: requestRef.id,
         riderId,
         deliveryId: deliveryDocId || null,
-        withdrawalRequestId: requestRef.id,
-        type: "withdrawal",
-        amount: -breakdown.riderGrossShare,
-        grossDeliveryEarning: breakdown.riderGrossShare,
-        stripePaymentFee: breakdown.stripeFeeDeductedFromRider,
-        netPayout: breakdown.riderNetPayout,
-        totalCustomerPaid: breakdown.totalCustomerPaid,
-        circumPlatformCommission: breakdown.circumPlatformCommission,
-        status: "processing",
-        stripeTransferId: created.id,
-        feePayer: "rider",
-        notes: "Stripe Connect Express rider payout transfer.",
-        createdAt: FieldValue.serverTimestamp(),
-        updatedAt: FieldValue.serverTimestamp(),
-      });
-      return created;
+        stripeAccountId,
+        breakdown,
+        deliveryRefs: deliveryDocs.filter((doc) => doc.exists).map((doc) => doc.ref.path),
+      };
     });
-    if (transfer.blocked) {
+    if (reservation.blocked) {
       await db.collection("riderPayoutAudit").add({
         riderId,
         payoutRequestId: requestRef.id,
         action: "stripe_transfer_blocked",
-        reason: transfer.reason,
+        reason: reservation.reason,
         amount,
-        riderGrossShare: transfer.riderGrossShare,
-        stripeFeeDeductedFromRider: transfer.stripeFeeDeductedFromRider,
-        riderNetPayout: transfer.riderNetPayout,
+        riderGrossShare: reservation.riderGrossShare,
+        stripeFeeDeductedFromRider: reservation.stripeFeeDeductedFromRider,
+        riderNetPayout: reservation.riderNetPayout,
         feePayer: "rider",
         actorId: context.auth.uid,
         createdAt: FieldValue.serverTimestamp(),
@@ -716,17 +759,114 @@ function createRiderTransferOrPayout(stripeOrFactory) {
           "Stripe fees exceed the rider share. Admin review is required.",
       );
     }
-    await db.collection("riderPayoutAudit").add({
-      riderId,
-      payoutRequestId: requestRef.id,
-      action: "stripe_transfer_created",
-      stripeTransferId: transfer.id,
-      stripeMode: mode,
-      amount,
-      feePayer: "rider",
-      actorId: context.auth.uid,
-      createdAt: FieldValue.serverTimestamp(),
+    if (reservation.idempotent) {
+      return {
+        requestId: requestRef.id,
+        stripeTransferId: reservation.id,
+        status: "processing",
+        idempotent: true,
+        feePayer: "rider",
+        stripeFeeDeductedFromRider: reservation.metadata && reservation.metadata.stripeFeeDeductedFromRider,
+        riderNetPayout: reservation.metadata && reservation.metadata.riderNetPayout,
+        feeChecklist: "Stripe Dashboard -> Connect settings -> set payout/fee payer to connected account/rider where available.",
+      };
+    }
+    let transfer;
+    try {
+      transfer = await stripe.transfers.create({
+        amount: Math.round(reservation.breakdown.riderNetPayout * 100),
+        currency: "gbp",
+        destination: reservation.stripeAccountId,
+        metadata: {
+          riderId,
+          payoutRequestId: reservation.requestId,
+          deliveryId: reservation.deliveryId || "",
+          payoutFeePayer: "rider",
+          riderGrossShare: String(reservation.breakdown.riderGrossShare),
+          stripeFeeDeductedFromRider: String(reservation.breakdown.stripeFeeDeductedFromRider),
+          riderNetPayout: String(reservation.breakdown.riderNetPayout),
+        },
+      }, {
+        idempotencyKey: stripeTransferIdempotencyKey(reservation.requestId),
+      });
+    } catch (error) {
+      await db.runTransaction(async (transaction) => {
+        const requestDoc = await transaction.get(requestRef);
+        const requestData = requestDoc.data() || {};
+        const status = text(requestData.status || requestData.payoutStatus).toLowerCase();
+        if (status !== "reserved") return;
+        transaction.set(requestRef, {
+          status: "failed",
+          payoutStatus: "failed",
+          payoutFailureStage: "stripe_transfer",
+          failureReason: error && (error.message || error.code) || "Stripe transfer failed.",
+          fundsReserved: false,
+          failedAt: FieldValue.serverTimestamp(),
+          updatedAt: FieldValue.serverTimestamp(),
+        }, {merge: true});
+        transaction.set(walletRef, {
+          availableBalance: FieldValue.increment(reservation.breakdown.riderGrossShare),
+          pendingWithdrawal: FieldValue.increment(-reservation.breakdown.riderGrossShare),
+          updatedAt: FieldValue.serverTimestamp(),
+        }, {merge: true});
+      });
+      throw new functions.https.HttpsError("internal", "Stripe transfer failed. Funds were restored for retry.");
+    }
+    await db.runTransaction(async (transaction) => {
+      const requestDoc = await transaction.get(requestRef);
+      const requestData = requestDoc.data() || {};
+      const existingTransferId = text(requestData.stripeTransferId);
+      if (existingTransferId && existingTransferId !== transfer.id) {
+        return;
+      }
+      const payoutPatch = {
+        payoutStatus: "processing",
+        status: "processing",
+        stripeTransferId: transfer.id,
+        payoutCreatedAt: FieldValue.serverTimestamp(),
+        processedAt: FieldValue.serverTimestamp(),
+        updatedAt: FieldValue.serverTimestamp(),
+      };
+      transaction.set(requestRef, payoutPatch, {merge: true});
+      reservation.deliveryRefs.forEach((path) => {
+        transaction.set(db.doc(path), {
+          ...payoutPatch,
+          payoutRequestId: reservation.requestId,
+        }, {merge: true});
+      });
+      transaction.set(db.collection("riderWalletTransactions").doc(`stripe_transfer_${reservation.requestId}`), {
+        id: `stripe_transfer_${reservation.requestId}`,
+        riderId,
+        deliveryId: reservation.deliveryId || null,
+        withdrawalRequestId: reservation.requestId,
+        type: "withdrawal",
+        amount: -reservation.breakdown.riderGrossShare,
+        grossDeliveryEarning: reservation.breakdown.riderGrossShare,
+        stripePaymentFee: reservation.breakdown.stripeFeeDeductedFromRider,
+        netPayout: reservation.breakdown.riderNetPayout,
+        totalCustomerPaid: reservation.breakdown.totalCustomerPaid,
+        circumPlatformCommission: reservation.breakdown.circumPlatformCommission,
+        status: "processing",
+        stripeTransferId: transfer.id,
+        feePayer: "rider",
+        notes: "Stripe Connect Express rider payout transfer.",
+        createdAt: FieldValue.serverTimestamp(),
+        updatedAt: FieldValue.serverTimestamp(),
+      });
     });
+    if (!transfer.idempotent) {
+      await db.collection("riderPayoutAudit").add({
+        riderId,
+        payoutRequestId: requestRef.id,
+        action: "stripe_transfer_created",
+        stripeTransferId: transfer.id,
+        stripeMode: mode,
+        amount,
+        feePayer: "rider",
+        actorId: context.auth.uid,
+        createdAt: FieldValue.serverTimestamp(),
+      });
+    }
     return {
       requestId: requestRef.id,
       stripeTransferId: transfer.id,
@@ -758,11 +898,10 @@ function requestRiderWithdrawal() {
     }
     const db = getFirestore();
     const {profile} = await loadRider(riderId);
+    const readiness = await computeRiderPayoutReadiness(riderId);
     const stripeAccountId = text(
         profile.stripeConnectAccountId || profile.stripeAccountId,
     );
-    const payoutsReady = profile.stripePayoutsEnabled === true ||
-      text(profile.stripeStatus).toLowerCase() === "payouts_enabled";
     const requestRef = db.collection("payoutRequests").doc(`active_${riderId}`);
     const walletRef = db.collection("riderEarnings").doc(riderId);
     await db.runTransaction(async (transaction) => {
@@ -784,8 +923,8 @@ function requestRiderWithdrawal() {
         available,
         minimum,
         existingStatus,
-        approvedRider: approved(profile),
-        stripeReady: Boolean(stripeAccountId && payoutsReady),
+        approvedRider: readiness.checks.riderApproved === true,
+        stripeReady: readiness.ready === true,
         payoutPaused: profile.payoutPaused === true,
       });
       const failures = {
@@ -954,6 +1093,38 @@ function adminReviewRiderWithdrawal() {
   });
 }
 
+async function processStripeConnectEventOnce(db, event, handler) {
+  const eventId = text(event && event.id);
+  if (!eventId) {
+    throw new Error("Stripe Connect webhook event id is missing.");
+  }
+  const eventRef = db.collection("stripeConnectWebhookEvents").doc(eventId);
+  return db.runTransaction(async (transaction) => {
+    const existingEvent = await transaction.get(eventRef);
+    if (existingEvent.exists) {
+      return {
+        duplicate: true,
+        eventId,
+        previousStatus: existingEvent.data().status || "processed",
+      };
+    }
+    const result = await handler(transaction);
+    transaction.create(eventRef, {
+      eventId,
+      type: event.type,
+      stripeAccountId: text(event.account),
+      status: "processed",
+      createdAt: FieldValue.serverTimestamp(),
+      result: result || {},
+    });
+    return {
+      duplicate: false,
+      eventId,
+      ...(result || {}),
+    };
+  });
+}
+
 function handleStripeConnectWebhook(stripeOrFactory) {
   return stripeWebhookRuntime.https.onRequest(async (req, res) => {
     const stripe = stripeFrom(stripeOrFactory);
@@ -985,60 +1156,106 @@ function handleStripeConnectWebhook(stripeOrFactory) {
           }));
         }
       }
-      if (event.type === "payout.paid" || event.type === "payout.failed") {
+      if (event.type === "external_account.updated" ||
+        event.type === "account.external_account.updated") {
+        const accountId = text(object.account || event.account);
+        if (accountId) {
+          const processed = await processStripeConnectEventOnce(db, event, async () => ({
+            stripeAccountId: accountId,
+            status: "account_sync_requested",
+          }));
+          if (!processed.duplicate) {
+            const account = await stripe.accounts.retrieve(accountId);
+            const riderId = await riderIdForStripeAccount(db, account);
+            if (riderId) {
+              await updateRiderConnectFields(riderId, connectPatch(account, {
+                stripeMode: stripeClientMode(stripe),
+                stripeExternalAccountUpdatedAt: FieldValue.serverTimestamp(),
+              }));
+              await db.collection("riderPayoutAudit").add({
+                riderId,
+                action: "stripe_external_account_updated",
+                stripeAccountId: account.id,
+                stripeMode: stripeClientMode(stripe),
+                createdAt: FieldValue.serverTimestamp(),
+              });
+            }
+          }
+        }
+      }
+      if (event.type === "payout.created" ||
+        event.type === "payout.paid" ||
+        event.type === "payout.failed" ||
+        event.type === "payout.canceled") {
         const accountId = text(object.destination || object.account || event.account);
-        const status = event.type === "payout.paid" ? "paid" : "failed";
-        const query = await db.collection("payoutRequests")
-            .where("stripeAccountId", "==", accountId)
-            .where("status", "in", ["processing", "pending", "requested"])
-            .limit(10)
-            .get();
-        const batch = db.batch();
-        query.docs.forEach((doc) => {
-          const payout = doc.data() || {};
-          const riderId = text(payout.riderId);
-          const amount = Number(payout.amount || 0);
-          batch.set(doc.ref, {
-            status,
-            stripePayoutId: object.id,
-            failureReason: object.failure_message || object.failure_code || null,
-            paidAt: status === "paid" ? FieldValue.serverTimestamp() : null,
-            failedAt: status === "failed" ? FieldValue.serverTimestamp() : null,
-            updatedAt: FieldValue.serverTimestamp(),
-          }, {merge: true});
-          if (riderId && amount > 0) {
-            batch.set(db.collection("riderEarnings").doc(riderId), {
-              pendingWithdrawal: FieldValue.increment(-amount),
-              totalWithdrawn: status === "paid" ? FieldValue.increment(amount) : FieldValue.increment(0),
-              withdrawnEarnings: status === "paid" ? FieldValue.increment(amount) : FieldValue.increment(0),
-              availableBalance: status === "failed" ? FieldValue.increment(amount) : FieldValue.increment(0),
+        const status = event.type === "payout.paid" ? "paid" :
+          event.type === "payout.created" ? "scheduled" :
+          event.type === "payout.canceled" ? "canceled" :
+          "failed";
+        const releaseBalance = status === "failed" || status === "canceled";
+        await processStripeConnectEventOnce(db, event, async (transaction) => {
+          const query = await transaction.get(db.collection("payoutRequests")
+              .where("stripeAccountId", "==", accountId)
+              .where("status", "in", ["processing", "pending", "requested", "scheduled"])
+              .limit(10));
+          let matched = 0;
+          query.docs.forEach((doc) => {
+            const payout = doc.data() || {};
+            const riderId = text(payout.riderId);
+            const amount = Number(payout.amount || 0);
+            const reserved = payout.fundsReserved === true;
+            matched += 1;
+            transaction.set(doc.ref, {
+              status,
+              payoutStatus: status,
+              stripePayoutId: object.id,
+              failureReason: object.failure_message || object.failure_code || null,
+              payoutScheduledAt: status === "scheduled" ? FieldValue.serverTimestamp() : null,
+              paidAt: status === "paid" ? FieldValue.serverTimestamp() : null,
+              failedAt: status === "failed" ? FieldValue.serverTimestamp() : null,
+              canceledAt: status === "canceled" ? FieldValue.serverTimestamp() : null,
               updatedAt: FieldValue.serverTimestamp(),
             }, {merge: true});
-          }
+            if (riderId && amount > 0 && status !== "scheduled") {
+              transaction.set(db.collection("riderEarnings").doc(riderId), {
+                pendingWithdrawal: reserved ? FieldValue.increment(-amount) : FieldValue.increment(0),
+                totalWithdrawn: status === "paid" ? FieldValue.increment(amount) : FieldValue.increment(0),
+                withdrawnEarnings: status === "paid" ? FieldValue.increment(amount) : FieldValue.increment(0),
+                availableBalance: releaseBalance ? FieldValue.increment(amount) : FieldValue.increment(0),
+                updatedAt: FieldValue.serverTimestamp(),
+              }, {merge: true});
+            }
+          });
+          return {status, matched};
         });
-        await batch.commit();
       }
       if (event.type === "transfer.created" || event.type === "transfer.failed") {
         const requestId = text(object.metadata && object.metadata.payoutRequestId);
         if (requestId) {
           const requestRef = db.collection("payoutRequests").doc(requestId);
-          const request = await requestRef.get();
-          const requestData = request.data() || {};
-          const riderId = text(requestData.riderId);
-          const amount = Number(requestData.amount || object.amount / 100 || 0);
-          await db.collection("payoutRequests").doc(requestId).set({
-            status: event.type === "transfer.failed" ? "failed" : "processing",
-            stripeTransferId: object.id,
-            failureReason: object.failure_message || object.failure_code || null,
-            updatedAt: FieldValue.serverTimestamp(),
-          }, {merge: true});
-          if (event.type === "transfer.failed" && riderId && amount > 0) {
-            await db.collection("riderEarnings").doc(riderId).set({
-              availableBalance: FieldValue.increment(amount),
-              pendingWithdrawal: FieldValue.increment(-amount),
+          await processStripeConnectEventOnce(db, event, async (transaction) => {
+            const request = await transaction.get(requestRef);
+            const requestData = request.data() || {};
+            const riderId = text(requestData.riderId);
+            const amount = Number(requestData.amount || object.amount / 100 || 0);
+            const reserved = requestData.fundsReserved === true;
+            const currentStatus = text(requestData.status || requestData.payoutStatus).toLowerCase();
+            const active = ["processing", "pending", "requested"].includes(currentStatus);
+            transaction.set(requestRef, {
+              status: event.type === "transfer.failed" ? "failed" : "processing",
+              stripeTransferId: object.id,
+              failureReason: object.failure_message || object.failure_code || null,
               updatedAt: FieldValue.serverTimestamp(),
             }, {merge: true});
-          }
+            if (event.type === "transfer.failed" && active && riderId && amount > 0) {
+              transaction.set(db.collection("riderEarnings").doc(riderId), {
+                availableBalance: FieldValue.increment(amount),
+                pendingWithdrawal: reserved ? FieldValue.increment(-amount) : FieldValue.increment(0),
+                updatedAt: FieldValue.serverTimestamp(),
+              }, {merge: true});
+            }
+            return {requestId, active, status: event.type === "transfer.failed" ? "failed" : "processing"};
+          });
         }
       }
       res.json({received: true});
@@ -1124,6 +1341,7 @@ module.exports = {
   createStripeOnboardingLink,
   refreshStripeOnboardingLink,
   syncStripeConnectStatus,
+  riderPayoutReadiness,
   createRiderTransferOrPayout,
   requestRiderWithdrawal,
   cancelRiderWithdrawal,
@@ -1137,4 +1355,5 @@ module.exports = {
   resolveRiderPayoutBreakdown,
   riderWithdrawalFailure,
   stripeStatusFromAccount,
+  computeRiderPayoutReadiness,
 };

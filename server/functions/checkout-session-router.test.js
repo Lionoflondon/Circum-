@@ -63,6 +63,26 @@ test("wallet top-up checkout uses Roth ledger finalizer", async () => {
   assert.equal(calls[0].eventId, "evt_3");
 });
 
+test("Sender delivery checkout uses Sender finalizer for lost redirect recovery", async () => {
+  const calls = [];
+  const result = await routeCheckoutSessionCompleted(
+      {id: "cs_sender", metadata: {type: "sender_delivery_payment", paymentSessionId: "quote-1"}},
+      "evt_sender",
+      {
+        senderBooking: {
+          handleSenderCheckoutSession: async (session, eventId) => {
+            calls.push({session, eventId});
+          },
+        },
+      },
+  );
+
+  assert.deepEqual(result, {handled: true, type: "sender_delivery_payment"});
+  assert.equal(calls.length, 1);
+  assert.equal(calls[0].session.id, "cs_sender");
+  assert.equal(calls[0].eventId, "evt_sender");
+});
+
 test("gift checkout uses the Gifts finalizer for lost redirect recovery", async () => {
   const calls = [];
   const result = await routeCheckoutSessionCompleted(
@@ -82,6 +102,46 @@ test("gift checkout uses the Gifts finalizer for lost redirect recovery", async 
   assert.equal(calls[0].giftDraftId, "gift-1");
   assert.equal(calls[0].session.id, "cs_gift");
   assert.equal(calls[0].eventId, "evt_gift");
+});
+
+test("Health+ checkout uses the Health+ finalizer for Roth and card settlement", async () => {
+  const calls = [];
+  const result = await routeCheckoutSessionCompleted(
+      {id: "cs_health", metadata: {type: "health_plus_payment", bookingId: "hp_1"}},
+      "evt_health",
+      {
+        healthPlus: {
+          handleHealthPlusCheckoutSession: async (session, eventId) => {
+            calls.push({session, eventId});
+          },
+        },
+      },
+  );
+
+  assert.deepEqual(result, {handled: true, type: "health_plus_payment"});
+  assert.equal(calls.length, 1);
+  assert.equal(calls[0].session.id, "cs_health");
+  assert.equal(calls[0].eventId, "evt_health");
+});
+
+test("legacy Health+ checkout metadata still reaches the Health+ finalizer", async () => {
+  const calls = [];
+  const result = await routeCheckoutSessionCompleted(
+      {id: "cs_health_legacy", metadata: {feature: "health_plus", bookingId: "hp_2"}},
+      "evt_health_legacy",
+      {
+        healthPlus: {
+          handleHealthPlusCheckoutSession: async (session, eventId) => {
+            calls.push({session, eventId});
+          },
+        },
+      },
+  );
+
+  assert.deepEqual(result, {handled: true, type: "health_plus_payment"});
+  assert.equal(calls.length, 1);
+  assert.equal(calls[0].session.id, "cs_health_legacy");
+  assert.equal(calls[0].eventId, "evt_health_legacy");
 });
 
 test("unknown checkout session metadata is ignored safely", async () => {

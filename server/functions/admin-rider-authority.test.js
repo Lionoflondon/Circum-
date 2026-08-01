@@ -33,6 +33,14 @@ test("Admin Rider authority supports required certification actions", () => {
   }
 });
 
+test("Admin Rider document review status history stores event objects, not " +
+    "nested arrays", () => {
+  const source = fs.readFileSync("admin-rider-authority.js", "utf8");
+
+  assert.match(source, /statusHistory: FieldValue\.arrayUnion\(\{/);
+  assert.doesNotMatch(source, /statusHistory: FieldValue\.arrayUnion\(\[\{/);
+});
+
 test("Admin Rider authority is exported from Firebase Functions index", () => {
   const source = fs.readFileSync("index.js", "utf8");
 

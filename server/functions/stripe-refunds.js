@@ -27,9 +27,33 @@ async function syncChargeRefund({db, event}) {
   const paymentIntentId = typeof charge.payment_intent === "string" ? charge.payment_intent : charge.payment_intent && charge.payment_intent.id;
   if (!paymentIntentId) return {handled: false, reason: "missing_payment_intent"};
   const directId = charge.metadata && (charge.metadata.deliveryId || charge.metadata.requestId);
-  const query = directId ? null : await db.collection("deliveryRequests").where("stripePaymentIntentId", "==", paymentIntentId).get();
+  const query = directId ? null : await db.collection("deliveryRequests").where("stripePaymentIntentId", "==", paymentIntentId).limit(2).get();
   const refs = directId ? [db.collection("deliveryRequests").doc(directId)] : query.docs.map((doc) => doc.ref);
   if (!refs.length) return {handled: false, reason: "delivery_not_found", paymentIntentId};
+  if (!directId && refs.length > 1) {
+    await db.runTransaction(async (transaction) => {
+      const seen = await transaction.get(eventRef);
+      if (seen.exists) return;
+      transaction.create(eventRef, {
+        type: event.type,
+        paymentIntentId,
+        deliveryIds: refs.map((ref) => ref.id),
+        reviewRequired: true,
+        reason: "multiple_deliveries_for_payment_intent",
+        createdAt: FieldValue.serverTimestamp(),
+      });
+      transaction.set(db.collection("adminAuditLogs").doc(), {
+        action: "stripe_refund_requires_review",
+        actionType: "stripe_refund_requires_review",
+        paymentIntentId,
+        deliveryIds: refs.map((ref) => ref.id),
+        stripeChargeId: charge.id || null,
+        reason: "multiple_deliveries_for_payment_intent",
+        createdAt: FieldValue.serverTimestamp(),
+      });
+    });
+    return {handled: false, reason: "multiple_deliveries_for_payment_intent", paymentIntentId, deliveryIds: refs.map((ref) => ref.id), reviewRequired: true};
+  }
   const patch = refundPatch(charge);
   await db.runTransaction(async (transaction) => {
     const seen = await transaction.get(eventRef);

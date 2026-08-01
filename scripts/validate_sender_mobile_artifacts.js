@@ -41,6 +41,24 @@ assertContains('ios/Runner/Info.plist', '$(GOOGLE_MAPS_API_KEY)',
   'iOS configured Maps key injection');
 assertContains('ios/Runner/AppDelegate.swift', 'GoogleMapsApiKey',
   'iOS Maps key lookup');
+assertContains('docs/ios-ci-google-maps-readiness.md', 'SENDER_IOS_GOOGLE_MAPS_API_KEY',
+  'Future Sender iOS CI Maps secret contract');
+assertContains('docs/ios-ci-google-maps-readiness.md', 'GOOGLE_MAPS_API_KEY',
+  'Future Sender iOS CI build setting mapping');
+assertContains('scripts/build_sender_app_web.sh', 'CIRCUM_WEB_GOOGLE_MAPS_API_KEY',
+  'Sender Web Maps secret validation');
+assertContains('scripts/build_sender_app_web.sh', 'maps.googleapis.com/maps/api/js',
+  'Sender Web Maps JavaScript injection');
+assertContains('scripts/build_public_web.sh', 'GOOGLE_PLACES_API_KEY',
+  'Public Web Places key validation');
+assertContains('.github/workflows/rc1_release_build.yml', 'SENDER_ANDROID_GOOGLE_MAPS_API_KEY',
+  'Sender Android CI Maps secret');
+assertContains('.github/workflows/rc1_release_build.yml', 'GOOGLE_MAPS_DIRECTIONS_API_KEY',
+  'Sender Directions CI key');
+assertContains('.github/workflows/rc1_release_build.yml', 'CIRCUM_WEB_GOOGLE_MAPS_API_KEY',
+  'Sender Web CI Maps secret');
+assertContains('.github/workflows/rc1_release_build.yml', 'GOOGLE_PLACES_API_KEY',
+  'Public Web CI Places secret');
 assertContains('lib/app/security/circum_app_check.dart',
   'AndroidProvider.playIntegrity',
   'Sender Android App Check provider');
@@ -71,6 +89,10 @@ console.log(JSON.stringify({
     'android-package',
     'android-maps-config',
     'ios-maps-config',
+    'web-maps-config',
+    'directions-config',
+    'places-config',
+    'ci-secret',
     'app-check-providers',
     'sender-mobile-website-imports',
   ],

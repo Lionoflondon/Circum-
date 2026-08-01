@@ -9,6 +9,22 @@ const {
 } = require("./iris-core");
 const {requireAdmin} = require("./admin-auth");
 
+function clean(value) {
+  return `${value || ""}`.trim().toLowerCase();
+}
+
+function requireIrisAdmin(context) {
+  const token = context.auth && context.auth.token ? context.auth.token : {};
+  const roles = Array.isArray(token.roles) ? token.roles.map(clean) : [];
+  const allowed = token.admin === true || token.superAdmin === true ||
+    token.super_admin === true ||
+    [clean(token.adminRole), clean(token.role), ...roles]
+        .some((role) => ["admin", "super_admin", "operations_admin"].includes(role));
+  if (!allowed) {
+    throw new functions.https.HttpsError("permission-denied", "IRIS administrator access is required.");
+  }
+}
+
 async function loadLearningExamples(description) {
   const text = `${description || ""}`.trim();
   if (!text) return [];
@@ -30,6 +46,7 @@ const analyseIris = functions.https.onCall(async (data, context) => {
 
 const adjudicateIris = functions.https.onCall(async (data, context) => {
   const adminUid = requireAdmin(context, "IRIS administrator access is required.");
+  requireIrisAdmin(context);
   const {requestId, decision, finalCategory, finalWeightBand, finalHandlingFlags, reason, referralType, serviceabilityStatus} = data;
   if (!requestId || !decision || !reason) {
     throw new functions.https.HttpsError("invalid-argument",

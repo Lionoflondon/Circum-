@@ -31,27 +31,29 @@ scripts/deploy_admin_web.sh --branch origin/main
 
 | Surface | Entrypoint | Output | Hosting target |
 | --- | --- | --- | --- |
-| Sender App Web | `lib/main_sender_web.dart` | `build/sender_app_web` | `hosting:app` |
+| Sender App Web | `lib/app/sender_mobile/sender_mobile_preview.dart` | `build/sender_app_web` | `hosting:app` |
 | Public Web | `lib/main_public_web.dart` | `build/public_web` | `hosting:public` |
 | Admin Web | `lib/main.dart` with `CIRCUM_ADMIN_HOSTING=true` | `build/web_admin` | `hosting:admin` |
 
-## Shared Web App Check
+## Product Web App Check
 
-All Circum web surfaces use one Firebase App Check reCAPTCHA Enterprise site
-key. Provide it at build time only:
+Each Circum web surface uses its own Firebase App Check reCAPTCHA Enterprise
+site key. Provide the relevant key at build time only:
 
 ```bash
-CIRCUM_WEB_RECAPTCHA_ENTERPRISE_SITE_KEY=<site-key> scripts/deploy_isolated.sh <sender|public|admin> --branch origin/main
+PUBLIC_WEB_RECAPTCHA_ENTERPRISE_SITE_KEY=<website-site-key> scripts/deploy_isolated.sh website --branch origin/main
+CIRCUM_WEB_RECAPTCHA_ENTERPRISE_SITE_KEY=<sender-site-key> scripts/deploy_sender_app_web.sh
 ```
 
 The build scripts pass it through Flutter as:
 
 ```bash
---dart-define=CIRCUM_WEB_RECAPTCHA_ENTERPRISE_SITE_KEY=<site-key>
+--dart-define=PUBLIC_WEB_RECAPTCHA_ENTERPRISE_SITE_KEY=<website-site-key>
+--dart-define=CIRCUM_WEB_RECAPTCHA_ENTERPRISE_SITE_KEY=<sender-site-key>
 ```
 
-Do not hardcode the key, log it, or reintroduce per-surface web App Check
-environment variables.
+Do not hardcode keys, log them, or share one product's App Check key with
+another product.
 
 ## Failure Conditions
 

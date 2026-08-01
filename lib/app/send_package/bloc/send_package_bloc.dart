@@ -1,4 +1,6 @@
 import 'dart:async';
+import 'dart:math' as math;
+import 'dart:ui' show Size;
 
 import 'package:circum/app/iris/iris_learning_bridge.dart';
 import 'package:circum/app/iris/iris_weight_estimator.dart';
@@ -37,12 +39,51 @@ part 'send_package_state.dart';
 const _googleMapsDirectionsApiKey =
     String.fromEnvironment('GOOGLE_MAPS_DIRECTIONS_API_KEY');
 
+void _logRecoverableSenderError(
+  String context,
+  Object error,
+  StackTrace stackTrace,
+) {
+  if (!kDebugMode) return;
+  debugPrint('Sender booking recoverable error: $context: $error');
+  debugPrintStack(stackTrace: stackTrace);
+}
+
+String _senderPaymentMessage(
+  FirebaseFunctionsException error,
+  String fallback,
+) {
+  final message = (error.message ?? '').trim();
+  final lowerMessage = message.toLowerCase();
+  if (message.isNotEmpty &&
+      lowerMessage != 'internal' &&
+      lowerMessage != 'internal error') {
+    return message;
+  }
+  switch (error.code) {
+    case 'unauthenticated':
+      return 'Sign in again to continue payment.';
+    case 'permission-denied':
+      return 'This payment session does not belong to this account.';
+    case 'invalid-argument':
+      return 'Check the delivery details and try again.';
+    case 'failed-precondition':
+      return 'Payment could not be confirmed yet. Please try again.';
+    case 'deadline-exceeded':
+    case 'unavailable':
+      return 'Unable to contact payment service. Please try again.';
+    case 'resource-exhausted':
+      return 'Payment service is busy. Please try again in a moment.';
+    default:
+      return fallback;
+  }
+}
+
 class SendPackageBloc extends Bloc<SendPackageEvent, SendPackageState> {
   FirebaseAuth auth = FirebaseAuth.instance;
   FirebaseFirestore db = FirebaseFirestore.instance;
   final FirebaseMessaging firebaseMessaging = FirebaseMessaging.instance;
-  StreamSubscription<QuerySnapshot<Map<String, dynamic>>>?
-      _activeDeliverySubscription;
+  StreamSubscription? _activeDeliverySubscription;
   StreamSubscription<DocumentSnapshot<Map<String, dynamic>>>?
       _activeDeliveryLiveLocationSubscription;
   String? _activeDeliveryLiveLocationId;
@@ -51,8 +92,10 @@ class SendPackageBloc extends Bloc<SendPackageEvent, SendPackageState> {
     on<SearchAPlaceEvent>(_handleSearchAPlaceEvent);
     on<SetDrawerHeight>(_handleSetDrawerHeight);
     on<ClearSuggestions>(_handleClearSuggestionsEvent);
+    on<ResetSenderBookingSession>(_handleResetSenderBookingSession);
     on<SetPickupAddress>(_handleSetPickupAddressEvent);
     on<SetDeliveryAddress>(_handleSetDeliveryAddress);
+    on<RestoreSenderRoute>(_handleRestoreSenderRoute);
     on<SetDeliveryStatus>(_handleSetDeliveryStatusEvent);
     on<CalculateDistance>(_handleCalculateDistance);
     on<SetDistance>(_handleSetDistance);
@@ -63,6 +106,7 @@ class SendPackageBloc extends Bloc<SendPackageEvent, SendPackageState> {
     on<LoadSenderRothBalance>(_handleLoadSenderRothBalance);
     on<StartSenderPaymentSession>(_handleStartSenderPaymentSession);
     on<CreatePaidSenderDelivery>(_handleCreatePaidSenderDelivery);
+    on<FinalizeSenderWebCheckout>(_handleFinalizeSenderWebCheckout);
     on<SendDeliveryRequest>(_handleSendDeliveryRequestEvent);
     on<DeliveryAccepted>(_handleDeliveryAcceptedEvent);
     on<DeliveryCompleted>(_handleDeliveryCompleted);
@@ -96,23 +140,17 @@ class SendPackageBloc extends Bloc<SendPackageEvent, SendPackageState> {
     final normalized = requestId.trim();
     if (normalized.isEmpty) return;
     _activeDeliverySubscription?.cancel();
-    _activeDeliverySubscription = db
-        .collection('deliveryRequests')
-        .where('requestId', isEqualTo: normalized)
-        .limit(1)
-        .snapshots()
-        .listen(
-      (snapshot) {
-        if (snapshot.docs.isEmpty) {
-          unawaited(_clearActiveRequestIfCurrent(normalized));
-          add(ActiveDeliverySnapshotChanged(clearedRequestId: normalized));
+    _activeDeliverySubscription =
+        db.collection('deliveryRequests').doc(normalized).snapshots().listen(
+      (doc) {
+        if (!doc.exists) {
+          unawaited(_resolveActiveDeliveryByRequestId(normalized));
           return;
         }
-        final doc = snapshot.docs.first;
         _listenToActiveDeliveryLiveLocation(doc.id);
         add(
           ActiveDeliverySnapshotChanged(
-            data: {...doc.data(), 'id': doc.id},
+            data: {...?doc.data(), 'id': doc.id},
           ),
         );
       },
@@ -124,6 +162,53 @@ class SendPackageBloc extends Bloc<SendPackageEvent, SendPackageState> {
         );
       },
     );
+  }
+
+  Future<void> _resolveActiveDeliveryByRequestId(String requestId) async {
+    try {
+      final snapshot = await db
+          .collection('deliveryRequests')
+          .where('requestId', isEqualTo: requestId)
+          .limit(1)
+          .get();
+      if (snapshot.docs.isNotEmpty) {
+        final doc = snapshot.docs.first;
+        _listenToActiveDeliveryLiveLocation(doc.id);
+        add(ActiveDeliverySnapshotChanged(data: {...doc.data(), 'id': doc.id}));
+        return;
+      }
+      await Future<void>.delayed(const Duration(seconds: 3));
+      final retryDoc =
+          await db.collection('deliveryRequests').doc(requestId).get();
+      if (retryDoc.exists) {
+        _listenToActiveDeliveryLiveLocation(retryDoc.id);
+        add(
+          ActiveDeliverySnapshotChanged(
+            data: {...?retryDoc.data(), 'id': retryDoc.id},
+          ),
+        );
+        return;
+      }
+      final retrySnapshot = await db
+          .collection('deliveryRequests')
+          .where('requestId', isEqualTo: requestId)
+          .limit(1)
+          .get();
+      if (retrySnapshot.docs.isNotEmpty) {
+        final doc = retrySnapshot.docs.first;
+        _listenToActiveDeliveryLiveLocation(doc.id);
+        add(ActiveDeliverySnapshotChanged(data: {...doc.data(), 'id': doc.id}));
+        return;
+      }
+      unawaited(_clearActiveRequestIfCurrent(requestId));
+      add(ActiveDeliverySnapshotChanged(clearedRequestId: requestId));
+    } catch (_) {
+      add(
+        ActiveDeliverySnapshotChanged(
+          errorMessage: 'Unable to load live delivery status.',
+        ),
+      );
+    }
   }
 
   Future<void> _clearActiveRequestIfCurrent(String requestId) async {
@@ -231,6 +316,18 @@ class SendPackageBloc extends Bloc<SendPackageEvent, SendPackageState> {
     emit(state.copyWith(suggestions: []));
   }
 
+  Future<void> _handleResetSenderBookingSession(
+    ResetSenderBookingSession event,
+    Emitter<SendPackageState> emit,
+  ) async {
+    await _activeDeliverySubscription?.cancel();
+    _activeDeliverySubscription = null;
+    await _activeDeliveryLiveLocationSubscription?.cancel();
+    _activeDeliveryLiveLocationSubscription = null;
+    _activeDeliveryLiveLocationId = null;
+    emit(SendPackageState(senderRothBalance: state.senderRothBalance));
+  }
+
   void _handleSetPickupAddressEvent(
     SetPickupAddress event,
     Emitter<SendPackageState> emit,
@@ -262,7 +359,16 @@ class SendPackageBloc extends Bloc<SendPackageEvent, SendPackageState> {
           pickupLocality: address[0].locality,
         ),
       );
-    } catch (e) {}
+      if (state.desinationCoordinate != null) {
+        add(CalculateDistance());
+      }
+    } catch (error, stackTrace) {
+      _logRecoverableSenderError(
+        'pickup place details lookup failed',
+        error,
+        stackTrace,
+      );
+    }
   }
 
   void _handleSetDeliveryAddress(SetDeliveryAddress event, Emitter emit) async {
@@ -300,6 +406,9 @@ class SendPackageBloc extends Bloc<SendPackageEvent, SendPackageState> {
           destinationLocality: address[0].locality,
         ),
       );
+      if (state.pickupCoordinate != null) {
+        add(CalculateDistance());
+      }
 
       if (state.pickupCoordinate != null &&
           state.pickupLocationSubAddress?.split(',').last ==
@@ -309,9 +418,11 @@ class SendPackageBloc extends Bloc<SendPackageEvent, SendPackageState> {
         PolylinePoints points = PolylinePoints();
 
         if (_googleMapsDirectionsApiKey.isEmpty) {
-          emit(state.copyWith(
-            addressSearchError: 'Route preview is temporarily unavailable.',
-          ));
+          emit(
+            state.copyWith(
+              addressSearchError: 'Route preview could not be prepared.',
+            ),
+          );
           return;
         }
 
@@ -336,9 +447,9 @@ class SendPackageBloc extends Bloc<SendPackageEvent, SendPackageState> {
           // print(polylineResult.distance);
           // print(polylineResult.distanceText);
           // print(polylineResult.distanceValue);
-          polylineResult.points.forEach((ele) {
-            latLngList.add(LatLng(ele.latitude, ele.longitude));
-          });
+          for (final point in polylineResult.points) {
+            latLngList.add(LatLng(point.latitude, point.longitude));
+          }
 
           List<Polyline> polyLines = [];
           polyLines.add(
@@ -350,15 +461,24 @@ class SendPackageBloc extends Bloc<SendPackageEvent, SendPackageState> {
             ),
           );
 
+          final sourceIcon =
+              await BitmapDescriptorHelper.getBitmapDescriptorFromSvgAsset(
+            'assets/svg/source_marker.svg',
+            const Size(27, 43),
+          );
+          final destinationIcon =
+              await BitmapDescriptorHelper.getBitmapDescriptorFromSvgAsset(
+            'assets/svg/destination_marker.svg',
+            const Size(27, 43),
+          );
+
           final Marker sourceMarker = Marker(
             markerId: const MarkerId('source_marker'),
             position: LatLng(
               state.pickupCoordinate!.lat,
               state.pickupCoordinate!.lng,
             ), // Source address location
-            icon: BitmapDescriptor.defaultMarkerWithHue(
-              BitmapDescriptor.hueAzure,
-            ),
+            icon: sourceIcon,
           );
 
           final Marker destinationMarker = Marker(
@@ -367,9 +487,7 @@ class SendPackageBloc extends Bloc<SendPackageEvent, SendPackageState> {
               state.desinationCoordinate!.lat,
               state.desinationCoordinate!.lng,
             ), // Destination address location
-            icon: BitmapDescriptor.defaultMarkerWithHue(
-              BitmapDescriptor.hueRed,
-            ),
+            icon: destinationIcon,
           );
 
           Map<MarkerId, Marker> markers = {
@@ -394,7 +512,37 @@ class SendPackageBloc extends Bloc<SendPackageEvent, SendPackageState> {
         }
         // add(CalculateDistance());
       }
-    } catch (e) {}
+    } catch (error, stackTrace) {
+      _logRecoverableSenderError(
+        'delivery route lookup failed',
+        error,
+        stackTrace,
+      );
+    }
+  }
+
+  void _handleRestoreSenderRoute(
+    RestoreSenderRoute event,
+    Emitter<SendPackageState> emit,
+  ) {
+    emit(
+      state.copyWith(
+        pickupLocation: event.pickupAddress,
+        destinationLocation: event.dropoffAddress,
+        pickupCoordinate: PlaceCoordinate(
+          lat: event.pickupLat,
+          lng: event.pickupLng,
+        ),
+        desinationCoordinate: PlaceCoordinate(
+          lat: event.dropoffLat,
+          lng: event.dropoffLng,
+        ),
+        sourceAndDestinationStatus: SourceAndDestinationStatus.selected,
+        mapCameraStatus: MapCameraStatus.showingSourceAndDestinationLocations,
+      ),
+    );
+    add(CalculateDistance());
+    add(SetPrice());
   }
 
   void _handleSetDeliveryStatusEvent(
@@ -423,7 +571,13 @@ class SendPackageBloc extends Bloc<SendPackageEvent, SendPackageState> {
       emit(state.copyWith(distance: distanceInTwoDecimalPlaces));
 
       // print(distanceInKilometres);
-    } catch (e) {}
+    } catch (error, stackTrace) {
+      _logRecoverableSenderError(
+        'distance calculation failed',
+        error,
+        stackTrace,
+      );
+    }
   }
 
   void _handleSetDistance(SetDistance event, Emitter<SendPackageState> emit) {
@@ -431,8 +585,21 @@ class SendPackageBloc extends Bloc<SendPackageEvent, SendPackageState> {
     add(SetPrice());
   }
 
+  double? _distanceKmFromRouteCoordinates() {
+    final pickup = state.pickupCoordinate;
+    final dropoff = state.desinationCoordinate;
+    if (pickup == null || dropoff == null) return null;
+    final metres = Geolocator.distanceBetween(
+      pickup.lat,
+      pickup.lng,
+      dropoff.lat,
+      dropoff.lng,
+    );
+    return double.parse((metres / 1000).toStringAsFixed(2));
+  }
+
   void _handleSetPrice(SetPrice event, Emitter<SendPackageState> emit) {
-    final distanceKm = state.distance ?? 0;
+    final distanceKm = state.distance ?? _distanceKmFromRouteCoordinates() ?? 0;
     final quote = DeliveryPricing.calculate(
       DeliveryPricingInput(
         distanceMiles: DeliveryPricing.kilometresToMiles(distanceKm),
@@ -463,6 +630,13 @@ class SendPackageBloc extends Bloc<SendPackageEvent, SendPackageState> {
         itemDescription:
             itemDescription.trim().isEmpty ? null : itemDescription,
         isIrisResolving: quickEstimate != null,
+        irisWeightReviewMessage: quickEstimate == null
+            ? ''
+            : _weightReviewMessage(
+                userWeightKg: event.weightKg,
+                irisWeightKg: quickEstimate.weightKg,
+                finalWeightKg: quickWeight,
+              ),
       ),
     );
     add(SetPrice());
@@ -477,12 +651,18 @@ class SendPackageBloc extends Bloc<SendPackageEvent, SendPackageState> {
         userEnteredWeightKg: event.weightKg,
         irisEstimatedWeightKg: trusted.pricingWeightKg,
       );
+      final reviewMessage = _weightReviewMessage(
+        userWeightKg: event.weightKg,
+        irisWeightKg: trusted.pricingWeightKg,
+        finalWeightKg: finalWeight,
+      );
       emit(
         state.copyWith(
           parcelWeightKg: finalWeight,
           irisResult: quickEstimate,
           itemDescription: itemDescription,
           isIrisResolving: false,
+          irisWeightReviewMessage: reviewMessage,
         ),
       );
       add(SetPrice());
@@ -493,10 +673,32 @@ class SendPackageBloc extends Bloc<SendPackageEvent, SendPackageState> {
           irisResult: quickEstimate,
           itemDescription: itemDescription,
           isIrisResolving: false,
+          irisWeightReviewMessage: _weightReviewMessage(
+            userWeightKg: event.weightKg,
+            irisWeightKg: quickEstimate.weightKg,
+            finalWeightKg: quickWeight,
+          ),
         ),
       );
       add(SetPrice());
     }
+  }
+
+  String _weightReviewMessage({
+    required double userWeightKg,
+    required double? irisWeightKg,
+    required double finalWeightKg,
+  }) {
+    if (userWeightKg <= 0 || irisWeightKg == null || irisWeightKg <= 0) {
+      return '';
+    }
+    final lower = math.min(userWeightKg, irisWeightKg);
+    final higher = math.max(userWeightKg, irisWeightKg);
+    if (higher - lower < 2 || higher / lower < 2.5) return '';
+    final source = userWeightKg >= irisWeightKg
+        ? 'your entered weight'
+        : 'Circum’s parcel estimate';
+    return 'The parcel weight looks unusually different. Pricing uses the higher weight for fairness: ${finalWeightKg.toStringAsFixed(1)}kg from $source. Please check the weight before payment.';
   }
 
   void _handleRequestCanonicalIrisEstimate(
@@ -511,9 +713,22 @@ class SendPackageBloc extends Bloc<SendPackageEvent, SendPackageState> {
       state.copyWith(
         itemDescription:
             itemDescription.trim().isEmpty ? null : itemDescription,
+        clearItemDescription: itemDescription.trim().isEmpty,
         isIrisResolving: true,
         irisErrorMessage: '',
-        canonicalIrisResult: null,
+        clearCanonicalIrisResult: true,
+        clearSenderQuoteId: true,
+        clearSenderQuoteTotal: true,
+        clearSenderQuoteSpeed: true,
+        senderQuoteLineItems: const [],
+        senderQuoteSpeedOptions: const [],
+        clearSenderPaymentSession: true,
+        clearSenderPaymentClientSecret: true,
+        clearSenderPaymentIntent: true,
+        clearSenderPaymentCustomer: true,
+        clearSenderPaymentEphemeralKey: true,
+        clearSenderPaymentCheckoutUrl: true,
+        clearSenderCreatedRequest: true,
       ),
     );
     try {
@@ -536,7 +751,8 @@ class SendPackageBloc extends Bloc<SendPackageEvent, SendPackageState> {
       };
       final result = await FirebaseFunctions.instance
           .httpsCallable('analyseIris')
-          .call(payload);
+          .call(payload)
+          .timeout(const Duration(seconds: 15));
       final data = result.data is Map
           ? Map<String, dynamic>.from(result.data as Map)
           : <String, dynamic>{};
@@ -545,12 +761,19 @@ class SendPackageBloc extends Bloc<SendPackageEvent, SendPackageState> {
         fallbackItemName: event.itemName,
         fallbackQuantity: event.quantity <= 0 ? 1 : event.quantity,
       );
+      final declaredWeightKg = DeliveryPricing.parseWeightKg(
+        event.declaredWeightText,
+      );
+      final finalWeightKg = DeliveryPricing.checkoutPricingWeightKg(
+        userEnteredWeightKg: declaredWeightKg <= 0 ? null : declaredWeightKg,
+        irisEstimatedWeightKg: canonical.totalWeightKg,
+      );
       emit(
         state.copyWith(
           canonicalIrisResult: canonical,
           isIrisResolving: false,
           irisErrorMessage: '',
-          parcelWeightKg: canonical.totalWeightKg ?? state.parcelWeightKg,
+          parcelWeightKg: finalWeightKg,
         ),
       );
       add(SetPrice());
@@ -609,17 +832,32 @@ class SendPackageBloc extends Bloc<SendPackageEvent, SendPackageState> {
       state.copyWith(
         isSenderQuoteLoading: true,
         senderQuoteError: '',
+        clearSenderQuoteId: true,
+        clearSenderQuoteTotal: true,
+        clearSenderQuoteSpeed: true,
+        senderQuoteLineItems: const [],
+        senderQuoteSpeedOptions: const [],
+        clearSenderPaymentSession: true,
+        clearSenderPaymentClientSecret: true,
+        clearSenderPaymentIntent: true,
+        clearSenderPaymentCustomer: true,
+        clearSenderPaymentEphemeralKey: true,
+        clearSenderPaymentCheckoutUrl: true,
+        clearSenderCreatedRequest: true,
       ),
     );
     try {
+      final distanceKm = state.distance ?? _distanceKmFromRouteCoordinates();
       final data = await _callableMap('createSenderBookingQuote', {
         if (event.businessContext != null)
           'businessContext': event.businessContext,
         'selectedSpeed': event.selectedSpeed,
+        if (event.irisPhotoAnalysisId.trim().isNotEmpty)
+          'irisPhotoAnalysisId': event.irisPhotoAnalysisId.trim(),
         'vanguardProtocolEnabled': event.vanguardProtocolEnabled,
-        'distanceMiles': state.distance == null
+        'distanceMiles': distanceKm == null
             ? 0
-            : DeliveryPricing.kilometresToMiles(state.distance!),
+            : DeliveryPricing.kilometresToMiles(distanceKm),
         'weightKg':
             state.parcelWeightKg <= 0 ? event.weightKg : state.parcelWeightKg,
         'parcel': {
@@ -635,7 +873,9 @@ class SendPackageBloc extends Bloc<SendPackageEvent, SendPackageState> {
             'quantity': state.canonicalIrisResult!.quantity,
             'totalWeightKg': state.canonicalIrisResult!.totalWeightKg,
             'category': state.canonicalIrisResult!.category,
-            'recommendedVehicle': state.canonicalIrisResult!.recommendedVehicle,
+            'recommendedVehicle': event.selectedVehicle.trim().isNotEmpty
+                ? event.selectedVehicle.trim()
+                : state.canonicalIrisResult!.recommendedVehicle,
             'confidence': state.canonicalIrisResult!.confidenceLabel,
             'vanguardRequired': state.canonicalIrisResult!.vanguardRequired,
             'vanguardRequiredReason':
@@ -652,6 +892,7 @@ class SendPackageBloc extends Bloc<SendPackageEvent, SendPackageState> {
           ),
           senderQuoteSpeed: '${data['selectedSpeed'] ?? event.selectedSpeed}',
           senderQuoteLineItems: _lineItemsFrom(data['lineItems']),
+          senderQuoteSpeedOptions: _lineItemsFrom(data['speedOptions']),
           price: _numFrom(
             data['total'] ?? data['finalAmount'] ?? data['amountDue'],
           ),
@@ -664,6 +905,11 @@ class SendPackageBloc extends Bloc<SendPackageEvent, SendPackageState> {
       emit(
         state.copyWith(
           isSenderQuoteLoading: false,
+          clearSenderQuoteId: true,
+          clearSenderQuoteTotal: true,
+          clearSenderQuoteSpeed: true,
+          senderQuoteLineItems: const [],
+          senderQuoteSpeedOptions: const [],
           senderQuoteError:
               error.message ?? 'Could not load delivery quote. Try again.',
         ),
@@ -673,6 +919,11 @@ class SendPackageBloc extends Bloc<SendPackageEvent, SendPackageState> {
       emit(
         state.copyWith(
           isSenderQuoteLoading: false,
+          clearSenderQuoteId: true,
+          clearSenderQuoteTotal: true,
+          clearSenderQuoteSpeed: true,
+          senderQuoteLineItems: const [],
+          senderQuoteSpeedOptions: const [],
           senderQuoteError: 'Could not load delivery quote. Try again.',
         ),
       );
@@ -683,9 +934,7 @@ class SendPackageBloc extends Bloc<SendPackageEvent, SendPackageState> {
     LoadSenderRothBalance event,
     Emitter<SendPackageState> emit,
   ) async {
-    emit(
-      state.copyWith(isSenderRothLoading: true, senderRothError: ''),
-    );
+    emit(state.copyWith(isSenderRothLoading: true, senderRothError: ''));
     try {
       final data = await _callableMap('getSenderRothBalance', const {});
       emit(
@@ -732,6 +981,14 @@ class SendPackageBloc extends Bloc<SendPackageEvent, SendPackageState> {
       state.copyWith(
         isSenderPaymentLoading: true,
         senderPaymentError: '',
+        senderDeliveryError: '',
+        senderPaymentStatus: 'creating_checkout',
+        clearSenderPaymentSession: true,
+        clearSenderPaymentClientSecret: true,
+        clearSenderPaymentIntent: true,
+        clearSenderPaymentCustomer: true,
+        clearSenderPaymentEphemeralKey: true,
+        clearSenderPaymentCheckoutUrl: true,
       ),
     );
     try {
@@ -740,7 +997,29 @@ class SendPackageBloc extends Bloc<SendPackageEvent, SendPackageState> {
         'rothEnabled': event.rothEnabled,
         'fallbackMethod': event.fallbackMethod,
         'paymentMethodId': event.paymentMethodId,
+        if (event.checkoutMode.isNotEmpty) 'checkoutMode': event.checkoutMode,
+        if (event.returnUrl.isNotEmpty) 'returnUrl': event.returnUrl,
+        if (event.draftId.isNotEmpty) 'draftId': event.draftId,
+        if (event.idempotencyKey.isNotEmpty)
+          'idempotencyKey': event.idempotencyKey,
+        if (event.deliveryPayload.isNotEmpty)
+          'deliveryPayload': event.deliveryPayload,
       });
+      final requestId = '${data['requestId'] ?? data['deliveryId'] ?? ''}';
+      if (requestId.isNotEmpty) {
+        try {
+          await FirebaseFunctions.instanceFor(
+            region: 'us-central1',
+          ).httpsCallable('sendPackage').call({'requestId': requestId});
+        } catch (error) {
+          debugPrint(
+            'sendPackage dispatch after direct paid delivery failed; delivery remains created: $error',
+          );
+        }
+        final prefs = await SharedPreferences.getInstance();
+        await prefs.setString('activeRequest', requestId);
+        add(WatchActiveDelivery(requestId: requestId));
+      }
       emit(
         state.copyWith(
           isSenderPaymentLoading: false,
@@ -757,8 +1036,20 @@ class SendPackageBloc extends Bloc<SendPackageEvent, SendPackageState> {
           senderPaymentEphemeralKeySecret: data['ephemeralKeySecret'] == null
               ? null
               : '${data['ephemeralKeySecret']}',
+          senderPaymentCheckoutUrl:
+              data['checkoutUrl'] == null ? null : '${data['checkoutUrl']}',
+          senderCreatedRequestId: requestId.isEmpty ? null : requestId,
+          deliveryStatus: requestId.isEmpty
+              ? state.deliveryStatus
+              : DeliveryStatus.deliveryConfirmed,
+          deliveryRequestStatus:
+              requestId.isEmpty ? state.deliveryRequestStatus : 'requested',
+          senderPaymentError: '',
         ),
       );
+      if (requestId.isNotEmpty) {
+        add(SetDrawerHeight(minDrawerHeight: 180, maxDrawerHeight: 0.5.sh));
+      }
     } on FirebaseFunctionsException catch (error) {
       debugPrint(
         'createSenderPaymentSession failed: code=${error.code}, message=${error.message}, details=${error.details}',
@@ -766,8 +1057,17 @@ class SendPackageBloc extends Bloc<SendPackageEvent, SendPackageState> {
       emit(
         state.copyWith(
           isSenderPaymentLoading: false,
-          senderPaymentError:
-              error.message ?? "Payment couldn't be started. Please try again.",
+          senderPaymentStatus: 'failed',
+          clearSenderPaymentSession: true,
+          clearSenderPaymentClientSecret: true,
+          clearSenderPaymentIntent: true,
+          clearSenderPaymentCustomer: true,
+          clearSenderPaymentEphemeralKey: true,
+          clearSenderPaymentCheckoutUrl: true,
+          senderPaymentError: _senderPaymentMessage(
+            error,
+            "Payment couldn't be started. Please try again.",
+          ),
         ),
       );
     } catch (error) {
@@ -775,6 +1075,13 @@ class SendPackageBloc extends Bloc<SendPackageEvent, SendPackageState> {
       emit(
         state.copyWith(
           isSenderPaymentLoading: false,
+          senderPaymentStatus: 'failed',
+          clearSenderPaymentSession: true,
+          clearSenderPaymentClientSecret: true,
+          clearSenderPaymentIntent: true,
+          clearSenderPaymentCustomer: true,
+          clearSenderPaymentEphemeralKey: true,
+          clearSenderPaymentCheckoutUrl: true,
           senderPaymentError: "Payment couldn't be started. Please try again.",
         ),
       );
@@ -785,22 +1092,16 @@ class SendPackageBloc extends Bloc<SendPackageEvent, SendPackageState> {
     CreatePaidSenderDelivery event,
     Emitter<SendPackageState> emit,
   ) async {
-    if (state.senderPaymentStatus != 'succeeded' ||
-        state.senderPaymentSessionId == null ||
-        state.senderQuoteId == null) {
+    if (state.senderPaymentSessionId == null || state.senderQuoteId == null) {
       emit(
         state.copyWith(
-          senderDeliveryError:
-              'Payment must be confirmed before delivery creation.',
+          senderDeliveryError: 'Start payment before delivery creation.',
         ),
       );
       return;
     }
     emit(
-      state.copyWith(
-        isSenderDeliveryCreating: true,
-        senderDeliveryError: '',
-      ),
+      state.copyWith(isSenderDeliveryCreating: true, senderDeliveryError: ''),
     );
     try {
       final payload = {
@@ -811,9 +1112,15 @@ class SendPackageBloc extends Bloc<SendPackageEvent, SendPackageState> {
       final data = await _callableMap('createSenderPaidDelivery', payload);
       final requestId = '${data['requestId'] ?? ''}';
       if (requestId.isNotEmpty) {
-        await FirebaseFunctions.instanceFor(region: 'us-central1')
-            .httpsCallable('sendPackage')
-            .call({'requestId': requestId});
+        try {
+          await FirebaseFunctions.instanceFor(
+            region: 'us-central1',
+          ).httpsCallable('sendPackage').call({'requestId': requestId});
+        } catch (error) {
+          debugPrint(
+            'sendPackage dispatch after paid delivery failed; delivery remains created: $error',
+          );
+        }
         final prefs = await SharedPreferences.getInstance();
         await prefs.setString('activeRequest', requestId);
         add(WatchActiveDelivery(requestId: requestId));
@@ -834,8 +1141,10 @@ class SendPackageBloc extends Bloc<SendPackageEvent, SendPackageState> {
       emit(
         state.copyWith(
           isSenderDeliveryCreating: false,
-          senderDeliveryError:
-              error.message ?? 'Delivery could not be created after payment.',
+          senderDeliveryError: _senderPaymentMessage(
+            error,
+            'Delivery could not be created after payment.',
+          ),
         ),
       );
     } catch (error) {
@@ -844,6 +1153,73 @@ class SendPackageBloc extends Bloc<SendPackageEvent, SendPackageState> {
         state.copyWith(
           isSenderDeliveryCreating: false,
           senderDeliveryError: 'Delivery could not be created after payment.',
+        ),
+      );
+    }
+  }
+
+  void _handleFinalizeSenderWebCheckout(
+    FinalizeSenderWebCheckout event,
+    Emitter<SendPackageState> emit,
+  ) async {
+    emit(
+      state.copyWith(
+        isSenderPaymentLoading: true,
+        senderPaymentError: '',
+        senderDeliveryError: '',
+      ),
+    );
+    try {
+      final data = await _callableMap('finalizeSenderWebCheckout', {
+        'checkoutSessionId': event.checkoutSessionId,
+        'paymentSessionId': event.paymentSessionId,
+      });
+      final requestId = '${data['requestId'] ?? data['deliveryId'] ?? ''}';
+      if (requestId.isNotEmpty) {
+        try {
+          await FirebaseFunctions.instanceFor(
+            region: 'us-central1',
+          ).httpsCallable('sendPackage').call({'requestId': requestId});
+        } catch (error) {
+          debugPrint(
+            'sendPackage dispatch after finalized checkout failed; delivery remains created: $error',
+          );
+        }
+        final prefs = await SharedPreferences.getInstance();
+        await prefs.setString('activeRequest', requestId);
+        add(WatchActiveDelivery(requestId: requestId));
+      }
+      emit(
+        state.copyWith(
+          isSenderPaymentLoading: false,
+          senderPaymentSessionId: event.paymentSessionId,
+          senderPaymentStatus: 'succeeded',
+          senderCreatedRequestId: requestId,
+          deliveryStatus: DeliveryStatus.deliveryConfirmed,
+          deliveryRequestStatus: 'requested',
+        ),
+      );
+      add(SetDrawerHeight(minDrawerHeight: 180, maxDrawerHeight: 0.5.sh));
+    } on FirebaseFunctionsException catch (error) {
+      debugPrint(
+        'finalizeSenderWebCheckout failed: code=${error.code}, message=${error.message}, details=${error.details}',
+      );
+      emit(
+        state.copyWith(
+          isSenderPaymentLoading: false,
+          senderPaymentError: _senderPaymentMessage(
+            error,
+            'Stripe payment could not be confirmed. Please contact support.',
+          ),
+        ),
+      );
+    } catch (error) {
+      debugPrint('finalizeSenderWebCheckout unexpected failure: $error');
+      emit(
+        state.copyWith(
+          isSenderPaymentLoading: false,
+          senderPaymentError:
+              'Stripe payment could not be confirmed. Please contact support.',
         ),
       );
     }
@@ -874,7 +1250,7 @@ class SendPackageBloc extends Bloc<SendPackageEvent, SendPackageState> {
     }
     emit(
       state.copyWith(
-        deliveryStatus: DeliveryStatus.deliveryOnGoing,
+        deliveryStatus: DeliveryStatus.reconnectingWithRider,
         deliveryRequestStatus: 'accepted',
         deliveryData: deliveryData,
       ),
@@ -961,14 +1337,14 @@ class SendPackageBloc extends Bloc<SendPackageEvent, SendPackageState> {
           final deliveryData = DeliveryData.fromJson(event.data);
           emit(state.copyWith(deliveryData: deliveryData));
         }
-
-        if (state.deliveryStatus != DeliveryStatus.deliveryOnGoing) {
-          emit(state.copyWith(deliveryStatus: DeliveryStatus.deliveryOnGoing));
-
-          add(SetDrawerHeight(minDrawerHeight: 180, maxDrawerHeight: 0.7.sh));
-        }
       }
-    } catch (e) {}
+    } catch (error, stackTrace) {
+      _logRecoverableSenderError(
+        'active delivery setup failed',
+        error,
+        stackTrace,
+      );
+    }
   }
 
   void _handleWatchActiveDeliveryEvent(
@@ -1001,8 +1377,9 @@ class SendPackageBloc extends Bloc<SendPackageEvent, SendPackageState> {
     if (data == null) return;
 
     final requestStatus = '${data['status'] ?? ''}'.trim();
-    if (_terminalRequestStatuses
-        .contains(requestStatus.toLowerCase().replaceAll('-', '_'))) {
+    if (_terminalRequestStatuses.contains(
+      requestStatus.toLowerCase().replaceAll('-', '_'),
+    )) {
       final requestId = '${data['requestId'] ?? data['id'] ?? ''}'.trim();
       if (requestId.isNotEmpty) {
         unawaited(_clearActiveRequestIfCurrent(requestId));
@@ -1021,7 +1398,7 @@ class SendPackageBloc extends Bloc<SendPackageEvent, SendPackageState> {
 
     emit(
       state.copyWith(
-        deliveryStatus: _deliveryStatusForBackendStatus(requestStatus),
+        deliveryStatus: _deliveryStatusForBackendData(data),
         deliveryRequestStatus: requestStatus,
         activeDeliveryData: Map<String, dynamic>.from(data),
         pickupDetails: pickupDetails,
@@ -1069,8 +1446,12 @@ class SendPackageBloc extends Bloc<SendPackageEvent, SendPackageState> {
     );
   }
 
-  DeliveryStatus _deliveryStatusForBackendStatus(String status) {
+  DeliveryStatus _deliveryStatusForBackendData(Map<String, dynamic> data) {
+    final status =
+        '${data['status'] ?? data['deliveryStatus'] ?? data['deliveryStage'] ?? ''}';
     final normalized = status.trim().toLowerCase().replaceAll('-', '_');
+    final assigned = _hasBackendAssignment(data);
+    final collected = _hasBackendCollectionProof(data);
     if (normalized == 'delivered' ||
         normalized == 'completed' ||
         normalized == 'delivery_completed') {
@@ -1078,6 +1459,11 @@ class SendPackageBloc extends Bloc<SendPackageEvent, SendPackageState> {
     }
     if (_cancelledRequestStatuses.contains(normalized)) {
       return DeliveryStatus.inital;
+    }
+    if (_inTransitRequestStatuses.contains(normalized)) {
+      return assigned && collected
+          ? DeliveryStatus.deliveryOnGoing
+          : DeliveryStatus.reconnectingWithRider;
     }
     if (_activeRequestStatuses.contains(normalized)) {
       return DeliveryStatus.reconnectingWithRider;
@@ -1088,7 +1474,30 @@ class SendPackageBloc extends Bloc<SendPackageEvent, SendPackageState> {
         normalized == 'finding_rider') {
       return DeliveryStatus.deliveryConfirmed;
     }
-    return DeliveryStatus.reconnectingWithRider;
+    return DeliveryStatus.deliveryConfirmed;
+  }
+
+  bool _hasBackendAssignment(Map<String, dynamic> data) {
+    return [
+      data['riderId'],
+      data['driverId'],
+      data['assignedRider'],
+      data['assignedRiderId'],
+      data['assignedDriverId'],
+      data['courierId'],
+    ].any((value) => '$value'.trim().isNotEmpty && '$value'.trim() != 'null');
+  }
+
+  bool _hasBackendCollectionProof(Map<String, dynamic> data) {
+    return data['collectionConfirmed'] == true ||
+        data['collectionPinVerified'] == true ||
+        data['pickupVerified'] == true ||
+        data['parcelCollected'] == true ||
+        data['collectedAt'] != null ||
+        data['collectionConfirmedAt'] != null ||
+        data['pickupCompletedAt'] != null ||
+        data['pickupVerifiedAt'] != null ||
+        data['collectionTimestamp'] != null;
   }
 
   static const Set<String> _activeRequestStatuses = {
@@ -1103,13 +1512,17 @@ class SendPackageBloc extends Bloc<SendPackageEvent, SendPackageState> {
     'waiting',
     'pickup_verification',
     'pickup_verified',
+    'pin_required',
+    'issue_reported',
+  };
+
+  static const Set<String> _inTransitRequestStatuses = {
     'collected',
     'outfordelivery',
     'out_for_delivery',
+    'in_transit',
     'navigating_to_dropoff',
     'arrived_at_dropoff',
-    'pin_required',
-    'issue_reported',
   };
 
   static const Set<String> _cancelledRequestStatuses = {
@@ -1127,10 +1540,7 @@ class SendPackageBloc extends Bloc<SendPackageEvent, SendPackageState> {
     ..._cancelledRequestStatuses,
   };
 
-  ContactInfo? _contactFromDelivery(
-    Object? value, {
-    ContactInfo? fallback,
-  }) {
+  ContactInfo? _contactFromDelivery(Object? value, {ContactInfo? fallback}) {
     if (value is! Map) return fallback;
     final coordinate = _coordinateFromPosition(value['position']);
     if (coordinate == null) return fallback;
@@ -1245,8 +1655,9 @@ class SendPackageBloc extends Bloc<SendPackageEvent, SendPackageState> {
         // }
 
         final requestStatus = '${data['status'] ?? ''}';
-        if (_activeRequestStatuses
-            .contains(requestStatus.toLowerCase().replaceAll('-', '_'))) {
+        if (_activeRequestStatuses.contains(
+          requestStatus.toLowerCase().replaceAll('-', '_'),
+        )) {
           status = DeliveryStatus.reconnectingWithRider;
           final deliveryData = DeliveryData.fromJson(data);
           emit(
@@ -1267,6 +1678,14 @@ class SendPackageBloc extends Bloc<SendPackageEvent, SendPackageState> {
           );
         }
 
+        final normalizedRequestStatus = requestStatus.toLowerCase().replaceAll(
+              '-',
+              '_',
+            );
+        if (_terminalRequestStatuses.contains(normalizedRequestStatus)) {
+          await prefs.remove('activeRequest');
+        }
+
         if (requestStatus == 'completed' || requestStatus == 'delivered') {
           status = DeliveryStatus.deliveryCompleted;
           emit(
@@ -1284,7 +1703,7 @@ class SendPackageBloc extends Bloc<SendPackageEvent, SendPackageState> {
         if (requestStatus == 'cancelled' || requestStatus == 'canceled') {
           emit(
             state.copyWith(
-              deliveryStatus: DeliveryStatus.reconnectingWithRider,
+              deliveryStatus: DeliveryStatus.inital,
               deliveryRequestStatus: requestStatus,
               pickupDetails: pickupDetails,
               dropoffDetails: dropoffDetails,
@@ -1343,8 +1762,9 @@ class SendPackageBloc extends Bloc<SendPackageEvent, SendPackageState> {
       }
 
       emit(state.copyWith(message: ''));
-      final callable =
-          FirebaseFunctions.instance.httpsCallable('sendCircumMessage');
+      final callable = FirebaseFunctions.instance.httpsCallable(
+        'sendCircumMessage',
+      );
       await callable.call({
         'chatId': activeRequest,
         'message': event.message,
@@ -1391,9 +1811,9 @@ class SendPackageBloc extends Bloc<SendPackageEvent, SendPackageState> {
         '${state.activeDeliveryData['id'] ?? ''}';
     if (activeRequest.trim().isNotEmpty) {
       try {
-        await FirebaseFunctions.instanceFor(region: 'us-central1')
-            .httpsCallable('requestSenderCancellation')
-            .call({
+        await FirebaseFunctions.instanceFor(
+          region: 'us-central1',
+        ).httpsCallable('requestSenderCancellation').call({
           'deliveryId': activeRequest,
           'idempotencyKey': '$activeRequest:legacy_sender_cancel',
         });

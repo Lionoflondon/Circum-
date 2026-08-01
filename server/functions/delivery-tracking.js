@@ -251,6 +251,40 @@ function highestTrustAward(delivery = {}) {
   return 1;
 }
 
+function canonicalRiderRankForTrust(trustPoints) {
+  const trust = Number(trustPoints);
+  if (!Number.isFinite(trust) || trust < 100) return "agent";
+  if (trust < 300) return "sentinel";
+  if (trust < 700) return "warden";
+  if (trust < 1500) return "knight";
+  return "veteran";
+}
+
+function hasManualRankOverride(profile = {}) {
+  return profile.rankOverride === true ||
+    `${profile.rankSource || ""}`.toLowerCase() === "manual" ||
+    text(profile.rankUpdatedBy) ||
+    text(profile.rankReason);
+}
+
+function riderTrustRankPatch(profile = {}, awardedTrustPoints = 0) {
+  const currentTrust = Number(profile.trustPoints || profile.riderTrustPoints || 0);
+  const awarded = Number(awardedTrustPoints);
+  const trustPoints = Math.max(0, (Number.isFinite(currentTrust) ? currentTrust : 0) +
+    (Number.isFinite(awarded) ? awarded : 0));
+  const patch = {
+    trustPoints: FieldValue.increment(awardedTrustPoints),
+    updatedAt: FieldValue.serverTimestamp(),
+  };
+  if (!hasManualRankOverride(profile)) {
+    patch.riderRank = canonicalRiderRankForTrust(trustPoints);
+    patch.rank = patch.riderRank;
+    patch.rankSource = "trust_points";
+    patch.rankUpdatedAt = FieldValue.serverTimestamp();
+  }
+  return patch;
+}
+
 function patchForTransition({action, nextStatus, riderId}) {
   const now = FieldValue.serverTimestamp();
   const patch = {
@@ -409,6 +443,9 @@ exports.updateDeliveryTrackingStatus = functions.https.onCall(async (data, conte
     const earningRef = nextStatus === "delivered" ?
       db.collection("riderEarningTransactions").doc(found.id) : null;
     const existingEarning = earningRef ? await transaction.get(earningRef) : null;
+    const riderProfileRef = settlementValues(delivery).trustPoints > 0 ?
+      db.collection("riderProfiles").doc(riderId) : null;
+    const riderProfileSnapshot = riderProfileRef ? await transaction.get(riderProfileRef) : null;
     transaction.set(found.ref, patch, {merge: true});
     if (nextStatus === "delivered") {
       const settlement = settlementValues(delivery);
@@ -435,10 +472,9 @@ exports.updateDeliveryTrackingStatus = functions.https.onCall(async (data, conte
           updatedAt: FieldValue.serverTimestamp(),
         }, {merge: true});
         if (settlement.trustPoints > 0) {
-          transaction.set(db.collection("riderProfiles").doc(riderId), {
-            trustPoints: FieldValue.increment(settlement.trustPoints),
-            updatedAt: FieldValue.serverTimestamp(),
-          }, {merge: true});
+          transaction.set(riderProfileRef,
+              riderTrustRankPatch(riderProfileSnapshot ? riderProfileSnapshot.data() : {}, settlement.trustPoints),
+              {merge: true});
         }
         patch.settlementId = earningRef.id;
         patch.settlementCompletedAt = FieldValue.serverTimestamp();
@@ -606,4 +642,7 @@ exports._private = {
   evidenceRequirements,
   settlementValues,
   highestTrustAward,
+  canonicalRiderRankForTrust,
+  hasManualRankOverride,
+  riderTrustRankPatch,
 };

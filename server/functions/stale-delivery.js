@@ -65,6 +65,18 @@ async function releaseRiderLock(batch, db, {riderId, deliveryId, reason, actorUi
   });
 }
 
+async function referencedPresenceDocs(db) {
+  const [activeSnapshot, currentSnapshot] = await Promise.all([
+    db.collection("riderPresence").where("activeDeliveryId", ">", "").limit(500).get(),
+    db.collection("riderPresence").where("currentDeliveryId", ">", "").limit(500).get(),
+  ]);
+  const docs = new Map();
+  for (const doc of [...activeSnapshot.docs, ...currentSnapshot.docs]) {
+    docs.set(doc.id, doc);
+  }
+  return [...docs.values()];
+}
+
 exports.resolveStaleDeliveryLock = functions.https.onCall(async (data, context) => {
   const actorUid = requireAdmin(context);
   const deliveryId = text(data && data.deliveryId);
@@ -116,10 +128,10 @@ exports.reconcileStaleDeliveryLocks = functions.pubsub
     .timeZone("Europe/London")
     .onRun(async () => {
       const db = getFirestore();
-      const snapshot = await db.collection("riderPresence").limit(500).get();
+      const presenceDocs = await referencedPresenceDocs(db);
       let repaired = 0;
       let queued = 0;
-      for (const presenceDoc of snapshot.docs) {
+      for (const presenceDoc of presenceDocs) {
         const presence = presenceDoc.data();
         const deliveryId = text(presence.activeDeliveryId || presence.currentDeliveryId);
         if (!deliveryId) continue;

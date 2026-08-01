@@ -20,11 +20,14 @@ const DEFAULT_POLICY = Object.freeze({
 
 const ACTIVE_PRE_COLLECTION = new Set([
   "accepted",
+  "rider_assigned",
   "navigating_to_pickup",
+  "en_route_to_pickup",
 ]);
 
 const ARRIVED_PICKUP = new Set([
   "arrived_at_pickup",
+  "waiting_for_collection",
   "waiting",
 ]);
 
@@ -101,7 +104,7 @@ function cancellationDecision(input = {}) {
     allowedActions: [],
   };
 
-  if (["finding_rider", "pending", "unmatched", "requested"].includes(state)) {
+  if (["finding_rider", "pending", "unmatched", "requested", "broadcasting", "available", "awaiting_rider"].includes(state)) {
     return {
       ...base,
       canCancel: true,

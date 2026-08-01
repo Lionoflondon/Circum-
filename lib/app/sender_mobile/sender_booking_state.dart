@@ -20,7 +20,7 @@ enum SenderDeliveryTimingType { now, scheduled }
 
 enum SenderFallbackPaymentMethod { card, applePay, googlePay }
 
-const senderDeliverySpeeds = ['Economy', 'Standard', 'Express'];
+const senderDeliverySpeeds = ['Standard', 'Express'];
 const senderVanguardAddOnPriceGbp = 1.99;
 const senderVanguardProtocolLabel = 'Vanguard Delivery Protocol';
 const senderRothPoundValue = 1.0;
@@ -200,7 +200,11 @@ String formatSenderRothCredits(double value) {
 class SenderBookingDraft {
   final SenderBookingStep step;
   final String pickupAddress;
+  final double? pickupLat;
+  final double? pickupLng;
   final String dropoffAddress;
+  final double? dropoffLat;
+  final double? dropoffLng;
   final String receiverName;
   final String receiverPhone;
   final String deliveryNotes;
@@ -216,6 +220,7 @@ class SenderBookingDraft {
   final bool highValue;
   final String irisConfidence;
   final String irisVehicle;
+  final String selectedVehicle;
   final String selectedOption;
   final bool vanguard;
   final SenderPaymentStatus paymentStatus;
@@ -235,7 +240,11 @@ class SenderBookingDraft {
   const SenderBookingDraft({
     this.step = SenderBookingStep.pickup,
     this.pickupAddress = '',
+    this.pickupLat,
+    this.pickupLng,
     this.dropoffAddress = '',
+    this.dropoffLat,
+    this.dropoffLng,
     this.receiverName = '',
     this.receiverPhone = '',
     this.deliveryNotes = '',
@@ -250,7 +259,8 @@ class SenderBookingDraft {
     this.fragile = false,
     this.highValue = false,
     this.irisConfidence = 'Medium',
-    this.irisVehicle = 'Bike',
+    this.irisVehicle = 'Motorbike',
+    this.selectedVehicle = '',
     this.selectedOption = 'Standard',
     this.vanguard = false,
     this.paymentStatus = SenderPaymentStatus.notReady,
@@ -271,9 +281,9 @@ class SenderBookingDraft {
   bool get canContinue {
     switch (step) {
       case SenderBookingStep.pickup:
-        return pickupAddress.trim().isNotEmpty;
+        return isSenderTypedAddressSpecific(pickupAddress);
       case SenderBookingStep.dropoff:
-        return dropoffAddress.trim().isNotEmpty;
+        return isSenderTypedAddressSpecific(dropoffAddress);
       case SenderBookingStep.recipient:
         return receiverName.trim().isNotEmpty &&
             receiverPhone.trim().isNotEmpty;
@@ -354,7 +364,13 @@ class SenderBookingDraft {
   SenderBookingDraft copyWith({
     SenderBookingStep? step,
     String? pickupAddress,
+    double? pickupLat,
+    double? pickupLng,
+    bool clearPickupCoordinate = false,
     String? dropoffAddress,
+    double? dropoffLat,
+    double? dropoffLng,
+    bool clearDropoffCoordinate = false,
     String? receiverName,
     String? receiverPhone,
     String? deliveryNotes,
@@ -370,6 +386,7 @@ class SenderBookingDraft {
     bool? highValue,
     String? irisConfidence,
     String? irisVehicle,
+    String? selectedVehicle,
     String? selectedOption,
     bool? vanguard,
     SenderPaymentStatus? paymentStatus,
@@ -392,7 +409,11 @@ class SenderBookingDraft {
     return SenderBookingDraft(
       step: step ?? this.step,
       pickupAddress: pickupAddress ?? this.pickupAddress,
+      pickupLat: clearPickupCoordinate ? null : pickupLat ?? this.pickupLat,
+      pickupLng: clearPickupCoordinate ? null : pickupLng ?? this.pickupLng,
       dropoffAddress: dropoffAddress ?? this.dropoffAddress,
+      dropoffLat: clearDropoffCoordinate ? null : dropoffLat ?? this.dropoffLat,
+      dropoffLng: clearDropoffCoordinate ? null : dropoffLng ?? this.dropoffLng,
       receiverName: receiverName ?? this.receiverName,
       receiverPhone: receiverPhone ?? this.receiverPhone,
       deliveryNotes: deliveryNotes ?? this.deliveryNotes,
@@ -408,6 +429,7 @@ class SenderBookingDraft {
       highValue: highValue ?? this.highValue,
       irisConfidence: irisConfidence ?? this.irisConfidence,
       irisVehicle: irisVehicle ?? this.irisVehicle,
+      selectedVehicle: selectedVehicle ?? this.selectedVehicle,
       selectedOption: selectedOption ?? this.selectedOption,
       vanguard: vanguard ?? this.vanguard,
       paymentStatus: paymentStatus ?? this.paymentStatus,
@@ -442,9 +464,19 @@ class SenderBookingDraft {
         'completed': false,
         'pickup': {
           'address': pickupAddress,
+          if (pickupLat != null && pickupLng != null)
+            'coordinate': {
+              'lat': pickupLat,
+              'lng': pickupLng,
+            },
         },
         'dropoff': {
           'address': dropoffAddress,
+          if (dropoffLat != null && dropoffLng != null)
+            'coordinate': {
+              'lat': dropoffLat,
+              'lng': dropoffLng,
+            },
         },
         'recipient': {
           'name': receiverName,
@@ -471,6 +503,7 @@ class SenderBookingDraft {
         'iris': {
           'confidence': irisConfidence,
           'recommendedVehicle': irisVehicle,
+          'selectedVehicle': selectedVehicle,
         },
         'deliveryOptions': {
           'selectedOption': selectedOption,
@@ -490,6 +523,8 @@ class SenderBookingDraft {
   factory SenderBookingDraft.fromBackendDraft(Map<String, dynamic> data) {
     final pickup = _draftMap(data['pickup']);
     final dropoff = _draftMap(data['dropoff']);
+    final pickupCoordinate = _draftMap(pickup['coordinate']);
+    final dropoffCoordinate = _draftMap(dropoff['coordinate']);
     final recipient = _draftMap(data['recipient']);
     final deliveryTime = _draftMap(data['deliveryTime']);
     final parcel = _draftMap(data['parcel']);
@@ -515,7 +550,11 @@ class SenderBookingDraft {
           ? SenderBookingStep.pickup
           : restoredStep,
       pickupAddress: '${pickup['address'] ?? ''}',
+      pickupLat: _draftDouble(pickupCoordinate['lat']),
+      pickupLng: _draftDouble(pickupCoordinate['lng']),
       dropoffAddress: '${dropoff['address'] ?? ''}',
+      dropoffLat: _draftDouble(dropoffCoordinate['lat']),
+      dropoffLng: _draftDouble(dropoffCoordinate['lng']),
       receiverName: '${recipient['name'] ?? ''}',
       receiverPhone: '${recipient['phone'] ?? ''}',
       deliveryNotes: '${recipient['deliveryNotes'] ?? ''}',
@@ -530,7 +569,8 @@ class SenderBookingDraft {
       fragile: parcel['fragile'] == true,
       highValue: parcel['highValue'] == true,
       irisConfidence: '${iris['confidence'] ?? 'Medium'}',
-      irisVehicle: '${iris['recommendedVehicle'] ?? 'Bike'}',
+      irisVehicle: '${iris['recommendedVehicle'] ?? 'Motorbike'}',
+      selectedVehicle: '${iris['selectedVehicle'] ?? ''}',
       selectedOption: '${deliveryOptions['selectedOption'] ?? 'Standard'}',
       vanguard: deliveryOptions['vanguard'] == true,
       selectedPaymentMethod: fallback,
@@ -548,6 +588,15 @@ Map<String, dynamic> _draftMap(Object? value) =>
 double? _draftDouble(Object? value) {
   if (value is num) return value.toDouble();
   return double.tryParse('$value');
+}
+
+bool isSenderTypedAddressSpecific(String value) {
+  final text = value.trim();
+  if (text.length < 8) return false;
+  final hasDigit = RegExp(r'\d').hasMatch(text);
+  final hasSeparator =
+      text.contains(',') || text.split(RegExp(r'\s+')).length >= 3;
+  return hasDigit && hasSeparator;
 }
 
 String senderStepTitle(SenderBookingStep step) {
@@ -571,7 +620,7 @@ String senderStepTitle(SenderBookingStep step) {
     case SenderBookingStep.payment:
       return 'Payment';
     case SenderBookingStep.findingRider:
-      return 'Finding the best rider for you...';
+      return 'Finding the best Circum Rider for you...';
     case SenderBookingStep.liveTracking:
       return 'Track your delivery.';
   }

@@ -7,6 +7,7 @@ Use this checklist for any pull request that touches protected architecture file
 - `scripts/deploy_guard.js`
 - `scripts/deploy_guard.self_test.js`
 - `scripts/absolute_product_ownership.js`
+- `scripts/backend_authority_guard.js`
 
 ## Required Answers
 
@@ -19,6 +20,8 @@ Use this checklist for any pull request that touches protected architecture file
 4. What validator was updated?
 
 5. Which new certification was run?
+
+6. Does the change preserve backend authority for operational state?
 
 ## Approval Rule
 

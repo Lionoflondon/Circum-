@@ -44,7 +44,8 @@ void main() {
     expect(source, isNot(contains('_SenderStableHomeSurface(')));
     expect(source, contains('const SenderBookingCanvas()'));
     expect(source, contains('SenderActivityView('));
-    expect(source, contains('const SenderWalletView()'));
+    expect(source,
+        contains('SenderWalletView(repository: widget.walletRepository)'));
     expect(source, contains('SenderMobileProfileView('));
 
     final selectedTabs =
@@ -52,7 +53,7 @@ void main() {
     final homeIndex = selectedTabs.indexOf('_CanonicalSenderHome(');
     final sendIndex = selectedTabs.indexOf('const SenderBookingCanvas()');
     final activityIndex = selectedTabs.indexOf('SenderActivityView(');
-    final walletIndex = selectedTabs.indexOf('const SenderWalletView()');
+    final walletIndex = selectedTabs.indexOf('SenderWalletView(');
     final profileIndex = selectedTabs.indexOf('SenderMobileProfileView(');
 
     expect(homeIndex, greaterThan(0));
@@ -163,8 +164,8 @@ void main() {
       'Confirm delivery time',
       'Tell us about your parcel.',
       'IRIS has estimated your parcel.',
-      'Choose options',
-      'Review delivery',
+      'Choose your delivery options.',
+      'Review your delivery.',
       'Continue to payment',
       'Track your delivery.',
     ]) {
@@ -202,6 +203,158 @@ void main() {
     }
     expect(bloc, contains('_clearActiveRequestIfCurrent'));
     expect(bloc, contains('_terminalRequestStatuses'));
+  });
+
+  test('Sender billing weight uses the higher of customer and IRIS weight', () {
+    final bloc = read('lib/app/send_package/bloc/send_package_bloc.dart');
+    final handlerStart = bloc.indexOf('void _handleSetParcelWeight(');
+    final handlerEnd =
+        bloc.indexOf('void _handleRequestCanonicalIrisEstimate', handlerStart);
+    expect(handlerStart, isNonNegative);
+    expect(handlerEnd, greaterThan(handlerStart));
+
+    final handler = bloc.substring(handlerStart, handlerEnd);
+    final trustedStart =
+        handler.indexOf('final trusted = await IrisLearningBridge');
+    final emitStart = handler.indexOf('emit(', trustedStart);
+    expect(trustedStart, isNonNegative);
+    expect(emitStart, greaterThan(trustedStart));
+    final trustedResolution = handler.substring(trustedStart, emitStart);
+
+    expect(
+        trustedResolution, contains('DeliveryPricing.checkoutPricingWeightKg'));
+    expect(trustedResolution, contains('userEnteredWeightKg: event.weightKg'));
+    expect(
+      trustedResolution,
+      contains('irisEstimatedWeightKg: trusted.pricingWeightKg'),
+      reason:
+          'Billing must use whichever is higher: customer-declared weight or IRIS weight.',
+    );
+  });
+
+  test(
+      'Sender IRIS requests timeout and stale matches require non-empty item text',
+      () {
+    final bloc = read('lib/app/send_package/bloc/send_package_bloc.dart');
+    final canvas = read('lib/app/sender_mobile/sender_booking_canvas.dart');
+
+    final handlerStart =
+        bloc.indexOf('void _handleRequestCanonicalIrisEstimate');
+    final handlerEnd = bloc.indexOf('double _numFrom', handlerStart);
+    expect(handlerStart, isNonNegative);
+    expect(handlerEnd, greaterThan(handlerStart));
+    final handler = bloc.substring(handlerStart, handlerEnd);
+    expect(handler, contains("httpsCallable('analyseIris')"));
+    expect(handler, contains('.timeout(const Duration(seconds: 15))'));
+
+    final matchStart = canvas.indexOf('bool _irisMatchesParcel');
+    final matchEnd =
+        canvas.indexOf('String _irisEstimatedWeightDisplay', matchStart);
+    expect(matchStart, isNonNegative);
+    expect(matchEnd, greaterThan(matchStart));
+    final matcher = canvas.substring(matchStart, matchEnd);
+    expect(matcher, contains('final item = itemName.trim().toLowerCase();'));
+    expect(matcher, contains('item.isNotEmpty && actual.contains(item)'));
+  });
+
+  test('Sender async IRIS and quote refreshes clear stale booking state first',
+      () {
+    final bloc = read('lib/app/send_package/bloc/send_package_bloc.dart');
+    final state = read('lib/app/send_package/bloc/send_package_state.dart');
+
+    for (final clearFlag in const [
+      'clearCanonicalIrisResult',
+      'clearSenderQuoteId',
+      'clearSenderQuoteTotal',
+      'clearSenderQuoteSpeed',
+      'clearSenderPaymentSession',
+      'clearSenderPaymentClientSecret',
+      'clearSenderPaymentIntent',
+      'clearSenderPaymentCustomer',
+      'clearSenderPaymentEphemeralKey',
+      'clearSenderPaymentCheckoutUrl',
+      'clearSenderCreatedRequest',
+    ]) {
+      expect(state, contains(clearFlag));
+      expect(bloc, contains('$clearFlag: true'));
+    }
+    expect(state, contains('clearItemDescription'));
+    expect(
+      bloc,
+      contains('clearItemDescription: itemDescription.trim().isEmpty'),
+    );
+
+    final irisStart = bloc.indexOf('void _handleRequestCanonicalIrisEstimate');
+    final irisCallable =
+        bloc.indexOf("httpsCallable('analyseIris')", irisStart);
+    expect(irisStart, isNonNegative);
+    expect(irisCallable, greaterThan(irisStart));
+    final irisPreflight = bloc.substring(irisStart, irisCallable);
+    expect(irisPreflight, contains('clearCanonicalIrisResult: true'));
+    expect(irisPreflight, contains('clearSenderQuoteId: true'));
+    expect(irisPreflight, contains('clearSenderCreatedRequest: true'));
+
+    final quoteStart = bloc.indexOf('void _handleRequestSenderBookingQuote');
+    final quoteCallable =
+        bloc.indexOf("_callableMap('createSenderBookingQuote'", quoteStart);
+    expect(quoteStart, isNonNegative);
+    expect(quoteCallable, greaterThan(quoteStart));
+    final quotePreflight = bloc.substring(quoteStart, quoteCallable);
+    expect(quotePreflight, contains('clearSenderQuoteId: true'));
+    expect(quotePreflight, contains('clearSenderQuoteTotal: true'));
+    expect(quotePreflight, contains('clearSenderPaymentSession: true'));
+    expect(quotePreflight, contains('clearSenderCreatedRequest: true'));
+  });
+
+  test('Sender nullable booking artifacts are never cleared with null literals',
+      () {
+    final source = read('lib/app/send_package/bloc/send_package_bloc.dart');
+
+    for (final staleClear in const [
+      'canonicalIrisResult: null',
+      'itemDescription: null',
+      'senderQuoteId: null',
+      'senderQuoteTotal: null',
+      'senderQuoteSpeed: null',
+      'senderPaymentSessionId: null',
+      'senderPaymentClientSecret: null',
+      'senderPaymentIntentId: null',
+      'senderPaymentCustomerId: null',
+      'senderPaymentEphemeralKeySecret: null',
+      'senderPaymentCheckoutUrl: null',
+      'senderCreatedRequestId: null',
+    ]) {
+      expect(
+        source,
+        isNot(contains(staleClear)),
+        reason:
+            '$staleClear does not clear copyWith state; use the explicit clear flag.',
+      );
+    }
+  });
+
+  test('Sender address search is backend-mediated and bounded by timeout', () {
+    final source = read('lib/app/send_package/repo/place_api.dart');
+
+    expect(source, contains("httpsCallable('searchFreeUkAddresses')"));
+    expect(source, contains("httpsCallable('resolveUkAddressPlace')"));
+    expect(source, contains("'sessionToken': '\$sessionToken'"));
+    expect(source, contains(".timeout(const Duration(seconds: 8))"));
+    expect(source, isNot(contains('maps.googleapis.com')));
+  });
+
+  test('Sender-facing delivery models never expose Rider phone fallbacks', () {
+    final profile = read('lib/app/sender_profile/sender_profile.dart');
+    final deliveryData =
+        read('lib/app/send_package/models/delivery_data.m.dart');
+
+    expect(profile, contains('assignedDriverPhone: \'\','));
+    expect(deliveryData, contains('phoneNumber: \'\','));
+    expect(profile, isNot(contains("data['riderPhone']")));
+    expect(profile, isNot(contains("data['driverPhone']")));
+    expect(profile, isNot(contains("data['courierPhone']")));
+    expect(deliveryData, isNot(contains("data['riderPhone']")));
+    expect(deliveryData, isNot(contains("data['phoneNumber']")));
   });
 
   test('Sender wallet actions stay inside Sender wallet destinations', () {

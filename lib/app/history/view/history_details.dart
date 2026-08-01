@@ -9,7 +9,7 @@ import '../../send_package/models/dispatch_request.m..dart';
 
 class HistoryDetailsView extends StatefulWidget {
   final DispatchRequest data;
-  const HistoryDetailsView({Key? key, required this.data}) : super(key: key);
+  const HistoryDetailsView({super.key, required this.data});
 
   @override
   State<HistoryDetailsView> createState() => _HistoryDetailsViewState();
@@ -130,7 +130,7 @@ class _HistoryDetailsViewState extends State<HistoryDetailsView> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  AppText.text('Rider Rating',
+                  AppText.text('Circum Rider Rating',
                       color: Colors.white,
                       fontSize: 16,
                       fontWeight: FontWeight.w600),

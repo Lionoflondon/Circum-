@@ -1,14 +1,42 @@
-/* eslint-disable max-len */
+/* eslint-disable max-len, require-jsdoc */
 "use strict";
 
 const functions = require("firebase-functions/v1");
 const {getFirestore, FieldValue} = require("firebase-admin/firestore");
+const {
+  verifiedStripePaidGbpSession,
+  verifiedStripeRothPurchase,
+} = require("./roth-ledger-core");
+const {requireAdmin} = require("./admin-auth");
 const {calculateWalletCheckout} = require("./wallet-core");
+const communicationEngine = require("./communication-engine");
 
 function money(value) {
   const parsed = Number(value || 0);
   if (!Number.isFinite(parsed)) return 0;
   return Math.round(parsed * 100) / 100;
+}
+
+function text(value, max = 500) {
+  return `${value || ""}`.trim().slice(0, max);
+}
+
+function invoiceNumberFor(ref) {
+  const today = new Date().toISOString().slice(0, 10).replace(/-/g, "");
+  return `CIR-BIZ-${today}-${ref.id.slice(0, 6).toUpperCase()}`;
+}
+
+function normaliseLineItems(items, fallbackDescription, total) {
+  const lines = Array.isArray(items) ? items : [];
+  const normalised = lines.slice(0, 20).map((item) => ({
+    description: text(item && item.description, 160),
+    amount: money(item && item.amount),
+  })).filter((item) => item.description && item.amount > 0);
+  if (normalised.length) return normalised;
+  return [{
+    description: text(fallbackDescription, 160) || "Business services",
+    amount: total,
+  }];
 }
 
 function isMember(account, context) {
@@ -42,6 +70,8 @@ async function creditBusinessRoth({businessId, amount, type, note, metadata = {}
   const accountRef = db.collection("businessAccounts").doc(businessId);
   await db.runTransaction(async (transaction) => {
     const walletSnap = await transaction.get(walletRef);
+    const existingTx = await transaction.get(txRef);
+    if (existingTx.exists) return;
     const previous = money(walletSnap.data() && walletSnap.data().balance);
     const resulting = money(previous + amount);
     transaction.set(walletRef, {
@@ -58,6 +88,11 @@ async function creditBusinessRoth({businessId, amount, type, note, metadata = {}
       businessId,
       direction: "credit",
       amount,
+      amountGBP: metadata.amountGBP == null ? amount : metadata.amountGBP,
+      rothIssued: metadata.rothIssued == null ? amount : metadata.rothIssued,
+      currency: metadata.currency || "GBP",
+      source: metadata.source || "purchase",
+      paymentIntentId: metadata.stripePaymentIntentId || null,
       type,
       note,
       createdAt: FieldValue.serverTimestamp(),
@@ -69,14 +104,6 @@ async function creditBusinessRoth({businessId, amount, type, note, metadata = {}
     transaction.set(accountRef, {
       businessRothBalance: resulting,
       rothBalance: resulting,
-      recentBusinessRothTransactions: FieldValue.arrayUnion({
-        transactionId: txRef.id,
-        direction: "credit",
-        amount,
-        source: type,
-        reason: note,
-        createdAt: new Date(),
-      }),
       updatedAt: FieldValue.serverTimestamp(),
     }, {merge: true});
   });
@@ -120,15 +147,6 @@ async function debitBusinessRoth({businessId, amount, invoiceId, metadata = {}})
     transaction.set(accountRef, {
       businessRothBalance: resulting,
       rothBalance: resulting,
-      recentBusinessRothTransactions: FieldValue.arrayUnion({
-        transactionId: txRef.id,
-        direction: "debit",
-        amount,
-        source: "invoice_payment",
-        reason: "Business invoice paid with Roth.",
-        invoiceId,
-        createdAt: new Date(),
-      }),
       updatedAt: FieldValue.serverTimestamp(),
     }, {merge: true});
     return true;
@@ -174,17 +192,6 @@ async function markInvoicePaid({invoiceId, businessId, amount, method, stripeSes
       createdAt: FieldValue.serverTimestamp(),
     }, {merge: true});
     transaction.set(db.collection("businessAccounts").doc(businessId), {
-      recentBusinessInvoices: FieldValue.arrayUnion({
-        invoiceId,
-        invoiceNumber: invoice.invoiceNumber,
-        status: nextStatus,
-        total,
-        amountPaid: nextPaid,
-        balanceDue: nextBalance,
-        paymentMethod: method,
-        updatedAt: new Date(),
-        ...(nextStatus === "paid" ? {paidAt: new Date()} : {}),
-      }),
       updatedAt: FieldValue.serverTimestamp(),
     }, {merge: true});
     transaction.set(db.collection("adminAuditLogs").doc(), {
@@ -203,6 +210,261 @@ async function markInvoicePaid({invoiceId, businessId, amount, method, stripeSes
   });
 }
 
+async function payBusinessInvoiceAtomically({
+  businessId,
+  invoiceId,
+  cardAmount = 0,
+  rothAmount = 0,
+  method,
+  stripeSessionId = null,
+  stripePaymentIntentId = null,
+  paymentId = null,
+  metadata = {},
+}) {
+  const db = getFirestore();
+  const paymentRef = db.collection("businessInvoicePayments")
+      .doc(paymentId || stripeSessionId || `roth_${invoiceId}`);
+  const invoiceRef = db.collection("businessInvoices").doc(invoiceId);
+  const walletRef = db.collection("business_wallets").doc(businessId);
+  const accountRef = db.collection("businessAccounts").doc(businessId);
+  const walletTxRef = walletRef.collection("transactions")
+      .doc(`invoice_roth_${invoiceId}_${paymentRef.id}`);
+  return db.runTransaction(async (transaction) => {
+    const reads = [
+      transaction.get(paymentRef),
+      transaction.get(invoiceRef),
+    ];
+    if (money(rothAmount) > 0) {
+      reads.push(transaction.get(walletRef));
+      reads.push(transaction.get(walletTxRef));
+    }
+    const [existingPaymentSnap, invoiceSnap, walletSnap, existingWalletTxSnap] =
+      await Promise.all(reads);
+    if (existingPaymentSnap.exists &&
+        `${existingPaymentSnap.data().status || ""}` === "paid") {
+      return {
+        paid: true,
+        duplicate: true,
+        paymentId: paymentRef.id,
+        invoiceId,
+      };
+    }
+    if (!invoiceSnap.exists) {
+      throw new functions.https.HttpsError("not-found", "Business invoice not found.");
+    }
+    const invoice = invoiceSnap.data() || {};
+    if (`${invoice.status || ""}` === "paid" ||
+        `${invoice.status || ""}` === "paid_manually") {
+      transaction.set(paymentRef, {
+        paymentId: paymentRef.id,
+        businessId,
+        invoiceId,
+        amount: money(cardAmount),
+        rothAmount: money(rothAmount),
+        method,
+        status: "paid",
+        duplicateOfPaidInvoice: true,
+        stripeCheckoutSessionId: stripeSessionId,
+        stripePaymentIntentId,
+        paidAt: FieldValue.serverTimestamp(),
+        createdAt: FieldValue.serverTimestamp(),
+      }, {merge: true});
+      return {
+        paid: true,
+        duplicate: true,
+        paymentId: paymentRef.id,
+        invoiceId,
+      };
+    }
+    const normalizedCardAmount = money(cardAmount);
+    const normalizedRothAmount = money(rothAmount);
+    const total = money(invoice.total || invoice.subtotal || invoice.balanceDue ||
+      normalizedCardAmount + normalizedRothAmount);
+    const previousPaid = money(invoice.amountPaid);
+    const paymentTotal = money(normalizedCardAmount + normalizedRothAmount);
+    const nextPaid = money(Math.min(total, previousPaid + paymentTotal));
+    const nextBalance = money(Math.max(0, total - nextPaid));
+    const nextStatus = nextBalance <= 0 ? "paid" : "partially_paid";
+    let previousWalletBalance = null;
+    let resultingWalletBalance = null;
+    if (normalizedRothAmount > 0) {
+      if (existingWalletTxSnap && existingWalletTxSnap.exists) {
+        throw new functions.https.HttpsError(
+            "already-exists",
+            "This Business Roth payment is already being processed.",
+        );
+      }
+      const wallet = walletSnap && walletSnap.exists ? walletSnap.data() || {} : {};
+      previousWalletBalance = money(wallet.balance || wallet.availableBalance);
+      resultingWalletBalance = money(previousWalletBalance - normalizedRothAmount);
+      if (resultingWalletBalance < 0) {
+        throw new functions.https.HttpsError("failed-precondition", "Business Roth balance is too low.");
+      }
+      transaction.set(walletRef, {
+        businessId,
+        balance: resultingWalletBalance,
+        availableBalance: resultingWalletBalance,
+        lifetimeSpent: FieldValue.increment(normalizedRothAmount),
+        updatedAt: FieldValue.serverTimestamp(),
+      }, {merge: true});
+      transaction.set(walletTxRef, {
+        transactionId: walletTxRef.id,
+        businessId,
+        direction: "debit",
+        amount: normalizedRothAmount,
+        type: "invoice_payment",
+        method: "roth",
+        invoiceId,
+        paymentId: paymentRef.id,
+        note: "Business invoice paid with Roth.",
+        createdAt: FieldValue.serverTimestamp(),
+        previousBalance: previousWalletBalance,
+        resultingBalance: resultingWalletBalance,
+        metadata,
+      }, {merge: false});
+    }
+    transaction.set(invoiceRef, {
+      status: nextStatus,
+      amountPaid: nextPaid,
+      balanceDue: nextBalance,
+      paymentMethod: method,
+      stripeCheckoutSessionId: stripeSessionId,
+      stripePaymentIntentId,
+      ...(nextStatus === "paid" ? {paidAt: FieldValue.serverTimestamp()} : {}),
+      updatedAt: FieldValue.serverTimestamp(),
+    }, {merge: true});
+    transaction.set(paymentRef, {
+      paymentId: paymentRef.id,
+      businessId,
+      invoiceId,
+      amount: normalizedCardAmount,
+      rothAmount: normalizedRothAmount,
+      method,
+      status: "paid",
+      stripeCheckoutSessionId: stripeSessionId,
+      stripePaymentIntentId,
+      paidAt: FieldValue.serverTimestamp(),
+      createdAt: FieldValue.serverTimestamp(),
+      metadata,
+    }, {merge: true});
+    transaction.set(accountRef, {
+      ...(normalizedRothAmount > 0 ? {
+        businessRothBalance: resultingWalletBalance,
+        rothBalance: resultingWalletBalance,
+      } : {}),
+      updatedAt: FieldValue.serverTimestamp(),
+    }, {merge: true});
+    transaction.set(db.collection("adminAuditLogs").doc(), {
+      action: nextStatus === "paid" ? "business_invoice_paid" : "business_invoice_part_payment",
+      actionType: nextStatus === "paid" ? "business_invoice_paid" : "business_invoice_part_payment",
+      businessId,
+      invoiceId,
+      amount: paymentTotal,
+      paymentMethod: method,
+      previousStatus: invoice.status || null,
+      newStatus: nextStatus,
+      balanceDue: nextBalance,
+      stripeCheckoutSessionId: stripeSessionId,
+      createdAt: FieldValue.serverTimestamp(),
+    });
+    return {
+      paid: true,
+      duplicate: false,
+      paymentId: paymentRef.id,
+      invoiceId,
+      status: nextStatus,
+      balanceDue: nextBalance,
+      rothBalance: resultingWalletBalance,
+    };
+  });
+}
+
+exports.adminCreateBusinessInvoice = functions.https.onCall(async (payload, context) => {
+  const adminUid = requireAdmin(context, "Your Admin role cannot create Business invoices.");
+  const data = payload || {};
+  const db = getFirestore();
+  const businessId = text(data.businessId, 120);
+  const total = money(data.total || data.amount || data.balanceDue);
+  const reason = text(data.reason, 500);
+  if (!businessId || total <= 0) {
+    throw new functions.https.HttpsError("invalid-argument", "Choose a Business account and invoice amount.");
+  }
+  if (!reason) {
+    throw new functions.https.HttpsError("invalid-argument", "Add a reason before creating the invoice.");
+  }
+  const businessRef = db.collection("businessAccounts").doc(businessId);
+  const businessSnap = await businessRef.get();
+  if (!businessSnap.exists) {
+    throw new functions.https.HttpsError("not-found", "Business account not found.");
+  }
+  const business = businessSnap.data() || {};
+  const invoiceRef = db.collection("businessInvoices").doc();
+  const invoiceNumber = text(data.invoiceNumber, 80) || invoiceNumberFor(invoiceRef);
+  const lineItems = normaliseLineItems(data.lineItems, data.description, total);
+  const subtotal = money(lineItems.reduce((sum, item) => sum + item.amount, 0));
+  const invoiceTotal = money(total || subtotal);
+  const now = FieldValue.serverTimestamp();
+  const dueDate = text(data.dueDate, 40) || null;
+  const invoice = {
+    invoiceId: invoiceRef.id,
+    invoiceNumber,
+    businessId,
+    businessName: business.businessName || business.companyName || "Business",
+    billingEmail: business.billingEmail || business.contactEmail || business.ownerEmail || null,
+    description: text(data.description, 500),
+    lineItems,
+    subtotal: invoiceTotal,
+    total: invoiceTotal,
+    amountPaid: 0,
+    balanceDue: invoiceTotal,
+    currency: "GBP",
+    status: "open",
+    invoiceStatus: "open",
+    paymentStatus: "unpaid",
+    source: "circum_operations",
+    createdByAdminId: adminUid,
+    createdByAdminEmail: text(context.auth.token && context.auth.token.email, 160),
+    createdReason: reason,
+    deliveryIds: Array.isArray(data.deliveryIds) ? data.deliveryIds.map((item) => text(item, 120)).filter(Boolean).slice(0, 50) : [],
+    dueDate,
+    createdAt: now,
+    updatedAt: now,
+  };
+  await db.runTransaction(async (transaction) => {
+    transaction.set(invoiceRef, invoice);
+    transaction.set(businessRef, {
+      outstandingInvoiceAmount: FieldValue.increment(invoiceTotal),
+      updatedAt: now,
+    }, {merge: true});
+    const auditPayload = {
+      action: "business_invoice_created",
+      actionType: "business_invoice_created",
+      actorId: adminUid,
+      actorEmail: text(context.auth.token && context.auth.token.email, 160),
+      businessId,
+      invoiceId: invoiceRef.id,
+      invoiceNumber,
+      amount: invoiceTotal,
+      reason,
+      createdAt: now,
+    };
+    transaction.set(db.collection("businessAuditLogs").doc(), auditPayload);
+    transaction.set(db.collection("adminAuditLogs").doc(), {
+      ...auditPayload,
+      recordType: "businessInvoices",
+      recordId: invoiceRef.id,
+    });
+  });
+  return {
+    invoiceId: invoiceRef.id,
+    invoiceNumber,
+    businessId,
+    total: invoiceTotal,
+    balanceDue: invoiceTotal,
+    status: "open",
+  };
+});
+
 exports.createBusinessRothCheckout = (stripe) => functions.https.onCall(async (data, context) => {
   const businessId = `${data.businessId || ""}`.trim();
   const amount = money(data.amount);
@@ -217,6 +479,7 @@ exports.createBusinessRothCheckout = (stripe) => functions.https.onCall(async (d
   const session = await stripe.checkout.sessions.create({
     mode: "payment",
     payment_method_types: ["card"],
+    client_reference_id: businessId,
     line_items: [{
       quantity: 1,
       price_data: {
@@ -255,14 +518,6 @@ exports.createBusinessRothCheckout = (stripe) => functions.https.onCall(async (d
     createdByUserId: context.auth.uid,
   });
   await db.collection("businessAccounts").doc(businessId).set({
-    recentBusinessRothPurchases: FieldValue.arrayUnion({
-      purchaseId: purchaseRef.id,
-      amountGbp: amount,
-      rothAmount: amount,
-      status: "pending_verification",
-      paymentProvider: "stripe",
-      createdAt: new Date(),
-    }),
     updatedAt: FieldValue.serverTimestamp(),
   }, {merge: true});
   return {checkoutUrl: session.url, sessionId: session.id, purchaseId: purchaseRef.id};
@@ -303,10 +558,16 @@ exports.createBusinessInvoiceCheckout = (stripe) => functions.https.onCall(async
   const requestedMethod = ["apple_pay", "google_pay", "saved_card", "card"].includes(`${data.paymentMethod || ""}`) ? `${data.paymentMethod}` : "card";
   if (cardAmount <= 0) {
     const paymentId = `roth_${invoiceId}_${Math.round(paymentAmount * 100)}`;
-    const debited = await debitBusinessRoth({businessId, amount: rothAmount, invoiceId, metadata: {paymentId}});
-    if (!debited) return {paid: true, method: "roth", paymentAmount, duplicate: true};
-    await markInvoicePaid({invoiceId, businessId, amount: 0, rothAmount, method: "roth", paymentId});
-    return {paid: true, method: "roth", paymentAmount, totalInvoice: balanceDue, rothApplied: rothAmount, cardAmount: 0};
+    const result = await payBusinessInvoiceAtomically({
+      businessId,
+      invoiceId,
+      cardAmount: 0,
+      rothAmount,
+      method: "roth",
+      paymentId,
+      metadata: {paymentId, source: "business_invoice_roth_only"},
+    });
+    return {paid: true, method: "roth", paymentAmount, totalInvoice: balanceDue, rothApplied: rothAmount, cardAmount: 0, duplicate: result.duplicate === true};
   }
   const paymentRef = db.collection("businessInvoicePayments").doc();
   const baseUrl = `${data.returnUrl || "https://circumuk.com/?app=business&section=invoicing"}`;
@@ -315,6 +576,7 @@ exports.createBusinessInvoiceCheckout = (stripe) => functions.https.onCall(async
   const session = await stripe.checkout.sessions.create({
     mode: "payment",
     payment_method_types: ["card"],
+    client_reference_id: businessId,
     line_items: [{
       quantity: 1,
       price_data: {
@@ -371,11 +633,54 @@ exports.handleBusinessCheckoutSession = async (sessionData, eventId = null) => {
   if (metadata.type === "business_roth_purchase") {
     const businessId = metadata.businessId;
     const purchaseId = metadata.purchaseRequestId;
-    const amount = money(metadata.amountGbp || Number(sessionData.amount_total || 0) / 100);
+    if (!businessId || !purchaseId) {
+      throw new Error("Business Roth purchase owner could not be verified.");
+    }
+    let verifiedPurchase;
+    try {
+      verifiedPurchase = verifiedStripeRothPurchase(sessionData, {ownerId: businessId});
+    } catch (error) {
+      await getFirestore().collection("businessRothPurchases").doc(purchaseId).set({
+        status: "failed",
+        failureCode: "payment_not_verified",
+        failureMessage: error && error.message ? error.message : "Business Roth payment could not be verified.",
+        stripePaymentIntentId: sessionData.payment_intent || null,
+        stripeSessionId: sessionData.id || null,
+        updatedAt: FieldValue.serverTimestamp(),
+      }, {merge: true});
+      if (metadata.createdByUserId) {
+        try {
+          await communicationEngine.emitNotification({
+            recipientId: metadata.createdByUserId,
+            recipientRole: "sender",
+            type: "business_roth_purchase_failed",
+            title: "Business Roth purchase needs attention",
+            body: "We could not add Roth from this payment. No Business Roth has been credited.",
+            data: {
+              correlationId: `business_roth_purchase_${sessionData.id || eventId || "unknown"}`,
+              businessId,
+              purchaseId,
+              stripeEventId: eventId || "",
+              stripeCheckoutSessionId: sessionData.id || "",
+              paymentIntentId: sessionData.payment_intent || "",
+              failureCode: "payment_not_verified",
+            },
+          });
+        } catch (notificationError) {
+          console.error("Business Roth purchase failure notification failed", {
+            businessId,
+            purchaseId,
+            error: notificationError && notificationError.message ? notificationError.message : notificationError,
+          });
+        }
+      }
+      throw error;
+    }
+    const amount = verifiedPurchase.rothIssued;
     const purchaseRef = getFirestore().collection("businessRothPurchases").doc(purchaseId);
     const snap = await purchaseRef.get();
-    const purchase = snap.exists ? snap.data() || {} : {};
-    if (purchase.status === "paid" || purchase.creditedAt) return;
+    const purchaseRecord = snap.exists ? snap.data() || {} : {};
+    if (purchaseRecord.status === "paid" || purchaseRecord.creditedAt) return;
     await creditBusinessRoth({
       businessId,
       amount,
@@ -387,6 +692,10 @@ exports.handleBusinessCheckoutSession = async (sessionData, eventId = null) => {
         stripeEventId: eventId,
         stripeCheckoutSessionId: sessionData.id,
         stripePaymentIntentId: sessionData.payment_intent || null,
+        amountGBP: verifiedPurchase.amountGBP,
+        rothIssued: verifiedPurchase.rothIssued,
+        currency: verifiedPurchase.currency,
+        source: "purchase",
         purchaseId,
       },
     });
@@ -396,29 +705,76 @@ exports.handleBusinessCheckoutSession = async (sessionData, eventId = null) => {
       creditedAt: FieldValue.serverTimestamp(),
       stripePaymentIntentId: sessionData.payment_intent || null,
       stripeSessionId: sessionData.id,
+      amountGBP: verifiedPurchase.amountGBP,
+      amountRoth: verifiedPurchase.rothIssued,
+      rothAmount: verifiedPurchase.rothIssued,
+      currency: verifiedPurchase.currency,
     }, {merge: true});
+    if (metadata.createdByUserId) {
+      try {
+        await communicationEngine.emitNotification({
+          recipientId: metadata.createdByUserId,
+          recipientRole: "sender",
+          type: "business_roth_purchase_completed",
+          title: "Business Roth added",
+          body: `${amount} Roth has been added to your Business balance.`,
+          data: {
+            correlationId: `business_roth_purchase_${sessionData.id}`,
+            businessId,
+            purchaseId,
+            paymentIntentId: sessionData.payment_intent || "",
+            amountGBP: `${verifiedPurchase.amountGBP}`,
+            rothIssued: `${verifiedPurchase.rothIssued}`,
+          },
+        });
+      } catch (error) {
+        console.error("Business Roth purchase notification failed", {
+          businessId,
+          purchaseId,
+          error: error && error.message ? error.message : error,
+        });
+      }
+    }
   }
   if (metadata.type === "business_invoice_payment") {
     const businessId = metadata.businessId;
     const invoiceId = metadata.invoiceId;
     const paymentId = metadata.paymentId || sessionData.id;
     const paymentSnap = await getFirestore().collection("businessInvoicePayments").doc(paymentId).get();
-    if (paymentSnap.exists && paymentSnap.data() && paymentSnap.data().status === "paid") return;
-    const rothAmount = money(metadata.rothAmountGbp);
-    const cardAmount = money(metadata.cardAmountGbp || Number(sessionData.amount_total || 0) / 100);
-    if (rothAmount > 0) {
-      await debitBusinessRoth({businessId, amount: rothAmount, invoiceId, metadata: {paymentId, stripeCheckoutSessionId: sessionData.id}});
+    if (!paymentSnap.exists) {
+      throw new Error("Business invoice payment record is missing.");
     }
-    const requestedMethod = `${metadata.requestedPaymentMethod || "card"}`;
-    await markInvoicePaid({
+    const payment = paymentSnap.data() || {};
+    if (payment.status === "paid") return;
+    const rothAmount = money(payment.rothAmount);
+    const verifiedPayment = verifiedStripePaidGbpSession(sessionData, {
+      ownerId: businessId,
+      expectedAmountGBP: payment.cardAmount,
+    });
+    const cardAmount = verifiedPayment.amountGBP;
+    const requestedMethod = `${payment.requestedPaymentMethod || metadata.requestedPaymentMethod || "card"}`;
+    await payBusinessInvoiceAtomically({
       invoiceId,
       businessId,
-      amount: cardAmount,
+      cardAmount,
       rothAmount,
       method: rothAmount > 0 ? `roth_${requestedMethod}` : requestedMethod,
       stripeSessionId: sessionData.id,
       stripePaymentIntentId: sessionData.payment_intent || null,
       paymentId,
+      metadata: {
+        source: "business_invoice_stripe_finalizer",
+        stripeEventId: eventId,
+        stripeCheckoutSessionId: sessionData.id,
+        stripePaymentIntentId: sessionData.payment_intent || null,
+      },
     });
   }
+};
+
+exports._private = {
+  creditBusinessRoth,
+  debitBusinessRoth,
+  markInvoicePaid,
+  payBusinessInvoiceAtomically,
 };

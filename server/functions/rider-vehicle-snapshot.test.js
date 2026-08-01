@@ -40,7 +40,7 @@ test("buildRiderVehicleSnapshot falls back to legacy fields", () => {
   });
 
   assert.deepEqual(snapshot, {
-    type: "Bike",
+    type: "Motorbike",
     registration: "ZX99 YYY",
   });
 });

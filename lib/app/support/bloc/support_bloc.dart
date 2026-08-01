@@ -1,11 +1,6 @@
-import 'dart:convert';
+import 'package:cloud_functions/cloud_functions.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
 
-import 'package:bloc/bloc.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:equatable/equatable.dart';
-import 'package:firebase_auth/firebase_auth.dart';
-
-import '../../../helper/chats_help.dart';
 import '../../send_package/models/message.m.dart';
 
 part 'support_event.dart';
@@ -13,11 +8,7 @@ part 'support_state.dart';
 
 class SupportBloc extends Bloc<SupportEvent, SupportState> {
   SupportBloc() : super(SupportState()) {
-    FirebaseAuth auth = FirebaseAuth.instance;
-    FirebaseFirestore db = FirebaseFirestore.instance;
-    on<SupportEvent>((event, emit) {
-      // TODO: implement event handler
-    });
+    final functions = FirebaseFunctions.instanceFor(region: 'us-central1');
 
     on<SetNewSupportMessage>(
       (event, emit) {
@@ -40,37 +31,23 @@ class SupportBloc extends Bloc<SupportEvent, SupportState> {
     on<MessageSupport>(
       (event, emit) async {
         try {
-          final User? user = auth.currentUser;
-          String msg = event.message;
+          final msg = event.message;
 
           emit(state.copyWith(message: ''));
-          final messageData = {
-            "requestId": "support",
-            'senderId': user!.uid,
-            'message': msg,
-            'timeStamp': '${DateTime.now()}'
-          };
-
-          await db.collection('messages').doc().set(messageData);
-
-          add(IncomingSupportMessage(data: messageData));
-
-          ChatsHelper().storeChat(messageData);
+          await functions.httpsCallable('getOrCreateSupportConversation').call({
+            'topic': 'support',
+            'title': 'Circum Support',
+            'initialMessage': msg,
+            'participantRole': 'sender',
+          });
         } catch (e) {
+          emit(state.copyWith(message: event.message));
         }
       },
     );
 
     on<LoadSupportChatMessages>(
-      (event, emit) async {
-        final jsonData = await ChatsHelper().loadChat('support');
-        if (jsonData.isNotEmpty) {
-          final messagesList =
-              jsonData.map((e) => Message.fromJson(e)).toList();
-          emit(state.copyWith(
-              chatMessages: messagesList, chatStatus: ChatStatus.newMessage));
-        }
-      },
+      (event, emit) async {},
     );
   }
 }

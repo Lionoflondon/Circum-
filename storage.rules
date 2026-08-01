@@ -51,29 +51,40 @@ service firebase.storage {
 
     match /riderDocuments/{riderId}/{allPaths=**} {
       allow read: if isAdmin() || (signedIn() && request.auth.uid == riderId);
-      allow create, update: if (isAdmin() || (signedIn() && request.auth.uid == riderId)) && isSafeUpload();
+      allow create, update: if isAdmin() && isSafeUpload();
       allow delete: if isSuperAdmin();
     }
 
     match /riders/{riderId}/documents/{allPaths=**} {
       allow read: if isAdmin() || (signedIn() && request.auth.uid == riderId);
-      allow create, update: if (isAdmin() || (signedIn() && request.auth.uid == riderId)) && isSafeUpload();
+      allow create, update: if isAdmin() && isSafeUpload();
       allow delete: if isSuperAdmin();
     }
 
     match /vehicleDocuments/{riderId}/{allPaths=**} {
       allow read: if isAdmin() || (signedIn() && request.auth.uid == riderId);
-      allow create, update: if (isAdmin() || (signedIn() && request.auth.uid == riderId)) && isSafeUpload();
+      allow create, update: if isAdmin() && isSafeUpload();
       allow delete: if isSuperAdmin();
     }
 
     match /profilePhotos/{userId}/{allPaths=**} {
-      allow read: if signedIn();
+      allow read: if isAdmin() || (signedIn() && request.auth.uid == userId);
       allow create, update: if (isAdmin() || (signedIn() && request.auth.uid == userId)) &&
         request.resource != null &&
         request.resource.size <= 5 * 1024 * 1024 &&
         request.resource.contentType is string &&
         request.resource.contentType.matches('image/.*');
+      allow delete: if isSuperAdmin() || (signedIn() && request.auth.uid == userId);
+    }
+
+    match /users/{userId}/profile/{fileName} {
+      allow read: if isAdmin() || (signedIn() && request.auth.uid == userId);
+      allow create, update: if (isAdmin() || (signedIn() && request.auth.uid == userId)) &&
+        fileName.matches('avatar\\.jpg|avatar\\.png') &&
+        request.resource != null &&
+        request.resource.size <= 8 * 1024 * 1024 &&
+        request.resource.contentType is string &&
+        request.resource.contentType.matches('image/jpeg|image/jpg|image/png');
       allow delete: if isSuperAdmin() || (signedIn() && request.auth.uid == userId);
     }
 
@@ -117,7 +128,7 @@ service firebase.storage {
     match /gift_requests/{requestId}/voice/{fileName} {
       allow read: if isAdmin() || isGiftVoiceNoteOwner(requestId);
       allow create, update: if isGiftVoiceNoteOwner(requestId) && isSafeGiftVoiceNoteUpload();
-      allow delete: if isSuperAdmin();
+      allow delete: if isSuperAdmin() || isGiftVoiceNoteOwner(requestId);
     }
 
     match /{allPaths=**} {

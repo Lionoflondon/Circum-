@@ -38,11 +38,17 @@ test("Firestore rules keep referrals admin-only", () => {
   assert.match(rules, /match \/irisReferrals\/\{referralId\}[\s\S]*allow read, write: if isAdmin\(\);/);
 });
 
+test("Firestore rules expose IRIS learning review collections to admins", () => {
+  assert.match(rules, /match \/irisLearningCases\/\{caseId\}[\s\S]*allow read, create, update: if isAdmin\(\);/);
+  assert.match(rules, /match \/iris_learning_review_candidates\/\{candidateId\}[\s\S]*allow read, update: if isAdmin\(\);[\s\S]*allow create: if false;/);
+  assert.match(rules, /match \/irisCanonicalObjects\/\{objectId\}[\s\S]*allow read, create, update: if isAdmin\(\);/);
+});
+
 test("IRIS dispatch callable requires delivery owner or admin", () => {
   assert.match(sendPackage, /const \{hasAdminClaim\} = require\("\.\/admin-auth"\)/);
   assert.match(sendPackage, /function senderOwnsRequest\(delivery, uid\)/);
   assert.match(sendPackage, /!senderOwnsRequest\(deliveryRequest\[0\], uid\)/);
-  assert.match(sendPackage, /!hasAdminClaim\(context\.auth\.token \|\| \{\}\)/);
+  assert.match(sendPackage, /!hasAdminClaim\(authToken \|\| \{\}\)/);
   assert.match(sendPackage, /Only the Sender or an administrator can dispatch this delivery/);
   assert.match(sendPackage, /e instanceof functions\.https\.HttpsError/);
 });
@@ -53,13 +59,30 @@ test("IRIS dispatch records audit when server recomputation blocks dispatch", ()
   assert.match(sendPackage, /storedIrisMismatch: dispatchDecision\.storedIrisMismatch === true/);
 });
 
-test("Firestore rules reserve rider rank changes for driver managers", () => {
+test("legacy sendPackage request lookup remains bounded", () => {
+  assert.match(
+      sendPackage,
+      /collection\("deliveryRequests"\)\.where\("requestId", "==", requestId\)\.limit\(1\)\.get\(\)/,
+  );
+  assert.match(sendPackage, /async function dispatchDeliveryRequest/);
+});
+
+test("delivery dispatch is idempotent after broadcast or acceptance", () => {
+  assert.match(sendPackage, /currentDispatchStatus === "broadcasted"/);
+  assert.match(sendPackage, /currentDispatchStatus === "accepted"/);
+  assert.match(sendPackage, /currentMatchingStatus === "broadcasted"/);
+  assert.match(sendPackage, /currentMatchingStatus === "accepted"/);
+  assert.match(sendPackage, /status: "already_dispatched"/);
+  assert.match(sendPackage, /idempotent: true/);
+});
+
+test("Firestore rules reserve rider authority changes for driver managers", () => {
   assert.match(
       rules,
-      /match \/riderProfiles\/\{driverId\}[\s\S]*allow update: if isDriverManager\(\)/,
+      /match \/riderProfiles\/\{driverId\}[\s\S]*allow create: if isDriverManager\(\) \|\| isSafeRiderSelfCreate\(driverId\);[\s\S]*allow update: if isDriverManager\(\) \|\| isSafeRiderSelfUpdate\(driverId\);/,
   );
   assert.match(
       rules,
-      /changedKeys\(\)\.hasAny\(\[[\s\S]*'rank'[\s\S]*'riderRank'[\s\S]*'rankUpdatedBy'/,
+      /function riderAdminOnlyFields\(\)[\s\S]*'approvalStatus'[\s\S]*'verificationStatus'[\s\S]*'driverStatus'[\s\S]*'rank'[\s\S]*'riderRank'/,
   );
 });

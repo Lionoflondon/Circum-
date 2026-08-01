@@ -226,11 +226,18 @@ List<SenderPaymentProfileOption> senderOrderedPaymentOptions(
   bool includeAddMethod = true,
 }) {
   final target = platform ?? defaultTargetPlatform;
-  final saved = profile.methods
-      .map((method) => SenderPaymentProfileOption(
-          SenderPaymentProfileOptionType.savedCard,
-          method: method))
-      .toList(growable: false);
+  final seenSavedCards = <String>{};
+  final saved = <SenderPaymentProfileOption>[];
+  for (final method in profile.methods) {
+    final key = method.id.trim().isNotEmpty
+        ? method.id.trim()
+        : '${method.brand}:${method.last4}:${method.expMonth}:${method.expYear}';
+    if (!seenSavedCards.add(key)) continue;
+    saved.add(SenderPaymentProfileOption(
+      SenderPaymentProfileOptionType.savedCard,
+      method: method,
+    ));
+  }
   final defaultCards = saved.where((item) => item.isDefault).toList();
   final otherCards = saved.where((item) => !item.isDefault).toList();
   final apple =

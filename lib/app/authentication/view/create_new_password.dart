@@ -7,7 +7,7 @@ import '../bloc/auth_bloc.dart';
 // import 'success_screen.dart';
 
 class CreateNewPasswordView extends StatelessWidget {
-  const CreateNewPasswordView({Key? key}) : super(key: key);
+  const CreateNewPasswordView({super.key});
 
   @override
   Widget build(BuildContext context) {
@@ -56,7 +56,7 @@ class CreateNewPasswordView extends StatelessWidget {
                         const SizedBox(height: 20),
                         _confirmPasswordField(),
                         const SizedBox(height: 20),
-                        _OTPField(),
+                        _otpField(),
                         const SizedBox(height: 20),
                         _errorMessage(),
                         const SizedBox(height: 40),
@@ -122,7 +122,7 @@ Widget _passwordField() {
   });
 }
 
-Widget _OTPField() {
+Widget _otpField() {
   return BlocBuilder<AuthBloc, AuthState>(builder: (context, state) {
     return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
       AppText.text('OTP', color: Colors.white, fontWeight: FontWeight.bold),

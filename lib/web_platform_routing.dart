@@ -1,4 +1,4 @@
-enum CircumWebSurface { public, sender, rider, gifts, admin }
+enum CircumWebSurface { public, sender, rider, gifts, vanguard, admin }
 
 enum CircumSenderEntry { dashboard, healthPlus, business, profile }
 
@@ -30,6 +30,14 @@ String normalizeCircumWebPath(String rawPath) {
   return path;
 }
 
+String _effectiveCircumWebPath(Uri uri) {
+  final fragment = uri.fragment.trim();
+  if (fragment.startsWith('/')) {
+    return normalizeCircumWebPath(fragment.split('?').first);
+  }
+  return normalizeCircumWebPath(uri.path);
+}
+
 CircumWebRouteResolution resolveCircumWebRoute(
   Uri uri, {
   required bool adminHostingTarget,
@@ -42,7 +50,7 @@ CircumWebRouteResolution resolveCircumWebRoute(
     );
   }
 
-  final path = normalizeCircumWebPath(uri.path);
+  final path = _effectiveCircumWebPath(uri);
   final segments = path
       .split('/')
       .where((segment) => segment.trim().isNotEmpty)
@@ -71,6 +79,11 @@ CircumWebRouteResolution resolveCircumWebRoute(
     case 'gifts':
       return CircumWebRouteResolution(
         surface: CircumWebSurface.gifts,
+        canonicalPath: path,
+      );
+    case 'vanguard':
+      return CircumWebRouteResolution(
+        surface: CircumWebSurface.vanguard,
         canonicalPath: path,
       );
     default:
@@ -125,6 +138,12 @@ CircumWebRouteResolution? _legacyQueryResolution(Uri uri) {
         surface: CircumWebSurface.gifts,
         canonicalPath: '/gifts',
         legacyRedirectPath: '/gifts',
+      );
+    case 'vanguard':
+      return const CircumWebRouteResolution(
+        surface: CircumWebSurface.vanguard,
+        canonicalPath: '/vanguard',
+        legacyRedirectPath: '/vanguard',
       );
     default:
       return null;

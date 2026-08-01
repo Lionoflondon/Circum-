@@ -227,3 +227,27 @@ test("settlement values reuse canonical earnings and highest trust category", ()
   assert.equal(deliveryTracking.highestTrustAward({isGift: true, isBusiness: true}), 5);
   assert.equal(deliveryTracking.highestTrustAward({}), 1);
 });
+
+test("canonical rider rank follows backend trust thresholds", () => {
+  assert.equal(deliveryTracking.canonicalRiderRankForTrust(0), "agent");
+  assert.equal(deliveryTracking.canonicalRiderRankForTrust(99), "agent");
+  assert.equal(deliveryTracking.canonicalRiderRankForTrust(100), "sentinel");
+  assert.equal(deliveryTracking.canonicalRiderRankForTrust(300), "warden");
+  assert.equal(deliveryTracking.canonicalRiderRankForTrust(700), "knight");
+  assert.equal(deliveryTracking.canonicalRiderRankForTrust(1500), "veteran");
+});
+
+test("trust award patch writes backend-owned rank unless manually overridden", () => {
+  const patch = deliveryTracking.riderTrustRankPatch({trustPoints: 99}, 1);
+  assert.equal(patch.riderRank, "sentinel");
+  assert.equal(patch.rank, "sentinel");
+  assert.equal(patch.rankSource, "trust_points");
+
+  const overridePatch = deliveryTracking.riderTrustRankPatch({
+    trustPoints: 0,
+    riderRank: "veteran",
+    rankOverride: true,
+  }, 6);
+  assert.equal(Object.prototype.hasOwnProperty.call(overridePatch, "riderRank"), false);
+  assert.equal(Object.prototype.hasOwnProperty.call(overridePatch, "rank"), false);
+});

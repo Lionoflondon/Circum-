@@ -17,11 +17,22 @@ Run the deployment guard before any release:
 
 ```sh
 node scripts/deploy_guard.self_test.js
+node scripts/backend_authority_guard.js
 node scripts/deploy_guard.js --target=sender-app --base HEAD
 node scripts/deploy_guard.js --target=website --base HEAD
 node scripts/deploy_guard.js --target=admin --base HEAD
 node scripts/deploy_guard.js --target=backend --base HEAD
 ```
+
+## Backend Authority
+
+The backend is the authoritative source of truth for operational state. New
+features must use backend callables or server-owned triggers for delivery
+lifecycle, dispatch, identity, verification, payments, Roth, Wallet, IRIS,
+Health+, Gifts, Vanguard, Business, chat, notifications, and Admin recovery.
+
+Clients may own only UI state, local preferences, local cache, and draft form
+state. See `docs/BACKEND_AUTHORITY_POLICY.md`.
 
 ## Local Validation
 
@@ -50,13 +61,13 @@ Sender mobile initializes Firebase App Check through
 - iOS production provider: App Attest with DeviceCheck fallback.
 - Web provider: reCAPTCHA Enterprise.
 
-Web builds must receive the shared web App Check key as a build-time
-environment value. Never commit or print the key.
+Web builds must receive their product-specific App Check key as a build-time
+environment value. Never commit or print the keys.
 
 ```sh
-CIRCUM_WEB_RECAPTCHA_ENTERPRISE_SITE_KEY=<site-key> scripts/build_public_web.sh
-CIRCUM_WEB_RECAPTCHA_ENTERPRISE_SITE_KEY=<site-key> scripts/build_sender_app_web.sh
-CIRCUM_WEB_RECAPTCHA_ENTERPRISE_SITE_KEY=<site-key> scripts/build_admin_web.sh
+PUBLIC_WEB_RECAPTCHA_ENTERPRISE_SITE_KEY=<website-site-key> scripts/build_public_web.sh
+CIRCUM_WEB_RECAPTCHA_ENTERPRISE_SITE_KEY=<sender-site-key> scripts/build_sender_app_web.sh
+CIRCUM_WEB_RECAPTCHA_ENTERPRISE_SITE_KEY=<admin-site-key> scripts/build_admin_web.sh
 ```
 
 Firebase Console App Check enforcement is a manual rollout decision and is not

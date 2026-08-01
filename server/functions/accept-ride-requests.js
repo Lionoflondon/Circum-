@@ -11,11 +11,58 @@ const cleanText = (value, fallback = "") => {
   return text.length > 0 ? text : fallback;
 };
 
+const terminalStatuses = new Set(["accepted", "assigned", "collected", "in_transit", "delivered", "completed", "cancelled", "canceled", "expired", "failed", "blocked"]);
+const openStatuses = new Set(["requested", "pending", "broadcast", "broadcasted", "awaiting_rider", "finding_rider"]);
+const openMatchingStatuses = new Set(["available", "requested", "broadcast", "broadcasted"]);
+const openDispatchStatuses = new Set(["requested", "available", "broadcast", "broadcasted", "queued", "waiting"]);
+const paidStatuses = new Set(["", "paid", "succeeded", "payment_confirmed", "confirmed", "roth_paid", "stripe_paid"]);
+
+const millis = (value) => {
+  if (!value) return 0;
+  if (typeof value.toMillis === "function") return value.toMillis();
+  if (Number.isFinite(Number(value))) return Number(value);
+  if (value.seconds !== undefined) return Number(value.seconds) * 1000;
+  const parsed = Date.parse(`${value}`);
+  return Number.isFinite(parsed) ? parsed : 0;
+};
+
+const offerExpiryMillis = (delivery = {}) =>
+  millis(delivery.offerExpiresAt || delivery.dispatchExpiresAt || delivery.expiresAt || delivery.matchingExpiresAt);
+
+const offerCreatedMillis = (delivery = {}) =>
+  millis(delivery.createdAt || delivery.created_at || delivery.bookingCreatedAt || delivery.updatedAt);
+
+const assignedRiderId = (delivery = {}) =>
+  cleanText(delivery.riderId || delivery.driverId || delivery.assignedRider || delivery.assignedRiderId || delivery.assignedDriverId || delivery.courierId);
+
+const offerExclusionReason = (delivery = {}, riderId = "", now = Date.now()) => {
+  const status = cleanText(delivery.status).toLowerCase();
+  const deliveryStatus = cleanText(delivery.deliveryStatus || delivery.deliveryStage).toLowerCase();
+  const matchingStatus = cleanText(delivery.matchingStatus).toLowerCase();
+  const dispatchStatus = cleanText(delivery.dispatchStatus).toLowerCase();
+  const paymentStatus = cleanText(delivery.paymentStatus || delivery.paymentState).toLowerCase();
+  const assigned = assignedRiderId(delivery);
+  const expiry = offerExpiryMillis(delivery);
+
+  if ([status, deliveryStatus, matchingStatus, dispatchStatus].some((value) => terminalStatuses.has(value))) {
+    return assigned === riderId && ["accepted", "assigned"].includes(status) ? "" : "terminal_status";
+  }
+  if (assigned && assigned !== riderId) return "already_assigned";
+  if (expiry && expiry <= now) return "expired_offer";
+  if (!paidStatuses.has(paymentStatus)) return "payment_not_confirmed";
+  if (matchingStatus && !openMatchingStatuses.has(matchingStatus)) return "matching_not_open";
+  if (dispatchStatus && !openDispatchStatuses.has(dispatchStatus)) return "dispatch_not_open";
+  if (status && !openStatuses.has(status) && matchingStatus !== "available" && dispatchStatus !== "requested") return "status_not_open";
+  return "";
+};
+
 const riderPayload = (riderId, rider) => {
   const vehicle = rider.vehicle || rider.vehicleDetails || {};
   return {
     courierName: cleanText(rider.fullName || rider.name || rider.displayName || rider.email, "Circum rider"),
-    phoneNumber: cleanText(rider.phone || rider.phoneNumber || rider.mobile),
+    phoneNumber: "",
+    contactMethod: "circum_relay",
+    maskedCommunicationOnly: true,
     locality: cleanText(rider.locality || rider.city),
     typeOfVehicle: cleanText(rider.vehicleType || vehicle.type, "Vehicle"),
     plateNumber: cleanText(rider.plateNumber || rider.vehicleRegistration || vehicle.registration),
@@ -45,10 +92,13 @@ const findDeliveryRequest = async (db, transaction, requestId) => {
 
 const getRiderProfile = async (db, riderId) => {
   const profileDoc = await db.collection("riderProfiles").doc(riderId).get();
-  if (profileDoc.exists) return profileDoc.data();
-
   const riderDoc = await db.collection("riders").doc(riderId).get();
-  if (riderDoc.exists) return riderDoc.data();
+  if (riderDoc.exists) {
+    return {
+      ...(profileDoc.exists ? profileDoc.data() : {}),
+      ...riderDoc.data(),
+    };
+  }
 
   return null;
 };
@@ -109,6 +159,18 @@ const acceptRideRequests = functions.https.onCall(async (data, context) => {
     }
 
     const deliveryRequest = found.data;
+    console.info("rider_offer_accept_attempt", {
+      bookingId: cleanText(deliveryRequest.bookingId || deliveryRequest.requestId || found.id),
+      deliveryId: found.id,
+      senderId: cleanText(deliveryRequest.senderId || deliveryRequest.userId || deliveryRequest.customerId),
+      riderId,
+      dispatchId: cleanText(deliveryRequest.dispatchId || deliveryRequest.dispatchRunId),
+      offerCreatedAt: offerCreatedMillis(deliveryRequest),
+      offerExpiresAt: offerExpiryMillis(deliveryRequest),
+      status: cleanText(deliveryRequest.status),
+      matchingStatus: cleanText(deliveryRequest.matchingStatus),
+      dispatchStatus: cleanText(deliveryRequest.dispatchStatus),
+    });
     const privateDoc = await transaction.get(db.collection("irisPrivate").doc(deliveryRequest.requestId || found.id));
     if (privateDoc.exists) {
       deliveryRequest.irisPrivate = privateDoc.data();
@@ -131,21 +193,36 @@ const acceptRideRequests = functions.https.onCall(async (data, context) => {
     }
 
     const currentStatus = cleanText(deliveryRequest.status).toLowerCase();
-    const assignedRider = cleanText(deliveryRequest.riderId || deliveryRequest.driverId || deliveryRequest.assignedDriverId);
+    const assignedRider = assignedRiderId(deliveryRequest);
     if (assignedRider && assignedRider !== riderId) {
       throw new functions.https.HttpsError("already-exists", "Delivery request has already been accepted.");
     }
-    if (currentStatus && !["requested", "pending", "broadcast", "broadcasted"].includes(currentStatus) && assignedRider !== riderId) {
+    const exclusion = offerExclusionReason(deliveryRequest, riderId);
+    if (exclusion) {
+      console.warn("rider_offer_accept_rejected", {
+        bookingId: cleanText(deliveryRequest.bookingId || deliveryRequest.requestId || found.id),
+        deliveryId: found.id,
+        senderId: cleanText(deliveryRequest.senderId || deliveryRequest.userId || deliveryRequest.customerId),
+        riderId,
+        dispatchId: cleanText(deliveryRequest.dispatchId || deliveryRequest.dispatchRunId),
+        reason: exclusion,
+      });
+      throw new functions.https.HttpsError("failed-precondition", `Delivery offer is no longer available: ${exclusion}.`);
+    }
+    if (currentStatus && !["requested", "pending", "broadcast", "broadcasted", "awaiting_rider", "finding_rider"].includes(currentStatus) && assignedRider !== riderId) {
       throw new functions.https.HttpsError("failed-precondition", `Delivery request is not open for acceptance: ${currentStatus}.`);
     }
 
     const payload = riderPayload(riderId, rider);
     transaction.set(found.ref, {
       status: "accepted",
+      deliveryStatus: "accepted",
+      deliveryStage: "accepted",
       dispatchStatus: "accepted",
       matchingStatus: "accepted",
       riderId,
       driverId: riderId,
+      assignedRider: riderId,
       assignedDriverId: riderId,
       assignedRiderId: riderId,
       riderName: payload.courierName,
@@ -178,6 +255,12 @@ const acceptRideRequests = functions.https.onCall(async (data, context) => {
       deliveryRequest,
       payload,
     };
+  });
+  console.info("rider_offer_accept_success", {
+    bookingId: accepted.requestId,
+    deliveryId: accepted.id,
+    riderId,
+    assignmentTimestamp: Date.now(),
   });
 
   let senderNotified = false;

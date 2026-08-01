@@ -1,6 +1,6 @@
 # Circum Project Memory
 
-Last updated: 2026-06-04  
+Last updated: 2026-07-23
 Current working branch: `main`  
 Firebase project: `circum-2797c`
 
@@ -28,6 +28,118 @@ Firebase project: `circum-2797c`
   - `firebase deploy --only hosting:public,hosting:app,hosting:admin --project circum-2797c`
 
 ## Completed And Deployed
+
+### Business Onboarding Materials
+
+- Created printable A4 brochure pack for onboarding local businesses onto Circum:
+  - general business paid pilot
+  - dry cleaners, laundries, tailors, and boutiques
+  - phone, laptop, and electronics repair shops
+  - cake makers, bakeries, florists, and gift shops
+  - furniture, vintage, marketplace, and bulky-item sellers
+- Brochure files were created locally in:
+  - `/Users/jason/Documents/Codex/2026-06-04/before-implementing-iris-create-a-concise/brochures`
+- The brochures position Circum as overflow, urgent, awkward-item, fragile/high-value, and van-required delivery support rather than replacing existing delivery operations.
+- Superseded this with a more customer-facing company sales brochure pack:
+  - Circum overview: deliveries for customers, staff, and client care
+  - delivery for everyone: customer convenience and everyday business delivery
+  - Health+: pharmacy pickup support for users, families, and staff
+  - client gifting: gifts and appreciation deliveries for good business clients
+- The corrected brochure positioning sells Circum as a broad delivery company, not just an overflow courier.
+- Created a refined six-page CIRCUM business brochure after reviewing
+  `Circum_Business_Brochure.pdf`:
+  - stronger customer-facing sales narrative
+  - customer delivery, Health+, staff support, and client appreciation
+  - only current, supportable service claims
+  - real CIRCUM wordmark
+  - `BUSINESS` sub-brand beneath the CIRCUM wordmark on the cover and closing page
+  - richer full-colour service icons with stronger visual weight
+  - official App Store and Google Play download badges on the closing page
+  - corrected page 01 spacing between the customer-benefit heading, bullets,
+    and lower business-use band
+  - rebalanced the section 02 staff-benefit panel with improved padding,
+    heading separation, and text spacing
+  - updated section 03 to define Circum Gifts as thoughtfully curated,
+    story-rich gifting experiences that strengthen customer loyalty and
+    employee appreciation
+  - print-ready A4 layout with visual rendering checks
+- Refined brochure output:
+  - `/Users/jason/Documents/Codex/2026-06-04/before-implementing-iris-create-a-concise/output/pdf/Circum_Business_Brochure_Improved.pdf`
+- Refined brochure generator:
+  - `/Users/jason/Documents/Codex/2026-06-04/before-implementing-iris-create-a-concise/brochures/generate_circum_business_brochure.py`
+- Created a separate six-page quiet-luxury edition while preserving the
+  approved brochure content and messaging:
+  - warm ivory, graphite, midnight, platinum, and champagne visual system
+  - embedded Baskerville and Avenir typography
+  - generous editorial grid, restrained line icons, and print-style rules
+  - original premium editorial photography for the cover, customer delivery,
+    Health+, Circum Gifts, and partnership pages
+  - official App Store and Google Play badges retained on the closing page
+  - full visual QA and PDF integrity checks completed
+- Luxury brochure output:
+  - `/Users/jason/Documents/Codex/2026-06-04/before-implementing-iris-create-a-concise/output/pdf/Circum_Business_Brochure_Luxury.pdf`
+- Luxury brochure generator:
+  - `/Users/jason/Documents/Codex/2026-06-04/before-implementing-iris-create-a-concise/brochures/generate_circum_business_brochure_luxury.py`
+- Luxury brochure photography:
+  - `/Users/jason/Documents/Codex/2026-06-04/before-implementing-iris-create-a-concise/brochures/assets/luxury`
+- The quiet-luxury mixed text/photo layout was superseded by a standard
+  edition with separate image plates:
+  - restores all six approved standard brochure pages
+  - adds five unnumbered, full-bleed photography pages beside the sections
+    they support
+  - never places photography and text on the same page
+  - automated PDF verification confirms every image plate contains zero text
+- Current preferred brochure output:
+  - `/Users/jason/Documents/Codex/2026-06-04/before-implementing-iris-create-a-concise/output/pdf/Circum_Business_Brochure_Standard_With_Image_Plates.pdf`
+- Current preferred brochure generator:
+  - `/Users/jason/Documents/Codex/2026-06-04/before-implementing-iris-create-a-concise/brochures/generate_circum_business_brochure_standard_with_images.py`
+- Rebuilt and verified the current preferred brochure PDF on 2026-07-23:
+  - 11 A4 pages
+  - five separate full-bleed image plates
+  - image plate pages contain no text layer
+- Added and verified one additional standard-style benefits page on 2026-07-23:
+  - live tracking
+  - secure payments
+  - IRIS intelligence
+  - Vanguard handling
+  - connected support
+  - Health+ and Gifts platform breadth
+  - current preferred brochure is now 12 A4 pages with five image-only plates
+- Updated the benefits page IRIS card on 2026-07-23:
+  - defines IRIS as Circum's intelligent parcel assessment and trust engine
+  - references photo and user-input analysis, parcel characteristic estimates,
+    safe transport recommendations, and decision evidence
+  - replaced the generic IRIS card icon with a dimensional intelligence mark
+- Updated the benefits page product cards on 2026-07-23:
+  - Live Tracking now references real-time location, progress, rider status,
+    and journey events from collection to completion
+  - Circum Payments now references Stripe, Apple Pay, Google Pay, saved cards,
+    Roth Wallet, and intelligent split payments
+  - Vanguard card is now named Vanguard Protocol and describes premium
+    delivery protection, rider prioritisation, enhanced custody tracking,
+    priority support, and peace of mind
+  - Connected Support now references fast assistance, issue resolution,
+    questions, and customer communication
+  - Built beyond parcels now ties deliveries, payments, tracking, support,
+    Vanguard, and the wider Circum experience together
+  - Live Tracking, Circum Payments, Vanguard Protocol, and Connected Support
+    cards use custom dimensional icons
+- Updated numbered section 04 on 2026-07-23:
+  - headline now says Circum adds value and ensures customer satisfaction
+  - adjusted only that section header spacing to prevent overlap
+- Created a designs-only brochure variant on 2026-07-23:
+  - removes all full-bleed image plate pages
+  - keeps the designed brochure pages and benefits page
+  - outputs a compact 7-page A4 PDF
+  - `/Users/jason/Documents/Codex/2026-06-04/before-implementing-iris-create-a-concise/output/pdf/Circum_Business_Brochure_Designs_Only.pdf`
+- Cleaned local Codex-generated brochure work files on 2026-07-25:
+  - emptied the temporary `tmp/` workspace, including rendered PDF pages,
+    contact sheets, one-off screenshots, and the temporary PDF Python venv
+  - removed local `.DS_Store` clutter
+  - removed the superseded luxury PDF output
+  - kept only the two current brochure outputs:
+    `Circum_Business_Brochure_Standard_With_Image_Plates.pdf` and
+    `Circum_Business_Brochure_Designs_Only.pdf`
 
 ### Public Sender Web App
 

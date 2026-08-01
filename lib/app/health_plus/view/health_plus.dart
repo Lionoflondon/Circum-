@@ -3,6 +3,7 @@ import 'dart:convert';
 
 import 'package:cloud_functions/cloud_functions.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:url_launcher/url_launcher.dart';
@@ -65,7 +66,7 @@ extension _HealthStepCopy on _HealthStep {
       _HealthStep.delivery => 'Where should it go?',
       _HealthStep.frequency => 'How often?',
       _HealthStep.plan => 'Choose your plan',
-      _HealthStep.notes => 'Anything the rider should know?',
+      _HealthStep.notes => 'Anything the Circum Rider should know?',
       _HealthStep.review => 'Review your pickup',
       _HealthStep.checkout => 'Secure payment',
       _HealthStep.confirmed => 'Pickup scheduled',
@@ -87,7 +88,8 @@ class _HealthPlusViewState extends State<HealthPlusView> {
   final _pharmacyAddress = TextEditingController();
   final _deliveryAddress = TextEditingController();
   final _notes = TextEditingController();
-  final _preferredTime = TextEditingController(text: 'Tuesday, 10:00 AM');
+  final _preferredTime =
+      TextEditingController(text: _defaultHealthPickupDateTime());
   final _customSchedule = TextEditingController();
   final _pharmacySearch = _HealthPlaceSearchController();
   final _deliverySearch = _HealthPlaceSearchController();
@@ -97,7 +99,9 @@ class _HealthPlusViewState extends State<HealthPlusView> {
   var _plan = 'basic';
   var _consent = false;
   var _savePaymentMethod = true;
+  var _useRoth = false;
   var _submitting = false;
+  double _rothBalance = 0;
   String? _scheduleId;
   String? _message;
   String? _checkoutUrl;
@@ -118,6 +122,7 @@ class _HealthPlusViewState extends State<HealthPlusView> {
     _fullName.text = user?.displayName ?? '';
     _email.text = user?.email ?? '';
     _phone.text = user?.phoneNumber ?? '';
+    _loadRothBalance();
   }
 
   @override
@@ -188,6 +193,24 @@ class _HealthPlusViewState extends State<HealthPlusView> {
     return false;
   }
 
+  Future<void> _loadRothBalance() async {
+    try {
+      final result = await FirebaseFunctions.instanceFor(region: 'us-central1')
+          .httpsCallable('getSenderRothBalance')
+          .call<Map<String, dynamic>>();
+      final data = Map<String, dynamic>.from(result.data);
+      if (!mounted) return;
+      setState(() {
+        _rothBalance = (data['availableRoth'] as num?)?.toDouble() ??
+            (data['balance'] as num?)?.toDouble() ??
+            0;
+      });
+    } catch (_) {
+      if (!mounted) return;
+      setState(() => _rothBalance = 0);
+    }
+  }
+
   Future<void> _bookHealthPlus() async {
     if (_submitting) return;
     if (!_consent) {
@@ -232,11 +255,15 @@ class _HealthPlusViewState extends State<HealthPlusView> {
       final pickupId = '${data['pickupId'] ?? ''}'.trim();
       final scheduleId = '${data['scheduleId'] ?? ''}'.trim();
       final amount = (data['amount'] as num?)?.toDouble() ?? quote.total;
-      final checkoutUrl = await _createCheckoutSession(
+      final checkout = await _createCheckoutSession(
         pickupId: pickupId,
         profileId: profileId,
         quote: quote,
       );
+      final checkoutUrl =
+          checkout == null ? null : '${checkout['checkoutUrl'] ?? ''}'.trim();
+      final paid = checkout != null && checkout['paid'] == true;
+      final hasCheckoutUrl = checkoutUrl != null && checkoutUrl.isNotEmpty;
 
       if (!mounted) return;
       setState(() {
@@ -258,27 +285,36 @@ class _HealthPlusViewState extends State<HealthPlusView> {
         _payments.insert(0, {
           'pickupId': pickupId,
           'amount': amount,
-          'status': checkoutUrl == null
-              ? 'pending_secure_checkout'
-              : 'checkout_created',
+          'status': paid
+              ? 'paid'
+              : !hasCheckoutUrl
+                  ? 'pending_secure_checkout'
+                  : 'checkout_created',
+          'rothApplied': checkout?['rothApplied'],
+          'cardAmount': checkout?['cardAmount'],
         });
-        _message = checkoutUrl == null
-            ? 'Health+ pickup saved. Secure checkout needs configuration.'
-            : 'Health+ pickup saved. Secure checkout is ready.';
+        _message = paid
+            ? 'Health+ pickup paid with Roth.'
+            : !hasCheckoutUrl
+                ? 'Health+ pickup saved. Secure checkout needs configuration.'
+                : 'Health+ pickup saved. Secure checkout is ready.';
         _step = _HealthStep.confirmed;
       });
 
-      if (checkoutUrl != null) {
-        await launchUrl(
-          Uri.parse(checkoutUrl),
-          mode: LaunchMode.externalApplication,
-        );
+      if (hasCheckoutUrl) {
+        await _openStripeCheckoutUrl(checkoutUrl);
       }
     } on FirebaseFunctionsException catch (error) {
       if (!mounted) return;
       setState(() {
         _message = error.message ??
             'Health+ could not be saved. Please check the details and try again.';
+      });
+    } on _HealthCheckoutException catch (error) {
+      if (!mounted) return;
+      setState(() {
+        _message =
+            'Health+ pickup was saved, but payment could not start. ${error.message}';
       });
     } catch (_) {
       if (!mounted) return;
@@ -290,7 +326,7 @@ class _HealthPlusViewState extends State<HealthPlusView> {
     }
   }
 
-  Future<String?> _createCheckoutSession({
+  Future<Map<String, dynamic>?> _createCheckoutSession({
     required String pickupId,
     required String profileId,
     required HealthPlusPriceBreakdown quote,
@@ -310,6 +346,8 @@ class _HealthPlusViewState extends State<HealthPlusView> {
           'profileId': profileId,
           'email': _email.text.trim(),
           'frequency': _frequency.value,
+          'useRoth': _useRoth,
+          'subscriptionPlan': _plan,
           'priceBreakdown': quote.toJson(),
           'successUrl':
               'https://circum-app-2797c.web.app/?app=health&health=success',
@@ -318,12 +356,16 @@ class _HealthPlusViewState extends State<HealthPlusView> {
         }),
       );
       if (response.statusCode < 200 || response.statusCode >= 300) {
-        return null;
+        throw _HealthCheckoutException(_checkoutErrorMessage(response.body));
       }
       final data = jsonDecode(response.body) as Map<String, dynamic>;
-      return data['checkoutUrl'] as String?;
+      return data;
+    } on _HealthCheckoutException {
+      rethrow;
     } catch (_) {
-      return null;
+      throw const _HealthCheckoutException(
+        'Secure payment could not be prepared. Please try again.',
+      );
     }
   }
 
@@ -334,10 +376,12 @@ class _HealthPlusViewState extends State<HealthPlusView> {
       });
       return;
     }
-    await launchUrl(
-      Uri.parse(_checkoutUrl!),
-      mode: LaunchMode.externalApplication,
-    );
+    try {
+      await _openStripeCheckoutUrl(_checkoutUrl!);
+    } on _HealthCheckoutException catch (error) {
+      if (!mounted) return;
+      setState(() => _message = error.message);
+    }
   }
 
   Future<void> _pauseSchedule() async {
@@ -519,6 +563,10 @@ class _HealthPlusViewState extends State<HealthPlusView> {
       _HealthStep.checkout => _HealthCheckoutStep(
           quote: _quote,
           submitting: _submitting,
+          useRoth: _useRoth,
+          rothBalance: _rothBalance,
+          recurring: _frequency != HealthPlusFrequency.oneOff,
+          onUseRoth: (value) => setState(() => _useRoth = value),
           onCheckout: _next,
         ),
       _HealthStep.confirmed => _HealthConfirmedStep(
@@ -912,9 +960,9 @@ class _HealthFrequencyStep extends StatelessWidget {
             );
           }).toList(),
         ),
-        _HealthInput(
+        _HealthDateTimeInput(
           controller: preferredTime,
-          label: 'Preferred pickup day/time',
+          label: 'Preferred pickup date and time',
         ),
         if (selected == HealthPlusFrequency.custom)
           _HealthInput(
@@ -953,14 +1001,9 @@ class _HealthPlanStep extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    const plans = [
-      _HealthPlan('basic', 'Basic', 'Standard prescription delivery'),
-      _HealthPlan('priority', 'Priority', 'Faster rider assignment'),
-      _HealthPlan('family', 'Family support', 'Household pickup support'),
-    ];
     return _HealthStepCard(
       children: [
-        ...plans.map((plan) {
+        ..._healthPlans.map((plan) {
           final quote = HealthPlusPricing.calculate(
             recurring: frequency != HealthPlusFrequency.oneOff,
             subscriptionPlan: plan.id,
@@ -972,18 +1015,72 @@ class _HealthPlanStep extends StatelessWidget {
             onTap: () => onChanged(plan.id),
           );
         }),
-        _HealthPrimaryButton(label: 'Continue to Notes', onTap: onContinue),
+        _HealthPrimaryButton(
+          label: frequency == HealthPlusFrequency.oneOff
+              ? 'Continue one-off pickup'
+              : 'Start subscription',
+          onTap: onContinue,
+        ),
       ],
     );
   }
+}
+
+const _healthPlans = [
+  _HealthPlan(
+    id: 'basic',
+    title: 'Health+ Basic',
+    subtitle: '£11/month',
+    features: [
+      '2 Health+ prescription pickups every calendar month',
+      'Medicine delivery reminders',
+      'Secure sealed-package handover',
+    ],
+  ),
+  _HealthPlan(
+    id: 'priority',
+    title: 'Health+ Priority',
+    subtitle: '£25/month',
+    features: [
+      '4 Health+ prescription pickups every calendar month',
+      'Priority Circum Rider matching',
+      'Faster pickup target',
+      'Medicine reminders',
+    ],
+  ),
+  _HealthPlan(
+    id: 'family',
+    title: 'Health+ Family',
+    subtitle: '£40/month',
+    features: [
+      'Unlimited Health+ prescription pickups',
+      'Family member support',
+      'Shared pickup notes',
+      'Repeat medicine reminders',
+      'Priority support',
+    ],
+  ),
+];
+
+String _healthPlanTitle(String id) {
+  for (final plan in _healthPlans) {
+    if (plan.id == id) return plan.title;
+  }
+  return id;
 }
 
 class _HealthPlan {
   final String id;
   final String title;
   final String subtitle;
+  final List<String> features;
 
-  const _HealthPlan(this.id, this.title, this.subtitle);
+  const _HealthPlan({
+    required this.id,
+    required this.title,
+    required this.subtitle,
+    required this.features,
+  });
 }
 
 class _HealthNotesStep extends StatelessWidget {
@@ -1009,7 +1106,7 @@ class _HealthNotesStep extends StatelessWidget {
       children: [
         _HealthInput(
           controller: notes,
-          label: 'Notes for the rider (optional)',
+          label: 'Notes for the Circum Rider (optional)',
           maxLines: 4,
         ),
         _HealthToggleRow(
@@ -1057,7 +1154,7 @@ class _HealthReviewStep extends StatelessWidget {
         _HealthReviewRow(label: 'Delivery', value: delivery),
         _HealthReviewRow(label: 'Preferred time', value: preferredTime),
         _HealthReviewRow(label: 'Frequency', value: frequency.label),
-        _HealthReviewRow(label: 'Plan', value: plan),
+        _HealthReviewRow(label: 'Plan', value: _healthPlanTitle(plan)),
         const _HealthDivider(),
         _HealthReviewRow(
             label: 'Base fare', value: _money(quote.delivery.baseFare)),
@@ -1099,11 +1196,19 @@ class _HealthReviewStep extends StatelessWidget {
 class _HealthCheckoutStep extends StatelessWidget {
   final HealthPlusPriceBreakdown quote;
   final bool submitting;
+  final bool useRoth;
+  final double rothBalance;
+  final bool recurring;
+  final ValueChanged<bool> onUseRoth;
   final VoidCallback onCheckout;
 
   const _HealthCheckoutStep({
     required this.quote,
     required this.submitting,
+    required this.useRoth,
+    required this.rothBalance,
+    required this.recurring,
+    required this.onUseRoth,
     required this.onCheckout,
   });
 
@@ -1113,6 +1218,22 @@ class _HealthCheckoutStep extends StatelessWidget {
       children: [
         const _HealthSecureNote(),
         _HealthTotalRow(total: quote.total),
+        _HealthToggleRow(
+          selected: useRoth,
+          title: recurring
+              ? 'Use Roth on the first Health+ subscription payment. Available: ${_money(rothBalance)}.'
+              : 'Use Roth for this Health+ pickup. Available: ${_money(rothBalance)}.',
+          onTap: () => onUseRoth(!useRoth),
+        ),
+        if (recurring)
+          const Text(
+            'Future subscription renewals continue securely by card unless Roth subscription billing is enabled later.',
+            style: TextStyle(
+              color: _HealthTokens.muted,
+              height: 1.4,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
         _HealthPrimaryButton(
           label: submitting
               ? 'Creating Health+...'
@@ -1228,6 +1349,109 @@ class _HealthInput extends StatelessWidget {
         focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(14),
           borderSide: const BorderSide(color: _HealthTokens.health),
+        ),
+      ),
+    );
+  }
+}
+
+class _HealthDateTimeInput extends StatelessWidget {
+  final TextEditingController controller;
+  final String label;
+
+  const _HealthDateTimeInput({
+    required this.controller,
+    required this.label,
+  });
+
+  Future<void> _pick(BuildContext context) async {
+    FocusScope.of(context).unfocus();
+    final now = DateTime.now();
+    final initialDate = now.add(const Duration(days: 1));
+    final date = await showDatePicker(
+      context: context,
+      initialDate: initialDate,
+      firstDate: DateTime(now.year, now.month, now.day),
+      lastDate: DateTime(now.year + 1, now.month, now.day),
+      helpText: 'Select pickup date',
+      builder: (context, child) => Theme(
+        data: Theme.of(context).copyWith(
+          colorScheme: const ColorScheme.dark(
+            primary: _HealthTokens.health,
+            surface: _HealthTokens.bg,
+          ),
+        ),
+        child: child ?? const SizedBox.shrink(),
+      ),
+    );
+    if (!context.mounted || date == null) return;
+
+    final time = await showTimePicker(
+      context: context,
+      initialTime: const TimeOfDay(hour: 10, minute: 0),
+      helpText: 'Select pickup time',
+      builder: (context, child) => Theme(
+        data: Theme.of(context).copyWith(
+          colorScheme: const ColorScheme.dark(
+            primary: _HealthTokens.health,
+            surface: _HealthTokens.bg,
+          ),
+        ),
+        child: child ?? const SizedBox.shrink(),
+      ),
+    );
+    if (time == null) return;
+
+    controller.text = _formatHealthPickupDateTime(date, time);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Semantics(
+      button: true,
+      label: '$label. ${controller.text}',
+      hint: 'Opens date and time selectors',
+      child: TextField(
+        controller: controller,
+        readOnly: true,
+        onTap: () => _pick(context),
+        style:
+            const TextStyle(color: Colors.white, fontWeight: FontWeight.w700),
+        decoration: InputDecoration(
+          labelText: label,
+          helperText: 'Choose day, month, year and time.',
+          helperStyle: const TextStyle(
+            color: _HealthTokens.muted,
+            fontSize: 11,
+            fontWeight: FontWeight.w700,
+          ),
+          labelStyle: const TextStyle(
+            color: _HealthTokens.muted,
+            fontSize: 12,
+            fontWeight: FontWeight.w800,
+          ),
+          prefixIcon: const Icon(
+            Icons.event_available_outlined,
+            color: _HealthTokens.health,
+          ),
+          suffixIcon: const Icon(
+            Icons.expand_more_rounded,
+            color: _HealthTokens.muted,
+          ),
+          filled: true,
+          fillColor: _HealthTokens.input,
+          border: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(14),
+            borderSide: BorderSide.none,
+          ),
+          enabledBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(14),
+            borderSide: const BorderSide(color: _HealthTokens.border),
+          ),
+          focusedBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(14),
+            borderSide: const BorderSide(color: _HealthTokens.health),
+          ),
         ),
       ),
     );
@@ -1362,7 +1586,9 @@ class _HealthPlanCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final extra = quote.priorityFee + quote.familySupportFee;
+    final allowance = plan.id == 'family'
+        ? 'Unlimited pickups'
+        : '${quote.includedPickups} included pickups/month';
     return InkWell(
       borderRadius: BorderRadius.circular(16),
       onTap: onTap,
@@ -1400,16 +1626,49 @@ class _HealthPlanCard extends StatelessWidget {
                       fontWeight: FontWeight.w900,
                     ),
                   ),
-                  const SizedBox(height: 3),
-                  Text(
-                    plan.subtitle,
-                    style: const TextStyle(color: _HealthTokens.muted),
+                  if (plan.subtitle.isNotEmpty) ...[
+                    const SizedBox(height: 3),
+                    Text(
+                      plan.subtitle,
+                      style: const TextStyle(
+                        color: _HealthTokens.muted,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                  ],
+                  const SizedBox(height: 8),
+                  ...plan.features.map(
+                    (feature) => Padding(
+                      padding: const EdgeInsets.only(bottom: 5),
+                      child: Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Icon(
+                            Icons.check_circle_rounded,
+                            color: _HealthTokens.health,
+                            size: 15,
+                          ),
+                          const SizedBox(width: 6),
+                          Expanded(
+                            child: Text(
+                              feature,
+                              style: const TextStyle(
+                                color: _HealthTokens.muted,
+                                fontSize: 12,
+                                height: 1.25,
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
                   ),
                 ],
               ),
             ),
             Text(
-              extra == 0 ? 'Included' : '+${_money(extra)}',
+              quote.recurring ? allowance : 'One-off rates',
               style: const TextStyle(
                 color: _HealthTokens.health,
                 fontWeight: FontWeight.w900,
@@ -1958,6 +2217,38 @@ class _HealthBackdrop extends StatelessWidget {
   }
 }
 
+class _HealthCheckoutException implements Exception {
+  final String message;
+
+  const _HealthCheckoutException(this.message);
+}
+
+String _checkoutErrorMessage(String body) {
+  try {
+    final decoded = jsonDecode(body);
+    if (decoded is Map<String, dynamic>) {
+      final error = '${decoded['error'] ?? decoded['message'] ?? ''}'.trim();
+      if (error.isNotEmpty) return error;
+    }
+  } catch (_) {
+    // The server may return a plain text or empty error body.
+  }
+  return 'Secure payment could not be prepared. Please try again.';
+}
+
+Future<void> _openStripeCheckoutUrl(String checkoutUrl) async {
+  final opened = await launchUrl(
+    Uri.parse(checkoutUrl),
+    mode: kIsWeb ? LaunchMode.platformDefault : LaunchMode.externalApplication,
+    webOnlyWindowName: kIsWeb ? '_self' : null,
+  );
+  if (!opened) {
+    throw const _HealthCheckoutException(
+      'Secure payment could not be opened. Please try again.',
+    );
+  }
+}
+
 class _HealthTokens {
   static const bg = Color(0xFF07090F);
   static const input = Color(0xFF1F292E);
@@ -1967,12 +2258,50 @@ class _HealthTokens {
   static const danger = Color(0xFFFF452B);
 }
 
+String _defaultHealthPickupDateTime() {
+  return _formatHealthPickupDateTime(
+    DateTime.now().add(const Duration(days: 1)),
+    const TimeOfDay(hour: 10, minute: 0),
+  );
+}
+
+String _formatHealthPickupDateTime(DateTime date, TimeOfDay time) {
+  final weekdays = [
+    'Monday',
+    'Tuesday',
+    'Wednesday',
+    'Thursday',
+    'Friday',
+    'Saturday',
+    'Sunday',
+  ];
+  final months = [
+    'January',
+    'February',
+    'March',
+    'April',
+    'May',
+    'June',
+    'July',
+    'August',
+    'September',
+    'October',
+    'November',
+    'December',
+  ];
+  final weekday = weekdays[date.weekday - 1];
+  final month = months[date.month - 1];
+  final hour = time.hour.toString().padLeft(2, '0');
+  final minute = time.minute.toString().padLeft(2, '0');
+  return '$weekday, ${date.day} $month ${date.year}, $hour:$minute';
+}
+
 String _money(double value) => '£${value.toStringAsFixed(2)}';
 
 String _pickupLabel(PickupStatus status) {
   return switch (status) {
     PickupStatus.scheduled => 'Scheduled',
-    PickupStatus.assigned => 'Assigned to a rider',
+    PickupStatus.assigned => 'Assigned to a Circum Rider',
     PickupStatus.awaitingPharmacyCollection => 'Awaiting pharmacy collection',
     PickupStatus.collected => 'Collected',
     PickupStatus.outForDelivery => 'Out for delivery',
