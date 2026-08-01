@@ -1006,7 +1006,10 @@ class SendPackageBloc extends Bloc<SendPackageEvent, SendPackageState> {
           'deliveryPayload': event.deliveryPayload,
       });
       final requestId = '${data['requestId'] ?? data['deliveryId'] ?? ''}';
-      if (requestId.isNotEmpty) {
+      final paymentStatus =
+          '${data['paymentStatus'] ?? data['status'] ?? ''}'.toLowerCase();
+      final paymentSucceeded = paymentStatus == 'succeeded';
+      if (requestId.isNotEmpty && paymentSucceeded) {
         try {
           await FirebaseFunctions.instanceFor(
             region: 'us-central1',
