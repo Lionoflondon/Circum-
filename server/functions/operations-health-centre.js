@@ -9,7 +9,7 @@ const {approvalProjection} = require("./rider-canonical-account");
 
 const criticalServices = new Set([
   "Dispatch Pipeline",
-  "Google Maps",
+  "Frontend Maps",
   "Stripe",
   "Roth",
   "Firebase Functions",
@@ -39,13 +39,60 @@ function healthItem(service, status, rootCause, remediation, details = {}) {
 }
 
 function googlePlacesConfigured() {
-  const config = functions.config() || {};
   return Boolean(`${process.env.GOOGLE_PLACES_API_KEY ||
     process.env.CIRCUM_GOOGLE_PLACES_API_KEY ||
     process.env.CIRCUM_WEB_GOOGLE_MAPS_API_KEY ||
     process.env.GOOGLE_MAPS_API_KEY ||
-    config.google && config.google.places_api_key ||
     ""}`.trim());
+}
+
+function frontendMapsHealth(frontendMaps = {}) {
+  const hasSample = Object.keys(frontendMaps || {}).length > 0;
+  if (!hasSample) {
+    return healthItem(
+        "Frontend Maps",
+        "WARNING",
+        "No live frontend map runtime sample was supplied to this backend scan.",
+        "Run Sender tracking diagnostics to verify Maps JS, platform view, tiles and camera state.",
+        {samplePresent: false},
+    );
+  }
+  const required = [
+    ["mapsJsLoaded", "Maps JS was not observed in the browser runtime."],
+    ["googleMapWidgetMounted", "SenderGoogleTrackingMap was not observed as mounted."],
+    ["platformViewCreated", "Google Maps platform view was not observed."],
+    ["tilesRendered", "Google map tiles were not observed."],
+    ["cameraInitialized", "GoogleMap onMapCreated/camera initialisation was not observed."],
+  ];
+  const missing = required
+      .filter(([field]) => frontendMaps[field] !== true)
+      .map(([field, reason]) => ({field, reason}));
+  return healthItem(
+      "Frontend Maps",
+      missing.length ? "FAIL" : "PASS",
+      missing.length ? "Frontend map runtime evidence is incomplete." : "Frontend Maps runtime evidence passed.",
+      missing.length ? "Open Sender tracking and capture GoogleMap mount/platform-view diagnostics." : "No action required.",
+      {samplePresent: true, missing, ...frontendMaps},
+  );
+}
+
+function backendMapsHealth() {
+  const configured = googlePlacesConfigured();
+  return healthItem(
+      "Backend Maps / Places",
+      configured ? "PASS" : "WARNING",
+      configured ? "Backend Places/Geocoding key is visible to the function runtime." : "No backend Maps/Places secret or environment variable is visible to this callable.",
+      configured ? "No action required." : "Attach the canonical Maps/Places secret only if backend Places/Geocoding calls are required by this deployment gate.",
+      {
+        expectedEnv: [
+          "GOOGLE_PLACES_API_KEY",
+          "CIRCUM_GOOGLE_PLACES_API_KEY",
+          "CIRCUM_WEB_GOOGLE_MAPS_API_KEY",
+          "GOOGLE_MAPS_API_KEY",
+        ],
+        configured,
+      },
+  );
 }
 
 function weightedScore(items) {
@@ -101,7 +148,8 @@ async function buildHealthScan(db, options = {}) {
     countCollection(db, "founderAuthorityAudit", 1),
     countCollection(db, "founderTestAccounts"),
   ]);
-  const mapsConfigured = googlePlacesConfigured();
+  const frontendMaps = frontendMapsHealth(options.frontendMaps || {});
+  const backendMaps = backendMapsHealth();
   const stripeConfigured = Boolean(process.env.STRIPE_SECRET_KEY ||
     process.env.STRIPE_WEBHOOK_SECRET ||
     functions.config().stripe);
@@ -128,13 +176,21 @@ async function buildHealthScan(db, options = {}) {
         irisRecords,
     ),
     healthItem(
-        "Google Maps",
-        mapsConfigured ? "PASS" : "FAIL",
-        mapsConfigured ? "Maps configuration variable is present in backend runtime." : "No Maps or Places key is visible to the backend runtime.",
-        mapsConfigured ? "No action required." : "Attach the configured Maps/Places secret to health callables before certification.",
+        frontendMaps.service,
+        frontendMaps.status,
+        frontendMaps.rootCause,
+        frontendMaps.suggestedRemediation,
+        frontendMaps.details,
     ),
-    healthItem("Places API", mapsConfigured ? "PASS" : "FAIL", mapsConfigured ? "Places key path is configured." : "Places key path is missing.", mapsConfigured ? "No action required." : "Verify the configured Places secret name and deployment attachment."),
-    healthItem("Geocoding", mapsConfigured ? "PASS" : "FAIL", mapsConfigured ? "Geocoding uses the same configured Google API key path." : "Geocoding key path is missing.", mapsConfigured ? "No action required." : "Enable Geocoding API for the configured Google key."),
+    healthItem(
+        backendMaps.service,
+        backendMaps.status,
+        backendMaps.rootCause,
+        backendMaps.suggestedRemediation,
+        backendMaps.details,
+    ),
+    healthItem("Places API", backendMaps.status, backendMaps.status === "PASS" ? "Places backend key path is configured." : "Backend Places key path is not visible to this callable.", backendMaps.status === "PASS" ? "No action required." : "Attach the canonical Places secret only if backend Places calls are required."),
+    healthItem("Geocoding", backendMaps.status, backendMaps.status === "PASS" ? "Geocoding backend key path is configured." : "Backend Geocoding key path is not visible to this callable.", backendMaps.status === "PASS" ? "No action required." : "Attach the canonical Geocoding/Places secret only if backend Geocoding calls are required."),
     healthItem(
         "Notifications",
         notifications.ok ? "PASS" : "WARNING",
@@ -174,7 +230,9 @@ async function buildHealthScan(db, options = {}) {
   const scores = {
     dispatchHealthScore: report.dispatchHealthScore,
     irisHealthScore: weightedScore(items.filter((item) => item.service === "IRIS")),
-    mapsHealthScore: weightedScore(items.filter((item) => ["Google Maps", "Places API", "Geocoding"].includes(item.service))),
+    frontendMapsHealthScore: weightedScore(items.filter((item) => item.service === "Frontend Maps")),
+    backendMapsHealthScore: weightedScore(items.filter((item) => ["Backend Maps / Places", "Places API", "Geocoding"].includes(item.service))),
+    mapsHealthScore: weightedScore(items.filter((item) => ["Frontend Maps", "Backend Maps / Places", "Places API", "Geocoding"].includes(item.service))),
     paymentsHealthScore: weightedScore(items.filter((item) => ["Stripe", "Wallet", "Roth"].includes(item.service))),
     firebaseHealthScore: weightedScore(items.filter((item) => ["Firebase Functions", "Firestore", "Storage", "App Check", "Authentication"].includes(item.service))),
     notificationHealthScore: weightedScore(items.filter((item) => item.service === "Notifications")),
@@ -327,13 +385,64 @@ function stage(status, name, rootCause, remediation, details = {}) {
   return {stage: name, status, rootCause, affectedService: name, suggestedRemediation: remediation, details};
 }
 
-function deliveryStageReport(delivery = {}) {
+function number(value) {
+  if (typeof value === "number" && Number.isFinite(value)) return value;
+  const parsed = Number(`${value || ""}`);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+function latLngFromMap(value) {
+  if (!value || typeof value !== "object") return null;
+  const coordinate = value.coordinate || value.position;
+  if (coordinate) {
+    const nested = latLngFromMap(coordinate);
+    if (nested) return nested;
+  }
+  const geo = value.geopoint || value.geoPoint || value.location;
+  if (geo && typeof geo.latitude === "number" && typeof geo.longitude === "number") {
+    return {lat: geo.latitude, lng: geo.longitude};
+  }
+  if (geo && typeof geo.lat === "number" && typeof geo.lng === "number") {
+    return {lat: geo.lat, lng: geo.lng};
+  }
+  if (geo && typeof geo === "object") {
+    const nested = latLngFromMap(geo);
+    if (nested) return nested;
+  }
+  const lat = number(value.lat || value.latitude || value._latitude || value.y);
+  const lng = number(value.lng || value.longitude || value._longitude || value.x);
+  return lat !== null && lng !== null ? {lat, lng} : null;
+}
+
+function firstLatLng(data, keys) {
+  for (const key of keys) {
+    const coordinate = latLngFromMap(data[key]);
+    if (coordinate) return {source: key, ...coordinate};
+  }
+  return null;
+}
+
+function trackingDiagnostics(delivery = {}, runtime = {}) {
+  const pickup = firstLatLng(delivery, ["pickup", "pickupDetails", "pickupAddress", "pickupLocation", "source", "origin", "from"]);
+  const dropoff = firstLatLng(delivery, ["dropoff", "dropoffDetails", "dropoffAddress", "dropoffLocation", "destination", "to"]);
+  const snapshotGenerated = pickup && dropoff;
+  return [
+    stage(snapshotGenerated ? "PASS" : "FAIL", "Tracking State", snapshotGenerated ? "Pickup and drop-off coordinates are available from canonical delivery data." : "Tracking cannot resolve pickup/drop-off coordinates from canonical delivery data.", "Verify delivery coordinate persistence and SendPackageState restoration.", {pickup, dropoff}),
+    stage(snapshotGenerated ? "PASS" : "FAIL", "Snapshot Generation", snapshotGenerated ? "SenderTrackingMapAdapter has sufficient data to create a snapshot." : "SenderTrackingMapAdapter would return null.", "Trace snapshotFor coordinate inputs and reasonForNull.", {returnedSnapshot: Boolean(snapshotGenerated), reasonForNull: pickup ? "dropoff-null" : "pickup-null"}),
+    stage(runtime.googleMapConstructed === true ? "PASS" : "WARNING", "GoogleMap Construction", runtime.googleMapConstructed === true ? "Runtime reported SenderGoogleTrackingMap construction." : "No client runtime construction evidence supplied.", "Capture Sender tracking runtime diagnostics.", {googleMapConstructed: runtime.googleMapConstructed === true}),
+    stage(runtime.platformViewCreated === true ? "PASS" : "WARNING", "PlatformView", runtime.platformViewCreated === true ? "Runtime reported Google Maps platform view creation." : "No client platform-view evidence supplied.", "Verify browser platform view count and map DOM.", {platformViewCreated: runtime.platformViewCreated === true}),
+    stage(runtime.onMapCreated === true ? "PASS" : "WARNING", "onMapCreated", runtime.onMapCreated === true ? "Runtime reported GoogleMap onMapCreated." : "No onMapCreated evidence supplied.", "Capture SenderGoogleTrackingMap onMapCreated trace.", {onMapCreated: runtime.onMapCreated === true}),
+  ];
+}
+
+function deliveryStageReport(delivery = {}, runtime = {}) {
   const stages = [
     stage(delivery.paymentStatus ? "PASS" : "FAIL", "Booking", delivery.paymentStatus ? "Booking record contains payment state." : "Delivery has no payment status.", "Verify Sender payment finalisation and delivery creation."),
     stage(["available", "broadcast", "broadcasted", "offered", "accepted", "reserved", "assigned", "expired"].includes(`${delivery.matchingStatus || delivery.dispatchStatus || ""}`.toLowerCase()) ? "PASS" : "FAIL", "Dispatch", "Dispatch status is evaluated from canonical delivery fields.", "Check broadcast trigger and dispatchStatus/matchingStatus."),
     stage(delivery.offerCount || delivery.lastBroadcastAt || delivery.broadcastAt ? "PASS" : "WARNING", "Offer Broadcast", delivery.offerCount || delivery.lastBroadcastAt || delivery.broadcastAt ? "Broadcast metadata exists." : "No broadcast metadata found on delivery.", "Inspect riderOffers/deliveryOffers for this delivery ID."),
     stage(delivery.acceptedByRiderId || delivery.riderId || delivery.assignedRiderId ? "PASS" : "WARNING", "Offer Acceptance", delivery.acceptedByRiderId || delivery.riderId || delivery.assignedRiderId ? "Rider assignment field exists." : "No rider assignment field exists yet.", "Confirm rider acceptance transaction committed."),
     stage(delivery.riderId || delivery.assignedRiderId ? "PASS" : "WARNING", "Assignment", delivery.riderId || delivery.assignedRiderId ? "Assigned rider is present." : "Delivery is not assigned.", "Check atomic acceptance transaction."),
+    ...trackingDiagnostics(delivery, runtime),
     stage(delivery.navigationStartedAt || delivery.riderLocation ? "PASS" : "WARNING", "Navigation", delivery.navigationStartedAt || delivery.riderLocation ? "Navigation or rider location signal exists." : "No navigation signal found.", "Verify Rider navigation start."),
     stage(delivery.pickupStartedAt || delivery.arrivedAtPickupAt || delivery.pickupPin ? "PASS" : "WARNING", "Pickup", "Pickup readiness inspected from delivery fields.", "Verify Rider pickup transition and PIN generation."),
     stage(delivery.pickupPin || delivery.collectionPin || delivery.pickupPinVerified ? "PASS" : "WARNING", "Pickup PIN", "Pickup PIN status inspected.", "Verify private PIN document if not stored on public delivery."),
@@ -386,7 +495,7 @@ function liveDeliveryDiagnostics() {
       return {deliveryId, correlationId, auditId, ...result};
     }
     const delivery = found.data() || {};
-    const result = deliveryStageReport(delivery);
+    const result = deliveryStageReport(delivery, data && data.trackingRuntime || {});
     const auditId = await writeOperationsAudit(db, adminUid, "live_delivery_diagnostics", {
       correlationId,
       durationMs: Date.now() - started,

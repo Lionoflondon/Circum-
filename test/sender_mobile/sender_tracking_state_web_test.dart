@@ -358,4 +358,15 @@ void main() {
     expect(source.substring(layerStart, radarStart),
         contains('if (googleMapSnapshot != null)'));
   });
+
+  test('Sender tracking GoogleMap is mounted before ready fade completes', () {
+    final source = File('lib/app/sender_mobile/sender_tracking_screen.dart')
+        .readAsStringSync();
+    final mapStart = source.indexOf('class SenderGoogleTrackingMap');
+    final opacityStart = source.indexOf('opacity: _ready ? .88 : .01', mapStart);
+
+    expect(mapStart, isNonNegative);
+    expect(opacityStart, greaterThan(mapStart));
+    expect(source.substring(mapStart), isNot(contains('opacity: _ready ? .88 : 0')));
+  });
 }

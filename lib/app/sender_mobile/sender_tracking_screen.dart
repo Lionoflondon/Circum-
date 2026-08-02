@@ -1603,7 +1603,7 @@ class _SenderGoogleTrackingMapState extends State<SenderGoogleTrackingMap> {
   Widget build(BuildContext context) {
     final snapshot = widget.snapshot;
     return AnimatedOpacity(
-      opacity: _ready ? .88 : 0,
+      opacity: _ready ? .88 : .01,
       duration: const Duration(milliseconds: 360),
       curve: Curves.easeOutCubic,
       child: GoogleMap(
