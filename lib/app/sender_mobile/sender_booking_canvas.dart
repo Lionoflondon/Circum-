@@ -858,6 +858,15 @@ class _SenderBookingCanvasState extends State<SenderBookingCanvas> {
           ? null
           : 'Photo kept. Recheck IRIS after changing item details.';
     }
+    final engine = context.read<SendPackageBloc>().state;
+    if (engine.canonicalIrisResult != null ||
+        engine.irisResult != null ||
+        engine.parcelWeightKg > 0 ||
+        engine.senderQuoteId != null ||
+        engine.senderPaymentSessionId != null) {
+      _lastBackendQuoteKey = null;
+      context.read<SendPackageBloc>().add(const ClearIrisParcelState());
+    }
     final parsed = _manualWeightKg(_weight.text);
     _setDraft(
       _draft.copyWith(
@@ -948,6 +957,8 @@ class _SenderBookingCanvasState extends State<SenderBookingCanvas> {
       _irisPhotoAnalysisId = null;
       _photoEstimatedWeightKg = null;
     });
+    _lastBackendQuoteKey = null;
+    context.read<SendPackageBloc>().add(const ClearIrisParcelState());
   }
 
   void _restoreRouteFromDraftIfReady(SenderBookingDraft draft) {

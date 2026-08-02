@@ -306,6 +306,42 @@ void main() {
     expect(quotePreflight, contains('clearSenderCreatedRequest: true'));
   });
 
+  test('Sender parcel edits and photo removal clear stale IRIS state', () {
+    final canvas = read('lib/app/sender_mobile/sender_booking_canvas.dart');
+    final bloc = read('lib/app/send_package/bloc/send_package_bloc.dart');
+
+    final removeStart = canvas.indexOf('void _removeParcelPhoto()');
+    final restoreStart = canvas.indexOf('void _restoreRouteFromDraftIfReady');
+    expect(removeStart, isNonNegative);
+    expect(restoreStart, greaterThan(removeStart));
+    final removeHandler = canvas.substring(removeStart, restoreStart);
+    expect(removeHandler, contains('const ClearIrisParcelState()'));
+    expect(removeHandler, contains('_lastBackendQuoteKey = null'));
+
+    final parcelChangeStart = canvas.indexOf('void _onParcelChanged()');
+    final photoPickerStart = canvas.indexOf('Future<void> _pickParcelPhoto()');
+    expect(parcelChangeStart, isNonNegative);
+    expect(photoPickerStart, greaterThan(parcelChangeStart));
+    final parcelChangeHandler =
+        canvas.substring(parcelChangeStart, photoPickerStart);
+    expect(parcelChangeHandler, contains('engine.canonicalIrisResult != null'));
+    expect(parcelChangeHandler, contains('engine.irisResult != null'));
+    expect(parcelChangeHandler, contains('engine.senderQuoteId != null'));
+    expect(parcelChangeHandler, contains('const ClearIrisParcelState()'));
+
+    final clearStart = bloc.indexOf('void _handleClearIrisParcelState');
+    final reviewStart = bloc.indexOf('String _weightReviewMessage', clearStart);
+    expect(clearStart, isNonNegative);
+    expect(reviewStart, greaterThan(clearStart));
+    final clearHandler = bloc.substring(clearStart, reviewStart);
+    expect(clearHandler, contains('parcelWeightKg: 0'));
+    expect(clearHandler, contains('price: 0'));
+    expect(clearHandler, contains('clearIrisResult: true'));
+    expect(clearHandler, contains('clearCanonicalIrisResult: true'));
+    expect(clearHandler, contains('clearSenderQuoteId: true'));
+    expect(clearHandler, contains('clearSenderPaymentSession: true'));
+  });
+
   test('Sender nullable booking artifacts are never cleared with null literals',
       () {
     final source = read('lib/app/send_package/bloc/send_package_bloc.dart');

@@ -92,6 +92,10 @@ class SetParcelWeight extends SendPackageEvent {
   const SetParcelWeight({required this.weightKg, this.itemDescription});
 }
 
+class ClearIrisParcelState extends SendPackageEvent {
+  const ClearIrisParcelState();
+}
+
 class RequestCanonicalIrisEstimate extends SendPackageEvent {
   final String itemName;
   final int quantity;

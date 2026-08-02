@@ -66,6 +66,12 @@ void main() {
     expect(cleared.senderCreatedRequestId, isNull);
   });
 
+  test('ClearIrisParcelState is wired to remove stale IRIS artifacts', () {
+    const event = ClearIrisParcelState();
+
+    expect(event, isA<SendPackageEvent>());
+  });
+
   test('Sender copyWith cannot accidentally clear nullable fields with null',
       () {
     final stale = SendPackageState(

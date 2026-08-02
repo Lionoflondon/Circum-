@@ -101,6 +101,7 @@ class SendPackageBloc extends Bloc<SendPackageEvent, SendPackageState> {
     on<SetDistance>(_handleSetDistance);
     on<SetPrice>(_handleSetPrice);
     on<SetParcelWeight>(_handleSetParcelWeight);
+    on<ClearIrisParcelState>(_handleClearIrisParcelState);
     on<RequestCanonicalIrisEstimate>(_handleRequestCanonicalIrisEstimate);
     on<RequestSenderBookingQuote>(_handleRequestSenderBookingQuote);
     on<LoadSenderRothBalance>(_handleLoadSenderRothBalance);
@@ -682,6 +683,36 @@ class SendPackageBloc extends Bloc<SendPackageEvent, SendPackageState> {
       );
       add(SetPrice());
     }
+  }
+
+  void _handleClearIrisParcelState(
+    ClearIrisParcelState event,
+    Emitter<SendPackageState> emit,
+  ) {
+    emit(
+      state.copyWith(
+        parcelWeightKg: 0,
+        price: 0,
+        clearIrisResult: true,
+        clearCanonicalIrisResult: true,
+        clearItemDescription: true,
+        isIrisResolving: false,
+        irisErrorMessage: '',
+        irisWeightReviewMessage: '',
+        clearSenderQuoteId: true,
+        clearSenderQuoteTotal: true,
+        clearSenderQuoteSpeed: true,
+        senderQuoteLineItems: const [],
+        senderQuoteSpeedOptions: const [],
+        clearSenderPaymentSession: true,
+        clearSenderPaymentClientSecret: true,
+        clearSenderPaymentIntent: true,
+        clearSenderPaymentCustomer: true,
+        clearSenderPaymentEphemeralKey: true,
+        clearSenderPaymentCheckoutUrl: true,
+        clearSenderCreatedRequest: true,
+      ),
+    );
   }
 
   String _weightReviewMessage({
