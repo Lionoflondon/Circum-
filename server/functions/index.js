@@ -83,6 +83,7 @@ const adminIrisReferenceImages = require("./admin-iris-reference-images");
 const adminRiderAuthority = require("./admin-rider-authority");
 const adminGovernance = require("./admin-governance");
 const adminOperationsAuthority = require("./admin-operations-authority");
+const operationsHealthCentre = require("./operations-health-centre");
 const {routeCheckoutSessionCompleted} = require("./checkout-session-router");
 
 initializeApp();
@@ -307,6 +308,12 @@ exports.adminRecordRiderEvent =
 exports.adminResolveMessageReport =
   adminOperationsAuthority.adminResolveMessageReport;
 exports.pipelineHealthReset = deliveryCleanup.pipelineHealthReset();
+exports.operationsHealthScan =
+  operationsHealthCentre.operationsHealthScan();
+exports.operationsHealthRepair =
+  operationsHealthCentre.operationsHealthRepair();
+exports.liveDeliveryDiagnostics =
+  operationsHealthCentre.liveDeliveryDiagnostics();
 exports.resetRiderTestStripeAccount =
   riderConnect.resetRiderTestStripeAccount();
 exports.handleStripeConnectWebhook =

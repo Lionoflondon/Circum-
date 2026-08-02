@@ -21,6 +21,7 @@ jobs:
       - run: node scripts/deploy_guard.self_test.js
       - run: node scripts/deploy_guard.js --target=admin --base HEAD
       - run: flutter test test/admin_operations_test.dart
+      - run: node scripts/operations_health_deployment_gate.js
       - run: CIRCUM_WEB_RECAPTCHA_ENTERPRISE_SITE_KEY="${{ secrets.CIRCUM_WEB_RECAPTCHA_ENTERPRISE_SITE_KEY }}" scripts/build_admin_web.sh
       - run: node scripts/validate_web_artifacts.js --surface=admin
       - uses: google-github-actions/auth@v2

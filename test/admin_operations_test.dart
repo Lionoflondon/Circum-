@@ -906,6 +906,13 @@ void main() {
       expect(source, contains('Super Admin callable with audit'));
       expect(source, contains('No raw record editing or user impersonation'));
       expect(source, contains('Pipeline Health Reset'));
+      expect(source, contains('Operations Health Centre'));
+      expect(source, contains("httpsCallable('operationsHealthScan')"));
+      expect(source, contains("httpsCallable('operationsHealthRepair')"));
+      expect(source, contains("httpsCallable('liveDeliveryDiagnostics')"));
+      expect(source, contains('Operations Health Scan'));
+      expect(source, contains('Health Repair'));
+      expect(source, contains('Live Delivery Diagnostics'));
       expect(source, contains("httpsCallable('pipelineHealthReset')"));
       expect(source, contains('This expires only stale unaccepted deliveries'));
       expect(source, contains('Deliveries expired:'));

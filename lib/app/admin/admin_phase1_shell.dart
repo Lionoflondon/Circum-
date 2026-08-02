@@ -3193,6 +3193,149 @@ class _AdminPhaseOneShellState extends State<AdminPhaseOneShell> {
     }
   }
 
+  Future<void> _operationsHealthScan() async {
+    if (!_can(AdminPermission.manageIssues)) {
+      setState(() => _message = 'Your role cannot run health scans.');
+      return;
+    }
+    try {
+      final result =
+          await _functions.httpsCallable('operationsHealthScan').call({
+        'correlationId':
+            'admin-health-scan-${DateTime.now().millisecondsSinceEpoch}',
+      });
+      final data = Map<String, dynamic>.from(result.data as Map);
+      if (!mounted) return;
+      await showDialog<void>(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: const Text('Operations Health Scan'),
+          content: Text(_operationsHealthSummary(data)),
+          actions: [
+            FilledButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Done'),
+            ),
+          ],
+        ),
+      );
+      setState(() => _message = 'Operations Health Scan completed.');
+    } on FirebaseFunctionsException catch (error) {
+      setState(() => _message = _functionsMessage(error));
+    }
+  }
+
+  Future<void> _operationsHealthRepair() async {
+    if (!_can(AdminPermission.manageIssues)) {
+      setState(() => _message = 'Your role cannot run health repairs.');
+      return;
+    }
+    const reason =
+        'Admin Operations Health Repair for deterministic canonical inconsistencies.';
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Health Repair'),
+        content: const Text(
+          'This repairs deterministic canonical inconsistencies only. It never approves users, changes financial records, weakens security or edits active delivery lifecycle state.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Run repair'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true) return;
+    try {
+      final result =
+          await _functions.httpsCallable('operationsHealthRepair').call({
+        'reason': reason,
+      });
+      final data = Map<String, dynamic>.from(result.data as Map);
+      if (!mounted) return;
+      await showDialog<void>(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: const Text('Health Repair complete'),
+          content: Text(_operationsRepairSummary(data)),
+          actions: [
+            FilledButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Done'),
+            ),
+          ],
+        ),
+      );
+      setState(() => _message = 'Health Repair completed.');
+      await _loadAdminData();
+    } on FirebaseFunctionsException catch (error) {
+      setState(() => _message = _functionsMessage(error));
+    }
+  }
+
+  Future<void> _liveDeliveryDiagnostics() async {
+    if (!_can(AdminPermission.manageIssues)) {
+      setState(() => _message = 'Your role cannot run delivery diagnostics.');
+      return;
+    }
+    final controller = TextEditingController();
+    final deliveryId = await showDialog<String>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Live Delivery Diagnostics'),
+        content: TextField(
+          controller: controller,
+          decoration: const InputDecoration(
+            labelText: 'Delivery ID',
+            hintText: 'deliveryRequests/{id}',
+          ),
+          autofocus: true,
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(context, controller.text.trim()),
+            child: const Text('Inspect'),
+          ),
+        ],
+      ),
+    );
+    if (deliveryId == null || deliveryId.trim().isEmpty) return;
+    try {
+      final result =
+          await _functions.httpsCallable('liveDeliveryDiagnostics').call({
+        'deliveryId': deliveryId.trim(),
+      });
+      final data = Map<String, dynamic>.from(result.data as Map);
+      if (!mounted) return;
+      await showDialog<void>(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: const Text('Live Delivery Diagnostics'),
+          content: Text(_deliveryDiagnosticsSummary(data)),
+          actions: [
+            FilledButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Done'),
+            ),
+          ],
+        ),
+      );
+      setState(() => _message = 'Live Delivery Diagnostics completed.');
+    } on FirebaseFunctionsException catch (error) {
+      setState(() => _message = _functionsMessage(error));
+    }
+  }
+
   String _pipelineHealthSummary(Map<String, dynamic> data) {
     final before = Map<String, dynamic>.from((data['before'] as Map?) ?? {});
     final after = Map<String, dynamic>.from((data['after'] as Map?) ?? {});
@@ -3206,6 +3349,61 @@ class _AdminPhaseOneShellState extends State<AdminPhaseOneShell> {
       'IRIS sessions cleaned: ${data['irisSessionsCleaned'] ?? 0}',
       'Temporary caches cleared: ${data['temporaryCachesCleared'] ?? 0}',
       'Audit ID: ${data['auditId'] ?? ''}',
+    ].join('\n');
+  }
+
+  String _operationsHealthSummary(Map<String, dynamic> data) {
+    final scores = Map<String, dynamic>.from((data['scores'] as Map?) ?? {});
+    final items = (data['items'] as List? ?? const [])
+        .whereType<Map>()
+        .map((item) => Map<String, dynamic>.from(item))
+        .toList(growable: false);
+    final failures = items
+        .where((item) => item['status'] != 'PASS')
+        .take(8)
+        .map((item) =>
+            '${item['status']} ${item['service']}: ${item['rootCause']}\nRemediation: ${item['suggestedRemediation']}')
+        .join('\n\n');
+    return [
+      'Result: ${data['result'] ?? 'n/a'}',
+      'Deployment gate: ${data['deploymentCertification'] ?? 'n/a'}',
+      'Overall score: ${scores['overallProductionHealthScore'] ?? 'n/a'}',
+      'Dispatch score: ${scores['dispatchHealthScore'] ?? 'n/a'}',
+      'IRIS score: ${scores['irisHealthScore'] ?? 'n/a'}',
+      'Maps score: ${scores['mapsHealthScore'] ?? 'n/a'}',
+      'Payments score: ${scores['paymentsHealthScore'] ?? 'n/a'}',
+      'Firebase score: ${scores['firebaseHealthScore'] ?? 'n/a'}',
+      if (failures.isNotEmpty) '\nWarnings / failures:\n$failures',
+    ].join('\n');
+  }
+
+  String _operationsRepairSummary(Map<String, dynamic> data) {
+    final results = Map<String, dynamic>.from((data['results'] as Map?) ?? {});
+    final after = Map<String, dynamic>.from((data['after'] as Map?) ?? {});
+    final scores = Map<String, dynamic>.from((after['scores'] as Map?) ?? {});
+    return [
+      'Rider canonical synchronisations: ${results['riderCanonicalSynchronisations'] ?? 0}',
+      'Dispatch eligibility recalculations: ${results['dispatchEligibilityRecalculations'] ?? 0}',
+      'Financial records mutated: ${results['financialRecordsMutated'] ?? 0}',
+      'Users approved: ${results['usersApproved'] ?? 0}',
+      'Overall score after repair: ${scores['overallProductionHealthScore'] ?? 'n/a'}',
+    ].join('\n');
+  }
+
+  String _deliveryDiagnosticsSummary(Map<String, dynamic> data) {
+    final stages = (data['stages'] as List? ?? const [])
+        .whereType<Map>()
+        .map((item) => Map<String, dynamic>.from(item))
+        .toList(growable: false);
+    final lines = stages
+        .map((stage) =>
+            '${stage['status']} ${stage['stage']}: ${stage['rootCause']}')
+        .join('\n');
+    return [
+      'Delivery: ${data['deliveryId'] ?? 'n/a'}',
+      'Result: ${data['result'] ?? 'n/a'}',
+      'Stopped at: ${data['stoppedAt'] ?? 'n/a'}',
+      if (lines.isNotEmpty) '\n$lines',
     ].join('\n');
   }
 
@@ -3436,6 +3634,9 @@ class _AdminPhaseOneShellState extends State<AdminPhaseOneShell> {
                       onUpdateSenderTrust: _updateSenderTrust,
                       onGovernanceAction: _performGovernanceAction,
                       onPipelineHealthReset: _pipelineHealthReset,
+                      onOperationsHealthScan: _operationsHealthScan,
+                      onOperationsHealthRepair: _operationsHealthRepair,
+                      onLiveDeliveryDiagnostics: _liveDeliveryDiagnostics,
                     ),
                   ),
                 ],
@@ -4345,6 +4546,9 @@ class _AdminModuleBody extends StatelessWidget {
     required this.onRetryNotificationDelivery,
     required this.onGovernanceAction,
     required this.onPipelineHealthReset,
+    required this.onOperationsHealthScan,
+    required this.onOperationsHealthRepair,
+    required this.onLiveDeliveryDiagnostics,
   });
 
   final AdminModule module;
@@ -4475,6 +4679,9 @@ class _AdminModuleBody extends StatelessWidget {
   final Future<void> Function(Map<String, dynamic>) onRetryNotificationDelivery;
   final Future<void> Function(Map<String, dynamic>, String) onGovernanceAction;
   final Future<void> Function() onPipelineHealthReset;
+  final Future<void> Function() onOperationsHealthScan;
+  final Future<void> Function() onOperationsHealthRepair;
+  final Future<void> Function() onLiveDeliveryDiagnostics;
 
   @override
   Widget build(BuildContext context) {
@@ -4512,6 +4719,9 @@ class _AdminModuleBody extends StatelessWidget {
               canRecover: canManageIssues,
               onGovernanceAction: onGovernanceAction,
               onPipelineHealthReset: onPipelineHealthReset,
+              onOperationsHealthScan: onOperationsHealthScan,
+              onOperationsHealthRepair: onOperationsHealthRepair,
+              onLiveDeliveryDiagnostics: onLiveDeliveryDiagnostics,
               onRetryNotificationDelivery: onRetryNotificationDelivery,
               onOpenDelivery: onOpenDeliveryProfile,
             ),
@@ -17154,6 +17364,9 @@ class _GovernanceOperationsModule extends StatelessWidget {
     required this.canRecover,
     required this.onGovernanceAction,
     required this.onPipelineHealthReset,
+    required this.onOperationsHealthScan,
+    required this.onOperationsHealthRepair,
+    required this.onLiveDeliveryDiagnostics,
     required this.onRetryNotificationDelivery,
     required this.onOpenDelivery,
   });
@@ -17183,6 +17396,9 @@ class _GovernanceOperationsModule extends StatelessWidget {
   final bool canRecover;
   final Future<void> Function(Map<String, dynamic>, String) onGovernanceAction;
   final Future<void> Function() onPipelineHealthReset;
+  final Future<void> Function() onOperationsHealthScan;
+  final Future<void> Function() onOperationsHealthRepair;
+  final Future<void> Function() onLiveDeliveryDiagnostics;
   final Future<void> Function(Map<String, dynamic>) onRetryNotificationDelivery;
   final ValueChanged<Map<String, dynamic>> onOpenDelivery;
 
@@ -17393,45 +17609,71 @@ class _GovernanceOperationsModule extends StatelessWidget {
           subtitle:
               'Observe, investigate, recover and resolve operational issues without impersonating users or editing private preferences.',
         ),
-        if (canRecover) ...[
-          const SizedBox(height: 14),
-          DecoratedBox(
-            decoration: _panelDecoration(),
-            child: Padding(
-              padding: const EdgeInsets.all(18),
-              child: Row(
-                children: [
-                  const Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          'Pipeline Health Reset',
-                          style: TextStyle(fontWeight: FontWeight.w900),
-                        ),
-                        SizedBox(height: 6),
-                        Text(
-                          'Expires stale unaccepted jobs and clears expired operational queue artefacts with audit.',
-                        ),
-                      ],
+        const SizedBox(height: 14),
+        DecoratedBox(
+          decoration: _panelDecoration(),
+          child: Padding(
+            padding: const EdgeInsets.all(18),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'Operations Health Centre',
+                  style: TextStyle(fontWeight: FontWeight.w900),
+                ),
+                const SizedBox(height: 6),
+                const Text(
+                  'Continuous production health, deterministic repair, deployment gate and live delivery diagnostics with immutable audit.',
+                ),
+                const SizedBox(height: 14),
+                Wrap(
+                  spacing: 10,
+                  runSpacing: 10,
+                  children: [
+                    FilledButton.icon(
+                      onPressed: canRecover
+                          ? () => unawaited(onOperationsHealthScan())
+                          : null,
+                      icon: const Icon(Icons.monitor_heart_rounded),
+                      label: const Text('Operations Health Scan'),
                     ),
-                  ),
-                  const SizedBox(width: 12),
-                  FilledButton.icon(
-                    onPressed: () => unawaited(onPipelineHealthReset()),
-                    icon: const Icon(Icons.health_and_safety_rounded),
-                    label: const Text('Pipeline Health Reset'),
-                  ),
-                ],
-              ),
+                    OutlinedButton.icon(
+                      onPressed: canRecover
+                          ? () => unawaited(onOperationsHealthRepair())
+                          : null,
+                      icon: const Icon(Icons.build_circle_rounded),
+                      label: const Text('Health Repair'),
+                    ),
+                    OutlinedButton.icon(
+                      onPressed: canRecover
+                          ? () => unawaited(onPipelineHealthReset())
+                          : null,
+                      icon: const Icon(Icons.health_and_safety_rounded),
+                      label: const Text('Pipeline Health Reset'),
+                    ),
+                    OutlinedButton.icon(
+                      onPressed: canRecover
+                          ? () => unawaited(onLiveDeliveryDiagnostics())
+                          : null,
+                      icon: const Icon(Icons.route_rounded),
+                      label: const Text('Live Delivery Diagnostics'),
+                    ),
+                  ],
+                ),
+              ],
             ),
           ),
-        ],
+        ),
         const SizedBox(height: 14),
         Wrap(
           spacing: 12,
           runSpacing: 12,
           children: [
+            _MetricCard(
+              'Production health',
+              'Scan',
+              'PASS / WARNING / FAIL',
+            ),
             _MetricCard(
               'Address limits',
               '${rateLimits.length}',
