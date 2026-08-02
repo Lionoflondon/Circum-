@@ -98,3 +98,26 @@ test("latest application wins vehicle reconciliation deterministically", () => {
   assert.equal(latest.id, "new");
   assert.deepEqual(cleanVehicle(latest).vehicle.type, "bike");
 });
+
+test("canonical repair ignores newer empty application when older submitted vehicle exists", () => {
+  const projection = approvalProjection({
+    rider: {
+      approvalStatus: "submitted",
+      verificationStatus: "verification_pending",
+      onboardingStatus: "application_submitted",
+      vehicleType: null,
+    },
+    applications: [
+      {id: "RWEB-1", vehicleType: "Bike", updatedAt: "2026-06-02T04:58:58.382Z"},
+      {id: "uid-doc", status: "submitted", updatedAt: "2026-07-13T08:32:48.005Z"},
+    ],
+    documents: approvedDocs,
+    reason: "Repair canonical rider vehicle projection from submitted application.",
+    approve: false,
+  });
+
+  assert.equal(projection.ok, true);
+  assert.equal(projection.after.vehicleType, "bike");
+  assert.equal(projection.riderPatch.vehicle.type, "bike");
+  assert.equal(projection.after.dispatchEligible, false);
+});

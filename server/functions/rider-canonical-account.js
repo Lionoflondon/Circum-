@@ -43,6 +43,13 @@ function latestApplication(applications = []) {
         timestampMillis(a.updatedAt || a.submittedAt || a.createdAt))[0] || {};
 }
 
+function latestApplicationWithVehicle(applications = []) {
+  return applications
+      .filter((application) => cleanVehicle(application).vehicleType)
+      .sort((a, b) => timestampMillis(b.updatedAt || b.submittedAt || b.createdAt) -
+        timestampMillis(a.updatedAt || a.submittedAt || a.createdAt))[0] || {};
+}
+
 function timestampMillis(value) {
   if (!value) return 0;
   if (typeof value.toMillis === "function") return value.toMillis();
@@ -60,6 +67,7 @@ function approved(value) {
 
 function canonicalInput({rider = {}, profile = {}, applications = []}) {
   const application = latestApplication(applications);
+  const vehicleApplication = latestApplicationWithVehicle(applications);
   const merged = {
     ...application,
     ...profile,
@@ -68,7 +76,7 @@ function canonicalInput({rider = {}, profile = {}, applications = []}) {
   const vehicle = cleanVehicle({
     ...rider,
     ...profile,
-    ...application,
+    ...vehicleApplication,
   });
   return {application, merged, vehicle};
 }
