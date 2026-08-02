@@ -223,21 +223,28 @@ async function deleteStorageObject(path) {
   }
 }
 
-async function riderApplicationsFor(transaction, db, riderId) {
+async function riderApplicationsFor(transaction, db, riderId, emails = []) {
   const directRef = db.collection("riderApplications").doc(riderId);
   const directSnap = await transaction.get(directRef);
-  const byRiderId = await transaction.get(
-      db.collection("riderApplications").where("riderId", "==", riderId).limit(10),
-  );
+  const reads = [
+    transaction.get(db.collection("riderApplications").where("riderId", "==", riderId).limit(10)),
+    transaction.get(db.collection("riderApplications").where("uid", "==", riderId).limit(10)),
+  ];
+  [...new Set(emails.map(text).filter(Boolean))].forEach((email) => {
+    reads.push(transaction.get(db.collection("riderApplications").where("email", "==", email).limit(10)));
+  });
+  const snapshots = await Promise.all(reads);
   const applications = [];
   const refs = new Map();
   if (directSnap.exists) {
     applications.push({id: directSnap.id, ...directSnap.data()});
     refs.set(directSnap.id, directRef);
   }
-  byRiderId.docs.forEach((doc) => {
-    applications.push({id: doc.id, ...doc.data()});
-    refs.set(doc.id, doc.ref);
+  snapshots.forEach((snapshot) => {
+    snapshot.docs.forEach((doc) => {
+      applications.push({id: doc.id, ...doc.data()});
+      refs.set(doc.id, doc.ref);
+    });
   });
   return {applications, refs};
 }
@@ -273,16 +280,19 @@ exports.adminReviewRider = functions.https.onCall(async (data, context) => {
     if (auditSnap.exists) {
       return {idempotent: true, auditId: auditRef.id, ...(auditSnap.data() || {})};
     }
-    const [riderSnap, profileSnap, applicationState] = await Promise.all([
+    const [riderSnap, profileSnap] = await Promise.all([
       transaction.get(riderRef),
       transaction.get(profileRef),
-      riderApplicationsFor(transaction, db, riderId),
     ]);
     if (!riderSnap.exists && !profileSnap.exists) {
       throw new functions.https.HttpsError("not-found", "Rider was not found.");
     }
     const rider = riderSnap.data() || {};
     const profile = profileSnap.data() || {};
+    const applicationState = await riderApplicationsFor(transaction, db, riderId, [
+      rider.email,
+      profile.email,
+    ]);
     const before = {
       approvalStatus: profile.approvalStatus || rider.approvalStatus || null,
       verificationStatus: profile.verificationStatus || rider.verificationStatus || null,
@@ -472,10 +482,9 @@ exports.adminRepairCanonicalRider = functions.https.onCall(async (data, context)
     if (auditSnap.exists) {
       return {ok: true, idempotent: true, auditId: auditRef.id, ...(auditSnap.data() || {})};
     }
-    const [riderSnap, profileSnap, applicationState, documentSnapshot] = await Promise.all([
+    const [riderSnap, profileSnap, documentSnapshot] = await Promise.all([
       transaction.get(riderRef),
       transaction.get(profileRef),
-      riderApplicationsFor(transaction, db, riderId),
       transaction.get(db.collection("riderDocuments").where("riderId", "==", riderId).limit(100)),
     ]);
     if (!riderSnap.exists && !profileSnap.exists) {
@@ -483,6 +492,10 @@ exports.adminRepairCanonicalRider = functions.https.onCall(async (data, context)
     }
     const rider = riderSnap.data() || {};
     const profile = profileSnap.data() || {};
+    const applicationState = await riderApplicationsFor(transaction, db, riderId, [
+      rider.email,
+      profile.email,
+    ]);
     const documents = documentSnapshot.docs.map((doc) => ({id: doc.id, ...doc.data()}));
     const projection = approvalProjection({
       rider,

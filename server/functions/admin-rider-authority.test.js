@@ -38,6 +38,7 @@ test("Admin Rider approval performs canonical projection synchronisation", () =>
 
   assert.match(source, /approvalProjection/);
   assert.match(source, /riderApplicationsFor/);
+  assert.match(source, /where\("email", "==", email\)/);
   assert.match(source, /applicationState\.refs\.forEach/);
   assert.match(source, /canonical_rider_approval_sync/);
 });
