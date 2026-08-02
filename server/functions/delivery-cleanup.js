@@ -1,6 +1,7 @@
 /* eslint-disable max-len, require-jsdoc */
 const functions = require("firebase-functions/v1");
 const {getFirestore, FieldValue} = require("firebase-admin/firestore");
+const {requireAdmin} = require("./admin-auth");
 const {assertFounder} = require("./founder-authority");
 
 const archiveStatuses = new Set([
@@ -50,6 +51,11 @@ const transientDeliveryCollections = [
   "deliveryOffers",
   "riderOffers",
 ];
+
+const offerCollections = new Set(["deliveryOffers", "riderOffers"]);
+const reservationCollections = new Set(["dispatchReservations"]);
+const queueCollections = new Set(["staleDeliveryQueue", "dispatchQueue", "matchmakingQueue"]);
+const irisTemporaryCollections = new Set(["dispatchInspections", "irisPrivate"]);
 
 function normalize(value) {
   return `${value || ""}`.trim().toLowerCase();
@@ -203,6 +209,96 @@ function canFounderPurgeDelivery(delivery, now = new Date(), expirationMs = 24 *
   return isFounderTestDelivery(delivery) || founderPurgeAgeExpired(delivery, now, expirationMs);
 }
 
+function pipelineHealthScore(report) {
+  const staleTotal = report.staleSearchingDeliveries +
+    report.expiredRiderOffers +
+    report.staleReservations +
+    report.staleQueueEntries +
+    report.orphanedIrisSessions;
+  return Math.max(0, Math.min(100, 100 - staleTotal * 5));
+}
+
+async function scanTransientHealth(db, collection, now, expirationMs, limit) {
+  const snapshot = await db.collection(collection).limit(limit).get().catch(() => null);
+  const summary = {active: 0, stale: 0, refs: []};
+  if (!snapshot) return summary;
+  snapshot.docs.forEach((doc) => {
+    const data = doc.data() || {};
+    const active = data.active === true || ["active", "pending", "offered", "reserved", "queued"].includes(normalize(data.status));
+    const expiry = readMillis(data.expiresAt || data.offerExpiresAt || data.reservationExpiresAt || data.dispatchExpiresAt);
+    const lastTouched = readMillis(data.updatedAt || data.createdAt);
+    const stale = active && (
+      (Boolean(expiry) && expiry <= now.getTime()) ||
+      (Boolean(lastTouched) && now.getTime() - lastTouched >= expirationMs)
+    );
+    if (active && !stale) summary.active += 1;
+    if (stale) {
+      summary.stale += 1;
+      summary.refs.push(doc.ref);
+    }
+  });
+  return summary;
+}
+
+async function pipelineHealthReport(db, {now = new Date(), expirationMs = 24 * 60 * 60 * 1000, limit = 500} = {}) {
+  const deliverySnapshot = await db.collection("deliveryRequests").limit(limit).get();
+  let activeDeliveries = 0;
+  let searchingDeliveries = 0;
+  const staleDeliveryRefs = [];
+  deliverySnapshot.docs.forEach((doc) => {
+    const delivery = doc.data() || {};
+    const statuses = [
+      delivery.status,
+      delivery.deliveryStatus,
+      delivery.flowStatus,
+      delivery.matchingStatus,
+      delivery.dispatchStatus,
+    ].map(normalize);
+    const protectedLive = statuses.some((status) => protectedStatuses.has(status));
+    if (protectedLive || hasAssignedRider(delivery)) activeDeliveries += 1;
+    if (statuses.some((status) => founderPurgeOpenStatuses.has(status))) {
+      searchingDeliveries += 1;
+      if (canFounderPurgeDelivery(delivery, now, expirationMs)) {
+        staleDeliveryRefs.push(doc.ref);
+      }
+    }
+  });
+
+  const transient = {};
+  for (const collection of transientDeliveryCollections) {
+    transient[collection] = await scanTransientHealth(db, collection, now, expirationMs, limit);
+  }
+  const activeRiderOffers = [...offerCollections].reduce((sum, key) => sum + (transient[key] ? transient[key].active : 0), 0);
+  const expiredRiderOffers = [...offerCollections].reduce((sum, key) => sum + (transient[key] ? transient[key].stale : 0), 0);
+  const activeReservations = [...reservationCollections].reduce((sum, key) => sum + (transient[key] ? transient[key].active : 0), 0);
+  const staleReservations = [...reservationCollections].reduce((sum, key) => sum + (transient[key] ? transient[key].stale : 0), 0);
+  const activeQueueEntries = [...queueCollections].reduce((sum, key) => sum + (transient[key] ? transient[key].active : 0), 0);
+  const staleQueueEntries = [...queueCollections].reduce((sum, key) => sum + (transient[key] ? transient[key].stale : 0), 0);
+  const temporaryIrisSessions = [...irisTemporaryCollections].reduce((sum, key) => sum + (transient[key] ? transient[key].active : 0), 0);
+  const orphanedIrisSessions = [...irisTemporaryCollections].reduce((sum, key) => sum + (transient[key] ? transient[key].stale : 0), 0);
+
+  const report = {
+    activeDeliveries,
+    searchingDeliveries,
+    staleSearchingDeliveries: staleDeliveryRefs.length,
+    activeRiderOffers,
+    expiredRiderOffers,
+    activeReservations,
+    staleReservations,
+    activeQueueEntries,
+    staleQueueEntries,
+    temporaryIrisSessions,
+    orphanedIrisSessions,
+    dispatchHealthScore: 100,
+  };
+  report.dispatchHealthScore = pipelineHealthScore(report);
+  return {
+    report,
+    staleDeliveryRefs,
+    staleTransientRefs: Object.fromEntries(Object.entries(transient).map(([key, value]) => [key, value.refs])),
+  };
+}
+
 function founderPurgePatch({founderUid, reason, now = FieldValue.serverTimestamp()}) {
   return {
     status: "expired",
@@ -255,6 +351,15 @@ function clearTransientPatch({deliveryId, founderUid, reason}) {
     clearReason: reason,
     clearedAt: FieldValue.serverTimestamp(),
     updatedAt: FieldValue.serverTimestamp(),
+  };
+}
+
+function pipelineResetPatch({deliveryId, adminUid, reason}) {
+  return {
+    ...clearTransientPatch({deliveryId, founderUid: adminUid, reason}),
+    pipelineHealthReset: true,
+    pipelineHealthResetBy: adminUid,
+    pipelineHealthResetReason: reason,
   };
 }
 
@@ -434,6 +539,111 @@ function purgeFounderTestPipeline() {
   });
 }
 
+function pipelineHealthReset() {
+  return functions.https.onCall(async (data, context) => {
+    const adminUid = requireAdmin(context, "Operations Admin access is required.");
+    const db = getFirestore();
+    const reason = `${data && data.reason || ""}`.trim().slice(0, 1000);
+    if (reason.length < 12) {
+      throw new functions.https.HttpsError("invalid-argument", "A detailed reset reason is required.");
+    }
+    const limit = Math.min(Math.max(Number(data && data.limit) || 300, 1), 500);
+    const expirationHours = Math.min(Math.max(Number(data && data.expirationHours) || 24, 1), 168);
+    const expirationMs = expirationHours * 60 * 60 * 1000;
+    const now = new Date();
+    const before = await pipelineHealthReport(db, {now, expirationMs, limit});
+    const batch = db.batch();
+    const maxCleanupWrites = 430;
+    let cleanupWrites = 0;
+    const summary = {
+      deliveriesExpired: 0,
+      offersRemoved: 0,
+      reservationsReleased: 0,
+      queueEntriesCleared: 0,
+      irisSessionsCleaned: 0,
+      temporaryCachesCleared: 0,
+      errors: [],
+    };
+
+    for (const ref of before.staleDeliveryRefs) {
+      if (cleanupWrites >= maxCleanupWrites) {
+        summary.errors.push({
+          path: ref.path,
+          code: "cleanup_write_limit_deferred",
+        });
+        continue;
+      }
+      const doc = await ref.get();
+      const delivery = doc.data() || {};
+      if (!canFounderPurgeDelivery(delivery, now, expirationMs)) continue;
+      summary.deliveriesExpired += 1;
+      cleanupWrites += 1;
+      batch.set(ref, founderPurgePatch({founderUid: adminUid, reason}), {merge: true});
+    }
+
+    Object.entries(before.staleTransientRefs).forEach(([collection, refs]) => {
+      refs.forEach((ref) => {
+        if (cleanupWrites >= maxCleanupWrites) {
+          summary.errors.push({
+            collection,
+            path: ref.path,
+            code: "cleanup_write_limit_deferred",
+          });
+          return;
+        }
+        cleanupWrites += 1;
+        batch.set(ref, pipelineResetPatch({
+          deliveryId: ref.id,
+          adminUid,
+          reason,
+        }), {merge: true});
+      });
+      if (offerCollections.has(collection)) summary.offersRemoved += refs.length;
+      else if (reservationCollections.has(collection)) summary.reservationsReleased += refs.length;
+      else if (queueCollections.has(collection)) summary.queueEntriesCleared += refs.length;
+      else if (irisTemporaryCollections.has(collection)) summary.irisSessionsCleaned += refs.length;
+      else summary.temporaryCachesCleared += refs.length;
+    });
+
+    const audit = {
+      action: "pipeline_health_reset",
+      actionType: "pipeline_health_reset",
+      recordType: "dispatchPipeline",
+      recordId: `pipeline-health-reset-${Date.now()}`,
+      adminUserId: adminUid,
+      adminEmail: context.auth.token.email || "",
+      reason,
+      before: before.report,
+      summary,
+      createdAt: FieldValue.serverTimestamp(),
+      immutable: true,
+    };
+    const auditRef = db.collection("adminAuditLogs").doc();
+    const runRef = db.collection("deliveryCleanupRuns").doc();
+    batch.set(auditRef, audit);
+    batch.set(runRef, {
+      type: "pipeline_health_reset",
+      adminUserId: adminUid,
+      reason,
+      before: before.report,
+      summary,
+      auditId: auditRef.id,
+      createdAt: FieldValue.serverTimestamp(),
+    });
+    await batch.commit();
+
+    const after = await pipelineHealthReport(db, {now: new Date(), expirationMs, limit});
+    await runRef.set({after: after.report, completedAt: FieldValue.serverTimestamp()}, {merge: true});
+    return {
+      ok: summary.errors.length === 0,
+      auditId: auditRef.id,
+      before: before.report,
+      after: after.report,
+      ...summary,
+    };
+  });
+}
+
 module.exports = {
   archiveExpiredDeliveries,
   archiveExpiredPatch,
@@ -442,5 +652,8 @@ module.exports = {
   founderPurgePatch,
   isArchiveRecord,
   missingCanonicalFields,
+  pipelineHealthReport,
+  pipelineHealthReset,
+  pipelineHealthScore,
   purgeFounderTestPipeline,
 };

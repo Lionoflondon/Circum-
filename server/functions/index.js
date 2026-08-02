@@ -306,6 +306,7 @@ exports.adminRecordRiderEvent =
   adminOperationsAuthority.adminRecordRiderEvent;
 exports.adminResolveMessageReport =
   adminOperationsAuthority.adminResolveMessageReport;
+exports.pipelineHealthReset = deliveryCleanup.pipelineHealthReset();
 exports.resetRiderTestStripeAccount =
   riderConnect.resetRiderTestStripeAccount();
 exports.handleStripeConnectWebhook =

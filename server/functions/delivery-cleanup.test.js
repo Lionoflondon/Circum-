@@ -116,6 +116,36 @@ test("Founder purge callable is exported and Founder-authorized", () => {
   assert.match(index, /exports\.purgeFounderTestPipeline = deliveryCleanup\.purgeFounderTestPipeline\(\)/);
 });
 
+test("Pipeline health reset is Admin-only audited and exported", () => {
+  const source = require("node:fs").readFileSync(require("node:path").join(__dirname, "delivery-cleanup.js"), "utf8");
+  const index = require("node:fs").readFileSync(require("node:path").join(__dirname, "index.js"), "utf8");
+
+  assert.match(source, /function pipelineHealthReset\(\)/);
+  assert.match(source, /requireAdmin\(context, "Operations Admin access is required\."\)/);
+  assert.match(source, /actionType: "pipeline_health_reset"/);
+  assert.match(source, /before: before\.report/);
+  assert.match(source, /after: after\.report/);
+  assert.match(source, /immutable: true/);
+  assert.match(index, /exports\.pipelineHealthReset = deliveryCleanup\.pipelineHealthReset\(\)/);
+});
+
+test("Pipeline health score only penalizes stale operational artefacts", () => {
+  assert.equal(cleanup.pipelineHealthScore({
+    staleSearchingDeliveries: 0,
+    expiredRiderOffers: 0,
+    staleReservations: 0,
+    staleQueueEntries: 0,
+    orphanedIrisSessions: 0,
+  }), 100);
+  assert.equal(cleanup.pipelineHealthScore({
+    staleSearchingDeliveries: 2,
+    expiredRiderOffers: 1,
+    staleReservations: 1,
+    staleQueueEntries: 0,
+    orphanedIrisSessions: 0,
+  }), 80);
+});
+
 test("missing canonical fields include account recovery fields", () => {
   const missing = cleanup.missingCanonicalFields({
     status: "requested",

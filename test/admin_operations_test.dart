@@ -905,6 +905,12 @@ void main() {
       expect(source, contains('Recovery Matrix'));
       expect(source, contains('Super Admin callable with audit'));
       expect(source, contains('No raw record editing or user impersonation'));
+      expect(source, contains('Pipeline Health Reset'));
+      expect(source, contains("httpsCallable('pipelineHealthReset')"));
+      expect(source, contains('This expires only stale unaccepted deliveries'));
+      expect(source, contains('Deliveries expired:'));
+      expect(source, contains('Before score:'));
+      expect(source, contains('After score:'));
       expect(source, contains('force_logout'));
       expect(source, contains('Reconcile'));
       expect(AdminModule.values, contains(AdminModule.irisRepository));
@@ -944,7 +950,8 @@ void main() {
       expect(source, contains('Alias Manager'));
       expect(source, contains('Category Management'));
       expect(source, contains('Imports and Repository Settings'));
-      expect(source, contains("httpsCallable('adminUpdateIrisRepositoryRecord')"));
+      expect(
+          source, contains("httpsCallable('adminUpdateIrisRepositoryRecord')"));
       expect(
         source,
         isNot(contains("collection('irisCanonicalObjects').doc(canonicalId)")),
@@ -966,8 +973,10 @@ void main() {
       expect(source, contains('Future<void> _suggestGiftCampaignMatch'));
       expect(source, contains('Future<void> _approveGiftCampaignMatch'));
       expect(source, contains('Future<void> _bulkGiftCampaignAction'));
-      expect(source, contains("httpsCallable('adminSuggestGiftCampaignMatch')"));
-      expect(source, contains("httpsCallable('adminApproveGiftCampaignMatch')"));
+      expect(
+          source, contains("httpsCallable('adminSuggestGiftCampaignMatch')"));
+      expect(
+          source, contains("httpsCallable('adminApproveGiftCampaignMatch')"));
       expect(source, contains("httpsCallable('adminBulkGiftCampaignAction')"));
       expect(
         source,

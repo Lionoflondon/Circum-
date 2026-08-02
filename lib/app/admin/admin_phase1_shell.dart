@@ -3139,6 +3139,76 @@ class _AdminPhaseOneShellState extends State<AdminPhaseOneShell> {
     }
   }
 
+  Future<void> _pipelineHealthReset() async {
+    if (!_can(AdminPermission.manageIssues)) {
+      setState(() => _message = 'Your role cannot reset pipeline health.');
+      return;
+    }
+    const reason =
+        'Admin Operations Pipeline Health Reset for stale operational artefacts.';
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Pipeline Health Reset'),
+        content: const Text(
+          'This expires only stale unaccepted deliveries and clears expired operational queue artefacts. Accepted, assigned, delivered and financial records are never touched.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Run reset'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true) return;
+    try {
+      final result =
+          await _functions.httpsCallable('pipelineHealthReset').call({
+        'reason': reason,
+      });
+      final data = Map<String, dynamic>.from(result.data as Map);
+      if (!mounted) return;
+      await showDialog<void>(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: const Text('Pipeline Health Reset complete'),
+          content: Text(_pipelineHealthSummary(data)),
+          actions: [
+            FilledButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Done'),
+            ),
+          ],
+        ),
+      );
+      setState(() => _message = 'Pipeline Health Reset completed.');
+      await _loadAdminData();
+    } on FirebaseFunctionsException catch (error) {
+      setState(() => _message = _functionsMessage(error));
+    }
+  }
+
+  String _pipelineHealthSummary(Map<String, dynamic> data) {
+    final before = Map<String, dynamic>.from((data['before'] as Map?) ?? {});
+    final after = Map<String, dynamic>.from((data['after'] as Map?) ?? {});
+    return [
+      'Before score: ${before['dispatchHealthScore'] ?? 'n/a'}',
+      'After score: ${after['dispatchHealthScore'] ?? 'n/a'}',
+      'Deliveries expired: ${data['deliveriesExpired'] ?? 0}',
+      'Offers removed: ${data['offersRemoved'] ?? 0}',
+      'Reservations released: ${data['reservationsReleased'] ?? 0}',
+      'Queue entries cleared: ${data['queueEntriesCleared'] ?? 0}',
+      'IRIS sessions cleaned: ${data['irisSessionsCleaned'] ?? 0}',
+      'Temporary caches cleared: ${data['temporaryCachesCleared'] ?? 0}',
+      'Audit ID: ${data['auditId'] ?? ''}',
+    ].join('\n');
+  }
+
   void _openRiderProfile(Map<String, dynamic> rider) {
     setState(() {
       _selectedRider = rider;
@@ -3365,6 +3435,7 @@ class _AdminPhaseOneShellState extends State<AdminPhaseOneShell> {
                       onAddAdminNote: _addAdminNote,
                       onUpdateSenderTrust: _updateSenderTrust,
                       onGovernanceAction: _performGovernanceAction,
+                      onPipelineHealthReset: _pipelineHealthReset,
                     ),
                   ),
                 ],
@@ -4273,6 +4344,7 @@ class _AdminModuleBody extends StatelessWidget {
     required this.onUpdateSenderTrust,
     required this.onRetryNotificationDelivery,
     required this.onGovernanceAction,
+    required this.onPipelineHealthReset,
   });
 
   final AdminModule module;
@@ -4402,6 +4474,7 @@ class _AdminModuleBody extends StatelessWidget {
   final Future<void> Function(Map<String, dynamic>, String) onUpdateSenderTrust;
   final Future<void> Function(Map<String, dynamic>) onRetryNotificationDelivery;
   final Future<void> Function(Map<String, dynamic>, String) onGovernanceAction;
+  final Future<void> Function() onPipelineHealthReset;
 
   @override
   Widget build(BuildContext context) {
@@ -4438,6 +4511,7 @@ class _AdminModuleBody extends StatelessWidget {
               query: query,
               canRecover: canManageIssues,
               onGovernanceAction: onGovernanceAction,
+              onPipelineHealthReset: onPipelineHealthReset,
               onRetryNotificationDelivery: onRetryNotificationDelivery,
               onOpenDelivery: onOpenDeliveryProfile,
             ),
@@ -17079,6 +17153,7 @@ class _GovernanceOperationsModule extends StatelessWidget {
     required this.query,
     required this.canRecover,
     required this.onGovernanceAction,
+    required this.onPipelineHealthReset,
     required this.onRetryNotificationDelivery,
     required this.onOpenDelivery,
   });
@@ -17107,6 +17182,7 @@ class _GovernanceOperationsModule extends StatelessWidget {
   final String query;
   final bool canRecover;
   final Future<void> Function(Map<String, dynamic>, String) onGovernanceAction;
+  final Future<void> Function() onPipelineHealthReset;
   final Future<void> Function(Map<String, dynamic>) onRetryNotificationDelivery;
   final ValueChanged<Map<String, dynamic>> onOpenDelivery;
 
@@ -17317,6 +17393,40 @@ class _GovernanceOperationsModule extends StatelessWidget {
           subtitle:
               'Observe, investigate, recover and resolve operational issues without impersonating users or editing private preferences.',
         ),
+        if (canRecover) ...[
+          const SizedBox(height: 14),
+          DecoratedBox(
+            decoration: _panelDecoration(),
+            child: Padding(
+              padding: const EdgeInsets.all(18),
+              child: Row(
+                children: [
+                  const Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Pipeline Health Reset',
+                          style: TextStyle(fontWeight: FontWeight.w900),
+                        ),
+                        SizedBox(height: 6),
+                        Text(
+                          'Expires stale unaccepted jobs and clears expired operational queue artefacts with audit.',
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  FilledButton.icon(
+                    onPressed: () => unawaited(onPipelineHealthReset()),
+                    icon: const Icon(Icons.health_and_safety_rounded),
+                    label: const Text('Pipeline Health Reset'),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
         const SizedBox(height: 14),
         Wrap(
           spacing: 12,
