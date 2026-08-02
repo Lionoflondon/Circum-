@@ -61,6 +61,20 @@ test("Rider account creation initializes backend-owned rank and trust", () => {
   assert.match(source, /trustPoints:\s*0/);
 });
 
+test("Rider application mirrors submitted vehicle into all canonical records", () => {
+  const submitStart = source.indexOf("exports.submitRiderApplication");
+  const submitEnd = source.indexOf("exports.", submitStart + 1);
+  const submitBody = source.slice(submitStart, submitEnd === -1 ? undefined : submitEnd);
+  assert.match(submitBody, /transaction\.set\(applicationRef/);
+  assert.match(submitBody, /transaction\.set\(profileRef/);
+  assert.match(submitBody, /transaction\.set\(riderRef/);
+  assert.match(submitBody, /vehicleType:\s*application\.vehicleType/);
+  assert.match(submitBody, /vehicleRegistration:\s*application\.vehicleRegistration/);
+  assert.match(submitBody, /type:\s*application\.vehicleType/);
+  assert.match(submitBody, /registration:\s*application\.vehicleRegistration/);
+  assert.match(submitBody, /plateNumber:\s*application\.vehicleRegistration/);
+});
+
 test("Rider Web routes operational self-service mutations through callables", () => {
   assert.match(websiteSource, /httpsCallable\('updateRiderProfile'\)/);
   assert.match(websiteSource, /httpsCallable\('requestRiderEmailChange'\)/);

@@ -33,6 +33,27 @@ test("Admin Rider authority supports required certification actions", () => {
   }
 });
 
+test("Admin Rider approval performs canonical projection synchronisation", () => {
+  const source = fs.readFileSync("admin-rider-authority.js", "utf8");
+
+  assert.match(source, /approvalProjection/);
+  assert.match(source, /riderApplicationsFor/);
+  assert.match(source, /applicationState\.refs\.forEach/);
+  assert.match(source, /canonical_rider_approval_sync/);
+});
+
+test("Admin canonical Rider repair is admin-only, idempotent and audited", () => {
+  const source = fs.readFileSync("admin-rider-authority.js", "utf8");
+
+  assert.match(source, /exports\.adminRepairCanonicalRider = functions\.https\.onCall/);
+  assert.match(source, /assertRiderAdmin\(context\)/);
+  assert.match(source, /db\.runTransaction/);
+  assert.match(source, /repair_canonical_rider/);
+  assert.match(source, /canonical_rider_repaired/);
+  assert.match(source, /riderAuthorityAudit/);
+  assert.match(source, /idempotent: true/);
+});
+
 test("Admin Rider document review status history stores event objects, not " +
     "nested arrays", () => {
   const source = fs.readFileSync("admin-rider-authority.js", "utf8");
@@ -48,5 +69,9 @@ test("Admin Rider authority is exported from Firebase Functions index", () => {
   assert.match(
       source,
       /exports\.adminReviewRider = adminRiderAuthority\.adminReviewRider/,
+  );
+  assert.match(
+      source,
+      /exports\.adminRepairCanonicalRider =\s*adminRiderAuthority\.adminRepairCanonicalRider/,
   );
 });

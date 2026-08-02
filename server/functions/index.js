@@ -241,6 +241,8 @@ exports.requestRiderWithdrawal = riderConnect.requestRiderWithdrawal();
 exports.cancelRiderWithdrawal = riderConnect.cancelRiderWithdrawal();
 exports.adminReviewRiderWithdrawal = riderConnect.adminReviewRiderWithdrawal();
 exports.adminReviewRider = adminRiderAuthority.adminReviewRider;
+exports.adminRepairCanonicalRider =
+  adminRiderAuthority.adminRepairCanonicalRider;
 exports.adminGovernanceAction = adminGovernance.adminGovernanceAction;
 exports.adminResolveAccess = adminOperationsAuthority.adminResolveAccess;
 exports.adminRecordAuditEntry = adminOperationsAuthority.adminRecordAuditEntry;

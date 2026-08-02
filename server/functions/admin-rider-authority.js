@@ -3,7 +3,7 @@ const functions = require("firebase-functions/v1");
 const {getFirestore, FieldValue} = require("firebase-admin/firestore");
 const {getStorage} = require("firebase-admin/storage");
 const {requireAdmin} = require("./admin-auth");
-const {payoutReadiness} = require("./rider-certification-policy");
+const {approvalProjection} = require("./rider-canonical-account");
 
 const RIDER_ACTIONS = new Set([
   "approve",
@@ -223,6 +223,25 @@ async function deleteStorageObject(path) {
   }
 }
 
+async function riderApplicationsFor(transaction, db, riderId) {
+  const directRef = db.collection("riderApplications").doc(riderId);
+  const directSnap = await transaction.get(directRef);
+  const byRiderId = await transaction.get(
+      db.collection("riderApplications").where("riderId", "==", riderId).limit(10),
+  );
+  const applications = [];
+  const refs = new Map();
+  if (directSnap.exists) {
+    applications.push({id: directSnap.id, ...directSnap.data()});
+    refs.set(directSnap.id, directRef);
+  }
+  byRiderId.docs.forEach((doc) => {
+    applications.push({id: doc.id, ...doc.data()});
+    refs.set(doc.id, doc.ref);
+  });
+  return {applications, refs};
+}
+
 exports.adminReviewRider = functions.https.onCall(async (data, context) => {
   const actorId = assertRiderAdmin(context);
   const db = getFirestore();
@@ -254,9 +273,10 @@ exports.adminReviewRider = functions.https.onCall(async (data, context) => {
     if (auditSnap.exists) {
       return {idempotent: true, auditId: auditRef.id, ...(auditSnap.data() || {})};
     }
-    const [riderSnap, profileSnap] = await Promise.all([
+    const [riderSnap, profileSnap, applicationState] = await Promise.all([
       transaction.get(riderRef),
       transaction.get(profileRef),
+      riderApplicationsFor(transaction, db, riderId),
     ]);
     if (!riderSnap.exists && !profileSnap.exists) {
       throw new functions.https.HttpsError("not-found", "Rider was not found.");
@@ -312,16 +332,22 @@ exports.adminReviewRider = functions.https.onCall(async (data, context) => {
         const documentSnapshot = await transaction.get(
             db.collection("riderDocuments").where("riderId", "==", riderId).limit(100),
         );
-        const readiness = payoutReadiness(
-            {
-              ...rider,
-              ...profile,
-              onboardingStatus: "approved",
-              approvalStatus: "approved",
-              verificationStatus: "approved",
-            },
-            documentSnapshot.docs.map((doc) => ({id: doc.id, ...doc.data()})),
-        );
+        const documents = documentSnapshot.docs.map((doc) => ({id: doc.id, ...doc.data()}));
+        const projection = approvalProjection({
+          rider,
+          profile,
+          applications: applicationState.applications,
+          documents,
+          actor,
+          reason,
+          approve: true,
+        });
+        if (!projection.ok) {
+          throw new functions.https.HttpsError("failed-precondition", projection.message, {
+            reason: projection.reason,
+          });
+        }
+        const readiness = projection.readiness;
         const failedApprovalChecks = Object.entries(readiness.checks)
             .filter(([key, ok]) => ok !== true && ![
               "stripeAccountExists",
@@ -355,9 +381,22 @@ exports.adminReviewRider = functions.https.onCall(async (data, context) => {
           patch.complianceOverrideAt = FieldValue.serverTimestamp();
           patch.complianceOverrideFailedChecks = failedApprovalChecks;
         }
+        patch = {...patch, ...projection.riderPatch};
+        const profilePatch = {...patch, ...projection.profilePatch};
+        transaction.set(profileRef, profilePatch, {merge: true});
+        applicationState.refs.forEach((ref) => {
+          transaction.set(ref, projection.applicationPatch, {merge: true});
+        });
+        console.info("canonical_rider_approval_sync", {
+          riderId,
+          actorId,
+          applicationCount: applicationState.applications.length,
+          before: projection.before,
+          after: projection.after,
+        });
       }
       transaction.set(riderRef, patch, {merge: true});
-      transaction.set(profileRef, patch, {merge: true});
+      if (action !== "approve") transaction.set(profileRef, patch, {merge: true});
     }
     const audit = {
       riderId,
@@ -406,4 +445,79 @@ exports.adminReviewRider = functions.https.onCall(async (data, context) => {
     auditId: result.auditId,
     idempotent: result.idempotent === true,
   };
+});
+
+exports.adminRepairCanonicalRider = functions.https.onCall(async (data, context) => {
+  const actorId = assertRiderAdmin(context);
+  const db = getFirestore();
+  const riderId = text(data && data.riderId);
+  const reason = text(data && data.reason);
+  const idempotencyKey = text(data && data.idempotencyKey) ||
+    `${actorId}:${riderId}:canonical_repair`;
+  if (!riderId) {
+    throw new functions.https.HttpsError("invalid-argument", "A Rider is required.");
+  }
+  if (!reason || reason.length < 12) {
+    throw new functions.https.HttpsError("invalid-argument", "A detailed canonical repair reason is required.");
+  }
+  const actor = {
+    uid: actorId,
+    email: text(context.auth.token.email),
+  };
+  const riderRef = db.collection("riders").doc(riderId);
+  const profileRef = db.collection("riderProfiles").doc(riderId);
+  const auditRef = db.collection("riderAuthorityAudit").doc(idempotencyKey.replace(/[/.#[\]]/g, "_"));
+  return db.runTransaction(async (transaction) => {
+    const auditSnap = await transaction.get(auditRef);
+    if (auditSnap.exists) {
+      return {ok: true, idempotent: true, auditId: auditRef.id, ...(auditSnap.data() || {})};
+    }
+    const [riderSnap, profileSnap, applicationState, documentSnapshot] = await Promise.all([
+      transaction.get(riderRef),
+      transaction.get(profileRef),
+      riderApplicationsFor(transaction, db, riderId),
+      transaction.get(db.collection("riderDocuments").where("riderId", "==", riderId).limit(100)),
+    ]);
+    if (!riderSnap.exists && !profileSnap.exists) {
+      throw new functions.https.HttpsError("not-found", "Rider was not found.");
+    }
+    const rider = riderSnap.data() || {};
+    const profile = profileSnap.data() || {};
+    const documents = documentSnapshot.docs.map((doc) => ({id: doc.id, ...doc.data()}));
+    const projection = approvalProjection({
+      rider,
+      profile,
+      applications: applicationState.applications,
+      documents,
+      actor,
+      reason,
+      approve: false,
+    });
+    if (!projection.ok) {
+      throw new functions.https.HttpsError("failed-precondition", projection.message, {
+        reason: projection.reason,
+      });
+    }
+    transaction.set(riderRef, projection.riderPatch, {merge: true});
+    transaction.set(profileRef, projection.profilePatch, {merge: true});
+    applicationState.refs.forEach((ref) => {
+      transaction.set(ref, projection.applicationPatch, {merge: true});
+    });
+    const audit = {
+      riderId,
+      action: "repair_canonical_rider",
+      eventAction: "canonical_rider_repaired",
+      reason,
+      before: projection.before,
+      after: projection.after,
+      readiness: projection.readiness,
+      applicationCount: applicationState.applications.length,
+      actorId,
+      actorEmail: actor.email || null,
+      createdAt: FieldValue.serverTimestamp(),
+    };
+    transaction.set(auditRef, audit);
+    console.info("canonical_rider_repair", audit);
+    return {ok: true, idempotent: false, auditId: auditRef.id, riderId, after: projection.after};
+  });
 });
