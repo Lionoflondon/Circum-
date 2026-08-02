@@ -2448,8 +2448,37 @@ function normalizeRiderRank(value) {
 }
 
 const APPROVED_RIDER_STATUSES = new Set(["approved", "verified"]);
+const DISPATCH_TEST_ACCOUNT_TYPES = new Set(["internal_tester", "qa_account", "demo_account"]);
+
+function founderWaiverToken(value) {
+  return normalize(value).replace(/\s+/g, "_");
+}
+
+function founderTestWaivers(rider = {}) {
+  const designation = rider.founderTestAccount || rider.internalTestAccount || {};
+  if (designation.active !== true) return new Set();
+  const type = founderWaiverToken(designation.accountType || designation.type);
+  if (!DISPATCH_TEST_ACCOUNT_TYPES.has(type)) return new Set();
+  return new Set(Array.isArray(designation.waivers) ?
+    designation.waivers.map(founderWaiverToken) : []);
+}
+
+function founderWaivesDispatchEligibility(rider = {}) {
+  return founderTestWaivers(rider).has("dispatch_eligibility");
+}
+
+function founderWaivesEligibilityField(rider = {}, field) {
+  const waivers = founderTestWaivers(rider);
+  if (field === "approvalStatus") return waivers.has("approval_status");
+  if (field === "verificationStatus") return waivers.has("verification_status");
+  if (field === "adminApprovalStatus") return waivers.has("admin_approval");
+  if (field === "accountStatus") return waivers.has("account_status");
+  if (field === "onboardingStatus") return waivers.has("rider_onboarding");
+  return false;
+}
 
 function isApprovedRiderForDispatch(rider = {}) {
+  if (founderWaivesDispatchEligibility(rider)) return true;
   return [
     rider.approvalStatus,
     rider.verificationStatus,
@@ -2476,6 +2505,7 @@ function riderDispatchEligibilityReason(rider = {}) {
     ["onboardingStatus", "onboarding_incomplete"],
   ];
   const failed = reasons.find(([field]) => {
+    if (founderWaivesEligibilityField(rider, field)) return false;
     const value = normalize(fields[field]);
     return value && value !== "approved" && value !== "verified";
   });

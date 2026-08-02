@@ -4,6 +4,7 @@ const {getFirestore, FieldValue} = require("firebase-admin/firestore");
 const {getMessaging} = require("firebase-admin/messaging");
 const {isDispatchable, riderCanViewDispatch, riderDispatchEligibilityReason, riderMatchesIris} = require("./iris-core");
 const {riderVehicleMatchesRequest} = require("./vehicle-dispatch");
+const {loadFounderTestAccount} = require("./founder-authority");
 
 const cleanText = (value, fallback = "") => {
   if (value === undefined || value === null) return fallback;
@@ -150,6 +151,10 @@ const acceptRideRequests = functions.https.onCall(async (data, context) => {
 
   if (!rider) {
     throw new functions.https.HttpsError("not-found", "Rider profile not found.");
+  }
+  const founderTestAccount = await loadFounderTestAccount(db, riderId);
+  if (founderTestAccount) {
+    rider.founderTestAccount = founderTestAccount;
   }
 
   const accepted = await db.runTransaction(async (transaction) => {

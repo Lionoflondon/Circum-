@@ -12,6 +12,7 @@ const {
   dispatchPriority,
   normalizeRiderRank,
   riderCanViewDispatch,
+  riderDispatchEligibilityReason,
   riderDispatchPriority,
 } = require("./iris-core");
 
@@ -1061,6 +1062,50 @@ test("rider rank never hides jobs and only changes backup priority", () => {
   }, now), true);
   assert.equal(riderDispatchPriority({rank: "sentinel"}, {createdAt: "2026-06-14T11:59:00Z"}, now), 0);
   assert.equal(riderDispatchPriority({rank: "sentinel"}, {createdAt: "2026-06-14T11:55:00Z"}, now), 1);
+});
+
+test("Founder internal test account waives only configured dispatch gates", () => {
+  const pending = {
+    approvalStatus: "submitted",
+    verificationStatus: "verification_pending",
+    adminApprovalStatus: "pending",
+    accountStatus: "active",
+    onboardingStatus: "application_submitted",
+  };
+  assert.equal(riderCanViewDispatch(pending, {}), false);
+  assert.equal(riderDispatchEligibilityReason(pending), "approval_pending");
+
+  const waivesOnboardingOnly = {
+    ...pending,
+    founderTestAccount: {
+      active: true,
+      accountType: "internal_tester",
+      waivers: ["rider_onboarding"],
+    },
+  };
+  assert.equal(riderCanViewDispatch(waivesOnboardingOnly, {}), false);
+  assert.equal(riderDispatchEligibilityReason(waivesOnboardingOnly), "approval_pending");
+
+  const waivesDispatch = {
+    ...pending,
+    founderTestAccount: {
+      active: true,
+      accountType: "internal_tester",
+      waivers: ["dispatch_eligibility"],
+    },
+  };
+  assert.equal(riderCanViewDispatch(waivesDispatch, {}), true);
+  assert.equal(riderDispatchEligibilityReason(waivesDispatch), null);
+
+  const inactiveDesignation = {
+    ...pending,
+    founderTestAccount: {
+      active: false,
+      accountType: "internal_tester",
+      waivers: ["dispatch_eligibility"],
+    },
+  };
+  assert.equal(riderCanViewDispatch(inactiveDesignation, {}), false);
 });
 
 test("rider mismatch is evidence, not final truth", () => {

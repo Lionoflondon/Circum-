@@ -9,7 +9,15 @@ const FOUNDER_EMAIL = "ayojason600@gmail.com";
 
 const TEST_ACCOUNT_TYPES = new Set(["internal_tester", "qa_account", "demo_account"]);
 const TEST_WAIVERS = new Set([
+  "rider_onboarding",
   "vehicle_registration",
+  "vehicle_information",
+  "document_approval",
+  "dispatch_eligibility",
+  "approval_status",
+  "verification_status",
+  "admin_approval",
+  "account_status",
   "profile_photo",
   "identity",
   "insurance",
@@ -115,10 +123,28 @@ function founderDesignateTestAccount() {
   });
 }
 
+async function loadFounderTestAccount(db, uid) {
+  const targetUid = text(uid, 128);
+  if (!targetUid) return null;
+  const snap = await db.collection("founderTestAccounts").doc(targetUid).get();
+  if (!snap.exists) return null;
+  const data = snap.data() || {};
+  if (data.active !== true) return null;
+  const accountType = cleanTestType(data.accountType);
+  const waivers = cleanWaivers(data.waivers);
+  return {
+    active: true,
+    targetUid,
+    accountType,
+    waivers,
+  };
+}
+
 module.exports = {
   FOUNDER_UID,
   FOUNDER_EMAIL,
   assertFounder,
   isFounderContext,
   founderDesignateTestAccount,
+  loadFounderTestAccount,
 };
