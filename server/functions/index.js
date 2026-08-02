@@ -422,6 +422,7 @@ exports.updateRiderApplicationSection =
   riderAccount.updateRiderApplicationSection;
 exports.submitRiderDocument = riderAccount.submitRiderDocument;
 exports.archiveExpiredDeliveries = deliveryCleanup.archiveExpiredDeliveries;
+exports.purgeFounderTestPipeline = deliveryCleanup.purgeFounderTestPipeline();
 exports.resolveStaleDeliveryLock = staleDelivery.resolveStaleDeliveryLock;
 exports.reconcileStaleDeliveryLocks = staleDelivery.reconcileStaleDeliveryLocks;
 

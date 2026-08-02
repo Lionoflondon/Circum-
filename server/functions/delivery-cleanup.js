@@ -1,6 +1,7 @@
 /* eslint-disable max-len, require-jsdoc */
 const functions = require("firebase-functions/v1");
 const {getFirestore, FieldValue} = require("firebase-admin/firestore");
+const {assertFounder} = require("./founder-authority");
 
 const archiveStatuses = new Set([
   "archived_stale",
@@ -29,6 +30,27 @@ const protectedStatuses = new Set([
   "paid",
 ]);
 
+const founderPurgeOpenStatuses = new Set([
+  "searching",
+  "requested",
+  "pending",
+  "broadcast",
+  "broadcasted",
+  "finding_rider",
+  "awaiting_rider",
+]);
+
+const transientDeliveryCollections = [
+  "dispatchInspections",
+  "irisPrivate",
+  "staleDeliveryQueue",
+  "dispatchQueue",
+  "matchmakingQueue",
+  "dispatchReservations",
+  "deliveryOffers",
+  "riderOffers",
+];
+
 function normalize(value) {
   return `${value || ""}`.trim().toLowerCase();
 }
@@ -41,6 +63,15 @@ function readDate(value) {
     const date = new Date(value);
     return Number.isNaN(date.getTime()) ? null : date;
   }
+  return null;
+}
+
+function readMillis(value) {
+  const date = readDate(value);
+  if (date) return date.getTime();
+  if (typeof value === "number") return value;
+  if (value && typeof value.toMillis === "function") return value.toMillis();
+  if (value && typeof value.seconds === "number") return value.seconds * 1000;
   return null;
 }
 
@@ -117,6 +148,116 @@ function canAutoArchiveExpired(delivery, now = new Date()) {
   return missing.length > 0 || staleStatus || delivery.stale === true || delivery.manuallyMarkedStale === true;
 }
 
+function isFounderTestDelivery(delivery = {}) {
+  return delivery.founderTest === true ||
+    delivery.internalTest === true ||
+    delivery.testDelivery === true ||
+    delivery.isTest === true ||
+    normalize(delivery.testMode) === "founder" ||
+    normalize(delivery.deliveryMode) === "founder_test" ||
+    normalize(delivery.source) === "founder_e2e";
+}
+
+function hasAssignedRider(delivery = {}) {
+  return nonEmpty(delivery.riderId) ||
+    nonEmpty(delivery.assignedRiderId) ||
+    nonEmpty(delivery.acceptedByRiderId) ||
+    nonEmpty(delivery.reservedByRiderId);
+}
+
+function hasActiveWorkflow(delivery = {}) {
+  return delivery.disputeOpen === true ||
+    delivery.underReview === true ||
+    delivery.paymentInvestigation === true ||
+    delivery.cancellationPending === true ||
+    delivery.cancelRequested === true ||
+    delivery.refundPending === true ||
+    delivery.assignmentLocked === true ||
+    delivery.reservationLocked === true ||
+    delivery.liveAssignmentLock === true ||
+    nonEmpty(delivery.assignmentLockId) ||
+    nonEmpty(delivery.reservationId);
+}
+
+function founderPurgeAgeExpired(delivery = {}, now = new Date(), expirationMs = 24 * 60 * 60 * 1000) {
+  const explicitExpiry = readMillis(delivery.offerExpiresAt || delivery.dispatchExpiresAt ||
+    delivery.expiresAt || delivery.matchingExpiresAt);
+  if (explicitExpiry && explicitExpiry <= now.getTime()) return true;
+  const created = readMillis(delivery.createdAt || delivery.requestedAt || delivery.updatedAt);
+  return Boolean(created && now.getTime() - created >= expirationMs);
+}
+
+function canFounderPurgeDelivery(delivery, now = new Date(), expirationMs = 24 * 60 * 60 * 1000) {
+  if (!delivery || isArchiveRecord(delivery)) return false;
+  const statuses = [
+    delivery.status,
+    delivery.deliveryStatus,
+    delivery.flowStatus,
+    delivery.matchingStatus,
+    delivery.dispatchStatus,
+  ].map(normalize);
+  if (statuses.some((status) => protectedStatuses.has(status))) return false;
+  if (!statuses.some((status) => founderPurgeOpenStatuses.has(status))) return false;
+  if (hasAssignedRider(delivery)) return false;
+  if (hasActiveWorkflow(delivery)) return false;
+  return isFounderTestDelivery(delivery) || founderPurgeAgeExpired(delivery, now, expirationMs);
+}
+
+function founderPurgePatch({founderUid, reason, now = FieldValue.serverTimestamp()}) {
+  return {
+    status: "expired",
+    deliveryStatus: "expired",
+    flowStatus: "expired",
+    matchingStatus: "expired",
+    dispatchStatus: "expired",
+    broadcastBlocked: true,
+    broadcastBlockReason: "founder_test_pipeline_purge",
+    active: false,
+    expired: true,
+    staleArchived: true,
+    staleState: "expired",
+    removedFromActiveQueues: true,
+    founderPipelinePurged: true,
+    founderPipelinePurgeReason: reason,
+    founderPipelinePurgedAt: now,
+    founderPipelinePurgedBy: founderUid,
+    updatedAt: now,
+    offerExpiresAt: now,
+    dispatchExpiresAt: now,
+    matchingExpiresAt: now,
+  };
+}
+
+async function matchingDocs(db, collection, deliveryId, requestId) {
+  const byPath = new Map();
+  const direct = await db.collection(collection).doc(deliveryId).get();
+  if (direct.exists) byPath.set(direct.ref.path, direct.ref);
+  const fields = [
+    ["deliveryId", deliveryId],
+    ["requestId", requestId],
+    ["bookingId", requestId],
+  ].filter(([, value]) => nonEmpty(value));
+  const snapshots = await Promise.all(fields.map(([field, value]) =>
+    db.collection(collection).where(field, "==", value).limit(50).get().catch(() => null)));
+  snapshots.filter(Boolean).forEach((snapshot) => {
+    snapshot.docs.forEach((doc) => byPath.set(doc.ref.path, doc.ref));
+  });
+  return [...byPath.values()];
+}
+
+function clearTransientPatch({deliveryId, founderUid, reason}) {
+  return {
+    deliveryId,
+    status: "cleared",
+    active: false,
+    removedFromActiveQueues: true,
+    clearedBy: founderUid,
+    clearReason: reason,
+    clearedAt: FieldValue.serverTimestamp(),
+    updatedAt: FieldValue.serverTimestamp(),
+  };
+}
+
 function archiveExpiredPatch(delivery, now = FieldValue.serverTimestamp()) {
   const missing = missingCanonicalFields(delivery);
   return {
@@ -185,10 +326,121 @@ const archiveExpiredDeliveries = functions.pubsub
       return {count: affected.length, affected};
     });
 
+function purgeFounderTestPipeline() {
+  return functions.https.onCall(async (data, context) => {
+    const founder = assertFounder(context);
+    const db = getFirestore();
+    const reason = `${data && data.reason || ""}`.trim().slice(0, 1000);
+    if (reason.length < 12) {
+      throw new functions.https.HttpsError("invalid-argument", "A detailed purge reason is required.");
+    }
+    const limit = Math.min(Math.max(Number(data && data.limit) || 200, 1), 500);
+    const expirationHours = Math.min(Math.max(Number(data && data.expirationHours) || 24, 1), 168);
+    const expirationMs = expirationHours * 60 * 60 * 1000;
+    const now = new Date();
+    const snapshot = await db.collection("deliveryRequests").limit(limit).get();
+    const eligible = snapshot.docs.filter((doc) =>
+      canFounderPurgeDelivery(doc.data(), now, expirationMs));
+
+    const result = {
+      deliveriesExpired: [],
+      reservationsReleased: 0,
+      offersRemoved: 0,
+      queueEntriesCleared: 0,
+      errors: [],
+    };
+    const batch = db.batch();
+    for (const doc of eligible) {
+      const delivery = doc.data() || {};
+      const requestId = `${delivery.requestId || delivery.bookingId || doc.id}`.trim();
+      result.deliveriesExpired.push(doc.id);
+      batch.set(doc.ref, founderPurgePatch({
+        founderUid: founder.uid,
+        reason,
+      }), {merge: true});
+      batch.set(db.collection("adminAuditLogs").doc(), {
+        action: "founder_test_pipeline_purged",
+        actionType: "founder_test_pipeline_purged",
+        recordType: "deliveryRequests",
+        recordId: doc.id,
+        previousStatus: delivery.status || "",
+        newStatus: "expired",
+        reason,
+        founderUid: founder.uid,
+        founderEmail: founder.email,
+        createdAt: FieldValue.serverTimestamp(),
+      });
+      batch.set(db.collection("founderAuthorityAudit").doc(), {
+        founderUid: founder.uid,
+        founderEmail: founder.email,
+        targetUid: delivery.senderId || delivery.userId || null,
+        action: "purge_founder_test_pipeline",
+        recordType: "deliveryRequests",
+        recordId: doc.id,
+        previousValues: {
+          status: delivery.status || null,
+          dispatchStatus: delivery.dispatchStatus || null,
+          matchingStatus: delivery.matchingStatus || null,
+          riderId: delivery.riderId || delivery.assignedRiderId || null,
+        },
+        newValues: {
+          status: "expired",
+          dispatchStatus: "expired",
+          matchingStatus: "expired",
+        },
+        reason,
+        createdAt: FieldValue.serverTimestamp(),
+        immutable: true,
+      });
+
+      for (const collection of transientDeliveryCollections) {
+        try {
+          const refs = await matchingDocs(db, collection, doc.id, requestId);
+          refs.forEach((ref) => {
+            batch.set(ref, clearTransientPatch({
+              deliveryId: doc.id,
+              founderUid: founder.uid,
+              reason,
+            }), {merge: true});
+          });
+          if (collection.includes("Offer") || collection.includes("offer")) {
+            result.offersRemoved += refs.length;
+          } else if (collection.includes("Reservation") || collection.includes("reservation")) {
+            result.reservationsReleased += refs.length;
+          } else {
+            result.queueEntriesCleared += refs.length;
+          }
+        } catch (error) {
+          result.errors.push({deliveryId: doc.id, collection, message: error.message});
+        }
+      }
+    }
+    if (result.deliveriesExpired.length > 0 || result.errors.length > 0) {
+      batch.set(db.collection("deliveryCleanupRuns").doc(), {
+        type: "purge_founder_test_pipeline",
+        founderUid: founder.uid,
+        count: result.deliveriesExpired.length,
+        deliveryIds: result.deliveriesExpired,
+        reservationsReleased: result.reservationsReleased,
+        offersRemoved: result.offersRemoved,
+        queueEntriesCleared: result.queueEntriesCleared,
+        errors: result.errors,
+        reason,
+        createdAt: FieldValue.serverTimestamp(),
+      });
+      await batch.commit();
+    }
+    return {ok: result.errors.length === 0, ...result};
+  });
+}
+
 module.exports = {
   archiveExpiredDeliveries,
   archiveExpiredPatch,
   canAutoArchiveExpired,
+  canFounderPurgeDelivery,
+  founderPurgePatch,
   isArchiveRecord,
   missingCanonicalFields,
+  purgeFounderTestPipeline,
 };
