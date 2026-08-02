@@ -225,8 +225,9 @@ function documentData(snap) {
 
 async function riderApplicationsFor(db, uid, emails = []) {
   const byId = new Map();
-  const direct = await db.collection("riderApplications").doc(uid).get();
-  if (direct.exists) byId.set(direct.id, {id: direct.id, ...direct.data()});
+  const directRef = db.collection("riderApplications").doc(uid);
+  const direct = await directRef.get();
+  if (direct.exists) byId.set(direct.id, {ref: direct.ref, data: {id: direct.id, ...direct.data()}});
   const reads = [
     db.collection("riderApplications").where("riderId", "==", uid).limit(10).get(),
     db.collection("riderApplications").where("uid", "==", uid).limit(10).get(),
@@ -236,7 +237,7 @@ async function riderApplicationsFor(db, uid, emails = []) {
   });
   const snapshots = await Promise.all(reads);
   snapshots.forEach((snapshot) => {
-    snapshot.docs.forEach((doc) => byId.set(doc.id, {id: doc.id, ...doc.data()}));
+    snapshot.docs.forEach((doc) => byId.set(doc.id, {ref: doc.ref, data: {id: doc.id, ...doc.data()}}));
   });
   return [...byId.values()];
 }
@@ -270,11 +271,12 @@ function founderPreflightE2E() {
     const rider = documentData(riderSnap);
     const profile = documentData(profileSnap);
     const sender = documentData(senderSnap);
-    const applications = await riderApplicationsFor(db, targetUid, [
+    const applicationRecords = await riderApplicationsFor(db, targetUid, [
       rider.email,
       profile.email,
       sender.email,
     ]);
+    const applications = applicationRecords.map((record) => record.data);
     const documents = documentSnapshot.docs.map((doc) => ({id: doc.id, ...doc.data()}));
     const projection = approvalProjection({
       rider,
@@ -306,6 +308,9 @@ function founderPreflightE2E() {
         if (freshProjection.ok) {
           transaction.set(riderRef, freshProjection.riderPatch, {merge: true});
           transaction.set(profileRef, freshProjection.profilePatch, {merge: true});
+          applicationRecords.forEach((record) => {
+            transaction.set(record.ref, freshProjection.applicationPatch, {merge: true});
+          });
           repaired = true;
         }
       });
@@ -338,7 +343,9 @@ function founderPreflightE2E() {
         vehicleRegistration: projection.after.vehicleRegistration || null,
       }) : fail("vehicle_assignment", "vehicle_missing"),
       pass("required_backend_configuration", {projectId: process.env.GCLOUD_PROJECT || null}),
-      pass("google_maps_configuration", {configured: Boolean(process.env.GOOGLE_PLACES_API_KEY)}),
+      process.env.GOOGLE_PLACES_API_KEY ?
+        pass("google_maps_configuration", {configured: true}) :
+        fail("google_maps_configuration", "google_places_api_key_missing", {configured: false}),
       pass("stripe_configuration", {configured: true}),
       pass("roth_configuration", {configured: true}),
       pending("notification_readiness", "requires_live_device_token_confirmation"),
