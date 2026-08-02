@@ -4,6 +4,7 @@ const {getFirestore, FieldValue} = require("firebase-admin/firestore");
 const {getStorage} = require("firebase-admin/storage");
 const {requireAdmin} = require("./admin-auth");
 const {approvalProjection} = require("./rider-canonical-account");
+const {isFounderContext} = require("./founder-authority");
 
 const RIDER_ACTIONS = new Set([
   "approve",
@@ -38,6 +39,7 @@ function roleValues(token = {}) {
 }
 
 function assertRiderAdmin(context) {
+  if (isFounderContext(context)) return context.auth.uid;
   const uid = requireAdmin(context, "Rider administrator access is required.");
   const roles = roleValues(context.auth.token || {});
   if (
@@ -58,6 +60,7 @@ function assertRiderAdmin(context) {
 }
 
 function isSuperAdminContext(context) {
+  if (isFounderContext(context)) return true;
   const roles = roleValues(context.auth.token || {});
   return context.auth.token.superAdmin === true ||
     context.auth.token.super_admin === true ||

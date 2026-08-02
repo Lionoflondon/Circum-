@@ -16,6 +16,10 @@ const adminAuthority = fs.readFileSync(
     path.join(__dirname, "admin-rider-authority.js"),
     "utf8",
 );
+const riderCanonicalAccount = fs.readFileSync(
+    path.join(__dirname, "rider-canonical-account.js"),
+    "utf8",
+);
 
 test("rider document storage paths are not client-writable", () => {
   for (const collection of ["riderDocuments", "riders", "vehicleDocuments"]) {
@@ -36,7 +40,8 @@ test("rider document uploads use backend callable and canonical matrix", () => {
 });
 
 test("admin rider approval enforces application compliance without blocking Stripe self-service", () => {
-  assert.match(adminAuthority, /payoutReadiness/);
+  assert.match(adminAuthority, /approvalProjection/);
+  assert.match(riderCanonicalAccount, /payoutReadiness/);
   assert.match(adminAuthority, /action === "approve"/);
   assert.match(adminAuthority, /overrideCompliance/);
   assert.match(adminAuthority, /isSuperAdminContext/);

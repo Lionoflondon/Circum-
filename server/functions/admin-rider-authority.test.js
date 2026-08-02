@@ -7,6 +7,7 @@ test("Admin Rider authority is backend-owned and auditable", () => {
 
   assert.match(source, /exports\.adminReviewRider = functions\.https\.onCall/);
   assert.match(source, /assertRiderAdmin\(context\)/);
+  assert.match(source, /isFounderContext\(context\)/);
   assert.match(source, /db\.runTransaction/);
   assert.match(source, /collection\("riderProfiles"\)\.doc\(riderId\)/);
   assert.match(source, /collection\("riders"\)\.doc\(riderId\)/);
@@ -48,6 +49,7 @@ test("Admin canonical Rider repair is admin-only, idempotent and audited", () =>
 
   assert.match(source, /exports\.adminRepairCanonicalRider = functions\.https\.onCall/);
   assert.match(source, /assertRiderAdmin\(context\)/);
+  assert.match(source, /isFounderContext\(context\)/);
   assert.match(source, /db\.runTransaction/);
   assert.match(source, /repair_canonical_rider/);
   assert.match(source, /canonical_rider_repaired/);

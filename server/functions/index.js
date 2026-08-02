@@ -57,6 +57,7 @@ const ratingsTipping = require("./ratings-tipping");
 const stripeRefunds = require("./stripe-refunds");
 const riderEarningsSummary = require("./rider-earnings-summary");
 const founderRiderAccess = require("./founder-rider-access");
+const founderAuthority = require("./founder-authority");
 const healthPlusOperations = require("./health-plus-operations");
 const rothLedger = require("./roth-ledger");
 const businessPayments = require("./business-payments");
@@ -155,6 +156,8 @@ exports.getRiderEarningsSummary =
 exports.adminReconcileRiderEarnings = riderEarningsSummary.adminReconcileRiderEarnings();
 exports.scheduledRiderEarningsReconciliation = riderEarningsSummary.scheduledRiderEarningsReconciliation;
 exports.setFounderRiderAccess = founderRiderAccess.setFounderRiderAccess();
+exports.founderDesignateTestAccount =
+  founderAuthority.founderDesignateTestAccount();
 exports.startAdminConversation = communicationEngine.startAdminConversation;
 exports.getOrCreateSupportConversation =
   communicationEngine.getOrCreateSupportConversation;
