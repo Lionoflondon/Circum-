@@ -33,6 +33,9 @@ test("Founder test account designation is backend-only and audited", () => {
 
   assert.match(source, /exports|module\.exports/);
   assert.match(source, /founderDesignateTestAccount/);
+  assert.match(source, /founderRevokeTestAccount/);
+  assert.match(source, /founderListTestAccounts/);
+  assert.match(source, /founderPreflightE2E/);
   assert.match(source, /assertFounder\(context\)/);
   assert.match(source, /collection\("founderTestAccounts"\)/);
   assert.match(source, /collection\("founderAuthorityAudit"\)/);
@@ -46,7 +49,22 @@ test("Founder authority is exported without trusting client role claims", () => 
   const authoritySource = fs.readFileSync(path.join(__dirname, "founder-authority.js"), "utf8");
 
   assert.match(indexSource, /founderDesignateTestAccount/);
+  assert.match(indexSource, /founderRevokeTestAccount/);
+  assert.match(indexSource, /founderListTestAccounts/);
+  assert.match(indexSource, /founderPreflightE2E/);
   assert.doesNotMatch(authoritySource, /token\.role/);
   assert.doesNotMatch(authoritySource, /token\.adminRole/);
   assert.doesNotMatch(authoritySource, /super_admin/);
+});
+
+test("Founder preflight is audited and does not fake infrastructure checks", () => {
+  const source = fs.readFileSync(path.join(__dirname, "founder-authority.js"), "utf8");
+
+  assert.match(source, /action: "founder_preflight_e2e"/);
+  assert.match(source, /correlationId/);
+  assert.match(source, /previousValues/);
+  assert.match(source, /newValues/);
+  assert.match(source, /requires_live_device_token_confirmation/);
+  assert.match(source, /requires_rules_emulator_or_live_rules_test/);
+  assert.match(source, /requires_storage_rules_test/);
 });

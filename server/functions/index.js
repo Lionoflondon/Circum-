@@ -158,6 +158,12 @@ exports.scheduledRiderEarningsReconciliation = riderEarningsSummary.scheduledRid
 exports.setFounderRiderAccess = founderRiderAccess.setFounderRiderAccess();
 exports.founderDesignateTestAccount =
   founderAuthority.founderDesignateTestAccount();
+exports.founderRevokeTestAccount =
+  founderAuthority.founderRevokeTestAccount();
+exports.founderListTestAccounts =
+  founderAuthority.founderListTestAccounts();
+exports.founderPreflightE2E =
+  founderAuthority.founderPreflightE2E();
 exports.startAdminConversation = communicationEngine.startAdminConversation;
 exports.getOrCreateSupportConversation =
   communicationEngine.getOrCreateSupportConversation;
