@@ -263,4 +263,64 @@ void main() {
 
     expect(snapshot, isNull);
   });
+
+  test('Sender tracking map adapter reads backend position geopoints', () {
+    final snapshot = SenderTrackingMapAdapter.snapshotFor(
+      SendPackageState(
+        activeDeliveryData: {
+          'pickupDetails': {
+            'position': {
+              'geopoint': {'latitude': 51.501, 'longitude': -0.141},
+            },
+          },
+          'dropoffDetails': {
+            'position': {
+              'geopoint': {'latitude': 51.515, 'longitude': -0.092},
+            },
+          },
+        },
+      ),
+      content: senderTrackingContentFor(SenderTrackingState.findingRider),
+      stateDelivered: false,
+    );
+
+    expect(snapshot, isNotNull);
+    expect(snapshot!.pickup.latitude, 51.501);
+    expect(snapshot.dropoff.longitude, -0.092);
+  });
+
+  test('Sender tracking map adapter reads REST serialized geopoints', () {
+    final snapshot = SenderTrackingMapAdapter.snapshotFor(
+      SendPackageState(
+        activeDeliveryData: {
+          'pickupDetails': {
+            'position': {
+              'geopoint': {
+                'geoPointValue': {
+                  'latitude': 51.4432992,
+                  'longitude': -0.0092803,
+                },
+              },
+            },
+          },
+          'dropoffDetails': {
+            'position': {
+              'geopoint': {
+                'geoPointValue': {
+                  'latitude': 51.5034878,
+                  'longitude': -0.1276965,
+                },
+              },
+            },
+          },
+        },
+      ),
+      content: senderTrackingContentFor(SenderTrackingState.findingRider),
+      stateDelivered: false,
+    );
+
+    expect(snapshot, isNotNull);
+    expect(snapshot!.pickup.latitude, 51.4432992);
+    expect(snapshot.dropoff.longitude, -0.1276965);
+  });
 }

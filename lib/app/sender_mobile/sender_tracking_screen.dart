@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:math' as math;
 import 'dart:ui';
 
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:cloud_functions/cloud_functions.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -1402,11 +1403,13 @@ class SenderTrackingMapAdapter {
     required bool stateDelivered,
   }) {
     final pickup = _latLng(engine.pickupCoordinate) ??
+        _latLng(engine.pickupDetails?.address) ??
         _latLngFromMap(
           engine.activeDeliveryData['pickup'] ??
               engine.activeDeliveryData['pickupDetails'],
         );
     final dropoff = _latLng(engine.desinationCoordinate) ??
+        _latLng(engine.dropoffDetails?.address) ??
         _latLngFromMap(
           engine.activeDeliveryData['dropoff'] ??
               engine.activeDeliveryData['dropoffDetails'] ??
@@ -1446,8 +1449,21 @@ class SenderTrackingMapAdapter {
       final fromCoordinate = _latLngFromMap(coordinate);
       if (fromCoordinate != null) return fromCoordinate;
     }
+    final position = map['position'];
+    if (position is Map) {
+      final fromPosition = _latLngFromMap(position);
+      if (fromPosition != null) return fromPosition;
+    }
     final geo = map['geopoint'] ?? map['geoPoint'] ?? map['location'];
+    if (geo is GeoPoint) {
+      return LatLng(geo.latitude, geo.longitude);
+    }
     if (geo is Map) {
+      final geoPointValue = geo['geoPointValue'];
+      if (geoPointValue is Map) {
+        final fromGeoPointValue = _latLngFromMap(geoPointValue);
+        if (fromGeoPointValue != null) return fromGeoPointValue;
+      }
       final fromGeo = _latLngFromMap(geo);
       if (fromGeo != null) return fromGeo;
     }

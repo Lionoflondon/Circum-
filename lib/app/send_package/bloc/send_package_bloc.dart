@@ -1397,6 +1397,12 @@ class SendPackageBloc extends Bloc<SendPackageEvent, SendPackageState> {
     );
     final riderLocation = _riderLocationFromDelivery(data);
     final deliveryData = DeliveryData.fromJson(data);
+    RestoredDeliveryCoordinates? restoredCoordinates;
+    try {
+      restoredCoordinates = restoreDeliveryCoordinates(data);
+    } catch (_) {
+      restoredCoordinates = null;
+    }
 
     emit(
       state.copyWith(
@@ -1405,6 +1411,8 @@ class SendPackageBloc extends Bloc<SendPackageEvent, SendPackageState> {
         activeDeliveryData: Map<String, dynamic>.from(data),
         pickupDetails: pickupDetails,
         dropoffDetails: dropoffDetails,
+        pickupCoordinate: restoredCoordinates?.pickup,
+        desinationCoordinate: restoredCoordinates?.dropoff,
         pickupLocation:
             '${data['pickupDetails']?['address'] ?? state.pickupLocation ?? ''}'
                     .trim()
