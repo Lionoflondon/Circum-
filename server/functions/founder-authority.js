@@ -219,6 +219,14 @@ function pending(name, reason, details = {}) {
   return {name, status: "PENDING", reason, ...details};
 }
 
+function googlePlacesConfigured() {
+  const config = functions.config() || {};
+  return Boolean(`${process.env.GOOGLE_PLACES_API_KEY ||
+    process.env.CIRCUM_GOOGLE_PLACES_API_KEY ||
+    config.google && config.google.places_api_key ||
+    ""}`.trim());
+}
+
 function documentData(snap) {
   return snap && snap.exists ? snap.data() || {} : {};
 }
@@ -343,7 +351,7 @@ function founderPreflightE2E() {
         vehicleRegistration: projection.after.vehicleRegistration || null,
       }) : fail("vehicle_assignment", "vehicle_missing"),
       pass("required_backend_configuration", {projectId: process.env.GCLOUD_PROJECT || null}),
-      process.env.GOOGLE_PLACES_API_KEY ?
+      googlePlacesConfigured() ?
         pass("google_maps_configuration", {configured: true}) :
         fail("google_maps_configuration", "google_places_api_key_missing", {configured: false}),
       pass("stripe_configuration", {configured: true}),
