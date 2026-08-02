@@ -49,6 +49,12 @@ void _logRecoverableSenderError(
   debugPrintStack(stackTrace: stackTrace);
 }
 
+void _logSenderPerformanceMetric(String event, Stopwatch stopwatch) {
+  debugPrint(
+    'Sender performance metric: event=$event durationMs=${stopwatch.elapsedMilliseconds}',
+  );
+}
+
 String _senderPaymentMessage(
   FirebaseFunctionsException error,
   String fallback,
@@ -77,6 +83,45 @@ String _senderPaymentMessage(
     default:
       return fallback;
   }
+}
+
+SendPackageState _clearIrisDependentState(
+  SendPackageState state, {
+  String? itemDescription,
+  bool clearItemDescription = true,
+  bool irisResolving = false,
+  String irisErrorMessage = '',
+}) {
+  return state.copyWith(
+    parcelWeightKg: 0,
+    price: 0,
+    itemDescription: itemDescription,
+    clearIrisResult: true,
+    clearCanonicalIrisResult: true,
+    clearItemDescription: clearItemDescription,
+    isIrisResolving: irisResolving,
+    irisErrorMessage: irisErrorMessage,
+    irisWeightReviewMessage: '',
+    isSenderQuoteLoading: false,
+    senderQuoteError: '',
+    clearSenderQuoteId: true,
+    clearSenderQuoteTotal: true,
+    clearSenderQuoteSpeed: true,
+    senderQuoteLineItems: const [],
+    senderQuoteSpeedOptions: const [],
+    isSenderPaymentLoading: false,
+    senderPaymentError: '',
+    clearSenderPaymentSession: true,
+    clearSenderPaymentStatus: true,
+    clearSenderPaymentClientSecret: true,
+    clearSenderPaymentIntent: true,
+    clearSenderPaymentCustomer: true,
+    clearSenderPaymentEphemeralKey: true,
+    clearSenderPaymentCheckoutUrl: true,
+    isSenderDeliveryCreating: false,
+    senderDeliveryError: '',
+    clearSenderCreatedRequest: true,
+  );
 }
 
 class SendPackageBloc extends Bloc<SendPackageEvent, SendPackageState> {
@@ -689,30 +734,7 @@ class SendPackageBloc extends Bloc<SendPackageEvent, SendPackageState> {
     ClearIrisParcelState event,
     Emitter<SendPackageState> emit,
   ) {
-    emit(
-      state.copyWith(
-        parcelWeightKg: 0,
-        price: 0,
-        clearIrisResult: true,
-        clearCanonicalIrisResult: true,
-        clearItemDescription: true,
-        isIrisResolving: false,
-        irisErrorMessage: '',
-        irisWeightReviewMessage: '',
-        clearSenderQuoteId: true,
-        clearSenderQuoteTotal: true,
-        clearSenderQuoteSpeed: true,
-        senderQuoteLineItems: const [],
-        senderQuoteSpeedOptions: const [],
-        clearSenderPaymentSession: true,
-        clearSenderPaymentClientSecret: true,
-        clearSenderPaymentIntent: true,
-        clearSenderPaymentCustomer: true,
-        clearSenderPaymentEphemeralKey: true,
-        clearSenderPaymentCheckoutUrl: true,
-        clearSenderCreatedRequest: true,
-      ),
-    );
+    emit(_clearIrisDependentState(state));
   }
 
   String _weightReviewMessage({
@@ -741,27 +763,15 @@ class SendPackageBloc extends Bloc<SendPackageEvent, SendPackageState> {
       event.description,
     ].where((value) => value.trim().isNotEmpty).join(' · ');
     emit(
-      state.copyWith(
+      _clearIrisDependentState(
+        state,
         itemDescription:
             itemDescription.trim().isEmpty ? null : itemDescription,
         clearItemDescription: itemDescription.trim().isEmpty,
-        isIrisResolving: true,
-        irisErrorMessage: '',
-        clearCanonicalIrisResult: true,
-        clearSenderQuoteId: true,
-        clearSenderQuoteTotal: true,
-        clearSenderQuoteSpeed: true,
-        senderQuoteLineItems: const [],
-        senderQuoteSpeedOptions: const [],
-        clearSenderPaymentSession: true,
-        clearSenderPaymentClientSecret: true,
-        clearSenderPaymentIntent: true,
-        clearSenderPaymentCustomer: true,
-        clearSenderPaymentEphemeralKey: true,
-        clearSenderPaymentCheckoutUrl: true,
-        clearSenderCreatedRequest: true,
+        irisResolving: true,
       ),
     );
+    final irisTimer = Stopwatch()..start();
     try {
       final payload = <String, dynamic>{
         'description':
@@ -784,6 +794,7 @@ class SendPackageBloc extends Bloc<SendPackageEvent, SendPackageState> {
           .httpsCallable('analyseIris')
           .call(payload)
           .timeout(const Duration(seconds: 15));
+      _logSenderPerformanceMetric('iris.analyseIris', irisTimer);
       final data = result.data is Map
           ? Map<String, dynamic>.from(result.data as Map)
           : <String, dynamic>{};
@@ -809,6 +820,7 @@ class SendPackageBloc extends Bloc<SendPackageEvent, SendPackageState> {
       );
       add(SetPrice());
     } on FirebaseFunctionsException catch (error) {
+      _logSenderPerformanceMetric('iris.analyseIris.failed', irisTimer);
       debugPrint(
         'analyseIris failed: code=${error.code}, message=${error.message}, details=${error.details}',
       );
@@ -820,6 +832,7 @@ class SendPackageBloc extends Bloc<SendPackageEvent, SendPackageState> {
         ),
       );
     } catch (error) {
+      _logSenderPerformanceMetric('iris.analyseIris.failed', irisTimer);
       debugPrint('analyseIris unexpected failure: $error');
       emit(
         state.copyWith(
@@ -877,6 +890,7 @@ class SendPackageBloc extends Bloc<SendPackageEvent, SendPackageState> {
         clearSenderCreatedRequest: true,
       ),
     );
+    final quoteTimer = Stopwatch()..start();
     try {
       final distanceKm = state.distance ?? _distanceKmFromRouteCoordinates();
       final data = await _callableMap('createSenderBookingQuote', {
@@ -914,6 +928,7 @@ class SendPackageBloc extends Bloc<SendPackageEvent, SendPackageState> {
           },
         },
       });
+      _logSenderPerformanceMetric('iris.createSenderBookingQuote', quoteTimer);
       emit(
         state.copyWith(
           isSenderQuoteLoading: false,
@@ -930,6 +945,10 @@ class SendPackageBloc extends Bloc<SendPackageEvent, SendPackageState> {
         ),
       );
     } on FirebaseFunctionsException catch (error) {
+      _logSenderPerformanceMetric(
+        'iris.createSenderBookingQuote.failed',
+        quoteTimer,
+      );
       debugPrint(
         'createSenderBookingQuote failed: code=${error.code}, message=${error.message}, details=${error.details}',
       );
@@ -946,6 +965,10 @@ class SendPackageBloc extends Bloc<SendPackageEvent, SendPackageState> {
         ),
       );
     } catch (error) {
+      _logSenderPerformanceMetric(
+        'iris.createSenderBookingQuote.failed',
+        quoteTimer,
+      );
       debugPrint('createSenderBookingQuote unexpected failure: $error');
       emit(
         state.copyWith(

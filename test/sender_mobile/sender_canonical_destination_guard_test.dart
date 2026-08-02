@@ -268,6 +268,7 @@ void main() {
       'clearSenderQuoteTotal',
       'clearSenderQuoteSpeed',
       'clearSenderPaymentSession',
+      'clearSenderPaymentStatus',
       'clearSenderPaymentClientSecret',
       'clearSenderPaymentIntent',
       'clearSenderPaymentCustomer',
@@ -290,9 +291,8 @@ void main() {
     expect(irisStart, isNonNegative);
     expect(irisCallable, greaterThan(irisStart));
     final irisPreflight = bloc.substring(irisStart, irisCallable);
-    expect(irisPreflight, contains('clearCanonicalIrisResult: true'));
-    expect(irisPreflight, contains('clearSenderQuoteId: true'));
-    expect(irisPreflight, contains('clearSenderCreatedRequest: true'));
+    expect(irisPreflight, contains('_clearIrisDependentState'));
+    expect(irisPreflight, contains('Stopwatch()..start()'));
 
     final quoteStart = bloc.indexOf('void _handleRequestSenderBookingQuote');
     final quoteCallable =
@@ -329,17 +329,25 @@ void main() {
     expect(parcelChangeHandler, contains('engine.senderQuoteId != null'));
     expect(parcelChangeHandler, contains('const ClearIrisParcelState()'));
 
+    final resetStart =
+        bloc.indexOf('SendPackageState _clearIrisDependentState');
     final clearStart = bloc.indexOf('void _handleClearIrisParcelState');
     final reviewStart = bloc.indexOf('String _weightReviewMessage', clearStart);
-    expect(clearStart, isNonNegative);
+    expect(resetStart, isNonNegative);
+    expect(clearStart, greaterThan(resetStart));
     expect(reviewStart, greaterThan(clearStart));
+    final resetHelper = bloc.substring(resetStart, clearStart);
     final clearHandler = bloc.substring(clearStart, reviewStart);
-    expect(clearHandler, contains('parcelWeightKg: 0'));
-    expect(clearHandler, contains('price: 0'));
-    expect(clearHandler, contains('clearIrisResult: true'));
-    expect(clearHandler, contains('clearCanonicalIrisResult: true'));
-    expect(clearHandler, contains('clearSenderQuoteId: true'));
-    expect(clearHandler, contains('clearSenderPaymentSession: true'));
+    expect(clearHandler, contains('_clearIrisDependentState(state)'));
+    expect(resetHelper, contains('parcelWeightKg: 0'));
+    expect(resetHelper, contains('price: 0'));
+    expect(resetHelper, contains('clearIrisResult: true'));
+    expect(resetHelper, contains('clearCanonicalIrisResult: true'));
+    expect(resetHelper, contains('clearSenderQuoteId: true'));
+    expect(resetHelper, contains('clearSenderPaymentSession: true'));
+    expect(resetHelper, contains('clearSenderPaymentStatus: true'));
+    expect(resetHelper, contains('senderPaymentError:'));
+    expect(resetHelper, contains('senderDeliveryError:'));
   });
 
   test('Sender nullable booking artifacts are never cleared with null literals',

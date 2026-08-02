@@ -323,4 +323,39 @@ void main() {
     expect(snapshot!.pickup.latitude, 51.4432992);
     expect(snapshot.dropoff.longitude, -0.1276965);
   });
+
+  test('Sender tracking map adapter reads canonical flat route coordinates',
+      () {
+    final snapshot = SenderTrackingMapAdapter.snapshotFor(
+      SendPackageState(
+        activeDeliveryData: {
+          'pickupLat': 51.4432992,
+          'pickupLng': -0.0092803,
+          'dropoffLat': 51.5034878,
+          'dropoffLng': -0.1276965,
+        },
+      ),
+      content: senderTrackingContentFor(SenderTrackingState.findingRider),
+      stateDelivered: false,
+    );
+
+    expect(snapshot, isNotNull);
+    expect(snapshot!.pickup.latitude, 51.4432992);
+    expect(snapshot.dropoff.longitude, -0.1276965);
+  });
+
+  test('Sender tracking map layer keeps GoogleMap beneath searching radar', () {
+    final source = File('lib/app/sender_mobile/sender_tracking_screen.dart')
+        .readAsStringSync();
+    final layerStart = source.indexOf('class SenderTrackingMapLayer');
+    final googleMapStart =
+        source.indexOf('SenderGoogleTrackingMap(', layerStart);
+    final radarStart = source.indexOf('_SearchRingsPainter(', layerStart);
+
+    expect(layerStart, isNonNegative);
+    expect(googleMapStart, greaterThan(layerStart));
+    expect(radarStart, greaterThan(googleMapStart));
+    expect(source.substring(layerStart, radarStart),
+        contains('if (googleMapSnapshot != null)'));
+  });
 }

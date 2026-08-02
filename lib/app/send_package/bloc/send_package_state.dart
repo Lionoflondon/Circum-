@@ -236,6 +236,7 @@ class SendPackageState {
     String? senderPaymentEphemeralKeySecret,
     String? senderPaymentCheckoutUrl,
     bool clearSenderPaymentSession = false,
+    bool clearSenderPaymentStatus = false,
     bool clearSenderPaymentClientSecret = false,
     bool clearSenderPaymentIntent = false,
     bool clearSenderPaymentCustomer = false,
@@ -325,7 +326,9 @@ class SendPackageState {
       senderPaymentSessionId: clearSenderPaymentSession
           ? null
           : senderPaymentSessionId ?? this.senderPaymentSessionId,
-      senderPaymentStatus: senderPaymentStatus ?? this.senderPaymentStatus,
+      senderPaymentStatus: clearSenderPaymentStatus
+          ? null
+          : senderPaymentStatus ?? this.senderPaymentStatus,
       senderPaymentClientSecret: clearSenderPaymentClientSecret
           ? null
           : senderPaymentClientSecret ?? this.senderPaymentClientSecret,

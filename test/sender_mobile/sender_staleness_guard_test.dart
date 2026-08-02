@@ -25,11 +25,16 @@ void main() {
         {'id': 'express', 'amount': 35.92},
       ],
       senderPaymentSessionId: 'session_old',
+      senderPaymentStatus: 'checkout_created',
       senderPaymentClientSecret: 'secret_old',
       senderPaymentIntentId: 'pi_old',
       senderPaymentCustomerId: 'cus_old',
       senderPaymentEphemeralKeySecret: 'eph_old',
       senderPaymentCheckoutUrl: 'https://checkout.stripe.com/old',
+      senderPaymentError: 'stale payment error',
+      isSenderPaymentLoading: true,
+      isSenderDeliveryCreating: true,
+      senderDeliveryError: 'stale delivery error',
       senderCreatedRequestId: 'request_old',
     );
 
@@ -41,12 +46,17 @@ void main() {
       clearSenderQuoteSpeed: true,
       senderQuoteLineItems: const [],
       senderQuoteSpeedOptions: const [],
+      isSenderPaymentLoading: false,
+      senderPaymentError: '',
       clearSenderPaymentSession: true,
+      clearSenderPaymentStatus: true,
       clearSenderPaymentClientSecret: true,
       clearSenderPaymentIntent: true,
       clearSenderPaymentCustomer: true,
       clearSenderPaymentEphemeralKey: true,
       clearSenderPaymentCheckoutUrl: true,
+      isSenderDeliveryCreating: false,
+      senderDeliveryError: '',
       clearSenderCreatedRequest: true,
     );
 
@@ -57,12 +67,17 @@ void main() {
     expect(cleared.senderQuoteSpeed, isNull);
     expect(cleared.senderQuoteLineItems, isEmpty);
     expect(cleared.senderQuoteSpeedOptions, isEmpty);
+    expect(cleared.isSenderPaymentLoading, isFalse);
+    expect(cleared.senderPaymentError, isEmpty);
     expect(cleared.senderPaymentSessionId, isNull);
+    expect(cleared.senderPaymentStatus, isNull);
     expect(cleared.senderPaymentClientSecret, isNull);
     expect(cleared.senderPaymentIntentId, isNull);
     expect(cleared.senderPaymentCustomerId, isNull);
     expect(cleared.senderPaymentEphemeralKeySecret, isNull);
     expect(cleared.senderPaymentCheckoutUrl, isNull);
+    expect(cleared.isSenderDeliveryCreating, isFalse);
+    expect(cleared.senderDeliveryError, isEmpty);
     expect(cleared.senderCreatedRequestId, isNull);
   });
 

@@ -1404,16 +1404,30 @@ class SenderTrackingMapAdapter {
   }) {
     final pickup = _latLng(engine.pickupCoordinate) ??
         _latLng(engine.pickupDetails?.address) ??
-        _latLngFromMap(
-          engine.activeDeliveryData['pickup'] ??
-              engine.activeDeliveryData['pickupDetails'],
+        _firstLatLngFromMap(
+          engine.activeDeliveryData,
+          const [
+            'pickup',
+            'pickupDetails',
+            'pickupAddress',
+            'pickupLocation',
+            'source',
+            'origin',
+            'from',
+          ],
         );
     final dropoff = _latLng(engine.desinationCoordinate) ??
         _latLng(engine.dropoffDetails?.address) ??
-        _latLngFromMap(
-          engine.activeDeliveryData['dropoff'] ??
-              engine.activeDeliveryData['dropoffDetails'] ??
-              engine.activeDeliveryData['destination'],
+        _firstLatLngFromMap(
+          engine.activeDeliveryData,
+          const [
+            'dropoff',
+            'dropoffDetails',
+            'dropoffAddress',
+            'dropoffLocation',
+            'destination',
+            'to',
+          ],
         );
     if (pickup == null || dropoff == null) return null;
 
@@ -1475,6 +1489,41 @@ class SenderTrackingMapAdapter {
     );
     if (lat == null || lng == null) return null;
     return LatLng(lat, lng);
+  }
+
+  static LatLng? _firstLatLngFromMap(
+    Map<String, dynamic> data,
+    List<String> keys,
+  ) {
+    for (final key in keys) {
+      final coordinate = _latLngFromMap(data[key]);
+      if (coordinate != null) return coordinate;
+    }
+    final pickupLat = _doubleValue(
+      data['pickupLat'] ?? data['pickupLatitude'] ?? data['sourceLat'],
+    );
+    final pickupLng = _doubleValue(
+      data['pickupLng'] ?? data['pickupLongitude'] ?? data['sourceLng'],
+    );
+    final dropoffLat = _doubleValue(
+      data['dropoffLat'] ??
+          data['dropoffLatitude'] ??
+          data['destinationLat'] ??
+          data['destinationLatitude'],
+    );
+    final dropoffLng = _doubleValue(
+      data['dropoffLng'] ??
+          data['dropoffLongitude'] ??
+          data['destinationLng'] ??
+          data['destinationLongitude'],
+    );
+    if (keys.contains('pickup') && pickupLat != null && pickupLng != null) {
+      return LatLng(pickupLat, pickupLng);
+    }
+    if (keys.contains('dropoff') && dropoffLat != null && dropoffLng != null) {
+      return LatLng(dropoffLat, dropoffLng);
+    }
+    return null;
   }
 
   static double? _doubleValue(Object? value) {
