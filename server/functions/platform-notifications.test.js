@@ -123,3 +123,35 @@ test("dispatch candidate decision rejects offline presence even when profile is 
   assert.equal(decision.eligible, false);
   assert.equal(decision.reason, "offline");
 });
+
+test("dispatch candidate decision honours an active founder test waiver", () => {
+  const now = Date.now();
+  const decision = _private.dispatchCandidateDecision({
+    id: "founder-rider",
+    profile: {
+      approvalStatus: "submitted",
+      vehicleStatus: "pending",
+      founderTestAccount: {
+        active: true,
+        accountType: "internal_tester",
+        waivers: ["dispatch_eligibility"],
+      },
+    },
+    rider: {vehicleType: "bike"},
+    presence: {
+      isOnline: true,
+      availabilityStatus: "available",
+      busy: false,
+      lastHeartbeatAt: now,
+      gpsStatus: "active",
+      currentLocation: {
+        latitude: 51.5072,
+        longitude: -0.1276,
+        accuracyMeters: 20,
+        updatedAt: now,
+      },
+    },
+  }, {vehicleType: "bike"}, now);
+  assert.equal(decision.eligible, true);
+  assert.equal(decision.reason, "eligible");
+});

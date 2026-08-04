@@ -32,10 +32,20 @@ function riderApproved(profile = {}) {
     bool(profile.identityApproved) && bool(profile.documentsApproved);
 }
 
+function founderDispatchOverride(profile = {}) {
+  const designation = profile.founderTestAccount || profile.internalTestAccount || {};
+  if (designation.active !== true) return false;
+  const accountType = lower(designation.accountType || designation.type);
+  if (!new Set(["internal_tester", "qa_account", "demo_account"]).has(accountType)) return false;
+  const waivers = Array.isArray(designation.waivers) ? designation.waivers.map(lower) : [];
+  return waivers.includes("dispatch_eligibility");
+}
+
 function blockedReason(profile = {}) {
   if (profile.isFrozen === true || lower(profile.riderStatus) === "frozen") return "Account frozen.";
   if (profile.isSuspended === true || lower(profile.riderStatus) === "suspended") return "Account suspended.";
   if (profile.isClosed === true || lower(profile.riderStatus) === "closed") return "Account closed.";
+  if (founderDispatchOverride(profile)) return "";
   if (!riderApproved(profile)) return "Rider approval required.";
   if (!vehicleVerified(profile)) return "Vehicle verification required.";
   return "";
@@ -130,6 +140,7 @@ module.exports = {
   blockedReasonForAccess,
   canGoOnline,
   canReceiveDispatch,
+  founderDispatchOverride,
   gpsHealthy,
   nextPresenceOnDelivery,
   riderApproved,
