@@ -3,6 +3,7 @@ const functions = require("firebase-functions/v1");
 const {getFirestore, FieldValue} = require("firebase-admin/firestore");
 const core = require("./rider-presence-core");
 const staleCore = require("./stale-delivery-core");
+const {loadFounderTestAccount} = require("./founder-authority");
 
 function requireAuth(context) {
   if (!context.auth || !context.auth.uid) {
@@ -268,11 +269,14 @@ async function forceOfflineWhenBlocked(change, context) {
   const riderId = context.params.riderId;
   const db = getFirestore();
   const profile = await riderProfile(db, riderId);
+  const founderTestAccount = await loadFounderTestAccount(db, riderId);
+  if (founderTestAccount) profile.founderTestAccount = founderTestAccount;
   const reason = core.blockedReason(profile);
   if (!reason) return null;
   await db.collection("riderPresence").doc(riderId).set({
     riderId,
     isOnline: false,
+    status: "offline",
     busy: false,
     availabilityStatus: "offline",
     connectionStatus: "offline",

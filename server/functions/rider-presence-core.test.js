@@ -54,6 +54,60 @@ test("founder claim bypasses readiness while normal rider remains blocked", () =
   assert.equal(core.blockedReasonForAccess(incomplete, false), "Rider approval required.");
 });
 
+test("active founder test designation bypasses approval but not live presence", () => {
+  const profile = {
+    onboardingStatus: "in_progress",
+    vehicleStatus: "pending",
+    founderTestAccount: {
+      active: true,
+      accountType: "internal_tester",
+      waivers: ["dispatch_eligibility"],
+    },
+  };
+  const presence = {
+    isOnline: true,
+    availabilityStatus: "available",
+    busy: false,
+    lastHeartbeatAt: Date.now(),
+    currentLocation: {
+      latitude: 51.5072,
+      longitude: -0.1276,
+      accuracyMeters: 18,
+      updatedAt: Date.now(),
+    },
+  };
+  assert.equal(core.canReceiveDispatch({profile, presence}), true);
+  assert.equal(core.canReceiveDispatch({
+    profile,
+    presence: {...presence, lastHeartbeatAt: 0},
+  }), false);
+  assert.equal(core.canReceiveDispatch({
+    profile: {
+      ...profile,
+      founderTestAccount: {...profile.founderTestAccount, active: false},
+    },
+    presence,
+  }), false);
+});
+
+test("founder test designation never bypasses account suspension", () => {
+  assert.equal(core.blockedReason({
+    riderStatus: "suspended",
+    founderTestAccount: {
+      active: true,
+      accountType: "internal_tester",
+      waivers: ["dispatch_eligibility"],
+    },
+  }), "Account suspended.");
+});
+
+test("blocked profile trigger preserves an authorised founder test rider", () => {
+  const source = fs.readFileSync(path.join(__dirname, "rider-presence.js"), "utf8");
+  assert.match(source, /loadFounderTestAccount\(db, riderId\)/);
+  assert.match(source, /if \(founderTestAccount\) profile\.founderTestAccount = founderTestAccount/);
+  assert.match(source, /status: "offline"/);
+});
+
 test("goOnline never leaks raw internal failures to riders", () => {
   const source = fs.readFileSync(path.join(__dirname, "rider-presence.js"), "utf8");
   const goOnlineStart = source.indexOf("exports.goOnline = functions.https.onCall");

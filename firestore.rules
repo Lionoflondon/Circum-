@@ -8,9 +8,10 @@ service cloud.firestore {
 
     function hasRole(role) {
       return signedIn() && (
-        request.auth.token.adminRole == role ||
-        request.auth.token.role == role ||
-        (request.auth.token.roles is list && role in request.auth.token.roles)
+        request.auth.token.get('adminRole', '') == role ||
+        request.auth.token.get('role', '') == role ||
+        (request.auth.token.get('roles', []) is list &&
+          role in request.auth.token.get('roles', []))
       );
     }
 
@@ -97,25 +98,45 @@ service cloud.firestore {
     function isOwnDelivery(deliveryId) {
       return signedIn() && (
         deliveryId == request.auth.uid ||
-        resource.data.senderId == request.auth.uid ||
-        resource.data.userId == request.auth.uid
+        resource.data.get('senderId', '') == request.auth.uid ||
+        resource.data.get('userId', '') == request.auth.uid
       );
     }
 
     function isAssignedRider() {
       return signedIn() && (
-        resource.data.riderId == request.auth.uid ||
-        resource.data.driverId == request.auth.uid ||
-        resource.data.assignedDriverId == request.auth.uid
+        resource.data.get('riderId', '') == request.auth.uid ||
+        resource.data.get('driverId', '') == request.auth.uid ||
+        resource.data.get('assignedDriverId', '') == request.auth.uid
       );
     }
 
     function isAvailableRiderJob() {
-      return isRiderAccount() && (
+      return isApprovedRiderForDispatch() && (
         resource.data.status == 'requested' ||
         resource.data.dispatchStatus == 'requested' ||
         resource.data.matchingStatus == 'available'
       );
+    }
+
+    function isApprovedRiderForDispatch() {
+      let profile = get(/databases/$(database)/documents/riderProfiles/$(request.auth.uid)).data;
+      return (isFounderRider() || (isRiderAccount() &&
+          profile.dispatchEligible == true &&
+          profile.approvalStatus == 'approved' &&
+          (profile.verificationStatus == 'approved' || profile.verificationStatus == 'verified') &&
+          profile.onboardingStatus == 'approved')) &&
+        profile.get('suspended', false) != true &&
+        profile.get('accountStatus', '') != 'suspended' &&
+        profile.get('accountStatus', '') != 'frozen' &&
+        profile.get('accountStatus', '') != 'closed';
+    }
+
+    function isFounderRider() {
+      return signedIn() &&
+        request.auth.uid == 'T2eV6PQucdUKmwSipEn2NAn4N9z1' &&
+        'founderRider' in request.auth.token &&
+        request.auth.token.founderRider == true;
     }
 
     function isCreatingOwnDelivery() {
@@ -768,7 +789,7 @@ service cloud.firestore {
     match /giftRequests/{giftRequestId} {
       allow create: if isAdmin();
       allow read: if isAdmin() ||
-        canReadBusinessId(resource.data.businessId) ||
+        canReadBusinessId(resource.data.get('businessId', '')) ||
         (signedIn() && resource.data.senderId == request.auth.uid);
       allow update: if isAdmin();
       allow delete: if hasRole('super_admin');
@@ -907,7 +928,7 @@ service cloud.firestore {
       allow read: if isAdmin() ||
         isOwnDelivery(deliveryId) ||
         isAssignedRider() ||
-        canReadBusinessId(resource.data.businessId) ||
+        canReadBusinessId(resource.data.get('businessId', '')) ||
         isAvailableRiderJob();
       allow create: if isAdmin();
       allow update: if isAdmin() ||

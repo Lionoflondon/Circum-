@@ -4,6 +4,7 @@ const {getFirestore, FieldValue, Timestamp} = require("firebase-admin/firestore"
 const {getMessaging} = require("firebase-admin/messaging");
 const {riderMatchesIris} = require("./iris-core");
 const riderPresenceCore = require("./rider-presence-core");
+const {loadFounderTestAccount} = require("./founder-authority");
 const communicationEngine = require("./communication-engine");
 
 const text = (value) => `${value || ""}`.trim();
@@ -224,9 +225,13 @@ async function onlineCandidateRiderRecords(db) {
       record.rider ? null : db.collection("riders").doc(record.id).get(),
       record.presence ? null : db.collection("riderPresence").doc(record.id).get(),
     ]);
+    const founderTestAccount = await loadFounderTestAccount(db, record.id);
     return {
       id: record.id,
-      profile: record.profile || (profileDoc && profileDoc.exists ? profileDoc.data() : {}),
+      profile: {
+        ...(record.profile || (profileDoc && profileDoc.exists ? profileDoc.data() : {})),
+        ...(founderTestAccount ? {founderTestAccount} : {}),
+      },
       rider: record.rider || (riderDoc && riderDoc.exists ? riderDoc.data() : {}),
       presence: record.presence || (presenceDoc && presenceDoc.exists ? presenceDoc.data() : {}),
     };
