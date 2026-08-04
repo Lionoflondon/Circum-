@@ -104,7 +104,7 @@ function cancellationDecision(input = {}) {
     allowedActions: [],
   };
 
-  if (["finding_rider", "pending", "unmatched", "requested", "broadcasting", "available", "awaiting_rider"].includes(state)) {
+  if (["searching", "finding_rider", "pending", "unmatched", "requested", "broadcasting", "available", "awaiting_rider"].includes(state)) {
     return {
       ...base,
       canCancel: true,

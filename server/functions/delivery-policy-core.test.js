@@ -9,7 +9,7 @@ const nearby = {lat: 51.51555, lng: -0.14185};
 const farAway = {lat: 51.517, lng: -0.145};
 
 test("cancellation policy is free before rider acceptance", () => {
-  for (const state of ["requested", "pending", "unmatched", "finding_rider", "broadcasting", "available", "awaiting_rider"]) {
+  for (const state of ["searching", "requested", "pending", "unmatched", "finding_rider", "broadcasting", "available", "awaiting_rider"]) {
     const decision = policy.cancellationDecision({state, serverNow: now});
     assert.equal(decision.canCancel, true);
     assert.equal(decision.feeAmount, 0);

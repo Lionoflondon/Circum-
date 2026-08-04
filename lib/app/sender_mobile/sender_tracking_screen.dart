@@ -1149,10 +1149,20 @@ class _SenderMobileTrackingScreenState extends State<SenderMobileTrackingScreen>
     );
     if (confirmed != true) return;
     try {
-      await _callFunction('requestSenderCancellation', {
+      final result = await _callFunction('requestSenderCancellation', {
         'deliveryId': deliveryId,
         'requestId': deliveryId,
       });
+      if (result['success'] != true) {
+        final decision = result['decision'];
+        final reason = result['backendReason'] ??
+            (decision is Map ? decision['userFacingMessage'] : null) ??
+            (decision is Map ? decision['adminFacingReason'] : null) ??
+            'Cancellation could not be completed.';
+        if (!mounted) return;
+        _showActionMessage('$reason');
+        return;
+      }
       if (!mounted) return;
       _showActionMessage('Delivery cancellation sent.');
     } catch (error) {

@@ -3,6 +3,7 @@ class BookingCancellationPolicy {
     'requested',
     'pending',
     'unmatched',
+    'searching',
     'finding_rider',
     'broadcasting',
     'available',

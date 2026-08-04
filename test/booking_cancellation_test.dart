@@ -12,6 +12,7 @@ void main() {
       'broadcasting',
       'available',
       'awaiting_rider',
+      'searching',
       'rider_assigned',
       'accepted',
       'navigating_to_pickup',
