@@ -135,8 +135,12 @@ service cloud.firestore {
     function isFounderRider() {
       return signedIn() &&
         request.auth.uid == 'T2eV6PQucdUKmwSipEn2NAn4N9z1' &&
-        'founderRider' in request.auth.token &&
-        request.auth.token.founderRider == true;
+        (request.auth.token.get('founderRider', false) == true ||
+          (exists(/databases/$(database)/documents/founderTestAccounts/$(request.auth.uid)) &&
+            get(/databases/$(database)/documents/founderTestAccounts/$(request.auth.uid)).data.active == true &&
+            get(/databases/$(database)/documents/founderTestAccounts/$(request.auth.uid)).data.accountType == 'internal_tester' &&
+            get(/databases/$(database)/documents/founderTestAccounts/$(request.auth.uid)).data.waivers is list &&
+            'dispatch_eligibility' in get(/databases/$(database)/documents/founderTestAccounts/$(request.auth.uid)).data.waivers));
     }
 
     function isCreatingOwnDelivery() {

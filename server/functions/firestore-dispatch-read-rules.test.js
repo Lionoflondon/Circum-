@@ -86,3 +86,26 @@ test("configured founder Rider cannot bypass account suspension", async () => {
       {founderRider: true},
   ).firestore(), "deliveryRequests", "job-1")));
 });
+
+test("server-managed founder test designation allows dispatch reads without a refreshed claim", async () => {
+  await seed({...approved, dispatchEligible: false});
+  await env.withSecurityRulesDisabled(async (context) => {
+    await setDoc(doc(
+        context.firestore(),
+        "riderProfiles",
+        "T2eV6PQucdUKmwSipEn2NAn4N9z1",
+    ), {...approved, dispatchEligible: false});
+    await setDoc(doc(
+        context.firestore(),
+        "founderTestAccounts",
+        "T2eV6PQucdUKmwSipEn2NAn4N9z1",
+    ), {
+      active: true,
+      accountType: "internal_tester",
+      waivers: ["dispatch_eligibility"],
+    });
+  });
+  await assertSucceeds(getDoc(doc(env.authenticatedContext(
+      "T2eV6PQucdUKmwSipEn2NAn4N9z1",
+  ).firestore(), "deliveryRequests", "job-1")));
+});
