@@ -21,7 +21,7 @@ jobs:
       - run: node scripts/deploy_guard.self_test.js
       - run: node scripts/deploy_guard.js --target=sender-app --base HEAD
       - run: flutter test test/sender_product_isolation_test.dart test/sender_mobile/sender_canonical_destination_guard_test.dart
-      - run: CIRCUM_WEB_RECAPTCHA_ENTERPRISE_SITE_KEY="${{ secrets.CIRCUM_WEB_RECAPTCHA_ENTERPRISE_SITE_KEY }}" CIRCUM_WEB_GOOGLE_MAPS_API_KEY="${{ secrets.CIRCUM_WEB_GOOGLE_MAPS_API_KEY }}" STRIPE_PUBLISHABLE_KEY="${{ secrets.STRIPE_PUBLISHABLE_KEY }}" scripts/build_sender_app_web.sh
+      - run: CIRCUM_WEB_RECAPTCHA_ENTERPRISE_SITE_KEY="${{ secrets.CIRCUM_WEB_RECAPTCHA_ENTERPRISE_SITE_KEY }}" CIRCUM_WEB_GOOGLE_MAPS_API_KEY="${{ secrets.CIRCUM_WEB_GOOGLE_MAPS_API_KEY }}" GOOGLE_PLACES_API_KEY="${{ secrets.GOOGLE_PLACES_API_KEY }}" STRIPE_PUBLISHABLE_KEY="${{ secrets.STRIPE_PUBLISHABLE_KEY }}" scripts/build_sender_app_web.sh
       - run: node scripts/validate_web_artifacts.js --surface=sender-app
       - uses: google-github-actions/auth@v2
         with:

@@ -22,7 +22,7 @@ jobs:
       - run: flutter analyze lib/app/sender_mobile/sender_ui_baseline.dart lib/app/sender_mobile/sender_page_shell.dart lib/app/sender_mobile/sender_mobile_home.dart lib/app/sender_mobile/sender_activity.dart lib/app/sender_mobile/sender_wallet.dart lib/app/sender_mobile/sender_mobile_profile.dart
       - run: flutter test test/sender_mobile/sender_app_boot_contract_test.dart test/sender_mobile/sender_first_frame_layout_test.dart test/sender_mobile/sender_visual_baseline_contract_test.dart
       - run: PUBLIC_WEB_RECAPTCHA_ENTERPRISE_SITE_KEY="${{ secrets.PUBLIC_WEB_RECAPTCHA_ENTERPRISE_SITE_KEY }}" GOOGLE_PLACES_API_KEY="${{ secrets.GOOGLE_PLACES_API_KEY }}" scripts/build_public_web.sh
-      - run: CIRCUM_WEB_RECAPTCHA_ENTERPRISE_SITE_KEY="${{ secrets.CIRCUM_WEB_RECAPTCHA_ENTERPRISE_SITE_KEY }}" CIRCUM_WEB_GOOGLE_MAPS_API_KEY="${{ secrets.CIRCUM_WEB_GOOGLE_MAPS_API_KEY }}" STRIPE_PUBLISHABLE_KEY="${{ secrets.STRIPE_PUBLISHABLE_KEY }}" scripts/build_sender_app_web.sh
+      - run: CIRCUM_WEB_RECAPTCHA_ENTERPRISE_SITE_KEY="${{ secrets.CIRCUM_WEB_RECAPTCHA_ENTERPRISE_SITE_KEY }}" CIRCUM_WEB_GOOGLE_MAPS_API_KEY="${{ secrets.CIRCUM_WEB_GOOGLE_MAPS_API_KEY }}" GOOGLE_PLACES_API_KEY="${{ secrets.GOOGLE_PLACES_API_KEY }}" STRIPE_PUBLISHABLE_KEY="${{ secrets.STRIPE_PUBLISHABLE_KEY }}" scripts/build_sender_app_web.sh
       - uses: actions/upload-artifact@v4
         with:
           name: circum-rc1-web-artifacts
