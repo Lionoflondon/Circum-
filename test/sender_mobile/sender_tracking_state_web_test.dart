@@ -362,22 +362,22 @@ void main() {
   test('Sender tracking action sheet intercepts platform-view hit testing', () {
     final source = File('lib/app/sender_mobile/sender_tracking_screen.dart')
         .readAsStringSync();
-    final panelStart = source.indexOf('PointerInterceptor(');
     final mapStart = source.indexOf('SenderTrackingMapLayer(');
+    final actionsStart = source.indexOf('class _TrackingActions');
 
-    expect(panelStart, isNonNegative);
     expect(mapStart, isNonNegative);
-    expect(panelStart, greaterThan(mapStart));
-    expect(
-      source.substring(
-        panelStart,
-        source.indexOf('class _TrackingPanelContent'),
-      ),
-      contains('FloatingGlassPanel('),
-    );
+    expect(actionsStart, greaterThan(mapStart));
+    expect(source, contains('FloatingGlassPanel('));
     expect(source, contains("? 'Cancel Delivery'"));
     expect(source, contains('onTap: canCancel'));
     expect(source, contains('onCancelDelivery'));
+    final actionsSource = source.substring(actionsStart);
+    expect(
+      RegExp(r'PointerInterceptor\(\s*child: _TrackingButton', multiLine: true)
+          .allMatches(actionsSource)
+          .length,
+      2,
+    );
   });
 
   test('Sender tracking GoogleMap is mounted before ready fade completes', () {

@@ -1075,17 +1075,15 @@ class _SenderMobileTrackingScreenState extends State<SenderMobileTrackingScreen>
         if (staleLabel != null) _StaleLocationPill(label: staleLabel),
         if (visibleContent.showRider && !delivered) const _RecenterButton(),
         if (delivered) const _DeliveredConfirmationOverlay(),
-        PointerInterceptor(
-          child: FloatingGlassPanel(
-            child: _TrackingPanelContent(
-              state: state,
-              content: visibleContent,
-              engine: widget.engine,
-              mapMode: mapMode,
-              onOpenMessage: _openDeliveryChat,
-              onOpenSupport: _openSupportChat,
-              onCancelDelivery: () => _confirmCancelDelivery(state),
-            ),
+        FloatingGlassPanel(
+          child: _TrackingPanelContent(
+            state: state,
+            content: visibleContent,
+            engine: widget.engine,
+            mapMode: mapMode,
+            onOpenMessage: _openDeliveryChat,
+            onOpenSupport: _openSupportChat,
+            onCancelDelivery: () => _confirmCancelDelivery(state),
           ),
         ),
       ],
@@ -3777,39 +3775,43 @@ class _TrackingActions extends StatelessWidget {
     return Row(
       children: [
         Expanded(
-          child: _TrackingButton(
-            label: empty
-                ? 'Send a parcel'
-                : finding
-                    ? 'Message Support'
-                    : delivered
-                        ? 'View receipt'
-                        : 'Message',
-            primary: empty,
-            onTap: finding
-                ? onOpenSupport
-                : empty || delivered
-                    ? null
-                    : onOpenMessage,
+          child: PointerInterceptor(
+            child: _TrackingButton(
+              label: empty
+                  ? 'Send a parcel'
+                  : finding
+                      ? 'Message Support'
+                      : delivered
+                          ? 'View receipt'
+                          : 'Message',
+              primary: empty,
+              onTap: finding
+                  ? onOpenSupport
+                  : empty || delivered
+                      ? null
+                      : onOpenMessage,
+            ),
           ),
         ),
         const SizedBox(width: 8),
         Expanded(
-          child: _TrackingButton(
-            label: canCancel
-                ? 'Cancel Delivery'
-                : intervention
-                    ? 'Request Delivery Intervention'
-                    : delivered
-                        ? 'Done'
-                        : 'Support',
-            primary: delivered || state == SenderTrackingState.issue,
-            success: delivered,
-            onTap: canCancel
-                ? onCancelDelivery
-                : delivered
-                    ? null
-                    : onOpenSupport,
+          child: PointerInterceptor(
+            child: _TrackingButton(
+              label: canCancel
+                  ? 'Cancel Delivery'
+                  : intervention
+                      ? 'Request Delivery Intervention'
+                      : delivered
+                          ? 'Done'
+                          : 'Support',
+              primary: delivered || state == SenderTrackingState.issue,
+              success: delivered,
+              onTap: canCancel
+                  ? onCancelDelivery
+                  : delivered
+                      ? null
+                      : onOpenSupport,
+            ),
           ),
         ),
       ],
