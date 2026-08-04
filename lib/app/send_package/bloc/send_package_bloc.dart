@@ -331,6 +331,9 @@ class SendPackageBloc extends Bloc<SendPackageEvent, SendPackageState> {
         ),
       );
     } catch (error, stackTrace) {
+      final functionsError = error is FirebaseFunctionsException
+          ? error
+          : null;
       if (error is FirebaseFunctionsException) {
         debugPrint(
           'Sender address lookup callable failed: code=${error.code} message=${error.message} details=${error.details}',
@@ -344,6 +347,11 @@ class SendPackageBloc extends Bloc<SendPackageEvent, SendPackageState> {
           suggestions: [],
           isAddressSearching: false,
           addressSearchError: 'Address lookup failed: $error',
+          addressLookupExceptionType: error.runtimeType.toString(),
+          addressLookupExceptionMessage: '$error',
+          addressLookupStackTrace: '$stackTrace',
+          addressLookupHttpStatus: functionsError?.code,
+          addressLookupResponse: functionsError?.details?.toString(),
         ),
       );
     }

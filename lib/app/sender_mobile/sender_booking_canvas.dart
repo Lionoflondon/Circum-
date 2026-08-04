@@ -1653,7 +1653,7 @@ class _AddressPanel extends StatelessWidget {
             ),
           ),
         if (resolutionMessage != null ||
-            (errorText.isNotEmpty && !typedAddressCanContinue))
+            errorText.isNotEmpty)
           Padding(
             padding: const EdgeInsets.only(bottom: 8),
             child: Align(
