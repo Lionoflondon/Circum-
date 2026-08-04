@@ -3,6 +3,7 @@ const functions = require("firebase-functions/v1");
 const {getFirestore} = require("firebase-admin/firestore");
 const {dispatchPriority, isDispatchable, riderCanViewDispatch, riderDispatchEligibilityReason, riderDispatchPriority, riderMatchesIris} = require("./iris-core");
 const {loadFounderTestAccount} = require("./founder-authority");
+const riderPresenceCore = require("./rider-presence-core");
 
 const REQUEST_SCAN_LIMIT = 100;
 const openStatuses = new Set(["requested", "pending", "broadcast", "broadcasted", "awaiting_rider", "finding_rider"]);
@@ -128,6 +129,7 @@ const getNearbyRequests = functions.https.onCall(async (data, context) => {
     }
 
     const riderProfileDoc = await getFirestore().collection("riderProfiles").doc(riderId).get();
+    const riderPresenceDoc = await getFirestore().collection("riderPresence").doc(riderId).get();
     const riderData = {
       ...(riderProfileDoc.exists ? riderProfileDoc.data() : {}),
       ...riderDoc.data(),
@@ -136,15 +138,19 @@ const getNearbyRequests = functions.https.onCall(async (data, context) => {
     if (founderTestAccount) {
       riderData.founderTestAccount = founderTestAccount;
     }
-    if (!riderData.position || !riderData.position.geopoint ||
-        !Number.isFinite(Number(riderData.position.geopoint.latitude)) ||
-        !Number.isFinite(Number(riderData.position.geopoint.longitude))) {
+    const riderPresence = riderPresenceDoc.exists ? riderPresenceDoc.data() : {};
+    if (!riderPresenceCore.canReceiveDispatch({profile: riderData, presence: riderPresence})) {
+      throw new functions.https.HttpsError("failed-precondition", "Rider presence is not dispatch-ready");
+    }
+    const currentLocation = riderPresence.currentLocation || {};
+    if (!Number.isFinite(Number(currentLocation.latitude)) ||
+        !Number.isFinite(Number(currentLocation.longitude))) {
       throw new functions.https.HttpsError("failed-precondition", "Rider position not available");
     }
 
     const riderPosition = {
-      latitude: riderData.position.geopoint.latitude,
-      longitude: riderData.position.geopoint.longitude,
+      latitude: Number(currentLocation.latitude),
+      longitude: Number(currentLocation.longitude),
     };
 
     const requestDocs = await candidateRequestDocs(getFirestore(), riderData);
