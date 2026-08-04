@@ -3,6 +3,7 @@ const functions = require("firebase-functions/v1");
 const {getFirestore} = require("firebase-admin/firestore");
 const {dispatchPriority, isDispatchable, riderCanViewDispatch, riderDispatchEligibilityReason, riderDispatchPriority, riderMatchesIris} = require("./iris-core");
 const {loadFounderTestAccount} = require("./founder-authority");
+const {highestTrustAward} = require("./trust-award");
 
 const REQUEST_SCAN_LIMIT = 100;
 const openStatuses = new Set(["requested", "pending", "broadcast", "broadcasted", "awaiting_rider", "finding_rider"]);
@@ -231,6 +232,8 @@ const getNearbyRequests = functions.https.onCall(async (data, context) => {
                 return {
                   id: doc.id,
                   ...requestData,
+                  trustPoints: Number.isFinite(Number(requestData.trustPointsAwarded)) ?
+                    Number(requestData.trustPointsAwarded) : highestTrustAward(requestData),
                   distanceFromRider: distance,
                 };
               } catch (error) {

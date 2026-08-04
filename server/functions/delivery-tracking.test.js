@@ -228,6 +228,11 @@ test("settlement values reuse canonical earnings and highest trust category", ()
   assert.equal(deliveryTracking.highestTrustAward({}), 1);
 });
 
+test("delivered transitions persist the canonical trust award even on retry", () => {
+  assert.equal(deliveryTracking.highestTrustAward({requiresVanguard: true}), 4);
+  assert.equal(deliveryTracking.settlementValues({requiresVanguard: true}).trustPoints, 4);
+});
+
 test("canonical rider rank follows backend trust thresholds", () => {
   assert.equal(deliveryTracking.canonicalRiderRankForTrust(0), "agent");
   assert.equal(deliveryTracking.canonicalRiderRankForTrust(99), "agent");

@@ -4,6 +4,7 @@
 const functions = require("firebase-functions/v1");
 const {getFirestore, FieldValue, GeoPoint} = require("firebase-admin/firestore");
 const tracking = require("./sender-tracking-state-core");
+const {highestTrustAward} = require("./trust-award");
 
 function text(value) {
   return `${value || ""}`.trim();
@@ -238,19 +239,6 @@ function settlementValues(delivery = {}) {
   };
 }
 
-function highestTrustAward(delivery = {}) {
-  const text = `${delivery.category || delivery.deliveryType || delivery.serviceType || ""}`.toLowerCase();
-  const enabled = (key) => delivery[key] === true;
-  if (enabled("isHealthPlus") || enabled("healthPlus") || text.includes("health")) return 6;
-  if (enabled("isGift") || enabled("gift") || text.includes("gift")) return 5;
-  if (enabled("isScheduled") || enabled("scheduled") || delivery.scheduledAt || text.includes("scheduled")) return 5;
-  if (enabled("requiresVanguard") || enabled("vanguard") || text.includes("vanguard")) return 4;
-  if (enabled("isHeavyDuty") || enabled("heavyDuty") || text.includes("heavy")) return 4;
-  if (enabled("isBusiness") || enabled("business") || text.includes("business")) return 3;
-  if (enabled("isMarketplace") || enabled("marketplace") || text.includes("marketplace")) return 2;
-  return 1;
-}
-
 function canonicalRiderRankForTrust(trustPoints) {
   const trust = Number(trustPoints);
   if (!Number.isFinite(trust) || trust < 100) return "agent";
@@ -446,6 +434,13 @@ exports.updateDeliveryTrackingStatus = functions.https.onCall(async (data, conte
     const riderProfileRef = settlementValues(delivery).trustPoints > 0 ?
       db.collection("riderProfiles").doc(riderId) : null;
     const riderProfileSnapshot = riderProfileRef ? await transaction.get(riderProfileRef) : null;
+    const existingAward = Number(delivery.trustPointsAwarded);
+    const existingLedgerAward = existingEarning && existingEarning.exists ?
+      Number(existingEarning.data()?.trustPoints) : NaN;
+    const canonicalAward = Number.isFinite(existingAward) && existingAward >= 0 ?
+      existingAward : Number.isFinite(existingLedgerAward) && existingLedgerAward >= 0 ?
+        existingLedgerAward : settlementValues(delivery).trustPoints;
+    if (nextStatus === "delivered") patch.trustPointsAwarded = canonicalAward;
     transaction.set(found.ref, patch, {merge: true});
     if (nextStatus === "delivered") {
       const settlement = settlementValues(delivery);
@@ -478,7 +473,6 @@ exports.updateDeliveryTrackingStatus = functions.https.onCall(async (data, conte
         }
         patch.settlementId = earningRef.id;
         patch.settlementCompletedAt = FieldValue.serverTimestamp();
-        patch.trustPointsAwarded = settlement.trustPoints;
         transaction.set(found.ref, patch, {merge: true});
         transaction.set(db.collection("chats").doc(delivery.requestId || found.id), {
           readOnly: true,
