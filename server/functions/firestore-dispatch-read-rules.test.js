@@ -3,7 +3,7 @@ const test = require("node:test");
 const fs = require("node:fs");
 const path = require("node:path");
 const {assertFails, assertSucceeds, initializeTestEnvironment} = require("@firebase/rules-unit-testing");
-const {doc, getDoc, setDoc} = require("firebase/firestore");
+const {collection, doc, getDoc, getDocs, query, setDoc, where} = require("firebase/firestore");
 
 let env;
 test.before(async () => {
@@ -108,4 +108,12 @@ test("server-managed founder test designation allows dispatch reads without a re
   await assertSucceeds(getDoc(doc(env.authenticatedContext(
       "T2eV6PQucdUKmwSipEn2NAn4N9z1",
   ).firestore(), "deliveryRequests", "job-1")));
+  const founderDb = env.authenticatedContext(
+      "T2eV6PQucdUKmwSipEn2NAn4N9z1",
+  ).firestore();
+  await assertSucceeds(getDocs(query(
+      collection(founderDb, "deliveryRequests"),
+      where("status", "==", "requested"),
+      where("matchingStatus", "==", "available"),
+  )));
 });
