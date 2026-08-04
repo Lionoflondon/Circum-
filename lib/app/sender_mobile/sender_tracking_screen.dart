@@ -238,6 +238,7 @@ SenderTrackingState? senderTrackingStateForBackendStatus(Object? status) {
       SenderTrackingState.delivered,
     'cancelled' ||
     'canceled' ||
+    'cancelled_by_sender' ||
     'cancelled_verified_discrepancy' ||
     'sender_no_show_pickup' =>
       SenderTrackingState.cancelled,

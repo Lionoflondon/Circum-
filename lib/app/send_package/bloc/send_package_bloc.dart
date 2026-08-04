@@ -1592,6 +1592,7 @@ class SendPackageBloc extends Bloc<SendPackageEvent, SendPackageState> {
   static const Set<String> _cancelledRequestStatuses = {
     'cancelled',
     'canceled',
+    'cancelled_by_sender',
     'cancelled_verified_discrepancy',
     'sender_no_show_pickup',
     'archived',
@@ -1681,7 +1682,6 @@ class SendPackageBloc extends Bloc<SendPackageEvent, SendPackageState> {
         );
         return;
       }
-      add(WatchActiveDelivery(requestId: activeRequest));
       final userDocumentReference =
           db.collection('deliveryRequests').doc(user.uid);
       final requestDocumentReference =
@@ -1693,8 +1693,22 @@ class SendPackageBloc extends Bloc<SendPackageEvent, SendPackageState> {
       }
 
       if (docResponse.exists) {
-        _listenToActiveDeliveryLiveLocation(docResponse.id);
         final data = docResponse.data();
+        final senderId = '${data?['senderId'] ?? data?['userId'] ?? ''}'.trim();
+        if (senderId != user.uid) {
+          await prefs.remove('activeRequest');
+          emit(
+            state.copyWith(
+              deliveryStatus: DeliveryStatus.inital,
+              deliveryRequestStatus: 'not_owned',
+              activeDeliveryData: const {},
+              senderDeliveryError: '',
+            ),
+          );
+          return;
+        }
+        add(WatchActiveDelivery(requestId: docResponse.id));
+        _listenToActiveDeliveryLiveLocation(docResponse.id);
         String? pickupAddress = data!['pickupDetails']['address'];
         String? dropoffAddress = data['dropoffDetails']['address'];
         double? price = data['price'];
