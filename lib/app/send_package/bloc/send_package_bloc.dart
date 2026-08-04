@@ -1270,7 +1270,6 @@ class SendPackageBloc extends Bloc<SendPackageEvent, SendPackageState> {
           deliveryRequestStatus: 'requested',
         ),
       );
-      add(SetDrawerHeight(minDrawerHeight: 180, maxDrawerHeight: 0.5.sh));
     } on FirebaseFunctionsException catch (error) {
       debugPrint(
         'finalizeSenderWebCheckout failed: code=${error.code}, message=${error.message}, details=${error.details}',
