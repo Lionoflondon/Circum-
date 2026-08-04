@@ -7,6 +7,7 @@ import 'package:cloud_functions/cloud_functions.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
+import 'package:pointer_interceptor/pointer_interceptor.dart';
 
 import '../delivery/proof_of_delivery.dart';
 import '../../helper/bitmap_descriptor_helper.dart';
@@ -1074,15 +1075,17 @@ class _SenderMobileTrackingScreenState extends State<SenderMobileTrackingScreen>
         if (staleLabel != null) _StaleLocationPill(label: staleLabel),
         if (visibleContent.showRider && !delivered) const _RecenterButton(),
         if (delivered) const _DeliveredConfirmationOverlay(),
-        FloatingGlassPanel(
-          child: _TrackingPanelContent(
-            state: state,
-            content: visibleContent,
-            engine: widget.engine,
-            mapMode: mapMode,
-            onOpenMessage: _openDeliveryChat,
-            onOpenSupport: _openSupportChat,
-            onCancelDelivery: () => _confirmCancelDelivery(state),
+        PointerInterceptor(
+          child: FloatingGlassPanel(
+            child: _TrackingPanelContent(
+              state: state,
+              content: visibleContent,
+              engine: widget.engine,
+              mapMode: mapMode,
+              onOpenMessage: _openDeliveryChat,
+              onOpenSupport: _openSupportChat,
+              onCancelDelivery: () => _confirmCancelDelivery(state),
+            ),
           ),
         ),
       ],

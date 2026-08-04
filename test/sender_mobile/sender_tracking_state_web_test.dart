@@ -359,14 +359,37 @@ void main() {
         contains('if (googleMapSnapshot != null)'));
   });
 
+  test('Sender tracking action sheet intercepts platform-view hit testing', () {
+    final source = File('lib/app/sender_mobile/sender_tracking_screen.dart')
+        .readAsStringSync();
+    final panelStart = source.indexOf('PointerInterceptor(');
+    final mapStart = source.indexOf('SenderTrackingMapLayer(');
+
+    expect(panelStart, isNonNegative);
+    expect(mapStart, isNonNegative);
+    expect(panelStart, greaterThan(mapStart));
+    expect(
+      source.substring(
+        panelStart,
+        source.indexOf('class _TrackingPanelContent'),
+      ),
+      contains('FloatingGlassPanel('),
+    );
+    expect(source, contains("? 'Cancel Delivery'"));
+    expect(source, contains('onTap: canCancel'));
+    expect(source, contains('onCancelDelivery'));
+  });
+
   test('Sender tracking GoogleMap is mounted before ready fade completes', () {
     final source = File('lib/app/sender_mobile/sender_tracking_screen.dart')
         .readAsStringSync();
     final mapStart = source.indexOf('class SenderGoogleTrackingMap');
-    final opacityStart = source.indexOf('opacity: _ready ? .88 : .01', mapStart);
+    final opacityStart =
+        source.indexOf('opacity: _ready ? .88 : .01', mapStart);
 
     expect(mapStart, isNonNegative);
     expect(opacityStart, greaterThan(mapStart));
-    expect(source.substring(mapStart), isNot(contains('opacity: _ready ? .88 : 0')));
+    expect(source.substring(mapStart),
+        isNot(contains('opacity: _ready ? .88 : 0')));
   });
 }
