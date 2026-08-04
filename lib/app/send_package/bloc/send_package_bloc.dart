@@ -343,8 +343,7 @@ class SendPackageBloc extends Bloc<SendPackageEvent, SendPackageState> {
         state.copyWith(
           suggestions: [],
           isAddressSearching: false,
-          addressSearchError:
-              "Couldn't find matching addresses. Please continue typing or try again.",
+          addressSearchError: 'Address lookup failed: $error',
         ),
       );
     }
