@@ -285,10 +285,22 @@ function riderTrustRankPatch(profile = {}, awardedTrustPoints = 0) {
   return patch;
 }
 
-function patchForTransition({action, nextStatus, riderId}) {
+function deliveredProjectionPatch(delivery, now) {
+  return {
+    state: "delivered",
+    deliveryStatus: "delivered",
+    deliveryStage: "delivered",
+    currentStep: "completed",
+    waiting: {...(delivery.waiting || {}), active: false, completedAt: now},
+    pendingNotification: FieldValue.delete(),
+  };
+}
+
+function patchForTransition({action, nextStatus, riderId, delivery = {}}) {
   const now = FieldValue.serverTimestamp();
   const patch = {
     status: nextStatus,
+    state: nextStatus,
     deliveryStatus: nextStatus,
     deliveryStage: nextStatus,
     updatedAt: now,
@@ -315,6 +327,7 @@ function patchForTransition({action, nextStatus, riderId}) {
     patch.deliveryPinVerifiedBy = riderId;
     patch.deliveredAt = now;
     patch.completedAt = now;
+    Object.assign(patch, deliveredProjectionPatch(delivery, now));
   }
   if (nextStatus === "issue_reported") {
     patch.issueReportedAt = now;
@@ -358,6 +371,12 @@ exports.updateDeliveryTrackingStatus = functions.https.onCall(async (data, conte
     const currentStatus = normalized(delivery.status || delivery.deliveryStatus || "requested");
     if (currentStatus === nextStatus ||
         (nextStatus === "delivered" && currentStatus === "completed")) {
+      if (nextStatus === "delivered") {
+        transaction.set(found.ref, {
+          ...deliveredProjectionPatch(delivery, FieldValue.serverTimestamp()),
+          updatedAt: FieldValue.serverTimestamp(),
+        }, {merge: true});
+      }
       return {
         deliveryId: found.id,
         requestId: delivery.requestId || found.id,
@@ -413,6 +432,7 @@ exports.updateDeliveryTrackingStatus = functions.https.onCall(async (data, conte
       action,
       nextStatus,
       riderId,
+      delivery,
     });
     if (Object.keys(evidence).length > 0) {
       patch[action === "verify_receiver_pin" ? "handoverEvidence" : "pickupEvidence"] = {
@@ -635,6 +655,7 @@ exports._private = {
   signalQuality,
   validatedLiveLocation,
   patchForTransition,
+  deliveredProjectionPatch,
   expectedPin,
   pinAuthorityRequired,
   assertRiderOwnsDelivery,

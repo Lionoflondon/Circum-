@@ -23,12 +23,36 @@ test("receiver PIN verification patch delivers without exposing PIN values", () 
     action: "verify_receiver_pin",
     nextStatus: "delivered",
     riderId: "rider-1",
+    delivery: {waiting: {active: true, startedAt: 123}},
   });
   assert.equal(patch.status, "delivered");
+  assert.equal(patch.state, "delivered");
+  assert.equal(patch.deliveryStatus, "delivered");
+  assert.equal(patch.deliveryStage, "delivered");
+  assert.equal(patch.currentStep, "completed");
+  assert.equal(patch.waiting.active, false);
+  assert.equal(patch.waiting.startedAt, 123);
+  assert.ok(patch.pendingNotification);
   assert.equal(patch.deliveryPinVerified, true);
   assert.equal(patch.deliveryPinVerifiedBy, "rider-1");
   assert.equal(Object.prototype.hasOwnProperty.call(patch, "deliveryPin"), false);
   assert.equal(Object.prototype.hasOwnProperty.call(patch, "receiverPin"), false);
+});
+
+test("delivered projection repair closes stale lifecycle aliases idempotently", () => {
+  const patch = deliveryTracking.deliveredProjectionPatch(
+      {waiting: {active: true, startedAt: 123}},
+      "server-time",
+  );
+
+  assert.equal(patch.state, "delivered");
+  assert.equal(patch.deliveryStatus, "delivered");
+  assert.equal(patch.deliveryStage, "delivered");
+  assert.equal(patch.currentStep, "completed");
+  assert.equal(patch.waiting.active, false);
+  assert.equal(patch.waiting.startedAt, 123);
+  assert.equal(patch.waiting.completedAt, "server-time");
+  assert.ok(patch.pendingNotification);
 });
 
 test("rider location patch preserves live GPS contract", () => {
