@@ -1681,7 +1681,7 @@ class _AddressPanel extends StatelessWidget {
               ),
             ),
           ),
-        if (controller.text.trim().isNotEmpty && !canContinue)
+        if (controller.text.trim().isNotEmpty && suggestions.isNotEmpty)
           ConstrainedBox(
             constraints: const BoxConstraints(maxHeight: 164),
             child: ListView.builder(
