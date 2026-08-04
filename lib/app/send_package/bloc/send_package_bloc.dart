@@ -330,7 +330,15 @@ class SendPackageBloc extends Bloc<SendPackageEvent, SendPackageState> {
               : '',
         ),
       );
-    } catch (e) {
+    } catch (error, stackTrace) {
+      if (error is FirebaseFunctionsException) {
+        debugPrint(
+          'Sender address lookup callable failed: code=${error.code} message=${error.message} details=${error.details}',
+        );
+      } else {
+        debugPrint('Sender address lookup failed: $error');
+      }
+      debugPrintStack(stackTrace: stackTrace);
       emit(
         state.copyWith(
           suggestions: [],
