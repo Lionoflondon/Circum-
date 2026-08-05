@@ -421,7 +421,10 @@ void main() {
     expect(sheet, contains('if (size.width >= 900)'));
     expect(sheet, contains('desktopWidthFraction'));
     expect(sheet, contains('desktopHeightFraction'));
-    expect(source, contains('desktopAlignment: Alignment.bottomLeft'));
+    expect(source, contains('desktopAlignment: Alignment.bottomCenter'));
+    expect(source, contains('desktopWidthFraction: .96'));
+    expect(source, contains('desktopHeightFraction: .34'));
+    expect(source, contains('desktopMaxWidth: 1600'));
   });
 
   test('Sender mobile tracking panel has three persisted snap points', () {

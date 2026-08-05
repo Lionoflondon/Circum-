@@ -1085,7 +1085,10 @@ class _SenderMobileTrackingScreenState extends State<SenderMobileTrackingScreen>
           persistenceId: 'tracking:${senderActiveDeliveryIdFor(widget.engine)}',
           desktopPanel: true,
           wrapInGlass: true,
-          desktopAlignment: Alignment.bottomLeft,
+          desktopAlignment: Alignment.bottomCenter,
+          desktopWidthFraction: .96,
+          desktopMaxWidth: 1600,
+          desktopHeightFraction: .34,
           child: _TrackingPanelContent(
             state: state,
             content: visibleContent,
