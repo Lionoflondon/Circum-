@@ -8,6 +8,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:pointer_interceptor/pointer_interceptor.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import '../delivery/proof_of_delivery.dart';
 import '../../helper/bitmap_descriptor_helper.dart';
@@ -1080,6 +1081,7 @@ class _SenderMobileTrackingScreenState extends State<SenderMobileTrackingScreen>
         if (visibleContent.showRider && !delivered) const _RecenterButton(),
         if (delivered) const _DeliveredConfirmationOverlay(),
         FloatingGlassPanel(
+          deliveryId: senderActiveDeliveryIdFor(widget.engine),
           child: _TrackingPanelContent(
             state: state,
             content: visibleContent,
@@ -1837,10 +1839,76 @@ const _senderTrackingGoogleMapStyle = '''
 ]
 ''';
 
-class FloatingGlassPanel extends StatelessWidget {
+class FloatingGlassPanel extends StatefulWidget {
+  final String deliveryId;
   final Widget child;
 
-  const FloatingGlassPanel({super.key, required this.child});
+  const FloatingGlassPanel({
+    super.key,
+    required this.deliveryId,
+    required this.child,
+  });
+
+  @override
+  State<FloatingGlassPanel> createState() => _FloatingGlassPanelState();
+}
+
+class _FloatingGlassPanelState extends State<FloatingGlassPanel> {
+  static const _defaultExtent = .45;
+  static const _minExtent = .18;
+  static const _maxExtent = .9;
+  static const _extentKeyPrefix = 'sender_tracking_panel_extent_';
+
+  double _initialExtent = _defaultExtent;
+  String _loadedDeliveryId = '';
+  Timer? _persistTimer;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadExtent(widget.deliveryId);
+  }
+
+  @override
+  void didUpdateWidget(covariant FloatingGlassPanel oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.deliveryId != widget.deliveryId) {
+      _loadExtent(widget.deliveryId);
+    }
+  }
+
+  @override
+  void dispose() {
+    _persistTimer?.cancel();
+    super.dispose();
+  }
+
+  Future<void> _loadExtent(String deliveryId) async {
+    _persistTimer?.cancel();
+    _loadedDeliveryId = deliveryId;
+    var extent = _defaultExtent;
+    if (deliveryId.isNotEmpty) {
+      final preferences = await SharedPreferences.getInstance();
+      final saved = preferences.getDouble('$_extentKeyPrefix$deliveryId');
+      if (saved != null && saved >= _minExtent && saved <= _maxExtent) {
+        extent = saved;
+      }
+    }
+    if (!mounted || _loadedDeliveryId != deliveryId) return;
+    setState(() => _initialExtent = extent);
+  }
+
+  void _rememberExtent(double extent) {
+    if (widget.deliveryId.isEmpty) return;
+    _persistTimer?.cancel();
+    _persistTimer = Timer(const Duration(milliseconds: 250), () async {
+      final preferences = await SharedPreferences.getInstance();
+      await preferences.setDouble(
+        '$_extentKeyPrefix${widget.deliveryId}',
+        extent.clamp(_minExtent, _maxExtent).toDouble(),
+      );
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -1855,15 +1923,22 @@ class FloatingGlassPanel extends StatelessWidget {
         ),
       );
     }
-    return DraggableScrollableSheet(
-      initialChildSize: .38,
-      minChildSize: .24,
-      maxChildSize: .78,
-      snap: true,
-      snapSizes: const [.38, .78],
-      builder: (context, controller) {
-        return _panel(controller);
+    return NotificationListener<DraggableScrollableNotification>(
+      onNotification: (notification) {
+        _rememberExtent(notification.extent);
+        return false;
       },
+      child: DraggableScrollableSheet(
+        key: ValueKey('${widget.deliveryId}:$_initialExtent'),
+        initialChildSize: _initialExtent,
+        minChildSize: _minExtent,
+        maxChildSize: _maxExtent,
+        snap: true,
+        snapSizes: const [_minExtent, _defaultExtent, _maxExtent],
+        builder: (context, controller) {
+          return _panel(controller);
+        },
+      ),
     );
   }
 
@@ -1891,7 +1966,7 @@ class FloatingGlassPanel extends StatelessWidget {
                 ),
               ),
             ),
-            child,
+            widget.child,
           ],
         ),
       ),

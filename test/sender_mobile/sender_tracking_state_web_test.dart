@@ -412,4 +412,23 @@ void main() {
     expect(source, contains('height: size.height * .78'));
     expect(source, contains('Alignment.bottomLeft'));
   });
+
+  test('Sender mobile tracking panel has three persisted snap points', () {
+    final source = File('lib/app/sender_mobile/sender_tracking_screen.dart')
+        .readAsStringSync();
+
+    expect(source, contains('static const _minExtent = .18'));
+    expect(source, contains('static const _defaultExtent = .45'));
+    expect(source, contains('static const _maxExtent = .9'));
+    expect(source,
+        contains('snapSizes: const [_minExtent, _defaultExtent, _maxExtent]'));
+    expect(source, contains('SharedPreferences.getInstance()'));
+    expect(source, contains('sender_tracking_panel_extent_'));
+    expect(source,
+        contains('NotificationListener<DraggableScrollableNotification>'));
+    expect(
+        source, contains("ValueKey('\${widget.deliveryId}:\$_initialExtent')"));
+    expect(source,
+        contains('deliveryId: senderActiveDeliveryIdFor(widget.engine)'));
+  });
 }
