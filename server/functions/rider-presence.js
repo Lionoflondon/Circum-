@@ -3,7 +3,11 @@ const functions = require("firebase-functions/v1");
 const {getFirestore, FieldValue} = require("firebase-admin/firestore");
 const core = require("./rider-presence-core");
 const staleCore = require("./stale-delivery-core");
-const {loadFounderTestAccount} = require("./founder-authority");
+const {
+  loadFounderTestAccount,
+  isFounderRiderUid,
+  reconcileFounderRiderState,
+} = require("./founder-authority");
 
 function requireAuth(context) {
   if (!context.auth || !context.auth.uid) {
@@ -135,8 +139,14 @@ exports.goOnline = functions.https.onCall(async (data, context) => {
   try {
     const riderId = requireAuth(context);
     const db = getFirestore();
+    if (isFounderRiderUid(riderId)) {
+      await reconcileFounderRiderState(db, riderId);
+    }
     const profile = await riderProfile(db, riderId);
-    const founder = context.auth.token && context.auth.token.founderRider === true;
+    const founderDesignation = await loadFounderTestAccount(db, riderId);
+    if (founderDesignation) profile.founderTestAccount = founderDesignation;
+    const founder = isFounderRiderUid(riderId) ||
+      context.auth.token && context.auth.token.founderRider === true;
     const reason = core.blockedReasonForAccess(profile, founder);
     if (reason) {
       throw new functions.https.HttpsError("failed-precondition", reason);
