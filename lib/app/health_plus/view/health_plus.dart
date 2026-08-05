@@ -13,6 +13,7 @@ import '../../send_package/repo/place_api.dart';
 import '../health_plus_pricing.dart';
 import '../models/pickup_status.dart';
 import '../models/recurring_pickup_schedule.dart';
+import '../../shared/roth/roth_presentation.dart';
 
 enum _HealthStep {
   status,
@@ -1218,9 +1219,10 @@ class _HealthCheckoutStep extends StatelessWidget {
       children: [
         const _HealthSecureNote(),
         _HealthTotalRow(total: quote.total),
-        _HealthToggleRow(
+        RothChoiceCard(
           selected: useRoth,
-          title: recurring
+          title: 'Use Roth',
+          description: recurring
               ? 'Use Roth on the first Health+ subscription payment. Available: ${_money(rothBalance)}.'
               : 'Use Roth for this Health+ pickup. Available: ${_money(rothBalance)}.',
           onTap: () => onUseRoth(!useRoth),

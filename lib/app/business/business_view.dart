@@ -14,6 +14,7 @@ import 'business_iris_moments.dart';
 import 'business_journey_context.dart';
 import 'business_models.dart';
 import 'business_repository.dart';
+import '../shared/roth/roth_presentation.dart';
 
 const _navy = Color(0xFF07090F);
 const _panel = Color(0xFF0D111C);
@@ -1626,16 +1627,15 @@ class _BusinessInvoicePaymentSheetState
           _DetailLine(
               label: 'Available Roth',
               value: plan.availableRoth.toStringAsFixed(2)),
-          SwitchListTile.adaptive(
-            contentPadding: EdgeInsets.zero,
-            title: const Text('Apply Roth',
-                style: TextStyle(fontWeight: FontWeight.w800)),
-            subtitle: const Text(
-                'The Finance Engine applies the best available amount.'),
-            value: _useRoth,
-            onChanged: widget.availableRoth <= 0
-                ? null
-                : (value) => setState(() => _useRoth = value),
+          RothChoiceCard(
+            selected: _useRoth,
+            title: 'Apply Roth',
+            description: widget.availableRoth <= 0
+                ? 'No Roth balance is currently available.'
+                : 'The Finance Engine applies the best available amount.',
+            onTap: widget.availableRoth <= 0
+                ? () {}
+                : () => setState(() => _useRoth = !_useRoth),
           ),
           _DetailLine(
               label: 'Roth applied',

@@ -10,6 +10,7 @@ import 'sender_accessibility.dart';
 import 'gift_journey_draft.dart';
 import 'gift_relationship_view.dart';
 import 'gift_status_view.dart';
+import '../shared/roth/roth_presentation.dart';
 
 class GiftPaymentView extends StatefulWidget {
   final GiftJourneyDraft draft;
@@ -141,7 +142,7 @@ class _GiftPaymentViewState extends State<GiftPaymentView> {
           value: '£${widget.draft.budget.toStringAsFixed(0)}',
         ),
         const SizedBox(height: 10),
-        _RothBalanceSummary(
+        RothSummaryCard(
           loading: _rothLoading,
           unavailable: _rothUnavailable,
           balance: _rothBalance,
@@ -178,7 +179,7 @@ class _GiftPaymentViewState extends State<GiftPaymentView> {
         ],
         if (_showRothToggle) ...[
           const SizedBox(height: 16),
-          _RothToggleCard(
+          RothApplyCard(
             enabled: _applyRoth,
             balance: _rothBalance,
             applied: _rothApplied,
@@ -383,131 +384,6 @@ class _PaymentMethodTile extends StatelessWidget {
   }
 }
 
-class _RothToggleCard extends StatelessWidget {
-  final bool enabled;
-  final double balance;
-  final double applied;
-  final double remaining;
-  final ValueChanged<bool> onChanged;
-
-  const _RothToggleCard({
-    required this.enabled,
-    required this.balance,
-    required this.applied,
-    required this.remaining,
-    required this.onChanged,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: .052),
-        borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: Colors.white.withValues(alpha: .09)),
-      ),
-      child: Column(
-        children: [
-          SwitchListTile.adaptive(
-            contentPadding: EdgeInsets.zero,
-            value: enabled,
-            onChanged: onChanged,
-            title: Text(
-              'Apply Roth balance',
-              style: GoogleFonts.inter(
-                color: Colors.white,
-                fontSize: 13,
-                fontWeight: FontWeight.w800,
-              ),
-            ),
-          ),
-          if (enabled) ...[
-            const SizedBox(height: 8),
-            _PaymentSummary(
-              label: 'Roth balance',
-              value: '£${balance.toStringAsFixed(0)}',
-            ),
-            const SizedBox(height: 8),
-            _PaymentSummary(
-              label: 'Roth applied',
-              value: '£${applied.toStringAsFixed(0)}',
-            ),
-            const SizedBox(height: 8),
-            _PaymentSummary(
-              label: 'Remaining card amount',
-              value: '£${remaining.toStringAsFixed(0)}',
-            ),
-          ],
-        ],
-      ),
-    );
-  }
-}
-
-class _RothBalanceSummary extends StatelessWidget {
-  final bool loading;
-  final bool unavailable;
-  final double balance;
-  final double applied;
-  final double remaining;
-
-  const _RothBalanceSummary({
-    required this.loading,
-    required this.unavailable,
-    required this.balance,
-    required this.applied,
-    required this.remaining,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final balanceText = loading
-        ? 'Loading...'
-        : unavailable
-            ? 'Unavailable'
-            : '£${balance.toStringAsFixed(0)}';
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: .052),
-        borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: Colors.white.withValues(alpha: .09)),
-      ),
-      child: Column(
-        children: [
-          _PaymentSummaryRow(
-              label: 'Available Roth balance', value: balanceText),
-          const SizedBox(height: 8),
-          _PaymentSummaryRow(
-            label: 'Amount covered by Roth',
-            value: '£${applied.toStringAsFixed(0)}',
-          ),
-          const SizedBox(height: 8),
-          _PaymentSummaryRow(
-            label: 'Remaining card amount',
-            value: '£${remaining.toStringAsFixed(0)}',
-          ),
-          if (unavailable) ...[
-            const SizedBox(height: 10),
-            Text(
-              'Roth is currently unavailable. You can continue securely by card.',
-              style: GoogleFonts.inter(
-                color: const Color(0xFFB8AAB8),
-                fontSize: 11.5,
-                height: 1.35,
-                fontWeight: FontWeight.w600,
-              ),
-            ),
-          ],
-        ],
-      ),
-    );
-  }
-}
-
 class _PaymentSummary extends StatelessWidget {
   final String label;
   final String value;
@@ -530,23 +406,6 @@ class _PaymentSummary extends StatelessWidget {
           _PaymentValue(value),
         ],
       ),
-    );
-  }
-}
-
-class _PaymentSummaryRow extends StatelessWidget {
-  final String label;
-  final String value;
-
-  const _PaymentSummaryRow({required this.label, required this.value});
-
-  @override
-  Widget build(BuildContext context) {
-    return Row(
-      children: [
-        Expanded(child: _PaymentLabel(label)),
-        _PaymentValue(value),
-      ],
     );
   }
 }
