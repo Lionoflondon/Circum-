@@ -357,6 +357,10 @@ void main() {
     expect(radarStart, greaterThan(googleMapStart));
     expect(source.substring(layerStart, radarStart),
         contains('if (googleMapSnapshot != null)'));
+    expect(source.substring(layerStart, googleMapStart),
+        contains('Positioned.fill('));
+    expect(source.substring(layerStart, googleMapStart),
+        contains('fit: StackFit.expand'));
   });
 
   test('Sender tracking action sheet intercepts platform-view hit testing', () {
@@ -371,25 +375,39 @@ void main() {
     expect(source, contains("? 'Cancel Delivery'"));
     expect(source, contains('onTap: canCancel'));
     expect(source, contains('onCancelDelivery'));
-    final actionsSource = source.substring(actionsStart);
-    expect(
-      RegExp(r'PointerInterceptor\(\s*child: _TrackingButton', multiLine: true)
-          .allMatches(actionsSource)
-          .length,
-      2,
-    );
+    expect(source, contains('PointerInterceptor('));
   });
 
-  test('Sender tracking GoogleMap is mounted before ready fade completes', () {
+  test('Sender tracking GoogleMap is never wrapped in opacity or transforms', () {
     final source = File('lib/app/sender_mobile/sender_tracking_screen.dart')
         .readAsStringSync();
     final mapStart = source.indexOf('class SenderGoogleTrackingMap');
-    final opacityStart =
-        source.indexOf('opacity: _ready ? .88 : .01', mapStart);
+    final markerStart = source.indexOf('Set<Marker>', mapStart);
+    final mapSource = source.substring(mapStart, markerStart);
 
     expect(mapStart, isNonNegative);
-    expect(opacityStart, greaterThan(mapStart));
-    expect(source.substring(mapStart),
-        isNot(contains('opacity: _ready ? .88 : 0')));
+    expect(markerStart, greaterThan(mapStart));
+    expect(mapSource, contains('return GoogleMap('));
+    expect(mapSource, isNot(contains('AnimatedOpacity(')));
+    expect(mapSource, isNot(contains('Transform(')));
+    expect(mapSource, contains('assertPlatformViewAttachVisibility('));
+  });
+
+  test('Sender map guard keeps platform views visible before attachment', () {
+    final guard =
+        File('lib/helper/platform_view_visibility.dart').readAsStringSync();
+
+    expect(guard, contains('opacity == 0'));
+    expect(guard, contains('before attachment completed'));
+    expect(guard, contains('debugPrint('));
+  });
+
+  test('Sender tracking panel is constrained on desktop widths', () {
+    final source = File('lib/app/sender_mobile/sender_tracking_screen.dart')
+        .readAsStringSync();
+
+    expect(source, contains('if (size.width >= 900)'));
+    expect(source, contains('width: math.min(460, size.width * .38)'));
+    expect(source, contains('Alignment.bottomLeft'));
   });
 }

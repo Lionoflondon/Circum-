@@ -11,6 +11,7 @@ import 'package:pointer_interceptor/pointer_interceptor.dart';
 
 import '../delivery/proof_of_delivery.dart';
 import '../../helper/bitmap_descriptor_helper.dart';
+import '../../helper/platform_view_visibility.dart';
 import '../send_package/bloc/send_package_bloc.dart';
 import '../send_package/models/place_coordinates.m.dart';
 import '../send_package/view/ride_chats.dart';
@@ -1051,17 +1052,19 @@ class _SenderMobileTrackingScreenState extends State<SenderMobileTrackingScreen>
     final delivered = state == SenderTrackingState.delivered;
     return Stack(
       children: [
-        SenderTrackingMapLayer(
-          engine: widget.engine,
-          content: visibleContent,
-          riderPosition: riderPosition,
-          vehicleKind: senderVehicleMarkerKindFor(
-            widget.engine.deliveryData?.typeOfVehicle,
+        Positioned.fill(
+          child: SenderTrackingMapLayer(
+            engine: widget.engine,
+            content: visibleContent,
+            riderPosition: riderPosition,
+            vehicleKind: senderVehicleMarkerKindFor(
+              widget.engine.deliveryData?.typeOfVehicle,
+            ),
+            headingDegrees: widget.engine.riderLiveLocationHeading,
+            mapDrift: _mapDrift,
+            pulse: _pulse,
+            delivered: delivered,
           ),
-          headingDegrees: widget.engine.riderLiveLocationHeading,
-          mapDrift: _mapDrift,
-          pulse: _pulse,
-          delivered: delivered,
         ),
         if (content.pill.isNotEmpty)
           SafeArea(
@@ -1261,14 +1264,17 @@ class SenderTrackingMapLayer extends StatelessWidget {
           stateDelivered: delivered,
         );
         return Stack(
+          fit: StackFit.expand,
           children: [
             if (googleMapSnapshot != null)
-              SenderGoogleTrackingMap(
-                snapshot: googleMapSnapshot,
-                content: content,
-                vehicleKind: vehicleKind,
-                headingDegrees: headingDegrees,
-                delivered: delivered,
+              Positioned.fill(
+                child: SenderGoogleTrackingMap(
+                  snapshot: googleMapSnapshot,
+                  content: content,
+                  vehicleKind: vehicleKind,
+                  headingDegrees: headingDegrees,
+                  delivered: delivered,
+                ),
               ),
             AnimatedOpacity(
               opacity: googleMapSnapshot == null ? 1 : .26,
@@ -1589,6 +1595,9 @@ class _SenderGoogleTrackingMapState extends State<SenderGoogleTrackingMap> {
   BitmapDescriptor? _dropoffIcon;
   BitmapDescriptor? _riderIcon;
   var _ready = false;
+  var _disposed = false;
+  var _cameraMoveScheduled = false;
+  var _cameraMoveInFlight = false;
 
   @override
   void initState() {
@@ -1601,12 +1610,13 @@ class _SenderGoogleTrackingMapState extends State<SenderGoogleTrackingMap> {
     super.didUpdateWidget(oldWidget);
     if (_cameraInputsChanged(oldWidget.snapshot, widget.snapshot) ||
         oldWidget.delivered != widget.delivered) {
-      WidgetsBinding.instance.addPostFrameCallback((_) => _moveCamera());
+      _scheduleCameraMove();
     }
   }
 
   @override
   void dispose() {
+    _disposed = true;
     _controller?.dispose();
     super.dispose();
   }
@@ -1614,33 +1624,34 @@ class _SenderGoogleTrackingMapState extends State<SenderGoogleTrackingMap> {
   @override
   Widget build(BuildContext context) {
     final snapshot = widget.snapshot;
-    return AnimatedOpacity(
-      opacity: _ready ? .88 : .01,
-      duration: const Duration(milliseconds: 360),
-      curve: Curves.easeOutCubic,
-      child: GoogleMap(
-        key: const ValueKey('sender-live-google-map'),
-        initialCameraPosition: CameraPosition(
-          target: snapshot.rider ?? snapshot.pickup,
-          zoom: snapshot.rider == null ? 13.2 : 14.4,
-        ),
-        onMapCreated: (controller) {
-          _controller = controller;
-          setState(() => _ready = true);
-          WidgetsBinding.instance.addPostFrameCallback((_) => _moveCamera());
-        },
-        markers: _markers(snapshot),
-        polylines: _polylines(snapshot),
-        zoomControlsEnabled: false,
-        myLocationButtonEnabled: false,
-        mapToolbarEnabled: false,
-        compassEnabled: false,
-        rotateGesturesEnabled: true,
-        tiltGesturesEnabled: false,
-        trafficEnabled: false,
-        buildingsEnabled: false,
-        style: _senderTrackingGoogleMapStyle,
+    assertPlatformViewAttachVisibility(
+      viewName: 'SenderGoogleTrackingMap',
+      opacity: 1,
+      attached: _ready,
+    );
+    return GoogleMap(
+      key: const ValueKey('sender-live-google-map'),
+      initialCameraPosition: CameraPosition(
+        target: snapshot.rider ?? snapshot.pickup,
+        zoom: snapshot.rider == null ? 13.2 : 14.4,
       ),
+      onMapCreated: (controller) {
+        if (!mounted) return;
+        _controller = controller;
+        setState(() => _ready = true);
+        _scheduleCameraMove();
+      },
+      markers: _markers(snapshot),
+      polylines: _polylines(snapshot),
+      zoomControlsEnabled: false,
+      myLocationButtonEnabled: false,
+      mapToolbarEnabled: false,
+      compassEnabled: false,
+      rotateGesturesEnabled: true,
+      tiltGesturesEnabled: false,
+      trafficEnabled: false,
+      buildingsEnabled: false,
+      style: _senderTrackingGoogleMapStyle,
     );
   }
 
@@ -1729,6 +1740,8 @@ class _SenderGoogleTrackingMapState extends State<SenderGoogleTrackingMap> {
   }
 
   Future<void> _moveCamera() async {
+    _cameraMoveScheduled = false;
+    if (_disposed || !mounted || !_ready || _cameraMoveInFlight) return;
     final controller = _controller;
     if (controller == null) return;
     final snapshot = widget.snapshot;
@@ -1742,9 +1755,20 @@ class _SenderGoogleTrackingMapState extends State<SenderGoogleTrackingMap> {
     _lastRider = rider;
     if (_lastBounds == targetBounds && rider == null) return;
     _lastBounds = targetBounds;
-    await controller.animateCamera(
-      CameraUpdate.newLatLngBounds(targetBounds, 84),
-    );
+    _cameraMoveInFlight = true;
+    try {
+      await controller.animateCamera(
+        CameraUpdate.newLatLngBounds(targetBounds, 84),
+      );
+    } finally {
+      _cameraMoveInFlight = false;
+    }
+  }
+
+  void _scheduleCameraMove() {
+    if (_disposed || _cameraMoveScheduled) return;
+    _cameraMoveScheduled = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) => _moveCamera());
   }
 
   LatLngBounds _cameraBounds(SenderTrackingMapSnapshot snapshot) {
@@ -1820,6 +1844,17 @@ class FloatingGlassPanel extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final size = MediaQuery.sizeOf(context);
+    if (size.width >= 900) {
+      return Align(
+        alignment: Alignment.bottomLeft,
+        child: SizedBox(
+          width: math.min(460, size.width * .38),
+          height: size.height * .78,
+          child: _panel(null),
+        ),
+      );
+    }
     return DraggableScrollableSheet(
       initialChildSize: .38,
       minChildSize: .24,
@@ -1827,7 +1862,13 @@ class FloatingGlassPanel extends StatelessWidget {
       snap: true,
       snapSizes: const [.38, .78],
       builder: (context, controller) {
-        return Padding(
+        return _panel(controller);
+      },
+    );
+  }
+
+  Widget _panel(ScrollController? controller) {
+    return Padding(
           padding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
           child: AppGlassContainer(
             radius: 26,
@@ -1855,8 +1896,6 @@ class FloatingGlassPanel extends StatelessWidget {
             ),
           ),
         );
-      },
-    );
   }
 }
 
