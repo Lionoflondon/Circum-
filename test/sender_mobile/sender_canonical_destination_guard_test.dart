@@ -118,6 +118,16 @@ void main() {
     }
   });
 
+  test('Send a parcel hero keeps decorative art out of hit testing', () {
+    final source = read('lib/app/sender_mobile/sender_mobile_home.dart');
+    final heroStart = source.indexOf('class _HeroSendCard');
+    final heroEnd = source.indexOf('class _RecentOrdersCard');
+    final hero = source.substring(heroStart, heroEnd);
+
+    expect(hero, contains('onTap: onTap'));
+    expect(hero, contains('IgnorePointer(child: _HeroRouteArt())'));
+  });
+
   test('Sender web deep link opens the canonical Gifts flow', () {
     final preview = read('lib/app/sender_mobile/sender_mobile_preview.dart');
     final home = read('lib/app/sender_mobile/sender_mobile_home.dart');

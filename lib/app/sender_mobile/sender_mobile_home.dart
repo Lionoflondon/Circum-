@@ -247,7 +247,8 @@ class _SenderMobileHomeState extends State<SenderMobileHome> {
 
   void _selectTab(int next) {
     final index = next.clamp(0, senderMobileBottomNavigationLabels.length - 1);
-    if (index == 1 && _index != 1 &&
+    if (index == 1 &&
+        _index != 1 &&
         _isTerminalBookingStatus(_bookingBloc.state.deliveryRequestStatus)) {
       _bookingBloc.add(const ResetSenderBookingSession());
     }
@@ -3473,7 +3474,11 @@ class _HeroSendCard extends StatelessWidget {
           ),
           child: Stack(
             children: [
-              const Positioned.fill(child: _HeroRouteArt()),
+              // Decorative route art must never compete with the booking CTA
+              // for pointer events.
+              const Positioned.fill(
+                child: IgnorePointer(child: _HeroRouteArt()),
+              ),
               Positioned(
                 right: 0,
                 top: 0,
