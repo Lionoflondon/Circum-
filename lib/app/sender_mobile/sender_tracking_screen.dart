@@ -1847,10 +1847,10 @@ class FloatingGlassPanel extends StatelessWidget {
     final size = MediaQuery.sizeOf(context);
     if (size.width >= 900) {
       return Align(
-        alignment: Alignment.bottomCenter,
+        alignment: Alignment.bottomLeft,
         child: SizedBox(
-          width: math.min(780, size.width - 32),
-          height: math.min(420, size.height * .52),
+          width: math.min(460, size.width * .38),
+          height: size.height * .78,
           child: _panel(null),
         ),
       );

@@ -407,8 +407,7 @@ void main() {
         .readAsStringSync();
 
     expect(source, contains('if (size.width >= 900)'));
-    expect(source, contains('width: math.min(780, size.width - 32)'));
-    expect(source, contains('height: math.min(420, size.height * .52)'));
-    expect(source, contains('Alignment.bottomCenter'));
+    expect(source, contains('width: math.min(460, size.width * .38)'));
+    expect(source, contains('Alignment.bottomLeft'));
   });
 }
