@@ -371,6 +371,13 @@ class SendPackageBloc extends Bloc<SendPackageEvent, SendPackageState> {
     await _activeDeliveryLiveLocationSubscription?.cancel();
     _activeDeliveryLiveLocationSubscription = null;
     _activeDeliveryLiveLocationId = null;
+    try {
+      await FirebaseFunctions.instance
+          .httpsCallable('deleteSenderDraft')
+          .call();
+    } catch (error) {
+      debugPrint('Sender booking draft reset deferred: $error');
+    }
     emit(SendPackageState(senderRothBalance: state.senderRothBalance));
   }
 
@@ -1600,6 +1607,8 @@ class SendPackageBloc extends Bloc<SendPackageEvent, SendPackageState> {
     'delivered',
     'completed',
     'delivery_completed',
+    'failed',
+    'expired',
     ..._cancelledRequestStatuses,
   };
 
@@ -1747,6 +1756,13 @@ class SendPackageBloc extends Bloc<SendPackageEvent, SendPackageState> {
             );
         if (_terminalRequestStatuses.contains(normalizedRequestStatus)) {
           await prefs.remove('activeRequest');
+          await _activeDeliverySubscription?.cancel();
+          _activeDeliverySubscription = null;
+          await _activeDeliveryLiveLocationSubscription?.cancel();
+          _activeDeliveryLiveLocationSubscription = null;
+          _activeDeliveryLiveLocationId = null;
+          emit(SendPackageState(senderRothBalance: state.senderRothBalance));
+          return;
         }
 
         if (requestStatus == 'completed' || requestStatus == 'delivered') {
@@ -1889,6 +1905,7 @@ class SendPackageBloc extends Bloc<SendPackageEvent, SendPackageState> {
         );
         return;
       }
+      await prefs.remove('activeRequest');
     }
     add(
       SetDrawerHeight(
@@ -1902,6 +1919,9 @@ class SendPackageBloc extends Bloc<SendPackageEvent, SendPackageState> {
         polylineCoordinates: [],
         markers: {},
         deliveryStatus: DeliveryStatus.inital,
+        deliveryRequestStatus: 'cancelled_by_sender',
+        activeDeliveryData: const {},
+        deliveryData: null,
       ),
     );
   }
