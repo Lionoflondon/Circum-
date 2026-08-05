@@ -10,6 +10,7 @@ import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:pointer_interceptor/pointer_interceptor.dart';
 
 import '../delivery/proof_of_delivery.dart';
+import '../delivery/delivery_evidence_photo.dart';
 import '../../helper/bitmap_descriptor_helper.dart';
 import '../../helper/platform_view_visibility.dart';
 import '../send_package/bloc/send_package_bloc.dart';
@@ -2167,8 +2168,9 @@ class _ProofOfDeliverySection extends StatelessWidget {
                 borderRadius: BorderRadius.circular(14),
                 child: AspectRatio(
                   aspectRatio: 16 / 9,
-                  child: Image.network(
-                    proof.photoUrl,
+                  child: DeliveryEvidencePhoto(
+                    legacyUrl: proof.photoUrl,
+                    storagePath: proof.evidencePhotoPath,
                     fit: BoxFit.cover,
                     errorBuilder: (_, __, ___) => Container(
                       color: Colors.white.withValues(alpha: .06),
@@ -2189,8 +2191,9 @@ class _ProofOfDeliverySection extends StatelessWidget {
                     backgroundColor: const Color(0xFF07111F),
                     child: ClipRRect(
                       borderRadius: BorderRadius.circular(18),
-                      child: Image.network(
-                        proof.photoUrl,
+                      child: DeliveryEvidencePhoto(
+                        legacyUrl: proof.photoUrl,
+                        storagePath: proof.evidencePhotoPath,
                         fit: BoxFit.contain,
                         errorBuilder: (_, __, ___) => const Padding(
                           padding: EdgeInsets.all(24),

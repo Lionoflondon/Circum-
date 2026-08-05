@@ -60,5 +60,21 @@ void main() {
       expect(proof.visibleRows, contains(('Collection PIN', 'Verified')));
       expect(proof.visibleRows, contains(('Delivery PIN', 'Not verified')));
     });
+
+    test('canonical verified evidence summary is visible without a public URL', () {
+      final proof = proofOfDeliveryFromRecord({
+        'requestId': 'DEL-104',
+        'evidenceSummary': {
+          'verifiedPhotoCount': 1,
+          'latestPhotoPath': 'deliveries/DEL-104/evidence/photos/photo-1.jpg',
+        },
+      });
+
+      expect(proof.evidenceAvailable, isTrue);
+      expect(proof.evidencePhotoPath,
+          'deliveries/DEL-104/evidence/photos/photo-1.jpg');
+      expect(proof.hasPhoto, isTrue);
+      expect(proof.visibleRows, contains(('Delivery evidence', 'Verified photo recorded')));
+    });
   });
 }

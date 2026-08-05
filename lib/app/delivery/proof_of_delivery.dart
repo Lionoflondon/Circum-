@@ -14,6 +14,11 @@ class ProofOfDeliveryDetails {
   final bool deliveryPinVerified;
   final bool underReview;
   final bool vanguard;
+  final bool evidenceAvailable;
+  final String evidencePhotoPath;
+  final String evidenceThumbnailPath;
+  final String evidenceCapturedAt;
+  final String evidenceDevice;
 
   const ProofOfDeliveryDetails({
     required this.photoUrl,
@@ -29,9 +34,14 @@ class ProofOfDeliveryDetails {
     required this.deliveryPinVerified,
     required this.underReview,
     required this.vanguard,
+    required this.evidenceAvailable,
+    this.evidencePhotoPath = '',
+    this.evidenceThumbnailPath = '',
+    this.evidenceCapturedAt = '',
+    this.evidenceDevice = '',
   });
 
-  bool get hasPhoto => photoUrl.trim().isNotEmpty;
+  bool get hasPhoto => photoUrl.trim().isNotEmpty || evidencePhotoPath.trim().isNotEmpty;
 
   bool get hasAnyProof =>
       hasPhoto ||
@@ -40,7 +50,8 @@ class ProofOfDeliveryDetails {
       pinVerificationResult.trim().isNotEmpty ||
       gpsConfirmation.trim().isNotEmpty ||
       collectionPinVerified ||
-      deliveryPinVerified;
+      deliveryPinVerified ||
+      evidenceAvailable;
 
   String get statusLabel {
     if (underReview) return 'Under review';
@@ -65,6 +76,10 @@ class ProofOfDeliveryDetails {
       if (finalAddress.trim().isNotEmpty) ('Final address', finalAddress),
       if (deliveryReference.trim().isNotEmpty)
         ('Delivery reference', deliveryReference),
+      if (evidenceAvailable) ('Delivery evidence', 'Verified photo recorded'),
+      if (evidenceCapturedAt.trim().isNotEmpty)
+        ('Evidence captured', evidenceCapturedAt),
+      if (evidenceDevice.trim().isNotEmpty) ('Capture device', evidenceDevice),
     ];
     if (vanguard) {
       rows.insertAll(0, [
@@ -97,6 +112,16 @@ ProofOfDeliveryDetails proofOfDeliveryFromRecord(
       _isTruthy(record['vanguardProtected']) ||
       _isTruthy(record['vanguardProtection']) ||
       _isTruthy(record['vanguard']);
+  final evidenceSummary = record['evidenceSummary'];
+  final evidenceAvailable = evidenceSummary is Map &&
+      (evidenceSummary['verifiedPhotoCount'] is num &&
+          (evidenceSummary['verifiedPhotoCount'] as num) > 0);
+  final evidencePhotoPath = evidenceAvailable
+      ? '${evidenceSummary['latestPhotoPath'] ?? ''}'.trim()
+      : '';
+  final evidenceThumbnailPath = evidenceAvailable
+      ? '${evidenceSummary['latestThumbnailPath'] ?? ''}'.trim()
+      : '';
   final collectionPinVerified = _firstBool(record, proof, const [
     'collectionPinVerified',
     'pickupPinVerified',
@@ -182,6 +207,11 @@ ProofOfDeliveryDetails proofOfDeliveryFromRecord(
     deliveryPinVerified: deliveryPinVerified,
     underReview: _isUnderReview(record, proof),
     vanguard: vanguard,
+    evidenceAvailable: evidenceAvailable,
+    evidencePhotoPath: evidencePhotoPath,
+    evidenceThumbnailPath: evidenceThumbnailPath,
+    evidenceCapturedAt: _formatDate(evidenceSummary is Map ? evidenceSummary['latestCapturedAt'] : null),
+    evidenceDevice: evidenceSummary is Map ? '${evidenceSummary['latestDevice'] ?? ''}'.trim() : '',
   );
 }
 
