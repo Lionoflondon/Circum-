@@ -21,6 +21,7 @@ import '../send_package/bloc/send_package_bloc.dart';
 import '../send_package/models/place_coordinates.m.dart';
 import '../send_package/repo/place_api.dart';
 import 'sender_accessibility.dart';
+import 'adaptive_sender_bottom_sheet.dart';
 import 'sender_booking_state.dart';
 import 'sender_finance.dart';
 import 'sender_saved_addresses.dart';
@@ -70,6 +71,8 @@ class _SenderBookingCanvasState extends State<SenderBookingCanvas> {
   String? _irisPhotoAnalysisId;
   double? _photoEstimatedWeightKg;
   bool _resettingBooking = false;
+  String _bookingPanelSessionId =
+      'new:${DateTime.now().microsecondsSinceEpoch}';
 
   @override
   void initState() {
@@ -638,6 +641,7 @@ class _SenderBookingCanvasState extends State<SenderBookingCanvas> {
       _draft = const SenderBookingDraft();
       _draftId = null;
       _draftRevision = 0;
+      _bookingPanelSessionId = 'new:${DateTime.now().microsecondsSinceEpoch}';
       _saveGeneration++;
       _syncStatus = 'New booking';
       _initializationError = null;
@@ -718,8 +722,8 @@ class _SenderBookingCanvasState extends State<SenderBookingCanvas> {
 
   Future<bool> _resolveTypedAddressIfNeeded() async {
     final pickup = _draft.step == SenderBookingStep.pickup;
-    final address = (pickup ? _draft.pickupAddress : _draft.dropoffAddress)
-        .trim();
+    final address =
+        (pickup ? _draft.pickupAddress : _draft.dropoffAddress).trim();
     final hasCoordinates = pickup
         ? _draft.pickupLat != null && _draft.pickupLng != null
         : _draft.dropoffLat != null && _draft.dropoffLng != null;
@@ -1046,6 +1050,7 @@ class _SenderBookingCanvasState extends State<SenderBookingCanvas> {
           return _SenderReviewDeliveryScreen(
             draft: _draft,
             engine: engine,
+            panelPersistenceId: 'review:$_bookingPanelSessionId',
             onBack: _back,
             onCancel: _confirmCancelBooking,
             onContinue: _advance,
@@ -1064,45 +1069,51 @@ class _SenderBookingCanvasState extends State<SenderBookingCanvas> {
                 distanceKm: engine.distance,
               ),
               SafeArea(
-                child: Column(
+                child: Stack(
                   children: [
-                    _TopBar(
-                      progress: _draft.progress,
-                      syncStatus: _syncStatus,
-                      onBack: _back,
-                      onCancel: _confirmCancelBooking,
+                    Align(
+                      alignment: Alignment.topCenter,
+                      child: _TopBar(
+                        progress: _draft.progress,
+                        syncStatus: _syncStatus,
+                        onBack: _back,
+                        onCancel: _confirmCancelBooking,
+                      ),
                     ),
-                    const Spacer(),
-                    _BookingPanel(
-                      draft: _draft,
-                      engine: engine,
-                      draftId: _draftId,
-                      senderUid: _uid,
-                      pickup: _pickup,
-                      dropoff: _dropoff,
-                      receiverName: _receiverName,
-                      receiverPhone: _receiverPhone,
-                      notes: _notes,
-                      scheduledDate: _scheduledDate,
-                      customWindowStart: _customWindowStart,
-                      customWindowEnd: _customWindowEnd,
-                      item: _item,
-                      description: _description,
-                      weight: _weight,
-                      parcelPhoto: _parcelPhoto,
-                      parcelPhotoBusy: _parcelPhotoBusy,
-                      parcelPhotoMessage: _parcelPhotoMessage,
-                      photoEstimatedWeightKg: _photoEstimatedWeightKg,
-                      searchingPickup: _searchingPickup,
-                      onSearchingPickupChanged: (value) =>
-                          setState(() => _searchingPickup = value),
-                      onParcelChanged: _onParcelChanged,
-                      onPhotoTap: _pickParcelPhoto,
-                      onPhotoRemove: _removeParcelPhoto,
-                      onDraft: _setDraft,
-                      onContinue: _advance,
-                      addressResolutionMessage: _addressResolutionMessage,
-                      addressResolving: _addressResolving,
+                    AdaptiveSenderBottomSheet(
+                      key: ValueKey('booking-panel:$_bookingPanelSessionId'),
+                      persistenceId: 'booking:$_bookingPanelSessionId',
+                      child: _BookingPanel(
+                        draft: _draft,
+                        engine: engine,
+                        draftId: _draftId,
+                        senderUid: _uid,
+                        pickup: _pickup,
+                        dropoff: _dropoff,
+                        receiverName: _receiverName,
+                        receiverPhone: _receiverPhone,
+                        notes: _notes,
+                        scheduledDate: _scheduledDate,
+                        customWindowStart: _customWindowStart,
+                        customWindowEnd: _customWindowEnd,
+                        item: _item,
+                        description: _description,
+                        weight: _weight,
+                        parcelPhoto: _parcelPhoto,
+                        parcelPhotoBusy: _parcelPhotoBusy,
+                        parcelPhotoMessage: _parcelPhotoMessage,
+                        photoEstimatedWeightKg: _photoEstimatedWeightKg,
+                        searchingPickup: _searchingPickup,
+                        onSearchingPickupChanged: (value) =>
+                            setState(() => _searchingPickup = value),
+                        onParcelChanged: _onParcelChanged,
+                        onPhotoTap: _pickParcelPhoto,
+                        onPhotoRemove: _removeParcelPhoto,
+                        onDraft: _setDraft,
+                        onContinue: _advance,
+                        addressResolutionMessage: _addressResolutionMessage,
+                        addressResolving: _addressResolving,
+                      ),
                     ),
                   ],
                 ),
@@ -1652,8 +1663,7 @@ class _AddressPanel extends StatelessWidget {
               backgroundColor: Colors.transparent,
             ),
           ),
-        if (resolutionMessage != null ||
-            errorText.isNotEmpty)
+        if (resolutionMessage != null || errorText.isNotEmpty)
           Padding(
             padding: const EdgeInsets.only(bottom: 8),
             child: Align(
@@ -3459,6 +3469,7 @@ String _speedQuoteStandalonePrice(Map<String, dynamic>? option) {
 class _SenderReviewDeliveryScreen extends StatefulWidget {
   final SenderBookingDraft draft;
   final SendPackageState engine;
+  final String panelPersistenceId;
   final VoidCallback onBack;
   final VoidCallback onCancel;
   final VoidCallback onContinue;
@@ -3466,6 +3477,7 @@ class _SenderReviewDeliveryScreen extends StatefulWidget {
   const _SenderReviewDeliveryScreen({
     required this.draft,
     required this.engine,
+    required this.panelPersistenceId,
     required this.onBack,
     required this.onCancel,
     required this.onContinue,
@@ -3490,6 +3502,121 @@ class _SenderReviewDeliveryScreenState
         ? widget.engine.senderQuoteSpeed!.trim()
         : widget.draft.selectedOption;
 
+    final reviewContent = SafeArea(
+      child: Column(
+        children: [
+          _ReviewTopBar(onBack: widget.onBack, onCancel: widget.onCancel),
+          Expanded(
+            child: AnimatedSwitcher(
+              duration: const Duration(milliseconds: 300),
+              switchInCurve: Curves.easeOutCubic,
+              child: ListView(
+                key: ValueKey(widget.engine.senderQuoteId ?? speed),
+                padding: EdgeInsets.fromLTRB(
+                  16,
+                  0,
+                  16,
+                  18 + media.padding.bottom,
+                ),
+                children: [
+                  _ReviewRoutePanel(
+                    engine: widget.engine,
+                    draft: widget.draft,
+                    selectedSpeed: speed,
+                    onCancel: widget.onCancel,
+                  ),
+                  const SizedBox(height: 14),
+                  _ReviewSheet(
+                    child: Column(
+                      children: [
+                        const _ReviewGrabber(),
+                        _ExpandableReviewAddressRow(
+                          icon: Icons.location_on_outlined,
+                          label: 'Pickup',
+                          summary: _reviewAddressSummary(
+                            pickup,
+                            widget.engine.pickupLocality,
+                          ),
+                          fullAddress: pickup,
+                        ),
+                        _ExpandableReviewAddressRow(
+                          icon: Icons.flag_outlined,
+                          label: 'Drop-off',
+                          summary: _reviewAddressSummary(
+                            dropoff,
+                            widget.engine.destinationLocality,
+                          ),
+                          fullAddress: dropoff,
+                        ),
+                        _ReviewListRow(
+                          icon: Icons.person_outline_rounded,
+                          label: 'Recipient',
+                          value: widget.draft.receiverName.trim().isEmpty
+                              ? 'Recipient pending'
+                              : widget.draft.receiverName.trim(),
+                          secondary: _maskSenderPhoneForReview(
+                            widget.draft.receiverPhone,
+                          ),
+                        ),
+                        _ReviewListRow(
+                          icon: Icons.inventory_2_outlined,
+                          label: 'Parcel',
+                          value: widget.draft.itemName.trim().isEmpty
+                              ? 'Parcel pending'
+                              : widget.draft.itemName.trim(),
+                          secondary: _reviewIrisEstimate(
+                            widget.engine,
+                            widget.draft,
+                          ),
+                          badge: widget.draft.vanguard
+                              ? const _VanguardReviewBadge()
+                              : null,
+                        ),
+                        if (widget.engine.irisWeightReviewMessage.isNotEmpty)
+                          Padding(
+                            padding: const EdgeInsets.only(top: 10),
+                            child: _InfoNote(
+                              text: widget.engine.irisWeightReviewMessage,
+                            ),
+                          ),
+                        _ReviewListRow(
+                          icon: Icons.schedule_rounded,
+                          label: 'Delivery time',
+                          value: widget.draft.deliveryTimeSummary,
+                        ),
+                        _ReviewListRow(
+                          icon: Icons.speed_rounded,
+                          label: 'Delivery priority',
+                          value: speed,
+                        ),
+                        Padding(
+                          padding: const EdgeInsets.only(top: 10),
+                          child: _SelectedSpeedNote(speed: speed),
+                        ),
+                        Padding(
+                          padding: const EdgeInsets.only(top: 14),
+                          child: _BackendPricingBreakdown(
+                            engine: widget.engine,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          _ReviewBottomBar(
+            total: total,
+            loading: widget.engine.isSenderQuoteLoading,
+            error: widget.engine.senderQuoteError,
+            canContinue: canContinue,
+            onContinue: widget.onContinue,
+          ),
+        ],
+      ),
+    );
+
     return ColoredBox(
       color: _Tokens.bg,
       child: Stack(
@@ -3504,121 +3631,13 @@ class _SenderReviewDeliveryScreenState
               distanceKm: widget.engine.distance,
             ),
           ),
-          SafeArea(
-            child: Column(
-              children: [
-                _ReviewTopBar(onBack: widget.onBack, onCancel: widget.onCancel),
-                Expanded(
-                  child: AnimatedSwitcher(
-                    duration: const Duration(milliseconds: 300),
-                    switchInCurve: Curves.easeOutCubic,
-                    child: ListView(
-                      key: ValueKey(widget.engine.senderQuoteId ?? speed),
-                      padding: EdgeInsets.fromLTRB(
-                        16,
-                        0,
-                        16,
-                        18 + media.padding.bottom,
-                      ),
-                      children: [
-                        _ReviewRoutePanel(
-                          engine: widget.engine,
-                          draft: widget.draft,
-                          selectedSpeed: speed,
-                          onCancel: widget.onCancel,
-                        ),
-                        const SizedBox(height: 14),
-                        _ReviewSheet(
-                          child: Column(
-                            children: [
-                              const _ReviewGrabber(),
-                              _ExpandableReviewAddressRow(
-                                icon: Icons.location_on_outlined,
-                                label: 'Pickup',
-                                summary: _reviewAddressSummary(
-                                  pickup,
-                                  widget.engine.pickupLocality,
-                                ),
-                                fullAddress: pickup,
-                              ),
-                              _ExpandableReviewAddressRow(
-                                icon: Icons.flag_outlined,
-                                label: 'Drop-off',
-                                summary: _reviewAddressSummary(
-                                  dropoff,
-                                  widget.engine.destinationLocality,
-                                ),
-                                fullAddress: dropoff,
-                              ),
-                              _ReviewListRow(
-                                icon: Icons.person_outline_rounded,
-                                label: 'Recipient',
-                                value: widget.draft.receiverName.trim().isEmpty
-                                    ? 'Recipient pending'
-                                    : widget.draft.receiverName.trim(),
-                                secondary: _maskSenderPhoneForReview(
-                                  widget.draft.receiverPhone,
-                                ),
-                              ),
-                              _ReviewListRow(
-                                icon: Icons.inventory_2_outlined,
-                                label: 'Parcel',
-                                value: widget.draft.itemName.trim().isEmpty
-                                    ? 'Parcel pending'
-                                    : widget.draft.itemName.trim(),
-                                secondary: _reviewIrisEstimate(
-                                  widget.engine,
-                                  widget.draft,
-                                ),
-                                badge: widget.draft.vanguard
-                                    ? const _VanguardReviewBadge()
-                                    : null,
-                              ),
-                              if (widget
-                                  .engine.irisWeightReviewMessage.isNotEmpty)
-                                Padding(
-                                  padding: const EdgeInsets.only(top: 10),
-                                  child: _InfoNote(
-                                    text: widget.engine.irisWeightReviewMessage,
-                                  ),
-                                ),
-                              _ReviewListRow(
-                                icon: Icons.schedule_rounded,
-                                label: 'Delivery time',
-                                value: widget.draft.deliveryTimeSummary,
-                              ),
-                              _ReviewListRow(
-                                icon: Icons.speed_rounded,
-                                label: 'Delivery priority',
-                                value: speed,
-                              ),
-                              Padding(
-                                padding: const EdgeInsets.only(top: 10),
-                                child: _SelectedSpeedNote(speed: speed),
-                              ),
-                              Padding(
-                                padding: const EdgeInsets.only(top: 14),
-                                child: _BackendPricingBreakdown(
-                                  engine: widget.engine,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-                _ReviewBottomBar(
-                  total: total,
-                  loading: widget.engine.isSenderQuoteLoading,
-                  error: widget.engine.senderQuoteError,
-                  canContinue: canContinue,
-                  onContinue: widget.onContinue,
-                ),
-              ],
+          if (media.size.width >= 900)
+            reviewContent
+          else
+            AdaptiveSenderBottomSheet(
+              persistenceId: widget.panelPersistenceId,
+              child: reviewContent,
             ),
-          ),
         ],
       ),
     );

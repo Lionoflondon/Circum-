@@ -8,7 +8,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:pointer_interceptor/pointer_interceptor.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 
 import '../delivery/proof_of_delivery.dart';
 import '../../helper/bitmap_descriptor_helper.dart';
@@ -16,6 +15,7 @@ import '../../helper/platform_view_visibility.dart';
 import '../send_package/bloc/send_package_bloc.dart';
 import '../send_package/models/place_coordinates.m.dart';
 import '../send_package/view/ride_chats.dart';
+import 'adaptive_sender_bottom_sheet.dart';
 import 'design_system/sender_design_system.dart';
 import 'sender_accessibility.dart';
 
@@ -1080,8 +1080,11 @@ class _SenderMobileTrackingScreenState extends State<SenderMobileTrackingScreen>
         if (staleLabel != null) _StaleLocationPill(label: staleLabel),
         if (visibleContent.showRider && !delivered) const _RecenterButton(),
         if (delivered) const _DeliveredConfirmationOverlay(),
-        FloatingGlassPanel(
-          deliveryId: senderActiveDeliveryIdFor(widget.engine),
+        AdaptiveSenderBottomSheet(
+          persistenceId: 'tracking:${senderActiveDeliveryIdFor(widget.engine)}',
+          desktopPanel: true,
+          wrapInGlass: true,
+          desktopAlignment: Alignment.bottomLeft,
           child: _TrackingPanelContent(
             state: state,
             content: visibleContent,
@@ -1838,141 +1841,6 @@ const _senderTrackingGoogleMapStyle = '''
   {"featureType":"water","elementType":"geometry","stylers":[{"color":"#05070d"}]}
 ]
 ''';
-
-class FloatingGlassPanel extends StatefulWidget {
-  final String deliveryId;
-  final Widget child;
-
-  const FloatingGlassPanel({
-    super.key,
-    required this.deliveryId,
-    required this.child,
-  });
-
-  @override
-  State<FloatingGlassPanel> createState() => _FloatingGlassPanelState();
-}
-
-class _FloatingGlassPanelState extends State<FloatingGlassPanel> {
-  static const _defaultExtent = .45;
-  static const _minExtent = .18;
-  static const _maxExtent = .9;
-  static const _extentKeyPrefix = 'sender_tracking_panel_extent_';
-
-  double _initialExtent = _defaultExtent;
-  String _loadedDeliveryId = '';
-  Timer? _persistTimer;
-
-  @override
-  void initState() {
-    super.initState();
-    _loadExtent(widget.deliveryId);
-  }
-
-  @override
-  void didUpdateWidget(covariant FloatingGlassPanel oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    if (oldWidget.deliveryId != widget.deliveryId) {
-      _loadExtent(widget.deliveryId);
-    }
-  }
-
-  @override
-  void dispose() {
-    _persistTimer?.cancel();
-    super.dispose();
-  }
-
-  Future<void> _loadExtent(String deliveryId) async {
-    _persistTimer?.cancel();
-    _loadedDeliveryId = deliveryId;
-    var extent = _defaultExtent;
-    if (deliveryId.isNotEmpty) {
-      final preferences = await SharedPreferences.getInstance();
-      final saved = preferences.getDouble('$_extentKeyPrefix$deliveryId');
-      if (saved != null && saved >= _minExtent && saved <= _maxExtent) {
-        extent = saved;
-      }
-    }
-    if (!mounted || _loadedDeliveryId != deliveryId) return;
-    setState(() => _initialExtent = extent);
-  }
-
-  void _rememberExtent(double extent) {
-    if (widget.deliveryId.isEmpty) return;
-    _persistTimer?.cancel();
-    _persistTimer = Timer(const Duration(milliseconds: 250), () async {
-      final preferences = await SharedPreferences.getInstance();
-      await preferences.setDouble(
-        '$_extentKeyPrefix${widget.deliveryId}',
-        extent.clamp(_minExtent, _maxExtent).toDouble(),
-      );
-    });
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final size = MediaQuery.sizeOf(context);
-    if (size.width >= 900) {
-      return Align(
-        alignment: Alignment.bottomLeft,
-        child: SizedBox(
-          width: math.min(460, size.width * .38),
-          height: size.height * .78,
-          child: _panel(null),
-        ),
-      );
-    }
-    return NotificationListener<DraggableScrollableNotification>(
-      onNotification: (notification) {
-        _rememberExtent(notification.extent);
-        return false;
-      },
-      child: DraggableScrollableSheet(
-        key: ValueKey('${widget.deliveryId}:$_initialExtent'),
-        initialChildSize: _initialExtent,
-        minChildSize: _minExtent,
-        maxChildSize: _maxExtent,
-        snap: true,
-        snapSizes: const [_minExtent, _defaultExtent, _maxExtent],
-        builder: (context, controller) {
-          return _panel(controller);
-        },
-      ),
-    );
-  }
-
-  Widget _panel(ScrollController? controller) {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
-      child: AppGlassContainer(
-        radius: 26,
-        padding: EdgeInsets.zero,
-        accent: AppTokens.primary,
-        surfaceColor: Colors.white.withValues(alpha: .048),
-        borderColor: const Color(0xFF3B82F6).withValues(alpha: .28),
-        child: ListView(
-          controller: controller,
-          padding: const EdgeInsets.fromLTRB(20, 10, 20, 18),
-          children: [
-            Center(
-              child: Container(
-                width: 38,
-                height: 4,
-                margin: const EdgeInsets.only(bottom: 16),
-                decoration: BoxDecoration(
-                  color: Colors.white.withValues(alpha: .18),
-                  borderRadius: BorderRadius.circular(99),
-                ),
-              ),
-            ),
-            widget.child,
-          ],
-        ),
-      ),
-    );
-  }
-}
 
 class _TrackingPanelContent extends StatelessWidget {
   final SenderTrackingState state;

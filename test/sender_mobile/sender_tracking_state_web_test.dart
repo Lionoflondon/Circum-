@@ -371,7 +371,7 @@ void main() {
 
     expect(mapStart, isNonNegative);
     expect(actionsStart, greaterThan(mapStart));
-    expect(source, contains('FloatingGlassPanel('));
+    expect(source, contains('AdaptiveSenderBottomSheet('));
     expect(source, contains("? 'Cancel Delivery'"));
     expect(source, contains('onTap: canCancel'));
     expect(source, contains('onCancelDelivery'));
@@ -407,28 +407,39 @@ void main() {
     final source = File('lib/app/sender_mobile/sender_tracking_screen.dart')
         .readAsStringSync();
 
-    expect(source, contains('if (size.width >= 900)'));
-    expect(source, contains('width: math.min(460, size.width * .38)'));
-    expect(source, contains('height: size.height * .78'));
-    expect(source, contains('Alignment.bottomLeft'));
+    final sheet = File(
+      'lib/app/sender_mobile/adaptive_sender_bottom_sheet.dart',
+    ).readAsStringSync();
+
+    expect(sheet, contains('if (size.width >= 900)'));
+    expect(sheet, contains('desktopWidthFraction'));
+    expect(sheet, contains('desktopHeightFraction'));
+    expect(source, contains('desktopAlignment: Alignment.bottomLeft'));
   });
 
   test('Sender mobile tracking panel has three persisted snap points', () {
-    final source = File('lib/app/sender_mobile/sender_tracking_screen.dart')
-        .readAsStringSync();
+    final source = File(
+      'lib/app/sender_mobile/adaptive_sender_bottom_sheet.dart',
+    ).readAsStringSync();
 
-    expect(source, contains('static const _minExtent = .18'));
-    expect(source, contains('static const _defaultExtent = .45'));
-    expect(source, contains('static const _maxExtent = .9'));
+    expect(source, contains('static const minExtent = .18'));
+    expect(source, contains('static const defaultExtent = .45'));
+    expect(source, contains('static const maxExtent = .9'));
     expect(source,
-        contains('snapSizes: const [_minExtent, _defaultExtent, _maxExtent]'));
+        contains('snapSizes: const [minExtent, defaultExtent, maxExtent]'));
     expect(source, contains('SharedPreferences.getInstance()'));
-    expect(source, contains('sender_tracking_panel_extent_'));
+    expect(source, contains('sender_adaptive_panel_extent_'));
     expect(source,
         contains('NotificationListener<DraggableScrollableNotification>'));
-    expect(
-        source, contains("ValueKey('\${widget.deliveryId}:\$_initialExtent')"));
     expect(source,
-        contains('deliveryId: senderActiveDeliveryIdFor(widget.engine)'));
+        contains("ValueKey('\${widget.persistenceId}:\$_initialExtent')"));
+    final booking = File('lib/app/sender_mobile/sender_booking_canvas.dart')
+        .readAsStringSync();
+    expect(booking, contains('AdaptiveSenderBottomSheet('));
+    expect(
+        booking, contains("persistenceId: 'booking:\$_bookingPanelSessionId'"));
+    expect(booking,
+        contains("panelPersistenceId: 'review:\$_bookingPanelSessionId'"));
+    expect(booking, contains('persistenceId: widget.panelPersistenceId'));
   });
 }
