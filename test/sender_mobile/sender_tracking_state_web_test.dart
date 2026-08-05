@@ -376,6 +376,13 @@ void main() {
     expect(source, contains('onTap: canCancel'));
     expect(source, contains('onCancelDelivery'));
     expect(source, contains('PointerInterceptor('));
+    final actionsSource = source.substring(actionsStart);
+    expect(
+      RegExp(r'PointerInterceptor\(\s*child: _TrackingButton', multiLine: true)
+          .allMatches(actionsSource)
+          .length,
+      2,
+    );
   });
 
   test('Sender tracking GoogleMap is never wrapped in opacity or transforms',

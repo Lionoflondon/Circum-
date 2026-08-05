@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:pointer_interceptor/pointer_interceptor.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'design_system/sender_design_system.dart';
@@ -139,29 +140,31 @@ class _AdaptiveSenderBottomSheetState extends State<AdaptiveSenderBottomSheet> {
     }
     return Padding(
       padding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
-      child: AppGlassContainer(
-        radius: 26,
-        padding: EdgeInsets.zero,
-        accent: AppTokens.primary,
-        surfaceColor: Colors.white.withValues(alpha: .048),
-        borderColor: const Color(0xFF3B82F6).withValues(alpha: .28),
-        child: ListView(
-          controller: controller,
-          padding: const EdgeInsets.fromLTRB(20, 10, 20, 18),
-          children: [
-            Center(
-              child: Container(
-                width: 38,
-                height: 4,
-                margin: const EdgeInsets.only(bottom: 16),
-                decoration: BoxDecoration(
-                  color: Colors.white.withValues(alpha: .18),
-                  borderRadius: BorderRadius.circular(99),
+      child: PointerInterceptor(
+        child: AppGlassContainer(
+          radius: 26,
+          padding: EdgeInsets.zero,
+          accent: AppTokens.primary,
+          surfaceColor: Colors.white.withValues(alpha: .048),
+          borderColor: const Color(0xFF3B82F6).withValues(alpha: .28),
+          child: ListView(
+            controller: controller,
+            padding: const EdgeInsets.fromLTRB(20, 10, 20, 18),
+            children: [
+              Center(
+                child: Container(
+                  width: 38,
+                  height: 4,
+                  margin: const EdgeInsets.only(bottom: 16),
+                  decoration: BoxDecoration(
+                    color: Colors.white.withValues(alpha: .18),
+                    borderRadius: BorderRadius.circular(99),
+                  ),
                 ),
               ),
-            ),
-            widget.child,
-          ],
+              widget.child,
+            ],
+          ),
         ),
       ),
     );
