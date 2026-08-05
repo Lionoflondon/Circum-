@@ -21,6 +21,9 @@ test("builds a complete canonical DeliveryCompleted payload", () => {
   });
   assert.equal(event.eventId, "delivery_completed_delivery-1");
   assert.equal(event.eventType, "DeliveryCompleted");
+  assert.equal(event.deliveryDomainVersion, 1);
+  assert.equal(event.core.deliveryId, "delivery-1");
+  assert.equal("businessOrderId" in event.core, false);
   assert.equal(event.businessOrderId, "order-1");
   assert.equal(event.proofOfDeliveryPath, "deliveries/delivery-1/evidence/photos/p.jpg");
   assert.equal(event.vanguardEnabled, true);

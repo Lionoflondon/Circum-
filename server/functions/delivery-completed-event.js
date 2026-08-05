@@ -7,6 +7,7 @@ const giftStoryAutomation = require("./gift-story-automation");
 const legends = require("./legends");
 const referrals = require("./referrals");
 const platformNotifications = require("./platform-notifications");
+const {createDeliveryCore, DELIVERY_DOMAIN_VERSION} = require("./delivery-domain-core");
 
 const EVENT_TYPE = "DeliveryCompleted";
 const EVENT_VERSION = 1;
@@ -26,6 +27,20 @@ function idFrom(delivery, ...keys) {
 
 function buildDeliveryCompletedEvent({deliveryId, delivery = {}, riderId, trustPoints, completedAt, verification, evidence}) {
   const eventId = `delivery_completed_${deliveryId}`;
+  const core = createDeliveryCore({
+    id: deliveryId,
+    status: "delivered",
+    senderId: delivery.senderId || delivery.userId || delivery.customerId,
+    recipientId: delivery.recipientId || delivery.receiverId || delivery.recipientUserId,
+    riderId: riderId || delivery.riderId || delivery.assignedRiderId || delivery.driverId,
+    createdAt: delivery.createdAt,
+    completedAt: completedAt || delivery.completedAt || delivery.deliveredAt,
+    dispatchId: delivery.dispatchId,
+    trackingId: delivery.trackingId,
+    pricingId: delivery.pricingId,
+    paymentId: delivery.paymentId || delivery.stripePaymentIntentId,
+    evidenceId: delivery.evidenceId,
+  });
   const verified = verification || {
     pickupPinVerified: delivery.collectionPinVerified === true || delivery.pickupPinVerified === true,
     deliveryPinVerified: delivery.deliveryPinVerified === true || delivery.receiverPinVerified === true,
@@ -35,6 +50,8 @@ function buildDeliveryCompletedEvent({deliveryId, delivery = {}, riderId, trustP
     eventId,
     eventType: EVENT_TYPE,
     version: EVENT_VERSION,
+    deliveryDomainVersion: DELIVERY_DOMAIN_VERSION,
+    core,
     deliveryId,
     senderId: idFrom(delivery, "senderId", "userId", "customerId"),
     recipientId: idFrom(delivery, "recipientId", "receiverId", "recipientUserId"),
