@@ -25,6 +25,14 @@ const TEST_WAIVERS = new Set([
   "right_to_work",
 ]);
 
+const FOUNDER_OPERATIONAL_WAIVERS = [
+  "rider_onboarding",
+  "vehicle_information",
+  "vehicle_registration",
+  "document_approval",
+  "dispatch_eligibility",
+];
+
 function text(value, max = 500) {
   return `${value || ""}`.trim().slice(0, max);
 }
@@ -54,6 +62,127 @@ function assertFounder(context) {
     uid: FOUNDER_UID,
     email: FOUNDER_EMAIL,
   };
+}
+
+function isFounderRiderUid(uid) {
+  return text(uid, 128) === FOUNDER_UID;
+}
+
+async function ensureFounderOperationalDesignation(db, uid) {
+  if (!isFounderRiderUid(uid)) return null;
+  const ref = db.collection("founderTestAccounts").doc(uid);
+  const auditRef = db.collection("founderAuthorityAudit").doc();
+  let designation;
+  await db.runTransaction(async (transaction) => {
+    const snapshot = await transaction.get(ref);
+    const before = snapshot.exists ? snapshot.data() || {} : {};
+    designation = {
+      targetUid: uid,
+      accountType: "internal_tester",
+      waivers: FOUNDER_OPERATIONAL_WAIVERS,
+      active: true,
+      reason: "Founder operational E2E designation",
+      founderUid: FOUNDER_UID,
+      founderEmail: FOUNDER_EMAIL,
+      updatedAt: FieldValue.serverTimestamp(),
+    };
+    transaction.set(ref, designation, {merge: true});
+    transaction.set(auditRef, {
+      founderUid: FOUNDER_UID,
+      founderEmail: FOUNDER_EMAIL,
+      targetUid: uid,
+      action: "founder_operational_designation_reconciled",
+      previousValues: before,
+      newValues: designation,
+      reason: designation.reason,
+      createdAt: FieldValue.serverTimestamp(),
+      immutable: true,
+    });
+  });
+  return {
+    active: true,
+    targetUid: uid,
+    accountType: designation.accountType,
+    waivers: designation.waivers,
+  };
+}
+
+async function reconcileFounderRiderState(db, uid) {
+  const designation = isFounderRiderUid(uid) ?
+    await ensureFounderOperationalDesignation(db, uid) :
+    await loadFounderTestAccount(db, uid);
+  if (!designation) return {designation: null, repaired: false, projection: null};
+
+  const [riderSnap, profileSnap, applicationRecords, documentSnapshot] = await Promise.all([
+    db.collection("riders").doc(uid).get(),
+    db.collection("riderProfiles").doc(uid).get(),
+    riderApplicationsFor(db, uid),
+    db.collection("riderDocuments").where("riderId", "==", uid).limit(100).get(),
+  ]);
+  const projection = approvalProjection({
+    rider: documentData(riderSnap),
+    profile: documentData(profileSnap),
+    applications: applicationRecords.map((record) => record.data),
+    documents: documentSnapshot.docs.map((doc) => ({id: doc.id, ...doc.data()})),
+    actor: {uid: FOUNDER_UID},
+    reason: "founder_operational_state_reconciliation",
+    approve: false,
+  });
+  const riderRef = db.collection("riders").doc(uid);
+  const profileRef = db.collection("riderProfiles").doc(uid);
+  await db.runTransaction(async (transaction) => {
+    const [freshRider, freshProfile] = await Promise.all([
+      transaction.get(riderRef),
+      transaction.get(profileRef),
+    ]);
+    const founderPatch = {founderTestAccount: designation};
+    if (projection.ok) {
+      transaction.set(riderRef, {...projection.riderPatch, ...founderPatch}, {merge: true});
+      transaction.set(profileRef, {...projection.profilePatch, ...founderPatch}, {merge: true});
+      applicationRecords.forEach((record) => transaction.set(record.ref, projection.applicationPatch, {merge: true}));
+    } else {
+      transaction.set(riderRef, founderPatch, {merge: true});
+      transaction.set(profileRef, founderPatch, {merge: true});
+    }
+    transaction.set(db.collection("riderOperationalAudit").doc(), {
+      riderId: uid,
+      action: "founder_operational_state_reconciled",
+      projectionOk: projection.ok,
+      previousValues: {
+        rider: operationalSnapshotFields(freshRider.data()),
+        profile: operationalSnapshotFields(freshProfile.data()),
+      },
+      newValues: projection.ok ? projection.after : {founderTestAccount: designation},
+      reason: "founder_operational_state_reconciliation",
+      createdAt: FieldValue.serverTimestamp(),
+    });
+  });
+  return {designation, repaired: true, projection};
+}
+
+function founderRiderOperationalPreflight() {
+  return functions.https.onCall(async (data, context) => {
+    const uid = context.auth && context.auth.uid;
+    if (!uid) throw new functions.https.HttpsError("unauthenticated", "Sign in first.");
+    const db = getFirestore();
+    const designation = isFounderRiderUid(uid) ?
+      await ensureFounderOperationalDesignation(db, uid) :
+      await loadFounderTestAccount(db, uid);
+    if (!designation) {
+      throw new functions.https.HttpsError(
+          "permission-denied",
+          "Founder operational self-healing is restricted to designated test accounts.",
+      );
+    }
+    const result = await reconcileFounderRiderState(db, uid);
+    return {
+      ok: true,
+      uid,
+      repaired: result.repaired,
+      designation: result.designation || designation,
+      projection: result.projection && result.projection.after || null,
+    };
+  });
 }
 
 function cleanTestType(value) {
@@ -231,6 +360,17 @@ function documentData(snap) {
   return snap && snap.exists ? snap.data() || {} : {};
 }
 
+function operationalSnapshotFields(value = {}) {
+  return {
+    approvalStatus: value.approvalStatus || null,
+    verificationStatus: value.verificationStatus || null,
+    onboardingStatus: value.onboardingStatus || null,
+    vehicleType: value.vehicleType || null,
+    vehicleRegistration: value.vehicleRegistration || value.plateNumber || null,
+    dispatchEligible: value.dispatchEligible === true,
+  };
+}
+
 async function riderApplicationsFor(db, uid, emails = []) {
   const byId = new Map();
   const directRef = db.collection("riderApplications").doc(uid);
@@ -406,4 +546,7 @@ module.exports = {
   founderListTestAccounts,
   founderPreflightE2E,
   loadFounderTestAccount,
+  isFounderRiderUid,
+  reconcileFounderRiderState,
+  founderRiderOperationalPreflight,
 };

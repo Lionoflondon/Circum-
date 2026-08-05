@@ -220,6 +220,14 @@ void main() {
     expect(source, isNot(contains("'Profile unavailable'")));
   });
 
+  test('Sender profile reads retry transient Firestore failures once', () {
+    final source = File('lib/app/sender_mobile/sender_profile_authority.dart')
+        .readAsStringSync();
+    expect(source, contains('firestore_read_retry reason=timeout'));
+    expect(source, contains("'unavailable'"));
+    expect(source, contains('Duration(milliseconds: 350)'));
+  });
+
   test('Sender profile authority reads before repairing missing profiles', () {
     final source = File('lib/app/sender_mobile/sender_profile_authority.dart')
         .readAsStringSync();

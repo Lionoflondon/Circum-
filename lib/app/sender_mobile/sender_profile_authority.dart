@@ -291,84 +291,114 @@ class SenderProfileAuthority {
       path: reference.path,
       event: 'firestore_read_begin',
     );
-    try {
-      final snapshot = await reference.get().timeout(profileReadTimeout);
-      logSenderProfileStage(
-        uid: user.uid,
-        phase: phase,
-        path: reference.path,
-        event: 'firestore_read_complete exists=${snapshot.exists} '
-            'pendingWrites=${snapshot.metadata.hasPendingWrites} '
-            'cache=${snapshot.metadata.isFromCache}',
-      );
-      if (!snapshot.exists) {
+    var attempt = 0;
+    while (true) {
+      try {
+        final snapshot = await reference.get().timeout(profileReadTimeout);
+        logSenderProfileStage(
+          uid: user.uid,
+          phase: phase,
+          path: reference.path,
+          event: 'firestore_read_complete exists=${snapshot.exists} '
+              'pendingWrites=${snapshot.metadata.hasPendingWrites} '
+              'cache=${snapshot.metadata.isFromCache}',
+        );
+        if (!snapshot.exists) {
+          throw SenderProfileAuthorityException(
+            code: SenderProfileDiagnosticCode.notFound,
+            message: profileMessageFor(SenderProfileDiagnosticCode.notFound),
+            phase: phase,
+            documentId: user.uid,
+          );
+        }
+        _validateProfileOwner(user, snapshot.data() ?? const {}, phase);
+        return snapshot;
+      } on SenderProfileAuthorityException catch (error, stack) {
+        logSenderProfileDiagnostic(
+          code: error.code,
+          uid: user.uid,
+          phase: phase,
+          path: error.path,
+          error: error,
+          stack: stack,
+        );
+        rethrow;
+      } on TimeoutException catch (error, stack) {
+        if (attempt++ == 0) {
+          logSenderProfileStage(
+            uid: user.uid,
+            phase: phase,
+            path: reference.path,
+            event: 'firestore_read_retry reason=timeout',
+          );
+          await Future<void>.delayed(const Duration(milliseconds: 350));
+          continue;
+        }
+        logSenderProfileDiagnostic(
+          code: SenderProfileDiagnosticCode.repositoryFailure,
+          uid: user.uid,
+          phase: phase,
+          path: reference.path,
+          error: error,
+          stack: stack,
+        );
         throw SenderProfileAuthorityException(
-          code: SenderProfileDiagnosticCode.notFound,
-          message: profileMessageFor(SenderProfileDiagnosticCode.notFound),
+          code: SenderProfileDiagnosticCode.repositoryFailure,
+          message: 'Profile service timed out. Please try again.',
+          phase: phase,
+          documentId: user.uid,
+        );
+      } on FirebaseException catch (error, stack) {
+        final retryable = <String>{
+          'aborted',
+          'deadline-exceeded',
+          'internal',
+          'resource-exhausted',
+          'unavailable',
+        }.contains(error.code);
+        if (retryable && attempt++ == 0) {
+          logSenderProfileStage(
+            uid: user.uid,
+            phase: phase,
+            path: reference.path,
+            event: 'firestore_read_retry reason=${error.code}',
+          );
+          await Future<void>.delayed(const Duration(milliseconds: 350));
+          continue;
+        }
+        final code = error.code == 'permission-denied'
+            ? SenderProfileDiagnosticCode.permissionDenied
+            : SenderProfileDiagnosticCode.repositoryFailure;
+        logSenderProfileDiagnostic(
+          code: code,
+          uid: user.uid,
+          phase: phase,
+          path: reference.path,
+          error: error,
+          stack: stack,
+        );
+        throw SenderProfileAuthorityException(
+          code: code,
+          message: profileMessageFor(code),
+          phase: phase,
+          documentId: user.uid,
+        );
+      } catch (error, stack) {
+        logSenderProfileDiagnostic(
+          code: SenderProfileDiagnosticCode.repositoryFailure,
+          uid: user.uid,
+          phase: phase,
+          path: reference.path,
+          error: error,
+          stack: stack,
+        );
+        throw SenderProfileAuthorityException(
+          code: SenderProfileDiagnosticCode.repositoryFailure,
+          message: 'Profile refresh failed. Please try again.',
           phase: phase,
           documentId: user.uid,
         );
       }
-      _validateProfileOwner(user, snapshot.data() ?? const {}, phase);
-      return snapshot;
-    } on SenderProfileAuthorityException catch (error, stack) {
-      logSenderProfileDiagnostic(
-        code: error.code,
-        uid: user.uid,
-        phase: phase,
-        path: error.path,
-        error: error,
-        stack: stack,
-      );
-      rethrow;
-    } on TimeoutException catch (error, stack) {
-      logSenderProfileDiagnostic(
-        code: SenderProfileDiagnosticCode.repositoryFailure,
-        uid: user.uid,
-        phase: phase,
-        path: reference.path,
-        error: error,
-        stack: stack,
-      );
-      throw SenderProfileAuthorityException(
-        code: SenderProfileDiagnosticCode.repositoryFailure,
-        message: 'Profile service timed out. Please try again.',
-        phase: phase,
-        documentId: user.uid,
-      );
-    } on FirebaseException catch (error, stack) {
-      final code = error.code == 'permission-denied'
-          ? SenderProfileDiagnosticCode.permissionDenied
-          : SenderProfileDiagnosticCode.repositoryFailure;
-      logSenderProfileDiagnostic(
-        code: code,
-        uid: user.uid,
-        phase: phase,
-        path: reference.path,
-        error: error,
-        stack: stack,
-      );
-      throw SenderProfileAuthorityException(
-        code: code,
-        message: profileMessageFor(code),
-        phase: phase,
-        documentId: user.uid,
-      );
-    } catch (error, stack) {
-      logSenderProfileDiagnostic(
-        code: SenderProfileDiagnosticCode.repositoryFailure,
-        uid: user.uid,
-        phase: phase,
-        path: reference.path,
-        error: error,
-        stack: stack,
-      );
-      throw SenderProfileAuthorityException(
-        code: SenderProfileDiagnosticCode.repositoryFailure,
-        message: 'Profile refresh failed. Please try again.',
-        phase: phase,
-        documentId: user.uid,
-      );
     }
   }
 

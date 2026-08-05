@@ -165,6 +165,8 @@ exports.founderListTestAccounts =
   founderAuthority.founderListTestAccounts();
 exports.founderPreflightE2E =
   founderAuthority.founderPreflightE2E();
+exports.founderRiderOperationalPreflight =
+  founderAuthority.founderRiderOperationalPreflight();
 exports.startAdminConversation = communicationEngine.startAdminConversation;
 exports.getOrCreateSupportConversation =
   communicationEngine.getOrCreateSupportConversation;
