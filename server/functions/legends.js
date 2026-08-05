@@ -160,10 +160,8 @@ async function revokeRecognition({
   });
 }
 
-exports.awardLegendOnCompletion = functions.firestore.document("deliveryRequests/{deliveryId}").onUpdate(async (change, context) => {
-  if (isEligibleLegendDelivery(change.before.data()) || !isEligibleLegendDelivery(change.after.data())) return null;
-  const db = getFirestore();
-  const deliveryRef = change.after.ref;
+async function awardLegendForCompletedDelivery({db, deliveryId}) {
+  const deliveryRef = db.collection("deliveryRequests").doc(deliveryId);
   const counterRef = db.collection("platformStats").doc("legends");
 
   return db.runTransaction(async (transaction) => {
@@ -192,7 +190,7 @@ exports.awardLegendOnCompletion = functions.firestore.document("deliveryRequests
       legendNumber,
       legendAwardedAt: FieldValue.serverTimestamp(),
       legendSource: "first_completed_delivery",
-      legendDeliveryId: context.params.deliveryId,
+      legendDeliveryId: deliveryId,
       legendCelebrationSeenAt: null,
     }, {merge: true});
     transaction.set(counterRef, {
@@ -206,7 +204,9 @@ exports.awardLegendOnCompletion = functions.firestore.document("deliveryRequests
       legendAwardedTo: userId,
     }, {merge: true});
   });
-});
+}
+
+exports.handleDeliveryCompleted = awardLegendForCompletedDelivery;
 
 function statusApproved(value) {
   return ["approved", "verified", "active"].includes(`${value || ""}`.trim().toLowerCase());

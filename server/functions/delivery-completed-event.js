@@ -3,6 +3,10 @@
 
 const functions = require("firebase-functions/v1");
 const {getFirestore, FieldValue} = require("firebase-admin/firestore");
+const giftStoryAutomation = require("./gift-story-automation");
+const legends = require("./legends");
+const referrals = require("./referrals");
+const platformNotifications = require("./platform-notifications");
 
 const EVENT_TYPE = "DeliveryCompleted";
 const EVENT_VERSION = 1;
@@ -20,9 +24,9 @@ function idFrom(delivery, ...keys) {
   return null;
 }
 
-function buildDeliveryCompletedEvent({deliveryId, delivery = {}, riderId, trustPoints, completedAt}) {
+function buildDeliveryCompletedEvent({deliveryId, delivery = {}, riderId, trustPoints, completedAt, verification, evidence}) {
   const eventId = `delivery_completed_${deliveryId}`;
-  const verification = {
+  const verified = verification || {
     pickupPinVerified: delivery.collectionPinVerified === true || delivery.pickupPinVerified === true,
     deliveryPinVerified: delivery.deliveryPinVerified === true || delivery.receiverPinVerified === true,
     evidenceVerified: delivery.evidenceVerified === true || Number(delivery.evidenceSummary?.verifiedPhotoCount || 0) > 0,
@@ -38,6 +42,10 @@ function buildDeliveryCompletedEvent({deliveryId, delivery = {}, riderId, trustP
     completedAt: completedAt || FieldValue.serverTimestamp(),
     publishedAt: FieldValue.serverTimestamp(),
     deliveryType: text(delivery.deliveryType || delivery.type || delivery.serviceType || "standard"),
+    bookingId: idFrom(delivery, "bookingId", "requestId") || deliveryId,
+    paymentStatus: text(delivery.paymentStatus || delivery.paymentState),
+    senderEmail: text(delivery.senderEmail),
+    riderEmail: text(delivery.riderEmail),
     giftId: idFrom(delivery, "giftId", "giftRequestId"),
     storyId: idFrom(delivery, "storyId", "giftStoryId"),
     healthOrderId: idFrom(delivery, "healthOrderId", "healthPickupId", "prescriptionPickupId"),
@@ -45,12 +53,12 @@ function buildDeliveryCompletedEvent({deliveryId, delivery = {}, riderId, trustP
     walletTransactionId: idFrom(delivery, "walletTransactionId", "settlementId"),
     rothRewardId: idFrom(delivery, "rothRewardId", "trustLedgerId"),
     vanguardEnabled: delivery.vanguardEnabled === true || delivery.vanguardProtocolEnabled === true || delivery.vanguardRequired === true,
-    proofOfDeliveryPath: text(delivery.evidenceSummary?.latestPhotoPath || delivery.proofOfDeliveryPath) || null,
+    proofOfDeliveryPath: text(evidence?.photoUrl || delivery.evidenceSummary?.latestPhotoPath || delivery.proofOfDeliveryPath) || null,
     trustPoints: Number.isFinite(Number(trustPoints)) ? Number(trustPoints) : 0,
     vehicleType: text(delivery.vehicleType || delivery.selectedVehicle || delivery.requiredVehicle) || null,
     region: text(delivery.region || delivery.dispatchRegion || delivery.pickupRegion) || null,
-    verification,
-    proofOfDelivery: delivery.evidenceSummary || delivery.proofOfDelivery || null,
+    verification: verified,
+    proofOfDelivery: evidence || delivery.evidenceSummary || delivery.proofOfDelivery || null,
   };
 }
 
@@ -134,20 +142,11 @@ const subscribers = {
   },
   gifts: async (db, event) => {
     if (!event.giftId) return;
-    await db.collection("giftRequests").doc(event.giftId).set({
-      deliveryCompletedEventId: event.eventId,
-      deliveryCompletedAt: event.completedAt,
-      giftStoryAvailable: true,
-      updatedAt: FieldValue.serverTimestamp(),
-    }, {merge: true});
-    if (event.storyId) {
-      await db.collection("giftStories").doc(event.storyId).set({
-        deliveryCompletedEventId: event.eventId,
-        releasedAt: event.completedAt,
-        status: "released",
-        updatedAt: FieldValue.serverTimestamp(),
-      }, {merge: true});
-    }
+    await giftStoryAutomation.handleGiftDeliveryCompleted({
+      db,
+      delivery: {giftRequestId: event.giftId, status: "delivered", deliveryId: event.deliveryId},
+      deliveryId: event.deliveryId,
+    });
   },
   healthPlus: async (db, event) => {
     if (!event.healthOrderId) return;
@@ -175,6 +174,7 @@ const subscribers = {
     }, {merge: true});
   },
   notifications: async (db, event) => {
+    await platformNotifications.handleDeliveryCompletedNotification({event});
     await db.collection("platformNotifications").doc(event.eventId).set({
       eventId: event.eventId,
       eventType: EVENT_TYPE,
@@ -221,6 +221,27 @@ const subscribers = {
       status: "completed",
       createdAt: FieldValue.serverTimestamp(),
     }, {merge: true});
+  },
+  legends: async (db, event) => {
+    await legends.handleDeliveryCompleted({db, deliveryId: event.deliveryId});
+  },
+  referrals: async (_db, event) => {
+    await referrals.handleDeliveryCompletedReferral({delivery: event, deliveryId: event.deliveryId});
+    if (event.giftId) {
+      await referrals.handleGiftCompletedReferral({
+        giftId: event.giftId,
+        senderId: event.senderId,
+        senderEmail: event.senderEmail,
+        paymentStatus: event.paymentStatus,
+      });
+    }
+    if (event.healthOrderId) {
+      await referrals.handleHealthPlusCompletedReferral({
+        pickupId: event.healthOrderId,
+        userId: event.senderId,
+        email: event.senderEmail,
+      });
+    }
   },
 };
 

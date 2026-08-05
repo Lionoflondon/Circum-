@@ -242,60 +242,39 @@ async function activateReferralForUser({referredUserId, activityType, activityId
   }
 }
 
-function becameCompleted(before, after) {
-  const was = `${before.status || before.giftStatus || ""}`.toLowerCase();
-  const now = `${after.status || after.giftStatus || ""}`.toLowerCase();
-  return !["completed", "delivered", "active"].includes(was) &&
-    ["completed", "delivered", "active"].includes(now);
+async function handleDeliveryCompletedReferral({delivery, deliveryId}) {
+  const payment = `${delivery.paymentStatus || ""}`.toLowerCase();
+  if (payment && !["paid", "succeeded", "success"].includes(payment)) return null;
+  const senderId = `${delivery.senderId || delivery.userId || ""}`;
+  const riderId = `${delivery.riderId || delivery.assignedRiderId || ""}`;
+  await Promise.all([
+    senderId ? activateReferralForUser({referredUserId: senderId, activityType: "sender_completed_paid_booking", activityId: deliveryId, userEmail: delivery.senderEmail}) : null,
+    riderId ? activateReferralForUser({referredUserId: riderId, activityType: "rider_completed_delivery", activityId: deliveryId, userEmail: delivery.riderEmail}) : null,
+  ]);
+  return null;
 }
 
-exports.activateReferralOnDeliveryCompleted = functions.firestore
-    .document("deliveryRequests/{deliveryId}")
-    .onUpdate(async (change, context) => {
-      const before = change.before.data() || {};
-      const after = change.after.data() || {};
-      if (!becameCompleted(before, after)) return null;
-      const payment = `${after.paymentStatus || ""}`.toLowerCase();
-      if (payment && !["paid", "succeeded", "success"].includes(payment)) return null;
-      const deliveryId = context.params.deliveryId;
-      const senderId = `${after.senderId || after.userId || ""}`;
-      const riderId = `${after.riderId || after.assignedRiderId || ""}`;
-      await Promise.all([
-        senderId ? activateReferralForUser({referredUserId: senderId, activityType: "sender_completed_paid_booking", activityId: deliveryId, userEmail: after.senderEmail}) : null,
-        riderId ? activateReferralForUser({referredUserId: riderId, activityType: "rider_completed_delivery", activityId: deliveryId, userEmail: after.riderEmail}) : null,
-      ]);
-      return null;
-    });
+exports.handleDeliveryCompletedReferral = handleDeliveryCompletedReferral;
 
-exports.activateReferralOnGiftCompleted = functions.firestore
-    .document("giftRequests/{giftRequestId}")
-    .onUpdate(async (change, context) => {
-      const before = change.before.data() || {};
-      const after = change.after.data() || {};
-      if (!becameCompleted(before, after)) return null;
-      if (`${after.paymentStatus || ""}`.toLowerCase() !== "paid") return null;
-      const senderId = `${after.senderId || ""}`;
-      if (!senderId) return null;
-      return activateReferralForUser({
-        referredUserId: senderId,
-        activityType: "gift_request_completed",
-        activityId: context.params.giftRequestId,
-        userEmail: after.senderEmail,
-      });
-    });
+async function handleGiftCompletedReferral({giftId, senderId, senderEmail, paymentStatus}) {
+  if (`${paymentStatus || ""}`.toLowerCase() !== "paid" || !senderId) return null;
+  return activateReferralForUser({
+    referredUserId: senderId,
+    activityType: "gift_request_completed",
+    activityId: giftId,
+    userEmail: senderEmail,
+  });
+}
 
-exports.activateReferralOnHealthPlusCompleted = functions.firestore
-    .document("prescriptionPickups/{pickupId}")
-    .onUpdate(async (change, context) => {
-      const before = change.before.data() || {};
-      const after = change.after.data() || {};
-      if (!becameCompleted(before, after)) return null;
-      const userId = `${after.senderId || after.userId || after.profileId || ""}`;
-      if (!userId) return null;
-      return activateReferralForUser({
-        referredUserId: userId,
-        activityType: "health_plus_completed",
-        activityId: context.params.pickupId,
-        userEmail: after.email,
-      });
-    });
+async function handleHealthPlusCompletedReferral({pickupId, userId, email}) {
+  if (!userId) return null;
+  return activateReferralForUser({
+    referredUserId: userId,
+    activityType: "health_plus_completed",
+    activityId: pickupId,
+    userEmail: email,
+  });
+}
+
+exports.handleGiftCompletedReferral = handleGiftCompletedReferral;
+exports.handleHealthPlusCompletedReferral = handleHealthPlusCompletedReferral;

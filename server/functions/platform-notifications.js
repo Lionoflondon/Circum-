@@ -380,6 +380,7 @@ exports.onDeliveryUpdated = functions.firestore.document("deliveryRequests/{deli
   const oldStatus = text(before.status || before.deliveryStatus).toLowerCase();
   const status = text(after.status || after.deliveryStatus).toLowerCase();
   const statusChanged = status && status !== oldStatus;
+  if (statusChanged && ["delivered", "completed"].includes(status)) return null;
   const ids = deliveryIds({...after, id: change.after.id});
   const oldPayment = text(before.paymentStatus || before.paymentState).toLowerCase();
   const payment = text(after.paymentStatus || after.paymentState).toLowerCase();
@@ -443,6 +444,36 @@ exports.onDeliveryUpdated = functions.firestore.document("deliveryRequests/{deli
   if (ids.senderId && oldWaitingCharge !== waitingChargeAmount && waitingChargeAmount > 0) await notify({recipientId: ids.senderId, recipientRole: "shipper", type: "waiting_charge_updated", title: "Waiting charge updated", body: `Additional waiting charge: ${moneyText(waitingCharge.amount, waitingCharge.currency)}.`, bookingId: ids.bookingId, data: {category: "Payments"}});
   if (ids.riderId && statusChanged && (status.includes("cancel") || status === "updated")) await notify({recipientId: ids.riderId, recipientRole: "rider", type: status.includes("cancel") ? "delivery_cancelled" : "delivery_updated", title: status.includes("cancel") ? "Delivery cancelled" : "Delivery updated", body: status.includes("cancel") ? "A delivery assigned to you was cancelled." : "An assigned delivery has been updated.", bookingId: ids.bookingId});
 });
+
+async function handleDeliveryCompletedNotification({event}) {
+  await communicationEngine.closeDeliveryConversation(event.bookingId || event.deliveryId, "delivered");
+  const notifications = [];
+  if (event.senderId) {
+    notifications.push(notify({
+      recipientId: event.senderId,
+      recipientRole: "shipper",
+      type: "delivery_delivered",
+      title: "Delivered",
+      body: "Your parcel has been delivered.",
+      bookingId: event.bookingId || event.deliveryId,
+      data: {category: "Deliveries", deliveryId: event.deliveryId, correlationId: event.eventId},
+    }));
+  }
+  if (event.riderId) {
+    notifications.push(notify({
+      recipientId: event.riderId,
+      recipientRole: "rider",
+      type: "delivery_delivered",
+      title: "Delivery completed",
+      body: "Your delivery has been completed.",
+      bookingId: event.bookingId || event.deliveryId,
+      data: {category: "Deliveries", deliveryId: event.deliveryId, correlationId: event.eventId},
+    }));
+  }
+  await Promise.all(notifications);
+}
+
+exports.handleDeliveryCompletedNotification = handleDeliveryCompletedNotification;
 
 exports.onGiftRequestCreated = functions.firestore.document("giftRequests/{giftId}").onCreate((snapshot, context) =>
   notifyGiftStatus({after: snapshot.data(), giftId: context.params.giftId}));

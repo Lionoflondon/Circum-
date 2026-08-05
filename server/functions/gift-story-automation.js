@@ -745,25 +745,24 @@ async function markAutomationFailure(db, deliveryId, giftId, error) {
   await batch.commit();
 }
 
-exports.onGiftDeliveryCompleted = functions.firestore.document("deliveryRequests/{deliveryId}").onUpdate(async (change, context) => {
-  const before = change.before.data() || {};
-  const after = change.after.data() || {};
-  if (!isGiftDelivery(after) || isComplete(before.status) || !isComplete(after.status)) return null;
-  const db = getFirestore();
+async function handleGiftDeliveryCompleted({db, delivery, deliveryId}) {
+  if (!isGiftDelivery(delivery) || !isComplete(delivery.status || delivery.deliveryStatus)) return null;
   let giftSnap = null;
   try {
-    giftSnap = await findGift(db, {...after, id: context.params.deliveryId});
+    giftSnap = await findGift(db, {...delivery, id: deliveryId});
     if (!giftSnap) throw new Error("Linked gift request was not found.");
-    await unlockGiftStory(db, giftSnap, context.params.deliveryId);
-    await change.after.ref.set({
+    await unlockGiftStory(db, giftSnap, deliveryId);
+    await db.collection("deliveryRequests").doc(deliveryId).set({
       giftStoryAutomationStatus: "ready",
       giftStoryAutomationUpdatedAt: FieldValue.serverTimestamp(),
     }, {merge: true});
   } catch (error) {
-    await markAutomationFailure(db, context.params.deliveryId, giftSnap && giftSnap.id, error);
+    await markAutomationFailure(db, deliveryId, giftSnap && giftSnap.id, error);
   }
   return null;
-});
+}
+
+exports.handleGiftDeliveryCompleted = handleGiftDeliveryCompleted;
 
 async function tokenRecord(db, token) {
   const clean = text(token);

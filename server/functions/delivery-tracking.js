@@ -455,6 +455,12 @@ exports.updateDeliveryTrackingStatus = functions.https.onCall(async (data, conte
           delivery,
           riderId,
           trustPoints: canonicalAward,
+          verification: {
+            pickupPinVerified: delivery.collectionPinVerified === true || delivery.pickupPinVerified === true,
+            deliveryPinVerified: true,
+            evidenceVerified: evidenceDecision.valid,
+          },
+          evidence,
         }),
       });
       const settlement = settlementValues(delivery);

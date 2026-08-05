@@ -36,7 +36,7 @@ test("event identity is deterministic for idempotent publication", () => {
 test("subscriber set is independently addressable", () => {
   assert.deepEqual(Object.keys(core._private.subscribers).sort(), [
     "admin", "analytics", "business", "gifts", "healthPlus", "iris",
-    "notifications", "recipient", "rider", "sender", "vanguard",
+    "legends", "notifications", "recipient", "referrals", "rider", "sender", "vanguard",
   ]);
 });
 

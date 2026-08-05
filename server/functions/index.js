@@ -135,7 +135,6 @@ exports.onRiderProfileUpdated = platformNotifications.onRiderProfileUpdated;
 exports.onPayoutUpdated = platformNotifications.onPayoutUpdated;
 exports.escalateUnclaimedDeliveries =
   platformNotifications.escalateUnclaimedDeliveries;
-exports.awardLegendOnCompletion = legends.awardLegendOnCompletion;
 exports.createGiftPayment = giftsPayment.createGiftPayment(stripe);
 exports.finalizeGiftPayment = giftsPayment.finalizeGiftPayment(stripe);
 exports.cleanupExpiredGiftVoiceDrafts =
@@ -329,12 +328,6 @@ exports.adminUpdateSenderTrust = senderTrust.adminUpdateSenderTrust;
 exports.ensureReferralCode = referrals.ensureReferralCode;
 exports.attachReferralCode = referrals.attachReferralCode;
 exports.activateReferral = referrals.activateReferral;
-exports.activateReferralOnDeliveryCompleted =
-  referrals.activateReferralOnDeliveryCompleted;
-exports.activateReferralOnGiftCompleted =
-  referrals.activateReferralOnGiftCompleted;
-exports.activateReferralOnHealthPlusCompleted =
-  referrals.activateReferralOnHealthPlusCompleted;
 exports.onGiftMovementWrite = movementLedger.onGiftMovementWrite;
 exports.onHealthMovementWrite = movementLedger.onHealthMovementWrite;
 exports.onHealthPaymentMovementWrite =
@@ -342,7 +335,6 @@ exports.onHealthPaymentMovementWrite =
 exports.onMovementTimelineWrite = movementTimeline.onMovementTimelineWrite;
 exports.onDeliveryLiveLocationWrite =
   movementTimeline.onDeliveryLiveLocationWrite;
-exports.onGiftDeliveryCompleted = giftStoryAutomation.onGiftDeliveryCompleted;
 exports.resolveGiftStoryAccess = giftStoryAutomation.resolveGiftStoryAccess;
 exports.recordGiftStoryEvent = giftStoryAutomation.recordGiftStoryEvent;
 exports.recordGiftStoryGuestEvent =
