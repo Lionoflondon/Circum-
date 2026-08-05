@@ -83,6 +83,10 @@ function timestampMillis(value) {
 }
 
 function gpsHealthy({presence = {}, now = Date.now()}) {
+  return gpsHealthResult({presence, now}).eligible;
+}
+
+function gpsHealthResult({presence = {}, now = Date.now()}) {
   const blockedStatuses = new Set([
     "disabled",
     "denied",
@@ -97,17 +101,38 @@ function gpsHealthy({presence = {}, now = Date.now()}) {
     "locationservicesdisabled",
   ]);
   const gpsStatus = lower(presence.gpsStatus || presence.locationStatus || presence.trackingStatus);
-  if (blockedStatuses.has(gpsStatus)) return false;
+  if (blockedStatuses.has(gpsStatus)) {
+    return result({eligible: false, reason: gpsStatus === "pooraccuracy" || gpsStatus === "poorgpsaccuracy" ? "LOW_ACCURACY" : "GPS_STATUS_BLOCKED", presence, now});
+  }
   const location = presence.currentLocation || presence.location || presence.riderLiveLocation || {};
-  if (location.mocked === true || location.isMocked === true || presence.mockedLocation === true) return false;
+  if (location.mocked === true || location.isMocked === true || presence.mockedLocation === true) return result({eligible: false, reason: "MOCKED_LOCATION", presence, now});
   const latitude = Number(location.latitude);
   const longitude = Number(location.longitude);
-  if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) return false;
+  if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) return result({eligible: false, reason: "NON_FINITE_COORDINATES", presence, now});
+  if (latitude < -90 || latitude > 90 || longitude < -180 || longitude > 180) return result({eligible: false, reason: "INVALID_COORDINATES", presence, now});
   const accuracy = Number(location.accuracyMeters ?? location.accuracy);
-  if (!Number.isFinite(accuracy) || accuracy <= 0 || accuracy > MAX_DISPATCH_ACCURACY_METERS) return false;
+  if (!Number.isFinite(accuracy) || accuracy <= 0) return result({eligible: false, reason: "ZERO_ACCURACY", presence, now});
+  if (accuracy > MAX_DISPATCH_ACCURACY_METERS) return result({eligible: false, reason: "LOW_ACCURACY", presence, now});
   const updatedAt = timestampMillis(location.updatedAt || location.clientRecordedAt || presence.lastLocationAt);
-  if (!updatedAt) return false;
-  return now - updatedAt <= STALE_LOCATION_MS;
+  if (!updatedAt) return result({eligible: false, reason: "TIMESTAMP_MISSING", presence, now});
+  const ageMs = now - updatedAt;
+  if (ageMs < 0) return result({eligible: false, reason: "CLOCK_SKEW", presence, now});
+  if (ageMs > STALE_LOCATION_MS) return result({eligible: false, reason: "STALE_LOCATION", presence, now});
+  return result({eligible: true, reason: "OK", presence, now});
+}
+
+function result({eligible, reason, presence, now}) {
+  const location = presence.currentLocation || presence.location || presence.riderLiveLocation || {};
+  const timestamp = timestampMillis(location.updatedAt || location.clientRecordedAt || presence.lastLocationAt) || null;
+  return {
+    eligible,
+    reason,
+    ageMs: timestamp == null ? null : now - timestamp,
+    accuracy: Number(location.accuracyMeters ?? location.accuracy) || null,
+    latitude: Number.isFinite(Number(location.latitude)) ? Number(location.latitude) : null,
+    longitude: Number.isFinite(Number(location.longitude)) ? Number(location.longitude) : null,
+    timestamp,
+  };
 }
 
 function nextPresenceOnDelivery({before = {}, after = {}, riderId}) {
@@ -142,6 +167,7 @@ module.exports = {
   canReceiveDispatch,
   founderDispatchOverride,
   gpsHealthy,
+  gpsHealthResult,
   nextPresenceOnDelivery,
   riderApproved,
   vehicleVerified,

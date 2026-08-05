@@ -86,10 +86,40 @@ function presencePatch({riderId, status, busy = false, location = null}) {
     patch.backgroundTracking = text(location.backgroundTracking || "");
     patch.batteryOptimisation = text(location.batteryOptimisation || "");
     patch.connectionStatus = "connected";
-    patch.dispatchEligible = core.gpsHealthy({presence: {...patch}, now});
+    const gpsHealth = core.gpsHealthResult({presence: {...patch}, now});
+    patch.dispatchEligible = gpsHealth.eligible;
+    patch.gpsHealth = gpsHealth;
+    console.info("[GPS_HEALTH] evaluated", {
+      riderId,
+      source: status === "available" ? "goOnline" : "heartbeat",
+      provider: location.provider || "unknown",
+      platform: location.platform || "unknown",
+      browser: location.browser || "unknown",
+      rawLatitude: location.latitude,
+      rawLongitude: location.longitude,
+      rawAccuracy: location.accuracyMeters || location.accuracy,
+      rawTimestamp: location.updatedAt || location.clientRecordedAt,
+      serverReceiveTime: now,
+      ...gpsHealth,
+    });
   } else if (status === "available") {
     patch.gpsStatus = "unknown";
     patch.dispatchEligible = false;
+    patch.gpsHealth = {
+      eligible: false,
+      reason: "NO_LOCATION",
+      ageMs: null,
+      accuracy: null,
+      latitude: null,
+      longitude: null,
+      timestamp: null,
+    };
+    console.info("[GPS_HEALTH] evaluated", {
+      riderId,
+      source: "goOnline",
+      serverReceiveTime: now,
+      ...patch.gpsHealth,
+    });
   }
   return patch;
 }

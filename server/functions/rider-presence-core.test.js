@@ -233,6 +233,42 @@ test("dispatch requires fresh accurate GPS", () => {
   }), true);
 });
 
+test("GPS health returns an explicit rejection reason for each invalid input", () => {
+  const now = Date.now();
+  const cases = [
+    [{}, "NON_FINITE_COORDINATES"],
+    [{currentLocation: {latitude: 51.5, longitude: -0.1, accuracyMeters: 0, updatedAt: now}}, "ZERO_ACCURACY"],
+    [{currentLocation: {latitude: 51.5, longitude: -0.1, accuracyMeters: 101, updatedAt: now}}, "LOW_ACCURACY"],
+    [{currentLocation: {latitude: 51.5, longitude: -0.1, accuracyMeters: 10, updatedAt: now - core.STALE_LOCATION_MS - 1}}, "STALE_LOCATION"],
+  ];
+  for (const [presence, reason] of cases) {
+    const result = core.gpsHealthResult({presence, now});
+    assert.equal(result.eligible, false);
+    assert.equal(result.reason, reason);
+  }
+});
+
+test("GPS health exposes the accepted coordinates and age", () => {
+  const now = Date.now();
+  const result = core.gpsHealthResult({
+    now,
+    presence: {
+      currentLocation: {
+        latitude: 51.5072,
+        longitude: -0.1276,
+        accuracyMeters: 18,
+        updatedAt: now - 500,
+      },
+    },
+  });
+  assert.equal(result.eligible, true);
+  assert.equal(result.reason, "OK");
+  assert.equal(result.latitude, 51.5072);
+  assert.equal(result.longitude, -0.1276);
+  assert.equal(result.accuracy, 18);
+  assert.equal(result.ageMs, 500);
+});
+
 test("delivery write marks rider busy, then available", () => {
   assert.equal(
       core.nextPresenceOnDelivery({
