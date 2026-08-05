@@ -378,7 +378,8 @@ void main() {
     expect(source, contains('PointerInterceptor('));
   });
 
-  test('Sender tracking GoogleMap is never wrapped in opacity or transforms', () {
+  test('Sender tracking GoogleMap is never wrapped in opacity or transforms',
+      () {
     final source = File('lib/app/sender_mobile/sender_tracking_screen.dart')
         .readAsStringSync();
     final mapStart = source.indexOf('class SenderGoogleTrackingMap');
@@ -407,8 +408,8 @@ void main() {
         .readAsStringSync();
 
     expect(source, contains('if (size.width >= 900)'));
-    expect(source, contains('width: math.min(780, size.width - 32)'));
+    expect(source, contains('width: math.min(460, size.width * .38)'));
     expect(source, contains('height: size.height * .78'));
-    expect(source, contains('Alignment.bottomCenter'));
+    expect(source, contains('Alignment.bottomLeft'));
   });
 }

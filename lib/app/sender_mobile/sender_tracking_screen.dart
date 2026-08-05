@@ -1847,9 +1847,9 @@ class FloatingGlassPanel extends StatelessWidget {
     final size = MediaQuery.sizeOf(context);
     if (size.width >= 900) {
       return Align(
-        alignment: Alignment.bottomCenter,
+        alignment: Alignment.bottomLeft,
         child: SizedBox(
-          width: math.min(780, size.width - 32),
+          width: math.min(460, size.width * .38),
           height: size.height * .78,
           child: _panel(null),
         ),
@@ -1869,33 +1869,33 @@ class FloatingGlassPanel extends StatelessWidget {
 
   Widget _panel(ScrollController? controller) {
     return Padding(
-          padding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
-          child: AppGlassContainer(
-            radius: 26,
-            padding: EdgeInsets.zero,
-            accent: AppTokens.primary,
-            surfaceColor: Colors.white.withValues(alpha: .048),
-            borderColor: const Color(0xFF3B82F6).withValues(alpha: .28),
-            child: ListView(
-              controller: controller,
-              padding: const EdgeInsets.fromLTRB(20, 10, 20, 18),
-              children: [
-                Center(
-                  child: Container(
-                    width: 38,
-                    height: 4,
-                    margin: const EdgeInsets.only(bottom: 16),
-                    decoration: BoxDecoration(
-                      color: Colors.white.withValues(alpha: .18),
-                      borderRadius: BorderRadius.circular(99),
-                    ),
-                  ),
+      padding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
+      child: AppGlassContainer(
+        radius: 26,
+        padding: EdgeInsets.zero,
+        accent: AppTokens.primary,
+        surfaceColor: Colors.white.withValues(alpha: .048),
+        borderColor: const Color(0xFF3B82F6).withValues(alpha: .28),
+        child: ListView(
+          controller: controller,
+          padding: const EdgeInsets.fromLTRB(20, 10, 20, 18),
+          children: [
+            Center(
+              child: Container(
+                width: 38,
+                height: 4,
+                margin: const EdgeInsets.only(bottom: 16),
+                decoration: BoxDecoration(
+                  color: Colors.white.withValues(alpha: .18),
+                  borderRadius: BorderRadius.circular(99),
                 ),
-                child,
-              ],
+              ),
             ),
-          ),
-        );
+            child,
+          ],
+        ),
+      ),
+    );
   }
 }
 
