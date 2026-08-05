@@ -408,7 +408,7 @@ void main() {
 
     expect(source, contains('if (size.width >= 900)'));
     expect(source, contains('width: math.min(780, size.width - 32)'));
-    expect(source, contains('height: math.min(420, size.height * .52)'));
+    expect(source, contains('height: size.height * .78'));
     expect(source, contains('Alignment.bottomCenter'));
   });
 }

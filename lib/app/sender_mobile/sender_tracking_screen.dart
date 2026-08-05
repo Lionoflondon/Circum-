@@ -1850,7 +1850,7 @@ class FloatingGlassPanel extends StatelessWidget {
         alignment: Alignment.bottomCenter,
         child: SizedBox(
           width: math.min(780, size.width - 32),
-          height: math.min(420, size.height * .52),
+          height: size.height * .78,
           child: _panel(null),
         ),
       );
