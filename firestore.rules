@@ -469,6 +469,15 @@ service cloud.firestore {
       );
     }
 
+    function canReadDeliveryEvidence(deliveryId) {
+      return signedIn() && (
+        isAdmin() ||
+        deliveryFor(deliveryId).senderId == request.auth.uid ||
+        deliveryFor(deliveryId).userId == request.auth.uid ||
+        assignedRiderForDelivery(deliveryId)
+      );
+    }
+
     function isTrackableDelivery(deliveryId) {
       return !([
         'completed',
@@ -946,6 +955,16 @@ service cloud.firestore {
 
     match /deliveryRequestsPrivate/{deliveryId} {
       allow read, write: if false;
+    }
+
+    match /deliveryEvidence/{deliveryId} {
+      allow read: if canReadDeliveryEvidence(deliveryId);
+      allow write: if false;
+
+      match /{subcollection}/{evidenceId} {
+        allow read: if canReadDeliveryEvidence(deliveryId);
+        allow write: if false;
+      }
     }
 
     match /activeDeliveries/{deliveryId} {

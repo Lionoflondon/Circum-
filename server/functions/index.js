@@ -54,6 +54,8 @@ const communicationEngine = require("./communication-engine");
 const deliveryPolicy = require("./delivery-policy");
 const deliveryTracking = require("./delivery-tracking");
 const deliveryCompletedEvent = require("./delivery-completed-event");
+const deliveryEvidence = require("./delivery-evidence");
+const deliveryEvidenceMedia = require("./delivery-evidence-media");
 const ratingsTipping = require("./ratings-tipping");
 const stripeRefunds = require("./stripe-refunds");
 const riderEarningsSummary = require("./rider-earnings-summary");
@@ -151,6 +153,9 @@ exports.completeDelivery = deliveryTracking.completeDelivery;
 exports.updateDeliveryLiveLocation =
   deliveryTracking.updateDeliveryLiveLocation;
 exports.onDeliveryCompletedEvent = deliveryCompletedEvent.onDeliveryCompletedEvent;
+exports.recordDeliveryEvidence = deliveryEvidence.recordDeliveryEvidence;
+exports.onDeliveryEvidencePhotoFinalized =
+  deliveryEvidenceMedia.onDeliveryEvidencePhotoFinalized;
 exports.submitDeliveryRating = ratingsTipping.submitDeliveryRating;
 exports.submitDeliveryTip = ratingsTipping.submitDeliveryTip(stripe);
 

@@ -32,6 +32,13 @@ test("rider document storage paths are not client-writable", () => {
   assert.match(storageRules, /allow create, update: if isAdmin\(\) && isSafeUpload\(\);/);
 });
 
+test("delivery evidence uses assigned-rider JPEG uploads and immutable objects", () => {
+  assert.match(storageRules, /match \/deliveries\/{deliveryId}\/evidence\/photos\/{photoFile}/);
+  assert.match(storageRules, /isAssignedDeliveryRider\(deliveryId\)/);
+  assert.match(storageRules, /photoFile\.matches\('\^\[A-Za-z0-9_-\]\+\\\\\.jpg\$'\)/);
+  assert.match(storageRules, /allow update, delete: if false;/);
+});
+
 test("rider document uploads use backend callable and canonical matrix", () => {
   assert.match(riderAccount, /exports\.submitRiderDocument = functions\.https\.onCall/);
   assert.match(riderAccount, /canonicalDocumentId/);

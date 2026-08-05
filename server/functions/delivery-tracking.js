@@ -9,6 +9,7 @@ const {
   buildDeliveryCompletedEvent,
   publishDeliveryCompleted,
 } = require("./delivery-completed-event");
+const {completionEvidenceDecision} = require("./delivery-evidence-core");
 
 function text(value) {
   return `${value || ""}`.trim();
@@ -203,7 +204,7 @@ function evidenceRequirements(delivery, action, evidence = {}) {
       delivery.requiresVanguard === true ||
       delivery.secureHandoverRequired === true;
   if (!required) return {valid: true};
-  if (!text(evidence.photoUrl)) return {valid: false, reason: "A delivery evidence photo is required."};
+  if (!text(evidence.photoUrl) && !text(evidence.photoId)) return {valid: false, reason: "A delivery evidence photo is required."};
   if (pickup && evidence.conditionConfirmed !== true) {
     return {valid: false, reason: "Parcel condition must be confirmed."};
   }
@@ -372,6 +373,16 @@ async function updateDeliveryTrackingStatusHandler(data, context) {
     const privateRef = db.collection("deliveryRequestsPrivate").doc(found.id);
     const privateSnapshot = await transaction.get(privateRef);
     const privateDelivery = privateSnapshot.exists ? privateSnapshot.data() || {} : {};
+    const evidenceRecordRef = db.collection("deliveryEvidence").doc(found.id);
+    const evidenceRecordSnapshot = await transaction.get(evidenceRecordRef);
+    if (nextStatus === "delivered") {
+      const completionDecision = completionEvidenceDecision(
+          evidenceRecordSnapshot.exists ? evidenceRecordSnapshot.data() || {} : {},
+      );
+      if (!completionDecision.allowed) {
+        throw new functions.https.HttpsError("failed-precondition", completionDecision.reason);
+      }
+    }
     const requiredPin = expectedPin(privateDelivery, action);
     if (!requiredPin && pinAuthorityRequired(delivery, action)) {
       throw new functions.https.HttpsError(
@@ -445,7 +456,32 @@ async function updateDeliveryTrackingStatusHandler(data, context) {
     const canonicalAward = Number.isFinite(existingAward) && existingAward >= 0 ?
       existingAward : Number.isFinite(existingLedgerAward) && existingLedgerAward >= 0 ?
         existingLedgerAward : settlementValues(delivery).trustPoints;
-    if (nextStatus === "delivered") patch.trustPointsAwarded = canonicalAward;
+    if (nextStatus === "delivered") {
+      patch.trustPointsAwarded = canonicalAward;
+      patch.evidenceSummary = {
+        recordPath: `deliveryEvidence/${found.id}`,
+        verifiedPhotoCount: Number(evidenceRecordSnapshot.data()?.verifiedPhotoCount || 0),
+        latestPhotoPath: evidenceRecordSnapshot.data()?.latestPhotoPath || null,
+        latestThumbnailPath: evidenceRecordSnapshot.data()?.latestThumbnailPath || null,
+        latestCapturedAt: evidenceRecordSnapshot.data()?.latestCapturedAt || null,
+        latestDevice: evidenceRecordSnapshot.data()?.latestDevice || null,
+        latestGps: evidenceRecordSnapshot.data()?.latestGps || null,
+        latestAccuracy: evidenceRecordSnapshot.data()?.latestAccuracy || null,
+        types: ["PHOTO"],
+        verifiedAt: FieldValue.serverTimestamp(),
+      };
+      transaction.set(evidenceRecordRef.collection("events").doc("delivery_completed"), {
+        type: "DELIVERY_COMPLETED",
+        deliveryId: found.id,
+        actorUid: riderId,
+        at: FieldValue.serverTimestamp(),
+        immutable: true,
+      }, {merge: false});
+      transaction.set(evidenceRecordRef, {
+        completedAt: FieldValue.serverTimestamp(),
+        updatedAt: FieldValue.serverTimestamp(),
+      }, {merge: true});
+    }
     transaction.set(found.ref, patch, {merge: true});
     if (nextStatus === "delivered") {
       publishDeliveryCompleted({

@@ -49,6 +49,38 @@ service firebase.storage {
         request.resource.contentType.matches('audio/webm|audio/mpeg|audio/mp4|audio/aac|audio/ogg');
     }
 
+    function deliveryRecord(deliveryId) {
+      return get(/databases/(default)/documents/deliveryRequests/$(deliveryId)).data;
+    }
+
+    function canReadDeliveryEvidence(deliveryId) {
+      return signedIn() && (
+        isAdmin() ||
+        deliveryRecord(deliveryId).senderId == request.auth.uid ||
+        deliveryRecord(deliveryId).userId == request.auth.uid ||
+        deliveryRecord(deliveryId).riderId == request.auth.uid ||
+        deliveryRecord(deliveryId).driverId == request.auth.uid ||
+        deliveryRecord(deliveryId).assignedRiderId == request.auth.uid ||
+        deliveryRecord(deliveryId).assignedDriverId == request.auth.uid
+      );
+    }
+
+    function isAssignedDeliveryRider(deliveryId) {
+      return signedIn() && (
+        deliveryRecord(deliveryId).riderId == request.auth.uid ||
+        deliveryRecord(deliveryId).driverId == request.auth.uid ||
+        deliveryRecord(deliveryId).assignedRiderId == request.auth.uid ||
+        deliveryRecord(deliveryId).assignedDriverId == request.auth.uid
+      );
+    }
+
+    function isSafeEvidencePhoto() {
+      return request.resource != null &&
+        request.resource.size > 0 &&
+        request.resource.size <= 15 * 1024 * 1024 &&
+        request.resource.contentType == 'image/jpeg';
+    }
+
     match /riderDocuments/{riderId}/{allPaths=**} {
       allow read: if isAdmin() || (signedIn() && request.auth.uid == riderId);
       allow create, update: if isAdmin() && isSafeUpload();
@@ -129,6 +161,19 @@ service firebase.storage {
       allow read: if isAdmin() || isGiftVoiceNoteOwner(requestId);
       allow create, update: if isGiftVoiceNoteOwner(requestId) && isSafeGiftVoiceNoteUpload();
       allow delete: if isSuperAdmin() || isGiftVoiceNoteOwner(requestId);
+    }
+
+    match /deliveries/{deliveryId}/evidence/photos/{photoFile} {
+      allow read: if canReadDeliveryEvidence(deliveryId);
+      allow create: if isAssignedDeliveryRider(deliveryId) &&
+        photoFile.matches('^[A-Za-z0-9_-]+\\.jpg$') &&
+        isSafeEvidencePhoto();
+      allow update, delete: if false;
+    }
+
+    match /deliveries/{deliveryId}/evidence/thumbnails/{photoFile} {
+      allow read: if canReadDeliveryEvidence(deliveryId);
+      allow write: if false;
     }
 
     match /{allPaths=**} {
