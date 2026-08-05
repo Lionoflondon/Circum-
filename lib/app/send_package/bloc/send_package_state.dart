@@ -30,11 +30,6 @@ class SendPackageState {
   List<Suggestion> suggestions;
   final bool isAddressSearching;
   final String addressSearchError;
-  final String? addressLookupExceptionType;
-  final String? addressLookupExceptionMessage;
-  final String? addressLookupStackTrace;
-  final String? addressLookupHttpStatus;
-  final String? addressLookupResponse;
   List ongoingRequests;
   String? pickupLocation;
   String? destinationLocation;
@@ -103,11 +98,6 @@ class SendPackageState {
     this.suggestions = const [],
     this.isAddressSearching = false,
     this.addressSearchError = '',
-    this.addressLookupExceptionType,
-    this.addressLookupExceptionMessage,
-    this.addressLookupStackTrace,
-    this.addressLookupHttpStatus,
-    this.addressLookupResponse,
     this.ongoingRequests = const [],
     this.pickupLocation,
     this.destinationLocation,
@@ -178,11 +168,6 @@ class SendPackageState {
     List<Suggestion>? suggestions,
     bool? isAddressSearching,
     String? addressSearchError,
-    String? addressLookupExceptionType,
-    String? addressLookupExceptionMessage,
-    String? addressLookupStackTrace,
-    String? addressLookupHttpStatus,
-    String? addressLookupResponse,
     String? pickupLocation,
     String? destinationLocation,
     String? pickupLocationSubAddress,
@@ -266,16 +251,6 @@ class SendPackageState {
       suggestions: suggestions ?? this.suggestions,
       isAddressSearching: isAddressSearching ?? this.isAddressSearching,
       addressSearchError: addressSearchError ?? this.addressSearchError,
-      addressLookupExceptionType:
-          addressLookupExceptionType ?? this.addressLookupExceptionType,
-      addressLookupExceptionMessage:
-          addressLookupExceptionMessage ?? this.addressLookupExceptionMessage,
-      addressLookupStackTrace:
-          addressLookupStackTrace ?? this.addressLookupStackTrace,
-      addressLookupHttpStatus:
-          addressLookupHttpStatus ?? this.addressLookupHttpStatus,
-      addressLookupResponse:
-          addressLookupResponse ?? this.addressLookupResponse,
       pickupLocation: pickupLocation ?? this.pickupLocation,
       destinationLocation: destinationLocation ?? this.destinationLocation,
       pickupLocationSubAddress:

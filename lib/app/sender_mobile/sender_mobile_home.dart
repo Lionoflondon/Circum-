@@ -247,31 +247,8 @@ class _SenderMobileHomeState extends State<SenderMobileHome> {
 
   void _selectTab(int next) {
     final index = next.clamp(0, senderMobileBottomNavigationLabels.length - 1);
-    if (index == 1 &&
-        _index != 1 &&
-        widget.sendTabBuilder == null &&
-        _isTerminalBookingStatus(_bookingBloc.state.deliveryRequestStatus)) {
-      _bookingBloc.add(const ResetSenderBookingSession());
-    }
     setState(() => _index = index);
     widget.onTabChanged?.call(index);
-  }
-
-  static bool _isTerminalBookingStatus(String status) {
-    final normalized = status.trim().toLowerCase().replaceAll('-', '_');
-    return const {
-      'cancelled',
-      'canceled',
-      'cancelled_by_sender',
-      'cancelled_verified_discrepancy',
-      'sender_no_show_pickup',
-      'delivered',
-      'completed',
-      'delivery_completed',
-      'failed',
-      'expired',
-      'archived',
-    }.contains(normalized);
   }
 
   void _openInitialSenderRoute() {

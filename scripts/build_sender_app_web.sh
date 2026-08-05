@@ -9,7 +9,6 @@ OUTPUT_DIR="$ROOT_DIR/build/sender_app_web"
 SYMBOLS_ROOT="$ROOT_DIR/build/release_symbols/sender_app_web"
 WEB_RECAPTCHA_SITE_KEY="${CIRCUM_WEB_RECAPTCHA_ENTERPRISE_SITE_KEY:-}"
 WEB_GOOGLE_MAPS_API_KEY="${CIRCUM_WEB_GOOGLE_MAPS_API_KEY:-}"
-WEB_GOOGLE_PLACES_API_KEY="${GOOGLE_PLACES_API_KEY:-}"
 STRIPE_PUBLISHABLE_KEY_VALUE="${STRIPE_PUBLISHABLE_KEY:-}"
 BUILD_HASH="$(git rev-parse HEAD)"
 RELEASE_TAG="${CIRCUM_RELEASE_TAG:-$(git describe --tags --exact-match HEAD 2>/dev/null || git describe --tags --always --dirty)}"
@@ -27,11 +26,6 @@ fi
 
 if [[ -z "$WEB_GOOGLE_MAPS_API_KEY" ]]; then
   echo "Missing CIRCUM_WEB_GOOGLE_MAPS_API_KEY for Sender App Web Google Maps." >&2
-  exit 1
-fi
-
-if [[ -z "$WEB_GOOGLE_PLACES_API_KEY" ]]; then
-  echo "Missing GOOGLE_PLACES_API_KEY for Sender Web address search." >&2
   exit 1
 fi
 
@@ -56,7 +50,6 @@ rm -rf "$OUTPUT_DIR"
   --no-web-resources-cdn \
   ${EXTRA_FLUTTER_BUILD_ARGS+"${EXTRA_FLUTTER_BUILD_ARGS[@]}"} \
   --dart-define=CIRCUM_WEB_RECAPTCHA_ENTERPRISE_SITE_KEY="$WEB_RECAPTCHA_SITE_KEY" \
-  --dart-define=GOOGLE_PLACES_API_KEY="$WEB_GOOGLE_PLACES_API_KEY" \
   --dart-define=STRIPE_PUBLISHABLE_KEY="$STRIPE_PUBLISHABLE_KEY_VALUE" \
   --dart-define=CIRCUM_BUILD_HASH="$BUILD_HASH" \
   --dart-define=CIRCUM_RELEASE_TAG="$RELEASE_TAG" \

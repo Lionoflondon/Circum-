@@ -1,5 +1,4 @@
 import 'package:cloud_functions/cloud_functions.dart';
-import 'package:flutter/foundation.dart';
 
 import '../../platform/address_engine.dart';
 import '../models/place_coordinates.m.dart';
@@ -21,9 +20,6 @@ class PlaceApiProvider {
       'query': query,
       'sessionToken': '$sessionToken',
     }).timeout(const Duration(seconds: 8));
-    debugPrint(
-      'Sender address lookup response: type=${response.data.runtimeType} data=${response.data}',
-    );
     final data = response.data is Map
         ? Map<String, dynamic>.from(response.data as Map)
         : <String, dynamic>{};
@@ -38,9 +34,6 @@ class PlaceApiProvider {
         })
         .where((item) => item.description.isNotEmpty)
         .toList();
-    debugPrint(
-      'Sender address lookup parsed: rawCount=${results.length} parsedCount=${suggestions.length} suggestions=$suggestions',
-    );
     return suggestions;
   }
 

@@ -330,28 +330,13 @@ class SendPackageBloc extends Bloc<SendPackageEvent, SendPackageState> {
               : '',
         ),
       );
-    } catch (error, stackTrace) {
-      final functionsError = error is FirebaseFunctionsException
-          ? error
-          : null;
-      if (error is FirebaseFunctionsException) {
-        debugPrint(
-          'Sender address lookup callable failed: code=${error.code} message=${error.message} details=${error.details}',
-        );
-      } else {
-        debugPrint('Sender address lookup failed: $error');
-      }
-      debugPrintStack(stackTrace: stackTrace);
+    } catch (e) {
       emit(
         state.copyWith(
           suggestions: [],
           isAddressSearching: false,
-          addressSearchError: 'Address lookup failed: $error',
-          addressLookupExceptionType: error.runtimeType.toString(),
-          addressLookupExceptionMessage: '$error',
-          addressLookupStackTrace: '$stackTrace',
-          addressLookupHttpStatus: functionsError?.code,
-          addressLookupResponse: functionsError?.details?.toString(),
+          addressSearchError:
+              "Couldn't find matching addresses. Please continue typing or try again.",
         ),
       );
     }
@@ -1270,6 +1255,7 @@ class SendPackageBloc extends Bloc<SendPackageEvent, SendPackageState> {
           deliveryRequestStatus: 'requested',
         ),
       );
+      add(SetDrawerHeight(minDrawerHeight: 180, maxDrawerHeight: 0.5.sh));
     } on FirebaseFunctionsException catch (error) {
       debugPrint(
         'finalizeSenderWebCheckout failed: code=${error.code}, message=${error.message}, details=${error.details}',
@@ -1606,7 +1592,6 @@ class SendPackageBloc extends Bloc<SendPackageEvent, SendPackageState> {
   static const Set<String> _cancelledRequestStatuses = {
     'cancelled',
     'canceled',
-    'cancelled_by_sender',
     'cancelled_verified_discrepancy',
     'sender_no_show_pickup',
     'archived',
@@ -1696,6 +1681,7 @@ class SendPackageBloc extends Bloc<SendPackageEvent, SendPackageState> {
         );
         return;
       }
+      add(WatchActiveDelivery(requestId: activeRequest));
       final userDocumentReference =
           db.collection('deliveryRequests').doc(user.uid);
       final requestDocumentReference =
@@ -1707,22 +1693,8 @@ class SendPackageBloc extends Bloc<SendPackageEvent, SendPackageState> {
       }
 
       if (docResponse.exists) {
-        final data = docResponse.data();
-        final senderId = '${data?['senderId'] ?? data?['userId'] ?? ''}'.trim();
-        if (senderId != user.uid) {
-          await prefs.remove('activeRequest');
-          emit(
-            state.copyWith(
-              deliveryStatus: DeliveryStatus.inital,
-              deliveryRequestStatus: 'not_owned',
-              activeDeliveryData: const {},
-              senderDeliveryError: '',
-            ),
-          );
-          return;
-        }
-        add(WatchActiveDelivery(requestId: docResponse.id));
         _listenToActiveDeliveryLiveLocation(docResponse.id);
+        final data = docResponse.data();
         String? pickupAddress = data!['pickupDetails']['address'];
         String? dropoffAddress = data['dropoffDetails']['address'];
         double? price = data['price'];
