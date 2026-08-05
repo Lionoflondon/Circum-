@@ -535,6 +535,9 @@ async function updateDeliveryTrackingStatusHandler(data, context) {
 exports.updateDeliveryTrackingStatus = functions.https.onCall(updateDeliveryTrackingStatusHandler);
 
 exports.completeDelivery = functions.https.onCall(async (data, context) => {
+  if (!context.auth) {
+    throw new functions.https.HttpsError("unauthenticated", "Rider must be signed in.");
+  }
   const deliveryId = text(data && (data.deliveryId || data.requestId));
   const deliveryPin = text(data && (data.deliveryPin || data.pin));
   if (!deliveryId) {

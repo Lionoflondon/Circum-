@@ -22,6 +22,10 @@ test("collection PIN verification patch updates backend tracking fields", () => 
 test("canonical completion callable is exported separately from general transitions", () => {
   assert.equal(typeof deliveryTrackingModule.completeDelivery, "function");
   assert.equal(typeof deliveryTrackingModule.updateDeliveryTrackingStatus, "function");
+  assert.match(
+      require("fs").readFileSync(require.resolve("./delivery-tracking"), "utf8"),
+      /completeDelivery = functions\.https\.onCall/,
+  );
 });
 
 test("receiver PIN verification patch delivers without exposing PIN values", () => {

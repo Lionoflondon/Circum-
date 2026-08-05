@@ -269,7 +269,7 @@ exports.buildDeliveryCompletedEvent = buildDeliveryCompletedEvent;
 exports.publishDeliveryCompleted = ({transaction, db, event}) => {
   transaction.create(eventRef(db, event.eventId), event);
 };
-exports.onDeliveryCompletedEvent = functions.firestore.document("platformEvents/{eventId}").onCreate(async (snapshot) => {
+exports.onDeliveryCompletedEvent = functions.runWith({failurePolicy: true}).firestore.document("platformEvents/{eventId}").onCreate(async (snapshot) => {
   const event = snapshot.data() || {};
   if (event.eventType !== EVENT_TYPE || event.version !== EVENT_VERSION) return null;
   await Promise.all(Object.entries(subscribers).map(([name, handler]) => runSubscriber(getFirestore(), event, name, handler)));

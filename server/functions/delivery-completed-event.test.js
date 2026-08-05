@@ -57,6 +57,14 @@ test("publication uses create semantics so the event cannot be overwritten", () 
   assert.equal(calls[0].event.eventType, "DeliveryCompleted");
 });
 
+test("DeliveryCompleted subscriber retries after downstream failure", () => {
+  const source = require("fs").readFileSync(
+      require.resolve("./delivery-completed-event"),
+      "utf8",
+  );
+  assert.match(source, /runWith\(\{failurePolicy: true\}\)/);
+});
+
 test("a duplicate subscriber delivery is skipped after the first completion", async () => {
   const docs = new Map();
   const writes = [];
