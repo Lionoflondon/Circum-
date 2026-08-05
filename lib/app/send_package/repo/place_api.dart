@@ -8,7 +8,7 @@ import '../models/suggestions.m.dart';
 class PlaceApiProvider {
   PlaceApiProvider(this.sessionToken);
 
-  final Object sessionToken;
+  final String sessionToken;
   static final Map<String, Suggestion> _suggestionCache = {};
 
   Future<List<Suggestion>> fetchSuggestions(String input, String lang) async {
@@ -18,7 +18,7 @@ class PlaceApiProvider {
         .httpsCallable('searchFreeUkAddresses')
         .call({
       'query': query,
-      'sessionToken': '$sessionToken',
+      'sessionToken': sessionToken,
     }).timeout(const Duration(seconds: 8));
     final data = response.data is Map
         ? Map<String, dynamic>.from(response.data as Map)
@@ -46,7 +46,7 @@ class PlaceApiProvider {
         .httpsCallable('resolveUkAddressPlace')
         .call({
       'placeId': placeId,
-      'sessionToken': '$sessionToken',
+      'sessionToken': sessionToken,
     }).timeout(const Duration(seconds: 8));
     final data = response.data is Map
         ? Map<String, dynamic>.from(response.data as Map)

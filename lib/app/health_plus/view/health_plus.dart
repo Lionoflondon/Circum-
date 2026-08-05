@@ -580,7 +580,9 @@ class _HealthPlusViewState extends State<HealthPlusView> {
 }
 
 class _HealthPlaceSearchController {
-  final provider = PlaceApiProvider(DateTime.now().microsecondsSinceEpoch);
+  final provider = PlaceApiProvider(
+    DateTime.now().microsecondsSinceEpoch.toString(),
+  );
   Timer? _debounce;
   var loading = false;
   String? error;

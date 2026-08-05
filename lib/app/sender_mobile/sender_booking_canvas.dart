@@ -734,7 +734,7 @@ class _SenderBookingCanvasState extends State<SenderBookingCanvas> {
       _addressResolutionMessage = null;
     });
     try {
-      final provider = PlaceApiProvider(const Uuid());
+      final provider = PlaceApiProvider(const Uuid().v4());
       final lang = Localizations.localeOf(context).languageCode;
       final suggestions = await provider.fetchSuggestions(
         address,
