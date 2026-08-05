@@ -4,6 +4,7 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
 const deliveryTracking = require("./delivery-tracking")._private;
+const deliveryTrackingModule = require("./delivery-tracking");
 
 test("collection PIN verification patch updates backend tracking fields", () => {
   const patch = deliveryTracking.patchForTransition({
@@ -16,6 +17,11 @@ test("collection PIN verification patch updates backend tracking fields", () => 
   assert.equal(patch.collectionPinVerifiedBy, "rider-1");
   assert.equal(Object.prototype.hasOwnProperty.call(patch, "deliveryPin"), false);
   assert.equal(Object.prototype.hasOwnProperty.call(patch, "collectionPin"), false);
+});
+
+test("canonical completion callable is exported separately from general transitions", () => {
+  assert.equal(typeof deliveryTrackingModule.completeDelivery, "function");
+  assert.equal(typeof deliveryTrackingModule.updateDeliveryTrackingStatus, "function");
 });
 
 test("receiver PIN verification patch delivers without exposing PIN values", () => {

@@ -319,7 +319,7 @@ function patchForTransition({action, nextStatus, riderId}) {
   return patch;
 }
 
-exports.updateDeliveryTrackingStatus = functions.https.onCall(async (data, context) => {
+async function updateDeliveryTrackingStatusHandler(data, context) {
   if (!context.auth) {
     throw new functions.https.HttpsError("unauthenticated", "Rider must be signed in.");
   }
@@ -412,6 +412,7 @@ exports.updateDeliveryTrackingStatus = functions.https.onCall(async (data, conte
         recordedAt: FieldValue.serverTimestamp(),
         recordedBy: riderId,
       };
+      if (nextStatus === "delivered" && evidence.evidenceId) patch.evidenceId = text(evidence.evidenceId);
     }
     if (action === "report_issue") {
       const issue = data && data.issue && typeof data.issue === "object" ? data.issue : {};
@@ -529,6 +530,36 @@ exports.updateDeliveryTrackingStatus = functions.https.onCall(async (data, conte
     );
   }
   return result;
+}
+
+exports.updateDeliveryTrackingStatus = functions.https.onCall(updateDeliveryTrackingStatusHandler);
+
+exports.completeDelivery = functions.https.onCall(async (data, context) => {
+  const deliveryId = text(data && (data.deliveryId || data.requestId));
+  const deliveryPin = text(data && (data.deliveryPin || data.pin));
+  if (!deliveryId) {
+    throw new functions.https.HttpsError(
+        "invalid-argument",
+        "deliveryId is required.",
+        {reasonCode: "DELIVERY_ID_REQUIRED"},
+    );
+  }
+  if (!deliveryPin) {
+    throw new functions.https.HttpsError(
+        "failed-precondition",
+        "Delivery PIN is required.",
+        {reasonCode: "PIN_VERIFICATION_FAILED"},
+    );
+  }
+  const evidence = data && data.evidence && typeof data.evidence === "object" ?
+    {...data.evidence} : {};
+  if (data && data.evidenceId && !evidence.evidenceId) evidence.evidenceId = text(data.evidenceId);
+  return updateDeliveryTrackingStatusHandler({
+    deliveryId,
+    action: "verify_receiver_pin",
+    pin: deliveryPin,
+    evidence,
+  }, context);
 });
 
 exports.updateDeliveryLiveLocation = functions.https.onCall(async (data, context) => {

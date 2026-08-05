@@ -39,7 +39,7 @@ function buildDeliveryCompletedEvent({deliveryId, delivery = {}, riderId, trustP
     trackingId: delivery.trackingId,
     pricingId: delivery.pricingId,
     paymentId: delivery.paymentId || delivery.stripePaymentIntentId,
-    evidenceId: delivery.evidenceId,
+    evidenceId: idFrom(evidence, "evidenceId") || delivery.evidenceId,
   });
   const verified = verification || {
     pickupPinVerified: delivery.collectionPinVerified === true || delivery.pickupPinVerified === true,
@@ -71,6 +71,7 @@ function buildDeliveryCompletedEvent({deliveryId, delivery = {}, riderId, trustP
     rothRewardId: idFrom(delivery, "rothRewardId", "trustLedgerId"),
     vanguardEnabled: delivery.vanguardEnabled === true || delivery.vanguardProtocolEnabled === true || delivery.vanguardRequired === true,
     proofOfDeliveryPath: text(evidence?.photoUrl || delivery.evidenceSummary?.latestPhotoPath || delivery.proofOfDeliveryPath) || null,
+    evidenceId: idFrom(evidence, "evidenceId") || text(evidence?.photoUrl) || idFrom(delivery, "evidenceId"),
     trustPoints: Number.isFinite(Number(trustPoints)) ? Number(trustPoints) : 0,
     vehicleType: text(delivery.vehicleType || delivery.selectedVehicle || delivery.requiredVehicle) || null,
     region: text(delivery.region || delivery.dispatchRegion || delivery.pickupRegion) || null,

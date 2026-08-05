@@ -147,6 +147,7 @@ exports.markRiderNoShow = deliveryPolicy.markRiderNoShow;
 exports.cancelDelivery = deliveryPolicy.requestSenderCancellation;
 exports.updateDeliveryTrackingStatus =
   deliveryTracking.updateDeliveryTrackingStatus;
+exports.completeDelivery = deliveryTracking.completeDelivery;
 exports.updateDeliveryLiveLocation =
   deliveryTracking.updateDeliveryLiveLocation;
 exports.onDeliveryCompletedEvent = deliveryCompletedEvent.onDeliveryCompletedEvent;
