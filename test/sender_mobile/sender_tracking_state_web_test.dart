@@ -441,5 +441,7 @@ void main() {
     expect(booking,
         contains("panelPersistenceId: 'review:\$_bookingPanelSessionId'"));
     expect(booking, contains('persistenceId: widget.panelPersistenceId'));
+    expect(booking, contains("persistenceId: 'status:\$title'"));
+    expect(booking, isNot(contains('if (media.size.width >= 900)')));
   });
 }

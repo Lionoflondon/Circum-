@@ -1187,50 +1187,54 @@ class _SendRouteStateScaffold extends StatelessWidget {
       child: Stack(
         children: [
           const _SenderMobileMap(active: false),
-          SafeArea(
-            child: Center(
-              child: Padding(
-                padding: const EdgeInsets.all(18),
-                child: _Glass(
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(
-                        children: [
-                          const Icon(
-                            Icons.error_outline_rounded,
-                            color: _Tokens.lightBlue,
-                          ),
-                          const SizedBox(width: 10),
-                          Expanded(
-                            child: Text(
-                              title,
-                              style: const TextStyle(
-                                color: Colors.white,
-                                fontSize: 22,
-                                fontWeight: FontWeight.w900,
+          AdaptiveSenderBottomSheet(
+            persistenceId: 'status:$title',
+            desktopAlignment: Alignment.center,
+            child: SafeArea(
+              child: Center(
+                child: Padding(
+                  padding: const EdgeInsets.all(18),
+                  child: _Glass(
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+                            const Icon(
+                              Icons.error_outline_rounded,
+                              color: _Tokens.lightBlue,
+                            ),
+                            const SizedBox(width: 10),
+                            Expanded(
+                              child: Text(
+                                title,
+                                style: const TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 22,
+                                  fontWeight: FontWeight.w900,
+                                ),
                               ),
                             ),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 10),
-                      Text(
-                        body,
-                        style: const TextStyle(
-                          color: _Tokens.muted,
-                          height: 1.4,
-                          fontWeight: FontWeight.w600,
+                          ],
                         ),
-                      ),
-                      const SizedBox(height: 16),
-                      _PrimaryButton(
-                        label: actionLabel,
-                        enabled: onAction != null,
-                        onTap: onAction ?? () {},
-                      ),
-                    ],
+                        const SizedBox(height: 10),
+                        Text(
+                          body,
+                          style: const TextStyle(
+                            color: _Tokens.muted,
+                            height: 1.4,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                        const SizedBox(height: 16),
+                        _PrimaryButton(
+                          label: actionLabel,
+                          enabled: onAction != null,
+                          onTap: onAction ?? () {},
+                        ),
+                      ],
+                    ),
                   ),
                 ),
               ),
@@ -3675,13 +3679,10 @@ class _SenderReviewDeliveryScreenState
               distanceKm: widget.engine.distance,
             ),
           ),
-          if (media.size.width >= 900)
-            reviewContent
-          else
-            AdaptiveSenderBottomSheet(
-              persistenceId: widget.panelPersistenceId,
-              child: reviewContent,
-            ),
+          AdaptiveSenderBottomSheet(
+            persistenceId: widget.panelPersistenceId,
+            child: reviewContent,
+          ),
         ],
       ),
     );
