@@ -378,8 +378,6 @@ class SendPackageBloc extends Bloc<SendPackageEvent, SendPackageState> {
     SetPickupAddress event,
     Emitter<SendPackageState> emit,
   ) async {
-    final sessionToken = const Uuid().v4();
-
     emit(
       state.copyWith(
         pickupLocation: event.val,
@@ -390,9 +388,10 @@ class SendPackageBloc extends Bloc<SendPackageEvent, SendPackageState> {
     );
 
     try {
-      PlaceCoordinate coordinate = await PlaceApiProvider(
-        sessionToken,
-      ).fetchPlaceDetails(event.placeId, event.lang);
+      final coordinate = event.coordinate ??
+          await PlaceApiProvider(
+            const Uuid().v4(),
+          ).fetchPlaceDetails(event.placeId, event.lang);
 
       var address = await placemarkFromCoordinates(
         coordinate.lat,
@@ -418,7 +417,6 @@ class SendPackageBloc extends Bloc<SendPackageEvent, SendPackageState> {
   }
 
   void _handleSetDeliveryAddress(SetDeliveryAddress event, Emitter emit) async {
-    final sessionToken = const Uuid().v4();
     emit(
       state.copyWith(
         destinationLocation: event.val,
@@ -436,9 +434,10 @@ class SendPackageBloc extends Bloc<SendPackageEvent, SendPackageState> {
       );
     }
     try {
-      PlaceCoordinate coordinate = await PlaceApiProvider(
-        sessionToken,
-      ).fetchPlaceDetails(event.placeId, event.lang);
+      final coordinate = event.coordinate ??
+          await PlaceApiProvider(
+            const Uuid().v4(),
+          ).fetchPlaceDetails(event.placeId, event.lang);
       // var addresses = await Geocoder.google ( '<---------YOUR APIKEY-------->' ).findAddressesFromCoordinates(coordinates);
       var address = await placemarkFromCoordinates(
         coordinate.lat,

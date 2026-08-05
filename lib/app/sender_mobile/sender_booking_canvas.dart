@@ -54,6 +54,8 @@ class _SenderBookingCanvasState extends State<SenderBookingCanvas> {
   var _searchingPickup = true;
   String? _initializationError;
   String? _addressResolutionMessage;
+  String? _selectedPickupPlaceId;
+  String? _selectedDropoffPlaceId;
   bool _addressResolving = false;
   bool _draftLoading = true;
   bool _restoringDraft = false;
@@ -639,6 +641,8 @@ class _SenderBookingCanvasState extends State<SenderBookingCanvas> {
     _weight.clear();
     setState(() {
       _draft = const SenderBookingDraft();
+      _selectedPickupPlaceId = null;
+      _selectedDropoffPlaceId = null;
       _draftId = null;
       _draftRevision = 0;
       _bookingPanelSessionId = 'new:${DateTime.now().microsecondsSinceEpoch}';
@@ -736,63 +740,71 @@ class _SenderBookingCanvasState extends State<SenderBookingCanvas> {
     try {
       final provider = PlaceApiProvider(const Uuid().v4());
       final lang = Localizations.localeOf(context).languageCode;
-      final suggestions = await provider.fetchSuggestions(
-        address,
-        lang,
-      );
+      final selectedPlaceId =
+          (pickup ? _selectedPickupPlaceId : _selectedDropoffPlaceId)?.trim();
+      final suggestions = selectedPlaceId == null || selectedPlaceId.isEmpty
+          ? await provider.fetchSuggestions(address, lang)
+          : const [];
       if (!mounted) return false;
       final normalized = address.toLowerCase().replaceAll(RegExp(r'\s+'), ' ');
-      final match = suggestions.where((suggestion) {
-        final description = suggestion.description
-            .trim()
-            .toLowerCase()
-            .replaceAll(RegExp(r'\s+'), ' ');
-        final main = suggestion.mainText
-            .trim()
-            .toLowerCase()
-            .replaceAll(RegExp(r'\s+'), ' ');
-        return description == normalized || main == normalized;
-      }).firstOrNull;
-      if (match == null) {
+      final match = selectedPlaceId != null && selectedPlaceId.isNotEmpty
+          ? null
+          : suggestions.where((suggestion) {
+              final description = suggestion.description
+                  .trim()
+                  .toLowerCase()
+                  .replaceAll(RegExp(r'\s+'), ' ');
+              final main = suggestion.mainText
+                  .trim()
+                  .toLowerCase()
+                  .replaceAll(RegExp(r'\s+'), ' ');
+              return description == normalized || main == normalized;
+            }).firstOrNull;
+      final placeId = selectedPlaceId ?? match?.placeId;
+      if (placeId == null || placeId.isEmpty) {
         throw StateError('No exact address match found');
       }
       final coordinate = await provider.fetchPlaceDetails(
-        match.placeId,
+        placeId,
         lang,
       );
       if (!mounted) return false;
       if (pickup) {
         context.read<SendPackageBloc>().add(
               SetPickupAddress(
-                val: match.description,
-                pickupLocationSubAddress: match.subText,
-                placeId: match.placeId,
+                val: address,
+                pickupLocationSubAddress: '',
+                placeId: placeId,
                 lang: lang,
+                coordinate: coordinate,
               ),
             );
         _setDraft(
           _draft.copyWith(
-            pickupAddress: match.description,
+            pickupAddress: address,
             pickupLat: coordinate.lat,
             pickupLng: coordinate.lng,
           ),
         );
+        _selectedPickupPlaceId = null;
       } else {
         context.read<SendPackageBloc>().add(
               SetDeliveryAddress(
-                val: match.description,
-                destinationLocationSubAddress: match.subText,
-                placeId: match.placeId,
+                val: address,
+                destinationLocationSubAddress: '',
+                placeId: placeId,
                 lang: lang,
+                coordinate: coordinate,
               ),
             );
         _setDraft(
           _draft.copyWith(
-            dropoffAddress: match.description,
+            dropoffAddress: address,
             dropoffLat: coordinate.lat,
             dropoffLng: coordinate.lng,
           ),
         );
+        _selectedDropoffPlaceId = null;
       }
       return true;
     } catch (error, stackTrace) {
@@ -1111,6 +1123,14 @@ class _SenderBookingCanvasState extends State<SenderBookingCanvas> {
                         onPhotoRemove: _removeParcelPhoto,
                         onDraft: _setDraft,
                         onContinue: _advance,
+                        onPickupAddressChanged: () =>
+                            _selectedPickupPlaceId = null,
+                        onDropoffAddressChanged: () =>
+                            _selectedDropoffPlaceId = null,
+                        onPickupPlaceSelected: (placeId) =>
+                            _selectedPickupPlaceId = placeId,
+                        onDropoffPlaceSelected: (placeId) =>
+                            _selectedDropoffPlaceId = placeId,
                         addressResolutionMessage: _addressResolutionMessage,
                         addressResolving: _addressResolving,
                       ),
@@ -1300,6 +1320,10 @@ class _BookingPanel extends StatelessWidget {
   final VoidCallback onPhotoRemove;
   final ValueChanged<SenderBookingDraft> onDraft;
   final VoidCallback onContinue;
+  final VoidCallback onPickupAddressChanged;
+  final VoidCallback onDropoffAddressChanged;
+  final ValueChanged<String> onPickupPlaceSelected;
+  final ValueChanged<String> onDropoffPlaceSelected;
   final String? addressResolutionMessage;
   final bool addressResolving;
 
@@ -1330,6 +1354,10 @@ class _BookingPanel extends StatelessWidget {
     required this.onPhotoRemove,
     required this.onDraft,
     required this.onContinue,
+    required this.onPickupAddressChanged,
+    required this.onDropoffAddressChanged,
+    required this.onPickupPlaceSelected,
+    required this.onDropoffPlaceSelected,
     required this.addressResolutionMessage,
     required this.addressResolving,
   });
@@ -1402,6 +1430,7 @@ class _BookingPanel extends StatelessWidget {
           resolutionMessage: addressResolutionMessage,
           isResolvingTypedAddress: addressResolving,
           onChanged: (value) {
+            onPickupAddressChanged();
             onSearchingPickupChanged(true);
             _search(context, value);
             onDraft(
@@ -1415,14 +1444,21 @@ class _BookingPanel extends StatelessWidget {
             final lng = suggestion.lng is num
                 ? (suggestion.lng as num).toDouble()
                 : null;
-            context.read<SendPackageBloc>().add(
-                  SetPickupAddress(
-                    val: suggestion.description,
-                    pickupLocationSubAddress: suggestion.subText,
-                    placeId: suggestion.placeId,
-                    lang: Localizations.localeOf(context).languageCode,
-                  ),
-                );
+            onPickupPlaceSelected(suggestion.placeId);
+            final coordinate = lat != null && lng != null
+                ? PlaceCoordinate(lat: lat, lng: lng)
+                : null;
+            if (coordinate != null) {
+              context.read<SendPackageBloc>().add(
+                    SetPickupAddress(
+                      val: suggestion.description,
+                      pickupLocationSubAddress: suggestion.subText,
+                      placeId: suggestion.placeId,
+                      lang: Localizations.localeOf(context).languageCode,
+                      coordinate: coordinate,
+                    ),
+                  );
+            }
             pickup.text = suggestion.description;
             onDraft(
               draft.copyWith(
@@ -1450,6 +1486,7 @@ class _BookingPanel extends StatelessWidget {
           resolutionMessage: addressResolutionMessage,
           isResolvingTypedAddress: addressResolving,
           onChanged: (value) {
+            onDropoffAddressChanged();
             onSearchingPickupChanged(false);
             _search(context, value);
             onDraft(
@@ -1466,14 +1503,21 @@ class _BookingPanel extends StatelessWidget {
             final lng = suggestion.lng is num
                 ? (suggestion.lng as num).toDouble()
                 : null;
-            context.read<SendPackageBloc>().add(
-                  SetDeliveryAddress(
-                    val: suggestion.description,
-                    destinationLocationSubAddress: suggestion.subText,
-                    placeId: suggestion.placeId,
-                    lang: Localizations.localeOf(context).languageCode,
-                  ),
-                );
+            onDropoffPlaceSelected(suggestion.placeId);
+            final coordinate = lat != null && lng != null
+                ? PlaceCoordinate(lat: lat, lng: lng)
+                : null;
+            if (coordinate != null) {
+              context.read<SendPackageBloc>().add(
+                    SetDeliveryAddress(
+                      val: suggestion.description,
+                      destinationLocationSubAddress: suggestion.subText,
+                      placeId: suggestion.placeId,
+                      lang: Localizations.localeOf(context).languageCode,
+                      coordinate: coordinate,
+                    ),
+                  );
+            }
             dropoff.text = suggestion.description;
             onDraft(
               draft.copyWith(
