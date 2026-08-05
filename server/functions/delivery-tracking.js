@@ -5,6 +5,10 @@ const functions = require("firebase-functions/v1");
 const {getFirestore, FieldValue, GeoPoint} = require("firebase-admin/firestore");
 const tracking = require("./sender-tracking-state-core");
 const {highestTrustAward} = require("./trust-award");
+const {
+  buildDeliveryCompletedEvent,
+  publishDeliveryCompleted,
+} = require("./delivery-completed-event");
 
 function text(value) {
   return `${value || ""}`.trim();
@@ -443,6 +447,16 @@ exports.updateDeliveryTrackingStatus = functions.https.onCall(async (data, conte
     if (nextStatus === "delivered") patch.trustPointsAwarded = canonicalAward;
     transaction.set(found.ref, patch, {merge: true});
     if (nextStatus === "delivered") {
+      publishDeliveryCompleted({
+        transaction,
+        db,
+        event: buildDeliveryCompletedEvent({
+          deliveryId: found.id,
+          delivery,
+          riderId,
+          trustPoints: canonicalAward,
+        }),
+      });
       const settlement = settlementValues(delivery);
       if (earningRef && existingEarning && !existingEarning.exists) {
         transaction.set(earningRef, {
