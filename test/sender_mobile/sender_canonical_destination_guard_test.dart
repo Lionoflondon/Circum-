@@ -128,6 +128,25 @@ void main() {
     expect(hero, contains('IgnorePointer(child: _HeroRouteArt())'));
   });
 
+  test('Recipient fields preserve editable text and multiline instructions', () {
+    final source = read('lib/app/sender_mobile/sender_booking_canvas.dart');
+    final start = source.indexOf('class _RecipientPanel');
+    final end = source.indexOf('class _DeliveryTimePanel', start);
+    final panel = source.substring(start, end);
+
+    expect(panel, contains("hint: 'Recipient name'"));
+    expect(panel, contains("hint: 'Recipient phone'"));
+    expect(panel, contains("hint: 'Delivery instructions (optional)'"));
+    expect(panel, contains('minLines: 3'));
+    expect(panel, contains('maxLines: 6'));
+    expect(source, contains('final _receiverName = TextEditingController();'));
+    expect(source, contains('final _receiverPhone = TextEditingController();'));
+    expect(source, contains('final _notes = TextEditingController();'));
+    expect(source, contains('receiverName: receiverName.text'));
+    expect(source, contains('receiverPhone: receiverPhone.text'));
+    expect(source, contains('deliveryNotes: notes.text'));
+  });
+
   test('Sender web deep link opens the canonical Gifts flow', () {
     final preview = read('lib/app/sender_mobile/sender_mobile_preview.dart');
     final home = read('lib/app/sender_mobile/sender_mobile_home.dart');

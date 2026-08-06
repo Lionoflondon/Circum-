@@ -1805,6 +1805,8 @@ class _RecipientPanel extends StatelessWidget {
         _TextInput(
           controller: notes,
           hint: 'Delivery instructions (optional)',
+          minLines: 3,
+          maxLines: 6,
           onChanged: (_) => onChanged(),
         ),
         const SizedBox(height: 12),
@@ -5434,6 +5436,8 @@ class _TextInput extends StatelessWidget {
   final TextEditingController controller;
   final String hint;
   final TextInputType? keyboardType;
+  final int? minLines;
+  final int? maxLines;
   final String? helperText;
   final String? errorText;
   final ValueChanged<String> onChanged;
@@ -5442,6 +5446,8 @@ class _TextInput extends StatelessWidget {
     required this.controller,
     required this.hint,
     this.keyboardType,
+    this.minLines,
+    this.maxLines = 1,
     this.helperText,
     this.errorText,
     required this.onChanged,
@@ -5452,6 +5458,8 @@ class _TextInput extends StatelessWidget {
     return TextField(
       controller: controller,
       keyboardType: keyboardType,
+      minLines: minLines,
+      maxLines: maxLines,
       onChanged: onChanged,
       style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w800),
       decoration: InputDecoration(
