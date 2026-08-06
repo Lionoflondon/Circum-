@@ -24,4 +24,28 @@ void main() {
       expect(source, contains("'$status'"));
     }
   });
+
+  test('terminal restoration is classified before any active-delivery watcher',
+      () {
+    final source = File(
+      'lib/app/send_package/bloc/send_package_bloc.dart',
+    ).readAsStringSync();
+
+    final checkStart = source.indexOf(
+      'void _handleCheckForActiveRequestEvent',
+    );
+    final checkEnd = source.indexOf(
+      'void _handleSetPanelControlStatusEvent',
+      checkStart,
+    );
+    final handler = source.substring(checkStart, checkEnd);
+
+    expect(handler, contains('normalizedRequestStatus'));
+    expect(handler, contains('_terminalRequestStatuses.contains'));
+    expect(handler, contains('_clearTerminalRestoration(activeRequest)'));
+    expect(
+      handler.indexOf('_clearTerminalRestoration(activeRequest)'),
+      lessThan(handler.indexOf('add(WatchActiveDelivery(')),
+    );
+  });
 }

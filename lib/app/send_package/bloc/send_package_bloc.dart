@@ -264,6 +264,15 @@ class SendPackageBloc extends Bloc<SendPackageEvent, SendPackageState> {
     }
   }
 
+  Future<void> _clearTerminalRestoration(String requestId) async {
+    await _clearActiveRequestIfCurrent(requestId);
+    await _activeDeliverySubscription?.cancel();
+    _activeDeliverySubscription = null;
+    await _activeDeliveryLiveLocationSubscription?.cancel();
+    _activeDeliveryLiveLocationSubscription = null;
+    _activeDeliveryLiveLocationId = null;
+  }
+
   Future<void> _listenToActiveDeliveryLiveLocation(String deliveryId) async {
     final normalized = deliveryId.trim();
     if (normalized.isEmpty || normalized == _activeDeliveryLiveLocationId) {
@@ -1689,7 +1698,6 @@ class SendPackageBloc extends Bloc<SendPackageEvent, SendPackageState> {
         );
         return;
       }
-      add(WatchActiveDelivery(requestId: activeRequest));
       final userDocumentReference =
           db.collection('deliveryRequests').doc(user.uid);
       final requestDocumentReference =
@@ -1727,8 +1735,21 @@ class SendPackageBloc extends Bloc<SendPackageEvent, SendPackageState> {
         // }
 
         final requestStatus = '${data['status'] ?? ''}';
+        final normalizedRequestStatus = requestStatus.toLowerCase().replaceAll(
+              '-',
+              '_',
+            );
+        // Classify the persisted record before starting any watcher or
+        // emitting restoration state. Terminal deliveries are historical.
+        if (_terminalRequestStatuses.contains(normalizedRequestStatus)) {
+          await _clearTerminalRestoration(activeRequest);
+          emit(SendPackageState(senderRothBalance: state.senderRothBalance));
+          return;
+        }
+
+        add(WatchActiveDelivery(requestId: activeRequest));
         if (_activeRequestStatuses.contains(
-          requestStatus.toLowerCase().replaceAll('-', '_'),
+          normalizedRequestStatus,
         )) {
           status = DeliveryStatus.reconnectingWithRider;
           final deliveryData = DeliveryData.fromJson(data);
@@ -1748,21 +1769,6 @@ class SendPackageBloc extends Bloc<SendPackageEvent, SendPackageState> {
               deliveryPinVerified: data['deliveryPinVerified'] == true,
             ),
           );
-        }
-
-        final normalizedRequestStatus = requestStatus.toLowerCase().replaceAll(
-              '-',
-              '_',
-            );
-        if (_terminalRequestStatuses.contains(normalizedRequestStatus)) {
-          await prefs.remove('activeRequest');
-          await _activeDeliverySubscription?.cancel();
-          _activeDeliverySubscription = null;
-          await _activeDeliveryLiveLocationSubscription?.cancel();
-          _activeDeliveryLiveLocationSubscription = null;
-          _activeDeliveryLiveLocationId = null;
-          emit(SendPackageState(senderRothBalance: state.senderRothBalance));
-          return;
         }
 
         if (requestStatus == 'completed' || requestStatus == 'delivered') {
