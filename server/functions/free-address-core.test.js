@@ -1,6 +1,8 @@
 /* eslint-disable max-len */
 const test = require("node:test");
 const assert = require("node:assert/strict");
+const fs = require("node:fs");
+const path = require("node:path");
 const {
   googlePlaceDetailsUrl,
   googlePlacesAutocompleteUrl,
@@ -9,6 +11,57 @@ const {
   sanitizeQuery,
   searchFreeUkAddresses,
 } = require("./free-address-core");
+const {_googlePlacesApiKey} = require("./free-address-search");
+
+function withPlacesEnvironment(values, callback) {
+  const names = ["GOOGLE_PLACES_API_KEY", "CIRCUM_GOOGLE_PLACES_API_KEY"];
+  const previous = Object.fromEntries(names.map((name) => [name, process.env[name]]));
+  for (const name of names) {
+    if (values[name] === undefined) delete process.env[name];
+    else process.env[name] = values[name];
+  }
+  try {
+    return callback();
+  } finally {
+    for (const name of names) {
+      if (previous[name] === undefined) delete process.env[name];
+      else process.env[name] = previous[name];
+    }
+  }
+}
+
+test("Places key lookup never uses deprecated Runtime Config", () => {
+  const source = fs.readFileSync(path.join(__dirname, "free-address-search.js"), "utf8");
+  assert.doesNotMatch(source, /functions\.config\(\)/);
+  assert.match(source, /process\.env\.GOOGLE_PLACES_API_KEY/);
+});
+
+test("Places key lookup uses the primary environment value", () => {
+  withPlacesEnvironment({GOOGLE_PLACES_API_KEY: "test-primary"}, () => {
+    assert.equal(_googlePlacesApiKey(), "test-primary");
+  });
+});
+
+test("Places key lookup supports the compatibility environment alias", () => {
+  withPlacesEnvironment({CIRCUM_GOOGLE_PLACES_API_KEY: "test-compat"}, () => {
+    assert.equal(_googlePlacesApiKey(), "test-compat");
+  });
+});
+
+test("Places key lookup gives the primary environment value precedence", () => {
+  withPlacesEnvironment({
+    GOOGLE_PLACES_API_KEY: "test-primary",
+    CIRCUM_GOOGLE_PLACES_API_KEY: "test-compat",
+  }, () => {
+    assert.equal(_googlePlacesApiKey(), "test-primary");
+  });
+});
+
+test("Places key lookup preserves the missing-key fallback contract", () => {
+  withPlacesEnvironment({}, () => {
+    assert.equal(_googlePlacesApiKey(), "");
+  });
+});
 
 test("sanitizes address queries", () => {
   assert.equal(sanitizeQuery("  Harley   Street   London  "), "Harley Street London");
@@ -62,6 +115,7 @@ test("uses Google Places autocomplete when a paid key is configured", async () =
   assert.equal(result.results[0].provider, "google_places");
   assert.equal(result.results[0].placeId, "google-place-1");
   assert.equal(result.results[0].lat, null);
+  assert.equal(Object.hasOwn(result, "fallbackReason"), false);
   assert.equal(seenUrls.length, 1);
 });
 
@@ -140,6 +194,7 @@ test("maps free address search results into Circum address suggestions", async (
   assert.equal(result.results[0].provider, "openstreetmap_nominatim");
   assert.equal(result.results[0].components.postcode, "W1G 9QU");
   assert.equal(result.results[0].lat, 51.5181037);
+  assert.equal(result.fallbackReason, "MISSING_GOOGLE_PLACES_API_KEY");
 });
 
 test("falls back to Nominatim when Google Places is unavailable", async () => {
