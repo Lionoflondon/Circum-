@@ -6,6 +6,40 @@ const assert = require("node:assert/strict");
 const deliveryTracking = require("./delivery-tracking")._private;
 const deliveryTrackingModule = require("./delivery-tracking");
 
+function fakeFirestore(seed) {
+  const documents = new Map(Object.entries(seed));
+  const documentRef = (path) => ({
+    id: path.split("/").at(-1),
+    path,
+    collection: (name) => collectionRef(`${path}/${name}`),
+  });
+  const collectionRef = (path) => ({
+    doc: (id) => documentRef(`${path}/${id}`),
+    where: () => ({limit: () => ({path: `${path}/__query__`})}),
+  });
+  const snapshot = (ref) => ({
+    id: ref.id,
+    exists: documents.has(ref.path),
+    data: () => documents.get(ref.path),
+  });
+  return {
+    collection: collectionRef,
+    runTransaction: async (callback) => callback({
+      get: async (ref) => snapshot(ref),
+      set: (ref, value, options = {}) => {
+        const current = documents.get(ref.path) || {};
+        documents.set(ref.path, options.merge ? {...current, ...value} : value);
+      },
+      create: (ref, value) => {
+        if (documents.has(ref.path)) throw new Error(`Document already exists: ${ref.path}`);
+        documents.set(ref.path, value);
+      },
+    }),
+    read: (path) => documents.get(path),
+    write: (path, value) => documents.set(path, value),
+  };
+}
+
 test("collection PIN verification patch updates backend tracking fields", () => {
   const patch = deliveryTracking.patchForTransition({
     action: "verify_collection_pin",
@@ -33,6 +67,7 @@ test("receiver PIN verification patch delivers without exposing PIN values", () 
     action: "verify_receiver_pin",
     nextStatus: "delivered",
     riderId: "rider-1",
+    pinVerified: true,
   });
   assert.equal(patch.status, "delivered");
   assert.equal(patch.deliveryPinVerified, true);
@@ -161,6 +196,199 @@ test("Vanguard PIN actions require private PIN authority", () => {
   ), false);
 });
 
+test("pickup verification policy separates standard and protected deliveries", () => {
+  assert.equal(deliveryTracking.pickupVerificationRequired({}), true);
+  assert.equal(deliveryTracking.pickupVerificationRequired({vanguardProtocolEnabled: false}), false);
+  assert.equal(deliveryTracking.pickupVerificationRequired({verificationRequired: false}), false);
+  assert.equal(deliveryTracking.pickupVerificationRequired({verificationRequired: true}), true);
+  assert.equal(deliveryTracking.pickupVerificationRequired({
+    verificationRequired: false,
+    isGift: true,
+  }), true);
+  assert.equal(deliveryTracking.pickupVerificationRequired({requiresVanguard: true}), true);
+  assert.equal(deliveryTracking.pickupVerificationRequired({serviceType: "health_plus"}), true);
+  assert.equal(deliveryTracking.pickupVerificationRequired({isGift: true}), true);
+});
+
+test("authoritative handler policy permits only standard direct collection", () => {
+  assert.equal(deliveryTracking.canApplyDeliveryTransition(
+      {vanguardProtocolEnabled: false}, "arrived_at_pickup", "collected", "confirm_collected",
+  ), true);
+  assert.equal(deliveryTracking.canApplyDeliveryTransition(
+      {}, "arrived_at_pickup", "collected", "confirm_collected",
+  ), false);
+  assert.equal(deliveryTracking.canApplyDeliveryTransition(
+      {verificationRequired: true}, "arrived_at_pickup", "collected", "confirm_collected",
+  ), false);
+  assert.equal(deliveryTracking.canApplyDeliveryTransition(
+      {requiresVanguard: true}, "arrived_at_pickup", "collected", "confirm_collected",
+  ), false);
+  assert.equal(deliveryTracking.canApplyDeliveryTransition(
+      {}, "arrived_at_pickup", "delivered", "complete_delivery",
+  ), false);
+});
+
+test("ordinary completion is PIN-less while protected completion remains gated", () => {
+  assert.equal(deliveryTracking.deliveryPinRequired({}), false);
+  assert.equal(deliveryTracking.deliveryPinRequired({pinRequired: true}), true);
+  assert.equal(deliveryTracking.deliveryPinRequired({requiresVanguard: true}), true);
+  assert.equal(deliveryTracking.deliveryPinRequired({serviceType: "health_plus"}), true);
+  assert.equal(deliveryTracking.canApplyDeliveryTransition(
+      {}, "arrived_at_dropoff", "delivered", "complete_delivery",
+  ), true);
+  assert.equal(deliveryTracking.canApplyDeliveryTransition(
+      {requiresVanguard: true}, "arrived_at_dropoff", "delivered", "complete_delivery",
+  ), false);
+});
+
+test("confirm_collected persists the canonical standard pickup transition", async () => {
+  const db = fakeFirestore({
+    "deliveryRequests/delivery-1": {
+      requestId: "delivery-1",
+      riderId: "rider-1",
+      status: "arrived_at_pickup",
+      vanguardProtocolEnabled: false,
+    },
+    "riders/rider-1": {accountState: "approved"},
+  });
+
+  const result = await deliveryTracking.updateDeliveryTrackingStatusHandler(
+      {deliveryId: "delivery-1", action: "confirm_collected"},
+      {auth: {uid: "rider-1", token: {}}},
+      db,
+  );
+
+  assert.equal(result.status, "collected");
+  assert.equal(result.senderTrackingState, "pickup_complete");
+  assert.equal(db.read("deliveryRequests/delivery-1").status, "collected");
+  assert.equal(db.read("deliveryRequests/delivery-1").deliveryStatus, "collected");
+  assert.equal(db.read("deliveryRequests/delivery-1").deliveryStage, "collected");
+  assert.equal(db.read("deliveryRequests/delivery-1").lastRiderAction, "confirm_collected");
+  assert.ok(db.read("deliveryRequests/delivery-1").collectedAt);
+});
+
+test("confirm_collected cannot bypass protected pickup verification", async () => {
+  const db = fakeFirestore({
+    "deliveryRequests/delivery-1": {
+      requestId: "delivery-1",
+      riderId: "rider-1",
+      status: "arrived_at_pickup",
+      verificationRequired: true,
+    },
+    "riders/rider-1": {accountState: "approved"},
+  });
+
+  await assert.rejects(
+      deliveryTracking.updateDeliveryTrackingStatusHandler(
+          {deliveryId: "delivery-1", action: "confirm_collected"},
+          {auth: {uid: "rider-1", token: {}}},
+          db,
+      ),
+      /Cannot move delivery from arrived_at_pickup to collected/,
+  );
+  assert.equal(db.read("deliveryRequests/delivery-1").status, "arrived_at_pickup");
+});
+
+test("real tracking handler completes the standard lifecycle without PIN actions", async () => {
+  const db = fakeFirestore({
+    "deliveryRequests/delivery-1": {
+      requestId: "delivery-1",
+      riderId: "rider-1",
+      senderId: "sender-1",
+      status: "requested",
+      riderEarning: 8.5,
+      vanguardProtocolEnabled: false,
+    },
+    "riders/rider-1": {accountState: "approved"},
+    "deliveryEvidence/delivery-1": {
+      verifiedPhotoCount: 1,
+      latestPhotoPath: "deliveryEvidence/delivery-1/handover/photo-1.jpg",
+    },
+  });
+  const deliveryPath = "deliveryRequests/delivery-1";
+  db.write(deliveryPath, {...db.read(deliveryPath), status: "accepted"});
+  const actions = [
+    "start_heading_to_pickup",
+    "arrived_at_pickup",
+    "confirm_collected",
+    "start_delivery",
+    "near_dropoff",
+    "complete_delivery",
+  ];
+  const statuses = [];
+  const senderStates = [];
+
+  for (const action of actions) {
+    const result = action === "complete_delivery" ?
+      await deliveryTracking.completeDeliveryHandler(
+          {
+            deliveryId: "delivery-1",
+            evidence: {evidenceId: "evidence-1", recipientConfirmed: true},
+          },
+          {auth: {uid: "rider-1", token: {}}},
+          db,
+      ) :
+      await deliveryTracking.updateDeliveryTrackingStatusHandler(
+          {deliveryId: "delivery-1", action},
+          {auth: {uid: "rider-1", token: {}}},
+          db,
+      );
+    statuses.push(result.status);
+    senderStates.push(result.senderTrackingState);
+  }
+
+  assert.deepEqual(statuses, [
+    "navigating_to_pickup",
+    "arrived_at_pickup",
+    "collected",
+    "navigating_to_dropoff",
+    "arrived_at_dropoff",
+    "delivered",
+  ]);
+  assert.deepEqual(senderStates, [
+    "rider_en_route_to_pickup",
+    "rider_arrived_at_pickup",
+    "pickup_complete",
+    "in_transit",
+    "rider_arriving_at_dropoff",
+    "delivered",
+  ]);
+  assert.equal(db.read(deliveryPath).status, "delivered");
+  assert.equal(db.read(deliveryPath).deliveryStatus, "delivered");
+  assert.equal(db.read(deliveryPath).deliveryStage, "delivered");
+  assert.equal(db.read(deliveryPath).lastRiderAction, "complete_delivery");
+  assert.equal(db.read(deliveryPath).handoverEvidence.recipientConfirmed, true);
+  assert.equal(db.read(deliveryPath).pickupEvidence, undefined);
+  assert.equal(db.read(deliveryPath).deliveryPinVerified, undefined);
+  assert.equal(
+      db.read("platformEvents/delivery_completed_delivery-1").eventType,
+      "DeliveryCompleted",
+  );
+});
+
+test("canonical completion rejects a missing PIN for protected deliveries", async () => {
+  const db = fakeFirestore({
+    "deliveryRequests/delivery-1": {
+      requestId: "delivery-1",
+      riderId: "rider-1",
+      status: "arrived_at_dropoff",
+      requiresVanguard: true,
+    },
+    "riders/rider-1": {accountState: "approved"},
+    "deliveryEvidence/delivery-1": {verifiedPhotoCount: 1},
+  });
+
+  await assert.rejects(
+      deliveryTracking.completeDeliveryHandler(
+          {deliveryId: "delivery-1", evidence: {evidenceId: "evidence-1"}},
+          {auth: {uid: "rider-1", token: {}}},
+          db,
+      ),
+      /Cannot move delivery from arrived_at_dropoff to delivered/,
+  );
+  assert.equal(db.read("deliveryRequests/delivery-1").status, "arrived_at_dropoff");
+});
+
 test("public verification patches never expose or clear PIN secrets", () => {
   const collectionPatch = deliveryTracking.patchForTransition({
     action: "verify_collection_pin",
@@ -171,6 +399,7 @@ test("public verification patches never expose or clear PIN secrets", () => {
     action: "verify_receiver_pin",
     nextStatus: "delivered",
     riderId: "rider-1",
+    pinVerified: true,
   });
   for (const patch of [collectionPatch, deliveryPatch]) {
     assert.equal(Object.prototype.hasOwnProperty.call(patch, "collectionPin"), false);

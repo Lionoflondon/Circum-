@@ -83,6 +83,7 @@ const RIDER_ACTION_TO_STATUS = Object.freeze({
   near_dropoff: "arrived_at_dropoff",
   arrived_at_dropoff: "arrived_at_dropoff",
   verify_receiver_pin: "delivered",
+  complete_delivery: "delivered",
   report_issue: "issue_reported",
   cancel: "cancelled",
 });
@@ -97,10 +98,13 @@ function senderTrackingStateForBackendStatus(status) {
   return BACKEND_STATUS_TO_SENDER_STATE[normalized] || SENDER_TRACKING_STATES.ISSUE;
 }
 
-function canTransitionDeliveryStatus(from, to) {
+function canTransitionDeliveryStatus(from, to, options = {}) {
   const current = normalizeStatus(from);
   const next = normalizeStatus(to);
   if (!current || !next) return false;
+  if (next === "collected" && current === "arrived_at_pickup") {
+    return options.allowDirectCollection === true;
+  }
   return (ALLOWED_TRANSITIONS[current] || []).includes(next);
 }
 

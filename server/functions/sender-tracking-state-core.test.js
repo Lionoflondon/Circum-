@@ -71,6 +71,49 @@ test("delivery status transition rules block unsafe jumps", () => {
   assert.equal(tracking.canTransitionDeliveryStatus("cancelled", "accepted"), false);
 });
 
+test("standard pickup can be collected directly without weakening verified pickup", () => {
+  assert.equal(tracking.canTransitionDeliveryStatus(
+      "arrived_at_pickup", "collected", {allowDirectCollection: true},
+  ), true);
+  assert.equal(tracking.canTransitionDeliveryStatus(
+      "waiting", "collected", {allowDirectCollection: true},
+  ), false);
+  assert.equal(tracking.canTransitionDeliveryStatus("waiting", "delivered"), false);
+  assert.equal(tracking.canTransitionDeliveryStatus(
+      "arrived_at_pickup", "collected", {allowDirectCollection: false},
+  ), false);
+  assert.equal(tracking.canTransitionDeliveryStatus(
+      "arrived_at_pickup", "collected",
+  ), false);
+});
+
+test("canonical standard delivery lifecycle reaches delivered without PIN states", () => {
+  const statuses = [
+    "requested",
+    "accepted",
+    "navigating_to_pickup",
+    "arrived_at_pickup",
+    "collected",
+    "navigating_to_dropoff",
+    "arrived_at_dropoff",
+    "delivered",
+  ];
+  for (let index = 1; index < statuses.length; index += 1) {
+    assert.equal(tracking.canTransitionDeliveryStatus(
+        statuses[index - 1],
+        statuses[index],
+        {allowDirectCollection: true},
+    ), true, `${statuses[index - 1]} -> ${statuses[index]}`);
+  }
+  assert.equal(statuses.includes("pickup_verification"), false);
+  assert.equal(statuses.includes("pickup_verified"), false);
+  assert.equal(statuses.includes("pin_required"), false);
+  assert.equal(
+      tracking.senderTrackingStateForBackendStatus(statuses.at(-1)),
+      tracking.SENDER_TRACKING_STATES.DELIVERED,
+  );
+});
+
 test("rider actions resolve to canonical backend statuses", () => {
   assert.equal(tracking.statusForRiderAction("start_heading_to_pickup"), "navigating_to_pickup");
   assert.equal(tracking.statusForRiderAction("arrived_at_pickup"), "arrived_at_pickup");
@@ -79,6 +122,7 @@ test("rider actions resolve to canonical backend statuses", () => {
   assert.equal(tracking.statusForRiderAction("start_delivery"), "navigating_to_dropoff");
   assert.equal(tracking.statusForRiderAction("near_dropoff"), "arrived_at_dropoff");
   assert.equal(tracking.statusForRiderAction("verify_receiver_pin"), "delivered");
+  assert.equal(tracking.statusForRiderAction("complete_delivery"), "delivered");
   assert.equal(tracking.statusForRiderAction("report_issue"), "issue_reported");
   assert.equal(tracking.statusForRiderAction("unknown"), "");
 });

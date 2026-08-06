@@ -172,10 +172,14 @@ function expectedPin(privateDelivery, action) {
   if (action === "verify_collection_pin") {
     return text(privateDelivery.collectionPin || privateDelivery.pickupPin || protection.collectionPin);
   }
-  if (action === "verify_receiver_pin") {
+  if (action === "verify_receiver_pin" || action === "complete_delivery") {
     return text(privateDelivery.deliveryPin || privateDelivery.receiverPin || privateDelivery.dropoffPin || protection.deliveryPin);
   }
   return "";
+}
+
+function isHandoverAction(action) {
+  return action === "verify_receiver_pin" || action === "complete_delivery";
 }
 
 function pinAuthorityRequired(delivery, action) {
@@ -187,14 +191,64 @@ function pinAuthorityRequired(delivery, action) {
     protection.enabled === true;
 }
 
+function pickupVerificationRequired(delivery = {}) {
+  const protection = delivery.vanguardProtection || {};
+  const protocol = delivery.vanguardProtocol || {};
+  const serviceType = normalized(delivery.serviceType || delivery.sourceModule);
+  const protectedDelivery = delivery.verificationRequired === true ||
+    delivery.requiresVerification === true ||
+    delivery.requiresVanguard === true ||
+    delivery.vanguardEnabled === true ||
+    delivery.vanguardProtocolEnabled === true ||
+    protection.enabled === true ||
+    protocol.enabled === true ||
+    delivery.isHealthPlus === true ||
+    delivery.healthPlusOrderId != null ||
+    ["health", "healthplus", "health_plus"].includes(serviceType) ||
+    delivery.isGift === true ||
+    delivery.giftOrderId != null ||
+    ["gift", "gifts"].includes(serviceType);
+  if (protectedDelivery) return true;
+
+  const explicitlyOrdinary = delivery.verificationRequired === false ||
+    delivery.requiresVerification === false ||
+    delivery.vanguardProtocolEnabled === false ||
+    delivery.vanguardStatus === "not_required" ||
+    protocol.enabled === false ||
+    ["standard", "delivery", "sender"].includes(serviceType);
+  return !explicitlyOrdinary;
+}
+
+function deliveryPinRequired(delivery = {}) {
+  const protection = delivery.vanguardProtection || {};
+  const serviceType = normalized(delivery.serviceType || delivery.sourceModule);
+  return delivery.pinRequired === true ||
+    delivery.receiverPinRequired === true ||
+    delivery.secureHandoverRequired === true ||
+    delivery.requiresVanguard === true ||
+    delivery.vanguardEnabled === true ||
+    delivery.vanguardProtocolEnabled === true ||
+    protection.enabled === true ||
+    delivery.isHealthPlus === true ||
+    delivery.healthPlusOrderId != null ||
+    ["health", "healthplus", "health_plus"].includes(serviceType);
+}
+
+function canApplyDeliveryTransition(delivery, currentStatus, nextStatus, action) {
+  if (action === "complete_delivery" && deliveryPinRequired(delivery)) return false;
+  return tracking.canTransitionDeliveryStatus(currentStatus, nextStatus, {
+    allowDirectCollection: !pickupVerificationRequired(delivery),
+  });
+}
+
 function pinAttemptField(action) {
-  return action === "verify_receiver_pin" ?
+  return isHandoverAction(action) ?
     "deliveryPinAttemptCount" : "collectionPinAttemptCount";
 }
 
 function evidenceRequirements(delivery, action, evidence = {}) {
   const pickup = action === "verify_collection_pin";
-  const handover = action === "verify_receiver_pin";
+  const handover = isHandoverAction(action);
   if (!pickup && !handover) return {valid: true};
   const required = pickup ?
     delivery.verificationRequired === true ||
@@ -278,7 +332,7 @@ function riderTrustRankPatch(profile = {}, awardedTrustPoints = 0) {
   return patch;
 }
 
-function patchForTransition({action, nextStatus, riderId}) {
+function patchForTransition({action, nextStatus, riderId, pinVerified = false}) {
   const now = FieldValue.serverTimestamp();
   const patch = {
     status: nextStatus,
@@ -303,9 +357,11 @@ function patchForTransition({action, nextStatus, riderId}) {
   }
   if (nextStatus === "arrived_at_dropoff") patch.arrivedAtDropoffAt = now;
   if (nextStatus === "delivered") {
-    patch.deliveryPinVerified = true;
-    patch.deliveryPinVerifiedAt = now;
-    patch.deliveryPinVerifiedBy = riderId;
+    if (pinVerified) {
+      patch.deliveryPinVerified = true;
+      patch.deliveryPinVerifiedAt = now;
+      patch.deliveryPinVerifiedBy = riderId;
+    }
     patch.deliveredAt = now;
     patch.completedAt = now;
   }
@@ -320,7 +376,7 @@ function patchForTransition({action, nextStatus, riderId}) {
   return patch;
 }
 
-async function updateDeliveryTrackingStatusHandler(data, context) {
+async function updateDeliveryTrackingStatusHandler(data, context, db = getFirestore()) {
   if (!context.auth) {
     throw new functions.https.HttpsError("unauthenticated", "Rider must be signed in.");
   }
@@ -334,7 +390,6 @@ async function updateDeliveryTrackingStatusHandler(data, context) {
     throw new functions.https.HttpsError("invalid-argument", "Unsupported rider tracking action.");
   }
 
-  const db = getFirestore();
   const riderId = context.auth.uid;
   const result = await db.runTransaction(async (transaction) => {
     const found = await findDelivery(db, transaction, deliveryId);
@@ -359,7 +414,7 @@ async function updateDeliveryTrackingStatusHandler(data, context) {
         idempotent: true,
       };
     }
-    if (!tracking.canTransitionDeliveryStatus(currentStatus, nextStatus)) {
+    if (!canApplyDeliveryTransition(delivery, currentStatus, nextStatus, action)) {
       throw new functions.https.HttpsError("failed-precondition", `Cannot move delivery from ${currentStatus} to ${nextStatus}.`);
     }
 
@@ -405,7 +460,7 @@ async function updateDeliveryTrackingStatusHandler(data, context) {
           [attemptField]: attempts + 1,
           lastPinAttemptAt: FieldValue.serverTimestamp(),
           vanguardReviewRequired: attempts + 1 >= 5,
-          vanguardLastFailedStage: action === "verify_receiver_pin" ? "delivery" : "collection",
+          vanguardLastFailedStage: isHandoverAction(action) ? "delivery" : "collection",
           updatedAt: FieldValue.serverTimestamp(),
         }, {merge: true});
         return {verificationFailed: true, attemptsRemaining: 4 - attempts};
@@ -416,9 +471,10 @@ async function updateDeliveryTrackingStatusHandler(data, context) {
       action,
       nextStatus,
       riderId,
+      pinVerified: Boolean(requiredPin),
     });
     if (Object.keys(evidence).length > 0) {
-      patch[action === "verify_receiver_pin" ? "handoverEvidence" : "pickupEvidence"] = {
+      patch[isHandoverAction(action) ? "handoverEvidence" : "pickupEvidence"] = {
         ...evidence,
         recordedAt: FieldValue.serverTimestamp(),
         recordedBy: riderId,
@@ -494,7 +550,7 @@ async function updateDeliveryTrackingStatusHandler(data, context) {
           trustPoints: canonicalAward,
           verification: {
             pickupPinVerified: delivery.collectionPinVerified === true || delivery.pickupPinVerified === true,
-            deliveryPinVerified: true,
+            deliveryPinVerified: Boolean(requiredPin) || delivery.deliveryPinVerified === true,
             evidenceVerified: evidenceDecision.valid,
           },
           evidence,
@@ -570,7 +626,7 @@ async function updateDeliveryTrackingStatusHandler(data, context) {
 
 exports.updateDeliveryTrackingStatus = functions.https.onCall(updateDeliveryTrackingStatusHandler);
 
-exports.completeDelivery = functions.https.onCall(async (data, context) => {
+async function completeDeliveryHandler(data, context, db = getFirestore()) {
   if (!context.auth) {
     throw new functions.https.HttpsError("unauthenticated", "Rider must be signed in.");
   }
@@ -583,23 +639,18 @@ exports.completeDelivery = functions.https.onCall(async (data, context) => {
         {reasonCode: "DELIVERY_ID_REQUIRED"},
     );
   }
-  if (!deliveryPin) {
-    throw new functions.https.HttpsError(
-        "failed-precondition",
-        "Delivery PIN is required.",
-        {reasonCode: "PIN_VERIFICATION_FAILED"},
-    );
-  }
   const evidence = data && data.evidence && typeof data.evidence === "object" ?
     {...data.evidence} : {};
   if (data && data.evidenceId && !evidence.evidenceId) evidence.evidenceId = text(data.evidenceId);
   return updateDeliveryTrackingStatusHandler({
     deliveryId,
-    action: "verify_receiver_pin",
-    pin: deliveryPin,
+    action: deliveryPin ? "verify_receiver_pin" : "complete_delivery",
+    ...(deliveryPin ? {pin: deliveryPin} : {}),
     evidence,
-  }, context);
-});
+  }, context, db);
+}
+
+exports.completeDelivery = functions.https.onCall(completeDeliveryHandler);
 
 exports.updateDeliveryLiveLocation = functions.https.onCall(async (data, context) => {
   if (!context.auth) {
@@ -713,6 +764,8 @@ exports.updateDeliveryLiveLocation = functions.https.onCall(async (data, context
 });
 
 exports._private = {
+  updateDeliveryTrackingStatusHandler,
+  completeDeliveryHandler,
   liveLocationPatch,
   shouldWriteLiveLocation,
   distanceMeters,
@@ -721,6 +774,9 @@ exports._private = {
   patchForTransition,
   expectedPin,
   pinAuthorityRequired,
+  pickupVerificationRequired,
+  deliveryPinRequired,
+  canApplyDeliveryTransition,
   assertRiderOwnsDelivery,
   assertRiderOperational,
   evidenceRequirements,
