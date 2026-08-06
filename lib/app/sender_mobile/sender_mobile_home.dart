@@ -14,6 +14,7 @@ import '../business/business_access_view.dart';
 import '../health_plus/view/health_plus.dart';
 import '../sender_profile/sender_profile.dart';
 import '../send_package/bloc/send_package_bloc.dart';
+import '../send_package/models/sender_delivery_restoration.dart';
 import '../send_package/view/ride_chats.dart';
 import 'design_system/sender_design_system.dart';
 import 'gift_journey_draft.dart';
@@ -257,18 +258,7 @@ class _SenderMobileHomeState extends State<SenderMobileHome> {
   }
 
   static bool _isTerminalBookingStatus(String? status) {
-    final normalized = (status ?? '').trim().toLowerCase().replaceAll('-', '_');
-    return const {
-      'cancelled',
-      'cancelled_by_sender',
-      'canceled',
-      'delivered',
-      'completed',
-      'delivery_completed',
-      'failed',
-      'expired',
-      'archived',
-    }.contains(normalized);
+    return SenderDeliveryRestorationPolicy.isTerminalStatus(status);
   }
 
   void _openInitialSenderRoute() {

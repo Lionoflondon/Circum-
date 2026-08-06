@@ -224,10 +224,16 @@ class ActiveDeliverySnapshotChanged extends SendPackageEvent {
   final Map<String, dynamic>? data;
   final String? errorMessage;
   final String? clearedRequestId;
+  final String? requestId;
+  final int restorationGeneration;
+  final bool allowTerminalTransition;
   const ActiveDeliverySnapshotChanged({
     this.data,
     this.errorMessage,
     this.clearedRequestId,
+    this.requestId,
+    required this.restorationGeneration,
+    this.allowTerminalTransition = false,
   });
 }
 

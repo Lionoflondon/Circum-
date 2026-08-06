@@ -30,6 +30,7 @@ import '../models/contact_info.dart';
 import '../models/delivery_data.m.dart';
 import '../models/delivery_restoration_coordinates.dart';
 import '../models/message.m.dart';
+import '../models/sender_delivery_restoration.dart';
 import '../models/suggestions.m.dart';
 import '../repo/place_api.dart';
 
@@ -128,10 +129,12 @@ class SendPackageBloc extends Bloc<SendPackageEvent, SendPackageState> {
   FirebaseAuth auth = FirebaseAuth.instance;
   FirebaseFirestore db = FirebaseFirestore.instance;
   final FirebaseMessaging firebaseMessaging = FirebaseMessaging.instance;
-  StreamSubscription? _activeDeliverySubscription;
+  final SenderDeliveryRestorationCoordinator _restorationCoordinator =
+      SenderDeliveryRestorationCoordinator();
   StreamSubscription<DocumentSnapshot<Map<String, dynamic>>>?
       _activeDeliveryLiveLocationSubscription;
   String? _activeDeliveryLiveLocationId;
+  Completer<void>? _bookingResetCompleter;
   SendPackageBloc() : super(SendPackageState()) {
     on<CheckForPushToken>(_handleCheckForPushToken);
     on<SearchAPlaceEvent>(_handleSearchAPlaceEvent);
@@ -177,7 +180,7 @@ class SendPackageBloc extends Bloc<SendPackageEvent, SendPackageState> {
 
   @override
   Future<void> close() async {
-    await _activeDeliverySubscription?.cancel();
+    await _restorationCoordinator.close();
     await _activeDeliveryLiveLocationSubscription?.cancel();
     return super.close();
   }
@@ -185,75 +188,114 @@ class SendPackageBloc extends Bloc<SendPackageEvent, SendPackageState> {
   Future<void> _listenToActiveDelivery(String requestId) async {
     final normalized = requestId.trim();
     if (normalized.isEmpty) return;
-    await _activeDeliverySubscription?.cancel();
-    _activeDeliverySubscription =
-        db.collection('deliveryRequests').doc(normalized).snapshots().listen(
-      (doc) {
-        if (!doc.exists) {
-          unawaited(_resolveActiveDeliveryByRequestId(normalized));
-          return;
-        }
-        unawaited(_listenToActiveDeliveryLiveLocation(doc.id));
+    final user = auth.currentUser;
+    if (user == null) {
+      await _clearActiveRequestIfCurrent(normalized);
+      return;
+    }
+    await _restorationCoordinator.restore(
+      requestId: normalized,
+      senderId: user.uid,
+      load: _loadActiveDeliveryRecord,
+      watch: _watchActiveDeliveryRecord,
+      clearPointer: _clearActiveRequestIfCurrent,
+      onRestore: (record, generation) {
         add(
           ActiveDeliverySnapshotChanged(
-            data: {...?doc.data(), 'id': doc.id},
+            data: {...record.data, 'id': record.documentId},
+            requestId: normalized,
+            restorationGeneration: generation,
           ),
         );
       },
-      onError: (Object error) {
+      onTerminal: (record, generation) async {
+        await _resetActiveDeliveryLiveLocation();
         add(
           ActiveDeliverySnapshotChanged(
-            errorMessage: 'Unable to load live delivery status.',
+            data: {...record.data, 'id': record.documentId},
+            requestId: normalized,
+            restorationGeneration: generation,
+            allowTerminalTransition: true,
+          ),
+        );
+      },
+      onFresh: (requestId, reason, generation) async {
+        await _resetActiveDeliveryLiveLocation();
+        add(
+          ActiveDeliverySnapshotChanged(
+            clearedRequestId: requestId,
+            restorationGeneration: generation,
+          ),
+        );
+      },
+      onError: (message, generation) {
+        add(
+          ActiveDeliverySnapshotChanged(
+            errorMessage: message,
+            requestId: normalized,
+            restorationGeneration: generation,
           ),
         );
       },
     );
   }
 
-  Future<void> _resolveActiveDeliveryByRequestId(String requestId) async {
-    try {
-      final snapshot = await db
-          .collection('deliveryRequests')
-          .where('requestId', isEqualTo: requestId)
-          .limit(1)
-          .get();
-      if (snapshot.docs.isNotEmpty) {
-        final doc = snapshot.docs.first;
-        _listenToActiveDeliveryLiveLocation(doc.id);
-        add(ActiveDeliverySnapshotChanged(data: {...doc.data(), 'id': doc.id}));
-        return;
-      }
-      await Future<void>.delayed(const Duration(seconds: 3));
-      final retryDoc =
-          await db.collection('deliveryRequests').doc(requestId).get();
-      if (retryDoc.exists) {
-        _listenToActiveDeliveryLiveLocation(retryDoc.id);
-        add(
-          ActiveDeliverySnapshotChanged(
-            data: {...?retryDoc.data(), 'id': retryDoc.id},
-          ),
-        );
-        return;
-      }
-      final retrySnapshot = await db
-          .collection('deliveryRequests')
-          .where('requestId', isEqualTo: requestId)
-          .limit(1)
-          .get();
-      if (retrySnapshot.docs.isNotEmpty) {
-        final doc = retrySnapshot.docs.first;
-        _listenToActiveDeliveryLiveLocation(doc.id);
-        add(ActiveDeliverySnapshotChanged(data: {...doc.data(), 'id': doc.id}));
-        return;
-      }
-      unawaited(_clearActiveRequestIfCurrent(requestId));
-      add(ActiveDeliverySnapshotChanged(clearedRequestId: requestId));
-    } catch (_) {
-      add(
-        ActiveDeliverySnapshotChanged(
-          errorMessage: 'Unable to load live delivery status.',
-        ),
-      );
+  Future<SenderRestorationRecord?> _loadActiveDeliveryRecord(
+    String requestId,
+    String senderId,
+  ) async {
+    final direct = await db.collection('deliveryRequests').doc(requestId).get();
+    if (direct.exists) {
+      return _ownedRestorationRecord(direct, senderId);
+    }
+    final byRequestId = await db
+        .collection('deliveryRequests')
+        .where('requestId', isEqualTo: requestId)
+        .limit(1)
+        .get();
+    if (byRequestId.docs.isEmpty) return null;
+    return _ownedRestorationRecord(byRequestId.docs.first, senderId);
+  }
+
+  SenderRestorationRecord? _ownedRestorationRecord(
+    DocumentSnapshot<Map<String, dynamic>> document,
+    String senderId,
+  ) {
+    final data = document.data();
+    if (data == null) return null;
+    final ownerId = '${data['senderId'] ?? data['userId'] ?? ''}'.trim();
+    if (ownerId.isNotEmpty && ownerId != senderId) return null;
+    return SenderRestorationRecord(documentId: document.id, data: data);
+  }
+
+  Stream<SenderRestorationRecord?> _watchActiveDeliveryRecord(
+    String documentId,
+  ) {
+    return db.collection('deliveryRequests').doc(documentId).snapshots().map(
+      (document) {
+        final data = document.data();
+        if (!document.exists || data == null) return null;
+        return SenderRestorationRecord(documentId: document.id, data: data);
+      },
+    );
+  }
+
+  Future<void> _resetActiveDeliverySubscriptions() async {
+    await _restorationCoordinator.reset();
+    await _resetActiveDeliveryLiveLocation();
+  }
+
+  Future<void> _resetActiveDeliveryLiveLocation() async {
+    await _activeDeliveryLiveLocationSubscription?.cancel();
+    _activeDeliveryLiveLocationSubscription = null;
+    _activeDeliveryLiveLocationId = null;
+  }
+
+  Future<void> _clearCurrentActiveRequest() async {
+    final prefs = await SharedPreferences.getInstance();
+    final requestId = prefs.getString('activeRequest');
+    if (requestId != null) {
+      await prefs.remove('activeRequest');
     }
   }
 
@@ -265,12 +307,8 @@ class SendPackageBloc extends Bloc<SendPackageEvent, SendPackageState> {
   }
 
   Future<void> _clearTerminalRestoration(String requestId) async {
+    await _resetActiveDeliverySubscriptions();
     await _clearActiveRequestIfCurrent(requestId);
-    await _activeDeliverySubscription?.cancel();
-    _activeDeliverySubscription = null;
-    await _activeDeliveryLiveLocationSubscription?.cancel();
-    _activeDeliveryLiveLocationSubscription = null;
-    _activeDeliveryLiveLocationId = null;
   }
 
   Future<void> _listenToActiveDeliveryLiveLocation(String deliveryId) async {
@@ -375,19 +413,25 @@ class SendPackageBloc extends Bloc<SendPackageEvent, SendPackageState> {
     ResetSenderBookingSession event,
     Emitter<SendPackageState> emit,
   ) async {
-    await _activeDeliverySubscription?.cancel();
-    _activeDeliverySubscription = null;
-    await _activeDeliveryLiveLocationSubscription?.cancel();
-    _activeDeliveryLiveLocationSubscription = null;
-    _activeDeliveryLiveLocationId = null;
+    final resetCompleter = Completer<void>();
+    _bookingResetCompleter = resetCompleter;
     try {
-      await FirebaseFunctions.instance
-          .httpsCallable('deleteSenderDraft')
-          .call();
-    } catch (error) {
-      debugPrint('Sender booking draft reset deferred: $error');
+      await _resetActiveDeliverySubscriptions();
+      await _clearCurrentActiveRequest();
+      try {
+        await FirebaseFunctions.instance
+            .httpsCallable('deleteSenderDraft')
+            .call();
+      } catch (error) {
+        debugPrint('Sender booking draft reset deferred: $error');
+      }
+      emit(SendPackageState(senderRothBalance: state.senderRothBalance));
+    } finally {
+      if (!resetCompleter.isCompleted) resetCompleter.complete();
+      if (identical(_bookingResetCompleter, resetCompleter)) {
+        _bookingResetCompleter = null;
+      }
     }
-    emit(SendPackageState(senderRothBalance: state.senderRothBalance));
   }
 
   void _handleSetPickupAddressEvent(
@@ -1466,36 +1510,47 @@ class SendPackageBloc extends Bloc<SendPackageEvent, SendPackageState> {
     await _listenToActiveDelivery(event.requestId);
   }
 
-  void _handleActiveDeliverySnapshotChanged(
+  Future<void> _handleActiveDeliverySnapshotChanged(
     ActiveDeliverySnapshotChanged event,
     Emitter<SendPackageState> emit,
-  ) {
+  ) async {
+    if (!_restorationCoordinator.isCurrent(event.restorationGeneration)) {
+      return;
+    }
     if (event.errorMessage != null) {
       emit(state.copyWith(senderDeliveryError: event.errorMessage));
       return;
     }
     if (event.clearedRequestId != null) {
-      emit(
-        state.copyWith(
-          deliveryStatus: DeliveryStatus.inital,
-          deliveryRequestStatus: 'archived',
-          activeDeliveryData: const {},
-          senderDeliveryError: 'That delivery is no longer active.',
-        ),
-      );
+      emit(SendPackageState(senderRothBalance: state.senderRothBalance));
       return;
     }
     final data = event.data;
     if (data == null) return;
 
     final requestStatus = '${data['status'] ?? ''}'.trim();
-    if (_terminalRequestStatuses.contains(
-      requestStatus.toLowerCase().replaceAll('-', '_'),
-    )) {
-      final requestId = '${data['requestId'] ?? data['id'] ?? ''}'.trim();
-      if (requestId.isNotEmpty) {
-        unawaited(_clearActiveRequestIfCurrent(requestId));
+    final restorationDisposition =
+        SenderDeliveryRestorationPolicy.classify(data);
+    if (restorationDisposition ==
+        SenderDeliveryRestorationDisposition.terminal) {
+      if (event.allowTerminalTransition) {
+        // The record became terminal during a genuine active session. Its
+        // pointer and subscriptions are already cleared by the coordinator;
+        // emit the final state once so Delivered/Cancelled remains visible.
+      } else {
+        final requestId = '${data['requestId'] ?? data['id'] ?? ''}'.trim();
+        if (requestId.isNotEmpty) {
+          await _clearTerminalRestoration(requestId);
+        }
+        emit(SendPackageState(senderRothBalance: state.senderRothBalance));
+        return;
       }
+    }
+    final documentId = '${data['id'] ?? event.requestId ?? ''}'.trim();
+    if (restorationDisposition !=
+            SenderDeliveryRestorationDisposition.terminal &&
+        documentId.isNotEmpty) {
+      await _listenToActiveDeliveryLiveLocation(documentId);
     }
     final pickupDetails = _contactFromDelivery(
       data['pickupDetails'],
@@ -1653,15 +1708,6 @@ class SendPackageBloc extends Bloc<SendPackageEvent, SendPackageState> {
     'archived',
   };
 
-  static const Set<String> _terminalRequestStatuses = {
-    'delivered',
-    'completed',
-    'delivery_completed',
-    'failed',
-    'expired',
-    ..._cancelledRequestStatuses,
-  };
-
   ContactInfo? _contactFromDelivery(Object? value, {ContactInfo? fallback}) {
     if (value is! Map) return fallback;
     final coordinate = _coordinateFromPosition(value['position']);
@@ -1719,135 +1765,27 @@ class SendPackageBloc extends Bloc<SendPackageEvent, SendPackageState> {
     return double.tryParse('${value ?? ''}');
   }
 
-  void _handleCheckForActiveRequestEvent(
+  Future<void> _handleCheckForActiveRequestEvent(
     CheckForActiveRequest event,
-    Emitter emit,
+    Emitter<SendPackageState> emit,
   ) async {
+    await _bookingResetCompleter?.future;
     final User? user = auth.currentUser;
     final SharedPreferences prefs = await SharedPreferences.getInstance();
     final String? activeRequest = prefs.getString('activeRequest');
-
-    if (activeRequest != null) {
-      if (user == null) {
-        await prefs.remove('activeRequest');
-        emit(
-          state.copyWith(
-            deliveryStatus: DeliveryStatus.inital,
-            deliveryRequestStatus: 'signed_out',
-            senderDeliveryError: '',
-          ),
-        );
-        return;
-      }
-      final userDocumentReference =
-          db.collection('deliveryRequests').doc(user.uid);
-      final requestDocumentReference =
-          db.collection('deliveryRequests').doc(activeRequest);
-
-      var docResponse = await userDocumentReference.get();
-      if (!docResponse.exists) {
-        docResponse = await requestDocumentReference.get();
-      }
-
-      if (docResponse.exists) {
-        _listenToActiveDeliveryLiveLocation(docResponse.id);
-        final data = docResponse.data();
-        String? pickupAddress = data!['pickupDetails']['address'];
-        String? dropoffAddress = data['dropoffDetails']['address'];
-        double? price = data['price'];
-        String? currency = data['currency'];
-
-        final restoredCoordinates = restoreDeliveryCoordinates(data);
-
-        final ContactInfo pickupDetails = ContactInfo.fromJson(
-          address: restoredCoordinates.pickup,
-          moreInformation: data['pickupDetails']['moreInformation'],
-        );
-
-        final ContactInfo dropoffDetails = ContactInfo.fromJson(
-          address: restoredCoordinates.dropoff,
-          moreInformation: data['dropoffDetails']['moreInformation'],
-        );
-
-        DeliveryStatus? status;
-        // print(data['status']);
-        // if (data['status'] == 'requested') {
-        //   await documentReference.delete();
-        // }
-
-        final requestStatus = '${data['status'] ?? ''}';
-        final normalizedRequestStatus = requestStatus.toLowerCase().replaceAll(
-              '-',
-              '_',
-            );
-        // Classify the persisted record before starting any watcher or
-        // emitting restoration state. Terminal deliveries are historical.
-        if (_terminalRequestStatuses.contains(normalizedRequestStatus)) {
-          await _clearTerminalRestoration(activeRequest);
-          emit(SendPackageState(senderRothBalance: state.senderRothBalance));
-          return;
-        }
-
-        add(WatchActiveDelivery(requestId: activeRequest));
-        if (_activeRequestStatuses.contains(
-          normalizedRequestStatus,
-        )) {
-          status = DeliveryStatus.reconnectingWithRider;
-          final deliveryData = DeliveryData.fromJson(data);
-          emit(
-            state.copyWith(
-              deliveryStatus: status,
-              deliveryRequestStatus: requestStatus,
-              pickupDetails: pickupDetails,
-              dropoffDetails: dropoffDetails,
-              pickupLocation: pickupAddress,
-              destinationLocation: dropoffAddress,
-              price: price,
-              currency: currency,
-              deliveryData: deliveryData,
-              riderLocation: _riderLocationFromDelivery(data),
-              collectionPinVerified: data['collectionPinVerified'] == true,
-              deliveryPinVerified: data['deliveryPinVerified'] == true,
-            ),
-          );
-        }
-
-        if (requestStatus == 'completed' || requestStatus == 'delivered') {
-          status = DeliveryStatus.deliveryCompleted;
-          emit(
-            state.copyWith(
-              lastHistoryId: data['historyId'],
-              deliveryStatus: status,
-              deliveryRequestStatus: requestStatus,
-              deliveryData: DeliveryData.fromJson(data),
-              collectionPinVerified: data['collectionPinVerified'] == true,
-              deliveryPinVerified: data['deliveryPinVerified'] == true,
-            ),
-          );
-        }
-
-        if (requestStatus == 'cancelled' || requestStatus == 'canceled') {
-          emit(
-            state.copyWith(
-              deliveryStatus: DeliveryStatus.inital,
-              deliveryRequestStatus: requestStatus,
-              pickupDetails: pickupDetails,
-              dropoffDetails: dropoffDetails,
-              pickupLocation: pickupAddress,
-              destinationLocation: dropoffAddress,
-              price: price,
-              currency: currency,
-              deliveryData: DeliveryData.fromJson(data),
-              riderLocation: _riderLocationFromDelivery(data),
-              collectionPinVerified: data['collectionPinVerified'] == true,
-              deliveryPinVerified: data['deliveryPinVerified'] == true,
-            ),
-          );
-        }
-
-        // emit(state.copyWith());
-      }
-    } else {}
+    if (activeRequest == null || activeRequest.trim().isEmpty) return;
+    if (user == null) {
+      await _clearTerminalRestoration(activeRequest);
+      emit(
+        state.copyWith(
+          deliveryStatus: DeliveryStatus.inital,
+          deliveryRequestStatus: 'signed_out',
+          senderDeliveryError: '',
+        ),
+      );
+      return;
+    }
+    await _listenToActiveDelivery(activeRequest);
   }
 
   void _handleSetPanelControlStatusEvent(

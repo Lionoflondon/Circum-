@@ -128,7 +128,8 @@ void main() {
     expect(hero, contains('IgnorePointer(child: _HeroRouteArt())'));
   });
 
-  test('Recipient fields preserve editable text and multiline instructions', () {
+  test('Recipient fields preserve editable text and multiline instructions',
+      () {
     final source = read('lib/app/sender_mobile/sender_booking_canvas.dart');
     final start = source.indexOf('class _RecipientPanel');
     final end = source.indexOf('class _DeliveryTimePanel', start);
@@ -231,7 +232,11 @@ void main() {
       expect(activeStatuses, isNot(contains("'$terminalStatus'")));
     }
     expect(bloc, contains('_clearActiveRequestIfCurrent'));
-    expect(bloc, contains('_terminalRequestStatuses'));
+    final restorationPolicy = read(
+      'lib/app/send_package/models/sender_delivery_restoration.dart',
+    );
+    expect(bloc, contains('SenderDeliveryRestorationPolicy.classify'));
+    expect(restorationPolicy, contains('terminalStatuses'));
   });
 
   test('Sender billing weight uses the higher of customer and IRIS weight', () {
