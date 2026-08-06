@@ -8,6 +8,7 @@ const REQUIRED_FIELDS = ["addressLine1", "city", "postcode", "country"];
 const ADDRESS_FIELDS = [
   "formattedAddress", "addressLine1", "addressLine2", "city", "county",
   "postcode", "country", "latitude", "longitude", "placeId",
+  "provider", "source", "verified",
 ];
 
 function clean(value) {
@@ -43,6 +44,17 @@ function canonicalAddress(data) {
   const missing = REQUIRED_FIELDS.filter((field) => !clean(address[field]));
   if (missing.length) {
     throw new functions.https.HttpsError("invalid-argument", `Address is missing: ${missing.join(", ")}.`);
+  }
+  if (address.placeId) {
+    const hasCoordinates = Number.isFinite(address.latitude) &&
+      Number.isFinite(address.longitude) &&
+      address.latitude >= -90 && address.latitude <= 90 &&
+      address.longitude >= -180 && address.longitude <= 180;
+    if (!hasCoordinates) {
+      throw new functions.https.HttpsError(
+          "invalid-argument",
+          "Resolve the selected address before saving.");
+    }
   }
   return address;
 }

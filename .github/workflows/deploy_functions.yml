@@ -2,6 +2,11 @@ name: Deploy Functions
 
 on:
   workflow_dispatch:
+    inputs:
+      base_ref:
+        description: Git ref immediately before the approved Functions change
+        required: false
+        default: HEAD^
 
 jobs:
   deploy-functions:
@@ -11,6 +16,8 @@ jobs:
       id-token: write
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
       - uses: actions/setup-node@v4
         with:
           node-version: 20
@@ -18,11 +25,24 @@ jobs:
       - run: node scripts/deploy_guard.js --target=backend --base HEAD
       - run: npm --prefix server/functions ci
       - run: npm --prefix server/functions test
+      - run: node --test scripts/scoped_functions_deploy_list.test.js
+      - name: Calculate Functions deployment scope
+        id: scope
+        run: node scripts/scoped_functions_deploy_list.js --base "${{ inputs.base_ref }}" --head HEAD --manifest functions-deployment-scope.json --github-output "$GITHUB_OUTPUT" --json
+      - uses: actions/upload-artifact@v4
+        with:
+          name: functions-deployment-scope
+          path: functions-deployment-scope.json
       - uses: google-github-actions/auth@v2
+        if: steps.scope.outputs.has_functions == 'true'
         with:
           credentials_json: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_CIRCUM_2797C }}
-      - run: npm install -g firebase-tools
+      - if: steps.scope.outputs.has_functions == 'true'
+        run: npm install -g firebase-tools
       - run: printf "GOOGLE_PLACES_API_KEY=%s\n" "$GOOGLE_PLACES_API_KEY" > server/functions/.env
+        if: steps.scope.outputs.has_functions == 'true'
         env:
           GOOGLE_PLACES_API_KEY: ${{ secrets.GOOGLE_PLACES_API_KEY }}
-      - run: firebase deploy --only "$(node scripts/scoped_functions_deploy_list.js)" --project circum-2797c
+      - name: Deploy selected Functions only
+        if: steps.scope.outputs.has_functions == 'true'
+        run: firebase deploy --only "${{ steps.scope.outputs.targets }}" --project circum-2797c
