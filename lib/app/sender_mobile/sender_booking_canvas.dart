@@ -6468,9 +6468,10 @@ class _SenderMobileMap extends StatefulWidget {
 }
 
 class _SenderMobileMapState extends State<_SenderMobileMap>
-    with SingleTickerProviderStateMixin {
+    with SingleTickerProviderStateMixin, WidgetsBindingObserver {
   late final AnimationController _controller;
   GoogleMapController? _mapController;
+  Timer? _viewportRelayoutTimer;
   LatLngBounds? _lastBounds;
   LatLng? _lastPickup;
   LatLng? _lastDropoff;
@@ -6480,6 +6481,7 @@ class _SenderMobileMapState extends State<_SenderMobileMap>
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _controller = AnimationController(
       vsync: this,
       duration: const Duration(seconds: 28),
@@ -6489,9 +6491,29 @@ class _SenderMobileMapState extends State<_SenderMobileMap>
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    _viewportRelayoutTimer?.cancel();
     _controller.dispose();
     _mapController?.dispose();
     super.dispose();
+  }
+
+  @override
+  void didChangeMetrics() => _scheduleViewportRelayout();
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) _scheduleViewportRelayout();
+  }
+
+  void _scheduleViewportRelayout() {
+    _viewportRelayoutTimer?.cancel();
+    _viewportRelayoutTimer = Timer(const Duration(milliseconds: 160), () {
+      if (!mounted || _mapController == null) return;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) _moveCamera(force: true);
+      });
+    });
   }
 
   @override
@@ -6518,33 +6540,32 @@ class _SenderMobileMapState extends State<_SenderMobileMap>
     final pickupForMap = pickup;
     return Stack(
       children: [
-        AnimatedSwitcher(
-          duration: const Duration(milliseconds: 300),
-          switchInCurve: Curves.easeOutCubic,
-          switchOutCurve: Curves.easeInCubic,
+        Positioned.fill(
           child: showGoogleMap
-              ? GoogleMap(
-                  key: const ValueKey('sender-google-map'),
-                  initialCameraPosition: CameraPosition(
-                    target: pickupForMap!,
-                    zoom: dropoff == null ? 15.4 : 12.5,
+              ? SizedBox.expand(
+                  child: GoogleMap(
+                    key: const ValueKey('sender-google-map'),
+                    initialCameraPosition: CameraPosition(
+                      target: pickupForMap!,
+                      zoom: dropoff == null ? 15.4 : 12.5,
+                    ),
+                    onMapCreated: (controller) {
+                      _mapController = controller;
+                      WidgetsBinding.instance.addPostFrameCallback(
+                        (_) => _moveCamera(),
+                      );
+                    },
+                    markers: _markers(pickupForMap, dropoff),
+                    polylines: _polylines(),
+                    zoomControlsEnabled: false,
+                    myLocationButtonEnabled: false,
+                    mapToolbarEnabled: false,
+                    compassEnabled: false,
+                    rotateGesturesEnabled: false,
+                    tiltGesturesEnabled: false,
+                    trafficEnabled: false,
+                    style: _senderMapStyle,
                   ),
-                  onMapCreated: (controller) {
-                    _mapController = controller;
-                    WidgetsBinding.instance.addPostFrameCallback(
-                      (_) => _moveCamera(),
-                    );
-                  },
-                  markers: _markers(pickupForMap, dropoff),
-                  polylines: _polylines(),
-                  zoomControlsEnabled: false,
-                  myLocationButtonEnabled: false,
-                  mapToolbarEnabled: false,
-                  compassEnabled: false,
-                  rotateGesturesEnabled: false,
-                  tiltGesturesEnabled: false,
-                  trafficEnabled: false,
-                  style: _senderMapStyle,
                 )
               : AnimatedBuilder(
                   key: const ValueKey('sender-painted-map'),
@@ -6661,14 +6682,14 @@ class _SenderMobileMapState extends State<_SenderMobileMap>
         .toSet();
   }
 
-  Future<void> _moveCamera() async {
+  Future<void> _moveCamera({bool force = false}) async {
     final controller = _mapController;
     final engine = widget.engine;
     final pickup = _latLng(engine?.pickupCoordinate);
     if (controller == null || pickup == null) return;
     final dropoff = _latLng(engine?.desinationCoordinate);
     if (dropoff == null) {
-      if (_lastPickup == pickup && _lastDropoff == null) return;
+      if (!force && _lastPickup == pickup && _lastDropoff == null) return;
       _lastPickup = pickup;
       _lastDropoff = null;
       await controller.animateCamera(
@@ -6679,7 +6700,7 @@ class _SenderMobileMapState extends State<_SenderMobileMap>
       return;
     }
     final bounds = _boundsFor(pickup, dropoff);
-    if (_lastBounds == bounds) return;
+    if (!force && _lastBounds == bounds) return;
     _lastPickup = pickup;
     _lastDropoff = dropoff;
     _lastBounds = bounds;

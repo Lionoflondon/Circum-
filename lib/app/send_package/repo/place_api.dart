@@ -1,4 +1,5 @@
 import 'package:cloud_functions/cloud_functions.dart';
+import 'package:flutter/foundation.dart';
 
 import '../../platform/address_engine.dart';
 import '../models/place_coordinates.m.dart';
@@ -12,6 +13,7 @@ class PlaceApiProvider {
   static final Map<String, Suggestion> _suggestionCache = {};
 
   Future<List<Suggestion>> fetchSuggestions(String input, String lang) async {
+    final timer = Stopwatch()..start();
     final query = input.trim();
     if (query.length < 3) return [];
     final response = await FirebaseFunctions.instance
@@ -34,12 +36,19 @@ class PlaceApiProvider {
         })
         .where((item) => item.description.isNotEmpty)
         .toList();
+    debugPrint(
+      'Sender performance metric: event=address.predictions durationMs=${timer.elapsedMilliseconds}',
+    );
     return suggestions;
   }
 
   Future<PlaceCoordinate> fetchPlaceDetails(String placeId, String lang) async {
+    final timer = Stopwatch()..start();
     final suggestion = _suggestionCache[placeId];
     if (suggestion?.lat != null && suggestion?.lng != null) {
+      debugPrint(
+        'Sender performance metric: event=address.placeDetailsCache durationMs=${timer.elapsedMilliseconds}',
+      );
       return PlaceCoordinate(lat: suggestion!.lat!, lng: suggestion.lng!);
     }
     final response = await FirebaseFunctions.instance
@@ -55,6 +64,9 @@ class PlaceApiProvider {
     _suggestionCache[resolved.placeId] = resolved;
     _suggestionCache[placeId] = resolved;
     if (resolved.lat != null && resolved.lng != null) {
+      debugPrint(
+        'Sender performance metric: event=address.placeDetailsCallable durationMs=${timer.elapsedMilliseconds}',
+      );
       return PlaceCoordinate(lat: resolved.lat!, lng: resolved.lng!);
     }
     throw Exception("Couldn't fetch location details");

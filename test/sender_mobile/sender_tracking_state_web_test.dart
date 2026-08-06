@@ -252,6 +252,30 @@ void main() {
     expect(senderBookingMapShouldUseGoogle(null), isFalse);
   });
 
+  test('Sender booking GoogleMap uses stable Safari platform-view constraints', () {
+    final source = File(
+      'lib/app/sender_mobile/sender_booking_canvas.dart',
+    ).readAsStringSync();
+    final start = source.indexOf('class _SenderMobileMapState');
+    final end = source.indexOf('@visibleForTesting', start);
+    final map = source.substring(start, end);
+
+    expect(map, contains('with SingleTickerProviderStateMixin, WidgetsBindingObserver'));
+    expect(map, contains('Positioned.fill('));
+    expect(map, contains('SizedBox.expand('));
+    expect(map, contains('void didChangeMetrics()'));
+    expect(map, contains('AppLifecycleState.resumed'));
+    expect(map, isNot(contains('AnimatedSwitcher(')));
+  });
+
+  test('Sender release injects the key used by the Directions pipeline', () {
+    final buildScript = File('scripts/build_sender_app_web.sh').readAsStringSync();
+    expect(
+      buildScript,
+      contains('--dart-define=GOOGLE_MAPS_DIRECTIONS_API_KEY='),
+    );
+  });
+
   test(
       'Sender tracking map adapter falls back when coordinates are unavailable',
       () {

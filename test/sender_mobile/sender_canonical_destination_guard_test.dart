@@ -416,6 +416,21 @@ void main() {
     expect(source, isNot(contains('maps.googleapis.com')));
   });
 
+  test('Sender route preparation parallelizes network-bound dependencies', () {
+    final bloc = read('lib/app/send_package/bloc/send_package_bloc.dart');
+    final placeApi = read('lib/app/send_package/repo/place_api.dart');
+
+    expect(bloc, contains('final results = await Future.wait<Object?>(['));
+    expect(bloc, contains('_loadDestinationLocality(coordinate)'));
+    expect(bloc, contains('_loadDirections(pickup, coordinate)'));
+    expect(bloc, contains("'route.directionsAndDecode'"));
+    expect(bloc, contains("'route.distanceCalculation'"));
+    expect(bloc, contains("'route.pricingEngine'"));
+    expect(placeApi, contains('event=address.predictions'));
+    expect(placeApi, contains('event=address.placeDetailsCache'));
+    expect(placeApi, contains('event=address.placeDetailsCallable'));
+  });
+
   test('Sender-facing delivery models never expose Rider phone fallbacks', () {
     final profile = read('lib/app/sender_profile/sender_profile.dart');
     final deliveryData =

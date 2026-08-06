@@ -450,61 +450,55 @@ class SendPackageBloc extends Bloc<SendPackageEvent, SendPackageState> {
       );
     }
     try {
+      final detailsTimer = Stopwatch()..start();
       final coordinate = event.coordinate ??
           await PlaceApiProvider(
             const Uuid().v4(),
           ).fetchPlaceDetails(event.placeId, event.lang);
-      // var addresses = await Geocoder.google ( '<---------YOUR APIKEY-------->' ).findAddressesFromCoordinates(coordinates);
-      var address = await placemarkFromCoordinates(
-        coordinate.lat,
-        coordinate.lng,
-        // localeIdentifier: "en_US"
-      );
+      _logSenderPerformanceMetric('route.placeDetails', detailsTimer);
 
       emit(
         state.copyWith(
           desinationCoordinate: coordinate,
-          destinationLocality: address[0].locality,
         ),
       );
       if (state.pickupCoordinate != null) {
         add(CalculateDistance());
       }
 
-      if (state.pickupCoordinate != null &&
+      final pickup = state.pickupCoordinate;
+      final shouldLoadRoute = pickup != null &&
           state.pickupLocationSubAddress?.split(',').last ==
-              event.destinationLocationSubAddress.split(',').last) {
+              event.destinationLocationSubAddress.split(',').last;
+      final results = await Future.wait<Object?>([
+        _loadDestinationLocality(coordinate),
+        if (shouldLoadRoute)
+          _loadDirections(pickup, coordinate)
+        else
+          Future<PolylineResult?>.value(null),
+      ]);
+      final destinationLocality = results[0] as String?;
+      final polylineResult = results[1] as PolylineResult?;
+      emit(
+        state.copyWith(
+          destinationLocality: destinationLocality,
+        ),
+      );
+
+      if (pickup != null && polylineResult != null) {
         List<LatLng> latLngList = [];
 
-        PolylinePoints points = PolylinePoints();
-
-        if (_googleMapsDirectionsApiKey.isEmpty) {
-          emit(
-            state.copyWith(
-              addressSearchError: 'Route preview could not be prepared.',
-            ),
-          );
-          return;
-        }
-
-        PolylineResult polylineResult = await points.getRouteBetweenCoordinates(
-          request: PolylineRequest(
-            origin: PointLatLng(
-              state.pickupCoordinate!.lat,
-              state.pickupCoordinate!.lng,
-            ),
-            destination: PointLatLng(
-              state.desinationCoordinate!.lat,
-              state.desinationCoordinate!.lng,
-            ),
-            mode: TravelMode.driving,
-          ),
-          googleApiKey: _googleMapsDirectionsApiKey,
-        );
-
         if (polylineResult.points.isNotEmpty) {
+          final renderTimer = Stopwatch()..start();
           double tripDistance;
-          tripDistance = polylineResult.totalDistanceValue!.toDouble() / 1000;
+          tripDistance = (polylineResult.totalDistanceValue?.toDouble() ??
+                  Geolocator.distanceBetween(
+                    pickup.lat,
+                    pickup.lng,
+                    coordinate.lat,
+                    coordinate.lng,
+                  )) /
+              1000;
           // print(polylineResult.distance);
           // print(polylineResult.distanceText);
           // print(polylineResult.distanceValue);
@@ -522,16 +516,18 @@ class SendPackageBloc extends Bloc<SendPackageEvent, SendPackageState> {
             ),
           );
 
-          final sourceIcon =
-              await BitmapDescriptorHelper.getBitmapDescriptorFromSvgAsset(
-            'assets/svg/source_marker.svg',
-            const Size(27, 43),
-          );
-          final destinationIcon =
-              await BitmapDescriptorHelper.getBitmapDescriptorFromSvgAsset(
-            'assets/svg/destination_marker.svg',
-            const Size(27, 43),
-          );
+          final icons = await Future.wait<BitmapDescriptor>([
+            BitmapDescriptorHelper.getBitmapDescriptorFromSvgAsset(
+              'assets/svg/source_marker.svg',
+              const Size(27, 43),
+            ),
+            BitmapDescriptorHelper.getBitmapDescriptorFromSvgAsset(
+              'assets/svg/destination_marker.svg',
+              const Size(27, 43),
+            ),
+          ]);
+          final sourceIcon = icons[0];
+          final destinationIcon = icons[1];
 
           final Marker sourceMarker = Marker(
             markerId: const MarkerId('source_marker'),
@@ -563,6 +559,7 @@ class SendPackageBloc extends Bloc<SendPackageEvent, SendPackageState> {
               distance: tripDistance,
             ),
           );
+          _logSenderPerformanceMetric('route.uiRendering', renderTimer);
           add(SetPrice());
 
           add(
@@ -579,6 +576,46 @@ class SendPackageBloc extends Bloc<SendPackageEvent, SendPackageState> {
         error,
         stackTrace,
       );
+    }
+  }
+
+  Future<PolylineResult?> _loadDirections(
+    PlaceCoordinate pickup,
+    PlaceCoordinate destination,
+  ) async {
+    if (_googleMapsDirectionsApiKey.isEmpty) return null;
+    final timer = Stopwatch()..start();
+    try {
+      return await PolylinePoints().getRouteBetweenCoordinates(
+        request: PolylineRequest(
+          origin: PointLatLng(pickup.lat, pickup.lng),
+          destination: PointLatLng(destination.lat, destination.lng),
+          mode: TravelMode.driving,
+        ),
+        googleApiKey: _googleMapsDirectionsApiKey,
+      );
+    } finally {
+      _logSenderPerformanceMetric('route.directionsAndDecode', timer);
+    }
+  }
+
+  Future<String?> _loadDestinationLocality(PlaceCoordinate coordinate) async {
+    final timer = Stopwatch()..start();
+    try {
+      final address = await placemarkFromCoordinates(
+        coordinate.lat,
+        coordinate.lng,
+      );
+      return address.isEmpty ? null : address.first.locality;
+    } catch (error, stackTrace) {
+      _logRecoverableSenderError(
+        'destination reverse geocoding failed',
+        error,
+        stackTrace,
+      );
+      return null;
+    } finally {
+      _logSenderPerformanceMetric('route.geocoding', timer);
     }
   }
 
@@ -617,6 +654,7 @@ class SendPackageBloc extends Bloc<SendPackageEvent, SendPackageState> {
     CalculateDistance event,
     Emitter<SendPackageState> emit,
   ) async {
+    final timer = Stopwatch()..start();
     try {
       final double distanceInMetres = Geolocator.distanceBetween(
         state.pickupCoordinate!.lat,
@@ -630,6 +668,7 @@ class SendPackageBloc extends Bloc<SendPackageEvent, SendPackageState> {
       double distanceInTwoDecimalPlaces = double.parse(inString);
 
       emit(state.copyWith(distance: distanceInTwoDecimalPlaces));
+      _logSenderPerformanceMetric('route.distanceCalculation', timer);
 
       // print(distanceInKilometres);
     } catch (error, stackTrace) {
@@ -660,6 +699,7 @@ class SendPackageBloc extends Bloc<SendPackageEvent, SendPackageState> {
   }
 
   void _handleSetPrice(SetPrice event, Emitter<SendPackageState> emit) {
+    final timer = Stopwatch()..start();
     final distanceKm = state.distance ?? _distanceKmFromRouteCoordinates() ?? 0;
     final quote = DeliveryPricing.calculate(
       DeliveryPricingInput(
@@ -669,6 +709,7 @@ class SendPackageBloc extends Bloc<SendPackageEvent, SendPackageState> {
     );
 
     emit(state.copyWith(price: quote.total));
+    _logSenderPerformanceMetric('route.pricingEngine', timer);
   }
 
   void _handleSetParcelWeight(
