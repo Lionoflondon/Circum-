@@ -23,9 +23,16 @@ const CORE_EVENTS = Object.freeze({
   created: "Created",
   assigned: "Assigned",
   accepted: "Accepted",
+  navigating_to_pickup: "Rider En Route to Pickup",
+  en_route_to_pickup: "Rider En Route to Pickup",
+  arrived_at_pickup: "Rider Arrived at Pickup",
+  rider_arrived_pickup: "Rider Arrived at Pickup",
   collected: "Collected",
   picked_up: "Collected",
+  navigating_to_dropoff: "In Transit",
   in_transit: "In Transit",
+  out_for_delivery: "In Transit",
+  arrived_at_dropoff: "Rider Arrived at Drop-off",
   delivered: "Delivered",
   completed: "Completed",
   complete: "Completed",
@@ -217,3 +224,4 @@ module.exports.deliveryType = deliveryType;
 module.exports.eventName = eventName;
 module.exports.timelineEventsForChange = timelineEventsForChange;
 module.exports.trackingEventForChange = trackingEventForChange;
+module.exports.terminalStatus = terminalStatus;
