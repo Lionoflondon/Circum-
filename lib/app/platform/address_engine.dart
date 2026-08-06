@@ -17,17 +17,14 @@ class AddressEngine {
     'placeId',
     'latitude',
     'longitude',
+    'provider',
     'verified',
     'source',
     'createdAt',
     'updatedAt',
   ];
 
-  static const compatibilityFields = [
-    'countyState',
-    'lat',
-    'lng',
-  ];
+  static const compatibilityFields = ['countyState', 'lat', 'lng'];
 
   static const allSerializableFields = [
     ...canonicalFields,
@@ -87,11 +84,7 @@ class AddressEngine {
       raw['premise'],
       raw['subBuildingName'],
     ]);
-    final route = firstPart([
-      raw['route'],
-      raw['street'],
-      raw['thoroughfare'],
-    ]);
+    final route = firstPart([raw['route'], raw['street'], raw['thoroughfare']]);
     final line1FromParts = joinParts([streetNumber, route], separator: ' ');
     final manualParts = (manualAddress ?? suggestion?.description ?? '')
         .split(',')
@@ -116,10 +109,7 @@ class AddressEngine {
       raw['suite'],
       raw['subpremise'],
     ]);
-    final floor = firstPart([
-      raw['floor'],
-      raw['level'],
-    ]);
+    final floor = firstPart([raw['floor'], raw['level']]);
     final entranceInstructions = firstPart([
       raw['entranceInstructions'],
       raw['deliveryInstructions'],
@@ -146,8 +136,8 @@ class AddressEngine {
       manualParts.length >= 3
           ? manualParts[manualParts.length - 3]
           : manualParts.length >= 2
-              ? manualParts[manualParts.length - 2]
-              : null,
+          ? manualParts[manualParts.length - 2]
+          : null,
     ]);
     final county = firstPart([
       raw['county'],
@@ -174,17 +164,15 @@ class AddressEngine {
       postcode,
       country,
     ]);
-    final lat =
-        toDouble(latitude ?? raw['latitude'] ?? raw['lat'] ?? suggestion?.lat);
+    final lat = toDouble(
+      latitude ?? raw['latitude'] ?? raw['lat'] ?? suggestion?.lat,
+    );
     final lng = toDouble(
-        longitude ?? raw['longitude'] ?? raw['lng'] ?? suggestion?.lng);
+      longitude ?? raw['longitude'] ?? raw['lng'] ?? suggestion?.lng,
+    );
 
     return {
-      'addressId': firstPart([
-        addressId,
-        raw['addressId'],
-        raw['id'],
-      ]),
+      'addressId': firstPart([addressId, raw['addressId'], raw['id']]),
       'formattedAddress': formattedAddress,
       'addressLine1': addressLine1,
       'addressLine2': addressLine2,
@@ -199,6 +187,7 @@ class AddressEngine {
       'placeId': firstPart([placeId, raw['placeId'], suggestion?.placeId]),
       'latitude': lat,
       'longitude': lng,
+      'provider': firstPart([raw['provider']]),
       'verified': toBool(verified ?? raw['verified']),
       'source': firstPart([
         source,
@@ -223,6 +212,20 @@ class AddressEngine {
         clean(address['country']).isNotEmpty;
   }
 
+  static bool isCanonical(Map<String, dynamic> address) {
+    final latitude = toDouble(address['latitude']);
+    final longitude = toDouble(address['longitude']);
+    final placeId = clean(address['placeId']);
+    final hasCoordinates =
+        latitude != null &&
+        longitude != null &&
+        latitude >= -90 &&
+        latitude <= 90 &&
+        longitude >= -180 &&
+        longitude <= 180;
+    return isValid(address) && (placeId.isEmpty || hasCoordinates);
+  }
+
   static bool hasRequiredFields({
     Suggestion? suggestion,
     Map<String, dynamic>? components,
@@ -241,6 +244,11 @@ class AddressEngine {
     final components = map['components'] is Map
         ? Map<String, dynamic>.from(map['components'] as Map)
         : <String, dynamic>{};
+    for (final field in ['provider', 'source', 'verified']) {
+      if (map[field] != null && components[field] == null) {
+        components[field] = map[field];
+      }
+    }
     final rawSuggestion = Suggestion(
       placeId: clean(map['locationId']).isEmpty
           ? clean(map['placeId'])

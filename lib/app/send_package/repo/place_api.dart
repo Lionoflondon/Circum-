@@ -10,21 +10,40 @@ class PlaceApiProvider {
 
   final Object sessionToken;
   static final Map<String, Suggestion> _suggestionCache = {};
+  static final Map<String, Future<List<Suggestion>>> _suggestionRequests = {};
+
+  String _queryKey(String query, String lang) =>
+      '${sessionToken.toString()}|${lang.trim().toLowerCase()}|'
+      '${query.trim().toLowerCase().replaceAll(RegExp(r'\s+'), ' ')}';
 
   Future<List<Suggestion>> fetchSuggestions(String input, String lang) async {
     final query = input.trim();
     if (query.length < 3) return [];
+    final key = _queryKey(query, lang);
+    final existing = _suggestionRequests[key];
+    if (existing != null) return existing;
+    final request = _fetchSuggestions(query, lang);
+    _suggestionRequests[key] = request;
+    try {
+      return await request;
+    } finally {
+      if (identical(_suggestionRequests[key], request)) {
+        _suggestionRequests.remove(key);
+      }
+    }
+  }
+
+  Future<List<Suggestion>> _fetchSuggestions(String query, String lang) async {
     final response = await FirebaseFunctions.instance
         .httpsCallable('searchFreeUkAddresses')
-        .call({
-      'query': query,
-      'sessionToken': '$sessionToken',
-    }).timeout(const Duration(seconds: 8));
+        .call({'query': query, 'sessionToken': '$sessionToken'})
+        .timeout(const Duration(seconds: 8));
     final data = response.data is Map
         ? Map<String, dynamic>.from(response.data as Map)
         : <String, dynamic>{};
-    final results =
-        data['results'] is Iterable ? data['results'] as Iterable : const [];
+    final results = data['results'] is Iterable
+        ? data['results'] as Iterable
+        : const [];
     final suggestions = results
         .map((item) {
           final map = Map<String, dynamic>.from(item as Map);
@@ -44,10 +63,8 @@ class PlaceApiProvider {
     }
     final response = await FirebaseFunctions.instance
         .httpsCallable('resolveUkAddressPlace')
-        .call({
-      'placeId': placeId,
-      'sessionToken': '$sessionToken',
-    }).timeout(const Duration(seconds: 8));
+        .call({'placeId': placeId, 'sessionToken': '$sessionToken'})
+        .timeout(const Duration(seconds: 8));
     final data = response.data is Map
         ? Map<String, dynamic>.from(response.data as Map)
         : <String, dynamic>{};
