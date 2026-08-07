@@ -27,6 +27,9 @@ void main() {
     expect(app, contains('SenderMobileHome(previewAuthEnabled: true)'));
     expect(appNav, isNot(contains('initialAuthenticated: true')));
     expect(appNav, contains('SenderMobileHome(previewAuthEnabled: true)'));
+    expect(preview, contains('BlocProvider<AuthBloc>'));
+    expect(preview, contains('AuthBloc()..add(SortSessionState())'));
+    expect(preview, contains('BlocProvider<SendPackageBloc>'));
   });
 
   test('Sender session restore never signs out existing users by account age',
