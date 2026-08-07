@@ -52,6 +52,8 @@ class _SenderBookingCanvasState extends State<SenderBookingCanvas> {
   final _description = TextEditingController();
   final _weight = TextEditingController();
   var _searchingPickup = true;
+  int _addressSelectionGeneration = 0;
+  String? _resolvingPlaceId;
   String? _initializationError;
   String? _addressResolutionMessage;
   bool _addressResolving = false;
@@ -801,6 +803,91 @@ class _SenderBookingCanvasState extends State<SenderBookingCanvas> {
     }
   }
 
+  Future<void> _resolveSelectedSuggestion(
+    bool pickup,
+    dynamic suggestion,
+  ) async {
+    final placeId = '${suggestion.placeId ?? ''}'.trim();
+    final hasCoordinates = suggestion.lat is num && suggestion.lng is num;
+    if (placeId.isEmpty && !hasCoordinates) return;
+    if (_addressResolving && _resolvingPlaceId == placeId) return;
+    final generation = ++_addressSelectionGeneration;
+    setState(() {
+      _addressResolving = true;
+      _resolvingPlaceId = placeId;
+      _addressResolutionMessage = null;
+    });
+    try {
+      final lang = Localizations.localeOf(context).languageCode;
+      final coordinate = hasCoordinates
+          ? PlaceCoordinate(
+              lat: (suggestion.lat as num).toDouble(),
+              lng: (suggestion.lng as num).toDouble(),
+            )
+          : await PlaceApiProvider(const Uuid()).fetchPlaceDetails(
+              placeId,
+              lang,
+            );
+      if (!mounted || generation != _addressSelectionGeneration) return;
+      final description = '${suggestion.description}'.trim();
+      final subText = '${suggestion.subText}'.trim();
+      if (pickup) {
+        context.read<SendPackageBloc>().add(
+              SetPickupAddress(
+                val: description,
+                pickupLocationSubAddress: subText,
+                placeId: placeId,
+                lang: lang,
+              ),
+            );
+        _pickup.text = description;
+        _setDraft(
+          _draft.copyWith(
+            pickupAddress: description,
+            pickupLat: coordinate.lat,
+            pickupLng: coordinate.lng,
+            dropoffAddress: '',
+            clearDropoffCoordinate: true,
+          ),
+        );
+      } else {
+        context.read<SendPackageBloc>().add(
+              SetDeliveryAddress(
+                val: description,
+                destinationLocationSubAddress: subText,
+                placeId: placeId,
+                lang: lang,
+              ),
+            );
+        _dropoff.text = description;
+        _setDraft(
+          _draft.copyWith(
+            dropoffAddress: description,
+            dropoffLat: coordinate.lat,
+            dropoffLng: coordinate.lng,
+          ),
+        );
+      }
+      context.read<SendPackageBloc>().add(ClearSuggestions());
+    } catch (error, stackTrace) {
+      debugPrint('Selected Sender address resolution failed: $error');
+      debugPrintStack(stackTrace: stackTrace);
+      if (mounted && generation == _addressSelectionGeneration) {
+        setState(() {
+          _addressResolutionMessage =
+              'Please choose a valid address suggestion before continuing.';
+        });
+      }
+    } finally {
+      if (mounted && generation == _addressSelectionGeneration) {
+        setState(() {
+          _addressResolving = false;
+          _resolvingPlaceId = null;
+        });
+      }
+    }
+  }
+
   void _requestBackendQuote(SenderBookingDraft draft) {
     _restoreRouteFromDraftIfReady(draft);
     final engine = context.read<SendPackageBloc>().state;
@@ -1106,6 +1193,7 @@ class _SenderBookingCanvasState extends State<SenderBookingCanvas> {
                       onPhotoRemove: _removeParcelPhoto,
                       onDraft: _setDraft,
                       onContinue: _advance,
+                      onSuggestion: _resolveSelectedSuggestion,
                       addressResolutionMessage: _addressResolutionMessage,
                       addressResolving: _addressResolving,
                     ),
@@ -1294,6 +1382,7 @@ class _BookingPanel extends StatelessWidget {
   final VoidCallback onPhotoRemove;
   final ValueChanged<SenderBookingDraft> onDraft;
   final VoidCallback onContinue;
+  final Future<void> Function(bool pickup, dynamic suggestion) onSuggestion;
   final String? addressResolutionMessage;
   final bool addressResolving;
 
@@ -1324,6 +1413,7 @@ class _BookingPanel extends StatelessWidget {
     required this.onPhotoRemove,
     required this.onDraft,
     required this.onContinue,
+    required this.onSuggestion,
     required this.addressResolutionMessage,
     required this.addressResolving,
   });
@@ -1403,30 +1493,7 @@ class _BookingPanel extends StatelessWidget {
             );
           },
           onSuggestion: (suggestion) {
-            final lat = suggestion.lat is num
-                ? (suggestion.lat as num).toDouble()
-                : null;
-            final lng = suggestion.lng is num
-                ? (suggestion.lng as num).toDouble()
-                : null;
-            context.read<SendPackageBloc>().add(
-                  SetPickupAddress(
-                    val: suggestion.description,
-                    pickupLocationSubAddress: suggestion.subText,
-                    placeId: suggestion.placeId,
-                    lang: Localizations.localeOf(context).languageCode,
-                  ),
-                );
-            pickup.text = suggestion.description;
-            onDraft(
-              draft.copyWith(
-                pickupAddress: suggestion.description,
-                pickupLat: lat,
-                pickupLng: lng,
-                dropoffAddress: '',
-                clearDropoffCoordinate: true,
-              ),
-            );
+            onSuggestion(true, suggestion);
           },
           primaryLabel: 'Confirm pickup',
           canContinue: draft.canContinue,
@@ -1454,28 +1521,7 @@ class _BookingPanel extends StatelessWidget {
             );
           },
           onSuggestion: (suggestion) {
-            final lat = suggestion.lat is num
-                ? (suggestion.lat as num).toDouble()
-                : null;
-            final lng = suggestion.lng is num
-                ? (suggestion.lng as num).toDouble()
-                : null;
-            context.read<SendPackageBloc>().add(
-                  SetDeliveryAddress(
-                    val: suggestion.description,
-                    destinationLocationSubAddress: suggestion.subText,
-                    placeId: suggestion.placeId,
-                    lang: Localizations.localeOf(context).languageCode,
-                  ),
-                );
-            dropoff.text = suggestion.description;
-            onDraft(
-              draft.copyWith(
-                dropoffAddress: suggestion.description,
-                dropoffLat: lat,
-                dropoffLng: lng,
-              ),
-            );
+            onSuggestion(false, suggestion);
           },
           primaryLabel: 'Confirm drop-off',
           canContinue: draft.canContinue,
