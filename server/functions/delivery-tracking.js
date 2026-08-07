@@ -218,9 +218,11 @@ function effectiveCompletionPolicy(delivery = {}) {
   const knownPolicy = pickupExplicit !== null || receiverExplicit !== null ||
     evidenceExplicit !== null || vanguardProtected || explicitlyOrdinary;
   return Object.freeze({
-    pickupVerificationRequired: pickupExplicit ?? (vanguardProtected || !explicitlyOrdinary || !knownPolicy),
-    receiverVerificationRequired: receiverExplicit ?? (vanguardProtected || !knownPolicy),
-    handoverEvidenceRequired: evidenceExplicit ?? (vanguardProtected || !knownPolicy),
+    // Vanguard is additive: an explicit false value cannot weaken its
+    // authoritative protection requirements.
+    pickupVerificationRequired: vanguardProtected ? true : pickupExplicit ?? (!explicitlyOrdinary || !knownPolicy),
+    receiverVerificationRequired: vanguardProtected ? true : receiverExplicit ?? !knownPolicy,
+    handoverEvidenceRequired: vanguardProtected ? true : evidenceExplicit ?? !knownPolicy,
     authoritative: Object.keys(verification).length > 0 || pickupExplicit !== null ||
       receiverExplicit !== null || evidenceExplicit !== null,
   });

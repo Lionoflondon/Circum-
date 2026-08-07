@@ -241,6 +241,52 @@ test("backend-authored IRIS completion policy controls every protected action", 
   });
 });
 
+test("product matrix composes base policy with Vanguard monotonically", () => {
+  const ordinary = {
+    vanguardProtocolEnabled: false,
+    iris: {verification: {
+      pickupVerificationRequired: false,
+      recipientPinRequired: false,
+      handoverEvidenceRequired: false,
+    }},
+  };
+  const matrix = [
+    ["Standard", ordinary, false, false, false],
+    ["Standard + Vanguard", {...ordinary, requiresVanguard: true}, true, true, true],
+    ["Business", {...ordinary, serviceType: "business"}, false, false, false],
+    ["Business + Vanguard", {...ordinary, serviceType: "business", requiresVanguard: true}, true, true, true],
+    ["Health+", {...ordinary, serviceType: "health_plus"}, false, false, false],
+    ["Health+ + Vanguard", {...ordinary, serviceType: "health_plus", requiresVanguard: true}, true, true, true],
+    ["Gift", {...ordinary, serviceType: "gift"}, false, false, false],
+    ["Gift + Vanguard", {...ordinary, serviceType: "gift", requiresVanguard: true}, true, true, true],
+  ];
+  for (const [label, delivery, pickup, receiver, evidence] of matrix) {
+    assert.deepEqual(deliveryTracking.effectiveCompletionPolicy(delivery), {
+      pickupVerificationRequired: pickup,
+      receiverVerificationRequired: receiver,
+      handoverEvidenceRequired: evidence,
+      authoritative: true,
+    }, label);
+  }
+});
+
+test("Vanguard cannot be weakened by client-shaped false policy fields", () => {
+  const policy = deliveryTracking.effectiveCompletionPolicy({
+    requiresVanguard: true,
+    iris: {verification: {
+      pickupVerificationRequired: false,
+      recipientPinRequired: false,
+      handoverEvidenceRequired: false,
+    }},
+  });
+  assert.deepEqual(policy, {
+    pickupVerificationRequired: true,
+    receiverVerificationRequired: true,
+    handoverEvidenceRequired: true,
+    authoritative: true,
+  });
+});
+
 test("ambiguous delivery policy fails closed", () => {
   assert.equal(deliveryTracking.effectiveCompletionPolicy({}).pickupVerificationRequired, true);
   assert.equal(deliveryTracking.effectiveCompletionPolicy({}).receiverVerificationRequired, true);
