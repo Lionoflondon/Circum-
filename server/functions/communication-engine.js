@@ -103,11 +103,13 @@ async function participantDisplayName(uid, role, context) {
   return role === "rider" ? "Rider" : "Sender";
 }
 
-async function emitNotification({recipientId, recipientRole = "sender", type, title, body, data = {}}) {
+async function emitNotification({recipientId, recipientRole = "sender", type, title, body, data = {}, notificationId = null}) {
   const db = getFirestore();
   const safeData = redactContactFields(data);
   const destination = destinationFor(type, safeData);
-  const ref = db.collection("notifications").doc();
+  const ref = notificationId ?
+    db.collection("notifications").doc(clean(notificationId)) :
+    db.collection("notifications").doc();
   const correlationId = clean(safeData.correlationId) || ref.id;
   const payload = {
     notificationId: ref.id,
@@ -220,7 +222,7 @@ async function ensureSupportConversationForTicket(db, ticketId) {
       participantRole,
       {},
   );
-  await db.runTransaction(async (transaction) => {
+  const created = await db.runTransaction(async (transaction) => {
     transaction.set(chatRef, {
       threadId: chatId,
       conversationType: "support",
@@ -276,6 +278,7 @@ async function sendMessage(data, context) {
   if (!context.auth) throw new functions.https.HttpsError("unauthenticated", "Sign in to send a message.");
   const senderId = context.auth.uid;
   const chatId = clean(data.chatId || data.requestId || data.bookingId);
+  const clientMessageId = clean(data.clientMessageId).replace(/[^A-Za-z0-9_-]/g, '').slice(0, 96);
   const message = maskContactDetails(data.message || data.messageText);
   const messageType = clean(data.messageType || "text").toLowerCase();
   if (!chatId || !message) {
@@ -302,14 +305,25 @@ async function sendMessage(data, context) {
   }
 
   const recipientIds = (chat.participants || []).filter((uid) => uid && uid !== senderId);
-  const messageRef = chatRef.collection("messages").doc();
+  const messageRef = clientMessageId ?
+    chatRef.collection("messages").doc(`client_${clientMessageId}`) :
+    chatRef.collection("messages").doc();
   const correlationId = clean(data.correlationId) || `${chatId}_${messageRef.id}`;
   const senderRole = isAdmin(context) ? "admin" : recipientRoleFor(chat, senderId);
   const senderName = await participantDisplayName(senderId, senderRole, context);
   await db.runTransaction(async (transaction) => {
+    const existing = await transaction.get(messageRef);
+    if (existing.exists) {
+      const existingData = existing.data() || {};
+      if (existingData.senderId !== senderId || existingData.messageText !== message) {
+        throw new functions.https.HttpsError("already-exists", "This message id is already in use.");
+      }
+      return false;
+    }
     transaction.set(messageRef, {
       messageId: messageRef.id,
       conversationId: chatId,
+      clientMessageId: clientMessageId || null,
       correlationId,
       senderId,
       senderName,
@@ -343,7 +357,27 @@ async function sendMessage(data, context) {
         updatedAt: FieldValue.serverTimestamp(),
       }, {merge: true});
     }
+    return true;
   });
+  if (created && recipientIds.length) {
+    try {
+      await Promise.all(recipientIds.map((recipientId) => emitNotification({
+        recipientId,
+        recipientRole: recipientRoleFor(chat, recipientId),
+        type: "conversation_message",
+        title: senderName,
+        body: message,
+        notificationId: `conversation_message_${messageRef.id}_${recipientId}`,
+        data: {chatId, messageId: messageRef.id, correlationId},
+      })));
+    } catch (error) {
+      console.error("Conversation notification fan-out failed", {
+        chatId,
+        messageId: messageRef.id,
+        error: error && error.message ? error.message : error,
+      });
+    }
+  }
   return {ok: true, chatId, messageId: messageRef.id};
 }
 

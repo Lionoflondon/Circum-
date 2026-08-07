@@ -3221,8 +3221,12 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
   final _riderChatInput = TextEditingController();
   final List<_ChatMessage> _riderChatMessages = [];
   StreamSubscription<QuerySnapshot<Map<String, dynamic>>>? _riderChatSub;
+  String? _pendingRiderChatMessageId;
   Timer? _riderLiveLocationTimer;
   String? _trackingDeliveryId;
+
+  String _newChatMessageId() =>
+      '${DateTime.now().microsecondsSinceEpoch}_${math.Random().nextInt(1 << 32)}';
 
   @override
   void initState() {
@@ -4927,7 +4931,7 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
         .doc(requestId)
         .collection('messages')
         .orderBy('createdAt')
-        .limit(80)
+        .limitToLast(80)
         .snapshots()
         .listen(
       (snapshot) {
@@ -4975,12 +4979,19 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
     if (user == null || job == null || text.isEmpty) return;
     final requestId = '${job['requestId'] ?? job['id'] ?? ''}'.trim();
     if (requestId.isEmpty) return;
+    final clientMessageId = _pendingRiderChatMessageId ??= _newChatMessageId();
     _riderChatInput.clear();
     try {
       await _ensureCircumFirebaseReady();
       await FirebaseFunctions.instanceFor(region: 'us-central1')
           .httpsCallable('sendCircumMessage')
-          .call({'chatId': requestId, 'requestId': requestId, 'message': text});
+          .call({
+        'chatId': requestId,
+        'requestId': requestId,
+        'message': text,
+        'clientMessageId': clientMessageId,
+      });
+      _pendingRiderChatMessageId = null;
     } catch (_) {
       if (!mounted) return;
       setState(() => _jobMessage = 'Message could not be sent.');
@@ -8021,6 +8032,7 @@ class _CustomerPortalState extends State<_CustomerPortal> {
   StreamSubscription<QuerySnapshot<Map<String, dynamic>>>?
       _deliveryAdjustmentSub;
   String? _visibleAdjustmentId;
+  String? _pendingSenderChatMessageId;
 
   bool get _matchingHasStarted =>
       _checkoutState == _CheckoutState.matchingRiders ||
@@ -8040,6 +8052,9 @@ class _CustomerPortalState extends State<_CustomerPortal> {
       time: 'Now',
     ),
   ];
+
+  String _newChatMessageId() =>
+      '${DateTime.now().microsecondsSinceEpoch}_${math.Random().nextInt(1 << 32)}';
 
   @override
   void initState() {
@@ -12680,6 +12695,7 @@ class _CustomerPortalState extends State<_CustomerPortal> {
         .doc(id)
         .collection('messages')
         .orderBy('createdAt')
+        .limitToLast(100)
         .snapshots()
         .listen((snapshot) {
       if (!mounted) return;
@@ -12840,6 +12856,7 @@ class _CustomerPortalState extends State<_CustomerPortal> {
     final text = _chatInput.text.trim();
     final requestId = _activeRequestDocId;
     if (text.isEmpty) return;
+    final clientMessageId = _pendingSenderChatMessageId ??= _newChatMessageId();
     _chatInput.clear();
     setState(() {
       final target = _supportChat ? _supportMessages : _driverMessages;
@@ -12851,7 +12868,13 @@ class _CustomerPortalState extends State<_CustomerPortal> {
       await _ensureFirebaseReady();
       await FirebaseFunctions.instanceFor(region: 'us-central1')
           .httpsCallable('sendCircumMessage')
-          .call({'chatId': requestId, 'requestId': requestId, 'message': text});
+          .call({
+        'chatId': requestId,
+        'requestId': requestId,
+        'message': text,
+        'clientMessageId': clientMessageId,
+      });
+      _pendingSenderChatMessageId = null;
     } catch (_) {
       if (!mounted) return;
       setState(

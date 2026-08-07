@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:math';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:cloud_functions/cloud_functions.dart';
@@ -36,6 +37,8 @@ class _RideChatPageViewState extends State<RideChatPageView> {
   String? _deliveryChatTitle;
   String? _supportError;
   bool _sending = false;
+  String? _pendingMessageId;
+  bool _typingPublished = false;
   Timer? _typingDebounce;
 
   @override
@@ -144,6 +147,9 @@ class _RideChatPageViewState extends State<RideChatPageView> {
     }
   }
 
+  String _newMessageId() =>
+      '${DateTime.now().microsecondsSinceEpoch}_${Random().nextInt(1 << 32)}';
+
   Future<void> _markConversationRead(String chatId) async {
     try {
       await FirebaseFunctions.instance
@@ -159,12 +165,17 @@ class _RideChatPageViewState extends State<RideChatPageView> {
     final chatId = _chatId;
     if (message.isEmpty || chatId == null || readOnly || _sending) return;
     setState(() => _sending = true);
+    final clientMessageId = _pendingMessageId ??= _newMessageId();
     try {
-      await FirebaseFunctions.instance
-          .httpsCallable('sendCircumMessage')
-          .call({'chatId': chatId, 'message': message, 'messageType': 'text'});
+      await FirebaseFunctions.instance.httpsCallable('sendCircumMessage').call({
+        'chatId': chatId,
+        'message': message,
+        'messageType': 'text',
+        'clientMessageId': clientMessageId,
+      });
       _input.clear();
       await _setTyping(false);
+      _pendingMessageId = null;
     } on FirebaseFunctionsException catch (error) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -187,9 +198,11 @@ class _RideChatPageViewState extends State<RideChatPageView> {
         title: Text(_deliveryChatTitle?.trim().isNotEmpty == true
             ? _deliveryChatTitle!.trim()
             : widget.title),
-        backgroundColor: AppTokens.background,
+        backgroundColor: AppTokens.strongGlass,
         foregroundColor: AppTokens.text,
         elevation: 0,
+        surfaceTintColor: Colors.transparent,
+        shape: const Border(bottom: BorderSide(color: AppTokens.glassBorder)),
       ),
       body: _supportError != null
           ? AppEmptyState(
@@ -258,10 +271,16 @@ class _RideChatPageViewState extends State<RideChatPageView> {
                           role:
                               '${Map<String, dynamic>.from(chat['participantRoles'] as Map? ?? const {})[currentId] ?? 'sender'}',
                           onChanged: (_) {
-                            _setTyping(true);
+                            if (!_typingPublished) {
+                              _typingPublished = true;
+                              _setTyping(true);
+                            }
                             _typingDebounce?.cancel();
-                            _typingDebounce = Timer(const Duration(seconds: 4),
-                                () => _setTyping(false));
+                            _typingDebounce =
+                                Timer(const Duration(seconds: 4), () {
+                              _typingPublished = false;
+                              _setTyping(false);
+                            });
                           },
                           onQuickReply: (reply) {
                             _input.text = reply;
@@ -278,18 +297,72 @@ class _RideChatPageViewState extends State<RideChatPageView> {
   }
 }
 
-class _MessageStream extends StatelessWidget {
+class _MessageStream extends StatefulWidget {
   final String chatId;
   final ScrollController scrollController;
 
   const _MessageStream({required this.chatId, required this.scrollController});
 
   @override
+  State<_MessageStream> createState() => _MessageStreamState();
+}
+
+class _MessageStreamState extends State<_MessageStream> {
+  static const _olderPageSize = 50;
+  final _olderMessages = <String, QueryDocumentSnapshot<Map<String, dynamic>>>{};
+  DocumentSnapshot<Map<String, dynamic>>? _oldestCursor;
+  bool _loadingOlder = false;
+  bool _hasMoreOlder = true;
+
+  Future<void> _loadOlder() async {
+    if (_loadingOlder || !_hasMoreOlder || _oldestCursor == null) return;
+    setState(() => _loadingOlder = true);
+    final beforeExtent = widget.scrollController.hasClients
+        ? widget.scrollController.position.maxScrollExtent
+        : 0.0;
+    try {
+      final snapshot = await FirebaseFirestore.instance
+          .collection('chats')
+          .doc(widget.chatId)
+          .collection('messages')
+          .orderBy('createdAt', descending: true)
+          .startAfterDocument(_oldestCursor!)
+          .limit(_olderPageSize)
+          .get();
+      if (!mounted) return;
+      for (final doc in snapshot.docs) {
+        _olderMessages[doc.id] = doc;
+      }
+      _hasMoreOlder = snapshot.docs.length == _olderPageSize;
+      if (snapshot.docs.isNotEmpty) {
+        _oldestCursor = snapshot.docs.last;
+      }
+      setState(() => _loadingOlder = false);
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!widget.scrollController.hasClients) return;
+        final delta = widget.scrollController.position.maxScrollExtent - beforeExtent;
+        if (delta > 0) {
+          widget.scrollController.jumpTo(
+              (widget.scrollController.offset + delta)
+                  .clamp(0.0, widget.scrollController.position.maxScrollExtent));
+        }
+      });
+    } catch (_) {
+      if (mounted) setState(() => _loadingOlder = false);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Older messages could not be loaded.')),
+        );
+      }
+    }
+  }
+
+  @override
   Widget build(BuildContext context) =>
       StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
         stream: FirebaseFirestore.instance
             .collection('chats')
-            .doc(chatId)
+            .doc(widget.chatId)
             .collection('messages')
             .orderBy('createdAt', descending: false)
             .limitToLast(100)
@@ -308,7 +381,24 @@ class _MessageStream extends StatelessWidget {
               body: 'Your chat history will appear here.',
             );
           }
-          final messages = snapshot.data!.docs;
+          final liveDocs = snapshot.data!.docs;
+          if (liveDocs.isNotEmpty &&
+              (_oldestCursor == null || liveDocs.first.id == _oldestCursor!.id)) {
+            _oldestCursor = liveDocs.first;
+          }
+          final merged = <String, QueryDocumentSnapshot<Map<String, dynamic>>>{
+            ..._olderMessages,
+            for (final doc in liveDocs) doc.id: doc,
+          };
+          final messages = merged.values.toList()
+            ..sort((a, b) {
+              final aTime = a.data()['createdAt'];
+              final bTime = b.data()['createdAt'];
+              if (aTime is Timestamp && bTime is Timestamp) {
+                return aTime.compareTo(bTime);
+              }
+              return a.id.compareTo(b.id);
+            });
           if (messages.isEmpty) {
             return const AppEmptyState(
               icon: Icons.forum_outlined,
@@ -318,20 +408,34 @@ class _MessageStream extends StatelessWidget {
             );
           }
           WidgetsBinding.instance.addPostFrameCallback((_) {
-            if (scrollController.hasClients) {
-              scrollController.animateTo(
-                  scrollController.position.maxScrollExtent,
+            if (widget.scrollController.hasClients) {
+              widget.scrollController.animateTo(
+                  widget.scrollController.position.maxScrollExtent,
                   duration: AppTokens.fast,
                   curve: Curves.easeOut);
             }
           });
-          return ListView.separated(
-            controller: scrollController,
-            padding: const EdgeInsets.all(AppTokens.space16),
-            itemCount: messages.length,
-            separatorBuilder: (_, __) => const SizedBox(height: 10),
-            itemBuilder: (context, index) =>
-                _MessageBubble(data: messages[index].data()),
+          return Column(
+            children: [
+              if (_hasMoreOlder)
+                Padding(
+                  padding: const EdgeInsets.only(top: 8),
+                  child: TextButton(
+                    onPressed: _loadingOlder ? null : _loadOlder,
+                    child: Text(_loadingOlder ? 'Loading older messages...' : 'Load older messages'),
+                  ),
+                ),
+              Expanded(
+                child: ListView.separated(
+                  controller: widget.scrollController,
+                  padding: const EdgeInsets.all(AppTokens.space16),
+                  itemCount: messages.length,
+                  separatorBuilder: (_, __) => const SizedBox(height: 10),
+                  itemBuilder: (context, index) =>
+                      _MessageBubble(data: messages[index].data()),
+                ),
+              ),
+            ],
           );
         },
       );
@@ -456,50 +560,74 @@ class _Composer extends StatelessWidget {
         child: Column(mainAxisSize: MainAxisSize.min, children: [
           if (!readOnly)
             SizedBox(
-              height: 40,
+              height: 42,
               child: ListView.separated(
                 scrollDirection: Axis.horizontal,
                 padding: const EdgeInsets.symmetric(horizontal: 16),
                 itemCount: _quickReplies.length,
                 separatorBuilder: (_, __) => const SizedBox(width: 8),
-                itemBuilder: (context, index) => ActionChip(
-                  label: Text(_quickReplies[index]),
-                  onPressed: () => onQuickReply(_quickReplies[index]),
+                itemBuilder: (context, index) => DecoratedBox(
+                  decoration: BoxDecoration(
+                    color: AppTokens.glass,
+                    borderRadius: BorderRadius.circular(999),
+                    border: Border.all(color: AppTokens.glassBorder),
+                  ),
+                  child: InkWell(
+                    borderRadius: BorderRadius.circular(999),
+                    onTap: () => onQuickReply(_quickReplies[index]),
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 14),
+                      child: Center(
+                        child: Text(_quickReplies[index],
+                            style: const TextStyle(
+                                color: AppTokens.mutedText, fontSize: 12)),
+                      ),
+                    ),
+                  ),
                 ),
               ),
             ),
           Padding(
             padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
-            child: Row(children: [
-              Expanded(
-                child: TextField(
-                  controller: controller,
-                  enabled: !readOnly && !sending,
-                  minLines: 1,
-                  maxLines: 4,
-                  onChanged: onChanged,
-                  decoration: InputDecoration(
-                    hintText:
-                        readOnly ? 'This conversation is closed' : hintText,
-                    filled: true,
-                    fillColor: AppTokens.raisedPanel,
-                    border: OutlineInputBorder(
-                        borderRadius:
-                            BorderRadius.circular(AppTokens.radius16)),
+            child: AppGlassContainer(
+              padding: const EdgeInsets.fromLTRB(8, 4, 8, 4),
+              accent: readOnly ? null : AppTokens.primary,
+              child: Row(children: [
+                Expanded(
+                  child: TextField(
+                    controller: controller,
+                    enabled: !readOnly && !sending,
+                    minLines: 1,
+                    maxLines: 4,
+                    onChanged: onChanged,
+                    style: const TextStyle(color: AppTokens.text),
+                    decoration: InputDecoration(
+                      hintText:
+                          readOnly ? 'This conversation is closed' : hintText,
+                      hintStyle: const TextStyle(color: AppTokens.mutedText),
+                      border: InputBorder.none,
+                      contentPadding:
+                          const EdgeInsets.symmetric(horizontal: 12),
+                    ),
                   ),
                 ),
-              ),
-              const SizedBox(width: 8),
-              IconButton.filled(
-                onPressed: readOnly || sending ? null : onSend,
-                tooltip: 'Send message',
-                icon: sending
-                    ? const SizedBox.square(
-                        dimension: 18,
-                        child: CircularProgressIndicator(strokeWidth: 2))
-                    : const Icon(Icons.send_rounded),
-              ),
-            ]),
+                IconButton(
+                  onPressed: readOnly || sending ? null : onSend,
+                  tooltip: 'Send message',
+                  style: IconButton.styleFrom(
+                    backgroundColor: AppTokens.primary,
+                    foregroundColor: Colors.white,
+                    disabledBackgroundColor: AppTokens.glass,
+                    minimumSize: const Size(44, 44),
+                  ),
+                  icon: sending
+                      ? const SizedBox.square(
+                          dimension: 18,
+                          child: CircularProgressIndicator(strokeWidth: 2))
+                      : const Icon(Icons.send_rounded),
+                ),
+              ]),
+            ),
           ),
         ]),
       );

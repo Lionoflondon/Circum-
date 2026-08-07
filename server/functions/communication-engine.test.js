@@ -1,5 +1,6 @@
 const assert = require("node:assert/strict");
 const fs = require("node:fs");
+const path = require("node:path");
 const test = require("node:test");
 
 const source = fs.readFileSync("communication-engine.js", "utf8");
@@ -46,6 +47,30 @@ test("messages include backend-only diagnostic metadata", () => {
   assert.match(source, /deliveryState:\s*"persisted"/);
   assert.match(source, /retryCount:\s*0/);
   assert.match(source, /notificationId:\s*null/);
+});
+
+test("message retries can reuse a stable client id without duplicating writes", () => {
+  assert.match(source, /clientMessageId/);
+  assert.match(source, /client_\$\{clientMessageId\}/);
+  assert.match(source, /const existing = await transaction\.get\(messageRef\)/);
+  assert.match(source, /existingData\.senderId !== senderId/);
+  assert.match(source, /existingData\.messageText !== message/);
+  assert.match(source, /conversation_message_\$\{messageRef\.id\}_\$\{recipientId\}/);
+  assert.match(source, /if \(created && recipientIds\.length\)/);
+});
+
+test("chat listeners remain bounded at the realtime edge", () => {
+  const senderSource = fs.readFileSync(
+    path.join(__dirname, "../../lib/app/send_package/view/ride_chats.dart"),
+    "utf8",
+  );
+  const websiteSource = fs.readFileSync(
+    path.join(__dirname, "../../lib/website/shared/circum_website_app.dart"),
+    "utf8",
+  );
+  assert.match(senderSource, /limitToLast\(100\)/);
+  assert.match(websiteSource, /limitToLast\(80\)/);
+  assert.match(websiteSource, /limitToLast\(100\)/);
 });
 
 test("legacy sendMessage delegates to canonical communication handler", () => {

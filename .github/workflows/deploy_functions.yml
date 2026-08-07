@@ -2,6 +2,11 @@ name: Deploy Functions
 
 on:
   workflow_dispatch:
+    inputs:
+      functions:
+        description: "Comma-separated function exports; blank deploys the full backend"
+        required: false
+        default: ""
 
 jobs:
   deploy-functions:
@@ -25,4 +30,11 @@ jobs:
       - run: printf "GOOGLE_PLACES_API_KEY=%s\n" "$GOOGLE_PLACES_API_KEY" > server/functions/.env
         env:
           GOOGLE_PLACES_API_KEY: ${{ secrets.GOOGLE_PLACES_API_KEY }}
-      - run: firebase deploy --only "$(node scripts/scoped_functions_deploy_list.js)" --project circum-2797c
+      - run: |
+          if [ -n "${{ inputs.functions }}" ]; then
+            target="$(node scripts/scoped_functions_deploy_list.js --functions "${{ inputs.functions }}")"
+          else
+            target="$(node scripts/scoped_functions_deploy_list.js)"
+          fi
+          echo "Deploying scoped targets: $target"
+          firebase deploy --only "$target" --project circum-2797c
