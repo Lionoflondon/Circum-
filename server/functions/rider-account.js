@@ -87,6 +87,30 @@ function safeFileName(value) {
   return text(value || "rider-document", 180).replace(/[^A-Za-z0-9._-]/g, "_");
 }
 
+function cleanVehicle(value = {}) {
+  const make = text(value.make, 80);
+  const model = text(value.model, 80);
+  return {
+    type: lower(value.type || value.vehicleType, 80),
+    makeModel: text(value.makeModel || [make, model].filter(Boolean).join(" "), 120),
+    colour: text(value.colour || value.color, 80),
+    plateNumber: text(value.plateNumber || value.registration, 40),
+    year: text(value.year, 10),
+    ownershipStatus: text(value.ownershipStatus, 40),
+  };
+}
+
+function normalizeVehicles(data = {}, existing = {}) {
+  const source = Array.isArray(data.vehicles) ? data.vehicles :
+    Array.isArray(existing.vehicles) ? existing.vehicles :
+      [data.vehicle || existing.vehicle].filter(Boolean);
+  return source
+      .filter((value) => value && typeof value === "object")
+      .slice(0, 2)
+      .map(cleanVehicle)
+      .filter((vehicle) => Object.values(vehicle).some(Boolean));
+}
+
 function audit(type, rider, extra = {}) {
   return {
     type,
@@ -101,7 +125,8 @@ function audit(type, rider, extra = {}) {
 }
 
 function profilePatch(data, rider, existing = {}) {
-  const vehicleExisting = existing.vehicle && typeof existing.vehicle === "object" ? existing.vehicle : {};
+  const vehicles = normalizeVehicles(data, existing);
+  const vehicleExisting = vehicles[0] || {};
   const fullName = text(data.fullName || existing.fullName || existing.name || rider.name, 160);
   const phoneNumber = text(data.phoneNumber || data.phone || existing.phoneNumber || existing.phone, 60);
   const vehicleType = lower(data.vehicleType || existing.vehicleType || existing.typeOfVehicle || vehicleExisting.type, 80);
@@ -112,6 +137,16 @@ function profilePatch(data, rider, existing = {}) {
     colour: text(data.vehicleColour || existing.vehicleColour || vehicleExisting.colour, 80),
     plateNumber: vehicleRegistration,
   };
+  const canonicalVehicles = vehicles.length ? [
+    {
+      ...vehicles[0],
+      type: vehicleType,
+      makeModel: vehicle.makeModel,
+      colour: vehicle.colour,
+      plateNumber: vehicleRegistration,
+    },
+    ...vehicles.slice(1),
+  ] : [];
   return {
     uid: rider.uid,
     riderId: rider.uid,
@@ -131,6 +166,7 @@ function profilePatch(data, rider, existing = {}) {
     plateNumber: vehicleRegistration,
     vehicleRegistration,
     vehicle,
+    vehicles: canonicalVehicles,
     availability: text(data.availability || existing.availability, 240),
     approvalStatus: existing.approvalStatus || "pending",
     onboardingStatus: existing.onboardingStatus || "not_started",
@@ -146,6 +182,7 @@ function profilePatch(data, rider, existing = {}) {
 }
 
 function riderPatch(data, rider, existing = {}) {
+  const vehicles = normalizeVehicles(data, existing);
   return {
     name: text(data.fullName || existing.fullName || existing.name || rider.name, 160),
     phone: text(data.phoneNumber || data.phone || existing.phoneNumber || existing.phone, 60),
@@ -156,6 +193,7 @@ function riderPatch(data, rider, existing = {}) {
     typeOfVehicle: text(data.vehicleType || existing.vehicleType || existing.typeOfVehicle, 80),
     vehicleMakeModel: text(data.vehicleMakeModel || existing.vehicleMakeModel, 120),
     vehicleColour: text(data.vehicleColour || existing.vehicleColour, 80),
+    vehicles,
     verificationStatus: existing.verificationStatus || "pending",
     updatedAt: FieldValue.serverTimestamp(),
   };
@@ -180,6 +218,7 @@ function applicationPatchFromProfile(data, rider, profile) {
     vehicleType: profile.vehicleType,
     vehicleRegistration: profile.vehicleRegistration,
     vehicle: profile.vehicle,
+    vehicles: profile.vehicles,
     availability: profile.availability,
     source: "cloud-functions",
     updatedAt: now,
@@ -479,6 +518,8 @@ exports.submitRiderApplication = functions.https.onCall(async (data, context) =>
     const applicationData = applicationSnap.data() || {};
     const existing = {...riderData, ...profileData, ...applicationData};
     const vehicle = existing.vehicle && typeof existing.vehicle === "object" ? existing.vehicle : {};
+    const vehicles = normalizeVehicles(data, existing);
+    const primaryVehicle = vehicles[0] || vehicle;
 
     const now = FieldValue.serverTimestamp();
     const application = {
@@ -494,9 +535,10 @@ exports.submitRiderApplication = functions.https.onCall(async (data, context) =>
       emergencyContactName: text(data.emergencyContactName || existing.emergencyContactName, 160),
       emergencyContactPhone: text(data.emergencyContactPhone || existing.emergencyContactPhone, 60),
       accessibilityNeeds: text(data.accessibilityNeeds || existing.accessibilityNeeds, 1000),
-      vehicleType: lower(data.vehicleType || existing.vehicleType || vehicle.type, 80),
-      vehicleRegistration: text(data.vehicleRegistration || data.plateNumber || existing.vehicleRegistration || existing.plateNumber || vehicle.registration, 40),
-      vehicle,
+      vehicleType: lower(data.vehicleType || existing.vehicleType || primaryVehicle.type || vehicle.type, 80),
+      vehicleRegistration: text(data.vehicleRegistration || data.plateNumber || existing.vehicleRegistration || existing.plateNumber || primaryVehicle.plateNumber || vehicle.registration, 40),
+      vehicle: primaryVehicle,
+      vehicles,
       availability: text(data.availability || existing.availability, 240),
       notes: text(data.notes, 1000),
       rightToWorkConfirmed: true,
@@ -518,7 +560,8 @@ exports.submitRiderApplication = functions.https.onCall(async (data, context) =>
       email: application.email,
       phoneNumber: application.phoneNumber,
       vehicleType: application.vehicleType,
-      vehicleRegistration: text(data.vehicleRegistration || data.plateNumber || existing.vehicleRegistration || existing.plateNumber || vehicle.registration, 40),
+      vehicleRegistration: text(data.vehicleRegistration || data.plateNumber || existing.vehicleRegistration || existing.plateNumber || primaryVehicle.plateNumber || vehicle.registration, 40),
+      vehicles,
       onboardingStatus: "pending_review",
       approvalStatus: "pending",
       verificationStatus: "pending",
@@ -532,11 +575,12 @@ exports.submitRiderApplication = functions.https.onCall(async (data, context) =>
       vehicleType: application.vehicleType,
       vehicleRegistration: application.vehicleRegistration,
       vehicle: {
-        ...vehicle,
+        ...primaryVehicle,
         type: application.vehicleType,
         registration: application.vehicleRegistration,
         plateNumber: application.vehicleRegistration,
       },
+      vehicles,
       updatedAt: now,
     }, {merge: true});
     transaction.set(eventRef, audit("rider_application_submitted", rider, {

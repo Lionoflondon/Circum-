@@ -73,6 +73,19 @@ test("Rider application mirrors submitted vehicle into all canonical records", (
   assert.match(submitBody, /type:\s*application\.vehicleType/);
   assert.match(submitBody, /registration:\s*application\.vehicleRegistration/);
   assert.match(submitBody, /plateNumber:\s*application\.vehicleRegistration/);
+  assert.match(submitBody, /vehicles/);
+  assert.match(source, /function normalizeVehicles/);
+  assert.match(source, /vehicles: profile\.vehicles/);
+});
+
+test("Rider profile updates preserve both submitted vehicle records", () => {
+  const profileStart = source.indexOf("function profilePatch");
+  const profileEnd = source.indexOf("function riderPatch", profileStart);
+  const profileBody = source.slice(profileStart, profileEnd);
+  assert.match(profileBody, /normalizeVehicles\(data, existing\)/);
+  assert.match(source, /normalizeVehicles[\s\S]*slice\(0, 2\)/);
+  assert.match(profileBody, /vehicles: canonicalVehicles/);
+  assert.match(source, /vehicles,\s*verificationStatus/);
 });
 
 test("Rider Web routes operational self-service mutations through callables", () => {
