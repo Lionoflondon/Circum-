@@ -71,6 +71,73 @@ void main() {
     expect(target.coordinate, sender);
   });
 
+  test('booking camera matrix rejects unusable coordinates before authority',
+      () {
+    const sender = LatLng(51.6, -0.2);
+    const fallback = LatLng(51.7, -0.3);
+    final unusable = <LatLng>[
+      const LatLng(double.nan, -0.1),
+      const LatLng(double.infinity, -0.1),
+      const LatLng(91, -0.1),
+      const LatLng(51.6, 181),
+      const LatLng(0, 0),
+      const LatLng(40.7, -74.0),
+    ];
+
+    for (final coordinate in unusable) {
+      final target = resolveSenderBookingCameraTarget(
+        pickup: coordinate,
+        senderLocation: sender,
+        serviceFallback: fallback,
+      );
+      expect(target.source, SenderBookingCameraSource.senderApproximate);
+      expect(target.coordinate, sender);
+    }
+
+    final fallbackTarget = resolveSenderBookingCameraTarget(
+      pickup: unusable.first,
+      serviceFallback: fallback,
+    );
+    expect(fallbackTarget.source, SenderBookingCameraSource.serviceFallback);
+    expect(fallbackTarget.coordinate, fallback);
+  });
+
+  test('canonical pickup remains authoritative when sender location changes',
+      () {
+    const pickup = LatLng(51.5, -0.1);
+    const firstSenderLocation = LatLng(51.6, -0.2);
+    const laterSenderLocation = LatLng(51.7, -0.3);
+
+    final beforeResolution = resolveSenderBookingCameraTarget(
+      senderLocation: firstSenderLocation,
+    );
+    final afterResolution = resolveSenderBookingCameraTarget(
+      pickup: pickup,
+      senderLocation: laterSenderLocation,
+    );
+
+    expect(
+        beforeResolution.source, SenderBookingCameraSource.senderApproximate);
+    expect(afterResolution.source, SenderBookingCameraSource.pickup);
+    expect(afterResolution.coordinate, pickup);
+  });
+
+  test('booking map uses one real Google route layer and pointer-safe overlays',
+      () {
+    final source = File('lib/app/sender_mobile/sender_booking_canvas.dart')
+        .readAsStringSync();
+    final mapStart = source.indexOf('class _SenderMobileMap');
+    final mapEnd = source.indexOf('@visibleForTesting', mapStart);
+    final bookingMap = source.substring(mapStart, mapEnd);
+
+    expect(bookingMap, contains('GoogleMap('));
+    expect(bookingMap, contains('_polylines(_controller.value)'));
+    expect(bookingMap, contains('const IgnorePointer('));
+    expect(bookingMap,
+        contains('IgnorePointer(\n            child: AnimatedBuilder'));
+    expect(bookingMap, isNot(contains('_MapPainter')));
+  });
+
   test('Sender Web reads canonical delivery lifecycle fields', () {
     final source =
         File('lib/website/shared/circum_website_app.dart').readAsStringSync();
