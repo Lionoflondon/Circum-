@@ -2,6 +2,7 @@ const assert = require("node:assert/strict");
 const fs = require("node:fs");
 const path = require("node:path");
 const test = require("node:test");
+const {_persistMessageIdempotently} = require("./communication-engine");
 
 const source = fs.readFileSync("communication-engine.js", "utf8");
 const indexSource = fs.readFileSync("index.js", "utf8");
@@ -71,6 +72,65 @@ test("chat listeners remain bounded at the realtime edge", () => {
   assert.match(senderSource, /limitToLast\(100\)/);
   assert.match(websiteSource, /limitToLast\(80\)/);
   assert.match(websiteSource, /limitToLast\(100\)/);
+});
+
+test("concurrent same-id sends commit one canonical message", async () => {
+  const documents = new Map();
+  let queue = Promise.resolve();
+  const db = {
+    runTransaction(callback) {
+      const result = queue.then(() => callback({
+        async get(ref) {
+          return documents.has(ref.id) ?
+            {exists: true, data: () => documents.get(ref.id)} :
+            {exists: false, data: () => ({})};
+        },
+        set(ref, data) {
+          documents.set(ref.id, data);
+        },
+      }));
+      queue = result.catch(() => {});
+      return result;
+    },
+  };
+  const ref = {id: "client_same_message"};
+  const write = async (transaction) => transaction.set(ref, {
+    senderId: "sender-1",
+    messageText: "hello",
+  });
+  const results = await Promise.all([
+    _persistMessageIdempotently(db, ref, "sender-1", "hello", write),
+    _persistMessageIdempotently(db, ref, "sender-1", "hello", write),
+  ]);
+  assert.deepEqual(results.sort(), [false, true]);
+  assert.equal(documents.size, 1);
+});
+
+test("same id with different content is rejected without overwrite", async () => {
+  const documents = new Map([[
+    "client_conflict",
+    {senderId: "sender-1", messageText: "original"},
+  ]]);
+  const db = {
+    runTransaction(callback) {
+      return callback({
+        async get(ref) {
+          return {
+            exists: documents.has(ref.id),
+            data: () => documents.get(ref.id),
+          };
+        },
+        set(ref, data) {
+          documents.set(ref.id, data);
+        },
+      });
+    },
+  };
+  await assert.rejects(
+      _persistMessageIdempotently(db, {id: "client_conflict"}, "sender-1", "tampered", async () => {}),
+      (error) => error.code === "already-exists",
+  );
+  assert.equal(documents.get("client_conflict").messageText, "original");
 });
 
 test("legacy sendMessage delegates to canonical communication handler", () => {

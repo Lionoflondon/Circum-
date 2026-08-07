@@ -222,7 +222,7 @@ async function ensureSupportConversationForTicket(db, ticketId) {
       participantRole,
       {},
   );
-  const created = await db.runTransaction(async (transaction) => {
+  await db.runTransaction(async (transaction) => {
     transaction.set(chatRef, {
       threadId: chatId,
       conversationType: "support",
@@ -274,11 +274,26 @@ function canSend(chat, senderId, admin) {
   return Array.isArray(chat.participants) && chat.participants.includes(senderId);
 }
 
+async function persistMessageIdempotently(db, messageRef, senderId, message, write) {
+  return db.runTransaction(async (transaction) => {
+    const existing = await transaction.get(messageRef);
+    if (existing.exists) {
+      const existingData = existing.data() || {};
+      if (existingData.senderId !== senderId || existingData.messageText !== message) {
+        throw new functions.https.HttpsError("already-exists", "This message id is already in use.");
+      }
+      return false;
+    }
+    await write(transaction);
+    return true;
+  });
+}
+
 async function sendMessage(data, context) {
   if (!context.auth) throw new functions.https.HttpsError("unauthenticated", "Sign in to send a message.");
   const senderId = context.auth.uid;
   const chatId = clean(data.chatId || data.requestId || data.bookingId);
-  const clientMessageId = clean(data.clientMessageId).replace(/[^A-Za-z0-9_-]/g, '').slice(0, 96);
+  const clientMessageId = clean(data.clientMessageId).replace(/[^A-Za-z0-9_-]/g, "").slice(0, 96);
   const message = maskContactDetails(data.message || data.messageText);
   const messageType = clean(data.messageType || "text").toLowerCase();
   if (!chatId || !message) {
@@ -311,15 +326,8 @@ async function sendMessage(data, context) {
   const correlationId = clean(data.correlationId) || `${chatId}_${messageRef.id}`;
   const senderRole = isAdmin(context) ? "admin" : recipientRoleFor(chat, senderId);
   const senderName = await participantDisplayName(senderId, senderRole, context);
-  await db.runTransaction(async (transaction) => {
-    const existing = await transaction.get(messageRef);
-    if (existing.exists) {
-      const existingData = existing.data() || {};
-      if (existingData.senderId !== senderId || existingData.messageText !== message) {
-        throw new functions.https.HttpsError("already-exists", "This message id is already in use.");
-      }
-      return false;
-    }
+  const created = await persistMessageIdempotently(
+      db, messageRef, senderId, message, async (transaction) => {
     transaction.set(messageRef, {
       messageId: messageRef.id,
       conversationId: chatId,
@@ -358,7 +366,7 @@ async function sendMessage(data, context) {
       }, {merge: true});
     }
     return true;
-  });
+      });
   if (created && recipientIds.length) {
     try {
       await Promise.all(recipientIds.map((recipientId) => emitNotification({
@@ -790,6 +798,7 @@ async function markConversationRead(data, context) {
 }
 
 exports.emitNotification = emitNotification;
+exports._persistMessageIdempotently = persistMessageIdempotently;
 exports.destinationFor = destinationFor;
 exports._sendCircumMessageHandler = sendMessage;
 exports.sendCircumMessage = functions.https.onCall(sendMessage);
