@@ -204,10 +204,47 @@ test("pickup verification policy separates standard and protected deliveries", (
   assert.equal(deliveryTracking.pickupVerificationRequired({
     verificationRequired: false,
     isGift: true,
-  }), true);
+  }), false);
   assert.equal(deliveryTracking.pickupVerificationRequired({requiresVanguard: true}), true);
   assert.equal(deliveryTracking.pickupVerificationRequired({serviceType: "health_plus"}), true);
   assert.equal(deliveryTracking.pickupVerificationRequired({isGift: true}), true);
+});
+
+test("backend-authored IRIS completion policy controls every protected action", () => {
+  const ordinary = {
+    vanguardProtocolEnabled: false,
+    iris: {verification: {
+      recipientPinRequired: false,
+      photoEvidenceRequired: false,
+      handoverEvidenceRequired: false,
+    }},
+  };
+  assert.deepEqual(deliveryTracking.effectiveCompletionPolicy(ordinary), {
+    pickupVerificationRequired: false,
+    receiverVerificationRequired: false,
+    handoverEvidenceRequired: false,
+    authoritative: true,
+  });
+
+  const protectedDelivery = {
+    iris: {verification: {
+      pickupVerificationRequired: true,
+      recipientPinRequired: true,
+      handoverEvidenceRequired: true,
+    }},
+  };
+  assert.deepEqual(deliveryTracking.effectiveCompletionPolicy(protectedDelivery), {
+    pickupVerificationRequired: true,
+    receiverVerificationRequired: true,
+    handoverEvidenceRequired: true,
+    authoritative: true,
+  });
+});
+
+test("ambiguous delivery policy fails closed", () => {
+  assert.equal(deliveryTracking.effectiveCompletionPolicy({}).pickupVerificationRequired, true);
+  assert.equal(deliveryTracking.effectiveCompletionPolicy({}).receiverVerificationRequired, true);
+  assert.equal(deliveryTracking.effectiveCompletionPolicy({}).handoverEvidenceRequired, true);
 });
 
 test("authoritative handler policy permits only standard direct collection", () => {
@@ -229,12 +266,12 @@ test("authoritative handler policy permits only standard direct collection", () 
 });
 
 test("ordinary completion is PIN-less while protected completion remains gated", () => {
-  assert.equal(deliveryTracking.deliveryPinRequired({}), false);
+  assert.equal(deliveryTracking.deliveryPinRequired({vanguardProtocolEnabled: false}), false);
   assert.equal(deliveryTracking.deliveryPinRequired({pinRequired: true}), true);
   assert.equal(deliveryTracking.deliveryPinRequired({requiresVanguard: true}), true);
   assert.equal(deliveryTracking.deliveryPinRequired({serviceType: "health_plus"}), true);
   assert.equal(deliveryTracking.canApplyDeliveryTransition(
-      {}, "arrived_at_dropoff", "delivered", "complete_delivery",
+      {vanguardProtocolEnabled: false}, "arrived_at_dropoff", "delivered", "complete_delivery",
   ), true);
   assert.equal(deliveryTracking.canApplyDeliveryTransition(
       {requiresVanguard: true}, "arrived_at_dropoff", "delivered", "complete_delivery",

@@ -191,47 +191,47 @@ function pinAuthorityRequired(delivery, action) {
     protection.enabled === true;
 }
 
-function pickupVerificationRequired(delivery = {}) {
-  const protection = delivery.vanguardProtection || {};
-  const protocol = delivery.vanguardProtocol || {};
-  const serviceType = normalized(delivery.serviceType || delivery.sourceModule);
-  const protectedDelivery = delivery.verificationRequired === true ||
-    delivery.requiresVerification === true ||
-    delivery.requiresVanguard === true ||
+function effectiveCompletionPolicy(delivery = {}) {
+  const iris = delivery.iris || delivery.irisDeliveryEstimate || {};
+  const verification = iris.verification || delivery.completionPolicy || {};
+  const bool = (value) => value === true || value === false ? value : null;
+  const pickupExplicit = bool(verification.pickupVerificationRequired) ??
+    bool(delivery.verificationRequired) ??
+    bool(delivery.requiresVerification);
+  const receiverExplicit = bool(verification.recipientPinRequired) ??
+    bool(delivery.receiverPinRequired) ??
+    bool(delivery.pinRequired) ??
+    bool(delivery.secureHandoverRequired);
+  const evidenceExplicit = bool(verification.handoverEvidenceRequired) ??
+    bool(verification.photoEvidenceRequired) ??
+    bool(delivery.handoverEvidenceRequired) ??
+    bool(delivery.deliveryPhotoRequired) ??
+    bool(delivery.secureHandoverRequired);
+  const vanguardProtected = delivery.requiresVanguard === true ||
     delivery.vanguardEnabled === true ||
     delivery.vanguardProtocolEnabled === true ||
-    protection.enabled === true ||
-    protocol.enabled === true ||
-    delivery.isHealthPlus === true ||
-    delivery.healthPlusOrderId != null ||
-    ["health", "healthplus", "health_plus"].includes(serviceType) ||
-    delivery.isGift === true ||
-    delivery.giftOrderId != null ||
-    ["gift", "gifts"].includes(serviceType);
-  if (protectedDelivery) return true;
-
-  const explicitlyOrdinary = delivery.verificationRequired === false ||
-    delivery.requiresVerification === false ||
-    delivery.vanguardProtocolEnabled === false ||
+    delivery.vanguardProtection?.enabled === true ||
+    delivery.vanguardProtocol?.enabled === true;
+  const explicitlyOrdinary = delivery.vanguardProtocolEnabled === false ||
     delivery.vanguardStatus === "not_required" ||
-    protocol.enabled === false ||
-    ["standard", "delivery", "sender"].includes(serviceType);
-  return !explicitlyOrdinary;
+    pickupExplicit === false && receiverExplicit === false && evidenceExplicit === false;
+  const knownPolicy = pickupExplicit !== null || receiverExplicit !== null ||
+    evidenceExplicit !== null || vanguardProtected || explicitlyOrdinary;
+  return Object.freeze({
+    pickupVerificationRequired: pickupExplicit ?? (vanguardProtected || !explicitlyOrdinary || !knownPolicy),
+    receiverVerificationRequired: receiverExplicit ?? (vanguardProtected || !knownPolicy),
+    handoverEvidenceRequired: evidenceExplicit ?? (vanguardProtected || !knownPolicy),
+    authoritative: Object.keys(verification).length > 0 || pickupExplicit !== null ||
+      receiverExplicit !== null || evidenceExplicit !== null,
+  });
+}
+
+function pickupVerificationRequired(delivery = {}) {
+  return effectiveCompletionPolicy(delivery).pickupVerificationRequired;
 }
 
 function deliveryPinRequired(delivery = {}) {
-  const protection = delivery.vanguardProtection || {};
-  const serviceType = normalized(delivery.serviceType || delivery.sourceModule);
-  return delivery.pinRequired === true ||
-    delivery.receiverPinRequired === true ||
-    delivery.secureHandoverRequired === true ||
-    delivery.requiresVanguard === true ||
-    delivery.vanguardEnabled === true ||
-    delivery.vanguardProtocolEnabled === true ||
-    protection.enabled === true ||
-    delivery.isHealthPlus === true ||
-    delivery.healthPlusOrderId != null ||
-    ["health", "healthplus", "health_plus"].includes(serviceType);
+  return effectiveCompletionPolicy(delivery).receiverVerificationRequired;
 }
 
 function canApplyDeliveryTransition(delivery, currentStatus, nextStatus, action) {
@@ -250,13 +250,8 @@ function evidenceRequirements(delivery, action, evidence = {}) {
   const pickup = action === "verify_collection_pin";
   const handover = isHandoverAction(action);
   if (!pickup && !handover) return {valid: true};
-  const required = pickup ?
-    delivery.verificationRequired === true ||
-      delivery.requiresVerification === true ||
-      delivery.requiresVanguard === true :
-    delivery.deliveryPhotoRequired === true ||
-      delivery.requiresVanguard === true ||
-      delivery.secureHandoverRequired === true;
+  const policy = effectiveCompletionPolicy(delivery);
+  const required = pickup ? policy.pickupVerificationRequired : policy.handoverEvidenceRequired;
   if (!required) return {valid: true};
   if (!text(evidence.photoUrl) && !text(evidence.photoId)) return {valid: false, reason: "A delivery evidence photo is required."};
   if (pickup && evidence.conditionConfirmed !== true) {
@@ -776,6 +771,7 @@ exports._private = {
   pinAuthorityRequired,
   pickupVerificationRequired,
   deliveryPinRequired,
+  effectiveCompletionPolicy,
   canApplyDeliveryTransition,
   assertRiderOwnsDelivery,
   assertRiderOperational,
