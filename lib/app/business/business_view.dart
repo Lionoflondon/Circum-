@@ -510,8 +510,8 @@ class _BusinessViewState extends State<BusinessView> {
       const SizedBox(height: 8),
       _ResponsiveGrid(minItemWidth: 145, childAspectRatio: 3.2, children: [
         _CompactAction(
-            label: 'Cancel',
-            icon: Icons.cancel_outlined,
+            label: 'Cancellation details',
+            icon: Icons.info_outline_rounded,
             onTap: () => _showMessage(
                 'Open Delivery Details to cancel eligible deliveries.')),
         _CompactAction(
