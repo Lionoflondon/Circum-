@@ -1,0 +1,34 @@
+{
+  "project": "circum-2797c",
+  "updatedAt": "2026-08-07T18:35:32Z",
+  "senderFunctions": {
+    "sourceSha": "593c9010632079023528b0743de6e9c19a355927",
+    "functionsWorkflow": "31190455430",
+    "functions": [
+      "sendCircumMessage",
+      "createBusinessRothCheckout",
+      "StripeWebhook"
+    ]
+  },
+  "senderHosting": {
+    "sourceSha": "5a4700cd034adc5cd30f746dc4c7ccb7fb165f8a",
+    "workflow": "31207432119",
+    "target": "hosting:app",
+    "lastModified": "2026-08-07T18:35:32Z",
+    "indexEtag": "96c55f2ce7f4d7fa7a5b8bd5d7ffa3b4a3b74fca776012f25b27c9e195fc1606",
+    "mainDartJsEtag": "4c0f682afd201937cb7c2d95463b0340cd88d7974452c79ce0e82d352bdc331d"
+  },
+  "riderHosting": {
+    "sourceSha": "05f31076fa8fa8ba697835c5a097c5c4dd245613",
+    "workflow": "31206855626",
+    "target": "hosting:rider",
+    "lastModified": "2026-08-07T18:28:27Z",
+    "indexEtag": "dfbd09f807fb28c2219e65d3c756f3908f4adc305934a7a50dddd978d987dc03",
+    "mainDartJsEtag": "7d8e218cf8072a9ac927aca6c135f8bb170b8d1dcbe82e7d31865b708a72d19b"
+  },
+  "certification": {
+    "appCheck": "PENDING_LIVE_CERTIFICATION",
+    "liveChatSenderToRider": "PENDING_LIVE_CERTIFICATION",
+    "liveChatRiderToSender": "PENDING_LIVE_CERTIFICATION"
+  }
+}
