@@ -27,8 +27,18 @@ test("Roth purchase finalizers are idempotent", () => {
   assert.match(rothLedgerSource, /const \[existingLedger, wallet, senderWalletSnap\]/);
   assert.match(rothLedgerSource, /if \(existingLedger\.exists\) return;/);
   assert.match(businessPaymentsSource, /const existingTx = await transaction\.get\(txRef\);/);
-  assert.match(businessPaymentsSource, /if \(existingTx\.exists\) return;/);
+  assert.match(businessPaymentsSource, /if \(existingTx\.exists\) return false;/);
   assert.match(businessPaymentsSource, /purchaseRecord\.status === "paid" \|\| purchaseRecord\.creditedAt/);
+  assert.match(businessPaymentsSource, /const credited = await creditBusinessRoth/);
+  assert.match(businessPaymentsSource, /if \(!credited\) return;/);
+});
+
+test("Business Roth refunds are recorded for manual review without automatic balance mutation", () => {
+  const refunds = fs.readFileSync("stripe-refunds.js", "utf8");
+  assert.match(refunds, /businessRothPurchases/);
+  assert.match(refunds, /pending_manual_review/);
+  assert.match(refunds, /automaticRothMutation: false/);
+  assert.doesNotMatch(refunds, /transaction\.set\([^,]*wallet/);
 });
 
 test("Roth purchase ledger records expose audit and admin-visible fields", () => {

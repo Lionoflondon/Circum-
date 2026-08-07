@@ -26,6 +26,54 @@ async function syncChargeRefund({db, event}) {
   const charge = event.data.object;
   const paymentIntentId = typeof charge.payment_intent === "string" ? charge.payment_intent : charge.payment_intent && charge.payment_intent.id;
   if (!paymentIntentId) return {handled: false, reason: "missing_payment_intent"};
+  const rothPurchases = await db.collection("businessRothPurchases")
+      .where("stripePaymentIntentId", "==", paymentIntentId)
+      .limit(10)
+      .get();
+  if (!rothPurchases.empty) {
+    const patch = refundPatch(charge);
+    await db.runTransaction(async (transaction) => {
+      const seen = await transaction.get(eventRef);
+      if (seen.exists) return;
+      transaction.create(eventRef, {
+        type: event.type,
+        paymentIntentId,
+        purchaseIds: rothPurchases.docs.map((doc) => doc.id),
+        reviewRequired: true,
+        reason: "business_roth_refund_manual_review",
+        createdAt: FieldValue.serverTimestamp(),
+      });
+      for (const purchase of rothPurchases.docs) {
+        transaction.set(purchase.ref, {
+          refundReviewRequired: true,
+          refundReviewStatus: "pending_manual_review",
+          refundEventType: event.type,
+          refundStripeChargeId: charge.id || null,
+          refundAmount: patch.refundedAmount,
+          refundCurrency: patch.refundedCurrency,
+          refundObservedAt: patch.refundedAt,
+          updatedAt: FieldValue.serverTimestamp(),
+        }, {merge: true});
+      }
+      transaction.set(db.collection("adminAuditLogs").doc(), {
+        action: "business_roth_refund_requires_manual_review",
+        actionType: "business_roth_refund_requires_manual_review",
+        paymentIntentId,
+        purchaseIds: rothPurchases.docs.map((doc) => doc.id),
+        stripeChargeId: charge.id || null,
+        refundAmount: patch.refundedAmount,
+        refundCurrency: patch.refundedCurrency,
+        createdAt: FieldValue.serverTimestamp(),
+      });
+    });
+    return {
+      handled: true,
+      paymentIntentId,
+      purchaseIds: rothPurchases.docs.map((doc) => doc.id),
+      reviewRequired: true,
+      automaticRothMutation: false,
+    };
+  }
   const directId = charge.metadata && (charge.metadata.deliveryId || charge.metadata.requestId);
   const query = directId ? null : await db.collection("deliveryRequests").where("stripePaymentIntentId", "==", paymentIntentId).limit(2).get();
   const refs = directId ? [db.collection("deliveryRequests").doc(directId)] : query.docs.map((doc) => doc.ref);

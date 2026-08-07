@@ -10,6 +10,11 @@ const {
 const {requireAdmin} = require("./admin-auth");
 const {calculateWalletCheckout} = require("./wallet-core");
 const communicationEngine = require("./communication-engine");
+const {
+  BUSINESS_ROTH_POLICY,
+  evaluateBusinessRothPurchase,
+  parseGbpPence,
+} = require("./business-roth-policy");
 
 function money(value) {
   const parsed = Number(value || 0);
@@ -68,10 +73,10 @@ async function creditBusinessRoth({businessId, amount, type, note, metadata = {}
     walletRef.collection("transactions").doc(metadata.transactionId) :
     walletRef.collection("transactions").doc();
   const accountRef = db.collection("businessAccounts").doc(businessId);
-  await db.runTransaction(async (transaction) => {
+  return db.runTransaction(async (transaction) => {
     const walletSnap = await transaction.get(walletRef);
     const existingTx = await transaction.get(txRef);
-    if (existingTx.exists) return;
+    if (existingTx.exists) return false;
     const previous = money(walletSnap.data() && walletSnap.data().balance);
     const resulting = money(previous + amount);
     transaction.set(walletRef, {
@@ -106,6 +111,7 @@ async function creditBusinessRoth({businessId, amount, type, note, metadata = {}
       rothBalance: resulting,
       updatedAt: FieldValue.serverTimestamp(),
     }, {merge: true});
+    return true;
   });
 }
 
@@ -467,11 +473,30 @@ exports.adminCreateBusinessInvoice = functions.https.onCall(async (payload, cont
 
 exports.createBusinessRothCheckout = (stripe) => functions.https.onCall(async (data, context) => {
   const businessId = `${data.businessId || ""}`.trim();
-  const amount = money(data.amount);
-  if (!businessId || amount < 1) {
+  const amountPence = parseGbpPence(data.amount);
+  if (!businessId || amountPence == null) {
     throw new functions.https.HttpsError("invalid-argument", "Choose a valid Business account and Roth amount.");
   }
   const account = await requireBusinessMember(businessId, context);
+  const policy = evaluateBusinessRothPurchase({
+    account,
+    uid: context.auth.uid,
+    email: context.auth.token && context.auth.token.email,
+    amountPence,
+  });
+  if (!policy.allowed) {
+    throw new functions.https.HttpsError(
+        "permission-denied",
+        "This Business account or purchaser is not authorised for that Roth amount.",
+    );
+  }
+  if (policy.confirmationRequired && data.highValueConfirmed !== true) {
+    throw new functions.https.HttpsError(
+        "failed-precondition",
+        "Explicit confirmation is required for this Roth amount.",
+    );
+  }
+  const amount = amountPence / 100;
   const db = getFirestore();
   const purchaseRef = db.collection("businessRothPurchases").doc();
   const baseUrl = `${data.returnUrl || "https://circumuk.com/?app=business&section=invoicing"}`;
@@ -498,6 +523,13 @@ exports.createBusinessRothCheckout = (stripe) => functions.https.onCall(async (d
       businessId,
       purchaseRequestId: purchaseRef.id,
       amountGbp: `${amount}`,
+      amountPence,
+      expectedRoth: amount,
+      policyVersion: policy.policyVersion,
+      approvalTier: policy.tier,
+      confirmationRequired: policy.confirmationRequired,
+      purchaserRole: policy.role,
+      effectiveLimitPence: policy.effectiveLimitPence,
       createdByUserId: context.auth.uid,
     },
   });
@@ -506,6 +538,7 @@ exports.createBusinessRothCheckout = (stripe) => functions.https.onCall(async (d
     businessId,
     businessName: account.businessName || "Business",
     amountGbp: amount,
+    amountPence,
     amountRoth: amount,
     rothAmount: amount,
     paymentMethod: "card",
@@ -516,6 +549,11 @@ exports.createBusinessRothCheckout = (stripe) => functions.https.onCall(async (d
     paidAt: null,
     creditedAt: null,
     createdByUserId: context.auth.uid,
+    purchaserRole: policy.role,
+    approvalTier: policy.tier,
+    confirmationRequired: policy.confirmationRequired,
+    policyVersion: policy.policyVersion,
+    effectiveLimitPence: policy.effectiveLimitPence,
   });
   await db.collection("businessAccounts").doc(businessId).set({
     updatedAt: FieldValue.serverTimestamp(),
@@ -677,11 +715,18 @@ exports.handleBusinessCheckoutSession = async (sessionData, eventId = null) => {
       throw error;
     }
     const amount = verifiedPurchase.rothIssued;
+    const verifiedAmountPence = parseGbpPence(`${verifiedPurchase.amountGBP}`);
+    if (verifiedAmountPence == null ||
+        verifiedAmountPence > BUSINESS_ROTH_POLICY.maxSinglePurchasePence ||
+        (metadata.amountPence &&
+          `${metadata.amountPence}` !== `${verifiedAmountPence}`)) {
+      throw new Error("Business Roth purchase exceeds the platform limit.");
+    }
     const purchaseRef = getFirestore().collection("businessRothPurchases").doc(purchaseId);
     const snap = await purchaseRef.get();
     const purchaseRecord = snap.exists ? snap.data() || {} : {};
     if (purchaseRecord.status === "paid" || purchaseRecord.creditedAt) return;
-    await creditBusinessRoth({
+    const credited = await creditBusinessRoth({
       businessId,
       amount,
       type: "roth_purchase",
@@ -699,6 +744,7 @@ exports.handleBusinessCheckoutSession = async (sessionData, eventId = null) => {
         purchaseId,
       },
     });
+    if (!credited) return;
     await purchaseRef.set({
       status: "paid",
       paidAt: FieldValue.serverTimestamp(),

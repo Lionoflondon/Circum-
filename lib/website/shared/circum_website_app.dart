@@ -10376,8 +10376,35 @@ class _CustomerPortalState extends State<_CustomerPortal> {
 
   Future<void> _openBusinessRothCheckout() async {
     final businessId = _selectedBusinessId;
-    final amount = double.tryParse(_businessRothAmount.text.trim()) ?? 0;
+    final rawAmount = _businessRothAmount.text.trim().replaceAll(',', '');
+    final amount = double.tryParse(rawAmount) ?? 0;
     if (businessId == null || amount <= 0 || _businessBusy) return;
+    if (amount >= 10000) {
+      final businessName =
+          '${_selectedBusinessAccount?['businessName'] ?? 'Business'}';
+      final confirmed = await showDialog<bool>(
+        context: context,
+        builder: (dialogContext) => AlertDialog(
+          title: Text('Confirm £${_formatBusinessMoney(amount)} Roth purchase'),
+          content: Text(
+              'Business: $businessName\n\n'
+              'Amount charged: £${_formatBusinessMoney(amount)}\n'
+              'Roth credited after verified payment: ${_formatBusinessMoney(amount)}\n\n'
+              'Roth is non-withdrawable internal Circum credit.'),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(false),
+              child: const Text('Cancel'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.of(dialogContext).pop(true),
+              child: Text('Confirm £${_formatBusinessMoney(amount)}'),
+            ),
+          ],
+        ),
+      );
+      if (confirmed != true || !mounted) return;
+    }
     setState(() {
       _businessBusy = true;
       _businessMessage = 'Preparing Roth checkout...';
@@ -10387,7 +10414,8 @@ class _CustomerPortalState extends State<_CustomerPortal> {
           .httpsCallable('createBusinessRothCheckout')
           .call({
         'businessId': businessId,
-        'amount': amount,
+        'amount': rawAmount,
+        'highValueConfirmed': amount >= 10000,
         'returnUrl': 'https://circumuk.com/?app=business',
       });
       final data = Map<String, dynamic>.from(result.data as Map);
@@ -10399,6 +10427,10 @@ class _CustomerPortalState extends State<_CustomerPortal> {
       if (mounted) setState(() => _businessBusy = false);
     }
   }
+
+  String _formatBusinessMoney(double amount) =>
+      amount.toStringAsFixed(2).replaceAllMapped(
+          RegExp(r'(?<=\d)(?=(\d{3})+(?!\d))'), (_) => ',');
 
   Future<void> _cancelSenderBooking(SenderDeliveryRecord delivery) async {
     final user = _senderUser;
