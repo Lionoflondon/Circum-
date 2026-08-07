@@ -12,9 +12,12 @@ const source = fs.readFileSync(indexPath, "utf8");
 const names = [...source.matchAll(/exports\.([A-Za-z0-9_]+)/g)]
     .map((match) => match[1]);
 const unique = [...new Set(names)];
+
 const requested = process.argv.includes("--functions") ?
   process.argv[process.argv.indexOf("--functions") + 1]
-      .split(",").map((name) => name.trim()).filter(Boolean) : null;
+      .split(",")
+      .map((name) => name.trim())
+      .filter(Boolean) : null;
 
 if (unique.length !== names.length) {
   const duplicates = names.filter((name, index) => names.indexOf(name) !== index);
@@ -26,6 +29,7 @@ if (unique.length === 0) {
   console.error("No Cloud Function exports found in server/functions/index.js.");
   process.exit(1);
 }
+
 if (requested) {
   const unknown = requested.filter((name) => !unique.includes(name));
   if (unknown.length) {
@@ -39,5 +43,6 @@ if (process.argv.includes("--count")) {
 } else if (process.argv.includes("--names")) {
   console.log(unique.join("\n"));
 } else {
-  console.log((requested || unique).map((name) => `functions:${name}`).join(","));
+  const selected = requested || unique;
+  console.log(selected.map((name) => `functions:${name}`).join(","));
 }

@@ -23,6 +23,17 @@ test("ambiguous payment intent refund is routed to admin review", async () => {
     collection(name) {
       return {
         where(field, op, value) {
+          if (name === "businessRothPurchases") {
+            return {
+              limit() {
+                return {
+                  async get() {
+                    return {docs: [], empty: true};
+                  },
+                };
+              },
+            };
+          }
           assert.equal(name, "deliveryRequests");
           assert.equal(field, "stripePaymentIntentId");
           assert.equal(op, "==");
