@@ -859,10 +859,11 @@ class SendPackageBloc extends Bloc<SendPackageEvent, SendPackageState> {
 
   Future<Map<String, dynamic>> _callableMap(
     String name,
-    Map<String, dynamic> payload,
-  ) async {
-    final result =
-        await FirebaseFunctions.instance.httpsCallable(name).call(payload);
+    Map<String, dynamic> payload, {
+    Duration? timeout,
+  }) async {
+    final call = FirebaseFunctions.instance.httpsCallable(name).call(payload);
+    final result = timeout == null ? await call : await call.timeout(timeout);
     return result.data is Map
         ? Map<String, dynamic>.from(result.data as Map)
         : <String, dynamic>{};
@@ -893,41 +894,45 @@ class SendPackageBloc extends Bloc<SendPackageEvent, SendPackageState> {
     final quoteTimer = Stopwatch()..start();
     try {
       final distanceKm = state.distance ?? _distanceKmFromRouteCoordinates();
-      final data = await _callableMap('createSenderBookingQuote', {
-        if (event.businessContext != null)
-          'businessContext': event.businessContext,
-        'selectedSpeed': event.selectedSpeed,
-        if (event.irisPhotoAnalysisId.trim().isNotEmpty)
-          'irisPhotoAnalysisId': event.irisPhotoAnalysisId.trim(),
-        'vanguardProtocolEnabled': event.vanguardProtocolEnabled,
-        'distanceMiles': distanceKm == null
-            ? 0
-            : DeliveryPricing.kilometresToMiles(distanceKm),
-        'weightKg':
-            state.parcelWeightKg <= 0 ? event.weightKg : state.parcelWeightKg,
-        'parcel': {
-          'itemName': event.itemName,
-          'description': event.description,
-          'weightKg': event.weightKg,
-          'fragile': event.fragile,
-          'highValue': event.highValue,
-        },
-        'iris': {
-          if (state.canonicalIrisResult != null) ...{
-            'itemName': state.canonicalIrisResult!.itemName,
-            'quantity': state.canonicalIrisResult!.quantity,
-            'totalWeightKg': state.canonicalIrisResult!.totalWeightKg,
-            'category': state.canonicalIrisResult!.category,
-            'recommendedVehicle': event.selectedVehicle.trim().isNotEmpty
-                ? event.selectedVehicle.trim()
-                : state.canonicalIrisResult!.recommendedVehicle,
-            'confidence': state.canonicalIrisResult!.confidenceLabel,
-            'vanguardRequired': state.canonicalIrisResult!.vanguardRequired,
-            'vanguardRequiredReason':
-                state.canonicalIrisResult!.vanguardRequiredReason,
+      final data = await _callableMap(
+        'createSenderBookingQuote',
+        {
+          if (event.businessContext != null)
+            'businessContext': event.businessContext,
+          'selectedSpeed': event.selectedSpeed,
+          if (event.irisPhotoAnalysisId.trim().isNotEmpty)
+            'irisPhotoAnalysisId': event.irisPhotoAnalysisId.trim(),
+          'vanguardProtocolEnabled': event.vanguardProtocolEnabled,
+          'distanceMiles': distanceKm == null
+              ? 0
+              : DeliveryPricing.kilometresToMiles(distanceKm),
+          'weightKg':
+              state.parcelWeightKg <= 0 ? event.weightKg : state.parcelWeightKg,
+          'parcel': {
+            'itemName': event.itemName,
+            'description': event.description,
+            'weightKg': event.weightKg,
+            'fragile': event.fragile,
+            'highValue': event.highValue,
+          },
+          'iris': {
+            if (state.canonicalIrisResult != null) ...{
+              'itemName': state.canonicalIrisResult!.itemName,
+              'quantity': state.canonicalIrisResult!.quantity,
+              'totalWeightKg': state.canonicalIrisResult!.totalWeightKg,
+              'category': state.canonicalIrisResult!.category,
+              'recommendedVehicle': event.selectedVehicle.trim().isNotEmpty
+                  ? event.selectedVehicle.trim()
+                  : state.canonicalIrisResult!.recommendedVehicle,
+              'confidence': state.canonicalIrisResult!.confidenceLabel,
+              'vanguardRequired': state.canonicalIrisResult!.vanguardRequired,
+              'vanguardRequiredReason':
+                  state.canonicalIrisResult!.vanguardRequiredReason,
+            },
           },
         },
-      });
+        timeout: const Duration(seconds: 20),
+      );
       _logSenderPerformanceMetric('iris.createSenderBookingQuote', quoteTimer);
       emit(
         state.copyWith(

@@ -296,7 +296,7 @@ void main() {
 
     final quoteStart = bloc.indexOf('void _handleRequestSenderBookingQuote');
     final quoteCallable =
-        bloc.indexOf("_callableMap('createSenderBookingQuote'", quoteStart);
+        bloc.indexOf("'createSenderBookingQuote'", quoteStart);
     expect(quoteStart, isNonNegative);
     expect(quoteCallable, greaterThan(quoteStart));
     final quotePreflight = bloc.substring(quoteStart, quoteCallable);
@@ -304,6 +304,17 @@ void main() {
     expect(quotePreflight, contains('clearSenderQuoteTotal: true'));
     expect(quotePreflight, contains('clearSenderPaymentSession: true'));
     expect(quotePreflight, contains('clearSenderCreatedRequest: true'));
+    final quoteHandlerEnd = bloc.indexOf(
+      'void _handleLoadSenderRothBalance',
+      quoteCallable,
+    );
+    final quoteHandler = bloc.substring(quoteCallable, quoteHandlerEnd);
+    expect(
+      quoteHandler,
+      contains('timeout: const Duration(seconds: 20)'),
+    );
+    expect(quoteHandler, contains('isSenderQuoteLoading: false'));
+    expect(quoteHandler, contains('Could not load delivery quote. Try again.'));
   });
 
   test('Sender parcel edits and photo removal clear stale IRIS state', () {
