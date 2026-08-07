@@ -226,6 +226,77 @@ class AddressEngine {
     return isValid(address) && (placeId.isEmpty || hasCoordinates);
   }
 
+  /// Builds canonical fields from a resolved backend response only.
+  ///
+  /// Unlike [normalize] with a suggestion, this deliberately does not use
+  /// display text as a fallback for structured fields. Prediction text is
+  /// presentation data, not an address model.
+  static Map<String, dynamic> canonicalFromBackend(
+    Map<String, dynamic> data, {
+    String? fallbackPlaceId,
+  }) {
+    final nested = data['components'] is Map
+        ? Map<String, dynamic>.from(data['components'] as Map)
+        : <String, dynamic>{};
+    final components = <String, dynamic>{...data, ...nested};
+    return normalize(
+      components: components,
+      placeId: firstPart([
+        data['placeId'],
+        data['locationId'],
+        nested['placeId'],
+        fallbackPlaceId,
+      ]),
+      latitude:
+          data['latitude'] ??
+          data['lat'] ??
+          nested['latitude'] ??
+          nested['lat'],
+      longitude:
+          data['longitude'] ??
+          data['lng'] ??
+          nested['longitude'] ??
+          nested['lng'],
+      verified: data['verified'] ?? nested['verified'] ?? true,
+      source: firstPart([data['source'], nested['source'], data['provider']]),
+    );
+  }
+
+  static Suggestion suggestionFromCanonical(
+    Map<String, dynamic> address, {
+    String displayAddress = '',
+  }) {
+    final description = display(address, fallback: displayAddress);
+    return Suggestion(
+      placeId: clean(address['placeId']),
+      description: description,
+      mainText: clean(address['addressLine1']),
+      subText: joinParts([
+        address['city'],
+        address['county'],
+        address['postcode'],
+        address['country'],
+      ]),
+      lat: toDouble(address['latitude']),
+      lng: toDouble(address['longitude']),
+      components: address,
+    );
+  }
+
+  static Map<String, dynamic> canonicalFromSuggestion(Suggestion suggestion) {
+    return normalize(
+      components: suggestion.components,
+      placeId: suggestion.placeId,
+      latitude: suggestion.lat,
+      longitude: suggestion.lng,
+      source: suggestion.components['source'],
+      verified: suggestion.components['verified'],
+    );
+  }
+
+  static bool isGoogleSuggestion(Suggestion suggestion) =>
+      clean(suggestion.components['provider']).toLowerCase() == 'google_places';
+
   static bool hasRequiredFields({
     Suggestion? suggestion,
     Map<String, dynamic>? components,

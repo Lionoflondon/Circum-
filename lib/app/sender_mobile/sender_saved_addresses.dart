@@ -171,7 +171,9 @@ class FirebaseSenderSavedAddressesRepository
 
   @override
   Future<Suggestion> resolveSuggestion(Suggestion suggestion) async {
-    if (suggestion.lat != null &&
+    final isGooglePlace = AddressEngine.isGoogleSuggestion(suggestion);
+    if (!isGooglePlace &&
+        suggestion.lat != null &&
         suggestion.lng != null &&
         AddressEngine.isCanonical(
           AddressEngine.normalize(suggestion: suggestion),
@@ -186,13 +188,18 @@ class FirebaseSenderSavedAddressesRepository
         .httpsCallable('resolveUkAddressPlace')
         .call({'placeId': suggestion.placeId, 'sessionToken': _sessionToken});
     final data = Map<String, dynamic>.from(response.data as Map);
-    final resolved = AddressEngine.suggestionFromBackend(data);
-    final canonical = AddressEngine.normalize(suggestion: resolved);
+    final canonical = AddressEngine.canonicalFromBackend(
+      data,
+      fallbackPlaceId: suggestion.placeId,
+    );
     if (!AddressEngine.isCanonical(canonical)) {
       throw StateError('The selected address could not be verified.');
     }
     _startNewSearchSession();
-    return resolved;
+    return AddressEngine.suggestionFromCanonical(
+      canonical,
+      displayAddress: data['displayAddress']?.toString() ?? '',
+    );
   }
 
   @override
@@ -364,6 +371,7 @@ class _SenderSavedAddressEditorState extends State<SenderSavedAddressEditor> {
   String? _error;
   Timer? _searchDebounce;
   int _searchGeneration = 0;
+  int _selectionGeneration = 0;
   String _lastSearchQuery = '';
 
   @override
@@ -416,6 +424,7 @@ class _SenderSavedAddressEditorState extends State<SenderSavedAddressEditor> {
     _searchDebounce?.cancel();
     final query = value.trim();
     final generation = ++_searchGeneration;
+    _selectionGeneration++;
     if (query.length < 3) {
       _lastSearchQuery = '';
       setState(() {
@@ -455,6 +464,7 @@ class _SenderSavedAddressEditorState extends State<SenderSavedAddressEditor> {
 
   Future<void> _select(Suggestion suggestion) async {
     _searchDebounce?.cancel();
+    final selectionGeneration = ++_selectionGeneration;
     setState(() {
       _suggestions = const [];
       _searching = false;
@@ -463,8 +473,8 @@ class _SenderSavedAddressEditorState extends State<SenderSavedAddressEditor> {
     });
     try {
       final resolved = await widget.repository.resolveSuggestion(suggestion);
-      if (!mounted) return;
-      final normalized = AddressEngine.normalize(suggestion: resolved);
+      if (!mounted || selectionGeneration != _selectionGeneration) return;
+      final normalized = AddressEngine.canonicalFromSuggestion(resolved);
       if (!AddressEngine.isCanonical(normalized)) {
         throw StateError('The selected address could not be verified.');
       }
@@ -476,10 +486,13 @@ class _SenderSavedAddressEditorState extends State<SenderSavedAddressEditor> {
       _postcode.text = AddressEngine.clean(normalized['postcode']);
       _country.text = AddressEngine.clean(normalized['country']);
     } catch (error) {
-      if (mounted)
+      if (mounted && selectionGeneration == _selectionGeneration) {
         setState(() => _error = '$error'.replaceFirst('Bad state: ', ''));
+      }
     } finally {
-      if (mounted) setState(() => _resolving = false);
+      if (mounted && selectionGeneration == _selectionGeneration) {
+        setState(() => _resolving = false);
+      }
     }
   }
 
@@ -535,7 +548,7 @@ class _SenderSavedAddressEditorState extends State<SenderSavedAddressEditor> {
             components: address,
           ),
         );
-        address = AddressEngine.normalize(suggestion: resolved);
+        address = AddressEngine.canonicalFromSuggestion(resolved);
       }
       if (!AddressEngine.isCanonical(address)) {
         throw StateError('Resolve the selected address before saving.');
@@ -562,6 +575,12 @@ class _SenderSavedAddressEditorState extends State<SenderSavedAddressEditor> {
         });
       }
     }
+  }
+
+  bool get _canSave {
+    if (_saving || _resolving) return false;
+    final address = _address();
+    return AddressEngine.isCanonical(address);
   }
 
   @override
@@ -668,7 +687,7 @@ class _SenderSavedAddressEditorState extends State<SenderSavedAddressEditor> {
         SizedBox(
           height: 54,
           child: FilledButton(
-            onPressed: _saving || _resolving ? null : _save,
+            onPressed: _canSave ? _save : null,
             child: Text(
               _saving
                   ? 'Saving…'
