@@ -28,6 +28,18 @@ const senderRothPoundValue = 1.0;
 bool isSenderDeliverySpeed(String value) =>
     senderDeliverySpeeds.contains(value);
 
+bool isSenderCanonicalCoordinateUsable(double? latitude, double? longitude) {
+  if (latitude == null || longitude == null) return false;
+  return latitude.isFinite &&
+      longitude.isFinite &&
+      latitude != 0 &&
+      longitude != 0 &&
+      latitude >= 49 &&
+      latitude <= 61 &&
+      longitude >= -9 &&
+      longitude <= 2;
+}
+
 String senderPaymentMethodLabel(SenderFallbackPaymentMethod method) {
   switch (method) {
     case SenderFallbackPaymentMethod.card:
@@ -281,9 +293,11 @@ class SenderBookingDraft {
   bool get canContinue {
     switch (step) {
       case SenderBookingStep.pickup:
-        return isSenderTypedAddressSpecific(pickupAddress);
+        return pickupAddress.trim().isNotEmpty &&
+            isSenderCanonicalCoordinateUsable(pickupLat, pickupLng);
       case SenderBookingStep.dropoff:
-        return isSenderTypedAddressSpecific(dropoffAddress);
+        return dropoffAddress.trim().isNotEmpty &&
+            isSenderCanonicalCoordinateUsable(dropoffLat, dropoffLng);
       case SenderBookingStep.recipient:
         return receiverName.trim().isNotEmpty &&
             receiverPhone.trim().isNotEmpty;
