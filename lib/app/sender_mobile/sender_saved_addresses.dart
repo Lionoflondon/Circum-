@@ -372,6 +372,7 @@ class _SenderSavedAddressEditorState extends State<SenderSavedAddressEditor> {
   Timer? _searchDebounce;
   int _searchGeneration = 0;
   int _selectionGeneration = 0;
+  String? _resolvingSelectionKey;
   String _lastSearchQuery = '';
 
   @override
@@ -464,7 +465,14 @@ class _SenderSavedAddressEditorState extends State<SenderSavedAddressEditor> {
 
   Future<void> _select(Suggestion suggestion) async {
     _searchDebounce?.cancel();
+    final selectionKey = [
+      AddressEngine.clean(suggestion.components['provider']),
+      suggestion.placeId,
+      suggestion.description,
+    ].join('|');
+    if (_resolving && _resolvingSelectionKey == selectionKey) return;
     final selectionGeneration = ++_selectionGeneration;
+    _resolvingSelectionKey = selectionKey;
     setState(() {
       _suggestions = const [];
       _searching = false;
@@ -487,11 +495,14 @@ class _SenderSavedAddressEditorState extends State<SenderSavedAddressEditor> {
       _country.text = AddressEngine.clean(normalized['country']);
     } catch (error) {
       if (mounted && selectionGeneration == _selectionGeneration) {
-        setState(() => _error = '$error'.replaceFirst('Bad state: ', ''));
+        setState(() => _error = _addressErrorMessage(error));
       }
     } finally {
       if (mounted && selectionGeneration == _selectionGeneration) {
-        setState(() => _resolving = false);
+        setState(() {
+          _resolving = false;
+          _resolvingSelectionKey = null;
+        });
       }
     }
   }
@@ -571,10 +582,24 @@ class _SenderSavedAddressEditorState extends State<SenderSavedAddressEditor> {
       if (mounted) {
         setState(() {
           _saving = false;
-          _error = '$error'.replaceFirst('Bad state: ', '');
+          _error = _addressErrorMessage(error);
         });
       }
     }
+  }
+
+  String _addressErrorMessage(Object error) {
+    final message = error.toString().toLowerCase();
+    if (message.contains('resolve the selected address') ||
+        message.contains('choose a verified address') ||
+        message.contains('could not be verified') ||
+        message.contains('invalid-argument')) {
+      return 'Please select and resolve a valid address before saving.';
+    }
+    if (message.contains('timeout') || message.contains('unavailable')) {
+      return 'We could not verify that address. Check your connection and try again.';
+    }
+    return 'We could not verify that address. Please select another suggestion and try again.';
   }
 
   bool get _canSave {
@@ -585,7 +610,7 @@ class _SenderSavedAddressEditorState extends State<SenderSavedAddressEditor> {
 
   @override
   Widget build(BuildContext context) => Scaffold(
-    backgroundColor: _AddressColors.bg,
+    backgroundColor: AppTokens.background,
     appBar: AppBar(
       backgroundColor: Colors.transparent,
       foregroundColor: Colors.white,
@@ -595,26 +620,16 @@ class _SenderSavedAddressEditorState extends State<SenderSavedAddressEditor> {
       padding: const EdgeInsets.fromLTRB(20, 10, 20, 30),
       children: [
         const _SectionLabel('Choose label'),
-        SegmentedButton<String>(
-          segments: const [
-            ButtonSegment(
-              value: 'home',
-              label: Text('Home'),
-              icon: Icon(Icons.home_outlined),
-            ),
-            ButtonSegment(
-              value: 'work',
-              label: Text('Work'),
-              icon: Icon(Icons.work_outline),
-            ),
-            ButtonSegment(
-              value: 'other',
-              label: Text('Other'),
-              icon: Icon(Icons.place_outlined),
-            ),
-          ],
-          selected: {_label},
-          onSelectionChanged: (value) => setState(() => _label = value.first),
+        _Glass(
+          padding: const EdgeInsets.all(AppTokens.space8),
+          accent: AppTokens.primary,
+          child: Row(
+            children: [
+              _LabelChoice('Home', Icons.home_outlined, _label == 'home', () => setState(() => _label = 'home')),
+              _LabelChoice('Work', Icons.work_outline, _label == 'work', () => setState(() => _label = 'work')),
+              _LabelChoice('Other', Icons.place_outlined, _label == 'other', () => setState(() => _label = 'other')),
+            ],
+          ),
         ),
         if (_label == 'other') ...[
           const SizedBox(height: 12),
@@ -626,22 +641,23 @@ class _SenderSavedAddressEditorState extends State<SenderSavedAddressEditor> {
           label: 'Search address or postcode',
           onChanged: _lookup,
         ),
-        if (_searching) const LinearProgressIndicator(minHeight: 2),
-        ..._suggestions
-            .take(4)
-            .map(
-              (suggestion) => ListTile(
-                title: Text(
-                  suggestion.mainText,
-                  style: const TextStyle(color: Colors.white),
-                ),
-                subtitle: Text(
-                  suggestion.subText,
-                  style: const TextStyle(color: _AddressColors.muted),
-                ),
+        if (_searching || _resolving)
+          const Padding(
+            padding: EdgeInsets.only(top: 8),
+            child: LinearProgressIndicator(minHeight: 2),
+          ),
+        if (_suggestions.isNotEmpty)
+          _Glass(
+            padding: EdgeInsets.zero,
+            accent: AppTokens.primary,
+            child: Column(
+              children: _suggestions.take(4).map((suggestion) => ListTile(
+                title: Text(suggestion.mainText),
+                subtitle: Text(suggestion.subText),
                 onTap: () => _select(suggestion),
-              ),
+              )).toList(),
             ),
+          ),
         const _SectionLabel('Confirm address details'),
         _Field(controller: _line1, label: 'Address line 1'),
         const SizedBox(height: 10),
@@ -659,43 +675,24 @@ class _SenderSavedAddressEditorState extends State<SenderSavedAddressEditor> {
           maxLines: 3,
         ),
         const _SectionLabel('Default settings'),
-        SwitchListTile(
-          value: _defaultPickup,
-          onChanged: (value) => setState(() => _defaultPickup = value),
-          title: const Text(
-            'Set as default pickup',
-            style: TextStyle(color: Colors.white),
-          ),
-        ),
-        SwitchListTile(
-          value: _defaultDropoff,
-          onChanged: (value) => setState(() => _defaultDropoff = value),
-          title: const Text(
-            'Set as default drop-off',
-            style: TextStyle(color: Colors.white),
+        _Glass(
+          child: Column(
+            children: [
+              AppToggle(label: 'Set as default pickup', value: _defaultPickup, onChanged: (value) => setState(() => _defaultPickup = value)),
+              AppToggle(label: 'Set as default drop-off', value: _defaultDropoff, onChanged: (value) => setState(() => _defaultDropoff = value)),
+            ],
           ),
         ),
         if (_error != null)
           Padding(
             padding: const EdgeInsets.symmetric(vertical: 12),
-            child: Text(
-              _error!,
-              style: const TextStyle(color: Color(0xFFFCA5A5)),
-            ),
+            child: _Glass(accent: AppTokens.danger, child: Text(_error!)),
           ),
         const SizedBox(height: 18),
-        SizedBox(
-          height: 54,
-          child: FilledButton(
-            onPressed: _canSave ? _save : null,
-            child: Text(
-              _saving
-                  ? 'Saving…'
-                  : _resolving
-                  ? 'Verifying…'
-                  : 'Review and save',
-            ),
-          ),
+        AppButton(
+          onPressed: _canSave ? _save : null,
+          label: _saving ? 'Saving…' : _resolving ? 'Verifying…' : 'Review and save',
+          icon: _resolving ? Icons.verified_outlined : Icons.save_outlined,
         ),
       ],
     ),
@@ -925,10 +922,50 @@ class _Field extends StatelessWidget {
     style: const TextStyle(color: Colors.white),
     decoration: InputDecoration(
       labelText: label,
-      labelStyle: const TextStyle(color: _AddressColors.muted),
+      labelStyle: const TextStyle(color: AppTokens.mutedText),
       filled: true,
-      fillColor: Colors.white.withValues(alpha: .04),
-      border: OutlineInputBorder(borderRadius: BorderRadius.circular(14)),
+      fillColor: AppTokens.glass,
+      enabledBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(AppTokens.radius16),
+        borderSide: const BorderSide(color: AppTokens.glassBorder),
+      ),
+      focusedBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(AppTokens.radius16),
+        borderSide: const BorderSide(color: AppTokens.primary, width: 1.4),
+      ),
+    ),
+  );
+}
+
+class _LabelChoice extends StatelessWidget {
+  final String label;
+  final IconData icon;
+  final bool selected;
+  final VoidCallback onTap;
+  const _LabelChoice(this.label, this.icon, this.selected, this.onTap);
+  @override
+  Widget build(BuildContext context) => Expanded(
+    child: GestureDetector(
+      onTap: onTap,
+      child: AnimatedContainer(
+        duration: AppTokens.fast,
+        padding: const EdgeInsets.symmetric(vertical: 10),
+        decoration: BoxDecoration(
+          color: selected ? AppTokens.primary : Colors.transparent,
+          borderRadius: BorderRadius.circular(AppTokens.radius16),
+          boxShadow: selected
+              ? [BoxShadow(color: AppTokens.primary.withValues(alpha: .28), blurRadius: 18)]
+              : const [],
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(icon, color: selected ? Colors.white : AppTokens.mutedText),
+            const SizedBox(height: 4),
+            Text(label, style: TextStyle(color: selected ? Colors.white : AppTokens.mutedText)),
+          ],
+        ),
+      ),
     ),
   );
 }
@@ -987,10 +1024,12 @@ class _AddressState extends StatelessWidget {
 
 class _Glass extends StatelessWidget {
   final Widget child;
-  const _Glass({required this.child});
+  final EdgeInsetsGeometry padding;
+  final Color? accent;
+  const _Glass({required this.child, this.padding = const EdgeInsets.all(AppTokens.space16), this.accent});
   @override
   Widget build(BuildContext context) =>
-      AppGlassContainer(radius: AppTokens.radius22, child: child);
+      AppGlassContainer(radius: AppTokens.radius22, padding: padding, accent: accent, child: child);
 }
 
 class _AddressColors {
