@@ -16,6 +16,7 @@ import 'package:url_launcher/url_launcher.dart';
 import 'package:uuid/uuid.dart';
 
 import '../business/business_journey_context.dart';
+import '../authentication/bloc/auth_bloc.dart';
 import '../../helper/bitmap_descriptor_helper.dart';
 import '../send_package/bloc/send_package_bloc.dart';
 import '../send_package/models/place_coordinates.m.dart';
@@ -718,8 +719,8 @@ class _SenderBookingCanvasState extends State<SenderBookingCanvas> {
 
   Future<bool> _resolveTypedAddressIfNeeded() async {
     final pickup = _draft.step == SenderBookingStep.pickup;
-    final address = (pickup ? _draft.pickupAddress : _draft.dropoffAddress)
-        .trim();
+    final address =
+        (pickup ? _draft.pickupAddress : _draft.dropoffAddress).trim();
     final hasCoordinates = pickup
         ? _draft.pickupLat != null && _draft.pickupLng != null
         : _draft.dropoffLat != null && _draft.dropoffLng != null;
@@ -732,10 +733,7 @@ class _SenderBookingCanvasState extends State<SenderBookingCanvas> {
     try {
       final provider = PlaceApiProvider(const Uuid());
       final lang = Localizations.localeOf(context).languageCode;
-      final suggestions = await provider.fetchSuggestions(
-        address,
-        lang,
-      );
+      final suggestions = await provider.fetchSuggestions(address, lang);
       if (!mounted) return false;
       final normalized = address.toLowerCase().replaceAll(RegExp(r'\s+'), ' ');
       final match = suggestions.where((suggestion) {
@@ -743,19 +741,16 @@ class _SenderBookingCanvasState extends State<SenderBookingCanvas> {
             .trim()
             .toLowerCase()
             .replaceAll(RegExp(r'\s+'), ' ');
-        final main = suggestion.mainText
-            .trim()
-            .toLowerCase()
-            .replaceAll(RegExp(r'\s+'), ' ');
+        final main = suggestion.mainText.trim().toLowerCase().replaceAll(
+              RegExp(r'\s+'),
+              ' ',
+            );
         return description == normalized || main == normalized;
       }).firstOrNull;
       if (match == null) {
         throw StateError('No exact address match found');
       }
-      final coordinate = await provider.fetchPlaceDetails(
-        match.placeId,
-        lang,
-      );
+      final coordinate = await provider.fetchPlaceDetails(match.placeId, lang);
       if (!mounted) return false;
       if (pickup) {
         context.read<SendPackageBloc>().add(
@@ -1014,6 +1009,15 @@ class _SenderBookingCanvasState extends State<SenderBookingCanvas> {
     }
     return BlocBuilder<SendPackageBloc, SendPackageState>(
       builder: (context, engine) {
+        final senderLocation = context.select<AuthBloc, LatLng?>((bloc) {
+          final location = bloc.state.locationData;
+          if (location == null ||
+              !location.latitude.isFinite ||
+              !location.longitude.isFinite) {
+            return null;
+          }
+          return LatLng(location.latitude, location.longitude);
+        });
         final operationalStep = _stepForEngine(engine);
         if (operationalStep != null && operationalStep != _draft.step) {
           WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -1058,6 +1062,7 @@ class _SenderBookingCanvasState extends State<SenderBookingCanvas> {
               _SenderMobileMap(
                 active: true,
                 engine: engine,
+                senderLocation: senderLocation,
                 showDestination: engine.desinationCoordinate != null ||
                     _dropoff.text.trim().isNotEmpty,
                 showVanguardShield: _draft.vanguard,
@@ -3085,10 +3090,7 @@ List<String> _customerIrisReasons(dynamic iris, SenderBookingDraft draft) {
   return reasons.toSet().toList(growable: false);
 }
 
-bool _routeReadyForQuote(
-  SendPackageState engine, [
-  SenderBookingDraft? draft,
-]) {
+bool _routeReadyForQuote(SendPackageState engine, [SenderBookingDraft? draft]) {
   return engine.distance != null ||
       engine.pickupCoordinate != null && engine.desinationCoordinate != null ||
       draft?.pickupLat != null &&
@@ -6379,6 +6381,7 @@ class _IrisOrb extends StatelessWidget {
 class _SenderMobileMap extends StatefulWidget {
   final bool active;
   final SendPackageState? engine;
+  final LatLng? senderLocation;
   final bool showDestination;
   final bool showVanguardShield;
   final double? distanceKm;
@@ -6386,6 +6389,7 @@ class _SenderMobileMap extends StatefulWidget {
   const _SenderMobileMap({
     required this.active,
     this.engine,
+    this.senderLocation,
     this.showDestination = false,
     this.showVanguardShield = false,
     this.distanceKm,
@@ -6436,82 +6440,83 @@ class _SenderMobileMapState extends State<_SenderMobileMap>
 
   @override
   Widget build(BuildContext context) {
-    final highContrast =
-        SenderAccessibilityScope.maybeOf(context)?.settings.highContrast ??
-            false;
     final engine = widget.engine;
     final pickup = _latLng(engine?.pickupCoordinate);
     final dropoff = _latLng(engine?.desinationCoordinate);
-    final showGoogleMap = senderBookingMapShouldUseGoogle(pickup);
-    final pickupForMap = pickup;
+    final cameraTarget = resolveSenderBookingCameraTarget(
+      pickup: pickup,
+      senderLocation: widget.senderLocation,
+    );
     return Stack(
       children: [
-        AnimatedSwitcher(
-          duration: const Duration(milliseconds: 300),
-          switchInCurve: Curves.easeOutCubic,
-          switchOutCurve: Curves.easeInCubic,
-          child: showGoogleMap
-              ? GoogleMap(
-                  key: const ValueKey('sender-google-map'),
-                  initialCameraPosition: CameraPosition(
-                    target: pickupForMap!,
-                    zoom: dropoff == null ? 15.4 : 12.5,
-                  ),
-                  onMapCreated: (controller) {
-                    _mapController = controller;
-                    WidgetsBinding.instance.addPostFrameCallback(
-                      (_) => _moveCamera(),
-                    );
-                  },
-                  markers: _markers(pickupForMap, dropoff),
-                  polylines: _polylines(),
-                  zoomControlsEnabled: false,
-                  myLocationButtonEnabled: false,
-                  mapToolbarEnabled: false,
-                  compassEnabled: false,
-                  rotateGesturesEnabled: false,
-                  tiltGesturesEnabled: false,
-                  trafficEnabled: false,
-                  style: _senderMapStyle,
-                )
-              : AnimatedBuilder(
-                  key: const ValueKey('sender-painted-map'),
-                  animation: _controller,
-                  builder: (context, _) => CustomPaint(
-                    painter: _MapPainter(
-                      t: _controller.value,
-                      active: widget.active,
-                      showDestination: widget.showDestination,
-                      highContrast: highContrast,
-                    ),
-                    child: const SizedBox.expand(),
-                  ),
-                ),
+        AnimatedBuilder(
+          animation: _controller,
+          builder: (context, _) => GoogleMap(
+            key: const ValueKey('sender-google-map'),
+            initialCameraPosition: CameraPosition(
+              target: cameraTarget.coordinate,
+              zoom: dropoff == null ? 14.6 : 12.5,
+            ),
+            onMapCreated: (controller) {
+              _mapController = controller;
+              WidgetsBinding.instance.addPostFrameCallback(
+                (_) => _moveCamera(),
+              );
+            },
+            markers: _markers(pickup, dropoff, cameraTarget),
+            polylines: _polylines(_controller.value),
+            zoomControlsEnabled: false,
+            myLocationButtonEnabled: false,
+            mapToolbarEnabled: false,
+            compassEnabled: false,
+            rotateGesturesEnabled: false,
+            tiltGesturesEnabled: false,
+            trafficEnabled: false,
+            style: _senderMapStyle,
+          ),
         ),
-        const DecoratedBox(
-          decoration: BoxDecoration(
-            gradient: LinearGradient(
-              begin: Alignment.topCenter,
-              end: Alignment.bottomCenter,
-              colors: [Color(0x9907090F), Color(0x3307090F), Color(0xCC07090F)],
-              stops: [0, .48, 1],
+        const IgnorePointer(
+          child: DecoratedBox(
+            decoration: BoxDecoration(
+              gradient: RadialGradient(
+                center: Alignment(-.65, -.95),
+                radius: 1.15,
+                colors: [
+                  Color(0x243B82F6),
+                  Colors.transparent,
+                  Color(0x6607090F),
+                ],
+                stops: [0, .54, 1],
+              ),
             ),
           ),
         ),
-        DecoratedBox(
-          decoration: BoxDecoration(
-            gradient: RadialGradient(
-              center: const Alignment(-.65, -.95),
-              radius: 1.15,
-              colors: [
-                _Tokens.blue.withValues(alpha: .14),
-                Colors.transparent,
-                _Tokens.bg.withValues(alpha: .42),
-              ],
-              stops: const [0, .54, 1],
+        const IgnorePointer(
+          child: DecoratedBox(
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                begin: Alignment.topCenter,
+                end: Alignment.bottomCenter,
+                colors: [
+                  Color(0x9907090F),
+                  Color(0x3307090F),
+                  Color(0xCC07090F),
+                ],
+                stops: [0, .48, 1],
+              ),
             ),
           ),
         ),
+        if (cameraTarget.source == SenderBookingCameraSource.senderApproximate)
+          IgnorePointer(
+            child: AnimatedBuilder(
+              animation: _controller,
+              builder: (context, _) => CustomPaint(
+                painter: _ApproximateLocationPainter(_controller.value),
+                child: const SizedBox.expand(),
+              ),
+            ),
+          ),
         if (widget.showDestination && widget.showVanguardShield)
           const Align(
             alignment: Alignment(-.02, -.12),
@@ -6535,7 +6540,11 @@ class _SenderMobileMapState extends State<_SenderMobileMap>
     return LatLng(coordinate.lat, coordinate.lng);
   }
 
-  Set<Marker> _markers(LatLng pickup, LatLng? dropoff) {
+  Set<Marker> _markers(
+    LatLng? pickup,
+    LatLng? dropoff,
+    SenderBookingCameraTarget cameraTarget,
+  ) {
     final engine = widget.engine;
     if (engine != null && engine.markers.isNotEmpty) {
       return engine.markers.values.toSet();
@@ -6548,7 +6557,7 @@ class _SenderMobileMapState extends State<_SenderMobileMap>
     return {
       Marker(
         markerId: const MarkerId('source_marker'),
-        position: pickup,
+        position: pickup ?? cameraTarget.coordinate,
         icon: pickupIcon,
       ),
       if (dropoff != null)
@@ -6578,13 +6587,18 @@ class _SenderMobileMapState extends State<_SenderMobileMap>
     });
   }
 
-  Set<Polyline> _polylines() {
+  Set<Polyline> _polylines(double phase) {
     final engine = widget.engine;
     if (engine == null || engine.polylines.isEmpty) return const {};
+    final energyColor = Color.lerp(
+      _Tokens.lightBlue,
+      _Tokens.iris,
+      (math.sin(phase * math.pi * 2) + 1) / 2,
+    )!;
     return engine.polylines
         .map(
           (polyline) =>
-              polyline.copyWith(colorParam: _Tokens.lightBlue, widthParam: 4),
+              polyline.copyWith(colorParam: energyColor, widthParam: 4),
         )
         .toSet();
   }
@@ -6593,15 +6607,31 @@ class _SenderMobileMapState extends State<_SenderMobileMap>
     final controller = _mapController;
     final engine = widget.engine;
     final pickup = _latLng(engine?.pickupCoordinate);
-    if (controller == null || pickup == null) return;
+    final target = resolveSenderBookingCameraTarget(
+      pickup: pickup,
+      senderLocation: widget.senderLocation,
+    );
+    if (controller == null) return;
     final dropoff = _latLng(engine?.desinationCoordinate);
     if (dropoff == null) {
-      if (_lastPickup == pickup && _lastDropoff == null) return;
-      _lastPickup = pickup;
+      if (_lastPickup == target.coordinate && _lastDropoff == null) return;
+      _lastPickup = target.coordinate;
       _lastDropoff = null;
       await controller.animateCamera(
         CameraUpdate.newCameraPosition(
-          CameraPosition(target: pickup, zoom: 15.4),
+          CameraPosition(
+            target: target.coordinate,
+            zoom:
+                target.source == SenderBookingCameraSource.pickup ? 15.4 : 14.6,
+          ),
+        ),
+      );
+      return;
+    }
+    if (pickup == null) {
+      await controller.animateCamera(
+        CameraUpdate.newCameraPosition(
+          CameraPosition(target: target.coordinate, zoom: 12.5),
         ),
       );
       return;
@@ -6630,6 +6660,98 @@ class _SenderMobileMapState extends State<_SenderMobileMap>
 
 @visibleForTesting
 bool senderBookingMapShouldUseGoogle(LatLng? pickup) => pickup != null;
+
+enum SenderBookingCameraSource { pickup, senderApproximate, serviceFallback }
+
+class SenderBookingCameraTarget {
+  const SenderBookingCameraTarget({
+    required this.coordinate,
+    required this.source,
+  });
+
+  final LatLng coordinate;
+  final SenderBookingCameraSource source;
+}
+
+const _senderBookingServiceFallback = LatLng(51.5074, -0.1278);
+
+@visibleForTesting
+SenderBookingCameraTarget resolveSenderBookingCameraTarget({
+  LatLng? pickup,
+  LatLng? senderLocation,
+  LatLng serviceFallback = _senderBookingServiceFallback,
+}) {
+  if (_bookingCoordinateIsUsable(pickup)) {
+    return SenderBookingCameraTarget(
+      coordinate: pickup!,
+      source: SenderBookingCameraSource.pickup,
+    );
+  }
+  if (_bookingCoordinateIsUsable(senderLocation)) {
+    return SenderBookingCameraTarget(
+      coordinate: senderLocation!,
+      source: SenderBookingCameraSource.senderApproximate,
+    );
+  }
+  return SenderBookingCameraTarget(
+    coordinate: _bookingCoordinateIsUsable(serviceFallback)
+        ? serviceFallback
+        : _senderBookingServiceFallback,
+    source: SenderBookingCameraSource.serviceFallback,
+  );
+}
+
+bool _bookingCoordinateIsUsable(LatLng? coordinate) {
+  if (coordinate == null) return false;
+  final lat = coordinate.latitude;
+  final lng = coordinate.longitude;
+  return lat.isFinite &&
+      lng.isFinite &&
+      lat != 0 &&
+      lng != 0 &&
+      lat >= 49 &&
+      lat <= 61 &&
+      lng >= -9 &&
+      lng <= 2;
+}
+
+class _ApproximateLocationPainter extends CustomPainter {
+  const _ApproximateLocationPainter(this.phase);
+
+  final double phase;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final center = Offset(size.width / 2, size.height / 2);
+    final pulse = (math.sin(phase * math.pi * 2) + 1) / 2;
+    for (var index = 0; index < 3; index++) {
+      final radius = 24 + ((index + pulse) * 28);
+      canvas.drawCircle(
+        center,
+        radius,
+        Paint()
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = 2
+          ..color = Color.lerp(_Tokens.lightBlue, _Tokens.iris, pulse)!
+              .withValues(alpha: .16 - index * .035),
+      );
+    }
+    canvas.drawCircle(
+      center,
+      9,
+      Paint()..color = _Tokens.lightBlue.withValues(alpha: .9),
+    );
+    canvas.drawCircle(
+      center,
+      22,
+      Paint()..color = _Tokens.iris.withValues(alpha: .12),
+    );
+  }
+
+  @override
+  bool shouldRepaint(covariant _ApproximateLocationPainter oldDelegate) =>
+      oldDelegate.phase != phase;
+}
 
 const _senderMapStyle = '''
 [

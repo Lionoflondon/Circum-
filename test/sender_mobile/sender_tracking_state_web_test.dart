@@ -29,6 +29,48 @@ void main() {
     expect(restored.dropoff.lng, -0.3);
   });
 
+  test('booking camera prefers pickup, then sender location, then fallback',
+      () {
+    const pickup = LatLng(51.5, -0.1);
+    const sender = LatLng(51.6, -0.2);
+    const fallback = LatLng(51.7, -0.3);
+
+    expect(
+      resolveSenderBookingCameraTarget(
+        pickup: pickup,
+        senderLocation: sender,
+        serviceFallback: fallback,
+      ).source,
+      SenderBookingCameraSource.pickup,
+    );
+    expect(
+      resolveSenderBookingCameraTarget(
+        senderLocation: sender,
+        serviceFallback: fallback,
+      ).coordinate,
+      sender,
+    );
+    expect(
+      resolveSenderBookingCameraTarget(
+        senderLocation: const LatLng(0, 0),
+        serviceFallback: fallback,
+      ).coordinate,
+      fallback,
+    );
+  });
+
+  test('booking camera rejects invalid pickup in favour of sender location',
+      () {
+    const sender = LatLng(51.6, -0.2);
+    final target = resolveSenderBookingCameraTarget(
+      pickup: const LatLng(double.nan, -0.1),
+      senderLocation: sender,
+    );
+
+    expect(target.source, SenderBookingCameraSource.senderApproximate);
+    expect(target.coordinate, sender);
+  });
+
   test('Sender Web reads canonical delivery lifecycle fields', () {
     final source =
         File('lib/website/shared/circum_website_app.dart').readAsStringSync();
@@ -363,10 +405,12 @@ void main() {
     final source = File('lib/app/sender_mobile/sender_tracking_screen.dart')
         .readAsStringSync();
     final mapStart = source.indexOf('class SenderGoogleTrackingMap');
-    final opacityStart = source.indexOf('opacity: _ready ? .88 : .01', mapStart);
+    final opacityStart =
+        source.indexOf('opacity: _ready ? .88 : .01', mapStart);
 
     expect(mapStart, isNonNegative);
     expect(opacityStart, greaterThan(mapStart));
-    expect(source.substring(mapStart), isNot(contains('opacity: _ready ? .88 : 0')));
+    expect(source.substring(mapStart),
+        isNot(contains('opacity: _ready ? .88 : 0')));
   });
 }
