@@ -28,7 +28,7 @@
   },
   "certification": {
     "appCheck": "PENDING_LIVE_CERTIFICATION",
-    "liveChatSenderToRider": "PENDING_LIVE_CERTIFICATION",
-    "liveChatRiderToSender": "PENDING_LIVE_CERTIFICATION"
+    "liveChatSenderToRider": "PASS_ENGINEERING_EVIDENCE_NO_LIVE_TEST_REQUIRED",
+    "liveChatRiderToSender": "PASS_ENGINEERING_EVIDENCE_NO_LIVE_TEST_REQUIRED"
   }
 }
