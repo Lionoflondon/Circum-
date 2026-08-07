@@ -28,4 +28,8 @@ void main() {
     expect(RegExp(r'Expanded\(').allMatches(actions), hasLength(2));
     expect(actions, contains('const SizedBox(width: 8)'));
   });
+
+  test('tracking button animation overlay cannot intercept taps', () {
+    expect(source, contains('Positioned.fill(\n                  child: IgnorePointer('));
+  });
 }
