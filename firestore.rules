@@ -1027,6 +1027,11 @@ service cloud.firestore {
       allow create, update, delete: if false;
     }
 
+    match /deliveryCompletionEvents/{eventId} {
+      allow read: if isAdmin();
+      allow create, update, delete: if false;
+    }
+
     match /{path=**}/senderTrustEvents/{eventId} {
       allow read: if canReadSenderTrustEvent();
       allow create, update, delete: if false;

@@ -4,6 +4,8 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
 const deliveryTracking = require("./delivery-tracking")._private;
+const completion = require("./delivery-completion-core");
+const lifecycle = require("./delivery-lifecycle-core");
 
 test("collection PIN verification patch updates backend tracking fields", () => {
   const patch = deliveryTracking.patchForTransition({
@@ -235,6 +237,43 @@ test("settlement values reuse canonical earnings and highest trust category", ()
 test("delivered transitions persist the canonical trust award even on retry", () => {
   assert.equal(deliveryTracking.highestTrustAward({requiresVanguard: true}), 4);
   assert.equal(deliveryTracking.settlementValues({requiresVanguard: true}).trustPoints, 4);
+});
+
+test("completion event identity is deterministic and contains no secrets", () => {
+  const event = completion.completionEventFor({
+    deliveryId: "delivery-1",
+    riderId: "rider-1",
+    delivery: {
+      requestId: "request-1",
+      senderId: "sender-1",
+      quoteId: "quote-1",
+      paymentSessionId: "payment-1",
+    },
+  });
+  assert.equal(event.eventId, "delivery_completed_delivery-1");
+  assert.equal(event.eventType, "DeliveryCompleted");
+  assert.equal(event.schemaVersion, 1);
+  assert.equal(Object.hasOwn(event, "deliveryPin"), false);
+  assert.equal(Object.hasOwn(event, "collectionPin"), false);
+  assert.deepEqual(
+      completion.completionEventFor({deliveryId: "delivery-1", riderId: "rider-1", delivery: {}}),
+      completion.completionEventFor({deliveryId: "delivery-1", riderId: "rider-1", delivery: {}}),
+  );
+});
+
+test("canonical terminal predicate covers completion and cancellation states", () => {
+  for (const status of ["delivered", "completed", "cancelled", "failed", "expired", "blocked"]) {
+    assert.equal(lifecycle.isTerminalDeliveryStatus(status), true, status);
+  }
+  assert.equal(lifecycle.isTerminalDeliveryStatus("navigating_to_dropoff"), false);
+});
+
+test("completion source releases only the matching Rider assignment atomically", () => {
+  const source = require("node:fs").readFileSync(require("node:path").join(__dirname, "delivery-tracking.js"), "utf8");
+  assert.match(source, /presence\.activeDeliveryId === found\.id/);
+  assert.match(source, /source: "deliveryCompletion"/);
+  assert.match(source, /deliveryCompletionEvents/);
+  assert.match(source, /delivery_completed_\$\{found\.id\}/);
 });
 
 test("canonical rider rank follows backend trust thresholds", () => {

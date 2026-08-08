@@ -6,6 +6,8 @@ const {getFirestore, FieldValue, GeoPoint} = require("firebase-admin/firestore")
 const tracking = require("./sender-tracking-state-core");
 const {evaluateRoadCharges} = require("./road-charges-core");
 const {highestTrustAward} = require("./trust-award");
+const {isTerminalDeliveryStatus} = require("./delivery-lifecycle-core");
+const {completionEventFor} = require("./delivery-completion-core");
 
 function text(value) {
   return `${value || ""}`.trim();
@@ -351,6 +353,8 @@ exports.updateDeliveryTrackingStatus = functions.https.onCall(async (data, conte
 
     const riderRef = db.collection("riders").doc(riderId);
     const riderSnapshot = await transaction.get(riderRef);
+    const presenceRef = db.collection("riderPresence").doc(riderId);
+    const presenceSnapshot = await transaction.get(presenceRef);
     if (!(context.auth.token && context.auth.token.founderRider === true)) assertRiderOperational(riderSnapshot.data());
 
     const currentStatus = normalized(delivery.status || delivery.deliveryStatus || "requested");
@@ -583,6 +587,24 @@ exports.updateDeliveryTrackingStatus = functions.https.onCall(async (data, conte
           completedAt: FieldValue.serverTimestamp(),
           updatedAt: FieldValue.serverTimestamp(),
         }, {merge: true});
+        transaction.create(
+            db.collection("deliveryCompletionEvents").doc(`delivery_completed_${found.id}`),
+            {
+              ...completionEventFor({deliveryId: found.id, delivery, riderId}),
+              occurredAt: FieldValue.serverTimestamp(),
+            },
+        );
+      }
+    }
+    if (nextStatus === "delivered") {
+      const presence = presenceSnapshot.exists ? presenceSnapshot.data() || {} : {};
+      if (presence.activeDeliveryId === found.id) {
+        transaction.set(presenceRef, {
+          activeDeliveryId: FieldValue.delete(),
+          busy: false,
+          updatedAt: FieldValue.serverTimestamp(),
+          source: "deliveryCompletion",
+        }, {merge: true});
       }
     }
     if (activeRef && shouldWriteLocation) {
@@ -639,7 +661,7 @@ exports.updateDeliveryLiveLocation = functions.https.onCall(async (data, context
     const delivery = found.data || {};
     assertRiderOwnsDelivery(delivery, riderId);
     const currentStatus = normalized(delivery.status || delivery.deliveryStatus || delivery.deliveryStage);
-    if (["completed", "complete", "delivered", "cancelled", "canceled", "failed", "no_show"].includes(currentStatus)) {
+    if (isTerminalDeliveryStatus(currentStatus) || currentStatus === "no_show") {
       throw new functions.https.HttpsError("failed-precondition", "Live tracking is not active for this delivery.");
     }
 

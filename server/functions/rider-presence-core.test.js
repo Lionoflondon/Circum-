@@ -108,6 +108,19 @@ test("blocked profile trigger preserves an authorised founder test rider", () =>
   assert.match(source, /status: "offline"/);
 });
 
+test("completion reconciliation recognizes terminal release without changing policy", () => {
+  assert.equal(core.nextPresenceOnDelivery({
+    before: {riderId: "rider-1", status: "arrived_at_dropoff"},
+    after: {riderId: "rider-1", status: "delivered"},
+    riderId: "rider-1",
+  }), "available");
+  assert.equal(core.nextPresenceOnDelivery({
+    before: {riderId: "rider-1", status: "arrived_at_dropoff"},
+    after: {riderId: "rider-2", status: "delivered"},
+    riderId: "rider-1",
+  }), null);
+});
+
 test("goOnline never leaks raw internal failures to riders", () => {
   const source = fs.readFileSync(path.join(__dirname, "rider-presence.js"), "utf8");
   const goOnlineStart = source.indexOf("exports.goOnline = functions.https.onCall");
