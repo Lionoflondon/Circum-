@@ -7,6 +7,7 @@ const HEALTH_PLUS_FAMILY_MONTHLY_PENCE = 4000;
 const DELIVERY_BASE_FARE_PENCE = 500;
 const ADDITIONAL_FARE_PER_MILE_PENCE = 150;
 const SHORT_TRIP_FARE_FLOOR_MILES = 1.6;
+const MAX_VALIDATED_MEDICATION_WEIGHT_KG = 1000;
 
 const WEIGHT_BANDS = [
   {category: "Small Parcel", minKg: 0, maxKg: 5, surchargePence: 0},
@@ -30,6 +31,16 @@ const PICKUP_STATUSES = [
 function positiveNumber(value) {
   const number = Number(value);
   return Number.isFinite(number) && number >= 0 ? number : null;
+}
+
+function validateMedicationWeightKg(value) {
+  const weight = Number(value);
+  if (!Number.isFinite(weight) || weight <= 0 || weight > MAX_VALIDATED_MEDICATION_WEIGHT_KG) {
+    const error = new Error("Health+ route distance and medication weight are required; weight must be a finite positive value within supported limits.");
+    error.code = "invalid-medication-weight";
+    throw error;
+  }
+  return weight;
 }
 
 function normalizePlan(plan) {
@@ -148,8 +159,8 @@ function calculateHealthPlusAmountPence(input = {}) {
 
 function calculateAuthoritativeHealthPlusPricing(input = {}) {
   const distanceMiles = positiveNumber(input.distanceMiles);
-  const medicationWeightKg = positiveNumber(input.medicationWeightKg);
-  if (distanceMiles == null || medicationWeightKg == null) {
+  const medicationWeightKg = validateMedicationWeightKg(input.medicationWeightKg);
+  if (distanceMiles == null) {
     const error = new Error(
         "Health+ route distance and medication weight are required " +
         "for pricing.",
@@ -342,6 +353,8 @@ module.exports = {
   calculateHealthPlusAmountPence,
   calculateAuthoritativeHealthPlusPricing,
   healthPlusPricingInputFromBooking,
+  validateMedicationWeightKg,
+  MAX_VALIDATED_MEDICATION_WEIGHT_KG,
   normalizeSchedule,
   buildHealthPlusCheckoutParams,
   buildAdminStatusUpdate,
