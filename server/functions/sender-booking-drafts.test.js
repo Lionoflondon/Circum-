@@ -141,6 +141,50 @@ test("sender quote charges distance in miles", () => {
   assert.equal(quote.total, 9.5);
 });
 
+test("authoritative quote snapshot is stable and rejects payload substitution", () => {
+  const data = {
+    pickup: {address: "A", locality: "London", coordinates: {latitude: 51.5, longitude: -0.1}},
+    dropoff: {address: "B", locality: "London", coordinates: {latitude: 51.51, longitude: -0.11}},
+    pickupCoordinates: {latitude: 51.5, longitude: -0.1},
+    dropoffCoordinates: {latitude: 51.51, longitude: -0.11},
+    selectedSpeed: "Standard",
+    selectedVehicle: "Car",
+    weightKg: 2,
+    pickupAccess: "groundFloor",
+    dropoffAccess: "groundFloor",
+    parcel: {itemName: "Books", description: "Books", weightKg: 2},
+  };
+  const quote = _private.quotePayload({...data, authoritativeDistanceMiles: 4}, "sender-test");
+  const routeFacts = {
+    routeFingerprint: "route-a",
+    provider: "google_routes",
+    routeDistanceMeters: 6437.376,
+    routeDurationSeconds: 900,
+  };
+  const snapshot = _private.buildCanonicalQuoteSnapshot({
+    data,
+    quote,
+    routeFacts,
+    serverDistanceMiles: 4,
+  });
+  const securedQuote = {
+    ...quote,
+    canonicalQuoteSnapshot: snapshot,
+    canonicalQuoteSnapshotHash: _private.canonicalQuoteHash(snapshot),
+  };
+  const payload = {
+    ...data,
+    parcel: {...data.parcel},
+  };
+  assert.doesNotThrow(() => _private.assertQuotePayloadMatchesSnapshot(securedQuote, payload));
+  assert.throws(() => _private.assertQuotePayloadMatchesSnapshot(securedQuote, {
+    ...payload,
+    dropoffCoordinates: {latitude: 51.52, longitude: -0.12},
+  }), /booking changed/i);
+  assert.equal(_private.canonicalQuoteHash({...snapshot, lineItems: [...snapshot.lineItems].reverse()}),
+    _private.canonicalQuoteHash({...snapshot, lineItems: [...snapshot.lineItems].reverse()}));
+});
+
 test("sender quote carries authoritative normal-dispatch eligibility", () => {
   const supported = _private.quotePayload({
     selectedSpeed: "Standard",

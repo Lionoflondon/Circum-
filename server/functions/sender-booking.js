@@ -30,6 +30,9 @@ const PLATFORM_DELIVERY_FARE_SHARE = 0.35;
 const DRAFT_SCHEMA_VERSION = 1;
 const DRAFT_RETENTION_DAYS = 30;
 const DRAFT_INACTIVITY_MINUTES = 10;
+const QUOTE_SCHEMA_VERSION = 2;
+const QUOTE_RETENTION_MINUTES = 30;
+const METERS_PER_MILE = 1609.344;
 const MAX_DRAFT_BYTES = 32768;
 const MAX_STRING_LENGTH = 1000;
 const MAX_DEPTH = 6;
@@ -77,6 +80,157 @@ function text(value) {
 
 function money(value) {
   return roundMoney(Number(value || 0));
+}
+
+function finiteNumber(value) {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+function canonicalHashValue(value) {
+  if (value === undefined || value === null) return null;
+  if (Array.isArray(value)) return value.map(canonicalHashValue);
+  if (typeof value === "object") {
+    return Object.keys(value).sort().reduce((result, key) => {
+      const normalized = canonicalHashValue(value[key]);
+      if (normalized !== undefined) result[key] = normalized;
+      return result;
+    }, {});
+  }
+  if (typeof value === "number") return Number.isFinite(value) ? value : null;
+  return value;
+}
+
+function canonicalQuoteHash(snapshot) {
+  return crypto.createHash("sha256")
+      .update(JSON.stringify(canonicalHashValue(snapshot)))
+      .digest("hex");
+}
+
+function coordinateSnapshot(value = {}) {
+  const source = cleanMap(value);
+  const latitude = finiteNumber(source.latitude ?? source.lat);
+  const longitude = finiteNumber(source.longitude ?? source.lng ?? source.lon);
+  return {
+    placeId: cleanString(source.placeId || source.providerPlaceId || "", 200) || null,
+    provider: cleanString(source.provider || source.source || "", 80) || null,
+    latitude: latitude == null ? null : Number(latitude.toFixed(6)),
+    longitude: longitude == null ? null : Number(longitude.toFixed(6)),
+  };
+}
+
+function addressSnapshot(value = {}, coordinates = {}) {
+  const source = cleanMap(value);
+  return {
+    ...coordinateSnapshot(coordinates),
+    address: cleanString(source.address || source.formattedAddress || "", 500) || null,
+    locality: cleanString(source.locality || source.city || source.postcode || "", 160) || null,
+  };
+}
+
+function buildCanonicalQuoteSnapshot({data = {}, quote = {}, routeFacts = {}, serverDistanceMiles}) {
+  const parcel = cleanMap(data.parcel);
+  const pickupCoordinates = data.pickupCoordinates || data.pickupPosition ||
+    cleanMap(data.pickup).coordinates || {};
+  const dropoffCoordinates = data.dropoffCoordinates || data.dropoffPosition ||
+    cleanMap(data.dropoff).coordinates || {};
+  const pickup = cleanMap(data.pickup);
+  const dropoff = cleanMap(data.dropoff);
+  const deliveryTime = cleanMap(data.deliveryTime);
+  return {
+    pickup: addressSnapshot(pickup, pickupCoordinates),
+    dropoff: addressSnapshot(dropoff, dropoffCoordinates),
+    route: {
+      fingerprint: cleanString(routeFacts.routeFingerprint || "", 200) || null,
+      provider: cleanString(routeFacts.provider || routeFacts.routeSource || "", 80) || null,
+      distanceMeters: finiteNumber(routeFacts.routeDistanceMeters),
+      distanceMiles: Number(Number(serverDistanceMiles || quote.distanceMiles || 0).toFixed(4)),
+      durationSeconds: finiteNumber(routeFacts.routeDurationSeconds || routeFacts.durationSeconds),
+    },
+    vehicle: quote.selectedVehicle,
+    speed: quote.selectedSpeed,
+    weightKg: Number(Number(quote.weightKg || 0).toFixed(3)),
+    parcel: {
+      itemName: cleanString(parcel.itemName || "", 240) || null,
+      description: cleanString(parcel.description || data.description || data.packageDescription || "", 600) || null,
+      weightKg: finiteNumber(parcel.weightKg || data.weightKg),
+      weightLabel: cleanString(parcel.weightLabel || "", 80) || null,
+      highValue: parcel.highValue === true || data.highValue === true,
+    },
+    access: {
+      pickup: cleanString(data.pickupAccess || pickup.access || "", 80) || null,
+      dropoff: cleanString(data.dropoffAccess || dropoff.access || "", 80) || null,
+    },
+    vanguard: quote.vanguardProtocolEnabled === true,
+    iris: {
+      compliance: quote.irisComplianceStatus || null,
+      serviceability: quote.irisServiceabilityStatus || null,
+      normalCheckoutEligible: quote.normalCheckoutEligible === true,
+      photoAnalysisId: quote.irisPhotoAnalysisId || null,
+    },
+    schedule: deliveryTime.type || deliveryTime.scheduledAt || deliveryTime.scheduledWindow ? {
+      type: cleanString(deliveryTime.type || "", 40) || null,
+      scheduledAt: cleanString(deliveryTime.scheduledAt || "", 80) || null,
+      scheduledWindow: cleanString(deliveryTime.scheduledWindow || "", 120) || null,
+    } : null,
+    currency: quote.currency,
+    roadChargePolicyVersion: quote.roadChargePolicyVersion,
+    pricingSource: quote.pricingSource,
+    lineItems: quote.lineItems,
+    total: quote.total,
+    amountDue: quote.amountDue,
+  };
+}
+
+function quoteComparablePayload(payload = {}) {
+  const parcel = cleanMap(payload.parcel);
+  const pickup = cleanMap(payload.pickup);
+  const dropoff = cleanMap(payload.dropoff);
+  return {
+    pickup: coordinateSnapshot(payload.pickupCoordinates || payload.pickupPosition || pickup.coordinates),
+    dropoff: coordinateSnapshot(payload.dropoffCoordinates || payload.dropoffPosition || dropoff.coordinates),
+    vehicle: canonicalVehicle(payload.selectedVehicle || payload.vehicleType || payload.recommendedVehicle),
+    speed: speedKey(payload.selectedSpeed || payload.selectedOption || payload.selectedServiceLevel),
+    weightKg: finiteNumber(payload.weightKg || parcel.weightKg),
+    parcel: {
+      itemName: cleanString(parcel.itemName || "", 240) || null,
+      description: cleanString(parcel.description || payload.description || payload.packageDescription || "", 600) || null,
+      weightKg: finiteNumber(parcel.weightKg || payload.weightKg),
+      highValue: parcel.highValue === true || payload.highValue === true,
+    },
+    access: {
+      pickup: cleanString(payload.pickupAccess || pickup.access || "", 80) || null,
+      dropoff: cleanString(payload.dropoffAccess || dropoff.access || "", 80) || null,
+    },
+    vanguard: payload.vanguardProtocolEnabled === true || payload.vanguard === true,
+  };
+}
+
+function assertQuotePayloadMatchesSnapshot(quote, payload) {
+  const snapshot = quote.canonicalQuoteSnapshot;
+  if (!snapshot || quote.canonicalQuoteSnapshotHash !== canonicalQuoteHash(snapshot)) {
+    throw new functions.https.HttpsError("failed-precondition", "This quote must be refreshed before payment.", {reason: "invalid_quote_snapshot"});
+  }
+  const candidate = quoteComparablePayload(payload);
+  const expected = {
+    pickup: coordinateSnapshot(snapshot.pickup),
+    dropoff: coordinateSnapshot(snapshot.dropoff),
+    vehicle: snapshot.vehicle,
+    speed: snapshot.speed,
+    weightKg: snapshot.weightKg,
+    parcel: {
+      itemName: snapshot.parcel.itemName,
+      description: snapshot.parcel.description,
+      weightKg: snapshot.parcel.weightKg,
+      highValue: snapshot.parcel.highValue,
+    },
+    access: snapshot.access,
+    vanguard: snapshot.vanguard,
+  };
+  if (JSON.stringify(canonicalHashValue(candidate)) !== JSON.stringify(canonicalHashValue(expected))) {
+    throw new functions.https.HttpsError("failed-precondition", "The booking changed after its quote was issued. Please recalculate.", {reason: "quote_input_mismatch"});
+  }
+  return snapshot;
 }
 
 function canonicalVehicle(value) {
@@ -720,11 +874,12 @@ function riderDisplayAliases({quote = {}, data = {}, vanguardFields = {}} = {}) 
 
 function quotePayload(data, uid, serverPhotoAnalysis = null, serverRoadChargeFacts = null) {
   const selectedSpeed = speedKey(data.selectedSpeed || data.selectedOption);
+  const authoritativeDistanceMiles = finiteNumber(data.authoritativeDistanceMiles);
   const clientWeightKg = Number(data.weightKg || data.parcel && data.parcel.weightKg || 0.5);
   const photoWeightKg = Number(serverPhotoAnalysis && serverPhotoAnalysis.estimatedWeightKg || 0);
   const weightKg = Math.max(0.5, clientWeightKg, photoWeightKg);
   const base = BASE_FARE_GBP;
-  const distance = distanceFare(data.distanceMiles);
+  const distance = distanceFare(authoritativeDistanceMiles == null ? data.distanceMiles : authoritativeDistanceMiles);
   const weight = weightSurcharge(weightKg);
   const selectedVehicle = canonicalVehicle(
       data.selectedVehicle ||
@@ -741,7 +896,7 @@ function quotePayload(data, uid, serverPhotoAnalysis = null, serverRoadChargeFac
     description: parcelDescription,
     declaredWeightText: parcelData.weightLabel || parcelData.weightKg || data.weightKg || "",
     photoEstimatedWeightKg: photoWeightKg || null,
-    distanceMiles: data.distanceMiles || 0,
+    distanceMiles: authoritativeDistanceMiles == null ? data.distanceMiles || 0 : authoritativeDistanceMiles,
     speed: selectedSpeed,
     vehicleType: selectedVehicle,
     workflow: data.sourceModule || data.serviceType || data.type,
@@ -795,11 +950,12 @@ function quotePayload(data, uid, serverPhotoAnalysis = null, serverRoadChargeFac
   const quoteId = text(data.quoteId) || `sender_quote_${uid}_${Date.now()}`;
   const speedOptions = ["standard", "express"].map((speedOption) => {
     const optionSpeed = money(speedAdjustment(subtotal, speedOption));
-    const optionTotal = money(Math.max(0, subtotal + optionSpeed + vanguard));
+    const optionTotal = money(Math.max(0, subtotal + optionSpeed + vanguard + roadChargeCustomerContribution));
     return {
       speed: `${speedOption[0].toUpperCase()}${speedOption.slice(1)}`,
       total: optionTotal,
       speedAdjustment: optionSpeed,
+      roadChargeCustomerContribution,
       description: speedOption === "express" ?
         "Priority rider matching and urgent pickup." :
         "Regular rider matching.",
@@ -811,7 +967,7 @@ function quotePayload(data, uid, serverPhotoAnalysis = null, serverRoadChargeFac
     userId: uid,
     currency: "GBP",
     selectedSpeed,
-    distanceMiles: Number(data.distanceMiles || 0),
+    distanceMiles: authoritativeDistanceMiles == null ? Number(data.distanceMiles || 0) : authoritativeDistanceMiles,
     weightKg,
     selectedVehicle,
     vehicleType: selectedVehicle,
@@ -1049,10 +1205,33 @@ exports.createSenderBookingQuote = functions.runWith({
         {reason: serverRoadChargeFacts.reason || "authoritative_route_unavailable"},
     );
   }
+  const routeDistanceMeters = finiteNumber(serverRoadChargeFacts.routeDistanceMeters);
+  if (routeDistanceMeters == null || routeDistanceMeters <= 0) {
+    throw new functions.https.HttpsError(
+        "failed-precondition",
+        "A server-calculated route distance is required before quoting.",
+        {reason: "authoritative_route_distance_unavailable"},
+    );
+  }
+  const serverDistanceMiles = routeDistanceMeters / METERS_PER_MILE;
   const quote = quotePayload({
     ...(data || {}),
     ...(businessContext || {}),
+    authoritativeDistanceMiles: serverDistanceMiles,
   }, sender.uid, serverPhotoAnalysis, serverRoadChargeFacts);
+  const canonicalQuoteSnapshot = buildCanonicalQuoteSnapshot({
+    data: {...(data || {}), ...(businessContext || {})},
+    quote,
+    routeFacts: serverRoadChargeFacts,
+    serverDistanceMiles,
+  });
+  const canonicalQuoteSnapshotHash = canonicalQuoteHash(canonicalQuoteSnapshot);
+  const quoteRef = db.collection("senderBookingQuotes").doc();
+  quote.quoteId = quoteRef.id;
+  quote.quoteSchemaVersion = QUOTE_SCHEMA_VERSION;
+  quote.canonicalQuoteSnapshot = canonicalQuoteSnapshot;
+  quote.canonicalQuoteSnapshotHash = canonicalQuoteSnapshotHash;
+  quote.quoteExpiresAt = Timestamp.fromDate(new Date(Date.now() + QUOTE_RETENTION_MINUTES * 60 * 1000));
   const clientDisplayQuote = cleanMap(data && data.clientDisplayQuote);
   const clientDisplayedAmount = cleanNumber(clientDisplayQuote.amount);
   const clientDisplayedAmountPence = cleanNumber(clientDisplayQuote.amountPence);
@@ -1061,7 +1240,7 @@ exports.createSenderBookingQuote = functions.runWith({
     clientDisplayedAmountPence != null ? money(clientDisplayedAmountPence / 100) : null;
   const discrepancy = clientDisplayAmount == null ? null :
     money(clientDisplayAmount - money(quote.total));
-  await db.collection("senderBookingQuotes").doc(quote.quoteId).set({
+  await quoteRef.set({
     ...quote,
     ...(businessContext || {}),
     clientDisplayQuote: clientDisplayAmount == null ? null : {
@@ -1072,7 +1251,8 @@ exports.createSenderBookingQuote = functions.runWith({
     pricingDiscrepancy: discrepancy,
     pricingDiscrepancyPence: discrepancy == null ? null : minorUnits(discrepancy, "gbp"),
     createdAt: FieldValue.serverTimestamp(),
-  }, {merge: true});
+    immutable: true,
+  });
   return {
     ...quote,
     clientDisplayQuote: clientDisplayAmount == null ? null : {
@@ -1096,6 +1276,14 @@ exports.createSenderPaymentSession = (stripe) => functions.https.onCall(async (d
     throw new functions.https.HttpsError("not-found", "Booking quote not found.");
   }
   const quote = quoteSnap.data();
+  if (quote.currency !== "GBP" || quote.quoteSchemaVersion !== QUOTE_SCHEMA_VERSION) {
+    throw new functions.https.HttpsError("failed-precondition", "This quote must be refreshed before payment.", {reason: "quote_schema_invalid"});
+  }
+  const expiresAt = quote.quoteExpiresAt && typeof quote.quoteExpiresAt.toDate === "function" ?
+    quote.quoteExpiresAt.toDate() : null;
+  if (!expiresAt || expiresAt.getTime() <= Date.now()) {
+    throw new functions.https.HttpsError("failed-precondition", "This quote has expired. Please recalculate.", {reason: "quote_expired"});
+  }
   const total = money(quote.total || quote.finalAmount || quote.amountDue);
   const rothEnabled = data.rothEnabled === true;
   const rothBalance = rothEnabled ? await walletBalanceForSender(sender) : 0;
@@ -1104,6 +1292,7 @@ exports.createSenderPaymentSession = (stripe) => functions.https.onCall(async (d
   const checkoutMode = text(data.checkoutMode);
   const webCheckout = checkoutMode === "web_checkout";
   const deliveryPayload = cleanMap(data.deliveryPayload);
+  assertQuotePayloadMatchesSnapshot(quote, deliveryPayload);
   const payloadEligibility = normalDispatchEligibilityForDeliveryPayload(deliveryPayload);
   if (quote.normalCheckoutEligible !== true || payloadEligibility.normalCheckoutEligible !== true) {
     throw new functions.https.HttpsError(
@@ -1730,6 +1919,9 @@ async function createPaidDeliveryFromSession(stripe, sender, data) {
   if (!paymentSnap.exists || paymentSnap.data().userId !== sender.uid) {
     throw new functions.https.HttpsError("not-found", "Payment session not found.");
   }
+  if (paymentSnap.data().quoteId !== quoteId) {
+    throw new functions.https.HttpsError("failed-precondition", "Payment and quote do not match.", {reason: "payment_quote_mismatch"});
+  }
   let payment = paymentSnap.data();
   const rothOnlyPayment = payment.paymentMethod === "roth" &&
     Number(payment.remainingAmount || 0) <= 0 &&
@@ -1761,6 +1953,7 @@ async function createPaidDeliveryFromSession(stripe, sender, data) {
     ...data,
     parcel: data.parcel || {},
   };
+  const quoteSnapshot = assertQuotePayloadMatchesSnapshot(quote, deliveryPayload);
   const eligibility = normalDispatchEligibilityForDeliveryPayload(deliveryPayload);
   if (eligibility.normalCheckoutEligible !== true) {
     await recordIneligiblePaidCheckoutReview(db, {
@@ -1980,6 +2173,11 @@ async function createPaidDeliveryFromSession(stripe, sender, data) {
         "",
       matchingPriority: expressDelivery ? "express" : "standard",
       quoteId,
+      quoteSchemaVersion: quote.quoteSchemaVersion,
+      canonicalQuoteSnapshotHash: quote.canonicalQuoteSnapshotHash,
+      quotedAmount: quote.total,
+      quotedCurrency: quote.currency,
+      authoritativeRouteDistanceMiles: quoteSnapshot.route.distanceMiles,
       paymentSessionId,
       price: quote.total,
       ...riderAliases,
@@ -2351,6 +2549,11 @@ exports._private = {
   draftInactive,
   stableId,
   quotePayload,
+  buildCanonicalQuoteSnapshot,
+  canonicalQuoteHash,
+  quoteComparablePayload,
+  assertQuotePayloadMatchesSnapshot,
+  QUOTE_SCHEMA_VERSION,
   riderDisplayAliases,
   riderPayoutFromQuote,
   DRAFT_RETENTION_DAYS,

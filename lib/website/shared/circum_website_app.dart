@@ -8343,6 +8343,7 @@ class _CustomerPortalState extends State<_CustomerPortal> {
             _parcelPhotoCapturedAt = null;
             _irisPhotoAnalysisId = null;
             _irisImageInsight = null;
+            _invalidateAuthoritativeWebQuote();
             _parcelPhotoMessage = 'Parcel photo removed.';
           }),
           scheduledPickupDate: _scheduledPickupDate,
@@ -8369,12 +8370,20 @@ class _CustomerPortalState extends State<_CustomerPortal> {
           specialHandling: _specialHandling,
           vanguardRequired: _webVanguardRequired,
           vanguardEnabled: _webVanguardEnabled,
-          onVanguardChanged: (value) =>
-              setState(() => _webVanguardSelected = value),
+          onVanguardChanged: (value) => setState(() {
+            _webVanguardSelected = value;
+            _invalidateAuthoritativeWebQuote();
+          }),
           pickupAccess: _pickupAccess,
           dropoffAccess: _dropoffAccess,
-          onPickupAccess: (value) => setState(() => _pickupAccess = value),
-          onDropoffAccess: (value) => setState(() => _dropoffAccess = value),
+          onPickupAccess: (value) => setState(() {
+            _pickupAccess = value;
+            _invalidateAuthoritativeWebQuote();
+          }),
+          onDropoffAccess: (value) => setState(() {
+            _dropoffAccess = value;
+            _invalidateAuthoritativeWebQuote();
+          }),
           onVehicle: (vehicle) {
             final suitability = _vehicleSuitability;
             if (!DeliveryPricing.vehicleCanCarryDelivery(
@@ -8430,6 +8439,7 @@ class _CustomerPortalState extends State<_CustomerPortal> {
           scheduledDropoffDate: _scheduledDropoffDate.text.trim(),
           scheduledDropoffWindow: _scheduledDropoffWindow.text.trim(),
           onBack: () => setState(() {
+            _invalidateAuthoritativeWebQuote();
             if (!_matchingHasStarted) {
               _checkoutState = _CheckoutState.awaitingPayment;
             }
@@ -8724,6 +8734,11 @@ class _CustomerPortalState extends State<_CustomerPortal> {
     return quote;
   }
 
+  void _invalidateAuthoritativeWebQuote() {
+    _authoritativeWebQuote = null;
+    _authoritativeQuoteLoading = false;
+  }
+
   Future<void> _prepareAuthoritativeQuoteAndContinue() async {
     if (_authoritativeQuoteLoading) return;
     setState(() => _authoritativeQuoteLoading = true);
@@ -8809,6 +8824,7 @@ class _CustomerPortalState extends State<_CustomerPortal> {
   void _setDeliveryTimingType(String value) {
     final today = _dateInputValue(DateTime.now());
     setState(() {
+      _invalidateAuthoritativeWebQuote();
       _deliveryTimingType = value;
       _scheduledPickupDate.clear();
       _scheduledPickupWindow.clear();
@@ -10666,6 +10682,7 @@ class _CustomerPortalState extends State<_CustomerPortal> {
       senderWeightKg: senderWeight > 0 ? senderWeight : null,
     );
     setState(() {
+      _invalidateAuthoritativeWebQuote();
       _senderEnteredWeightKg = senderWeight > 0 ? senderWeight : null;
       _irisEstimatedWeightKg =
           decision.source == 'repository_match' && decision.weightKg != null
@@ -10734,6 +10751,7 @@ class _CustomerPortalState extends State<_CustomerPortal> {
       if (!mounted) return;
       if (picked != null && !await _parcelPhotoIsSafe(picked)) {
         setState(() {
+          _invalidateAuthoritativeWebQuote();
           _parcelPhoto = null;
           _parcelPhotoCapturedAt = null;
           _irisPhotoAnalysisId = null;
@@ -10747,6 +10765,7 @@ class _CustomerPortalState extends State<_CustomerPortal> {
           picked == null ? null : await _analyseParcelPhotoForIris(picked);
       if (!mounted) return;
       setState(() {
+        _invalidateAuthoritativeWebQuote();
         _parcelPhoto = picked;
         _parcelPhotoCapturedAt = picked == null ? null : DateTime.now();
         _irisPhotoAnalysisId = insight?.analysisId;
@@ -11487,6 +11506,14 @@ class _CustomerPortalState extends State<_CustomerPortal> {
       final request = _requestPayload(id, parcelPhotoData);
       final deliveryPayload = {
         'requestId': id,
+        'selectedVehicle': _effectiveVehicle,
+        'vehicleType': _effectiveVehicle,
+        'selectedSpeed': _selectedSpeed,
+        'weightKg': _deliveryClassification.finalWeightKg,
+        'vanguard': _webVanguardEnabled,
+        'vanguardProtocolEnabled': _webVanguardEnabled,
+        'pickupAccess': _pickupAccess.name,
+        'dropoffAccess': _dropoffAccess.name,
         'pickup': _webCanonicalPickupPayload(request),
         'dropoff': _webCanonicalDropoffPayload(request),
         'recipient': _webCanonicalRecipientPayload(request),

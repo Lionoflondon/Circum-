@@ -72,7 +72,7 @@ test("canonical payment authority calculates and records authoritative pricing",
   assert.match(senderBookingSource, /exports\.createSenderBookingQuote/);
   assert.match(senderBookingSource, /verifiedPhotoAnalysis\(\{/);
   assert.match(senderBookingSource, /authoritativeRoadRouteFacts\(\{/);
-  assert.match(senderBookingSource, /quotePayload\(\{\s*\.\.\.\(data \|\| \{\}\),\s*\.\.\.\(businessContext \|\| \{\}\),\s*\}, sender\.uid, serverPhotoAnalysis, serverRoadChargeFacts\)/);
+  assert.match(senderBookingSource, /quotePayload\(\{[\s\S]*authoritativeDistanceMiles: serverDistanceMiles,[\s\S]*\}, sender\.uid, serverPhotoAnalysis, serverRoadChargeFacts\)/);
   assert.match(senderBookingSource, /clientDisplayQuote/);
   assert.match(senderBookingSource, /pricingDiscrepancyPence/);
   assert.match(senderBookingSource, /exports\.createSenderPaymentSession/);
