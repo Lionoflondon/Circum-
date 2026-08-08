@@ -47,4 +47,14 @@ void main() {
     expect(source, contains('AuthBloc()..add(SortSessionState())'));
     expect(source, contains('BlocProvider<SendPackageBloc>'));
   });
+
+  test('Sender review renders authoritative road-charge supporting copy', () {
+    final source = File(
+      'lib/app/sender_mobile/sender_booking_canvas.dart',
+    ).readAsStringSync();
+
+    expect(source, contains("item['supportingCopy']"));
+    expect(source, contains('supportingCopy: item.supportingCopy'));
+    expect(source, contains('if (supportingCopy?.isNotEmpty == true)'));
+  });
 }

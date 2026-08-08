@@ -5905,11 +5905,13 @@ class _AddOnTile extends StatelessWidget {
 class _SummaryLine extends StatelessWidget {
   final String label;
   final String value;
+  final String? supportingCopy;
   final bool confirmed;
 
   const _SummaryLine({
     required this.label,
     required this.value,
+    this.supportingCopy,
     this.confirmed = false,
   });
 
@@ -5928,7 +5930,23 @@ class _SummaryLine extends StatelessWidget {
             const SizedBox(width: 7),
           ],
           Expanded(
-            child: Text(label, style: const TextStyle(color: _Tokens.muted)),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(label, style: const TextStyle(color: _Tokens.muted)),
+                if (supportingCopy?.isNotEmpty == true) ...[
+                  const SizedBox(height: 3),
+                  Text(
+                    supportingCopy!,
+                    style: const TextStyle(
+                      color: _Tokens.muted,
+                      fontSize: 12,
+                      height: 1.25,
+                    ),
+                  ),
+                ],
+              ],
+            ),
           ),
           const SizedBox(width: 12),
           Flexible(
@@ -5978,6 +5996,7 @@ class _BackendPricingBreakdown extends StatelessWidget {
           (item) => (
             label: _quoteLineLabel(item, engine),
             amount: _quoteLineAmountFromItem(item),
+            supportingCopy: '${item['supportingCopy'] ?? ''}'.trim(),
           ),
         )
         .where((item) => item.amount != null)
@@ -6007,6 +6026,7 @@ class _BackendPricingBreakdown extends StatelessWidget {
             (item) => _SummaryLine(
               label: item.label,
               value: item.amount!,
+              supportingCopy: item.supportingCopy,
               confirmed: item.label.toLowerCase().startsWith('final weight'),
             ),
           ),

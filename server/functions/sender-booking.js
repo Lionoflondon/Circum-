@@ -833,8 +833,10 @@ function quotePayload(data, uid, serverPhotoAnalysis = null, serverRoadChargeFac
           .map((charge) => ({
             key: charge.type === "route_toll" ? "road_toll" : "daily_zone_charge",
             label: charge.chargeId === "congestion_charge" ? "Central London fee" :
-              charge.chargeId === "dartford_crossing" ? "Dart Charge" :
-                charge.chargeId === "blackwall_silvertown" ? "Blackwall/Silvertown toll" : "Road charge",
+              "Road charge",
+            ...(charge.chargeId === "congestion_charge" ? {
+              supportingCopy: "Applies to eligible deliveries within the Congestion Charge Zone.",
+            } : {}),
             amount: charge.customerContribution,
           })),
     ],

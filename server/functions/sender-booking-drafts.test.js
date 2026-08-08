@@ -187,6 +187,10 @@ test("sender quote adds only server-authoritative road charge contributions", ()
 
   assert.equal(roadLine.amount, 9);
   assert.equal(roadLine.label, "Central London fee");
+  assert.equal(
+      roadLine.supportingCopy,
+      "Applies to eligible deliveries within the Congestion Charge Zone.",
+  );
   assert.equal(quote.roadChargeCustomerContribution, 9);
   assert.equal(quote.estimatedRoadChargeRecovery, 9);
   assert.equal(quote.total, 20.5);
@@ -199,6 +203,25 @@ test("sender quote adds only server-authoritative road charge contributions", ()
     customerRoadFeesPence: 900,
     policyVersion: quote.roadChargePolicyVersion,
   });
+});
+
+test("sender quote presents every crossing with the approved Road charge label", () => {
+  const quote = _private.quotePayload({
+    selectedSpeed: "Standard",
+    distanceMiles: 3,
+    weightKg: 2,
+    selectedVehicle: "car",
+    parcel: {itemName: "Printer", weightKg: 2},
+  }, "sender-test", null, {
+    authority: "authoritative_route",
+    crossings: [
+      {chargeId: "blackwall_silvertown", crossingId: "blackwall", at: "2026-08-07T08:00:00Z"},
+      {chargeId: "dartford_crossing", crossingId: "dartford", at: "2026-08-07T12:00:00Z"},
+    ],
+  });
+  const roadLines = quote.lineItems.filter((item) => item.key === "road_toll");
+  assert.equal(roadLines.length, 2);
+  assert.deepEqual(roadLines.map((item) => item.label), ["Road charge", "Road charge"]);
 });
 
 test("sender quote does not trust client route facts", () => {
