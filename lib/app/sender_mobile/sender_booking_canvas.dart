@@ -735,29 +735,32 @@ class _SenderBookingCanvasState extends State<SenderBookingCanvas> {
     try {
       final provider = PlaceApiProvider(const Uuid());
       final lang = Localizations.localeOf(context).languageCode;
-      final suggestions = await provider.fetchSuggestions(address, lang);
+      var suggestions = await provider.fetchSuggestions(address, lang);
       if (!mounted) return false;
-      final normalized = address.toLowerCase().replaceAll(RegExp(r'\s+'), ' ');
-      final match = suggestions.where((suggestion) {
-        final description = suggestion.description
-            .trim()
-            .toLowerCase()
-            .replaceAll(RegExp(r'\s+'), ' ');
-        final main = suggestion.mainText.trim().toLowerCase().replaceAll(
-              RegExp(r'\s+'),
-              ' ',
-            );
-        return description == normalized || main == normalized;
-      }).firstOrNull;
+      var usedManualFallback = false;
+      var match = _findExactTypedAddressSuggestion(suggestions, address);
+      if (match == null) {
+        final fallbackQuery = _typedAddressFallbackQuery(address);
+        if (fallbackQuery.isNotEmpty) {
+          suggestions = await provider.fetchSuggestions(fallbackQuery, lang);
+          if (!mounted) return false;
+          match = _findFallbackTypedAddressSuggestion(
+            suggestions,
+            fallbackQuery,
+          );
+          usedManualFallback = match != null;
+        }
+      }
       if (match == null) {
         throw StateError('No exact address match found');
       }
       final coordinate = await provider.fetchPlaceDetails(match.placeId, lang);
       if (!mounted) return false;
+      final resolvedAddress = usedManualFallback ? address : match.description;
       if (pickup) {
         context.read<SendPackageBloc>().add(
               SetPickupAddress(
-                val: match.description,
+                val: resolvedAddress,
                 pickupLocationSubAddress: match.subText,
                 placeId: match.placeId,
                 lang: lang,
@@ -765,7 +768,7 @@ class _SenderBookingCanvasState extends State<SenderBookingCanvas> {
             );
         _setDraft(
           _draft.copyWith(
-            pickupAddress: match.description,
+            pickupAddress: resolvedAddress,
             pickupLat: coordinate.lat,
             pickupLng: coordinate.lng,
           ),
@@ -773,7 +776,7 @@ class _SenderBookingCanvasState extends State<SenderBookingCanvas> {
       } else {
         context.read<SendPackageBloc>().add(
               SetDeliveryAddress(
-                val: match.description,
+                val: resolvedAddress,
                 destinationLocationSubAddress: match.subText,
                 placeId: match.placeId,
                 lang: lang,
@@ -781,7 +784,7 @@ class _SenderBookingCanvasState extends State<SenderBookingCanvas> {
             );
         _setDraft(
           _draft.copyWith(
-            dropoffAddress: match.description,
+            dropoffAddress: resolvedAddress,
             dropoffLat: coordinate.lat,
             dropoffLng: coordinate.lng,
           ),
@@ -801,6 +804,60 @@ class _SenderBookingCanvasState extends State<SenderBookingCanvas> {
     } finally {
       if (mounted) setState(() => _addressResolving = false);
     }
+  }
+
+  dynamic _findExactTypedAddressSuggestion(
+    List suggestions,
+    String address,
+  ) {
+    final normalized = address.toLowerCase().replaceAll(RegExp(r'\s+'), ' ');
+    return suggestions.where((suggestion) {
+      final description = suggestion.description
+          .trim()
+          .toLowerCase()
+          .replaceAll(RegExp(r'\s+'), ' ');
+      final main = suggestion.mainText.trim().toLowerCase().replaceAll(
+            RegExp(r'\s+'),
+            ' ',
+          );
+      return description == normalized || main == normalized;
+    }).firstOrNull;
+  }
+
+  String _typedAddressFallbackQuery(String address) {
+    final parts = address
+        .split(',')
+        .map((part) => part.trim())
+        .where((part) => part.isNotEmpty)
+        .toList();
+    if (parts.length < 2) return '';
+    final first = parts.first.toLowerCase();
+    if (!RegExp(r'^(flat|apartment|unit|suite)\b').hasMatch(first)) {
+      return '';
+    }
+    return parts.skip(1).join(' ');
+  }
+
+  dynamic _findFallbackTypedAddressSuggestion(
+    List suggestions,
+    String fallbackQuery,
+  ) {
+    final routeQuery = fallbackQuery
+        .replaceFirst(RegExp(r'^\s*\d+[a-z]?\s+', caseSensitive: false), '')
+        .toLowerCase()
+        .replaceAll(RegExp(r'\s+'), ' ')
+        .trim();
+    final routeWords = routeQuery
+        .split(RegExp(r'[^a-z0-9]+'))
+        .where((word) => word.length > 2)
+        .toList();
+    return suggestions.where((suggestion) {
+      final description = '${suggestion.description}'.toLowerCase();
+      return routeWords.isNotEmpty &&
+          routeWords.every(description.contains) &&
+          suggestion.lat is num &&
+          suggestion.lng is num;
+    }).firstOrNull;
   }
 
   Future<void> _resolveSelectedSuggestion(
