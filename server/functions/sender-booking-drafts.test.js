@@ -176,3 +176,76 @@ test("sender express surcharge is five pounds or twenty percent", () => {
   assert.equal(longQuote.lineItems.find((item) => item.key === "speed_adjustment").amount, 15.4);
   assert.equal(longQuote.total, 92.4);
 });
+
+test("Business reuses Standard road-charge authority and charges only route entry", () => {
+  const inside = _private.quotePayload({
+    businessMode: true,
+    businessId: "business-1",
+    selectedSpeed: "Standard",
+    selectedVehicle: "Car",
+    weightKg: 2,
+    authoritativeRouteFacts: {
+      authority: "authoritative_route",
+      known: true,
+      distanceMiles: 3,
+      geographyVersion: "2026-08-circum-road-geography-v2",
+      congestionZone: {entered: true, at: "2026-08-07T10:00:00Z"},
+      crossings: [],
+    },
+    authoritativeVehicleProfile: {
+      roadChargeFactsVerificationStatus: "verified",
+      cczAuthorityStatus: "CHARGEABLE",
+    },
+  }, "sender-test");
+  const roadLines = inside.lineItems.filter((item) => item.key === "daily_zone_charge");
+  assert.equal(roadLines.length, 1);
+  assert.equal(roadLines[0].amount, 9);
+  assert.equal(inside.roadCharges.customerAmount, 9);
+
+  const outside = _private.quotePayload({
+    businessMode: true,
+    businessId: "business-1",
+    selectedSpeed: "Standard",
+    selectedVehicle: "Car",
+    weightKg: 2,
+    authoritativeRouteFacts: {
+      authority: "authoritative_route",
+      known: true,
+      distanceMiles: 3,
+      geographyVersion: "2026-08-circum-road-geography-v2",
+      congestionZone: {entered: false, at: "2026-08-07T10:00:00Z"},
+      crossings: [],
+    },
+    authoritativeVehicleProfile: {
+      roadChargeFactsVerificationStatus: "verified",
+      cczAuthorityStatus: "CHARGEABLE",
+    },
+  }, "sender-test");
+  assert.equal(outside.roadCharges.customerAmount, 0);
+  assert.equal(outside.lineItems.filter((item) => item.key === "daily_zone_charge").length, 0);
+});
+
+test("Business Vanguard is additive and does not duplicate a route charge", () => {
+  const quote = _private.quotePayload({
+    businessMode: true,
+    businessId: "business-1",
+    selectedSpeed: "Standard",
+    selectedVehicle: "Car",
+    vanguardProtocolEnabled: true,
+    weightKg: 2,
+    authoritativeRouteFacts: {
+      authority: "authoritative_route",
+      known: true,
+      distanceMiles: 3,
+      congestionZone: {entered: true, at: "2026-08-07T10:00:00Z"},
+      crossings: [],
+    },
+    authoritativeVehicleProfile: {
+      roadChargeFactsVerificationStatus: "verified",
+      cczAuthorityStatus: "CHARGEABLE",
+    },
+  }, "sender-test");
+  assert.equal(quote.roadCharges.customerAmount, 9);
+  assert.equal(quote.lineItems.filter((item) => item.key === "daily_zone_charge").length, 1);
+  assert.equal(quote.lineItems.filter((item) => item.key === "vanguard").length, 1);
+});
