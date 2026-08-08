@@ -164,7 +164,8 @@ test("Sender Web checkout uses canonical payment callables and never writes paid
   const confirmPaymentMatch = webSenderSource.match(/Future<void> _confirmPayment\(\) async \{[\s\S]*?\n {2}Future<bool\?> _confirmAuthoritativeWebQuote/);
   assert.ok(confirmPaymentMatch, "web _confirmPayment implementation not found");
   const confirmPaymentSource = confirmPaymentMatch[0];
-  assert.match(confirmPaymentSource, /httpsCallable\('createSenderBookingQuote'\)/);
+  assert.match(webSenderSource, /httpsCallable\('createSenderBookingQuote'\)/);
+  assert.match(webSenderSource, /_prepareAuthoritativeQuoteAndContinue/);
   assert.match(confirmPaymentSource, /httpsCallable\('createSenderPaymentSession'\)/);
   assert.match(confirmPaymentSource, /'checkoutMode': 'web_checkout'/);
   assert.match(confirmPaymentSource, /'rothEnabled': _deliveryUseRoth/);
