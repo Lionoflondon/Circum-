@@ -281,9 +281,11 @@ class SenderBookingDraft {
   bool get canContinue {
     switch (step) {
       case SenderBookingStep.pickup:
-        return isSenderTypedAddressSpecific(pickupAddress);
+        return isSenderCanonicalCoordinateUsable(pickupLat, pickupLng) ||
+            isSenderTypedAddressSpecific(pickupAddress);
       case SenderBookingStep.dropoff:
-        return isSenderTypedAddressSpecific(dropoffAddress);
+        return isSenderCanonicalCoordinateUsable(dropoffLat, dropoffLng) ||
+            isSenderTypedAddressSpecific(dropoffAddress);
       case SenderBookingStep.recipient:
         return receiverName.trim().isNotEmpty &&
             receiverPhone.trim().isNotEmpty;
@@ -597,6 +599,12 @@ bool isSenderTypedAddressSpecific(String value) {
   final hasSeparator =
       text.contains(',') || text.split(RegExp(r'\s+')).length >= 3;
   return hasDigit && hasSeparator;
+}
+
+bool isSenderCanonicalCoordinateUsable(double? latitude, double? longitude) {
+  if (latitude == null || longitude == null) return false;
+  if (!latitude.isFinite || !longitude.isFinite) return false;
+  return latitude != 0 || longitude != 0;
 }
 
 String senderStepTitle(SenderBookingStep step) {
