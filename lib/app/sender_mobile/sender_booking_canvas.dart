@@ -855,8 +855,7 @@ class _SenderBookingCanvasState extends State<SenderBookingCanvas> {
       final description = '${suggestion.description}'.toLowerCase();
       return routeWords.isNotEmpty &&
           routeWords.every(description.contains) &&
-          suggestion.lat is num &&
-          suggestion.lng is num;
+          '${suggestion.placeId}'.trim().isNotEmpty;
     }).firstOrNull;
   }
 
