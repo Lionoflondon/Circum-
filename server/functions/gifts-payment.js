@@ -4,6 +4,7 @@ const {getFirestore, FieldValue} = require("firebase-admin/firestore");
 const {getStorage} = require("firebase-admin/storage");
 const giftVoiceMedia = require("./gift-voice-media");
 const vanguardProtocol = require("./vanguard-protocol-core");
+const {createGiftBudgetAuthority} = require("./gift-budget-authority");
 
 function requireAuth(context) {
   if (!context.auth) {
@@ -277,6 +278,7 @@ async function finalizeGiftPaymentSession({
     if (session.currency !== "gbp" || Number(session.amount_total || 0) !== expectedAmount) {
       throw new functions.https.HttpsError("failed-precondition", "Gift payment amount does not match the order.");
     }
+    const budgetAuthority = createGiftBudgetAuthority(expectedAmount);
     transaction.set(giftRef, {
       ...gift,
       ...(verifiedVoiceNote ? {voiceNote: verifiedVoiceNote} : {}),
@@ -290,6 +292,7 @@ async function finalizeGiftPaymentSession({
       paidAt: FieldValue.serverTimestamp(),
       createdAt: gift.createdAt || FieldValue.serverTimestamp(),
       updatedAt: FieldValue.serverTimestamp(),
+      giftBudgetAuthority: budgetAuthority,
     });
     transaction.set(db.collection("giftPaymentEvents").doc(eventId || `client_${session.id}`), {
       eventId: eventId || null,

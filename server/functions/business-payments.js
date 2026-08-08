@@ -10,6 +10,7 @@ const {
 const {requireAdmin} = require("./admin-auth");
 const {calculateWalletCheckout} = require("./wallet-core");
 const communicationEngine = require("./communication-engine");
+const {businessAuthority} = require("./business-authority");
 
 function money(value) {
   const parsed = Number(value || 0);
@@ -39,14 +40,7 @@ function normaliseLineItems(items, fallbackDescription, total) {
   }];
 }
 
-function isMember(account, context) {
-  const uid = context.auth && context.auth.uid;
-  const email = `${context.auth && context.auth.token && context.auth.token.email || ""}`.toLowerCase();
-  const members = Array.isArray(account.teamMemberIds) ? account.teamMemberIds.map((item) => `${item}`.toLowerCase()) : [];
-  return account.createdByUserId === uid || members.includes(`${uid}`.toLowerCase()) || (email && members.includes(email));
-}
-
-async function requireBusinessMember(businessId, context) {
+async function requireBusinessMember(businessId, context, {financial = false} = {}) {
   if (!context.auth) {
     throw new functions.https.HttpsError("unauthenticated", "Sign in to continue.");
   }
@@ -55,10 +49,14 @@ async function requireBusinessMember(businessId, context) {
     throw new functions.https.HttpsError("not-found", "Business account not found.");
   }
   const account = snap.data() || {};
-  if (!isMember(account, context)) {
+  const authority = businessAuthority(account, {
+    uid: context.auth.uid,
+    email: context.auth.token && context.auth.token.email,
+  });
+  if (!authority.member || financial && !authority.financialAuthorized) {
     throw new functions.https.HttpsError("permission-denied", "You do not have access to this Business account.");
   }
-  return {id: snap.id, ...account};
+  return {id: snap.id, ...account, authority};
 }
 
 async function creditBusinessRoth({businessId, amount, type, note, metadata = {}}) {
@@ -471,7 +469,7 @@ exports.createBusinessRothCheckout = (stripe) => functions.https.onCall(async (d
   if (!businessId || amount < 1) {
     throw new functions.https.HttpsError("invalid-argument", "Choose a valid Business account and Roth amount.");
   }
-  const account = await requireBusinessMember(businessId, context);
+  const account = await requireBusinessMember(businessId, context, {financial: true});
   const db = getFirestore();
   const purchaseRef = db.collection("businessRothPurchases").doc();
   const baseUrl = `${data.returnUrl || "https://circumuk.com/?app=business&section=invoicing"}`;
@@ -529,7 +527,7 @@ exports.createBusinessInvoiceCheckout = (stripe) => functions.https.onCall(async
   if (!businessId || !invoiceId) {
     throw new functions.https.HttpsError("invalid-argument", "Choose a valid Business invoice.");
   }
-  await requireBusinessMember(businessId, context);
+  await requireBusinessMember(businessId, context, {financial: true});
   const db = getFirestore();
   const invoiceSnap = await db.collection("businessInvoices").doc(invoiceId).get();
   if (!invoiceSnap.exists) {
