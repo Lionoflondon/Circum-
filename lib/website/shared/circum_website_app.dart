@@ -822,13 +822,30 @@ bool _isActiveSenderDeliveryStatus(String status) {
 }
 
 String _displayStatusLabel(String status) {
-  final normalized = status.trim().replaceAll('_', ' ');
-  if (normalized.isEmpty) return 'Status pending';
-  return normalized
-      .split(RegExp(r'\s+'))
-      .where((part) => part.isNotEmpty)
-      .map((part) => '${part[0].toUpperCase()}${part.substring(1)}')
-      .join(' ');
+  return switch (status.trim().toLowerCase()) {
+    'circum_rider' => 'CIRCUM Rider',
+    'iris' => 'IRIS',
+    'vanguard' => 'Vanguard',
+    'roth' => 'Roth',
+    'cancelled_by_sender' => 'Cancelled by sender',
+    'cancelled_by_rider' => 'Cancelled by Rider',
+    'manual_review' => 'Under review',
+    'arrived_at_pickup' => 'Arrived at pickup',
+    'navigating_to_pickup' => 'On the way to pickup',
+    'navigating_to_dropoff' => 'On the way to the drop-off',
+    'arrived_at_dropoff' => 'Arrived at drop-off',
+    'pickup_verification' => 'Pickup verification',
+    'receiver_verification' => 'Receiver verification',
+    'delivered' || 'completed' => 'Delivered',
+    'requested' => 'Finding a Rider',
+    'accepted' => 'Rider assigned',
+    'collected' || 'picked_up' => 'Collected',
+    'failed' => 'Needs attention',
+    'refunded' => 'Refunded',
+    'archived' => 'Archived',
+    '' => 'Status pending',
+    _ => 'Delivery update',
+  };
 }
 
 String _displayDeliveryReference(String reference) {
@@ -4692,7 +4709,7 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
       if (!mounted) return;
       setState(
         () => _jobMessage =
-            error.message ?? 'Could not report this discrepancy. Try again.',
+            'Could not report this discrepancy. Please try again.',
       );
     }
   }
@@ -5087,7 +5104,7 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
       if (!mounted) return;
       setState(
         () => _withdrawMessage =
-            error.message ?? 'We could not send the request. Try again.',
+            'We could not send the request. Please try again.',
       );
     } catch (_) {
       if (!mounted) return;
@@ -9278,8 +9295,10 @@ class _CustomerPortalState extends State<_CustomerPortal> {
       setState(() {
         _checkoutState = _CheckoutState.failed;
         _broadcasting = false;
-        _firebaseError = error.message ??
-            'Stripe payment could not be confirmed. Please contact support.';
+        _firebaseError = _friendlySenderFunctionMessage(
+          error,
+          'Stripe payment could not be confirmed. Please contact support.',
+        );
       });
     } catch (_) {
       if (!mounted) return;
@@ -10269,7 +10288,7 @@ class _CustomerPortalState extends State<_CustomerPortal> {
       if (!mounted) return;
       setState(
         () => _businessMessage =
-            error.message ?? 'Business workspace could not be created.',
+            'Business workspace could not be created. Please try again.',
       );
     } finally {
       if (mounted) setState(() => _businessBusy = false);
@@ -10301,7 +10320,7 @@ class _CustomerPortalState extends State<_CustomerPortal> {
       if (!mounted) return;
       setState(
         () => _businessMessage =
-            error.message ?? 'Business access request could not be sent.',
+            'Business access request could not be sent. Please try again.',
       );
     } finally {
       if (mounted) setState(() => _businessBusy = false);
@@ -10388,7 +10407,7 @@ class _CustomerPortalState extends State<_CustomerPortal> {
     } on FirebaseFunctionsException catch (error) {
       setState(
         () => _businessMessage =
-            error.message ?? 'We could not retrieve the company code just now.',
+            'We could not retrieve the company code just now. Please try again.',
       );
     } finally {
       if (mounted) setState(() => _businessBusy = false);
@@ -10490,8 +10509,7 @@ class _CustomerPortalState extends State<_CustomerPortal> {
         context: context,
         builder: (dialogContext) => AlertDialog(
           title: Text('Confirm £${_formatBusinessMoney(amount)} Roth purchase'),
-          content: Text(
-              'Business: $businessName\n\n'
+          content: Text('Business: $businessName\n\n'
               'Amount charged: £${_formatBusinessMoney(amount)}\n'
               'Roth credited after verified payment: ${_formatBusinessMoney(amount)}\n\n'
               'Roth is non-withdrawable internal Circum credit.'),
@@ -10532,9 +10550,9 @@ class _CustomerPortalState extends State<_CustomerPortal> {
     }
   }
 
-  String _formatBusinessMoney(double amount) =>
-      amount.toStringAsFixed(2).replaceAllMapped(
-          RegExp(r'(?<=\d)(?=(\d{3})+(?!\d))'), (_) => ',');
+  String _formatBusinessMoney(double amount) => amount
+      .toStringAsFixed(2)
+      .replaceAllMapped(RegExp(r'(?<=\d)(?=(\d{3})+(?!\d))'), (_) => ',');
 
   Future<void> _cancelSenderBooking(SenderDeliveryRecord delivery) async {
     final user = _senderUser;
@@ -10605,6 +10623,19 @@ class _CustomerPortalState extends State<_CustomerPortal> {
     FirebaseFunctionsException error,
     String fallback,
   ) {
+    final reason = '${error.details ?? ''}'.toLowerCase();
+    if (reason.contains('not_allowed_for_normal_dispatch')) {
+      return 'This delivery needs review before it can be booked normally.';
+    }
+    if (error.code == 'permission-denied') {
+      return 'You do not have permission to complete this action.';
+    }
+    if (error.code == 'failed-precondition') {
+      return 'This action is not available at the current delivery stage.';
+    }
+    if (error.code == 'invalid-argument') {
+      return 'Please check the details and try again.';
+    }
     final message = error.message?.trim();
     if (message != null &&
         message.isNotEmpty &&
@@ -10630,6 +10661,11 @@ class _CustomerPortalState extends State<_CustomerPortal> {
         value.contains('platformexception') ||
         value.contains('cloud functions') ||
         value.contains('https callable') ||
+        value.contains('not_allowed_for_normal_dispatch') ||
+        value.contains('failed_precondition') ||
+        value.contains('permission-denied') ||
+        value.contains('invalid-argument') ||
+        value.contains('firestore') ||
         value.contains('stack trace') ||
         value.contains('null check operator') ||
         value.contains('bad state');
@@ -12790,7 +12826,7 @@ class _CustomerPortalState extends State<_CustomerPortal> {
         _ratingSubmitted = alreadyRated;
         _ratingMessage = alreadyRated
             ? 'This delivery has already been rated.'
-            : (error.message ?? 'We could not save the rating. Try again.');
+            : 'We could not save the rating. Please try again.';
       });
     } catch (_) {
       if (!mounted) return;
@@ -25056,7 +25092,7 @@ class _DriverRatingPrompt extends StatelessWidget {
     for (final tag in _tags) {
       if (tag.$1 == key) return tag.$2;
     }
-    return key.replaceAll('_', ' ');
+    return 'Other feedback';
   }
 
   final _CircumColors colors;
@@ -26517,7 +26553,7 @@ class _GiftsRequestPageState extends State<_GiftsRequestPage> {
       );
       if (mounted) {
         setState(
-          () => _message = error.message ??
+          () => _message =
               'We could not confirm payment yet. Please refresh shortly.',
         );
       }
@@ -26739,8 +26775,7 @@ class _GiftsRequestPageState extends State<_GiftsRequestPage> {
           () => _message = error is StateError
               ? error.message
               : error is FirebaseFunctionsException
-                  ? (error.message ??
-                      'Could not start Stripe Checkout. Please try again.')
+                  ? 'Could not start Stripe Checkout. Please try again.'
                   : 'Could not start Stripe Checkout. Please try again.',
         );
       }

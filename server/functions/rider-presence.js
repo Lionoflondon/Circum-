@@ -5,6 +5,25 @@ const core = require("./rider-presence-core");
 const staleCore = require("./stale-delivery-core");
 const {loadFounderTestAccount} = require("./founder-authority");
 
+function riderOperationalStatusCopy(status, action) {
+  const copies = {
+    arrived_at_pickup: action === "offline" ?
+      "This delivery is still at pickup. Resolve it before going offline." :
+      "This delivery is still at pickup. Complete or resolve it first.",
+    navigating_to_pickup: "This delivery is on the way to pickup. Resolve it before going offline.",
+    accepted: "This delivery has been accepted. Resolve it before going offline.",
+    collected: "This delivery has been collected. Complete or resolve it before going offline.",
+    navigating_to_dropoff: "This delivery is on the way to drop-off. Complete or resolve it first.",
+    arrived_at_dropoff: "This delivery is at drop-off. Complete or resolve it first.",
+    waiting: "This delivery is waiting for pickup. Resolve it before going offline.",
+    pickup_verification: "This delivery is awaiting pickup verification. Resolve it before going offline.",
+    pickup_verified: "This delivery has passed pickup verification. Resolve it before going offline.",
+    pin_required: "This delivery is awaiting verification. Resolve it before going offline.",
+    issue_reported: "This delivery has an open issue. Resolve it before going offline.",
+  };
+  return copies[status] || "You have an active delivery. Resolve it before going offline.";
+}
+
 function requireAuth(context) {
   if (!context.auth || !context.auth.uid) {
     throw new functions.https.HttpsError("unauthenticated", "Sign in first.");
@@ -163,7 +182,7 @@ exports.goOffline = functions.https.onCall(async (data, context) => {
       const status = referenced.exists ? staleCore.statusOf(referencedData) : "unknown";
       throw new functions.https.HttpsError(
           "failed-precondition",
-          `Delivery ${referencedId} is still ${status.replaceAll("_", " ")}. Resolve it before going offline.`,
+          riderOperationalStatusCopy(status, "offline"),
           {deliveryId: referencedId, status, reason: decision.reason},
       );
     }
@@ -174,7 +193,7 @@ exports.goOffline = functions.https.onCall(async (data, context) => {
     const status = staleCore.statusOf(active.data());
     throw new functions.https.HttpsError(
         "failed-precondition",
-        `Delivery ${active.id} is still ${status.replaceAll("_", " ")}. Complete or resolve it before going offline.`,
+        riderOperationalStatusCopy(status, "active"),
         {deliveryId: active.id, status, reason: `active_${status}`},
     );
   }

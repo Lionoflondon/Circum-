@@ -856,7 +856,15 @@ bool senderCanCancelBeforeCollection(SenderTrackingState state) {
 
 String _firebaseFunctionMessage(Object error, String fallback) {
   if (error is FirebaseFunctionsException) {
-    return error.message ?? fallback;
+    return switch (error.code) {
+      'permission-denied' =>
+        'You do not have permission to change this delivery.',
+      'failed-precondition' => 'This delivery cannot be changed at this stage.',
+      'invalid-argument' => 'Please check the delivery details and try again.',
+      'not-found' => 'This delivery is no longer available.',
+      'unauthenticated' => 'Please sign in again and retry.',
+      _ => fallback,
+    };
   }
   return fallback;
 }
@@ -2151,13 +2159,18 @@ class _DeliveryReceiptSummary extends StatelessWidget {
       data['deliveredAt'] ?? data['completedAt'] ?? data['deliveryCompletedAt'],
     );
     final distance = _text(data['distanceText'] ?? data['distanceMiles']);
-    final duration = _text(data['deliveryDurationText'] ?? data['deliveryDuration']);
-    final rider = _text(data['riderName'] ?? data['courierName'] ?? data['driverName']);
+    final duration =
+        _text(data['deliveryDurationText'] ?? data['deliveryDuration']);
+    final rider =
+        _text(data['riderName'] ?? data['courierName'] ?? data['driverName']);
     final vehicle = _text(data['typeOfVehicle'] ?? data['vehicleType']);
     final reference = _text(data['requestId'] ?? data['id'] ?? data['code']);
     final rows = <(String, String)>[
       if (pickup.isNotEmpty || dropoff.isNotEmpty)
-        ('Journey', [pickup, dropoff].where((value) => value.isNotEmpty).join(' → ')),
+        (
+          'Journey',
+          [pickup, dropoff].where((value) => value.isNotEmpty).join(' → ')
+        ),
       if (deliveredAt.isNotEmpty) ('Delivered at', deliveredAt),
       if (distance.isNotEmpty) ('Distance', distance),
       if (duration.isNotEmpty) ('Delivery time', duration),

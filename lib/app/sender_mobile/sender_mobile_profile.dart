@@ -53,8 +53,7 @@ class SenderTrustActivity {
 
   static String _friendlyTrustLabel(String value) {
     if (value.isEmpty) return 'Trust activity';
-    final normalized =
-        value.trim().toLowerCase().replaceAll('_', ' ').replaceAll('-', ' ');
+    final normalized = value.trim().toLowerCase();
     if (normalized.contains('system baseline') ||
         normalized.contains('delivery history baseline')) {
       return 'Account trust baseline established';
@@ -67,13 +66,7 @@ class SenderTrustActivity {
         normalized.contains('manual credit')) {
       return 'Adjustment by Circum';
     }
-    return value
-        .replaceAll('_', ' ')
-        .replaceAll('-', ' ')
-        .split(' ')
-        .where((word) => word.isNotEmpty)
-        .map((word) => '${word[0].toUpperCase()}${word.substring(1)}')
-        .join(' ');
+    return 'Trust activity';
   }
 
   bool get isBaselineEvent {
@@ -990,10 +983,7 @@ class _SenderMobileProfileViewState extends State<SenderMobileProfileView> {
     } catch (error) {
       if (!mounted) return;
       setState(() {
-        _error = error is FirebaseFunctionsException &&
-                (error.message?.trim().isNotEmpty ?? false)
-            ? error.message!.trim()
-            : 'Your account could not be closed. Please try again.';
+        _error = 'Your account could not be closed. Please try again.';
       });
     }
   }
@@ -2477,7 +2467,7 @@ class _SenderClosedSubmissionScreenState
     } on FirebaseFunctionsException catch (error) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(error.message ?? 'Message could not be sent.')),
+        const SnackBar(content: Text('Message could not be sent.')),
       );
     } finally {
       if (mounted) setState(() => _sending = false);

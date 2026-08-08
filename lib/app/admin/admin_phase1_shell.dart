@@ -251,7 +251,7 @@ class _AdminPhaseOneShellState extends State<AdminPhaseOneShell> {
     } on FirebaseFunctionsException catch (error) {
       setState(
         () => _message =
-            error.message ?? 'Could not complete the governance action.',
+            _safeAdminError(error, 'Could not complete the governance action.'),
       );
     }
   }
@@ -341,7 +341,7 @@ class _AdminPhaseOneShellState extends State<AdminPhaseOneShell> {
       await _loadAdminData();
     } on FirebaseFunctionsException catch (error) {
       setState(
-        () => _message = error.message ?? 'Could not sync Rider Stripe.',
+        () => _message = _safeAdminError(error, 'Could not sync Rider Stripe.'),
       );
     }
   }
@@ -408,7 +408,8 @@ class _AdminPhaseOneShellState extends State<AdminPhaseOneShell> {
       await _loadAdminData();
       return url;
     } on FirebaseFunctionsException catch (error) {
-      setState(() => _message = error.message ?? 'Could not prepare link.');
+      setState(
+          () => _message = _safeAdminError(error, 'Could not prepare link.'));
     } catch (_) {
       setState(() => _message = 'Could not prepare payout setup link.');
     }
@@ -480,7 +481,8 @@ class _AdminPhaseOneShellState extends State<AdminPhaseOneShell> {
       await _loadAdminData();
     } on FirebaseFunctionsException catch (error) {
       setState(
-        () => _message = error.message ?? 'Could not reset Rider Stripe.',
+        () =>
+            _message = _safeAdminError(error, 'Could not reset Rider Stripe.'),
       );
     }
   }
@@ -640,7 +642,7 @@ class _AdminPhaseOneShellState extends State<AdminPhaseOneShell> {
     } on FirebaseFunctionsException catch (error) {
       setState(
         () => _message =
-            error.message ?? 'Could not resolve stale delivery lock.',
+            _safeAdminError(error, 'Could not resolve stale delivery lock.'),
       );
     }
   }
@@ -714,7 +716,8 @@ class _AdminPhaseOneShellState extends State<AdminPhaseOneShell> {
       );
       await _loadAdminData();
     } on FirebaseFunctionsException catch (error) {
-      setState(() => _message = error.message ?? 'IRIS adjudication failed.');
+      setState(
+          () => _message = _safeAdminError(error, 'IRIS adjudication failed.'));
     }
   }
 
@@ -741,7 +744,8 @@ class _AdminPhaseOneShellState extends State<AdminPhaseOneShell> {
       setState(() => _message = 'Reference image loaded for $itemId.');
     } on FirebaseFunctionsException catch (error) {
       setState(
-        () => _message = error.message ?? 'Reference image could not load.',
+        () => _message =
+            _safeAdminError(error, 'Reference image could not load.'),
       );
     }
   }
@@ -782,7 +786,7 @@ class _AdminPhaseOneShellState extends State<AdminPhaseOneShell> {
     } on FirebaseFunctionsException catch (error) {
       setState(
         () => _message =
-            error.message ?? 'Reference image could not be finalised.',
+            _safeAdminError(error, 'Reference image could not be finalised.'),
       );
     }
   }
@@ -815,8 +819,8 @@ class _AdminPhaseOneShellState extends State<AdminPhaseOneShell> {
       await _loadAdminData();
     } on FirebaseFunctionsException catch (error) {
       setState(
-        () =>
-            _message = error.message ?? 'Reference image could not be removed.',
+        () => _message =
+            _safeAdminError(error, 'Reference image could not be removed.'),
       );
     }
   }
@@ -974,7 +978,8 @@ class _AdminPhaseOneShellState extends State<AdminPhaseOneShell> {
       );
       await _loadAdminData();
     } on FirebaseFunctionsException catch (error) {
-      setState(() => _message = error.message ?? 'Could not generate invoice.');
+      setState(() =>
+          _message = _safeAdminError(error, 'Could not generate invoice.'));
     } catch (_) {
       setState(() => _message = 'Could not generate invoice.');
     }
@@ -1046,9 +1051,9 @@ class _AdminPhaseOneShellState extends State<AdminPhaseOneShell> {
       });
       setState(() => _message = 'Merge review requested for $duplicateId.');
     } on ArgumentError catch (error) {
-      setState(() => _message = error.message);
+      setState(() => _message = _safeAdminError(error, 'Merge review failed.'));
     } on FirebaseFunctionsException catch (error) {
-      setState(() => _message = error.message ?? 'Merge review failed.');
+      setState(() => _message = _safeAdminError(error, 'Merge review failed.'));
     }
   }
 
@@ -1118,9 +1123,11 @@ class _AdminPhaseOneShellState extends State<AdminPhaseOneShell> {
       setState(() => _message = 'Gift $id updated to $status.');
       await _loadAdminData();
     } on ArgumentError catch (error) {
-      setState(() => _message = error.message);
+      setState(
+          () => _message = _safeAdminError(error, 'Gift workflow failed.'));
     } on FirebaseFunctionsException catch (error) {
-      setState(() => _message = error.message ?? 'Gift workflow failed.');
+      setState(
+          () => _message = _safeAdminError(error, 'Gift workflow failed.'));
     }
   }
 
@@ -1145,7 +1152,8 @@ class _AdminPhaseOneShellState extends State<AdminPhaseOneShell> {
       setState(() => _message = 'Gift campaign participant $id updated.');
       await _loadAdminData();
     } on FirebaseFunctionsException catch (error) {
-      setState(() => _message = error.message ?? 'Campaign action failed.');
+      setState(
+          () => _message = _safeAdminError(error, 'Campaign action failed.'));
     }
   }
 
@@ -1175,8 +1183,8 @@ class _AdminPhaseOneShellState extends State<AdminPhaseOneShell> {
       setState(() => _message = 'Gift Brand Partner $id marked $status.');
       await _loadAdminData();
     } on FirebaseFunctionsException catch (error) {
-      setState(
-          () => _message = error.message ?? 'Brand Partner action failed.');
+      setState(() =>
+          _message = _safeAdminError(error, 'Brand Partner action failed.'));
     }
   }
 
@@ -1342,7 +1350,8 @@ class _AdminPhaseOneShellState extends State<AdminPhaseOneShell> {
       setState(() => _message = 'Gift Brand Partner $id saved.');
       await _loadAdminData();
     } on FirebaseFunctionsException catch (error) {
-      setState(() => _message = error.message ?? 'Brand Partner save failed.');
+      setState(() =>
+          _message = _safeAdminError(error, 'Brand Partner save failed.'));
     }
   }
 
@@ -1390,7 +1399,8 @@ class _AdminPhaseOneShellState extends State<AdminPhaseOneShell> {
       setState(() => _message = 'Campaign match suggestion saved.');
       await _loadAdminData();
     } on FirebaseFunctionsException catch (error) {
-      setState(() => _message = error.message ?? 'Match suggestion failed.');
+      setState(
+          () => _message = _safeAdminError(error, 'Match suggestion failed.'));
     }
   }
 
@@ -1434,7 +1444,8 @@ class _AdminPhaseOneShellState extends State<AdminPhaseOneShell> {
       );
       await _loadAdminData();
     } on FirebaseFunctionsException catch (error) {
-      setState(() => _message = error.message ?? 'Campaign approval failed.');
+      setState(
+          () => _message = _safeAdminError(error, 'Campaign approval failed.'));
     }
   }
 
@@ -1469,8 +1480,8 @@ class _AdminPhaseOneShellState extends State<AdminPhaseOneShell> {
       setState(() => _message = 'Campaign matching bulk $action complete.');
       await _loadAdminData();
     } on FirebaseFunctionsException catch (error) {
-      setState(
-          () => _message = error.message ?? 'Bulk campaign action failed.');
+      setState(() =>
+          _message = _safeAdminError(error, 'Bulk campaign action failed.'));
     }
   }
 
@@ -1850,7 +1861,8 @@ class _AdminPhaseOneShellState extends State<AdminPhaseOneShell> {
       setState(() => _message = 'Gift Request $id saved.');
       await _loadAdminData();
     } on FirebaseFunctionsException catch (error) {
-      setState(() => _message = error.message ?? 'Gift Request save failed.');
+      setState(
+          () => _message = _safeAdminError(error, 'Gift Request save failed.'));
     }
   }
 
@@ -1890,7 +1902,8 @@ class _AdminPhaseOneShellState extends State<AdminPhaseOneShell> {
       setState(() => _message = 'Gift Story $action submitted.');
       await _loadAdminData();
     } on FirebaseFunctionsException catch (error) {
-      setState(() => _message = error.message ?? 'Gift Story action failed.');
+      setState(
+          () => _message = _safeAdminError(error, 'Gift Story action failed.'));
     }
   }
 
@@ -1928,7 +1941,8 @@ class _AdminPhaseOneShellState extends State<AdminPhaseOneShell> {
         await _loadAdminData();
       } on FirebaseFunctionsException catch (error) {
         setState(
-          () => _message = error.message ?? 'IRIS repository save failed.',
+          () =>
+              _message = _safeAdminError(error, 'IRIS repository save failed.'),
         );
       }
       return;
@@ -1944,7 +1958,8 @@ class _AdminPhaseOneShellState extends State<AdminPhaseOneShell> {
       await _loadAdminData();
     } on FirebaseFunctionsException catch (error) {
       setState(
-        () => _message = error.message ?? 'IRIS repository action failed.',
+        () =>
+            _message = _safeAdminError(error, 'IRIS repository action failed.'),
       );
     }
   }
@@ -1978,7 +1993,8 @@ class _AdminPhaseOneShellState extends State<AdminPhaseOneShell> {
         await _loadAdminData();
       } on FirebaseFunctionsException catch (error) {
         setState(
-          () => _message = error.message ?? 'IRIS candidate promotion failed.',
+          () => _message =
+              _safeAdminError(error, 'IRIS candidate promotion failed.'),
         );
       }
       return;
@@ -1994,7 +2010,8 @@ class _AdminPhaseOneShellState extends State<AdminPhaseOneShell> {
       await _loadAdminData();
     } on FirebaseFunctionsException catch (error) {
       setState(
-        () => _message = error.message ?? 'IRIS candidate action failed.',
+        () =>
+            _message = _safeAdminError(error, 'IRIS candidate action failed.'),
       );
     }
   }
@@ -2020,8 +2037,8 @@ class _AdminPhaseOneShellState extends State<AdminPhaseOneShell> {
       setState(() => _message = 'Gift workspace $id marked $action.');
       await _loadAdminData();
     } on FirebaseFunctionsException catch (error) {
-      setState(
-          () => _message = error.message ?? 'Gift workspace action failed.');
+      setState(() =>
+          _message = _safeAdminError(error, 'Gift workspace action failed.'));
     }
   }
 
@@ -2081,7 +2098,8 @@ class _AdminPhaseOneShellState extends State<AdminPhaseOneShell> {
       await _loadAdminData();
     } on FirebaseFunctionsException catch (error) {
       setState(
-        () => _message = error.message ?? 'Gift Story media action failed.',
+        () => _message =
+            _safeAdminError(error, 'Gift Story media action failed.'),
       );
     }
   }
@@ -2107,7 +2125,7 @@ class _AdminPhaseOneShellState extends State<AdminPhaseOneShell> {
       setState(() => _message = 'Platform record $id updated to $status.');
       await _loadAdminData();
     } on ArgumentError catch (error) {
-      setState(() => _message = error.message);
+      setState(() => _message = _safeAdminError(error, 'Announcement failed.'));
     }
   }
 
@@ -2145,7 +2163,7 @@ class _AdminPhaseOneShellState extends State<AdminPhaseOneShell> {
       setState(() => _message = 'Announcement queued for $audience.');
       await _loadAdminData();
     } on FirebaseFunctionsException catch (error) {
-      setState(() => _message = error.message ?? 'Announcement failed.');
+      setState(() => _message = _safeAdminError(error, 'Announcement failed.'));
     }
   }
 
@@ -2165,7 +2183,8 @@ class _AdminPhaseOneShellState extends State<AdminPhaseOneShell> {
       setState(() => _message = 'Notification retry sent for $id.');
       await _loadAdminData();
     } on FirebaseFunctionsException catch (error) {
-      setState(() => _message = error.message ?? 'Notification retry failed.');
+      setState(() =>
+          _message = _safeAdminError(error, 'Notification retry failed.'));
     }
   }
 
@@ -2284,7 +2303,7 @@ class _AdminPhaseOneShellState extends State<AdminPhaseOneShell> {
       setState(() => _message = 'Roth issue submitted for $recipient.');
       await _loadAdminData();
     } on FirebaseFunctionsException catch (error) {
-      setState(() => _message = error.message ?? 'Roth issue failed.');
+      setState(() => _message = _safeAdminError(error, 'Roth issue failed.'));
     }
   }
 
@@ -2332,7 +2351,7 @@ class _AdminPhaseOneShellState extends State<AdminPhaseOneShell> {
       setState(() => _message = 'Manual Roth credit submitted.');
       await _loadAdminData();
     } on FirebaseFunctionsException catch (error) {
-      setState(() => _message = error.message ?? 'Roth issue failed.');
+      setState(() => _message = _safeAdminError(error, 'Roth issue failed.'));
     }
   }
 
@@ -2382,7 +2401,8 @@ class _AdminPhaseOneShellState extends State<AdminPhaseOneShell> {
       );
       await _loadAdminData();
     } on FirebaseFunctionsException catch (error) {
-      setState(() => _message = error.message ?? 'Recognition update failed.');
+      setState(() =>
+          _message = _safeAdminError(error, 'Recognition update failed.'));
     }
   }
 
@@ -2424,7 +2444,7 @@ class _AdminPhaseOneShellState extends State<AdminPhaseOneShell> {
       await _loadAdminData();
     } on FirebaseFunctionsException catch (error) {
       setState(
-        () => _message = error.message ?? 'Wallet freeze action failed.',
+        () => _message = _safeAdminError(error, 'Wallet freeze action failed.'),
       );
     }
   }
@@ -2484,7 +2504,8 @@ class _AdminPhaseOneShellState extends State<AdminPhaseOneShell> {
       setState(() => _message = 'Payout $requestId marked $nextStatus.');
       await _loadAdminData();
     } on FirebaseFunctionsException catch (error) {
-      setState(() => _message = error.message ?? 'Payout action failed.');
+      setState(
+          () => _message = _safeAdminError(error, 'Payout action failed.'));
     }
   }
 
@@ -2518,9 +2539,11 @@ class _AdminPhaseOneShellState extends State<AdminPhaseOneShell> {
       setState(() => _message = 'Rating $ratingId moderation saved.');
       await _loadAdminData();
     } on ArgumentError catch (error) {
-      setState(() => _message = error.message);
+      setState(
+          () => _message = _safeAdminError(error, 'Rating moderation failed.'));
     } on FirebaseFunctionsException catch (error) {
-      setState(() => _message = error.message ?? 'Rating moderation failed.');
+      setState(
+          () => _message = _safeAdminError(error, 'Rating moderation failed.'));
     }
   }
 
@@ -2806,7 +2829,7 @@ class _AdminPhaseOneShellState extends State<AdminPhaseOneShell> {
       setState(() => _message = 'Admin note added.');
       await _loadAdminData();
     } on FirebaseFunctionsException catch (error) {
-      setState(() => _message = error.message ?? 'Admin note failed.');
+      setState(() => _message = _safeAdminError(error, 'Admin note failed.'));
     }
   }
 
@@ -3134,8 +3157,8 @@ class _AdminPhaseOneShellState extends State<AdminPhaseOneShell> {
       setState(() => _message = 'Message report $id marked $status.');
       await _loadAdminData();
     } on FirebaseFunctionsException catch (error) {
-      setState(
-          () => _message = error.message ?? 'Message report update failed.');
+      setState(() =>
+          _message = _safeAdminError(error, 'Message report update failed.'));
     }
   }
 
@@ -3480,8 +3503,21 @@ class _AdminPhaseOneShellState extends State<AdminPhaseOneShell> {
       'permission-denied' => 'Your Admin role cannot send to this chat.',
       'not-found' => 'This chat thread is no longer available.',
       'failed-precondition' => 'This chat thread is not available for replies.',
-      'invalid-argument' => error.message ?? 'Check the message and try again.',
+      'invalid-argument' => 'Check the details and try again.',
       _ => 'Could not send this message.',
+    };
+  }
+
+  String _safeAdminError(Object error, String fallback) {
+    if (error is! FirebaseFunctionsException) return fallback;
+    return switch (error.code) {
+      'unauthenticated' => 'Please sign in again and retry.',
+      'permission-denied' => 'Your Admin role cannot perform this action.',
+      'not-found' => 'The requested record is no longer available.',
+      'failed-precondition' =>
+        'This action is not available in the current state.',
+      'invalid-argument' => 'Please check the details and try again.',
+      _ => fallback,
     };
   }
 
@@ -15007,7 +15043,16 @@ String _giftMatchBucket(Map<String, dynamic> record) {
 String _giftWorkspaceStatus(Map<String, dynamic> record) {
   final raw =
       '${record['giftsTeamWorkspaceStatus'] ?? record['workspaceStatus'] ?? record['giftAdminStatus'] ?? record['status'] ?? 'Awaiting Review'}';
-  return raw.replaceAll('_', ' ');
+  return switch (raw.trim().toLowerCase()) {
+    'pending' || 'submitted' || 'awaiting_review' => 'Awaiting Review',
+    'approved' || 'plan_approved' => 'Approved',
+    'in_progress' || 'procurement_in_progress' => 'In progress',
+    'ready' || 'ready_for_dispatch' => 'Ready for dispatch',
+    'complete' || 'completed' || 'delivered' => 'Completed',
+    'rejected' || 'declined' => 'Not approved',
+    'manual_review' => 'Under review',
+    _ => 'Gift update',
+  };
 }
 
 List<String> _giftWorkspaceProgress(Map<String, dynamic> record) {
@@ -15074,7 +15119,13 @@ bool _isGiftReadyForDispatch(Map<String, dynamic> record) {
 }
 
 String _giftWorkflowStatus(Map<String, dynamic> record) {
-  return _giftWorkflowStage(record).replaceAll('_', ' ');
+  return switch (_giftWorkflowStage(record)) {
+    'completed' => 'Completed',
+    'ready_for_dispatch' => 'Ready for dispatch',
+    'under_review' => 'Under review',
+    'in_progress' => 'In progress',
+    _ => 'Awaiting review',
+  };
 }
 
 String _giftWorkflowStage(Map<String, dynamic> record) {
@@ -22139,10 +22190,22 @@ bool _deliveryNeedsFraudReview(Map<String, dynamic> delivery) {
 
 String _deliveryStatusLabel(Map<String, dynamic> delivery) {
   final value =
-      '${delivery['status'] ?? delivery['deliveryStatus'] ?? delivery['deliveryStage'] ?? 'unknown'}'
-          .replaceAll('_', ' ')
-          .trim();
-  return value.isEmpty ? 'unknown' : value;
+      '${delivery['status'] ?? delivery['deliveryStatus'] ?? delivery['deliveryStage'] ?? ''}'
+          .trim()
+          .toLowerCase();
+  return switch (value) {
+    'requested' => 'Requested',
+    'accepted' => 'Accepted',
+    'arrived_at_pickup' => 'Arrived at pickup',
+    'collected' || 'picked_up' => 'Collected',
+    'navigating_to_dropoff' => 'On the way to the drop-off',
+    'arrived_at_dropoff' => 'Arrived at drop-off',
+    'delivered' || 'completed' => 'Delivered',
+    'cancelled_by_sender' => 'Cancelled by sender',
+    'manual_review' => 'Under review',
+    '' => 'Status pending',
+    _ => 'Delivery update',
+  };
 }
 
 String _deliveryRouteLabel(Map<String, dynamic> delivery) {
