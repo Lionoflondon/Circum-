@@ -36,8 +36,7 @@ import '../repo/place_api.dart';
 part 'send_package_event.dart';
 part 'send_package_state.dart';
 
-const _googleMapsDirectionsApiKey =
-    String.fromEnvironment('GOOGLE_MAPS_DIRECTIONS_API_KEY');
+const _googleMapsDirectionsApiKey = String.fromEnvironment('GOOGLE_MAPS_DIRECTIONS_API_KEY');
 
 void _logRecoverableSenderError(
   String context,
@@ -1241,10 +1240,9 @@ class SendPackageBloc extends Bloc<SendPackageEvent, SendPackageState> {
             'sendPackage dispatch after finalized checkout failed; delivery remains created: $error',
           );
         }
-        final prefs = await SharedPreferences.getInstance();
-        await prefs.setString('activeRequest', requestId);
-        add(WatchActiveDelivery(requestId: requestId));
       }
+      // Finalization is authoritative. Housekeeping must not turn a paid,
+      // created delivery into a client-reported payment failure.
       emit(
         state.copyWith(
           isSenderPaymentLoading: false,
@@ -1255,7 +1253,30 @@ class SendPackageBloc extends Bloc<SendPackageEvent, SendPackageState> {
           deliveryRequestStatus: 'requested',
         ),
       );
-      add(SetDrawerHeight(minDrawerHeight: 180, maxDrawerHeight: 0.5.sh));
+      if (requestId.isNotEmpty) {
+        try {
+          final prefs = await SharedPreferences.getInstance();
+          await prefs.setString('activeRequest', requestId);
+        } catch (error) {
+          debugPrint(
+            'finalizeSenderWebCheckout active request persistence failed; payment remains confirmed: $error',
+          );
+        }
+        try {
+          add(WatchActiveDelivery(requestId: requestId));
+        } catch (error) {
+          debugPrint(
+            'finalizeSenderWebCheckout active delivery watch failed; payment remains confirmed: $error',
+          );
+        }
+      }
+      try {
+        add(SetDrawerHeight(minDrawerHeight: 180, maxDrawerHeight: 0.5.sh));
+      } catch (error) {
+        debugPrint(
+          'finalizeSenderWebCheckout drawer update failed; payment remains confirmed: $error',
+        );
+      }
     } on FirebaseFunctionsException catch (error) {
       debugPrint(
         'finalizeSenderWebCheckout failed: code=${error.code}, message=${error.message}, details=${error.details}',
