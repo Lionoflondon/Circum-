@@ -764,6 +764,7 @@ class _SenderBookingCanvasState extends State<SenderBookingCanvas> {
                 pickupLocationSubAddress: match.subText,
                 placeId: match.placeId,
                 lang: lang,
+                coordinate: coordinate,
               ),
             );
         _setDraft(
@@ -780,6 +781,7 @@ class _SenderBookingCanvasState extends State<SenderBookingCanvas> {
                 destinationLocationSubAddress: match.subText,
                 placeId: match.placeId,
                 lang: lang,
+                coordinate: coordinate,
               ),
             );
         _setDraft(
@@ -907,6 +909,7 @@ class _SenderBookingCanvasState extends State<SenderBookingCanvas> {
                 pickupLocationSubAddress: subText,
                 placeId: placeId,
                 lang: lang,
+                coordinate: coordinate,
               ),
             );
         _pickup.text = description;
@@ -926,6 +929,7 @@ class _SenderBookingCanvasState extends State<SenderBookingCanvas> {
                 destinationLocationSubAddress: subText,
                 placeId: placeId,
                 lang: lang,
+                coordinate: coordinate,
               ),
             );
         _dropoff.text = description;
@@ -1801,7 +1805,7 @@ class _AddressPanel extends StatelessWidget {
               ),
             ),
           ),
-        if (controller.text.trim().isNotEmpty && !canContinue)
+        if (suggestions.isNotEmpty)
           ConstrainedBox(
             constraints: const BoxConstraints(maxHeight: 164),
             child: ListView.builder(

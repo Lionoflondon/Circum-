@@ -382,9 +382,18 @@ void main() {
 
     expect(source, contains("httpsCallable('searchFreeUkAddresses')"));
     expect(source, contains("httpsCallable('resolveUkAddressPlace')"));
-    expect(source, contains("'sessionToken': '\$sessionToken'"));
+    expect(source, contains("'sessionToken': sessionToken"));
     expect(source, contains(".timeout(const Duration(seconds: 8))"));
     expect(source, isNot(contains('maps.googleapis.com')));
+  });
+
+  test('Sender address search keeps the newest request and renders suggestions', () {
+    final bloc = read('lib/app/send_package/bloc/send_package_bloc.dart');
+    final canvas = read('lib/app/sender_mobile/sender_booking_canvas.dart');
+
+    expect(bloc, contains('_addressSearchGeneration'));
+    expect(bloc, contains('requestId != _addressSearchGeneration'));
+    expect(canvas, contains('if (suggestions.isNotEmpty)'));
   });
 
   test('Sender-facing delivery models never expose Rider phone fallbacks', () {

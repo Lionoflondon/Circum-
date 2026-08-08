@@ -132,6 +132,7 @@ class SendPackageBloc extends Bloc<SendPackageEvent, SendPackageState> {
   StreamSubscription<DocumentSnapshot<Map<String, dynamic>>>?
       _activeDeliveryLiveLocationSubscription;
   String? _activeDeliveryLiveLocationId;
+  int _addressSearchGeneration = 0;
   SendPackageBloc() : super(SendPackageState()) {
     on<CheckForPushToken>(_handleCheckForPushToken);
     on<SearchAPlaceEvent>(_handleSearchAPlaceEvent);
@@ -341,7 +342,7 @@ class SendPackageBloc extends Bloc<SendPackageEvent, SendPackageState> {
     SearchAPlaceEvent event,
     Emitter<SendPackageState> emit,
   ) async {
-    const uuid = Uuid();
+    final requestId = ++_addressSearchGeneration;
     if (event.query.trim().length < 3) {
       emit(
         state.copyWith(
@@ -355,8 +356,10 @@ class SendPackageBloc extends Bloc<SendPackageEvent, SendPackageState> {
     emit(state.copyWith(isAddressSearching: true, addressSearchError: ''));
     try {
       List<Suggestion> suggestions = await PlaceApiProvider(
-        uuid,
+        Uuid().v4(),
       ).fetchSuggestions(event.query, event.lang);
+
+      if (requestId != _addressSearchGeneration) return;
 
       emit(
         state.copyWith(
@@ -415,8 +418,6 @@ class SendPackageBloc extends Bloc<SendPackageEvent, SendPackageState> {
     SetPickupAddress event,
     Emitter<SendPackageState> emit,
   ) async {
-    const uuid = Uuid();
-
     emit(
       state.copyWith(
         pickupLocation: event.val,
@@ -427,9 +428,10 @@ class SendPackageBloc extends Bloc<SendPackageEvent, SendPackageState> {
     );
 
     try {
-      PlaceCoordinate coordinate = await PlaceApiProvider(
-        uuid,
-      ).fetchPlaceDetails(event.placeId, event.lang);
+      final coordinate = event.coordinate ??
+          await PlaceApiProvider(
+            Uuid().v4(),
+          ).fetchPlaceDetails(event.placeId, event.lang);
 
       var address = await placemarkFromCoordinates(
         coordinate.lat,
@@ -455,7 +457,6 @@ class SendPackageBloc extends Bloc<SendPackageEvent, SendPackageState> {
   }
 
   void _handleSetDeliveryAddress(SetDeliveryAddress event, Emitter emit) async {
-    const uuid = Uuid();
     emit(
       state.copyWith(
         destinationLocation: event.val,
@@ -473,9 +474,10 @@ class SendPackageBloc extends Bloc<SendPackageEvent, SendPackageState> {
       );
     }
     try {
-      PlaceCoordinate coordinate = await PlaceApiProvider(
-        uuid,
-      ).fetchPlaceDetails(event.placeId, event.lang);
+      final coordinate = event.coordinate ??
+          await PlaceApiProvider(
+            Uuid().v4(),
+          ).fetchPlaceDetails(event.placeId, event.lang);
       // var addresses = await Geocoder.google ( '<---------YOUR APIKEY-------->' ).findAddressesFromCoordinates(coordinates);
       var address = await placemarkFromCoordinates(
         coordinate.lat,

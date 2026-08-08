@@ -1,4 +1,5 @@
 import 'package:cloud_functions/cloud_functions.dart';
+import 'package:uuid/uuid.dart';
 
 import '../../platform/address_engine.dart';
 import '../models/place_coordinates.m.dart';
@@ -6,10 +7,16 @@ import '../models/suggestions.m.dart';
 // import 'package:http/http.dart';
 
 class PlaceApiProvider {
-  PlaceApiProvider(this.sessionToken);
+  PlaceApiProvider(Object sessionToken) : sessionToken = _token(sessionToken);
 
-  final Object sessionToken;
+  final String sessionToken;
   static final Map<String, Suggestion> _suggestionCache = {};
+  static final Map<String, String> _sessionTokenByPlaceId = {};
+
+  static String _token(Object value) {
+    final text = '$value'.trim();
+    return text.isEmpty || text.startsWith('Instance of ') ? Uuid().v4() : text;
+  }
 
   Future<List<Suggestion>> fetchSuggestions(String input, String lang) async {
     final query = input.trim();
@@ -18,7 +25,7 @@ class PlaceApiProvider {
         .httpsCallable('searchFreeUkAddresses')
         .call({
       'query': query,
-      'sessionToken': '$sessionToken',
+      'sessionToken': sessionToken,
     }).timeout(const Duration(seconds: 8));
     final data = response.data is Map
         ? Map<String, dynamic>.from(response.data as Map)
@@ -30,6 +37,9 @@ class PlaceApiProvider {
           final map = Map<String, dynamic>.from(item as Map);
           final suggestion = AddressEngine.suggestionFromBackend(map);
           _suggestionCache[suggestion.placeId] = suggestion;
+          if (suggestion.placeId.trim().isNotEmpty) {
+            _sessionTokenByPlaceId[suggestion.placeId] = sessionToken;
+          }
           return suggestion;
         })
         .where((item) => item.description.isNotEmpty)
@@ -46,7 +56,7 @@ class PlaceApiProvider {
         .httpsCallable('resolveUkAddressPlace')
         .call({
       'placeId': placeId,
-      'sessionToken': '$sessionToken',
+      'sessionToken': _sessionTokenByPlaceId[placeId] ?? sessionToken,
     }).timeout(const Duration(seconds: 8));
     final data = response.data is Map
         ? Map<String, dynamic>.from(response.data as Map)
@@ -54,6 +64,7 @@ class PlaceApiProvider {
     final resolved = AddressEngine.suggestionFromBackend(data);
     _suggestionCache[resolved.placeId] = resolved;
     _suggestionCache[placeId] = resolved;
+    _sessionTokenByPlaceId.remove(placeId);
     if (resolved.lat != null && resolved.lng != null) {
       return PlaceCoordinate(lat: resolved.lat!, lng: resolved.lng!);
     }
