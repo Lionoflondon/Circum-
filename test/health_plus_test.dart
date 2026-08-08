@@ -5,6 +5,8 @@ import 'package:circum/app/health_plus/models/health_plus_profile.dart';
 import 'package:circum/app/health_plus/models/pickup_status.dart';
 import 'package:circum/app/health_plus/models/prescription_pickup.dart';
 import 'package:circum/app/health_plus/models/recurring_pickup_schedule.dart';
+import 'package:circum/app/platform/address_engine.dart';
+import 'package:circum/app/send_package/models/suggestions.m.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
@@ -183,6 +185,54 @@ void main() {
       expect(source, contains("webOnlyWindowName: kIsWeb ? '_self' : null"));
       expect(source, contains("'subscriptionPlan': _plan"));
       expect(source, contains('_HealthCheckoutException'));
+    });
+
+    test('mobile Health+ serializes the shared canonical address contract', () {
+      final suggestion = Suggestion(
+        placeId: 'place_1',
+        description: 'The Shard, London SE1 9SG',
+        mainText: 'The Shard',
+        subText: 'London SE1 9SG',
+        lat: 51.5045,
+        lng: -0.0865,
+        components: const {
+          'addressLine1': '32 London Bridge Street',
+          'city': 'London',
+          'postcode': 'SE1 9SG',
+          'country': 'United Kingdom',
+        },
+      );
+      final payload = AddressEngine.canonicalAddressPayload(suggestion);
+
+      expect(payload['displayAddress'], isNotEmpty);
+      expect(payload['postcode'], 'SE1 9SG');
+      expect(payload['lat'], 51.5045);
+      expect(payload['lng'], -0.0865);
+      expect(payload['placeId'], 'place_1');
+      expect(payload['validationStatus'], 'verified');
+      expect(payload['provider'], 'google_places');
+    });
+
+    test('Health+ booking requires selected canonical destinations', () {
+      final source =
+          File('lib/app/health_plus/view/health_plus.dart').readAsStringSync();
+
+      expect(source, contains("'pharmacyAddressCanonical'"));
+      expect(source, contains("'deliveryAddressCanonical'"));
+      expect(source, contains('_selectedPharmacy != null'));
+      expect(source, contains('_selectedDelivery != null'));
+      expect(source, isNot(contains("'pharmacyPosition'")));
+      expect(source, isNot(contains("'deliveryPosition'")));
+    });
+
+    test('Gift address selection resolves before it becomes canonical', () {
+      final source = File(
+        'lib/app/sender_mobile/gift_delivery_view.dart',
+      ).readAsStringSync();
+
+      expect(source, contains('resolveSuggestion'));
+      expect(source, contains('_selectedAddressSuggestion = resolved'));
+      expect(source, contains('That address could not be resolved'));
     });
   });
 }

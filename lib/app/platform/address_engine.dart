@@ -285,6 +285,38 @@ class AddressEngine {
     );
   }
 
+  /// Serializes the same canonical address shape consumed by Website Health+.
+  /// Coordinates come from the resolved suggestion, never from typed text.
+  static Map<String, dynamic> canonicalAddressPayload(Suggestion suggestion) {
+    final address = normalize(
+      suggestion: cleanSuggestion(suggestion),
+      manualAddress: suggestion.description,
+      verified: true,
+      source: 'google_places',
+    );
+    return {
+      'rawInput': suggestion.description,
+      'displayAddress': address['formattedAddress'] ?? suggestion.description,
+      'postcode': address['postcode'],
+      'lat': address['latitude'],
+      'lng': address['longitude'],
+      'geocodeConfidence': 1.0,
+      'confidenceBand': 'high',
+      'validationStatus': 'verified',
+      'addressSource': 'google_places',
+      'provider': 'google_places',
+      'locationId': address['placeId'],
+      if (address['placeId'] != null) 'placeId': address['placeId'],
+      if (address['addressLine1'] != null)
+        'addressLine1': address['addressLine1'],
+      if (address['addressLine2'] != null)
+        'addressLine2': address['addressLine2'],
+      if (address['city'] != null) 'city': address['city'],
+      if (address['county'] != null) 'county': address['county'],
+      if (address['country'] != null) 'country': address['country'],
+    };
+  }
+
   static String display(Map<String, dynamic>? address, {String fallback = ''}) {
     if (address == null) return clean(fallback);
     return firstPart([

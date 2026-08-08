@@ -10,6 +10,7 @@ import 'package:url_launcher/url_launcher.dart';
 
 import '../../send_package/models/suggestions.m.dart';
 import '../../send_package/repo/place_api.dart';
+import '../../platform/address_engine.dart';
 import '../health_plus_pricing.dart';
 import '../models/pickup_status.dart';
 import '../models/recurring_pickup_schedule.dart';
@@ -105,6 +106,8 @@ class _HealthPlusViewState extends State<HealthPlusView> {
   String? _scheduleId;
   String? _message;
   String? _checkoutUrl;
+  Suggestion? _selectedPharmacy;
+  Suggestion? _selectedDelivery;
   Map<String, dynamic>? _latestPickup;
   final List<Map<String, dynamic>> _payments = [];
 
@@ -158,12 +161,17 @@ class _HealthPlusViewState extends State<HealthPlusView> {
           _goTo(_HealthStep.pharmacy);
         }
       case _HealthStep.pharmacy:
-        if (_requireText(_pharmacyAddress, 'Choose a pharmacy.')) {
+        if (_selectedPharmacy != null) {
           _goTo(_HealthStep.delivery);
+        } else {
+          setState(() => _message = 'Choose a pharmacy from the suggestions.');
         }
       case _HealthStep.delivery:
-        if (_requireText(_deliveryAddress, 'Choose a delivery address.')) {
+        if (_selectedDelivery != null) {
           _goTo(_HealthStep.frequency);
+        } else {
+          setState(() =>
+              _message = 'Choose a delivery address from the suggestions.');
         }
       case _HealthStep.frequency:
         _goTo(_HealthStep.plan);
@@ -236,6 +244,10 @@ class _HealthPlusViewState extends State<HealthPlusView> {
         'email': _email.text.trim(),
         'pharmacyAddress': _pharmacyAddress.text.trim(),
         'deliveryAddress': _deliveryAddress.text.trim(),
+        'pharmacyAddressCanonical':
+            AddressEngine.canonicalAddressPayload(_selectedPharmacy!),
+        'deliveryAddressCanonical':
+            AddressEngine.canonicalAddressPayload(_selectedDelivery!),
         'notes': _notes.text.trim(),
         'consentConfirmed': _consent,
         'preferredPickupTime': _preferredTime.text.trim(),
@@ -520,14 +532,32 @@ class _HealthPlusViewState extends State<HealthPlusView> {
           title: 'Search pharmacy or address',
           controller: _pharmacyAddress,
           search: _pharmacySearch,
-          onSelected: () => _goTo(_HealthStep.delivery),
+          selected: _selectedPharmacy,
+          onTextChanged: (value) => setState(() {
+            if (_selectedPharmacy?.description != value.trim()) {
+              _selectedPharmacy = null;
+            }
+          }),
+          onSelected: (suggestion) => setState(() {
+            _selectedPharmacy = suggestion;
+            _pharmacyAddress.text = suggestion.description;
+          }),
           onContinue: _next,
         ),
       _HealthStep.delivery => _HealthAddressStep(
           title: 'Search delivery address',
           controller: _deliveryAddress,
           search: _deliverySearch,
-          onSelected: () => _goTo(_HealthStep.frequency),
+          selected: _selectedDelivery,
+          onTextChanged: (value) => setState(() {
+            if (_selectedDelivery?.description != value.trim()) {
+              _selectedDelivery = null;
+            }
+          }),
+          onSelected: (suggestion) => setState(() {
+            _selectedDelivery = suggestion;
+            _deliveryAddress.text = suggestion.description;
+          }),
           onContinue: _next,
         ),
       _HealthStep.frequency => _HealthFrequencyStep(
@@ -586,6 +616,10 @@ class _HealthPlaceSearchController {
   List<Suggestion> suggestions = const [];
 
   void dispose() => _debounce?.cancel();
+
+  Future<Suggestion> resolve(Suggestion suggestion) {
+    return provider.resolveSuggestion(suggestion.placeId, 'en');
+  }
 
   void search(String query, VoidCallback onChanged) {
     _debounce?.cancel();
@@ -876,13 +910,17 @@ class _HealthAddressStep extends StatefulWidget {
   final String title;
   final TextEditingController controller;
   final _HealthPlaceSearchController search;
-  final VoidCallback onSelected;
+  final Suggestion? selected;
+  final ValueChanged<String> onTextChanged;
+  final ValueChanged<Suggestion> onSelected;
   final VoidCallback onContinue;
 
   const _HealthAddressStep({
     required this.title,
     required this.controller,
     required this.search,
+    required this.selected,
+    required this.onTextChanged,
     required this.onSelected,
     required this.onContinue,
   });
@@ -901,6 +939,7 @@ class _HealthAddressStepState extends State<_HealthAddressStep> {
           label: widget.title,
           prefixIcon: Icons.search_rounded,
           onChanged: (value) => widget.search.search(value, () {
+            widget.onTextChanged(value);
             if (mounted) setState(() {});
           }),
         ),
@@ -912,13 +951,24 @@ class _HealthAddressStepState extends State<_HealthAddressStep> {
           ...widget.search.suggestions.map(
             (suggestion) => _HealthSuggestionRow(
               suggestion: suggestion,
-              onTap: () {
+              onTap: () async {
                 widget.controller.text = suggestion.description;
-                widget.onSelected();
+                try {
+                  final resolved = await widget.search.resolve(suggestion);
+                  if (!mounted) return;
+                  widget.onSelected(resolved);
+                  setState(() {});
+                } catch (_) {
+                  if (!mounted) return;
+                  setState(() {
+                    widget.search.error =
+                        'That address could not be resolved. Choose another suggestion.';
+                  });
+                }
               },
             ),
           ),
-        if (widget.controller.text.trim().isNotEmpty)
+        if (widget.selected != null)
           _HealthPrimaryButton(label: 'Continue', onTap: widget.onContinue),
       ],
     );

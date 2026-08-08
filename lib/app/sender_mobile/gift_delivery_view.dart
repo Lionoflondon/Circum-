@@ -114,7 +114,7 @@ class _GiftDeliveryViewState extends State<GiftDeliveryView> {
     });
   }
 
-  void _selectAddressSuggestion(Suggestion suggestion) {
+  Future<void> _selectAddressSuggestion(Suggestion suggestion) async {
     _addressDebounce?.cancel();
     final cleanSuggestion = AddressEngine.cleanSuggestion(suggestion);
     _deliveryAddressController.text = cleanSuggestion.description;
@@ -122,11 +122,29 @@ class _GiftDeliveryViewState extends State<GiftDeliveryView> {
       offset: cleanSuggestion.description.length,
     );
     setState(() {
-      _selectedAddressSuggestion = cleanSuggestion;
+      _selectedAddressSuggestion = null;
       _addressSuggestions = const [];
-      _isAddressSearching = false;
+      _isAddressSearching = true;
       _addressError = '';
     });
+    try {
+      final resolved = await _addressSearch.resolveSuggestion(
+        cleanSuggestion.placeId,
+        'en',
+      );
+      if (!mounted) return;
+      setState(() {
+        _selectedAddressSuggestion = resolved;
+        _isAddressSearching = false;
+      });
+    } catch (_) {
+      if (!mounted) return;
+      setState(() {
+        _isAddressSearching = false;
+        _addressError =
+            'That address could not be resolved. Choose another suggestion.';
+      });
+    }
   }
 
   Future<void> _pickDeliveryDate() async {

@@ -59,4 +59,23 @@ class PlaceApiProvider {
     }
     throw Exception("Couldn't fetch location details");
   }
+
+  Future<Suggestion> resolveSuggestion(String placeId, String lang) async {
+    final response = await FirebaseFunctions.instance
+        .httpsCallable('resolveUkAddressPlace')
+        .call({
+      'placeId': placeId,
+      'sessionToken': '$sessionToken',
+    }).timeout(const Duration(seconds: 8));
+    final data = response.data is Map
+        ? Map<String, dynamic>.from(response.data as Map)
+        : <String, dynamic>{};
+    final resolved = AddressEngine.suggestionFromBackend(data);
+    _suggestionCache[resolved.placeId] = resolved;
+    _suggestionCache[placeId] = resolved;
+    if (resolved.lat == null || resolved.lng == null) {
+      throw Exception("Couldn't resolve address details");
+    }
+    return resolved;
+  }
 }
