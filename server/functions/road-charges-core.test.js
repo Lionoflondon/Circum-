@@ -189,6 +189,51 @@ test("one £18 vehicle-day liability caps recovery and yields the £882 hundred-
   assert.equal(circumRevenuePence, 88200);
 });
 
+test("daily recovery matrix is exact at 0, 1, 2, 3, 10, and 100 jobs", () => {
+  const expected = new Map([
+    [0, {fees: 0, recovery: 0, revenue: 0}],
+    [1, {fees: 900, recovery: 900, revenue: 0}],
+    [2, {fees: 1800, recovery: 1800, revenue: 0}],
+    [3, {fees: 2700, recovery: 1800, revenue: 900}],
+    [10, {fees: 9000, recovery: 1800, revenue: 7200}],
+    [100, {fees: 90000, recovery: 1800, revenue: 88200}],
+  ]);
+  for (const [jobs, totals] of expected) {
+    let recoveredPence = 0;
+    let fees = 0;
+    let recovery = 0;
+    let revenue = 0;
+    for (let job = 0; job < jobs; job += 1) {
+      const allocation = dailyRecoveryAllocation({
+        liabilityPence: 1800,
+        customerFeePence: 900,
+        recoveredPence,
+      });
+      recoveredPence = allocation.recoveredAfterPence;
+      fees += allocation.customerFeePence;
+      recovery += allocation.riderRecoveryPence;
+      revenue += allocation.circumRevenuePence;
+    }
+    assert.deepEqual({fees, recovery, revenue}, totals);
+  }
+});
+
+test("per-crossing reimbursement is not capped by the daily-liability waterfall", () => {
+  const result = evaluateRoadCharges({
+    routeFacts: route({crossings: [{
+      chargeId: "blackwall_silvertown",
+      crossingId: "three-peak-crossings",
+      count: 3,
+      direction: "northbound",
+      at: "2026-08-07T08:00:00Z",
+    }]}),
+    selectedVehicle: "car",
+  });
+  assert.equal(result.customerContributionPence, 1200);
+  assert.equal(result.riderReimbursementPence, 1200);
+  assert.equal(result.circumRevenuePence, 0);
+});
+
 test("ULEZ and LEZ are compliance records, not Sender charges", () => {
   const result = evaluateRoadCharges({
     routeFacts: route({

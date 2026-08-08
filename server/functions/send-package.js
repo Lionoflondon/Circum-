@@ -10,6 +10,22 @@ function senderOwnsRequest(delivery, uid) {
   return delivery.senderId === uid || delivery.userId === uid;
 }
 
+function rankDispatchCandidates(candidates, delivery = {}) {
+  const service = `${
+    delivery.selectedSpeed || delivery.selectedServiceLevel ||
+    delivery.serviceLevel || delivery.selectedTier || ""
+  }`.trim().toLowerCase();
+  const express = service === "express";
+  return [...candidates].sort((a, b) => {
+    const distanceDelta = Number(a.distanceFromPickup || 0) - Number(b.distanceFromPickup || 0);
+    const chargeDelta = Number(a.incrementalRoadChargePence || 0) -
+      Number(b.incrementalRoadChargePence || 0);
+    // Express preserves urgency. Standard/Economy may prefer a lower lawful
+    // incremental fulfilment cost after all eligibility filters have passed.
+    return express ? distanceDelta || chargeDelta : chargeDelta || distanceDelta;
+  });
+}
+
 async function dispatchDeliveryRequest({
   db = getFirestore(),
   messaging = getMessaging(),
@@ -163,14 +179,10 @@ async function dispatchDeliveryRequest({
           }),
   );
 
-  const closestRiders = ridersWithDistances
-      .filter((rider) => rider !== null)
-      .sort((a, b) => {
-        const chargeDelta = (a.incrementalRoadChargePence || 0) - (b.incrementalRoadChargePence || 0);
-        if (chargeDelta !== 0) return chargeDelta;
-        return a.distanceFromPickup - b.distanceFromPickup;
-      })
-      .slice(0, 5);
+  const closestRiders = rankDispatchCandidates(
+      ridersWithDistances.filter((rider) => rider !== null),
+      deliveryRequest[0],
+  ).slice(0, 5);
 
   const sendResults = await Promise.all(closestRiders.map(async (rider) => {
     if (!rider.fcmToken) {
@@ -279,3 +291,4 @@ const sendPackage = functions.https.onCall(async (data, context) => {
 
 module.exports = sendPackage;
 module.exports.dispatchDeliveryRequest = dispatchDeliveryRequest;
+module.exports.rankDispatchCandidates = rankDispatchCandidates;
