@@ -11,6 +11,7 @@ const {classifyIris, normalDispatchEligibilityForInput} = require("./iris-core")
 const {verifiedPhotoAnalysis} = require("./iris-photo-analysis");
 const {dispatchDeliveryRequest} = require("./send-package");
 const {evaluateRoadCharges, ROAD_CHARGE_POLICY_VERSION} = require("./road-charges-core");
+const {authoritativeRoadRouteFacts} = require("./road-charge-route-provider");
 
 const BASE_FARE_GBP = 5;
 const ADDITIONAL_FARE_PER_MILE_GBP = 1.5;
@@ -776,6 +777,15 @@ function quotePayload(data, uid, serverPhotoAnalysis = null, serverRoadChargeFac
   const roadChargeRiderReimbursement = money(roadChargeBreakdown.riderReimbursement);
   const roadChargeCircumContribution = money(roadChargeBreakdown.circumContribution);
   const roadChargeCircumRevenue = money(roadChargeBreakdown.circumRevenue);
+  const roadChargeMaximumSettlementPence = roadChargeBreakdown.charges.reduce((total, charge) => {
+    if (charge.type === "daily_zone_charge") {
+      return total + Number(charge.amountPence || 0);
+    }
+    if (charge.type === "route_toll") {
+      return total + Number(charge.riderReimbursementPence || charge.amountPence || 0);
+    }
+    return total;
+  }, 0);
   const total = money(Math.max(0, subtotal + speed + vanguard + roadChargeCustomerContribution));
   const riderBaseShare = money(Math.max(0, subtotal + speed) * RIDER_DELIVERY_FARE_SHARE);
   const platformBaseShare = money(Math.max(0, subtotal + speed) * PLATFORM_DELIVERY_FARE_SHARE);
@@ -849,6 +859,13 @@ function quotePayload(data, uid, serverPhotoAnalysis = null, serverRoadChargeFac
     roadChargeRiderReimbursement,
     roadChargeCircumContribution,
     roadChargeCircumRevenue,
+    roadChargeMaximumSettlementPence,
+    roadChargeFinancialReservation: {
+      status: roadChargeBreakdown.authoritativePricingComplete ? "reserved" : "unresolved",
+      maximumRiderObligationPence: roadChargeMaximumSettlementPence,
+      customerRoadFeesPence: roadChargeBreakdown.customerContributionPence,
+      policyVersion: ROAD_CHARGE_POLICY_VERSION,
+    },
     roadChargeFactsSource: serverRoadChargeFacts ? "authoritative_route" : "unavailable",
     roadChargeRouteFacts: serverRoadChargeFacts || null,
     roadChargePricingComplete: serverRoadChargeFacts ?
@@ -1016,10 +1033,22 @@ exports.createSenderBookingQuote = functions.https.onCall(async (data, context) 
     analysisId: data && data.irisPhotoAnalysisId,
     description: parcelDescription,
   });
+  const serverRoadChargeFacts = await authoritativeRoadRouteFacts({
+    db,
+    pickup: data && (data.pickupCoordinates || data.pickupPosition),
+    dropoff: data && (data.dropoffCoordinates || data.dropoffPosition),
+  });
+  if (serverRoadChargeFacts.known !== true) {
+    throw new functions.https.HttpsError(
+        "failed-precondition",
+        "Road-charge exposure could not be established safely. Please recalculate the route.",
+        {reason: serverRoadChargeFacts.reason || "authoritative_route_unavailable"},
+    );
+  }
   const quote = quotePayload({
     ...(data || {}),
     ...(businessContext || {}),
-  }, sender.uid, serverPhotoAnalysis);
+  }, sender.uid, serverPhotoAnalysis, serverRoadChargeFacts);
   const clientDisplayQuote = cleanMap(data && data.clientDisplayQuote);
   const clientDisplayedAmount = cleanNumber(clientDisplayQuote.amount);
   const clientDisplayedAmountPence = cleanNumber(clientDisplayQuote.amountPence);
@@ -1966,6 +1995,8 @@ async function createPaidDeliveryFromSession(stripe, sender, data) {
       roadChargeReimbursement: 0,
       roadChargeCircumContribution: quote.roadChargeCircumContribution || 0,
       roadChargeCircumRevenue: quote.roadChargeCircumRevenue || 0,
+      roadChargeMaximumSettlementPence: quote.roadChargeMaximumSettlementPence || 0,
+      roadChargeFinancialReservation: quote.roadChargeFinancialReservation || null,
       roadChargeLiabilityKeys: quote.roadChargeBreakdown && quote.roadChargeBreakdown.liabilityKeys || [],
       roadChargeRouteFacts: quote.roadChargeRouteFacts || null,
       quotedVehicleClass: quote.quotedVehicleClass || quote.selectedVehicle,

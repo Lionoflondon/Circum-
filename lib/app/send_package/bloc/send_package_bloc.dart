@@ -940,6 +940,16 @@ class SendPackageBloc extends Bloc<SendPackageEvent, SendPackageState> {
         'distanceMiles': distanceKm == null
             ? 0
             : DeliveryPricing.kilometresToMiles(distanceKm),
+        if (state.pickupCoordinate != null)
+          'pickupCoordinates': {
+            'latitude': state.pickupCoordinate!.lat,
+            'longitude': state.pickupCoordinate!.lng,
+          },
+        if (state.desinationCoordinate != null)
+          'dropoffCoordinates': {
+            'latitude': state.desinationCoordinate!.lat,
+            'longitude': state.desinationCoordinate!.lng,
+          },
         'weightKg':
             state.parcelWeightKg <= 0 ? event.weightKg : state.parcelWeightKg,
         'parcel': {

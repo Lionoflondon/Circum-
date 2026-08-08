@@ -193,6 +193,12 @@ test("sender quote adds only server-authoritative road charge contributions", ()
   assert.equal(quote.riderPayout, 7.48);
   assert.equal(quote.estimatedTotalRiderEarnings, 16.48);
   assert.equal(quote.totalCircumRevenue, 4.02);
+  assert.deepEqual(quote.roadChargeFinancialReservation, {
+    status: "reserved",
+    maximumRiderObligationPence: 1800,
+    customerRoadFeesPence: 900,
+    policyVersion: quote.roadChargePolicyVersion,
+  });
 });
 
 test("sender quote does not trust client route facts", () => {

@@ -11392,6 +11392,8 @@ class _CustomerPortalState extends State<_CustomerPortal> {
           await functions.httpsCallable('createSenderBookingQuote').call({
         'quoteId': id,
         'distanceMiles': _confirmedRouteDistanceMiles,
+        'pickupCoordinates': _validatedPickup!.toPositionMap(),
+        'dropoffCoordinates': _validatedDropoff!.toPositionMap(),
         'weightKg': _deliveryClassification.finalWeightKg,
         'selectedSpeed': _selectedSpeed,
         'vanguard': _webVanguardEnabled,
