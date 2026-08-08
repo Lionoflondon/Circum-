@@ -5,6 +5,7 @@ const assert = require("node:assert/strict");
 const {
   ROUTE_CACHE_MAX_AGE_MS,
   authoritativeRoadRouteFacts,
+  routeFingerprint,
 } = require("./road-charge-route-provider");
 const {deriveCircumRouteFacts} = require("./road-charge-geography");
 
@@ -33,6 +34,8 @@ test("fresh Google geometry is evaluated by CIRCUM rather than Google toll prici
   const provider = {name: "google_routes", getRoute: async () => ({
     provider: "google_routes",
     points: cczRoute,
+    distanceMeters: 12000,
+    duration: "900s",
     googleTollSignal: false,
   })};
   const result = await authoritativeRoadRouteFacts({...endpoints, db: fakeDb(), provider});
@@ -40,6 +43,24 @@ test("fresh Google geometry is evaluated by CIRCUM rather than Google toll prici
   assert.equal(result.status, "CHARGE_CONFIRMED");
   assert.equal(result.congestionZone.entered, true);
   assert.equal(result.corroboration.disagreement, true);
+  assert.match(result.routeFingerprint, /^[a-f0-9]{64}$/);
+  assert.equal(result.routeDistanceMeters, 12000);
+  assert.equal(result.routeDuration, "900s");
+  assert.equal(result.routePointCount, cczRoute.length);
+});
+
+test("route fingerprint binds endpoints, geometry, and distance", () => {
+  const input = {
+    origin: {latitude: 51.54, longitude: -0.2},
+    destination: {latitude: 51.49, longitude: -0.1},
+    points: cczRoute,
+    distanceMeters: 12000,
+  };
+  assert.equal(routeFingerprint(input), routeFingerprint({...input}));
+  assert.notEqual(
+      routeFingerprint(input),
+      routeFingerprint({...input, distanceMeters: input.distanceMeters + 1}),
+  );
 });
 
 test("Google toll metadata does not change CIRCUM financial route facts", () => {
@@ -145,4 +166,6 @@ test("fresh cached geometry is re-evaluated by current CIRCUM geography policy",
   assert.equal(result.routeSource, "server_validated_cache");
   assert.equal(result.status, "NO_CHARGE");
   assert.equal(result.financialAuthority, "circum_road_charge_engine");
+  assert.match(result.routeFingerprint, /^[a-f0-9]{64}$/);
+  assert.equal(result.routePointCount, outsideRoute.length);
 });

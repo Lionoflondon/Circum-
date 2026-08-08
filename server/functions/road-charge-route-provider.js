@@ -45,6 +45,16 @@ function routeCacheKey(origin, destination) {
   return crypto.createHash("sha256").update(stable).digest("hex");
 }
 
+function routeFingerprint({origin, destination, points, distanceMeters}) {
+  const payload = JSON.stringify({
+    origin: [origin.latitude, origin.longitude],
+    destination: [destination.latitude, destination.longitude],
+    points,
+    distanceMeters: Number(distanceMeters || 0),
+  });
+  return crypto.createHash("sha256").update(payload).digest("hex");
+}
+
 function googleRouteProvider({fetchImpl = fetch, apiKey = process.env.GOOGLE_MAPS_API_KEY || process.env.CIRCUM_WEB_GOOGLE_MAPS_API_KEY} = {}) {
   return {
     name: "google_routes",
@@ -95,6 +105,12 @@ async function authoritativeRoadRouteFacts({db, pickup, dropoff, provider = goog
   try {
     const route = await provider.getRoute({origin, destination});
     const facts = deriveCircumRouteFacts(route.points, {at: now, googleTollSignal: route.googleTollSignal});
+    const fingerprint = routeFingerprint({
+      origin,
+      destination,
+      points: route.points,
+      distanceMeters: route.distanceMeters,
+    });
     if (cacheRef) {
 await cacheRef.set({
       provider: route.provider,
@@ -102,10 +118,19 @@ await cacheRef.set({
       distanceMeters: route.distanceMeters,
       duration: route.duration,
       geographyVersion: GEOGRAPHY_VERSION,
+      routeFingerprint: fingerprint,
       validatedAtMillis: now.getTime(),
     }, {merge: true});
 }
-    return {...facts, routeSource: "fresh_google", provider: route.provider};
+    return {
+      ...facts,
+      routeFingerprint: fingerprint,
+      routeDistanceMeters: route.distanceMeters,
+      routeDuration: route.duration,
+      routePointCount: route.points.length,
+      routeSource: "fresh_google",
+      provider: route.provider,
+    };
   } catch (error) {
     if (cacheRef) {
       const snapshot = await cacheRef.get();
@@ -114,6 +139,15 @@ await cacheRef.set({
       if (cached && age >= 0 && age <= ROUTE_CACHE_MAX_AGE_MS && Array.isArray(cached.points)) {
         return {
           ...deriveCircumRouteFacts(cached.points, {at: now}),
+          routeFingerprint: cached.routeFingerprint || routeFingerprint({
+            origin,
+            destination,
+            points: cached.points,
+            distanceMeters: cached.distanceMeters,
+          }),
+          routeDistanceMeters: Number(cached.distanceMeters || 0),
+          routeDuration: cached.duration || null,
+          routePointCount: cached.points.length,
           routeSource: "server_validated_cache",
           provider: cached.provider || "cached_route",
           providerFailureCode: error.code || "route_provider_failed",
@@ -134,6 +168,7 @@ module.exports = {
   decodePolyline,
   coordinate,
   routeCacheKey,
+  routeFingerprint,
   googleRouteProvider,
   authoritativeRoadRouteFacts,
 };
