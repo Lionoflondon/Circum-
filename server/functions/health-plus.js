@@ -33,6 +33,8 @@ const {calculateWalletCheckout} = require("./wallet-core");
 const {verifiedStripePaidGbpSession} = require("./roth-ledger-core");
 const rothLedger = require("./roth-ledger");
 const vanguardProtocol = require("./vanguard-protocol-core");
+const {getAuthoritativeRouteFacts, coordinate} = require("./route-authority");
+const {evaluateRoadChargePolicy} = require("./road-charge-policy");
 
 function allowCors(res) {
   res.set("Access-Control-Allow-Origin", "*");
@@ -272,6 +274,9 @@ function serverHealthPricingInput(data = {}) {
   return {
     distanceMiles: pricingInputs.distanceMiles,
     medicationWeightKg: pricingInputs.medicationWeightKg,
+    routeFacts: data.authoritativeRouteFacts || null,
+    roadCharges: data.roadCharges || null,
+    roadChargeCustomerAmount: data.roadChargeCustomerAmount || 0,
     frequency: data.frequency,
     subscriptionPlan: data.subscriptionPlan || data.healthPlusPlan,
   };
@@ -305,7 +310,7 @@ function healthPlusVanguardFields() {
   };
 }
 
-exports.createHealthPlusBooking = functions.https.onCall(async (data, context) => {
+exports.createHealthPlusBooking = functions.runWith({secrets: ["GOOGLE_ROUTES_API_KEY"]}).https.onCall(async (data, context) => {
   const sender = requireCallableSender(context);
   if (data.consentConfirmed !== true) {
     throw new functions.https.HttpsError("failed-precondition", "Prescription consent is required.");
@@ -326,9 +331,33 @@ exports.createHealthPlusBooking = functions.https.onCall(async (data, context) =
     throw new functions.https.HttpsError("invalid-argument", "Complete the Health+ profile, pharmacy, delivery address and preferred time.");
   }
 
+  const pharmacy = coordinate(data.pharmacyAddressCanonical || data.pharmacyPosition);
+  const patient = coordinate(data.deliveryAddressCanonical || data.deliveryPosition);
+  let authoritativeRouteFacts;
+  try {
+    authoritativeRouteFacts = await getAuthoritativeRouteFacts({origin: pharmacy, destination: patient});
+  } catch (error) {
+    throw new functions.https.HttpsError(
+        "failed-precondition",
+        "Health+ requires two canonically resolved UK addresses before pricing.",
+    );
+  }
+  const roadCharges = evaluateRoadChargePolicy({
+    routeFacts: authoritativeRouteFacts,
+    // Health+ has no persisted assigned vehicle at booking time; never promote
+    // client vehicle claims into tariff authority.
+    vehicle: "unknown",
+    product: "health_plus",
+    vehicleProfile: data.authoritativeVehicleProfile || {},
+  });
   let authoritative;
   try {
-    authoritative = calculateAuthoritativeHealthPlusPricing(serverHealthPricingInput(data));
+    authoritative = calculateAuthoritativeHealthPlusPricing(serverHealthPricingInput({
+      ...data,
+      authoritativeRouteFacts,
+      roadCharges,
+      roadChargeCustomerAmount: roadCharges.customerAmount,
+    }));
   } catch (error) {
     throw new functions.https.HttpsError("failed-precondition", "Health+ booking requires route distance and medication weight before checkout.");
   }
@@ -361,6 +390,8 @@ exports.createHealthPlusBooking = functions.https.onCall(async (data, context) =
       pharmacyName,
       pharmacyAddress,
       deliveryAddress,
+      pharmacyAddressCanonical: data.pharmacyAddressCanonical || null,
+      deliveryAddressCanonical: data.deliveryAddressCanonical || null,
       notes: text(data.notes),
       prescriptionNotes: text(data.notes),
       prescriptionType,
@@ -417,6 +448,8 @@ exports.createHealthPlusBooking = functions.https.onCall(async (data, context) =
         distanceMiles: authoritative.distanceMiles,
         medicationWeightKg: authoritative.medicationWeightKg,
       },
+      authoritativeRouteFacts,
+      roadCharges,
       type: "health_plus_prescription_pickup",
       source: "cloud-functions",
       auditHistory: [healthPlusAudit("health_plus_pickup_created", sender, {status: "scheduled"})],

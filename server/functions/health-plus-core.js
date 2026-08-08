@@ -158,7 +158,8 @@ function calculateHealthPlusAmountPence(input = {}) {
 }
 
 function calculateAuthoritativeHealthPlusPricing(input = {}) {
-  const distanceMiles = positiveNumber(input.distanceMiles);
+  const routeFacts = input.routeFacts && typeof input.routeFacts === "object" ? input.routeFacts : null;
+  const distanceMiles = positiveNumber(routeFacts && routeFacts.distanceMiles || input.distanceMiles);
   const medicationWeightKg = validateMedicationWeightKg(input.medicationWeightKg);
   if (distanceMiles == null) {
     const error = new Error(
@@ -180,8 +181,9 @@ function calculateAuthoritativeHealthPlusPricing(input = {}) {
   const priorityFeePence = 0;
   const familySupportFeePence = 0;
   const recurringDiscountPence = 0;
+  const roadChargePence = Math.max(0, Math.round(Number(input.roadChargeCustomerAmount || 0) * 100));
   const subtotalPence = baseFarePence + distanceFarePence +
-    weightSurchargePence + serviceFeePence;
+    weightSurchargePence + serviceFeePence + roadChargePence;
   const oneOffAmountPence = Math.max(
       subtotalPence,
       HEALTH_PLUS_MINIMUM_PENCE,
@@ -198,6 +200,9 @@ function calculateAuthoritativeHealthPlusPricing(input = {}) {
     distanceFarePence,
     weightSurchargePence,
     serviceFeePence,
+    roadChargePence,
+    roadCharges: input.roadCharges || null,
+    routeFacts,
     priorityFeePence,
     familySupportFeePence,
     recurringDiscountPence,
@@ -260,6 +265,9 @@ function healthPlusPricingInputFromBooking(booking = {}, profile = {}) {
     frequency: booking.frequency || profile.frequency,
     subscriptionPlan: booking.subscriptionPlan || booking.healthPlusPlan ||
       profile.subscriptionPlan || profile.healthPlusPlan,
+    ...(booking.authoritativeRouteFacts ? {routeFacts: booking.authoritativeRouteFacts} : {}),
+    ...(booking.roadCharges ? {roadCharges: booking.roadCharges} : {}),
+    ...(booking.roadChargeCustomerAmount ? {roadChargeCustomerAmount: booking.roadChargeCustomerAmount} : {}),
   };
 }
 

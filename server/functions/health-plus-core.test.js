@@ -95,6 +95,20 @@ test("Health+ booking data determines checkout pricing input", () => {
   });
 });
 
+test("Health+ pricing uses authoritative route distance and road charges", () => {
+  const quote = calculateAuthoritativeHealthPlusPricing({
+    distanceMiles: 1,
+    medicationWeightKg: 0.5,
+    routeFacts: {distanceMiles: 8},
+    roadChargeCustomerAmount: 9,
+    roadCharges: {customerAmount: 9, lineItems: [{key: "daily_zone_charge", amount: 9}]},
+    frequency: "one_off",
+  });
+  assert.equal(quote.distanceMiles, 8);
+  assert.equal(quote.roadChargePence, 900);
+  assert.equal(quote.roadCharges.customerAmount, 9);
+});
+
 test("creates recurring secure checkout session params", () => {
   const params = buildHealthPlusCheckoutParams({
     bookingId: "pickup_1",
