@@ -4,6 +4,7 @@ const {getFirestore, FieldValue} = require("firebase-admin/firestore");
 const {getMessaging} = require("firebase-admin/messaging");
 const {isDispatchable, riderCanViewDispatch, riderDispatchEligibilityReason, riderMatchesIris} = require("./iris-core");
 const {riderVehicleMatchesRequest} = require("./vehicle-dispatch");
+const {buildRiderVehicleSnapshot} = require("./rider-vehicle-snapshot");
 const {loadFounderTestAccount} = require("./founder-authority");
 
 const cleanText = (value, fallback = "") => {
@@ -231,6 +232,9 @@ const acceptRideRequests = functions.https.onCall(async (data, context) => {
     }
 
     const payload = riderPayload(riderId, rider);
+    const assignedVehicle = buildRiderVehicleSnapshot(rider);
+    const assignedVehicleClass = assignedVehicle.type || payload.typeOfVehicle;
+    const assignedVehicleId = assignedVehicle.registration || null;
     transaction.set(found.ref, {
       status: "accepted",
       deliveryStatus: "accepted",
@@ -247,6 +251,9 @@ const acceptRideRequests = functions.https.onCall(async (data, context) => {
       courierName: payload.courierName,
       driverVehicle: payload.typeOfVehicle,
       driverPlateNumber: payload.plateNumber,
+      assignedVehicleId,
+      assignedVehicleClass,
+      assignedVehicleSnapshot: assignedVehicle,
       acceptedAt: FieldValue.serverTimestamp(),
       updatedAt: FieldValue.serverTimestamp(),
     }, {merge: true});

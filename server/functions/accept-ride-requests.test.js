@@ -14,6 +14,18 @@ test("accepted delivery writes every rider assignment alias used by Rider surfac
   assert.match(source, /riderId,\s+driverId: riderId,\s+assignedRider: riderId,\s+assignedDriverId: riderId,\s+assignedRiderId: riderId/s);
 });
 
+test("accepted delivery persists the authoritative assigned vehicle snapshot", () => {
+  const source = fs.readFileSync(
+      path.join(__dirname, "accept-ride-requests.js"),
+      "utf8",
+  );
+
+  assert.match(source, /buildRiderVehicleSnapshot\(rider\)/);
+  assert.match(source, /assignedVehicleId/);
+  assert.match(source, /assignedVehicleClass/);
+  assert.match(source, /assignedVehicleSnapshot/);
+});
+
 test("accept rejects stale, assigned, unpaid, or terminal offers with diagnostics", () => {
   const source = fs.readFileSync(
       path.join(__dirname, "accept-ride-requests.js"),
