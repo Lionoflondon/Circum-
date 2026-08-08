@@ -51,6 +51,55 @@ test("fresh Google geometry is evaluated by CIRCUM rather than Google toll prici
   assert.equal(result.routePointCount, cczRoute.length);
 });
 
+test("fresh route cache uses a Firestore-safe coordinate representation", async () => {
+  let cached = null;
+  const db = {
+    collection: () => ({doc: () => ({
+      get: async () => ({exists: false, data: () => null}),
+      set: async (value) => {
+        assert.equal(value.points.some(Array.isArray), false);
+        cached = value;
+      },
+    })}),
+  };
+  const provider = {getRoute: async () => ({
+    provider: "google_routes",
+    points: cczRoute,
+    distanceMeters: 12000,
+    duration: "900s",
+    googleTollSignal: false,
+  })};
+
+  const result = await authoritativeRoadRouteFacts({...endpoints, db, provider});
+
+  assert.equal(result.known, true);
+  assert.deepEqual(cached.points[0], {longitude: -0.2, latitude: 51.54});
+});
+
+test("a cache write failure cannot invalidate fresh authoritative geometry", async () => {
+  const db = {
+    collection: () => ({doc: () => ({
+      get: async () => ({exists: false, data: () => null}),
+      set: async () => {
+        throw Object.assign(new Error("Firestore rejected cache payload"), {code: 3});
+      },
+    })}),
+  };
+  const provider = {getRoute: async () => ({
+    provider: "google_routes",
+    points: outsideRoute,
+    distanceMeters: 5000,
+    duration: "600s",
+    googleTollSignal: false,
+  })};
+
+  const result = await authoritativeRoadRouteFacts({...endpoints, db, provider});
+
+  assert.equal(result.known, true);
+  assert.equal(result.routeSource, "fresh_google");
+  assert.equal(result.status, "NO_CHARGE");
+});
+
 test("authoritative Google provider uses only GOOGLE_ROUTES_API_KEY", async () => {
   const previousRoutes = process.env.GOOGLE_ROUTES_API_KEY;
   const previousBrowser = process.env.CIRCUM_WEB_GOOGLE_MAPS_API_KEY;
@@ -226,4 +275,21 @@ test("fresh cached geometry is re-evaluated by current CIRCUM geography policy",
   assert.equal(result.financialAuthority, "circum_road_charge_engine");
   assert.match(result.routeFingerprint, /^[a-f0-9]{64}$/);
   assert.equal(result.routePointCount, outsideRoute.length);
+});
+
+test("Firestore-safe cached geometry is restored for fallback evaluation", async () => {
+  const now = new Date("2026-08-08T12:00:00Z");
+  const db = fakeDb({
+    points: cczRoute.map(([longitude, latitude]) => ({longitude, latitude})),
+    validatedAtMillis: now.getTime() - 1000,
+  });
+  const provider = {getRoute: async () => {
+    throw Object.assign(new Error("timeout"), {code: "route_provider_timeout"});
+  }};
+
+  const result = await authoritativeRoadRouteFacts({...endpoints, db, provider, now});
+
+  assert.equal(result.routeSource, "server_validated_cache");
+  assert.equal(result.status, "CHARGE_CONFIRMED");
+  assert.equal(result.routePointCount, cczRoute.length);
 });

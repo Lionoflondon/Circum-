@@ -55,6 +55,18 @@ function routeFingerprint({origin, destination, points, distanceMeters}) {
   return crypto.createHash("sha256").update(payload).digest("hex");
 }
 
+function serializeRoutePoints(points) {
+  return points.map(([longitude, latitude]) => ({longitude, latitude}));
+}
+
+function deserializeRoutePoints(points) {
+  if (!Array.isArray(points)) return [];
+  return points.map((point) => Array.isArray(point) ? point : [
+    Number(point && point.longitude),
+    Number(point && point.latitude),
+  ]);
+}
+
 function googleRouteProvider({fetchImpl = fetch, apiKey = process.env.GOOGLE_ROUTES_API_KEY} = {}) {
   return {
     name: "google_routes",
@@ -112,16 +124,22 @@ async function authoritativeRoadRouteFacts({db, pickup, dropoff, provider = goog
       distanceMeters: route.distanceMeters,
     });
     if (cacheRef) {
-await cacheRef.set({
-      provider: route.provider,
-      points: route.points,
-      distanceMeters: route.distanceMeters,
-      duration: route.duration,
-      geographyVersion: GEOGRAPHY_VERSION,
-      routeFingerprint: fingerprint,
-      validatedAtMillis: now.getTime(),
-    }, {merge: true});
-}
+      try {
+        await cacheRef.set({
+          provider: route.provider,
+          points: serializeRoutePoints(route.points),
+          distanceMeters: route.distanceMeters,
+          duration: route.duration,
+          geographyVersion: GEOGRAPHY_VERSION,
+          routeFingerprint: fingerprint,
+          validatedAtMillis: now.getTime(),
+        }, {merge: true});
+      } catch (cacheError) {
+        console.warn("Authoritative route cache write failed", {
+          code: cacheError && cacheError.code || "route_cache_write_failed",
+        });
+      }
+    }
     return {
       ...facts,
       routeFingerprint: fingerprint,
@@ -136,18 +154,19 @@ await cacheRef.set({
       const snapshot = await cacheRef.get();
       const cached = snapshot.exists ? snapshot.data() : null;
       const age = cached ? now.getTime() - Number(cached.validatedAtMillis || 0) : Infinity;
-      if (cached && age >= 0 && age <= ROUTE_CACHE_MAX_AGE_MS && Array.isArray(cached.points)) {
+      const cachedPoints = deserializeRoutePoints(cached && cached.points);
+      if (cached && age >= 0 && age <= ROUTE_CACHE_MAX_AGE_MS && cachedPoints.length >= 2) {
         return {
-          ...deriveCircumRouteFacts(cached.points, {at: now}),
+          ...deriveCircumRouteFacts(cachedPoints, {at: now}),
           routeFingerprint: cached.routeFingerprint || routeFingerprint({
             origin,
             destination,
-            points: cached.points,
+            points: cachedPoints,
             distanceMeters: cached.distanceMeters,
           }),
           routeDistanceMeters: Number(cached.distanceMeters || 0),
           routeDuration: cached.duration || null,
-          routePointCount: cached.points.length,
+          routePointCount: cachedPoints.length,
           routeSource: "server_validated_cache",
           provider: cached.provider || "cached_route",
           providerFailureCode: error.code || "route_provider_failed",
