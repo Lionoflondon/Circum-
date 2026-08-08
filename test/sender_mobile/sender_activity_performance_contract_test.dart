@@ -81,4 +81,18 @@ void main() {
     expect(source, contains('_HistoryCursor'));
     expect(source, contains('_searchHistoryIfNeeded'));
   });
+
+  test('Sender Activity retains a bounded legacy delivery compatibility path',
+      () {
+    final source =
+        File('lib/app/sender_mobile/sender_activity.dart').readAsStringSync();
+
+    expect(source, contains('_legacyDeliveryDocs'));
+    expect(source, contains("where('createdAt', isNull: true)"));
+    expect(source, contains("'created_at'"));
+    expect(source, contains("'bookingCreatedAt'"));
+    expect(source, contains("'updatedAt'"));
+    expect(source, contains('legacyAnchors'));
+    expect(source, contains('docs.take(_historyPageSize)'));
+  });
 }

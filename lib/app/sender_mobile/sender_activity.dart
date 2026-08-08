@@ -22,17 +22,21 @@ class _HistoryCursor {
   final int page;
   final int createdAtMillis;
   final String documentId;
+  final Map<String, _LegacyAnchor> legacyAnchors;
 
   const _HistoryCursor({
     required this.page,
     required this.createdAtMillis,
     required this.documentId,
+    this.legacyAnchors = const {},
   });
 
   String encode() => base64UrlEncode(utf8.encode(jsonEncode({
         'page': page,
         'createdAtMillis': createdAtMillis,
         'documentId': documentId,
+        'legacyAnchors':
+            legacyAnchors.map((key, value) => MapEntry(key, value.toJson())),
       })));
 
   static _HistoryCursor? decode(String? token) {
@@ -50,11 +54,30 @@ class _HistoryCursor {
         page: page,
         createdAtMillis: createdAtMillis,
         documentId: documentId,
+        legacyAnchors:
+            (data['legacyAnchors'] as Map<String, dynamic>? ?? {}).map(
+          (key, value) => MapEntry(
+              key, _LegacyAnchor.fromJson(value as Map<String, dynamic>)),
+        ),
       );
     } catch (_) {
       return null;
     }
   }
+}
+
+class _LegacyAnchor {
+  final int millis;
+  final String documentId;
+
+  const _LegacyAnchor(this.millis, this.documentId);
+
+  Map<String, dynamic> toJson() => {'millis': millis, 'documentId': documentId};
+
+  static _LegacyAnchor fromJson(Map<String, dynamic> value) => _LegacyAnchor(
+        (value['millis'] as num?)?.toInt() ?? 0,
+        value['documentId'] as String? ?? '',
+      );
 }
 
 int _timestampMillis(Object? value) {
@@ -232,6 +255,7 @@ class FirebaseSenderActivityRepository implements SenderActivityRepository {
       'deliveryRequests',
       deliveryQuery.get(),
     );
+    final legacyFuture = _legacyDeliveryDocs(uid, cursor);
     final giftsFuture = _optionalActivityDocs(
       'giftRequests',
       firestore
@@ -250,13 +274,18 @@ class FirebaseSenderActivityRepository implements SenderActivityRepository {
     );
     final walletFuture = _optionalWalletTransactions(pageToken);
     final deliveries = await deliveriesFuture;
+    final legacyDeliveries = await legacyFuture;
     final riderProfilesFuture = _riderProfiles(deliveries.docs);
     final gifts = await giftsFuture;
     final health = await healthFuture;
     final wallet = await walletFuture;
     final riderProfiles = await riderProfilesFuture;
     final mergeStopwatch = Stopwatch()..start();
-    final deliveryItems = deliveries.docs
+    final deliveryDocs = <QueryDocumentSnapshot<Map<String, dynamic>>>{
+      ...deliveries.docs,
+      ...legacyDeliveries,
+    }.toList();
+    final deliveryItems = deliveryDocs
         .map((doc) => _delivery(
               doc.id,
               doc.data(),
@@ -282,6 +311,7 @@ class FirebaseSenderActivityRepository implements SenderActivityRepository {
         .compareTo(a.occurredAt ?? DateTime(1970)));
     final items = merged.take(_historyPageSize).toList();
     final hasMore = deliveries.docs.length == _historyPageSize ||
+        legacyDeliveries.length == _historyPageSize ||
         gifts.length == _historyPageSize ||
         health.length == _historyPageSize ||
         wallet.nextPageToken != null;
@@ -298,14 +328,93 @@ class FirebaseSenderActivityRepository implements SenderActivityRepository {
       'health=${health.length} wallet=${wallet.transactions.length}',
     );
     final lastDelivery = deliveries.docs.isEmpty ? null : deliveries.docs.last;
+    final nextLegacyAnchors = <String, _LegacyAnchor>{
+      ...?cursor?.legacyAnchors,
+    };
+    for (final doc in legacyDeliveries) {
+      final data = doc.data();
+      final field = _legacyTimestampField(data);
+      if (field != null) {
+        nextLegacyAnchors[field] =
+            _LegacyAnchor(_timestampMillis(data[field]), doc.id);
+      }
+    }
     final nextCursor = hasMore && lastDelivery != null
         ? _HistoryCursor(
             page: sourcePage + 1,
             createdAtMillis: _timestampMillis(lastDelivery.data()['createdAt']),
             documentId: lastDelivery.id,
+            legacyAnchors: nextLegacyAnchors,
           ).encode()
-        : null;
+        : (hasMore && nextLegacyAnchors.isNotEmpty
+            ? _HistoryCursor(
+                page: sourcePage + 1,
+                createdAtMillis: 0,
+                documentId: '',
+                legacyAnchors: nextLegacyAnchors,
+              ).encode()
+            : null);
     return SenderActivityPage(items, nextCursor);
+  }
+
+  static const _legacyTimestampFields = <String>[
+    'created_at',
+    'bookingCreatedAt',
+    'requestedAt',
+    'paidAt',
+    'finalizedAt',
+    'completedAt',
+    'deliveredAt',
+    'updatedAt',
+  ];
+
+  String? _legacyTimestampField(Map<String, dynamic> data) {
+    for (final field in _legacyTimestampFields) {
+      if (data[field] != null && _timestampMillis(data[field]) > 0) {
+        return field;
+      }
+    }
+    return null;
+  }
+
+  Future<List<QueryDocumentSnapshot<Map<String, dynamic>>>> _legacyDeliveryDocs(
+    String uid,
+    _HistoryCursor? cursor,
+  ) async {
+    final byId = <String, QueryDocumentSnapshot<Map<String, dynamic>>>{};
+    for (final field in _legacyTimestampFields) {
+      Query<Map<String, dynamic>> query = firestore
+          .collection('deliveryRequests')
+          .where('senderId', isEqualTo: uid)
+          .where('createdAt', isNull: true)
+          .orderBy(field, descending: true)
+          .orderBy(FieldPath.documentId, descending: true)
+          .limit(_historyPageSize);
+      final anchor = cursor?.legacyAnchors[field];
+      if (anchor != null) {
+        query = query.startAfter([
+          Timestamp.fromMillisecondsSinceEpoch(anchor.millis),
+          anchor.documentId,
+        ]);
+      }
+      try {
+        final snapshot = await query.get();
+        for (final doc in snapshot.docs) {
+          if (_legacyTimestampField(doc.data()) == field) byId[doc.id] = doc;
+        }
+      } catch (error) {
+        debugPrint(
+            'Sender Activity legacy source unavailable field=$field error=$error');
+      }
+    }
+    final docs = byId.values.toList()
+      ..sort((a, b) {
+        final at = _timestampMillis(a.data()[_legacyTimestampField(a.data())]);
+        final bt = _timestampMillis(b.data()[_legacyTimestampField(b.data())]);
+        final time = bt.compareTo(at);
+        return time != 0 ? time : b.id.compareTo(a.id);
+      });
+    return docs.take(_historyPageSize).toList();
   }
 
   Future<QuerySnapshot<Map<String, dynamic>>> _timedActivityFuture(
