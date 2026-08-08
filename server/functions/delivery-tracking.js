@@ -5,6 +5,7 @@ const functions = require("firebase-functions/v1");
 const {getFirestore, FieldValue, GeoPoint} = require("firebase-admin/firestore");
 const tracking = require("./sender-tracking-state-core");
 const {highestTrustAward} = require("./trust-award");
+const {planRoadChargeSettlement, pence} = require("./road-charge-settlement");
 
 function text(value) {
   return `${value || ""}`.trim();
@@ -449,6 +450,30 @@ exports.updateDeliveryTrackingStatus = functions.https.onCall(async (data, conte
     const earningRef = nextStatus === "delivered" ?
       db.collection("riderEarningTransactions").doc(found.id) : null;
     const existingEarning = earningRef ? await transaction.get(earningRef) : null;
+    const assignedVehicle = {
+      id: delivery.assignedVehicleId,
+      type: delivery.assignedVehicleClass,
+      ...(delivery.assignedVehicleSnapshot || {}),
+    };
+    const roadSettlement = nextStatus === "delivered" ?
+      planRoadChargeSettlement({
+        deliveryId: found.id,
+        riderId,
+        delivery,
+        assignedVehicle,
+      }) : {effects: [], dailyUpdates: [], reimbursementPence: 0, reimbursement: 0};
+    const roadEffectRefs = roadSettlement.effects.map((effect) =>
+      db.collection("riderRoadChargeTransactions").doc(effect.id));
+    const dailyRefs = roadSettlement.dailyUpdates.map((update) =>
+      db.collection("roadChargeDailyLiabilities").doc(update.id));
+    const roadEffectSnapshots = await Promise.all(roadEffectRefs.map((ref) => transaction.get(ref)));
+    const dailySnapshots = await Promise.all(dailyRefs.map((ref) => transaction.get(ref)));
+    const freshDailyState = {};
+    roadSettlement.dailyUpdates.forEach((update, index) => {
+      freshDailyState[update.id] = dailySnapshots[index].exists ? dailySnapshots[index].data() : {};
+    });
+    const finalRoadSettlement = nextStatus === "delivered" ?
+      planRoadChargeSettlement({deliveryId: found.id, riderId, delivery, assignedVehicle, dailyState: freshDailyState}) : roadSettlement;
     const riderProfileRef = settlementValues(delivery).trustPoints > 0 ?
       db.collection("riderProfiles").doc(riderId) : null;
     const riderProfileSnapshot = riderProfileRef ? await transaction.get(riderProfileRef) : null;
@@ -468,19 +493,45 @@ exports.updateDeliveryTrackingStatus = functions.https.onCall(async (data, conte
           deliveryId: found.id,
           riderId,
           type: "delivery_earning",
-          amount: settlement.amount,
+          amount: settlement.amount + finalRoadSettlement.reimbursement,
+          baseAmount: settlement.amount,
+          roadReimbursement: finalRoadSettlement.reimbursement,
           trustPoints: settlement.trustPoints,
           status: "completed",
           createdAt: FieldValue.serverTimestamp(),
         });
+        finalRoadSettlement.effects.forEach((effect, index) => {
+          if (roadEffectSnapshots[index] && roadEffectSnapshots[index].exists) return;
+          transaction.create(roadEffectRefs[index], {
+            ...effect,
+            reimbursement: Math.round(effect.reimbursementPence) / 100,
+            settlementId: earningRef.id,
+            createdAt: FieldValue.serverTimestamp(),
+          });
+        });
+        finalRoadSettlement.dailyUpdates.forEach((update, index) => {
+          const effect = finalRoadSettlement.effects.find((item) =>
+            item.chargeId === update.charge.chargeId && item.role === "ccz_recovery");
+          if (!effect || effect.reimbursementPence <= 0) return;
+          const current = dailySnapshots[index].exists ? dailySnapshots[index].data() : {};
+          transaction.set(dailyRefs[index], {
+            vehicleId: assignedVehicle.id || null,
+            vehicleClass: assignedVehicle.type || null,
+            chargingDate: update.charge.chargingDate,
+            recoveredPence: pence(current.recoveredPence) + effect.reimbursementPence,
+            customerContributionPence: pence(current.customerContributionPence) + effect.customerAmountPence,
+            updatedAt: FieldValue.serverTimestamp(),
+          }, {merge: true});
+        });
         transaction.set(db.collection("riderEarnings").doc(riderId), {
-          availableBalance: FieldValue.increment(settlement.amount),
+          availableBalance: FieldValue.increment(settlement.amount + finalRoadSettlement.reimbursement),
           deliveryEarningsTotal: FieldValue.increment(settlement.deliveryAmount),
+          roadChargeReimbursementsTotal: FieldValue.increment(finalRoadSettlement.reimbursement),
           tipsTotal: FieldValue.increment(settlement.tip),
           waitingNoShowTotal: FieldValue.increment(settlement.waiting),
           adjustmentsTotal: FieldValue.increment(settlement.adjustment),
-          lifetimeEarnings: FieldValue.increment(settlement.amount),
-          totalAmountEarned: FieldValue.increment(settlement.amount),
+          lifetimeEarnings: FieldValue.increment(settlement.amount + finalRoadSettlement.reimbursement),
+          totalAmountEarned: FieldValue.increment(settlement.amount + finalRoadSettlement.reimbursement),
           completedDeliveries: FieldValue.increment(1),
           updatedAt: FieldValue.serverTimestamp(),
         }, {merge: true});
