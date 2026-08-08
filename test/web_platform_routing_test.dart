@@ -195,6 +195,18 @@ void main() {
       expect(source, contains('senderStep: _SenderStep.business'));
     });
 
+    test('Website payment uses the authoritative backend quote', () {
+      final source =
+          File('lib/website/shared/circum_website_app.dart').readAsStringSync();
+
+      expect(source, contains('_prepareAuthoritativeQuoteAndContinue'));
+      expect(source, contains("httpsCallable('createSenderBookingQuote')"));
+      expect(source, contains("quote['normalCheckoutEligible'] == false"));
+      expect(source, contains("quote['roadChargePricingComplete'] == false"));
+      expect(source, contains('authoritativeQuote: _authoritativeWebQuote'));
+      expect(source, contains("quote['quoteId']"));
+    });
+
     test('Business and Health web keep app-style section parity', () {
       final source =
           File('lib/website/shared/circum_website_app.dart').readAsStringSync();

@@ -8010,6 +8010,8 @@ class _CustomerPortalState extends State<_CustomerPortal> {
   String? _parcelPhotoMessage;
   String? _irisPhotoAnalysisId;
   _IrisImageInsight? _irisImageInsight;
+  Map<String, dynamic>? _authoritativeWebQuote;
+  bool _authoritativeQuoteLoading = false;
   DateTime? _activeRequestReceivedAt;
   Set<String> _selectedRatingTags = {};
   Set<CircumRole> _availableRoles = const {};
@@ -8381,6 +8383,7 @@ class _CustomerPortalState extends State<_CustomerPortal> {
             )) {
               setState(() {
                 _selectedVehicle = _effectiveVehicle;
+                _authoritativeWebQuote = null;
                 _weightMessage =
                     'Vehicle recommendation based on weight, dimensions, and item type. Recommended vehicle: ${suitability.recommendedVehicle}.';
               });
@@ -8388,18 +8391,17 @@ class _CustomerPortalState extends State<_CustomerPortal> {
             }
             setState(() {
               _selectedVehicle = vehicle;
+              _authoritativeWebQuote = null;
               _checkoutState = _CheckoutState.awaitingPayment;
             });
           },
           onSpeed: (speed) => setState(() {
             _selectedSpeed = speed;
+            _authoritativeWebQuote = null;
             _checkoutState = _CheckoutState.awaitingPayment;
           }),
           onBack: () => setState(() => _step = _SenderStep.dashboard),
-          onContinue: () => setState(() {
-            _checkoutState = _CheckoutState.awaitingPayment;
-            _step = _SenderStep.payment;
-          }),
+          onContinue: () => unawaited(_prepareAuthoritativeQuoteAndContinue()),
         ),
       _SenderStep.payment => _PaymentStep(
           key: const ValueKey('payment'),
@@ -8414,6 +8416,7 @@ class _CustomerPortalState extends State<_CustomerPortal> {
           senderEnteredWeightKg: _senderEnteredWeightKg,
           weightKg: _deliveryClassification.finalWeightKg,
           total: _quoteTotal,
+          authoritativeQuote: _authoritativeWebQuote,
           checkoutState: _checkoutState,
           weightConfirmed: _hasConfirmedWeight,
           weightSource: _weightSourceText,
@@ -8671,10 +8674,76 @@ class _CustomerPortalState extends State<_CustomerPortal> {
   }
 
   double get _quoteTotal {
+    final authoritativeTotal = _authoritativeWebQuote?['amountDue'] ??
+        _authoritativeWebQuote?['total'];
+    if (authoritativeTotal is num) return authoritativeTotal.toDouble();
     return _quoteBreakdown.total +
         (_webVanguardEnabled && !_webVanguardRequired
             ? _webVanguardAddOnPriceGbp
             : 0);
+  }
+
+  Map<String, dynamic> _authoritativeQuotePayload(String id) => {
+        'quoteId': id,
+        'distanceMiles': _confirmedRouteDistanceMiles,
+        'pickupCoordinates': _validatedPickup!.toPositionMap(),
+        'dropoffCoordinates': _validatedDropoff!.toPositionMap(),
+        'weightKg': _deliveryClassification.finalWeightKg,
+        'selectedSpeed': _selectedSpeed,
+        'vanguard': _webVanguardEnabled,
+        'vanguardProtocolEnabled': _webVanguardEnabled,
+        'parcel': {
+          'itemName': _irisMatchedItemName ?? _inferPackageType(),
+          'description': _description.text.trim(),
+          'weightKg': _deliveryClassification.finalWeightKg,
+        },
+        if (_irisPhotoAnalysisId != null)
+          'irisPhotoAnalysisId': _irisPhotoAnalysisId,
+        'iris': _webCanonicalIrisPayload(),
+        'clientDisplayQuote': {
+          'amount': _quoteBreakdown.total,
+          'amountPence': (_quoteBreakdown.total * 100).round(),
+          'currency': 'GBP',
+        },
+      };
+
+  Future<Map<String, dynamic>> _fetchAuthoritativeWebQuote() async {
+    await _ensureFirebaseReady();
+    final id =
+        'CIR-${DateTime.now().millisecondsSinceEpoch.toString().substring(7)}';
+    final result = await FirebaseFunctions.instanceFor(region: 'us-central1')
+        .httpsCallable('createSenderBookingQuote')
+        .call(_authoritativeQuotePayload(id));
+    final quote = Map<String, dynamic>.from(result.data as Map);
+    if (quote['normalCheckoutEligible'] == false ||
+        quote['roadChargePricingComplete'] == false) {
+      throw StateError(
+          'Authoritative pricing is not available for this route.');
+    }
+    if (mounted) setState(() => _authoritativeWebQuote = quote);
+    return quote;
+  }
+
+  Future<void> _prepareAuthoritativeQuoteAndContinue() async {
+    if (_authoritativeQuoteLoading) return;
+    setState(() => _authoritativeQuoteLoading = true);
+    try {
+      await _fetchAuthoritativeWebQuote();
+      if (!mounted) return;
+      setState(() {
+        _authoritativeQuoteLoading = false;
+        _checkoutState = _CheckoutState.awaitingPayment;
+        _step = _SenderStep.payment;
+      });
+    } catch (_) {
+      if (!mounted) return;
+      setState(() {
+        _authoritativeQuoteLoading = false;
+        _checkoutState = _CheckoutState.failed;
+        _firebaseError =
+            'We could not confirm the authoritative delivery price. Please try again.';
+      });
+    }
   }
 
   bool get _hasConfirmedWeight {
@@ -8980,6 +9049,7 @@ class _CustomerPortalState extends State<_CustomerPortal> {
       _checkoutState = _CheckoutState.draft;
       _broadcasting = false;
       _validatedPickup = address;
+      _authoritativeWebQuote = null;
       _pickup.text = address.displayAddress;
       _firebaseError = null;
     });
@@ -9001,6 +9071,7 @@ class _CustomerPortalState extends State<_CustomerPortal> {
       _checkoutState = _CheckoutState.draft;
       _broadcasting = false;
       _validatedDropoff = address;
+      _authoritativeWebQuote = null;
       _dropoff.text = address.displayAddress;
       _firebaseError = null;
     });
@@ -9014,6 +9085,7 @@ class _CustomerPortalState extends State<_CustomerPortal> {
       _checkoutState = _CheckoutState.draft;
       _broadcasting = false;
       _validatedPickup = null;
+      _authoritativeWebQuote = null;
     });
   }
 
@@ -9024,6 +9096,7 @@ class _CustomerPortalState extends State<_CustomerPortal> {
       _checkoutState = _CheckoutState.draft;
       _broadcasting = false;
       _validatedDropoff = null;
+      _authoritativeWebQuote = null;
     });
   }
 
@@ -10833,6 +10906,7 @@ class _CustomerPortalState extends State<_CustomerPortal> {
     );
     setState(() {
       _confirmedWeightKg = weightKg;
+      _authoritativeWebQuote = null;
       _confirmedWeightBand = band;
       _weightSource = source;
       _weightConfirmedAt = DateTime.now();
@@ -10862,6 +10936,7 @@ class _CustomerPortalState extends State<_CustomerPortal> {
     if (!mounted) return;
     setState(() {
       _confirmedWeightKg = null;
+      _authoritativeWebQuote = null;
       _confirmedWeightBand = null;
       _weightSource = null;
       _weightConfirmedAt = null;
@@ -11388,31 +11463,9 @@ class _CustomerPortalState extends State<_CustomerPortal> {
     try {
       await _ensureFirebaseReady();
       final functions = FirebaseFunctions.instanceFor(region: 'us-central1');
-      final quoteResult =
-          await functions.httpsCallable('createSenderBookingQuote').call({
-        'quoteId': id,
-        'distanceMiles': _confirmedRouteDistanceMiles,
-        'pickupCoordinates': _validatedPickup!.toPositionMap(),
-        'dropoffCoordinates': _validatedDropoff!.toPositionMap(),
-        'weightKg': _deliveryClassification.finalWeightKg,
-        'selectedSpeed': _selectedSpeed,
-        'vanguard': _webVanguardEnabled,
-        'vanguardProtocolEnabled': _webVanguardEnabled,
-        'parcel': {
-          'itemName': _irisMatchedItemName ?? _inferPackageType(),
-          'description': _description.text.trim(),
-          'weightKg': _deliveryClassification.finalWeightKg,
-        },
-        if (_irisPhotoAnalysisId != null)
-          'irisPhotoAnalysisId': _irisPhotoAnalysisId,
-        'iris': _webCanonicalIrisPayload(),
-        'clientDisplayQuote': {
-          'amount': _quoteTotal,
-          'amountPence': (_quoteTotal * 100).round(),
-          'currency': 'GBP',
-        },
-      });
-      final quote = Map<String, dynamic>.from(quoteResult.data as Map);
+      final quote = _authoritativeWebQuote == null
+          ? await _fetchAuthoritativeWebQuote()
+          : Map<String, dynamic>.from(_authoritativeWebQuote!);
       final authoritativeTotal =
           (quote['amountDue'] as num? ?? quote['total'] as num? ?? 0)
               .toDouble();
@@ -20939,6 +20992,7 @@ class _PaymentStep extends StatelessWidget {
   final double? senderEnteredWeightKg;
   final double weightKg;
   final double total;
+  final Map<String, dynamic>? authoritativeQuote;
   final _CheckoutState checkoutState;
   final bool weightConfirmed;
   final String weightSource;
@@ -20968,6 +21022,7 @@ class _PaymentStep extends StatelessWidget {
     required this.senderEnteredWeightKg,
     required this.weightKg,
     required this.total,
+    required this.authoritativeQuote,
     required this.checkoutState,
     required this.weightConfirmed,
     required this.weightSource,
@@ -20990,6 +21045,35 @@ class _PaymentStep extends StatelessWidget {
     if (date.isEmpty) return window;
     if (window.isEmpty) return date;
     return '$date, $window';
+  }
+
+  List<Widget> _authoritativePriceLines() {
+    final items = authoritativeQuote?['lineItems'];
+    if (items is! List) return const [];
+    return items.whereType<Map>().expand<Widget>((item) {
+      final label = '${item['label'] ?? ''}'.trim();
+      final amount = item['amount'];
+      if (label.isEmpty || amount is! num) return const <Widget>[];
+      return [
+        _PriceLine(
+          colors: colors,
+          label: label,
+          value: '£${amount.toDouble().toStringAsFixed(2)}',
+        ),
+        if ('${item['supportingCopy'] ?? ''}'.trim().isNotEmpty)
+          Padding(
+            padding: const EdgeInsets.only(top: 2),
+            child: Text(
+              '${item['supportingCopy']}',
+              style: TextStyle(
+                color: colors.mutedText,
+                fontSize: 12,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
+      ];
+    }).toList();
   }
 
   @override
@@ -21139,48 +21223,51 @@ class _PaymentStep extends StatelessWidget {
                   value: pricingReason!,
                 ),
               Divider(color: colors.border, height: 26),
-              _PriceLine(
-                colors: colors,
-                label: 'Base fare',
-                value: '£${breakdown.baseFare.toStringAsFixed(2)}',
-              ),
-              _PriceLine(
-                colors: colors,
-                label: 'Distance fare',
-                value: '£${breakdown.distanceFare.toStringAsFixed(2)}',
-              ),
-              _PriceLine(
-                colors: colors,
-                label:
-                    '${breakdown.weightCategory} (${weightKg.toStringAsFixed(weightKg.truncateToDouble() == weightKg ? 0 : 1)} kg)',
-                value: '£${breakdown.weightSurcharge.toStringAsFixed(2)}',
-              ),
-              _PriceLine(
-                colors: colors,
-                label: '${vehicle.name} vehicle',
-                value: '£${breakdown.vehicleSurcharge.toStringAsFixed(2)}',
-              ),
-              if (breakdown.heavyHandlingSurcharge > 0)
+              if (authoritativeQuote != null) ..._authoritativePriceLines(),
+              if (authoritativeQuote == null) ...[
                 _PriceLine(
                   colors: colors,
-                  label: 'Heavy Handling Surcharge',
-                  value:
-                      '£${breakdown.heavyHandlingSurcharge.toStringAsFixed(2)}',
+                  label: 'Base fare',
+                  value: '£${breakdown.baseFare.toStringAsFixed(2)}',
                 ),
-              if (breakdown.specialConditions > 0)
                 _PriceLine(
                   colors: colors,
-                  label: speed == 'Express'
-                      ? 'Express service'
-                      : 'Special conditions',
-                  value: '£${breakdown.specialConditions.toStringAsFixed(2)}',
+                  label: 'Distance fare',
+                  value: '£${breakdown.distanceFare.toStringAsFixed(2)}',
                 ),
-              if (vanguardEnabled)
                 _PriceLine(
                   colors: colors,
-                  label: 'Vanguard',
-                  value: '£${_webVanguardAddOnPriceGbp.toStringAsFixed(2)}',
+                  label:
+                      '${breakdown.weightCategory} (${weightKg.toStringAsFixed(weightKg.truncateToDouble() == weightKg ? 0 : 1)} kg)',
+                  value: '£${breakdown.weightSurcharge.toStringAsFixed(2)}',
                 ),
+                _PriceLine(
+                  colors: colors,
+                  label: '${vehicle.name} vehicle',
+                  value: '£${breakdown.vehicleSurcharge.toStringAsFixed(2)}',
+                ),
+                if (breakdown.heavyHandlingSurcharge > 0)
+                  _PriceLine(
+                    colors: colors,
+                    label: 'Heavy Handling Surcharge',
+                    value:
+                        '£${breakdown.heavyHandlingSurcharge.toStringAsFixed(2)}',
+                  ),
+                if (breakdown.specialConditions > 0)
+                  _PriceLine(
+                    colors: colors,
+                    label: speed == 'Express'
+                        ? 'Express service'
+                        : 'Special conditions',
+                    value: '£${breakdown.specialConditions.toStringAsFixed(2)}',
+                  ),
+                if (vanguardEnabled)
+                  _PriceLine(
+                    colors: colors,
+                    label: 'Vanguard',
+                    value: '£${_webVanguardAddOnPriceGbp.toStringAsFixed(2)}',
+                  ),
+              ],
               Divider(color: colors.border, height: 26),
               _PriceLine(
                 colors: colors,
