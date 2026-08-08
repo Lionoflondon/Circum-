@@ -1,6 +1,6 @@
 /* eslint-disable max-len, require-jsdoc */
 const functions = require("firebase-functions/v1");
-const {getFirestore, FieldValue, Timestamp} = require("firebase-admin/firestore");
+const {getFirestore, FieldValue} = require("firebase-admin/firestore");
 const {getMessaging} = require("firebase-admin/messaging");
 const {riderMatchesIris} = require("./iris-core");
 const riderPresenceCore = require("./rider-presence-core");
@@ -499,13 +499,17 @@ exports.onPayoutUpdated = functions.firestore.document("payoutRequests/{requestI
 
 exports.escalateUnclaimedDeliveries = functions.pubsub.schedule("every 1 minutes").onRun(async () => {
   const db = getFirestore();
-  const cutoff = Timestamp.fromMillis(Date.now() - 2 * 60 * 1000);
-  const snapshot = await db.collection("deliveryRequests").where("createdAt", "<=", cutoff).limit(100).get();
+  const cutoff = Date.now() - 2 * 60 * 1000;
+  const snapshot = await db.collection("deliveryRequests")
+      .where("status", "in", [...openStatuses])
+      .limit(100)
+      .get();
   let riderProfileDocs = null;
   for (const doc of snapshot.docs) {
     const delivery = doc.data();
     if (!openStatuses.has(text(delivery.status).toLowerCase())) continue;
-    const createdAt = delivery.createdAt && delivery.createdAt.toMillis ? delivery.createdAt.toMillis() : Date.now();
+    const createdAt = delivery.createdAt && delivery.createdAt.toMillis ? delivery.createdAt.toMillis() : 0;
+    if (createdAt && createdAt > cutoff) continue;
     const ageMinutes = Math.floor((Date.now() - createdAt) / 60000);
     const stage = ageMinutes >= 5 ? 5 : ageMinutes >= 4 ? 4 : ageMinutes >= 3 ? 3 : ageMinutes >= 2 ? 2 : 0;
     if (!stage) continue;
