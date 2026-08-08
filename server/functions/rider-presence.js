@@ -1,6 +1,6 @@
 /* eslint-disable max-len, require-jsdoc */
 const functions = require("firebase-functions/v1");
-const {getFirestore, FieldValue} = require("firebase-admin/firestore");
+const {getFirestore, FieldValue, GeoPoint} = require("firebase-admin/firestore");
 const core = require("./rider-presence-core");
 const staleCore = require("./stale-delivery-core");
 const {loadFounderTestAccount} = require("./founder-authority");
@@ -94,6 +94,14 @@ function presencePatch({riderId, status, busy = false, location = null}) {
   return patch;
 }
 
+function riderPositionPatch(location) {
+  if (!location) return {};
+  const latitude = Number(location.latitude);
+  const longitude = Number(location.longitude);
+  if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) return {};
+  return {position: {geopoint: new GeoPoint(latitude, longitude)}};
+}
+
 function signalQuality(accuracy) {
   if (!Number.isFinite(accuracy) || accuracy <= 0) return "unknown";
   if (accuracy <= 25) return "high";
@@ -114,7 +122,12 @@ exports.goOnline = functions.https.onCall(async (data, context) => {
     const patch = presencePatch({riderId, status: "available", busy: false, location: data && data.location});
     const batch = db.batch();
     batch.set(db.collection("riderPresence").doc(riderId), {...patch, source: "goOnline"}, {merge: true});
-    batch.set(db.collection("riders").doc(riderId), {status: "online", availabilityStatus: "available", updatedAt: FieldValue.serverTimestamp()}, {merge: true});
+    batch.set(db.collection("riders").doc(riderId), {
+      status: "online",
+      availabilityStatus: "available",
+      ...riderPositionPatch(data && data.location),
+      updatedAt: FieldValue.serverTimestamp(),
+    }, {merge: true});
     batch.set(db.collection("riderProfiles").doc(riderId), {
       status: "online",
       availabilityStatus: "available",
@@ -228,6 +241,7 @@ exports.updateRiderPresence = functions.https.onCall(async (data, context) => {
   batch.set(db.collection("riders").doc(riderId), {
     status: "online",
     availabilityStatus: status,
+    ...riderPositionPatch(data && data.location),
     updatedAt: FieldValue.serverTimestamp(),
   }, {merge: true});
   batch.set(db.collection("riderProfiles").doc(riderId), {

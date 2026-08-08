@@ -149,6 +149,13 @@ test("heartbeat keeps riderProfiles dispatch state fresh", () => {
   assert.match(heartbeatSource, /lastHeartbeatAt: patch\.lastHeartbeatAt/);
 });
 
+test("presence heartbeat mirrors valid coordinates into the rider dispatch position", () => {
+  const source = fs.readFileSync(path.join(__dirname, "rider-presence.js"), "utf8");
+  assert.match(source, /function riderPositionPatch\(location\)/);
+  assert.match(source, /new GeoPoint\(latitude, longitude\)/);
+  assert.match(source, /\.\.\.riderPositionPatch\(data && data\.location\)/);
+});
+
 test("stale heartbeat blocks dispatch", () => {
   const profile = {
     onboardingStatus: "approved",
