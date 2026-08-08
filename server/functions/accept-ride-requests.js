@@ -5,6 +5,8 @@ const {getMessaging} = require("firebase-admin/messaging");
 const {isDispatchable, riderCanViewDispatch, riderDispatchEligibilityReason, riderMatchesIris} = require("./iris-core");
 const {riderVehicleMatchesRequest} = require("./vehicle-dispatch");
 const {loadFounderTestAccount} = require("./founder-authority");
+const {buildRiderVehicleSnapshot} = require("./rider-vehicle-snapshot");
+const {normalizeVehicle, vehicleTariffClassification} = require("./road-charges-core");
 
 const cleanText = (value, fallback = "") => {
   if (value === undefined || value === null) return fallback;
@@ -231,6 +233,9 @@ const acceptRideRequests = functions.https.onCall(async (data, context) => {
     }
 
     const payload = riderPayload(riderId, rider);
+    const assignedVehicle = buildRiderVehicleSnapshot(rider);
+    const assignedVehicleClass = normalizeVehicle(assignedVehicle.type);
+    const assignedVehicleId = cleanText(assignedVehicle.id || assignedVehicle.registration);
     transaction.set(found.ref, {
       status: "accepted",
       deliveryStatus: "accepted",
@@ -247,6 +252,10 @@ const acceptRideRequests = functions.https.onCall(async (data, context) => {
       courierName: payload.courierName,
       driverVehicle: payload.typeOfVehicle,
       driverPlateNumber: payload.plateNumber,
+      assignedVehicleId: assignedVehicleId || null,
+      assignedVehicleClass,
+      assignedVehicleSnapshot: assignedVehicle,
+      vehicleTariffClassification: vehicleTariffClassification(assignedVehicle),
       acceptedAt: FieldValue.serverTimestamp(),
       updatedAt: FieldValue.serverTimestamp(),
     }, {merge: true});

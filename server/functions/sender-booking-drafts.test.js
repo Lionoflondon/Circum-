@@ -172,6 +172,46 @@ test("sender quote charges two pounds for car vehicle", () => {
   assert.equal(quote.total, 11.5);
 });
 
+test("sender quote adds only server-authoritative road charge contributions", () => {
+  const quote = _private.quotePayload({
+    selectedSpeed: "Standard",
+    distanceMiles: 3,
+    weightKg: 2,
+    selectedVehicle: "car",
+    parcel: {itemName: "Printer", weightKg: 2},
+  }, "sender-test", null, {
+    authority: "authoritative_route",
+    congestionZone: {entered: true, at: "2026-08-07T10:00:00Z"},
+  });
+  const roadLine = quote.lineItems.find((item) => item.key === "daily_zone_charge");
+
+  assert.equal(roadLine.amount, 9);
+  assert.equal(roadLine.label, "Central London fee");
+  assert.equal(quote.roadChargeCustomerContribution, 9);
+  assert.equal(quote.estimatedRoadChargeRecovery, 9);
+  assert.equal(quote.total, 20.5);
+  assert.equal(quote.riderPayout, 7.48);
+  assert.equal(quote.estimatedTotalRiderEarnings, 16.48);
+  assert.equal(quote.totalCircumRevenue, 4.02);
+});
+
+test("sender quote does not trust client route facts", () => {
+  const quote = _private.quotePayload({
+    selectedSpeed: "Standard",
+    distanceMiles: 3,
+    weightKg: 2,
+    selectedVehicle: "car",
+    roadChargeFacts: {
+      authority: "authoritative_route",
+      congestionZone: {entered: true, at: "2026-08-07T10:00:00Z"},
+    },
+    parcel: {itemName: "Printer", weightKg: 2},
+  }, "sender-test");
+
+  assert.equal(quote.roadChargeFactsSource, "unavailable");
+  assert.equal(quote.roadChargeCustomerContribution, 0);
+});
+
 test("sender express surcharge is five pounds or twenty percent", () => {
   const shortQuote = _private.quotePayload({
     selectedSpeed: "Express",

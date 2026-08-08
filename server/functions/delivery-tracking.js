@@ -4,6 +4,7 @@
 const functions = require("firebase-functions/v1");
 const {getFirestore, FieldValue, GeoPoint} = require("firebase-admin/firestore");
 const tracking = require("./sender-tracking-state-core");
+const {evaluateRoadCharges} = require("./road-charges-core");
 const {highestTrustAward} = require("./trust-award");
 
 function text(value) {
@@ -216,7 +217,7 @@ function evidenceRequirements(delivery, action, evidence = {}) {
   return {valid: true};
 }
 
-function settlementValues(delivery = {}) {
+function settlementValues(delivery = {}, roadReimbursementOverride = null) {
   const base = Number(
       delivery.riderEarning ||
       delivery.estimatedEarnings ||
@@ -228,10 +229,19 @@ function settlementValues(delivery = {}) {
   const tip = Number(breakdown.tip || delivery.riderTip || delivery.tipAmount || 0);
   const waiting = Number(breakdown.waiting || delivery.riderWaitingEarning || delivery.noShowEarning || 0);
   const adjustment = Number(breakdown.adjustment || delivery.riderAdjustment || 0);
-  const amount = Number.isFinite(base) ? base : 0;
+  const storedRoadReimbursement = Number(
+      delivery.roadChargeReimbursement ||
+      delivery.roadChargeBreakdown && delivery.roadChargeBreakdown.riderReimbursement ||
+      0,
+  );
+  const roadReimbursement = roadReimbursementOverride == null ?
+    storedRoadReimbursement : Number(roadReimbursementOverride);
+  const amount = (Number.isFinite(base) ? base : 0) +
+    (Number.isFinite(roadReimbursement) ? roadReimbursement : 0);
   return {
     amount: Number.isFinite(amount) && amount > 0 ? Math.round(amount * 100) / 100 : 0,
-    deliveryAmount: Math.max(0, Math.round((amount - tip - waiting - adjustment) * 100) / 100),
+    deliveryAmount: Math.max(0, Math.round((amount - tip - waiting - adjustment - roadReimbursement) * 100) / 100),
+    roadReimbursement: Number.isFinite(roadReimbursement) ? Math.round(roadReimbursement * 100) / 100 : 0,
     tip: Number.isFinite(tip) ? Math.round(tip * 100) / 100 : 0,
     waiting: Number.isFinite(waiting) ? Math.round(waiting * 100) / 100 : 0,
     adjustment: Number.isFinite(adjustment) ? Math.round(adjustment * 100) / 100 : 0,
@@ -431,6 +441,49 @@ exports.updateDeliveryTrackingStatus = functions.https.onCall(async (data, conte
     const earningRef = nextStatus === "delivered" ?
       db.collection("riderEarningTransactions").doc(found.id) : null;
     const existingEarning = earningRef ? await transaction.get(earningRef) : null;
+    let actualRoadCharges = null;
+    const liabilitySnapshots = new Map();
+    if (nextStatus === "delivered" && existingEarning && !existingEarning.exists &&
+        delivery.roadChargeRouteFacts && delivery.roadChargeRouteFacts.authority === "authoritative_route") {
+      const assignedVehicle = delivery.assignedVehicleSnapshot || {
+        type: delivery.assignedVehicleClass || delivery.driverVehicle,
+      };
+      const assignedVehicleId = text(
+          delivery.assignedVehicleId || assignedVehicle.id || assignedVehicle.registration,
+      );
+      const preliminaryRoadCharges = evaluateRoadCharges({
+        routeFacts: delivery.roadChargeRouteFacts,
+        selectedVehicle: delivery.assignedVehicleClass || assignedVehicle.type,
+        vehicleProfile: assignedVehicle,
+        vehicleId: assignedVehicleId,
+        requireVehicleIdentity: true,
+      });
+      if (!preliminaryRoadCharges.authoritativePricingComplete) {
+        throw new functions.https.HttpsError(
+            "failed-precondition",
+            "Assigned vehicle road-charge classification requires review before settlement.",
+        );
+      }
+      for (const key of preliminaryRoadCharges.liabilityKeys) {
+        const liabilityRef = db.collection("roadChargeLiabilities").doc(key);
+        liabilitySnapshots.set(key, {
+          ref: liabilityRef,
+          snapshot: await transaction.get(liabilityRef),
+        });
+      }
+      const liabilityState = {liabilities: {}};
+      for (const [key, value] of liabilitySnapshots.entries()) {
+        if (value.snapshot.exists) liabilityState.liabilities[key] = value.snapshot.data();
+      }
+      actualRoadCharges = evaluateRoadCharges({
+        routeFacts: delivery.roadChargeRouteFacts,
+        selectedVehicle: delivery.assignedVehicleClass || assignedVehicle.type,
+        vehicleProfile: assignedVehicle,
+        vehicleId: assignedVehicleId,
+        liabilityState,
+        requireVehicleIdentity: true,
+      });
+    }
     const riderProfileRef = settlementValues(delivery).trustPoints > 0 ?
       db.collection("riderProfiles").doc(riderId) : null;
     const riderProfileSnapshot = riderProfileRef ? await transaction.get(riderProfileRef) : null;
@@ -441,9 +494,55 @@ exports.updateDeliveryTrackingStatus = functions.https.onCall(async (data, conte
       existingAward : Number.isFinite(existingLedgerAward) && existingLedgerAward >= 0 ?
         existingLedgerAward : settlementValues(delivery).trustPoints;
     if (nextStatus === "delivered") patch.trustPointsAwarded = canonicalAward;
+    if (actualRoadCharges) {
+      const quotedRoadPence = Number(
+          delivery.roadChargeBreakdown && delivery.roadChargeBreakdown.customerContributionPence || 0,
+      );
+      const actualRecoveryPence = Number(actualRoadCharges.riderReimbursementPence || 0);
+      patch.roadChargeReimbursement = actualRecoveryPence / 100;
+      patch.actualRoadChargeBreakdown = actualRoadCharges;
+      patch.roadChargeSettlement = {
+        quotedCustomerRoadChargesPence: quotedRoadPence,
+        actualRiderRecoveryPence: actualRecoveryPence,
+        platformRoadRevenuePence: quotedRoadPence - actualRecoveryPence,
+        assignedVehicleId: delivery.assignedVehicleId || null,
+        assignedVehicleClass: delivery.assignedVehicleClass || null,
+        policyVersion: actualRoadCharges.policyVersion,
+      };
+      for (const charge of actualRoadCharges.charges) {
+        if (charge.type !== "daily_zone_charge" || !charge.liabilityKey) continue;
+        const value = liabilitySnapshots.get(charge.liabilityKey);
+        if (!value) continue;
+        const riderRecoveryPence = Number(charge.riderReimbursementPence || 0);
+        const quotedCharge = delivery.roadChargeBreakdown &&
+          Array.isArray(delivery.roadChargeBreakdown.charges) &&
+          delivery.roadChargeBreakdown.charges.find((item) => item.chargeId === charge.chargeId);
+        const customerFeePence = Number(quotedCharge && quotedCharge.customerContributionPence || 0);
+        transaction.set(value.ref, {
+          chargeId: charge.chargeId,
+          assignedVehicleId: delivery.assignedVehicleId,
+          assignedVehicleClass: delivery.assignedVehicleClass,
+          riderId,
+          chargingDate: charge.chargingDate || null,
+          incurred: true,
+          actualDailyLiabilityPence: Number(charge.amountPence || charge.liabilityAmountPence || 0),
+          customerCentralLondonFeesPence: FieldValue.increment(customerFeePence),
+          riderRecoveryPence: Number(charge.recoveredAfterPence || 0),
+          remainingRiderRecoveryPence: Number(charge.remainingRecoveryPence || 0),
+          circumCCZRevenuePence: FieldValue.increment(Math.max(0, customerFeePence - riderRecoveryPence)),
+          circumCCZContributionPence: FieldValue.increment(Math.max(0, riderRecoveryPence - customerFeePence)),
+          deliveryIds: FieldValue.arrayUnion(found.id),
+          updatedAt: FieldValue.serverTimestamp(),
+          createdAt: value.snapshot.exists ? value.snapshot.data().createdAt : FieldValue.serverTimestamp(),
+        }, {merge: true});
+      }
+    }
     transaction.set(found.ref, patch, {merge: true});
     if (nextStatus === "delivered") {
-      const settlement = settlementValues(delivery);
+      const settlement = settlementValues(
+          delivery,
+          actualRoadCharges ? actualRoadCharges.riderReimbursement : null,
+      );
       if (earningRef && existingEarning && !existingEarning.exists) {
         transaction.set(earningRef, {
           transactionId: found.id,
@@ -451,6 +550,8 @@ exports.updateDeliveryTrackingStatus = functions.https.onCall(async (data, conte
           riderId,
           type: "delivery_earning",
           amount: settlement.amount,
+          deliveryAmount: settlement.deliveryAmount,
+          roadChargeReimbursement: settlement.roadReimbursement,
           trustPoints: settlement.trustPoints,
           status: "completed",
           createdAt: FieldValue.serverTimestamp(),
@@ -458,6 +559,7 @@ exports.updateDeliveryTrackingStatus = functions.https.onCall(async (data, conte
         transaction.set(db.collection("riderEarnings").doc(riderId), {
           availableBalance: FieldValue.increment(settlement.amount),
           deliveryEarningsTotal: FieldValue.increment(settlement.deliveryAmount),
+          roadChargeReimbursementsTotal: FieldValue.increment(settlement.roadReimbursement),
           tipsTotal: FieldValue.increment(settlement.tip),
           waitingNoShowTotal: FieldValue.increment(settlement.waiting),
           adjustmentsTotal: FieldValue.increment(settlement.adjustment),

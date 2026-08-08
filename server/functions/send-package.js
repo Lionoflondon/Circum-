@@ -2,8 +2,9 @@
 const functions = require("firebase-functions/v1");
 const {getFirestore, FieldValue} = require("firebase-admin/firestore");
 const {getMessaging} = require("firebase-admin/messaging");
-const {dispatchComplianceDecision, dispatchPriority, riderMatchesIris} = require("./iris-core");
+const {dispatchComplianceDecision, riderMatchesIris} = require("./iris-core");
 const {hasAdminClaim} = require("./admin-auth");
+const {dispatchRoadChargeScore} = require("./road-charges-core");
 
 function senderOwnsRequest(delivery, uid) {
   return delivery.senderId === uid || delivery.userId === uid;
@@ -143,11 +144,17 @@ async function dispatchDeliveryRequest({
 
               const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
               const distance = R * c;
+              const roadCharge = dispatchRoadChargeScore({
+                routeFacts: deliveryRequest[0].roadChargeRouteFacts || null,
+                rider: {id: doc.id, ...riderData},
+                request: deliveryRequest[0],
+              });
 
               return {
                 id: doc.id,
                 ...riderData,
                 distanceFromPickup: distance,
+                incrementalRoadChargePence: roadCharge.incrementalPence,
               };
             } catch (error) {
               console.error("Error processing rider:", error);
@@ -158,9 +165,11 @@ async function dispatchDeliveryRequest({
 
   const closestRiders = ridersWithDistances
       .filter((rider) => rider !== null)
-      .sort((a, b) => dispatchPriority(deliveryRequest[0]) === 1 ?
-        a.distanceFromPickup - b.distanceFromPickup :
-        a.distanceFromPickup - b.distanceFromPickup)
+      .sort((a, b) => {
+        const chargeDelta = (a.incrementalRoadChargePence || 0) - (b.incrementalRoadChargePence || 0);
+        if (chargeDelta !== 0) return chargeDelta;
+        return a.distanceFromPickup - b.distanceFromPickup;
+      })
       .slice(0, 5);
 
   const sendResults = await Promise.all(closestRiders.map(async (rider) => {
@@ -212,6 +221,10 @@ async function dispatchDeliveryRequest({
     source,
     riderIdsConsidered: ridersSnapshot.docs.map((doc) => doc.id),
     riderIdsMatched: closestRiders.map((rider) => rider.id),
+    riderRoadChargeScores: closestRiders.map((rider) => ({
+      riderId: rider.id,
+      incrementalRoadChargePence: rider.incrementalRoadChargePence || 0,
+    })),
     pushResults: sendResults,
     updatedAt: FieldValue.serverTimestamp(),
     createdAt: FieldValue.serverTimestamp(),

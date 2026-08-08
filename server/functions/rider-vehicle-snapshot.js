@@ -25,7 +25,12 @@ const canonicalVehicleType = (value) => {
 
 const buildRiderVehicleSnapshot = (rider = {}) => {
   const vehicle = rider.vehicle || rider.vehicleDetails || {};
+  const axleCount = Number(vehicle.axleCount || rider.vehicleAxleCount);
+  const grossVehicleWeightKg = Number(
+      vehicle.grossVehicleWeightKg || vehicle.grossWeightKg || rider.grossVehicleWeightKg,
+  );
   const snapshot = {
+    id: cleanText(vehicle.id || vehicle.vehicleId || rider.activeVehicleId || rider.vehicleId),
     type: canonicalVehicleType(
         vehicle.type || rider.vehicleType || rider.typeOfVehicle,
     ),
@@ -38,9 +43,15 @@ const buildRiderVehicleSnapshot = (rider = {}) => {
     insurance: cleanText(vehicle.insurance),
     mot: cleanText(vehicle.mot || vehicle.MOT),
     verificationStatus: cleanText(vehicle.verificationStatus || vehicle.status),
+    axleCount: Number.isInteger(axleCount) && axleCount > 0 ? axleCount : undefined,
+    grossVehicleWeightKg: Number.isFinite(grossVehicleWeightKg) && grossVehicleWeightKg > 0 ?
+      grossVehicleWeightKg : undefined,
+    emissionsClass: cleanText(vehicle.emissionsClass || vehicle.euroClass),
+    ulezCompliant: typeof vehicle.ulezCompliant === "boolean" ? vehicle.ulezCompliant : undefined,
+    lezCompliant: typeof vehicle.lezCompliant === "boolean" ? vehicle.lezCompliant : undefined,
   };
   return Object.fromEntries(
-      Object.entries(snapshot).filter(([, value]) => value !== ""));
+      Object.entries(snapshot).filter(([, value]) => value !== "" && value !== undefined));
 };
 
 module.exports = {

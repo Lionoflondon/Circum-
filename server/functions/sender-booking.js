@@ -10,6 +10,7 @@ const vanguardProtocol = require("./vanguard-protocol-core");
 const {classifyIris, normalDispatchEligibilityForInput} = require("./iris-core");
 const {verifiedPhotoAnalysis} = require("./iris-photo-analysis");
 const {dispatchDeliveryRequest} = require("./send-package");
+const {evaluateRoadCharges, ROAD_CHARGE_POLICY_VERSION} = require("./road-charges-core");
 
 const BASE_FARE_GBP = 5;
 const ADDITIONAL_FARE_PER_MILE_GBP = 1.5;
@@ -481,7 +482,7 @@ function speedAdjustment(subtotal, speed) {
 function riderEligibleFareFromQuote(quote = {}) {
   if (Array.isArray(quote.lineItems)) {
     const eligible = quote.lineItems
-        .filter((item) => `${item && item.key || ""}`.toLowerCase() !== "vanguard")
+        .filter((item) => !["vanguard", "road_toll", "daily_zone_charge"].includes(`${item && item.key || ""}`.toLowerCase()))
         .reduce((sum, item) => sum + Number(item && item.amount || 0), 0);
     if (Number.isFinite(eligible) && eligible > 0) return money(eligible);
   }
@@ -716,7 +717,7 @@ function riderDisplayAliases({quote = {}, data = {}, vanguardFields = {}} = {}) 
   };
 }
 
-function quotePayload(data, uid, serverPhotoAnalysis = null) {
+function quotePayload(data, uid, serverPhotoAnalysis = null, serverRoadChargeFacts = null) {
   const selectedSpeed = speedKey(data.selectedSpeed || data.selectedOption);
   const clientWeightKg = Number(data.weightKg || data.parcel && data.parcel.weightKg || 0.5);
   const photoWeightKg = Number(serverPhotoAnalysis && serverPhotoAnalysis.estimatedWeightKg || 0);
@@ -765,11 +766,22 @@ function quotePayload(data, uid, serverPhotoAnalysis = null) {
         giftDelivery ?
           "Vanguard is required for Gifts deliveries." :
           data.iris && data.iris.vanguardRequiredReason || "";
-  const total = money(Math.max(0, subtotal + speed + vanguard));
+  const roadChargeBreakdown = evaluateRoadCharges({
+    routeFacts: serverRoadChargeFacts,
+    selectedVehicle,
+    at: data.roadChargeAt || new Date(),
+    liabilityState: data.roadChargeLiabilityState || {},
+  });
+  const roadChargeCustomerContribution = money(roadChargeBreakdown.customerContribution);
+  const roadChargeRiderReimbursement = money(roadChargeBreakdown.riderReimbursement);
+  const roadChargeCircumContribution = money(roadChargeBreakdown.circumContribution);
+  const roadChargeCircumRevenue = money(roadChargeBreakdown.circumRevenue);
+  const total = money(Math.max(0, subtotal + speed + vanguard + roadChargeCustomerContribution));
   const riderBaseShare = money(Math.max(0, subtotal + speed) * RIDER_DELIVERY_FARE_SHARE);
   const platformBaseShare = money(Math.max(0, subtotal + speed) * PLATFORM_DELIVERY_FARE_SHARE);
   const totalRiderEarnings = riderBaseShare;
-  const totalCircumRevenue = money(total - totalRiderEarnings);
+  const estimatedTotalRiderEarnings = money(riderBaseShare + roadChargeRiderReimbursement);
+  const totalCircumRevenue = money(platformBaseShare + roadChargeCircumRevenue + vanguard);
   const quoteId = text(data.quoteId) || `sender_quote_${uid}_${Date.now()}`;
   const speedOptions = ["standard", "express"].map((speedOption) => {
     const optionSpeed = money(speedAdjustment(subtotal, speedOption));
@@ -806,6 +818,15 @@ function quotePayload(data, uid, serverPhotoAnalysis = null) {
       {key: "speed_adjustment", label: selectedSpeed === "express" ? "Express priority" : `${selectedSpeed[0].toUpperCase()}${selectedSpeed.slice(1)} service`, amount: speed},
       ...(vanguardIncluded ? [{key: "vanguard", label: "Vanguard Included", amount: 0}] : []),
       ...(!vanguardIncluded && vanguard > 0 ? [{key: "vanguard", label: "Vanguard Protection", amount: vanguard}] : []),
+      ...roadChargeBreakdown.charges
+          .filter((charge) => charge.customerContributionPence > 0)
+          .map((charge) => ({
+            key: charge.type === "route_toll" ? "road_toll" : "daily_zone_charge",
+            label: charge.chargeId === "congestion_charge" ? "Central London fee" :
+              charge.chargeId === "dartford_crossing" ? "Dart Charge" :
+                charge.chargeId === "blackwall_silvertown" ? "Blackwall/Silvertown toll" : "Road charge",
+            amount: charge.customerContribution,
+          })),
     ],
     total,
     finalAmount: total,
@@ -819,7 +840,21 @@ function quotePayload(data, uid, serverPhotoAnalysis = null) {
     circumBaseShare: platformBaseShare,
     circumLabourShare: 0,
     totalRiderEarnings,
+    estimatedRoadChargeRecovery: roadChargeRiderReimbursement,
+    estimatedTotalRiderEarnings,
     totalCircumRevenue,
+    roadChargePolicyVersion: ROAD_CHARGE_POLICY_VERSION,
+    roadChargeBreakdown,
+    roadChargeCustomerContribution,
+    roadChargeRiderReimbursement,
+    roadChargeCircumContribution,
+    roadChargeCircumRevenue,
+    roadChargeFactsSource: serverRoadChargeFacts ? "authoritative_route" : "unavailable",
+    roadChargeRouteFacts: serverRoadChargeFacts || null,
+    roadChargePricingComplete: serverRoadChargeFacts ?
+      roadChargeBreakdown.authoritativePricingComplete === true : false,
+    quotedVehicleClass: selectedVehicle,
+    requiredVehicleClass: selectedVehicle,
     driverShare: RIDER_DELIVERY_FARE_SHARE,
     platformShare: PLATFORM_DELIVERY_FARE_SHARE,
     pricingSource: "sender_backend_quote_v1",
@@ -1046,6 +1081,13 @@ exports.createSenderPaymentSession = (stripe) => functions.https.onCall(async (d
           compliance: payloadEligibility.compliance,
           serviceability: payloadEligibility.serviceability,
         },
+    );
+  }
+  if (quote.roadChargeFactsSource === "authoritative_route" && quote.roadChargePricingComplete !== true) {
+    throw new functions.https.HttpsError(
+        "failed-precondition",
+        "Road-charge pricing requires review before payment.",
+        {reason: "authoritative_road_charge_pricing_incomplete"},
     );
   }
   const split = calculateWalletCheckout({
@@ -1917,6 +1959,17 @@ async function createPaidDeliveryFromSession(stripe, sender, data) {
       rothAppliedAmount: payment.rothAppliedAmount || 0,
       remainingAmount: payment.remainingAmount || 0,
       pricingBreakdown: quote,
+      roadChargePolicyVersion: quote.roadChargePolicyVersion || ROAD_CHARGE_POLICY_VERSION,
+      roadChargeBreakdown: quote.roadChargeBreakdown || null,
+      roadChargeCustomerContribution: quote.roadChargeCustomerContribution || 0,
+      estimatedRoadChargeRecovery: quote.estimatedRoadChargeRecovery || 0,
+      roadChargeReimbursement: 0,
+      roadChargeCircumContribution: quote.roadChargeCircumContribution || 0,
+      roadChargeCircumRevenue: quote.roadChargeCircumRevenue || 0,
+      roadChargeLiabilityKeys: quote.roadChargeBreakdown && quote.roadChargeBreakdown.liabilityKeys || [],
+      roadChargeRouteFacts: quote.roadChargeRouteFacts || null,
+      quotedVehicleClass: quote.quotedVehicleClass || quote.selectedVehicle,
+      requiredVehicleClass: quote.requiredVehicleClass || quote.selectedVehicle,
       currency: "GBP",
       status: "requested",
       deliveryStatus: "requested",
