@@ -25,9 +25,13 @@ const canonicalVehicleType = (value) => {
 
 const buildRiderVehicleSnapshot = (rider = {}) => {
   const vehicle = rider.vehicle || rider.vehicleDetails || {};
-  const axleCount = Number(vehicle.axleCount || rider.vehicleAxleCount);
+  const roadAuthority = rider.roadChargeVehicleAuthority || {};
+  const axleCount = Number(roadAuthority.axleCount);
   const grossVehicleWeightKg = Number(
-      vehicle.grossVehicleWeightKg || vehicle.grossWeightKg || rider.grossVehicleWeightKg,
+      roadAuthority.grossVehicleWeightKg,
+  );
+  const referenceMassKg = Number(
+      roadAuthority.referenceMassKg,
   );
   const snapshot = {
     id: cleanText(vehicle.id || vehicle.vehicleId || rider.activeVehicleId || rider.vehicleId),
@@ -46,6 +50,16 @@ const buildRiderVehicleSnapshot = (rider = {}) => {
     axleCount: Number.isInteger(axleCount) && axleCount > 0 ? axleCount : undefined,
     grossVehicleWeightKg: Number.isFinite(grossVehicleWeightKg) && grossVehicleWeightKg > 0 ?
       grossVehicleWeightKg : undefined,
+    referenceMassKg: Number.isFinite(referenceMassKg) && referenceMassKg > 0 ?
+      referenceMassKg : undefined,
+    bodyType: cleanText(roadAuthority.bodyType),
+    tunnelTariffClass: cleanText(roadAuthority.tunnelTariffClass),
+    cczAuthorityStatus: cleanText(roadAuthority.cczAuthorityStatus),
+    cczDiscountPercent: Number.isFinite(Number(roadAuthority.cczDiscountPercent)) ?
+      Number(roadAuthority.cczDiscountPercent) : undefined,
+    roadChargeFactsVerificationStatus: cleanText(
+        roadAuthority.verificationStatus,
+    ),
     emissionsClass: cleanText(vehicle.emissionsClass || vehicle.euroClass),
     ulezCompliant: typeof vehicle.ulezCompliant === "boolean" ? vehicle.ulezCompliant : undefined,
     lezCompliant: typeof vehicle.lezCompliant === "boolean" ? vehicle.lezCompliant : undefined,

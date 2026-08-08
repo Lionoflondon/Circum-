@@ -336,6 +336,7 @@ service cloud.firestore {
         'stripeAccountId',
         'stripePayoutsEnabled',
         'payoutPaused',
+        'roadChargeVehicleAuthority',
         'internalAccess',
         'founderRider',
         'isAdmin',

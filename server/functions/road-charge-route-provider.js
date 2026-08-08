@@ -55,7 +55,7 @@ function routeFingerprint({origin, destination, points, distanceMeters}) {
   return crypto.createHash("sha256").update(payload).digest("hex");
 }
 
-function googleRouteProvider({fetchImpl = fetch, apiKey = process.env.GOOGLE_MAPS_API_KEY || process.env.CIRCUM_WEB_GOOGLE_MAPS_API_KEY} = {}) {
+function googleRouteProvider({fetchImpl = fetch, apiKey = process.env.GOOGLE_ROUTES_API_KEY} = {}) {
   return {
     name: "google_routes",
     async getRoute({origin, destination}) {

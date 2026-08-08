@@ -87,6 +87,7 @@ test("riderProfiles mirrors riders admin-only authority fields", () => {
     "roles",
     "trustPoints",
     "stripeConnectAccountId",
+    "roadChargeVehicleAuthority",
   ]) {
     assert.match(rules, new RegExp(`'${field}'`));
   }

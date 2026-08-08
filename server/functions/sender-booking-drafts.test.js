@@ -218,6 +218,33 @@ test("sender quote does not trust client route facts", () => {
   assert.equal(quote.roadChargeCustomerContribution, 0);
 });
 
+test("sender quote ignores forged small-Van facts and uses conservative tunnel tariff", () => {
+  const quote = _private.quotePayload({
+    selectedSpeed: "Standard",
+    distanceMiles: 3,
+    weightKg: 2,
+    selectedVehicle: "van",
+    vehicleProfile: {
+      tunnelTariffClass: "small_van",
+      roadChargeFactsVerificationStatus: "verified",
+    },
+    parcel: {itemName: "Parcel", weightKg: 2},
+  }, "sender-test", null, {
+    authority: "authoritative_route",
+    crossings: [{
+      chargeId: "blackwall_silvertown",
+      crossingId: "blackwall-forged-van",
+      direction: "northbound",
+      at: "2026-08-07T08:00:00Z",
+    }],
+  });
+  const toll = quote.roadChargeBreakdown.charges.find((charge) =>
+    charge.chargeId === "blackwall_silvertown");
+  assert.equal(toll.actualClassification, "UNKNOWN");
+  assert.equal(toll.pricingTariffApplied, "LARGE_VAN_CONSERVATIVE");
+  assert.equal(toll.customerContributionPence, 650);
+});
+
 test("sender express surcharge is five pounds or twenty percent", () => {
   const shortQuote = _private.quotePayload({
     selectedSpeed: "Express",

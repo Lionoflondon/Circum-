@@ -39,7 +39,8 @@ const ROAD_CHARGE_POLICY = Object.freeze({
       ratesPence: Object.freeze({
         motorbike: Object.freeze({offPeak: 150, peak: 250}),
         car: Object.freeze({offPeak: 150, peak: 400}),
-        van: Object.freeze({offPeak: 150, peak: 400}),
+        van_small: Object.freeze({offPeak: 150, peak: 400}),
+        van_large: Object.freeze({offPeak: 250, peak: 650}),
       }),
       settlementTreatment: "customer_pass_through_rider_reimbursement_no_commission",
       source: "tfl_blackwall_silvertown",
@@ -94,6 +95,82 @@ function vehicleTariffClassification(vehicleProfile = {}) {
   if (Number.isInteger(axleCount) && axleCount === 2) return "van_2_axle";
   if (Number.isInteger(axleCount) && axleCount > 2) return "van_multi_axle";
   return "unknown";
+}
+
+function verifiedRoadChargeFacts(vehicleProfile = {}) {
+  return ["verified", "approved"].includes(`${
+    vehicleProfile.roadChargeFactsVerificationStatus || ""
+  }`.trim().toLowerCase());
+}
+
+function vanTunnelTariffAuthority(vehicleProfile = {}, {pricingContext = "quote"} = {}) {
+  const verified = verifiedRoadChargeFacts(vehicleProfile);
+  const declared = `${vehicleProfile.tunnelTariffClass || ""}`.trim().toLowerCase();
+  const referenceMassKg = Number(vehicleProfile.referenceMassKg || vehicleProfile.unladenWeightKg);
+  const explicit = /^(small_van|small van)$/.test(declared) ? "small_van" :
+    /^(large_van|large van)$/.test(declared) ? "large_van" : null;
+  const massClass = Number.isFinite(referenceMassKg) && referenceMassKg > 0 ?
+    referenceMassKg < 1205 ? "small_van" : "large_van" : null;
+  const conflict = explicit && massClass && explicit !== massClass;
+  const actualClassification = verified && !conflict ? explicit || massClass : null;
+  if (actualClassification) {
+    return {
+      actualClassification: actualClassification.toUpperCase(),
+      pricingTariffApplied: actualClassification.toUpperCase(),
+      pricingReason: "VERIFIED_VEHICLE_FACTS",
+      verified: true,
+      complete: true,
+    };
+  }
+  if (pricingContext === "quote") {
+    return {
+      actualClassification: "UNKNOWN",
+      pricingTariffApplied: "LARGE_VAN_CONSERVATIVE",
+      pricingReason: conflict ? "CONFLICTING_VERIFIED_VEHICLE_DATA" :
+        verified ? "INSUFFICIENT_VERIFIED_VEHICLE_DATA" : "UNVERIFIED_VEHICLE_DATA",
+      verified: false,
+      complete: true,
+    };
+  }
+  return {
+    actualClassification: "UNKNOWN",
+    pricingTariffApplied: null,
+    pricingReason: conflict ? "CONFLICTING_VERIFIED_VEHICLE_DATA" :
+      "INSUFFICIENT_VERIFIED_VEHICLE_DATA",
+    verified: false,
+    complete: false,
+  };
+}
+
+function cczVehicleAuthority(vehicleClass, vehicleProfile = {}, {pricingContext = "quote"} = {}) {
+  if (vehicleClass === "motorbike") {
+    return {status: "VERIFIED_EXEMPT", liabilityPence: 0, discountPercent: 100, verified: true};
+  }
+  const verified = verifiedRoadChargeFacts(vehicleProfile);
+  const declared = `${vehicleProfile.cczAuthorityStatus || ""}`.trim().toUpperCase();
+  if (verified && declared === "VERIFIED_EXEMPT") {
+    return {status: declared, liabilityPence: 0, discountPercent: 100, verified: true};
+  }
+  if (verified && declared === "VERIFIED_DISCOUNT") {
+    const discountPercent = Number(vehicleProfile.cczDiscountPercent);
+    if (Number.isFinite(discountPercent) && discountPercent > 0 && discountPercent < 100) {
+      return {
+        status: declared,
+        liabilityPence: Math.round(1800 * (100 - discountPercent) / 100),
+        discountPercent,
+        verified: true,
+      };
+    }
+  }
+  if (verified && declared === "CHARGEABLE") {
+    return {status: declared, liabilityPence: 1800, discountPercent: 0, verified: true};
+  }
+  return {
+    status: "UNKNOWN",
+    liabilityPence: pricingContext === "quote" ? 1800 : null,
+    discountPercent: null,
+    verified: false,
+  };
 }
 
 function integerPence(value) {
@@ -227,6 +304,7 @@ function evaluateRoadCharges({
   at = new Date(),
   liabilityState = {},
   requireVehicleIdentity = false,
+  pricingContext = "quote",
 } = {}) {
   const vehicleClass = normalizeVehicle(selectedVehicle);
   const tariffClassification = vehicleTariffClassification({
@@ -250,17 +328,25 @@ function evaluateRoadCharges({
     if (seenCrossings.has(crossingKey)) continue;
     seenCrossings.add(crossingKey);
     const peak = chargeId === "blackwall_silvertown" ? tunnelPeak(crossing) : false;
-    const vanWeight = Number(vehicleProfile.grossVehicleWeightKg);
+    const verifiedFacts = verifiedRoadChargeFacts(vehicleProfile);
+    const vanTunnelAuthority = vehicleClass === "van" && chargeId === "blackwall_silvertown" ?
+      vanTunnelTariffAuthority(vehicleProfile, {pricingContext}) : null;
+    const conservativeDartford = vehicleClass === "van" && chargeId === "dartford_crossing" &&
+      (!verifiedFacts || tariffClassification === "unknown");
     const tariffUnknown = vehicleClass === "van" && (
-      chargeId === "dartford_crossing" && tariffClassification === "unknown" ||
-      chargeId === "blackwall_silvertown" && (!Number.isFinite(vanWeight) || vanWeight > 3500)
+      chargeId === "dartford_crossing" && pricingContext === "settlement" && conservativeDartford ||
+      chargeId === "blackwall_silvertown" && !vanTunnelAuthority.complete
     );
-    const vehicleRates = charge.ratesPence[vehicleClass];
+    const tunnelRateKey = vehicleClass === "van" && vanTunnelAuthority ?
+      vanTunnelAuthority.pricingTariffApplied === "SMALL_VAN" ? "van_small" : "van_large" :
+      vehicleClass;
+    const vehicleRates = charge.ratesPence[tunnelRateKey];
+    const dartfordRateKey = conservativeDartford ? "van_multi_axle" : tariffClassification;
     const unit = tariffUnknown ? 0 : chargeId === "blackwall_silvertown" && vehicleRates ?
-      vehicleRates[peak ? "peak" : "offPeak"] :
-      charge.ratesPence[tariffClassification] || 0;
+      vehicleRates[peak ? "peak" : "offPeak"] : charge.ratesPence[dartfordRateKey] || 0;
     const classificationUnknown = tariffUnknown || vehicleClass === "unknown";
-    charges.push(baseCharge({
+    charges.push({
+      ...baseCharge({
       charge,
       chargeId,
       type: charge.type,
@@ -269,7 +355,14 @@ function evaluateRoadCharges({
       amountPence: unit * count,
       status: classificationUnknown ? "tariff_classification_unknown" :
         unit > 0 ? "applicable" : "exempt_or_zero_rate",
-    }));
+      }),
+      ...(vanTunnelAuthority ? vanTunnelAuthority : {}),
+      ...(conservativeDartford ? {
+        actualClassification: "UNKNOWN",
+        pricingTariffApplied: pricingContext === "quote" ? "VAN_MULTI_AXLE_CONSERVATIVE" : null,
+        pricingReason: verifiedFacts ? "INSUFFICIENT_VERIFIED_VEHICLE_DATA" : "UNVERIFIED_VEHICLE_DATA",
+      } : {}),
+    });
   }
 
   const zone = facts.congestionZone;
@@ -284,17 +377,37 @@ function evaluateRoadCharges({
       chargeId: charge.id,
     });
     const eligibleVehicle = charge.applicableVehicles.includes(vehicleClass);
+    const vehicleAuthority = cczVehicleAuthority(vehicleClass, vehicleProfile, {pricingContext});
+    const authorityKnownForSettlement = pricingContext !== "settlement" ||
+      vehicleAuthority.status !== "UNKNOWN";
     const active = chargeIsEffective(charge, zoneAt) && congestionChargeable({
       at: zoneAt,
       isBankHoliday: zone.isBankHoliday === true,
     });
-    const record = liabilityRecord(liabilityState, key, charge.amountPence);
+    const record = liabilityRecord(liabilityState, key, vehicleAuthority.liabilityPence || 0);
     const allocation = dailyRecoveryAllocation({
-      liabilityPence: charge.amountPence,
-      customerFeePence: ROAD_CHARGE_POLICY.commercialPolicy.centralLondonFeePence,
+      liabilityPence: vehicleAuthority.liabilityPence || 0,
+      customerFeePence: Math.min(
+          ROAD_CHARGE_POLICY.commercialPolicy.centralLondonFeePence,
+          Math.round((vehicleAuthority.liabilityPence || 0) / 2),
+      ),
       recoveredPence: record.recoveredPence,
     });
-    if (eligibleVehicle && active && requireVehicleIdentity && !`${vehicleId || ""}`.trim()) {
+    if (eligibleVehicle && active && !authorityKnownForSettlement) {
+      charges.push({
+        ...baseCharge({
+          charge,
+          chargeId: charge.id,
+          type: charge.type,
+          at: zoneAt,
+          vehicleClass,
+          amountPence: 0,
+          liabilityKey: key,
+          status: "tariff_classification_unknown",
+        }),
+        vehicleAuthorityStatus: vehicleAuthority.status,
+      });
+    } else if (eligibleVehicle && active && requireVehicleIdentity && !`${vehicleId || ""}`.trim()) {
       charges.push(baseCharge({
         charge,
         chargeId: charge.id,
@@ -305,17 +418,21 @@ function evaluateRoadCharges({
         liabilityKey: null,
         status: "assigned_vehicle_identity_unknown",
       }));
-    } else if (!eligibleVehicle || !active) {
-      charges.push(baseCharge({
-        charge,
-        chargeId: charge.id,
-        type: charge.type,
-        at: zoneAt,
-        vehicleClass,
-        amountPence: 0,
-        liabilityKey: key,
-        status: eligibleVehicle ? "outside_charging_hours" : "vehicle_not_applicable",
-      }));
+    } else if (!eligibleVehicle || !active || vehicleAuthority.status === "VERIFIED_EXEMPT") {
+      charges.push({
+        ...baseCharge({
+          charge,
+          chargeId: charge.id,
+          type: charge.type,
+          at: zoneAt,
+          vehicleClass,
+          amountPence: 0,
+          liabilityKey: key,
+          status: vehicleAuthority.status === "VERIFIED_EXEMPT" ? "verified_exempt" :
+            eligibleVehicle ? "outside_charging_hours" : "vehicle_not_applicable",
+        }),
+        vehicleAuthorityStatus: vehicleAuthority.status,
+      });
     } else if (record.incurred && allocation.remainingRecoveryPence === 0) {
       charges.push({
         ...baseCharge({
@@ -324,7 +441,7 @@ function evaluateRoadCharges({
           type: charge.type,
           at: zoneAt,
           vehicleClass,
-          amountPence: charge.amountPence,
+          amountPence: vehicleAuthority.liabilityPence,
           liabilityKey: key,
           status: "daily_liability_recovered",
         }),
@@ -334,6 +451,8 @@ function evaluateRoadCharges({
         riderReimbursementPence: 0,
         recoveredBeforePence: allocation.recoveredBeforePence,
         recoveredAfterPence: allocation.recoveredAfterPence,
+        vehicleAuthorityStatus: vehicleAuthority.status,
+        verifiedDiscountPercent: vehicleAuthority.discountPercent,
       });
     } else {
       charges.push({
@@ -343,7 +462,7 @@ function evaluateRoadCharges({
           type: charge.type,
           at: zoneAt,
           vehicleClass,
-          amountPence: charge.amountPence,
+          amountPence: vehicleAuthority.liabilityPence,
           liabilityKey: key,
           status: record.incurred ? "daily_liability_recovering" : "new_daily_liability",
         }),
@@ -354,6 +473,8 @@ function evaluateRoadCharges({
         recoveredBeforePence: allocation.recoveredBeforePence,
         recoveredAfterPence: allocation.recoveredAfterPence,
         remainingRecoveryPence: allocation.remainingRecoveryPence,
+        vehicleAuthorityStatus: vehicleAuthority.status,
+        verifiedDiscountPercent: vehicleAuthority.discountPercent,
       });
     }
   } else if (facts.congestionZone && facts.congestionZone.known === false) {
@@ -450,6 +571,9 @@ module.exports = {
   ROAD_CHARGE_POLICY,
   normalizeVehicle,
   vehicleTariffClassification,
+  verifiedRoadChargeFacts,
+  vanTunnelTariffAuthority,
+  cczVehicleAuthority,
   stableLiabilityKey,
   dailyRecoveryAllocation,
   evaluateRoadCharges,

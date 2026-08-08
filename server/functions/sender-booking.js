@@ -1021,7 +1021,9 @@ exports.getSenderRothBalance = functions.https.onCall(async (_, context) => {
   };
 });
 
-exports.createSenderBookingQuote = functions.https.onCall(async (data, context) => {
+exports.createSenderBookingQuote = functions.runWith({
+  secrets: ["GOOGLE_ROUTES_API_KEY"],
+}).https.onCall(async (data, context) => {
   const sender = requireSender(context);
   const db = getFirestore();
   const businessContext = await verifiedBusinessContext(db, sender, data && data.businessContext);

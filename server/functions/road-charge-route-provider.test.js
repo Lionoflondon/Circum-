@@ -2,10 +2,12 @@
 
 const test = require("node:test");
 const assert = require("node:assert/strict");
+const fs = require("node:fs");
 const {
   ROUTE_CACHE_MAX_AGE_MS,
   authoritativeRoadRouteFacts,
   routeFingerprint,
+  googleRouteProvider,
 } = require("./road-charge-route-provider");
 const {deriveCircumRouteFacts} = require("./road-charge-geography");
 
@@ -47,6 +49,62 @@ test("fresh Google geometry is evaluated by CIRCUM rather than Google toll prici
   assert.equal(result.routeDistanceMeters, 12000);
   assert.equal(result.routeDuration, "900s");
   assert.equal(result.routePointCount, cczRoute.length);
+});
+
+test("authoritative Google provider uses only GOOGLE_ROUTES_API_KEY", async () => {
+  const previousRoutes = process.env.GOOGLE_ROUTES_API_KEY;
+  const previousBrowser = process.env.CIRCUM_WEB_GOOGLE_MAPS_API_KEY;
+  const previousLegacy = process.env.GOOGLE_MAPS_API_KEY;
+  delete process.env.GOOGLE_ROUTES_API_KEY;
+  process.env.CIRCUM_WEB_GOOGLE_MAPS_API_KEY = "browser-key-must-not-be-used";
+  process.env.GOOGLE_MAPS_API_KEY = "legacy-key-must-not-be-used";
+  try {
+    await assert.rejects(
+        googleRouteProvider().getRoute({
+          origin: {latitude: 51.5, longitude: -0.1},
+          destination: {latitude: 51.51, longitude: -0.11},
+        }),
+        (error) => error.code === "route_provider_unconfigured",
+    );
+  } finally {
+    if (previousRoutes === undefined) delete process.env.GOOGLE_ROUTES_API_KEY;
+    else process.env.GOOGLE_ROUTES_API_KEY = previousRoutes;
+    if (previousBrowser === undefined) delete process.env.CIRCUM_WEB_GOOGLE_MAPS_API_KEY;
+    else process.env.CIRCUM_WEB_GOOGLE_MAPS_API_KEY = previousBrowser;
+    if (previousLegacy === undefined) delete process.env.GOOGLE_MAPS_API_KEY;
+    else process.env.GOOGLE_MAPS_API_KEY = previousLegacy;
+  }
+});
+
+test("Sender quote Function binds only the server Routes secret", () => {
+  const source = fs.readFileSync(require.resolve("./sender-booking"), "utf8");
+  assert.match(source, /createSenderBookingQuote\s*=\s*functions\.runWith\(\{\s*secrets:\s*\["GOOGLE_ROUTES_API_KEY"\]/s);
+  const providerSource = fs.readFileSync(require.resolve("./road-charge-route-provider"), "utf8");
+  assert.doesNotMatch(providerSource, /CIRCUM_WEB_GOOGLE_MAPS_API_KEY|process\.env\.GOOGLE_MAPS_API_KEY/);
+});
+
+test("GOOGLE_ROUTES_API_KEY is passed to the Routes API without exposing it", async () => {
+  let observedKey = null;
+  const provider = googleRouteProvider({
+    apiKey: "server-routes-test-key",
+    fetchImpl: async (_url, request) => {
+      observedKey = request.headers["X-Goog-Api-Key"];
+      return {
+        ok: true,
+        json: async () => ({routes: [{
+          distanceMeters: 100,
+          duration: "10s",
+          polyline: {encodedPolyline: "_p~iF~ps|U_ulLnnqC"},
+        }]}),
+      };
+    },
+  });
+  const route = await provider.getRoute({
+    origin: {latitude: 51.5, longitude: -0.1},
+    destination: {latitude: 51.51, longitude: -0.11},
+  });
+  assert.equal(observedKey, "server-routes-test-key");
+  assert.equal(route.distanceMeters, 100);
 });
 
 test("route fingerprint binds endpoints, geometry, and distance", () => {

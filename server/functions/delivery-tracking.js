@@ -457,6 +457,7 @@ exports.updateDeliveryTrackingStatus = functions.https.onCall(async (data, conte
         vehicleProfile: assignedVehicle,
         vehicleId: assignedVehicleId,
         requireVehicleIdentity: true,
+        pricingContext: "settlement",
       });
       if (!preliminaryRoadCharges.authoritativePricingComplete) {
         throw new functions.https.HttpsError(
@@ -482,6 +483,7 @@ exports.updateDeliveryTrackingStatus = functions.https.onCall(async (data, conte
         vehicleId: assignedVehicleId,
         liabilityState,
         requireVehicleIdentity: true,
+        pricingContext: "settlement",
       });
     }
     const riderProfileRef = settlementValues(delivery).trustPoints > 0 ?

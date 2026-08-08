@@ -295,6 +295,7 @@ test("Rider profile self-writes cannot alter admin payment or trust authority", 
     "rating",
     "availableBalance",
     "stripeConnectAccountId",
+    "roadChargeVehicleAuthority",
     "admin",
   ]) {
     await assertFails(setDoc(doc(riderDb, "riders", "rider-1"), {
@@ -328,6 +329,7 @@ test("Rider cannot self-write admin authority on riderProfiles", async () => {
     "rating",
     "availableBalance",
     "stripeConnectAccountId",
+    "roadChargeVehicleAuthority",
     "admin",
   ]) {
     await assertFails(setDoc(doc(riderDb, "riderProfiles", "rider-1"), {

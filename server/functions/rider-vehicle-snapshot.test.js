@@ -60,3 +60,26 @@ test("buildRiderVehicleSnapshot returns an immutable copy", () => {
 
   assert.equal(snapshot.model, "Yaris");
 });
+
+test("road-charge facts come only from backend vehicle authority", () => {
+  const snapshot = buildRiderVehicleSnapshot({
+    vehicle: {
+      type: "Van",
+      registration: "AUTH 1",
+      tunnelTariffClass: "small_van",
+      cczAuthorityStatus: "VERIFIED_EXEMPT",
+      roadChargeFactsVerificationStatus: "verified",
+    },
+    roadChargeVehicleAuthority: {
+      tunnelTariffClass: "large_van",
+      referenceMassKg: 1800,
+      axleCount: 2,
+      cczAuthorityStatus: "CHARGEABLE",
+      verificationStatus: "verified",
+    },
+  });
+  assert.equal(snapshot.tunnelTariffClass, "large_van");
+  assert.equal(snapshot.referenceMassKg, 1800);
+  assert.equal(snapshot.cczAuthorityStatus, "CHARGEABLE");
+  assert.equal(snapshot.roadChargeFactsVerificationStatus, "verified");
+});

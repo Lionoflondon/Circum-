@@ -12,6 +12,8 @@ const {
   dailyRecoveryAllocation,
   normalizeVehicle,
   vehicleTariffClassification,
+  vanTunnelTariffAuthority,
+  cczVehicleAuthority,
 } = require("./road-charges-core");
 
 const route = (overrides = {}) => ({
@@ -94,12 +96,124 @@ test("Dartford uses independent Car and Van axle tariffs", () => {
   const van = evaluateRoadCharges({
     routeFacts: route({crossings: crossing}),
     selectedVehicle: "van",
-    vehicleProfile: {axleCount: 2},
+    vehicleProfile: {axleCount: 2, roadChargeFactsVerificationStatus: "verified"},
   });
   const unknownVan = evaluateRoadCharges({routeFacts: route({crossings: crossing}), selectedVehicle: "van"});
   assert.equal(car.customerContributionPence, 350);
   assert.equal(van.customerContributionPence, 420);
-  assert.equal(unknownVan.authoritativePricingComplete, false);
+  assert.equal(unknownVan.customerContributionPence, 840);
+  assert.equal(unknownVan.charges[0].pricingTariffApplied, "VAN_MULTI_AXLE_CONSERVATIVE");
+  assert.equal(unknownVan.charges[0].actualClassification, "UNKNOWN");
+});
+
+test("Van tunnel quote uses verified class or conservative large-Van pricing", () => {
+  const crossing = [{
+    chargeId: "blackwall_silvertown",
+    crossingId: "van-tunnel",
+    direction: "northbound",
+    at: "2026-08-07T08:00:00Z",
+  }];
+  const evaluate = (vehicleProfile = {}, pricingContext = "quote") => evaluateRoadCharges({
+    routeFacts: route({crossings: crossing}),
+    selectedVehicle: "van",
+    vehicleProfile,
+    pricingContext,
+  });
+  const verifiedSmall = evaluate({
+    tunnelTariffClass: "small_van",
+    referenceMassKg: 1100,
+    roadChargeFactsVerificationStatus: "verified",
+  });
+  const verifiedLarge = evaluate({
+    tunnelTariffClass: "large_van",
+    referenceMassKg: 1800,
+    roadChargeFactsVerificationStatus: "verified",
+  });
+  const unknown = evaluate();
+  const forgedSmall = evaluate({tunnelTariffClass: "small_van", referenceMassKg: 1000});
+  const conflicting = evaluate({
+    tunnelTariffClass: "small_van",
+    referenceMassKg: 1800,
+    roadChargeFactsVerificationStatus: "verified",
+  });
+  assert.equal(verifiedSmall.customerContributionPence, 400);
+  assert.equal(verifiedSmall.charges[0].actualClassification, "SMALL_VAN");
+  assert.equal(verifiedLarge.customerContributionPence, 650);
+  for (const result of [unknown, forgedSmall, conflicting]) {
+    assert.equal(result.customerContributionPence, 650);
+    assert.equal(result.charges[0].actualClassification, "UNKNOWN");
+    assert.equal(result.charges[0].pricingTariffApplied, "LARGE_VAN_CONSERVATIVE");
+  }
+  assert.equal(evaluate({}, "settlement").authoritativePricingComplete, false);
+});
+
+test("conservative Van quote never inflates actual Rider reimbursement", () => {
+  const routeFacts = route({crossings: [{
+    chargeId: "blackwall_silvertown",
+    crossingId: "variance",
+    direction: "northbound",
+    at: "2026-08-07T08:00:00Z",
+  }]});
+  const quote = evaluateRoadCharges({routeFacts, selectedVehicle: "van"});
+  const actualSmall = evaluateRoadCharges({
+    routeFacts,
+    selectedVehicle: "van",
+    vehicleProfile: {
+      tunnelTariffClass: "small_van",
+      referenceMassKg: 1100,
+      roadChargeFactsVerificationStatus: "verified",
+    },
+    pricingContext: "settlement",
+  });
+  const actualLarge = evaluateRoadCharges({
+    routeFacts,
+    selectedVehicle: "van",
+    vehicleProfile: {
+      tunnelTariffClass: "large_van",
+      referenceMassKg: 1800,
+      roadChargeFactsVerificationStatus: "verified",
+    },
+    pricingContext: "settlement",
+  });
+  assert.equal(quote.customerContributionPence, 650);
+  assert.equal(actualSmall.riderReimbursementPence, 400);
+  assert.equal(actualLarge.riderReimbursementPence, 650);
+  assert.equal(quote.customerContributionPence, 650);
+});
+
+test("vehicle switch after quote changes actual liability but never customer payment", () => {
+  const routeFacts = route({crossings: [{
+    chargeId: "blackwall_silvertown",
+    crossingId: "vehicle-switch",
+    direction: "northbound",
+    at: "2026-08-07T08:00:00Z",
+  }]});
+  const quotedCar = evaluateRoadCharges({routeFacts, selectedVehicle: "car"});
+  const assignedLargeVan = evaluateRoadCharges({
+    routeFacts,
+    selectedVehicle: "van",
+    vehicleProfile: {
+      tunnelTariffClass: "large_van",
+      referenceMassKg: 1800,
+      roadChargeFactsVerificationStatus: "verified",
+    },
+    pricingContext: "settlement",
+  });
+  assert.equal(quotedCar.customerContributionPence, 400);
+  assert.equal(assignedLargeVan.riderReimbursementPence, 650);
+  assert.equal(quotedCar.customerContributionPence, 400);
+});
+
+test("Van authority keeps unknown distinct from verified large Van", () => {
+  const unknown = vanTunnelTariffAuthority({tunnelTariffClass: "large_van"});
+  const verified = vanTunnelTariffAuthority({
+    tunnelTariffClass: "large_van",
+    roadChargeFactsVerificationStatus: "approved",
+  });
+  assert.equal(unknown.actualClassification, "UNKNOWN");
+  assert.equal(unknown.pricingTariffApplied, "LARGE_VAN_CONSERVATIVE");
+  assert.equal(verified.actualClassification, "LARGE_VAN");
+  assert.equal(verified.pricingTariffApplied, "LARGE_VAN");
 });
 
 test("Blackwall and Silvertown distinguish direction-sensitive peak pricing", () => {
@@ -125,6 +239,72 @@ test("Motorbike, Car, and Van receive independent Central London treatment", () 
   assert.equal(motorbike.customerContributionPence, 0);
   assert.equal(car.customerContributionPence, 900);
   assert.equal(van.customerContributionPence, 900);
+});
+
+test("CCZ authority separates chargeable, exempt, discounted, and unknown facts", () => {
+  assert.deepEqual(cczVehicleAuthority("motorbike"), {
+    status: "VERIFIED_EXEMPT", liabilityPence: 0, discountPercent: 100, verified: true,
+  });
+  assert.equal(cczVehicleAuthority("car").status, "UNKNOWN");
+  assert.equal(cczVehicleAuthority("van").liabilityPence, 1800);
+  assert.equal(cczVehicleAuthority("car", {
+    cczAuthorityStatus: "VERIFIED_EXEMPT",
+    roadChargeFactsVerificationStatus: "verified",
+  }).liabilityPence, 0);
+  assert.equal(cczVehicleAuthority("car", {
+    cczAuthorityStatus: "VERIFIED_DISCOUNT",
+    cczDiscountPercent: 25,
+    roadChargeFactsVerificationStatus: "verified",
+  }).liabilityPence, 1350);
+  assert.equal(cczVehicleAuthority("van", {
+    cczAuthorityStatus: "VERIFIED_DISCOUNT",
+    cczDiscountPercent: 50,
+    roadChargeFactsVerificationStatus: "verified",
+  }).liabilityPence, 900);
+  assert.equal(cczVehicleAuthority("car", {
+    cczAuthorityStatus: "VERIFIED_EXEMPT",
+  }).status, "UNKNOWN");
+});
+
+test("verified CCZ treatment controls quote while unverified claims remain conservative", () => {
+  const routeFacts = route({congestionZone: {entered: true, at: "2026-08-07T10:00:00Z"}});
+  const evaluate = (selectedVehicle, vehicleProfile = {}) => evaluateRoadCharges({
+    routeFacts, selectedVehicle, vehicleProfile,
+  });
+  assert.equal(evaluate("car").customerContributionPence, 900);
+  assert.equal(evaluate("van").customerContributionPence, 900);
+  assert.equal(evaluate("motorbike").customerContributionPence, 0);
+  assert.equal(evaluate("car", {cczAuthorityStatus: "VERIFIED_EXEMPT"}).customerContributionPence, 900);
+  assert.equal(evaluate("car", {
+    cczAuthorityStatus: "VERIFIED_EXEMPT",
+    roadChargeFactsVerificationStatus: "verified",
+  }).customerContributionPence, 0);
+  assert.equal(evaluate("car", {
+    cczAuthorityStatus: "VERIFIED_DISCOUNT",
+    cczDiscountPercent: 25,
+    roadChargeFactsVerificationStatus: "verified",
+  }).customerContributionPence, 675);
+  assert.equal(evaluate("van", {
+    cczAuthorityStatus: "VERIFIED_DISCOUNT",
+    cczDiscountPercent: 50,
+    roadChargeFactsVerificationStatus: "verified",
+  }).customerContributionPence, 450);
+});
+
+test("unknown CCZ authority is conservative for quote and fails closed for settlement", () => {
+  const routeFacts = route({congestionZone: {entered: true, at: "2026-08-07T10:00:00Z"}});
+  const quote = evaluateRoadCharges({routeFacts, selectedVehicle: "car"});
+  const settlement = evaluateRoadCharges({
+    routeFacts,
+    selectedVehicle: "car",
+    vehicleId: "car-unknown",
+    pricingContext: "settlement",
+    requireVehicleIdentity: true,
+  });
+  assert.equal(quote.customerContributionPence, 900);
+  assert.equal(quote.charges[0].vehicleAuthorityStatus, "UNKNOWN");
+  assert.equal(settlement.authoritativePricingComplete, false);
+  assert.equal(settlement.charges[0].status, "tariff_classification_unknown");
 });
 
 test("Central London fee funds the daily Rider recovery waterfall", () => {
