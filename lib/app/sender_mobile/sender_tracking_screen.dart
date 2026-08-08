@@ -7,9 +7,12 @@ import 'package:cloud_functions/cloud_functions.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
+import 'package:pointer_interceptor/pointer_interceptor.dart';
 
+import '../delivery/delivery_receipt.dart';
 import '../delivery/proof_of_delivery.dart';
 import '../../helper/bitmap_descriptor_helper.dart';
+import '../../helper/platform_view_visibility.dart';
 import '../send_package/bloc/send_package_bloc.dart';
 import '../send_package/models/place_coordinates.m.dart';
 import '../send_package/view/ride_chats.dart';
@@ -263,7 +266,6 @@ SenderTrackingState? senderTrackingStateForBackendData(
   if (status.isEmpty) return null;
   final assigned = _senderHasBackendAssignment(data);
   final collectionProof = _senderHasBackendCollectionProof(data);
-  final deliveryProof = _senderHasBackendDeliveryProof(data);
 
   if ({
     'requested',
@@ -337,9 +339,7 @@ SenderTrackingState? senderTrackingStateForBackendData(
   if (status == 'delivered' ||
       status == 'completed' ||
       status == 'delivery_completed') {
-    return deliveryProof
-        ? SenderTrackingState.delivered
-        : SenderTrackingState.riderArrivingAtDropoff;
+    return SenderTrackingState.delivered;
   }
   return senderTrackingStateForBackendStatus(status);
 }
@@ -365,15 +365,6 @@ bool _senderHasBackendCollectionProof(Map<String, dynamic> data) {
       data['pickupCompletedAt'] != null ||
       data['pickupVerifiedAt'] != null ||
       data['collectionTimestamp'] != null;
-}
-
-bool _senderHasBackendDeliveryProof(Map<String, dynamic> data) {
-  return data['deliveryPinVerified'] == true ||
-      data['receiverPinVerified'] == true ||
-      data['deliveredAt'] != null ||
-      data['completedAt'] != null ||
-      data['deliveryCompletedAt'] != null ||
-      data['receiverPinVerifiedAt'] != null;
 }
 
 SenderTrackingContent senderTrackingContentFor(
@@ -407,7 +398,9 @@ SenderTrackingContent senderTrackingContentFor(
         pill: 'Searching',
         progress: 0,
         dimMap: false,
+        showRoute: true,
         showPickupPin: true,
+        showDropoffPin: true,
         showAnonymousRiders: true,
         showVanguard: true,
         riderPosition: Offset(.34, .44),
@@ -1074,15 +1067,18 @@ class _SenderMobileTrackingScreenState extends State<SenderMobileTrackingScreen>
         if (staleLabel != null) _StaleLocationPill(label: staleLabel),
         if (visibleContent.showRider && !delivered) const _RecenterButton(),
         if (delivered) const _DeliveredConfirmationOverlay(),
-        FloatingGlassPanel(
-          child: _TrackingPanelContent(
-            state: state,
-            content: visibleContent,
-            engine: widget.engine,
-            mapMode: mapMode,
-            onOpenMessage: _openDeliveryChat,
-            onOpenSupport: _openSupportChat,
-            onCancelDelivery: () => _confirmCancelDelivery(state),
+        Positioned.fill(
+          child: FloatingGlassPanel(
+            child: _TrackingPanelContent(
+              state: state,
+              content: visibleContent,
+              engine: widget.engine,
+              mapMode: mapMode,
+              onOpenMessage: _openDeliveryChat,
+              onOpenSupport: _openSupportChat,
+              onViewReceipt: _openReceipt,
+              onCancelDelivery: () => _confirmCancelDelivery(state),
+            ),
           ),
         ),
       ],
@@ -1109,6 +1105,18 @@ class _SenderMobileTrackingScreenState extends State<SenderMobileTrackingScreen>
           title: 'Circum Support',
           supportConversation: true,
         ),
+      ),
+    );
+  }
+
+  void _openReceipt() {
+    final receipt = deliveryReceiptFromRecord(
+      widget.engine.activeDeliveryData,
+      referenceFormatter: customerFacingDeliveryReference,
+    );
+    Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (_) => _DeliveryReceiptView(receipt: receipt),
       ),
     );
   }
@@ -1186,7 +1194,6 @@ bool senderShouldRequestDeliveryIntervention(SenderTrackingState state) {
     SenderTrackingState.pickupComplete ||
     SenderTrackingState.inTransit ||
     SenderTrackingState.riderArrivingAtDropoff ||
-    SenderTrackingState.delivered ||
     SenderTrackingState.issue ||
     SenderTrackingState.adjustmentUnderReview ||
     SenderTrackingState.adjustmentMoreEvidence ||
@@ -1304,9 +1311,14 @@ class SenderTrackingMapLayer extends StatelessWidget {
                   ),
                 ),
               ),
-            if (content.showRoute)
-              _RouteLine(completed: delivered, highContrast: highContrast),
-            if (content.showPickupPin)
+            if (content.showRoute && googleMapSnapshot == null)
+              _RouteLine(
+                completed: delivered,
+                highContrast: highContrast,
+                pulse: markerPulse,
+                searching: content.pill == 'Searching',
+              ),
+            if (content.showPickupPin && googleMapSnapshot == null)
               Stack(
                 children: [
                   _MapPin(
@@ -1322,7 +1334,7 @@ class SenderTrackingMapLayer extends StatelessWidget {
                     ),
                 ],
               ),
-            if (content.showDropoffPin)
+            if (content.showDropoffPin && googleMapSnapshot == null)
               delivered
                   ? const _CompletionPulse(
                       alignment: Alignment(.48, .34),
@@ -1340,7 +1352,7 @@ class SenderTrackingMapLayer extends StatelessWidget {
               _AnonymousRiderDot(alignment: Alignment(.32, -.02), delay: 720),
               _AnonymousRiderDot(alignment: Alignment(-.02, .18), delay: 1080),
             ],
-            if (content.showRider)
+            if (content.showRider && googleMapSnapshot == null)
               AnimatedAlign(
                 duration: const Duration(milliseconds: 900),
                 curve: Curves.easeOutCubic,
@@ -1447,9 +1459,9 @@ class SenderTrackingMapAdapter {
               engine.activeDeliveryData['liveLocation'] ??
               engine.activeDeliveryData['currentLocation'],
         );
-    final route = engine.polylineCoordinates.isNotEmpty
-        ? engine.polylineCoordinates
-        : <LatLng>[pickup, if (rider != null) rider, dropoff];
+    final route = engine.polylineCoordinates
+        .where(_isValidUkCoordinate)
+        .toList(growable: false);
     final riderIndex = rider == null ? 0 : _nearestRouteIndex(route, rider);
     return SenderTrackingMapSnapshot(
       pickup: pickup,
@@ -1462,7 +1474,8 @@ class SenderTrackingMapAdapter {
 
   static LatLng? _latLng(PlaceCoordinate? coordinate) {
     if (coordinate == null) return null;
-    return LatLng(coordinate.lat, coordinate.lng);
+    final value = LatLng(coordinate.lat, coordinate.lng);
+    return _isValidUkCoordinate(value) ? value : null;
   }
 
   static LatLng? _latLngFromMap(Object? value) {
@@ -1480,7 +1493,8 @@ class SenderTrackingMapAdapter {
     }
     final geo = map['geopoint'] ?? map['geoPoint'] ?? map['location'];
     if (geo is GeoPoint) {
-      return LatLng(geo.latitude, geo.longitude);
+      final value = LatLng(geo.latitude, geo.longitude);
+      return _isValidUkCoordinate(value) ? value : null;
     }
     if (geo is Map) {
       final geoPointValue = geo['geoPointValue'];
@@ -1498,8 +1512,17 @@ class SenderTrackingMapAdapter {
       map['lng'] ?? map['longitude'] ?? map['_longitude'] ?? map['x'],
     );
     if (lat == null || lng == null) return null;
-    return LatLng(lat, lng);
+    final coordinateValue = LatLng(lat, lng);
+    return _isValidUkCoordinate(coordinateValue) ? coordinateValue : null;
   }
+
+  static bool _isValidUkCoordinate(LatLng value) =>
+      value.latitude.isFinite &&
+      value.longitude.isFinite &&
+      value.latitude >= 49.0 &&
+      value.latitude <= 61.0 &&
+      value.longitude >= -9.0 &&
+      value.longitude <= 2.5;
 
   static LatLng? _firstLatLngFromMap(
     Map<String, dynamic> data,
@@ -1612,8 +1635,14 @@ class _SenderGoogleTrackingMapState extends State<SenderGoogleTrackingMap> {
   @override
   Widget build(BuildContext context) {
     final snapshot = widget.snapshot;
+    final opacity = _ready ? .88 : .01;
+    assertPlatformViewAttachVisibility(
+      viewName: 'SenderGoogleTrackingMap',
+      opacity: opacity,
+      attached: _ready,
+    );
     return AnimatedOpacity(
-      opacity: _ready ? .88 : .01,
+      opacity: opacity,
       duration: const Duration(milliseconds: 360),
       curve: Curves.easeOutCubic,
       child: GoogleMap(
@@ -1700,6 +1729,7 @@ class _SenderGoogleTrackingMapState extends State<SenderGoogleTrackingMap> {
   }
 
   Set<Polyline> _polylines(SenderTrackingMapSnapshot snapshot) {
+    if (snapshot.route.length < 2) return const {};
     final remaining = snapshot.remainingRoute;
     final completed = snapshot.completedRoute;
     return {
@@ -1746,13 +1776,20 @@ class _SenderGoogleTrackingMapState extends State<SenderGoogleTrackingMap> {
   }
 
   LatLngBounds _cameraBounds(SenderTrackingMapSnapshot snapshot) {
+    if (widget.delivered) {
+      return _boundsForPoints(<LatLng>[snapshot.pickup, snapshot.dropoff]);
+    }
     final points = <LatLng>[
       if (snapshot.rider != null) snapshot.rider!,
       if (widget.content.showRoute && widget.content.progress < 55)
         snapshot.pickup,
       snapshot.dropoff,
     ];
-    if (points.length == 1) points.add(snapshot.pickup);
+    return _boundsForPoints(points);
+  }
+
+  LatLngBounds _boundsForPoints(List<LatLng> points) {
+    if (points.length == 1) points.add(widget.snapshot.pickup);
     var minLat = points.first.latitude;
     var maxLat = points.first.latitude;
     var minLng = points.first.longitude;
@@ -1827,29 +1864,31 @@ class FloatingGlassPanel extends StatelessWidget {
       builder: (context, controller) {
         return Padding(
           padding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
-          child: AppGlassContainer(
-            radius: 26,
-            padding: EdgeInsets.zero,
-            accent: AppTokens.primary,
-            surfaceColor: Colors.white.withValues(alpha: .048),
-            borderColor: const Color(0xFF3B82F6).withValues(alpha: .28),
-            child: ListView(
-              controller: controller,
-              padding: const EdgeInsets.fromLTRB(20, 10, 20, 18),
-              children: [
-                Center(
-                  child: Container(
-                    width: 38,
-                    height: 4,
-                    margin: const EdgeInsets.only(bottom: 16),
-                    decoration: BoxDecoration(
-                      color: Colors.white.withValues(alpha: .18),
-                      borderRadius: BorderRadius.circular(99),
+          child: PointerInterceptor(
+            child: AppGlassContainer(
+              radius: 26,
+              padding: EdgeInsets.zero,
+              accent: AppTokens.primary,
+              surfaceColor: Colors.white.withValues(alpha: .048),
+              borderColor: const Color(0xFF3B82F6).withValues(alpha: .28),
+              child: ListView(
+                controller: controller,
+                padding: const EdgeInsets.fromLTRB(20, 10, 20, 18),
+                children: [
+                  Center(
+                    child: Container(
+                      width: 38,
+                      height: 4,
+                      margin: const EdgeInsets.only(bottom: 16),
+                      decoration: BoxDecoration(
+                        color: Colors.white.withValues(alpha: .18),
+                        borderRadius: BorderRadius.circular(99),
+                      ),
                     ),
                   ),
-                ),
-                child,
-              ],
+                  child,
+                ],
+              ),
             ),
           ),
         );
@@ -1865,6 +1904,7 @@ class _TrackingPanelContent extends StatelessWidget {
   final SenderDeliveryMapMode mapMode;
   final VoidCallback onOpenMessage;
   final VoidCallback onOpenSupport;
+  final VoidCallback onViewReceipt;
   final VoidCallback onCancelDelivery;
 
   const _TrackingPanelContent({
@@ -1874,6 +1914,7 @@ class _TrackingPanelContent extends StatelessWidget {
     required this.mapMode,
     required this.onOpenMessage,
     required this.onOpenSupport,
+    required this.onViewReceipt,
     required this.onCancelDelivery,
   });
 
@@ -1930,9 +1971,13 @@ class _TrackingPanelContent extends StatelessWidget {
         ],
         if (content.showRiderCard) ...[
           const SizedBox(height: 12),
-          RiderCard(engine: engine, eta: content.eta),
+          RiderCard(
+            engine: engine,
+            eta: content.eta,
+            liveStatus: content.pill,
+          ),
         ],
-        if (waiting.visible) ...[
+        if (state != SenderTrackingState.delivered && waiting.visible) ...[
           const SizedBox(height: 12),
           SenderWaitingCard(waiting: waiting),
         ],
@@ -2014,7 +2059,7 @@ class _TrackingPanelContent extends StatelessWidget {
           _ProofOfDeliverySection(
             proof: proofOfDeliveryFromRecord(
               engine.activeDeliveryData,
-              fallbackReference: engine.deliveryData?.code,
+              fallbackReference: senderActiveDeliveryIdFor(engine),
             ),
           ),
         ],
@@ -2023,6 +2068,7 @@ class _TrackingPanelContent extends StatelessWidget {
           state: state,
           onOpenMessage: onOpenMessage,
           onOpenSupport: onOpenSupport,
+          onViewReceipt: onViewReceipt,
           onCancelDelivery: onCancelDelivery,
         ),
       ],
@@ -2127,7 +2173,87 @@ class _ProofOfDeliverySection extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final rows = proof.visibleRows;
+    Widget section(String title, List<(String, String)> rows) {
+      if (rows.isEmpty) return const SizedBox.shrink();
+      return Padding(
+        padding: const EdgeInsets.only(bottom: 10),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              title,
+              style: const TextStyle(
+                color: Color(0xFF60A5FA),
+                fontSize: 11,
+                fontWeight: FontWeight.w900,
+                letterSpacing: .4,
+              ),
+            ),
+            const SizedBox(height: 5),
+            ...rows.map(
+              (row) => Padding(
+                padding: const EdgeInsets.only(bottom: 5),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    SizedBox(
+                      width: 132,
+                      child: Text(
+                        row.$1,
+                        style: const TextStyle(
+                          color: _TrackingTokens.muted,
+                          fontSize: 12,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                    ),
+                    Expanded(
+                      child: Text(
+                        row.$2,
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 12,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
+    final deliveryRows = <(String, String)>[
+      ('Status', proof.statusLabel),
+      if (proof.deliveredAt.trim().isNotEmpty)
+        ('Date & time', proof.deliveredAt),
+      if (proof.deliveryReference.trim().isNotEmpty)
+        ('Delivery reference', proof.deliveryReference),
+    ];
+    final riderRows = <(String, String)>[
+      if (proof.riderName.trim().isNotEmpty) ('Rider name', proof.riderName),
+    ];
+    final recipientRows = <(String, String)>[
+      if (proof.receiverName.trim().isNotEmpty)
+        ('Recipient name', proof.receiverName),
+      if (proof.deliveryPinVerified) ('Delivery PIN', 'PIN verified'),
+    ];
+    final locationRows = <(String, String)>[
+      if (proof.finalAddress.trim().isNotEmpty)
+        ('Delivery address', proof.finalAddress),
+    ];
+    final verificationRows = <(String, String)>[
+      if (proof.gpsConfirmation.trim().isNotEmpty)
+        ('Location verification', proof.gpsConfirmation),
+      if (proof.vanguard)
+        (
+          'Vanguard',
+          proof.vanguardIncomplete ? 'Review required' : 'Completed',
+        ),
+    ];
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.all(14),
@@ -2224,34 +2350,28 @@ class _ProofOfDeliverySection extends StatelessWidget {
               ),
               const SizedBox(height: 10),
             ],
-            for (final row in rows)
-              Padding(
-                padding: const EdgeInsets.only(bottom: 6),
-                child: Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    SizedBox(
-                      width: 132,
-                      child: Text(
-                        row.$1,
-                        style: const TextStyle(
-                          color: _TrackingTokens.muted,
-                          fontSize: 12,
-                          fontWeight: FontWeight.w700,
-                        ),
-                      ),
-                    ),
-                    Expanded(
-                      child: Text(
-                        row.$2,
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontSize: 12,
-                          fontWeight: FontWeight.w700,
-                        ),
-                      ),
-                    ),
-                  ],
+            section('Delivery', deliveryRows),
+            section('Rider', riderRows),
+            section('Recipient', recipientRows),
+            section('Location', locationRows),
+            section('Verification', verificationRows),
+            if (proof.deliveryReference.trim().isNotEmpty)
+              Align(
+                alignment: Alignment.centerLeft,
+                child: TextButton.icon(
+                  onPressed: () async {
+                    await Clipboard.setData(
+                      ClipboardData(text: proof.deliveryReference),
+                    );
+                    if (context.mounted) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                            content: Text('Delivery reference copied')),
+                      );
+                    }
+                  },
+                  icon: const Icon(Icons.copy_rounded, size: 15),
+                  label: const Text('Copy Delivery Reference'),
                 ),
               ),
           ],
@@ -2916,17 +3036,23 @@ class _VanguardCollectionPinCardState extends State<VanguardCollectionPinCard> {
 class RiderCard extends StatelessWidget {
   final SendPackageState engine;
   final String eta;
+  final String liveStatus;
 
-  const RiderCard({super.key, required this.engine, required this.eta});
+  const RiderCard({
+    super.key,
+    required this.engine,
+    required this.eta,
+    required this.liveStatus,
+  });
 
   @override
   Widget build(BuildContext context) {
     final data = engine.deliveryData;
     final name = _firstName(data?.courierName) ?? 'Your Circum Rider';
     final vehicle = data?.typeOfVehicle.trim().isNotEmpty == true
-        ? data!.typeOfVehicle
-        : 'Circum Rider';
-    final rating = data?.rating.trim().isNotEmpty == true ? data!.rating : '';
+        ? _riderVehicleLabel(data!.typeOfVehicle)
+        : 'Vehicle pending';
+    final rank = _riderTrustRank(engine.activeDeliveryData);
     return Container(
       padding: const EdgeInsets.all(12),
       decoration: _cardDecoration(),
@@ -2955,16 +3081,55 @@ class RiderCard extends StatelessWidget {
                   overflow: TextOverflow.ellipsis,
                   style: const TextStyle(
                     color: Colors.white,
-                    fontWeight: FontWeight.w700,
+                    fontSize: 17,
+                    fontWeight: FontWeight.w800,
                   ),
+                ),
+                const SizedBox(height: 5),
+                Row(
+                  children: [
+                    Flexible(
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 7,
+                          vertical: 3,
+                        ),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFF34D399).withValues(alpha: .12),
+                          borderRadius: BorderRadius.circular(999),
+                          border: Border.all(
+                            color:
+                                const Color(0xFF34D399).withValues(alpha: .28),
+                          ),
+                        ),
+                        child: Text(
+                          rank,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                            color: Color(0xFF34D399),
+                            fontSize: 10.5,
+                            fontWeight: FontWeight.w800,
+                          ),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 7),
+                    Flexible(
+                      child: Text(
+                        'Circum Rider',
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          color: _TrackingTokens.muted,
+                          fontSize: 11.5,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
                 const SizedBox(height: 3),
                 Text(
-                  [
-                    'Order Circum Rider',
-                    if (rating.isNotEmpty) '$rating star',
-                    vehicle,
-                  ].join(' · '),
+                  '$vehicle${liveStatus.isEmpty ? '' : ' · $liveStatus'}',
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: const TextStyle(
@@ -2980,6 +3145,28 @@ class RiderCard extends StatelessWidget {
       ),
     );
   }
+}
+
+String _riderTrustRank(Map<String, dynamic> data) {
+  for (final key in const [
+    'trustRank',
+    'riderRank',
+    'rank',
+    'trustTier',
+    'trustLevel',
+  ]) {
+    final value = '${data[key] ?? ''}'.trim();
+    if (value.isNotEmpty && value.toLowerCase() != 'null') {
+      return value;
+    }
+  }
+  return 'Trust rank pending';
+}
+
+String _riderVehicleLabel(String value) {
+  final normalized = value.trim().toLowerCase();
+  if (normalized.isEmpty) return 'Vehicle pending';
+  return normalized[0].toUpperCase() + normalized.substring(1);
 }
 
 class IRISChip extends StatelessWidget {
@@ -3725,6 +3912,88 @@ class _MatchAssuranceGrid extends StatelessWidget {
   }
 }
 
+class _DeliveryReceiptView extends StatelessWidget {
+  final DeliveryReceiptDetails receipt;
+
+  const _DeliveryReceiptView({required this.receipt});
+
+  @override
+  Widget build(BuildContext context) {
+    String money(double amount) => receipt.currency == 'GBP'
+        ? '£${amount.toStringAsFixed(2)}'
+        : '${receipt.currency} ${amount.toStringAsFixed(2)}';
+
+    Widget row(String label, String value, {bool strong = false}) => Padding(
+          padding: const EdgeInsets.symmetric(vertical: 7),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              SizedBox(
+                width: 122,
+                child: Text(
+                  label,
+                  style: const TextStyle(color: _TrackingTokens.muted),
+                ),
+              ),
+              Expanded(
+                child: Text(
+                  value,
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontWeight: strong ? FontWeight.w900 : FontWeight.w700,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        );
+
+    return Scaffold(
+      backgroundColor: const Color(0xFF07090F),
+      appBar: AppBar(
+        backgroundColor: Colors.transparent,
+        title: const Text('Delivery receipt'),
+      ),
+      body: ListView(
+        padding: const EdgeInsets.all(20),
+        children: [
+          AppGlassContainer(
+            radius: 20,
+            padding: const EdgeInsets.all(18),
+            accent: const Color(0xFF3B82F6),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'CIRCUM',
+                  style: TextStyle(
+                    color: Color(0xFF60A5FA),
+                    fontSize: 13,
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+                const SizedBox(height: 12),
+                row('Reference', receipt.reference),
+                row('Pickup', receipt.pickup),
+                row('Drop-off', receipt.dropoff),
+                row('Completed', receipt.completedAt),
+                row('Service', receipt.service),
+                const Divider(color: Colors.white12),
+                for (final item in receipt.lineItems)
+                  row(item.label, money(item.amount)),
+                const Divider(color: Colors.white12),
+                row('Amount paid', money(receipt.amountPaid), strong: true),
+                row('Payment', receipt.paymentStatus),
+                row('Method', receipt.paymentMethod),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 class ETABadge extends StatelessWidget {
   final String value;
 
@@ -3755,12 +4024,14 @@ class _TrackingActions extends StatelessWidget {
   final SenderTrackingState state;
   final VoidCallback onOpenMessage;
   final VoidCallback onOpenSupport;
+  final VoidCallback onViewReceipt;
   final VoidCallback onCancelDelivery;
 
   const _TrackingActions({
     required this.state,
     required this.onOpenMessage,
     required this.onOpenSupport,
+    required this.onViewReceipt,
     required this.onCancelDelivery,
   });
 
@@ -3785,9 +4056,11 @@ class _TrackingActions extends StatelessWidget {
             primary: empty,
             onTap: finding
                 ? onOpenSupport
-                : empty || delivered
+                : empty
                     ? null
-                    : onOpenMessage,
+                    : delivered
+                        ? onViewReceipt
+                        : onOpenMessage,
           ),
         ),
         const SizedBox(width: 8),
@@ -3795,18 +4068,14 @@ class _TrackingActions extends StatelessWidget {
           child: _TrackingButton(
             label: canCancel
                 ? 'Cancel Delivery'
-                : intervention
-                    ? 'Request Delivery Intervention'
-                    : delivered
-                        ? 'Done'
+                : delivered
+                    ? 'Get help with this delivery'
+                    : intervention
+                        ? 'Request Delivery Intervention'
                         : 'Support',
             primary: delivered || state == SenderTrackingState.issue,
             success: delivered,
-            onTap: canCancel
-                ? onCancelDelivery
-                : delivered
-                    ? null
-                    : onOpenSupport,
+            onTap: canCancel ? onCancelDelivery : onOpenSupport,
           ),
         ),
       ],
@@ -4663,8 +4932,15 @@ class _VehicleIconPainter extends CustomPainter {
 class _RouteLine extends StatelessWidget {
   final bool completed;
   final bool highContrast;
+  final double pulse;
+  final bool searching;
 
-  const _RouteLine({this.completed = false, this.highContrast = false});
+  const _RouteLine({
+    this.completed = false,
+    this.highContrast = false,
+    this.pulse = 0,
+    this.searching = false,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -4679,6 +4955,8 @@ class _RouteLine extends StatelessWidget {
               progress: value,
               completed: completed,
               highContrast: highContrast,
+              pulse: pulse,
+              searching: searching,
             ),
           );
         },
@@ -4795,11 +5073,15 @@ class _RouteLinePainter extends CustomPainter {
   final double progress;
   final bool completed;
   final bool highContrast;
+  final double pulse;
+  final bool searching;
 
   const _RouteLinePainter({
     required this.progress,
     required this.completed,
     this.highContrast = false,
+    this.pulse = 0,
+    this.searching = false,
   });
 
   @override
@@ -4820,6 +5102,18 @@ class _RouteLinePainter extends CustomPainter {
         Offset.zero,
       );
     }
+
+    final energy = (math.sin(pulse * math.pi * 2) + 1) / 2;
+    final glow = Paint()
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = (highContrast ? 8 : 6) + energy * 4
+      ..strokeCap = StrokeCap.round
+      ..color = const Color(0xFF34D399).withValues(
+        alpha: highContrast ? .22 : .12,
+      )
+      ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 7);
+    canvas.drawPath(visiblePath, glow);
+
     final paint = Paint()
       ..style = PaintingStyle.stroke
       ..strokeWidth = highContrast ? 5 : 3
@@ -4830,13 +5124,42 @@ class _RouteLinePainter extends CustomPainter {
             : const [Color(0x2234D399), Color(0xFF3B82F6), Color(0xFF34D399)],
       ).createShader(Offset.zero & size);
     canvas.drawPath(visiblePath, paint);
+
+    if (completed || metrics.isEmpty) return;
+
+    final metric = metrics.first;
+    final particlePhases = const [.0, .16, .32];
+    final directions = searching ? const [1.0, -1.0] : const [1.0];
+    for (final direction in directions) {
+      for (final offset in particlePhases) {
+        final phase = (pulse * direction + offset) % 1;
+        final distance = phase < 0 ? phase + 1 : phase;
+        final tangent = metric.getTangentForOffset(metric.length * distance);
+        if (tangent == null) continue;
+        final fade = math.sin(distance * math.pi).clamp(.2, 1.0);
+        final particleGlow = Paint()
+          ..color = const Color(0xFF67E8F9).withValues(
+            alpha: fade * (highContrast ? .54 : .30),
+          )
+          ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 4);
+        final particle = Paint()
+          ..color = const Color(0xFFE0F2FE).withValues(
+            alpha: fade * (highContrast ? .94 : .78),
+          );
+        canvas
+          ..drawCircle(tangent.position, highContrast ? 3.2 : 2.4, particleGlow)
+          ..drawCircle(tangent.position, highContrast ? 1.5 : 1.1, particle);
+      }
+    }
   }
 
   @override
   bool shouldRepaint(covariant _RouteLinePainter oldDelegate) =>
       oldDelegate.progress != progress ||
       oldDelegate.completed != completed ||
-      oldDelegate.highContrast != highContrast;
+      oldDelegate.highContrast != highContrast ||
+      oldDelegate.pulse != pulse ||
+      oldDelegate.searching != searching;
 }
 
 BoxDecoration _cardDecoration() => BoxDecoration(

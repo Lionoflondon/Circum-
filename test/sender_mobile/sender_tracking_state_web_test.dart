@@ -151,6 +151,17 @@ void main() {
     );
   });
 
+  test('canonical terminal status cannot regress when proof is delayed', () {
+    expect(
+      senderTrackingStateForBackendData({
+        'status': 'delivered',
+        'riderId': 'rider_123',
+        'waiting': {'active': true},
+      }),
+      SenderTrackingState.delivered,
+    );
+  });
+
   test('Sender mobile contains user-facing copy for every tracking stage', () {
     for (final stage in SenderTrackingState.values) {
       final copy = senderTrackingContentFor(stage);
@@ -344,6 +355,49 @@ void main() {
     expect(snapshot.dropoff.longitude, -0.1276965);
   });
 
+  test('terminal map excludes live rider and never fabricates route geometry',
+      () {
+    final snapshot = SenderTrackingMapAdapter.snapshotFor(
+      SendPackageState(
+        pickupCoordinate: PlaceCoordinate(lat: 51.5045, lng: -0.0865),
+        desinationCoordinate: PlaceCoordinate(lat: 51.4820203, lng: -0.1444907),
+        riderLocation: PlaceCoordinate(lat: 59.0, lng: 1.0),
+      ),
+      content: senderTrackingContentFor(SenderTrackingState.delivered),
+      stateDelivered: true,
+    );
+
+    expect(snapshot, isNotNull);
+    expect(snapshot!.rider, isNull);
+    expect(snapshot.route, isEmpty);
+  });
+
+  test('tracking map rejects malformed and out-of-UK canonical coordinates',
+      () {
+    final snapshot = SenderTrackingMapAdapter.snapshotFor(
+      SendPackageState(
+        pickupCoordinate: PlaceCoordinate(lat: 0, lng: 0),
+        desinationCoordinate: PlaceCoordinate(lat: 51.5, lng: -0.1),
+      ),
+      content: senderTrackingContentFor(SenderTrackingState.delivered),
+      stateDelivered: true,
+    );
+
+    expect(snapshot, isNull);
+  });
+
+  test('delivered actions have receipt and post-delivery support callbacks',
+      () {
+    final source = File('lib/app/sender_mobile/sender_tracking_screen.dart')
+        .readAsStringSync();
+    expect(source, contains("? 'View receipt'"));
+    expect(source, contains('? onViewReceipt'));
+    expect(source, contains("? 'Get help with this delivery'"));
+    expect(source, contains(': onOpenSupport'));
+    expect(source,
+        contains('state != SenderTrackingState.delivered && waiting.visible'));
+  });
+
   test('Sender tracking map layer keeps GoogleMap beneath searching radar', () {
     final source = File('lib/app/sender_mobile/sender_tracking_screen.dart')
         .readAsStringSync();
@@ -359,14 +413,69 @@ void main() {
         contains('if (googleMapSnapshot != null)'));
   });
 
+  test('Sender tracking action sheet intercepts platform-view hit testing', () {
+    final source = File('lib/app/sender_mobile/sender_tracking_screen.dart')
+        .readAsStringSync();
+    final panelStart = source.indexOf('PointerInterceptor(');
+    final mapStart = source.indexOf('SenderTrackingMapLayer(');
+
+    expect(panelStart, isNonNegative);
+    expect(mapStart, isNonNegative);
+    expect(panelStart, greaterThan(mapStart));
+    expect(
+      source.substring(
+        panelStart,
+        source.indexOf('class _TrackingPanelContent'),
+      ),
+      contains('child: AppGlassContainer('),
+    );
+    expect(source,
+        contains('Positioned.fill(\n          child: FloatingGlassPanel('));
+    expect(source, contains("? 'Cancel Delivery'"));
+    expect(source, contains('onTap: canCancel'));
+    expect(source, contains('onCancelDelivery'));
+  });
+
   test('Sender tracking GoogleMap is mounted before ready fade completes', () {
     final source = File('lib/app/sender_mobile/sender_tracking_screen.dart')
         .readAsStringSync();
     final mapStart = source.indexOf('class SenderGoogleTrackingMap');
-    final opacityStart = source.indexOf('opacity: _ready ? .88 : .01', mapStart);
+    final opacityStart =
+        source.indexOf('final opacity = _ready ? .88 : .01', mapStart);
 
     expect(mapStart, isNonNegative);
     expect(opacityStart, greaterThan(mapStart));
-    expect(source.substring(mapStart), isNot(contains('opacity: _ready ? .88 : 0')));
+    expect(source.substring(mapStart),
+        isNot(contains('opacity: _ready ? .88 : 0')));
+  });
+
+  test('platform view guard warns before zero-opacity attachment', () {
+    final source = File('lib/app/sender_mobile/sender_tracking_screen.dart')
+        .readAsStringSync();
+    final mapStart = source.indexOf('class SenderGoogleTrackingMap');
+    final mapSource = source.substring(mapStart);
+
+    expect(mapStart, isNonNegative);
+    expect(mapSource, contains('assertPlatformViewAttachVisibility('));
+    expect(mapSource, isNot(contains('opacity: 0')));
+
+    final guard =
+        File('lib/helper/platform_view_visibility.dart').readAsStringSync();
+    expect(guard, contains('opacity == 0'));
+    expect(guard, contains('before attachment completed'));
+    expect(guard, contains('debugPrint('));
+  });
+
+  test('all Sender GoogleMap sites use the shared platform-view guard', () {
+    final tracking = File('lib/app/sender_mobile/sender_tracking_screen.dart')
+        .readAsStringSync();
+    final booking = File('lib/app/sender_mobile/sender_booking_canvas.dart')
+        .readAsStringSync();
+    final guard =
+        File('lib/helper/platform_view_visibility.dart').readAsStringSync();
+
+    expect(guard, contains('opacity == 0'));
+    expect(tracking, contains('assertPlatformViewAttachVisibility('));
+    expect(booking, contains('assertPlatformViewAttachVisibility('));
   });
 }
