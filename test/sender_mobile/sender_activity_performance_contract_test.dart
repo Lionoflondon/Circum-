@@ -60,4 +60,20 @@ void main() {
     expect(liveEnd, greaterThan(liveStart));
     expect(source.substring(liveStart, liveEnd), contains("'searching'"));
   });
+
+  test('Sender Activity history window covers one rendered page', () {
+    final source =
+        File('lib/app/sender_mobile/sender_activity.dart').readAsStringSync();
+
+    final historyStart = source.indexOf(
+      'Future<SenderActivityPage> history({String? pageToken})',
+    );
+    final historyEnd = source.indexOf(
+      'Future<QuerySnapshot<Map<String, dynamic>>> _timedActivityFuture',
+    );
+    final historyBody = source.substring(historyStart, historyEnd);
+
+    expect(historyBody, contains('final sourceLimit = (page + 1) * 20;'));
+    expect(historyBody, isNot(contains('(page + 1) * 12')));
+  });
 }

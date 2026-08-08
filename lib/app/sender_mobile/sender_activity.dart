@@ -165,7 +165,10 @@ class FirebaseSenderActivityRepository implements SenderActivityRepository {
     final uid = _uid;
     if (uid == null) return const SenderActivityPage([], null);
     final page = int.tryParse(pageToken ?? '0') ?? 0;
-    final sourceLimit = (page + 1) * 12;
+    // Keep the source window at least as large as the rendered page. The
+    // previous 12-record window could omit an owned terminal delivery before
+    // the first "Load more" action, making Activity search appear empty.
+    final sourceLimit = (page + 1) * 20;
     final deliveriesFuture = _timedActivityFuture(
       'deliveryRequests',
       firestore
