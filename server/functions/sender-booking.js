@@ -11,6 +11,7 @@ const {classifyIris} = require("./iris-core");
 const {verifiedPhotoAnalysis} = require("./iris-photo-analysis");
 const {dispatchDeliveryRequest} = require("./send-package");
 const {getAuthoritativeRouteFacts, coordinate} = require("./route-authority");
+const {evaluateRoadChargePolicy} = require("./road-charge-policy");
 
 const BASE_FARE_GBP = 5;
 const ADDITIONAL_FARE_PER_MILE_GBP = 1.5;
@@ -713,8 +714,15 @@ function quotePayload(data, uid, serverPhotoAnalysis = null) {
       data.recommendedVehicle ||
       data.iris && (data.iris.recommendedVehicle || data.iris.vehicleType),
   );
+  const roadCharges = evaluateRoadChargePolicy({
+    routeFacts: data.authoritativeRouteFacts,
+    vehicle: selectedVehicle,
+    product: data.businessMode === true ||
+      text(data.businessId || data.businessAccountId).length > 0 ? "business" : "standard",
+  });
+  const roadChargeAmount = roadCharges.customerAmount;
   const vehicle = vehicleSurcharge(selectedVehicle);
-  const subtotal = money(base + distance + weight + vehicle);
+  const subtotal = money(base + distance + weight + vehicle + roadChargeAmount);
   const speed = money(speedAdjustment(subtotal, selectedSpeed));
   const parcelData = cleanMap(data.parcel);
   const highValueParcel = data.highValue === true || parcelData.highValue === true;
@@ -764,6 +772,7 @@ function quotePayload(data, uid, serverPhotoAnalysis = null) {
     selectedSpeed,
     distanceMiles: Number(data.authoritativeRouteFacts ? data.authoritativeRouteFacts.distanceMiles : data.distanceMiles || 0),
     routeFacts: data.authoritativeRouteFacts || null,
+    roadCharges,
     weightKg,
     selectedVehicle,
     vehicleType: selectedVehicle,
@@ -777,6 +786,7 @@ function quotePayload(data, uid, serverPhotoAnalysis = null) {
       {key: "distance", label: "Distance", amount: distance},
       {key: "weight", label: "Parcel weight", amount: weight},
       ...(vehicle > 0 ? [{key: "vehicle", label: `${vehicleLabel(selectedVehicle)} vehicle`, amount: vehicle}] : []),
+      ...roadCharges.lineItems.map((item) => ({key: item.key, label: item.label, amount: item.amount})),
       {key: "speed_adjustment", label: selectedSpeed === "express" ? "Express priority" : `${selectedSpeed[0].toUpperCase()}${selectedSpeed.slice(1)} service`, amount: speed},
       ...(vanguardIncluded ? [{key: "vanguard", label: "Vanguard Included", amount: 0}] : []),
       ...(!vanguardIncluded && vanguard > 0 ? [{key: "vanguard", label: "Vanguard Protection", amount: vanguard}] : []),
