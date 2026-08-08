@@ -835,7 +835,20 @@ class _SenderBookingCanvasState extends State<SenderBookingCanvas> {
     if (!RegExp(r'^(flat|apartment|unit|suite)\b').hasMatch(first)) {
       return '';
     }
-    return parts.skip(1).join(' ');
+    final withoutUnit = parts.skip(1).join(' ');
+    final withoutHouseNumber = withoutUnit.replaceFirst(
+      RegExp(r'^\s*\d+[a-z]?\s+', caseSensitive: false),
+      '',
+    );
+    return withoutHouseNumber
+        .replaceFirst(
+          RegExp(
+            r'\s+[A-Z]{1,2}\d[A-Z\d]?\s*\d[A-Z]{2}\b',
+            caseSensitive: false,
+          ),
+          '',
+        )
+        .trim();
   }
 
   dynamic _findFallbackTypedAddressSuggestion(
