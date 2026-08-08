@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
@@ -16,6 +17,54 @@ import 'sender_page_shell.dart';
 import 'sender_wallet.dart';
 
 enum SenderActivityType { parcel, gift, health, business, roth }
+
+class _HistoryCursor {
+  final int page;
+  final int createdAtMillis;
+  final String documentId;
+
+  const _HistoryCursor({
+    required this.page,
+    required this.createdAtMillis,
+    required this.documentId,
+  });
+
+  String encode() => base64UrlEncode(utf8.encode(jsonEncode({
+        'page': page,
+        'createdAtMillis': createdAtMillis,
+        'documentId': documentId,
+      })));
+
+  static _HistoryCursor? decode(String? token) {
+    if (token == null || token.isEmpty) return null;
+    try {
+      final data = jsonDecode(utf8.decode(base64Url.decode(token)))
+          as Map<String, dynamic>;
+      final page = data['page'] as int?;
+      final createdAtMillis = data['createdAtMillis'] as int?;
+      final documentId = data['documentId'] as String?;
+      if (page == null || createdAtMillis == null || documentId == null) {
+        return null;
+      }
+      return _HistoryCursor(
+        page: page,
+        createdAtMillis: createdAtMillis,
+        documentId: documentId,
+      );
+    } catch (_) {
+      return null;
+    }
+  }
+}
+
+int _timestampMillis(Object? value) {
+  if (value is Timestamp) return value.millisecondsSinceEpoch;
+  if (value is DateTime) return value.millisecondsSinceEpoch;
+  if (value is Map && value['seconds'] is num) {
+    return (value['seconds'] as num).toInt() * 1000;
+  }
+  return DateTime.tryParse('$value')?.millisecondsSinceEpoch ?? 0;
+}
 
 class SenderActivityItem {
   final String id;
@@ -164,25 +213,30 @@ class FirebaseSenderActivityRepository implements SenderActivityRepository {
     final totalStopwatch = Stopwatch()..start();
     final uid = _uid;
     if (uid == null) return const SenderActivityPage([], null);
-    final page = int.tryParse(pageToken ?? '0') ?? 0;
-    // Keep the source window at least as large as the rendered page. The
-    // previous 12-record window could omit an owned terminal delivery before
-    // the first "Load more" action, making Activity search appear empty.
-    final sourceLimit = (page + 1) * 20;
+    final cursor = _HistoryCursor.decode(pageToken);
+    final sourcePage = cursor?.page ?? 0;
+    Query<Map<String, dynamic>> deliveryQuery = firestore
+        .collection('deliveryRequests')
+        .where('senderId', isEqualTo: uid)
+        .orderBy('createdAt', descending: true)
+        .orderBy(FieldPath.documentId, descending: true)
+        .limit(_historyPageSize);
+    if (cursor != null) {
+      deliveryQuery = deliveryQuery.startAfter([
+        Timestamp.fromMillisecondsSinceEpoch(cursor.createdAtMillis),
+        cursor.documentId,
+      ]);
+    }
     final deliveriesFuture = _timedActivityFuture(
       'deliveryRequests',
-      firestore
-          .collection('deliveryRequests')
-          .where('senderId', isEqualTo: uid)
-          .limit(sourceLimit)
-          .get(),
+      deliveryQuery.get(),
     );
     final giftsFuture = _optionalActivityDocs(
       'giftRequests',
       firestore
           .collection('giftRequests')
           .where('senderId', isEqualTo: uid)
-          .limit(sourceLimit)
+          .limit(_historyPageSize)
           .get(),
     );
     final healthFuture = _optionalActivityDocs(
@@ -190,7 +244,7 @@ class FirebaseSenderActivityRepository implements SenderActivityRepository {
       firestore
           .collection('prescriptionPickups')
           .where('profileId', isEqualTo: uid)
-          .limit(sourceLimit)
+          .limit(_historyPageSize)
           .get(),
     );
     final walletFuture = _optionalWalletTransactions(pageToken);
@@ -225,14 +279,10 @@ class FirebaseSenderActivityRepository implements SenderActivityRepository {
     ]..removeWhere((item) => item.active);
     merged.sort((a, b) => (b.occurredAt ?? DateTime(1970))
         .compareTo(a.occurredAt ?? DateTime(1970)));
-    final start = page * 20;
-    final items = start >= merged.length
-        ? <SenderActivityItem>[]
-        : merged.skip(start).take(20).toList();
-    final hasMore = merged.length > start + items.length ||
-        deliveries.docs.length == sourceLimit ||
-        gifts.length == sourceLimit ||
-        health.length == sourceLimit ||
+    final items = merged.take(_historyPageSize).toList();
+    final hasMore = deliveries.docs.length == _historyPageSize ||
+        gifts.length == _historyPageSize ||
+        health.length == _historyPageSize ||
         wallet.nextPageToken != null;
     mergeStopwatch.stop();
     totalStopwatch.stop();
@@ -246,7 +296,15 @@ class FirebaseSenderActivityRepository implements SenderActivityRepository {
       'deliveries=${deliveries.docs.length} gifts=${gifts.length} '
       'health=${health.length} wallet=${wallet.transactions.length}',
     );
-    return SenderActivityPage(items, hasMore ? '${page + 1}' : null);
+    final lastDelivery = deliveries.docs.isEmpty ? null : deliveries.docs.last;
+    final nextCursor = hasMore && lastDelivery != null
+        ? _HistoryCursor(
+            page: sourcePage + 1,
+            createdAtMillis: _timestampMillis(lastDelivery.data()['createdAt']),
+            documentId: lastDelivery.id,
+          ).encode()
+        : null;
+    return SenderActivityPage(items, nextCursor);
   }
 
   Future<QuerySnapshot<Map<String, dynamic>>> _timedActivityFuture(
@@ -507,6 +565,7 @@ class _SenderActivityViewState extends State<SenderActivityView> {
   bool _loadingMore = false;
   bool _activeLoaded = false;
   bool _hasCachedHistory = false;
+  int _searchGeneration = 0;
   final Stopwatch _viewStopwatch = Stopwatch();
   var _buildCount = 0;
 
@@ -610,6 +669,34 @@ class _SenderActivityViewState extends State<SenderActivityView> {
     }
   }
 
+  Future<void> _searchHistoryIfNeeded(String value) async {
+    final query = value.trim();
+    final generation = ++_searchGeneration;
+    if (query.isEmpty) return;
+    while (mounted && generation == _searchGeneration &&
+        _nextPage != null && !_matchesCurrentQuery(query)) {
+      await _loadMore();
+    }
+  }
+
+  bool _matchesCurrentQuery(String query) {
+    final normalized = query.toLowerCase();
+    return _history.any((item) {
+      final date = item.occurredAt == null
+          ? ''
+          : DateFormat('d MMM yyyy').format(item.occurredAt!);
+      return [
+        item.id,
+        item.title,
+        item.status,
+        item.destination,
+        item.pickup,
+        date,
+        _typeLabel(item.type),
+      ].join(' ').toLowerCase().contains(normalized);
+    });
+  }
+
   List<SenderActivityItem> get _visible {
     final query = _query.trim().toLowerCase();
     return _history.where((item) {
@@ -683,7 +770,10 @@ class _SenderActivityViewState extends State<SenderActivityView> {
           ),
           const SizedBox(height: 14),
           TextField(
-            onChanged: (value) => setState(() => _query = value),
+            onChanged: (value) {
+              setState(() => _query = value);
+              unawaited(_searchHistoryIfNeeded(value));
+            },
             decoration: const InputDecoration(
               hintText: 'Search recipient, address, order ID or date',
               prefixIcon: Icon(Icons.search_rounded),

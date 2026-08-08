@@ -61,7 +61,7 @@ void main() {
     expect(source.substring(liveStart, liveEnd), contains("'searching'"));
   });
 
-  test('Sender Activity history window covers one rendered page', () {
+  test('Sender Activity uses deterministic cursor pagination', () {
     final source =
         File('lib/app/sender_mobile/sender_activity.dart').readAsStringSync();
 
@@ -73,7 +73,12 @@ void main() {
     );
     final historyBody = source.substring(historyStart, historyEnd);
 
-    expect(historyBody, contains('final sourceLimit = (page + 1) * 20;'));
-    expect(historyBody, isNot(contains('(page + 1) * 12')));
+    expect(historyBody, contains("orderBy('createdAt', descending: true)"));
+    expect(historyBody, contains('orderBy(FieldPath.documentId'));
+    expect(historyBody, contains('startAfter'));
+    expect(historyBody, contains('_historyPageSize'));
+    expect(historyBody, isNot(contains('final sourceLimit')));
+    expect(source, contains('_HistoryCursor'));
+    expect(source, contains('_searchHistoryIfNeeded'));
   });
 }
