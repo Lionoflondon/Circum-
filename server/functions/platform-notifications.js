@@ -58,7 +58,7 @@ async function adminRecipients() {
   }));
 }
 
-async function notify({recipientId, recipientRole, type, title, body, bookingId, ticketId, data = {}}) {
+async function notify({recipientId, recipientRole, type, title, body, bookingId, ticketId, data = {}, notificationId = null}) {
   if (recipientRole !== "admin") {
     return communicationEngine.emitNotification({
       recipientId,
@@ -67,10 +67,13 @@ async function notify({recipientId, recipientRole, type, title, body, bookingId,
       title,
       body,
       data: {...data, bookingId, ticketId},
+      notificationId,
     });
   }
   const db = getFirestore();
-  const ref = db.collection("notifications").doc();
+  const ref = notificationId ?
+    db.collection("notifications").doc(notificationId) :
+    db.collection("notifications").doc();
   await ref.set({
     recipientId: recipientId || null,
     recipientRole,
@@ -106,6 +109,21 @@ async function notify({recipientId, recipientRole, type, title, body, bookingId,
     }).catch((error) => console.error("Notification failed", error));
   }
   return ref.id;
+}
+
+function deliveryNotificationId(deliveryId, recipientId, eventType, transitionVersion = "") {
+  const cleanPart = (value) => text(value).replace(/[^A-Za-z0-9_-]/g, "_");
+  return ["delivery", deliveryId, recipientId, eventType, transitionVersion || "v1"]
+      .map(cleanPart)
+      .filter(Boolean)
+      .join("_");
+}
+
+function recipientForDelivery(data = {}) {
+  if (data.recipientNotificationsEnabled !== true) return "";
+  const senderId = text(data.senderId || data.userId || data.customerId);
+  const recipientId = text(data.recipientId || data.recipientUserId || data.recipientUid || data.receiverId);
+  return recipientId && recipientId !== senderId ? recipientId : "";
 }
 
 function giftNotificationRecord({
@@ -316,7 +334,7 @@ function customerWaitingCharge(data) {
 exports.onDeliveryCreated = functions.firestore.document("deliveryRequests/{deliveryId}").onCreate(async (snapshot) => {
   const delivery = snapshot.data();
   const ids = deliveryIds({...delivery, id: snapshot.id});
-  if (ids.senderId) await notify({recipientId: ids.senderId, recipientRole: "shipper", type: "delivery_created", title: "Delivery created", body: "Your delivery request has been created.", bookingId: ids.bookingId, data: {category: "Deliveries"}});
+  if (ids.senderId) await notify({recipientId: ids.senderId, recipientRole: "shipper", type: "delivery_created", title: "Your CIRCUM is booked ✓", body: "We’ve got it. We’re finding the right Rider for your delivery.", bookingId: ids.bookingId, notificationId: deliveryNotificationId(snapshot.id, ids.senderId, "booked"), data: {category: "Deliveries", deliveryId: snapshot.id}});
   const db = getFirestore();
   const riders = await onlineCandidateRiderRecords(db);
   const decisions = riders.map((record) => ({
@@ -352,6 +370,7 @@ exports.onDeliveryCreated = functions.firestore.document("deliveryRequests/{deli
     title: "New delivery available",
     body: "A delivery matching your vehicle is ready to review.",
     bookingId: ids.bookingId,
+    notificationId: deliveryNotificationId(snapshot.id, decision.riderId, "offer"),
     data: {
       category: "jobs",
       route: "jobs",
@@ -427,7 +446,7 @@ exports.onDeliveryUpdated = functions.firestore.document("deliveryRequests/{deli
     collected: ["Delivery in progress", "Your parcel has been collected.", "Deliveries"],
     picked_up: ["Delivery in progress", "Your parcel has been collected.", "Deliveries"],
     navigating_to_dropoff: ["Delivery in progress", "Your parcel is on the way to drop-off.", "Deliveries"],
-    arrived_at_dropoff: ["Near destination", "Your rider is arriving at the drop-off.", "Deliveries"],
+    arrived_at_dropoff: ["Your delivery is outside 📍", "Your rider has arrived at the destination.", "Deliveries"],
     pin_required: ["Receiver PIN needed", "The receiver PIN is needed to complete handover.", "Deliveries"],
     delivered: ["Delivered", "Your parcel has been delivered.", "Deliveries"],
     completed: ["Delivered", "Your delivery is complete.", "Deliveries"],
@@ -436,12 +455,17 @@ exports.onDeliveryUpdated = functions.firestore.document("deliveryRequests/{deli
     refunded: ["Refund issued", "Your delivery refund has been updated.", "Payments"],
   };
   const senderMessage = statusChanged ? senderMessages[status] : null;
-  if (ids.senderId && senderMessage) await notify({recipientId: ids.senderId, recipientRole: "shipper", type: `delivery_${status}`, title: senderMessage[0], body: senderMessage[1], bookingId: ids.bookingId, data: {category: senderMessage[2]}});
-  if (ids.senderId && oldPayment !== payment && ["paid", "succeeded", "success"].includes(payment)) await notify({recipientId: ids.senderId, recipientRole: "shipper", type: "payment_successful", title: "Payment successful", body: "Your delivery payment was successful.", bookingId: ids.bookingId, data: {category: "Payments"}});
-  if (ids.senderId && oldPayment !== payment && ["failed", "declined"].includes(payment)) await notify({recipientId: ids.senderId, recipientRole: "shipper", type: "payment_failed", title: "Payment failed", body: "Your delivery payment was not completed.", bookingId: ids.bookingId, data: {category: "Payments"}});
+  const transitionVersion = text(after.lifecycleVersion || after.transitionVersion || after.statusVersion || status);
+  if (ids.senderId && senderMessage) await notify({recipientId: ids.senderId, recipientRole: "shipper", type: `delivery_${status}`, title: senderMessage[0], body: senderMessage[1], bookingId: ids.bookingId, notificationId: deliveryNotificationId(change.after.id, ids.senderId, `status_${status}`, transitionVersion), data: {category: senderMessage[2], deliveryId: change.after.id}});
+  if (ids.senderId && oldPayment !== payment && ["paid", "succeeded", "success"].includes(payment)) await notify({recipientId: ids.senderId, recipientRole: "shipper", type: "payment_successful", title: "Payment successful", body: "Your delivery payment was successful.", bookingId: ids.bookingId, notificationId: deliveryNotificationId(change.after.id, ids.senderId, "payment_success", transitionVersion), data: {category: "Payments", deliveryId: change.after.id}});
+  if (ids.senderId && oldPayment !== payment && ["failed", "declined"].includes(payment)) await notify({recipientId: ids.senderId, recipientRole: "shipper", type: "payment_failed", title: "Payment failed", body: "Your delivery payment was not completed.", bookingId: ids.bookingId, notificationId: deliveryNotificationId(change.after.id, ids.senderId, "payment_failed", transitionVersion), data: {category: "Payments", deliveryId: change.after.id}});
   if (ids.senderId && oldWaitingContext !== waitingContext && waitingContext === "customer_responded") await notify({recipientId: ids.senderId, recipientRole: "shipper", type: "customer_responded", title: "Customer response received", body: "Waiting continues under the current policy.", bookingId: ids.bookingId, data: {category: "Deliveries"}});
   if (ids.senderId && oldWaitingCharge !== waitingChargeAmount && waitingChargeAmount > 0) await notify({recipientId: ids.senderId, recipientRole: "shipper", type: "waiting_charge_updated", title: "Waiting charge updated", body: `Additional waiting charge: ${moneyText(waitingCharge.amount, waitingCharge.currency)}.`, bookingId: ids.bookingId, data: {category: "Payments"}});
-  if (ids.riderId && statusChanged && (status.includes("cancel") || status === "updated")) await notify({recipientId: ids.riderId, recipientRole: "rider", type: status.includes("cancel") ? "delivery_cancelled" : "delivery_updated", title: status.includes("cancel") ? "Delivery cancelled" : "Delivery updated", body: status.includes("cancel") ? "A delivery assigned to you was cancelled." : "An assigned delivery has been updated.", bookingId: ids.bookingId});
+  if (ids.riderId && statusChanged && (status.includes("cancel") || status === "updated")) await notify({recipientId: ids.riderId, recipientRole: "rider", type: status.includes("cancel") ? "delivery_cancelled" : "delivery_updated", title: status.includes("cancel") ? "Delivery cancelled" : "Delivery updated", body: status.includes("cancel") ? "A delivery assigned to you was cancelled." : "An assigned delivery has been updated.", bookingId: ids.bookingId, notificationId: deliveryNotificationId(change.after.id, ids.riderId, status.includes("cancel") ? "cancelled" : "updated", transitionVersion), data: {deliveryId: change.after.id}});
+  const recipientId = recipientForDelivery(after);
+  const recipientMessage = statusChanged ? senderMessages[status] : null;
+  const recipientRelevant = new Set(["collected", "picked_up", "navigating_to_dropoff", "arrived_at_dropoff", "pin_required", "delivered", "completed", "cancelled", "issue_reported"]);
+  if (recipientId && recipientMessage && recipientRelevant.has(status)) await notify({recipientId, recipientRole: "shipper", type: `delivery_${status}`, title: recipientMessage[0], body: recipientMessage[1], bookingId: ids.bookingId, notificationId: deliveryNotificationId(change.after.id, recipientId, `recipient_${status}`, transitionVersion), data: {category: "Deliveries", deliveryId: change.after.id}});
 });
 
 exports.onGiftRequestCreated = functions.firestore.document("giftRequests/{giftId}").onCreate((snapshot, context) =>

@@ -104,6 +104,15 @@ test("delivery creation notifies merged online rider candidates", () => {
   assert.doesNotMatch(source, /const riders = await getFirestore\(\)\.collection\("riderProfiles"\)\.get\(\);/);
 });
 
+test("delivery lifecycle notifications use stable recipient-scoped ids", () => {
+  const source = fs.readFileSync(path.join(__dirname, "platform-notifications.js"), "utf8");
+  assert.match(source, /function deliveryNotificationId\(deliveryId, recipientId, eventType/);
+  assert.match(source, /notificationId: deliveryNotificationId\(snapshot\.id, ids\.senderId, "booked"\)/);
+  assert.match(source, /notificationId: deliveryNotificationId\(change\.after\.id, ids\.senderId, `status_\$\{status\}`/);
+  assert.match(source, /recipientNotificationsEnabled !== true/);
+  assert.match(source, /Your delivery is outside 📍/);
+});
+
 test("dispatch candidate decision rejects offline presence even when profile is stale online", () => {
   const decision = _private.dispatchCandidateDecision({
     id: "rider-1",

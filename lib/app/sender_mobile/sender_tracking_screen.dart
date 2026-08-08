@@ -2011,6 +2011,8 @@ class _TrackingPanelContent extends StatelessWidget {
           const SizedBox(height: 8),
           const _DeliveredChipSequence(),
           const SizedBox(height: 12),
+          _DeliveryReceiptSummary(data: engine.activeDeliveryData),
+          const SizedBox(height: 12),
           _ProofOfDeliverySection(
             proof: proofOfDeliveryFromRecord(
               engine.activeDeliveryData,
@@ -2116,6 +2118,104 @@ class _DeliveredChipSequence extends StatelessWidget {
           color: Color(0xFF34D399),
         ),
       ],
+    );
+  }
+}
+
+class _DeliveryReceiptSummary extends StatelessWidget {
+  final Map<String, dynamic> data;
+
+  const _DeliveryReceiptSummary({required this.data});
+
+  String _text(Object? value) => '${value ?? ''}'.trim();
+
+  String _address(String key) {
+    final raw = data[key];
+    if (raw is Map) {
+      return _text(raw['displayAddress'] ?? raw['address'] ?? raw['label']);
+    }
+    return _text(raw);
+  }
+
+  String _timestamp(Object? value) {
+    if (value is Timestamp) return value.toDate().toLocal().toString();
+    if (value is DateTime) return value.toLocal().toString();
+    return _text(value);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final pickup = _address('pickupDetails');
+    final dropoff = _address('dropoffDetails');
+    final deliveredAt = _timestamp(
+      data['deliveredAt'] ?? data['completedAt'] ?? data['deliveryCompletedAt'],
+    );
+    final distance = _text(data['distanceText'] ?? data['distanceMiles']);
+    final duration = _text(data['deliveryDurationText'] ?? data['deliveryDuration']);
+    final rider = _text(data['riderName'] ?? data['courierName'] ?? data['driverName']);
+    final vehicle = _text(data['typeOfVehicle'] ?? data['vehicleType']);
+    final reference = _text(data['requestId'] ?? data['id'] ?? data['code']);
+    final rows = <(String, String)>[
+      if (pickup.isNotEmpty || dropoff.isNotEmpty)
+        ('Journey', [pickup, dropoff].where((value) => value.isNotEmpty).join(' → ')),
+      if (deliveredAt.isNotEmpty) ('Delivered at', deliveredAt),
+      if (distance.isNotEmpty) ('Distance', distance),
+      if (duration.isNotEmpty) ('Delivery time', duration),
+      if (rider.isNotEmpty) ('Rider', rider),
+      if (vehicle.isNotEmpty) ('Vehicle', vehicle),
+      if (reference.isNotEmpty) ('Reference', reference),
+    ];
+    if (rows.isEmpty) return const SizedBox.shrink();
+    return AppGlassContainer(
+      radius: 17,
+      padding: const EdgeInsets.all(14),
+      accent: const Color(0xFF34D399),
+      surfaceColor: Colors.white.withValues(alpha: .045),
+      borderColor: const Color(0xFF34D399).withValues(alpha: .18),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            'Delivered. Nice. ✓',
+            style: TextStyle(
+              color: Colors.white,
+              fontSize: 17,
+              fontWeight: FontWeight.w900,
+            ),
+          ),
+          const SizedBox(height: 10),
+          for (final row in rows)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 7),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  SizedBox(
+                    width: 100,
+                    child: Text(
+                      row.$1,
+                      style: const TextStyle(
+                        color: _TrackingTokens.muted,
+                        fontSize: 11,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ),
+                  Expanded(
+                    child: Text(
+                      row.$2,
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 12,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+        ],
+      ),
     );
   }
 }

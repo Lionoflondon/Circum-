@@ -134,7 +134,13 @@ async function emitNotification({recipientId, recipientRole = "sender", type, ti
     pushProvider: "fcm",
     createdAt: FieldValue.serverTimestamp(),
   };
-  await ref.set(payload);
+  const created = await db.runTransaction(async (transaction) => {
+    const existing = await transaction.get(ref);
+    if (existing.exists) return false;
+    transaction.create(ref, payload);
+    return true;
+  });
+  if (!created) return ref.id;
   const token = await profileToken(recipientId, recipientRole);
   if (!token) {
     await ref.set({

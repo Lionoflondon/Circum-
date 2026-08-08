@@ -155,12 +155,14 @@ exports.requestSenderCancellation = functions.https.onCall(async (data, context)
     await communicationEngine.emitNotification({
       recipientId: "circum-support", recipientRole: "admin", type: "delivery_cancelled",
       title: "Delivery cancelled", body: `Delivery ${deliveryId} was cancelled${result.refundReviewRequired ? " and requires manual refund review" : ""}.`,
+      notificationId: `delivery_${deliveryId}_circum-support_cancelled_v1`,
       data: {deliveryId, stripePaymentIntentId: result.stripePaymentIntentId || "", refundReviewRequired: `${result.refundReviewRequired}`},
     });
     if (result.riderId) {
       await communicationEngine.emitNotification({
         recipientId: result.riderId, recipientRole: "rider", type: "delivery_cancelled",
         title: "Delivery cancelled", body: "A delivery assigned to you was cancelled.", data: {deliveryId},
+        notificationId: `delivery_${deliveryId}_${result.riderId}_cancelled_v1`,
       });
     }
   }

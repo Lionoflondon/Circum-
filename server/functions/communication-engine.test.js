@@ -35,6 +35,8 @@ test("notifications record delivery status, failures, and retries", () => {
   assert.match(source, /retryCount:\s*FieldValue\.increment\(1\)/);
   assert.match(source, /lastDeliveryAttemptAt/);
   assert.match(source, /retryable:\s*true/);
+  assert.match(source, /db\.runTransaction\(async \(transaction\) =>/);
+  assert.match(source, /if \(!created\) return ref\.id;/);
 });
 
 test("messages include backend-only diagnostic metadata", () => {
