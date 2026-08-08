@@ -169,6 +169,7 @@ abstract class SenderActivityRepository {
 
 class FirebaseSenderActivityRepository implements SenderActivityRepository {
   static const _optionalSourceTimeout = Duration(seconds: 4);
+  static const _historyPageSize = 20;
 
   final FirebaseAuth auth;
   final FirebaseFirestore firestore;
