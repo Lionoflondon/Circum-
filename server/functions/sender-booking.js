@@ -10,6 +10,7 @@ const vanguardProtocol = require("./vanguard-protocol-core");
 const {classifyIris} = require("./iris-core");
 const {verifiedPhotoAnalysis} = require("./iris-photo-analysis");
 const {dispatchDeliveryRequest} = require("./send-package");
+const {getAuthoritativeRouteFacts, coordinate} = require("./route-authority");
 
 const BASE_FARE_GBP = 5;
 const ADDITIONAL_FARE_PER_MILE_GBP = 1.5;
@@ -704,7 +705,7 @@ function quotePayload(data, uid, serverPhotoAnalysis = null) {
   const photoWeightKg = Number(serverPhotoAnalysis && serverPhotoAnalysis.estimatedWeightKg || 0);
   const weightKg = Math.max(0.5, clientWeightKg, photoWeightKg);
   const base = BASE_FARE_GBP;
-  const distance = distanceFare(data.distanceMiles);
+  const distance = distanceFare(data.authoritativeRouteFacts ? data.authoritativeRouteFacts.distanceMiles : data.distanceMiles);
   const weight = weightSurcharge(weightKg);
   const selectedVehicle = canonicalVehicle(
       data.selectedVehicle ||
@@ -761,7 +762,8 @@ function quotePayload(data, uid, serverPhotoAnalysis = null) {
     userId: uid,
     currency: "GBP",
     selectedSpeed,
-    distanceMiles: Number(data.distanceMiles || 0),
+    distanceMiles: Number(data.authoritativeRouteFacts ? data.authoritativeRouteFacts.distanceMiles : data.distanceMiles || 0),
+    routeFacts: data.authoritativeRouteFacts || null,
     weightKg,
     selectedVehicle,
     vehicleType: selectedVehicle,
@@ -894,7 +896,7 @@ exports.getSenderRothBalance = functions.https.onCall(async (_, context) => {
   };
 });
 
-exports.createSenderBookingQuote = functions.https.onCall(async (data, context) => {
+exports.createSenderBookingQuote = functions.runWith({secrets: ["GOOGLE_ROUTES_API_KEY"]}).https.onCall(async (data, context) => {
   const sender = requireSender(context);
   const db = getFirestore();
   const businessContext = await verifiedBusinessContext(db, sender, data && data.businessContext);
@@ -906,6 +908,17 @@ exports.createSenderBookingQuote = functions.https.onCall(async (data, context) 
     analysisId: data && data.irisPhotoAnalysisId,
     description: parcelDescription,
   });
+  const pickup = coordinate(data && (data.pickupPosition || data.pickup && data.pickup.position || data.pickup));
+  const dropoff = coordinate(data && (data.dropoffPosition || data.dropoff && data.dropoff.position || data.dropoff));
+  let authoritativeRouteFacts;
+  try {
+    authoritativeRouteFacts = await getAuthoritativeRouteFacts({origin: pickup, destination: dropoff});
+  } catch (error) {
+    console.error("Sender authoritative route evaluation failed", {code: error.code || "routes_failed"});
+    throw new functions.https.HttpsError("failed-precondition", "We could not verify the route for this quote. Please check both addresses and try again.");
+  }
+  const quoteInput = data && typeof data === "object" ? data : {};
+  quoteInput.authoritativeRouteFacts = authoritativeRouteFacts;
   const quote = quotePayload({
     ...(data || {}),
     ...(businessContext || {}),
