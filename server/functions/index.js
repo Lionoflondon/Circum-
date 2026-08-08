@@ -387,6 +387,8 @@ exports.createSenderPaidDelivery =
   senderBooking.createSenderPaidDelivery(stripe);
 exports.finalizeSenderWebCheckout =
   senderBooking.finalizeSenderWebCheckout(stripe);
+exports.recoverIneligibleSenderDelivery =
+  senderBooking.recoverIneligibleSenderDelivery;
 exports.saveSenderDraft = senderBooking.saveSenderDraft;
 exports.loadSenderDraft = senderBooking.loadSenderDraft;
 exports.deleteSenderDraft = senderBooking.deleteSenderDraft;

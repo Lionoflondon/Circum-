@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:circum/app/send_package/bloc/send_package_bloc.dart';
 import 'package:circum/app/send_package/models/canonical_iris_result.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -107,5 +109,20 @@ void main() {
     expect(unchanged.senderQuoteId, 'quote_keep');
     expect(unchanged.senderPaymentSessionId, 'session_keep');
     expect(unchanged.senderCreatedRequestId, 'request_keep');
+  });
+
+  test('ineligible paid deliveries cannot restore as active Sender work', () {
+    final blocSource = File(
+      'lib/app/send_package/bloc/send_package_bloc.dart',
+    ).readAsStringSync();
+    final homeSource = File(
+      'lib/app/sender_mobile/sender_mobile_home.dart',
+    ).readAsStringSync();
+    expect(blocSource, contains('_isNormalDispatchEligible'));
+    expect(blocSource, contains('recoverIneligibleSenderDelivery'));
+    expect(blocSource, contains("deliveryRequestStatus: 'review_required'"));
+    expect(homeSource, contains('normalDispatchEligible'));
+    expect(homeSource,
+        contains('.where((order) => order.normalDispatchEligible)'));
   });
 }

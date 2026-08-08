@@ -26,3 +26,11 @@ test("dispatch and Rider offer/acceptance retain the server-side IRIS backstop",
   assert.match(availableRequests, /if \(!isDispatchable\(requestData\)\) return false/);
   assert.match(acceptRequests, /if \(!isDispatchable\(deliveryRequest\)\)/);
 });
+
+test("ineligible paid Sender deliveries have an explicit review recovery path", () => {
+  assert.match(senderBooking, /exports\.recoverIneligibleSenderDelivery = functions\.https\.onCall/);
+  assert.match(senderBooking, /status: "review_required"/);
+  assert.match(senderBooking, /matchingStatus: "review_required"/);
+  assert.match(senderBooking, /normalDispatchEligible: false/);
+  assert.match(senderBooking, /hasCollectionProof/);
+});

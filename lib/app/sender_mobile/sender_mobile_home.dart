@@ -1596,6 +1596,7 @@ class SenderHomeOrder {
   final String rawStatus;
   final DateTime? updatedAt;
   final DateTime? scheduledAt;
+  final bool normalDispatchEligible;
 
   const SenderHomeOrder({
     required this.id,
@@ -1605,6 +1606,7 @@ class SenderHomeOrder {
     this.rawStatus = '',
     this.updatedAt,
     this.scheduledAt,
+    this.normalDispatchEligible = true,
   });
 
   factory SenderHomeOrder.fromFirestore(
@@ -1653,7 +1655,23 @@ class SenderHomeOrder {
       rawStatus: rawStatus.trim().toLowerCase(),
       updatedAt: rawDate is Timestamp ? rawDate.toDate() : null,
       scheduledAt: scheduleDate is Timestamp ? scheduleDate.toDate() : null,
+      normalDispatchEligible: _normalDispatchEligibility(data),
     );
+  }
+
+  static bool _normalDispatchEligibility(Map<String, dynamic> data) {
+    final explicit = data['normalDispatchEligible'];
+    if (explicit is bool) return explicit;
+    final iris = data['iris'];
+    if (iris is! Map) return true;
+    final compliance = iris['compliance'] is Map
+        ? '${iris['compliance']['status'] ?? ''}'.trim().toLowerCase()
+        : '';
+    final serviceability = iris['serviceability'] is Map
+        ? '${iris['serviceability']['status'] ?? ''}'.trim().toLowerCase()
+        : '';
+    if (compliance.isEmpty && serviceability.isEmpty) return true;
+    return compliance == 'allowed' && serviceability == 'serviceable';
   }
 
   static String _firstText(List<Object?> values) {
@@ -2028,6 +2046,7 @@ class _CanonicalSenderHomeState extends State<_CanonicalSenderHome> {
           .toList(growable: false);
 
   List<SenderHomeOrder> get _qualifyingOrders => (_orders ?? const [])
+      .where((order) => order.normalDispatchEligible)
       .where((order) => _isHomeDeliveryStatus(order.rawStatus))
       .toList(growable: false);
 

@@ -54,6 +54,21 @@ function requireSender(context) {
   };
 }
 
+function assignedRiderId(delivery = {}) {
+  return text(delivery.riderId || delivery.driverId || delivery.assignedRider ||
+    delivery.assignedRiderId || delivery.assignedDriverId || delivery.courierId);
+}
+
+function hasCollectionProof(delivery = {}) {
+  return delivery.collectionConfirmed === true ||
+    delivery.collectionPinVerified === true ||
+    delivery.pickupVerified === true ||
+    delivery.parcelCollected === true ||
+    Boolean(delivery.collectedAt || delivery.collectionConfirmedAt ||
+      delivery.pickupCompletedAt || delivery.pickupVerifiedAt ||
+      delivery.collectionTimestamp);
+}
+
 function text(value) {
   return `${value || ""}`.trim();
 }
@@ -2165,6 +2180,75 @@ exports.finalizeSenderWebCheckout = (stripe) => functions.https.onCall(async (da
   } catch (error) {
     throw new functions.https.HttpsError("failed-precondition", safePaymentFinalizationError(error));
   }
+});
+
+exports.recoverIneligibleSenderDelivery = functions.https.onCall(async (data, context) => {
+  const sender = requireSender(context);
+  const deliveryId = text(data && (data.deliveryId || data.requestId));
+  if (!deliveryId) {
+    throw new functions.https.HttpsError("invalid-argument", "Delivery reference is required.");
+  }
+
+  const db = getFirestore();
+  const deliveryRef = db.collection("deliveryRequests").doc(deliveryId);
+  let recovery = null;
+  await db.runTransaction(async (transaction) => {
+    const snapshot = await transaction.get(deliveryRef);
+    if (!snapshot.exists) {
+      throw new functions.https.HttpsError("not-found", "Delivery was not found.");
+    }
+    const delivery = snapshot.data() || {};
+    const ownerId = text(delivery.senderId || delivery.userId || delivery.customerId);
+    if (ownerId !== sender.uid) {
+      throw new functions.https.HttpsError("permission-denied", "This delivery does not belong to this account.");
+    }
+
+    const currentStatus = text(delivery.status || delivery.deliveryStatus).toLowerCase();
+    if (currentStatus === "review_required") {
+      recovery = {status: currentStatus, alreadyReview: true};
+      return;
+    }
+    if (["delivered", "completed", "cancelled", "canceled", "failed", "refunded", "archived"].includes(currentStatus)) {
+      recovery = {status: currentStatus, alreadyTerminal: true};
+      return;
+    }
+    if (assignedRiderId(delivery) || hasCollectionProof(delivery)) {
+      throw new functions.https.HttpsError("failed-precondition", "This delivery has progressed beyond automatic review recovery.");
+    }
+
+    const payloadEligibility = normalDispatchEligibilityForDeliveryPayload(delivery);
+    if (payloadEligibility.normalCheckoutEligible === true) {
+      throw new functions.https.HttpsError("failed-precondition", "This delivery is eligible for normal dispatch.");
+    }
+
+    const reason = payloadEligibility.reason || "server_iris_blocked";
+    transaction.update(deliveryRef, {
+      status: "review_required",
+      deliveryStatus: "review_required",
+      flowStatus: "review_required",
+      dispatchStatus: "review_required",
+      matchingStatus: "review_required",
+      normalDispatchEligible: false,
+      reviewStatus: "manual_review",
+      reviewReason: reason,
+      reviewRequiredAt: FieldValue.serverTimestamp(),
+      updatedAt: FieldValue.serverTimestamp(),
+    });
+    recovery = {status: "review_required", reason, alreadyTerminal: false};
+  });
+
+  if (recovery && recovery.status === "review_required" && recovery.alreadyReview !== true) {
+    await db.collection("adminAuditLogs").add({
+      actionType: "sender_ineligible_delivery_review_recovered",
+      recordType: "deliveryRequests",
+      recordId: deliveryId,
+      deliveryId,
+      userId: sender.uid,
+      reason: recovery.reason,
+      createdAt: FieldValue.serverTimestamp(),
+    });
+  }
+  return {deliveryId, ...recovery};
 });
 
 exports.handleSenderCheckoutSession = async (stripe, sessionData, eventId = null) => {

@@ -36,7 +36,8 @@ import '../repo/place_api.dart';
 part 'send_package_event.dart';
 part 'send_package_state.dart';
 
-const _googleMapsDirectionsApiKey = String.fromEnvironment('GOOGLE_MAPS_DIRECTIONS_API_KEY');
+const _googleMapsDirectionsApiKey =
+    String.fromEnvironment('GOOGLE_MAPS_DIRECTIONS_API_KEY');
 
 void _logRecoverableSenderError(
   String context,
@@ -261,6 +262,43 @@ class SendPackageBloc extends Bloc<SendPackageEvent, SendPackageState> {
     if (prefs.getString('activeRequest') == requestId) {
       await prefs.remove('activeRequest');
     }
+  }
+
+  bool _isNormalDispatchEligible(Map<String, dynamic> data) {
+    final explicit = data['normalDispatchEligible'];
+    if (explicit is bool) return explicit;
+    final iris = data['iris'];
+    if (iris is! Map) return true;
+    final compliance = (iris['compliance'] is Map)
+        ? '${iris['compliance']['status'] ?? ''}'.trim().toLowerCase()
+        : '';
+    final serviceability = (iris['serviceability'] is Map)
+        ? '${iris['serviceability']['status'] ?? ''}'.trim().toLowerCase()
+        : '';
+    if (compliance.isEmpty && serviceability.isEmpty) return true;
+    return compliance == 'allowed' && serviceability == 'serviceable';
+  }
+
+  Future<void> _recoverIneligibleSenderDelivery(
+    String deliveryId,
+  ) async {
+    try {
+      await FirebaseFunctions.instanceFor(region: 'us-central1')
+          .httpsCallable('recoverIneligibleSenderDelivery')
+          .call({'deliveryId': deliveryId});
+    } catch (error, stackTrace) {
+      _logRecoverableSenderError(
+        'ineligible delivery review recovery',
+        error,
+        stackTrace,
+      );
+    }
+    await _activeDeliverySubscription?.cancel();
+    _activeDeliverySubscription = null;
+    await _activeDeliveryLiveLocationSubscription?.cancel();
+    _activeDeliveryLiveLocationSubscription = null;
+    _activeDeliveryLiveLocationId = null;
+    await _clearActiveRequestIfCurrent(deliveryId);
   }
 
   Future<void> _listenToActiveDeliveryLiveLocation(String deliveryId) async {
@@ -1702,7 +1740,6 @@ class SendPackageBloc extends Bloc<SendPackageEvent, SendPackageState> {
         );
         return;
       }
-      add(WatchActiveDelivery(requestId: activeRequest));
       final userDocumentReference =
           db.collection('deliveryRequests').doc(user.uid);
       final requestDocumentReference =
@@ -1715,8 +1752,23 @@ class SendPackageBloc extends Bloc<SendPackageEvent, SendPackageState> {
 
       if (docResponse.exists) {
         _listenToActiveDeliveryLiveLocation(docResponse.id);
-        final data = docResponse.data();
-        String? pickupAddress = data!['pickupDetails']['address'];
+        final data = docResponse.data()!;
+        final deliveryId = '${data['requestId'] ?? docResponse.id}'.trim();
+        if (!_isNormalDispatchEligible(data)) {
+          await _recoverIneligibleSenderDelivery(deliveryId);
+          emit(
+            state.copyWith(
+              deliveryStatus: DeliveryStatus.inital,
+              deliveryRequestStatus: 'review_required',
+              activeDeliveryData: const {},
+              senderDeliveryError:
+                  'This paid delivery requires manual review before dispatch. You can start a new booking.',
+            ),
+          );
+          return;
+        }
+        add(WatchActiveDelivery(requestId: activeRequest));
+        String? pickupAddress = data['pickupDetails']['address'];
         String? dropoffAddress = data['dropoffDetails']['address'];
         double? price = data['price'];
         String? currency = data['currency'];
