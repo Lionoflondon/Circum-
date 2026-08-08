@@ -2375,7 +2375,7 @@ function serverIrisForDispatch(request = {}) {
   const parcel = request.parcel && typeof request.parcel === "object" ? request.parcel : {};
   const description = requestIrisDescription(request);
   if (!description) return null;
-  return classifyIris({
+  return normalDispatchEligibilityForInput({
     description,
     declaredWeightText: request.weight || request.weightLabel || parcel.weightLabel || parcel.weightKg || "",
     photoEstimatedWeightKg: request.photoEstimatedWeightKg ||
@@ -2385,7 +2385,22 @@ function serverIrisForDispatch(request = {}) {
     distanceMiles: request.distanceMiles || request.routeDistanceMiles || 0,
     speed: request.selectedSpeed || request.selectedServiceLevel || request.serviceLevel || request.speed || "",
     vehicleType: request.vehicleType || request.recommendedVehicle || null,
-  });
+  }).iris;
+}
+
+function normalDispatchEligibilityForInput(input = {}) {
+  const iris = classifyIris(input);
+  const compliance = iris.compliance && iris.compliance.status || iris.status || "prohibited";
+  const serviceability = iris.serviceability && iris.serviceability.status || "manual_review";
+  const dispatchable = compliance === "allowed" && serviceability === "serviceable";
+  return {
+    dispatchable,
+    normalCheckoutEligible: dispatchable,
+    reason: dispatchable ? "server_iris_allowed" : "server_iris_blocked",
+    compliance,
+    serviceability,
+    iris,
+  };
 }
 
 function dispatchComplianceDecision(request = {}) {
@@ -2402,8 +2417,19 @@ function dispatchComplianceDecision(request = {}) {
   if (!serverIris) {
     return {dispatchable: false, reason: "missing_server_iris"};
   }
-  const compliance = serverIris.compliance && serverIris.compliance.status || serverIris.status || "prohibited";
-  const serviceability = serverIris.serviceability && serverIris.serviceability.status || "manual_review";
+  const eligibility = normalDispatchEligibilityForInput({
+    description: requestIrisDescription(request),
+    declaredWeightText: request.weight || request.weightLabel || request.parcel && request.parcel.weightLabel || request.parcel && request.parcel.weightKg || "",
+    photoEstimatedWeightKg: request.photoEstimatedWeightKg ||
+      request.irisPhotoAnalysis && request.irisPhotoAnalysis.estimatedWeightKg ||
+      request.iris && request.iris.photoAnalysis && request.iris.photoAnalysis.estimatedWeightKg ||
+      null,
+    distanceMiles: request.distanceMiles || request.routeDistanceMiles || 0,
+    speed: request.selectedSpeed || request.selectedServiceLevel || request.serviceLevel || request.speed || "",
+    vehicleType: request.vehicleType || request.recommendedVehicle || null,
+  });
+  const compliance = eligibility.compliance;
+  const serviceability = eligibility.serviceability;
   const storedIris = request.iris || {};
   const storedCompliance = storedIris.compliance && storedIris.compliance.status || storedIris.status || null;
   const storedServiceability = storedIris.serviceability && storedIris.serviceability.status || null;
@@ -2557,6 +2583,7 @@ module.exports = {
   weightBandFor,
   createLearningSnapshot,
   dispatchComplianceDecision,
+  normalDispatchEligibilityForInput,
   isDispatchable,
   requestIrisDescription,
   serverIrisForDispatch,

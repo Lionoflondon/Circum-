@@ -7,7 +7,7 @@ const {getFirestore, FieldValue, GeoPoint, Timestamp} = require("firebase-admin/
 const {calculateWalletCheckout, roundMoney, minorUnits} = require("./wallet-core");
 const {verifiedStripePaidGbpSession} = require("./roth-ledger-core");
 const vanguardProtocol = require("./vanguard-protocol-core");
-const {classifyIris} = require("./iris-core");
+const {classifyIris, normalDispatchEligibilityForInput} = require("./iris-core");
 const {verifiedPhotoAnalysis} = require("./iris-photo-analysis");
 const {dispatchDeliveryRequest} = require("./send-package");
 
@@ -535,6 +535,9 @@ function safePaymentFinalizationError(error) {
   if (lower.includes("must be confirmed") || lower.includes("could not be verified")) {
     return "Payment could not be confirmed yet. Please try again.";
   }
+  if (lower.includes("requires review") || lower.includes("review before normal dispatch")) {
+    return "This delivery requires review before normal dispatch.";
+  }
   if (lower.includes("ownership") || lower.includes("belong")) {
     return "This payment session does not belong to this account.";
   }
@@ -716,6 +719,16 @@ function quotePayload(data, uid, serverPhotoAnalysis = null) {
   const subtotal = money(base + distance + weight + vehicle);
   const speed = money(speedAdjustment(subtotal, selectedSpeed));
   const parcelData = cleanMap(data.parcel);
+  const parcelDescription = text(parcelData.description || parcelData.itemName || data.description || data.packageDescription);
+  const irisEligibility = normalDispatchEligibilityForInput({
+    description: parcelDescription,
+    declaredWeightText: parcelData.weightLabel || parcelData.weightKg || data.weightKg || "",
+    photoEstimatedWeightKg: photoWeightKg || null,
+    distanceMiles: data.distanceMiles || 0,
+    speed: selectedSpeed,
+    vehicleType: selectedVehicle,
+    workflow: data.sourceModule || data.serviceType || data.type,
+  });
   const highValueParcel = data.highValue === true || parcelData.highValue === true;
   const surfaceText = text(data.sourceModule || data.serviceType || data.type).toLowerCase();
   const businessDelivery = data.businessMode === true ||
@@ -795,6 +808,10 @@ function quotePayload(data, uid, serverPhotoAnalysis = null) {
     driverShare: RIDER_DELIVERY_FARE_SHARE,
     platformShare: PLATFORM_DELIVERY_FARE_SHARE,
     pricingSource: "sender_backend_quote_v1",
+    normalCheckoutEligible: irisEligibility.normalCheckoutEligible,
+    irisComplianceStatus: irisEligibility.compliance,
+    irisServiceabilityStatus: irisEligibility.serviceability,
+    irisCheckoutBlockReason: irisEligibility.normalCheckoutEligible ? null : "not_allowed_for_normal_dispatch",
     ...(serverPhotoAnalysis ? {
       irisPhotoAnalysisId: serverPhotoAnalysis.analysisId,
       photoEstimatedWeightKg: photoWeightKg,
@@ -815,6 +832,49 @@ function quotePayload(data, uid, serverPhotoAnalysis = null) {
       },
     } : {}),
   };
+}
+
+function normalDispatchEligibilityForDeliveryPayload(payload = {}) {
+  const parcel = payload.parcel && typeof payload.parcel === "object" ? payload.parcel : {};
+  return normalDispatchEligibilityForInput({
+    description: text(parcel.description || parcel.itemName || payload.description || payload.packageDescription),
+    declaredWeightText: parcel.weightLabel || parcel.weightKg || payload.weightKg || "",
+    photoEstimatedWeightKg: payload.photoEstimatedWeightKg || null,
+    distanceMiles: payload.distanceMiles || 0,
+    speed: payload.selectedSpeed || payload.selectedServiceLevel || payload.serviceLevel || payload.speed || "",
+    vehicleType: payload.vehicleType || payload.recommendedVehicle || null,
+    workflow: payload.sourceModule || payload.serviceType || payload.type,
+  });
+}
+
+async function recordIneligiblePaidCheckoutReview(db, {
+  paymentSessionId,
+  quoteId,
+  userId,
+  reason,
+  eligibility,
+}) {
+  const reviewReason = reason || eligibility.reason || "server_iris_blocked";
+  await db.collection("senderPaymentSessions").doc(paymentSessionId).set({
+    status: "review_required",
+    paymentStatus: "review_required",
+    reviewStatus: "manual_review",
+    reviewReason,
+    normalCheckoutEligible: false,
+    updatedAt: FieldValue.serverTimestamp(),
+  }, {merge: true});
+  await db.collection("adminAuditLogs").add({
+    actionType: "sender_paid_checkout_review_required",
+    recordType: "senderPaymentSessions",
+    recordId: paymentSessionId,
+    paymentSessionId,
+    quoteId,
+    userId,
+    reason: reviewReason,
+    compliance: eligibility.compliance || null,
+    serviceability: eligibility.serviceability || null,
+    createdAt: FieldValue.serverTimestamp(),
+  });
 }
 
 async function walletBalanceForSender(sender) {
@@ -961,6 +1021,18 @@ exports.createSenderPaymentSession = (stripe) => functions.https.onCall(async (d
   const checkoutMode = text(data.checkoutMode);
   const webCheckout = checkoutMode === "web_checkout";
   const deliveryPayload = cleanMap(data.deliveryPayload);
+  const payloadEligibility = normalDispatchEligibilityForDeliveryPayload(deliveryPayload);
+  if (quote.normalCheckoutEligible !== true || payloadEligibility.normalCheckoutEligible !== true) {
+    throw new functions.https.HttpsError(
+        "failed-precondition",
+        "This delivery requires review before normal payment and dispatch.",
+        {
+          reason: quote.irisCheckoutBlockReason || payloadEligibility.reason || "not_allowed_for_normal_dispatch",
+          compliance: payloadEligibility.compliance,
+          serviceability: payloadEligibility.serviceability,
+        },
+    );
+  }
   const split = calculateWalletCheckout({
     orderTotalGbp: total,
     walletBalanceGbp: rothEnabled ? rothBalance : 0,
@@ -1595,6 +1667,29 @@ async function createPaidDeliveryFromSession(stripe, sender, data) {
     });
   }
   const quote = quoteSnap.data();
+  const deliveryPayload = {
+    ...data,
+    parcel: data.parcel || {},
+  };
+  const eligibility = normalDispatchEligibilityForDeliveryPayload(deliveryPayload);
+  if (eligibility.normalCheckoutEligible !== true) {
+    await recordIneligiblePaidCheckoutReview(db, {
+      paymentSessionId,
+      quoteId,
+      userId: sender.uid,
+      reason: eligibility.reason,
+      eligibility,
+    });
+    throw new functions.https.HttpsError(
+        "failed-precondition",
+        "This paid booking requires review before normal dispatch.",
+        {
+          reason: eligibility.reason,
+          compliance: eligibility.compliance,
+          serviceability: eligibility.serviceability,
+        },
+    );
+  }
   const draftId = text(data.draftId);
   const idempotencyKey = text(data.idempotencyKey) ||
     stableId(`${sender.uid}:${draftId || "no-draft"}:${quoteId}:${paymentSessionId}`);
@@ -2004,6 +2099,23 @@ async function finalizeSenderCheckoutSession(stripe, sessionData, eventId = "") 
     ownerEmail: payment.userEmail || metadata.userEmail,
     expectedAmountGBP: payment.remainingAmount,
   });
+  const sender = {
+    uid: payment.userId || metadata.userId,
+    email: payment.userEmail || metadata.userEmail || "",
+    name: payment.userName || "",
+  };
+  const payload = payment.deliveryPayload || {};
+  const eligibility = normalDispatchEligibilityForDeliveryPayload(payload);
+  if (eligibility.normalCheckoutEligible !== true) {
+    await recordIneligiblePaidCheckoutReview(db, {
+      paymentSessionId,
+      quoteId,
+      userId: sender.uid,
+      reason: eligibility.reason,
+      eligibility,
+    });
+    throw new Error("Paid checkout requires review before normal dispatch.");
+  }
   await sessionRef.set({
     status: "succeeded",
     paymentStatus: "succeeded",
@@ -2026,12 +2138,6 @@ async function finalizeSenderCheckoutSession(stripe, sessionData, eventId = "") 
       amount: Number(payment.rothAppliedAmount || 0),
     });
   }
-  const sender = {
-    uid: payment.userId || metadata.userId,
-    email: payment.userEmail || metadata.userEmail || "",
-    name: payment.userName || "",
-  };
-  const payload = payment.deliveryPayload || {};
   return createPaidDeliveryFromSession(stripe, sender, {
     ...payload,
     requestId: payment.requestId || metadata.requestId,

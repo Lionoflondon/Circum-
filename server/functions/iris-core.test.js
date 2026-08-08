@@ -8,6 +8,7 @@ const {
   privateIris,
   weightBandFor,
   dispatchComplianceDecision,
+  normalDispatchEligibilityForInput,
   isDispatchable,
   dispatchPriority,
   normalizeRiderRank,
@@ -59,6 +60,21 @@ test("unsupported referrals and prohibited items do not dispatch normally", () =
   const weapon = classifyIris({description: "weapon and explosives"});
   assert.equal(weapon.compliance.status, "prohibited");
   assert.equal(weapon.serviceability.status, "manual_review");
+});
+
+test("normal dispatch eligibility is the shared checkout and dispatch predicate", () => {
+  const supported = normalDispatchEligibilityForInput({description: "laptop in a padded case"});
+  assert.equal(supported.normalCheckoutEligible, true);
+  assert.equal(supported.dispatchable, true);
+  assert.equal(supported.compliance, "allowed");
+  assert.equal(supported.serviceability, "serviceable");
+
+  for (const description of ["small parcel box", "item", "pet transport for my dog"]) {
+    const blocked = normalDispatchEligibilityForInput({description});
+    assert.equal(blocked.normalCheckoutEligible, false, description);
+    assert.equal(blocked.dispatchable, false, description);
+    assert.notEqual(blocked.reason, "server_iris_allowed", description);
+  }
 });
 
 test("dispatch recomputes IRIS and rejects create-time forged compliance", () => {

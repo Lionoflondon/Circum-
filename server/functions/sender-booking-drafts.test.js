@@ -141,6 +141,21 @@ test("sender quote charges distance in miles", () => {
   assert.equal(quote.total, 9.5);
 });
 
+test("sender quote carries authoritative normal-dispatch eligibility", () => {
+  const supported = _private.quotePayload({
+    selectedSpeed: "Standard",
+    parcel: {itemName: "laptop in a padded case", weightKg: 2},
+  }, "sender-test");
+  const blocked = _private.quotePayload({
+    selectedSpeed: "Standard",
+    parcel: {itemName: "small parcel box", weightKg: 1},
+  }, "sender-test");
+
+  assert.equal(supported.normalCheckoutEligible, true);
+  assert.equal(blocked.normalCheckoutEligible, false);
+  assert.equal(blocked.irisCheckoutBlockReason, "not_allowed_for_normal_dispatch");
+});
+
 test("sender quote charges two pounds for car vehicle", () => {
   const quote = _private.quotePayload({
     selectedSpeed: "Standard",
