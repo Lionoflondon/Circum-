@@ -372,6 +372,35 @@ void main() {
     expect(snapshot.route, isEmpty);
   });
 
+  test('route geometry is present only when authoritative points exist', () {
+    final absent = SenderTrackingMapAdapter.snapshotFor(
+      SendPackageState(
+        pickupCoordinate: PlaceCoordinate(lat: 51.5045, lng: -0.0865),
+        desinationCoordinate:
+            PlaceCoordinate(lat: 51.4820203, lng: -0.1444907),
+      ),
+      content: senderTrackingContentFor(SenderTrackingState.delivered),
+      stateDelivered: true,
+    );
+    final present = SenderTrackingMapAdapter.snapshotFor(
+      SendPackageState(
+        pickupCoordinate: PlaceCoordinate(lat: 51.5045, lng: -0.0865),
+        desinationCoordinate:
+            PlaceCoordinate(lat: 51.4820203, lng: -0.1444907),
+        polylineCoordinates: const [
+          LatLng(51.5045, -0.0865),
+          LatLng(51.495, -0.12),
+          LatLng(51.4820203, -0.1444907),
+        ],
+      ),
+      content: senderTrackingContentFor(SenderTrackingState.delivered),
+      stateDelivered: true,
+    );
+
+    expect(absent?.route, isEmpty);
+    expect(present?.route, hasLength(3));
+  });
+
   test('tracking map rejects malformed and out-of-UK canonical coordinates',
       () {
     final snapshot = SenderTrackingMapAdapter.snapshotFor(

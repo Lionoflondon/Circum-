@@ -1311,13 +1311,6 @@ class SenderTrackingMapLayer extends StatelessWidget {
                   ),
                 ),
               ),
-            if (content.showRoute && googleMapSnapshot == null)
-              _RouteLine(
-                completed: delivered,
-                highContrast: highContrast,
-                pulse: markerPulse,
-                searching: content.pill == 'Searching',
-              ),
             if (content.showPickupPin && googleMapSnapshot == null)
               Stack(
                 children: [
