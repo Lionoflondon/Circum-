@@ -36,4 +36,15 @@ void main() {
       contains('drawer update failed; payment remains confirmed'),
     );
   });
+
+  test('sender web preview provides the auth bloc used by booking maps', () {
+    final source = File(
+      'lib/app/sender_mobile/sender_mobile_preview.dart',
+    ).readAsStringSync();
+
+    expect(source, contains('MultiBlocProvider('));
+    expect(source, contains('BlocProvider<AuthBloc>'));
+    expect(source, contains('AuthBloc()..add(SortSessionState())'));
+    expect(source, contains('BlocProvider<SendPackageBloc>'));
+  });
 }

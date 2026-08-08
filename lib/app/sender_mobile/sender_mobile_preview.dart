@@ -11,6 +11,7 @@ import 'package:flutter_stripe/flutter_stripe.dart';
 
 import '../../firebase_options.dart';
 import '../../env/env.dart';
+import '../authentication/bloc/auth_bloc.dart';
 import '../security/circum_app_check.dart';
 import '../send_package/bloc/send_package_bloc.dart';
 import 'design_system/sender_design_system.dart';
@@ -249,8 +250,15 @@ class SenderMobilePreviewApp extends StatelessWidget {
       initialRouteName: initialRouteName,
     );
     SenderStartupDiagnostics.instance.completeOnce('Router construction');
-    return BlocProvider(
-      create: (_) => SendPackageBloc(),
+    return MultiBlocProvider(
+      providers: [
+        BlocProvider<AuthBloc>(
+          create: (_) => AuthBloc()..add(SortSessionState()),
+        ),
+        BlocProvider<SendPackageBloc>(
+          create: (_) => SendPackageBloc(),
+        ),
+      ],
       child: MaterialApp(
         debugShowCheckedModeBanner: false,
         initialRoute: Navigator.defaultRouteName,
