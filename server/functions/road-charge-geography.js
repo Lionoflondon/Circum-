@@ -3,7 +3,7 @@
 
 const CCZ_BOUNDARY = require("./road-charge-ccz-boundary.json");
 
-const GEOGRAPHY_VERSION = "2026-08-circum-road-geography-v1";
+const GEOGRAPHY_VERSION = "2026-08-circum-road-geography-v2";
 
 const OFFICIAL_CCZ_POLYGONS = Object.freeze(CCZ_BOUNDARY.features
     .filter((feature) => feature && feature.geometry && feature.geometry.type === "Polygon")
@@ -15,7 +15,7 @@ const CCZ_POLYGON = Object.freeze([[-0.106331, 51.531808], [-0.114031, 51.531288
 
 const CROSSINGS = Object.freeze([
   Object.freeze({chargeId: "blackwall_silvertown", crossingId: "blackwall", southPortal: [-0.0085, 51.497], northPortal: [-0.0066, 51.5095], radiusMeters: 550}),
-  Object.freeze({chargeId: "blackwall_silvertown", crossingId: "silvertown", southPortal: [-0.0118, 51.4994], northPortal: [0.0086, 51.5054], radiusMeters: 650}),
+  Object.freeze({chargeId: "blackwall_silvertown", crossingId: "silvertown", southPortal: [0.0058, 51.4992], northPortal: [0.0148, 51.5051], radiusMeters: 450}),
   Object.freeze({chargeId: "dartford_crossing", crossingId: "dartford", southPortal: [0.2575, 51.464], northPortal: [0.2585, 51.486], radiusMeters: 850}),
 ]);
 

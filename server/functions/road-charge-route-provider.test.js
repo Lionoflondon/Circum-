@@ -66,6 +66,33 @@ test("CIRCUM detects a crossing only when canonical geometry traverses both port
   assert.equal(nearbyOnly.crossings.length, 0);
 });
 
+test("Silvertown crossing detection follows both canonical portals and direction", () => {
+  const northbound = deriveCircumRouteFacts([
+    [0.00459, 51.49841],
+    [0.01089, 51.50125],
+    [0.0148, 51.5051],
+  ], {at: new Date("2026-08-08T12:00:00Z")});
+  const southbound = deriveCircumRouteFacts([
+    [0.0148, 51.5051],
+    [0.01089, 51.50125],
+    [0.00459, 51.49841],
+  ], {at: new Date("2026-08-08T12:00:00Z")});
+  const nearbySouthBank = deriveCircumRouteFacts([
+    [0.006, 51.491],
+    [0.034, 51.493],
+  ], {at: new Date("2026-08-08T12:00:00Z")});
+
+  assert.deepEqual(
+      northbound.crossings.map(({crossingId, direction}) => ({crossingId, direction})),
+      [{crossingId: "silvertown", direction: "northbound"}],
+  );
+  assert.deepEqual(
+      southbound.crossings.map(({crossingId, direction}) => ({crossingId, direction})),
+      [{crossingId: "silvertown", direction: "southbound"}],
+  );
+  assert.equal(nearbySouthBank.crossings.length, 0);
+});
+
 test("provider timeout or 5xx uses sufficiently fresh validated geometry", async () => {
   for (const code of ["route_provider_timeout", "route_provider_http"]) {
     const now = new Date("2026-08-08T12:00:00Z");
