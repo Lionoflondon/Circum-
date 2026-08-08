@@ -90,6 +90,13 @@ test("unclaimed delivery reminder reuses the rider profile snapshot per run", ()
   assert.match(source, /dispatchCandidateDecision\(record, delivery\)/);
 });
 
+test("unclaimed delivery escalation retries dispatch for unassigned open deliveries", () => {
+  const source = fs.readFileSync(path.join(__dirname, "platform-notifications.js"), "utf8");
+  assert.match(source, /dispatchDeliveryRequest\(\{/);
+  assert.match(source, /source: "escalateUnclaimedDeliveries"/);
+  assert.match(source, /if \(!assignedRiderId\(delivery\) && stage >= 1\)/);
+});
+
 test("delivery creation notifies merged online rider candidates", () => {
   const source = fs.readFileSync(path.join(__dirname, "platform-notifications.js"), "utf8");
   assert.match(source, /async function onlineCandidateRiderRecords\(db\)/);

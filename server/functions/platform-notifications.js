@@ -6,8 +6,12 @@ const {riderMatchesIris} = require("./iris-core");
 const riderPresenceCore = require("./rider-presence-core");
 const {loadFounderTestAccount} = require("./founder-authority");
 const communicationEngine = require("./communication-engine");
+const {dispatchDeliveryRequest} = require("./send-package");
 
 const text = (value) => `${value || ""}`.trim();
+function assignedRiderId(delivery = {}) {
+  return text(delivery.riderId || delivery.driverId || delivery.assignedRiderId || delivery.assignedDriverId || delivery.courierId);
+}
 const openStatuses = new Set(["requested", "pending", "broadcast", "broadcasted", "awaiting_rider", "finding_rider"]);
 const giftEvents = new Set([
   "gift_draft_saved",
@@ -505,6 +509,21 @@ exports.escalateUnclaimedDeliveries = functions.pubsub.schedule("every 1 minutes
     const ageMinutes = Math.floor((Date.now() - createdAt) / 60000);
     const stage = ageMinutes >= 5 ? 5 : ageMinutes >= 4 ? 4 : ageMinutes >= 3 ? 3 : ageMinutes >= 2 ? 2 : 0;
     if (!stage || Number(delivery.notificationEscalationStage || 0) >= stage) continue;
+    if (!assignedRiderId(delivery) && stage >= 1) {
+      try {
+        await dispatchDeliveryRequest({
+          db,
+          requestId: text(delivery.requestId || doc.id),
+          source: "escalateUnclaimedDeliveries",
+        });
+      } catch (error) {
+        console.warn("unclaimed_delivery_dispatch_retry_failed", {
+          deliveryId: doc.id,
+          code: error && error.code || null,
+          message: error && error.message || null,
+        });
+      }
+    }
     if (stage === 5) {
       await notify({recipientRole: "admin", type: "unclaimed_delivery", title: "Unclaimed delivery", body: "A delivery remains unclaimed after five minutes.", bookingId: text(delivery.requestId || doc.id)});
     } else {
