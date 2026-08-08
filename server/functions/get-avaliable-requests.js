@@ -81,11 +81,11 @@ async function candidateRequestDocs(db, riderData = {}) {
   const locality = riderLocality(riderData);
   const queries = [
     db.collection("deliveryRequests")
-        .where("matchingStatus", "==", "available")
+        .where("matchingStatus", "in", ["available", "broadcasted"])
         .limit(REQUEST_SCAN_LIMIT)
         .get(),
     db.collection("deliveryRequests")
-        .where("dispatchStatus", "==", "requested")
+        .where("dispatchStatus", "in", ["requested", "broadcasted"])
         .limit(REQUEST_SCAN_LIMIT)
         .get(),
     db.collection("deliveryRequests")
