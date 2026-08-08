@@ -59,6 +59,7 @@ test("delivery status transition rules block unsafe jumps", () => {
   assert.equal(tracking.canTransitionDeliveryStatus("navigating_to_pickup", "arrived_at_pickup"), true);
   assert.equal(tracking.canTransitionDeliveryStatus("arrived_at_pickup", "pickup_verification"), true);
   assert.equal(tracking.canTransitionDeliveryStatus("arrived_at_pickup", "pickup_verified"), true);
+  assert.equal(tracking.canTransitionDeliveryStatus("arrived_at_pickup", "collected"), true);
   assert.equal(tracking.canTransitionDeliveryStatus("pickup_verified", "collected"), true);
   assert.equal(tracking.canTransitionDeliveryStatus("pickup_verified", "navigating_to_dropoff"), true);
   assert.equal(tracking.canTransitionDeliveryStatus("collected", "navigating_to_dropoff"), true);
@@ -69,6 +70,45 @@ test("delivery status transition rules block unsafe jumps", () => {
   assert.equal(tracking.canTransitionDeliveryStatus("pin_required", "delivered"), true);
   assert.equal(tracking.canTransitionDeliveryStatus("delivered", "accepted"), false);
   assert.equal(tracking.canTransitionDeliveryStatus("cancelled", "accepted"), false);
+});
+
+test("pickup collection transition respects the authoritative delivery policy", () => {
+  assert.equal(
+      tracking.canTransitionDeliveryStatusForPolicy(
+          {requiresVanguard: false, iris: {verification: {senderPinRequired: false}}},
+          "arrived_at_pickup",
+          "collected",
+      ),
+      true,
+  );
+  assert.equal(
+      tracking.canTransitionDeliveryStatusForPolicy(
+          {requiresVanguard: true},
+          "arrived_at_pickup",
+          "collected",
+      ),
+      false,
+  );
+  assert.equal(
+      tracking.canTransitionDeliveryStatusForPolicy(
+          {iris: {verification: {senderPinRequired: true}}},
+          "arrived_at_pickup",
+          "collected",
+      ),
+      false,
+  );
+  assert.equal(
+      tracking.canTransitionDeliveryStatusForPolicy(
+          {requiresVanguard: true},
+          "pickup_verified",
+          "collected",
+      ),
+      true,
+  );
+  assert.equal(
+      tracking.canTransitionDeliveryStatusForPolicy({}, "navigating_to_pickup", "collected"),
+      false,
+  );
 });
 
 test("rider actions resolve to canonical backend statuses", () => {

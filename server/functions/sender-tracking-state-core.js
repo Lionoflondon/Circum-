@@ -57,7 +57,7 @@ const ALLOWED_TRANSITIONS = Object.freeze({
   requested: ["accepted", "cancelled", "issue_reported"],
   accepted: ["navigating_to_pickup", "arrived_at_pickup", "cancelled", "issue_reported"],
   navigating_to_pickup: ["arrived_at_pickup", "cancelled", "issue_reported"],
-  arrived_at_pickup: ["waiting", "pickup_verification", "pickup_verified", "cancelled", "issue_reported"],
+  arrived_at_pickup: ["waiting", "pickup_verification", "pickup_verified", "collected", "cancelled", "issue_reported"],
   waiting: ["pickup_verification", "pickup_verified", "cancelled", "issue_reported"],
   pickup_verification: ["pickup_verified", "issue_reported"],
   pickup_verified: ["collected", "navigating_to_dropoff", "issue_reported"],
@@ -104,6 +104,32 @@ function canTransitionDeliveryStatus(from, to) {
   return (ALLOWED_TRANSITIONS[current] || []).includes(next);
 }
 
+function pickupVerificationRequired(delivery = {}) {
+  const irisVerification = delivery.iris && delivery.iris.verification || {};
+  return delivery.vanguardProtocolEnabled === true ||
+    delivery.vanguardEnabled === true ||
+    delivery.requiresVanguard === true ||
+    delivery.verificationRequired === true ||
+    delivery.requiresVerification === true ||
+    delivery.pickupPinRequired === true ||
+    delivery.senderPinRequired === true ||
+    delivery.pickupEvidenceRequired === true ||
+    delivery.isHealthPlus === true ||
+    delivery.isGift === true ||
+    irisVerification.senderPinRequired === true ||
+    irisVerification.pickupEvidenceRequired === true;
+}
+
+function canTransitionDeliveryStatusForPolicy(delivery, from, to) {
+  const current = normalizeStatus(from);
+  const next = normalizeStatus(to);
+  if (!canTransitionDeliveryStatus(current, next)) return false;
+  if (current === "arrived_at_pickup" && next === "collected") {
+    return !pickupVerificationRequired(delivery);
+  }
+  return true;
+}
+
 function statusForRiderAction(action) {
   return RIDER_ACTION_TO_STATUS[normalizeStatus(action)] || "";
 }
@@ -114,7 +140,9 @@ module.exports = {
   RIDER_ACTION_TO_STATUS,
   SENDER_TRACKING_STATES,
   canTransitionDeliveryStatus,
+  canTransitionDeliveryStatusForPolicy,
   normalizeStatus,
+  pickupVerificationRequired,
   senderTrackingStateForBackendStatus,
   statusForRiderAction,
 };

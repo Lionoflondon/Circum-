@@ -217,6 +217,52 @@ test("required pickup evidence blocks incomplete verification", () => {
   ).valid, true);
 });
 
+test("Confirm Pickup callable policy permits ordinary collection and protects verified pickup", () => {
+  const preservedDeliveryPolicy = {
+    requiresVanguard: false,
+    iris: {
+      verification: {
+        senderPinRequired: false,
+        recipientPinRequired: true,
+        identityCheckRequired: true,
+        photoEvidenceRequired: false,
+      },
+    },
+  };
+  assert.deepEqual(
+      deliveryTracking.transitionPolicyDecision(
+          preservedDeliveryPolicy,
+          "arrived_at_pickup",
+          "collected",
+      ),
+      {allowed: true, message: ""},
+  );
+  assert.match(
+      deliveryTracking.transitionPolicyDecision(
+          {requiresVanguard: true},
+          "arrived_at_pickup",
+          "collected",
+      ).message,
+      /required pickup verification/,
+  );
+  assert.equal(
+      deliveryTracking.transitionPolicyDecision(
+          {requiresVanguard: true},
+          "pickup_verified",
+          "collected",
+      ).allowed,
+      true,
+  );
+  assert.equal(
+      deliveryTracking.transitionPolicyDecision(
+          {},
+          "navigating_to_pickup",
+          "collected",
+      ).allowed,
+      false,
+  );
+});
+
 test("settlement values reuse canonical earnings and highest trust category", () => {
   assert.deepEqual(deliveryTracking.settlementValues({
     riderEarning: 12.345,

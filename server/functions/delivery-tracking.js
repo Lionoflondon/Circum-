@@ -315,6 +315,23 @@ function patchForTransition({action, nextStatus, riderId}) {
   return patch;
 }
 
+function transitionPolicyDecision(delivery, currentStatus, nextStatus) {
+  if (tracking.canTransitionDeliveryStatusForPolicy(delivery, currentStatus, nextStatus)) {
+    return {allowed: true, message: ""};
+  }
+  if (currentStatus === "arrived_at_pickup" && nextStatus === "collected" &&
+      tracking.pickupVerificationRequired(delivery)) {
+    return {
+      allowed: false,
+      message: "Complete the required pickup verification before collecting this delivery.",
+    };
+  }
+  return {
+    allowed: false,
+    message: `Cannot move delivery from ${currentStatus} to ${nextStatus}.`,
+  };
+}
+
 exports.updateDeliveryTrackingStatus = functions.https.onCall(async (data, context) => {
   if (!context.auth) {
     throw new functions.https.HttpsError("unauthenticated", "Rider must be signed in.");
@@ -354,8 +371,9 @@ exports.updateDeliveryTrackingStatus = functions.https.onCall(async (data, conte
         idempotent: true,
       };
     }
-    if (!tracking.canTransitionDeliveryStatus(currentStatus, nextStatus)) {
-      throw new functions.https.HttpsError("failed-precondition", `Cannot move delivery from ${currentStatus} to ${nextStatus}.`);
+    const transitionDecision = transitionPolicyDecision(delivery, currentStatus, nextStatus);
+    if (!transitionDecision.allowed) {
+      throw new functions.https.HttpsError("failed-precondition", transitionDecision.message);
     }
 
     const evidence = data && data.evidence && typeof data.evidence === "object" ? data.evidence : {};
@@ -629,6 +647,7 @@ exports._private = {
   signalQuality,
   validatedLiveLocation,
   patchForTransition,
+  transitionPolicyDecision,
   expectedPin,
   pinAuthorityRequired,
   assertRiderOwnsDelivery,
