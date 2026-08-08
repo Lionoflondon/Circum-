@@ -32,7 +32,8 @@ async function dispatchDeliveryRequest({
   if (!senderOwnsRequest(deliveryRequest[0], uid) &&
     !hasAdminClaim(authToken || {}) &&
     source !== "createSenderPaidDelivery" &&
-    source !== "finalizeSenderCheckoutSession") {
+    source !== "finalizeSenderCheckoutSession" &&
+    source !== "escalateUnclaimedDeliveries") {
     throw new functions.https.HttpsError(
         "permission-denied",
         "Only the Sender or an administrator can dispatch this delivery.",

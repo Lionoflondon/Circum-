@@ -59,6 +59,10 @@ test("IRIS dispatch records audit when server recomputation blocks dispatch", ()
   assert.match(sendPackage, /storedIrisMismatch: dispatchDecision\.storedIrisMismatch === true/);
 });
 
+test("scheduled reconciliation may invoke the canonical dispatcher", () => {
+  assert.match(sendPackage, /source !== "escalateUnclaimedDeliveries"/);
+});
+
 test("legacy sendPackage request lookup remains bounded", () => {
   assert.match(
       sendPackage,
