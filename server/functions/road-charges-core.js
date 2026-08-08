@@ -114,6 +114,15 @@ function vanTunnelTariffAuthority(vehicleProfile = {}, {pricingContext = "quote"
   const conflict = explicit && massClass && explicit !== massClass;
   const actualClassification = verified && !conflict ? explicit || massClass : null;
   if (actualClassification) {
+    if (pricingContext === "quote") {
+      return {
+        actualClassification: actualClassification.toUpperCase(),
+        pricingTariffApplied: "LARGE_VAN_COMMERCIAL",
+        pricingReason: "CIRCUM_ALL_VANS_LARGE_TARIFF",
+        verified: true,
+        complete: true,
+      };
+    }
     return {
       actualClassification: actualClassification.toUpperCase(),
       pricingTariffApplied: actualClassification.toUpperCase(),
@@ -331,17 +340,17 @@ function evaluateRoadCharges({
     const verifiedFacts = verifiedRoadChargeFacts(vehicleProfile);
     const vanTunnelAuthority = vehicleClass === "van" && chargeId === "blackwall_silvertown" ?
       vanTunnelTariffAuthority(vehicleProfile, {pricingContext}) : null;
-    const conservativeDartford = vehicleClass === "van" && chargeId === "dartford_crossing" &&
-      (!verifiedFacts || tariffClassification === "unknown");
+    const commercialDartford = vehicleClass === "van" && chargeId === "dartford_crossing" &&
+      (pricingContext === "quote" || !verifiedFacts || tariffClassification === "unknown");
     const tariffUnknown = vehicleClass === "van" && (
-      chargeId === "dartford_crossing" && pricingContext === "settlement" && conservativeDartford ||
+      chargeId === "dartford_crossing" && pricingContext === "settlement" && commercialDartford ||
       chargeId === "blackwall_silvertown" && !vanTunnelAuthority.complete
     );
     const tunnelRateKey = vehicleClass === "van" && vanTunnelAuthority ?
       vanTunnelAuthority.pricingTariffApplied === "SMALL_VAN" ? "van_small" : "van_large" :
       vehicleClass;
     const vehicleRates = charge.ratesPence[tunnelRateKey];
-    const dartfordRateKey = conservativeDartford ? "van_multi_axle" : tariffClassification;
+    const dartfordRateKey = commercialDartford ? "van_multi_axle" : tariffClassification;
     const unit = tariffUnknown ? 0 : chargeId === "blackwall_silvertown" && vehicleRates ?
       vehicleRates[peak ? "peak" : "offPeak"] : charge.ratesPence[dartfordRateKey] || 0;
     const classificationUnknown = tariffUnknown || vehicleClass === "unknown";
@@ -357,10 +366,12 @@ function evaluateRoadCharges({
         unit > 0 ? "applicable" : "exempt_or_zero_rate",
       }),
       ...(vanTunnelAuthority ? vanTunnelAuthority : {}),
-      ...(conservativeDartford ? {
-        actualClassification: "UNKNOWN",
-        pricingTariffApplied: pricingContext === "quote" ? "VAN_MULTI_AXLE_CONSERVATIVE" : null,
-        pricingReason: verifiedFacts ? "INSUFFICIENT_VERIFIED_VEHICLE_DATA" : "UNVERIFIED_VEHICLE_DATA",
+      ...(commercialDartford ? {
+        actualClassification: verifiedFacts && tariffClassification !== "unknown" ?
+          tariffClassification.toUpperCase() : "UNKNOWN",
+        pricingTariffApplied: pricingContext === "quote" ? "VAN_MULTI_AXLE_COMMERCIAL" : null,
+        pricingReason: pricingContext === "quote" ? "CIRCUM_ALL_VANS_LARGE_TARIFF" :
+          verifiedFacts ? "INSUFFICIENT_VERIFIED_VEHICLE_DATA" : "UNVERIFIED_VEHICLE_DATA",
       } : {}),
     });
   }

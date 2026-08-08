@@ -90,23 +90,33 @@ test("Dartford motorcycle is zero-rate and duplicate crossing identity is ignore
   assert.equal(result.riderReimbursementPence, 0);
 });
 
-test("Dartford uses independent Car and Van axle tariffs", () => {
+test("Dartford quotes every Van at the large tariff and settles actual axle liability", () => {
   const crossing = [{chargeId: "dartford_crossing", crossingId: "dart-vehicle", at: "2026-08-07T12:00:00Z"}];
   const car = evaluateRoadCharges({routeFacts: route({crossings: crossing}), selectedVehicle: "car"});
+  const vanProfile = {axleCount: 2, roadChargeFactsVerificationStatus: "verified"};
   const van = evaluateRoadCharges({
     routeFacts: route({crossings: crossing}),
     selectedVehicle: "van",
-    vehicleProfile: {axleCount: 2, roadChargeFactsVerificationStatus: "verified"},
+    vehicleProfile: vanProfile,
+  });
+  const vanSettlement = evaluateRoadCharges({
+    routeFacts: route({crossings: crossing}),
+    selectedVehicle: "van",
+    vehicleProfile: vanProfile,
+    pricingContext: "settlement",
   });
   const unknownVan = evaluateRoadCharges({routeFacts: route({crossings: crossing}), selectedVehicle: "van"});
   assert.equal(car.customerContributionPence, 350);
-  assert.equal(van.customerContributionPence, 420);
+  assert.equal(van.customerContributionPence, 840);
+  assert.equal(van.charges[0].actualClassification, "VAN_2_AXLE");
+  assert.equal(van.charges[0].pricingTariffApplied, "VAN_MULTI_AXLE_COMMERCIAL");
+  assert.equal(vanSettlement.riderReimbursementPence, 420);
   assert.equal(unknownVan.customerContributionPence, 840);
-  assert.equal(unknownVan.charges[0].pricingTariffApplied, "VAN_MULTI_AXLE_CONSERVATIVE");
+  assert.equal(unknownVan.charges[0].pricingTariffApplied, "VAN_MULTI_AXLE_COMMERCIAL");
   assert.equal(unknownVan.charges[0].actualClassification, "UNKNOWN");
 });
 
-test("Van tunnel quote uses verified class or conservative large-Van pricing", () => {
+test("Van tunnel quotes always use the large-Van commercial tariff", () => {
   const crossing = [{
     chargeId: "blackwall_silvertown",
     crossingId: "van-tunnel",
@@ -136,9 +146,11 @@ test("Van tunnel quote uses verified class or conservative large-Van pricing", (
     referenceMassKg: 1800,
     roadChargeFactsVerificationStatus: "verified",
   });
-  assert.equal(verifiedSmall.customerContributionPence, 400);
+  assert.equal(verifiedSmall.customerContributionPence, 650);
   assert.equal(verifiedSmall.charges[0].actualClassification, "SMALL_VAN");
+  assert.equal(verifiedSmall.charges[0].pricingTariffApplied, "LARGE_VAN_COMMERCIAL");
   assert.equal(verifiedLarge.customerContributionPence, 650);
+  assert.equal(verifiedLarge.charges[0].pricingTariffApplied, "LARGE_VAN_COMMERCIAL");
   for (const result of [unknown, forgedSmall, conflicting]) {
     assert.equal(result.customerContributionPence, 650);
     assert.equal(result.charges[0].actualClassification, "UNKNOWN");
@@ -181,6 +193,37 @@ test("conservative Van quote never inflates actual Rider reimbursement", () => {
   assert.equal(quote.customerContributionPence, 650);
 });
 
+test("all Van quotes use the large tariff and CIRCUM retains the lawful difference", () => {
+  const routeFacts = route({crossings: [{
+    chargeId: "blackwall_silvertown",
+    crossingId: "all-vans-large",
+    direction: "northbound",
+    at: "2026-08-07T08:00:00Z",
+  }]});
+  const verifiedSmallProfile = {
+    tunnelTariffClass: "small_van",
+    referenceMassKg: 1100,
+    roadChargeFactsVerificationStatus: "verified",
+  };
+  const quote = evaluateRoadCharges({
+    routeFacts,
+    selectedVehicle: "van",
+    vehicleProfile: verifiedSmallProfile,
+    pricingContext: "quote",
+  });
+  const settlement = evaluateRoadCharges({
+    routeFacts,
+    selectedVehicle: "van",
+    vehicleProfile: verifiedSmallProfile,
+    pricingContext: "settlement",
+  });
+  assert.equal(quote.customerContributionPence, 650);
+  assert.equal(quote.charges[0].actualClassification, "SMALL_VAN");
+  assert.equal(quote.charges[0].pricingTariffApplied, "LARGE_VAN_COMMERCIAL");
+  assert.equal(settlement.riderReimbursementPence, 400);
+  assert.equal(quote.customerContributionPence - settlement.riderReimbursementPence, 250);
+});
+
 test("vehicle switch after quote changes actual liability but never customer payment", () => {
   const routeFacts = route({crossings: [{
     chargeId: "blackwall_silvertown",
@@ -213,7 +256,7 @@ test("Van authority keeps unknown distinct from verified large Van", () => {
   assert.equal(unknown.actualClassification, "UNKNOWN");
   assert.equal(unknown.pricingTariffApplied, "LARGE_VAN_CONSERVATIVE");
   assert.equal(verified.actualClassification, "LARGE_VAN");
-  assert.equal(verified.pricingTariffApplied, "LARGE_VAN");
+  assert.equal(verified.pricingTariffApplied, "LARGE_VAN_COMMERCIAL");
 });
 
 test("Blackwall and Silvertown distinguish direction-sensitive peak pricing", () => {
