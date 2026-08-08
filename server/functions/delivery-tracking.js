@@ -6,6 +6,7 @@ const {getFirestore, FieldValue, GeoPoint} = require("firebase-admin/firestore")
 const tracking = require("./sender-tracking-state-core");
 const {highestTrustAward} = require("./trust-award");
 const {planRoadChargeSettlement, pence} = require("./road-charge-settlement");
+const {standardSettlementAllowed, settlementProduct} = require("./settlement-product-guard");
 
 function text(value) {
   return `${value || ""}`.trim();
@@ -375,6 +376,12 @@ exports.updateDeliveryTrackingStatus = functions.https.onCall(async (data, conte
     const transitionDecision = transitionPolicyDecision(delivery, currentStatus, nextStatus);
     if (!transitionDecision.allowed) {
       throw new functions.https.HttpsError("failed-precondition", transitionDecision.message);
+    }
+    if (nextStatus === "delivered" && !standardSettlementAllowed(delivery)) {
+      throw new functions.https.HttpsError(
+          "failed-precondition",
+          `Settlement for ${settlementProduct(delivery)} deliveries must use its domain completion authority.`,
+      );
     }
 
     const evidence = data && data.evidence && typeof data.evidence === "object" ? data.evidence : {};
