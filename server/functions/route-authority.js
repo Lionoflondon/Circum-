@@ -1,6 +1,8 @@
 "use strict";
 
 const ROUTE_FACTS_VERSION = "circum_routes_v1";
+const {deriveCircumRouteFacts, GEOGRAPHY_VERSION} = require("./road-charge-geography");
+const {routeFingerprint} = require("./road-charge-route-provider");
 
 function coordinate(value) {
   if (!value || typeof value !== "object") return null;
@@ -83,7 +85,19 @@ async function getAuthoritativeRouteFacts({origin, destination, fetchImpl = glob
     throw error;
   }
   const geometry = route.polyline && route.polyline.encodedPolyline ? decodePolyline(route.polyline.encodedPolyline) : [];
+  const geography = deriveCircumRouteFacts(
+      geometry.map((point) => [point.longitude, point.latitude]),
+      {googleTollSignal: Boolean(route.travelAdvisory && route.travelAdvisory.tollInfo)},
+  );
+  const fingerprint = routeFingerprint({
+    origin: canonicalOrigin,
+    destination: canonicalDestination,
+    points: geometry.map((point) => [point.longitude, point.latitude]),
+    distanceMeters: Number(route.distanceMeters),
+  });
   return {
+    authority: "authoritative_route",
+    known: true,
     version: ROUTE_FACTS_VERSION,
     provider: "google_routes",
     origin: canonicalOrigin,
@@ -92,7 +106,10 @@ async function getAuthoritativeRouteFacts({origin, destination, fetchImpl = glob
     distanceMiles: Number(route.distanceMeters) / 1609.344,
     durationSeconds: Number.parseFloat(`${route.duration || ""}`) || null,
     encodedPolyline: route.polyline && route.polyline.encodedPolyline || null,
-    centralLondonEntered: routeEntersCentralLondon(geometry),
+    centralLondonEntered: Boolean(geography.congestionZone && geography.congestionZone.entered === true),
+    geography,
+    geographyVersion: GEOGRAPHY_VERSION,
+    routeFingerprint: fingerprint,
     tollInfo: route.travelAdvisory && route.travelAdvisory.tollInfo || null,
     evaluatedAt: new Date().toISOString(),
   };

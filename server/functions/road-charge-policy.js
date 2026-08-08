@@ -1,43 +1,37 @@
 "use strict";
 
-const ROAD_CHARGE_POLICY_VERSION = "circum_road_charges_v1";
+const {ROAD_CHARGE_POLICY_VERSION, evaluateRoadCharges} = require("./road-charges-core");
 
-function money(value) {
-  const parsed = Number(value);
-  return Number.isFinite(parsed) && parsed >= 0 ? Math.round(parsed * 100) / 100 : 0;
-}
-
-function vehicleKey(value) {
-  const normalized = `${value || ""}`.toLowerCase();
-  if (normalized.includes("van")) return "van";
-  if (normalized.includes("car")) return "car";
-  return "motorbike";
-}
-
-function evaluateRoadChargePolicy({routeFacts, vehicle, product, approvedPolicy = {}} = {}) {
-  const facts = routeFacts && typeof routeFacts === "object" ? routeFacts : null;
-  const key = vehicleKey(vehicle);
-  const centralLondon = facts && facts.centralLondonEntered === true;
-  const centralPolicy = approvedPolicy.centralLondon && approvedPolicy.centralLondon[key];
-  const centralAmount = centralLondon && centralPolicy && centralPolicy.approved === true ?
-    money(centralPolicy.amount) : 0;
-  const lineItems = centralAmount > 0 ? [{
-    key: "central_london",
-    label: "Central London fee",
-    amount: centralAmount,
-    chargeType: "daily_liability",
-  }] : [];
+function evaluateRoadChargePolicy({routeFacts, vehicle, product, vehicleProfile = {}, vehicleId = null, at, liabilityState = {}} = {}) {
+  const result = evaluateRoadCharges({
+    routeFacts,
+    selectedVehicle: vehicle,
+    vehicleProfile,
+    vehicleId,
+    at,
+    liabilityState,
+    pricingContext: "quote",
+  });
+  const lineItems = result.charges
+      .filter((charge) => Number(charge.customerContributionPence || charge.amountPence || 0) > 0)
+      .map((charge) => ({
+        key: charge.type === "route_toll" ? "road_toll" : "daily_zone_charge",
+        label: charge.chargeId === "congestion_charge" ? "Central London fee" : "Road charge",
+        amount: Number(charge.customerContribution || charge.amount || 0),
+        chargeType: charge.type,
+        chargeId: charge.chargeId,
+      }));
   return {
     version: ROAD_CHARGE_POLICY_VERSION,
     product: `${product || "standard"}`,
-    vehicle: key,
-    routeFactsVersion: facts && facts.version || null,
-    centralLondonEntered: centralLondon,
-    approvedTariffApplied: lineItems.length > 0,
-    customerAmount: money(lineItems.reduce((sum, item) => sum + item.amount, 0)),
+    vehicle: result.charges[0] && result.charges[0].vehicleClass || `${vehicle || "unknown"}`,
+    routeFactsVersion: routeFacts && (routeFacts.geographyVersion || routeFacts.version) || null,
+    centralLondonEntered: routeFacts && routeFacts.congestionZone && routeFacts.congestionZone.entered === true,
+    approvedTariffApplied: result.authoritativePricingComplete === true && lineItems.length > 0,
+    customerAmount: Number(result.customerContribution || 0),
     lineItems,
-    reason: lineItems.length > 0 ? "approved_tariff_applied" :
-      centralLondon ? "no_approved_tariff" : "route_outside_configured_geography",
+    breakdown: result,
+    reason: result.reason || (lineItems.length > 0 ? "approved_tariff_applied" : "no_applicable_charge"),
   };
 }
 

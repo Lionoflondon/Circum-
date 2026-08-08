@@ -719,6 +719,8 @@ function quotePayload(data, uid, serverPhotoAnalysis = null) {
     vehicle: selectedVehicle,
     product: data.businessMode === true ||
       text(data.businessId || data.businessAccountId).length > 0 ? "business" : "standard",
+    vehicleProfile: data.authoritativeVehicleProfile || {},
+    vehicleId: data.authoritativeVehicleId || null,
   });
   const roadChargeAmount = roadCharges.customerAmount;
   const vehicle = vehicleSurcharge(selectedVehicle);

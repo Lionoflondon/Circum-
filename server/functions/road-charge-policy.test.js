@@ -4,26 +4,33 @@ const assert = require("node:assert/strict");
 const test = require("node:test");
 const {evaluateRoadChargePolicy} = require("./road-charge-policy");
 
-test("road-charge policy fails closed when no approved tariff exists", () => {
+test("road-charge policy fails closed when authoritative geography is unavailable", () => {
   const result = evaluateRoadChargePolicy({
-    routeFacts: {version: "circum_routes_v1", centralLondonEntered: true},
+    routeFacts: {version: "circum_routes_v1"},
     vehicle: "car",
     product: "standard",
   });
   assert.equal(result.customerAmount, 0);
   assert.equal(result.approvedTariffApplied, false);
-  assert.equal(result.reason, "no_approved_tariff");
+  assert.equal(result.reason, "authoritative_route_facts_unavailable");
 });
 
-test("road-charge policy applies only an explicit approved tariff", () => {
+test("road-charge policy applies the recovered Central London tariff", () => {
   const result = evaluateRoadChargePolicy({
-    routeFacts: {version: "circum_routes_v1", centralLondonEntered: true},
-    vehicle: "van",
-    product: "business",
-    approvedPolicy: {centralLondon: {van: {approved: true, amount: 9}}},
+    routeFacts: {
+      authority: "authoritative_route",
+      known: true,
+      congestionZone: {entered: true, at: "2026-08-07T10:00:00Z"},
+    },
+    vehicle: "car",
+    product: "standard",
+    vehicleProfile: {
+      roadChargeFactsVerificationStatus: "verified",
+      cczAuthorityStatus: "CHARGEABLE",
+    },
   });
   assert.equal(result.customerAmount, 9);
-  assert.equal(result.lineItems[0].chargeType, "daily_liability");
+  assert.equal(result.lineItems[0].chargeType, "daily_zone_charge");
 });
 
 test("provider toll metadata cannot create a customer charge", () => {
