@@ -53,6 +53,7 @@ const giftsPayment = require("./gifts-payment");
 const communicationEngine = require("./communication-engine");
 const deliveryPolicy = require("./delivery-policy");
 const deliveryTracking = require("./delivery-tracking");
+const scheduledRoadChargeRefunds = require("./scheduled-road-charge-refunds");
 const ratingsTipping = require("./ratings-tipping");
 const stripeRefunds = require("./stripe-refunds");
 const riderEarningsSummary = require("./rider-earnings-summary");
@@ -149,6 +150,8 @@ exports.updateDeliveryTrackingStatus =
   deliveryTracking.updateDeliveryTrackingStatus;
 exports.updateDeliveryLiveLocation =
   deliveryTracking.updateDeliveryLiveLocation;
+exports.settleScheduledRoadChargeCashRefund =
+  scheduledRoadChargeRefunds.settleScheduledRoadChargeCashRefund;
 exports.submitDeliveryRating = ratingsTipping.submitDeliveryRating;
 exports.submitDeliveryTip = ratingsTipping.submitDeliveryTip(stripe);
 

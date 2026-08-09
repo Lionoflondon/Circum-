@@ -1,9 +1,11 @@
 "use strict";
 
+const functions = require("firebase-functions/v1");
 const REFUND_POLICY_VERSION = "2026-08-scheduled-road-charge-refunds-v1";
 const {getFirestore, FieldValue} = require("firebase-admin/firestore");
 const {walletIdForEmail} = require("./wallet-core");
 const {senderWalletProjectionRecord} = require("./roth-ledger-core");
+const {requireAdmin} = require("./admin-auth");
 const STATES = Object.freeze({
   pending: "PENDING_RECONCILIATION",
   eligible: "ELIGIBLE",
@@ -114,6 +116,92 @@ async function settleEntitlementToRoth({db = getFirestore(), entitlementId: id, 
   });
 }
 
+function cleanReference(value, label) {
+  const reference = `${value || ""}`.trim();
+  if (!reference || reference.length > 160) {
+    throw new functions.https.HttpsError("invalid-argument", `${label} is required.`);
+  }
+  return reference;
+}
+
+async function settleEntitlementToCash({
+  db = getFirestore(),
+  entitlementId: id,
+  actor = {},
+  customerRequestReference,
+  cashRefundReference,
+} = {}) {
+  if (!id) throw new Error("Road-charge refund entitlement is required.");
+  if (actor.authorized !== true || !actor.uid) {
+    return {settled: false, reason: "support_authorization_required", entitlementId: id};
+  }
+  const requestReference = cleanReference(customerRequestReference, "Customer support request reference");
+  const refundReference = cleanReference(cashRefundReference, "Cash refund reference");
+  const entitlementRef = db.collection("roadChargeRefundEntitlements").doc(id);
+  const cashRef = db.collection("roadChargeCashRefunds").doc(`road_charge_cash_refund_${id}`);
+  return db.runTransaction(async (transaction) => {
+    const entitlementSnapshot = await transaction.get(entitlementRef);
+    if (!entitlementSnapshot.exists) return {settled: false, reason: "entitlement_not_found", entitlementId: id};
+    const entitlement = entitlementSnapshot.data() || {};
+    if (entitlement.policyVersion !== REFUND_POLICY_VERSION) {
+      return {settled: false, reason: "unsupported_policy_version", entitlementId: id};
+    }
+    const amountPence = refundableAmountPence(entitlement) -
+      pence(entitlement.rothCreditedPence) - pence(entitlement.cashRefundedPence);
+    if (entitlement.state === STATES.cashSettled) {
+      return {settled: false, duplicate: true, entitlementId: id};
+    }
+    if (entitlement.state === STATES.rothSettled || pence(entitlement.rothCreditedPence) > 0) {
+      return {settled: false, reason: "roth_already_settled", entitlementId: id};
+    }
+    if (entitlement.state !== STATES.eligible || amountPence <= 0) {
+      return {settled: false, reason: "cash_refund_not_eligible", entitlementId: id};
+    }
+    const cashSnapshot = await transaction.get(cashRef);
+    if (cashSnapshot.exists) return {settled: false, duplicate: true, entitlementId: id};
+    transaction.create(cashRef, {
+      refundId: cashRef.id,
+      entitlementId: id,
+      deliveryId: entitlement.deliveryId,
+      quoteId: entitlement.quoteId,
+      chargeId: entitlement.chargeId,
+      amountPence,
+      amount: amountPence / 100,
+      currency: "GBP",
+      status: "processed",
+      customerRequestReference: requestReference,
+      cashRefundReference: refundReference,
+      authorizedBy: actor.uid,
+      policyVersion: REFUND_POLICY_VERSION,
+      createdAt: FieldValue.serverTimestamp(),
+      updatedAt: FieldValue.serverTimestamp(),
+    });
+    transaction.update(entitlementRef, {
+      state: STATES.cashSettled,
+      refundedPence: amountPence,
+      cashRefundedPence: amountPence,
+      cashRefundId: cashRef.id,
+      customerRequestReference: requestReference,
+      cashRefundReference: refundReference,
+      settledBy: actor.uid,
+      settledAt: FieldValue.serverTimestamp(),
+      updatedAt: FieldValue.serverTimestamp(),
+    });
+    return {settled: true, entitlementId: id, amountPence, refundId: cashRef.id};
+  });
+}
+
+const settleScheduledRoadChargeCashRefund = functions.https.onCall(async (data, context) => {
+  const actorUid = requireAdmin(context, "Support or administrator access is required.");
+  return settleEntitlementToCash({
+    db: getFirestore(),
+    entitlementId: `${data && data.entitlementId || ""}`.trim(),
+    customerRequestReference: data && data.customerRequestReference,
+    cashRefundReference: data && data.cashRefundReference,
+    actor: {authorized: true, uid: actorUid},
+  });
+});
+
 function eligibleRefund(entitlement, actualEvidence) {
   if (!entitlement || entitlement.policyVersion !== REFUND_POLICY_VERSION) {
     return {eligible: false, reason: "unsupported_policy_version"};
@@ -147,7 +235,9 @@ function reserveCash(entitlement, actor = {}) {
     return {...entitlement, state: STATES.review, decision: {eligible: false, reason: "roth_reversal_required"}};
   }
   if (entitlement.state !== STATES.eligible) return {...entitlement, decision: {eligible: false, reason: "entitlement_not_cash_reservable"}};
-  return {...entitlement, state: STATES.cashReserved, decision: {eligible: true, amountPence: pence(entitlement.entitlementPence)}};
+  const amountPence = refundableAmountPence(entitlement);
+  if (amountPence <= 0) return {...entitlement, decision: {eligible: false, reason: "cash_refund_not_eligible"}};
+  return {...entitlement, state: STATES.cashReserved, decision: {eligible: true, amountPence}};
 }
 
 function settleCash(entitlement) {
@@ -161,4 +251,4 @@ function invariant(entitlement) {
   return total <= refundableAmountPence(entitlement);
 }
 
-module.exports = {REFUND_POLICY_VERSION, STATES, pence, refundableAmountPence, entitlementId, createEntitlement, eligibleRefund, reserveRoth, reserveCash, settleCash, settleEntitlementToRoth, invariant};
+module.exports = {REFUND_POLICY_VERSION, STATES, pence, refundableAmountPence, entitlementId, createEntitlement, eligibleRefund, reserveRoth, reserveCash, settleCash, settleEntitlementToRoth, settleEntitlementToCash, settleScheduledRoadChargeCashRefund, invariant};
