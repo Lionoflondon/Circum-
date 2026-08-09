@@ -39,7 +39,7 @@ async function profileToken(db, uid, role) {
   for (const collection of collections) {
     const snapshot = await db.collection(collection).doc(uid).get();
     if (!snapshot.exists) continue;
-    const token = text(snapshot.data().fcmToken || snapshot.data().pushToken || snapshot.data().code);
+    const token = text(snapshot.data().fcmToken || snapshot.data().pushToken);
     if (token) return token;
   }
   return "";

@@ -143,17 +143,17 @@ test("rider applications and documents are backend/admin write-authoritative", (
   );
 });
 
-test("notifications are backend or admin authored only", () => {
+test("notifications are backend authored only", () => {
   const notificationBlock = rules.match(
       /match \/notifications\/\{notificationId\} \{[\s\S]*?\n {4}\}/,
   )[0];
   assert.match(
       notificationBlock,
-      /allow create: if isAdmin\(\);/,
+      /allow create, update: if false;/,
   );
   assert.doesNotMatch(
       notificationBlock,
-      /allow create: if isAdmin\(\) \|\|\s*\(signedIn\(\)/,
+      /allow create[^;]*isAdmin\(\)/,
   );
 });
 

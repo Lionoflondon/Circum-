@@ -69,6 +69,11 @@ suite("two concurrent Rider acceptances produce exactly one assignment", async (
     workflow: "Standard",
     pickupPosition: {geopoint: {latitude: 51.501, longitude: -0.125}},
   });
+  batch.set(db.collection("chats").doc(deliveryId), {
+    conversationType: "sender_rider",
+    participants: [senderId, `${prefix}_former_rider`, "circum-support"],
+    participantRoles: {[senderId]: "sender", [`${prefix}_former_rider`]: "rider", "circum-support": "admin"},
+  });
   await batch.commit();
 
   const results = await Promise.allSettled(riders.map((riderId) =>
@@ -87,6 +92,11 @@ suite("two concurrent Rider acceptances produce exactly one assignment", async (
   assert.equal(winnerPresence.activeDeliveryId, deliveryId);
   const loser = riders.find((riderId) => riderId !== delivery.riderId);
   assert.equal((await db.collection("riderPresence").doc(loser).get()).data().busy, false);
+  const chat = (await db.collection("chats").doc(deliveryId).get()).data();
+  assert.deepEqual(chat.participants, [senderId, delivery.riderId, "circum-support"]);
+  assert.equal(chat.participants.includes(`${prefix}_former_rider`), false);
+  assert.equal(chat.participantRoles[senderId], "sender");
+  assert.equal(chat.participantRoles[delivery.riderId], "rider");
 });
 
 suite("deterministic notification correlation persists and attempts one event once", async () => {
@@ -114,9 +124,29 @@ suite("deterministic notification correlation persists and attempts one event on
   const snapshot = await db.collection("notifications").where("correlationId", "==", correlationId).get();
   assert.equal(snapshot.size, 1);
   const stored = snapshot.docs[0].data();
-  assert.equal(stored.data.fcmToken, "");
-  assert.equal(stored.data.stripeCheckoutSessionId, "");
+  assert.equal("fcmToken" in stored.data, false);
+  assert.equal("stripeCheckoutSessionId" in stored.data, false);
   assert.equal(stored.deliveryAttempts, 0);
+});
+
+suite("concurrent notification retries have exactly one Firestore claim owner", async () => {
+  const db = getFirestore();
+  const notificationId = `${prefix}_retry_notification`;
+  await db.collection("notifications").doc(notificationId).set({
+    recipientId: `${prefix}_retry_recipient`,
+    recipientRole: "sender",
+    pushDeliveryStatus: "failed",
+    retryable: true,
+  });
+  const claims = await Promise.allSettled([
+    communicationEngine.claimNotificationRetry(db, notificationId),
+    communicationEngine.claimNotificationRetry(db, notificationId),
+  ]);
+  assert.equal(claims.filter((claim) => claim.status === "fulfilled").length, 1);
+  assert.equal(claims.filter((claim) => claim.status === "rejected").length, 1);
+  const stored = (await db.collection("notifications").doc(notificationId).get()).data();
+  assert.equal(stored.pushDeliveryStatus, "retrying");
+  assert.equal(stored.retryable, false);
 });
 
 suite("sendRiderUpdate rejects arbitrary tokens and wrong recipients", async () => {
@@ -165,14 +195,68 @@ suite("chat messages remain confined to declared participants", async () => {
     bookingId: `${prefix}_chat_delivery`,
   });
   await assert.rejects(
-      communicationEngine._sendCircumMessageHandler({chatId, message: "private"}, {auth: {uid: "outsider", token: {}}}),
+      communicationEngine._sendCircumMessageHandler(
+          {chatId, message: "private", clientMessageId: `${prefix}_outsider`},
+          {auth: {uid: "outsider", token: {}}},
+      ),
       (error) => error.code === "permission-denied",
   );
+  await assert.rejects(
+      communicationEngine._sendCircumMessageHandler(
+          {chatId: `${prefix}_forged_chat`, message: "private", clientMessageId: `${prefix}_forged`},
+          {auth: {uid: senderId, token: {}}},
+      ),
+      (error) => error.code === "not-found",
+  );
+  await assert.rejects(
+      communicationEngine._sendCircumMessageHandler(
+          {chatId, message: "missing identity"},
+          {auth: {uid: senderId, token: {}}},
+      ),
+      (error) => error.code === "invalid-argument",
+  );
   const result = await communicationEngine._sendCircumMessageHandler(
-      {chatId, message: "Delivery update", correlationId: `${prefix}_message`},
+      {chatId, message: "Delivery update", clientMessageId: `${prefix}_message`},
+      {auth: {uid: senderId, token: {name: "Sender"}}},
+  );
+  const replay = await communicationEngine._sendCircumMessageHandler(
+      {chatId, message: "Delivery update", clientMessageId: `${prefix}_message`},
       {auth: {uid: senderId, token: {name: "Sender"}}},
   );
   const message = (await db.collection("chats").doc(chatId).collection("messages").doc(result.messageId).get()).data();
+  const messages = await db.collection("chats").doc(chatId).collection("messages").get();
   assert.deepEqual(message.recipientIds, [riderId]);
   assert.equal(message.recipientIds.includes("outsider"), false);
+  assert.equal(replay.messageId, result.messageId);
+  assert.equal(replay.duplicate, true);
+  assert.equal(messages.size, 1);
+  const privateResult = await communicationEngine._sendCircumMessageHandler(
+      {chatId, message: "Email me at sender@example.com about pi_secret", clientMessageId: `${prefix}_private_message`},
+      {auth: {uid: senderId, token: {name: "Sender"}}},
+  );
+  const privateMessage = (await db.collection("chats").doc(chatId)
+      .collection("messages").doc(privateResult.messageId).get()).data();
+  assert.doesNotMatch(privateMessage.message, /sender@example\.com|pi_secret/);
+  await assert.rejects(
+      communicationEngine._sendCircumMessageHandler(
+          {chatId, message: "unsafe", clientMessageId: `${prefix}_attachment`, attachments: [{url: "https://example.invalid"}]},
+          {auth: {uid: senderId, token: {name: "Sender"}}},
+      ),
+      (error) => error.code === "invalid-argument",
+  );
+  await db.collection("chats").doc(chatId).set({readOnly: true}, {merge: true});
+  await assert.rejects(
+      communicationEngine._sendCircumMessageHandler(
+          {chatId, message: "late sender message", clientMessageId: `${prefix}_closed_sender`},
+          {auth: {uid: senderId, token: {}}},
+      ),
+      (error) => error.code === "permission-denied",
+  );
+  await assert.rejects(
+      communicationEngine._sendCircumMessageHandler(
+          {chatId, message: "late admin message", clientMessageId: `${prefix}_closed_admin`},
+          {auth: {uid: "admin", token: {admin: true}}},
+      ),
+      (error) => error.code === "permission-denied",
+  );
 });

@@ -64,14 +64,17 @@ function notificationCorrelation({recipientId, recipientRole, type, bookingId, t
 
 async function notify({recipientId, recipientRole, type, title, body, bookingId, ticketId, eventId, data = {}}) {
   const correlationId = notificationCorrelation({recipientId, recipientRole, type, bookingId, ticketId, eventId, data});
+  const safeTitle = communicationEngine.maskContactDetails(title);
+  const safeBody = communicationEngine.maskContactDetails(body);
+  const safeData = communicationEngine.redactContactFields(data);
   if (recipientRole !== "admin") {
     return communicationEngine.emitNotification({
       recipientId,
       recipientRole: recipientRole === "shipper" ? "sender" : recipientRole,
       type,
-      title,
-      body,
-      data: {...data, bookingId, ticketId, correlationId},
+      title: safeTitle,
+      body: safeBody,
+      data: {...safeData, bookingId, ticketId, correlationId},
     });
   }
   const db = getFirestore();
@@ -91,11 +94,11 @@ async function notify({recipientId, recipientRole, type, title, body, bookingId,
     recipientId: recipientId || null,
     recipientRole,
     type,
-    title,
-    message: body,
+    title: safeTitle,
+    message: safeBody,
     bookingId: bookingId || null,
     ticketId: ticketId || null,
-    data,
+    data: safeData,
     correlationId,
     read: false,
     createdAt: FieldValue.serverTimestamp(),
@@ -108,7 +111,7 @@ async function notify({recipientId, recipientRole, type, title, body, bookingId,
   if (tokens.length) {
     await getMessaging().sendEachForMulticast({
       tokens,
-      notification: {title, body},
+      notification: {title: safeTitle, body: safeBody},
       data: {type, notificationId: ref.id, bookingId: bookingId || "", ticketId: ticketId || ""},
     }).catch((error) => console.error("Admin notification failed", error));
   }
@@ -476,7 +479,7 @@ exports.onChatMessageCreated = functions.firestore.document("chats/{chatId}/mess
   if (message.initialSupportRequest !== true && text(message.senderRole) !== "admin" && (chatData.type === "support" || participants.includes("circum-support"))) await notify({recipientRole: "admin", type: "admin_response_needed", title: "New support message", body: "A shipper or rider sent a new message.", bookingId, ticketId, eventId: `chat-admin:${context.params.chatId}:${context.params.messageId}`});
 });
 
-exports.onSupportTicketCreated = functions.firestore.document("supportTickets/{ticketId}").onCreate((snapshot) => notify({recipientRole: "admin", type: "support_ticket", title: "New support ticket", body: text(snapshot.data().message) || "A new support request was opened.", ticketId: snapshot.id}));
+exports.onSupportTicketCreated = functions.firestore.document("supportTickets/{ticketId}").onCreate((snapshot) => notify({recipientRole: "admin", type: "support_ticket", title: "New support ticket", body: "A new support request was opened.", ticketId: snapshot.id}));
 exports.onDisputeCreated = functions.firestore.document("disputes/{disputeId}").onCreate((snapshot, context) => notify({recipientRole: "admin", type: "dispute", title: "New dispute", body: "A delivery dispute needs review.", bookingId: text(snapshot.data().bookingId || snapshot.data().requestId), eventId: `dispute:${context.params.disputeId}`}));
 
 exports.onRiderProfileUpdated = functions.firestore.document("riderProfiles/{riderId}").onUpdate(async (change, context) => {

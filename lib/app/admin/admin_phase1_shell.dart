@@ -6,6 +6,7 @@ import 'package:circum/app/admin/delivery/proof_of_delivery.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:uuid/uuid.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import 'admin_operations.dart';
@@ -383,6 +384,7 @@ class _AdminPhaseOneShellState extends State<AdminPhaseOneShell> {
             'chatId': chatId,
             'message': 'Please complete your secure payout setup here: $url',
             'messageType': 'text',
+            'clientMessageId': const Uuid().v4(),
           });
         }
       }
@@ -2129,6 +2131,7 @@ class _AdminPhaseOneShellState extends State<AdminPhaseOneShell> {
         'title': title,
         'body': body,
         'audience': audience,
+        'announcementId': const Uuid().v4(),
       });
       await _writeAudit(
         AdminAuditEntry(
@@ -2596,6 +2599,7 @@ class _AdminPhaseOneShellState extends State<AdminPhaseOneShell> {
         'chatId': chatId,
         'message': message,
         'messageType': 'text',
+        'clientMessageId': const Uuid().v4(),
       });
       await _writeAudit(
         AdminAuditEntry(

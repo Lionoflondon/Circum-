@@ -3,6 +3,7 @@ const functions = require("firebase-functions/v1");
 const {getFirestore, FieldValue} = require("firebase-admin/firestore");
 const {getStorage} = require("firebase-admin/storage");
 const {canonicalDocumentId, DOCUMENT_MATRIX} = require("./rider-certification-policy");
+const communicationEngine = require("./communication-engine");
 
 const ALLOWED_DOCUMENT_TYPES = new Set(Object.values(DOCUMENT_MATRIX).flat());
 const ALLOWED_CONTENT_TYPES = new Set([
@@ -413,8 +414,9 @@ exports.createWeightAdjustedNotification = functions.https.onCall(async (data, c
   }
   const db = getFirestore();
   const deliveryRef = db.collection("deliveryRequests").doc(requestId);
-  const notificationRef = db.collection("notifications").doc();
   const eventRef = db.collection("riderOnboardingEvents").doc();
+  let recipientId = "";
+  let notificationId = "";
 
   await db.runTransaction(async (transaction) => {
     const deliverySnap = await transaction.get(deliveryRef);
@@ -429,28 +431,37 @@ exports.createWeightAdjustedNotification = functions.https.onCall(async (data, c
     if (assignedRider !== rider.uid) {
       throw new functions.https.HttpsError("permission-denied", "Delivery is not assigned to this Rider.");
     }
-    const recipientId = text(delivery.senderId || delivery.userId, 180);
+    recipientId = text(delivery.senderId || delivery.userId, 180);
     if (!recipientId) {
       throw new functions.https.HttpsError("failed-precondition", "Delivery has no Sender recipient.");
     }
-    transaction.set(notificationRef, {
+    const correlationId = `weight_adjusted:${requestId}:${recipientId}`;
+    notificationId = communicationEngine.notificationIdFor({
       recipientId,
-      requestId,
+      recipientRole: "sender",
       type: "weight_adjusted",
-      title: "Parcel weight updated",
-      message: "Parcel weight differs from original declaration. Pricing has been adjusted.",
-      createdAt: FieldValue.serverTimestamp(),
-      read: false,
-      source: "createWeightAdjustedNotification",
+      correlationId,
     });
     transaction.set(eventRef, audit("rider_weight_adjustment_notified", rider, {
       requestId,
       recipientId,
-      notificationId: notificationRef.id,
+      notificationId,
     }));
   });
 
-  return {ok: true, notificationId: notificationRef.id};
+  notificationId = await communicationEngine.emitNotification({
+    recipientId,
+    recipientRole: "sender",
+    type: "weight_adjusted",
+    title: "Parcel weight updated",
+    body: "Parcel weight differs from the original declaration. Pricing has been adjusted.",
+    data: {
+      deliveryId: requestId,
+      correlationId: `weight_adjusted:${requestId}:${recipientId}`,
+      category: "deliveries",
+    },
+  });
+  return {ok: true, notificationId};
 });
 
 exports.submitRiderApplication = functions.https.onCall(async (data, context) => {

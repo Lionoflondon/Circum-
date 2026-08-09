@@ -5,6 +5,7 @@ import 'package:cloud_functions/cloud_functions.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:uuid/uuid.dart';
 
 import '../../sender_mobile/design_system/sender_design_system.dart';
 
@@ -159,10 +160,14 @@ class _RideChatPageViewState extends State<RideChatPageView> {
     final chatId = _chatId;
     if (message.isEmpty || chatId == null || readOnly || _sending) return;
     setState(() => _sending = true);
+    final clientMessageId = const Uuid().v4();
     try {
-      await FirebaseFunctions.instance
-          .httpsCallable('sendCircumMessage')
-          .call({'chatId': chatId, 'message': message, 'messageType': 'text'});
+      await FirebaseFunctions.instance.httpsCallable('sendCircumMessage').call({
+        'chatId': chatId,
+        'message': message,
+        'messageType': 'text',
+        'clientMessageId': clientMessageId,
+      });
       _input.clear();
       await _setTyping(false);
     } on FirebaseFunctionsException catch (error) {

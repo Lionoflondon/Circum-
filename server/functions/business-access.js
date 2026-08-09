@@ -1,6 +1,7 @@
 /* eslint-disable max-len, require-jsdoc */
 const functions = require("firebase-functions/v1");
 const {getFirestore, FieldValue} = require("firebase-admin/firestore");
+const communicationEngine = require("./communication-engine");
 
 const BUSINESS_ROLES = new Set([
   "owner",
@@ -532,18 +533,27 @@ exports.requestBusinessAccess = functions
           },
           {merge: true},
       );
-      await db.collection("notifications").add({
-        userIds:
-        business.managerIds ||
-        [business.ownerUid || business.createdByUserId].filter(Boolean),
-        category: "business",
+      const managerRecipients = [...new Set([
+        business.ownerUid,
+        business.createdByUserId,
+        ...(Array.isArray(business.managerIds) ? business.managerIds : []),
+        ...(Array.isArray(business.teamMembers) ? business.teamMembers
+            .filter((member) => BUSINESS_ADMIN_ROLES.has(clean(member.role)) && clean(member.status || "active") === "active")
+            .map((member) => member.userId) : []),
+      ].map(clean).filter((id) => id && !id.includes("@")))];
+      await Promise.all(managerRecipients.map((recipientId) => communicationEngine.emitNotification({
+        recipientId,
+        recipientRole: "sender",
+        type: "business_access_requested",
         title: "Business access request",
         body: `${userName} requested access to ${business.businessName || "your Business workspace"}.`,
-        destination: {route: "business", businessId},
-        readBy: [],
-        archivedBy: [],
-        createdAt: FieldValue.serverTimestamp(),
-      });
+        data: {
+          businessId,
+          requestId,
+          correlationId: `business_access_request:${requestId}:${recipientId}`,
+          category: "business",
+        },
+      })));
       return {status: "pending", businessId};
     });
 
@@ -642,18 +652,23 @@ exports.reviewBusinessAccessRequest = functions
             {merge: true},
         );
       }
-      batch.set(db.collection("notifications").doc(), {
-        userId: request.userId,
-        category: "business",
+      await batch.commit();
+      await communicationEngine.emitNotification({
+        recipientId: request.userId,
+        recipientRole: "sender",
+        type: approved ? "business_access_approved" : "business_access_rejected",
         title: approved ? "Business access approved" : "Business access update",
         body: approved ?
-        `You can now open ${business.businessName || "Business"}.` :
-        `Your request to join ${business.businessName || "Business"} was not approved.`,
-        destination: {route: "business", businessId: request.businessId},
-        read: false,
-        createdAt: FieldValue.serverTimestamp(),
+          `You can now open ${business.businessName || "Business"}.` :
+          `Your request to join ${business.businessName || "Business"} was not approved.`,
+        data: {
+          businessId: request.businessId,
+          requestId,
+          status: approved ? "approved" : "rejected",
+          correlationId: `business_access_review:${requestId}:${approved ? "approved" : "rejected"}`,
+          category: "business",
+        },
       });
-      await batch.commit();
       return {
         status: approved ? "approved" : "rejected",
         businessId: request.businessId,
@@ -800,18 +815,22 @@ exports.inviteBusinessMember = functions
         role,
         createdAt: FieldValue.serverTimestamp(),
       });
-      await db
-          .collection("notifications")
-          .doc()
-          .set({
-            userId: email,
+      const invitedUser = await db.collection("users").where("email", "==", email).limit(1).get();
+      if (!invitedUser.empty) {
+        const recipientId = invitedUser.docs[0].id;
+        await communicationEngine.emitNotification({
+          recipientId,
+          recipientRole: "sender",
+          type: "business_invitation",
+          title: "Business invitation",
+          body: `You have been invited to ${account.businessName || "Circum Business"}.`,
+          data: {
+            businessId,
+            correlationId: `business_invitation:${businessId}:${recipientId}`,
             category: "business",
-            title: "Business invitation",
-            body: `You have been invited to ${account.businessName || "Circum Business"}.`,
-            destination: {route: "business", businessId},
-            read: false,
-            createdAt: FieldValue.serverTimestamp(),
-          });
+          },
+        });
+      }
       return {status: "invited", businessId, email, role};
     });
 

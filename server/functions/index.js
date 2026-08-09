@@ -1,7 +1,6 @@
 /* eslint-disable max-len, require-jsdoc */
 const {initializeApp} = require("firebase-admin/app");
 const {getFirestore} = require("firebase-admin/firestore");
-const {getMessaging} = require("firebase-admin/messaging");
 const functions = require("firebase-functions/v1");
 const {defineSecret} = require("firebase-functions/params");
 const stripeConfig = functions.config().stripe || {};
@@ -544,48 +543,6 @@ exports.StripeWebhook = functions
         }
       }
 
-      if (event.type === "charge.succeeded") {
-        console.log("💰 Payment completed!");
-        const sessionData = event.data.object;
-        const metadata = sessionData.metadata;
-
-        const messageObj = JSON.stringify({
-        // sessionData,
-          metadata,
-          success: true,
-        });
-
-        const message = {
-          apns: {
-            payload: {
-              aps: {
-                "content-available": 1,
-              },
-            },
-          },
-          data: {
-            type: "payment",
-            data: messageObj,
-          },
-          // notification: {
-          //   title: `${req.user.firstName}`,
-          //   body: text,
-          // },
-          token: metadata.pushToken,
-        };
-
-        getMessaging()
-            .send(message)
-            .then((response) => {
-              console.log(`Successfully sent message: ${response}`);
-              // console.log(`token: ${metadata.pushToken}`);
-            })
-            .catch((err) => {
-              //   console.log(err)
-              // console.log('new error')
-            });
-      }
-
       if (event.type == "checkout.session.completed") {
         console.log("💰 Payment completed!");
         const sessionData = event.data.object;
@@ -624,45 +581,6 @@ exports.StripeWebhook = functions
               .status(500)
               .send({success: false, error: "checkout_finalization_failed"});
         }
-
-        const messageObj = JSON.stringify({
-        // sessionData,
-          metadata,
-          success: true,
-        });
-
-        if (!metadata.pushToken) {
-          return res.send({success: true});
-        }
-
-        const message = {
-          apns: {
-            payload: {
-              aps: {
-                "content-available": 1,
-              },
-            },
-          },
-          data: {
-            type: "payment",
-            data: messageObj,
-          },
-          // notification: {
-          //   title: `${req.user.firstName}`,
-          //   body: text,
-          // },
-          token: metadata.pushToken,
-        };
-
-        getMessaging()
-            .send(message)
-            .then((response) => {
-              console.log(`Successfully sent message: ${response}`);
-            })
-            .catch((err) => {
-              //   console.log(err)
-              // console.log('new error')
-            });
       }
 
       res.send({success: true});

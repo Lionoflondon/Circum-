@@ -1,7 +1,7 @@
 /* eslint-disable max-len, require-jsdoc */
 const functions = require("firebase-functions/v1");
 const {getFirestore} = require("firebase-admin/firestore");
-const {getMessaging} = require("firebase-admin/messaging");
+const communicationEngine = require("./communication-engine");
 const stripeConfig = functions.config().stripe || {};
 const {resolveStripeRuntimeConfig} = require("./stripe-config");
 let cachedStripe = null;
@@ -27,19 +27,23 @@ const {
   isMaterialDiscrepancy,
 } = require("./delivery-adjustment-core");
 
-async function notifyUser(userId, title, body, data) {
+async function notifyUser(userId, recipientRole, title, body, data) {
   if (!userId) return;
-  for (const collection of ["users", "riders"]) {
-    const snapshot = await getFirestore().collection(collection).doc(userId).get();
-    const token = snapshot.exists && snapshot.data().fcmToken;
-    if (!token) continue;
-    await getMessaging().send({
-      token,
-      notification: {title, body},
-      data: Object.fromEntries(Object.entries(data).map(([key, value]) => [key, String(value)])),
-    }).catch((error) => console.error("Adjustment notification failed", error));
-    return;
-  }
+  const type = `${data && data.type || "delivery_adjustment"}`;
+  const adjustmentId = `${data && data.adjustmentId || ""}`;
+  await communicationEngine.emitNotification({
+    recipientId: userId,
+    recipientRole,
+    type,
+    title,
+    body,
+    data: {
+      adjustmentId,
+      deliveryId: `${data && data.deliveryId || data && data.requestId || ""}`,
+      correlationId: `${type}:${adjustmentId}:${userId}`,
+      category: "deliveries",
+    },
+  });
 }
 
 async function bookingReference(db, requestId) {
@@ -139,7 +143,7 @@ exports.reportLoadDiscrepancy = functions.https.onCall(async (data, context) => 
       updatedAt: Date.now(),
     });
   });
-  if (adjustment.additionalAmount > 0) await notifyUser(senderId, "Booking adjustment under review", "A rider has reported a parcel difference. Circum is reviewing the evidence.", {type: "delivery_adjustment_review", requestId, adjustmentId: adjustmentRef.id});
+  if (adjustment.additionalAmount > 0) await notifyUser(senderId, "sender", "Booking adjustment under review", "A rider has reported a parcel difference. Circum is reviewing the evidence.", {type: "delivery_adjustment_review", requestId, adjustmentId: adjustmentRef.id});
   return {success: true, adjustmentId: adjustmentRef.id, additionalAmount: adjustment.additionalAmount, status: adjustment.additionalAmount > 0 ? "awaiting_admin_review" : "closed_no_charge"};
 });
 
@@ -208,7 +212,7 @@ exports.reviewDeliveryAdjustment = functions.https.onCall(async (data, context) 
     });
     notify = {userId: adjustment.riderId, title: "More evidence needed", body: "Circum needs more evidence for the parcel report.", type: "delivery_adjustment_more_evidence"};
   });
-  if (notify) await notifyUser(notify.userId, notify.title, notify.body, {type: notify.type, adjustmentId});
+  if (notify) await notifyUser(notify.userId, "rider", notify.title, notify.body, {type: notify.type, adjustmentId});
   return {success: true, adjustmentId, decision};
 });
 
@@ -223,7 +227,7 @@ exports.cancelAdjustedCollection = functions.https.onCall(async (data, context) 
     transaction.update(adjustmentRef, {status: "cancelled_by_sender", senderDecision: "cancelled", updatedAt: Date.now()});
     transaction.update(bookingRef, {"status": "cancelled_verified_discrepancy", "cancellationReason": "verified_load_discrepancy", "loadDiscrepancy.senderDecision": "cancelled", "updatedAt": Date.now()});
   });
-  await notifyUser(adjustment.data().riderId, "Collection cancelled", "The sender cancelled after the verified load discrepancy.", {type: "delivery_adjustment_cancelled", adjustmentId: adjustment.id});
+  await notifyUser(adjustment.data().riderId, "rider", "Collection cancelled", "The sender cancelled after the verified load discrepancy.", {type: "delivery_adjustment_cancelled", adjustmentId: adjustment.id});
   return {success: true};
 });
 
@@ -263,6 +267,6 @@ exports.finalizeDeliveryAdjustmentPayment = functions.https.onCall(async (data, 
     transaction.update(adjustmentRef, {status: "paid", paymentStatus: "succeeded", senderDecision: "approved_and_paid", paidAt: Date.now(), updatedAt: Date.now()});
     transaction.update(bookingRef, {"status": booking.data().preAdjustmentStatus || "accepted", "price": latest.data().revisedQuote, "paidAmount": latest.data().revisedQuote, "adjustmentResolvedBy": "sender_payment", "loadDiscrepancy.senderDecision": "approved_and_paid", "updatedAt": Date.now()});
   });
-  await notifyUser(adjustment.data().riderId, "Booking adjustment paid", "The sender paid the revised quote. You may continue the collection.", {type: "delivery_adjustment_paid", adjustmentId: adjustment.id});
+  await notifyUser(adjustment.data().riderId, "rider", "Booking adjustment paid", "The sender paid the revised quote. You may continue the collection.", {type: "delivery_adjustment_paid", adjustmentId: adjustment.id});
   return {success: true};
 });

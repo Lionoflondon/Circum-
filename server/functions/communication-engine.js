@@ -21,12 +21,17 @@ const clean = (value) => `${value || ""}`.trim();
 const emailPattern = /\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b/gi;
 const phonePattern = /(?<!\w)(?:\+?\d[\d\s().-]{7,}\d)(?!\w)/g;
 const contactFieldPattern = /(phone|phonenumber|mobile|contactnumber|tel|userphone|riderphone|senderphone|driverphone|courierphone)/i;
-const privateNotificationFieldPattern = /(fcm|push.?token|notification.?token|stripe|payment.?intent|checkout.?session|client.?secret|billing)/i;
+const privateNotificationFieldPattern = /(fcm|push.?token|notification.?token|stripe|payment|checkout|client.?secret|billing|secure.*url|story.*token|gift.*message|recipient.*(?:email|phone|name)|medical|medication|prescription|diagnosis|audit)/i;
+const privateIdentifierPattern = /\b(?:sk|pk|rk)_(?:live|test)_[A-Za-z0-9_-]+\b|\b(?:pi|pm|ch|seti|src|tok|cs_(?:live|test))_[A-Za-z0-9_-]+\b|\beyJ[A-Za-z0-9_-]{40,}(?:\.[A-Za-z0-9_-]+){1,2}\b|\b[A-Za-z0-9_-]{40,}:[A-Za-z0-9_-]{20,}\b/gi;
+const sensitiveQueryPattern = /((?:[?&]|\b)(?:token|secret|client_secret|payment_intent)\s*=\s*)[^&\s]+/gi;
+const messageMutationIdPattern = /^[A-Za-z0-9._:-]{8,180}$/;
 
 function maskContactDetails(value) {
   return clean(value)
       .replace(emailPattern, "[email removed]")
-      .replace(phonePattern, "[phone number removed]");
+      .replace(phonePattern, "[phone number removed]")
+      .replace(privateIdentifierPattern, "[private reference removed]")
+      .replace(sensitiveQueryPattern, "$1[private value removed]");
 }
 
 function redactContactFields(value) {
@@ -34,15 +39,50 @@ function redactContactFields(value) {
   if (!value || typeof value !== "object") {
     return typeof value === "string" ? maskContactDetails(value) : value;
   }
-  return Object.fromEntries(Object.entries(value).map(([key, item]) => {
-    if (contactFieldPattern.test(key) || privateNotificationFieldPattern.test(key)) return [key, ""];
-    return [key, redactContactFields(item)];
+  return Object.fromEntries(Object.entries(value).flatMap(([key, item]) => {
+    if (contactFieldPattern.test(key) || privateNotificationFieldPattern.test(key)) return [];
+    return [[key, redactContactFields(item)]];
   }));
 }
 
 function notificationIdFor({recipientId = "", recipientRole = "", type = "", correlationId = ""}) {
   const authority = [recipientRole, recipientId, type, correlationId].map(clean).join("|");
   return `notification_${createHash("sha256").update(authority).digest("hex").slice(0, 40)}`;
+}
+
+function notificationCorrelationFor(type, data = {}) {
+  const explicit = clean(data.correlationId);
+  if (explicit) return explicit;
+  const authority = [
+    data.eventId,
+    data.deliveryId,
+    data.bookingId,
+    data.requestId,
+    data.giftId,
+    data.healthPickupId,
+    data.pickupId,
+    data.businessId,
+    data.transactionId,
+    data.adjustmentId,
+    data.ticketId,
+    data.announcementId,
+    data.status,
+    data.stage,
+    data.action,
+    data.amount,
+  ].map(clean).filter(Boolean);
+  if (!authority.length) {
+    throw new functions.https.HttpsError(
+        "failed-precondition",
+        "Notification event identity is required.",
+    );
+  }
+  return `${clean(type) || "system"}:${authority.join(":")}`;
+}
+
+function messageDocumentId(chatId, senderId, clientMessageId) {
+  const authority = [chatId, senderId, clientMessageId].map(clean).join("|");
+  return `message_${createHash("sha256").update(authority).digest("hex").slice(0, 40)}`;
 }
 
 function isAdmin(context) {
@@ -85,7 +125,7 @@ async function profileToken(uid, role) {
   for (const collection of collections) {
     const doc = await db.collection(collection).doc(uid).get();
     if (!doc.exists) continue;
-    const token = clean(doc.data().fcmToken || doc.data().pushToken || doc.data().code);
+    const token = clean(doc.data().fcmToken || doc.data().pushToken);
     if (token) return token;
   }
   return "";
@@ -94,7 +134,7 @@ async function profileToken(uid, role) {
 async function participantDisplayName(uid, role, context) {
   if (!uid) return "Participant";
   const token = context.auth && context.auth.uid === uid ? context.auth.token || {} : {};
-  const tokenName = clean(token.name || token.email);
+  const tokenName = clean(token.name);
   if (tokenName) return tokenName;
   if (role === "admin") return "Circum Support";
   if (uid === "circum-support") return "Circum Support";
@@ -104,7 +144,7 @@ async function participantDisplayName(uid, role, context) {
     const doc = await db.collection(collection).doc(uid).get();
     if (!doc.exists) continue;
     const data = doc.data() || {};
-    const name = clean(data.fullName || data.displayName || data.name || data.email);
+    const name = clean(data.fullName || data.displayName || data.name);
     if (name) return name;
   }
   return role === "rider" ? "Rider" : "Sender";
@@ -114,23 +154,22 @@ async function emitNotification({recipientId, recipientRole = "sender", type, ti
   const db = getFirestore();
   const safeData = redactContactFields(data);
   const destination = destinationFor(type, safeData);
-  const requestedCorrelationId = clean(safeData.correlationId);
-  const ref = requestedCorrelationId ? db.collection("notifications").doc(notificationIdFor({
+  const correlationId = notificationCorrelationFor(type, safeData);
+  const ref = db.collection("notifications").doc(notificationIdFor({
     recipientId,
     recipientRole,
     type,
-    correlationId: requestedCorrelationId,
-  })) : db.collection("notifications").doc();
-  const correlationId = requestedCorrelationId || ref.id;
+    correlationId,
+  }));
   const payload = {
     notificationId: ref.id,
     correlationId,
     recipientId: recipientId || null,
     recipientRole,
     type: clean(type) || "system",
-    title: clean(title) || "Circum update",
-    body: clean(body),
-    message: clean(body),
+    title: maskContactDetails(title) || "Circum update",
+    body: maskContactDetails(body),
+    message: maskContactDetails(body),
     category: notificationCategory(type, data.category),
     data: {...safeData, destination},
     destination,
@@ -146,18 +185,14 @@ async function emitNotification({recipientId, recipientRole = "sender", type, ti
     createdAt: FieldValue.serverTimestamp(),
   };
   let shouldSend = true;
-  if (requestedCorrelationId) {
-    await db.runTransaction(async (transaction) => {
-      const existing = await transaction.get(ref);
-      if (existing.exists) {
-        shouldSend = false;
-        return;
-      }
-      transaction.set(ref, payload);
-    });
-  } else {
-    await ref.set(payload);
-  }
+  await db.runTransaction(async (transaction) => {
+    const existing = await transaction.get(ref);
+    if (existing.exists) {
+      shouldSend = false;
+      return;
+    }
+    transaction.set(ref, payload);
+  });
   if (!shouldSend) return ref.id;
   const token = await profileToken(recipientId, recipientRole);
   if (!token) {
@@ -263,13 +298,13 @@ async function ensureSupportConversationForTicket(db, ticketId) {
       source: "communication-engine",
       updatedAt: FieldValue.serverTimestamp(),
       createdAt: FieldValue.serverTimestamp(),
-      lastMessage: clean(data.lastMessage || data.message),
+      lastMessage: maskContactDetails(data.lastMessage || data.message),
     }, {merge: true});
     transaction.set(ticketRef, {
       chatId,
       updatedAt: FieldValue.serverTimestamp(),
     }, {merge: true});
-    const initialText = clean(data.message);
+    const initialText = maskContactDetails(data.message);
     if (initialText) {
       transaction.set(chatRef.collection("messages").doc("ticket_initial"), {
         threadId: chatId,
@@ -293,8 +328,8 @@ async function ensureSupportConversationForTicket(db, ticketId) {
 }
 
 function canSend(chat, senderId, admin) {
-  if (admin) return true;
   if (chat.readOnly === true) return false;
+  if (admin) return true;
   return Array.isArray(chat.participants) && chat.participants.includes(senderId);
 }
 
@@ -304,13 +339,20 @@ async function sendMessage(data, context) {
   const chatId = clean(data.chatId || data.requestId || data.bookingId);
   const message = maskContactDetails(data.message || data.messageText);
   const messageType = clean(data.messageType || "text").toLowerCase();
+  const clientMessageId = clean(data.clientMessageId || data.correlationId);
   if (!chatId || !message) {
     throw new functions.https.HttpsError("invalid-argument", "A conversation and message are required.");
+  }
+  if (!messageMutationIdPattern.test(clientMessageId)) {
+    throw new functions.https.HttpsError("invalid-argument", "A valid message mutation id is required.");
   }
   if (!allowedMessageTypes.has(messageType) || messageType === "system") {
     throw new functions.https.HttpsError("invalid-argument", "Unsupported message type.");
   }
   if (message.length > 2000) throw new functions.https.HttpsError("invalid-argument", "Messages are limited to 2000 characters.");
+  if (Array.isArray(data.attachments) && data.attachments.length) {
+    throw new functions.https.HttpsError("invalid-argument", "Message attachments are not supported.");
+  }
 
   const db = getFirestore();
   const chatRef = db.collection("chats").doc(chatId);
@@ -328,11 +370,23 @@ async function sendMessage(data, context) {
   }
 
   const recipientIds = (chat.participants || []).filter((uid) => uid && uid !== senderId);
-  const messageRef = chatRef.collection("messages").doc();
-  const correlationId = clean(data.correlationId) || `${chatId}_${messageRef.id}`;
+  const messageRef = chatRef.collection("messages").doc(messageDocumentId(chatId, senderId, clientMessageId));
+  const correlationId = `${chatId}:${senderId}:${clientMessageId}`;
   const senderRole = isAdmin(context) ? "admin" : recipientRoleFor(chat, senderId);
   const senderName = await participantDisplayName(senderId, senderRole, context);
+  let duplicate = false;
   await db.runTransaction(async (transaction) => {
+    const [latestChat, existingMessage] = await Promise.all([
+      transaction.get(chatRef),
+      transaction.get(messageRef),
+    ]);
+    if (existingMessage.exists) {
+      duplicate = true;
+      return;
+    }
+    if (!latestChat.exists || !canSend(latestChat.data(), senderId, isAdmin(context))) {
+      throw new functions.https.HttpsError("permission-denied", "Conversation access denied.");
+    }
     transaction.set(messageRef, {
       messageId: messageRef.id,
       conversationId: chatId,
@@ -352,6 +406,7 @@ async function sendMessage(data, context) {
       retryCount: 0,
       notificationId: null,
       audited: true,
+      clientMessageId,
     });
     transaction.set(chatRef, {
       lastMessage: message,
@@ -370,7 +425,7 @@ async function sendMessage(data, context) {
       }, {merge: true});
     }
   });
-  return {ok: true, chatId, messageId: messageRef.id};
+  return {ok: true, chatId, messageId: messageRef.id, duplicate};
 }
 
 async function setConversationTyping(data, context) {
@@ -418,7 +473,11 @@ async function sendAnnouncement(data, context) {
   const title = clean(data.title);
   const body = clean(data.body);
   const audience = clean(data.audience || "everyone").toLowerCase();
+  const announcementId = clean(data.announcementId);
   if (!title || !body) throw new functions.https.HttpsError("invalid-argument", "A title and message are required.");
+  if (!messageMutationIdPattern.test(announcementId)) {
+    throw new functions.https.HttpsError("invalid-argument", "A valid announcement mutation id is required.");
+  }
   if (!["everyone", "senders", "riders", "business", "health", "user"].includes(audience)) {
     throw new functions.https.HttpsError("invalid-argument", "Unsupported announcement audience.");
   }
@@ -442,18 +501,45 @@ async function sendAnnouncement(data, context) {
     type: "system_announcement",
     title,
     body,
-    data: {category: "system", announcement: true},
+    data: {
+      category: "system",
+      announcement: true,
+      announcementId,
+      correlationId: `announcement:${announcementId}`,
+    },
   })));
   await db.collection("adminAuditLogs").doc().set({
     adminUserId: context.auth.uid,
     actionType: "platform_announcement_sent",
     recordType: "notifications",
-    recordId: clean(data.announcementId) || "system_announcement",
+    recordId: announcementId,
     newValue: {audience, recipientCount: recipients.length, notificationIds},
     reason: "Announcement sent through backend notification engine",
     createdAt: FieldValue.serverTimestamp(),
   });
   return {ok: true, recipientCount: recipients.length, notificationIds};
+}
+
+async function claimNotificationRetry(db, notificationId) {
+  const ref = db.collection("notifications").doc(notificationId);
+  let notification = null;
+  await db.runTransaction(async (transaction) => {
+    const snap = await transaction.get(ref);
+    if (!snap.exists) throw new functions.https.HttpsError("not-found", "Notification not found.");
+    const current = snap.data() || {};
+    const status = clean(current.pushDeliveryStatus).toLowerCase();
+    if (status === "sent" || status === "retrying" || current.retryable !== true) {
+      throw new functions.https.HttpsError("failed-precondition", "Notification is not eligible for retry.");
+    }
+    notification = current;
+    transaction.set(ref, {
+      pushDeliveryStatus: "retrying",
+      retryable: false,
+      lastRetriedAt: FieldValue.serverTimestamp(),
+      updatedAt: FieldValue.serverTimestamp(),
+    }, {merge: true});
+  });
+  return notification;
 }
 
 async function retryNotificationDelivery(data, context) {
@@ -462,9 +548,7 @@ async function retryNotificationDelivery(data, context) {
   if (!notificationId) throw new functions.https.HttpsError("invalid-argument", "A notification id is required.");
   const db = getFirestore();
   const ref = db.collection("notifications").doc(notificationId);
-  const snap = await ref.get();
-  if (!snap.exists) throw new functions.https.HttpsError("not-found", "Notification not found.");
-  const notification = snap.data() || {};
+  const notification = await claimNotificationRetry(db, notificationId);
   const token = await profileToken(clean(notification.recipientId), clean(notification.recipientRole));
   if (!token) {
     await ref.set({
@@ -650,7 +734,6 @@ async function getOrCreateSupportConversation(data, context) {
         senderId: uid,
         senderRole: participantRole,
         senderType: participantRole,
-        senderEmail: submittedBy.email,
         senderName: submittedBy.displayName,
         messageText: initialMessage,
         message: initialMessage,
@@ -668,7 +751,7 @@ async function getOrCreateSupportConversation(data, context) {
 }
 
 async function submitWebsiteSupportRequest(data, context) {
-  const message = clean(data.message).slice(0, 4000);
+  const message = maskContactDetails(data.message).slice(0, 4000);
   const email = clean(data.email).slice(0, 180).toLowerCase();
   if (!message || !email || !email.includes("@")) {
     throw new functions.https.HttpsError("invalid-argument", "Contact email and message are required.");
@@ -723,7 +806,6 @@ async function submitWebsiteSupportRequest(data, context) {
       senderId: uid,
       senderRole: participantRole,
       senderType: participantRole,
-      senderEmail: email,
       senderName: name || null,
       messageText: message,
       message,
@@ -784,7 +866,11 @@ async function markConversationRead(data, context) {
 exports.emitNotification = emitNotification;
 exports.destinationFor = destinationFor;
 exports.notificationIdFor = notificationIdFor;
+exports.notificationCorrelationFor = notificationCorrelationFor;
 exports.redactContactFields = redactContactFields;
+exports.maskContactDetails = maskContactDetails;
+exports.messageDocumentId = messageDocumentId;
+exports.claimNotificationRetry = claimNotificationRetry;
 exports._sendCircumMessageHandler = sendMessage;
 exports.sendCircumMessage = functions.https.onCall(sendMessage);
 exports.startAdminConversation = functions.https.onCall(startAdminConversation);
@@ -810,7 +896,8 @@ exports.appendSystemMessage = async (deliveryId, message, eventId) => {
   const chatRef = db.collection("chats").doc(clean(deliveryId));
   const chat = await chatRef.get();
   if (!chat.exists) return;
-  const correlationId = clean(eventId) || `${clean(deliveryId)}:${clean(message)}`;
+  const safeMessage = maskContactDetails(message);
+  const correlationId = clean(eventId) || `${clean(deliveryId)}:${safeMessage}`;
   const messageRef = chatRef.collection("messages").doc(notificationIdFor({
     recipientId: clean(deliveryId),
     recipientRole: "system",
@@ -824,8 +911,8 @@ exports.appendSystemMessage = async (deliveryId, message, eventId) => {
       senderId: "circum-system",
       senderRole: "system",
       correlationId,
-      messageText: clean(message),
-      message: clean(message),
+      messageText: safeMessage,
+      message: safeMessage,
       messageType: "system",
       readBy: [],
       createdAt: FieldValue.serverTimestamp(),

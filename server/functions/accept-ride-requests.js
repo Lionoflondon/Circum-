@@ -208,6 +208,10 @@ const acceptRideRequestHandler = async (data, context, dependencies = {}) => {
     }
 
     const payload = riderPayload(riderId, rider);
+    const senderId = senderIdFor(found.data);
+    if (!senderId) {
+      throw new functions.https.HttpsError("failed-precondition", "Delivery owner is unavailable.");
+    }
     const assignedVehicle = buildRiderVehicleSnapshot(rider);
     const assignedVehicleClass = assignedVehicle.type || payload.typeOfVehicle;
     const assignedVehicleId = assignedVehicle.registration || null;
@@ -244,14 +248,14 @@ const acceptRideRequestHandler = async (data, context, dependencies = {}) => {
     }, {merge: true});
 
     const chatRef = db.collection("chats").doc(found.data.requestId || found.id);
-    const senderId = senderIdFor(found.data);
     transaction.set(chatRef, {
       threadId: found.data.requestId || found.id,
       bookingId: found.data.requestId || found.id,
       requestId: found.data.requestId || found.id,
-      participants: FieldValue.arrayUnion(...[senderId, riderId, "circum-support"].filter(Boolean)),
+      conversationType: "sender_rider",
+      participants: [senderId, riderId, "circum-support"],
       participantRoles: {
-        ...(senderId ? {[senderId]: "sender"} : {}),
+        [senderId]: "sender",
         [riderId]: "rider",
         "circum-support": "admin",
       },

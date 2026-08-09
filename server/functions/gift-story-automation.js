@@ -4,8 +4,8 @@
 const crypto = require("crypto");
 const functions = require("firebase-functions/v1");
 const {getFirestore, FieldValue, Timestamp} = require("firebase-admin/firestore");
-const {getMessaging} = require("firebase-admin/messaging");
 const {getStorage} = require("firebase-admin/storage");
+const communicationEngine = require("./communication-engine");
 
 const STORY_RETENTION_HOURS = 48;
 const COMPLETE_STATUSES = new Set(["completed", "complete", "delivered"]);
@@ -542,7 +542,8 @@ async function queueSenderStoryAppNotification(db, {giftId, userId, token, retry
     message: "Your Circum Gift Story is ready.",
     category: "gifts",
     giftId,
-    data: {giftId, secureStoryUrl: url, destination: {route: "gift", giftId}},
+    data: {giftId, destination: {route: "gift", giftId}},
+    destination: {route: "gift", giftId},
     read: false,
     archived: false,
     deliveryStatus: "persisted",
@@ -817,31 +818,21 @@ async function resolveGiftStoryActionAccess(db, data, context, {requireAccount =
   return {giftId, giftRef, gift, uid, tokenAccess};
 }
 
-async function sendThankYouPush(giftId, gift, notificationId) {
+async function sendThankYouPush(giftId, gift) {
   const senderId = text(gift.senderId || gift.userId || gift.customerId);
-  if (!senderId) return;
-  let token = "";
-  for (const collection of ["users", "senders"]) {
-    const profile = await getFirestore().collection(collection).doc(senderId).get();
-    if (profile.exists) {
-      token = text(profile.data().fcmToken || profile.data().pushToken || profile.data().code);
-      if (token) break;
-    }
-  }
-  if (!token) return;
-  await getMessaging().send({
-    token,
-    notification: {
-      title: "A thank you for your gift",
-      body: "Your recipient sent a thank you for their Gift Story.",
-    },
+  if (!senderId) return null;
+  return communicationEngine.emitNotification({
+    recipientId: senderId,
+    recipientRole: "sender",
+    type: "gift_story_thank_you",
+    title: "A thank you for your gift",
+    body: "Your recipient sent a thank you for their Gift Story.",
     data: {
-      type: "gift_story_thank_you",
-      notificationId,
       giftId,
-      route: "gift",
+      correlationId: `gift_story_thank_you:${giftId}:${senderId}`,
+      category: "gifts",
     },
-  }).catch((error) => console.error("Gift Story thank-you push failed", error));
+  });
 }
 
 async function acknowledgeGiftStory(db, access) {
@@ -849,7 +840,6 @@ async function acknowledgeGiftStory(db, access) {
   const ids = giftStoryActionIds(access.giftId);
   const eventRef = access.giftRef.collection("timeline").doc(ids.thankYou);
   const auditRef = db.collection("auditLogs").doc(ids.thankYouAudit);
-  const notificationRef = db.collection("notifications").doc(ids.thankYouNotification);
   const senderId = text(access.gift.senderId || access.gift.userId || access.gift.customerId);
   const created = await db.runTransaction(async (transaction) => {
     const existing = await transaction.get(eventRef);
@@ -867,23 +857,6 @@ async function acknowledgeGiftStory(db, access) {
     };
     transaction.set(eventRef, event);
     transaction.set(auditRef, {...event, source: "gift_story_action"});
-    if (senderId) {
-      transaction.set(notificationRef, {
-        recipientId: senderId,
-        recipientRole: "sender",
-        type: "gift_story_thank_you",
-        title: "A thank you for your gift",
-        body: thankYouMessage || "Your recipient sent a thank you for their Gift Story.",
-        message: thankYouMessage || "Your recipient sent a thank you for their Gift Story.",
-        category: "gifts",
-        giftId: access.giftId,
-        data: {giftId: access.giftId, destination: {route: "gift", giftId: access.giftId}},
-        destination: {route: "gift", giftId: access.giftId},
-        read: false,
-        archived: false,
-        createdAt: FieldValue.serverTimestamp(),
-      });
-    }
     transaction.set(access.giftRef, {
       giftStoryThankYouSent: true,
       giftStoryThankYouMessage: thankYouMessage || FieldValue.delete(),
@@ -892,7 +865,7 @@ async function acknowledgeGiftStory(db, access) {
     }, {merge: true});
     return true;
   });
-  if (created && senderId) await sendThankYouPush(access.giftId, access.gift, ids.thankYouNotification);
+  if (senderId) await sendThankYouPush(access.giftId, access.gift);
   return {ok: true, alreadySent: !created};
 }
 

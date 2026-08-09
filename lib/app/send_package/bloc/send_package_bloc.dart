@@ -1878,6 +1878,7 @@ class SendPackageBloc extends Bloc<SendPackageEvent, SendPackageState> {
         'chatId': activeRequest,
         'message': event.message,
         'messageType': 'text',
+        'clientMessageId': const Uuid().v4(),
       });
     } catch (e) {
       debugPrint('Sending message failed: $e');

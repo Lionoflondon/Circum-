@@ -31,6 +31,7 @@ import 'package:image_picker/image_picker.dart';
 import 'package:flutter_stripe/flutter_stripe.dart';
 import 'package:url_launcher/link.dart';
 import 'package:url_launcher/url_launcher.dart';
+import 'package:uuid/uuid.dart';
 import 'package:web/web.dart' as web;
 
 import 'firebase/website_firebase_options.dart';
@@ -4778,7 +4779,12 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
       await _ensureCircumFirebaseReady();
       await FirebaseFunctions.instanceFor(region: 'us-central1')
           .httpsCallable('sendCircumMessage')
-          .call({'chatId': requestId, 'requestId': requestId, 'message': text});
+          .call({
+        'chatId': requestId,
+        'requestId': requestId,
+        'message': text,
+        'clientMessageId': const Uuid().v4(),
+      });
     } catch (_) {
       if (!mounted) return;
       setState(() => _jobMessage = 'Message could not be sent.');
@@ -12645,7 +12651,12 @@ class _CustomerPortalState extends State<_CustomerPortal> {
       await _ensureFirebaseReady();
       await FirebaseFunctions.instanceFor(region: 'us-central1')
           .httpsCallable('sendCircumMessage')
-          .call({'chatId': requestId, 'requestId': requestId, 'message': text});
+          .call({
+        'chatId': requestId,
+        'requestId': requestId,
+        'message': text,
+        'clientMessageId': const Uuid().v4(),
+      });
     } catch (_) {
       if (!mounted) return;
       setState(

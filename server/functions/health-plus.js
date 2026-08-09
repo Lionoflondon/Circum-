@@ -530,7 +530,9 @@ exports.createHealthPlusBooking = functions.runWith({
         auditHistory: [healthPlusAudit("health_plus_schedule_created", sender, {status: "active"})],
       }, {merge: true});
     }
-    transaction.set(db.collection("healthPlusNotifications").doc(), {
+    const senderHealthNotificationId = `health_${pickupRef.id}_pickup_scheduled`;
+    transaction.set(db.collection("healthPlusNotifications").doc(senderHealthNotificationId), {
+      notificationId: senderHealthNotificationId,
       profileId,
       pickupId: pickupRef.id,
       senderId: sender.uid,

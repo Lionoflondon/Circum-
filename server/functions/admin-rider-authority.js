@@ -5,6 +5,7 @@ const {getStorage} = require("firebase-admin/storage");
 const {requireAdmin} = require("./admin-auth");
 const {approvalProjection} = require("./rider-canonical-account");
 const {isFounderContext} = require("./founder-authority");
+const communicationEngine = require("./communication-engine");
 
 const RIDER_ACTIONS = new Set([
   "approve",
@@ -438,17 +439,19 @@ exports.adminReviewRider = functions.https.onCall(async (data, context) => {
     ]);
   }
 
-  await db.collection("notifications").add({
-    userId: riderId,
-    riderId,
-    audience: "rider",
+  await communicationEngine.emitNotification({
+    recipientId: riderId,
+    recipientRole: "rider",
     type: "rider_authority",
-    action,
-    status: result.eventAction || action,
     title: "Rider account update",
     body: reason,
-    read: false,
-    createdAt: FieldValue.serverTimestamp(),
+    data: {
+      eventId: result.auditId,
+      action,
+      status: result.eventAction || action,
+      correlationId: `rider_authority:${result.auditId}:${riderId}`,
+      category: "system",
+    },
   });
 
   return {
