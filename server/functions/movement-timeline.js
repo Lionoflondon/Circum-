@@ -347,19 +347,17 @@ exports.onDeliveryLiveLocationWrite = functions.firestore
       if (!delivery.exists) return null;
       const data = delivery.data() || {};
       const eventId = `${context.eventId || context.timestamp}`.replace(/[^a-zA-Z0-9_-]/g, "_");
-      await delivery.ref.collection("timeline").doc(`tracking_${eventId}`).set({
-        eventKey: normalized(event),
-        event,
-        status: normalized(data.status),
-        deliveryType: deliveryType(data),
-        actor: (after || before || {}).riderId || "system",
+      await appendOperationalEvent(db, {
+        deliveryId: context.params.deliveryId,
+        eventType: event.includes("started") ? "LiveTrackingStarted" : "LiveTrackingStopped",
+        correlationId: eventId,
+        timestamp: Timestamp.fromDate(new Date(context.timestamp)),
         actorType: (after || before || {}).riderId ? "rider" : "system",
         actorId: (after || before || {}).riderId || null,
-        actorName: null,
-        notes: null,
-        deliveryId: context.params.deliveryId,
-        timestamp: FieldValue.serverTimestamp(),
-        createdAt: FieldValue.serverTimestamp(),
+        source: "deliveryLiveLocations.onWrite",
+        previousState: normalized(before && before.trackingStatus) || null,
+        newState: normalized(after && after.trackingStatus) || null,
+        metadata: {deliveryType: deliveryType(data), deliveryStatus: normalized(data.status)},
       });
       return null;
     });
