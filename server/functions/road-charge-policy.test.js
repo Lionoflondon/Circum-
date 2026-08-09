@@ -87,3 +87,31 @@ test("Blackwall/Silvertown charges respect the 06:00-22:00 operating window", ()
   });
   assert.equal(van.customerAmount, 4);
 });
+
+test("Dartford charges respect the independent daily 06:00-22:00 window", () => {
+  const routeFacts = (at) => ({
+    authority: "authoritative_route",
+    known: true,
+    crossings: [{
+      chargeId: "dartford_crossing",
+      crossingId: "dartford_crossing",
+      direction: "northbound",
+      at,
+    }],
+  });
+  const quote = (at) => evaluateRoadChargePolicy({
+    routeFacts: routeFacts(at),
+    vehicle: "car",
+    product: "standard",
+  });
+  assert.equal(quote("2026-08-07T04:59:00Z").customerAmount, 0);
+  assert.equal(quote("2026-08-07T05:00:00Z").customerAmount, 3.5);
+  assert.equal(quote("2026-08-07T20:59:00Z").customerAmount, 3.5);
+  assert.equal(quote("2026-08-07T21:00:00Z").customerAmount, 0);
+  assert.equal(quote("2026-08-07T21:01:00Z").customerAmount, 0);
+  assert.equal(evaluateRoadChargePolicy({
+    routeFacts: {authority: "authoritative_route", known: true, crossings: []},
+    vehicle: "car",
+    product: "standard",
+  }).customerAmount, 0);
+});

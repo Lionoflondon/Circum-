@@ -236,6 +236,10 @@ function tunnelChargeable({at}) {
   return withinWindow(dateParts(at), 6, 22);
 }
 
+function dartfordChargeable({at}) {
+  return withinWindow(dateParts(at), 6, 22);
+}
+
 function chargeIsEffective(charge, at) {
   const timestamp = new Date(at || Date.now()).getTime();
   const from = new Date(charge.effectiveFrom).getTime();
@@ -332,7 +336,8 @@ function evaluateRoadCharges({
     if (seenCrossings.has(crossingKey)) continue;
     seenCrossings.add(crossingKey);
     const peak = chargeId === "blackwall_silvertown" ? tunnelPeak(crossing) : false;
-    const active = chargeId === "blackwall_silvertown" ? tunnelChargeable(crossing) : true;
+    const active = chargeId === "blackwall_silvertown" ? tunnelChargeable(crossing) :
+      chargeId === "dartford_crossing" ? dartfordChargeable(crossing) : true;
     const verifiedFacts = verifiedRoadChargeFacts(vehicleProfile);
     const vanTunnelAuthority = vehicleClass === "van" && chargeId === "blackwall_silvertown" ?
       vanTunnelTariffAuthority(vehicleProfile, {pricingContext}) : null;
