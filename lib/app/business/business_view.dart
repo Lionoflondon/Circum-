@@ -255,7 +255,7 @@ class _BusinessViewState extends State<BusinessView> {
   }
 
   Widget _tabs() {
-    const data = <(BusinessSection, IconData, String)>[
+    const allTabs = <(BusinessSection, IconData, String)>[
       (BusinessSection.overview, Icons.home_rounded, 'Overview'),
       (BusinessSection.deliveries, Icons.local_shipping_rounded, 'Deliveries'),
       (BusinessSection.invoices, Icons.receipt_long_rounded, 'Invoices'),
@@ -271,6 +271,23 @@ class _BusinessViewState extends State<BusinessView> {
       ),
       (BusinessSection.settings, Icons.settings_rounded, 'Settings'),
     ];
+    final permissions = _workspace?.permissions;
+    final data = allTabs.where((item) {
+      if (item.$1 == BusinessSection.invoices ||
+          item.$1 == BusinessSection.finance) {
+        return permissions?.finance == true;
+      }
+      if (item.$1 == BusinessSection.analytics) {
+        return permissions?.reports == true;
+      }
+      if (item.$1 == BusinessSection.deliveries ||
+          item.$1 == BusinessSection.healthPlus ||
+          item.$1 == BusinessSection.gifts ||
+          item.$1 == BusinessSection.vanguard) {
+        return permissions?.deliveries == true;
+      }
+      return true;
+    }).toList(growable: false);
     return SizedBox(
       height: 54,
       child: ListView.separated(
@@ -507,6 +524,14 @@ class _BusinessViewState extends State<BusinessView> {
             onAction: _bookDelivery)
       else
         ...filtered.map(_deliveryRow),
+      if (_workspace!.nextDeliveryCursor != null) ...[
+        const SizedBox(height: 10),
+        _SecondaryButton(
+          label: 'Load more deliveries',
+          icon: Icons.expand_more_rounded,
+          onTap: _working ? null : _loadMoreDeliveries,
+        ),
+      ],
       const SizedBox(height: 8),
       _ResponsiveGrid(minItemWidth: 145, childAspectRatio: 3.2, children: [
         _CompactAction(
@@ -907,6 +932,7 @@ class _BusinessViewState extends State<BusinessView> {
   }
 
   Widget _analytics() {
+    final summary = _workspace!.summary;
     final completed =
         _workspace!.deliveries.where((item) => item.isCompleted).toList();
     final deliveries = _workspace!.deliveries;
@@ -934,14 +960,10 @@ class _BusinessViewState extends State<BusinessView> {
         monthlyCounts[key] = (monthlyCounts[key] ?? 0) + 1;
       }
     }
-    final monthlySpend = _workspace!.deliveries.where((item) {
-      final date = item.createdAt;
-      final now = DateTime.now();
-      return date != null && date.year == now.year && date.month == now.month;
-    }).fold<double>(0, (sum, item) => sum + item.amount);
-    final successRate = deliveries.isEmpty
+    final monthlySpend = summary.monthlySpend;
+    final successRate = summary.deliveryCount == 0
         ? 0
-        : ((completed.length / deliveries.length) * 100).round();
+        : ((summary.completedCount / summary.deliveryCount) * 100).round();
     return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
       const _Subtitle(
           'Clear operational answers drawn from your delivery history.'),
@@ -952,7 +974,7 @@ class _BusinessViewState extends State<BusinessView> {
             bars: _amountBars(deliveries)),
         _MetricChartCard(
             title: 'Deliveries by Month',
-            value: '${deliveries.length}',
+            value: '${summary.deliveryCount}',
             bars: monthlyCounts),
         _MetricListCard(
             title: 'Spend by Department',
@@ -961,15 +983,23 @@ class _BusinessViewState extends State<BusinessView> {
         _MetricChartCard(
             title: 'Delivery Success Rate',
             value: '$successRate%',
-            bars: {'Completed': completed.length, 'Total': deliveries.length}),
+            bars: {
+              'Completed': summary.completedCount,
+              'Failed/cancelled': summary.failedOrCancelledCount,
+              'Total': summary.deliveryCount
+            }),
         _MetricListCard(
             title: 'Delivery Types',
             items: _topEntries(categories),
             empty: 'Delivery types will appear here.'),
         _MetricChartCard(
             title: 'Average Delivery Time',
-            value: averageMinutes == 0 ? 'N/A' : '$averageMinutes min',
-            bars: {'Avg': averageMinutes}),
+            value: summary.averageDeliveryMinutes == null
+                ? 'N/A'
+                : '${summary.averageDeliveryMinutes} min',
+            bars: {
+              'Avg': summary.averageDeliveryMinutes ?? averageMinutes
+            }),
         _MetricListCard(
             title: 'Top Pickup Locations',
             items: _topEntries(pickupLocations),
@@ -1138,11 +1168,84 @@ class _BusinessViewState extends State<BusinessView> {
         subtitle: [
           item.id,
           item.vehicle,
-          if (item.bookedBy.isNotEmpty) 'Booked by ${item.bookedBy}'
+          if (item.bookedBy.isNotEmpty) 'Booked by ${item.bookedBy}',
+          'SLA ${item.slaStatus}'
         ].where((value) => value.isNotEmpty).join(' · '),
         amount: item.amount > 0 ? _gbp(item.amount) : null,
         status: _statusLabel(item.status),
+        onTap: () => _showDeliveryTimeline(item),
       );
+
+  Future<void> _showDeliveryTimeline(BusinessDelivery delivery) async {
+    final account = _account;
+    if (account == null) return;
+    setState(() => _working = true);
+    try {
+      final events = await _repository.loadDeliveryTimeline(
+        account: account,
+        deliveryId: delivery.id,
+      );
+      if (!mounted) return;
+      await showModalBottomSheet<void>(
+        context: context,
+        backgroundColor: _raised,
+        showDragHandle: true,
+        builder: (context) => SafeArea(
+          child: ListView(
+            padding: const EdgeInsets.fromLTRB(20, 8, 20, 24),
+            children: [
+              Text('Delivery timeline',
+                  style: Theme.of(context).textTheme.titleLarge),
+              const SizedBox(height: 4),
+              Text(delivery.id, style: const TextStyle(color: _muted)),
+              const SizedBox(height: 16),
+              if (events.isEmpty)
+                const _EmptyState(
+                  icon: Icons.timeline_rounded,
+                  message: 'No timeline events are available yet.',
+                )
+              else
+                for (final event in events)
+                  ListTile(
+                    contentPadding: EdgeInsets.zero,
+                    leading: const Icon(Icons.circle, size: 10, color: _blue),
+                    title: Text(_statusLabel(event.type)),
+                    subtitle: Text([
+                      if (event.timestamp != null)
+                        DateFormat('d MMM yyyy, HH:mm').format(event.timestamp!),
+                      if (event.actorType.isNotEmpty) event.actorType,
+                    ].join(' · ')),
+                  ),
+            ],
+          ),
+        ),
+      );
+    } catch (_) {
+      if (mounted) _showMessage('Timeline is unavailable right now.');
+    } finally {
+      if (mounted) setState(() => _working = false);
+    }
+  }
+
+  Future<void> _loadMoreDeliveries() async {
+    final account = _account;
+    final workspace = _workspace;
+    final cursor = workspace?.nextDeliveryCursor;
+    if (account == null || workspace == null || cursor == null) return;
+    setState(() => _working = true);
+    try {
+      final page = await _repository.loadDeliveryPage(
+        account: account,
+        cursor: cursor,
+      );
+      if (!mounted) return;
+      setState(() => _workspace = workspace.withDeliveryPage(page));
+    } catch (_) {
+      if (mounted) _showMessage('More deliveries are unavailable right now.');
+    } finally {
+      if (mounted) setState(() => _working = false);
+    }
+  }
 
   Widget _invoiceRow(BusinessInvoice item, {VoidCallback? onTap}) =>
       _OperationalRow(

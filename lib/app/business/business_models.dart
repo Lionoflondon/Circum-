@@ -98,16 +98,15 @@ class BusinessAccount {
       paymentPreferences: Map<String, dynamic>.from(
         data['paymentPreferences'] as Map? ?? const {},
       ),
-      irisMoments:
-          ((data['irisMoments'] ?? data['moments'] ?? data['businessMoments'])
-                      as List? ??
-                  const [])
-              .whereType<Map>()
-              .map((item) => Map<String, dynamic>.from(item))
-              .toList(growable: false),
+      irisMoments: ((data['irisMoments'] ??
+                  data['moments'] ??
+                  data['businessMoments']) as List? ??
+              const [])
+          .whereType<Map>()
+          .map((item) => Map<String, dynamic>.from(item))
+          .toList(growable: false),
       isPatron: patron['awarded'] == true || data['isPatron'] == true,
-      patronNumber:
-          (patron['number'] as num?)?.toInt() ??
+      patronNumber: (patron['number'] as num?)?.toInt() ??
           (data['patronNumber'] as num?)?.toInt(),
     );
   }
@@ -232,6 +231,8 @@ class BusinessDelivery {
   final DateTime? createdAt;
   final DateTime? scheduledAt;
   final Duration? duration;
+  final String slaStatus;
+  final String incidentType;
 
   const BusinessDelivery({
     required this.id,
@@ -245,6 +246,8 @@ class BusinessDelivery {
     this.createdAt,
     this.scheduledAt,
     this.duration,
+    this.slaStatus = 'GREEN',
+    this.incidentType = '',
   });
 
   factory BusinessDelivery.fromMap(String id, Map<String, dynamic> data) {
@@ -259,25 +262,34 @@ class BusinessDelivery {
           .toLowerCase(),
       bookedBy: '${data['bookedByName'] ?? data['senderName'] ?? ''}'.trim(),
       vehicle: '${data['vehicleType'] ?? data['vehicle'] ?? ''}'.trim(),
-      category: '${data['category'] ?? data['itemCategory'] ?? 'Delivery'}'
-          .trim(),
+      category:
+          '${data['category'] ?? data['itemCategory'] ?? 'Delivery'}'.trim(),
       amount: _money(
-        data['totalAmount'] ?? data['price'] ?? data['amountPaid'],
+        data['amount'] ??
+            data['totalAmount'] ??
+            data['price'] ??
+            data['amountPaid'],
       ),
-      createdAt: _date(data['createdAt']),
-      scheduledAt: _date(data['scheduledAt'] ?? data['preferredDeliveryDate']),
+      createdAt: _date(data['createdAt'] ?? data['createdAtMillis']),
+      scheduledAt: _date(
+        data['scheduledAt'] ??
+            data['scheduledAtMillis'] ??
+            data['preferredDeliveryDate'],
+      ),
       duration: data['durationMinutes'] is num
           ? Duration(minutes: (data['durationMinutes'] as num).round())
           : null,
+      slaStatus: '${data['slaStatus'] ?? 'GREEN'}'.trim().toUpperCase(),
+      incidentType: '${data['incidentType'] ?? ''}'.trim(),
     );
   }
 
   bool get isCompleted => const {
-    'delivered',
-    'completed',
-    'cancelled',
-    'cancelled_admin',
-  }.contains(status);
+        'delivered',
+        'completed',
+        'cancelled',
+        'cancelled_admin',
+      }.contains(status);
 
   bool get isScheduled =>
       !isCompleted &&
@@ -325,12 +337,11 @@ class BusinessInvoice {
       total: _money(data['total'] ?? data['subtotal']),
       balanceDue: _money(data['balanceDue'] ?? data['total']),
       rothApplied: _money(data['rothApplied'] ?? data['rothAmount']),
-      deliveryCount:
-          (data['deliveryCount'] as num?)?.toInt() ??
+      deliveryCount: (data['deliveryCount'] as num?)?.toInt() ??
           (data['deliveryIds'] as List?)?.length ??
           0,
-      dueAt: _date(data['dueAt'] ?? data['dueDate']),
-      createdAt: _date(data['createdAt']),
+      dueAt: _date(data['dueAt'] ?? data['dueAtMillis'] ?? data['dueDate']),
+      createdAt: _date(data['createdAt'] ?? data['createdAtMillis']),
       paymentReference:
           '${data['stripePaymentIntentId'] ?? data['paymentReference'] ?? ''}'
               .trim(),
@@ -405,6 +416,37 @@ class BusinessRequestSummary {
   });
 }
 
+class BusinessDeliveryTimelineEvent {
+  final String id;
+  final String type;
+  final DateTime? timestamp;
+  final String actorType;
+  final String source;
+  final String previousState;
+  final String newState;
+
+  const BusinessDeliveryTimelineEvent({
+    required this.id,
+    required this.type,
+    required this.timestamp,
+    required this.actorType,
+    required this.source,
+    required this.previousState,
+    required this.newState,
+  });
+
+  factory BusinessDeliveryTimelineEvent.fromMap(Map<String, dynamic> data) =>
+      BusinessDeliveryTimelineEvent(
+        id: '${data['eventId'] ?? ''}',
+        type: '${data['eventType'] ?? 'Delivery update'}',
+        timestamp: _date(data['timestampMillis']),
+        actorType: '${data['actorType'] ?? 'system'}',
+        source: '${data['source'] ?? ''}',
+        previousState: '${data['previousState'] ?? ''}',
+        newState: '${data['newState'] ?? ''}',
+      );
+}
+
 class BusinessWalletSummary {
   final double rothBalance;
   final double lifetimeOffset;
@@ -430,6 +472,10 @@ class BusinessWorkspaceData {
   final List<BusinessRequestSummary> healthRequests;
   final List<BusinessRequestSummary> giftRequests;
   final BusinessWalletSummary wallet;
+  final BusinessOperationsSummary summary;
+  final BusinessWorkspacePermissions permissions;
+  final String role;
+  final Map<String, dynamic>? nextDeliveryCursor;
 
   const BusinessWorkspaceData({
     required this.account,
@@ -438,15 +484,13 @@ class BusinessWorkspaceData {
     required this.healthRequests,
     required this.giftRequests,
     required this.wallet,
+    this.summary = BusinessOperationsSummary.empty,
+    this.permissions = BusinessWorkspacePermissions.none,
+    this.role = '',
+    this.nextDeliveryCursor,
   });
 
-  int get monthlyDeliveries {
-    final now = DateTime.now();
-    return deliveries.where((item) {
-      final date = item.createdAt;
-      return date != null && date.year == now.year && date.month == now.month;
-    }).length;
-  }
+  int get monthlyDeliveries => summary.monthlyDeliveries;
 
   double get outstandingBalance => invoices
       .where((item) => !item.isPaid)
@@ -459,12 +503,119 @@ class BusinessWorkspaceData {
   int get activeGiftRequests => giftRequests
       .where((item) => !const {'completed', 'delivered'}.contains(item.status))
       .length;
+
+  BusinessWorkspaceData withDeliveryPage(BusinessDeliveryPage page) {
+    final byId = <String, BusinessDelivery>{
+      for (final delivery in deliveries) delivery.id: delivery,
+      for (final delivery in page.deliveries) delivery.id: delivery,
+    };
+    final merged = byId.values.toList(growable: false)
+      ..sort((a, b) => (b.createdAt ?? DateTime(1970))
+          .compareTo(a.createdAt ?? DateTime(1970)));
+    return BusinessWorkspaceData(
+        account: account,
+        deliveries: merged,
+        invoices: invoices,
+        healthRequests: healthRequests,
+        giftRequests: giftRequests,
+        wallet: wallet,
+        summary: summary,
+        permissions: permissions,
+        role: role,
+        nextDeliveryCursor: page.nextCursor,
+      );
+  }
+}
+
+class BusinessDeliveryPage {
+  final List<BusinessDelivery> deliveries;
+  final Map<String, dynamic>? nextCursor;
+
+  const BusinessDeliveryPage({
+    required this.deliveries,
+    required this.nextCursor,
+  });
+}
+
+class BusinessWorkspacePermissions {
+  final bool deliveries;
+  final bool reports;
+  final bool finance;
+
+  const BusinessWorkspacePermissions({
+    required this.deliveries,
+    required this.reports,
+    required this.finance,
+  });
+
+  static const none = BusinessWorkspacePermissions(
+    deliveries: false,
+    reports: false,
+    finance: false,
+  );
+
+  factory BusinessWorkspacePermissions.fromMap(Map<String, dynamic> data) =>
+      BusinessWorkspacePermissions(
+        deliveries: data['deliveries'] == true,
+        reports: data['reports'] == true,
+        finance: data['finance'] == true,
+      );
+}
+
+class BusinessOperationsSummary {
+  final int deliveryCount;
+  final int completedCount;
+  final int failedOrCancelledCount;
+  final int activeCount;
+  final int monthlyDeliveries;
+  final double monthlySpend;
+  final int? averageDeliveryMinutes;
+  final Map<String, int> serviceMix;
+
+  const BusinessOperationsSummary({
+    required this.deliveryCount,
+    required this.completedCount,
+    required this.failedOrCancelledCount,
+    required this.activeCount,
+    required this.monthlyDeliveries,
+    required this.monthlySpend,
+    required this.averageDeliveryMinutes,
+    required this.serviceMix,
+  });
+
+  static const empty = BusinessOperationsSummary(
+    deliveryCount: 0,
+    completedCount: 0,
+    failedOrCancelledCount: 0,
+    activeCount: 0,
+    monthlyDeliveries: 0,
+    monthlySpend: 0,
+    averageDeliveryMinutes: null,
+    serviceMix: {},
+  );
+
+  factory BusinessOperationsSummary.fromMap(Map<String, dynamic> data) =>
+      BusinessOperationsSummary(
+        deliveryCount: (data['deliveryCount'] as num?)?.toInt() ?? 0,
+        completedCount: (data['completedCount'] as num?)?.toInt() ?? 0,
+        failedOrCancelledCount:
+            (data['failedOrCancelledCount'] as num?)?.toInt() ?? 0,
+        activeCount: (data['activeCount'] as num?)?.toInt() ?? 0,
+        monthlyDeliveries: (data['monthlyDeliveries'] as num?)?.toInt() ?? 0,
+        monthlySpend: _money(data['monthlySpend']),
+        averageDeliveryMinutes:
+            (data['averageDeliveryMinutes'] as num?)?.toInt(),
+        serviceMix: Map<String, dynamic>.from(
+          data['serviceMix'] as Map? ?? const {},
+        ).map((key, value) => MapEntry(key, (value as num?)?.toInt() ?? 0)),
+      );
 }
 
 DateTime? _date(dynamic value) {
   if (value is Timestamp) return value.toDate();
   if (value is DateTime) return value;
   if (value is String) return DateTime.tryParse(value);
+  if (value is num) return DateTime.fromMillisecondsSinceEpoch(value.toInt());
   return null;
 }
 

@@ -7,8 +7,17 @@ import 'business_models.dart';
 abstract class BusinessRepository {
   Future<List<BusinessAccount>> loadAccounts();
   Future<BusinessWorkspaceData> loadWorkspace(BusinessAccount account);
+  Future<List<BusinessDeliveryTimelineEvent>> loadDeliveryTimeline({
+    required BusinessAccount account,
+    required String deliveryId,
+  });
+  Future<BusinessDeliveryPage> loadDeliveryPage({
+    required BusinessAccount account,
+    required Map<String, dynamic> cursor,
+  });
   Future<BusinessCreatedResult> createBusinessAccount(
-      BusinessCreateDraft draft);
+    BusinessCreateDraft draft,
+  );
   Future<BusinessCodeLookupResult> lookupCompanyCode(String companyCode);
   Future<String> requestBusinessAccess({
     required BusinessCodeLookupResult business,
@@ -18,7 +27,8 @@ abstract class BusinessRepository {
     bool rotate = false,
   });
   Future<List<BusinessAccessRequest>> loadPendingAccessRequests(
-      BusinessAccount account);
+    BusinessAccount account,
+  );
   Future<void> reviewAccessRequest({
     required BusinessAccount account,
     required BusinessAccessRequest request,
@@ -101,80 +111,130 @@ class FirebaseBusinessRepository implements BusinessRepository {
 
   @override
   Future<BusinessWorkspaceData> loadWorkspace(BusinessAccount account) async {
-    final results = await Future.wait([
-      firestore
-          .collection('deliveryRequests')
-          .where('businessId', isEqualTo: account.id)
-          .limit(200)
-          .get(),
-      firestore
-          .collection('businessInvoices')
-          .where('businessId', isEqualTo: account.id)
-          .limit(100)
-          .get(),
-      firestore
-          .collection('prescriptionPickups')
-          .where('businessId', isEqualTo: account.id)
-          .limit(100)
-          .get(),
-      firestore
-          .collection('giftRequests')
-          .where('businessId', isEqualTo: account.id)
-          .limit(100)
-          .get(),
-      firestore.collection('business_wallets').doc(account.id).get(),
-    ]);
-    final deliveryDocs = results[0] as QuerySnapshot<Map<String, dynamic>>;
-    final invoiceDocs = results[1] as QuerySnapshot<Map<String, dynamic>>;
-    final healthDocs = results[2] as QuerySnapshot<Map<String, dynamic>>;
-    final giftDocs = results[3] as QuerySnapshot<Map<String, dynamic>>;
-    final walletDoc = results[4] as DocumentSnapshot<Map<String, dynamic>>;
-
-    final deliveries = deliveryDocs.docs
-        .map((doc) => BusinessDelivery.fromMap(doc.id, doc.data()))
-        .toList(growable: false)
-      ..sort((a, b) => (b.createdAt ?? DateTime(1970))
-          .compareTo(a.createdAt ?? DateTime(1970)));
-    final invoices = invoiceDocs.docs
-        .map((doc) => BusinessInvoice.fromMap(doc.id, doc.data()))
-        .toList(growable: false)
-      ..sort((a, b) => (b.createdAt ?? DateTime(1970))
-          .compareTo(a.createdAt ?? DateTime(1970)));
+    final callable = await functions
+        .httpsCallable('getBusinessOperationsWorkspace')
+        .call({'businessId': account.id, 'pageSize': 20});
+    final data = Map<String, dynamic>.from(callable.data as Map);
+    final deliveries =
+        (data['deliveries'] as List? ?? const []).whereType<Map>().map((item) {
+      final map = Map<String, dynamic>.from(item);
+      return BusinessDelivery.fromMap('${map['id'] ?? ''}', map);
+    }).toList(growable: false)
+          ..sort(
+            (a, b) => (b.createdAt ?? DateTime(1970)).compareTo(
+              a.createdAt ?? DateTime(1970),
+            ),
+          );
+    final invoices =
+        (data['invoices'] as List? ?? const []).whereType<Map>().map((item) {
+      final map = Map<String, dynamic>.from(item);
+      return BusinessInvoice.fromMap('${map['id'] ?? ''}', map);
+    }).toList(growable: false)
+          ..sort(
+            (a, b) => (b.createdAt ?? DateTime(1970)).compareTo(
+              a.createdAt ?? DateTime(1970),
+            ),
+          );
     return BusinessWorkspaceData(
       account: account,
       deliveries: deliveries,
       invoices: invoices,
-      healthRequests: healthDocs.docs
-          .map((doc) => BusinessRequestSummary(
-                id: doc.id,
-                title: '${doc.data()['patientName'] ?? 'Health+ request'}',
-                status: '${doc.data()['status'] ?? 'requested'}'.toLowerCase(),
-                createdAt: _timestamp(doc.data()['createdAt']),
-              ))
-          .toList(growable: false),
-      giftRequests: giftDocs.docs
-          .map((doc) => BusinessRequestSummary(
-                id: doc.id,
-                title: '${doc.data()['occasion'] ?? 'Corporate gift'}',
-                status: '${doc.data()['status'] ?? 'requested'}'.toLowerCase(),
-                createdAt: _timestamp(doc.data()['createdAt']),
-              ))
-          .toList(growable: false),
-      wallet: walletDoc.exists
+      healthRequests: (data['healthRequests'] as List? ?? const [])
+          .whereType<Map>()
+          .map((item) {
+        final map = Map<String, dynamic>.from(item);
+        return BusinessRequestSummary(
+          id: '${map['id'] ?? ''}',
+          title: '${map['title'] ?? 'Health+ request'}',
+          status: '${map['status'] ?? 'requested'}'.toLowerCase(),
+          createdAt: _timestamp(map['createdAtMillis']),
+        );
+      }).toList(growable: false),
+      giftRequests: (data['giftRequests'] as List? ?? const [])
+          .whereType<Map>()
+          .map((item) {
+        final map = Map<String, dynamic>.from(item);
+        return BusinessRequestSummary(
+          id: '${map['id'] ?? ''}',
+          title: '${map['title'] ?? 'Corporate gift'}',
+          status: '${map['status'] ?? 'requested'}'.toLowerCase(),
+          createdAt: _timestamp(map['createdAtMillis']),
+        );
+      }).toList(growable: false),
+      wallet: data['wallet'] is Map
           ? BusinessWalletSummary(
               rothBalance:
-                  (walletDoc.data()?['balance'] as num?)?.toDouble() ?? 0,
-              lifetimeOffset:
-                  (walletDoc.data()?['lifetimeSpent'] as num?)?.toDouble() ?? 0,
-              status: '${walletDoc.data()?['status'] ?? 'active'}',
+                  (Map<String, dynamic>.from(data['wallet'] as Map)['balance']
+                              as num?)
+                          ?.toDouble() ??
+                      0,
+              lifetimeOffset: (Map<String, dynamic>.from(
+                    data['wallet'] as Map,
+                  )['lifetimeSpent'] as num?)
+                      ?.toDouble() ??
+                  0,
+              status:
+                  '${Map<String, dynamic>.from(data['wallet'] as Map)['status'] ?? 'active'}',
             )
           : BusinessWalletSummary.empty,
+      summary: BusinessOperationsSummary.fromMap(
+        Map<String, dynamic>.from(data['summary'] as Map? ?? const {}),
+      ),
+      permissions: BusinessWorkspacePermissions.fromMap(
+        Map<String, dynamic>.from(data['permissions'] as Map? ?? const {}),
+      ),
+      role: '${data['role'] ?? ''}',
+      nextDeliveryCursor: data['nextCursor'] is Map
+          ? Map<String, dynamic>.from(data['nextCursor'] as Map)
+          : null,
+    );
+  }
+
+  @override
+  Future<List<BusinessDeliveryTimelineEvent>> loadDeliveryTimeline({
+    required BusinessAccount account,
+    required String deliveryId,
+  }) async {
+    final callable = await functions
+        .httpsCallable('getBusinessDeliveryTimeline')
+        .call({'businessId': account.id, 'deliveryId': deliveryId});
+    final data = Map<String, dynamic>.from(callable.data as Map);
+    return (data['events'] as List? ?? const [])
+        .whereType<Map>()
+        .map(
+          (item) => BusinessDeliveryTimelineEvent.fromMap(
+            Map<String, dynamic>.from(item),
+          ),
+        )
+        .toList(growable: false);
+  }
+
+  @override
+  Future<BusinessDeliveryPage> loadDeliveryPage({
+    required BusinessAccount account,
+    required Map<String, dynamic> cursor,
+  }) async {
+    final callable = await functions
+        .httpsCallable('getBusinessOperationsWorkspace')
+        .call({'businessId': account.id, 'pageSize': 20, 'cursor': cursor});
+    final data = Map<String, dynamic>.from(callable.data as Map);
+    return BusinessDeliveryPage(
+      deliveries: (data['deliveries'] as List? ?? const [])
+          .whereType<Map>()
+          .map((item) {
+        final map = Map<String, dynamic>.from(item);
+        return BusinessDelivery.fromMap('${map['id'] ?? ''}', map);
+      }).toList(growable: false),
+      nextCursor: data['nextCursor'] is Map
+          ? Map<String, dynamic>.from(data['nextCursor'] as Map)
+          : null,
     );
   }
 
   @override
   Future<BusinessCreatedResult> createBusinessAccount(
-      BusinessCreateDraft draft) async {
+    BusinessCreateDraft draft,
+  ) async {
     final result = await functions.httpsCallable('createBusinessAccount').call({
       'companyName': draft.companyName,
       'businessType': draft.businessType,
@@ -192,10 +252,9 @@ class FirebaseBusinessRepository implements BusinessRepository {
 
   @override
   Future<BusinessCodeLookupResult> lookupCompanyCode(String companyCode) async {
-    final result =
-        await functions.httpsCallable('lookupBusinessByCompanyCode').call({
-      'companyCode': companyCode,
-    });
+    final result = await functions
+        .httpsCallable('lookupBusinessByCompanyCode')
+        .call({'companyCode': companyCode});
     return BusinessCodeLookupResult.fromMap(
       Map<String, dynamic>.from(result.data as Map),
     );
@@ -218,18 +277,17 @@ class FirebaseBusinessRepository implements BusinessRepository {
     required BusinessAccount account,
     bool rotate = false,
   }) async {
-    final result =
-        await functions.httpsCallable('ensureBusinessCompanyCode').call({
-      'businessId': account.id,
-      'rotate': rotate,
-    });
+    final result = await functions
+        .httpsCallable('ensureBusinessCompanyCode')
+        .call({'businessId': account.id, 'rotate': rotate});
     final data = Map<String, dynamic>.from(result.data as Map);
     return '${data['companyCode'] ?? ''}'.trim();
   }
 
   @override
   Future<List<BusinessAccessRequest>> loadPendingAccessRequests(
-      BusinessAccount account) async {
+    BusinessAccount account,
+  ) async {
     final snapshot = await firestore
         .collection('businessJoinRequests')
         .where('businessId', isEqualTo: account.id)
@@ -239,8 +297,11 @@ class FirebaseBusinessRepository implements BusinessRepository {
     return snapshot.docs
         .map((doc) => BusinessAccessRequest.fromMap(doc.id, doc.data()))
         .toList(growable: false)
-      ..sort((a, b) => (b.createdAt ?? DateTime(1970))
-          .compareTo(a.createdAt ?? DateTime(1970)));
+      ..sort(
+        (a, b) => (b.createdAt ?? DateTime(1970)).compareTo(
+          a.createdAt ?? DateTime(1970),
+        ),
+      );
   }
 
   @override
@@ -370,5 +431,6 @@ class FirebaseBusinessRepository implements BusinessRepository {
 DateTime? _timestamp(dynamic value) {
   if (value is Timestamp) return value.toDate();
   if (value is DateTime) return value;
+  if (value is num) return DateTime.fromMillisecondsSinceEpoch(value.toInt());
   return null;
 }
