@@ -69,6 +69,8 @@ const senderTrust = require("./sender-trust");
 const referrals = require("./referrals");
 const movementLedger = require("./movement-ledger");
 const movementTimeline = require("./movement-timeline");
+const deliveryEventProjections = require("./delivery-event-projections");
+const deliveryWatchdog = require("./delivery-watchdog");
 const giftStoryAutomation = require("./gift-story-automation");
 const riderPresence = require("./rider-presence");
 const freeAddressSearch = require("./free-address-search");
@@ -352,6 +354,13 @@ exports.onHealthMovementWrite = movementLedger.onHealthMovementWrite;
 exports.onHealthPaymentMovementWrite =
   movementLedger.onHealthPaymentMovementWrite;
 exports.onMovementTimelineWrite = movementTimeline.onMovementTimelineWrite;
+exports.onNotificationOperationalWrite = deliveryEventProjections.onNotificationOperationalWrite;
+exports.onChatOperationalCreate = deliveryEventProjections.onChatOperationalCreate;
+exports.onChatMessageOperationalCreate = deliveryEventProjections.onChatMessageOperationalCreate;
+exports.onDeliveryEvidenceOperationalWrite = deliveryEventProjections.onDeliveryEvidenceOperationalWrite;
+exports.deliveryLifecycleWatchdog = deliveryWatchdog.deliveryLifecycleWatchdog;
+exports.acknowledgeOperationalIncident = deliveryWatchdog.acknowledgeOperationalIncident;
+exports.resolveOperationalIncident = deliveryWatchdog.resolveOperationalIncident;
 exports.onDeliveryLiveLocationWrite =
   movementTimeline.onDeliveryLiveLocationWrite;
 exports.onGiftDeliveryCompleted = giftStoryAutomation.onGiftDeliveryCompleted;

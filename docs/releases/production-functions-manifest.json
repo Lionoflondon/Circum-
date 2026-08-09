@@ -1,17 +1,80 @@
 {
   "manifestVersion": 1,
   "project": "circum-2797c",
-  "capturedAt": "2026-08-09T19:41:57+01:00",
+  "capturedAt": "2026-08-09T22:15:00+01:00",
   "releaseSha": "SELF",
   "releaseShaSemantics": "SELF means the Git commit containing this manifest; the immutable SHA is recorded in the release report and deployment provenance.",
   "entryPoint": "server/functions/index.js",
   "inventory": {
-    "productionFunctions": 253,
-    "applicationFunctions": 247,
+    "productionFunctions": 260,
+    "applicationFunctions": 254,
     "extensionFunctions": 6,
-    "sourceExports": 247
+    "sourceExports": 254
   },
   "applicationFunctions": [
+    {
+      "name": "acknowledgeOperationalIncident",
+      "source": "server/functions/delivery-watchdog.js#acknowledgeOperationalIncident",
+      "runtime": "nodejs20",
+      "region": "us-central1",
+      "trigger": {"type": "callable"},
+      "state": "ACTIVE",
+      "releaseSha": "SELF"
+    },
+    {
+      "name": "deliveryLifecycleWatchdog",
+      "source": "server/functions/delivery-watchdog.js#deliveryLifecycleWatchdog",
+      "runtime": "nodejs20",
+      "region": "us-central1",
+      "trigger": {"type": "schedule", "schedule": "every 5 minutes", "timeZone": "Europe/London"},
+      "state": "ACTIVE",
+      "releaseSha": "SELF"
+    },
+    {
+      "name": "onChatMessageOperationalCreate",
+      "source": "server/functions/delivery-event-projections.js#onChatMessageOperationalCreate",
+      "runtime": "nodejs20",
+      "region": "us-central1",
+      "trigger": {"type": "firestore", "document": "chats/{chatId}/messages/{messageId}"},
+      "state": "ACTIVE",
+      "releaseSha": "SELF"
+    },
+    {
+      "name": "onChatOperationalCreate",
+      "source": "server/functions/delivery-event-projections.js#onChatOperationalCreate",
+      "runtime": "nodejs20",
+      "region": "us-central1",
+      "trigger": {"type": "firestore", "document": "chats/{chatId}"},
+      "state": "ACTIVE",
+      "releaseSha": "SELF"
+    },
+    {
+      "name": "onDeliveryEvidenceOperationalWrite",
+      "source": "server/functions/delivery-event-projections.js#onDeliveryEvidenceOperationalWrite",
+      "runtime": "nodejs20",
+      "region": "us-central1",
+      "trigger": {"type": "firestore", "document": "deliveryEvidence/{deliveryId}/photos/{photoId}"},
+      "state": "ACTIVE",
+      "releaseSha": "SELF"
+    },
+    {
+      "name": "onNotificationOperationalWrite",
+      "source": "server/functions/delivery-event-projections.js#onNotificationOperationalWrite",
+      "runtime": "nodejs20",
+      "region": "us-central1",
+      "trigger": {"type": "firestore", "document": "notifications/{notificationId}"},
+      "state": "ACTIVE",
+      "releaseSha": "SELF"
+    },
+    {
+      "name": "resolveOperationalIncident",
+      "source": "server/functions/delivery-watchdog.js#resolveOperationalIncident",
+      "runtime": "nodejs20",
+      "region": "us-central1",
+      "trigger": {"type": "callable"},
+      "state": "ACTIVE",
+      "releaseSha": "SELF"
+    },
     {
       "name": "acceptRideRequests",
       "source": "server/functions/index.js#acceptRideRequests",

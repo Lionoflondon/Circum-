@@ -1,6 +1,24 @@
 {
   "indexes": [
     {
+      "collectionGroup": "deliveryOperationalState",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {"fieldPath": "active", "order": "ASCENDING"},
+        {"fieldPath": "nextCheckAt", "order": "ASCENDING"}
+      ],
+      "density": "SPARSE_ALL"
+    },
+    {
+      "collectionGroup": "operationalIncidents",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {"fieldPath": "status", "order": "ASCENDING"},
+        {"fieldPath": "detectedAt", "order": "DESCENDING"}
+      ],
+      "density": "SPARSE_ALL"
+    },
+    {
       "collectionGroup": "riderPresence",
       "queryScope": "COLLECTION",
       "fields": [

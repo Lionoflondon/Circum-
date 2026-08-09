@@ -195,6 +195,7 @@
         "deploy-manifest.json",
         "deployment_report.md",
         "docs/",
+        "ops/",
         "firebase.json",
         "safe_release.sh",
         "server/",

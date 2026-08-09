@@ -887,6 +887,21 @@ service cloud.firestore {
           canWriteOwnLiveLocation(deliveryId);
         allow delete: if isAdmin();
       }
+
+      match /timeline/{eventId} {
+        allow read: if isAdmin();
+        allow write: if false;
+      }
+    }
+
+    match /operationalIncidents/{incidentId} {
+      allow read: if isAdmin();
+      allow write: if false;
+    }
+
+    match /deliveryOperationalState/{deliveryId} {
+      allow read: if isAdmin();
+      allow write: if false;
     }
 
     match /deliveryRequestsPrivate/{deliveryId} {
@@ -1110,7 +1125,10 @@ service cloud.firestore {
           'notifications',
           'chats',
           'healthPlusNotifications',
-          'healthPlusUsageEvents'
+          'healthPlusUsageEvents',
+          'deliveryRequests',
+          'operationalIncidents',
+          'deliveryOperationalState'
         ].hasAny([collection]);
     }
   }

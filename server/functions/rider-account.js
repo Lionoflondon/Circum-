@@ -1,6 +1,7 @@
 /* eslint-disable max-len, require-jsdoc */
 const functions = require("firebase-functions/v1");
 const {getFirestore, FieldValue} = require("firebase-admin/firestore");
+const {appendOperationalEvent} = require("./delivery-operational-events");
 const {getStorage} = require("firebase-admin/storage");
 const {canonicalDocumentId, DOCUMENT_MATRIX} = require("./rider-certification-policy");
 const communicationEngine = require("./communication-engine");
@@ -348,6 +349,19 @@ exports.recordRiderJobDecision = functions.https.onCall(async (data, context) =>
       requestId,
       action,
     }));
+    if (action === "reject") {
+      await appendOperationalEvent(db, {
+        deliveryId: deliveryRef.id,
+        eventType: "RiderRejected",
+        correlationId: `rider-rejection:${rider.uid}`,
+        actorType: "rider",
+        actorId: rider.uid,
+        source: "recordRiderJobDecision",
+        previousState: data.status,
+        newState: data.status,
+        metadata: {decision: action},
+      }, {transaction});
+    }
   });
   return {ok: true, requestId, action};
 });

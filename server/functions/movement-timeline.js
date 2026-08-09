@@ -2,7 +2,16 @@
 "use strict";
 
 const functions = require("firebase-functions/v1");
-const {getFirestore, FieldValue} = require("firebase-admin/firestore");
+const {getFirestore, FieldValue, Timestamp} = require("firebase-admin/firestore");
+const {appendOperationalEvent} = require("./delivery-operational-events");
+
+const WATCHDOG_THRESHOLDS_MINUTES = Object.freeze({
+  accepted_no_movement: 15,
+  arrived_not_collected: 15,
+  collected_no_movement: 10,
+  dropoff_completion_delay: 10,
+  payment_dispatch_failure: 10,
+});
 
 function normalized(value) {
   return `${value || ""}`.trim().toLowerCase().replace(/[\s-]+/g, "_");
@@ -23,12 +32,23 @@ const CORE_EVENTS = Object.freeze({
   created: "Created",
   assigned: "Assigned",
   accepted: "Accepted",
+  arrived_at_pickup: "Arrived At Pickup",
+  waiting: "Waiting Started",
+  waiting_at_pickup: "Waiting Started",
+  customer_responded: "Customer Responded",
   collected: "Collected",
   picked_up: "Collected",
   in_transit: "In Transit",
+  navigating_to_dropoff: "In Transit",
+  arrived_at_dropoff: "Arrived At Drop-off",
+  verification_started: "Verification Started",
   delivered: "Delivered",
   completed: "Completed",
   complete: "Completed",
+  cancelled: "Cancelled",
+  canceled: "Cancelled",
+  failed: "Failed",
+  refunded: "Refunded",
 });
 
 const GIFT_EVENTS = Object.freeze({
@@ -76,11 +96,12 @@ function eventName(type, status) {
 }
 
 function actor(data = {}) {
+  const adminActor = data.adminOperationUpdatedBy || data.archivedByAdminId || null;
   return {
-    actor: data.updatedBy || data.actorName || data.actorId || "system",
-    actorType: normalized(data.actorType || data.updatedByRole || "system"),
-    actorId: data.actorId || data.updatedById || null,
-    actorName: data.actorName || data.updatedByName || null,
+    actor: data.updatedBy || data.actorName || data.actorId || adminActor || "system",
+    actorType: normalized(data.actorType || data.updatedByRole || (adminActor ? "admin" : "system")),
+    actorId: data.actorId || data.updatedById || data.archivedByAdminId || null,
+    actorName: data.actorName || data.updatedByName || data.adminOperationUpdatedBy || null,
   };
 }
 
@@ -99,6 +120,21 @@ function timelineEventsForChange(before, after) {
   };
 
   if (!before) add("created", "Created");
+
+  const previousQuote = previous.quoteId || previous.authoritativeQuoteId || null;
+  const currentQuote = current.quoteId || current.authoritativeQuoteId || null;
+  if (currentQuote && currentQuote !== previousQuote) add("quote_confirmed", "Quote Confirmed");
+
+  const previousPayment = normalized(previous.paymentStatus || previous.stripePaymentStatus || previous.checkoutStatus);
+  const currentPayment = normalized(current.paymentStatus || current.stripePaymentStatus || current.checkoutStatus);
+  if (["paid", "succeeded", "confirmed", "complete"].includes(currentPayment) && currentPayment !== previousPayment) {
+    add("payment_confirmed", "Payment Confirmed");
+  }
+  const previousRefund = normalized(previous.refundStatus);
+  const currentRefund = normalized(current.refundStatus);
+  if (["refunded", "succeeded", "complete"].includes(currentRefund) && currentRefund !== previousRefund) {
+    add("refunded", "Refunded");
+  }
 
   const previousRider = previous.assignedRiderId || previous.riderId || null;
   const currentRider = current.assignedRiderId || current.riderId || null;
@@ -122,10 +158,16 @@ function timelineEventsForChange(before, after) {
     add(currentVanguardEvent, VANGUARD_EVENTS[currentVanguardEvent]);
   }
 
+  const previousAdminOperation = normalized(previous.adminOperationStatus || previous.adminArchiveStatus);
+  const currentAdminOperation = normalized(current.adminOperationStatus || current.adminArchiveStatus);
+  if (currentAdminOperation && currentAdminOperation !== previousAdminOperation) {
+    add("admin_override", "Admin Override");
+  }
+
   return events.map((event) => ({
     ...event,
     deliveryType: type,
-    notes: current.timelineNote || current.statusNote || null,
+    notes: current.timelineNote || current.statusNote || current.adminOperationReason || current.adminArchiveReason || null,
     ...actor(current),
   }));
 }
@@ -136,6 +178,76 @@ function assignedRiderId(data = {}) {
 
 function terminalStatus(value) {
   return ["completed", "delivered", "cancelled", "canceled", "failed", "deleted"].includes(normalized(value));
+}
+
+function canonicalEventType(event, before, after) {
+  const key = normalized(event.status || event.eventKey);
+  const map = {
+    created: "DeliveryCreated",
+    requested: "DeliveryCreated",
+    quote_confirmed: "QuoteConfirmed",
+    payment_confirmed: "PaymentConfirmed",
+    assigned: "RiderAssigned",
+    accepted: "RiderAccepted",
+    arrived_at_pickup: "RiderArrivedPickup",
+    waiting: "WaitingStarted",
+    waiting_at_pickup: "WaitingStarted",
+    customer_responded: "CustomerResponded",
+    collected: "Collected",
+    picked_up: "Collected",
+    in_transit: "InTransit",
+    navigating_to_dropoff: "InTransit",
+    arrived_at_dropoff: "RiderArrivedDropoff",
+    verification_started: "VerificationStarted",
+    delivered: "Completed",
+    completed: "Completed",
+    cancelled: "Cancelled",
+    canceled: "Cancelled",
+    failed: "Failed",
+    refunded: "Refunded",
+    admin_override: "AdminOverride",
+  };
+  if (map[key]) return map[key];
+  if (event.eventKey === "assigned") return "RiderAssigned";
+  if (!before && after) return "DeliveryCreated";
+  return null;
+}
+
+function watchdogCondition(data = {}) {
+  const status = normalized(data.status || data.deliveryStatus || data.deliveryStage);
+  const rider = assignedRiderId(data);
+  const payment = normalized(data.paymentStatus || data.stripePaymentStatus || data.checkoutStatus);
+  if (["accepted", "assigned", "navigating_to_pickup"].includes(status) && rider) return "accepted_no_movement";
+  if (["arrived_at_pickup", "waiting_at_pickup", "waiting"].includes(status)) return "arrived_not_collected";
+  if (["collected", "picked_up", "navigating_to_dropoff", "in_transit"].includes(status)) return "collected_no_movement";
+  if (["arrived_at_dropoff", "verification_started"].includes(status)) return "dropoff_completion_delay";
+  if (!rider && ["paid", "succeeded", "confirmed", "complete"].includes(payment) &&
+      ["requested", "searching", "matching", "available", "broadcasted"].includes(status)) {
+    return "payment_dispatch_failure";
+  }
+  return null;
+}
+
+function operationalProjection(deliveryId, before, after, now = Timestamp.now(), existing = null) {
+  const currentStatusValue = after.status || after.deliveryStatus || after.deliveryStage;
+  const condition = terminalStatus(currentStatusValue) ? null : watchdogCondition(after);
+  const previousStatus = normalized(before && (before.status || before.deliveryStatus || before.deliveryStage));
+  const status = normalized(after.status || after.deliveryStatus || after.deliveryStage);
+  const stateChanged = status !== previousStatus;
+  const enteredAt = !stateChanged && existing && existing.stateEnteredAt ? existing.stateEnteredAt : now;
+  const threshold = condition ? WATCHDOG_THRESHOLDS_MINUTES[condition] : null;
+  return {
+    deliveryId,
+    status,
+    incidentType: condition,
+    active: Boolean(condition),
+    assignedRiderId: assignedRiderId(after),
+    stateEnteredAt: enteredAt,
+    nextCheckAt: condition ? Timestamp.fromMillis(now.toMillis() + threshold * 60000) : null,
+    openIncidentId: condition && existing && existing.incidentType === condition ? existing.openIncidentId || null : null,
+    updatedAt: now,
+    projectionVersion: "2026-08-operations-brain-v1",
+  };
 }
 
 function trackingEventForChange(before, after) {
@@ -159,26 +271,65 @@ exports.onMovementTimelineWrite = functions.firestore
       const after = change.after.data() || {};
       const events = timelineEventsForChange(before, after);
       const db = getFirestore();
+      const projectionRef = db.collection("deliveryOperationalState").doc(context.params.deliveryId);
+      const projectionSnapshot = await projectionRef.get();
       const eventId = `${context.eventId || context.timestamp}`.replace(/[^a-zA-Z0-9_-]/g, "_");
       const batch = db.batch();
       events.forEach((event, index) => {
-        const ref = db.collection("deliveryRequests")
-            .doc(context.params.deliveryId)
-            .collection("timeline")
-            .doc(`${eventId}_${index}`);
-        batch.set(ref, {
-          ...event,
+        const eventType = canonicalEventType(event, before, after);
+        if (!eventType) return;
+        appendOperationalEvent(db, {
           deliveryId: context.params.deliveryId,
-          timestamp: FieldValue.serverTimestamp(),
-          createdAt: FieldValue.serverTimestamp(),
-        });
+          eventType,
+          correlationId: `${eventId}:${index}`,
+          timestamp: Timestamp.fromDate(new Date(context.timestamp)),
+          actorType: event.actorType,
+          actorId: event.actorId,
+          source: "deliveryRequests.onWrite",
+          previousState: before && before.status,
+          newState: after.status,
+          metadata: {
+            deliveryType: event.deliveryType,
+            notes: event.notes,
+            quoteId: after.quoteId || after.authoritativeQuoteId || null,
+            paymentRecordId: after.paymentRecordId || null,
+          },
+        }, {batch});
       });
+      batch.set(projectionRef, operationalProjection(
+          context.params.deliveryId,
+          before,
+          after,
+          Timestamp.now(),
+          projectionSnapshot.exists ? projectionSnapshot.data() : null,
+      ), {merge: false});
+      const previousProjection = projectionSnapshot.exists ? projectionSnapshot.data() || {} : {};
+      const nextCondition = watchdogCondition(after);
+      if (previousProjection.openIncidentId && previousProjection.incidentType !== nextCondition) {
+        const incidentId = previousProjection.openIncidentId;
+        batch.set(db.collection("operationalIncidents").doc(incidentId), {
+          status: "RESOLVED",
+          resolvedAt: FieldValue.serverTimestamp(),
+          resolvedBy: "delivery-state-transition",
+          resolutionReason: "delivery_state_progressed",
+          updatedAt: FieldValue.serverTimestamp(),
+        }, {merge: true});
+        appendOperationalEvent(db, {
+          deliveryId: context.params.deliveryId,
+          eventType: "IncidentResolved",
+          correlationId: incidentId,
+          timestamp: Timestamp.fromDate(new Date(context.timestamp)),
+          source: "deliveryRequests.onWrite",
+          previousState: before && before.status,
+          newState: after.status,
+          metadata: {incidentId, incidentType: previousProjection.incidentType, reason: "delivery_state_progressed"},
+        }, {batch});
+      }
       const reassigned = before && assignedRiderId(before) &&
         assignedRiderId(before) !== assignedRiderId(after);
       if (terminalStatus(after.status) || reassigned) {
         batch.delete(db.collection("deliveryLiveLocations").doc(context.params.deliveryId));
       }
-      if (events.length === 0 && !terminalStatus(after.status) && !reassigned) return null;
       await batch.commit();
       return null;
     });
@@ -217,3 +368,7 @@ module.exports.deliveryType = deliveryType;
 module.exports.eventName = eventName;
 module.exports.timelineEventsForChange = timelineEventsForChange;
 module.exports.trackingEventForChange = trackingEventForChange;
+module.exports.canonicalEventType = canonicalEventType;
+module.exports.operationalProjection = operationalProjection;
+module.exports.watchdogCondition = watchdogCondition;
+module.exports.WATCHDOG_THRESHOLDS_MINUTES = WATCHDOG_THRESHOLDS_MINUTES;
