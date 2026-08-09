@@ -14,7 +14,10 @@ test("Rider nearby request lookup is bounded and locality-first", () => {
   assert.match(source, /where\("dispatchStatus", "in", \["requested", "broadcasted"\]\)[\s\S]*?limit\(REQUEST_SCAN_LIMIT\)/);
   assert.match(source, /where\("dispatchStatus", "in", \["requested", "broadcasted"\]\)[\s\S]*?limit\(REQUEST_SCAN_LIMIT\)/);
   assert.match(source, /where\("status", "==", "requested"\)[\s\S]*?limit\(REQUEST_SCAN_LIMIT\)/);
-  assert.match(source, /const requestDocs = await candidateRequestDocs\(getFirestore\(\), riderData\);/);
+  assert.match(source, /const requestDocs = await candidateRequestDocs\(db, riderData\);/);
+  assert.match(source, /functions\.runWith\(\{enforceAppCheck: true\}\)/);
+  assert.match(source, /dispatchEligibilityDecision\(\{/);
+  assert.match(source, /riderOfferProjection/);
   assert.match(source, /function offerExclusionReason\(delivery = \{\}, now = Date\.now\(\)\)/);
   assert.match(source, /terminalStatuses/);
   assert.match(source, /already_assigned/);

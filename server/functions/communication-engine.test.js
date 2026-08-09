@@ -33,6 +33,11 @@ test("notifications record delivery status, failures, and retries", () => {
   assert.match(source, /retryCount:\s*FieldValue\.increment\(1\)/);
   assert.match(source, /lastDeliveryAttemptAt/);
   assert.match(source, /retryable:\s*true/);
+  assert.match(source, /function notificationIdFor/);
+  assert.match(source, /createHash\("sha256"\)/);
+  assert.match(source, /if \(existing\.exists\)/);
+  assert.match(source, /if \(!shouldSend\) return ref\.id/);
+  assert.match(source, /privateNotificationFieldPattern/);
 });
 
 test("messages include backend-only diagnostic metadata", () => {
@@ -116,3 +121,11 @@ test("closed support submissions create admin-visible read-only messages",
       assert.match(source, /closedSubmission: closeImmediately/);
       assert.match(source, /adminUnreadCount: initialMessage \? 1 : 0/);
     });
+
+test("delivery system messages use deterministic event documents", () => {
+  assert.match(source, /exports\.appendSystemMessage = async \(deliveryId, message, eventId\)/);
+  assert.match(source, /type: "chat_system_message"/);
+  assert.match(source, /const existing = await transaction\.get\(messageRef\)/);
+  assert.match(source, /if \(existing\.exists\) return/);
+  assert.doesNotMatch(source, /collection\("messages"\)\.add\(\{[\s\S]*senderId: "circum-system"/);
+});

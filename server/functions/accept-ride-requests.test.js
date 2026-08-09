@@ -57,4 +57,23 @@ test("accepted rider payload never exposes personal phone numbers to sender surf
   assert.doesNotMatch(payloadSource, /cleanText\(rider\.phone/);
   assert.doesNotMatch(payloadSource, /rider\.phoneNumber/);
   assert.doesNotMatch(payloadSource, /rider\.mobile/);
+  assert.doesNotMatch(payloadSource, /fcmToken/);
+  assert.doesNotMatch(payloadSource, /code:/);
+});
+
+test("acceptance uses the shared eligibility predicate and atomically reserves Rider presence", () => {
+  const source = fs.readFileSync(path.join(__dirname, "accept-ride-requests.js"), "utf8");
+  assert.match(source, /dispatchEligibilityDecision\(\{/);
+  assert.match(source, /transaction\.get\(presenceRef\)/);
+  assert.match(source, /availabilityStatus: "busy"/);
+  assert.match(source, /activeDeliveryId: found\.id/);
+  assert.doesNotMatch(source, /adminVehicleOverride/);
+});
+
+test("acceptance notification derives the Sender identity and never reads a token from delivery", () => {
+  const source = fs.readFileSync(path.join(__dirname, "accept-ride-requests.js"), "utf8");
+  assert.match(source, /communicationEngine\.emitNotification/);
+  assert.match(source, /recipientId: senderId/);
+  assert.doesNotMatch(source, /deliveryRequest\.fcmToken/);
+  assert.doesNotMatch(source, /deliveryRequest\.pushToken/);
 });

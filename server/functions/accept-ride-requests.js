@@ -1,11 +1,10 @@
 /* eslint-disable max-len */
 const functions = require("firebase-functions/v1");
 const {getFirestore, FieldValue} = require("firebase-admin/firestore");
-const {getMessaging} = require("firebase-admin/messaging");
-const {isDispatchable, riderCanViewDispatch, riderDispatchEligibilityReason, riderMatchesIris} = require("./iris-core");
-const {riderVehicleMatchesRequest} = require("./vehicle-dispatch");
+const {isDispatchable} = require("./iris-core");
 const {buildRiderVehicleSnapshot} = require("./rider-vehicle-snapshot");
-const {loadFounderTestAccount} = require("./founder-authority");
+const {dispatchEligibilityDecision} = require("./rider-dispatch-authority");
+const communicationEngine = require("./communication-engine");
 
 const cleanText = (value, fallback = "") => {
   if (value === undefined || value === null) return fallback;
@@ -69,7 +68,6 @@ const riderPayload = (riderId, rider) => {
     typeOfVehicle: cleanText(rider.vehicleType || vehicle.type, "Vehicle"),
     plateNumber: cleanText(rider.plateNumber || rider.vehicleRegistration || vehicle.registration),
     estimatedDeliveryTime: cleanText(rider.estimatedDeliveryTime, "On the way"),
-    code: cleanText(rider.code || rider.fcmToken),
     rating: cleanText(rider.rating || rider.averageRating, "New"),
     riderId,
     photoURL: cleanText(rider.photoURL || rider.profilePhotoUrl || rider.avatarUrl, "null"),
@@ -92,51 +90,42 @@ const findDeliveryRequest = async (db, transaction, requestId) => {
   return {ref: doc.ref, id: doc.id, data: doc.data()};
 };
 
-const getRiderProfile = async (db, riderId) => {
-  const profileDoc = await db.collection("riderProfiles").doc(riderId).get();
-  const riderDoc = await db.collection("riders").doc(riderId).get();
+const getRiderProfile = async (db, transaction, riderId) => {
+  const profileDoc = await transaction.get(db.collection("riderProfiles").doc(riderId));
+  const riderDoc = await transaction.get(db.collection("riders").doc(riderId));
   if (riderDoc.exists) {
     return {
-      ...(profileDoc.exists ? profileDoc.data() : {}),
       ...riderDoc.data(),
+      ...(profileDoc.exists ? profileDoc.data() : {}),
     };
   }
 
   return null;
 };
 
-const canOverrideVehicleMismatch = (context, data) => {
-  if (!data || data.adminVehicleOverride !== true) return false;
-  const token = context.auth && context.auth.token || {};
-  const role = cleanText(token.role || token.adminRole || token.claims && token.claims.role).toLowerCase();
-  const roles = Array.isArray(token.roles) ? token.roles.map((item) => cleanText(item).toLowerCase()) : [];
-  return token.super_admin === true || token.admin === true ||
-    [role, ...roles].some((item) => ["super_admin", "operations_admin", "ops_admin"].includes(item));
-};
+const senderIdFor = (delivery = {}) =>
+  cleanText(delivery.senderId || delivery.userId || delivery.customerId);
 
-const notifySender = async (deliveryRequest, payload) => {
-  const token = cleanText(deliveryRequest.code || deliveryRequest.fcmToken || deliveryRequest.pushToken);
-  if (!token) return false;
-
-  await getMessaging().send({
-    apns: {
-      payload: {
-        aps: {
-          "content-available": 1,
-        },
-      },
-    },
+const notifySender = async (deliveryId, deliveryRequest) => {
+  const senderId = senderIdFor(deliveryRequest);
+  if (!senderId) return false;
+  await communicationEngine.emitNotification({
+    recipientId: senderId,
+    recipientRole: "sender",
+    type: "delivery_accepted",
+    title: "Rider accepted",
+    body: "A rider has accepted your delivery.",
     data: {
-      "type": "connection",
-      "status": "accepted",
-      "data": JSON.stringify(payload),
+      bookingId: cleanText(deliveryRequest.requestId || deliveryRequest.bookingId || deliveryId),
+      deliveryId,
+      correlationId: `delivery_accepted:${deliveryId}`,
+      category: "deliveries",
     },
-    token,
   });
   return true;
 };
 
-const acceptRideRequests = functions.runWith({enforceAppCheck: true}).https.onCall(async (data, context) => {
+const acceptRideRequestHandler = async (data, context, dependencies = {}) => {
   if (!context.auth) {
     throw new functions.https.HttpsError("unauthenticated", "User must be authenticated to accept a delivery.");
   }
@@ -147,17 +136,7 @@ const acceptRideRequests = functions.runWith({enforceAppCheck: true}).https.onCa
   }
 
   const riderId = context.auth.uid;
-  const db = getFirestore();
-  const rider = await getRiderProfile(db, riderId);
-
-  if (!rider) {
-    throw new functions.https.HttpsError("not-found", "Rider profile not found.");
-  }
-  const founderTestAccount = await loadFounderTestAccount(db, riderId);
-  if (founderTestAccount) {
-    rider.founderTestAccount = founderTestAccount;
-  }
-
+  const db = dependencies.db || getFirestore();
   const accepted = await db.runTransaction(async (transaction) => {
     const found = await findDeliveryRequest(db, transaction, requestId);
     if (!found) {
@@ -165,6 +144,13 @@ const acceptRideRequests = functions.runWith({enforceAppCheck: true}).https.onCa
     }
 
     const deliveryRequest = found.data;
+    const rider = await getRiderProfile(db, transaction, riderId);
+    if (!rider) {
+      throw new functions.https.HttpsError("not-found", "Rider profile not found.");
+    }
+    const presenceRef = db.collection("riderPresence").doc(riderId);
+    const presenceDoc = await transaction.get(presenceRef);
+    const presence = presenceDoc.exists ? presenceDoc.data() : {};
     console.info("rider_offer_accept_attempt", {
       bookingId: cleanText(deliveryRequest.bookingId || deliveryRequest.requestId || found.id),
       deliveryId: found.id,
@@ -185,29 +171,19 @@ const acceptRideRequests = functions.runWith({enforceAppCheck: true}).https.onCa
       throw new functions.https.HttpsError("failed-precondition", "Delivery request is not dispatchable by Iris.");
     }
 
-    if (!riderCanViewDispatch(rider, deliveryRequest)) {
+    const eligibility = dispatchEligibilityDecision({
+      riderId,
+      profile: rider,
+      presence,
+      delivery: deliveryRequest,
+    });
+    if (!eligibility.eligible) {
       console.info("rider_accept_ineligible", {
         riderId,
         deliveryId: found.id,
-        reason: riderDispatchEligibilityReason(rider),
-        eligibility: {
-          approvalStatus: rider.approvalStatus,
-          verificationStatus: rider.verificationStatus,
-          adminApprovalStatus: rider.adminApprovalStatus,
-          accountStatus: rider.accountStatus,
-          onboardingStatus: rider.onboardingStatus,
-        },
+        reason: eligibility.reason,
       });
       throw new functions.https.HttpsError("permission-denied", "This delivery is not currently available because your rider account is not yet eligible for dispatch.");
-    }
-
-    if (!riderVehicleMatchesRequest(rider, deliveryRequest) &&
-        !canOverrideVehicleMismatch(context, data)) {
-      throw new functions.https.HttpsError("failed-precondition", "Your registered vehicle is not suitable for this delivery.");
-    }
-
-    if (!riderMatchesIris(rider, deliveryRequest)) {
-      throw new functions.https.HttpsError("failed-precondition", "Rider does not match this delivery requirement.");
     }
 
     const currentStatus = cleanText(deliveryRequest.status).toLowerCase();
@@ -257,14 +233,25 @@ const acceptRideRequests = functions.runWith({enforceAppCheck: true}).https.onCa
       acceptedAt: FieldValue.serverTimestamp(),
       updatedAt: FieldValue.serverTimestamp(),
     }, {merge: true});
+    transaction.set(presenceRef, {
+      isOnline: true,
+      availabilityStatus: "busy",
+      busy: true,
+      dispatchEligible: false,
+      activeDeliveryId: found.id,
+      currentDeliveryId: found.id,
+      updatedAt: FieldValue.serverTimestamp(),
+    }, {merge: true});
 
     const chatRef = db.collection("chats").doc(found.data.requestId || found.id);
+    const senderId = senderIdFor(found.data);
     transaction.set(chatRef, {
       threadId: found.data.requestId || found.id,
       bookingId: found.data.requestId || found.id,
       requestId: found.data.requestId || found.id,
-      participants: FieldValue.arrayUnion(riderId, "circum-support"),
+      participants: FieldValue.arrayUnion(...[senderId, riderId, "circum-support"].filter(Boolean)),
       participantRoles: {
+        ...(senderId ? {[senderId]: "sender"} : {}),
         [riderId]: "rider",
         "circum-support": "admin",
       },
@@ -289,7 +276,7 @@ const acceptRideRequests = functions.runWith({enforceAppCheck: true}).https.onCa
 
   let senderNotified = false;
   try {
-    senderNotified = await notifySender(accepted.deliveryRequest, accepted.payload);
+    senderNotified = await (dependencies.notifySender || notifySender)(accepted.id, accepted.deliveryRequest);
   } catch (error) {
     console.error("Sender acceptance notification failed:", error);
   }
@@ -301,6 +288,15 @@ const acceptRideRequests = functions.runWith({enforceAppCheck: true}).https.onCa
     senderNotified,
     rider: accepted.payload,
   };
-});
+};
+
+const acceptRideRequests = functions.runWith({enforceAppCheck: true}).https.onCall(acceptRideRequestHandler);
 
 module.exports = acceptRideRequests;
+module.exports._private = {
+  assignedRiderId,
+  acceptRideRequestHandler,
+  offerExclusionReason,
+  riderPayload,
+  senderIdFor,
+};

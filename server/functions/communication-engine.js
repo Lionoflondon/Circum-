@@ -2,6 +2,7 @@
 const functions = require("firebase-functions/v1");
 const {FieldValue, getFirestore} = require("firebase-admin/firestore");
 const {getMessaging} = require("firebase-admin/messaging");
+const {createHash} = require("node:crypto");
 
 const terminalDeliveryStatuses = new Set([
   "delivered", "completed", "cancelled", "canceled", "failed",
@@ -20,6 +21,7 @@ const clean = (value) => `${value || ""}`.trim();
 const emailPattern = /\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b/gi;
 const phonePattern = /(?<!\w)(?:\+?\d[\d\s().-]{7,}\d)(?!\w)/g;
 const contactFieldPattern = /(phone|phonenumber|mobile|contactnumber|tel|userphone|riderphone|senderphone|driverphone|courierphone)/i;
+const privateNotificationFieldPattern = /(fcm|push.?token|notification.?token|stripe|payment.?intent|checkout.?session|client.?secret|billing)/i;
 
 function maskContactDetails(value) {
   return clean(value)
@@ -33,9 +35,14 @@ function redactContactFields(value) {
     return typeof value === "string" ? maskContactDetails(value) : value;
   }
   return Object.fromEntries(Object.entries(value).map(([key, item]) => {
-    if (contactFieldPattern.test(key)) return [key, ""];
+    if (contactFieldPattern.test(key) || privateNotificationFieldPattern.test(key)) return [key, ""];
     return [key, redactContactFields(item)];
   }));
+}
+
+function notificationIdFor({recipientId = "", recipientRole = "", type = "", correlationId = ""}) {
+  const authority = [recipientRole, recipientId, type, correlationId].map(clean).join("|");
+  return `notification_${createHash("sha256").update(authority).digest("hex").slice(0, 40)}`;
 }
 
 function isAdmin(context) {
@@ -107,8 +114,14 @@ async function emitNotification({recipientId, recipientRole = "sender", type, ti
   const db = getFirestore();
   const safeData = redactContactFields(data);
   const destination = destinationFor(type, safeData);
-  const ref = db.collection("notifications").doc();
-  const correlationId = clean(safeData.correlationId) || ref.id;
+  const requestedCorrelationId = clean(safeData.correlationId);
+  const ref = requestedCorrelationId ? db.collection("notifications").doc(notificationIdFor({
+    recipientId,
+    recipientRole,
+    type,
+    correlationId: requestedCorrelationId,
+  })) : db.collection("notifications").doc();
+  const correlationId = requestedCorrelationId || ref.id;
   const payload = {
     notificationId: ref.id,
     correlationId,
@@ -132,7 +145,20 @@ async function emitNotification({recipientId, recipientRole = "sender", type, ti
     pushProvider: "fcm",
     createdAt: FieldValue.serverTimestamp(),
   };
-  await ref.set(payload);
+  let shouldSend = true;
+  if (requestedCorrelationId) {
+    await db.runTransaction(async (transaction) => {
+      const existing = await transaction.get(ref);
+      if (existing.exists) {
+        shouldSend = false;
+        return;
+      }
+      transaction.set(ref, payload);
+    });
+  } else {
+    await ref.set(payload);
+  }
+  if (!shouldSend) return ref.id;
   const token = await profileToken(recipientId, recipientRole);
   if (!token) {
     await ref.set({
@@ -757,6 +783,8 @@ async function markConversationRead(data, context) {
 
 exports.emitNotification = emitNotification;
 exports.destinationFor = destinationFor;
+exports.notificationIdFor = notificationIdFor;
+exports.redactContactFields = redactContactFields;
 exports._sendCircumMessageHandler = sendMessage;
 exports.sendCircumMessage = functions.https.onCall(sendMessage);
 exports.startAdminConversation = functions.https.onCall(startAdminConversation);
@@ -777,19 +805,32 @@ exports.closeDeliveryConversation = async (deliveryId, status) => {
     updatedAt: FieldValue.serverTimestamp(),
   }, {merge: true});
 };
-exports.appendSystemMessage = async (deliveryId, message) => {
-  const chatRef = getFirestore().collection("chats").doc(clean(deliveryId));
+exports.appendSystemMessage = async (deliveryId, message, eventId) => {
+  const db = getFirestore();
+  const chatRef = db.collection("chats").doc(clean(deliveryId));
   const chat = await chatRef.get();
   if (!chat.exists) return;
-  await chatRef.collection("messages").add({
-    senderId: "circum-system",
-    senderRole: "system",
-    messageText: clean(message),
-    message: clean(message),
-    messageType: "system",
-    readBy: [],
-    createdAt: FieldValue.serverTimestamp(),
-    status: "sent",
-    audited: true,
+  const correlationId = clean(eventId) || `${clean(deliveryId)}:${clean(message)}`;
+  const messageRef = chatRef.collection("messages").doc(notificationIdFor({
+    recipientId: clean(deliveryId),
+    recipientRole: "system",
+    type: "chat_system_message",
+    correlationId,
+  }));
+  await db.runTransaction(async (transaction) => {
+    const existing = await transaction.get(messageRef);
+    if (existing.exists) return;
+    transaction.set(messageRef, {
+      senderId: "circum-system",
+      senderRole: "system",
+      correlationId,
+      messageText: clean(message),
+      message: clean(message),
+      messageType: "system",
+      readBy: [],
+      createdAt: FieldValue.serverTimestamp(),
+      status: "sent",
+      audited: true,
+    });
   });
 };

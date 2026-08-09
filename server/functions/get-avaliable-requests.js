@@ -1,9 +1,15 @@
 /* eslint-disable max-len, require-jsdoc */
 const functions = require("firebase-functions/v1");
 const {getFirestore} = require("firebase-admin/firestore");
-const {dispatchPriority, isDispatchable, riderCanViewDispatch, riderDispatchEligibilityReason, riderDispatchPriority, riderMatchesIris} = require("./iris-core");
-const {loadFounderTestAccount} = require("./founder-authority");
+const {dispatchPriority, isDispatchable, riderDispatchPriority} = require("./iris-core");
 const {highestTrustAward} = require("./trust-award");
+const {
+  accountEligibilityDecision,
+  dispatchEligibilityDecision,
+  presenceEligibilityDecision,
+  riderCoordinate,
+  riderOfferProjection,
+} = require("./rider-dispatch-authority");
 
 const REQUEST_SCAN_LIMIT = 100;
 const openStatuses = new Set(["requested", "pending", "broadcast", "broadcasted", "awaiting_rider", "finding_rider"]);
@@ -108,12 +114,8 @@ async function candidateRequestDocs(db, riderData = {}) {
       .sort((a, b) => deliveryCreatedMillis(b.data() || {}) - deliveryCreatedMillis(a.data() || {}));
 }
 
-const getNearbyRequests = functions.https.onCall(async (data, context) => {
+const getNearbyRequests = functions.runWith({enforceAppCheck: true}).https.onCall(async (data, context) => {
   try {
-    const toRadians = (degrees) => {
-      return degrees * (Math.PI / 180);
-    };
-
     // Check if the user is authenticated
     if (!context.auth) {
       throw new functions.https.HttpsError("unauthenticated",
@@ -123,32 +125,33 @@ const getNearbyRequests = functions.https.onCall(async (data, context) => {
     const riderId = context.auth.uid;
 
     // Get rider's current position
-    const riderDoc = await getFirestore().collection("riders").doc(riderId).get();
+    const db = getFirestore();
+    const [riderDoc, riderProfileDoc, presenceDoc] = await Promise.all([
+      db.collection("riders").doc(riderId).get(),
+      db.collection("riderProfiles").doc(riderId).get(),
+      db.collection("riderPresence").doc(riderId).get(),
+    ]);
     if (!riderDoc.exists) {
       throw new functions.https.HttpsError("not-found", "Rider not found");
     }
 
-    const riderProfileDoc = await getFirestore().collection("riderProfiles").doc(riderId).get();
     const riderData = {
-      ...(riderProfileDoc.exists ? riderProfileDoc.data() : {}),
       ...riderDoc.data(),
+      ...(riderProfileDoc.exists ? riderProfileDoc.data() : {}),
     };
-    const founderTestAccount = await loadFounderTestAccount(getFirestore(), riderId);
-    if (founderTestAccount) {
-      riderData.founderTestAccount = founderTestAccount;
+    const presence = presenceDoc.exists ? presenceDoc.data() : {};
+    const accountDecision = accountEligibilityDecision(riderData);
+    if (!accountDecision.eligible) {
+      throw new functions.https.HttpsError("permission-denied", "Rider is not eligible for dispatch.");
     }
-    if (!riderData.position || !riderData.position.geopoint ||
-        !Number.isFinite(Number(riderData.position.geopoint.latitude)) ||
-        !Number.isFinite(Number(riderData.position.geopoint.longitude))) {
-      throw new functions.https.HttpsError("failed-precondition", "Rider position not available");
+    const presenceDecision = presenceEligibilityDecision({riderId, presence});
+    if (!presenceDecision.eligible) {
+      throw new functions.https.HttpsError("failed-precondition", "Rider presence is not ready for dispatch.");
     }
 
-    const riderPosition = {
-      latitude: riderData.position.geopoint.latitude,
-      longitude: riderData.position.geopoint.longitude,
-    };
+    const riderPosition = riderCoordinate(presence);
 
-    const requestDocs = await candidateRequestDocs(getFirestore(), riderData);
+    const requestDocs = await candidateRequestDocs(db, riderData);
     console.info("rider_offer_scan", {
       riderId,
       scanned: requestDocs.length,
@@ -192,49 +195,32 @@ const getNearbyRequests = functions.https.onCall(async (data, context) => {
                   });
                   return null;
                 }
-                const privateDoc = await getFirestore()
+                const privateDoc = await db
                     .collection("irisPrivate")
                     .doc(requestData.requestId || doc.id)
                     .get();
                 if (privateDoc.exists) {
                   requestData.irisPrivate = privateDoc.data();
                 }
-                if (!riderCanViewDispatch(riderData, requestData)) {
-                  console.info("rider_offer_excluded", {riderId, bookingId: text(requestData.bookingId || requestData.requestId || doc.id), deliveryId: doc.id, reason: riderDispatchEligibilityReason(riderData), eligibility: {
-                    approvalStatus: riderData.approvalStatus,
-                    verificationStatus: riderData.verificationStatus,
-                    adminApprovalStatus: riderData.adminApprovalStatus,
-                    accountStatus: riderData.accountStatus,
-                    onboardingStatus: riderData.onboardingStatus,
-                  }});
+                const decision = dispatchEligibilityDecision({
+                  riderId,
+                  profile: riderData,
+                  presence,
+                  delivery: requestData,
+                });
+                if (!decision.eligible) {
+                  console.info("rider_offer_excluded", {
+                    riderId,
+                    bookingId: text(requestData.bookingId || requestData.requestId || doc.id),
+                    deliveryId: doc.id,
+                    reason: decision.reason,
+                  });
                   return null;
                 }
-                if (!riderMatchesIris(riderData, requestData)) {
-                  console.info("rider_offer_excluded", {riderId, bookingId: text(requestData.bookingId || requestData.requestId || doc.id), deliveryId: doc.id, reason: "iris_mismatch"});
-                  return null;
-                }
-                const pickupLocation = requestData.pickupPosition.geopoint;
-
-                // Haversine formula for distance calculation
-                const R = 6371; // Earth's radius in kilometers
-                const dLat = toRadians(pickupLocation.latitude - riderPosition.latitude);
-                const dLon = toRadians(pickupLocation.longitude - riderPosition.longitude);
-
-                const a =
-                  Math.sin(dLat/2) * Math.sin(dLat/2) +
-                  Math.cos(toRadians(riderPosition.latitude)) *
-                  Math.cos(toRadians(pickupLocation.latitude)) *
-                  Math.sin(dLon/2) * Math.sin(dLon/2);
-
-                const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
-                const distance = R * c; // Distance in kilometers
-
                 return {
-                  id: doc.id,
-                  ...requestData,
+                  ...riderOfferProjection(doc.id, requestData, decision.distanceKm),
                   trustPoints: Number.isFinite(Number(requestData.trustPointsAwarded)) ?
                     Number(requestData.trustPointsAwarded) : highestTrustAward(requestData),
-                  distanceFromRider: distance,
                 };
               } catch (error) {
                 console.error("Error processing request:", error);

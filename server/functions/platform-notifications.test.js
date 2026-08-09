@@ -106,8 +106,9 @@ test("delivery creation notifies merged online rider candidates", () => {
   assert.match(source, /collection\("riderProfiles"\)/);
   assert.match(source, /where\("status", "in", \["online", "available"\]\)/);
   assert.match(source, /where\("availabilityStatus", "in", \["online", "available"\]\)/);
-  assert.match(source, /const riders = await onlineCandidateRiderRecords\(db\);/);
+  assert.match(source, /const riders = dispatchable \? await onlineCandidateRiderRecords\(db\) : \[\];/);
   assert.match(source, /collection\("dispatchInspections"\)/);
+  assert.match(source, /correlationId: `delivery_offer:\$\{snapshot\.id\}:\$\{decision\.riderId\}`/);
   assert.doesNotMatch(source, /const riders = await getFirestore\(\)\.collection\("riderProfiles"\)\.get\(\);/);
 });
 
@@ -116,9 +117,14 @@ test("dispatch candidate decision rejects offline presence even when profile is 
     id: "rider-1",
     profile: {
       approvalStatus: "approved",
-      vehicleStatus: "approved",
+      verificationStatus: "verified",
+      onboardingStatus: "approved",
+      dispatchEligible: true,
+      documentsVerified: true,
+      vehicleVerified: true,
       status: "online",
       availabilityStatus: "available",
+      vehicleType: "motorbike",
     },
     rider: {},
     presence: {
@@ -131,7 +137,7 @@ test("dispatch candidate decision rejects offline presence even when profile is 
   assert.equal(decision.reason, "offline");
 });
 
-test("dispatch candidate decision honours an active founder test waiver", () => {
+test("dispatch candidate decision does not let founder designation bypass approval", () => {
   const now = Date.now();
   const decision = _private.dispatchCandidateDecision({
     id: "founder-rider",
@@ -149,6 +155,7 @@ test("dispatch candidate decision honours an active founder test waiver", () => 
       isOnline: true,
       availabilityStatus: "available",
       busy: false,
+      dispatchEligible: true,
       lastHeartbeatAt: now,
       gpsStatus: "active",
       currentLocation: {
@@ -159,6 +166,11 @@ test("dispatch candidate decision honours an active founder test waiver", () => 
       },
     },
   }, {vehicleType: "bike"}, now);
-  assert.equal(decision.eligible, true);
-  assert.equal(decision.reason, "eligible");
+  assert.equal(decision.eligible, false);
+  assert.equal(decision.reason, "dispatch_not_eligible");
+});
+
+test("delivery status system messages carry a deterministic retry identity", () => {
+  const source = fs.readFileSync(path.join(__dirname, "platform-notifications.js"), "utf8");
+  assert.match(source, /`delivery_status:\$\{change\.after\.id\}:\$\{status\}`/);
 });

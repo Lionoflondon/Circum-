@@ -107,6 +107,7 @@ function gpsHealthy({presence = {}, now = Date.now()}) {
   if (!Number.isFinite(accuracy) || accuracy <= 0 || accuracy > MAX_DISPATCH_ACCURACY_METERS) return false;
   const updatedAt = timestampMillis(location.updatedAt || location.clientRecordedAt || presence.lastLocationAt);
   if (!updatedAt) return false;
+  if (updatedAt > now + 30000) return false;
   return now - updatedAt <= STALE_LOCATION_MS;
 }
 
@@ -136,6 +137,7 @@ module.exports = {
   MAX_DISPATCH_ACCURACY_METERS,
   STALE_LOCATION_MS,
   STALE_HEARTBEAT_MS,
+  timestampMillis,
   blockedReason,
   blockedReasonForAccess,
   canGoOnline,

@@ -1043,7 +1043,14 @@ test("express jobs receive dispatch priority", () => {
 
 test("rider rank never hides jobs and only changes backup priority", () => {
   const now = Date.parse("2026-06-14T12:00:00Z");
-  const approved = {approvalStatus: "approved"};
+  const approved = {
+    approvalStatus: "approved",
+    verificationStatus: "verified",
+    onboardingStatus: "approved",
+    dispatchEligible: true,
+    documentsVerified: true,
+    vehicleVerified: true,
+  };
   assert.equal(normalizeRiderRank(), "agent");
   assert.equal(riderCanViewDispatch({}, {createdAt: "2026-06-14T11:59:00Z"}, now), false);
   assert.equal(riderCanViewDispatch({...approved}, {createdAt: "2026-06-14T11:59:00Z"}, now), true);
@@ -1064,7 +1071,7 @@ test("rider rank never hides jobs and only changes backup priority", () => {
   assert.equal(riderDispatchPriority({rank: "sentinel"}, {createdAt: "2026-06-14T11:55:00Z"}, now), 1);
 });
 
-test("Founder internal test account waives only configured dispatch gates", () => {
+test("Founder designation does not waive normal dispatch eligibility", () => {
   const pending = {
     approvalStatus: "submitted",
     verificationStatus: "verification_pending",
@@ -1073,7 +1080,7 @@ test("Founder internal test account waives only configured dispatch gates", () =
     onboardingStatus: "application_submitted",
   };
   assert.equal(riderCanViewDispatch(pending, {}), false);
-  assert.equal(riderDispatchEligibilityReason(pending), "approval_pending");
+  assert.equal(riderDispatchEligibilityReason(pending), "dispatch_not_eligible");
 
   const waivesOnboardingOnly = {
     ...pending,
@@ -1084,7 +1091,7 @@ test("Founder internal test account waives only configured dispatch gates", () =
     },
   };
   assert.equal(riderCanViewDispatch(waivesOnboardingOnly, {}), false);
-  assert.equal(riderDispatchEligibilityReason(waivesOnboardingOnly), "approval_pending");
+  assert.equal(riderDispatchEligibilityReason(waivesOnboardingOnly), "dispatch_not_eligible");
 
   const waivesDispatch = {
     ...pending,
@@ -1094,8 +1101,8 @@ test("Founder internal test account waives only configured dispatch gates", () =
       waivers: ["dispatch_eligibility"],
     },
   };
-  assert.equal(riderCanViewDispatch(waivesDispatch, {}), true);
-  assert.equal(riderDispatchEligibilityReason(waivesDispatch), null);
+  assert.equal(riderCanViewDispatch(waivesDispatch, {}), false);
+  assert.equal(riderDispatchEligibilityReason(waivesDispatch), "dispatch_not_eligible");
 
   const inactiveDesignation = {
     ...pending,

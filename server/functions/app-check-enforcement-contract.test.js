@@ -21,6 +21,9 @@ test("financial and lifecycle mutation callables require App Check", () => {
     ["gifts-payment.js", /createGiftPayment\s*=\s*\(stripe\) => functions\.runWith\(\{[\s\S]*?enforceAppCheck: true,[\s\S]*?GOOGLE_PLACES_API_KEY[\s\S]*?\}\)/],
     ["gifts-payment.js", /finalizeGiftPayment\s*=\s*\(stripe\) => functions\.runWith\(\{enforceAppCheck: true\}\)/],
     ["accept-ride-requests.js", /const acceptRideRequests = functions\.runWith\(\{enforceAppCheck: true\}\)/],
+    ["send-package.js", /const sendPackage = functions\.runWith\(\{enforceAppCheck: true\}\)/],
+    ["get-avaliable-requests.js", /const getNearbyRequests = functions\.runWith\(\{enforceAppCheck: true\}\)/],
+    ["send-rider-update.js", /const sendRiderUpdate = functions\.runWith\(\{enforceAppCheck: true\}\)/],
     ["scheduled-road-charge-refunds.js", /const settleScheduledRoadChargeCashRefund = functions\.runWith\(\{enforceAppCheck: true\}\)/],
   ];
   for (const [file, pattern] of expectations) {

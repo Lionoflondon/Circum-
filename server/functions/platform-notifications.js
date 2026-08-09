@@ -2,9 +2,8 @@
 const functions = require("firebase-functions/v1");
 const {getFirestore, FieldValue} = require("firebase-admin/firestore");
 const {getMessaging} = require("firebase-admin/messaging");
-const {riderMatchesIris} = require("./iris-core");
-const riderPresenceCore = require("./rider-presence-core");
-const {loadFounderTestAccount} = require("./founder-authority");
+const {isDispatchable} = require("./iris-core");
+const {dispatchEligibilityDecision} = require("./rider-dispatch-authority");
 const communicationEngine = require("./communication-engine");
 const {dispatchDeliveryRequest} = require("./send-package");
 
@@ -39,21 +38,6 @@ const giftEvents = new Set([
   "dispute_resolved",
 ]);
 
-async function profileToken(uid, role) {
-  if (!uid) return "";
-  const db = getFirestore();
-  const collections = role === "rider" ? ["riderProfiles", "riders"] : ["users", "senders"];
-  for (const collection of collections) {
-    const doc = await db.collection(collection).doc(uid).get();
-    if (doc.exists) {
-      const data = doc.data();
-      const token = text(data.fcmToken || data.pushToken || data.code);
-      if (token) return token;
-    }
-  }
-  return "";
-}
-
 async function adminRecipients() {
   const snapshot = await getFirestore().collection("adminUsers").get();
   return snapshot.docs.filter((doc) => text(doc.data().status || "active").toLowerCase() !== "disabled").map((doc) => ({
@@ -62,7 +46,24 @@ async function adminRecipients() {
   }));
 }
 
-async function notify({recipientId, recipientRole, type, title, body, bookingId, ticketId, data = {}}) {
+function notificationCorrelation({recipientId, recipientRole, type, bookingId, ticketId, eventId, data = {}}) {
+  return text(eventId || data.correlationId || [
+    type,
+    recipientRole,
+    recipientId,
+    bookingId,
+    ticketId,
+    data.giftId,
+    data.healthPickupId,
+    data.businessId,
+    data.status,
+    data.stage,
+    data.amount,
+  ].map(text).filter(Boolean).join(":"));
+}
+
+async function notify({recipientId, recipientRole, type, title, body, bookingId, ticketId, eventId, data = {}}) {
+  const correlationId = notificationCorrelation({recipientId, recipientRole, type, bookingId, ticketId, eventId, data});
   if (recipientRole !== "admin") {
     return communicationEngine.emitNotification({
       recipientId,
@@ -70,12 +71,23 @@ async function notify({recipientId, recipientRole, type, title, body, bookingId,
       type,
       title,
       body,
-      data: {...data, bookingId, ticketId},
+      data: {...data, bookingId, ticketId, correlationId},
     });
   }
   const db = getFirestore();
-  const ref = db.collection("notifications").doc();
-  await ref.set({
+  const ref = db.collection("notifications").doc(communicationEngine.notificationIdFor({
+    recipientRole: "admin",
+    type,
+    correlationId,
+  }));
+  let shouldSend = true;
+  await db.runTransaction(async (transaction) => {
+    const existing = await transaction.get(ref);
+    if (existing.exists) {
+      shouldSend = false;
+      return;
+    }
+    transaction.set(ref, {
     recipientId: recipientId || null,
     recipientRole,
     type,
@@ -84,30 +96,21 @@ async function notify({recipientId, recipientRole, type, title, body, bookingId,
     bookingId: bookingId || null,
     ticketId: ticketId || null,
     data,
+    correlationId,
     read: false,
     createdAt: FieldValue.serverTimestamp(),
+    });
   });
+  if (!shouldSend) return ref.id;
 
-  let token = "";
-  if (recipientRole === "admin") {
-    const admins = await adminRecipients();
-    const tokens = admins.map((admin) => admin.token).filter(Boolean);
-    if (tokens.length) {
-      await getMessaging().sendEachForMulticast({
-        tokens,
-        notification: {title, body},
-        data: {type, notificationId: ref.id, bookingId: bookingId || "", ticketId: ticketId || ""},
-      }).catch((error) => console.error("Admin notification failed", error));
-    }
-    return ref.id;
-  }
-  token = await profileToken(recipientId, recipientRole);
-  if (token) {
-    await getMessaging().send({
-      token,
+  const admins = await adminRecipients();
+  const tokens = admins.map((admin) => admin.token).filter(Boolean);
+  if (tokens.length) {
+    await getMessaging().sendEachForMulticast({
+      tokens,
       notification: {title, body},
       data: {type, notificationId: ref.id, bookingId: bookingId || "", ticketId: ticketId || ""},
-    }).catch((error) => console.error("Notification failed", error));
+    }).catch((error) => console.error("Admin notification failed", error));
   }
   return ref.id;
 }
@@ -229,13 +232,9 @@ async function onlineCandidateRiderRecords(db) {
       record.rider ? null : db.collection("riders").doc(record.id).get(),
       record.presence ? null : db.collection("riderPresence").doc(record.id).get(),
     ]);
-    const founderTestAccount = await loadFounderTestAccount(db, record.id);
     return {
       id: record.id,
-      profile: {
-        ...(record.profile || (profileDoc && profileDoc.exists ? profileDoc.data() : {})),
-        ...(founderTestAccount ? {founderTestAccount} : {}),
-      },
+      profile: record.profile || (profileDoc && profileDoc.exists ? profileDoc.data() : {}),
       rider: record.rider || (riderDoc && riderDoc.exists ? riderDoc.data() : {}),
       presence: record.presence || (presenceDoc && presenceDoc.exists ? presenceDoc.data() : {}),
     };
@@ -246,17 +245,8 @@ async function onlineCandidateRiderRecords(db) {
 function dispatchCandidateDecision(record, delivery, now = Date.now()) {
   const profile = {...(record.rider || {}), ...(record.profile || {})};
   const presence = record.presence || {};
-  if (!riderPresenceCore.canReceiveDispatch({profile, presence, now})) {
-    const reason = riderPresenceCore.blockedReason(profile) ||
-      (presence.isOnline !== true ? "offline" :
-        presence.availabilityStatus !== "available" ? `availability_${text(presence.availabilityStatus || "unknown")}` :
-          presence.busy === true ? "busy" : "location_or_heartbeat_unhealthy");
-    return {eligible: false, reason, profile, presence};
-  }
-  if (!riderMatchesIris(profile, delivery)) {
-    return {eligible: false, reason: "vehicle_or_iris_mismatch", profile, presence};
-  }
-  return {eligible: true, reason: "eligible", profile, presence};
+  const decision = dispatchEligibilityDecision({riderId: record.id, profile, presence, delivery, now});
+  return {...decision, profile, presence};
 }
 
 function moneyText(value, currency = "GBP") {
@@ -322,7 +312,8 @@ exports.onDeliveryCreated = functions.firestore.document("deliveryRequests/{deli
   const ids = deliveryIds({...delivery, id: snapshot.id});
   if (ids.senderId) await notify({recipientId: ids.senderId, recipientRole: "shipper", type: "delivery_created", title: "Delivery created", body: "Your delivery request has been created.", bookingId: ids.bookingId, data: {category: "Deliveries"}});
   const db = getFirestore();
-  const riders = await onlineCandidateRiderRecords(db);
+  const dispatchable = isDispatchable(delivery);
+  const riders = dispatchable ? await onlineCandidateRiderRecords(db) : [];
   const decisions = riders.map((record) => ({
     riderId: record.id,
     ...dispatchCandidateDecision(record, delivery),
@@ -332,7 +323,7 @@ exports.onDeliveryCreated = functions.firestore.document("deliveryRequests/{deli
     deliveryId: snapshot.id,
     bookingId: ids.bookingId || snapshot.id,
     senderId: ids.senderId || null,
-    status: "broadcast_evaluated",
+    status: dispatchable ? "broadcast_evaluated" : "dispatch_blocked",
     deliveryStatus: text(delivery.status || delivery.deliveryStatus),
     dispatchStatus: text(delivery.dispatchStatus),
     matchingStatus: text(delivery.matchingStatus),
@@ -361,9 +352,10 @@ exports.onDeliveryCreated = functions.firestore.document("deliveryRequests/{deli
       route: "jobs",
       deliveryId: snapshot.id,
       dispatchInspectionId: ids.bookingId || snapshot.id,
+      correlationId: `delivery_offer:${snapshot.id}:${decision.riderId}`,
     },
   })));
-  if (eligible.length === 0) {
+  if (dispatchable && eligible.length === 0) {
     console.warn("delivery_dispatch_no_eligible_riders", {
       deliveryId: snapshot.id,
       bookingId: ids.bookingId,
@@ -415,7 +407,11 @@ exports.onDeliveryUpdated = functions.firestore.document("deliveryRequests/{deli
     completed: "Delivery completed.",
   };
   if (statusChanged && systemMessages[status]) {
-    await communicationEngine.appendSystemMessage(ids.bookingId, systemMessages[status]);
+    await communicationEngine.appendSystemMessage(
+        ids.bookingId,
+        systemMessages[status],
+        `delivery_status:${change.after.id}:${status}`,
+    );
   }
   const chargeText = moneyText(waitingCharge.amount, waitingCharge.currency);
   const senderMessages = {
@@ -440,12 +436,12 @@ exports.onDeliveryUpdated = functions.firestore.document("deliveryRequests/{deli
     refunded: ["Refund issued", "Your delivery refund has been updated.", "Payments"],
   };
   const senderMessage = statusChanged ? senderMessages[status] : null;
-  if (ids.senderId && senderMessage) await notify({recipientId: ids.senderId, recipientRole: "shipper", type: `delivery_${status}`, title: senderMessage[0], body: senderMessage[1], bookingId: ids.bookingId, data: {category: senderMessage[2]}});
-  if (ids.senderId && oldPayment !== payment && ["paid", "succeeded", "success"].includes(payment)) await notify({recipientId: ids.senderId, recipientRole: "shipper", type: "payment_successful", title: "Payment successful", body: "Your delivery payment was successful.", bookingId: ids.bookingId, data: {category: "Payments"}});
-  if (ids.senderId && oldPayment !== payment && ["failed", "declined"].includes(payment)) await notify({recipientId: ids.senderId, recipientRole: "shipper", type: "payment_failed", title: "Payment failed", body: "Your delivery payment was not completed.", bookingId: ids.bookingId, data: {category: "Payments"}});
-  if (ids.senderId && oldWaitingContext !== waitingContext && waitingContext === "customer_responded") await notify({recipientId: ids.senderId, recipientRole: "shipper", type: "customer_responded", title: "Customer response received", body: "Waiting continues under the current policy.", bookingId: ids.bookingId, data: {category: "Deliveries"}});
-  if (ids.senderId && oldWaitingCharge !== waitingChargeAmount && waitingChargeAmount > 0) await notify({recipientId: ids.senderId, recipientRole: "shipper", type: "waiting_charge_updated", title: "Waiting charge updated", body: `Additional waiting charge: ${moneyText(waitingCharge.amount, waitingCharge.currency)}.`, bookingId: ids.bookingId, data: {category: "Payments"}});
-  if (ids.riderId && statusChanged && (status.includes("cancel") || status === "updated")) await notify({recipientId: ids.riderId, recipientRole: "rider", type: status.includes("cancel") ? "delivery_cancelled" : "delivery_updated", title: status.includes("cancel") ? "Delivery cancelled" : "Delivery updated", body: status.includes("cancel") ? "A delivery assigned to you was cancelled." : "An assigned delivery has been updated.", bookingId: ids.bookingId});
+  if (ids.senderId && senderMessage) await notify({recipientId: ids.senderId, recipientRole: "shipper", type: `delivery_${status}`, title: senderMessage[0], body: senderMessage[1], bookingId: ids.bookingId, data: {category: senderMessage[2], status}});
+  if (ids.senderId && oldPayment !== payment && ["paid", "succeeded", "success"].includes(payment)) await notify({recipientId: ids.senderId, recipientRole: "shipper", type: "payment_successful", title: "Payment successful", body: "Your delivery payment was successful.", bookingId: ids.bookingId, data: {category: "Payments", status: payment}});
+  if (ids.senderId && oldPayment !== payment && ["failed", "declined"].includes(payment)) await notify({recipientId: ids.senderId, recipientRole: "shipper", type: "payment_failed", title: "Payment failed", body: "Your delivery payment was not completed.", bookingId: ids.bookingId, data: {category: "Payments", status: payment}});
+  if (ids.senderId && oldWaitingContext !== waitingContext && waitingContext === "customer_responded") await notify({recipientId: ids.senderId, recipientRole: "shipper", type: "customer_responded", title: "Customer response received", body: "Waiting continues under the current policy.", bookingId: ids.bookingId, data: {category: "Deliveries", status: waitingContext}});
+  if (ids.senderId && oldWaitingCharge !== waitingChargeAmount && waitingChargeAmount > 0) await notify({recipientId: ids.senderId, recipientRole: "shipper", type: "waiting_charge_updated", title: "Waiting charge updated", body: `Additional waiting charge: ${moneyText(waitingCharge.amount, waitingCharge.currency)}.`, bookingId: ids.bookingId, data: {category: "Payments", amount: waitingChargeAmount}});
+  if (ids.riderId && statusChanged && (status.includes("cancel") || status === "updated")) await notify({recipientId: ids.riderId, recipientRole: "rider", type: status.includes("cancel") ? "delivery_cancelled" : "delivery_updated", title: status.includes("cancel") ? "Delivery cancelled" : "Delivery updated", body: status.includes("cancel") ? "A delivery assigned to you was cancelled." : "An assigned delivery has been updated.", bookingId: ids.bookingId, data: {status}});
 });
 
 exports.onGiftRequestCreated = functions.firestore.document("giftRequests/{giftId}").onCreate((snapshot, context) =>
@@ -475,26 +471,27 @@ exports.onChatMessageCreated = functions.firestore.document("chats/{chatId}/mess
     body: text(message.messageText || message.message) || "You have a new message.",
     bookingId,
     ticketId,
+    eventId: `chat:${context.params.chatId}:${context.params.messageId}:${uid}`,
   })));
-  if (message.initialSupportRequest !== true && text(message.senderRole) !== "admin" && (chatData.type === "support" || participants.includes("circum-support"))) await notify({recipientRole: "admin", type: "admin_response_needed", title: "New support message", body: "A shipper or rider sent a new message.", bookingId, ticketId});
+  if (message.initialSupportRequest !== true && text(message.senderRole) !== "admin" && (chatData.type === "support" || participants.includes("circum-support"))) await notify({recipientRole: "admin", type: "admin_response_needed", title: "New support message", body: "A shipper or rider sent a new message.", bookingId, ticketId, eventId: `chat-admin:${context.params.chatId}:${context.params.messageId}`});
 });
 
 exports.onSupportTicketCreated = functions.firestore.document("supportTickets/{ticketId}").onCreate((snapshot) => notify({recipientRole: "admin", type: "support_ticket", title: "New support ticket", body: text(snapshot.data().message) || "A new support request was opened.", ticketId: snapshot.id}));
-exports.onDisputeCreated = functions.firestore.document("disputes/{disputeId}").onCreate((snapshot) => notify({recipientRole: "admin", type: "dispute", title: "New dispute", body: "A delivery dispute needs review.", bookingId: text(snapshot.data().bookingId || snapshot.data().requestId)}));
+exports.onDisputeCreated = functions.firestore.document("disputes/{disputeId}").onCreate((snapshot, context) => notify({recipientRole: "admin", type: "dispute", title: "New dispute", body: "A delivery dispute needs review.", bookingId: text(snapshot.data().bookingId || snapshot.data().requestId), eventId: `dispute:${context.params.disputeId}`}));
 
 exports.onRiderProfileUpdated = functions.firestore.document("riderProfiles/{riderId}").onUpdate(async (change, context) => {
   const before = text(change.before.data().approvalStatus || change.before.data().verificationStatus);
   const after = text(change.after.data().approvalStatus || change.after.data().verificationStatus);
   if (!after || before === after) return;
-  if (["approved", "verified", "rejected"].includes(after.toLowerCase())) await notify({recipientId: context.params.riderId, recipientRole: "rider", type: "verification_update", title: after.toLowerCase() === "rejected" ? "Verification update" : "Verification approved", body: after.toLowerCase() === "rejected" ? "Your rider verification needs attention." : "Your rider account has been approved."});
+  if (["approved", "verified", "rejected"].includes(after.toLowerCase())) await notify({recipientId: context.params.riderId, recipientRole: "rider", type: "verification_update", title: after.toLowerCase() === "rejected" ? "Verification update" : "Verification approved", body: after.toLowerCase() === "rejected" ? "Your rider verification needs attention." : "Your rider account has been approved.", data: {status: after.toLowerCase()}});
 });
 
-exports.onPayoutUpdated = functions.firestore.document("payoutRequests/{requestId}").onUpdate(async (change) => {
+exports.onPayoutUpdated = functions.firestore.document("payoutRequests/{requestId}").onUpdate(async (change, context) => {
   const before = text(change.before.data().status).toLowerCase();
   const after = text(change.after.data().status).toLowerCase();
   if (before === after || !["paid", "approved", "rejected"].includes(after)) return;
   const data = change.after.data();
-  await notify({recipientId: text(data.riderId), recipientRole: "rider", type: "earnings_update", title: after === "paid" ? "Earnings paid" : "Withdrawal updated", body: `Your withdrawal is ${after}.`});
+  await notify({recipientId: text(data.riderId), recipientRole: "rider", type: "earnings_update", title: after === "paid" ? "Earnings paid" : "Withdrawal updated", body: `Your withdrawal is ${after}.`, eventId: `payout:${context.params.requestId}:${after}`, data: {status: after}});
 });
 
 exports.escalateUnclaimedDeliveries = functions.pubsub.schedule("every 1 minutes").onRun(async () => {
@@ -538,7 +535,7 @@ exports.escalateUnclaimedDeliveries = functions.pubsub.schedule("every 1 minutes
       await Promise.all(riderProfileDocs
           .map((record) => ({...dispatchCandidateDecision(record, delivery), riderId: record.id}))
           .filter((decision) => decision.eligible)
-          .map((decision) => notify({recipientId: decision.riderId, recipientRole: "rider", type: "delivery_reminder", title: "Delivery still available", body: "An eligible delivery is still waiting for a rider.", bookingId: text(delivery.requestId || doc.id)})));
+          .map((decision) => notify({recipientId: decision.riderId, recipientRole: "rider", type: "delivery_reminder", title: "Delivery still available", body: "An eligible delivery is still waiting for a rider.", bookingId: text(delivery.requestId || doc.id), data: {stage}})));
     }
     await doc.ref.set({notificationEscalationStage: stage, notificationEscalatedAt: FieldValue.serverTimestamp()}, {merge: true});
   }

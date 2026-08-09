@@ -1,9 +1,10 @@
 /* eslint-disable max-len, require-jsdoc */
 const functions = require("firebase-functions/v1");
 const {getFirestore, FieldValue} = require("firebase-admin/firestore");
-const {getMessaging} = require("firebase-admin/messaging");
-const {dispatchComplianceDecision, dispatchPriority, riderMatchesIris} = require("./iris-core");
+const {dispatchComplianceDecision} = require("./iris-core");
 const {hasAdminClaim} = require("./admin-auth");
+const {dispatchEligibilityDecision} = require("./rider-dispatch-authority");
+const communicationEngine = require("./communication-engine");
 
 function senderOwnsRequest(delivery, uid) {
   return delivery.senderId === uid || delivery.userId === uid;
@@ -11,15 +12,12 @@ function senderOwnsRequest(delivery, uid) {
 
 async function dispatchDeliveryRequest({
   db = getFirestore(),
-  messaging = getMessaging(),
+  emitNotification = communicationEngine.emitNotification,
   requestId,
   uid,
   authToken = {},
   source = "sendPackage",
 }) {
-  const toRadians = (degrees) => {
-    return degrees * (Math.PI / 180);
-  };
   const snapshot = await db.collection("deliveryRequests").where("requestId", "==", requestId).limit(1).get();
   const deliveryRequest = snapshot.docs.map((doc) => ({
     id: doc.id,
@@ -62,8 +60,8 @@ async function dispatchDeliveryRequest({
       requestId,
       deliveryId: deliveryRequest[0].id,
       idempotent: true,
-      closestRiders: [],
-      pushResults: [],
+      matchedRiderCount: 0,
+      pushSentCount: 0,
     };
   }
 
@@ -104,96 +102,54 @@ async function dispatchDeliveryRequest({
     deliveryRequest[0].irisPrivate = privateDoc.data();
   }
 
-  const pickupPoint = {
-    latitude: deliveryRequest[0].pickupPosition.geopoint.latitude,
-    longitude: deliveryRequest[0].pickupPosition.geopoint.longitude,
-  };
-
-  const ridersSnapshot = await db.collection("riders")
-      .where("status", "==", "online")
+  const presenceSnapshot = await db.collection("riderPresence")
+      .where("isOnline", "==", true)
+      .where("availabilityStatus", "==", "available")
+      .limit(250)
       .get();
+  const candidateDecisions = await Promise.all(presenceSnapshot.docs.map(async (presenceDoc) => {
+    const [profileDoc, riderDoc] = await Promise.all([
+      db.collection("riderProfiles").doc(presenceDoc.id).get(),
+      db.collection("riders").doc(presenceDoc.id).get(),
+    ]);
+    const profile = {
+      ...(riderDoc.exists ? riderDoc.data() : {}),
+      ...(profileDoc.exists ? profileDoc.data() : {}),
+    };
+    const decision = dispatchEligibilityDecision({
+      riderId: presenceDoc.id,
+      profile,
+      presence: presenceDoc.data(),
+      delivery: deliveryRequest[0],
+    });
+    return {
+      ...decision,
+      id: presenceDoc.id,
+    };
+  }));
 
-  const ridersWithDistances = await Promise.all(
-      ridersSnapshot.docs
-          .filter((doc) => {
-            const riderData = doc.data();
-            if (!riderMatchesIris(riderData, deliveryRequest[0])) return false;
-            return riderData.position &&
-               riderData.position.geopoint &&
-               riderData.position.geopoint.latitude &&
-               riderData.position.geopoint.longitude;
-          })
-          .map(async (doc) => {
-            try {
-              const riderData = doc.data();
-              const riderLocation = riderData.position.geopoint;
-
-              if (!riderLocation.latitude || !riderLocation.longitude) {
-                return null;
-              }
-
-              const R = 6371;
-              const dLat = toRadians(riderLocation.latitude - pickupPoint.latitude);
-              const dLon = toRadians(riderLocation.longitude - pickupPoint.longitude);
-
-              const a =
-            Math.sin(dLat/2) * Math.sin(dLat/2) +
-            Math.cos(toRadians(pickupPoint.latitude)) *
-            Math.cos(toRadians(riderLocation.latitude)) *
-            Math.sin(dLon/2) * Math.sin(dLon/2);
-
-              const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
-              const distance = R * c;
-
-              return {
-                id: doc.id,
-                ...riderData,
-                distanceFromPickup: distance,
-              };
-            } catch (error) {
-              console.error("Error processing rider:", error);
-              return null;
-            }
-          }),
-  );
-
-  const closestRiders = ridersWithDistances
-      .filter((rider) => rider !== null)
-      .sort((a, b) => dispatchPriority(deliveryRequest[0]) === 1 ?
-        a.distanceFromPickup - b.distanceFromPickup :
-        a.distanceFromPickup - b.distanceFromPickup)
+  const closestRiders = candidateDecisions
+      .filter((rider) => rider.eligible)
+      .sort((a, b) => a.distanceKm - b.distanceKm)
       .slice(0, 5);
 
   const sendResults = await Promise.all(closestRiders.map(async (rider) => {
-    if (!rider.fcmToken) {
-      return {riderId: rider.id, sent: false, reason: "missing_fcm_token"};
-    }
-    const message = {
-      apns: {
-        payload: {
-          aps: {
-            "content-available": 1,
-          },
-        },
-      },
-      data: {
-        "type": "broadcast-request",
-        "requestId": requestId,
-        "deliveryId": deliveryRequest[0].id,
-        "data": JSON.stringify({
-          deliveryId: deliveryRequest[0].id,
-          requestId,
-          riderId: rider.id,
-          distanceFromPickup: rider.distanceFromPickup,
-        }),
-      },
-      token: rider.fcmToken,
-
-    };
-
     try {
-      const response = await messaging.send(message);
-      return {riderId: rider.id, sent: true, response};
+      const notificationId = await emitNotification({
+        recipientId: rider.id,
+        recipientRole: "rider",
+        type: "new_delivery",
+        title: "New delivery available",
+        body: "A delivery matching your vehicle is ready to review.",
+        data: {
+          bookingId: requestId,
+          deliveryId: deliveryRequest[0].id,
+          route: "jobs",
+          category: "jobs",
+          correlationId: `delivery_offer:${deliveryRequest[0].id}:${rider.id}`,
+        },
+      });
+      return {riderId: rider.id, sent: true, notificationId};
     } catch (err) {
       console.warn("rider_broadcast_push_failed", {
         requestId,
@@ -211,8 +167,12 @@ async function dispatchDeliveryRequest({
     requestId,
     status: closestRiders.length ? "broadcast" : "no_riders_matched",
     source,
-    riderIdsConsidered: ridersSnapshot.docs.map((doc) => doc.id),
+    riderIdsConsidered: presenceSnapshot.docs.map((doc) => doc.id),
     riderIdsMatched: closestRiders.map((rider) => rider.id),
+    excluded: candidateDecisions
+        .filter((decision) => !decision.eligible)
+        .slice(0, 100)
+        .map((decision) => ({riderId: decision.id, reason: decision.reason})),
     pushResults: sendResults,
     updatedAt: FieldValue.serverTimestamp(),
     createdAt: FieldValue.serverTimestamp(),
@@ -227,16 +187,15 @@ async function dispatchDeliveryRequest({
   }, {merge: true});
 
   return {
-    message: `Endpoint accessed by user ${uid}`,
+    message: "Dispatch evaluated.",
     requestId: requestId,
-    request: deliveryRequest,
-    coordinates: `${deliveryRequest[0].pickupPosition[0]}, ${deliveryRequest[0].pickupPosition[1]}`,
-    closestRiders: closestRiders,
-    pushResults: sendResults,
+    deliveryId: deliveryRequest[0].id,
+    matchedRiderCount: closestRiders.length,
+    pushSentCount: sendResults.filter((result) => result.sent).length,
   };
 }
 
-const sendPackage = functions.https.onCall(async (data, context) => {
+const sendPackage = functions.runWith({enforceAppCheck: true}).https.onCall(async (data, context) => {
   try {
     const {requestId} = data;
     // Check if the user is authenticated
@@ -258,9 +217,11 @@ const sendPackage = functions.https.onCall(async (data, context) => {
     if (e instanceof functions.https.HttpsError) {
       throw e;
     }
-    return {
-      error: e,
-    };
+    console.error("Delivery dispatch failed", {
+      code: e && e.code || null,
+      message: e && e.message || "unknown_dispatch_error",
+    });
+    throw new functions.https.HttpsError("internal", "Delivery dispatch could not be completed.");
   }
 });
 
