@@ -44,4 +44,5 @@ jobs:
           credentials_json: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_CIRCUM_2797C }}
       - run: firebase deploy --only firestore:rules --project circum-2797c
       - run: firebase deploy --only "$(node scripts/scoped_functions_deploy_list.js)" --project circum-2797c
+      - run: node scripts/verify_functions_runtime_context.js circum-2797c
       - run: firebase deploy --only hosting:app,hosting:public,hosting:admin --project circum-2797c

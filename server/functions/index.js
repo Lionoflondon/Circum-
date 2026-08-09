@@ -85,6 +85,7 @@ const adminRiderAuthority = require("./admin-rider-authority");
 const adminGovernance = require("./admin-governance");
 const adminOperationsAuthority = require("./admin-operations-authority");
 const operationsHealthCentre = require("./operations-health-centre");
+const legacyFinancialEndpoints = require("./legacy-financial-endpoints");
 const {routeCheckoutSessionCompleted} = require("./checkout-session-router");
 
 initializeApp();
@@ -654,116 +655,8 @@ exports.StripeWebhook = functions
       res.send({success: true});
     });
 
-exports.RetrieveCardDetails = functions.https.onRequest(async (req, res) => {
-  try {
-    const {customerId} = req.body;
-    // const customer = await stripe.customers.retrieve(customerId);
-
-    const paymentMethods = await stripe.paymentMethods.list({
-      customer: customerId,
-      type: "card",
-    });
-
-    res.json(paymentMethods);
-    // const cards = customer.sources.data.filter((source) => source.object === "card");
-    // res.json(cards);
-  } catch (error) {
-    console.error(error);
-    res.status(500).json({error: "Unable to retrieve cards"});
-  }
-});
-
-exports.calculateEarnings = functions.https.onRequest(async (req, res) => {
-  if (allowCors(req, res)) return;
-  try {
-    const {riderId} = req.body;
-
-    if (!riderId) {
-      return res.status(404).send({msg: "riderId is required"});
-    }
-
-    const paymentRef = await getFirestore()
-        .collection("payments")
-        .doc(riderId)
-        .get();
-
-    let accountBalance = 0;
-    if (paymentRef.exists) {
-      const paymentData = paymentRef.data();
-      accountBalance = paymentData.accountBalance || 0;
-    }
-
-    // Retrieve the 'history' database reference
-    const historyRef = getFirestore().collection("history");
-
-    // Query the history for the riderId
-    const snapshot = await historyRef.where("riderId", "==", riderId).get();
-
-    let totalAmountEarned = 0;
-
-    // Loop through the history records and calculate the total amount earned
-    snapshot.forEach((childSnapshot) => {
-      const historyEntry = childSnapshot.data();
-      totalAmountEarned += historyEntry.price || 0;
-    });
-
-    const currentDate = new Date();
-
-    // Initialize an object to store daily earnings
-    const weeklyEarnings = {
-      Sun: 0,
-      Mon: 0,
-      Tue: 0,
-      Wed: 0,
-      Thu: 0,
-      Fri: 0,
-      Sat: 0,
-    };
-
-    // Calculate the start date of the week (assuming Sunday is the start of the week)
-    const startDate = new Date(currentDate);
-    startDate.setDate(startDate.getDate() - 7);
-
-    // Calculate the end date of the week (assuming Saturday is the end of the week)
-    const endDate = new Date(currentDate);
-    // endDate.setDate(endDate.getDate() + (6 - endDate.getDay()));
-
-    // Query Firestore for earnings within the current week for the given user
-    const earningsSnapshot = await getFirestore()
-        .collection("history")
-        .where("riderId", "==", riderId)
-        .where("createdAt", ">=", startDate)
-        .where("createdAt", "<=", endDate)
-        .get();
-
-    // Aggregate earnings by day
-    earningsSnapshot.forEach((doc) => {
-      const earningData = doc.data();
-
-      // console.log(earningData);
-      const earningDate = earningData.createdAt.toDate();
-      const dayOfWeek = earningDate.toLocaleDateString("en-US", {
-        weekday: "short",
-      });
-
-      weeklyEarnings[dayOfWeek] += earningData.price || 0;
-    });
-
-    // response.json(weeklyEarnings);
-
-    res.status(200).send({
-      accountBalance: accountBalance,
-      totalAmountEarned: totalAmountEarned,
-      totalTrips: snapshot.size,
-      weeklyEarnings: weeklyEarnings,
-    });
-  } catch (error) {
-    console.error("Error calculating total amount earned:", error);
-    res.status(500).send({
-      error: error,
-    });
-  }
-});
+exports.RetrieveCardDetails = legacyFinancialEndpoints.retrieveCardDetails(stripe);
+exports.calculateEarnings = legacyFinancialEndpoints.calculateEarnings();
 
 exports.endTrip = functions.https.onRequest(async (req, res) => {
   if (allowCors(req, res)) return;

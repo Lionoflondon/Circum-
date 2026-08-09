@@ -218,6 +218,8 @@
         "scripts/scoped_functions_deploy_list.js",
         "scripts/operations_health_deployment_gate.js",
         "scripts/validate_web_artifacts.js",
+        "scripts/verify_functions_runtime_context.js",
+        "scripts/verify_functions_runtime_context.test.js",
         "scripts/verify_sender_deployment_governance.js"
       ],
       "forbiddenPrefixes": [
