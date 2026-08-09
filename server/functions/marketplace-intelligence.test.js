@@ -3,8 +3,15 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
 const {adjustmentFor, dispatchIntelligenceSignal, flagPolicy, gpsRiskDecision, riskLevel, trend} = require("./marketplace-intelligence");
+const intelligence = require("./marketplace-intelligence");
 
 const delivery = {assignedRiderId: "rider-1"};
+
+test("marketplace intelligence exports every deployable Function", () => {
+  for (const name of ["onDeliveryIntelligenceEventCreate", "onDeliveryLocationRiskWrite", "onDeliveryDisputeIntelligenceCreate", "onDriverRatingIntelligenceCreate", "onMarketplaceRiskFlagCreate", "reviewMarketplaceRiskFlag"]) {
+    assert.equal(typeof intelligence[name], "function", name);
+  }
+});
 
 test("completed delivery improves reliability without changing Trust Points or Rank", () => {
   const result = adjustmentFor({eventId: "event-1", deliveryId: "delivery-1", eventType: "Completed"}, delivery);

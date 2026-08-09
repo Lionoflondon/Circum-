@@ -254,4 +254,4 @@ exports.reviewMarketplaceRiskFlag = functions.https.onCall(async (data, context)
   return {ok: true, flagId, status};
 });
 
-module.exports = {BASE_SCORE, EVENT_ADJUSTMENTS, MODEL_VERSION, adjustmentFor, clampScore, coordinate, createSourceEvent, dispatchIntelligenceSignal, distanceMeters, flagPolicy, gpsRiskDecision, processTimelineEvent, riskLevel, riderIdFor, trend};
+Object.assign(module.exports, {BASE_SCORE, EVENT_ADJUSTMENTS, MODEL_VERSION, adjustmentFor, clampScore, coordinate, createSourceEvent, dispatchIntelligenceSignal, distanceMeters, flagPolicy, gpsRiskDecision, processTimelineEvent, riskLevel, riderIdFor, trend});
