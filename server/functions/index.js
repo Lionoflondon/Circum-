@@ -84,6 +84,7 @@ const deliveryCleanup = require("./delivery-cleanup");
 const staleDelivery = require("./stale-delivery");
 const accountClosure = require("./account-closure");
 const businessAccess = require("./business-access");
+const businessOperations = require("./business-operations");
 const riderIrisAcknowledgement = require("./rider-iris-acknowledgement");
 const adminIrisReferenceImages = require("./admin-iris-reference-images");
 const adminRiderAuthority = require("./admin-rider-authority");
@@ -253,6 +254,10 @@ exports.updateBusinessMemberRole = businessAccess.updateBusinessMemberRole;
 exports.updateBusinessMemberStatus = businessAccess.updateBusinessMemberStatus;
 exports.removeBusinessMember = businessAccess.removeBusinessMember;
 exports.recordBusinessIrisMoment = businessAccess.recordBusinessIrisMoment;
+exports.getBusinessOperationsWorkspace =
+  businessOperations.getBusinessOperationsWorkspace;
+exports.getBusinessDeliveryTimeline =
+  businessOperations.getBusinessDeliveryTimeline;
 exports.createStripeConnectAccountForRider =
   riderConnect.createStripeConnectAccountForRider(stripeConnectClient);
 exports.createStripeOnboardingLink =

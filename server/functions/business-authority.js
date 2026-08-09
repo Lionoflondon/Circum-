@@ -1,6 +1,12 @@
 "use strict";
 
 const FINANCIAL_ROLES = new Set(["owner", "admin", "manager", "finance"]);
+const OPERATIONS_ROLES = new Set([
+  "owner", "admin", "manager", "operations", "dispatcher", "member",
+]);
+const REPORTING_ROLES = new Set([
+  "owner", "admin", "manager", "operations", "dispatcher", "finance", "viewer",
+]);
 
 function normalized(value) {
   return `${value || ""}`.trim().toLowerCase();
@@ -32,11 +38,18 @@ function businessAuthority(account = {}, {uid, email} = {}) {
   return {
     member,
     role: role || (legacyMember ? "legacy_member" : ""),
-    deliveryAuthorized: member,
+    deliveryAuthorized: Boolean(role && OPERATIONS_ROLES.has(role)),
+    reportingAuthorized: Boolean(role && REPORTING_ROLES.has(role)),
     financialAuthorized: Boolean(role && FINANCIAL_ROLES.has(role)),
     ownerOrAdmin: Boolean(role && ["owner", "admin", "manager"].includes(role)),
     legacyOnly: !role && legacyMember,
   };
 }
 
-module.exports = {businessAuthority, canonicalMemberRole, FINANCIAL_ROLES};
+module.exports = {
+  businessAuthority,
+  canonicalMemberRole,
+  FINANCIAL_ROLES,
+  OPERATIONS_ROLES,
+  REPORTING_ROLES,
+};

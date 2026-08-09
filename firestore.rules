@@ -78,6 +78,22 @@ service cloud.firestore {
         );
     }
 
+    function canReadBusinessFinance(businessId) {
+      return signedIn() &&
+        businessId is string &&
+        businessId.size() > 0 &&
+        exists(/databases/$(database)/documents/businessAccounts/$(businessId)) &&
+        (
+          get(/databases/$(database)/documents/businessAccounts/$(businessId)).data.ownerUid == request.auth.uid ||
+          get(/databases/$(database)/documents/businessAccounts/$(businessId)).data.createdByUserId == request.auth.uid ||
+          (
+            exists(/databases/$(database)/documents/businessMemberships/$(businessId + '_' + request.auth.uid)) &&
+            get(/databases/$(database)/documents/businessMemberships/$(businessId + '_' + request.auth.uid)).data.status == 'active' &&
+            get(/databases/$(database)/documents/businessMemberships/$(businessId + '_' + request.auth.uid)).data.role in ['owner', 'admin', 'finance']
+          )
+        );
+    }
+
     function changesLegendFields() {
       return request.resource.data.diff(resource.data).changedKeys().hasAny([
         'isLegend',
@@ -688,7 +704,7 @@ service cloud.firestore {
     }
 
     match /business_wallets/{businessId} {
-      allow read: if isAdmin() || canReadBusinessId(businessId);
+      allow read: if isAdmin() || canReadBusinessFinance(businessId);
       allow write: if isAdmin();
     }
 
@@ -707,7 +723,7 @@ service cloud.firestore {
     }
 
     match /businessInvoices/{invoiceId} {
-      allow read: if isAdmin() || canReadBusinessId(resource.data.businessId);
+      allow read: if isAdmin() || canReadBusinessFinance(resource.data.businessId);
       allow write: if isAdmin();
     }
 
