@@ -20306,31 +20306,16 @@ String? _extractUkPostcode(String address) {
   return match?.group(1)?.toUpperCase().replaceAll(RegExp(r'\s+'), ' ');
 }
 
-Map<String, String> _googleAddressComponents(List<dynamic> components) {
-  String? byType(String type) {
-    for (final component in components.whereType<Map<String, dynamic>>()) {
-      final types = (component['types'] as List<dynamic>? ?? const [])
-          .map((value) => '$value')
-          .toSet();
-      if (types.contains(type)) return '${component['long_name']}';
-    }
-    return null;
-  }
+double? _asDouble(Object? value) {
+  if (value is num) return value.toDouble();
+  return double.tryParse('${value ?? ''}'.trim());
+}
 
-  final streetNumber = byType('street_number');
-  final route = byType('route');
-  final city = byType('postal_town') ?? byType('locality');
-  final county = byType('administrative_area_level_2');
-  final postcode = byType('postal_code');
-  final country = byType('country');
-  return {
-    if (streetNumber != null) 'buildingNumber': streetNumber,
-    if (route != null) 'street': route,
-    if (city != null) 'city': city,
-    if (county != null) 'county': county,
-    if (postcode != null) 'postcode': postcode,
-    if (country != null) 'country': country,
-  };
+Map<String, String> _stringComponents(Object? value) {
+  if (value is! Map) return const {};
+  return value.map(
+    (key, item) => MapEntry('$key', '${item ?? ''}'.trim()),
+  )..removeWhere((key, item) => item.isEmpty);
 }
 
 String _cleanGoogleAddress(String address) {
@@ -22856,40 +22841,33 @@ class _AddressFieldState extends State<_AddressField> {
   Future<List<_AddressSuggestion>> _googlePlacesAutocomplete(
     String input,
   ) async {
-    if (_googlePlacesApiKey.trim().isEmpty) return const [];
     try {
-      final uri = Uri.https(
-        'maps.googleapis.com',
-        '/maps/api/place/autocomplete/json',
-        {
-          'input': input,
-          'language': 'en',
-          'components': 'country:uk',
-          'key': _googlePlacesApiKey,
-          'sessiontoken': _placesSessionToken,
-        },
-      );
-      final response = await http.get(uri).timeout(const Duration(seconds: 4));
-      if (response.statusCode != 200) return const [];
-      final body = jsonDecode(response.body) as Map<String, dynamic>;
+      final response = await FirebaseFunctions.instanceFor(
+        region: 'us-central1',
+      ).httpsCallable('searchFreeUkAddresses').call({
+        'query': input,
+        'sessionToken': _placesSessionToken,
+      });
+      final body = response.data is Map
+          ? Map<String, dynamic>.from(response.data as Map)
+          : const <String, dynamic>{};
       if ('${body['status']}' != 'OK') return const [];
-      final predictions = body['predictions'] as List<dynamic>? ?? const [];
-      return predictions
-          .whereType<Map<String, dynamic>>()
-          .where(
-            (prediction) =>
-                prediction['place_id'] != null &&
-                prediction['description'] != null,
-          )
+      final results = body['results'] as List<dynamic>? ?? const [];
+      return results
+          .whereType<Map>()
           .map(
-            (prediction) => _AddressSuggestion(
-              displayAddress: '${prediction['description']}',
-              confidence: 0.99,
-              provider: 'google_places',
+            (result) => _AddressSuggestion(
+              displayAddress: '${result['displayAddress'] ?? ''}',
+              confidence: _asDouble(result['confidence']) ?? 0.99,
+              provider: '${result['provider'] ?? 'google_places'}',
               sourceInput: input,
-              placeId: '${prediction['place_id']}',
+              placeId: '${result['placeId'] ?? result['locationId'] ?? ''}',
+              components: _stringComponents(result['components']),
             ),
           )
+          .where((suggestion) =>
+              suggestion.displayAddress.trim().isNotEmpty &&
+              suggestion.placeId?.trim().isNotEmpty == true)
           .take(6)
           .toList(growable: false);
     } catch (_) {
@@ -22901,42 +22879,33 @@ class _AddressFieldState extends State<_AddressField> {
     _AddressSuggestion suggestion,
   ) async {
     final placeId = suggestion.placeId;
-    if (placeId == null || _googlePlacesApiKey.trim().isEmpty) {
+    if (placeId == null || placeId.trim().isEmpty) {
       return suggestion;
     }
     try {
-      final uri =
-          Uri.https('maps.googleapis.com', '/maps/api/place/details/json', {
-        'place_id': placeId,
-        'language': 'en',
-        'fields': 'formatted_address,address_components,geometry,place_id,name',
-        'key': _googlePlacesApiKey,
-        'sessiontoken': _placesSessionToken,
+      final response = await FirebaseFunctions.instanceFor(
+        region: 'us-central1',
+      ).httpsCallable('resolveUkAddressPlace').call({
+        'placeId': placeId,
+        'sessionToken': _placesSessionToken,
       });
-      final response = await http.get(uri).timeout(const Duration(seconds: 4));
-      if (response.statusCode != 200) return null;
-      final body = jsonDecode(response.body) as Map<String, dynamic>;
-      if ('${body['status']}' != 'OK') return null;
-      final result = body['result'] as Map<String, dynamic>;
-      final geometry = result['geometry'] as Map<String, dynamic>?;
-      final location = geometry?['location'] as Map<String, dynamic>?;
-      final lat = (location?['lat'] as num?)?.toDouble();
-      final lng = (location?['lng'] as num?)?.toDouble();
+      final result = response.data is Map
+          ? Map<String, dynamic>.from(response.data as Map)
+          : const <String, dynamic>{};
+      final lat = _asDouble(result['lat']);
+      final lng = _asDouble(result['lng']);
       if (lat == null || lng == null) return null;
-      final components = _googleAddressComponents(
-        result['address_components'] as List<dynamic>? ?? const [],
-      );
       return _AddressSuggestion(
         displayAddress: _cleanGoogleAddress(
-          '${result['formatted_address'] ?? suggestion.displayAddress}',
+          '${result['displayAddress'] ?? suggestion.displayAddress}',
         ),
         lat: lat,
         lng: lng,
-        confidence: 0.99,
-        provider: 'google_places',
+        confidence: _asDouble(result['confidence']) ?? 0.99,
+        provider: '${result['provider'] ?? 'google_places'}',
         sourceInput: suggestion.sourceInput,
         placeId: placeId,
-        components: components,
+        components: _stringComponents(result['components']),
       );
     } catch (_) {
       return null;
@@ -22947,45 +22916,30 @@ class _AddressFieldState extends State<_AddressField> {
     _AddressSuggestion suggestion,
   ) async {
     final query = suggestion.searchText ?? suggestion.displayAddress;
-    if (_googlePlacesApiKey.trim().isEmpty) return null;
     try {
-      final uri = Uri.https(
-        'maps.googleapis.com',
-        '/maps/api/place/findplacefromtext/json',
-        {
-          'input': query,
-          'inputtype': 'textquery',
-          'language': 'en',
-          'fields': 'formatted_address,geometry,place_id,name',
-          'key': _googlePlacesApiKey,
-          'locationbias': 'country:uk',
-        },
-      );
-      final response = await http.get(uri).timeout(const Duration(seconds: 4));
-      if (response.statusCode != 200) return null;
-      final body = jsonDecode(response.body) as Map<String, dynamic>;
-      if ('${body['status']}' != 'OK') return null;
-      final candidates = body['candidates'] as List<dynamic>? ?? const [];
-      final typedCandidates = candidates.whereType<Map<String, dynamic>>();
-      if (typedCandidates.isEmpty) return null;
-      final result = typedCandidates.first;
-      final geometry = result['geometry'] as Map<String, dynamic>?;
-      final location = geometry?['location'] as Map<String, dynamic>?;
-      final lat = (location?['lat'] as num?)?.toDouble();
-      final lng = (location?['lng'] as num?)?.toDouble();
-      if (lat == null || lng == null) return null;
-      return _AddressSuggestion(
-        displayAddress: _cleanGoogleAddress(
-          '${result['formatted_address'] ?? suggestion.displayAddress}',
+      final response = await FirebaseFunctions.instanceFor(
+        region: 'us-central1',
+      ).httpsCallable('searchFreeUkAddresses').call({
+        'query': query,
+        'sessionToken': _placesSessionToken,
+      });
+      final body = response.data is Map
+          ? Map<String, dynamic>.from(response.data as Map)
+          : const <String, dynamic>{};
+      final results = body['results'] as List<dynamic>? ?? const [];
+      final typedResults = results.whereType<Map>();
+      if (typedResults.isEmpty) return null;
+      final first = typedResults.first;
+      return _googlePlaceDetails(
+        _AddressSuggestion(
+          displayAddress:
+              '${first['displayAddress'] ?? suggestion.displayAddress}',
+          confidence: _asDouble(first['confidence']) ?? 0.99,
+          provider: '${first['provider'] ?? 'google_places'}',
+          sourceInput: suggestion.sourceInput,
+          placeId: '${first['placeId'] ?? first['locationId'] ?? ''}',
+          components: _stringComponents(first['components']),
         ),
-        lat: lat,
-        lng: lng,
-        confidence: 0.98,
-        provider: 'google_places',
-        sourceInput: suggestion.sourceInput,
-        placeId: '${result['place_id'] ?? ''}'.isEmpty
-            ? null
-            : '${result['place_id']}',
       );
     } catch (_) {
       return null;
