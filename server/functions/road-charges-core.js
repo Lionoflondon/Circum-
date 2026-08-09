@@ -232,6 +232,10 @@ function tunnelPeak({at, direction}) {
   return false;
 }
 
+function tunnelChargeable({at}) {
+  return withinWindow(dateParts(at), 6, 22);
+}
+
 function chargeIsEffective(charge, at) {
   const timestamp = new Date(at || Date.now()).getTime();
   const from = new Date(charge.effectiveFrom).getTime();
@@ -328,6 +332,7 @@ function evaluateRoadCharges({
     if (seenCrossings.has(crossingKey)) continue;
     seenCrossings.add(crossingKey);
     const peak = chargeId === "blackwall_silvertown" ? tunnelPeak(crossing) : false;
+    const active = chargeId === "blackwall_silvertown" ? tunnelChargeable(crossing) : true;
     const verifiedFacts = verifiedRoadChargeFacts(vehicleProfile);
     const vanTunnelAuthority = vehicleClass === "van" && chargeId === "blackwall_silvertown" ?
       vanTunnelTariffAuthority(vehicleProfile, {pricingContext}) : null;
@@ -342,7 +347,7 @@ function evaluateRoadCharges({
       vehicleClass;
     const vehicleRates = charge.ratesPence[tunnelRateKey];
     const dartfordRateKey = conservativeDartford ? "van_multi_axle" : tariffClassification;
-    const unit = tariffUnknown ? 0 : chargeId === "blackwall_silvertown" && vehicleRates ?
+    const unit = !active ? 0 : tariffUnknown ? 0 : chargeId === "blackwall_silvertown" && vehicleRates ?
       vehicleRates[peak ? "peak" : "offPeak"] : charge.ratesPence[dartfordRateKey] || 0;
     const classificationUnknown = tariffUnknown || vehicleClass === "unknown";
     charges.push({
@@ -353,7 +358,7 @@ function evaluateRoadCharges({
       at: crossing.at || at,
       vehicleClass,
       amountPence: unit * count,
-      status: classificationUnknown ? "tariff_classification_unknown" :
+      status: !active ? "outside_charging_hours" : classificationUnknown ? "tariff_classification_unknown" :
         unit > 0 ? "applicable" : "exempt_or_zero_rate",
       }),
       ...(vanTunnelAuthority ? vanTunnelAuthority : {}),
@@ -579,4 +584,3 @@ module.exports = {
   evaluateRoadCharges,
   dispatchRoadChargeScore,
 };
-

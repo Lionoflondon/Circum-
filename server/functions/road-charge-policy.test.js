@@ -45,3 +45,45 @@ test("provider toll metadata cannot create a customer charge", () => {
   assert.equal(result.customerAmount, 0);
   assert.equal(result.lineItems.length, 0);
 });
+
+test("Blackwall/Silvertown charges respect the 06:00-22:00 operating window", () => {
+  const routeFacts = (at) => ({
+    authority: "authoritative_route",
+    known: true,
+    crossings: [{
+      chargeId: "blackwall_silvertown",
+      crossingId: "blackwall_silvertown",
+      direction: "northbound",
+      at,
+    }],
+  });
+  const vehicleProfile = {
+    roadChargeFactsVerificationStatus: "verified",
+    tunnelTariffClass: "small_van",
+  };
+  const before = evaluateRoadChargePolicy({
+    routeFacts: routeFacts("2026-08-07T04:59:00Z"),
+    vehicle: "car",
+    product: "standard",
+  });
+  const open = evaluateRoadChargePolicy({
+    routeFacts: routeFacts("2026-08-07T05:00:00Z"),
+    vehicle: "car",
+    product: "standard",
+  });
+  const after = evaluateRoadChargePolicy({
+    routeFacts: routeFacts("2026-08-07T21:00:00Z"),
+    vehicle: "car",
+    product: "standard",
+  });
+  assert.equal(before.customerAmount, 0);
+  assert.equal(open.customerAmount, 4);
+  assert.equal(after.customerAmount, 0);
+  const van = evaluateRoadChargePolicy({
+    routeFacts: routeFacts("2026-08-07T05:00:00Z"),
+    vehicle: "van",
+    product: "standard",
+    vehicleProfile,
+  });
+  assert.equal(van.customerAmount, 4);
+});
