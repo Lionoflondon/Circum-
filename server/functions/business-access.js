@@ -2,6 +2,7 @@
 const functions = require("firebase-functions/v1");
 const {getFirestore, FieldValue} = require("firebase-admin/firestore");
 const communicationEngine = require("./communication-engine");
+const {resolveBusinessAuthority, hasBusinessPermission} = require("./business-authority");
 
 const BUSINESS_ROLES = new Set([
   "owner",
@@ -79,6 +80,20 @@ async function requireBusinessAdmin(db, businessId, context) {
     );
   }
   return {uid, ref, account, role};
+}
+
+async function requireBusinessAction(db, businessId, context, permission) {
+  const uid = requireAuth(context);
+  const email = cleanEmail(context.auth.token.email);
+  const ref = db.collection("businessAccounts").doc(businessId);
+  const snap = await ref.get();
+  if (!snap.exists) throw new functions.https.HttpsError("not-found", "Business workspace not found.");
+  const account = snap.data() || {};
+  const authority = await resolveBusinessAuthority(db, account, businessId, {uid, email});
+  if (!hasBusinessPermission(authority, permission, ["owner", "admin", "manager"])) {
+    throw new functions.https.HttpsError("permission-denied", "This Business role cannot perform that action.");
+  }
+  return {uid, ref, account, role: authority.role, authority};
 }
 
 function numericCode() {
@@ -744,7 +759,7 @@ exports.updateBusinessProfile = functions
       return {status: "updated", businessId};
     });
 
-exports.inviteBusinessMember = functions
+exports.inviteBusinessMember = functions.runWith({enforceAppCheck: true})
     .region("us-central1")
     .https.onCall(async (data, context) => {
       requireAuth(context);
@@ -764,11 +779,18 @@ exports.inviteBusinessMember = functions
         );
       }
       const db = getFirestore();
-      const {uid, ref, account} = await requireBusinessAdmin(
+      const {uid, ref, account, authority} = await requireBusinessAction(
           db,
           businessId,
           context,
+          "team.invite",
       );
+      if (authority.role === "custom" && role !== "member") {
+        throw new functions.https.HttpsError(
+            "permission-denied",
+            "Custom roles may invite standard members only.",
+        );
+      }
       const existing = Array.isArray(account.teamMembers) ?
       account.teamMembers :
       [];
@@ -815,6 +837,9 @@ exports.inviteBusinessMember = functions
         targetEmail: email,
         action: "business_member_invited",
         role,
+        previousState: null,
+        newState: {role, status: "invited"},
+        reason: clean(data.reason) || null,
         createdAt: FieldValue.serverTimestamp(),
       });
       const invitedUser = await db.collection("users").where("email", "==", email).limit(1).get();
@@ -1023,7 +1048,7 @@ exports.updateBusinessMemberRole = functions
       return {status: "updated", businessId, memberUserId, role: nextRole};
     });
 
-exports.removeBusinessMember = functions
+exports.removeBusinessMember = functions.runWith({enforceAppCheck: true})
     .region("us-central1")
     .https.onCall(async (data, context) => {
       requireAuth(context);
@@ -1036,10 +1061,11 @@ exports.removeBusinessMember = functions
         );
       }
       const db = getFirestore();
-      const {uid, ref, account} = await requireBusinessAdmin(
+      const {uid, ref, account, authority} = await requireBusinessAction(
           db,
           businessId,
           context,
+          "team.remove",
       );
       const members = Array.isArray(account.teamMembers) ?
       account.teamMembers :
@@ -1055,6 +1081,13 @@ exports.removeBusinessMember = functions
         throw new functions.https.HttpsError(
             "failed-precondition",
             "Owner cannot be removed.",
+        );
+      }
+      if (authority.role === "custom" &&
+          ["owner", "admin", "manager"].includes(clean(member.role))) {
+        throw new functions.https.HttpsError(
+            "permission-denied",
+            "Custom roles cannot remove Business administrators.",
         );
       }
       const remaining = members.map((item) =>
@@ -1099,6 +1132,9 @@ exports.removeBusinessMember = functions
         actorUserId: uid,
         targetUserId: memberUserId,
         action: "business_member_removed",
+        previousState: {role: clean(member.role), status: clean(member.status)},
+        newState: {role: clean(member.role), status: "removed"},
+        reason: clean(data.reason) || null,
         createdAt: FieldValue.serverTimestamp(),
       });
       return {status: "removed", businessId, memberUserId};

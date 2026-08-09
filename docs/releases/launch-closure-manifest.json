@@ -5,7 +5,7 @@
   "ownerCheckoutUntouched": true,
   "scope": {
     "runtime": {
-      "applicationFunctions": "nodejs20",
+      "applicationFunctions": "nodejs22",
       "legacyFunctions": [
         "ext-export-user-data-exportUserData (Firebase Extension, nodejs14)",
         "ext-mailchimp-firebase-sync-* (Firebase Extension, 5 functions, nodejs18)"

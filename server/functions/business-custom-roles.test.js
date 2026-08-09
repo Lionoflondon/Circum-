@@ -13,13 +13,16 @@ test("custom role records retain only server-approved granular permissions", () 
   assert.equal(role.businessId, "business-1");
 });
 
-test("custom role mutations are owner-only and auditable", () => {
+test("custom role definitions are owner-only and assignments prevent escalation", () => {
   const source = fs.readFileSync("business-custom-roles.js", "utf8");
   assert.match(source, /role !== "owner"/);
   assert.match(source, /businessAuditLogs/);
   for (const action of ["business_custom_role_created", "business_custom_role_updated", "business_custom_role_removed", "business_custom_role_assigned"]) assert.match(source, new RegExp(action));
   assert.match(source, /previousPermissions/);
   assert.match(source, /newPermissions/);
+  assert.match(source, /team\.roles\.assign/);
+  assert.match(source, /cannot grant permissions it does not hold/);
+  assert.match(source, /Business administrators cannot be replaced/);
 });
 
 test("assigned custom roles remain scoped to the member business", () => {

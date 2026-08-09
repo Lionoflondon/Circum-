@@ -18,11 +18,11 @@ const targetSources = Object.freeze({
 });
 
 test("production Function inventory is completely represented by source", () => {
-  assert.equal(manifest.inventory.productionFunctions, 273);
-  assert.equal(manifest.inventory.applicationFunctions, 267);
+  assert.equal(manifest.inventory.productionFunctions, 275);
+  assert.equal(manifest.inventory.applicationFunctions, 269);
   assert.equal(manifest.inventory.extensionFunctions, 6);
-  assert.equal(manifest.inventory.sourceExports, 267);
-  assert.equal(manifest.applicationFunctions.length, 267);
+  assert.equal(manifest.inventory.sourceExports, 269);
+  assert.equal(manifest.applicationFunctions.length, 269);
   assert.equal(
       manifest.extensions.reduce((count, extension) => count + extension.functions.length, 0),
       6,
@@ -50,7 +50,7 @@ test("all six recovered critical Functions have exports and canonical source mod
     const entry = manifest.applicationFunctions.find((item) => item.name === name);
     assert.ok(entry, `Missing manifest entry for ${name}`);
     assert.equal(entry.state, "ACTIVE");
-    assert.equal(entry.runtime, "nodejs20");
+    assert.equal(entry.runtime, "nodejs22");
     assert.ok(entry.criticalTarget);
     assert.match(indexSource, new RegExp(`exports\\.${name}\\s*=`));
     assert.equal(fs.existsSync(path.join(__dirname, sourceFile)), true);

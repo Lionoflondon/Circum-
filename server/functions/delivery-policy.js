@@ -3,6 +3,7 @@ const functions = require("firebase-functions/v1");
 const {getFirestore, FieldValue} = require("firebase-admin/firestore");
 const core = require("./delivery-policy-core");
 const communicationEngine = require("./communication-engine");
+const {resolveBusinessAuthority, hasBusinessPermission} = require("./business-authority");
 
 function requireAuth(context) {
   if (!context.auth || !context.auth.uid) {
@@ -20,6 +21,24 @@ function assertSender(uid, delivery) {
   if (!sender || sender !== uid) {
     throw new functions.https.HttpsError("permission-denied", "Only the sender can request this action.");
   }
+}
+
+async function authorizeCancellation(db, uid, email, deliveryId) {
+  const snapshot = await db.collection("deliveryRequests").doc(deliveryId).get();
+  if (!snapshot.exists) throw new functions.https.HttpsError("not-found", "Delivery not found.");
+  const delivery = {id: snapshot.id, ...snapshot.data()};
+  if (text(delivery.senderId || delivery.userId) === uid) {
+    return {businessId: null, actorRole: "sender"};
+  }
+  const businessId = text(delivery.businessId || delivery.businessAccountId);
+  if (!businessId) throw new functions.https.HttpsError("permission-denied", "Only the sender can request this action.");
+  const account = await db.collection("businessAccounts").doc(businessId).get();
+  if (!account.exists) throw new functions.https.HttpsError("permission-denied", "Business cancellation access is required.");
+  const authority = await resolveBusinessAuthority(db, account.data() || {}, businessId, {uid, email});
+  if (!hasBusinessPermission(authority, "deliveries.cancel", ["owner", "admin", "manager", "operations", "dispatcher"])) {
+    throw new functions.https.HttpsError("permission-denied", "This Business role cannot cancel deliveries.");
+  }
+  return {businessId, actorRole: authority.role};
 }
 
 function assertAssignedRider(uid, delivery) {
@@ -57,7 +76,7 @@ function policyPatch({state, event, evidenceId, extra = {}}) {
   };
 }
 
-exports.requestSenderCancellation = functions.https.onCall(async (data, context) => {
+exports.requestSenderCancellation = functions.runWith({enforceAppCheck: true}).https.onCall(async (data, context) => {
   const uid = requireAuth(context);
   const deliveryId = text(data.deliveryId || data.requestId);
   const cancellationReason = text(data.reason || data.cancellationReason) || "Sender requested cancellation";
@@ -65,13 +84,25 @@ exports.requestSenderCancellation = functions.https.onCall(async (data, context)
   if (!deliveryId) throw new functions.https.HttpsError("invalid-argument", "deliveryId is required.");
 
   const db = getFirestore();
+  const authorization = await authorizeCancellation(
+      db,
+      uid,
+      text(context.auth.token && context.auth.token.email).toLowerCase(),
+      deliveryId,
+  );
   const result = await db.runTransaction(async (transaction) => {
     const idemRef = idempotencyRef(deliveryId, idempotencyKey);
     const existing = await transaction.get(idemRef);
     if (existing.exists) return {...existing.data(), duplicate: true};
 
     const {ref, delivery} = await deliverySnapshot(transaction, deliveryId);
-    assertSender(uid, delivery);
+    if (authorization.businessId) {
+      if (text(delivery.businessId || delivery.businessAccountId) !== authorization.businessId) {
+        throw new functions.https.HttpsError("permission-denied", "Business delivery ownership changed.");
+      }
+    } else {
+      assertSender(uid, delivery);
+    }
     const now = Date.now();
     const previousLifecycleState = text(delivery.state || delivery.deliveryStage || delivery.deliveryStatus || delivery.status);
     const paymentStatus = text(delivery.paymentStatus || delivery.stripePaymentStatus || delivery.payment && delivery.payment.status);
@@ -95,14 +126,14 @@ exports.requestSenderCancellation = functions.https.onCall(async (data, context)
       deliveryId,
       riderId: delivery.riderId,
       actorId: uid,
-      actorType: "sender",
+      actorType: authorization.businessId ? "business" : "sender",
       reason: decision.cancellationType,
       serverNow: now,
     }) : null;
     const evidence = core.evidencePackage({
       deliveryId,
       actorId: uid,
-      actorType: "sender",
+      actorType: authorization.businessId ? "business" : "sender",
       idempotencyKey,
       delivery,
       policyDecision: decision,
@@ -113,7 +144,7 @@ exports.requestSenderCancellation = functions.https.onCall(async (data, context)
       type: "sender_cancellation_requested",
       deliveryId,
       actorId: uid,
-      actorType: "sender",
+      actorType: authorization.businessId ? "business" : "sender",
       decision,
       financial,
       evidenceId: evidenceRef.id,
@@ -124,6 +155,19 @@ exports.requestSenderCancellation = functions.https.onCall(async (data, context)
       deliveryId, riderId: text(delivery.riderId || delivery.assignedRiderId) || null,
       stripePaymentIntentId, paymentStatus, refundReviewRequired};
     transaction.set(idemRef, result);
+    if (authorization.businessId) {
+      transaction.set(db.collection("businessAuditLogs").doc(), {
+        businessId: authorization.businessId,
+        actorUserId: uid,
+        action: "business_delivery_cancelled",
+        targetType: "delivery",
+        targetId: deliveryId,
+        previousState: {status: previousLifecycleState},
+        newState: {status: "cancelled_by_sender"},
+        reason: cancellationReason,
+        createdAt: FieldValue.serverTimestamp(),
+      });
+    }
     transaction.update(ref, policyPatch({
       state: "cancelled_by_sender",
       event,
@@ -167,18 +211,23 @@ exports.requestSenderCancellation = functions.https.onCall(async (data, context)
   return result;
 });
 
-exports.previewSenderCancellation = functions.https.onCall(async (data, context) => {
+exports.previewSenderCancellation = functions.runWith({enforceAppCheck: true}).https.onCall(async (data, context) => {
   const uid = requireAuth(context);
   const deliveryId = text(data.deliveryId || data.requestId);
   if (!deliveryId) throw new functions.https.HttpsError("invalid-argument", "deliveryId is required.");
   const db = getFirestore();
+  await authorizeCancellation(
+      db,
+      uid,
+      text(context.auth.token && context.auth.token.email).toLowerCase(),
+      deliveryId,
+  );
   const ref = db.collection("deliveryRequests").doc(deliveryId);
   const snapshot = await ref.get();
   if (!snapshot.exists) {
     throw new functions.https.HttpsError("not-found", "Delivery not found.");
   }
   const delivery = {id: snapshot.id, ...snapshot.data()};
-  assertSender(uid, delivery);
   const decision = core.cancellationDecision({
     delivery,
     state: delivery.state || delivery.status,

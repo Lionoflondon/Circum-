@@ -1,138 +1,21 @@
 {
   "manifestVersion": 1,
   "project": "circum-2797c",
-  "capturedAt": "2026-08-09T22:15:00+01:00",
+  "capturedAt": "2026-08-09T22:53:00.138Z",
   "releaseSha": "SELF",
   "releaseShaSemantics": "SELF means the Git commit containing this manifest; the immutable SHA is recorded in the release report and deployment provenance.",
   "entryPoint": "server/functions/index.js",
   "inventory": {
-    "productionFunctions": 273,
-    "applicationFunctions": 267,
+    "productionFunctions": 275,
+    "applicationFunctions": 269,
     "extensionFunctions": 6,
-    "sourceExports": 267
+    "sourceExports": 269
   },
   "applicationFunctions": [
     {
-      "name": "acknowledgeOperationalIncident",
-      "source": "server/functions/delivery-watchdog.js#acknowledgeOperationalIncident",
-      "runtime": "nodejs20",
-      "region": "us-central1",
-      "trigger": {"type": "callable"},
-      "state": "ACTIVE",
-      "releaseSha": "SELF"
-    },
-    {
-      "name": "deliveryLifecycleWatchdog",
-      "source": "server/functions/delivery-watchdog.js#deliveryLifecycleWatchdog",
-      "runtime": "nodejs20",
-      "region": "us-central1",
-      "trigger": {"type": "schedule", "schedule": "every 5 minutes", "timeZone": "Europe/London"},
-      "state": "ACTIVE",
-      "releaseSha": "SELF"
-    },
-    {
-      "name": "onChatMessageOperationalCreate",
-      "source": "server/functions/delivery-event-projections.js#onChatMessageOperationalCreate",
-      "runtime": "nodejs20",
-      "region": "us-central1",
-      "trigger": {"type": "firestore", "document": "chats/{chatId}/messages/{messageId}"},
-      "state": "ACTIVE",
-      "releaseSha": "SELF"
-    },
-    {
-      "name": "onChatOperationalCreate",
-      "source": "server/functions/delivery-event-projections.js#onChatOperationalCreate",
-      "runtime": "nodejs20",
-      "region": "us-central1",
-      "trigger": {"type": "firestore", "document": "chats/{chatId}"},
-      "state": "ACTIVE",
-      "releaseSha": "SELF"
-    },
-    {
-      "name": "onDeliveryEvidenceOperationalWrite",
-      "source": "server/functions/delivery-event-projections.js#onDeliveryEvidenceOperationalWrite",
-      "runtime": "nodejs20",
-      "region": "us-central1",
-      "trigger": {"type": "firestore", "document": "deliveryEvidence/{deliveryId}/photos/{photoId}"},
-      "state": "ACTIVE",
-      "releaseSha": "SELF"
-    },
-    {
-      "name": "onNotificationOperationalWrite",
-      "source": "server/functions/delivery-event-projections.js#onNotificationOperationalWrite",
-      "runtime": "nodejs20",
-      "region": "us-central1",
-      "trigger": {"type": "firestore", "document": "notifications/{notificationId}"},
-      "state": "ACTIVE",
-      "releaseSha": "SELF"
-    },
-    {
-      "name": "resolveOperationalIncident",
-      "source": "server/functions/delivery-watchdog.js#resolveOperationalIncident",
-      "runtime": "nodejs20",
-      "region": "us-central1",
-      "trigger": {"type": "callable"},
-      "state": "ACTIVE",
-      "releaseSha": "SELF"
-    },
-    {
-      "name": "onDeliveryIntelligenceEventCreate",
-      "source": "server/functions/marketplace-intelligence.js#onDeliveryIntelligenceEventCreate",
-      "runtime": "nodejs20",
-      "region": "us-central1",
-      "trigger": {"type": "firestore", "document": "deliveryRequests/{deliveryId}/timeline/{eventId}"},
-      "state": "ACTIVE",
-      "releaseSha": "SELF"
-    },
-    {
-      "name": "onDeliveryLocationRiskWrite",
-      "source": "server/functions/marketplace-intelligence.js#onDeliveryLocationRiskWrite",
-      "runtime": "nodejs20",
-      "region": "us-central1",
-      "trigger": {"type": "firestore", "document": "deliveryLiveLocations/{deliveryId}"},
-      "state": "ACTIVE",
-      "releaseSha": "SELF"
-    },
-    {
-      "name": "onDeliveryDisputeIntelligenceCreate",
-      "source": "server/functions/marketplace-intelligence.js#onDeliveryDisputeIntelligenceCreate",
-      "runtime": "nodejs20",
-      "region": "us-central1",
-      "trigger": {"type": "firestore", "document": "disputes/{disputeId}"},
-      "state": "ACTIVE",
-      "releaseSha": "SELF"
-    },
-    {
-      "name": "onDriverRatingIntelligenceCreate",
-      "source": "server/functions/marketplace-intelligence.js#onDriverRatingIntelligenceCreate",
-      "runtime": "nodejs20",
-      "region": "us-central1",
-      "trigger": {"type": "firestore", "document": "driverRatings/{ratingId}"},
-      "state": "ACTIVE",
-      "releaseSha": "SELF"
-    },
-    {
-      "name": "onMarketplaceRiskFlagCreate",
-      "source": "server/functions/marketplace-intelligence.js#onMarketplaceRiskFlagCreate",
-      "runtime": "nodejs20",
-      "region": "us-central1",
-      "trigger": {"type": "firestore", "document": "marketplaceRiskFlags/{flagId}"},
-      "state": "ACTIVE",
-      "releaseSha": "SELF"
-    },
-    {
-      "name": "reviewMarketplaceRiskFlag",
-      "source": "server/functions/marketplace-intelligence.js#reviewMarketplaceRiskFlag",
-      "runtime": "nodejs20",
-      "region": "us-central1",
-      "trigger": {"type": "callable"},
-      "state": "ACTIVE",
-      "releaseSha": "SELF"
-    },
-    {
       "name": "acceptRideRequests",
       "source": "server/functions/index.js#acceptRideRequests",
-      "runtime": "nodejs20",
+      "runtime": "nodejs22",
       "region": "us-central1",
       "trigger": {
         "type": "callable"
@@ -142,9 +25,20 @@
       "releaseSha": "SELF"
     },
     {
+      "name": "acknowledgeBusinessOperationalIncident",
+      "source": "server/functions/business-mutations.js#acknowledgeBusinessOperationalIncident",
+      "runtime": "nodejs22",
+      "region": "us-central1",
+      "trigger": {
+        "type": "callable"
+      },
+      "state": "ACTIVE",
+      "releaseSha": "SELF"
+    },
+    {
       "name": "acknowledgeGiftStory",
       "source": "server/functions/gift-story-automation.js#acknowledgeGiftStory",
-      "runtime": "nodejs20",
+      "runtime": "nodejs22",
       "region": "us-central1",
       "trigger": {
         "type": "callable"
@@ -154,9 +48,20 @@
       "releaseSha": "SELF"
     },
     {
+      "name": "acknowledgeOperationalIncident",
+      "source": "server/functions/delivery-watchdog.js#acknowledgeOperationalIncident",
+      "runtime": "nodejs22",
+      "region": "us-central1",
+      "trigger": {
+        "type": "callable"
+      },
+      "state": "ACTIVE",
+      "releaseSha": "SELF"
+    },
+    {
       "name": "activateReferral",
       "source": "server/functions/referrals.js#activateReferral",
-      "runtime": "nodejs20",
+      "runtime": "nodejs22",
       "region": "us-central1",
       "trigger": {
         "type": "callable"
@@ -168,7 +73,7 @@
     {
       "name": "activateReferralOnDeliveryCompleted",
       "source": "server/functions/referrals.js#activateReferralOnDeliveryCompleted",
-      "runtime": "nodejs20",
+      "runtime": "nodejs22",
       "region": "us-central1",
       "trigger": {
         "type": "event",
@@ -183,7 +88,7 @@
     {
       "name": "activateReferralOnGiftCompleted",
       "source": "server/functions/referrals.js#activateReferralOnGiftCompleted",
-      "runtime": "nodejs20",
+      "runtime": "nodejs22",
       "region": "us-central1",
       "trigger": {
         "type": "event",
@@ -198,7 +103,7 @@
     {
       "name": "activateReferralOnHealthPlusCompleted",
       "source": "server/functions/referrals.js#activateReferralOnHealthPlusCompleted",
-      "runtime": "nodejs20",
+      "runtime": "nodejs22",
       "region": "us-central1",
       "trigger": {
         "type": "event",
@@ -213,7 +118,7 @@
     {
       "name": "adjudicateIris",
       "source": "server/functions/iris.js#adjudicateIris",
-      "runtime": "nodejs20",
+      "runtime": "nodejs22",
       "region": "us-central1",
       "trigger": {
         "type": "callable"
@@ -225,7 +130,7 @@
     {
       "name": "adminAddAdminNote",
       "source": "server/functions/admin-operations-authority.js#adminAddAdminNote",
-      "runtime": "nodejs20",
+      "runtime": "nodejs22",
       "region": "us-central1",
       "trigger": {
         "type": "callable"
@@ -237,7 +142,7 @@
     {
       "name": "adminApproveGiftCampaignMatch",
       "source": "server/functions/admin-operations-authority.js#adminApproveGiftCampaignMatch",
-      "runtime": "nodejs20",
+      "runtime": "nodejs22",
       "region": "us-central1",
       "trigger": {
         "type": "callable"
@@ -249,7 +154,7 @@
     {
       "name": "adminArchiveDelivery",
       "source": "server/functions/admin-operations-authority.js#adminArchiveDelivery",
-      "runtime": "nodejs20",
+      "runtime": "nodejs22",
       "region": "us-central1",
       "trigger": {
         "type": "callable"
@@ -261,7 +166,7 @@
     {
       "name": "adminBulkGiftCampaignAction",
       "source": "server/functions/admin-operations-authority.js#adminBulkGiftCampaignAction",
-      "runtime": "nodejs20",
+      "runtime": "nodejs22",
       "region": "us-central1",
       "trigger": {
         "type": "callable"
@@ -273,7 +178,7 @@
     {
       "name": "adminCreateBusinessInvoice",
       "source": "server/functions/business-payments.js#adminCreateBusinessInvoice",
-      "runtime": "nodejs20",
+      "runtime": "nodejs22",
       "region": "us-central1",
       "trigger": {
         "type": "callable"
@@ -285,7 +190,7 @@
     {
       "name": "adminDuplicateDelivery",
       "source": "server/functions/admin-operations-authority.js#adminDuplicateDelivery",
-      "runtime": "nodejs20",
+      "runtime": "nodejs22",
       "region": "us-central1",
       "trigger": {
         "type": "callable"
@@ -297,7 +202,7 @@
     {
       "name": "adminGovernanceAction",
       "source": "server/functions/admin-governance.js#adminGovernanceAction",
-      "runtime": "nodejs20",
+      "runtime": "nodejs22",
       "region": "us-central1",
       "trigger": {
         "type": "callable"
@@ -309,7 +214,7 @@
     {
       "name": "adminReconcileRiderEarnings",
       "source": "server/functions/rider-earnings-summary.js#adminReconcileRiderEarnings",
-      "runtime": "nodejs20",
+      "runtime": "nodejs22",
       "region": "us-central1",
       "trigger": {
         "type": "callable"
@@ -321,7 +226,7 @@
     {
       "name": "adminRecordAuditEntry",
       "source": "server/functions/admin-operations-authority.js#adminRecordAuditEntry",
-      "runtime": "nodejs20",
+      "runtime": "nodejs22",
       "region": "us-central1",
       "trigger": {
         "type": "callable"
@@ -333,7 +238,7 @@
     {
       "name": "adminRecordRiderEvent",
       "source": "server/functions/admin-operations-authority.js#adminRecordRiderEvent",
-      "runtime": "nodejs20",
+      "runtime": "nodejs22",
       "region": "us-central1",
       "trigger": {
         "type": "callable"
@@ -345,7 +250,7 @@
     {
       "name": "adminRepairCanonicalRider",
       "source": "server/functions/admin-rider-authority.js#adminRepairCanonicalRider",
-      "runtime": "nodejs20",
+      "runtime": "nodejs22",
       "region": "us-central1",
       "trigger": {
         "type": "callable"
@@ -357,7 +262,7 @@
     {
       "name": "adminRequestAccountMergeReview",
       "source": "server/functions/admin-operations-authority.js#adminRequestAccountMergeReview",
-      "runtime": "nodejs20",
+      "runtime": "nodejs22",
       "region": "us-central1",
       "trigger": {
         "type": "callable"
@@ -369,7 +274,7 @@
     {
       "name": "adminResolveAccess",
       "source": "server/functions/admin-operations-authority.js#adminResolveAccess",
-      "runtime": "nodejs20",
+      "runtime": "nodejs22",
       "region": "us-central1",
       "trigger": {
         "type": "callable"
@@ -381,7 +286,7 @@
     {
       "name": "adminResolveMessageReport",
       "source": "server/functions/admin-operations-authority.js#adminResolveMessageReport",
-      "runtime": "nodejs20",
+      "runtime": "nodejs22",
       "region": "us-central1",
       "trigger": {
         "type": "callable"
@@ -393,7 +298,7 @@
     {
       "name": "adminReviewRider",
       "source": "server/functions/admin-rider-authority.js#adminReviewRider",
-      "runtime": "nodejs20",
+      "runtime": "nodejs22",
       "region": "us-central1",
       "trigger": {
         "type": "callable"
@@ -405,7 +310,7 @@
     {
       "name": "adminReviewRiderWithdrawal",
       "source": "server/functions/rider-connect.js#adminReviewRiderWithdrawal",
-      "runtime": "nodejs20",
+      "runtime": "nodejs22",
       "region": "us-central1",
       "trigger": {
         "type": "callable"
@@ -417,7 +322,7 @@
     {
       "name": "adminSaveAdminUser",
       "source": "server/functions/admin-operations-authority.js#adminSaveAdminUser",
-      "runtime": "nodejs20",
+      "runtime": "nodejs22",
       "region": "us-central1",
       "trigger": {
         "type": "callable"
@@ -429,7 +334,7 @@
     {
       "name": "adminSaveGiftBrandPartner",
       "source": "server/functions/admin-operations-authority.js#adminSaveGiftBrandPartner",
-      "runtime": "nodejs20",
+      "runtime": "nodejs22",
       "region": "us-central1",
       "trigger": {
         "type": "callable"
@@ -441,7 +346,7 @@
     {
       "name": "adminSaveGiftRequestEditor",
       "source": "server/functions/admin-operations-authority.js#adminSaveGiftRequestEditor",
-      "runtime": "nodejs20",
+      "runtime": "nodejs22",
       "region": "us-central1",
       "trigger": {
         "type": "callable"
@@ -453,7 +358,7 @@
     {
       "name": "adminSuggestGiftCampaignMatch",
       "source": "server/functions/admin-operations-authority.js#adminSuggestGiftCampaignMatch",
-      "runtime": "nodejs20",
+      "runtime": "nodejs22",
       "region": "us-central1",
       "trigger": {
         "type": "callable"
@@ -465,7 +370,7 @@
     {
       "name": "adminUpdateBusinessAccountStatus",
       "source": "server/functions/admin-operations-authority.js#adminUpdateBusinessAccountStatus",
-      "runtime": "nodejs20",
+      "runtime": "nodejs22",
       "region": "us-central1",
       "trigger": {
         "type": "callable"
@@ -477,7 +382,7 @@
     {
       "name": "adminUpdateBusinessMember",
       "source": "server/functions/admin-operations-authority.js#adminUpdateBusinessMember",
-      "runtime": "nodejs20",
+      "runtime": "nodejs22",
       "region": "us-central1",
       "trigger": {
         "type": "callable"
@@ -489,7 +394,7 @@
     {
       "name": "adminUpdateBusinessOperation",
       "source": "server/functions/admin-operations-authority.js#adminUpdateBusinessOperation",
-      "runtime": "nodejs20",
+      "runtime": "nodejs22",
       "region": "us-central1",
       "trigger": {
         "type": "callable"
@@ -501,7 +406,7 @@
     {
       "name": "adminUpdateDeliveryOperation",
       "source": "server/functions/admin-operations-authority.js#adminUpdateDeliveryOperation",
-      "runtime": "nodejs20",
+      "runtime": "nodejs22",
       "region": "us-central1",
       "trigger": {
         "type": "callable"
@@ -513,7 +418,7 @@
     {
       "name": "adminUpdateFinanceWorkflow",
       "source": "server/functions/admin-operations-authority.js#adminUpdateFinanceWorkflow",
-      "runtime": "nodejs20",
+      "runtime": "nodejs22",
       "region": "us-central1",
       "trigger": {
         "type": "callable"
@@ -525,7 +430,7 @@
     {
       "name": "adminUpdateGiftCampaignParticipant",
       "source": "server/functions/admin-operations-authority.js#adminUpdateGiftCampaignParticipant",
-      "runtime": "nodejs20",
+      "runtime": "nodejs22",
       "region": "us-central1",
       "trigger": {
         "type": "callable"
@@ -537,7 +442,7 @@
     {
       "name": "adminUpdateGiftWorkflow",
       "source": "server/functions/admin-operations-authority.js#adminUpdateGiftWorkflow",
-      "runtime": "nodejs20",
+      "runtime": "nodejs22",
       "region": "us-central1",
       "trigger": {
         "type": "callable"
@@ -549,7 +454,7 @@
     {
       "name": "adminUpdateGiftWorkspace",
       "source": "server/functions/admin-operations-authority.js#adminUpdateGiftWorkspace",
-      "runtime": "nodejs20",
+      "runtime": "nodejs22",
       "region": "us-central1",
       "trigger": {
         "type": "callable"
@@ -561,7 +466,7 @@
     {
       "name": "adminUpdateHealthPlusPickup",
       "source": "server/functions/admin-operations-authority.js#adminUpdateHealthPlusPickup",
-      "runtime": "nodejs20",
+      "runtime": "nodejs22",
       "region": "us-central1",
       "trigger": {
         "type": "callable"
@@ -573,7 +478,7 @@
     {
       "name": "adminUpdateHealthPlusProfile",
       "source": "server/functions/admin-operations-authority.js#adminUpdateHealthPlusProfile",
-      "runtime": "nodejs20",
+      "runtime": "nodejs22",
       "region": "us-central1",
       "trigger": {
         "type": "callable"
@@ -585,7 +490,7 @@
     {
       "name": "adminUpdateHealthPlusSchedule",
       "source": "server/functions/admin-operations-authority.js#adminUpdateHealthPlusSchedule",
-      "runtime": "nodejs20",
+      "runtime": "nodejs22",
       "region": "us-central1",
       "trigger": {
         "type": "callable"
@@ -597,7 +502,7 @@
     {
       "name": "adminUpdateIrisCandidateWorkflow",
       "source": "server/functions/admin-operations-authority.js#adminUpdateIrisCandidateWorkflow",
-      "runtime": "nodejs20",
+      "runtime": "nodejs22",
       "region": "us-central1",
       "trigger": {
         "type": "callable"
@@ -609,7 +514,7 @@
     {
       "name": "adminUpdateIrisRepositoryRecord",
       "source": "server/functions/admin-operations-authority.js#adminUpdateIrisRepositoryRecord",
-      "runtime": "nodejs20",
+      "runtime": "nodejs22",
       "region": "us-central1",
       "trigger": {
         "type": "callable"
@@ -621,7 +526,7 @@
     {
       "name": "adminUpdateIrisReview",
       "source": "server/functions/admin-operations-authority.js#adminUpdateIrisReview",
-      "runtime": "nodejs20",
+      "runtime": "nodejs22",
       "region": "us-central1",
       "trigger": {
         "type": "callable"
@@ -633,7 +538,7 @@
     {
       "name": "adminUpdatePlatformRecord",
       "source": "server/functions/admin-operations-authority.js#adminUpdatePlatformRecord",
-      "runtime": "nodejs20",
+      "runtime": "nodejs22",
       "region": "us-central1",
       "trigger": {
         "type": "callable"
@@ -645,7 +550,7 @@
     {
       "name": "adminUpdateSenderAccountStatus",
       "source": "server/functions/admin-operations-authority.js#adminUpdateSenderAccountStatus",
-      "runtime": "nodejs20",
+      "runtime": "nodejs22",
       "region": "us-central1",
       "trigger": {
         "type": "callable"
@@ -657,7 +562,7 @@
     {
       "name": "adminUpdateSenderTrust",
       "source": "server/functions/sender-trust.js#adminUpdateSenderTrust",
-      "runtime": "nodejs20",
+      "runtime": "nodejs22",
       "region": "us-central1",
       "trigger": {
         "type": "callable"
@@ -669,7 +574,7 @@
     {
       "name": "analyseIris",
       "source": "server/functions/iris.js#analyseIris",
-      "runtime": "nodejs20",
+      "runtime": "nodejs22",
       "region": "us-central1",
       "trigger": {
         "type": "callable"
@@ -681,7 +586,7 @@
     {
       "name": "analyseParcelPhotoForIris",
       "source": "server/functions/iris-photo-analysis.js#analyseParcelPhotoForIris",
-      "runtime": "nodejs20",
+      "runtime": "nodejs22",
       "region": "us-central1",
       "trigger": {
         "type": "callable"
@@ -693,7 +598,7 @@
     {
       "name": "applyCheckoutRoth",
       "source": "server/functions/roth-ledger.js#applyCheckoutRoth",
-      "runtime": "nodejs20",
+      "runtime": "nodejs22",
       "region": "us-central1",
       "trigger": {
         "type": "callable"
@@ -705,7 +610,7 @@
     {
       "name": "archiveExpiredDeliveries",
       "source": "server/functions/delivery-cleanup.js#archiveExpiredDeliveries",
-      "runtime": "nodejs20",
+      "runtime": "nodejs22",
       "region": "us-central1",
       "trigger": {
         "type": "schedule",
@@ -717,9 +622,20 @@
       "releaseSha": "SELF"
     },
     {
+      "name": "assignBusinessCustomRole",
+      "source": "server/functions/business-custom-roles.js#assignBusinessCustomRole",
+      "runtime": "nodejs22",
+      "region": "us-central1",
+      "trigger": {
+        "type": "callable"
+      },
+      "state": "ACTIVE",
+      "releaseSha": "SELF"
+    },
+    {
       "name": "attachReferralCode",
       "source": "server/functions/referrals.js#attachReferralCode",
-      "runtime": "nodejs20",
+      "runtime": "nodejs22",
       "region": "us-central1",
       "trigger": {
         "type": "callable"
@@ -731,7 +647,7 @@
     {
       "name": "awardFoundingRiderOnApproval",
       "source": "server/functions/legends.js#awardFoundingRiderOnApproval",
-      "runtime": "nodejs20",
+      "runtime": "nodejs22",
       "region": "us-central1",
       "trigger": {
         "type": "event",
@@ -746,7 +662,7 @@
     {
       "name": "awardFoundingRiderOnRiderApproval",
       "source": "server/functions/legends.js#awardFoundingRiderOnRiderApproval",
-      "runtime": "nodejs20",
+      "runtime": "nodejs22",
       "region": "us-central1",
       "trigger": {
         "type": "event",
@@ -761,7 +677,7 @@
     {
       "name": "awardLegendOnCompletion",
       "source": "server/functions/legends.js#awardLegendOnCompletion",
-      "runtime": "nodejs20",
+      "runtime": "nodejs22",
       "region": "us-central1",
       "trigger": {
         "type": "event",
@@ -776,7 +692,7 @@
     {
       "name": "awardPatronOnBusinessInvoicePaid",
       "source": "server/functions/legends.js#awardPatronOnBusinessInvoicePaid",
-      "runtime": "nodejs20",
+      "runtime": "nodejs22",
       "region": "us-central1",
       "trigger": {
         "type": "event",
@@ -791,7 +707,7 @@
     {
       "name": "calculateEarnings",
       "source": "server/functions/legacy-financial-endpoints.js#calculateEarnings",
-      "runtime": "nodejs20",
+      "runtime": "nodejs22",
       "region": "us-central1",
       "trigger": {
         "type": "https"
@@ -803,7 +719,7 @@
     {
       "name": "cancelAdjustedCollection",
       "source": "server/functions/delivery-adjustments.js#cancelAdjustedCollection",
-      "runtime": "nodejs20",
+      "runtime": "nodejs22",
       "region": "us-central1",
       "trigger": {
         "type": "callable"
@@ -815,7 +731,7 @@
     {
       "name": "cancelDelivery",
       "source": "server/functions/delivery-policy.js#cancelDelivery",
-      "runtime": "nodejs20",
+      "runtime": "nodejs22",
       "region": "us-central1",
       "trigger": {
         "type": "callable"
@@ -827,7 +743,7 @@
     {
       "name": "cancelRiderWithdrawal",
       "source": "server/functions/rider-connect.js#cancelRiderWithdrawal",
-      "runtime": "nodejs20",
+      "runtime": "nodejs22",
       "region": "us-central1",
       "trigger": {
         "type": "callable"
@@ -839,7 +755,7 @@
     {
       "name": "cleanupExpiredGiftStories",
       "source": "server/functions/gift-story-automation.js#cleanupExpiredGiftStories",
-      "runtime": "nodejs20",
+      "runtime": "nodejs22",
       "region": "us-central1",
       "trigger": {
         "type": "schedule",
@@ -853,7 +769,7 @@
     {
       "name": "cleanupExpiredGiftVoiceDrafts",
       "source": "server/functions/gifts-payment.js#cleanupExpiredGiftVoiceDrafts",
-      "runtime": "nodejs20",
+      "runtime": "nodejs22",
       "region": "us-central1",
       "trigger": {
         "type": "schedule",
@@ -867,7 +783,7 @@
     {
       "name": "cleanupExpiredSenderDrafts",
       "source": "server/functions/sender-booking.js#cleanupExpiredSenderDrafts",
-      "runtime": "nodejs20",
+      "runtime": "nodejs22",
       "region": "us-central1",
       "trigger": {
         "type": "schedule",
@@ -881,7 +797,7 @@
     {
       "name": "closeCircumAccount",
       "source": "server/functions/account-closure.js#closeCircumAccount",
-      "runtime": "nodejs20",
+      "runtime": "nodejs22",
       "region": "us-central1",
       "trigger": {
         "type": "callable"
@@ -893,7 +809,7 @@
     {
       "name": "completeDelivery",
       "source": "server/functions/delivery-tracking.js#completeDelivery",
-      "runtime": "nodejs20",
+      "runtime": "nodejs22",
       "region": "us-central1",
       "trigger": {
         "type": "callable"
@@ -912,7 +828,7 @@
     {
       "name": "completeSenderWalletOnboarding",
       "source": "server/functions/roth-ledger.js#completeSenderWalletOnboarding",
-      "runtime": "nodejs20",
+      "runtime": "nodejs22",
       "region": "us-central1",
       "trigger": {
         "type": "callable"
@@ -924,7 +840,7 @@
     {
       "name": "confirmRiderIrisAssessment",
       "source": "server/functions/rider-iris-acknowledgement.js#confirmRiderIrisAssessment",
-      "runtime": "nodejs20",
+      "runtime": "nodejs22",
       "region": "us-central1",
       "trigger": {
         "type": "callable"
@@ -936,7 +852,7 @@
     {
       "name": "createBusinessAccount",
       "source": "server/functions/business-access.js#createBusinessAccount",
-      "runtime": "nodejs20",
+      "runtime": "nodejs22",
       "region": "us-central1",
       "trigger": {
         "type": "callable"
@@ -948,7 +864,7 @@
     {
       "name": "createBusinessInvoiceCheckout",
       "source": "server/functions/business-payments.js#createBusinessInvoiceCheckout",
-      "runtime": "nodejs20",
+      "runtime": "nodejs22",
       "region": "us-central1",
       "trigger": {
         "type": "callable"
@@ -960,7 +876,7 @@
     {
       "name": "createBusinessRothCheckout",
       "source": "server/functions/business-payments.js#createBusinessRothCheckout",
-      "runtime": "nodejs20",
+      "runtime": "nodejs22",
       "region": "us-central1",
       "trigger": {
         "type": "callable"
@@ -972,7 +888,7 @@
     {
       "name": "createDeliveryAdjustmentPayment",
       "source": "server/functions/delivery-adjustments.js#createDeliveryAdjustmentPayment",
-      "runtime": "nodejs20",
+      "runtime": "nodejs22",
       "region": "us-central1",
       "trigger": {
         "type": "callable"
@@ -984,7 +900,7 @@
     {
       "name": "createGiftPayment",
       "source": "server/functions/gifts-payment.js#createGiftPayment",
-      "runtime": "nodejs20",
+      "runtime": "nodejs22",
       "region": "us-central1",
       "trigger": {
         "type": "callable"
@@ -996,7 +912,7 @@
     {
       "name": "createGiftStoryVideoUpload",
       "source": "server/functions/gift-story-automation.js#createGiftStoryVideoUpload",
-      "runtime": "nodejs20",
+      "runtime": "nodejs22",
       "region": "us-central1",
       "trigger": {
         "type": "callable"
@@ -1008,7 +924,7 @@
     {
       "name": "createHealthPlusBooking",
       "source": "server/functions/health-plus.js#createHealthPlusBooking",
-      "runtime": "nodejs20",
+      "runtime": "nodejs22",
       "region": "us-central1",
       "trigger": {
         "type": "callable"
@@ -1020,7 +936,7 @@
     {
       "name": "createHealthPlusCheckoutSession",
       "source": "server/functions/health-plus.js#createHealthPlusCheckoutSession",
-      "runtime": "nodejs20",
+      "runtime": "nodejs22",
       "region": "us-central1",
       "trigger": {
         "type": "https"
@@ -1032,7 +948,7 @@
     {
       "name": "createRiderTransferOrPayout",
       "source": "server/functions/rider-connect.js#createRiderTransferOrPayout",
-      "runtime": "nodejs20",
+      "runtime": "nodejs22",
       "region": "us-central1",
       "trigger": {
         "type": "callable"
@@ -1044,7 +960,7 @@
     {
       "name": "createSenderBookingQuote",
       "source": "server/functions/sender-booking.js#createSenderBookingQuote",
-      "runtime": "nodejs20",
+      "runtime": "nodejs22",
       "region": "us-central1",
       "trigger": {
         "type": "callable"
@@ -1056,7 +972,7 @@
     {
       "name": "createSenderPaidDelivery",
       "source": "server/functions/sender-booking.js#createSenderPaidDelivery",
-      "runtime": "nodejs20",
+      "runtime": "nodejs22",
       "region": "us-central1",
       "trigger": {
         "type": "callable"
@@ -1068,7 +984,7 @@
     {
       "name": "createSenderPaymentSession",
       "source": "server/functions/sender-booking.js#createSenderPaymentSession",
-      "runtime": "nodejs20",
+      "runtime": "nodejs22",
       "region": "us-central1",
       "trigger": {
         "type": "callable"
@@ -1080,7 +996,7 @@
     {
       "name": "createSenderSetupIntent",
       "source": "server/functions/sender-finance.js#createSenderSetupIntent",
-      "runtime": "nodejs20",
+      "runtime": "nodejs22",
       "region": "us-central1",
       "trigger": {
         "type": "callable"
@@ -1092,7 +1008,7 @@
     {
       "name": "createStripeConnectAccountForRider",
       "source": "server/functions/rider-connect.js#createStripeConnectAccountForRider",
-      "runtime": "nodejs20",
+      "runtime": "nodejs22",
       "region": "us-central1",
       "trigger": {
         "type": "callable"
@@ -1104,7 +1020,7 @@
     {
       "name": "createStripeOnboardingLink",
       "source": "server/functions/rider-connect.js#createStripeOnboardingLink",
-      "runtime": "nodejs20",
+      "runtime": "nodejs22",
       "region": "us-central1",
       "trigger": {
         "type": "callable"
@@ -1116,7 +1032,7 @@
     {
       "name": "createWalletTopUp",
       "source": "server/functions/roth-ledger.js#createWalletTopUp",
-      "runtime": "nodejs20",
+      "runtime": "nodejs22",
       "region": "us-central1",
       "trigger": {
         "type": "callable"
@@ -1128,7 +1044,7 @@
     {
       "name": "createWeightAdjustedNotification",
       "source": "server/functions/rider-account.js#createWeightAdjustedNotification",
-      "runtime": "nodejs20",
+      "runtime": "nodejs22",
       "region": "us-central1",
       "trigger": {
         "type": "callable"
@@ -1140,7 +1056,7 @@
     {
       "name": "debitRothCredit",
       "source": "server/functions/roth-ledger.js#debitRothCredit",
-      "runtime": "nodejs20",
+      "runtime": "nodejs22",
       "region": "us-central1",
       "trigger": {
         "type": "callable"
@@ -1150,9 +1066,20 @@
       "releaseSha": "SELF"
     },
     {
+      "name": "deleteBusinessCustomRole",
+      "source": "server/functions/business-custom-roles.js#deleteBusinessCustomRole",
+      "runtime": "nodejs22",
+      "region": "us-central1",
+      "trigger": {
+        "type": "callable"
+      },
+      "state": "ACTIVE",
+      "releaseSha": "SELF"
+    },
+    {
       "name": "deleteIrisReferenceImage",
       "source": "server/functions/admin-iris-reference-images.js#deleteIrisReferenceImage",
-      "runtime": "nodejs20",
+      "runtime": "nodejs22",
       "region": "us-central1",
       "trigger": {
         "type": "callable"
@@ -1164,7 +1091,7 @@
     {
       "name": "deleteSenderDraft",
       "source": "server/functions/sender-booking.js#deleteSenderDraft",
-      "runtime": "nodejs20",
+      "runtime": "nodejs22",
       "region": "us-central1",
       "trigger": {
         "type": "callable"
@@ -1176,7 +1103,7 @@
     {
       "name": "deleteSenderSavedAddress",
       "source": "server/functions/sender-saved-addresses.js#deleteSenderSavedAddress",
-      "runtime": "nodejs20",
+      "runtime": "nodejs22",
       "region": "us-central1",
       "trigger": {
         "type": "callable"
@@ -1186,9 +1113,22 @@
       "releaseSha": "SELF"
     },
     {
+      "name": "deliveryLifecycleWatchdog",
+      "source": "server/functions/delivery-watchdog.js#deliveryLifecycleWatchdog",
+      "runtime": "nodejs22",
+      "region": "us-central1",
+      "trigger": {
+        "type": "schedule",
+        "schedule": "every 5 minutes",
+        "timeZone": "Europe/London"
+      },
+      "state": "ACTIVE",
+      "releaseSha": "SELF"
+    },
+    {
       "name": "detachSenderPaymentMethod",
       "source": "server/functions/sender-finance.js#detachSenderPaymentMethod",
-      "runtime": "nodejs20",
+      "runtime": "nodejs22",
       "region": "us-central1",
       "trigger": {
         "type": "callable"
@@ -1200,7 +1140,7 @@
     {
       "name": "endTrip",
       "source": "server/functions/index.js#endTrip",
-      "runtime": "nodejs20",
+      "runtime": "nodejs22",
       "region": "us-central1",
       "trigger": {
         "type": "https"
@@ -1212,7 +1152,7 @@
     {
       "name": "ensureBusinessCompanyCode",
       "source": "server/functions/business-access.js#ensureBusinessCompanyCode",
-      "runtime": "nodejs20",
+      "runtime": "nodejs22",
       "region": "us-central1",
       "trigger": {
         "type": "callable"
@@ -1224,7 +1164,7 @@
     {
       "name": "ensureReferralCode",
       "source": "server/functions/referrals.js#ensureReferralCode",
-      "runtime": "nodejs20",
+      "runtime": "nodejs22",
       "region": "us-central1",
       "trigger": {
         "type": "callable"
@@ -1236,7 +1176,7 @@
     {
       "name": "ensureRiderRothWallet",
       "source": "server/functions/rider-account.js#ensureRiderRothWallet",
-      "runtime": "nodejs20",
+      "runtime": "nodejs22",
       "region": "us-central1",
       "trigger": {
         "type": "callable"
@@ -1248,7 +1188,7 @@
     {
       "name": "ensureSenderAccount",
       "source": "server/functions/sender-account.js#ensureSenderAccount",
-      "runtime": "nodejs20",
+      "runtime": "nodejs22",
       "region": "us-central1",
       "trigger": {
         "type": "callable"
@@ -1260,7 +1200,7 @@
     {
       "name": "escalateUnclaimedDeliveries",
       "source": "server/functions/platform-notifications.js#escalateUnclaimedDeliveries",
-      "runtime": "nodejs20",
+      "runtime": "nodejs22",
       "region": "us-central1",
       "trigger": {
         "type": "schedule",
@@ -1274,7 +1214,7 @@
     {
       "name": "finalizeDeliveryAdjustmentPayment",
       "source": "server/functions/delivery-adjustments.js#finalizeDeliveryAdjustmentPayment",
-      "runtime": "nodejs20",
+      "runtime": "nodejs22",
       "region": "us-central1",
       "trigger": {
         "type": "callable"
@@ -1286,7 +1226,7 @@
     {
       "name": "finalizeGiftPayment",
       "source": "server/functions/gifts-payment.js#finalizeGiftPayment",
-      "runtime": "nodejs20",
+      "runtime": "nodejs22",
       "region": "us-central1",
       "trigger": {
         "type": "callable"
@@ -1298,7 +1238,7 @@
     {
       "name": "finalizeGiftStoryVideoUpload",
       "source": "server/functions/gift-story-automation.js#finalizeGiftStoryVideoUpload",
-      "runtime": "nodejs20",
+      "runtime": "nodejs22",
       "region": "us-central1",
       "trigger": {
         "type": "callable"
@@ -1310,7 +1250,7 @@
     {
       "name": "finalizeIrisReferenceImage",
       "source": "server/functions/admin-iris-reference-images.js#finalizeIrisReferenceImage",
-      "runtime": "nodejs20",
+      "runtime": "nodejs22",
       "region": "us-central1",
       "trigger": {
         "type": "callable"
@@ -1322,7 +1262,7 @@
     {
       "name": "finalizeSenderWebCheckout",
       "source": "server/functions/sender-booking.js#finalizeSenderWebCheckout",
-      "runtime": "nodejs20",
+      "runtime": "nodejs22",
       "region": "us-central1",
       "trigger": {
         "type": "callable"
@@ -1334,7 +1274,7 @@
     {
       "name": "founderDesignateTestAccount",
       "source": "server/functions/founder-authority.js#founderDesignateTestAccount",
-      "runtime": "nodejs20",
+      "runtime": "nodejs22",
       "region": "us-central1",
       "trigger": {
         "type": "callable"
@@ -1346,7 +1286,7 @@
     {
       "name": "founderListTestAccounts",
       "source": "server/functions/founder-authority.js#founderListTestAccounts",
-      "runtime": "nodejs20",
+      "runtime": "nodejs22",
       "region": "us-central1",
       "trigger": {
         "type": "callable"
@@ -1358,7 +1298,7 @@
     {
       "name": "founderPreflightE2E",
       "source": "server/functions/founder-authority.js#founderPreflightE2E",
-      "runtime": "nodejs20",
+      "runtime": "nodejs22",
       "region": "us-central1",
       "trigger": {
         "type": "callable"
@@ -1370,7 +1310,7 @@
     {
       "name": "founderRevokeTestAccount",
       "source": "server/functions/founder-authority.js#founderRevokeTestAccount",
-      "runtime": "nodejs20",
+      "runtime": "nodejs22",
       "region": "us-central1",
       "trigger": {
         "type": "callable"
@@ -1382,7 +1322,7 @@
     {
       "name": "founderRiderOperationalPreflight",
       "source": "server/functions/founder-authority.js#founderRiderOperationalPreflight",
-      "runtime": "nodejs20",
+      "runtime": "nodejs22",
       "region": "us-central1",
       "trigger": {
         "type": "callable"
@@ -1401,7 +1341,7 @@
     {
       "name": "generateHealthPlusRecurringBookings",
       "source": "server/functions/health-plus-operations.js#generateHealthPlusRecurringBookings",
-      "runtime": "nodejs20",
+      "runtime": "nodejs22",
       "region": "us-central1",
       "trigger": {
         "type": "schedule",
@@ -1415,7 +1355,7 @@
     {
       "name": "getAvailableRequests",
       "source": "server/functions/index.js#getAvailableRequests",
-      "runtime": "nodejs20",
+      "runtime": "nodejs22",
       "region": "us-central1",
       "trigger": {
         "type": "callable"
@@ -1427,7 +1367,7 @@
     {
       "name": "getAvaliableRequests",
       "source": "server/functions/index.js#getAvaliableRequests",
-      "runtime": "nodejs20",
+      "runtime": "nodejs22",
       "region": "us-central1",
       "trigger": {
         "type": "callable"
@@ -1459,9 +1399,20 @@
       "releaseSha": "SELF"
     },
     {
+      "name": "getCustomerDeliveryTrust",
+      "source": "server/functions/customer-delivery-trust.js#getCustomerDeliveryTrust",
+      "runtime": "nodejs22",
+      "region": "us-central1",
+      "trigger": {
+        "type": "callable"
+      },
+      "state": "ACTIVE",
+      "releaseSha": "SELF"
+    },
+    {
       "name": "getGiftStoryActionState",
       "source": "server/functions/gift-story-automation.js#getGiftStoryActionState",
-      "runtime": "nodejs20",
+      "runtime": "nodejs22",
       "region": "us-central1",
       "trigger": {
         "type": "callable"
@@ -1473,7 +1424,7 @@
     {
       "name": "getGiftStoryVideoDownload",
       "source": "server/functions/gift-story-automation.js#getGiftStoryVideoDownload",
-      "runtime": "nodejs20",
+      "runtime": "nodejs22",
       "region": "us-central1",
       "trigger": {
         "type": "callable"
@@ -1485,7 +1436,7 @@
     {
       "name": "getIrisReferenceImage",
       "source": "server/functions/admin-iris-reference-images.js#getIrisReferenceImage",
-      "runtime": "nodejs20",
+      "runtime": "nodejs22",
       "region": "us-central1",
       "trigger": {
         "type": "callable"
@@ -1497,7 +1448,7 @@
     {
       "name": "getOrCreateSupportConversation",
       "source": "server/functions/communication-engine.js#getOrCreateSupportConversation",
-      "runtime": "nodejs20",
+      "runtime": "nodejs22",
       "region": "us-central1",
       "trigger": {
         "type": "callable"
@@ -1509,7 +1460,7 @@
     {
       "name": "getRiderEarningsSummary",
       "source": "server/functions/rider-earnings-summary.js#getRiderEarningsSummary",
-      "runtime": "nodejs20",
+      "runtime": "nodejs22",
       "region": "us-central1",
       "trigger": {
         "type": "callable"
@@ -1521,7 +1472,7 @@
     {
       "name": "getSenderRothBalance",
       "source": "server/functions/sender-booking.js#getSenderRothBalance",
-      "runtime": "nodejs20",
+      "runtime": "nodejs22",
       "region": "us-central1",
       "trigger": {
         "type": "callable"
@@ -1533,7 +1484,7 @@
     {
       "name": "getSenderWallet",
       "source": "server/functions/roth-ledger.js#getSenderWallet",
-      "runtime": "nodejs20",
+      "runtime": "nodejs22",
       "region": "us-central1",
       "trigger": {
         "type": "callable"
@@ -1545,7 +1496,7 @@
     {
       "name": "getSenderWalletTransactions",
       "source": "server/functions/roth-ledger.js#getSenderWalletTransactions",
-      "runtime": "nodejs20",
+      "runtime": "nodejs22",
       "region": "us-central1",
       "trigger": {
         "type": "callable"
@@ -1557,7 +1508,7 @@
     {
       "name": "giftStoryLanding",
       "source": "server/functions/gift-story-automation.js#giftStoryLanding",
-      "runtime": "nodejs20",
+      "runtime": "nodejs22",
       "region": "us-central1",
       "trigger": {
         "type": "https"
@@ -1569,7 +1520,7 @@
     {
       "name": "goOffline",
       "source": "server/functions/rider-presence.js#goOffline",
-      "runtime": "nodejs20",
+      "runtime": "nodejs22",
       "region": "us-central1",
       "trigger": {
         "type": "callable"
@@ -1581,7 +1532,7 @@
     {
       "name": "goOnline",
       "source": "server/functions/rider-presence.js#goOnline",
-      "runtime": "nodejs20",
+      "runtime": "nodejs22",
       "region": "us-central1",
       "trigger": {
         "type": "callable"
@@ -1593,7 +1544,7 @@
     {
       "name": "grantRecognition",
       "source": "server/functions/legends.js#grantRecognition",
-      "runtime": "nodejs20",
+      "runtime": "nodejs22",
       "region": "us-central1",
       "trigger": {
         "type": "callable"
@@ -1605,7 +1556,7 @@
     {
       "name": "handleStripeConnectWebhook",
       "source": "server/functions/rider-connect.js#handleStripeConnectWebhook",
-      "runtime": "nodejs20",
+      "runtime": "nodejs22",
       "region": "us-central1",
       "trigger": {
         "type": "https"
@@ -1617,7 +1568,7 @@
     {
       "name": "initialiseSenderWallet",
       "source": "server/functions/roth-ledger.js#initialiseSenderWallet",
-      "runtime": "nodejs20",
+      "runtime": "nodejs22",
       "region": "us-central1",
       "trigger": {
         "type": "callable"
@@ -1629,7 +1580,7 @@
     {
       "name": "inviteBusinessMember",
       "source": "server/functions/business-access.js#inviteBusinessMember",
-      "runtime": "nodejs20",
+      "runtime": "nodejs22",
       "region": "us-central1",
       "trigger": {
         "type": "callable"
@@ -1641,7 +1592,7 @@
     {
       "name": "issueRothCredit",
       "source": "server/functions/roth-ledger.js#issueRothCredit",
-      "runtime": "nodejs20",
+      "runtime": "nodejs22",
       "region": "us-central1",
       "trigger": {
         "type": "callable"
@@ -1653,7 +1604,7 @@
     {
       "name": "issueRothToWallets",
       "source": "server/functions/roth-ledger.js#issueRothToWallets",
-      "runtime": "nodejs20",
+      "runtime": "nodejs22",
       "region": "us-central1",
       "trigger": {
         "type": "callable"
@@ -1663,9 +1614,20 @@
       "releaseSha": "SELF"
     },
     {
+      "name": "listBusinessCustomRoles",
+      "source": "server/functions/business-custom-roles.js#listBusinessCustomRoles",
+      "runtime": "nodejs22",
+      "region": "us-central1",
+      "trigger": {
+        "type": "callable"
+      },
+      "state": "ACTIVE",
+      "releaseSha": "SELF"
+    },
+    {
       "name": "listSenderPaymentMethods",
       "source": "server/functions/sender-finance.js#listSenderPaymentMethods",
-      "runtime": "nodejs20",
+      "runtime": "nodejs22",
       "region": "us-central1",
       "trigger": {
         "type": "callable"
@@ -1677,7 +1639,7 @@
     {
       "name": "liveDeliveryDiagnostics",
       "source": "server/functions/operations-health-centre.js#liveDeliveryDiagnostics",
-      "runtime": "nodejs20",
+      "runtime": "nodejs22",
       "region": "us-central1",
       "trigger": {
         "type": "callable"
@@ -1689,7 +1651,7 @@
     {
       "name": "loadSenderDraft",
       "source": "server/functions/sender-booking.js#loadSenderDraft",
-      "runtime": "nodejs20",
+      "runtime": "nodejs22",
       "region": "us-central1",
       "trigger": {
         "type": "callable"
@@ -1701,7 +1663,7 @@
     {
       "name": "lookupBusinessByCompanyCode",
       "source": "server/functions/business-access.js#lookupBusinessByCompanyCode",
-      "runtime": "nodejs20",
+      "runtime": "nodejs22",
       "region": "us-central1",
       "trigger": {
         "type": "callable"
@@ -1713,7 +1675,7 @@
     {
       "name": "manageGiftStoryAccess",
       "source": "server/functions/gift-story-automation.js#manageGiftStoryAccess",
-      "runtime": "nodejs20",
+      "runtime": "nodejs22",
       "region": "us-central1",
       "trigger": {
         "type": "callable"
@@ -1725,7 +1687,7 @@
     {
       "name": "markConversationRead",
       "source": "server/functions/communication-engine.js#markConversationRead",
-      "runtime": "nodejs20",
+      "runtime": "nodejs22",
       "region": "us-central1",
       "trigger": {
         "type": "callable"
@@ -1737,7 +1699,7 @@
     {
       "name": "markRiderNoShow",
       "source": "server/functions/delivery-policy.js#markRiderNoShow",
-      "runtime": "nodejs20",
+      "runtime": "nodejs22",
       "region": "us-central1",
       "trigger": {
         "type": "callable"
@@ -1749,7 +1711,7 @@
     {
       "name": "markSenderLegendCelebrationSeen",
       "source": "server/functions/sender-account.js#markSenderLegendCelebrationSeen",
-      "runtime": "nodejs20",
+      "runtime": "nodejs22",
       "region": "us-central1",
       "trigger": {
         "type": "callable"
@@ -1761,7 +1723,7 @@
     {
       "name": "markStaleRiderPresenceOffline",
       "source": "server/functions/rider-presence.js#markStaleRiderPresenceOffline",
-      "runtime": "nodejs20",
+      "runtime": "nodejs22",
       "region": "us-central1",
       "trigger": {
         "type": "schedule",
@@ -1775,7 +1737,7 @@
     {
       "name": "onChatMessageCreated",
       "source": "server/functions/platform-notifications.js#onChatMessageCreated",
-      "runtime": "nodejs20",
+      "runtime": "nodejs22",
       "region": "us-central1",
       "trigger": {
         "type": "event",
@@ -1788,9 +1750,33 @@
       "releaseSha": "SELF"
     },
     {
+      "name": "onChatMessageOperationalCreate",
+      "source": "server/functions/delivery-event-projections.js#onChatMessageOperationalCreate",
+      "runtime": "nodejs22",
+      "region": "us-central1",
+      "trigger": {
+        "type": "firestore",
+        "document": "chats/{chatId}/messages/{messageId}"
+      },
+      "state": "ACTIVE",
+      "releaseSha": "SELF"
+    },
+    {
+      "name": "onChatOperationalCreate",
+      "source": "server/functions/delivery-event-projections.js#onChatOperationalCreate",
+      "runtime": "nodejs22",
+      "region": "us-central1",
+      "trigger": {
+        "type": "firestore",
+        "document": "chats/{chatId}"
+      },
+      "state": "ACTIVE",
+      "releaseSha": "SELF"
+    },
+    {
       "name": "onDeliveryCompletedEvent",
       "source": "server/functions/delivery-completed-event.js#onDeliveryCompletedEvent",
-      "runtime": "nodejs20",
+      "runtime": "nodejs22",
       "region": "us-central1",
       "trigger": {
         "type": "event",
@@ -1812,7 +1798,7 @@
     {
       "name": "onDeliveryCreated",
       "source": "server/functions/platform-notifications.js#onDeliveryCreated",
-      "runtime": "nodejs20",
+      "runtime": "nodejs22",
       "region": "us-central1",
       "trigger": {
         "type": "event",
@@ -1825,9 +1811,33 @@
       "releaseSha": "SELF"
     },
     {
+      "name": "onDeliveryDisputeIntelligenceCreate",
+      "source": "server/functions/marketplace-intelligence.js#onDeliveryDisputeIntelligenceCreate",
+      "runtime": "nodejs22",
+      "region": "us-central1",
+      "trigger": {
+        "type": "firestore",
+        "document": "disputes/{disputeId}"
+      },
+      "state": "ACTIVE",
+      "releaseSha": "SELF"
+    },
+    {
+      "name": "onDeliveryEvidenceOperationalWrite",
+      "source": "server/functions/delivery-event-projections.js#onDeliveryEvidenceOperationalWrite",
+      "runtime": "nodejs22",
+      "region": "us-central1",
+      "trigger": {
+        "type": "firestore",
+        "document": "deliveryEvidence/{deliveryId}/photos/{photoId}"
+      },
+      "state": "ACTIVE",
+      "releaseSha": "SELF"
+    },
+    {
       "name": "onDeliveryEvidencePhotoFinalized",
       "source": "server/functions/delivery-evidence-media.js#onDeliveryEvidencePhotoFinalized",
-      "runtime": "nodejs20",
+      "runtime": "nodejs22",
       "region": "us-central1",
       "trigger": {
         "type": "event",
@@ -1847,9 +1857,21 @@
       }
     },
     {
+      "name": "onDeliveryIntelligenceEventCreate",
+      "source": "server/functions/marketplace-intelligence.js#onDeliveryIntelligenceEventCreate",
+      "runtime": "nodejs22",
+      "region": "us-central1",
+      "trigger": {
+        "type": "firestore",
+        "document": "deliveryRequests/{deliveryId}/timeline/{eventId}"
+      },
+      "state": "ACTIVE",
+      "releaseSha": "SELF"
+    },
+    {
       "name": "onDeliveryLiveLocationWrite",
       "source": "server/functions/movement-timeline.js#onDeliveryLiveLocationWrite",
-      "runtime": "nodejs20",
+      "runtime": "nodejs22",
       "region": "us-central1",
       "trigger": {
         "type": "event",
@@ -1862,9 +1884,21 @@
       "releaseSha": "SELF"
     },
     {
+      "name": "onDeliveryLocationRiskWrite",
+      "source": "server/functions/marketplace-intelligence.js#onDeliveryLocationRiskWrite",
+      "runtime": "nodejs22",
+      "region": "us-central1",
+      "trigger": {
+        "type": "firestore",
+        "document": "deliveryLiveLocations/{deliveryId}"
+      },
+      "state": "ACTIVE",
+      "releaseSha": "SELF"
+    },
+    {
       "name": "onDeliveryPresenceWrite",
       "source": "server/functions/rider-presence.js#onDeliveryPresenceWrite",
-      "runtime": "nodejs20",
+      "runtime": "nodejs22",
       "region": "us-central1",
       "trigger": {
         "type": "event",
@@ -1879,7 +1913,7 @@
     {
       "name": "onDeliveryUpdated",
       "source": "server/functions/platform-notifications.js#onDeliveryUpdated",
-      "runtime": "nodejs20",
+      "runtime": "nodejs22",
       "region": "us-central1",
       "trigger": {
         "type": "event",
@@ -1894,7 +1928,7 @@
     {
       "name": "onDisputeCreated",
       "source": "server/functions/platform-notifications.js#onDisputeCreated",
-      "runtime": "nodejs20",
+      "runtime": "nodejs22",
       "region": "us-central1",
       "trigger": {
         "type": "event",
@@ -1907,9 +1941,21 @@
       "releaseSha": "SELF"
     },
     {
+      "name": "onDriverRatingIntelligenceCreate",
+      "source": "server/functions/marketplace-intelligence.js#onDriverRatingIntelligenceCreate",
+      "runtime": "nodejs22",
+      "region": "us-central1",
+      "trigger": {
+        "type": "firestore",
+        "document": "driverRatings/{ratingId}"
+      },
+      "state": "ACTIVE",
+      "releaseSha": "SELF"
+    },
+    {
       "name": "onGiftCampaignParticipantUpdated",
       "source": "server/functions/platform-notifications.js#onGiftCampaignParticipantUpdated",
-      "runtime": "nodejs20",
+      "runtime": "nodejs22",
       "region": "us-central1",
       "trigger": {
         "type": "event",
@@ -1924,7 +1970,7 @@
     {
       "name": "onGiftDeliveryCompleted",
       "source": "server/functions/gift-story-automation.js#onGiftDeliveryCompleted",
-      "runtime": "nodejs20",
+      "runtime": "nodejs22",
       "region": "us-central1",
       "trigger": {
         "type": "event",
@@ -1939,7 +1985,7 @@
     {
       "name": "onGiftMovementWrite",
       "source": "server/functions/movement-ledger.js#onGiftMovementWrite",
-      "runtime": "nodejs20",
+      "runtime": "nodejs22",
       "region": "us-central1",
       "trigger": {
         "type": "event",
@@ -1954,7 +2000,7 @@
     {
       "name": "onGiftRequestCreated",
       "source": "server/functions/platform-notifications.js#onGiftRequestCreated",
-      "runtime": "nodejs20",
+      "runtime": "nodejs22",
       "region": "us-central1",
       "trigger": {
         "type": "event",
@@ -1969,7 +2015,7 @@
     {
       "name": "onGiftRequestUpdated",
       "source": "server/functions/platform-notifications.js#onGiftRequestUpdated",
-      "runtime": "nodejs20",
+      "runtime": "nodejs22",
       "region": "us-central1",
       "trigger": {
         "type": "event",
@@ -1984,7 +2030,7 @@
     {
       "name": "onGiftRequestVoiceMediaDeleted",
       "source": "server/functions/gifts-payment.js#onGiftRequestVoiceMediaDeleted",
-      "runtime": "nodejs20",
+      "runtime": "nodejs22",
       "region": "us-central1",
       "trigger": {
         "type": "event",
@@ -1999,7 +2045,7 @@
     {
       "name": "onHealthMovementWrite",
       "source": "server/functions/movement-ledger.js#onHealthMovementWrite",
-      "runtime": "nodejs20",
+      "runtime": "nodejs22",
       "region": "us-central1",
       "trigger": {
         "type": "event",
@@ -2014,7 +2060,7 @@
     {
       "name": "onHealthPaymentMovementWrite",
       "source": "server/functions/movement-ledger.js#onHealthPaymentMovementWrite",
-      "runtime": "nodejs20",
+      "runtime": "nodejs22",
       "region": "us-central1",
       "trigger": {
         "type": "event",
@@ -2029,7 +2075,7 @@
     {
       "name": "onHealthPlusPickupOperationalWrite",
       "source": "server/functions/health-plus-operations.js#onHealthPlusPickupOperationalWrite",
-      "runtime": "nodejs20",
+      "runtime": "nodejs22",
       "region": "us-central1",
       "trigger": {
         "type": "event",
@@ -2042,9 +2088,21 @@
       "releaseSha": "SELF"
     },
     {
+      "name": "onMarketplaceRiskFlagCreate",
+      "source": "server/functions/marketplace-intelligence.js#onMarketplaceRiskFlagCreate",
+      "runtime": "nodejs22",
+      "region": "us-central1",
+      "trigger": {
+        "type": "firestore",
+        "document": "marketplaceRiskFlags/{flagId}"
+      },
+      "state": "ACTIVE",
+      "releaseSha": "SELF"
+    },
+    {
       "name": "onMovementTimelineWrite",
       "source": "server/functions/movement-timeline.js#onMovementTimelineWrite",
-      "runtime": "nodejs20",
+      "runtime": "nodejs22",
       "region": "us-central1",
       "trigger": {
         "type": "event",
@@ -2057,9 +2115,21 @@
       "releaseSha": "SELF"
     },
     {
+      "name": "onNotificationOperationalWrite",
+      "source": "server/functions/delivery-event-projections.js#onNotificationOperationalWrite",
+      "runtime": "nodejs22",
+      "region": "us-central1",
+      "trigger": {
+        "type": "firestore",
+        "document": "notifications/{notificationId}"
+      },
+      "state": "ACTIVE",
+      "releaseSha": "SELF"
+    },
+    {
       "name": "onPayoutUpdated",
       "source": "server/functions/platform-notifications.js#onPayoutUpdated",
-      "runtime": "nodejs20",
+      "runtime": "nodejs22",
       "region": "us-central1",
       "trigger": {
         "type": "event",
@@ -2074,7 +2144,7 @@
     {
       "name": "onRiderProfileAvailabilityWrite",
       "source": "server/functions/rider-presence.js#onRiderProfileAvailabilityWrite",
-      "runtime": "nodejs20",
+      "runtime": "nodejs22",
       "region": "us-central1",
       "trigger": {
         "type": "event",
@@ -2089,7 +2159,7 @@
     {
       "name": "onRiderProfileUpdated",
       "source": "server/functions/platform-notifications.js#onRiderProfileUpdated",
-      "runtime": "nodejs20",
+      "runtime": "nodejs22",
       "region": "us-central1",
       "trigger": {
         "type": "event",
@@ -2104,7 +2174,7 @@
     {
       "name": "onRiderRecordAvailabilityWrite",
       "source": "server/functions/rider-presence.js#onRiderRecordAvailabilityWrite",
-      "runtime": "nodejs20",
+      "runtime": "nodejs22",
       "region": "us-central1",
       "trigger": {
         "type": "event",
@@ -2119,7 +2189,7 @@
     {
       "name": "onStoryNotificationWrite",
       "source": "server/functions/gift-story-automation.js#onStoryNotificationWrite",
-      "runtime": "nodejs20",
+      "runtime": "nodejs22",
       "region": "us-central1",
       "trigger": {
         "type": "event",
@@ -2134,7 +2204,7 @@
     {
       "name": "onSupportTicketCreated",
       "source": "server/functions/platform-notifications.js#onSupportTicketCreated",
-      "runtime": "nodejs20",
+      "runtime": "nodejs22",
       "region": "us-central1",
       "trigger": {
         "type": "event",
@@ -2149,7 +2219,7 @@
     {
       "name": "operationsHealthRepair",
       "source": "server/functions/operations-health-centre.js#operationsHealthRepair",
-      "runtime": "nodejs20",
+      "runtime": "nodejs22",
       "region": "us-central1",
       "trigger": {
         "type": "callable"
@@ -2161,7 +2231,7 @@
     {
       "name": "operationsHealthScan",
       "source": "server/functions/operations-health-centre.js#operationsHealthScan",
-      "runtime": "nodejs20",
+      "runtime": "nodejs22",
       "region": "us-central1",
       "trigger": {
         "type": "callable"
@@ -2173,7 +2243,7 @@
     {
       "name": "pipelineHealthReset",
       "source": "server/functions/delivery-cleanup.js#pipelineHealthReset",
-      "runtime": "nodejs20",
+      "runtime": "nodejs22",
       "region": "us-central1",
       "trigger": {
         "type": "callable"
@@ -2185,7 +2255,7 @@
     {
       "name": "previewSenderCancellation",
       "source": "server/functions/delivery-policy.js#previewSenderCancellation",
-      "runtime": "nodejs20",
+      "runtime": "nodejs22",
       "region": "us-central1",
       "trigger": {
         "type": "callable"
@@ -2197,7 +2267,7 @@
     {
       "name": "processHealthPlusReminders",
       "source": "server/functions/health-plus-operations.js#processHealthPlusReminders",
-      "runtime": "nodejs20",
+      "runtime": "nodejs22",
       "region": "us-central1",
       "trigger": {
         "type": "schedule",
@@ -2211,7 +2281,7 @@
     {
       "name": "purgeFounderTestPipeline",
       "source": "server/functions/delivery-cleanup.js#purgeFounderTestPipeline",
-      "runtime": "nodejs20",
+      "runtime": "nodejs22",
       "region": "us-central1",
       "trigger": {
         "type": "callable"
@@ -2223,7 +2293,7 @@
     {
       "name": "reconcileStaleDeliveryLocks",
       "source": "server/functions/stale-delivery.js#reconcileStaleDeliveryLocks",
-      "runtime": "nodejs20",
+      "runtime": "nodejs22",
       "region": "us-central1",
       "trigger": {
         "type": "schedule",
@@ -2237,7 +2307,7 @@
     {
       "name": "recordArrivalZoneCheck",
       "source": "server/functions/delivery-policy.js#recordArrivalZoneCheck",
-      "runtime": "nodejs20",
+      "runtime": "nodejs22",
       "region": "us-central1",
       "trigger": {
         "type": "callable"
@@ -2249,7 +2319,7 @@
     {
       "name": "recordBusinessIrisMoment",
       "source": "server/functions/business-access.js#recordBusinessIrisMoment",
-      "runtime": "nodejs20",
+      "runtime": "nodejs22",
       "region": "us-central1",
       "trigger": {
         "type": "callable"
@@ -2261,7 +2331,7 @@
     {
       "name": "recordCustomerArrivalResponse",
       "source": "server/functions/delivery-policy.js#recordCustomerArrivalResponse",
-      "runtime": "nodejs20",
+      "runtime": "nodejs22",
       "region": "us-central1",
       "trigger": {
         "type": "callable"
@@ -2273,7 +2343,7 @@
     {
       "name": "recordDeliveryEvidence",
       "source": "server/functions/delivery-evidence.js#recordDeliveryEvidence",
-      "runtime": "nodejs20",
+      "runtime": "nodejs22",
       "region": "us-central1",
       "trigger": {
         "type": "callable"
@@ -2292,7 +2362,7 @@
     {
       "name": "recordGiftStoryEvent",
       "source": "server/functions/gift-story-automation.js#recordGiftStoryEvent",
-      "runtime": "nodejs20",
+      "runtime": "nodejs22",
       "region": "us-central1",
       "trigger": {
         "type": "callable"
@@ -2304,7 +2374,7 @@
     {
       "name": "recordGiftStoryGuestEvent",
       "source": "server/functions/gift-story-automation.js#recordGiftStoryGuestEvent",
-      "runtime": "nodejs20",
+      "runtime": "nodejs22",
       "region": "us-central1",
       "trigger": {
         "type": "https"
@@ -2316,7 +2386,7 @@
     {
       "name": "recordIrisLearningCandidate",
       "source": "server/functions/sender-account.js#recordIrisLearningCandidate",
-      "runtime": "nodejs20",
+      "runtime": "nodejs22",
       "region": "us-central1",
       "trigger": {
         "type": "callable"
@@ -2328,7 +2398,7 @@
     {
       "name": "recordIrisLearningOutlier",
       "source": "server/functions/sender-account.js#recordIrisLearningOutlier",
-      "runtime": "nodejs20",
+      "runtime": "nodejs22",
       "region": "us-central1",
       "trigger": {
         "type": "callable"
@@ -2340,7 +2410,7 @@
     {
       "name": "recordRiderArrival",
       "source": "server/functions/delivery-policy.js#recordRiderArrival",
-      "runtime": "nodejs20",
+      "runtime": "nodejs22",
       "region": "us-central1",
       "trigger": {
         "type": "callable"
@@ -2352,7 +2422,7 @@
     {
       "name": "recordRiderJobDecision",
       "source": "server/functions/rider-account.js#recordRiderJobDecision",
-      "runtime": "nodejs20",
+      "runtime": "nodejs22",
       "region": "us-central1",
       "trigger": {
         "type": "callable"
@@ -2364,7 +2434,7 @@
     {
       "name": "recordWebsiteVisit",
       "source": "server/functions/sender-account.js#recordWebsiteVisit",
-      "runtime": "nodejs20",
+      "runtime": "nodejs22",
       "region": "us-central1",
       "trigger": {
         "type": "callable"
@@ -2376,7 +2446,7 @@
     {
       "name": "recoverIneligibleSenderDelivery",
       "source": "server/functions/sender-booking.js#recoverIneligibleSenderDelivery",
-      "runtime": "nodejs20",
+      "runtime": "nodejs22",
       "region": "us-central1",
       "trigger": {
         "type": "callable"
@@ -2395,7 +2465,7 @@
     {
       "name": "redactLegacyPayoutBankFields",
       "source": "server/functions/rider-connect.js#redactLegacyPayoutBankFields",
-      "runtime": "nodejs20",
+      "runtime": "nodejs22",
       "region": "us-central1",
       "trigger": {
         "type": "callable"
@@ -2407,7 +2477,7 @@
     {
       "name": "redeemGiftCard",
       "source": "server/functions/roth-ledger.js#redeemGiftCard",
-      "runtime": "nodejs20",
+      "runtime": "nodejs22",
       "region": "us-central1",
       "trigger": {
         "type": "callable"
@@ -2419,7 +2489,7 @@
     {
       "name": "refreshStripeOnboardingLink",
       "source": "server/functions/rider-connect.js#refreshStripeOnboardingLink",
-      "runtime": "nodejs20",
+      "runtime": "nodejs22",
       "region": "us-central1",
       "trigger": {
         "type": "callable"
@@ -2431,7 +2501,7 @@
     {
       "name": "removeBusinessMember",
       "source": "server/functions/business-access.js#removeBusinessMember",
-      "runtime": "nodejs20",
+      "runtime": "nodejs22",
       "region": "us-central1",
       "trigger": {
         "type": "callable"
@@ -2443,7 +2513,7 @@
     {
       "name": "reportCircumMessage",
       "source": "server/functions/communication-engine.js#reportCircumMessage",
-      "runtime": "nodejs20",
+      "runtime": "nodejs22",
       "region": "us-central1",
       "trigger": {
         "type": "callable"
@@ -2455,7 +2525,7 @@
     {
       "name": "reportLoadDiscrepancy",
       "source": "server/functions/delivery-adjustments.js#reportLoadDiscrepancy",
-      "runtime": "nodejs20",
+      "runtime": "nodejs22",
       "region": "us-central1",
       "trigger": {
         "type": "callable"
@@ -2467,7 +2537,7 @@
     {
       "name": "reportRating",
       "source": "server/functions/ratings-tipping.js#reportRating",
-      "runtime": "nodejs20",
+      "runtime": "nodejs22",
       "region": "us-central1",
       "trigger": {
         "type": "callable"
@@ -2479,7 +2549,7 @@
     {
       "name": "reportWaitingContext",
       "source": "server/functions/delivery-policy.js#reportWaitingContext",
-      "runtime": "nodejs20",
+      "runtime": "nodejs22",
       "region": "us-central1",
       "trigger": {
         "type": "callable"
@@ -2491,7 +2561,7 @@
     {
       "name": "requestBusinessAccess",
       "source": "server/functions/business-access.js#requestBusinessAccess",
-      "runtime": "nodejs20",
+      "runtime": "nodejs22",
       "region": "us-central1",
       "trigger": {
         "type": "callable"
@@ -2503,7 +2573,7 @@
     {
       "name": "requestRiderEmailChange",
       "source": "server/functions/rider-account.js#requestRiderEmailChange",
-      "runtime": "nodejs20",
+      "runtime": "nodejs22",
       "region": "us-central1",
       "trigger": {
         "type": "callable"
@@ -2515,7 +2585,7 @@
     {
       "name": "requestRiderWithdrawal",
       "source": "server/functions/rider-connect.js#requestRiderWithdrawal",
-      "runtime": "nodejs20",
+      "runtime": "nodejs22",
       "region": "us-central1",
       "trigger": {
         "type": "callable"
@@ -2527,7 +2597,7 @@
     {
       "name": "requestSenderCancellation",
       "source": "server/functions/delivery-policy.js#requestSenderCancellation",
-      "runtime": "nodejs20",
+      "runtime": "nodejs22",
       "region": "us-central1",
       "trigger": {
         "type": "callable"
@@ -2539,7 +2609,7 @@
     {
       "name": "requestSenderEmailChange",
       "source": "server/functions/sender-account.js#requestSenderEmailChange",
-      "runtime": "nodejs20",
+      "runtime": "nodejs22",
       "region": "us-central1",
       "trigger": {
         "type": "callable"
@@ -2551,7 +2621,7 @@
     {
       "name": "requestSenderWalletDebit",
       "source": "server/functions/roth-ledger.js#requestSenderWalletDebit",
-      "runtime": "nodejs20",
+      "runtime": "nodejs22",
       "region": "us-central1",
       "trigger": {
         "type": "callable"
@@ -2563,7 +2633,7 @@
     {
       "name": "requestSenderWalletRefund",
       "source": "server/functions/roth-ledger.js#requestSenderWalletRefund",
-      "runtime": "nodejs20",
+      "runtime": "nodejs22",
       "region": "us-central1",
       "trigger": {
         "type": "callable"
@@ -2575,7 +2645,7 @@
     {
       "name": "resetHealthPlusMonthlyUsage",
       "source": "server/functions/health-plus-operations.js#resetHealthPlusMonthlyUsage",
-      "runtime": "nodejs20",
+      "runtime": "nodejs22",
       "region": "us-central1",
       "trigger": {
         "type": "schedule",
@@ -2589,7 +2659,7 @@
     {
       "name": "resetRiderTestStripeAccount",
       "source": "server/functions/rider-connect.js#resetRiderTestStripeAccount",
-      "runtime": "nodejs20",
+      "runtime": "nodejs22",
       "region": "us-central1",
       "trigger": {
         "type": "callable"
@@ -2601,7 +2671,7 @@
     {
       "name": "resolveGiftStoryAccess",
       "source": "server/functions/gift-story-automation.js#resolveGiftStoryAccess",
-      "runtime": "nodejs20",
+      "runtime": "nodejs22",
       "region": "us-central1",
       "trigger": {
         "type": "callable"
@@ -2611,9 +2681,20 @@
       "releaseSha": "SELF"
     },
     {
+      "name": "resolveOperationalIncident",
+      "source": "server/functions/delivery-watchdog.js#resolveOperationalIncident",
+      "runtime": "nodejs22",
+      "region": "us-central1",
+      "trigger": {
+        "type": "callable"
+      },
+      "state": "ACTIVE",
+      "releaseSha": "SELF"
+    },
+    {
       "name": "resolveStaleDeliveryLock",
       "source": "server/functions/stale-delivery.js#resolveStaleDeliveryLock",
-      "runtime": "nodejs20",
+      "runtime": "nodejs22",
       "region": "us-central1",
       "trigger": {
         "type": "callable"
@@ -2625,7 +2706,7 @@
     {
       "name": "resolveUkAddressPlace",
       "source": "server/functions/free-address-search.js#resolveUkAddressPlace",
-      "runtime": "nodejs20",
+      "runtime": "nodejs22",
       "region": "us-central1",
       "trigger": {
         "type": "callable"
@@ -2637,7 +2718,7 @@
     {
       "name": "RetrieveCardDetails",
       "source": "server/functions/legacy-financial-endpoints.js#RetrieveCardDetails",
-      "runtime": "nodejs20",
+      "runtime": "nodejs22",
       "region": "us-central1",
       "trigger": {
         "type": "https"
@@ -2649,7 +2730,7 @@
     {
       "name": "retryGiftStoryAutomation",
       "source": "server/functions/gift-story-automation.js#retryGiftStoryAutomation",
-      "runtime": "nodejs20",
+      "runtime": "nodejs22",
       "region": "us-central1",
       "trigger": {
         "type": "callable"
@@ -2661,7 +2742,7 @@
     {
       "name": "retryNotificationDelivery",
       "source": "server/functions/communication-engine.js#retryNotificationDelivery",
-      "runtime": "nodejs20",
+      "runtime": "nodejs22",
       "region": "us-central1",
       "trigger": {
         "type": "callable"
@@ -2673,7 +2754,7 @@
     {
       "name": "reviewBusinessAccessRequest",
       "source": "server/functions/business-access.js#reviewBusinessAccessRequest",
-      "runtime": "nodejs20",
+      "runtime": "nodejs22",
       "region": "us-central1",
       "trigger": {
         "type": "callable"
@@ -2685,7 +2766,7 @@
     {
       "name": "reviewDeliveryAdjustment",
       "source": "server/functions/delivery-adjustments.js#reviewDeliveryAdjustment",
-      "runtime": "nodejs20",
+      "runtime": "nodejs22",
       "region": "us-central1",
       "trigger": {
         "type": "callable"
@@ -2695,9 +2776,20 @@
       "releaseSha": "SELF"
     },
     {
+      "name": "reviewMarketplaceRiskFlag",
+      "source": "server/functions/marketplace-intelligence.js#reviewMarketplaceRiskFlag",
+      "runtime": "nodejs22",
+      "region": "us-central1",
+      "trigger": {
+        "type": "callable"
+      },
+      "state": "ACTIVE",
+      "releaseSha": "SELF"
+    },
+    {
       "name": "revokeRecognition",
       "source": "server/functions/legends.js#revokeRecognition",
-      "runtime": "nodejs20",
+      "runtime": "nodejs22",
       "region": "us-central1",
       "trigger": {
         "type": "callable"
@@ -2709,7 +2801,7 @@
     {
       "name": "riderPayoutReadiness",
       "source": "server/functions/rider-connect.js#riderPayoutReadiness",
-      "runtime": "nodejs20",
+      "runtime": "nodejs22",
       "region": "us-central1",
       "trigger": {
         "type": "callable"
@@ -2719,9 +2811,20 @@
       "releaseSha": "SELF"
     },
     {
+      "name": "saveBusinessCustomRole",
+      "source": "server/functions/business-custom-roles.js#saveBusinessCustomRole",
+      "runtime": "nodejs22",
+      "region": "us-central1",
+      "trigger": {
+        "type": "callable"
+      },
+      "state": "ACTIVE",
+      "releaseSha": "SELF"
+    },
+    {
       "name": "saveGiftStoryToVault",
       "source": "server/functions/gift-story-automation.js#saveGiftStoryToVault",
-      "runtime": "nodejs20",
+      "runtime": "nodejs22",
       "region": "us-central1",
       "trigger": {
         "type": "callable"
@@ -2733,7 +2836,7 @@
     {
       "name": "saveSenderCheckoutPreference",
       "source": "server/functions/sender-finance.js#saveSenderCheckoutPreference",
-      "runtime": "nodejs20",
+      "runtime": "nodejs22",
       "region": "us-central1",
       "trigger": {
         "type": "callable"
@@ -2745,7 +2848,7 @@
     {
       "name": "saveSenderDraft",
       "source": "server/functions/sender-booking.js#saveSenderDraft",
-      "runtime": "nodejs20",
+      "runtime": "nodejs22",
       "region": "us-central1",
       "trigger": {
         "type": "callable"
@@ -2757,7 +2860,7 @@
     {
       "name": "saveSenderSavedAddress",
       "source": "server/functions/sender-saved-addresses.js#saveSenderSavedAddress",
-      "runtime": "nodejs20",
+      "runtime": "nodejs22",
       "region": "us-central1",
       "trigger": {
         "type": "callable"
@@ -2769,7 +2872,7 @@
     {
       "name": "scheduledRiderEarningsReconciliation",
       "source": "server/functions/rider-earnings-summary.js#scheduledRiderEarningsReconciliation",
-      "runtime": "nodejs20",
+      "runtime": "nodejs22",
       "region": "us-central1",
       "trigger": {
         "type": "schedule",
@@ -2783,7 +2886,7 @@
     {
       "name": "scheduledRiderStripeStatusSync",
       "source": "server/functions/rider-connect.js#scheduledRiderStripeStatusSync",
-      "runtime": "nodejs20",
+      "runtime": "nodejs22",
       "region": "us-central1",
       "trigger": {
         "type": "schedule",
@@ -2797,7 +2900,7 @@
     {
       "name": "searchFreeUkAddresses",
       "source": "server/functions/free-address-search.js#searchFreeUkAddresses",
-      "runtime": "nodejs20",
+      "runtime": "nodejs22",
       "region": "us-central1",
       "trigger": {
         "type": "callable"
@@ -2809,7 +2912,7 @@
     {
       "name": "sendCircumAnnouncement",
       "source": "server/functions/communication-engine.js#sendCircumAnnouncement",
-      "runtime": "nodejs20",
+      "runtime": "nodejs22",
       "region": "us-central1",
       "trigger": {
         "type": "callable"
@@ -2821,7 +2924,7 @@
     {
       "name": "sendCircumMessage",
       "source": "server/functions/communication-engine.js#sendCircumMessage",
-      "runtime": "nodejs20",
+      "runtime": "nodejs22",
       "region": "us-central1",
       "trigger": {
         "type": "callable"
@@ -2833,7 +2936,7 @@
     {
       "name": "sendMessage",
       "source": "server/functions/index.js#sendMessage",
-      "runtime": "nodejs20",
+      "runtime": "nodejs22",
       "region": "us-central1",
       "trigger": {
         "type": "callable"
@@ -2845,7 +2948,7 @@
     {
       "name": "sendPackage",
       "source": "server/functions/index.js#sendPackage",
-      "runtime": "nodejs20",
+      "runtime": "nodejs22",
       "region": "us-central1",
       "trigger": {
         "type": "callable"
@@ -2857,7 +2960,7 @@
     {
       "name": "sendRiderUpdate",
       "source": "server/functions/index.js#sendRiderUpdate",
-      "runtime": "nodejs20",
+      "runtime": "nodejs22",
       "region": "us-central1",
       "trigger": {
         "type": "callable"
@@ -2869,7 +2972,7 @@
     {
       "name": "setConversationTyping",
       "source": "server/functions/communication-engine.js#setConversationTyping",
-      "runtime": "nodejs20",
+      "runtime": "nodejs22",
       "region": "us-central1",
       "trigger": {
         "type": "callable"
@@ -2881,7 +2984,7 @@
     {
       "name": "setDefaultSenderPaymentMethod",
       "source": "server/functions/sender-finance.js#setDefaultSenderPaymentMethod",
-      "runtime": "nodejs20",
+      "runtime": "nodejs22",
       "region": "us-central1",
       "trigger": {
         "type": "callable"
@@ -2893,7 +2996,7 @@
     {
       "name": "setFounderRiderAccess",
       "source": "server/functions/founder-rider-access.js#setFounderRiderAccess",
-      "runtime": "nodejs20",
+      "runtime": "nodejs22",
       "region": "us-central1",
       "trigger": {
         "type": "callable"
@@ -2905,7 +3008,7 @@
     {
       "name": "settleScheduledRoadChargeCashRefund",
       "source": "server/functions/scheduled-road-charge-refunds.js#settleScheduledRoadChargeCashRefund",
-      "runtime": "nodejs20",
+      "runtime": "nodejs22",
       "region": "us-central1",
       "trigger": {
         "type": "callable"
@@ -2917,7 +3020,7 @@
     {
       "name": "setWalletFrozen",
       "source": "server/functions/roth-ledger.js#setWalletFrozen",
-      "runtime": "nodejs20",
+      "runtime": "nodejs22",
       "region": "us-central1",
       "trigger": {
         "type": "callable"
@@ -2929,7 +3032,7 @@
     {
       "name": "startAdminConversation",
       "source": "server/functions/communication-engine.js#startAdminConversation",
-      "runtime": "nodejs20",
+      "runtime": "nodejs22",
       "region": "us-central1",
       "trigger": {
         "type": "callable"
@@ -2941,7 +3044,7 @@
     {
       "name": "StripeWebhook",
       "source": "server/functions/index.js#StripeWebhook",
-      "runtime": "nodejs20",
+      "runtime": "nodejs22",
       "region": "us-central1",
       "trigger": {
         "type": "https"
@@ -2953,7 +3056,7 @@
     {
       "name": "submitDeliveryRating",
       "source": "server/functions/ratings-tipping.js#submitDeliveryRating",
-      "runtime": "nodejs20",
+      "runtime": "nodejs22",
       "region": "us-central1",
       "trigger": {
         "type": "callable"
@@ -2965,7 +3068,7 @@
     {
       "name": "submitDeliveryTip",
       "source": "server/functions/ratings-tipping.js#submitDeliveryTip",
-      "runtime": "nodejs20",
+      "runtime": "nodejs22",
       "region": "us-central1",
       "trigger": {
         "type": "callable"
@@ -2977,7 +3080,7 @@
     {
       "name": "submitGiftStoryThankYou",
       "source": "server/functions/gift-story-automation.js#submitGiftStoryThankYou",
-      "runtime": "nodejs20",
+      "runtime": "nodejs22",
       "region": "us-central1",
       "trigger": {
         "type": "https"
@@ -2989,7 +3092,7 @@
     {
       "name": "submitRiderApplication",
       "source": "server/functions/rider-account.js#submitRiderApplication",
-      "runtime": "nodejs20",
+      "runtime": "nodejs22",
       "region": "us-central1",
       "trigger": {
         "type": "callable"
@@ -3001,7 +3104,7 @@
     {
       "name": "submitRiderDocument",
       "source": "server/functions/rider-account.js#submitRiderDocument",
-      "runtime": "nodejs20",
+      "runtime": "nodejs22",
       "region": "us-central1",
       "trigger": {
         "type": "callable"
@@ -3013,7 +3116,7 @@
     {
       "name": "submitWebsiteSupportRequest",
       "source": "server/functions/communication-engine.js#submitWebsiteSupportRequest",
-      "runtime": "nodejs20",
+      "runtime": "nodejs22",
       "region": "us-central1",
       "trigger": {
         "type": "callable"
@@ -3025,7 +3128,7 @@
     {
       "name": "syncSenderTrustBaseline",
       "source": "server/functions/sender-trust.js#syncSenderTrustBaseline",
-      "runtime": "nodejs20",
+      "runtime": "nodejs22",
       "region": "us-central1",
       "trigger": {
         "type": "callable"
@@ -3037,7 +3140,7 @@
     {
       "name": "syncStripeConnectStatus",
       "source": "server/functions/rider-connect.js#syncStripeConnectStatus",
-      "runtime": "nodejs20",
+      "runtime": "nodejs22",
       "region": "us-central1",
       "trigger": {
         "type": "callable"
@@ -3047,9 +3150,20 @@
       "releaseSha": "SELF"
     },
     {
+      "name": "updateBusinessDeliveryNotes",
+      "source": "server/functions/business-mutations.js#updateBusinessDeliveryNotes",
+      "runtime": "nodejs22",
+      "region": "us-central1",
+      "trigger": {
+        "type": "callable"
+      },
+      "state": "ACTIVE",
+      "releaseSha": "SELF"
+    },
+    {
       "name": "updateBusinessMemberRole",
       "source": "server/functions/business-access.js#updateBusinessMemberRole",
-      "runtime": "nodejs20",
+      "runtime": "nodejs22",
       "region": "us-central1",
       "trigger": {
         "type": "callable"
@@ -3061,7 +3175,7 @@
     {
       "name": "updateBusinessMemberStatus",
       "source": "server/functions/business-access.js#updateBusinessMemberStatus",
-      "runtime": "nodejs20",
+      "runtime": "nodejs22",
       "region": "us-central1",
       "trigger": {
         "type": "callable"
@@ -3073,7 +3187,7 @@
     {
       "name": "updateBusinessProfile",
       "source": "server/functions/business-access.js#updateBusinessProfile",
-      "runtime": "nodejs20",
+      "runtime": "nodejs22",
       "region": "us-central1",
       "trigger": {
         "type": "callable"
@@ -3085,7 +3199,7 @@
     {
       "name": "updateDeliveryLiveLocation",
       "source": "server/functions/delivery-tracking.js#updateDeliveryLiveLocation",
-      "runtime": "nodejs20",
+      "runtime": "nodejs22",
       "region": "us-central1",
       "trigger": {
         "type": "callable"
@@ -3097,7 +3211,7 @@
     {
       "name": "updateDeliveryTrackingStatus",
       "source": "server/functions/delivery-tracking.js#updateDeliveryTrackingStatus",
-      "runtime": "nodejs20",
+      "runtime": "nodejs22",
       "region": "us-central1",
       "trigger": {
         "type": "callable"
@@ -3109,7 +3223,7 @@
     {
       "name": "updateGiftStoryPrivacy",
       "source": "server/functions/gift-story-automation.js#updateGiftStoryPrivacy",
-      "runtime": "nodejs20",
+      "runtime": "nodejs22",
       "region": "us-central1",
       "trigger": {
         "type": "callable"
@@ -3121,7 +3235,7 @@
     {
       "name": "updateHealthPlusPickupStatus",
       "source": "server/functions/health-plus.js#updateHealthPlusPickupStatus",
-      "runtime": "nodejs20",
+      "runtime": "nodejs22",
       "region": "us-central1",
       "trigger": {
         "type": "https"
@@ -3133,7 +3247,7 @@
     {
       "name": "updateRiderApplicationSection",
       "source": "server/functions/rider-account.js#updateRiderApplicationSection",
-      "runtime": "nodejs20",
+      "runtime": "nodejs22",
       "region": "us-central1",
       "trigger": {
         "type": "callable"
@@ -3145,7 +3259,7 @@
     {
       "name": "updateRiderNotificationState",
       "source": "server/functions/rider-account.js#updateRiderNotificationState",
-      "runtime": "nodejs20",
+      "runtime": "nodejs22",
       "region": "us-central1",
       "trigger": {
         "type": "callable"
@@ -3157,7 +3271,7 @@
     {
       "name": "updateRiderPresence",
       "source": "server/functions/rider-presence.js#updateRiderPresence",
-      "runtime": "nodejs20",
+      "runtime": "nodejs22",
       "region": "us-central1",
       "trigger": {
         "type": "callable"
@@ -3169,7 +3283,7 @@
     {
       "name": "updateRiderProfile",
       "source": "server/functions/rider-account.js#updateRiderProfile",
-      "runtime": "nodejs20",
+      "runtime": "nodejs22",
       "region": "us-central1",
       "trigger": {
         "type": "callable"
@@ -3181,7 +3295,7 @@
     {
       "name": "updateRiderPushToken",
       "source": "server/functions/rider-account.js#updateRiderPushToken",
-      "runtime": "nodejs20",
+      "runtime": "nodejs22",
       "region": "us-central1",
       "trigger": {
         "type": "callable"
@@ -3193,7 +3307,7 @@
     {
       "name": "updateSenderHealthPlusBooking",
       "source": "server/functions/health-plus.js#updateSenderHealthPlusBooking",
-      "runtime": "nodejs20",
+      "runtime": "nodejs22",
       "region": "us-central1",
       "trigger": {
         "type": "callable"
@@ -3205,7 +3319,7 @@
     {
       "name": "updateSenderLocation",
       "source": "server/functions/sender-account.js#updateSenderLocation",
-      "runtime": "nodejs20",
+      "runtime": "nodejs22",
       "region": "us-central1",
       "trigger": {
         "type": "callable"
@@ -3217,7 +3331,7 @@
     {
       "name": "updateSenderNotificationState",
       "source": "server/functions/sender-account.js#updateSenderNotificationState",
-      "runtime": "nodejs20",
+      "runtime": "nodejs22",
       "region": "us-central1",
       "trigger": {
         "type": "callable"
@@ -3229,7 +3343,7 @@
     {
       "name": "updateSenderProfile",
       "source": "server/functions/sender-account.js#updateSenderProfile",
-      "runtime": "nodejs20",
+      "runtime": "nodejs22",
       "region": "us-central1",
       "trigger": {
         "type": "callable"
@@ -3241,7 +3355,7 @@
     {
       "name": "updateSenderProfilePhoto",
       "source": "server/functions/sender-account.js#updateSenderProfilePhoto",
-      "runtime": "nodejs20",
+      "runtime": "nodejs22",
       "region": "us-central1",
       "trigger": {
         "type": "callable"
@@ -3253,7 +3367,7 @@
     {
       "name": "updateSenderPushToken",
       "source": "server/functions/sender-account.js#updateSenderPushToken",
-      "runtime": "nodejs20",
+      "runtime": "nodejs22",
       "region": "us-central1",
       "trigger": {
         "type": "callable"
@@ -3265,57 +3379,12 @@
     {
       "name": "updateSupportConversationStatus",
       "source": "server/functions/communication-engine.js#updateSupportConversationStatus",
-      "runtime": "nodejs20",
+      "runtime": "nodejs22",
       "region": "us-central1",
       "trigger": {
         "type": "callable"
       },
       "productionSourceHash": "470c1dc565cbba354f8ffddcd67f5c932b37c8cb",
-      "state": "ACTIVE",
-      "releaseSha": "SELF"
-    },
-    {
-      "name": "assignBusinessCustomRole",
-      "source": "server/functions/business-custom-roles.js#assignBusinessCustomRole",
-      "runtime": "nodejs22",
-      "region": "us-central1",
-      "trigger": {"type": "callable"},
-      "state": "ACTIVE",
-      "releaseSha": "SELF"
-    },
-    {
-      "name": "deleteBusinessCustomRole",
-      "source": "server/functions/business-custom-roles.js#deleteBusinessCustomRole",
-      "runtime": "nodejs22",
-      "region": "us-central1",
-      "trigger": {"type": "callable"},
-      "state": "ACTIVE",
-      "releaseSha": "SELF"
-    },
-    {
-      "name": "getCustomerDeliveryTrust",
-      "source": "server/functions/customer-delivery-trust.js#getCustomerDeliveryTrust",
-      "runtime": "nodejs22",
-      "region": "us-central1",
-      "trigger": {"type": "callable"},
-      "state": "ACTIVE",
-      "releaseSha": "SELF"
-    },
-    {
-      "name": "listBusinessCustomRoles",
-      "source": "server/functions/business-custom-roles.js#listBusinessCustomRoles",
-      "runtime": "nodejs22",
-      "region": "us-central1",
-      "trigger": {"type": "callable"},
-      "state": "ACTIVE",
-      "releaseSha": "SELF"
-    },
-    {
-      "name": "saveBusinessCustomRole",
-      "source": "server/functions/business-custom-roles.js#saveBusinessCustomRole",
-      "runtime": "nodejs22",
-      "region": "us-central1",
-      "trigger": {"type": "callable"},
       "state": "ACTIVE",
       "releaseSha": "SELF"
     }

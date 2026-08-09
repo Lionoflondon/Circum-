@@ -10,12 +10,14 @@ const REPORTING_ROLES = new Set([
 
 const BUSINESS_PERMISSION_KEYS = new Set([
   "deliveries.view", "deliveries.create", "deliveries.cancel",
+  "deliveries.notes.modify",
   "deliveries.status", "deliveries.rider_progress", "deliveries.evidence",
   "deliveries.support", "finance.invoices.view", "finance.invoices.download",
-  "finance.payments.view", "finance.roth.use", "finance.reports.export",
+  "finance.payments.view", "finance.payments.initiate", "finance.roth.use",
+  "finance.reports.export",
   "team.invite", "team.remove", "team.roles.assign", "reports.view",
   "reports.export", "operations.active_deliveries", "operations.incidents",
-  "operations.support",
+  "operations.incidents.acknowledge", "operations.support",
 ]);
 
 function normalizedPermissions(values) {
@@ -67,6 +69,30 @@ function businessAuthority(account = {}, {uid, email, customPermissions = []} = 
   };
 }
 
+function canonicalMember(account = {}, uid, email) {
+  const members = Array.isArray(account.teamMembers) ? account.teamMembers : [];
+  return members.find((item) => identityMatches(item || {}, uid, email) &&
+    !["removed", "rejected", "suspended"].includes(normalized(item.status))) || null;
+}
+
+async function resolveBusinessAuthority(db, account = {}, businessId, identity = {}) {
+  const member = canonicalMember(account, identity.uid, identity.email);
+  let customPermissions = [];
+  if (member && normalized(member.role) === "custom" && `${member.customRoleId || ""}`.trim()) {
+    const role = await db.collection("businessCustomRoles").doc(`${member.customRoleId}`.trim()).get();
+    if (role.exists && normalized(role.data().businessId) === normalized(businessId)) {
+      customPermissions = role.data().permissions;
+    }
+  }
+  return businessAuthority(account, {...identity, customPermissions});
+}
+
+function hasBusinessPermission(authority, permission, systemRoles = []) {
+  if (!authority || !authority.member) return false;
+  if (systemRoles.includes(authority.role)) return true;
+  return authority.role === "custom" && authority.permissions.includes(permission);
+}
+
 module.exports = {
   businessAuthority,
   canonicalMemberRole,
@@ -75,4 +101,7 @@ module.exports = {
   REPORTING_ROLES,
   BUSINESS_PERMISSION_KEYS,
   normalizedPermissions,
+  canonicalMember,
+  resolveBusinessAuthority,
+  hasBusinessPermission,
 };

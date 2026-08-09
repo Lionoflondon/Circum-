@@ -10,7 +10,7 @@ const {
 const {requireAdmin} = require("./admin-auth");
 const {calculateWalletCheckout} = require("./wallet-core");
 const communicationEngine = require("./communication-engine");
-const {businessAuthority} = require("./business-authority");
+const {resolveBusinessAuthority, hasBusinessPermission} = require("./business-authority");
 
 function money(value) {
   const parsed = Number(value || 0);
@@ -40,7 +40,7 @@ function normaliseLineItems(items, fallbackDescription, total) {
   }];
 }
 
-async function requireBusinessMember(businessId, context, {financial = false} = {}) {
+async function requireBusinessMember(businessId, context, {permission = null} = {}) {
   if (!context.auth) {
     throw new functions.https.HttpsError("unauthenticated", "Sign in to continue.");
   }
@@ -49,11 +49,15 @@ async function requireBusinessMember(businessId, context, {financial = false} = 
     throw new functions.https.HttpsError("not-found", "Business account not found.");
   }
   const account = snap.data() || {};
-  const authority = businessAuthority(account, {
+  const authority = await resolveBusinessAuthority(getFirestore(), account, businessId, {
     uid: context.auth.uid,
     email: context.auth.token && context.auth.token.email,
   });
-  if (!authority.member || financial && !authority.financialAuthorized) {
+  if (!authority.member || permission && !hasBusinessPermission(
+      authority,
+      permission,
+      ["owner", "admin", "manager", "finance"],
+  )) {
     throw new functions.https.HttpsError("permission-denied", "You do not have access to this Business account.");
   }
   return {id: snap.id, ...account, authority};
@@ -469,7 +473,9 @@ exports.createBusinessRothCheckout = (stripe) => functions.runWith({enforceAppCh
   if (!businessId || amount < 1) {
     throw new functions.https.HttpsError("invalid-argument", "Choose a valid Business account and Roth amount.");
   }
-  const account = await requireBusinessMember(businessId, context, {financial: true});
+  const account = await requireBusinessMember(businessId, context, {
+    permission: "finance.payments.initiate",
+  });
   const db = getFirestore();
   const purchaseRef = db.collection("businessRothPurchases").doc();
   const baseUrl = `${data.returnUrl || "https://circumuk.com/?app=business&section=invoicing"}`;
@@ -527,7 +533,9 @@ exports.createBusinessInvoiceCheckout = (stripe) => functions.runWith({enforceAp
   if (!businessId || !invoiceId) {
     throw new functions.https.HttpsError("invalid-argument", "Choose a valid Business invoice.");
   }
-  await requireBusinessMember(businessId, context, {financial: true});
+  await requireBusinessMember(businessId, context, {
+    permission: "finance.payments.initiate",
+  });
   const db = getFirestore();
   const invoiceSnap = await db.collection("businessInvoices").doc(invoiceId).get();
   if (!invoiceSnap.exists) {
@@ -543,6 +551,11 @@ exports.createBusinessInvoiceCheckout = (stripe) => functions.runWith({enforceAp
     throw new functions.https.HttpsError("invalid-argument", "Payment amount must be greater than zero and no more than the invoice balance.");
   }
   const useRoth = data.useRoth === true;
+  if (useRoth) {
+    await requireBusinessMember(businessId, context, {
+      permission: "finance.roth.use",
+    });
+  }
   const walletSnap = await db.collection("business_wallets").doc(businessId).get();
   const wallet = walletSnap.exists ? walletSnap.data() || {} : {};
   const walletBalance = useRoth && `${wallet.status || "active"}` === "active" ? money(wallet.balance || wallet.availableBalance) : 0;

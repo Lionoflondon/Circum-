@@ -13,6 +13,7 @@ const {dispatchDeliveryRequest} = require("./send-package");
 const {getAuthoritativeRouteFacts} = require("./route-authority");
 const {evaluateRoadChargePolicy} = require("./road-charge-policy");
 const {resolveCanonicalAddressPair, canonicalAddressPair, sameCanonicalAddress} = require("./canonical-address-authority");
+const {resolveBusinessAuthority, hasBusinessPermission} = require("./business-authority");
 
 const BASE_FARE_GBP = 5;
 const ADDITIONAL_FARE_PER_MILE_GBP = 1.5;
@@ -474,11 +475,15 @@ async function verifiedBusinessContext(db, sender, rawContext) {
   }
   const account = accountSnap.data() || {};
   const email = sender.email.trim().toLowerCase();
-  const members = Array.isArray(account.teamMemberIds) ?
-    account.teamMemberIds.map((item) => `${item}`.trim().toLowerCase()) : [];
-  const allowed = account.createdByUserId === sender.uid ||
-    members.includes(sender.uid.toLowerCase()) || (email && members.includes(email));
-  if (!allowed) {
+  const authority = await resolveBusinessAuthority(db, account, businessId, {
+    uid: sender.uid,
+    email,
+  });
+  if (!hasBusinessPermission(
+      authority,
+      "deliveries.create",
+      ["owner", "admin", "manager", "operations", "dispatcher", "finance", "viewer", "member"],
+  )) {
     throw new functions.https.HttpsError("permission-denied", "Business account access is required.");
   }
   return {
@@ -489,6 +494,7 @@ async function verifiedBusinessContext(db, sender, rawContext) {
     billingSource: "business_finance",
     paymentProfileSource: "shared_payment_profile",
     businessMode: true,
+    businessActorRole: authority.role,
   };
 }
 
@@ -1951,6 +1957,19 @@ async function createPaidDeliveryFromSession(stripe, sender, data) {
       createdAt: FieldValue.serverTimestamp(),
       updatedAt: FieldValue.serverTimestamp(),
     }));
+    if (quote.businessMode === true && quote.businessId) {
+      transaction.set(db.collection("businessAuditLogs").doc(), {
+        businessId: quote.businessId,
+        actorUserId: sender.uid,
+        action: "business_delivery_created",
+        targetType: "delivery",
+        targetId: requestId,
+        previousState: null,
+        newState: {status: "requested", quoteId},
+        reason: "Paid Business delivery finalised",
+        createdAt: FieldValue.serverTimestamp(),
+      });
+    }
     if (walletDebitRequired) {
       const now = FieldValue.serverTimestamp();
       const senderWallet = senderWalletSnap && senderWalletSnap.exists ?
