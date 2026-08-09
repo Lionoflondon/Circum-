@@ -76,7 +76,16 @@ async function authorizedAccount(db, businessId, context) {
   const snapshot = await ref.get();
   if (!snapshot.exists) throw new functions.https.HttpsError("not-found", "Business workspace not found.");
   const account = snapshot.data() || {};
-  const authority = businessAuthority(account, {uid, email: context.auth.token.email});
+  const email = context.auth.token.email;
+  const member = (Array.isArray(account.teamMembers) ? account.teamMembers : []).find((item) =>
+    text(item.userId).toLowerCase() === text(uid).toLowerCase() ||
+    Boolean(email && text(item.email).toLowerCase() === text(email).toLowerCase()));
+  let customPermissions = [];
+  if (member && text(member.role).toLowerCase() === "custom" && text(member.customRoleId)) {
+    const role = await db.collection("businessCustomRoles").doc(text(member.customRoleId)).get();
+    if (role.exists && text(role.data().businessId) === businessId) customPermissions = role.data().permissions;
+  }
+  const authority = businessAuthority(account, {uid, email, customPermissions});
   if (!authority.member) throw new functions.https.HttpsError("permission-denied", "Business workspace access is required.");
   return {account, authority};
 }
@@ -137,6 +146,7 @@ exports.getBusinessOperationsWorkspace = functions.runWith({enforceAppCheck: tru
         deliveries: authority.deliveryAuthorized,
         reports: authority.reportingAuthorized,
         finance: authority.financialAuthorized,
+        grants: authority.permissions,
       }};
       if (authority.deliveryAuthorized) {
         const {query, pageSize} = pageQuery(db, businessId, data || {});

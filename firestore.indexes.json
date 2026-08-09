@@ -1,6 +1,14 @@
 {
   "indexes": [
     {
+      "collectionGroup": "businessCustomRoles",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {"fieldPath": "businessId", "order": "ASCENDING"},
+        {"fieldPath": "name", "order": "ASCENDING"}
+      ]
+    },
+    {
       "collectionGroup": "deliveryRequests",
       "queryScope": "COLLECTION",
       "fields": [

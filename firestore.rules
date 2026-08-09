@@ -94,6 +94,17 @@ service cloud.firestore {
         );
     }
 
+    function isBusinessOwner(businessId) {
+      return signedIn() &&
+        businessId is string &&
+        businessId.size() > 0 &&
+        exists(/databases/$(database)/documents/businessAccounts/$(businessId)) &&
+        (
+          get(/databases/$(database)/documents/businessAccounts/$(businessId)).data.ownerUid == request.auth.uid ||
+          get(/databases/$(database)/documents/businessAccounts/$(businessId)).data.createdByUserId == request.auth.uid
+        );
+    }
+
     function changesLegendFields() {
       return request.resource.data.diff(resource.data).changedKeys().hasAny([
         'isLegend',
@@ -728,8 +739,13 @@ service cloud.firestore {
     }
 
     match /businessAuditLogs/{logId} {
-      allow read: if isAdmin() || canReadBusinessId(resource.data.businessId);
+      allow read: if isAdmin() || isBusinessOwner(resource.data.businessId);
       allow write: if isAdmin();
+    }
+
+    match /businessCustomRoles/{roleId} {
+      allow read: if isAdmin() || isBusinessOwner(resource.data.businessId);
+      allow create, update, delete: if false;
     }
 
     match /giftsWaitlist/{entryId} {

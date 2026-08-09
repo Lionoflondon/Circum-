@@ -85,6 +85,8 @@ const staleDelivery = require("./stale-delivery");
 const accountClosure = require("./account-closure");
 const businessAccess = require("./business-access");
 const businessOperations = require("./business-operations");
+const businessCustomRoles = require("./business-custom-roles");
+const customerDeliveryTrust = require("./customer-delivery-trust");
 const riderIrisAcknowledgement = require("./rider-iris-acknowledgement");
 const adminIrisReferenceImages = require("./admin-iris-reference-images");
 const adminRiderAuthority = require("./admin-rider-authority");
@@ -258,6 +260,11 @@ exports.getBusinessOperationsWorkspace =
   businessOperations.getBusinessOperationsWorkspace;
 exports.getBusinessDeliveryTimeline =
   businessOperations.getBusinessDeliveryTimeline;
+exports.saveBusinessCustomRole = businessCustomRoles.saveBusinessCustomRole;
+exports.deleteBusinessCustomRole = businessCustomRoles.deleteBusinessCustomRole;
+exports.assignBusinessCustomRole = businessCustomRoles.assignBusinessCustomRole;
+exports.listBusinessCustomRoles = businessCustomRoles.listBusinessCustomRoles;
+exports.getCustomerDeliveryTrust = customerDeliveryTrust.getCustomerDeliveryTrust;
 exports.createStripeConnectAccountForRider =
   riderConnect.createStripeConnectAccountForRider(stripeConnectClient);
 exports.createStripeOnboardingLink =

@@ -19,12 +19,23 @@ test("Business roles expose explicit operations, reporting, and finance authorit
   assert.deepEqual(businessAuthority(account, {uid: "ops"}), {
     member: true, role: "operations", deliveryAuthorized: true,
     reportingAuthorized: true, financialAuthorized: false,
-    ownerOrAdmin: false, legacyOnly: false,
+    ownerOrAdmin: false, legacyOnly: false, permissions: [],
   });
   assert.equal(businessAuthority(account, {uid: "finance"}).financialAuthorized, true);
   assert.equal(businessAuthority(account, {uid: "finance"}).deliveryAuthorized, false);
   assert.equal(businessAuthority(account, {uid: "viewer"}).reportingAuthorized, true);
   assert.equal(businessAuthority(account, {uid: "viewer"}).deliveryAuthorized, false);
+});
+
+test("Custom Business permissions cannot escape the approved catalogue", () => {
+  const account = {teamMembers: [{userId: "custom", role: "custom", status: "active"}]};
+  const authority = businessAuthority(account, {uid: "custom", customPermissions: [
+    "deliveries.view", "finance.invoices.view", "platform.admin", "other_business.read",
+  ]});
+  assert.deepEqual(authority.permissions, ["deliveries.view", "finance.invoices.view"]);
+  assert.equal(authority.deliveryAuthorized, true);
+  assert.equal(authority.financialAuthorized, true);
+  assert.equal(authority.ownerOrAdmin, false);
 });
 
 test("Business delivery projection is redacted and uses watchdog SLA truth", () => {

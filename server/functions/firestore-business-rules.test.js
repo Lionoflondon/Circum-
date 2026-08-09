@@ -23,6 +23,8 @@ test.beforeEach(async () => {
     await setDoc(doc(db, "businessInvoices", "invoice-1"), {businessId: "business-1", total: 100});
     await setDoc(doc(db, "business_wallets", "business-1"), {businessId: "business-1", balance: 25});
     await setDoc(doc(db, "deliveryRequests", "delivery-1"), {businessId: "business-1", status: "requested"});
+    await setDoc(doc(db, "businessCustomRoles", "role-1"), {businessId: "business-1", name: "Warehouse Manager"});
+    await setDoc(doc(db, "businessAuditLogs", "audit-1"), {businessId: "business-1", action: "business_custom_role_created"});
   });
 });
 
@@ -41,4 +43,14 @@ test("Business finance records are limited to finance-capable roles", async () =
 
 test("Business operational members retain delivery access", async () => {
   await assertSucceeds(getDoc(doc(env.authenticatedContext("ops").firestore(), "deliveryRequests", "delivery-1")));
+});
+
+test("Custom role and permission audit records are owner-readable and backend-written", async () => {
+  const owner = env.authenticatedContext("owner").firestore();
+  const ops = env.authenticatedContext("ops").firestore();
+  await assertSucceeds(getDoc(doc(owner, "businessCustomRoles", "role-1")));
+  await assertSucceeds(getDoc(doc(owner, "businessAuditLogs", "audit-1")));
+  await assertFails(getDoc(doc(ops, "businessCustomRoles", "role-1")));
+  await assertFails(getDoc(doc(ops, "businessAuditLogs", "audit-1")));
+  await assertFails(setDoc(doc(owner, "businessCustomRoles", "role-2"), {businessId: "business-1", name: "Unsafe"}));
 });
