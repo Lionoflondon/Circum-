@@ -1,6 +1,7 @@
 /* eslint-disable max-len, require-jsdoc */
 const riderPresenceCore = require("./rider-presence-core");
 const {riderVehicleMatchesRequest} = require("./vehicle-dispatch");
+const {dispatchIntelligenceSignal} = require("./marketplace-intelligence");
 
 const DEFAULT_MAX_DISPATCH_RADIUS_KM = 25;
 const BLOCKED_ACCOUNT_STATUSES = new Set(["suspended", "frozen", "closed", "rejected", "disabled"]);
@@ -166,6 +167,7 @@ function dispatchEligibilityDecision({
     pickup,
     distanceKm: candidateDistanceKm,
     maxRadiusKm,
+    intelligence: dispatchIntelligenceSignal(profile),
   };
 }
 

@@ -6,10 +6,10 @@
   "releaseShaSemantics": "SELF means the Git commit containing this manifest; the immutable SHA is recorded in the release report and deployment provenance.",
   "entryPoint": "server/functions/index.js",
   "inventory": {
-    "productionFunctions": 260,
-    "applicationFunctions": 254,
+    "productionFunctions": 266,
+    "applicationFunctions": 260,
     "extensionFunctions": 6,
-    "sourceExports": 254
+    "sourceExports": 260
   },
   "applicationFunctions": [
     {
@@ -69,6 +69,60 @@
     {
       "name": "resolveOperationalIncident",
       "source": "server/functions/delivery-watchdog.js#resolveOperationalIncident",
+      "runtime": "nodejs20",
+      "region": "us-central1",
+      "trigger": {"type": "callable"},
+      "state": "ACTIVE",
+      "releaseSha": "SELF"
+    },
+    {
+      "name": "onDeliveryIntelligenceEventCreate",
+      "source": "server/functions/marketplace-intelligence.js#onDeliveryIntelligenceEventCreate",
+      "runtime": "nodejs20",
+      "region": "us-central1",
+      "trigger": {"type": "firestore", "document": "deliveryRequests/{deliveryId}/timeline/{eventId}"},
+      "state": "ACTIVE",
+      "releaseSha": "SELF"
+    },
+    {
+      "name": "onDeliveryLocationRiskWrite",
+      "source": "server/functions/marketplace-intelligence.js#onDeliveryLocationRiskWrite",
+      "runtime": "nodejs20",
+      "region": "us-central1",
+      "trigger": {"type": "firestore", "document": "deliveryLiveLocations/{deliveryId}"},
+      "state": "ACTIVE",
+      "releaseSha": "SELF"
+    },
+    {
+      "name": "onDeliveryDisputeIntelligenceCreate",
+      "source": "server/functions/marketplace-intelligence.js#onDeliveryDisputeIntelligenceCreate",
+      "runtime": "nodejs20",
+      "region": "us-central1",
+      "trigger": {"type": "firestore", "document": "disputes/{disputeId}"},
+      "state": "ACTIVE",
+      "releaseSha": "SELF"
+    },
+    {
+      "name": "onDriverRatingIntelligenceCreate",
+      "source": "server/functions/marketplace-intelligence.js#onDriverRatingIntelligenceCreate",
+      "runtime": "nodejs20",
+      "region": "us-central1",
+      "trigger": {"type": "firestore", "document": "driverRatings/{ratingId}"},
+      "state": "ACTIVE",
+      "releaseSha": "SELF"
+    },
+    {
+      "name": "onMarketplaceRiskFlagCreate",
+      "source": "server/functions/marketplace-intelligence.js#onMarketplaceRiskFlagCreate",
+      "runtime": "nodejs20",
+      "region": "us-central1",
+      "trigger": {"type": "firestore", "document": "marketplaceRiskFlags/{flagId}"},
+      "state": "ACTIVE",
+      "releaseSha": "SELF"
+    },
+    {
+      "name": "reviewMarketplaceRiskFlag",
+      "source": "server/functions/marketplace-intelligence.js#reviewMarketplaceRiskFlag",
       "runtime": "nodejs20",
       "region": "us-central1",
       "trigger": {"type": "callable"},

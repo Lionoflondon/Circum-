@@ -7,6 +7,17 @@ import 'package:flutter_test/flutter_test.dart';
 
 void main() {
   group('Admin operations', () {
+    test('marketplace intelligence is visible but review-only', () {
+      final source =
+          File('lib/app/admin/admin_phase1_shell.dart').readAsStringSync();
+      expect(source, contains("collection('marketplaceRiskFlags')"));
+      expect(source, contains('Marketplace risk review'));
+      expect(source, contains('Reliability'));
+      expect(source, contains('reliabilityScore'));
+      expect(source, contains('reviewMarketplaceRiskFlag'));
+      expect(source, contains('No flag automatically suspends a Rider'));
+    });
+
     test('Rider Application Centre records are connected to Admin', () {
       final adminShell =
           File('lib/app/admin/admin_phase1_shell.dart').readAsStringSync();

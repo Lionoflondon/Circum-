@@ -20,6 +20,8 @@ test.beforeEach(async () => {
     await setDoc(doc(db, "deliveryRequests", "delivery-1", "timeline", "event-1"), {deliveryId: "delivery-1", eventType: "Completed", immutable: true});
     await setDoc(doc(db, "operationalIncidents", "incident-1"), {deliveryId: "delivery-1", status: "OPEN"});
     await setDoc(doc(db, "deliveryOperationalState", "delivery-1"), {deliveryId: "delivery-1", active: false});
+    await setDoc(doc(db, "riderReliabilityAdjustments", "adjustment-1"), {riderId: "rider-1", immutable: true});
+    await setDoc(doc(db, "marketplaceRiskFlags", "flag-1"), {riderId: "rider-1", status: "OPEN"});
   });
 });
 
@@ -31,6 +33,9 @@ test("only Admin can read operational timeline and incident projections", async 
   await assertSucceeds(getDoc(doc(admin, "deliveryOperationalState", "delivery-1")));
   await assertFails(getDoc(doc(sender, "deliveryRequests", "delivery-1", "timeline", "event-1")));
   await assertFails(getDoc(doc(sender, "operationalIncidents", "incident-1")));
+  await assertSucceeds(getDoc(doc(admin, "riderReliabilityAdjustments", "adjustment-1")));
+  await assertSucceeds(getDoc(doc(admin, "marketplaceRiskFlags", "flag-1")));
+  await assertFails(getDoc(doc(sender, "marketplaceRiskFlags", "flag-1")));
 });
 
 test("no client, including Admin, can mutate immutable operations records", async () => {
@@ -38,4 +43,6 @@ test("no client, including Admin, can mutate immutable operations records", asyn
   await assertFails(updateDoc(doc(admin, "deliveryRequests", "delivery-1", "timeline", "event-1"), {eventType: "Forged"}));
   await assertFails(updateDoc(doc(admin, "operationalIncidents", "incident-1"), {status: "RESOLVED"}));
   await assertFails(setDoc(doc(admin, "deliveryOperationalState", "forged"), {active: true}));
+  await assertFails(updateDoc(doc(admin, "riderReliabilityAdjustments", "adjustment-1"), {points: 100}));
+  await assertFails(updateDoc(doc(admin, "marketplaceRiskFlags", "flag-1"), {status: "DISMISSED"}));
 });

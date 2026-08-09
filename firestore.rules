@@ -865,6 +865,16 @@ service cloud.firestore {
       allow write: if isAdmin();
     }
 
+    match /riderReliabilityAdjustments/{adjustmentId} {
+      allow read: if isAdmin();
+      allow write: if false;
+    }
+
+    match /marketplaceRiskFlags/{flagId} {
+      allow read: if isAdmin();
+      allow write: if false;
+    }
+
     match /dispatchInspections/{inspectionId} {
       allow read: if isAdmin();
       allow write: if isAdmin();
@@ -1128,7 +1138,9 @@ service cloud.firestore {
           'healthPlusUsageEvents',
           'deliveryRequests',
           'operationalIncidents',
-          'deliveryOperationalState'
+          'deliveryOperationalState',
+          'riderReliabilityAdjustments',
+          'marketplaceRiskFlags'
         ].hasAny([collection]);
     }
   }

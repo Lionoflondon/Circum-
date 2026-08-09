@@ -84,6 +84,12 @@ test("eligible Rider passes the shared dispatch predicate", () => {
   const result = dispatchEligibilityDecision({riderId: "rider-1", profile, presence, delivery, now});
   assert.equal(result.eligible, true);
   assert.ok(result.distanceKm < 1);
+  assert.equal(result.intelligence.advisoryOnly, true);
+});
+
+test("reliability cannot bypass or veto canonical dispatch eligibility", () => {
+  assert.equal(dispatchEligibilityDecision({riderId: "rider-1", profile: {...profile, reliabilityScore: 5, reliabilityRiskLevel: "RED"}, presence, delivery, now}).eligible, true);
+  assert.equal(dispatchEligibilityDecision({riderId: "rider-1", profile: {...profile, reliabilityScore: 100}, presence: {...presence, isOnline: false}, delivery, now}).reason, "offline");
 });
 
 for (const [name, patch, reason] of [

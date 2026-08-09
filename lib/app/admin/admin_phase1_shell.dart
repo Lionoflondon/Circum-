@@ -8939,10 +8939,12 @@ class _RiderOperationsModule extends StatelessWidget {
           ],
         ),
         const SizedBox(height: 18),
+        _MarketplaceRiskPanel(query: query),
+        const SizedBox(height: 18),
         _RecordModule(
           title: 'Rider Performance Metrics',
           subtitle:
-              'Historical driverPerformanceMetrics workspace with acceptance, completion, cancellation, late arrival, trust, rank, warnings, history and audit.',
+              'Backend reliability intelligence alongside the existing Trust Points and Rank systems.',
           records: driverPerformanceMetrics,
           query: query,
           fields: const [
@@ -8961,13 +8963,17 @@ class _RiderOperationsModule extends StatelessWidget {
             'riderRank',
             'lowRatingFlag',
             'operationalWarnings',
+            'reliabilityScore',
+            'reliabilityTrend',
+            'reliabilityRiskLevel',
+            'lastReliabilityReason',
           ],
-          columns: const ['Rider', 'Performance', 'Trust / Rank', 'Warnings'],
+          columns: const ['Rider', 'Reliability', 'Trust / Rank', 'Factors'],
           row: (record) => [
             '${_riderNameForMetric(record)}\n${_metricRiderId(record)}',
-            'Accept ${_percent(record['acceptanceRate'])} / Complete ${_percent(record['completionRate'])}\nCancel ${_percent(record['cancellationRate'])} / Late ${record['lateArrivals'] ?? record['lateArrivalCount'] ?? 0}',
+            'Score ${record['reliabilityScore'] ?? 'Pending'} / ${record['reliabilityTrend'] ?? 'Stable'}\nRisk ${record['reliabilityRiskLevel'] ?? 'Pending'}',
             '${record['trustTier'] ?? record['trustLevel'] ?? 'standard'} / ${record['rank'] ?? record['riderRank'] ?? 'unranked'}\nHistory ${_historyCount(record['trustHistory']) + _historyCount(record['rankHistory'])}',
-            _riderWarningSummary(record),
+            '${record['lastReliabilityReason'] ?? _riderWarningSummary(record)}\nComplete ${_percent(record['completionRate'])} / Cancel ${_percent(record['cancellationRate'])}',
           ],
           actions: canManageRiders
               ? (record) => [
@@ -9046,6 +9052,118 @@ class _RiderOperationsModule extends StatelessWidget {
     }
     if (warnings.isEmpty) return 'No active warnings';
     return warnings.join(' / ');
+  }
+}
+
+class _MarketplaceRiskPanel extends StatefulWidget {
+  const _MarketplaceRiskPanel({required this.query});
+
+  final String query;
+
+  @override
+  State<_MarketplaceRiskPanel> createState() => _MarketplaceRiskPanelState();
+}
+
+class _MarketplaceRiskPanelState extends State<_MarketplaceRiskPanel> {
+  Future<void> _review(
+    BuildContext context,
+    Map<String, dynamic> flag,
+    String status,
+  ) async {
+    final controller = TextEditingController();
+    final reason = await showDialog<String>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Review marketplace signal'),
+        content: TextField(
+          controller: controller,
+          autofocus: true,
+          minLines: 2,
+          maxLines: 4,
+          decoration: const InputDecoration(labelText: 'Review reason'),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(dialogContext, controller.text),
+            child: const Text('Confirm'),
+          ),
+        ],
+      ),
+    );
+    if (reason == null || reason.trim().isEmpty || !context.mounted) return;
+    await FirebaseFunctions.instance
+        .httpsCallable('reviewMarketplaceRiskFlag')
+        .call({
+      'flagId': '${flag['id'] ?? flag['flagId']}',
+      'status': status,
+      'resolution': reason.trim(),
+    });
+    if (context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Marketplace review recorded.')),
+      );
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
+      stream: FirebaseFirestore.instance
+          .collection('marketplaceRiskFlags')
+          .where('status', isEqualTo: 'OPEN')
+          .limit(100)
+          .snapshots(),
+      builder: (context, snapshot) {
+        final records = (snapshot.data?.docs ?? const [])
+            .map((document) => {'id': document.id, ...document.data()})
+            .toList(growable: false);
+        return _RecordModule(
+          title: 'Marketplace risk review',
+          subtitle:
+              'Review-only delivery and GPS signals. No flag automatically suspends a Rider or changes eligibility.',
+          records: records,
+          query: widget.query,
+          fields: const [
+            'id',
+            'riderId',
+            'deliveryId',
+            'flagType',
+            'severity',
+            'status',
+          ],
+          columns: const [
+            'Severity',
+            'Signal',
+            'Rider / Delivery',
+            'Detected',
+          ],
+          row: (record) => [
+            '${record['severity'] ?? 'AMBER'}',
+            '${record['flagType'] ?? 'Operational review'}',
+            '${record['riderId'] ?? 'Unknown Rider'}\n${record['deliveryId'] ?? 'Unknown delivery'}',
+            _date(record['detectedAt']),
+          ],
+          actions: (record) => [
+            _MiniAction(
+              label: 'Dismiss',
+              onPressed: () => _review(context, record, 'DISMISSED'),
+            ),
+            _MiniAction(
+              label: 'Reviewed',
+              onPressed: () => _review(context, record, 'REVIEWED'),
+            ),
+            _MiniAction(
+              label: 'Action taken',
+              onPressed: () => _review(context, record, 'ACTION_TAKEN'),
+            ),
+          ],
+        );
+      },
+    );
   }
 }
 
