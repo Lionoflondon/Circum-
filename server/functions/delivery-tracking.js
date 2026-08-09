@@ -19,6 +19,10 @@ function normalized(value) {
   return tracking.normalizeStatus(value);
 }
 
+function shouldCaptureTraversalPoint(status) {
+  return ["collected", "navigating_to_dropoff", "arrived_at_dropoff"].includes(normalized(status));
+}
+
 function firstDefined(...values) {
   for (const value of values) {
     if (value !== undefined && value !== null) return value;
@@ -733,8 +737,7 @@ exports.updateDeliveryLiveLocation = functions.https.onCall(async (data, context
       lastBackendUploadAt: FieldValue.serverTimestamp(),
       updatedAt: FieldValue.serverTimestamp(),
     }, {merge: true});
-    if (["collected", "navigating_to_dropoff", "arrived_at_dropoff"].includes(currentStatus) ||
-        ["collected", "navigating_to_dropoff", "arrived_at_dropoff"].includes(trackingStatus)) {
+    if (shouldCaptureTraversalPoint(currentStatus)) {
       const evidenceRef = db.collection("deliveryTraversalEvidence").doc(found.id);
       const evidenceSnapshot = await transaction.get(evidenceRef);
       const existing = evidenceSnapshot.exists ? evidenceSnapshot.data() || {} : {};
@@ -796,5 +799,6 @@ exports._private = {
   highestTrustAward,
   canonicalRiderRankForTrust,
   hasManualRankOverride,
+  shouldCaptureTraversalPoint,
   riderTrustRankPatch,
 };

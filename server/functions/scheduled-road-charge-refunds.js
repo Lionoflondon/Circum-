@@ -19,6 +19,11 @@ function pence(value) {
   return Number.isFinite(number) ? Math.max(0, Math.round(number)) : 0;
 }
 
+function refundableAmountPence(entitlement = {}) {
+  return pence(Object.prototype.hasOwnProperty.call(entitlement, "refundablePence") ?
+    entitlement.refundablePence : entitlement.entitlementPence);
+}
+
 function entitlementId({deliveryId, quoteId, chargeId, lineItemKey} = {}) {
   return [deliveryId, quoteId, chargeId || lineItemKey || "road_charge", REFUND_POLICY_VERSION]
       .map((value) => `${value || ""}`.replace(/[^a-zA-Z0-9:_-]/g, "_"))
@@ -59,7 +64,13 @@ async function settleEntitlementToRoth({db = getFirestore(), entitlementId: id, 
     const entitlementSnapshot = await transaction.get(entitlementRef);
     if (!entitlementSnapshot.exists) return {settled: false, reason: "entitlement_not_found"};
     const entitlement = entitlementSnapshot.data() || {};
-    const amountPence = pence(entitlement.refundablePence || entitlement.entitlementPence) -
+    if (entitlement.policyVersion !== REFUND_POLICY_VERSION) {
+      return {settled: false, reason: "unsupported_policy_version", entitlementId: id};
+    }
+    if (!entitlement.deliveryId || !entitlement.quoteId || !entitlement.chargeId) {
+      return {settled: false, reason: "malformed_entitlement", entitlementId: id};
+    }
+    const amountPence = refundableAmountPence(entitlement) -
       pence(entitlement.cashRefundedPence);
     if (entitlement.state === STATES.rothSettled || entitlement.state === STATES.closed) {
       return {settled: false, duplicate: true, entitlementId: id};
@@ -104,6 +115,9 @@ async function settleEntitlementToRoth({db = getFirestore(), entitlementId: id, 
 }
 
 function eligibleRefund(entitlement, actualEvidence) {
+  if (!entitlement || entitlement.policyVersion !== REFUND_POLICY_VERSION) {
+    return {eligible: false, reason: "unsupported_policy_version"};
+  }
   if (!entitlement || entitlement.state !== STATES.pending && entitlement.state !== STATES.eligible) {
     return {eligible: false, reason: "entitlement_not_open"};
   }
@@ -113,7 +127,7 @@ function eligibleRefund(entitlement, actualEvidence) {
   if (actualEvidence.incurred === true) {
     return {eligible: false, reason: "liability_incurred"};
   }
-  const amountPence = pence(entitlement.entitlementPence) -
+  const amountPence = refundableAmountPence(entitlement) -
     pence(entitlement.rothCreditedPence) - pence(entitlement.cashRefundedPence);
   return amountPence > 0 ? {eligible: true, amountPence} : {eligible: false, reason: "already_settled"};
 }
@@ -126,6 +140,9 @@ function reserveRoth(entitlement, actualEvidence) {
 
 function reserveCash(entitlement, actor = {}) {
   if (!actor.supportAuthorized) return {...entitlement, decision: {eligible: false, reason: "support_authorization_required"}};
+  if (!entitlement || entitlement.policyVersion !== REFUND_POLICY_VERSION) {
+    return {...entitlement, decision: {eligible: false, reason: "unsupported_policy_version"}};
+  }
   if (pence(entitlement.rothCreditedPence) > 0) {
     return {...entitlement, state: STATES.review, decision: {eligible: false, reason: "roth_reversal_required"}};
   }
@@ -135,13 +152,13 @@ function reserveCash(entitlement, actor = {}) {
 
 function settleCash(entitlement) {
   if (!entitlement || entitlement.state !== STATES.cashReserved) return {...entitlement, decision: {eligible: false, reason: "cash_not_reserved"}};
-  const amountPence = pence(entitlement.entitlementPence);
+  const amountPence = refundableAmountPence(entitlement);
   return {...entitlement, state: STATES.cashSettled, cashRefundedPence: amountPence, refundedPence: amountPence, decision: {eligible: true, amountPence}};
 }
 
 function invariant(entitlement) {
   const total = pence(entitlement && entitlement.rothCreditedPence) + pence(entitlement && entitlement.cashRefundedPence);
-  return total <= pence(entitlement && entitlement.entitlementPence);
+  return total <= refundableAmountPence(entitlement);
 }
 
-module.exports = {REFUND_POLICY_VERSION, STATES, pence, entitlementId, createEntitlement, eligibleRefund, reserveRoth, reserveCash, settleCash, settleEntitlementToRoth, invariant};
+module.exports = {REFUND_POLICY_VERSION, STATES, pence, refundableAmountPence, entitlementId, createEntitlement, eligibleRefund, reserveRoth, reserveCash, settleCash, settleEntitlementToRoth, invariant};

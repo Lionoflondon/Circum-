@@ -54,10 +54,19 @@ test("Roth settlement is deterministic and idempotent", async () => {
     },
     async runTransaction(work) {
       const tx = {
-        async get(target) { return {exists: store.has(`${target.collection}/${target.id}`), data: () => store.get(`${target.collection}/${target.id}`)}; },
-        set(target, value, options = {}) { const key = `${target.collection}/${target.id}`; store.set(key, options.merge ? {...(store.get(key) || {}), ...value} : value); },
-        create(target, value) { store.set(`${target.collection}/${target.id}`, value); },
-        update(target, value) { store.set(`${target.collection}/${target.id}`, {...(store.get(`${target.collection}/${target.id}`) || {}), ...value}); },
+        async get(target) {
+          return {exists: store.has(`${target.collection}/${target.id}`), data: () => store.get(`${target.collection}/${target.id}`)};
+        },
+        set(target, value, options = {}) {
+          const key = `${target.collection}/${target.id}`;
+          store.set(key, options.merge ? {...(store.get(key) || {}), ...value} : value);
+        },
+        create(target, value) {
+          store.set(`${target.collection}/${target.id}`, value);
+        },
+        update(target, value) {
+          store.set(`${target.collection}/${target.id}`, {...(store.get(`${target.collection}/${target.id}`) || {}), ...value});
+        },
       };
       return work(tx);
     },
@@ -73,4 +82,21 @@ test("Roth settlement is deterministic and idempotent", async () => {
   assert.equal(first.amountPence, 250);
   assert.equal(second.duplicate, true);
   assert.equal(store.get(`walletTransactions/road_charge_refund_${entitlement.entitlementId}`).amount, 2.5);
+});
+
+test("explicit zero and partial refundable amounts are authoritative", () => {
+  const zero = {...refunds.createEntitlement({deliveryId: "d6", quoteId: "q6", charge, actualEvidence: evidence}), refundablePence: 0};
+  assert.equal(refunds.eligibleRefund(zero, evidence).eligible, false);
+  assert.equal(refunds.settleCash(refunds.reserveCash(zero, {supportAuthorized: true})).cashRefundedPence, 0);
+  const partial = {...refunds.createEntitlement({deliveryId: "d7", quoteId: "q7", charge, actualEvidence: evidence}), refundablePence: 250, entitlementPence: 400};
+  assert.equal(refunds.eligibleRefund(partial, evidence).amountPence, 250);
+  assert.equal(refunds.reserveRoth(partial, evidence).rothCreditedPence, 250);
+  assert.equal(refunds.invariant({...partial, rothCreditedPence: 250}), true);
+});
+
+test("legacy or malformed entitlements fail closed", () => {
+  const legacy = {...refunds.createEntitlement({deliveryId: "d8", quoteId: "q8", charge, actualEvidence: evidence})};
+  delete legacy.policyVersion;
+  assert.equal(refunds.eligibleRefund(legacy, evidence).reason, "unsupported_policy_version");
+  assert.equal(refunds.reserveRoth(legacy, evidence).rothCreditedPence, 0);
 });

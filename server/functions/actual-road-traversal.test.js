@@ -33,3 +33,24 @@ test("complete actual movement produces server-owned route facts", () => {
   assert.ok(["INCURRED", "NOT_INCURRED"].includes(result.status));
   assert.equal(result.deliveryId, "d1");
 });
+
+test("malformed or out-of-order movement cannot become refund evidence", () => {
+  const malformed = evaluateActualTraversal({points: [
+    {latitude: 51.49, longitude: -0.19, at: "not-a-date"},
+    {latitude: 51.50, longitude: -0.10, at: "2026-08-09T12:10:00Z"},
+  ]});
+  const outOfOrder = evaluateActualTraversal({points: [
+    {latitude: 51.49, longitude: -0.19, at: "2026-08-09T12:10:00Z"},
+    {latitude: 51.50, longitude: -0.10, at: "2026-08-09T12:09:00Z"},
+  ]});
+  assert.equal(malformed.evidenceCompleteness, "UNRESOLVED");
+  assert.equal(outOfOrder.evidenceCompleteness, "UNRESOLVED");
+});
+
+test("impossible movement segment cannot become refund evidence", () => {
+  const result = evaluateActualTraversal({points: [
+    {latitude: 51.49, longitude: -0.19, at: "2026-08-09T12:00:00Z"},
+    {latitude: 51.50, longitude: -0.10, at: "2026-08-09T12:00:01Z"},
+  ]});
+  assert.equal(result.evidenceCompleteness, "UNRESOLVED");
+});

@@ -4,7 +4,7 @@ const test = require("node:test");
 const assert = require("node:assert/strict");
 const {initializeApp} = require("firebase-admin/app");
 const {getFirestore} = require("firebase-admin/firestore");
-const {settleEntitlementToRoth, STATES} = require("./scheduled-road-charge-refunds");
+const {settleEntitlementToRoth, STATES, REFUND_POLICY_VERSION} = require("./scheduled-road-charge-refunds");
 
 const emulator = process.env.FIRESTORE_EMULATOR_HOST;
 
@@ -19,9 +19,10 @@ test("concurrent scheduled road-charge Roth settlement is exactly once", {skip: 
     refundablePence: 250,
     cashRefundedPence: 0,
     rothCreditedPence: 0,
+    chargeId: "blackwall_silvertown",
+    policyVersion: REFUND_POLICY_VERSION,
     deliveryId: `delivery-${id}`,
     quoteId: `quote-${id}`,
-    chargeId: "blackwall_silvertown",
     refundOwnerType: "sender",
     refundOwnerId: `owner-${id}`,
   });

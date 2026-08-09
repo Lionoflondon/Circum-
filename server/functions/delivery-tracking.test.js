@@ -5,6 +5,12 @@ const test = require("node:test");
 const assert = require("node:assert/strict");
 const deliveryTracking = require("./delivery-tracking")._private;
 
+test("movement evidence opens only after canonical collection status", () => {
+  assert.equal(deliveryTracking.shouldCaptureTraversalPoint("accepted"), false);
+  assert.equal(deliveryTracking.shouldCaptureTraversalPoint("collected"), true);
+  assert.equal(deliveryTracking.shouldCaptureTraversalPoint("arrived_at_dropoff"), true);
+});
+
 test("collection PIN verification patch updates backend tracking fields", () => {
   const patch = deliveryTracking.patchForTransition({
     action: "verify_collection_pin",
