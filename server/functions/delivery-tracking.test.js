@@ -29,12 +29,24 @@ test("receiver PIN verification patch delivers without exposing PIN values", () 
     action: "verify_receiver_pin",
     nextStatus: "delivered",
     riderId: "rider-1",
+    pinVerified: true,
   });
   assert.equal(patch.status, "delivered");
   assert.equal(patch.deliveryPinVerified, true);
   assert.equal(patch.deliveryPinVerifiedBy, "rider-1");
   assert.equal(Object.prototype.hasOwnProperty.call(patch, "deliveryPin"), false);
   assert.equal(Object.prototype.hasOwnProperty.call(patch, "receiverPin"), false);
+});
+
+test("ordinary completion does not manufacture receiver PIN verification", () => {
+  const patch = deliveryTracking.patchForTransition({
+    action: "complete_delivery",
+    nextStatus: "delivered",
+    riderId: "rider-1",
+  });
+  assert.equal(patch.status, "delivered");
+  assert.equal(Object.prototype.hasOwnProperty.call(patch, "deliveryPinVerified"), false);
+  assert.equal(Object.prototype.hasOwnProperty.call(patch, "deliveryPinVerifiedAt"), false);
 });
 
 test("rider location patch preserves live GPS contract", () => {
@@ -167,6 +179,7 @@ test("public verification patches never expose or clear PIN secrets", () => {
     action: "verify_receiver_pin",
     nextStatus: "delivered",
     riderId: "rider-1",
+    pinVerified: true,
   });
   for (const patch of [collectionPatch, deliveryPatch]) {
     assert.equal(Object.prototype.hasOwnProperty.call(patch, "collectionPin"), false);
@@ -221,6 +234,30 @@ test("required pickup evidence blocks incomplete verification", () => {
         riderDeclarationAccepted: true,
       },
   ).valid, true);
+});
+
+test("completeDelivery preserves canonical handover evidence requirements", () => {
+  assert.equal(deliveryTracking.evidenceRequirements(
+      {deliveryPhotoRequired: true},
+      "complete_delivery",
+      {recipientConfirmed: true},
+  ).valid, false);
+  assert.equal(deliveryTracking.evidenceRequirements(
+      {deliveryPhotoRequired: true},
+      "complete_delivery",
+      {photoId: "photo-1", recipientConfirmed: true},
+  ).valid, true);
+});
+
+test("completeDelivery callable validates auth and delivery identity before mutation", async () => {
+  await assert.rejects(
+      deliveryTracking.completeDeliveryHandler({}, {}, {}),
+      /Rider must be signed in/,
+  );
+  await assert.rejects(
+      deliveryTracking.completeDeliveryHandler({}, {auth: {uid: "rider-1"}}, {}),
+      /deliveryId is required/,
+  );
 });
 
 test("Confirm Pickup callable policy permits ordinary collection and protects verified pickup", () => {

@@ -53,6 +53,9 @@ const giftsPayment = require("./gifts-payment");
 const communicationEngine = require("./communication-engine");
 const deliveryPolicy = require("./delivery-policy");
 const deliveryTracking = require("./delivery-tracking");
+const deliveryCompletedEvent = require("./delivery-completed-event");
+const deliveryEvidence = require("./delivery-evidence");
+const deliveryEvidenceMedia = require("./delivery-evidence-media");
 const scheduledRoadChargeRefunds = require("./scheduled-road-charge-refunds");
 const ratingsTipping = require("./ratings-tipping");
 const stripeRefunds = require("./stripe-refunds");
@@ -149,8 +152,14 @@ exports.markRiderNoShow = deliveryPolicy.markRiderNoShow;
 exports.cancelDelivery = deliveryPolicy.requestSenderCancellation;
 exports.updateDeliveryTrackingStatus =
   deliveryTracking.updateDeliveryTrackingStatus;
+exports.completeDelivery = deliveryTracking.completeDelivery;
 exports.updateDeliveryLiveLocation =
   deliveryTracking.updateDeliveryLiveLocation;
+exports.onDeliveryCompletedEvent =
+  deliveryCompletedEvent.onDeliveryCompletedEvent;
+exports.recordDeliveryEvidence = deliveryEvidence.recordDeliveryEvidence;
+exports.onDeliveryEvidencePhotoFinalized =
+  deliveryEvidenceMedia.onDeliveryEvidencePhotoFinalized;
 exports.settleScheduledRoadChargeCashRefund =
   scheduledRoadChargeRefunds.settleScheduledRoadChargeCashRefund;
 exports.submitDeliveryRating = ratingsTipping.submitDeliveryRating;
@@ -169,6 +178,8 @@ exports.founderListTestAccounts =
   founderAuthority.founderListTestAccounts();
 exports.founderPreflightE2E =
   founderAuthority.founderPreflightE2E();
+exports.founderRiderOperationalPreflight =
+  founderAuthority.founderRiderOperationalPreflight();
 exports.startAdminConversation = communicationEngine.startAdminConversation;
 exports.getOrCreateSupportConversation =
   communicationEngine.getOrCreateSupportConversation;
@@ -391,6 +402,8 @@ exports.createSenderPaidDelivery =
   senderBooking.createSenderPaidDelivery(stripe);
 exports.finalizeSenderWebCheckout =
   senderBooking.finalizeSenderWebCheckout(stripe);
+exports.recoverIneligibleSenderDelivery =
+  senderBooking.recoverIneligibleSenderDelivery;
 exports.saveSenderDraft = senderBooking.saveSenderDraft;
 exports.loadSenderDraft = senderBooking.loadSenderDraft;
 exports.deleteSenderDraft = senderBooking.deleteSenderDraft;

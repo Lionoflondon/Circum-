@@ -83,6 +83,7 @@ const RIDER_ACTION_TO_STATUS = Object.freeze({
   near_dropoff: "arrived_at_dropoff",
   arrived_at_dropoff: "arrived_at_dropoff",
   verify_receiver_pin: "delivered",
+  complete_delivery: "delivered",
   report_issue: "issue_reported",
   cancel: "cancelled",
 });

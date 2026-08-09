@@ -10,6 +10,11 @@ const {standardSettlementAllowed, settlementProduct} = require("./settlement-pro
 const {appendPoint, evaluateActualTraversal} = require("./actual-road-traversal");
 const {roadChargesFor} = require("./road-charge-settlement");
 const {createEntitlement, settleEntitlementToRoth} = require("./scheduled-road-charge-refunds");
+const {
+  buildDeliveryCompletedEvent,
+  publishDeliveryCompleted,
+} = require("./delivery-completed-event");
+const {completionEvidenceDecision} = require("./delivery-evidence-core");
 
 function text(value) {
   return `${value || ""}`.trim();
@@ -176,10 +181,14 @@ function expectedPin(privateDelivery, action) {
   if (action === "verify_collection_pin") {
     return text(privateDelivery.collectionPin || privateDelivery.pickupPin || protection.collectionPin);
   }
-  if (action === "verify_receiver_pin") {
+  if (action === "verify_receiver_pin" || action === "complete_delivery") {
     return text(privateDelivery.deliveryPin || privateDelivery.receiverPin || privateDelivery.dropoffPin || protection.deliveryPin);
   }
   return "";
+}
+
+function isHandoverAction(action) {
+  return action === "verify_receiver_pin" || action === "complete_delivery";
 }
 
 function pinAuthorityRequired(delivery, action) {
@@ -192,13 +201,13 @@ function pinAuthorityRequired(delivery, action) {
 }
 
 function pinAttemptField(action) {
-  return action === "verify_receiver_pin" ?
+  return isHandoverAction(action) ?
     "deliveryPinAttemptCount" : "collectionPinAttemptCount";
 }
 
 function evidenceRequirements(delivery, action, evidence = {}) {
   const pickup = action === "verify_collection_pin";
-  const handover = action === "verify_receiver_pin";
+  const handover = isHandoverAction(action);
   if (!pickup && !handover) return {valid: true};
   const required = pickup ?
     delivery.verificationRequired === true ||
@@ -208,7 +217,9 @@ function evidenceRequirements(delivery, action, evidence = {}) {
       delivery.requiresVanguard === true ||
       delivery.secureHandoverRequired === true;
   if (!required) return {valid: true};
-  if (!text(evidence.photoUrl)) return {valid: false, reason: "A delivery evidence photo is required."};
+  if (!text(evidence.photoUrl) && !text(evidence.photoId)) {
+    return {valid: false, reason: "A delivery evidence photo is required."};
+  }
   if (pickup && evidence.conditionConfirmed !== true) {
     return {valid: false, reason: "Parcel condition must be confirmed."};
   }
@@ -282,7 +293,7 @@ function riderTrustRankPatch(profile = {}, awardedTrustPoints = 0) {
   return patch;
 }
 
-function patchForTransition({action, nextStatus, riderId}) {
+function patchForTransition({action, nextStatus, riderId, pinVerified = false}) {
   const now = FieldValue.serverTimestamp();
   const patch = {
     status: nextStatus,
@@ -307,9 +318,11 @@ function patchForTransition({action, nextStatus, riderId}) {
   }
   if (nextStatus === "arrived_at_dropoff") patch.arrivedAtDropoffAt = now;
   if (nextStatus === "delivered") {
-    patch.deliveryPinVerified = true;
-    patch.deliveryPinVerifiedAt = now;
-    patch.deliveryPinVerifiedBy = riderId;
+    if (pinVerified) {
+      patch.deliveryPinVerified = true;
+      patch.deliveryPinVerifiedAt = now;
+      patch.deliveryPinVerifiedBy = riderId;
+    }
     patch.deliveredAt = now;
     patch.completedAt = now;
   }
@@ -341,7 +354,7 @@ function transitionPolicyDecision(delivery, currentStatus, nextStatus) {
   };
 }
 
-exports.updateDeliveryTrackingStatus = functions.https.onCall(async (data, context) => {
+async function updateDeliveryTrackingStatusHandler(data, context, db = getFirestore()) {
   if (!context.auth) {
     throw new functions.https.HttpsError("unauthenticated", "Rider must be signed in.");
   }
@@ -355,7 +368,6 @@ exports.updateDeliveryTrackingStatus = functions.https.onCall(async (data, conte
     throw new functions.https.HttpsError("invalid-argument", "Unsupported rider tracking action.");
   }
 
-  const db = getFirestore();
   const riderId = context.auth.uid;
   const refundEntitlementIds = [];
   const result = await db.runTransaction(async (transaction) => {
@@ -402,6 +414,16 @@ exports.updateDeliveryTrackingStatus = functions.https.onCall(async (data, conte
     const privateRef = db.collection("deliveryRequestsPrivate").doc(found.id);
     const privateSnapshot = await transaction.get(privateRef);
     const privateDelivery = privateSnapshot.exists ? privateSnapshot.data() || {} : {};
+    const evidenceRecordRef = db.collection("deliveryEvidence").doc(found.id);
+    const evidenceRecordSnapshot = await transaction.get(evidenceRecordRef);
+    if (nextStatus === "delivered") {
+      const completionDecision = completionEvidenceDecision(
+          evidenceRecordSnapshot.exists ? evidenceRecordSnapshot.data() || {} : {},
+      );
+      if (!completionDecision.allowed) {
+        throw new functions.https.HttpsError("failed-precondition", completionDecision.reason);
+      }
+    }
     const requiredPin = expectedPin(privateDelivery, action);
     if (!requiredPin && pinAuthorityRequired(delivery, action)) {
       throw new functions.https.HttpsError(
@@ -424,7 +446,7 @@ exports.updateDeliveryTrackingStatus = functions.https.onCall(async (data, conte
           [attemptField]: attempts + 1,
           lastPinAttemptAt: FieldValue.serverTimestamp(),
           vanguardReviewRequired: attempts + 1 >= 5,
-          vanguardLastFailedStage: action === "verify_receiver_pin" ? "delivery" : "collection",
+          vanguardLastFailedStage: isHandoverAction(action) ? "delivery" : "collection",
           updatedAt: FieldValue.serverTimestamp(),
         }, {merge: true});
         return {verificationFailed: true, attemptsRemaining: 4 - attempts};
@@ -435,13 +457,17 @@ exports.updateDeliveryTrackingStatus = functions.https.onCall(async (data, conte
       action,
       nextStatus,
       riderId,
+      pinVerified: Boolean(requiredPin),
     });
     if (Object.keys(evidence).length > 0) {
-      patch[action === "verify_receiver_pin" ? "handoverEvidence" : "pickupEvidence"] = {
+      patch[isHandoverAction(action) ? "handoverEvidence" : "pickupEvidence"] = {
         ...evidence,
         recordedAt: FieldValue.serverTimestamp(),
         recordedBy: riderId,
       };
+      if (nextStatus === "delivered" && evidence.evidenceId) {
+        patch.evidenceId = text(evidence.evidenceId);
+      }
     }
     if (action === "report_issue") {
       const issue = data && data.issue && typeof data.issue === "object" ? data.issue : {};
@@ -498,7 +524,21 @@ exports.updateDeliveryTrackingStatus = functions.https.onCall(async (data, conte
     const canonicalAward = Number.isFinite(existingAward) && existingAward >= 0 ?
       existingAward : Number.isFinite(existingLedgerAward) && existingLedgerAward >= 0 ?
         existingLedgerAward : settlementValues(delivery).trustPoints;
-    if (nextStatus === "delivered") patch.trustPointsAwarded = canonicalAward;
+    if (nextStatus === "delivered") {
+      patch.trustPointsAwarded = canonicalAward;
+      patch.evidenceSummary = {
+        recordPath: `deliveryEvidence/${found.id}`,
+        verifiedPhotoCount: Number(evidenceRecordSnapshot.data()?.verifiedPhotoCount || 0),
+        latestPhotoPath: evidenceRecordSnapshot.data()?.latestPhotoPath || null,
+        latestThumbnailPath: evidenceRecordSnapshot.data()?.latestThumbnailPath || null,
+        latestCapturedAt: evidenceRecordSnapshot.data()?.latestCapturedAt || null,
+        latestDevice: evidenceRecordSnapshot.data()?.latestDevice || null,
+        latestGps: evidenceRecordSnapshot.data()?.latestGps || null,
+        latestAccuracy: evidenceRecordSnapshot.data()?.latestAccuracy || null,
+        types: ["PHOTO"],
+        verifiedAt: FieldValue.serverTimestamp(),
+      };
+    }
     if (nextStatus === "delivered" && delivery.deliveryTime &&
         delivery.deliveryTime.type === "scheduled" &&
         ["standard", "business"].includes(settlementProduct(delivery))) {
@@ -545,8 +585,39 @@ exports.updateDeliveryTrackingStatus = functions.https.onCall(async (data, conte
         }
       }
     }
+    if (nextStatus === "delivered") {
+      transaction.set(evidenceRecordRef.collection("events").doc("delivery_completed"), {
+        type: "DELIVERY_COMPLETED",
+        deliveryId: found.id,
+        actorUid: riderId,
+        at: FieldValue.serverTimestamp(),
+        immutable: true,
+      }, {merge: false});
+      transaction.set(evidenceRecordRef, {
+        completedAt: FieldValue.serverTimestamp(),
+        updatedAt: FieldValue.serverTimestamp(),
+      }, {merge: true});
+    }
     transaction.set(found.ref, patch, {merge: true});
     if (nextStatus === "delivered") {
+      publishDeliveryCompleted({
+        transaction,
+        db,
+        event: buildDeliveryCompletedEvent({
+          deliveryId: found.id,
+          delivery,
+          riderId,
+          trustPoints: canonicalAward,
+          verification: {
+            pickupPinVerified: delivery.collectionPinVerified === true ||
+              delivery.pickupPinVerified === true,
+            deliveryPinVerified: Boolean(requiredPin) ||
+              delivery.deliveryPinVerified === true,
+            evidenceVerified: evidenceDecision.valid,
+          },
+          evidence,
+        }),
+      });
       const settlement = settlementValues(delivery);
       if (earningRef && existingEarning && !existingEarning.exists) {
         transaction.set(earningRef, {
@@ -650,7 +721,38 @@ exports.updateDeliveryTrackingStatus = functions.https.onCall(async (data, conte
     );
   }
   return result;
-});
+}
+
+exports.updateDeliveryTrackingStatus =
+  functions.https.onCall(updateDeliveryTrackingStatusHandler);
+
+async function completeDeliveryHandler(data, context, db = getFirestore()) {
+  if (!context.auth) {
+    throw new functions.https.HttpsError("unauthenticated", "Rider must be signed in.");
+  }
+  const deliveryId = text(data && (data.deliveryId || data.requestId));
+  const deliveryPin = text(data && (data.deliveryPin || data.pin));
+  if (!deliveryId) {
+    throw new functions.https.HttpsError(
+        "invalid-argument",
+        "deliveryId is required.",
+        {reasonCode: "DELIVERY_ID_REQUIRED"},
+    );
+  }
+  const evidence = data && data.evidence && typeof data.evidence === "object" ?
+    {...data.evidence} : {};
+  if (data && data.evidenceId && !evidence.evidenceId) {
+    evidence.evidenceId = text(data.evidenceId);
+  }
+  return updateDeliveryTrackingStatusHandler({
+    deliveryId,
+    action: deliveryPin ? "verify_receiver_pin" : "complete_delivery",
+    ...(deliveryPin ? {pin: deliveryPin} : {}),
+    evidence,
+  }, context, db);
+}
+
+exports.completeDelivery = functions.https.onCall(completeDeliveryHandler);
 
 exports.updateDeliveryLiveLocation = functions.https.onCall(async (data, context) => {
   if (!context.auth) {
@@ -783,6 +885,8 @@ exports.updateDeliveryLiveLocation = functions.https.onCall(async (data, context
 });
 
 exports._private = {
+  updateDeliveryTrackingStatusHandler,
+  completeDeliveryHandler,
   liveLocationPatch,
   shouldWriteLiveLocation,
   distanceMeters,

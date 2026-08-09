@@ -36,12 +36,24 @@ test("Founder test account designation is backend-only and audited", () => {
   assert.match(source, /founderRevokeTestAccount/);
   assert.match(source, /founderListTestAccounts/);
   assert.match(source, /founderPreflightE2E/);
+  assert.match(source, /founderRiderOperationalPreflight/);
+  assert.match(source, /reconcileFounderRiderState/);
   assert.match(source, /assertFounder\(context\)/);
   assert.match(source, /collection\("founderTestAccounts"\)/);
   assert.match(source, /collection\("founderAuthorityAudit"\)/);
   assert.match(source, /previousValues/);
   assert.match(source, /newValues/);
   assert.match(source, /immutable: true/);
+});
+
+test("Founder operational reconciliation is UID-locked and audited", () => {
+  const source = fs.readFileSync(path.join(__dirname, "founder-authority.js"), "utf8");
+  assert.match(source, /isFounderRiderUid/);
+  assert.match(source, /founder_operational_state_reconciled/);
+  assert.match(source, /collection\("riderOperationalAudit"\)/);
+  assert.match(source, /transaction\.set\(riderRef/);
+  assert.match(source, /transaction\.set\(profileRef/);
+  assert.match(source, /FOUNDER_OPERATIONAL_WAIVERS/);
 });
 
 test("Founder authority is exported without trusting client role claims", () => {
@@ -52,6 +64,7 @@ test("Founder authority is exported without trusting client role claims", () => 
   assert.match(indexSource, /founderRevokeTestAccount/);
   assert.match(indexSource, /founderListTestAccounts/);
   assert.match(indexSource, /founderPreflightE2E/);
+  assert.match(indexSource, /founderRiderOperationalPreflight/);
   assert.doesNotMatch(authoritySource, /token\.role/);
   assert.doesNotMatch(authoritySource, /token\.adminRole/);
   assert.doesNotMatch(authoritySource, /super_admin/);

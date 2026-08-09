@@ -1,0 +1,3232 @@
+{
+  "manifestVersion": 1,
+  "project": "circum-2797c",
+  "capturedAt": "2026-08-09T19:41:57+01:00",
+  "releaseSha": "SELF",
+  "releaseShaSemantics": "SELF means the Git commit containing this manifest; the immutable SHA is recorded in the release report and deployment provenance.",
+  "entryPoint": "server/functions/index.js",
+  "inventory": {
+    "productionFunctions": 253,
+    "applicationFunctions": 247,
+    "extensionFunctions": 6,
+    "sourceExports": 247
+  },
+  "applicationFunctions": [
+    {
+      "name": "acceptRideRequests",
+      "source": "server/functions/index.js#acceptRideRequests",
+      "runtime": "nodejs20",
+      "region": "us-central1",
+      "trigger": {
+        "type": "callable"
+      },
+      "productionSourceHash": "cf31070f10c4d5a4754da22d2bacddee2d5922a9",
+      "state": "ACTIVE",
+      "releaseSha": "SELF"
+    },
+    {
+      "name": "acknowledgeGiftStory",
+      "source": "server/functions/gift-story-automation.js#acknowledgeGiftStory",
+      "runtime": "nodejs20",
+      "region": "us-central1",
+      "trigger": {
+        "type": "callable"
+      },
+      "productionSourceHash": "470c1dc565cbba354f8ffddcd67f5c932b37c8cb",
+      "state": "ACTIVE",
+      "releaseSha": "SELF"
+    },
+    {
+      "name": "activateReferral",
+      "source": "server/functions/referrals.js#activateReferral",
+      "runtime": "nodejs20",
+      "region": "us-central1",
+      "trigger": {
+        "type": "callable"
+      },
+      "productionSourceHash": "470c1dc565cbba354f8ffddcd67f5c932b37c8cb",
+      "state": "ACTIVE",
+      "releaseSha": "SELF"
+    },
+    {
+      "name": "activateReferralOnDeliveryCompleted",
+      "source": "server/functions/referrals.js#activateReferralOnDeliveryCompleted",
+      "runtime": "nodejs20",
+      "region": "us-central1",
+      "trigger": {
+        "type": "event",
+        "eventType": "providers/cloud.firestore/eventTypes/document.update",
+        "resource": "projects/circum-2797c/databases/(default)/documents/deliveryRequests/{deliveryId}",
+        "retry": false
+      },
+      "productionSourceHash": "7aa4c8fc023643033b3f90258e479a2be5a1c52b",
+      "state": "ACTIVE",
+      "releaseSha": "SELF"
+    },
+    {
+      "name": "activateReferralOnGiftCompleted",
+      "source": "server/functions/referrals.js#activateReferralOnGiftCompleted",
+      "runtime": "nodejs20",
+      "region": "us-central1",
+      "trigger": {
+        "type": "event",
+        "eventType": "providers/cloud.firestore/eventTypes/document.update",
+        "resource": "projects/circum-2797c/databases/(default)/documents/giftRequests/{giftRequestId}",
+        "retry": false
+      },
+      "productionSourceHash": "7aa4c8fc023643033b3f90258e479a2be5a1c52b",
+      "state": "ACTIVE",
+      "releaseSha": "SELF"
+    },
+    {
+      "name": "activateReferralOnHealthPlusCompleted",
+      "source": "server/functions/referrals.js#activateReferralOnHealthPlusCompleted",
+      "runtime": "nodejs20",
+      "region": "us-central1",
+      "trigger": {
+        "type": "event",
+        "eventType": "providers/cloud.firestore/eventTypes/document.update",
+        "resource": "projects/circum-2797c/databases/(default)/documents/prescriptionPickups/{pickupId}",
+        "retry": false
+      },
+      "productionSourceHash": "7aa4c8fc023643033b3f90258e479a2be5a1c52b",
+      "state": "ACTIVE",
+      "releaseSha": "SELF"
+    },
+    {
+      "name": "adjudicateIris",
+      "source": "server/functions/iris.js#adjudicateIris",
+      "runtime": "nodejs20",
+      "region": "us-central1",
+      "trigger": {
+        "type": "callable"
+      },
+      "productionSourceHash": "470c1dc565cbba354f8ffddcd67f5c932b37c8cb",
+      "state": "ACTIVE",
+      "releaseSha": "SELF"
+    },
+    {
+      "name": "adminAddAdminNote",
+      "source": "server/functions/admin-operations-authority.js#adminAddAdminNote",
+      "runtime": "nodejs20",
+      "region": "us-central1",
+      "trigger": {
+        "type": "callable"
+      },
+      "productionSourceHash": "470c1dc565cbba354f8ffddcd67f5c932b37c8cb",
+      "state": "ACTIVE",
+      "releaseSha": "SELF"
+    },
+    {
+      "name": "adminApproveGiftCampaignMatch",
+      "source": "server/functions/admin-operations-authority.js#adminApproveGiftCampaignMatch",
+      "runtime": "nodejs20",
+      "region": "us-central1",
+      "trigger": {
+        "type": "callable"
+      },
+      "productionSourceHash": "470c1dc565cbba354f8ffddcd67f5c932b37c8cb",
+      "state": "ACTIVE",
+      "releaseSha": "SELF"
+    },
+    {
+      "name": "adminArchiveDelivery",
+      "source": "server/functions/admin-operations-authority.js#adminArchiveDelivery",
+      "runtime": "nodejs20",
+      "region": "us-central1",
+      "trigger": {
+        "type": "callable"
+      },
+      "productionSourceHash": "470c1dc565cbba354f8ffddcd67f5c932b37c8cb",
+      "state": "ACTIVE",
+      "releaseSha": "SELF"
+    },
+    {
+      "name": "adminBulkGiftCampaignAction",
+      "source": "server/functions/admin-operations-authority.js#adminBulkGiftCampaignAction",
+      "runtime": "nodejs20",
+      "region": "us-central1",
+      "trigger": {
+        "type": "callable"
+      },
+      "productionSourceHash": "470c1dc565cbba354f8ffddcd67f5c932b37c8cb",
+      "state": "ACTIVE",
+      "releaseSha": "SELF"
+    },
+    {
+      "name": "adminCreateBusinessInvoice",
+      "source": "server/functions/business-payments.js#adminCreateBusinessInvoice",
+      "runtime": "nodejs20",
+      "region": "us-central1",
+      "trigger": {
+        "type": "callable"
+      },
+      "productionSourceHash": "470c1dc565cbba354f8ffddcd67f5c932b37c8cb",
+      "state": "ACTIVE",
+      "releaseSha": "SELF"
+    },
+    {
+      "name": "adminDuplicateDelivery",
+      "source": "server/functions/admin-operations-authority.js#adminDuplicateDelivery",
+      "runtime": "nodejs20",
+      "region": "us-central1",
+      "trigger": {
+        "type": "callable"
+      },
+      "productionSourceHash": "470c1dc565cbba354f8ffddcd67f5c932b37c8cb",
+      "state": "ACTIVE",
+      "releaseSha": "SELF"
+    },
+    {
+      "name": "adminGovernanceAction",
+      "source": "server/functions/admin-governance.js#adminGovernanceAction",
+      "runtime": "nodejs20",
+      "region": "us-central1",
+      "trigger": {
+        "type": "callable"
+      },
+      "productionSourceHash": "470c1dc565cbba354f8ffddcd67f5c932b37c8cb",
+      "state": "ACTIVE",
+      "releaseSha": "SELF"
+    },
+    {
+      "name": "adminReconcileRiderEarnings",
+      "source": "server/functions/rider-earnings-summary.js#adminReconcileRiderEarnings",
+      "runtime": "nodejs20",
+      "region": "us-central1",
+      "trigger": {
+        "type": "callable"
+      },
+      "productionSourceHash": "470c1dc565cbba354f8ffddcd67f5c932b37c8cb",
+      "state": "ACTIVE",
+      "releaseSha": "SELF"
+    },
+    {
+      "name": "adminRecordAuditEntry",
+      "source": "server/functions/admin-operations-authority.js#adminRecordAuditEntry",
+      "runtime": "nodejs20",
+      "region": "us-central1",
+      "trigger": {
+        "type": "callable"
+      },
+      "productionSourceHash": "470c1dc565cbba354f8ffddcd67f5c932b37c8cb",
+      "state": "ACTIVE",
+      "releaseSha": "SELF"
+    },
+    {
+      "name": "adminRecordRiderEvent",
+      "source": "server/functions/admin-operations-authority.js#adminRecordRiderEvent",
+      "runtime": "nodejs20",
+      "region": "us-central1",
+      "trigger": {
+        "type": "callable"
+      },
+      "productionSourceHash": "470c1dc565cbba354f8ffddcd67f5c932b37c8cb",
+      "state": "ACTIVE",
+      "releaseSha": "SELF"
+    },
+    {
+      "name": "adminRepairCanonicalRider",
+      "source": "server/functions/admin-rider-authority.js#adminRepairCanonicalRider",
+      "runtime": "nodejs20",
+      "region": "us-central1",
+      "trigger": {
+        "type": "callable"
+      },
+      "productionSourceHash": "470c1dc565cbba354f8ffddcd67f5c932b37c8cb",
+      "state": "ACTIVE",
+      "releaseSha": "SELF"
+    },
+    {
+      "name": "adminRequestAccountMergeReview",
+      "source": "server/functions/admin-operations-authority.js#adminRequestAccountMergeReview",
+      "runtime": "nodejs20",
+      "region": "us-central1",
+      "trigger": {
+        "type": "callable"
+      },
+      "productionSourceHash": "470c1dc565cbba354f8ffddcd67f5c932b37c8cb",
+      "state": "ACTIVE",
+      "releaseSha": "SELF"
+    },
+    {
+      "name": "adminResolveAccess",
+      "source": "server/functions/admin-operations-authority.js#adminResolveAccess",
+      "runtime": "nodejs20",
+      "region": "us-central1",
+      "trigger": {
+        "type": "callable"
+      },
+      "productionSourceHash": "470c1dc565cbba354f8ffddcd67f5c932b37c8cb",
+      "state": "ACTIVE",
+      "releaseSha": "SELF"
+    },
+    {
+      "name": "adminResolveMessageReport",
+      "source": "server/functions/admin-operations-authority.js#adminResolveMessageReport",
+      "runtime": "nodejs20",
+      "region": "us-central1",
+      "trigger": {
+        "type": "callable"
+      },
+      "productionSourceHash": "470c1dc565cbba354f8ffddcd67f5c932b37c8cb",
+      "state": "ACTIVE",
+      "releaseSha": "SELF"
+    },
+    {
+      "name": "adminReviewRider",
+      "source": "server/functions/admin-rider-authority.js#adminReviewRider",
+      "runtime": "nodejs20",
+      "region": "us-central1",
+      "trigger": {
+        "type": "callable"
+      },
+      "productionSourceHash": "4bc8ea2cc8513ef98866bc645c3b7cb35221c277",
+      "state": "ACTIVE",
+      "releaseSha": "SELF"
+    },
+    {
+      "name": "adminReviewRiderWithdrawal",
+      "source": "server/functions/rider-connect.js#adminReviewRiderWithdrawal",
+      "runtime": "nodejs20",
+      "region": "us-central1",
+      "trigger": {
+        "type": "callable"
+      },
+      "productionSourceHash": "470c1dc565cbba354f8ffddcd67f5c932b37c8cb",
+      "state": "ACTIVE",
+      "releaseSha": "SELF"
+    },
+    {
+      "name": "adminSaveAdminUser",
+      "source": "server/functions/admin-operations-authority.js#adminSaveAdminUser",
+      "runtime": "nodejs20",
+      "region": "us-central1",
+      "trigger": {
+        "type": "callable"
+      },
+      "productionSourceHash": "470c1dc565cbba354f8ffddcd67f5c932b37c8cb",
+      "state": "ACTIVE",
+      "releaseSha": "SELF"
+    },
+    {
+      "name": "adminSaveGiftBrandPartner",
+      "source": "server/functions/admin-operations-authority.js#adminSaveGiftBrandPartner",
+      "runtime": "nodejs20",
+      "region": "us-central1",
+      "trigger": {
+        "type": "callable"
+      },
+      "productionSourceHash": "470c1dc565cbba354f8ffddcd67f5c932b37c8cb",
+      "state": "ACTIVE",
+      "releaseSha": "SELF"
+    },
+    {
+      "name": "adminSaveGiftRequestEditor",
+      "source": "server/functions/admin-operations-authority.js#adminSaveGiftRequestEditor",
+      "runtime": "nodejs20",
+      "region": "us-central1",
+      "trigger": {
+        "type": "callable"
+      },
+      "productionSourceHash": "470c1dc565cbba354f8ffddcd67f5c932b37c8cb",
+      "state": "ACTIVE",
+      "releaseSha": "SELF"
+    },
+    {
+      "name": "adminSuggestGiftCampaignMatch",
+      "source": "server/functions/admin-operations-authority.js#adminSuggestGiftCampaignMatch",
+      "runtime": "nodejs20",
+      "region": "us-central1",
+      "trigger": {
+        "type": "callable"
+      },
+      "productionSourceHash": "470c1dc565cbba354f8ffddcd67f5c932b37c8cb",
+      "state": "ACTIVE",
+      "releaseSha": "SELF"
+    },
+    {
+      "name": "adminUpdateBusinessAccountStatus",
+      "source": "server/functions/admin-operations-authority.js#adminUpdateBusinessAccountStatus",
+      "runtime": "nodejs20",
+      "region": "us-central1",
+      "trigger": {
+        "type": "callable"
+      },
+      "productionSourceHash": "470c1dc565cbba354f8ffddcd67f5c932b37c8cb",
+      "state": "ACTIVE",
+      "releaseSha": "SELF"
+    },
+    {
+      "name": "adminUpdateBusinessMember",
+      "source": "server/functions/admin-operations-authority.js#adminUpdateBusinessMember",
+      "runtime": "nodejs20",
+      "region": "us-central1",
+      "trigger": {
+        "type": "callable"
+      },
+      "productionSourceHash": "470c1dc565cbba354f8ffddcd67f5c932b37c8cb",
+      "state": "ACTIVE",
+      "releaseSha": "SELF"
+    },
+    {
+      "name": "adminUpdateBusinessOperation",
+      "source": "server/functions/admin-operations-authority.js#adminUpdateBusinessOperation",
+      "runtime": "nodejs20",
+      "region": "us-central1",
+      "trigger": {
+        "type": "callable"
+      },
+      "productionSourceHash": "470c1dc565cbba354f8ffddcd67f5c932b37c8cb",
+      "state": "ACTIVE",
+      "releaseSha": "SELF"
+    },
+    {
+      "name": "adminUpdateDeliveryOperation",
+      "source": "server/functions/admin-operations-authority.js#adminUpdateDeliveryOperation",
+      "runtime": "nodejs20",
+      "region": "us-central1",
+      "trigger": {
+        "type": "callable"
+      },
+      "productionSourceHash": "470c1dc565cbba354f8ffddcd67f5c932b37c8cb",
+      "state": "ACTIVE",
+      "releaseSha": "SELF"
+    },
+    {
+      "name": "adminUpdateFinanceWorkflow",
+      "source": "server/functions/admin-operations-authority.js#adminUpdateFinanceWorkflow",
+      "runtime": "nodejs20",
+      "region": "us-central1",
+      "trigger": {
+        "type": "callable"
+      },
+      "productionSourceHash": "470c1dc565cbba354f8ffddcd67f5c932b37c8cb",
+      "state": "ACTIVE",
+      "releaseSha": "SELF"
+    },
+    {
+      "name": "adminUpdateGiftCampaignParticipant",
+      "source": "server/functions/admin-operations-authority.js#adminUpdateGiftCampaignParticipant",
+      "runtime": "nodejs20",
+      "region": "us-central1",
+      "trigger": {
+        "type": "callable"
+      },
+      "productionSourceHash": "470c1dc565cbba354f8ffddcd67f5c932b37c8cb",
+      "state": "ACTIVE",
+      "releaseSha": "SELF"
+    },
+    {
+      "name": "adminUpdateGiftWorkflow",
+      "source": "server/functions/admin-operations-authority.js#adminUpdateGiftWorkflow",
+      "runtime": "nodejs20",
+      "region": "us-central1",
+      "trigger": {
+        "type": "callable"
+      },
+      "productionSourceHash": "470c1dc565cbba354f8ffddcd67f5c932b37c8cb",
+      "state": "ACTIVE",
+      "releaseSha": "SELF"
+    },
+    {
+      "name": "adminUpdateGiftWorkspace",
+      "source": "server/functions/admin-operations-authority.js#adminUpdateGiftWorkspace",
+      "runtime": "nodejs20",
+      "region": "us-central1",
+      "trigger": {
+        "type": "callable"
+      },
+      "productionSourceHash": "cf31070f10c4d5a4754da22d2bacddee2d5922a9",
+      "state": "ACTIVE",
+      "releaseSha": "SELF"
+    },
+    {
+      "name": "adminUpdateHealthPlusPickup",
+      "source": "server/functions/admin-operations-authority.js#adminUpdateHealthPlusPickup",
+      "runtime": "nodejs20",
+      "region": "us-central1",
+      "trigger": {
+        "type": "callable"
+      },
+      "productionSourceHash": "470c1dc565cbba354f8ffddcd67f5c932b37c8cb",
+      "state": "ACTIVE",
+      "releaseSha": "SELF"
+    },
+    {
+      "name": "adminUpdateHealthPlusProfile",
+      "source": "server/functions/admin-operations-authority.js#adminUpdateHealthPlusProfile",
+      "runtime": "nodejs20",
+      "region": "us-central1",
+      "trigger": {
+        "type": "callable"
+      },
+      "productionSourceHash": "470c1dc565cbba354f8ffddcd67f5c932b37c8cb",
+      "state": "ACTIVE",
+      "releaseSha": "SELF"
+    },
+    {
+      "name": "adminUpdateHealthPlusSchedule",
+      "source": "server/functions/admin-operations-authority.js#adminUpdateHealthPlusSchedule",
+      "runtime": "nodejs20",
+      "region": "us-central1",
+      "trigger": {
+        "type": "callable"
+      },
+      "productionSourceHash": "470c1dc565cbba354f8ffddcd67f5c932b37c8cb",
+      "state": "ACTIVE",
+      "releaseSha": "SELF"
+    },
+    {
+      "name": "adminUpdateIrisCandidateWorkflow",
+      "source": "server/functions/admin-operations-authority.js#adminUpdateIrisCandidateWorkflow",
+      "runtime": "nodejs20",
+      "region": "us-central1",
+      "trigger": {
+        "type": "callable"
+      },
+      "productionSourceHash": "470c1dc565cbba354f8ffddcd67f5c932b37c8cb",
+      "state": "ACTIVE",
+      "releaseSha": "SELF"
+    },
+    {
+      "name": "adminUpdateIrisRepositoryRecord",
+      "source": "server/functions/admin-operations-authority.js#adminUpdateIrisRepositoryRecord",
+      "runtime": "nodejs20",
+      "region": "us-central1",
+      "trigger": {
+        "type": "callable"
+      },
+      "productionSourceHash": "470c1dc565cbba354f8ffddcd67f5c932b37c8cb",
+      "state": "ACTIVE",
+      "releaseSha": "SELF"
+    },
+    {
+      "name": "adminUpdateIrisReview",
+      "source": "server/functions/admin-operations-authority.js#adminUpdateIrisReview",
+      "runtime": "nodejs20",
+      "region": "us-central1",
+      "trigger": {
+        "type": "callable"
+      },
+      "productionSourceHash": "470c1dc565cbba354f8ffddcd67f5c932b37c8cb",
+      "state": "ACTIVE",
+      "releaseSha": "SELF"
+    },
+    {
+      "name": "adminUpdatePlatformRecord",
+      "source": "server/functions/admin-operations-authority.js#adminUpdatePlatformRecord",
+      "runtime": "nodejs20",
+      "region": "us-central1",
+      "trigger": {
+        "type": "callable"
+      },
+      "productionSourceHash": "470c1dc565cbba354f8ffddcd67f5c932b37c8cb",
+      "state": "ACTIVE",
+      "releaseSha": "SELF"
+    },
+    {
+      "name": "adminUpdateSenderAccountStatus",
+      "source": "server/functions/admin-operations-authority.js#adminUpdateSenderAccountStatus",
+      "runtime": "nodejs20",
+      "region": "us-central1",
+      "trigger": {
+        "type": "callable"
+      },
+      "productionSourceHash": "470c1dc565cbba354f8ffddcd67f5c932b37c8cb",
+      "state": "ACTIVE",
+      "releaseSha": "SELF"
+    },
+    {
+      "name": "adminUpdateSenderTrust",
+      "source": "server/functions/sender-trust.js#adminUpdateSenderTrust",
+      "runtime": "nodejs20",
+      "region": "us-central1",
+      "trigger": {
+        "type": "callable"
+      },
+      "productionSourceHash": "470c1dc565cbba354f8ffddcd67f5c932b37c8cb",
+      "state": "ACTIVE",
+      "releaseSha": "SELF"
+    },
+    {
+      "name": "analyseIris",
+      "source": "server/functions/iris.js#analyseIris",
+      "runtime": "nodejs20",
+      "region": "us-central1",
+      "trigger": {
+        "type": "callable"
+      },
+      "productionSourceHash": "470c1dc565cbba354f8ffddcd67f5c932b37c8cb",
+      "state": "ACTIVE",
+      "releaseSha": "SELF"
+    },
+    {
+      "name": "analyseParcelPhotoForIris",
+      "source": "server/functions/iris-photo-analysis.js#analyseParcelPhotoForIris",
+      "runtime": "nodejs20",
+      "region": "us-central1",
+      "trigger": {
+        "type": "callable"
+      },
+      "productionSourceHash": "470c1dc565cbba354f8ffddcd67f5c932b37c8cb",
+      "state": "ACTIVE",
+      "releaseSha": "SELF"
+    },
+    {
+      "name": "applyCheckoutRoth",
+      "source": "server/functions/roth-ledger.js#applyCheckoutRoth",
+      "runtime": "nodejs20",
+      "region": "us-central1",
+      "trigger": {
+        "type": "callable"
+      },
+      "productionSourceHash": "4bc8ea2cc8513ef98866bc645c3b7cb35221c277",
+      "state": "ACTIVE",
+      "releaseSha": "SELF"
+    },
+    {
+      "name": "archiveExpiredDeliveries",
+      "source": "server/functions/delivery-cleanup.js#archiveExpiredDeliveries",
+      "runtime": "nodejs20",
+      "region": "us-central1",
+      "trigger": {
+        "type": "schedule",
+        "schedule": null,
+        "timeZone": null
+      },
+      "productionSourceHash": "7aa4c8fc023643033b3f90258e479a2be5a1c52b",
+      "state": "ACTIVE",
+      "releaseSha": "SELF"
+    },
+    {
+      "name": "attachReferralCode",
+      "source": "server/functions/referrals.js#attachReferralCode",
+      "runtime": "nodejs20",
+      "region": "us-central1",
+      "trigger": {
+        "type": "callable"
+      },
+      "productionSourceHash": "470c1dc565cbba354f8ffddcd67f5c932b37c8cb",
+      "state": "ACTIVE",
+      "releaseSha": "SELF"
+    },
+    {
+      "name": "awardFoundingRiderOnApproval",
+      "source": "server/functions/legends.js#awardFoundingRiderOnApproval",
+      "runtime": "nodejs20",
+      "region": "us-central1",
+      "trigger": {
+        "type": "event",
+        "eventType": "providers/cloud.firestore/eventTypes/document.write",
+        "resource": "projects/circum-2797c/databases/(default)/documents/riderProfiles/{riderId}",
+        "retry": false
+      },
+      "productionSourceHash": "7aa4c8fc023643033b3f90258e479a2be5a1c52b",
+      "state": "ACTIVE",
+      "releaseSha": "SELF"
+    },
+    {
+      "name": "awardFoundingRiderOnRiderApproval",
+      "source": "server/functions/legends.js#awardFoundingRiderOnRiderApproval",
+      "runtime": "nodejs20",
+      "region": "us-central1",
+      "trigger": {
+        "type": "event",
+        "eventType": "providers/cloud.firestore/eventTypes/document.write",
+        "resource": "projects/circum-2797c/databases/(default)/documents/riders/{riderId}",
+        "retry": false
+      },
+      "productionSourceHash": "7aa4c8fc023643033b3f90258e479a2be5a1c52b",
+      "state": "ACTIVE",
+      "releaseSha": "SELF"
+    },
+    {
+      "name": "awardLegendOnCompletion",
+      "source": "server/functions/legends.js#awardLegendOnCompletion",
+      "runtime": "nodejs20",
+      "region": "us-central1",
+      "trigger": {
+        "type": "event",
+        "eventType": "providers/cloud.firestore/eventTypes/document.update",
+        "resource": "projects/circum-2797c/databases/(default)/documents/deliveryRequests/{deliveryId}",
+        "retry": false
+      },
+      "productionSourceHash": "7aa4c8fc023643033b3f90258e479a2be5a1c52b",
+      "state": "ACTIVE",
+      "releaseSha": "SELF"
+    },
+    {
+      "name": "awardPatronOnBusinessInvoicePaid",
+      "source": "server/functions/legends.js#awardPatronOnBusinessInvoicePaid",
+      "runtime": "nodejs20",
+      "region": "us-central1",
+      "trigger": {
+        "type": "event",
+        "eventType": "providers/cloud.firestore/eventTypes/document.write",
+        "resource": "projects/circum-2797c/databases/(default)/documents/businessInvoices/{invoiceId}",
+        "retry": false
+      },
+      "productionSourceHash": "7aa4c8fc023643033b3f90258e479a2be5a1c52b",
+      "state": "ACTIVE",
+      "releaseSha": "SELF"
+    },
+    {
+      "name": "calculateEarnings",
+      "source": "server/functions/legacy-financial-endpoints.js#calculateEarnings",
+      "runtime": "nodejs20",
+      "region": "us-central1",
+      "trigger": {
+        "type": "https"
+      },
+      "productionSourceHash": "7aa4c8fc023643033b3f90258e479a2be5a1c52b",
+      "state": "ACTIVE",
+      "releaseSha": "SELF"
+    },
+    {
+      "name": "cancelAdjustedCollection",
+      "source": "server/functions/delivery-adjustments.js#cancelAdjustedCollection",
+      "runtime": "nodejs20",
+      "region": "us-central1",
+      "trigger": {
+        "type": "callable"
+      },
+      "productionSourceHash": "470c1dc565cbba354f8ffddcd67f5c932b37c8cb",
+      "state": "ACTIVE",
+      "releaseSha": "SELF"
+    },
+    {
+      "name": "cancelDelivery",
+      "source": "server/functions/delivery-policy.js#cancelDelivery",
+      "runtime": "nodejs20",
+      "region": "us-central1",
+      "trigger": {
+        "type": "callable"
+      },
+      "productionSourceHash": "470c1dc565cbba354f8ffddcd67f5c932b37c8cb",
+      "state": "ACTIVE",
+      "releaseSha": "SELF"
+    },
+    {
+      "name": "cancelRiderWithdrawal",
+      "source": "server/functions/rider-connect.js#cancelRiderWithdrawal",
+      "runtime": "nodejs20",
+      "region": "us-central1",
+      "trigger": {
+        "type": "callable"
+      },
+      "productionSourceHash": "470c1dc565cbba354f8ffddcd67f5c932b37c8cb",
+      "state": "ACTIVE",
+      "releaseSha": "SELF"
+    },
+    {
+      "name": "cleanupExpiredGiftStories",
+      "source": "server/functions/gift-story-automation.js#cleanupExpiredGiftStories",
+      "runtime": "nodejs20",
+      "region": "us-central1",
+      "trigger": {
+        "type": "schedule",
+        "schedule": null,
+        "timeZone": null
+      },
+      "productionSourceHash": "7aa4c8fc023643033b3f90258e479a2be5a1c52b",
+      "state": "ACTIVE",
+      "releaseSha": "SELF"
+    },
+    {
+      "name": "cleanupExpiredGiftVoiceDrafts",
+      "source": "server/functions/gifts-payment.js#cleanupExpiredGiftVoiceDrafts",
+      "runtime": "nodejs20",
+      "region": "us-central1",
+      "trigger": {
+        "type": "schedule",
+        "schedule": null,
+        "timeZone": null
+      },
+      "productionSourceHash": "7aa4c8fc023643033b3f90258e479a2be5a1c52b",
+      "state": "ACTIVE",
+      "releaseSha": "SELF"
+    },
+    {
+      "name": "cleanupExpiredSenderDrafts",
+      "source": "server/functions/sender-booking.js#cleanupExpiredSenderDrafts",
+      "runtime": "nodejs20",
+      "region": "us-central1",
+      "trigger": {
+        "type": "schedule",
+        "schedule": null,
+        "timeZone": null
+      },
+      "productionSourceHash": "7aa4c8fc023643033b3f90258e479a2be5a1c52b",
+      "state": "ACTIVE",
+      "releaseSha": "SELF"
+    },
+    {
+      "name": "closeCircumAccount",
+      "source": "server/functions/account-closure.js#closeCircumAccount",
+      "runtime": "nodejs20",
+      "region": "us-central1",
+      "trigger": {
+        "type": "callable"
+      },
+      "productionSourceHash": "470c1dc565cbba354f8ffddcd67f5c932b37c8cb",
+      "state": "ACTIVE",
+      "releaseSha": "SELF"
+    },
+    {
+      "name": "completeDelivery",
+      "source": "server/functions/delivery-tracking.js#completeDelivery",
+      "runtime": "nodejs20",
+      "region": "us-central1",
+      "trigger": {
+        "type": "callable"
+      },
+      "productionSourceHash": "91889186caefe02a520a04ed208b7133af93c75d",
+      "state": "ACTIVE",
+      "releaseSha": "SELF",
+      "criticalTarget": {
+        "classification": "D",
+        "productionVersion": 7,
+        "productionBuild": "e58d8f9b-8d46-471e-b409-6b33366c06ea",
+        "productionSource": "gs://gcf-sources-516426305461-us-central1/completeDelivery-dd06e723-698f-4757-8e53-dcc763cd3aee/version-7/function-source.zip#0",
+        "reconciliation": "Recovered deployed callable contract and merged it with the newer canonical settlement path."
+      }
+    },
+    {
+      "name": "completeSenderWalletOnboarding",
+      "source": "server/functions/roth-ledger.js#completeSenderWalletOnboarding",
+      "runtime": "nodejs20",
+      "region": "us-central1",
+      "trigger": {
+        "type": "callable"
+      },
+      "productionSourceHash": "470c1dc565cbba354f8ffddcd67f5c932b37c8cb",
+      "state": "ACTIVE",
+      "releaseSha": "SELF"
+    },
+    {
+      "name": "confirmRiderIrisAssessment",
+      "source": "server/functions/rider-iris-acknowledgement.js#confirmRiderIrisAssessment",
+      "runtime": "nodejs20",
+      "region": "us-central1",
+      "trigger": {
+        "type": "callable"
+      },
+      "productionSourceHash": "470c1dc565cbba354f8ffddcd67f5c932b37c8cb",
+      "state": "ACTIVE",
+      "releaseSha": "SELF"
+    },
+    {
+      "name": "createBusinessAccount",
+      "source": "server/functions/business-access.js#createBusinessAccount",
+      "runtime": "nodejs20",
+      "region": "us-central1",
+      "trigger": {
+        "type": "callable"
+      },
+      "productionSourceHash": "470c1dc565cbba354f8ffddcd67f5c932b37c8cb",
+      "state": "ACTIVE",
+      "releaseSha": "SELF"
+    },
+    {
+      "name": "createBusinessInvoiceCheckout",
+      "source": "server/functions/business-payments.js#createBusinessInvoiceCheckout",
+      "runtime": "nodejs20",
+      "region": "us-central1",
+      "trigger": {
+        "type": "callable"
+      },
+      "productionSourceHash": "cf31070f10c4d5a4754da22d2bacddee2d5922a9",
+      "state": "ACTIVE",
+      "releaseSha": "SELF"
+    },
+    {
+      "name": "createBusinessRothCheckout",
+      "source": "server/functions/business-payments.js#createBusinessRothCheckout",
+      "runtime": "nodejs20",
+      "region": "us-central1",
+      "trigger": {
+        "type": "callable"
+      },
+      "productionSourceHash": "cf31070f10c4d5a4754da22d2bacddee2d5922a9",
+      "state": "ACTIVE",
+      "releaseSha": "SELF"
+    },
+    {
+      "name": "createDeliveryAdjustmentPayment",
+      "source": "server/functions/delivery-adjustments.js#createDeliveryAdjustmentPayment",
+      "runtime": "nodejs20",
+      "region": "us-central1",
+      "trigger": {
+        "type": "callable"
+      },
+      "productionSourceHash": "470c1dc565cbba354f8ffddcd67f5c932b37c8cb",
+      "state": "ACTIVE",
+      "releaseSha": "SELF"
+    },
+    {
+      "name": "createGiftPayment",
+      "source": "server/functions/gifts-payment.js#createGiftPayment",
+      "runtime": "nodejs20",
+      "region": "us-central1",
+      "trigger": {
+        "type": "callable"
+      },
+      "productionSourceHash": "663cc9dc6b9b2395e1e6a4ad01e82709b1b2d639",
+      "state": "ACTIVE",
+      "releaseSha": "SELF"
+    },
+    {
+      "name": "createGiftStoryVideoUpload",
+      "source": "server/functions/gift-story-automation.js#createGiftStoryVideoUpload",
+      "runtime": "nodejs20",
+      "region": "us-central1",
+      "trigger": {
+        "type": "callable"
+      },
+      "productionSourceHash": "470c1dc565cbba354f8ffddcd67f5c932b37c8cb",
+      "state": "ACTIVE",
+      "releaseSha": "SELF"
+    },
+    {
+      "name": "createHealthPlusBooking",
+      "source": "server/functions/health-plus.js#createHealthPlusBooking",
+      "runtime": "nodejs20",
+      "region": "us-central1",
+      "trigger": {
+        "type": "callable"
+      },
+      "productionSourceHash": "f3086864b3b83860be00bd8233b70a99359dfe60",
+      "state": "ACTIVE",
+      "releaseSha": "SELF"
+    },
+    {
+      "name": "createHealthPlusCheckoutSession",
+      "source": "server/functions/health-plus.js#createHealthPlusCheckoutSession",
+      "runtime": "nodejs20",
+      "region": "us-central1",
+      "trigger": {
+        "type": "https"
+      },
+      "productionSourceHash": "08dbd6531d6bdd4453e165601f061796efec2e89",
+      "state": "ACTIVE",
+      "releaseSha": "SELF"
+    },
+    {
+      "name": "createRiderTransferOrPayout",
+      "source": "server/functions/rider-connect.js#createRiderTransferOrPayout",
+      "runtime": "nodejs20",
+      "region": "us-central1",
+      "trigger": {
+        "type": "callable"
+      },
+      "productionSourceHash": "f6bbb70ff32bea542261939caaa510b59857e3e0",
+      "state": "ACTIVE",
+      "releaseSha": "SELF"
+    },
+    {
+      "name": "createSenderBookingQuote",
+      "source": "server/functions/sender-booking.js#createSenderBookingQuote",
+      "runtime": "nodejs20",
+      "region": "us-central1",
+      "trigger": {
+        "type": "callable"
+      },
+      "productionSourceHash": "f3086864b3b83860be00bd8233b70a99359dfe60",
+      "state": "ACTIVE",
+      "releaseSha": "SELF"
+    },
+    {
+      "name": "createSenderPaidDelivery",
+      "source": "server/functions/sender-booking.js#createSenderPaidDelivery",
+      "runtime": "nodejs20",
+      "region": "us-central1",
+      "trigger": {
+        "type": "callable"
+      },
+      "productionSourceHash": "663cc9dc6b9b2395e1e6a4ad01e82709b1b2d639",
+      "state": "ACTIVE",
+      "releaseSha": "SELF"
+    },
+    {
+      "name": "createSenderPaymentSession",
+      "source": "server/functions/sender-booking.js#createSenderPaymentSession",
+      "runtime": "nodejs20",
+      "region": "us-central1",
+      "trigger": {
+        "type": "callable"
+      },
+      "productionSourceHash": "cf31070f10c4d5a4754da22d2bacddee2d5922a9",
+      "state": "ACTIVE",
+      "releaseSha": "SELF"
+    },
+    {
+      "name": "createSenderSetupIntent",
+      "source": "server/functions/sender-finance.js#createSenderSetupIntent",
+      "runtime": "nodejs20",
+      "region": "us-central1",
+      "trigger": {
+        "type": "callable"
+      },
+      "productionSourceHash": "470c1dc565cbba354f8ffddcd67f5c932b37c8cb",
+      "state": "ACTIVE",
+      "releaseSha": "SELF"
+    },
+    {
+      "name": "createStripeConnectAccountForRider",
+      "source": "server/functions/rider-connect.js#createStripeConnectAccountForRider",
+      "runtime": "nodejs20",
+      "region": "us-central1",
+      "trigger": {
+        "type": "callable"
+      },
+      "productionSourceHash": "f6bbb70ff32bea542261939caaa510b59857e3e0",
+      "state": "ACTIVE",
+      "releaseSha": "SELF"
+    },
+    {
+      "name": "createStripeOnboardingLink",
+      "source": "server/functions/rider-connect.js#createStripeOnboardingLink",
+      "runtime": "nodejs20",
+      "region": "us-central1",
+      "trigger": {
+        "type": "callable"
+      },
+      "productionSourceHash": "a6b1389ac0fb5ce6409bb01ada2002c3a4e9af6e",
+      "state": "ACTIVE",
+      "releaseSha": "SELF"
+    },
+    {
+      "name": "createWalletTopUp",
+      "source": "server/functions/roth-ledger.js#createWalletTopUp",
+      "runtime": "nodejs20",
+      "region": "us-central1",
+      "trigger": {
+        "type": "callable"
+      },
+      "productionSourceHash": "470c1dc565cbba354f8ffddcd67f5c932b37c8cb",
+      "state": "ACTIVE",
+      "releaseSha": "SELF"
+    },
+    {
+      "name": "createWeightAdjustedNotification",
+      "source": "server/functions/rider-account.js#createWeightAdjustedNotification",
+      "runtime": "nodejs20",
+      "region": "us-central1",
+      "trigger": {
+        "type": "callable"
+      },
+      "productionSourceHash": "4c93bb9e84a9b301ee993f3d6eb7e8d85c4405e7",
+      "state": "ACTIVE",
+      "releaseSha": "SELF"
+    },
+    {
+      "name": "debitRothCredit",
+      "source": "server/functions/roth-ledger.js#debitRothCredit",
+      "runtime": "nodejs20",
+      "region": "us-central1",
+      "trigger": {
+        "type": "callable"
+      },
+      "productionSourceHash": "470c1dc565cbba354f8ffddcd67f5c932b37c8cb",
+      "state": "ACTIVE",
+      "releaseSha": "SELF"
+    },
+    {
+      "name": "deleteIrisReferenceImage",
+      "source": "server/functions/admin-iris-reference-images.js#deleteIrisReferenceImage",
+      "runtime": "nodejs20",
+      "region": "us-central1",
+      "trigger": {
+        "type": "callable"
+      },
+      "productionSourceHash": "470c1dc565cbba354f8ffddcd67f5c932b37c8cb",
+      "state": "ACTIVE",
+      "releaseSha": "SELF"
+    },
+    {
+      "name": "deleteSenderDraft",
+      "source": "server/functions/sender-booking.js#deleteSenderDraft",
+      "runtime": "nodejs20",
+      "region": "us-central1",
+      "trigger": {
+        "type": "callable"
+      },
+      "productionSourceHash": "470c1dc565cbba354f8ffddcd67f5c932b37c8cb",
+      "state": "ACTIVE",
+      "releaseSha": "SELF"
+    },
+    {
+      "name": "deleteSenderSavedAddress",
+      "source": "server/functions/sender-saved-addresses.js#deleteSenderSavedAddress",
+      "runtime": "nodejs20",
+      "region": "us-central1",
+      "trigger": {
+        "type": "callable"
+      },
+      "productionSourceHash": "470c1dc565cbba354f8ffddcd67f5c932b37c8cb",
+      "state": "ACTIVE",
+      "releaseSha": "SELF"
+    },
+    {
+      "name": "detachSenderPaymentMethod",
+      "source": "server/functions/sender-finance.js#detachSenderPaymentMethod",
+      "runtime": "nodejs20",
+      "region": "us-central1",
+      "trigger": {
+        "type": "callable"
+      },
+      "productionSourceHash": "470c1dc565cbba354f8ffddcd67f5c932b37c8cb",
+      "state": "ACTIVE",
+      "releaseSha": "SELF"
+    },
+    {
+      "name": "endTrip",
+      "source": "server/functions/index.js#endTrip",
+      "runtime": "nodejs20",
+      "region": "us-central1",
+      "trigger": {
+        "type": "https"
+      },
+      "productionSourceHash": "4bc8ea2cc8513ef98866bc645c3b7cb35221c277",
+      "state": "ACTIVE",
+      "releaseSha": "SELF"
+    },
+    {
+      "name": "ensureBusinessCompanyCode",
+      "source": "server/functions/business-access.js#ensureBusinessCompanyCode",
+      "runtime": "nodejs20",
+      "region": "us-central1",
+      "trigger": {
+        "type": "callable"
+      },
+      "productionSourceHash": "470c1dc565cbba354f8ffddcd67f5c932b37c8cb",
+      "state": "ACTIVE",
+      "releaseSha": "SELF"
+    },
+    {
+      "name": "ensureReferralCode",
+      "source": "server/functions/referrals.js#ensureReferralCode",
+      "runtime": "nodejs20",
+      "region": "us-central1",
+      "trigger": {
+        "type": "callable"
+      },
+      "productionSourceHash": "470c1dc565cbba354f8ffddcd67f5c932b37c8cb",
+      "state": "ACTIVE",
+      "releaseSha": "SELF"
+    },
+    {
+      "name": "ensureRiderRothWallet",
+      "source": "server/functions/rider-account.js#ensureRiderRothWallet",
+      "runtime": "nodejs20",
+      "region": "us-central1",
+      "trigger": {
+        "type": "callable"
+      },
+      "productionSourceHash": "4c93bb9e84a9b301ee993f3d6eb7e8d85c4405e7",
+      "state": "ACTIVE",
+      "releaseSha": "SELF"
+    },
+    {
+      "name": "ensureSenderAccount",
+      "source": "server/functions/sender-account.js#ensureSenderAccount",
+      "runtime": "nodejs20",
+      "region": "us-central1",
+      "trigger": {
+        "type": "callable"
+      },
+      "productionSourceHash": "470c1dc565cbba354f8ffddcd67f5c932b37c8cb",
+      "state": "ACTIVE",
+      "releaseSha": "SELF"
+    },
+    {
+      "name": "escalateUnclaimedDeliveries",
+      "source": "server/functions/platform-notifications.js#escalateUnclaimedDeliveries",
+      "runtime": "nodejs20",
+      "region": "us-central1",
+      "trigger": {
+        "type": "schedule",
+        "schedule": null,
+        "timeZone": null
+      },
+      "productionSourceHash": "7aa4c8fc023643033b3f90258e479a2be5a1c52b",
+      "state": "ACTIVE",
+      "releaseSha": "SELF"
+    },
+    {
+      "name": "finalizeDeliveryAdjustmentPayment",
+      "source": "server/functions/delivery-adjustments.js#finalizeDeliveryAdjustmentPayment",
+      "runtime": "nodejs20",
+      "region": "us-central1",
+      "trigger": {
+        "type": "callable"
+      },
+      "productionSourceHash": "470c1dc565cbba354f8ffddcd67f5c932b37c8cb",
+      "state": "ACTIVE",
+      "releaseSha": "SELF"
+    },
+    {
+      "name": "finalizeGiftPayment",
+      "source": "server/functions/gifts-payment.js#finalizeGiftPayment",
+      "runtime": "nodejs20",
+      "region": "us-central1",
+      "trigger": {
+        "type": "callable"
+      },
+      "productionSourceHash": "cf31070f10c4d5a4754da22d2bacddee2d5922a9",
+      "state": "ACTIVE",
+      "releaseSha": "SELF"
+    },
+    {
+      "name": "finalizeGiftStoryVideoUpload",
+      "source": "server/functions/gift-story-automation.js#finalizeGiftStoryVideoUpload",
+      "runtime": "nodejs20",
+      "region": "us-central1",
+      "trigger": {
+        "type": "callable"
+      },
+      "productionSourceHash": "4bc8ea2cc8513ef98866bc645c3b7cb35221c277",
+      "state": "ACTIVE",
+      "releaseSha": "SELF"
+    },
+    {
+      "name": "finalizeIrisReferenceImage",
+      "source": "server/functions/admin-iris-reference-images.js#finalizeIrisReferenceImage",
+      "runtime": "nodejs20",
+      "region": "us-central1",
+      "trigger": {
+        "type": "callable"
+      },
+      "productionSourceHash": "4bc8ea2cc8513ef98866bc645c3b7cb35221c277",
+      "state": "ACTIVE",
+      "releaseSha": "SELF"
+    },
+    {
+      "name": "finalizeSenderWebCheckout",
+      "source": "server/functions/sender-booking.js#finalizeSenderWebCheckout",
+      "runtime": "nodejs20",
+      "region": "us-central1",
+      "trigger": {
+        "type": "callable"
+      },
+      "productionSourceHash": "cf31070f10c4d5a4754da22d2bacddee2d5922a9",
+      "state": "ACTIVE",
+      "releaseSha": "SELF"
+    },
+    {
+      "name": "founderDesignateTestAccount",
+      "source": "server/functions/founder-authority.js#founderDesignateTestAccount",
+      "runtime": "nodejs20",
+      "region": "us-central1",
+      "trigger": {
+        "type": "callable"
+      },
+      "productionSourceHash": "470c1dc565cbba354f8ffddcd67f5c932b37c8cb",
+      "state": "ACTIVE",
+      "releaseSha": "SELF"
+    },
+    {
+      "name": "founderListTestAccounts",
+      "source": "server/functions/founder-authority.js#founderListTestAccounts",
+      "runtime": "nodejs20",
+      "region": "us-central1",
+      "trigger": {
+        "type": "callable"
+      },
+      "productionSourceHash": "470c1dc565cbba354f8ffddcd67f5c932b37c8cb",
+      "state": "ACTIVE",
+      "releaseSha": "SELF"
+    },
+    {
+      "name": "founderPreflightE2E",
+      "source": "server/functions/founder-authority.js#founderPreflightE2E",
+      "runtime": "nodejs20",
+      "region": "us-central1",
+      "trigger": {
+        "type": "callable"
+      },
+      "productionSourceHash": "470c1dc565cbba354f8ffddcd67f5c932b37c8cb",
+      "state": "ACTIVE",
+      "releaseSha": "SELF"
+    },
+    {
+      "name": "founderRevokeTestAccount",
+      "source": "server/functions/founder-authority.js#founderRevokeTestAccount",
+      "runtime": "nodejs20",
+      "region": "us-central1",
+      "trigger": {
+        "type": "callable"
+      },
+      "productionSourceHash": "470c1dc565cbba354f8ffddcd67f5c932b37c8cb",
+      "state": "ACTIVE",
+      "releaseSha": "SELF"
+    },
+    {
+      "name": "founderRiderOperationalPreflight",
+      "source": "server/functions/founder-authority.js#founderRiderOperationalPreflight",
+      "runtime": "nodejs20",
+      "region": "us-central1",
+      "trigger": {
+        "type": "callable"
+      },
+      "productionSourceHash": "ca36b3fd6449e696df95aa70e722e41e0ff775c7",
+      "state": "ACTIVE",
+      "releaseSha": "SELF",
+      "criticalTarget": {
+        "classification": "B",
+        "productionVersion": 5,
+        "productionBuild": "0494755d-e06e-4a6c-8c29-f865b04e93c8",
+        "productionSource": "gs://gcf-sources-516426305461-us-central1/founderRiderOperationalPreflight-cd88a8ca-75a1-4199-ac9c-25d87324947b/version-5/function-source.zip#0",
+        "reconciliation": "Recovered byte-equivalent founder operational preflight implementation."
+      }
+    },
+    {
+      "name": "generateHealthPlusRecurringBookings",
+      "source": "server/functions/health-plus-operations.js#generateHealthPlusRecurringBookings",
+      "runtime": "nodejs20",
+      "region": "us-central1",
+      "trigger": {
+        "type": "schedule",
+        "schedule": null,
+        "timeZone": null
+      },
+      "productionSourceHash": "7aa4c8fc023643033b3f90258e479a2be5a1c52b",
+      "state": "ACTIVE",
+      "releaseSha": "SELF"
+    },
+    {
+      "name": "getAvailableRequests",
+      "source": "server/functions/index.js#getAvailableRequests",
+      "runtime": "nodejs20",
+      "region": "us-central1",
+      "trigger": {
+        "type": "callable"
+      },
+      "productionSourceHash": "470c1dc565cbba354f8ffddcd67f5c932b37c8cb",
+      "state": "ACTIVE",
+      "releaseSha": "SELF"
+    },
+    {
+      "name": "getAvaliableRequests",
+      "source": "server/functions/index.js#getAvaliableRequests",
+      "runtime": "nodejs20",
+      "region": "us-central1",
+      "trigger": {
+        "type": "callable"
+      },
+      "productionSourceHash": "470c1dc565cbba354f8ffddcd67f5c932b37c8cb",
+      "state": "ACTIVE",
+      "releaseSha": "SELF"
+    },
+    {
+      "name": "getGiftStoryActionState",
+      "source": "server/functions/gift-story-automation.js#getGiftStoryActionState",
+      "runtime": "nodejs20",
+      "region": "us-central1",
+      "trigger": {
+        "type": "callable"
+      },
+      "productionSourceHash": "470c1dc565cbba354f8ffddcd67f5c932b37c8cb",
+      "state": "ACTIVE",
+      "releaseSha": "SELF"
+    },
+    {
+      "name": "getGiftStoryVideoDownload",
+      "source": "server/functions/gift-story-automation.js#getGiftStoryVideoDownload",
+      "runtime": "nodejs20",
+      "region": "us-central1",
+      "trigger": {
+        "type": "callable"
+      },
+      "productionSourceHash": "470c1dc565cbba354f8ffddcd67f5c932b37c8cb",
+      "state": "ACTIVE",
+      "releaseSha": "SELF"
+    },
+    {
+      "name": "getIrisReferenceImage",
+      "source": "server/functions/admin-iris-reference-images.js#getIrisReferenceImage",
+      "runtime": "nodejs20",
+      "region": "us-central1",
+      "trigger": {
+        "type": "callable"
+      },
+      "productionSourceHash": "4bc8ea2cc8513ef98866bc645c3b7cb35221c277",
+      "state": "ACTIVE",
+      "releaseSha": "SELF"
+    },
+    {
+      "name": "getOrCreateSupportConversation",
+      "source": "server/functions/communication-engine.js#getOrCreateSupportConversation",
+      "runtime": "nodejs20",
+      "region": "us-central1",
+      "trigger": {
+        "type": "callable"
+      },
+      "productionSourceHash": "470c1dc565cbba354f8ffddcd67f5c932b37c8cb",
+      "state": "ACTIVE",
+      "releaseSha": "SELF"
+    },
+    {
+      "name": "getRiderEarningsSummary",
+      "source": "server/functions/rider-earnings-summary.js#getRiderEarningsSummary",
+      "runtime": "nodejs20",
+      "region": "us-central1",
+      "trigger": {
+        "type": "callable"
+      },
+      "productionSourceHash": "470c1dc565cbba354f8ffddcd67f5c932b37c8cb",
+      "state": "ACTIVE",
+      "releaseSha": "SELF"
+    },
+    {
+      "name": "getSenderRothBalance",
+      "source": "server/functions/sender-booking.js#getSenderRothBalance",
+      "runtime": "nodejs20",
+      "region": "us-central1",
+      "trigger": {
+        "type": "callable"
+      },
+      "productionSourceHash": "470c1dc565cbba354f8ffddcd67f5c932b37c8cb",
+      "state": "ACTIVE",
+      "releaseSha": "SELF"
+    },
+    {
+      "name": "getSenderWallet",
+      "source": "server/functions/roth-ledger.js#getSenderWallet",
+      "runtime": "nodejs20",
+      "region": "us-central1",
+      "trigger": {
+        "type": "callable"
+      },
+      "productionSourceHash": "4bc8ea2cc8513ef98866bc645c3b7cb35221c277",
+      "state": "ACTIVE",
+      "releaseSha": "SELF"
+    },
+    {
+      "name": "getSenderWalletTransactions",
+      "source": "server/functions/roth-ledger.js#getSenderWalletTransactions",
+      "runtime": "nodejs20",
+      "region": "us-central1",
+      "trigger": {
+        "type": "callable"
+      },
+      "productionSourceHash": "470c1dc565cbba354f8ffddcd67f5c932b37c8cb",
+      "state": "ACTIVE",
+      "releaseSha": "SELF"
+    },
+    {
+      "name": "giftStoryLanding",
+      "source": "server/functions/gift-story-automation.js#giftStoryLanding",
+      "runtime": "nodejs20",
+      "region": "us-central1",
+      "trigger": {
+        "type": "https"
+      },
+      "productionSourceHash": "470c1dc565cbba354f8ffddcd67f5c932b37c8cb",
+      "state": "ACTIVE",
+      "releaseSha": "SELF"
+    },
+    {
+      "name": "goOffline",
+      "source": "server/functions/rider-presence.js#goOffline",
+      "runtime": "nodejs20",
+      "region": "us-central1",
+      "trigger": {
+        "type": "callable"
+      },
+      "productionSourceHash": "470c1dc565cbba354f8ffddcd67f5c932b37c8cb",
+      "state": "ACTIVE",
+      "releaseSha": "SELF"
+    },
+    {
+      "name": "goOnline",
+      "source": "server/functions/rider-presence.js#goOnline",
+      "runtime": "nodejs20",
+      "region": "us-central1",
+      "trigger": {
+        "type": "callable"
+      },
+      "productionSourceHash": "470c1dc565cbba354f8ffddcd67f5c932b37c8cb",
+      "state": "ACTIVE",
+      "releaseSha": "SELF"
+    },
+    {
+      "name": "grantRecognition",
+      "source": "server/functions/legends.js#grantRecognition",
+      "runtime": "nodejs20",
+      "region": "us-central1",
+      "trigger": {
+        "type": "callable"
+      },
+      "productionSourceHash": "470c1dc565cbba354f8ffddcd67f5c932b37c8cb",
+      "state": "ACTIVE",
+      "releaseSha": "SELF"
+    },
+    {
+      "name": "handleStripeConnectWebhook",
+      "source": "server/functions/rider-connect.js#handleStripeConnectWebhook",
+      "runtime": "nodejs20",
+      "region": "us-central1",
+      "trigger": {
+        "type": "https"
+      },
+      "productionSourceHash": "376069794b4f267eb34daa080169e3fb44ee3563",
+      "state": "ACTIVE",
+      "releaseSha": "SELF"
+    },
+    {
+      "name": "initialiseSenderWallet",
+      "source": "server/functions/roth-ledger.js#initialiseSenderWallet",
+      "runtime": "nodejs20",
+      "region": "us-central1",
+      "trigger": {
+        "type": "callable"
+      },
+      "productionSourceHash": "470c1dc565cbba354f8ffddcd67f5c932b37c8cb",
+      "state": "ACTIVE",
+      "releaseSha": "SELF"
+    },
+    {
+      "name": "inviteBusinessMember",
+      "source": "server/functions/business-access.js#inviteBusinessMember",
+      "runtime": "nodejs20",
+      "region": "us-central1",
+      "trigger": {
+        "type": "callable"
+      },
+      "productionSourceHash": "4bc8ea2cc8513ef98866bc645c3b7cb35221c277",
+      "state": "ACTIVE",
+      "releaseSha": "SELF"
+    },
+    {
+      "name": "issueRothCredit",
+      "source": "server/functions/roth-ledger.js#issueRothCredit",
+      "runtime": "nodejs20",
+      "region": "us-central1",
+      "trigger": {
+        "type": "callable"
+      },
+      "productionSourceHash": "470c1dc565cbba354f8ffddcd67f5c932b37c8cb",
+      "state": "ACTIVE",
+      "releaseSha": "SELF"
+    },
+    {
+      "name": "issueRothToWallets",
+      "source": "server/functions/roth-ledger.js#issueRothToWallets",
+      "runtime": "nodejs20",
+      "region": "us-central1",
+      "trigger": {
+        "type": "callable"
+      },
+      "productionSourceHash": "470c1dc565cbba354f8ffddcd67f5c932b37c8cb",
+      "state": "ACTIVE",
+      "releaseSha": "SELF"
+    },
+    {
+      "name": "listSenderPaymentMethods",
+      "source": "server/functions/sender-finance.js#listSenderPaymentMethods",
+      "runtime": "nodejs20",
+      "region": "us-central1",
+      "trigger": {
+        "type": "callable"
+      },
+      "productionSourceHash": "470c1dc565cbba354f8ffddcd67f5c932b37c8cb",
+      "state": "ACTIVE",
+      "releaseSha": "SELF"
+    },
+    {
+      "name": "liveDeliveryDiagnostics",
+      "source": "server/functions/operations-health-centre.js#liveDeliveryDiagnostics",
+      "runtime": "nodejs20",
+      "region": "us-central1",
+      "trigger": {
+        "type": "callable"
+      },
+      "productionSourceHash": "470c1dc565cbba354f8ffddcd67f5c932b37c8cb",
+      "state": "ACTIVE",
+      "releaseSha": "SELF"
+    },
+    {
+      "name": "loadSenderDraft",
+      "source": "server/functions/sender-booking.js#loadSenderDraft",
+      "runtime": "nodejs20",
+      "region": "us-central1",
+      "trigger": {
+        "type": "callable"
+      },
+      "productionSourceHash": "470c1dc565cbba354f8ffddcd67f5c932b37c8cb",
+      "state": "ACTIVE",
+      "releaseSha": "SELF"
+    },
+    {
+      "name": "lookupBusinessByCompanyCode",
+      "source": "server/functions/business-access.js#lookupBusinessByCompanyCode",
+      "runtime": "nodejs20",
+      "region": "us-central1",
+      "trigger": {
+        "type": "callable"
+      },
+      "productionSourceHash": "470c1dc565cbba354f8ffddcd67f5c932b37c8cb",
+      "state": "ACTIVE",
+      "releaseSha": "SELF"
+    },
+    {
+      "name": "manageGiftStoryAccess",
+      "source": "server/functions/gift-story-automation.js#manageGiftStoryAccess",
+      "runtime": "nodejs20",
+      "region": "us-central1",
+      "trigger": {
+        "type": "callable"
+      },
+      "productionSourceHash": "4bc8ea2cc8513ef98866bc645c3b7cb35221c277",
+      "state": "ACTIVE",
+      "releaseSha": "SELF"
+    },
+    {
+      "name": "markConversationRead",
+      "source": "server/functions/communication-engine.js#markConversationRead",
+      "runtime": "nodejs20",
+      "region": "us-central1",
+      "trigger": {
+        "type": "callable"
+      },
+      "productionSourceHash": "470c1dc565cbba354f8ffddcd67f5c932b37c8cb",
+      "state": "ACTIVE",
+      "releaseSha": "SELF"
+    },
+    {
+      "name": "markRiderNoShow",
+      "source": "server/functions/delivery-policy.js#markRiderNoShow",
+      "runtime": "nodejs20",
+      "region": "us-central1",
+      "trigger": {
+        "type": "callable"
+      },
+      "productionSourceHash": "470c1dc565cbba354f8ffddcd67f5c932b37c8cb",
+      "state": "ACTIVE",
+      "releaseSha": "SELF"
+    },
+    {
+      "name": "markSenderLegendCelebrationSeen",
+      "source": "server/functions/sender-account.js#markSenderLegendCelebrationSeen",
+      "runtime": "nodejs20",
+      "region": "us-central1",
+      "trigger": {
+        "type": "callable"
+      },
+      "productionSourceHash": "470c1dc565cbba354f8ffddcd67f5c932b37c8cb",
+      "state": "ACTIVE",
+      "releaseSha": "SELF"
+    },
+    {
+      "name": "markStaleRiderPresenceOffline",
+      "source": "server/functions/rider-presence.js#markStaleRiderPresenceOffline",
+      "runtime": "nodejs20",
+      "region": "us-central1",
+      "trigger": {
+        "type": "schedule",
+        "schedule": null,
+        "timeZone": null
+      },
+      "productionSourceHash": "7aa4c8fc023643033b3f90258e479a2be5a1c52b",
+      "state": "ACTIVE",
+      "releaseSha": "SELF"
+    },
+    {
+      "name": "onChatMessageCreated",
+      "source": "server/functions/platform-notifications.js#onChatMessageCreated",
+      "runtime": "nodejs20",
+      "region": "us-central1",
+      "trigger": {
+        "type": "event",
+        "eventType": "providers/cloud.firestore/eventTypes/document.create",
+        "resource": "projects/circum-2797c/databases/(default)/documents/chats/{chatId}/messages/{messageId}",
+        "retry": false
+      },
+      "productionSourceHash": "7aa4c8fc023643033b3f90258e479a2be5a1c52b",
+      "state": "ACTIVE",
+      "releaseSha": "SELF"
+    },
+    {
+      "name": "onDeliveryCompletedEvent",
+      "source": "server/functions/delivery-completed-event.js#onDeliveryCompletedEvent",
+      "runtime": "nodejs20",
+      "region": "us-central1",
+      "trigger": {
+        "type": "event",
+        "eventType": "providers/cloud.firestore/eventTypes/document.create",
+        "resource": "projects/circum-2797c/databases/(default)/documents/platformEvents/{eventId}",
+        "retry": true
+      },
+      "productionSourceHash": "a253d1beaa8e65891404a719dede337a633a24aa",
+      "state": "ACTIVE",
+      "releaseSha": "SELF",
+      "criticalTarget": {
+        "classification": "B",
+        "productionVersion": 6,
+        "productionBuild": "240216c1-add3-4bab-bf90-8ea88ca3936e",
+        "productionSource": "gs://gcf-sources-516426305461-us-central1/onDeliveryCompletedEvent-c0e4adc8-8029-4d49-afa7-55e91e388fe7/version-6/function-source.zip#0",
+        "reconciliation": "Recovered byte-equivalent canonical completion subscriber implementation."
+      }
+    },
+    {
+      "name": "onDeliveryCreated",
+      "source": "server/functions/platform-notifications.js#onDeliveryCreated",
+      "runtime": "nodejs20",
+      "region": "us-central1",
+      "trigger": {
+        "type": "event",
+        "eventType": "providers/cloud.firestore/eventTypes/document.create",
+        "resource": "projects/circum-2797c/databases/(default)/documents/deliveryRequests/{deliveryId}",
+        "retry": false
+      },
+      "productionSourceHash": "7aa4c8fc023643033b3f90258e479a2be5a1c52b",
+      "state": "ACTIVE",
+      "releaseSha": "SELF"
+    },
+    {
+      "name": "onDeliveryEvidencePhotoFinalized",
+      "source": "server/functions/delivery-evidence-media.js#onDeliveryEvidencePhotoFinalized",
+      "runtime": "nodejs20",
+      "region": "us-central1",
+      "trigger": {
+        "type": "event",
+        "eventType": "google.storage.object.finalize",
+        "resource": "projects/_/buckets/circum-2797c.appspot.com",
+        "retry": false
+      },
+      "productionSourceHash": "a253d1beaa8e65891404a719dede337a633a24aa",
+      "state": "ACTIVE",
+      "releaseSha": "SELF",
+      "criticalTarget": {
+        "classification": "B",
+        "productionVersion": 5,
+        "productionBuild": "240216c1-add3-4bab-bf90-8ea88ca3936e",
+        "productionSource": "gs://gcf-sources-516426305461-us-central1/onDeliveryCompletedEvent-c0e4adc8-8029-4d49-afa7-55e91e388fe7/version-6/function-source.zip#0",
+        "reconciliation": "Recovered byte-equivalent evidence thumbnail finalizer from the shared production archive."
+      }
+    },
+    {
+      "name": "onDeliveryLiveLocationWrite",
+      "source": "server/functions/movement-timeline.js#onDeliveryLiveLocationWrite",
+      "runtime": "nodejs20",
+      "region": "us-central1",
+      "trigger": {
+        "type": "event",
+        "eventType": "providers/cloud.firestore/eventTypes/document.write",
+        "resource": "projects/circum-2797c/databases/(default)/documents/deliveryLiveLocations/{deliveryId}",
+        "retry": false
+      },
+      "productionSourceHash": "7aa4c8fc023643033b3f90258e479a2be5a1c52b",
+      "state": "ACTIVE",
+      "releaseSha": "SELF"
+    },
+    {
+      "name": "onDeliveryPresenceWrite",
+      "source": "server/functions/rider-presence.js#onDeliveryPresenceWrite",
+      "runtime": "nodejs20",
+      "region": "us-central1",
+      "trigger": {
+        "type": "event",
+        "eventType": "providers/cloud.firestore/eventTypes/document.write",
+        "resource": "projects/circum-2797c/databases/(default)/documents/deliveryRequests/{deliveryId}",
+        "retry": false
+      },
+      "productionSourceHash": "7aa4c8fc023643033b3f90258e479a2be5a1c52b",
+      "state": "ACTIVE",
+      "releaseSha": "SELF"
+    },
+    {
+      "name": "onDeliveryUpdated",
+      "source": "server/functions/platform-notifications.js#onDeliveryUpdated",
+      "runtime": "nodejs20",
+      "region": "us-central1",
+      "trigger": {
+        "type": "event",
+        "eventType": "providers/cloud.firestore/eventTypes/document.update",
+        "resource": "projects/circum-2797c/databases/(default)/documents/deliveryRequests/{deliveryId}",
+        "retry": false
+      },
+      "productionSourceHash": "7aa4c8fc023643033b3f90258e479a2be5a1c52b",
+      "state": "ACTIVE",
+      "releaseSha": "SELF"
+    },
+    {
+      "name": "onDisputeCreated",
+      "source": "server/functions/platform-notifications.js#onDisputeCreated",
+      "runtime": "nodejs20",
+      "region": "us-central1",
+      "trigger": {
+        "type": "event",
+        "eventType": "providers/cloud.firestore/eventTypes/document.create",
+        "resource": "projects/circum-2797c/databases/(default)/documents/disputes/{disputeId}",
+        "retry": false
+      },
+      "productionSourceHash": "7aa4c8fc023643033b3f90258e479a2be5a1c52b",
+      "state": "ACTIVE",
+      "releaseSha": "SELF"
+    },
+    {
+      "name": "onGiftCampaignParticipantUpdated",
+      "source": "server/functions/platform-notifications.js#onGiftCampaignParticipantUpdated",
+      "runtime": "nodejs20",
+      "region": "us-central1",
+      "trigger": {
+        "type": "event",
+        "eventType": "providers/cloud.firestore/eventTypes/document.update",
+        "resource": "projects/circum-2797c/databases/(default)/documents/giftCampaignParticipants/{participantId}",
+        "retry": false
+      },
+      "productionSourceHash": "7aa4c8fc023643033b3f90258e479a2be5a1c52b",
+      "state": "ACTIVE",
+      "releaseSha": "SELF"
+    },
+    {
+      "name": "onGiftDeliveryCompleted",
+      "source": "server/functions/gift-story-automation.js#onGiftDeliveryCompleted",
+      "runtime": "nodejs20",
+      "region": "us-central1",
+      "trigger": {
+        "type": "event",
+        "eventType": "providers/cloud.firestore/eventTypes/document.update",
+        "resource": "projects/circum-2797c/databases/(default)/documents/deliveryRequests/{deliveryId}",
+        "retry": false
+      },
+      "productionSourceHash": "7aa4c8fc023643033b3f90258e479a2be5a1c52b",
+      "state": "ACTIVE",
+      "releaseSha": "SELF"
+    },
+    {
+      "name": "onGiftMovementWrite",
+      "source": "server/functions/movement-ledger.js#onGiftMovementWrite",
+      "runtime": "nodejs20",
+      "region": "us-central1",
+      "trigger": {
+        "type": "event",
+        "eventType": "providers/cloud.firestore/eventTypes/document.write",
+        "resource": "projects/circum-2797c/databases/(default)/documents/giftRequests/{giftId}",
+        "retry": false
+      },
+      "productionSourceHash": "7aa4c8fc023643033b3f90258e479a2be5a1c52b",
+      "state": "ACTIVE",
+      "releaseSha": "SELF"
+    },
+    {
+      "name": "onGiftRequestCreated",
+      "source": "server/functions/platform-notifications.js#onGiftRequestCreated",
+      "runtime": "nodejs20",
+      "region": "us-central1",
+      "trigger": {
+        "type": "event",
+        "eventType": "providers/cloud.firestore/eventTypes/document.create",
+        "resource": "projects/circum-2797c/databases/(default)/documents/giftRequests/{giftId}",
+        "retry": false
+      },
+      "productionSourceHash": "7aa4c8fc023643033b3f90258e479a2be5a1c52b",
+      "state": "ACTIVE",
+      "releaseSha": "SELF"
+    },
+    {
+      "name": "onGiftRequestUpdated",
+      "source": "server/functions/platform-notifications.js#onGiftRequestUpdated",
+      "runtime": "nodejs20",
+      "region": "us-central1",
+      "trigger": {
+        "type": "event",
+        "eventType": "providers/cloud.firestore/eventTypes/document.update",
+        "resource": "projects/circum-2797c/databases/(default)/documents/giftRequests/{giftId}",
+        "retry": false
+      },
+      "productionSourceHash": "7aa4c8fc023643033b3f90258e479a2be5a1c52b",
+      "state": "ACTIVE",
+      "releaseSha": "SELF"
+    },
+    {
+      "name": "onGiftRequestVoiceMediaDeleted",
+      "source": "server/functions/gifts-payment.js#onGiftRequestVoiceMediaDeleted",
+      "runtime": "nodejs20",
+      "region": "us-central1",
+      "trigger": {
+        "type": "event",
+        "eventType": "providers/cloud.firestore/eventTypes/document.delete",
+        "resource": "projects/circum-2797c/databases/(default)/documents/giftRequests/{giftRequestId}",
+        "retry": false
+      },
+      "productionSourceHash": "7aa4c8fc023643033b3f90258e479a2be5a1c52b",
+      "state": "ACTIVE",
+      "releaseSha": "SELF"
+    },
+    {
+      "name": "onHealthMovementWrite",
+      "source": "server/functions/movement-ledger.js#onHealthMovementWrite",
+      "runtime": "nodejs20",
+      "region": "us-central1",
+      "trigger": {
+        "type": "event",
+        "eventType": "providers/cloud.firestore/eventTypes/document.write",
+        "resource": "projects/circum-2797c/databases/(default)/documents/prescriptionPickups/{pickupId}",
+        "retry": false
+      },
+      "productionSourceHash": "7aa4c8fc023643033b3f90258e479a2be5a1c52b",
+      "state": "ACTIVE",
+      "releaseSha": "SELF"
+    },
+    {
+      "name": "onHealthPaymentMovementWrite",
+      "source": "server/functions/movement-ledger.js#onHealthPaymentMovementWrite",
+      "runtime": "nodejs20",
+      "region": "us-central1",
+      "trigger": {
+        "type": "event",
+        "eventType": "providers/cloud.firestore/eventTypes/document.write",
+        "resource": "projects/circum-2797c/databases/(default)/documents/healthPlusPayments/{pickupId}",
+        "retry": false
+      },
+      "productionSourceHash": "7aa4c8fc023643033b3f90258e479a2be5a1c52b",
+      "state": "ACTIVE",
+      "releaseSha": "SELF"
+    },
+    {
+      "name": "onHealthPlusPickupOperationalWrite",
+      "source": "server/functions/health-plus-operations.js#onHealthPlusPickupOperationalWrite",
+      "runtime": "nodejs20",
+      "region": "us-central1",
+      "trigger": {
+        "type": "event",
+        "eventType": "providers/cloud.firestore/eventTypes/document.write",
+        "resource": "projects/circum-2797c/databases/(default)/documents/prescriptionPickups/{pickupId}",
+        "retry": false
+      },
+      "productionSourceHash": "7aa4c8fc023643033b3f90258e479a2be5a1c52b",
+      "state": "ACTIVE",
+      "releaseSha": "SELF"
+    },
+    {
+      "name": "onMovementTimelineWrite",
+      "source": "server/functions/movement-timeline.js#onMovementTimelineWrite",
+      "runtime": "nodejs20",
+      "region": "us-central1",
+      "trigger": {
+        "type": "event",
+        "eventType": "providers/cloud.firestore/eventTypes/document.write",
+        "resource": "projects/circum-2797c/databases/(default)/documents/deliveryRequests/{deliveryId}",
+        "retry": false
+      },
+      "productionSourceHash": "7aa4c8fc023643033b3f90258e479a2be5a1c52b",
+      "state": "ACTIVE",
+      "releaseSha": "SELF"
+    },
+    {
+      "name": "onPayoutUpdated",
+      "source": "server/functions/platform-notifications.js#onPayoutUpdated",
+      "runtime": "nodejs20",
+      "region": "us-central1",
+      "trigger": {
+        "type": "event",
+        "eventType": "providers/cloud.firestore/eventTypes/document.update",
+        "resource": "projects/circum-2797c/databases/(default)/documents/payoutRequests/{requestId}",
+        "retry": false
+      },
+      "productionSourceHash": "7aa4c8fc023643033b3f90258e479a2be5a1c52b",
+      "state": "ACTIVE",
+      "releaseSha": "SELF"
+    },
+    {
+      "name": "onRiderProfileAvailabilityWrite",
+      "source": "server/functions/rider-presence.js#onRiderProfileAvailabilityWrite",
+      "runtime": "nodejs20",
+      "region": "us-central1",
+      "trigger": {
+        "type": "event",
+        "eventType": "providers/cloud.firestore/eventTypes/document.write",
+        "resource": "projects/circum-2797c/databases/(default)/documents/riderProfiles/{riderId}",
+        "retry": false
+      },
+      "productionSourceHash": "7aa4c8fc023643033b3f90258e479a2be5a1c52b",
+      "state": "ACTIVE",
+      "releaseSha": "SELF"
+    },
+    {
+      "name": "onRiderProfileUpdated",
+      "source": "server/functions/platform-notifications.js#onRiderProfileUpdated",
+      "runtime": "nodejs20",
+      "region": "us-central1",
+      "trigger": {
+        "type": "event",
+        "eventType": "providers/cloud.firestore/eventTypes/document.update",
+        "resource": "projects/circum-2797c/databases/(default)/documents/riderProfiles/{riderId}",
+        "retry": false
+      },
+      "productionSourceHash": "7aa4c8fc023643033b3f90258e479a2be5a1c52b",
+      "state": "ACTIVE",
+      "releaseSha": "SELF"
+    },
+    {
+      "name": "onRiderRecordAvailabilityWrite",
+      "source": "server/functions/rider-presence.js#onRiderRecordAvailabilityWrite",
+      "runtime": "nodejs20",
+      "region": "us-central1",
+      "trigger": {
+        "type": "event",
+        "eventType": "providers/cloud.firestore/eventTypes/document.write",
+        "resource": "projects/circum-2797c/databases/(default)/documents/riders/{riderId}",
+        "retry": false
+      },
+      "productionSourceHash": "7aa4c8fc023643033b3f90258e479a2be5a1c52b",
+      "state": "ACTIVE",
+      "releaseSha": "SELF"
+    },
+    {
+      "name": "onStoryNotificationWrite",
+      "source": "server/functions/gift-story-automation.js#onStoryNotificationWrite",
+      "runtime": "nodejs20",
+      "region": "us-central1",
+      "trigger": {
+        "type": "event",
+        "eventType": "providers/cloud.firestore/eventTypes/document.update",
+        "resource": "projects/circum-2797c/databases/(default)/documents/storyNotifications/{notificationId}",
+        "retry": false
+      },
+      "productionSourceHash": "7aa4c8fc023643033b3f90258e479a2be5a1c52b",
+      "state": "ACTIVE",
+      "releaseSha": "SELF"
+    },
+    {
+      "name": "onSupportTicketCreated",
+      "source": "server/functions/platform-notifications.js#onSupportTicketCreated",
+      "runtime": "nodejs20",
+      "region": "us-central1",
+      "trigger": {
+        "type": "event",
+        "eventType": "providers/cloud.firestore/eventTypes/document.create",
+        "resource": "projects/circum-2797c/databases/(default)/documents/supportTickets/{ticketId}",
+        "retry": false
+      },
+      "productionSourceHash": "7aa4c8fc023643033b3f90258e479a2be5a1c52b",
+      "state": "ACTIVE",
+      "releaseSha": "SELF"
+    },
+    {
+      "name": "operationsHealthRepair",
+      "source": "server/functions/operations-health-centre.js#operationsHealthRepair",
+      "runtime": "nodejs20",
+      "region": "us-central1",
+      "trigger": {
+        "type": "callable"
+      },
+      "productionSourceHash": "470c1dc565cbba354f8ffddcd67f5c932b37c8cb",
+      "state": "ACTIVE",
+      "releaseSha": "SELF"
+    },
+    {
+      "name": "operationsHealthScan",
+      "source": "server/functions/operations-health-centre.js#operationsHealthScan",
+      "runtime": "nodejs20",
+      "region": "us-central1",
+      "trigger": {
+        "type": "callable"
+      },
+      "productionSourceHash": "470c1dc565cbba354f8ffddcd67f5c932b37c8cb",
+      "state": "ACTIVE",
+      "releaseSha": "SELF"
+    },
+    {
+      "name": "pipelineHealthReset",
+      "source": "server/functions/delivery-cleanup.js#pipelineHealthReset",
+      "runtime": "nodejs20",
+      "region": "us-central1",
+      "trigger": {
+        "type": "callable"
+      },
+      "productionSourceHash": "470c1dc565cbba354f8ffddcd67f5c932b37c8cb",
+      "state": "ACTIVE",
+      "releaseSha": "SELF"
+    },
+    {
+      "name": "previewSenderCancellation",
+      "source": "server/functions/delivery-policy.js#previewSenderCancellation",
+      "runtime": "nodejs20",
+      "region": "us-central1",
+      "trigger": {
+        "type": "callable"
+      },
+      "productionSourceHash": "470c1dc565cbba354f8ffddcd67f5c932b37c8cb",
+      "state": "ACTIVE",
+      "releaseSha": "SELF"
+    },
+    {
+      "name": "processHealthPlusReminders",
+      "source": "server/functions/health-plus-operations.js#processHealthPlusReminders",
+      "runtime": "nodejs20",
+      "region": "us-central1",
+      "trigger": {
+        "type": "schedule",
+        "schedule": null,
+        "timeZone": null
+      },
+      "productionSourceHash": "7aa4c8fc023643033b3f90258e479a2be5a1c52b",
+      "state": "ACTIVE",
+      "releaseSha": "SELF"
+    },
+    {
+      "name": "purgeFounderTestPipeline",
+      "source": "server/functions/delivery-cleanup.js#purgeFounderTestPipeline",
+      "runtime": "nodejs20",
+      "region": "us-central1",
+      "trigger": {
+        "type": "callable"
+      },
+      "productionSourceHash": "4bc8ea2cc8513ef98866bc645c3b7cb35221c277",
+      "state": "ACTIVE",
+      "releaseSha": "SELF"
+    },
+    {
+      "name": "reconcileStaleDeliveryLocks",
+      "source": "server/functions/stale-delivery.js#reconcileStaleDeliveryLocks",
+      "runtime": "nodejs20",
+      "region": "us-central1",
+      "trigger": {
+        "type": "schedule",
+        "schedule": null,
+        "timeZone": null
+      },
+      "productionSourceHash": "7aa4c8fc023643033b3f90258e479a2be5a1c52b",
+      "state": "ACTIVE",
+      "releaseSha": "SELF"
+    },
+    {
+      "name": "recordArrivalZoneCheck",
+      "source": "server/functions/delivery-policy.js#recordArrivalZoneCheck",
+      "runtime": "nodejs20",
+      "region": "us-central1",
+      "trigger": {
+        "type": "callable"
+      },
+      "productionSourceHash": "470c1dc565cbba354f8ffddcd67f5c932b37c8cb",
+      "state": "ACTIVE",
+      "releaseSha": "SELF"
+    },
+    {
+      "name": "recordBusinessIrisMoment",
+      "source": "server/functions/business-access.js#recordBusinessIrisMoment",
+      "runtime": "nodejs20",
+      "region": "us-central1",
+      "trigger": {
+        "type": "callable"
+      },
+      "productionSourceHash": "470c1dc565cbba354f8ffddcd67f5c932b37c8cb",
+      "state": "ACTIVE",
+      "releaseSha": "SELF"
+    },
+    {
+      "name": "recordCustomerArrivalResponse",
+      "source": "server/functions/delivery-policy.js#recordCustomerArrivalResponse",
+      "runtime": "nodejs20",
+      "region": "us-central1",
+      "trigger": {
+        "type": "callable"
+      },
+      "productionSourceHash": "470c1dc565cbba354f8ffddcd67f5c932b37c8cb",
+      "state": "ACTIVE",
+      "releaseSha": "SELF"
+    },
+    {
+      "name": "recordDeliveryEvidence",
+      "source": "server/functions/delivery-evidence.js#recordDeliveryEvidence",
+      "runtime": "nodejs20",
+      "region": "us-central1",
+      "trigger": {
+        "type": "callable"
+      },
+      "productionSourceHash": "38334735a405f626d73e326cf7cbaf1c8a7d62f0",
+      "state": "ACTIVE",
+      "releaseSha": "SELF",
+      "criticalTarget": {
+        "classification": "B",
+        "productionVersion": 5,
+        "productionBuild": "ffeeb21f-c709-4876-8545-466c76228987",
+        "productionSource": "gs://gcf-sources-516426305461-us-central1/recordDeliveryEvidence-1ea471e9-163d-4cf7-b515-5e7c017b20a9/version-5/function-source.zip#0",
+        "reconciliation": "Recovered byte-equivalent evidence validation and recording implementation."
+      }
+    },
+    {
+      "name": "recordGiftStoryEvent",
+      "source": "server/functions/gift-story-automation.js#recordGiftStoryEvent",
+      "runtime": "nodejs20",
+      "region": "us-central1",
+      "trigger": {
+        "type": "callable"
+      },
+      "productionSourceHash": "470c1dc565cbba354f8ffddcd67f5c932b37c8cb",
+      "state": "ACTIVE",
+      "releaseSha": "SELF"
+    },
+    {
+      "name": "recordGiftStoryGuestEvent",
+      "source": "server/functions/gift-story-automation.js#recordGiftStoryGuestEvent",
+      "runtime": "nodejs20",
+      "region": "us-central1",
+      "trigger": {
+        "type": "https"
+      },
+      "productionSourceHash": "4bc8ea2cc8513ef98866bc645c3b7cb35221c277",
+      "state": "ACTIVE",
+      "releaseSha": "SELF"
+    },
+    {
+      "name": "recordIrisLearningCandidate",
+      "source": "server/functions/sender-account.js#recordIrisLearningCandidate",
+      "runtime": "nodejs20",
+      "region": "us-central1",
+      "trigger": {
+        "type": "callable"
+      },
+      "productionSourceHash": "4bc8ea2cc8513ef98866bc645c3b7cb35221c277",
+      "state": "ACTIVE",
+      "releaseSha": "SELF"
+    },
+    {
+      "name": "recordIrisLearningOutlier",
+      "source": "server/functions/sender-account.js#recordIrisLearningOutlier",
+      "runtime": "nodejs20",
+      "region": "us-central1",
+      "trigger": {
+        "type": "callable"
+      },
+      "productionSourceHash": "4bc8ea2cc8513ef98866bc645c3b7cb35221c277",
+      "state": "ACTIVE",
+      "releaseSha": "SELF"
+    },
+    {
+      "name": "recordRiderArrival",
+      "source": "server/functions/delivery-policy.js#recordRiderArrival",
+      "runtime": "nodejs20",
+      "region": "us-central1",
+      "trigger": {
+        "type": "callable"
+      },
+      "productionSourceHash": "470c1dc565cbba354f8ffddcd67f5c932b37c8cb",
+      "state": "ACTIVE",
+      "releaseSha": "SELF"
+    },
+    {
+      "name": "recordRiderJobDecision",
+      "source": "server/functions/rider-account.js#recordRiderJobDecision",
+      "runtime": "nodejs20",
+      "region": "us-central1",
+      "trigger": {
+        "type": "callable"
+      },
+      "productionSourceHash": "4c93bb9e84a9b301ee993f3d6eb7e8d85c4405e7",
+      "state": "ACTIVE",
+      "releaseSha": "SELF"
+    },
+    {
+      "name": "recordWebsiteVisit",
+      "source": "server/functions/sender-account.js#recordWebsiteVisit",
+      "runtime": "nodejs20",
+      "region": "us-central1",
+      "trigger": {
+        "type": "callable"
+      },
+      "productionSourceHash": "4bc8ea2cc8513ef98866bc645c3b7cb35221c277",
+      "state": "ACTIVE",
+      "releaseSha": "SELF"
+    },
+    {
+      "name": "recoverIneligibleSenderDelivery",
+      "source": "server/functions/sender-booking.js#recoverIneligibleSenderDelivery",
+      "runtime": "nodejs20",
+      "region": "us-central1",
+      "trigger": {
+        "type": "callable"
+      },
+      "productionSourceHash": "2a85726eff2bff4076feadd7ae4f4d65ceac8e66",
+      "state": "ACTIVE",
+      "releaseSha": "SELF",
+      "criticalTarget": {
+        "classification": "B",
+        "productionVersion": 2,
+        "productionBuild": "c357da6f-f51e-4daa-9275-e8002c833ddb",
+        "productionSource": "gs://gcf-sources-516426305461-us-central1/recoverIneligibleSenderDelivery-400dad12-4a9a-401b-8ece-fc4cdcff6f86/version-2/function-source.zip#0",
+        "reconciliation": "Recovered the deployed recovery handler into the newer canonical Sender booking module."
+      }
+    },
+    {
+      "name": "redactLegacyPayoutBankFields",
+      "source": "server/functions/rider-connect.js#redactLegacyPayoutBankFields",
+      "runtime": "nodejs20",
+      "region": "us-central1",
+      "trigger": {
+        "type": "callable"
+      },
+      "productionSourceHash": "470c1dc565cbba354f8ffddcd67f5c932b37c8cb",
+      "state": "ACTIVE",
+      "releaseSha": "SELF"
+    },
+    {
+      "name": "redeemGiftCard",
+      "source": "server/functions/roth-ledger.js#redeemGiftCard",
+      "runtime": "nodejs20",
+      "region": "us-central1",
+      "trigger": {
+        "type": "callable"
+      },
+      "productionSourceHash": "470c1dc565cbba354f8ffddcd67f5c932b37c8cb",
+      "state": "ACTIVE",
+      "releaseSha": "SELF"
+    },
+    {
+      "name": "refreshStripeOnboardingLink",
+      "source": "server/functions/rider-connect.js#refreshStripeOnboardingLink",
+      "runtime": "nodejs20",
+      "region": "us-central1",
+      "trigger": {
+        "type": "callable"
+      },
+      "productionSourceHash": "a6b1389ac0fb5ce6409bb01ada2002c3a4e9af6e",
+      "state": "ACTIVE",
+      "releaseSha": "SELF"
+    },
+    {
+      "name": "removeBusinessMember",
+      "source": "server/functions/business-access.js#removeBusinessMember",
+      "runtime": "nodejs20",
+      "region": "us-central1",
+      "trigger": {
+        "type": "callable"
+      },
+      "productionSourceHash": "470c1dc565cbba354f8ffddcd67f5c932b37c8cb",
+      "state": "ACTIVE",
+      "releaseSha": "SELF"
+    },
+    {
+      "name": "reportCircumMessage",
+      "source": "server/functions/communication-engine.js#reportCircumMessage",
+      "runtime": "nodejs20",
+      "region": "us-central1",
+      "trigger": {
+        "type": "callable"
+      },
+      "productionSourceHash": "470c1dc565cbba354f8ffddcd67f5c932b37c8cb",
+      "state": "ACTIVE",
+      "releaseSha": "SELF"
+    },
+    {
+      "name": "reportLoadDiscrepancy",
+      "source": "server/functions/delivery-adjustments.js#reportLoadDiscrepancy",
+      "runtime": "nodejs20",
+      "region": "us-central1",
+      "trigger": {
+        "type": "callable"
+      },
+      "productionSourceHash": "470c1dc565cbba354f8ffddcd67f5c932b37c8cb",
+      "state": "ACTIVE",
+      "releaseSha": "SELF"
+    },
+    {
+      "name": "reportRating",
+      "source": "server/functions/ratings-tipping.js#reportRating",
+      "runtime": "nodejs20",
+      "region": "us-central1",
+      "trigger": {
+        "type": "callable"
+      },
+      "productionSourceHash": "470c1dc565cbba354f8ffddcd67f5c932b37c8cb",
+      "state": "ACTIVE",
+      "releaseSha": "SELF"
+    },
+    {
+      "name": "reportWaitingContext",
+      "source": "server/functions/delivery-policy.js#reportWaitingContext",
+      "runtime": "nodejs20",
+      "region": "us-central1",
+      "trigger": {
+        "type": "callable"
+      },
+      "productionSourceHash": "470c1dc565cbba354f8ffddcd67f5c932b37c8cb",
+      "state": "ACTIVE",
+      "releaseSha": "SELF"
+    },
+    {
+      "name": "requestBusinessAccess",
+      "source": "server/functions/business-access.js#requestBusinessAccess",
+      "runtime": "nodejs20",
+      "region": "us-central1",
+      "trigger": {
+        "type": "callable"
+      },
+      "productionSourceHash": "470c1dc565cbba354f8ffddcd67f5c932b37c8cb",
+      "state": "ACTIVE",
+      "releaseSha": "SELF"
+    },
+    {
+      "name": "requestRiderEmailChange",
+      "source": "server/functions/rider-account.js#requestRiderEmailChange",
+      "runtime": "nodejs20",
+      "region": "us-central1",
+      "trigger": {
+        "type": "callable"
+      },
+      "productionSourceHash": "4c93bb9e84a9b301ee993f3d6eb7e8d85c4405e7",
+      "state": "ACTIVE",
+      "releaseSha": "SELF"
+    },
+    {
+      "name": "requestRiderWithdrawal",
+      "source": "server/functions/rider-connect.js#requestRiderWithdrawal",
+      "runtime": "nodejs20",
+      "region": "us-central1",
+      "trigger": {
+        "type": "callable"
+      },
+      "productionSourceHash": "470c1dc565cbba354f8ffddcd67f5c932b37c8cb",
+      "state": "ACTIVE",
+      "releaseSha": "SELF"
+    },
+    {
+      "name": "requestSenderCancellation",
+      "source": "server/functions/delivery-policy.js#requestSenderCancellation",
+      "runtime": "nodejs20",
+      "region": "us-central1",
+      "trigger": {
+        "type": "callable"
+      },
+      "productionSourceHash": "470c1dc565cbba354f8ffddcd67f5c932b37c8cb",
+      "state": "ACTIVE",
+      "releaseSha": "SELF"
+    },
+    {
+      "name": "requestSenderEmailChange",
+      "source": "server/functions/sender-account.js#requestSenderEmailChange",
+      "runtime": "nodejs20",
+      "region": "us-central1",
+      "trigger": {
+        "type": "callable"
+      },
+      "productionSourceHash": "4bc8ea2cc8513ef98866bc645c3b7cb35221c277",
+      "state": "ACTIVE",
+      "releaseSha": "SELF"
+    },
+    {
+      "name": "requestSenderWalletDebit",
+      "source": "server/functions/roth-ledger.js#requestSenderWalletDebit",
+      "runtime": "nodejs20",
+      "region": "us-central1",
+      "trigger": {
+        "type": "callable"
+      },
+      "productionSourceHash": "4bc8ea2cc8513ef98866bc645c3b7cb35221c277",
+      "state": "ACTIVE",
+      "releaseSha": "SELF"
+    },
+    {
+      "name": "requestSenderWalletRefund",
+      "source": "server/functions/roth-ledger.js#requestSenderWalletRefund",
+      "runtime": "nodejs20",
+      "region": "us-central1",
+      "trigger": {
+        "type": "callable"
+      },
+      "productionSourceHash": "4bc8ea2cc8513ef98866bc645c3b7cb35221c277",
+      "state": "ACTIVE",
+      "releaseSha": "SELF"
+    },
+    {
+      "name": "resetHealthPlusMonthlyUsage",
+      "source": "server/functions/health-plus-operations.js#resetHealthPlusMonthlyUsage",
+      "runtime": "nodejs20",
+      "region": "us-central1",
+      "trigger": {
+        "type": "schedule",
+        "schedule": null,
+        "timeZone": null
+      },
+      "productionSourceHash": "7aa4c8fc023643033b3f90258e479a2be5a1c52b",
+      "state": "ACTIVE",
+      "releaseSha": "SELF"
+    },
+    {
+      "name": "resetRiderTestStripeAccount",
+      "source": "server/functions/rider-connect.js#resetRiderTestStripeAccount",
+      "runtime": "nodejs20",
+      "region": "us-central1",
+      "trigger": {
+        "type": "callable"
+      },
+      "productionSourceHash": "470c1dc565cbba354f8ffddcd67f5c932b37c8cb",
+      "state": "ACTIVE",
+      "releaseSha": "SELF"
+    },
+    {
+      "name": "resolveGiftStoryAccess",
+      "source": "server/functions/gift-story-automation.js#resolveGiftStoryAccess",
+      "runtime": "nodejs20",
+      "region": "us-central1",
+      "trigger": {
+        "type": "callable"
+      },
+      "productionSourceHash": "470c1dc565cbba354f8ffddcd67f5c932b37c8cb",
+      "state": "ACTIVE",
+      "releaseSha": "SELF"
+    },
+    {
+      "name": "resolveStaleDeliveryLock",
+      "source": "server/functions/stale-delivery.js#resolveStaleDeliveryLock",
+      "runtime": "nodejs20",
+      "region": "us-central1",
+      "trigger": {
+        "type": "callable"
+      },
+      "productionSourceHash": "4bc8ea2cc8513ef98866bc645c3b7cb35221c277",
+      "state": "ACTIVE",
+      "releaseSha": "SELF"
+    },
+    {
+      "name": "resolveUkAddressPlace",
+      "source": "server/functions/free-address-search.js#resolveUkAddressPlace",
+      "runtime": "nodejs20",
+      "region": "us-central1",
+      "trigger": {
+        "type": "callable"
+      },
+      "productionSourceHash": "663cc9dc6b9b2395e1e6a4ad01e82709b1b2d639",
+      "state": "ACTIVE",
+      "releaseSha": "SELF"
+    },
+    {
+      "name": "RetrieveCardDetails",
+      "source": "server/functions/legacy-financial-endpoints.js#RetrieveCardDetails",
+      "runtime": "nodejs20",
+      "region": "us-central1",
+      "trigger": {
+        "type": "https"
+      },
+      "productionSourceHash": "7aa4c8fc023643033b3f90258e479a2be5a1c52b",
+      "state": "ACTIVE",
+      "releaseSha": "SELF"
+    },
+    {
+      "name": "retryGiftStoryAutomation",
+      "source": "server/functions/gift-story-automation.js#retryGiftStoryAutomation",
+      "runtime": "nodejs20",
+      "region": "us-central1",
+      "trigger": {
+        "type": "callable"
+      },
+      "productionSourceHash": "4bc8ea2cc8513ef98866bc645c3b7cb35221c277",
+      "state": "ACTIVE",
+      "releaseSha": "SELF"
+    },
+    {
+      "name": "retryNotificationDelivery",
+      "source": "server/functions/communication-engine.js#retryNotificationDelivery",
+      "runtime": "nodejs20",
+      "region": "us-central1",
+      "trigger": {
+        "type": "callable"
+      },
+      "productionSourceHash": "470c1dc565cbba354f8ffddcd67f5c932b37c8cb",
+      "state": "ACTIVE",
+      "releaseSha": "SELF"
+    },
+    {
+      "name": "reviewBusinessAccessRequest",
+      "source": "server/functions/business-access.js#reviewBusinessAccessRequest",
+      "runtime": "nodejs20",
+      "region": "us-central1",
+      "trigger": {
+        "type": "callable"
+      },
+      "productionSourceHash": "470c1dc565cbba354f8ffddcd67f5c932b37c8cb",
+      "state": "ACTIVE",
+      "releaseSha": "SELF"
+    },
+    {
+      "name": "reviewDeliveryAdjustment",
+      "source": "server/functions/delivery-adjustments.js#reviewDeliveryAdjustment",
+      "runtime": "nodejs20",
+      "region": "us-central1",
+      "trigger": {
+        "type": "callable"
+      },
+      "productionSourceHash": "470c1dc565cbba354f8ffddcd67f5c932b37c8cb",
+      "state": "ACTIVE",
+      "releaseSha": "SELF"
+    },
+    {
+      "name": "revokeRecognition",
+      "source": "server/functions/legends.js#revokeRecognition",
+      "runtime": "nodejs20",
+      "region": "us-central1",
+      "trigger": {
+        "type": "callable"
+      },
+      "productionSourceHash": "470c1dc565cbba354f8ffddcd67f5c932b37c8cb",
+      "state": "ACTIVE",
+      "releaseSha": "SELF"
+    },
+    {
+      "name": "riderPayoutReadiness",
+      "source": "server/functions/rider-connect.js#riderPayoutReadiness",
+      "runtime": "nodejs20",
+      "region": "us-central1",
+      "trigger": {
+        "type": "callable"
+      },
+      "productionSourceHash": "470c1dc565cbba354f8ffddcd67f5c932b37c8cb",
+      "state": "ACTIVE",
+      "releaseSha": "SELF"
+    },
+    {
+      "name": "saveGiftStoryToVault",
+      "source": "server/functions/gift-story-automation.js#saveGiftStoryToVault",
+      "runtime": "nodejs20",
+      "region": "us-central1",
+      "trigger": {
+        "type": "callable"
+      },
+      "productionSourceHash": "470c1dc565cbba354f8ffddcd67f5c932b37c8cb",
+      "state": "ACTIVE",
+      "releaseSha": "SELF"
+    },
+    {
+      "name": "saveSenderCheckoutPreference",
+      "source": "server/functions/sender-finance.js#saveSenderCheckoutPreference",
+      "runtime": "nodejs20",
+      "region": "us-central1",
+      "trigger": {
+        "type": "callable"
+      },
+      "productionSourceHash": "470c1dc565cbba354f8ffddcd67f5c932b37c8cb",
+      "state": "ACTIVE",
+      "releaseSha": "SELF"
+    },
+    {
+      "name": "saveSenderDraft",
+      "source": "server/functions/sender-booking.js#saveSenderDraft",
+      "runtime": "nodejs20",
+      "region": "us-central1",
+      "trigger": {
+        "type": "callable"
+      },
+      "productionSourceHash": "470c1dc565cbba354f8ffddcd67f5c932b37c8cb",
+      "state": "ACTIVE",
+      "releaseSha": "SELF"
+    },
+    {
+      "name": "saveSenderSavedAddress",
+      "source": "server/functions/sender-saved-addresses.js#saveSenderSavedAddress",
+      "runtime": "nodejs20",
+      "region": "us-central1",
+      "trigger": {
+        "type": "callable"
+      },
+      "productionSourceHash": "470c1dc565cbba354f8ffddcd67f5c932b37c8cb",
+      "state": "ACTIVE",
+      "releaseSha": "SELF"
+    },
+    {
+      "name": "scheduledRiderEarningsReconciliation",
+      "source": "server/functions/rider-earnings-summary.js#scheduledRiderEarningsReconciliation",
+      "runtime": "nodejs20",
+      "region": "us-central1",
+      "trigger": {
+        "type": "schedule",
+        "schedule": null,
+        "timeZone": null
+      },
+      "productionSourceHash": "7aa4c8fc023643033b3f90258e479a2be5a1c52b",
+      "state": "ACTIVE",
+      "releaseSha": "SELF"
+    },
+    {
+      "name": "scheduledRiderStripeStatusSync",
+      "source": "server/functions/rider-connect.js#scheduledRiderStripeStatusSync",
+      "runtime": "nodejs20",
+      "region": "us-central1",
+      "trigger": {
+        "type": "schedule",
+        "schedule": null,
+        "timeZone": null
+      },
+      "productionSourceHash": "e80c3db943dcf11c00bbf5fac39dd674f84e3b5b",
+      "state": "ACTIVE",
+      "releaseSha": "SELF"
+    },
+    {
+      "name": "searchFreeUkAddresses",
+      "source": "server/functions/free-address-search.js#searchFreeUkAddresses",
+      "runtime": "nodejs20",
+      "region": "us-central1",
+      "trigger": {
+        "type": "callable"
+      },
+      "productionSourceHash": "663cc9dc6b9b2395e1e6a4ad01e82709b1b2d639",
+      "state": "ACTIVE",
+      "releaseSha": "SELF"
+    },
+    {
+      "name": "sendCircumAnnouncement",
+      "source": "server/functions/communication-engine.js#sendCircumAnnouncement",
+      "runtime": "nodejs20",
+      "region": "us-central1",
+      "trigger": {
+        "type": "callable"
+      },
+      "productionSourceHash": "470c1dc565cbba354f8ffddcd67f5c932b37c8cb",
+      "state": "ACTIVE",
+      "releaseSha": "SELF"
+    },
+    {
+      "name": "sendCircumMessage",
+      "source": "server/functions/communication-engine.js#sendCircumMessage",
+      "runtime": "nodejs20",
+      "region": "us-central1",
+      "trigger": {
+        "type": "callable"
+      },
+      "productionSourceHash": "470c1dc565cbba354f8ffddcd67f5c932b37c8cb",
+      "state": "ACTIVE",
+      "releaseSha": "SELF"
+    },
+    {
+      "name": "sendMessage",
+      "source": "server/functions/index.js#sendMessage",
+      "runtime": "nodejs20",
+      "region": "us-central1",
+      "trigger": {
+        "type": "callable"
+      },
+      "productionSourceHash": "470c1dc565cbba354f8ffddcd67f5c932b37c8cb",
+      "state": "ACTIVE",
+      "releaseSha": "SELF"
+    },
+    {
+      "name": "sendPackage",
+      "source": "server/functions/index.js#sendPackage",
+      "runtime": "nodejs20",
+      "region": "us-central1",
+      "trigger": {
+        "type": "callable"
+      },
+      "productionSourceHash": "470c1dc565cbba354f8ffddcd67f5c932b37c8cb",
+      "state": "ACTIVE",
+      "releaseSha": "SELF"
+    },
+    {
+      "name": "sendRiderUpdate",
+      "source": "server/functions/index.js#sendRiderUpdate",
+      "runtime": "nodejs20",
+      "region": "us-central1",
+      "trigger": {
+        "type": "callable"
+      },
+      "productionSourceHash": "470c1dc565cbba354f8ffddcd67f5c932b37c8cb",
+      "state": "ACTIVE",
+      "releaseSha": "SELF"
+    },
+    {
+      "name": "setConversationTyping",
+      "source": "server/functions/communication-engine.js#setConversationTyping",
+      "runtime": "nodejs20",
+      "region": "us-central1",
+      "trigger": {
+        "type": "callable"
+      },
+      "productionSourceHash": "470c1dc565cbba354f8ffddcd67f5c932b37c8cb",
+      "state": "ACTIVE",
+      "releaseSha": "SELF"
+    },
+    {
+      "name": "setDefaultSenderPaymentMethod",
+      "source": "server/functions/sender-finance.js#setDefaultSenderPaymentMethod",
+      "runtime": "nodejs20",
+      "region": "us-central1",
+      "trigger": {
+        "type": "callable"
+      },
+      "productionSourceHash": "470c1dc565cbba354f8ffddcd67f5c932b37c8cb",
+      "state": "ACTIVE",
+      "releaseSha": "SELF"
+    },
+    {
+      "name": "setFounderRiderAccess",
+      "source": "server/functions/founder-rider-access.js#setFounderRiderAccess",
+      "runtime": "nodejs20",
+      "region": "us-central1",
+      "trigger": {
+        "type": "callable"
+      },
+      "productionSourceHash": "470c1dc565cbba354f8ffddcd67f5c932b37c8cb",
+      "state": "ACTIVE",
+      "releaseSha": "SELF"
+    },
+    {
+      "name": "settleScheduledRoadChargeCashRefund",
+      "source": "server/functions/scheduled-road-charge-refunds.js#settleScheduledRoadChargeCashRefund",
+      "runtime": "nodejs20",
+      "region": "us-central1",
+      "trigger": {
+        "type": "callable"
+      },
+      "productionSourceHash": "cf31070f10c4d5a4754da22d2bacddee2d5922a9",
+      "state": "ACTIVE",
+      "releaseSha": "SELF"
+    },
+    {
+      "name": "setWalletFrozen",
+      "source": "server/functions/roth-ledger.js#setWalletFrozen",
+      "runtime": "nodejs20",
+      "region": "us-central1",
+      "trigger": {
+        "type": "callable"
+      },
+      "productionSourceHash": "470c1dc565cbba354f8ffddcd67f5c932b37c8cb",
+      "state": "ACTIVE",
+      "releaseSha": "SELF"
+    },
+    {
+      "name": "startAdminConversation",
+      "source": "server/functions/communication-engine.js#startAdminConversation",
+      "runtime": "nodejs20",
+      "region": "us-central1",
+      "trigger": {
+        "type": "callable"
+      },
+      "productionSourceHash": "470c1dc565cbba354f8ffddcd67f5c932b37c8cb",
+      "state": "ACTIVE",
+      "releaseSha": "SELF"
+    },
+    {
+      "name": "StripeWebhook",
+      "source": "server/functions/index.js#StripeWebhook",
+      "runtime": "nodejs20",
+      "region": "us-central1",
+      "trigger": {
+        "type": "https"
+      },
+      "productionSourceHash": "5fb158e18a8ac484f24dc642be73279598bf0606",
+      "state": "ACTIVE",
+      "releaseSha": "SELF"
+    },
+    {
+      "name": "submitDeliveryRating",
+      "source": "server/functions/ratings-tipping.js#submitDeliveryRating",
+      "runtime": "nodejs20",
+      "region": "us-central1",
+      "trigger": {
+        "type": "callable"
+      },
+      "productionSourceHash": "470c1dc565cbba354f8ffddcd67f5c932b37c8cb",
+      "state": "ACTIVE",
+      "releaseSha": "SELF"
+    },
+    {
+      "name": "submitDeliveryTip",
+      "source": "server/functions/ratings-tipping.js#submitDeliveryTip",
+      "runtime": "nodejs20",
+      "region": "us-central1",
+      "trigger": {
+        "type": "callable"
+      },
+      "productionSourceHash": "cf31070f10c4d5a4754da22d2bacddee2d5922a9",
+      "state": "ACTIVE",
+      "releaseSha": "SELF"
+    },
+    {
+      "name": "submitGiftStoryThankYou",
+      "source": "server/functions/gift-story-automation.js#submitGiftStoryThankYou",
+      "runtime": "nodejs20",
+      "region": "us-central1",
+      "trigger": {
+        "type": "https"
+      },
+      "productionSourceHash": "470c1dc565cbba354f8ffddcd67f5c932b37c8cb",
+      "state": "ACTIVE",
+      "releaseSha": "SELF"
+    },
+    {
+      "name": "submitRiderApplication",
+      "source": "server/functions/rider-account.js#submitRiderApplication",
+      "runtime": "nodejs20",
+      "region": "us-central1",
+      "trigger": {
+        "type": "callable"
+      },
+      "productionSourceHash": "4c93bb9e84a9b301ee993f3d6eb7e8d85c4405e7",
+      "state": "ACTIVE",
+      "releaseSha": "SELF"
+    },
+    {
+      "name": "submitRiderDocument",
+      "source": "server/functions/rider-account.js#submitRiderDocument",
+      "runtime": "nodejs20",
+      "region": "us-central1",
+      "trigger": {
+        "type": "callable"
+      },
+      "productionSourceHash": "4c93bb9e84a9b301ee993f3d6eb7e8d85c4405e7",
+      "state": "ACTIVE",
+      "releaseSha": "SELF"
+    },
+    {
+      "name": "submitWebsiteSupportRequest",
+      "source": "server/functions/communication-engine.js#submitWebsiteSupportRequest",
+      "runtime": "nodejs20",
+      "region": "us-central1",
+      "trigger": {
+        "type": "callable"
+      },
+      "productionSourceHash": "470c1dc565cbba354f8ffddcd67f5c932b37c8cb",
+      "state": "ACTIVE",
+      "releaseSha": "SELF"
+    },
+    {
+      "name": "syncSenderTrustBaseline",
+      "source": "server/functions/sender-trust.js#syncSenderTrustBaseline",
+      "runtime": "nodejs20",
+      "region": "us-central1",
+      "trigger": {
+        "type": "callable"
+      },
+      "productionSourceHash": "470c1dc565cbba354f8ffddcd67f5c932b37c8cb",
+      "state": "ACTIVE",
+      "releaseSha": "SELF"
+    },
+    {
+      "name": "syncStripeConnectStatus",
+      "source": "server/functions/rider-connect.js#syncStripeConnectStatus",
+      "runtime": "nodejs20",
+      "region": "us-central1",
+      "trigger": {
+        "type": "callable"
+      },
+      "productionSourceHash": "a6b1389ac0fb5ce6409bb01ada2002c3a4e9af6e",
+      "state": "ACTIVE",
+      "releaseSha": "SELF"
+    },
+    {
+      "name": "updateBusinessMemberRole",
+      "source": "server/functions/business-access.js#updateBusinessMemberRole",
+      "runtime": "nodejs20",
+      "region": "us-central1",
+      "trigger": {
+        "type": "callable"
+      },
+      "productionSourceHash": "470c1dc565cbba354f8ffddcd67f5c932b37c8cb",
+      "state": "ACTIVE",
+      "releaseSha": "SELF"
+    },
+    {
+      "name": "updateBusinessMemberStatus",
+      "source": "server/functions/business-access.js#updateBusinessMemberStatus",
+      "runtime": "nodejs20",
+      "region": "us-central1",
+      "trigger": {
+        "type": "callable"
+      },
+      "productionSourceHash": "470c1dc565cbba354f8ffddcd67f5c932b37c8cb",
+      "state": "ACTIVE",
+      "releaseSha": "SELF"
+    },
+    {
+      "name": "updateBusinessProfile",
+      "source": "server/functions/business-access.js#updateBusinessProfile",
+      "runtime": "nodejs20",
+      "region": "us-central1",
+      "trigger": {
+        "type": "callable"
+      },
+      "productionSourceHash": "4bc8ea2cc8513ef98866bc645c3b7cb35221c277",
+      "state": "ACTIVE",
+      "releaseSha": "SELF"
+    },
+    {
+      "name": "updateDeliveryLiveLocation",
+      "source": "server/functions/delivery-tracking.js#updateDeliveryLiveLocation",
+      "runtime": "nodejs20",
+      "region": "us-central1",
+      "trigger": {
+        "type": "callable"
+      },
+      "productionSourceHash": "f74f841bd968616a3b2304b57817263acb5e7006",
+      "state": "ACTIVE",
+      "releaseSha": "SELF"
+    },
+    {
+      "name": "updateDeliveryTrackingStatus",
+      "source": "server/functions/delivery-tracking.js#updateDeliveryTrackingStatus",
+      "runtime": "nodejs20",
+      "region": "us-central1",
+      "trigger": {
+        "type": "callable"
+      },
+      "productionSourceHash": "f74f841bd968616a3b2304b57817263acb5e7006",
+      "state": "ACTIVE",
+      "releaseSha": "SELF"
+    },
+    {
+      "name": "updateGiftStoryPrivacy",
+      "source": "server/functions/gift-story-automation.js#updateGiftStoryPrivacy",
+      "runtime": "nodejs20",
+      "region": "us-central1",
+      "trigger": {
+        "type": "callable"
+      },
+      "productionSourceHash": "4bc8ea2cc8513ef98866bc645c3b7cb35221c277",
+      "state": "ACTIVE",
+      "releaseSha": "SELF"
+    },
+    {
+      "name": "updateHealthPlusPickupStatus",
+      "source": "server/functions/health-plus.js#updateHealthPlusPickupStatus",
+      "runtime": "nodejs20",
+      "region": "us-central1",
+      "trigger": {
+        "type": "https"
+      },
+      "productionSourceHash": "470c1dc565cbba354f8ffddcd67f5c932b37c8cb",
+      "state": "ACTIVE",
+      "releaseSha": "SELF"
+    },
+    {
+      "name": "updateRiderApplicationSection",
+      "source": "server/functions/rider-account.js#updateRiderApplicationSection",
+      "runtime": "nodejs20",
+      "region": "us-central1",
+      "trigger": {
+        "type": "callable"
+      },
+      "productionSourceHash": "4c93bb9e84a9b301ee993f3d6eb7e8d85c4405e7",
+      "state": "ACTIVE",
+      "releaseSha": "SELF"
+    },
+    {
+      "name": "updateRiderNotificationState",
+      "source": "server/functions/rider-account.js#updateRiderNotificationState",
+      "runtime": "nodejs20",
+      "region": "us-central1",
+      "trigger": {
+        "type": "callable"
+      },
+      "productionSourceHash": "4c93bb9e84a9b301ee993f3d6eb7e8d85c4405e7",
+      "state": "ACTIVE",
+      "releaseSha": "SELF"
+    },
+    {
+      "name": "updateRiderPresence",
+      "source": "server/functions/rider-presence.js#updateRiderPresence",
+      "runtime": "nodejs20",
+      "region": "us-central1",
+      "trigger": {
+        "type": "callable"
+      },
+      "productionSourceHash": "a57673a9484c93ef9742c7126fe7c807e5d52fe5",
+      "state": "ACTIVE",
+      "releaseSha": "SELF"
+    },
+    {
+      "name": "updateRiderProfile",
+      "source": "server/functions/rider-account.js#updateRiderProfile",
+      "runtime": "nodejs20",
+      "region": "us-central1",
+      "trigger": {
+        "type": "callable"
+      },
+      "productionSourceHash": "4c93bb9e84a9b301ee993f3d6eb7e8d85c4405e7",
+      "state": "ACTIVE",
+      "releaseSha": "SELF"
+    },
+    {
+      "name": "updateRiderPushToken",
+      "source": "server/functions/rider-account.js#updateRiderPushToken",
+      "runtime": "nodejs20",
+      "region": "us-central1",
+      "trigger": {
+        "type": "callable"
+      },
+      "productionSourceHash": "4c93bb9e84a9b301ee993f3d6eb7e8d85c4405e7",
+      "state": "ACTIVE",
+      "releaseSha": "SELF"
+    },
+    {
+      "name": "updateSenderHealthPlusBooking",
+      "source": "server/functions/health-plus.js#updateSenderHealthPlusBooking",
+      "runtime": "nodejs20",
+      "region": "us-central1",
+      "trigger": {
+        "type": "callable"
+      },
+      "productionSourceHash": "470c1dc565cbba354f8ffddcd67f5c932b37c8cb",
+      "state": "ACTIVE",
+      "releaseSha": "SELF"
+    },
+    {
+      "name": "updateSenderLocation",
+      "source": "server/functions/sender-account.js#updateSenderLocation",
+      "runtime": "nodejs20",
+      "region": "us-central1",
+      "trigger": {
+        "type": "callable"
+      },
+      "productionSourceHash": "4bc8ea2cc8513ef98866bc645c3b7cb35221c277",
+      "state": "ACTIVE",
+      "releaseSha": "SELF"
+    },
+    {
+      "name": "updateSenderNotificationState",
+      "source": "server/functions/sender-account.js#updateSenderNotificationState",
+      "runtime": "nodejs20",
+      "region": "us-central1",
+      "trigger": {
+        "type": "callable"
+      },
+      "productionSourceHash": "470c1dc565cbba354f8ffddcd67f5c932b37c8cb",
+      "state": "ACTIVE",
+      "releaseSha": "SELF"
+    },
+    {
+      "name": "updateSenderProfile",
+      "source": "server/functions/sender-account.js#updateSenderProfile",
+      "runtime": "nodejs20",
+      "region": "us-central1",
+      "trigger": {
+        "type": "callable"
+      },
+      "productionSourceHash": "470c1dc565cbba354f8ffddcd67f5c932b37c8cb",
+      "state": "ACTIVE",
+      "releaseSha": "SELF"
+    },
+    {
+      "name": "updateSenderProfilePhoto",
+      "source": "server/functions/sender-account.js#updateSenderProfilePhoto",
+      "runtime": "nodejs20",
+      "region": "us-central1",
+      "trigger": {
+        "type": "callable"
+      },
+      "productionSourceHash": "470c1dc565cbba354f8ffddcd67f5c932b37c8cb",
+      "state": "ACTIVE",
+      "releaseSha": "SELF"
+    },
+    {
+      "name": "updateSenderPushToken",
+      "source": "server/functions/sender-account.js#updateSenderPushToken",
+      "runtime": "nodejs20",
+      "region": "us-central1",
+      "trigger": {
+        "type": "callable"
+      },
+      "productionSourceHash": "470c1dc565cbba354f8ffddcd67f5c932b37c8cb",
+      "state": "ACTIVE",
+      "releaseSha": "SELF"
+    },
+    {
+      "name": "updateSupportConversationStatus",
+      "source": "server/functions/communication-engine.js#updateSupportConversationStatus",
+      "runtime": "nodejs20",
+      "region": "us-central1",
+      "trigger": {
+        "type": "callable"
+      },
+      "productionSourceHash": "470c1dc565cbba354f8ffddcd67f5c932b37c8cb",
+      "state": "ACTIVE",
+      "releaseSha": "SELF"
+    }
+  ],
+  "extensions": [
+    {
+      "instanceId": "export-user-data",
+      "package": "invertase/export-user-data",
+      "version": "0.1.0",
+      "state": "ACTIVE",
+      "functions": [
+        {
+          "name": "ext-export-user-data-exportUserData",
+          "runtime": "nodejs14",
+          "region": "us-central1",
+          "trigger": {
+            "type": "https"
+          },
+          "state": "ACTIVE",
+          "extensionInstance": "export-user-data"
+        }
+      ]
+    },
+    {
+      "instanceId": "mailchimp-firebase-sync",
+      "package": "mailchimp/mailchimp-firebase-sync",
+      "version": "0.5.4",
+      "state": "ACTIVE",
+      "functions": [
+        {
+          "name": "ext-mailchimp-firebase-sync-addUserToList",
+          "runtime": "nodejs18",
+          "region": "us-central1",
+          "trigger": {
+            "type": "event",
+            "eventType": "providers/firebase.auth/eventTypes/user.create",
+            "resource": "projects/circum-2797c",
+            "retry": false
+          },
+          "state": "ACTIVE",
+          "extensionInstance": "mailchimp-firebase-sync"
+        },
+        {
+          "name": "ext-mailchimp-firebase-sync-memberEventsHandler",
+          "runtime": "nodejs18",
+          "region": "us-central1",
+          "trigger": {
+            "type": "event",
+            "eventType": "providers/cloud.firestore/eventTypes/document.write",
+            "resource": "projects/circum-2797c/databases/(default)/documents/_unused_/{documentId}",
+            "retry": false
+          },
+          "state": "ACTIVE",
+          "extensionInstance": "mailchimp-firebase-sync"
+        },
+        {
+          "name": "ext-mailchimp-firebase-sync-memberTagsHandler",
+          "runtime": "nodejs18",
+          "region": "us-central1",
+          "trigger": {
+            "type": "event",
+            "eventType": "providers/cloud.firestore/eventTypes/document.write",
+            "resource": "projects/circum-2797c/databases/(default)/documents/_unused_/{documentId}",
+            "retry": false
+          },
+          "state": "ACTIVE",
+          "extensionInstance": "mailchimp-firebase-sync"
+        },
+        {
+          "name": "ext-mailchimp-firebase-sync-mergeFieldsHandler",
+          "runtime": "nodejs18",
+          "region": "us-central1",
+          "trigger": {
+            "type": "event",
+            "eventType": "providers/cloud.firestore/eventTypes/document.write",
+            "resource": "projects/circum-2797c/databases/(default)/documents/_unused_/{documentId}",
+            "retry": false
+          },
+          "state": "ACTIVE",
+          "extensionInstance": "mailchimp-firebase-sync"
+        },
+        {
+          "name": "ext-mailchimp-firebase-sync-removeUserFromList",
+          "runtime": "nodejs18",
+          "region": "us-central1",
+          "trigger": {
+            "type": "event",
+            "eventType": "providers/firebase.auth/eventTypes/user.delete",
+            "resource": "projects/circum-2797c",
+            "retry": false
+          },
+          "state": "ACTIVE",
+          "extensionInstance": "mailchimp-firebase-sync"
+        }
+      ]
+    }
+  ]
+}
