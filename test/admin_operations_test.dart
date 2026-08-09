@@ -874,6 +874,22 @@ void main() {
       expect(panelSource, isNot(contains("message['senderId'] ??")));
     });
 
+    test('operations timeline and incidents use bounded backend projections',
+        () {
+      final source = File(
+        'lib/app/admin/admin_phase1_shell.dart',
+      ).readAsStringSync();
+      expect(source, contains("collection('timeline')"));
+      expect(source, contains('.orderBy(\'timestamp\', descending: true)'));
+      expect(source, contains('.limit(_pageSize)'));
+      expect(source, contains('startAfterDocument'));
+      expect(source, contains("collection('operationalIncidents')"));
+      expect(source, contains("httpsCallable(callable)"));
+      expect(source, contains("'acknowledgeOperationalIncident'"));
+      expect(source, contains("'resolveOperationalIncident'"));
+      expect(source, isNot(contains("const steps = [\n      ('Booking'")));
+    });
+
     test('restored Admin shell exposes every required operations module', () {
       expect(
         AdminModule.values.map((module) => module.label),

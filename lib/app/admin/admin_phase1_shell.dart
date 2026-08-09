@@ -1178,7 +1178,8 @@ class _AdminPhaseOneShellState extends State<AdminPhaseOneShell> {
       await _loadAdminData();
     } on FirebaseFunctionsException catch (error) {
       setState(
-          () => _message = error.message ?? 'Brand Partner action failed.');
+        () => _message = error.message ?? 'Brand Partner action failed.',
+      );
     }
   }
 
@@ -1472,7 +1473,8 @@ class _AdminPhaseOneShellState extends State<AdminPhaseOneShell> {
       await _loadAdminData();
     } on FirebaseFunctionsException catch (error) {
       setState(
-          () => _message = error.message ?? 'Bulk campaign action failed.');
+        () => _message = error.message ?? 'Bulk campaign action failed.',
+      );
     }
   }
 
@@ -2023,7 +2025,8 @@ class _AdminPhaseOneShellState extends State<AdminPhaseOneShell> {
       await _loadAdminData();
     } on FirebaseFunctionsException catch (error) {
       setState(
-          () => _message = error.message ?? 'Gift workspace action failed.');
+        () => _message = error.message ?? 'Gift workspace action failed.',
+      );
     }
   }
 
@@ -3139,7 +3142,8 @@ class _AdminPhaseOneShellState extends State<AdminPhaseOneShell> {
       await _loadAdminData();
     } on FirebaseFunctionsException catch (error) {
       setState(
-          () => _message = error.message ?? 'Message report update failed.');
+        () => _message = error.message ?? 'Message report update failed.',
+      );
     }
   }
 
@@ -3171,10 +3175,9 @@ class _AdminPhaseOneShellState extends State<AdminPhaseOneShell> {
     );
     if (confirmed != true) return;
     try {
-      final result =
-          await _functions.httpsCallable('pipelineHealthReset').call({
-        'reason': reason,
-      });
+      final result = await _functions.httpsCallable('pipelineHealthReset').call(
+        {'reason': reason},
+      );
       final data = Map<String, dynamic>.from(result.data as Map);
       if (!mounted) return;
       await showDialog<void>(
@@ -3257,10 +3260,9 @@ class _AdminPhaseOneShellState extends State<AdminPhaseOneShell> {
     );
     if (confirmed != true) return;
     try {
-      final result =
-          await _functions.httpsCallable('operationsHealthRepair').call({
-        'reason': reason,
-      });
+      final result = await _functions
+          .httpsCallable('operationsHealthRepair')
+          .call({'reason': reason});
       final data = Map<String, dynamic>.from(result.data as Map);
       if (!mounted) return;
       await showDialog<void>(
@@ -3315,10 +3317,9 @@ class _AdminPhaseOneShellState extends State<AdminPhaseOneShell> {
     );
     if (deliveryId == null || deliveryId.trim().isEmpty) return;
     try {
-      final result =
-          await _functions.httpsCallable('liveDeliveryDiagnostics').call({
-        'deliveryId': deliveryId.trim(),
-      });
+      final result = await _functions
+          .httpsCallable('liveDeliveryDiagnostics')
+          .call({'deliveryId': deliveryId.trim()});
       final data = Map<String, dynamic>.from(result.data as Map);
       if (!mounted) return;
       await showDialog<void>(
@@ -3365,8 +3366,10 @@ class _AdminPhaseOneShellState extends State<AdminPhaseOneShell> {
     final failures = items
         .where((item) => item['status'] != 'PASS')
         .take(8)
-        .map((item) =>
-            '${item['status']} ${item['service']}: ${item['rootCause']}\nRemediation: ${item['suggestedRemediation']}')
+        .map(
+          (item) =>
+              '${item['status']} ${item['service']}: ${item['rootCause']}\nRemediation: ${item['suggestedRemediation']}',
+        )
         .join('\n\n');
     return [
       'Result: ${data['result'] ?? 'n/a'}',
@@ -3400,8 +3403,10 @@ class _AdminPhaseOneShellState extends State<AdminPhaseOneShell> {
         .map((item) => Map<String, dynamic>.from(item))
         .toList(growable: false);
     final lines = stages
-        .map((stage) =>
-            '${stage['status']} ${stage['stage']}: ${stage['rootCause']}')
+        .map(
+          (stage) =>
+              '${stage['status']} ${stage['stage']}: ${stage['rootCause']}',
+        )
         .join('\n');
     return [
       'Delivery: ${data['deliveryId'] ?? 'n/a'}',
@@ -9048,8 +9053,13 @@ String _sectionStatusSummary(Map<String, dynamic> record) {
   final sections = record['sectionStatus'];
   if (sections is! Map || sections.isEmpty) return 'No section status';
   final complete = sections.values
-      .where((value) => {'submitted', 'approved', 'verified'}
-          .contains('$value'.trim().toLowerCase()))
+      .where(
+        (value) => {
+          'submitted',
+          'approved',
+          'verified',
+        }.contains('$value'.trim().toLowerCase()),
+      )
       .length;
   return '$complete/${sections.length} sections complete';
 }
@@ -10362,22 +10372,221 @@ class _AdminProofOfDeliveryPanel extends StatelessWidget {
   }
 }
 
-class _DeliveryTimeline extends StatelessWidget {
+class _OperationalIncidentPanel extends StatelessWidget {
+  const _OperationalIncidentPanel();
+
+  Future<void> _act(
+    BuildContext context,
+    String callable,
+    String incidentId, [
+    String? reason,
+  ]) async {
+    await FirebaseFunctions.instance.httpsCallable(callable).call(
+      <String, dynamic>{
+        'incidentId': incidentId,
+        if (reason != null) 'reason': reason,
+      },
+    );
+    if (context.mounted) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Incident updated.')));
+    }
+  }
+
+  Future<void> _resolve(BuildContext context, String incidentId) async {
+    final controller = TextEditingController();
+    final reason = await showDialog<String>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Resolve incident'),
+        content: TextField(
+          controller: controller,
+          maxLength: 500,
+          decoration: const InputDecoration(labelText: 'Resolution reason'),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () =>
+                Navigator.pop(dialogContext, controller.text.trim()),
+            child: const Text('Resolve'),
+          ),
+        ],
+      ),
+    );
+    controller.dispose();
+    if (reason == null || reason.isEmpty || !context.mounted) return;
+    await _act(context, 'resolveOperationalIncident', incidentId, reason);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final stream = FirebaseFirestore.instance
+        .collection('operationalIncidents')
+        .where('status', whereIn: const ['OPEN', 'ACKNOWLEDGED'])
+        .orderBy('detectedAt', descending: true)
+        .limit(50)
+        .snapshots();
+    return StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
+      stream: stream,
+      builder: (context, snapshot) {
+        final incidents = snapshot.data?.docs ??
+            const <QueryDocumentSnapshot<Map<String, dynamic>>>[];
+        return DecoratedBox(
+          decoration: _panelDecoration(),
+          child: Padding(
+            padding: const EdgeInsets.all(18),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'Active delivery incidents',
+                  style: TextStyle(fontWeight: FontWeight.w900),
+                ),
+                const SizedBox(height: 6),
+                Text(
+                  incidents.isEmpty
+                      ? 'No intervention-required incidents.'
+                      : '${incidents.length} incident(s) need attention.',
+                ),
+                if (snapshot.hasError)
+                  const Padding(
+                    padding: EdgeInsets.only(top: 10),
+                    child: Text('Incidents could not be loaded.'),
+                  ),
+                for (final document in incidents) ...[
+                  const Divider(height: 24),
+                  Builder(
+                    builder: (context) {
+                      final incident = document.data();
+                      final severity = '${incident['severity'] ?? 'AMBER'}';
+                      return Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Icon(
+                            Icons.warning_amber_rounded,
+                            color: severity == 'RED'
+                                ? const Color(0xFFF87171)
+                                : const Color(0xFFFBBF24),
+                          ),
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  '$severity · ${incident['incidentType'] ?? 'Delivery incident'}',
+                                  style: const TextStyle(
+                                    fontWeight: FontWeight.w900,
+                                  ),
+                                ),
+                                Text(
+                                  'Delivery ${incident['deliveryId'] ?? 'Unknown'} · ${incident['currentDeliveryState'] ?? 'Unknown state'}',
+                                ),
+                                Text(
+                                  'Detected ${_date(incident['detectedAt'])} · Rider ${incident['assignedRider'] ?? 'Not assigned'}',
+                                ),
+                              ],
+                            ),
+                          ),
+                          if (incident['status'] == 'OPEN')
+                            IconButton(
+                              tooltip: 'Acknowledge',
+                              onPressed: () => _act(
+                                context,
+                                'acknowledgeOperationalIncident',
+                                document.id,
+                              ),
+                              icon: const Icon(Icons.visibility_rounded),
+                            ),
+                          IconButton(
+                            tooltip: 'Resolve',
+                            onPressed: () => _resolve(context, document.id),
+                            icon: const Icon(Icons.check_circle_rounded),
+                          ),
+                        ],
+                      );
+                    },
+                  ),
+                ],
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+}
+
+class _DeliveryTimeline extends StatefulWidget {
   const _DeliveryTimeline({required this.record});
 
   final Map<String, dynamic> record;
 
   @override
+  State<_DeliveryTimeline> createState() => _DeliveryTimelineState();
+}
+
+class _DeliveryTimelineState extends State<_DeliveryTimeline> {
+  static const _pageSize = 50;
+  final List<QueryDocumentSnapshot<Map<String, dynamic>>> _events = [];
+  DocumentSnapshot<Map<String, dynamic>>? _cursor;
+  bool _loading = true;
+  bool _hasMore = true;
+
+  String get _deliveryId =>
+      '${widget.record['id'] ?? widget.record['requestId'] ?? ''}'.trim();
+
+  @override
+  void initState() {
+    super.initState();
+    unawaited(_load());
+  }
+
+  Future<void> _load() async {
+    if (_deliveryId.isEmpty || !_hasMore) {
+      if (mounted) setState(() => _loading = false);
+      return;
+    }
+    setState(() => _loading = true);
+    Query<Map<String, dynamic>> query = FirebaseFirestore.instance
+        .collection('deliveryRequests')
+        .doc(_deliveryId)
+        .collection('timeline')
+        .orderBy('timestamp', descending: true)
+        .limit(_pageSize);
+    if (_cursor != null) query = query.startAfterDocument(_cursor!);
+    final page = await query.get();
+    if (!mounted) return;
+    setState(() {
+      _events.addAll(page.docs);
+      _cursor = page.docs.isEmpty ? _cursor : page.docs.last;
+      _hasMore = page.docs.length == _pageSize;
+      _loading = false;
+    });
+  }
+
+  IconData _icon(String eventType) {
+    if (eventType.contains('Payment') || eventType.contains('Refund')) {
+      return Icons.payments_rounded;
+    }
+    if (eventType.contains('Notification') || eventType.contains('Chat')) {
+      return Icons.notifications_active_rounded;
+    }
+    if (eventType.contains('Evidence') || eventType.contains('Verification')) {
+      return Icons.fact_check_rounded;
+    }
+    if (eventType.contains('Incident')) return Icons.warning_amber_rounded;
+    if (eventType.contains('Completed')) return Icons.check_circle_rounded;
+    return Icons.route_rounded;
+  }
+
+  @override
   Widget build(BuildContext context) {
-    const steps = [
-      ('Booking', Icons.add_circle_rounded),
-      ('Accepted', Icons.verified_rounded),
-      ('Collected', Icons.inventory_2_rounded),
-      ('Waiting', Icons.timer_rounded),
-      ('Delivered', Icons.local_shipping_rounded),
-      ('Completed', Icons.check_circle_rounded),
-    ];
-    final status = _deliveryStatusLabel(record).toLowerCase();
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: _premiumDeliveryGlass(radius: 22),
@@ -10389,25 +10598,61 @@ class _DeliveryTimeline extends StatelessWidget {
             style: TextStyle(fontSize: 17, fontWeight: FontWeight.w900),
           ),
           const SizedBox(height: 14),
-          for (final step in steps)
+          if (_loading && _events.isEmpty) const LinearProgressIndicator(),
+          if (!_loading && _events.isEmpty)
+            const Text(
+              'No operational events have been projected for this delivery.',
+            ),
+          for (final eventDocument in _events.reversed)
             Padding(
               padding: const EdgeInsets.only(bottom: 12),
               child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Icon(
-                    step.$2,
-                    color: status.contains(step.$1.toLowerCase())
-                        ? const Color(0xFF34D399)
-                        : const Color(0xFF7DD3FC),
+                    _icon(
+                      '${eventDocument.data()['eventType'] ?? eventDocument.data()['event'] ?? ''}',
+                    ),
+                    color: const Color(0xFF7DD3FC),
                     size: 20,
                   ),
                   const SizedBox(width: 12),
-                  Text(
-                    step.$1,
-                    style: const TextStyle(fontWeight: FontWeight.w800),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          '${eventDocument.data()['eventType'] ?? eventDocument.data()['event'] ?? 'Operational event'}',
+                          style: const TextStyle(fontWeight: FontWeight.w800),
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          '${_date(eventDocument.data()['timestamp'] ?? eventDocument.data()['createdAt'])} · ${eventDocument.data()['actorType'] ?? 'system'} · ${eventDocument.data()['source'] ?? 'backend'}',
+                          style: TextStyle(
+                            color: Colors.white.withValues(alpha: .62),
+                            fontSize: 12,
+                          ),
+                        ),
+                        if (eventDocument.data()['previousState'] != null ||
+                            eventDocument.data()['newState'] != null)
+                          Text(
+                            '${eventDocument.data()['previousState'] ?? '—'} → ${eventDocument.data()['newState'] ?? '—'}',
+                            style: TextStyle(
+                              color: Colors.white.withValues(alpha: .72),
+                              fontSize: 12,
+                            ),
+                          ),
+                      ],
+                    ),
                   ),
                 ],
               ),
+            ),
+          if (_hasMore)
+            TextButton.icon(
+              onPressed: _loading ? null : _load,
+              icon: const Icon(Icons.expand_more_rounded),
+              label: const Text('Load earlier events'),
             ),
         ],
       ),
@@ -17614,6 +17859,8 @@ class _GovernanceOperationsModule extends StatelessWidget {
               'Observe, investigate, recover and resolve operational issues without impersonating users or editing private preferences.',
         ),
         const SizedBox(height: 14),
+        const _OperationalIncidentPanel(),
+        const SizedBox(height: 14),
         DecoratedBox(
           decoration: _panelDecoration(),
           child: Padding(
@@ -17673,11 +17920,7 @@ class _GovernanceOperationsModule extends StatelessWidget {
           spacing: 12,
           runSpacing: 12,
           children: [
-            _MetricCard(
-              'Production health',
-              'Scan',
-              'PASS / WARNING / FAIL',
-            ),
+            _MetricCard('Production health', 'Scan', 'PASS / WARNING / FAIL'),
             _MetricCard(
               'Address limits',
               '${rateLimits.length}',
@@ -19600,13 +19843,17 @@ class _RiderProfileDrawer extends StatelessWidget {
         .where((document) => _documentBelongsToRider(document, riderId))
         .toList(growable: false);
     final riderApplications = applications
-        .where((application) =>
-            '${application['riderId'] ?? application['uid'] ?? ''}'.trim() ==
-            riderId)
+        .where(
+          (application) =>
+              '${application['riderId'] ?? application['uid'] ?? ''}'.trim() ==
+              riderId,
+        )
         .toList(growable: false);
     final riderOnboardingEvents = onboardingEvents
-        .where((event) =>
-            '${event['riderId'] ?? event['uid'] ?? ''}'.trim() == riderId)
+        .where(
+          (event) =>
+              '${event['riderId'] ?? event['uid'] ?? ''}'.trim() == riderId,
+        )
         .toList(growable: false);
     final riderRatings = ratings
         .where((rating) => _recordReferencesRider(rating, riderId))
