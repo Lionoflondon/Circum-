@@ -54,6 +54,12 @@ test("support cash exception is exactly once and cannot race Roth", {skip: !emul
     refundOwnerType: "sender",
     refundOwnerId: `owner-${id}`,
   });
+  await db.collection("supportTickets").doc(`support-case-${id}`).set({
+    ticketId: `support-case-${id}`,
+    deliveryId: `delivery-${id}`,
+    userId: `owner-${id}`,
+    status: "open",
+  });
   const actor = {authorized: true, uid: "support-agent-1"};
   const results = await Promise.all([
     ...Array.from({length: 8}, () => settleEntitlementToCash({

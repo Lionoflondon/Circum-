@@ -138,11 +138,20 @@ async function settleEntitlementToCash({
   const requestReference = cleanReference(customerRequestReference, "Customer support request reference");
   const refundReference = cleanReference(cashRefundReference, "Cash refund reference");
   const entitlementRef = db.collection("roadChargeRefundEntitlements").doc(id);
+  const supportRequestRef = db.collection("supportTickets").doc(requestReference);
   const cashRef = db.collection("roadChargeCashRefunds").doc(`road_charge_cash_refund_${id}`);
   return db.runTransaction(async (transaction) => {
     const entitlementSnapshot = await transaction.get(entitlementRef);
     if (!entitlementSnapshot.exists) return {settled: false, reason: "entitlement_not_found", entitlementId: id};
+    const supportRequestSnapshot = await transaction.get(supportRequestRef);
+    if (!supportRequestSnapshot.exists) {
+      return {settled: false, reason: "support_request_not_found", entitlementId: id};
+    }
     const entitlement = entitlementSnapshot.data() || {};
+    const supportRequest = supportRequestSnapshot.data() || {};
+    if (supportRequest.deliveryId && supportRequest.deliveryId !== entitlement.deliveryId) {
+      return {settled: false, reason: "support_request_delivery_mismatch", entitlementId: id};
+    }
     if (entitlement.policyVersion !== REFUND_POLICY_VERSION) {
       return {settled: false, reason: "unsupported_policy_version", entitlementId: id};
     }

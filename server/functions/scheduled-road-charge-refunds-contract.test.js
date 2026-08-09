@@ -29,3 +29,27 @@ test("ordinary actor cannot settle cash or mutate through the pure transaction p
   });
   assert.deepEqual(result, {settled: false, reason: "support_authorization_required", entitlementId: "cash-unauthorized"});
 });
+
+test("authorized cash settlement requires a real support ticket reference", async () => {
+  const result = await refunds.settleEntitlementToCash({
+    entitlementId: "cash-missing-ticket",
+    customerRequestReference: "missing-ticket",
+    cashRefundReference: "cash-ref-2",
+    actor: {authorized: true, uid: "support-agent-1"},
+    db: {
+      collection: (name) => ({doc: (id) => ({name, id})}),
+      runTransaction: async (callback) => callback({
+        get: async (ref) => ref.name === "roadChargeRefundEntitlements" ? {
+          exists: true,
+          data: () => ({
+            state: refunds.STATES.eligible,
+            refundablePence: 900,
+            policyVersion: refunds.REFUND_POLICY_VERSION,
+            deliveryId: "delivery-1",
+          }),
+        } : {exists: false},
+      }),
+    },
+  });
+  assert.deepEqual(result, {settled: false, reason: "support_request_not_found", entitlementId: "cash-missing-ticket"});
+});
