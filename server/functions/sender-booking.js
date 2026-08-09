@@ -12,7 +12,7 @@ const {verifiedPhotoAnalysis} = require("./iris-photo-analysis");
 const {dispatchDeliveryRequest} = require("./send-package");
 const {getAuthoritativeRouteFacts} = require("./route-authority");
 const {evaluateRoadChargePolicy} = require("./road-charge-policy");
-const {canonicalAddressPair, sameCanonicalAddress} = require("./canonical-address-authority");
+const {resolveCanonicalAddressPair, canonicalAddressPair, sameCanonicalAddress} = require("./canonical-address-authority");
 
 const BASE_FARE_GBP = 5;
 const ADDITIONAL_FARE_PER_MILE_GBP = 1.5;
@@ -934,7 +934,7 @@ exports.getSenderRothBalance = functions.https.onCall(async (_, context) => {
 
 exports.createSenderBookingQuote = functions.runWith({
   enforceAppCheck: true,
-  secrets: ["GOOGLE_ROUTES_API_KEY"],
+  secrets: ["GOOGLE_ROUTES_API_KEY", "GOOGLE_PLACES_API_KEY"],
 }).https.onCall(async (data, context) => {
   const sender = requireSender(context);
   const db = getFirestore();
@@ -949,7 +949,7 @@ exports.createSenderBookingQuote = functions.runWith({
   });
   let canonicalAddresses;
   try {
-    canonicalAddresses = canonicalAddressPair(data || {});
+    canonicalAddresses = await resolveCanonicalAddressPair(data || {});
   } catch (error) {
     console.error("Sender canonical address validation failed", {code: error.code || "canonical_address_invalid"});
     throw new functions.https.HttpsError("failed-precondition", "Choose both address suggestions before requesting a quote.");
@@ -1677,7 +1677,7 @@ async function createPaidDeliveryFromSession(stripe, sender, data) {
   const quote = quoteSnap.data();
   let canonicalAddresses;
   try {
-    canonicalAddresses = canonicalAddressPair(data || {});
+    canonicalAddresses = await resolveCanonicalAddressPair(data || {});
   } catch (error) {
     throw new functions.https.HttpsError("failed-precondition", "The paid delivery requires the verified booking addresses.");
   }
@@ -2061,7 +2061,10 @@ async function createPaidDeliveryFromSession(stripe, sender, data) {
   };
 }
 
-exports.createSenderPaidDelivery = (stripe) => functions.runWith({enforceAppCheck: true}).https.onCall(async (data, context) => {
+exports.createSenderPaidDelivery = (stripe) => functions.runWith({
+  enforceAppCheck: true,
+  secrets: ["GOOGLE_PLACES_API_KEY"],
+}).https.onCall(async (data, context) => {
   try {
     return await createPaidDeliveryFromSession(stripe, requireSender(context), data || {});
   } catch (error) {

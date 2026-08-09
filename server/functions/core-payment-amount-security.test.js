@@ -130,7 +130,7 @@ test("Sender Stripe checkout refreshes stale customer records", () => {
 
 test("canonical paid delivery finalization requires succeeded payment and is idempotent", () => {
   assert.match(senderBookingSource, /exports\.createSenderPaidDelivery/);
-  assert.match(senderBookingSource, /exports\.createSenderPaidDelivery\s*=\s*\(stripe\) => functions\.runWith\(\{enforceAppCheck: true\}\)/);
+  assert.match(senderBookingSource, /exports\.createSenderPaidDelivery\s*=\s*\(stripe\) => functions\.runWith\(\{[\s\S]*?enforceAppCheck: true,[\s\S]*?GOOGLE_PLACES_API_KEY[\s\S]*?\}\)/);
   assert.match(senderBookingSource, /paymentSessionId/);
   assert.match(senderBookingSource, /Stripe payment must be confirmed before delivery creation/);
   assert.match(senderBookingSource, /senderDeliveryIdempotency/);

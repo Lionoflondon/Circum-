@@ -1,5 +1,7 @@
 "use strict";
 
+const {resolveUkAddressPlace} = require("./free-address-core");
+
 const TRUSTED_PROVIDERS = new Set(["google_places", "openstreetmap_nominatim", "saved_google_place", "backend_verified"]);
 
 function text(value) {
@@ -60,6 +62,49 @@ function canonicalAddressPair(data = {}) {
   return {pickup, dropoff};
 }
 
+async function resolveCanonicalAddress(value, role = "address", options = {}) {
+  const candidate = canonicalAddress(value, role);
+  if (!["google_places", "saved_google_place", "backend_verified"].includes(candidate.provider)) {
+    const error = new Error(`${role} must use a server-resolvable place identity.`);
+    error.code = "canonical_address_provider_unsupported";
+    throw error;
+  }
+  const resolved = await resolveUkAddressPlace({
+    placeId: candidate.placeId,
+    fetchImpl: options.fetchImpl || global.fetch,
+    googlePlacesApiKey: options.googlePlacesApiKey || process.env.GOOGLE_PLACES_API_KEY || "",
+    sessionToken: options.sessionToken || "",
+  });
+  if (resolved.locationId !== candidate.locationId ||
+      Math.abs(Number(resolved.lat) - candidate.latitude) > 0.0005 ||
+      Math.abs(Number(resolved.lng) - candidate.longitude) > 0.0005) {
+    const error = new Error(`${role} does not match its server-resolved place identity.`);
+    error.code = "canonical_address_identity_mismatch";
+    throw error;
+  }
+  return canonicalAddress({
+    ...candidate,
+    ...resolved.components,
+    displayAddress: resolved.displayAddress,
+    placeId: resolved.placeId,
+    locationId: resolved.locationId,
+    provider: resolved.provider,
+    validationStatus: "verified",
+    lat: resolved.lat,
+    lng: resolved.lng,
+  }, role);
+}
+
+async function resolveCanonicalAddressPair(data = {}, options = {}) {
+  const pickupValue = data.pickupAddressCanonical || data.pickup && data.pickup.canonicalAddress;
+  const dropoffValue = data.dropoffAddressCanonical || data.dropoff && data.dropoff.canonicalAddress;
+  const [pickup, dropoff] = await Promise.all([
+    resolveCanonicalAddress(pickupValue, "pickup address", options),
+    resolveCanonicalAddress(dropoffValue, "drop-off address", options),
+  ]);
+  return {pickup, dropoff};
+}
+
 function sameCanonicalAddress(left, right) {
   return Boolean(left && right) &&
     (left.placeId === right.placeId || left.locationId === right.locationId) &&
@@ -67,4 +112,11 @@ function sameCanonicalAddress(left, right) {
     Math.abs(Number(left.longitude) - Number(right.longitude)) < 0.000001;
 }
 
-module.exports = {TRUSTED_PROVIDERS, canonicalAddress, canonicalAddressPair, sameCanonicalAddress};
+module.exports = {
+  TRUSTED_PROVIDERS,
+  canonicalAddress,
+  canonicalAddressPair,
+  resolveCanonicalAddress,
+  resolveCanonicalAddressPair,
+  sameCanonicalAddress,
+};

@@ -35,7 +35,7 @@ const rothLedger = require("./roth-ledger");
 const vanguardProtocol = require("./vanguard-protocol-core");
 const {getAuthoritativeRouteFacts} = require("./route-authority");
 const {evaluateRoadChargePolicy} = require("./road-charge-policy");
-const {canonicalAddress} = require("./canonical-address-authority");
+const {resolveCanonicalAddress} = require("./canonical-address-authority");
 
 function allowCors(res) {
   res.set("Access-Control-Allow-Origin", "*");
@@ -313,7 +313,7 @@ function healthPlusVanguardFields() {
 
 exports.createHealthPlusBooking = functions.runWith({
   enforceAppCheck: true,
-  secrets: ["GOOGLE_ROUTES_API_KEY"],
+  secrets: ["GOOGLE_ROUTES_API_KEY", "GOOGLE_PLACES_API_KEY"],
 }).https.onCall(async (data, context) => {
   const sender = requireCallableSender(context);
   if (data.consentConfirmed !== true) {
@@ -338,8 +338,10 @@ exports.createHealthPlusBooking = functions.runWith({
   let pharmacyAddressCanonical;
   let deliveryAddressCanonical;
   try {
-    pharmacyAddressCanonical = canonicalAddress(data.pharmacyAddressCanonical, "pharmacy address");
-    deliveryAddressCanonical = canonicalAddress(data.deliveryAddressCanonical, "patient address");
+    [pharmacyAddressCanonical, deliveryAddressCanonical] = await Promise.all([
+      resolveCanonicalAddress(data.pharmacyAddressCanonical, "pharmacy address"),
+      resolveCanonicalAddress(data.deliveryAddressCanonical, "patient address"),
+    ]);
   } catch (error) {
     throw new functions.https.HttpsError(
         "failed-precondition",

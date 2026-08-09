@@ -5,7 +5,7 @@ const {getStorage} = require("firebase-admin/storage");
 const giftVoiceMedia = require("./gift-voice-media");
 const vanguardProtocol = require("./vanguard-protocol-core");
 const {createGiftBudgetAuthority} = require("./gift-budget-authority");
-const {canonicalAddress} = require("./canonical-address-authority");
+const {resolveCanonicalAddress} = require("./canonical-address-authority");
 
 function requireAuth(context) {
   if (!context.auth) {
@@ -54,7 +54,7 @@ async function createCampaignPaymentDraft({data, context}) {
   }
   let deliveryAddressCanonical;
   try {
-    deliveryAddressCanonical = canonicalAddress(
+    deliveryAddressCanonical = await resolveCanonicalAddress(
         participantPayload.deliveryAddressData || participantPayload.deliveryAddressCanonical,
         "gift delivery address",
     );
@@ -128,7 +128,7 @@ async function createStandardPaymentDraft({data, context}) {
   }
   let deliveryAddressCanonical;
   try {
-    deliveryAddressCanonical = canonicalAddress(
+    deliveryAddressCanonical = await resolveCanonicalAddress(
         payload.deliveryAddressData || payload.deliveryAddressCanonical,
         "gift delivery address",
     );
@@ -173,7 +173,10 @@ async function createStandardPaymentDraft({data, context}) {
   return {giftDraftId: draftRef.id, gift: draft};
 }
 
-exports.createGiftPayment = (stripe) => functions.runWith({enforceAppCheck: true}).https.onCall(async (data, context) => {
+exports.createGiftPayment = (stripe) => functions.runWith({
+  enforceAppCheck: true,
+  secrets: ["GOOGLE_PLACES_API_KEY"],
+}).https.onCall(async (data, context) => {
   requireAuth(context);
   const campaignRequest = data.source === "sender_mobile_campaign" && data.campaignParticipant;
   const campaignDraft = campaignRequest ?
