@@ -929,10 +929,10 @@ exports.createSenderBookingQuote = functions.runWith({secrets: ["GOOGLE_ROUTES_A
     console.error("Sender authoritative route evaluation failed", {code: error.code || "routes_failed"});
     throw new functions.https.HttpsError("failed-precondition", "We could not verify the route for this quote. Please check both addresses and try again.");
   }
-  const quoteInput = data && typeof data === "object" ? data : {};
+  const quoteInput = data && typeof data === "object" ? {...data} : {};
   quoteInput.authoritativeRouteFacts = authoritativeRouteFacts;
   const quote = quotePayload({
-    ...(data || {}),
+    ...quoteInput,
     ...(businessContext || {}),
   }, sender.uid, serverPhotoAnalysis);
   const clientDisplayQuote = cleanMap(data && data.clientDisplayQuote);
