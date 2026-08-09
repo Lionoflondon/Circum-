@@ -11343,6 +11343,8 @@ class _CustomerPortalState extends State<_CustomerPortal> {
       final functions = FirebaseFunctions.instanceFor(region: 'us-central1');
       final quoteResult =
           await functions.httpsCallable('createSenderBookingQuote').call({
+        'pickupAddressCanonical': _validatedPickup?.toJson(),
+        'dropoffAddressCanonical': _validatedDropoff?.toJson(),
         'quoteId': id,
         'distanceMiles': _confirmedRouteDistanceMiles,
         'weightKg': _deliveryClassification.finalWeightKg,
@@ -11385,6 +11387,8 @@ class _CustomerPortalState extends State<_CustomerPortal> {
       final request = _requestPayload(id, parcelPhotoData);
       final deliveryPayload = {
         'requestId': id,
+        'pickupAddressCanonical': _validatedPickup?.toJson(),
+        'dropoffAddressCanonical': _validatedDropoff?.toJson(),
         'pickup': _webCanonicalPickupPayload(request),
         'dropoff': _webCanonicalDropoffPayload(request),
         'recipient': _webCanonicalRecipientPayload(request),
@@ -11492,6 +11496,7 @@ class _CustomerPortalState extends State<_CustomerPortal> {
       'locality': pickup['locality'],
       'address': pickup['address'],
       'subAddress': pickup['subAddress'],
+      'canonicalAddress': _validatedPickup?.toJson(),
     };
   }
 
@@ -11510,6 +11515,7 @@ class _CustomerPortalState extends State<_CustomerPortal> {
       'locality': dropoff['locality'],
       'address': dropoff['address'],
       'subAddress': dropoff['subAddress'],
+      'canonicalAddress': _validatedDropoff?.toJson(),
     };
   }
 

@@ -33,8 +33,9 @@ const {calculateWalletCheckout} = require("./wallet-core");
 const {verifiedStripePaidGbpSession} = require("./roth-ledger-core");
 const rothLedger = require("./roth-ledger");
 const vanguardProtocol = require("./vanguard-protocol-core");
-const {getAuthoritativeRouteFacts, coordinate} = require("./route-authority");
+const {getAuthoritativeRouteFacts} = require("./route-authority");
 const {evaluateRoadChargePolicy} = require("./road-charge-policy");
+const {canonicalAddress} = require("./canonical-address-authority");
 
 function allowCors(res) {
   res.set("Access-Control-Allow-Origin", "*");
@@ -334,8 +335,19 @@ exports.createHealthPlusBooking = functions.runWith({
     throw new functions.https.HttpsError("invalid-argument", "Complete the Health+ profile, pharmacy, delivery address and preferred time.");
   }
 
-  const pharmacy = coordinate(data.pharmacyAddressCanonical || data.pharmacyPosition);
-  const patient = coordinate(data.deliveryAddressCanonical || data.deliveryPosition);
+  let pharmacyAddressCanonical;
+  let deliveryAddressCanonical;
+  try {
+    pharmacyAddressCanonical = canonicalAddress(data.pharmacyAddressCanonical, "pharmacy address");
+    deliveryAddressCanonical = canonicalAddress(data.deliveryAddressCanonical, "patient address");
+  } catch (error) {
+    throw new functions.https.HttpsError(
+        "failed-precondition",
+        "Health+ requires two canonically resolved UK addresses before pricing.",
+    );
+  }
+  const pharmacy = pharmacyAddressCanonical.coordinates;
+  const patient = deliveryAddressCanonical.coordinates;
   let authoritativeRouteFacts;
   try {
     authoritativeRouteFacts = await getAuthoritativeRouteFacts({origin: pharmacy, destination: patient});
@@ -393,8 +405,8 @@ exports.createHealthPlusBooking = functions.runWith({
       pharmacyName,
       pharmacyAddress,
       deliveryAddress,
-      pharmacyAddressCanonical: data.pharmacyAddressCanonical || null,
-      deliveryAddressCanonical: data.deliveryAddressCanonical || null,
+      pharmacyAddressCanonical,
+      deliveryAddressCanonical,
       notes: text(data.notes),
       prescriptionNotes: text(data.notes),
       prescriptionType,
@@ -422,6 +434,8 @@ exports.createHealthPlusBooking = functions.runWith({
       pharmacyName,
       pharmacyAddress,
       deliveryAddress,
+      pharmacyAddressCanonical,
+      deliveryAddressCanonical,
       notes: text(data.notes),
       prescriptionNotes: text(data.notes),
       prescriptionType,

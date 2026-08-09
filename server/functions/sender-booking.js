@@ -10,8 +10,9 @@ const vanguardProtocol = require("./vanguard-protocol-core");
 const {classifyIris} = require("./iris-core");
 const {verifiedPhotoAnalysis} = require("./iris-photo-analysis");
 const {dispatchDeliveryRequest} = require("./send-package");
-const {getAuthoritativeRouteFacts, coordinate} = require("./route-authority");
+const {getAuthoritativeRouteFacts} = require("./route-authority");
 const {evaluateRoadChargePolicy} = require("./road-charge-policy");
+const {canonicalAddressPair, sameCanonicalAddress} = require("./canonical-address-authority");
 
 const BASE_FARE_GBP = 5;
 const ADDITIONAL_FARE_PER_MILE_GBP = 1.5;
@@ -793,6 +794,8 @@ function quotePayload(data, uid, serverPhotoAnalysis = null) {
     selectedSpeed,
     distanceMiles: Number(data.authoritativeRouteFacts ? data.authoritativeRouteFacts.distanceMiles : data.distanceMiles || 0),
     routeFacts: data.authoritativeRouteFacts || null,
+    pickupAddressCanonical: data.pickupAddressCanonical || null,
+    dropoffAddressCanonical: data.dropoffAddressCanonical || null,
     scheduledJourneyAt: data.scheduledJourneyAt || null,
     scheduledJourneyTimezone: data.scheduledJourneyAt ? "Europe/London" : null,
     roadCharges,
@@ -944,8 +947,15 @@ exports.createSenderBookingQuote = functions.runWith({
     analysisId: data && data.irisPhotoAnalysisId,
     description: parcelDescription,
   });
-  const pickup = coordinate(data && (data.pickupPosition || data.pickup && data.pickup.position || data.pickup));
-  const dropoff = coordinate(data && (data.dropoffPosition || data.dropoff && data.dropoff.position || data.dropoff));
+  let canonicalAddresses;
+  try {
+    canonicalAddresses = canonicalAddressPair(data || {});
+  } catch (error) {
+    console.error("Sender canonical address validation failed", {code: error.code || "canonical_address_invalid"});
+    throw new functions.https.HttpsError("failed-precondition", "Choose both address suggestions before requesting a quote.");
+  }
+  const pickup = canonicalAddresses.pickup.coordinates;
+  const dropoff = canonicalAddresses.dropoff.coordinates;
   const deliveryTime = cleanMap(data && data.deliveryTime);
   const scheduledJourneyAt = validatedScheduledJourneyAt(deliveryTime);
   let authoritativeRouteFacts;
@@ -961,6 +971,8 @@ exports.createSenderBookingQuote = functions.runWith({
   }
   const quoteInput = data && typeof data === "object" ? {...data} : {};
   quoteInput.authoritativeRouteFacts = authoritativeRouteFacts;
+  quoteInput.pickupAddressCanonical = canonicalAddresses.pickup;
+  quoteInput.dropoffAddressCanonical = canonicalAddresses.dropoff;
   quoteInput.scheduledJourneyAt = scheduledJourneyAt;
   const quote = quotePayload({
     ...quoteInput,
@@ -1009,6 +1021,18 @@ exports.createSenderPaymentSession = (stripe) => functions.runWith({enforceAppCh
     throw new functions.https.HttpsError("not-found", "Booking quote not found.");
   }
   const quote = quoteSnap.data();
+  if (Object.keys(deliveryPayload).length > 0) {
+    let submittedAddresses;
+    try {
+      submittedAddresses = canonicalAddressPair(deliveryPayload);
+    } catch (error) {
+      throw new functions.https.HttpsError("failed-precondition", "The payment must use the verified booking addresses.");
+    }
+    if (!sameCanonicalAddress(submittedAddresses.pickup, quote.pickupAddressCanonical) ||
+        !sameCanonicalAddress(submittedAddresses.dropoff, quote.dropoffAddressCanonical)) {
+      throw new functions.https.HttpsError("failed-precondition", "The booking addresses changed. Request a fresh quote before payment.");
+    }
+  }
   const total = money(quote.total || quote.finalAmount || quote.amountDue);
   const rothEnabled = data.rothEnabled === true;
   const rothBalance = rothEnabled ? await walletBalanceForSender(sender) : 0;
@@ -1651,6 +1675,16 @@ async function createPaidDeliveryFromSession(stripe, sender, data) {
     });
   }
   const quote = quoteSnap.data();
+  let canonicalAddresses;
+  try {
+    canonicalAddresses = canonicalAddressPair(data || {});
+  } catch (error) {
+    throw new functions.https.HttpsError("failed-precondition", "The paid delivery requires the verified booking addresses.");
+  }
+  if (!sameCanonicalAddress(canonicalAddresses.pickup, quote.pickupAddressCanonical) ||
+      !sameCanonicalAddress(canonicalAddresses.dropoff, quote.dropoffAddressCanonical)) {
+    throw new functions.https.HttpsError("failed-precondition", "The paid delivery addresses do not match the paid quote.");
+  }
   const draftId = text(data.draftId);
   const idempotencyKey = text(data.idempotencyKey) ||
     stableId(`${sender.uid}:${draftId || "no-draft"}:${quoteId}:${paymentSessionId}`);
@@ -1801,6 +1835,8 @@ async function createPaidDeliveryFromSession(stripe, sender, data) {
         address: pickup.address || "",
         subAddress: pickup.subAddress || "",
       },
+      pickupAddressCanonical: canonicalAddresses.pickup,
+      dropoffAddressCanonical: canonicalAddresses.dropoff,
       dropoffDetails: {
         fullname: dropoff.fullname || data.recipient && data.recipient.name || "",
         phone: "",

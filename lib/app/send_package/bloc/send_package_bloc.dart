@@ -384,8 +384,10 @@ class SendPackageBloc extends Bloc<SendPackageEvent, SendPackageState> {
       state.copyWith(
         pickupLocation: event.val,
         pickupLocationSubAddress: event.pickupLocationSubAddress,
+        pickupPlaceId: event.placeId,
         destinationLocation: '',
         destinationLocationSubAddress: '',
+        destinationPlaceId: '',
       ),
     );
 
@@ -423,6 +425,7 @@ class SendPackageBloc extends Bloc<SendPackageEvent, SendPackageState> {
       state.copyWith(
         destinationLocation: event.val,
         destinationLocationSubAddress: event.destinationLocationSubAddress,
+        destinationPlaceId: event.placeId,
       ),
     );
 
@@ -894,6 +897,18 @@ class SendPackageBloc extends Bloc<SendPackageEvent, SendPackageState> {
     try {
       final distanceKm = state.distance ?? _distanceKmFromRouteCoordinates();
       final data = await _callableMap('createSenderBookingQuote', {
+        'pickupAddressCanonical': _canonicalAddressPayload(
+          state.pickupLocation,
+          state.pickupLocationSubAddress,
+          state.pickupCoordinate,
+          state.pickupPlaceId,
+        ),
+        'dropoffAddressCanonical': _canonicalAddressPayload(
+          state.destinationLocation,
+          state.destinationLocationSubAddress,
+          state.desinationCoordinate,
+          state.destinationPlaceId,
+        ),
         if (event.businessContext != null)
           'businessContext': event.businessContext,
         'selectedSpeed': event.selectedSpeed,
@@ -990,6 +1005,28 @@ class SendPackageBloc extends Bloc<SendPackageEvent, SendPackageState> {
         ),
       );
     }
+  }
+
+  Map<String, dynamic> _canonicalAddressPayload(
+    String? displayAddress,
+    String? subAddress,
+    PlaceCoordinate? coordinate,
+    String? placeId,
+  ) {
+    final lat = coordinate?.lat;
+    final lng = coordinate?.lng;
+    return {
+      'displayAddress': displayAddress ?? '',
+      'postcode': subAddress ?? '',
+      'lat': lat,
+      'lng': lng,
+      'locationId': placeId ?? '',
+      'placeId': placeId ?? '',
+      'provider': 'google_places',
+      'addressSource': 'google_places',
+      'validationStatus': 'verified',
+      'country': 'United Kingdom',
+    };
   }
 
   void _handleLoadSenderRothBalance(

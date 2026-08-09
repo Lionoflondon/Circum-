@@ -5,6 +5,7 @@ const {getStorage} = require("firebase-admin/storage");
 const giftVoiceMedia = require("./gift-voice-media");
 const vanguardProtocol = require("./vanguard-protocol-core");
 const {createGiftBudgetAuthority} = require("./gift-budget-authority");
+const {canonicalAddress} = require("./canonical-address-authority");
 
 function requireAuth(context) {
   if (!context.auth) {
@@ -51,12 +52,22 @@ async function createCampaignPaymentDraft({data, context}) {
   if (gross < 50) {
     throw new functions.https.HttpsError("failed-precondition", "Campaign gift budget is below the minimum.");
   }
+  let deliveryAddressCanonical;
+  try {
+    deliveryAddressCanonical = canonicalAddress(
+        participantPayload.deliveryAddressData || participantPayload.deliveryAddressCanonical,
+        "gift delivery address",
+    );
+  } catch (error) {
+    throw new functions.https.HttpsError("failed-precondition", "Choose a verified gift delivery address before payment.");
+  }
   const participantRef = db.collection("giftCampaignParticipants").doc();
   const draftRef = db.collection("giftPaymentDrafts").doc();
   const senderEmail = text(context.auth.token && context.auth.token.email);
   const now = FieldValue.serverTimestamp();
   const participant = {
     ...participantPayload,
+    deliveryAddressCanonical,
     userId: context.auth.uid,
     senderId: context.auth.uid,
     email: senderEmail || text(participantPayload.email),
@@ -115,10 +126,20 @@ async function createStandardPaymentDraft({data, context}) {
   if (!text(payload.recipientName) || !text(payload.deliveryAddress)) {
     throw new functions.https.HttpsError("invalid-argument", "Gift recipient and delivery details are required.");
   }
+  let deliveryAddressCanonical;
+  try {
+    deliveryAddressCanonical = canonicalAddress(
+        payload.deliveryAddressData || payload.deliveryAddressCanonical,
+        "gift delivery address",
+    );
+  } catch (error) {
+    throw new functions.https.HttpsError("failed-precondition", "Choose a verified gift delivery address before payment.");
+  }
   const senderEmail = text(context.auth.token && context.auth.token.email) || text(payload.senderEmail);
   const now = FieldValue.serverTimestamp();
   const draft = {
     ...payload,
+    deliveryAddressCanonical,
     giftDraftId: draftRef.id,
     senderId: context.auth.uid,
     senderEmail,

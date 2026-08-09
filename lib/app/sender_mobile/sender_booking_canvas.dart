@@ -5148,6 +5148,25 @@ class _PaymentPanelState extends State<_PaymentPanel> {
         );
   }
 
+  Map<String, dynamic> _canonicalAddressPayload(
+    String address,
+    String subAddress,
+    PlaceCoordinate? coordinate,
+    String? placeId,
+  ) =>
+      {
+        'displayAddress': address,
+        'postcode': subAddress,
+        'lat': coordinate?.lat,
+        'lng': coordinate?.lng,
+        'locationId': placeId ?? '',
+        'placeId': placeId ?? '',
+        'provider': 'google_places',
+        'addressSource': 'google_places',
+        'validationStatus': 'verified',
+        'country': 'United Kingdom',
+      };
+
   Map<String, dynamic> _bookingPayload(SendPackageState engine) => {
         'draftId': draftId,
         'idempotencyKey':
@@ -5160,6 +5179,12 @@ class _PaymentPanelState extends State<_PaymentPanel> {
             'lat': engine.pickupCoordinate?.lat ?? 0,
             'lng': engine.pickupCoordinate?.lng ?? 0,
           },
+          'canonicalAddress': _canonicalAddressPayload(
+            engine.pickupLocation ?? draft.pickupAddress,
+            engine.pickupLocationSubAddress ?? '',
+            engine.pickupCoordinate,
+            engine.pickupPlaceId,
+          ),
         },
         'dropoff': {
           'address': engine.destinationLocation ?? draft.dropoffAddress,
@@ -5169,7 +5194,25 @@ class _PaymentPanelState extends State<_PaymentPanel> {
             'lat': engine.desinationCoordinate?.lat ?? 0,
             'lng': engine.desinationCoordinate?.lng ?? 0,
           },
+          'canonicalAddress': _canonicalAddressPayload(
+            engine.destinationLocation ?? draft.dropoffAddress,
+            engine.destinationLocationSubAddress ?? '',
+            engine.desinationCoordinate,
+            engine.destinationPlaceId,
+          ),
         },
+        'pickupAddressCanonical': _canonicalAddressPayload(
+          engine.pickupLocation ?? draft.pickupAddress,
+          engine.pickupLocationSubAddress ?? '',
+          engine.pickupCoordinate,
+          engine.pickupPlaceId,
+        ),
+        'dropoffAddressCanonical': _canonicalAddressPayload(
+          engine.destinationLocation ?? draft.dropoffAddress,
+          engine.destinationLocationSubAddress ?? '',
+          engine.desinationCoordinate,
+          engine.destinationPlaceId,
+        ),
         'recipient': {
           'name': draft.receiverName,
           'phone': draft.receiverPhone,

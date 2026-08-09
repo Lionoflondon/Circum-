@@ -35,6 +35,8 @@ class SendPackageState {
   String? destinationLocation;
   String? pickupLocationSubAddress;
   String? destinationLocationSubAddress;
+  String? pickupPlaceId;
+  String? destinationPlaceId;
   PlaceCoordinate? pickupCoordinate;
   PlaceCoordinate? desinationCoordinate;
   PlaceCoordinate? riderLocation;
@@ -103,6 +105,8 @@ class SendPackageState {
     this.destinationLocation,
     this.pickupLocationSubAddress,
     this.destinationLocationSubAddress,
+    this.pickupPlaceId,
+    this.destinationPlaceId,
     this.pickupCoordinate,
     this.desinationCoordinate,
     this.distance,
@@ -172,6 +176,8 @@ class SendPackageState {
     String? destinationLocation,
     String? pickupLocationSubAddress,
     String? destinationLocationSubAddress,
+    String? pickupPlaceId,
+    String? destinationPlaceId,
     PlaceCoordinate? pickupCoordinate,
     PlaceCoordinate? desinationCoordinate,
     PlaceCoordinate? riderLocation,
@@ -257,6 +263,8 @@ class SendPackageState {
           pickupLocationSubAddress ?? this.pickupLocationSubAddress,
       destinationLocationSubAddress:
           destinationLocationSubAddress ?? this.destinationLocationSubAddress,
+      pickupPlaceId: pickupPlaceId ?? this.pickupPlaceId,
+      destinationPlaceId: destinationPlaceId ?? this.destinationPlaceId,
       pickupCoordinate: pickupCoordinate ?? this.pickupCoordinate,
       desinationCoordinate: desinationCoordinate ?? this.desinationCoordinate,
       riderLocation: riderLocation ?? this.riderLocation,
