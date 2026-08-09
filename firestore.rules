@@ -111,34 +111,6 @@ service cloud.firestore {
       );
     }
 
-    function isAvailableRiderJob() {
-      return isApprovedRiderForDispatch() && (
-        resource.data.status == 'requested' ||
-        resource.data.dispatchStatus == 'requested' ||
-        resource.data.matchingStatus == 'available'
-      );
-    }
-
-    function isApprovedRiderForDispatch() {
-      let profile = get(/databases/$(database)/documents/riderProfiles/$(request.auth.uid)).data;
-      return (isFounderRider() || (isRiderAccount() &&
-          profile.dispatchEligible == true &&
-          profile.approvalStatus == 'approved' &&
-          (profile.verificationStatus == 'approved' || profile.verificationStatus == 'verified') &&
-          profile.onboardingStatus == 'approved')) &&
-        profile.get('suspended', false) != true &&
-        profile.get('accountStatus', '') != 'suspended' &&
-        profile.get('accountStatus', '') != 'frozen' &&
-        profile.get('accountStatus', '') != 'closed';
-    }
-
-    function isFounderRider() {
-      return signedIn() &&
-        request.auth.uid == 'T2eV6PQucdUKmwSipEn2NAn4N9z1' &&
-        'founderRider' in request.auth.token &&
-        request.auth.token.founderRider == true;
-    }
-
     function isCreatingOwnDelivery() {
       return signedIn() && (
         request.resource.data.senderId == request.auth.uid ||
@@ -927,9 +899,7 @@ service cloud.firestore {
     match /deliveryRequests/{deliveryId} {
       allow read: if isAdmin() ||
         isOwnDelivery(deliveryId) ||
-        isAssignedRider() ||
-        canReadBusinessId(resource.data.get('businessId', '')) ||
-        isAvailableRiderJob();
+        canReadBusinessId(resource.data.get('businessId', ''));
       allow create: if isAdmin();
       allow update: if isAdmin() ||
         isOwnDeliveryUpdate() ||

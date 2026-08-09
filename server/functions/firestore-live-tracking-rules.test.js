@@ -495,7 +495,7 @@ test("Vanguard PIN authority private documents are not client readable or writab
   const senderDb = testEnv.authenticatedContext("sender-1").firestore();
   const riderDb = testEnv.authenticatedContext("rider-1").firestore();
   await assertSucceeds(getDoc(doc(senderDb, "deliveryRequests", deliveryId)));
-  await assertSucceeds(getDoc(doc(riderDb, "deliveryRequests", deliveryId)));
+  await assertFails(getDoc(doc(riderDb, "deliveryRequests", deliveryId)));
   await assertFails(getDoc(doc(senderDb, "deliveryRequestsPrivate", deliveryId)));
   await assertFails(getDoc(doc(riderDb, "deliveryRequestsPrivate", deliveryId)));
   await assertFails(setDoc(doc(senderDb, "deliveryRequestsPrivate", deliveryId), {

@@ -138,6 +138,12 @@ function dispatchEligibilityDecision({
   if (!account.eligible) return {...account, riderId};
   const presenceDecision = presenceEligibilityDecision({riderId, presence, now});
   if (!presenceDecision.eligible) return {...presenceDecision, riderId};
+  const excludedRiders = [delivery.ignoredByRiders, delivery.rejectedByRiders]
+      .flatMap((value) => Array.isArray(value) ? value : [])
+      .map(text);
+  if (excludedRiders.includes(riderId)) {
+    return {eligible: false, reason: "rider_previously_declined", riderId};
+  }
   if (!riderVehicleMatchesRequest(profile, delivery)) {
     return {eligible: false, reason: "vehicle_incompatible", riderId};
   }
@@ -176,6 +182,14 @@ function safeContactLocation(value = {}, fallbackAddress = "", fallbackPosition 
     locality: text(source.locality || source.city || source.town),
     postcode: text(source.postcode || source.postalCode),
     position: safePosition(source.position || fallbackPosition),
+  };
+}
+
+function safePerson(value = {}, fallbackName = "", fallbackPhone = "") {
+  const source = value && typeof value === "object" ? value : {};
+  return {
+    name: text(source.name || source.fullName || fallbackName),
+    phone: text(source.phone || source.phoneNumber || fallbackPhone),
   };
 }
 
@@ -243,6 +257,105 @@ function riderOfferProjection(deliveryId, delivery = {}, distanceFromRiderKm = 0
   };
 }
 
+function riderAssignedJobProjection(deliveryId, delivery = {}, {completed = false} = {}) {
+  const projection = riderOfferProjection(deliveryId, delivery, 0);
+  const summary = delivery.driverJobSummary && typeof delivery.driverJobSummary === "object" ? delivery.driverJobSummary : {};
+  const riderBaseShare = Number(delivery.riderBaseShare ?? summary.riderBaseShare ?? 0);
+  const riderLabourShare = Number(delivery.riderLabourShare ?? summary.riderLabourShare ?? 0);
+  const assistedFee = Number(delivery.assistedFee ?? summary.assistedFee ?? 0);
+  const heavyDutyFee = Number(delivery.heavyDutyFee ?? summary.heavyDutyFee ?? 0);
+  const twoPersonFee = Number(delivery.twoPersonFee ?? summary.twoPersonFee ?? 0);
+  const tipAmount = Number(delivery.tipAmount ?? delivery.riderTip ?? summary.tipAmount ?? 0);
+
+  const operational = {
+    ...projection,
+    pickupAccess: text(delivery.pickupAccess),
+    dropoffAccess: text(delivery.dropoffAccess),
+    normalizedItemName: text(delivery.normalizedItemName),
+    customerDeclaredWeight: Number(delivery.customerDeclaredWeight ?? delivery.senderEnteredWeightKg ?? 0),
+    irisEstimatedWeight: Number(delivery.irisEstimatedWeight ?? delivery.irisEstimatedWeightKg ?? 0),
+    finalWeightUsed: Number(delivery.finalWeightUsed ?? delivery.finalChargeableWeight ?? delivery.confirmedWeightKg ?? projection.weightKg ?? 0),
+    weightCategory: text(delivery.weightCategory || delivery.confirmedWeightBand),
+    irisConfidenceScore: text(delivery.irisConfidenceScore || delivery.irisWeightConfidence),
+    irisWeightSource: text(delivery.irisWeightSource || summary.irisWeightSource),
+    weightReviewRequired: delivery.weightReviewRequired === true,
+    weightVerificationRequired: delivery.weightVerificationRequired === true,
+    vanguardEnabled: delivery.vanguardEnabled === true ||
+      delivery.requiresVanguard === true ||
+      delivery.vanguardProtocolEnabled === true ||
+      delivery.vanguardProtection && delivery.vanguardProtection.enabled === true,
+    collectionPinVerified: delivery.collectionPinVerified === true,
+    deliveryPinVerified: delivery.deliveryPinVerified === true,
+    riderBaseShare: Number.isFinite(riderBaseShare) ? riderBaseShare : 0,
+    riderLabourShare: Number.isFinite(riderLabourShare) ? riderLabourShare : 0,
+    assistedFee: Number.isFinite(assistedFee) ? assistedFee : 0,
+    heavyDutyFee: Number.isFinite(heavyDutyFee) ? heavyDutyFee : 0,
+    twoPersonFee: Number.isFinite(twoPersonFee) ? twoPersonFee : 0,
+    tipAmount: Number.isFinite(tipAmount) ? tipAmount : 0,
+    scheduledPickupDate: delivery.scheduledPickupDate || null,
+    scheduledPickupWindow: delivery.scheduledPickupWindow || null,
+    deliveryTimingType: text(delivery.deliveryTimingType),
+    deliveredAt: completed ? delivery.deliveredAt || delivery.completedAt || null : null,
+    completedAt: completed ? delivery.completedAt || delivery.deliveredAt || null : null,
+    proofOfDelivery: completed ? {
+      available: Boolean(delivery.proofOfDelivery || delivery.deliveryProof || delivery.completionProof),
+      collectionPinVerified: delivery.collectionPinVerified === true,
+      deliveryPinVerified: delivery.deliveryPinVerified === true,
+    } : null,
+  };
+
+  if (!completed) {
+    const sender = safePerson(
+        delivery.senderDetails,
+        delivery.senderName || summary.senderName,
+        delivery.senderPhone || summary.senderPhone,
+    );
+    const receiver = safePerson(
+        delivery.receiverDetails || delivery.recipient,
+        delivery.receiverName || summary.receiverName,
+        delivery.receiverPhone || summary.receiverPhone,
+    );
+    const collection = safePerson(
+        delivery.collectionContact,
+        delivery.collectionContactName || summary.collectionContactName,
+        delivery.collectionContactPhone || summary.collectionContactPhone,
+    );
+    operational.senderDetails = sender;
+    operational.receiverDetails = receiver;
+    operational.collectionContact = {
+      ...collection,
+      differentFromSender: delivery.collectionContactDifferent === true ||
+        delivery.collectionContact && delivery.collectionContact.differentFromSender === true,
+    };
+  }
+
+  operational.driverJobSummary = {
+    ...projection.driverJobSummary,
+    finalWeightUsed: operational.finalWeightUsed,
+    confirmedWeightBand: operational.weightCategory,
+    riderBaseShare: operational.riderBaseShare,
+    riderLabourShare: operational.riderLabourShare,
+    assistedFee: operational.assistedFee,
+    heavyDutyFee: operational.heavyDutyFee,
+    twoPersonFee: operational.twoPersonFee,
+    tipAmount: operational.tipAmount,
+    deliveryTimingType: operational.deliveryTimingType,
+    scheduledPickupDate: operational.scheduledPickupDate,
+    scheduledPickupWindow: operational.scheduledPickupWindow,
+    vanguardEnabled: operational.vanguardEnabled,
+    ...(completed ? {} : {
+      senderName: operational.senderDetails.name,
+      senderPhone: operational.senderDetails.phone,
+      receiverName: operational.receiverDetails.name,
+      receiverPhone: operational.receiverDetails.phone,
+      collectionContactName: operational.collectionContact.name,
+      collectionContactPhone: operational.collectionContact.phone,
+      collectionContactDifferent: operational.collectionContact.differentFromSender,
+    }),
+  };
+  return operational;
+}
+
 module.exports = {
   DEFAULT_MAX_DISPATCH_RADIUS_KM,
   accountEligibilityDecision,
@@ -253,6 +366,7 @@ module.exports = {
   pickupCoordinate,
   presenceEligibilityDecision,
   riderCoordinate,
+  riderAssignedJobProjection,
   riderOfferProjection,
   serviceEligibilityDecision,
   serviceName,

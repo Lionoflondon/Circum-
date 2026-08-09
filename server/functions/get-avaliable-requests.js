@@ -7,16 +7,19 @@ const {
   accountEligibilityDecision,
   dispatchEligibilityDecision,
   presenceEligibilityDecision,
-  riderCoordinate,
+  riderAssignedJobProjection,
   riderOfferProjection,
 } = require("./rider-dispatch-authority");
 
 const REQUEST_SCAN_LIMIT = 100;
+const RIDER_JOB_LIMIT = 20;
 const openStatuses = new Set(["requested", "pending", "broadcast", "broadcasted", "awaiting_rider", "finding_rider"]);
 const terminalStatuses = new Set(["accepted", "assigned", "collected", "in_transit", "delivered", "completed", "cancelled", "canceled", "expired", "failed", "blocked"]);
 const openMatchingStatuses = new Set(["available", "requested", "broadcast", "broadcasted"]);
 const openDispatchStatuses = new Set(["requested", "available", "broadcast", "broadcasted", "queued", "waiting"]);
 const paidStatuses = new Set(["", "paid", "succeeded", "payment_confirmed", "confirmed", "roth_paid", "stripe_paid"]);
+const activeRiderStatuses = new Set(["accepted", "assigned", "navigating_to_pickup", "en_route_to_pickup", "arrived_at_pickup", "waiting", "pickup_verification", "pickup_verified", "collected", "picked_up", "navigating_to_dropoff", "in_transit", "arrived_at_dropoff", "arriving", "issue_reported"]);
+const completedRiderStatuses = new Set(["completed", "delivered"]);
 const text = (value) => `${value || ""}`.trim();
 
 function riderLocality(rider = {}) {
@@ -114,7 +117,39 @@ async function candidateRequestDocs(db, riderData = {}) {
       .sort((a, b) => deliveryCreatedMillis(b.data() || {}) - deliveryCreatedMillis(a.data() || {}));
 }
 
-const getNearbyRequests = functions.runWith({enforceAppCheck: true}).https.onCall(async (data, context) => {
+async function assignedRiderJobDocs(db, riderId) {
+  const [activeSnapshot, completedSnapshot] = await Promise.all([
+    db.collection("deliveryRequests")
+        .where("riderId", "==", riderId)
+        .where("status", "in", [...activeRiderStatuses])
+        .limit(RIDER_JOB_LIMIT)
+        .get(),
+    db.collection("deliveryRequests")
+        .where("riderId", "==", riderId)
+        .where("status", "in", [...completedRiderStatuses])
+        .limit(RIDER_JOB_LIMIT)
+        .get(),
+  ]);
+  return [...activeSnapshot.docs, ...completedSnapshot.docs].sort((a, b) =>
+    deliveryCreatedMillis(b.data() || {}) - deliveryCreatedMillis(a.data() || {}) ||
+    a.id.localeCompare(b.id));
+}
+
+function projectAssignedRiderJobs(docs, riderId) {
+  const owned = docs.filter((doc) => assignedRiderId(doc.data() || {}) === riderId);
+  return {
+    activeJobs: owned
+        .filter((doc) => activeRiderStatuses.has(text(doc.data().status).toLowerCase()))
+        .slice(0, RIDER_JOB_LIMIT)
+        .map((doc) => riderAssignedJobProjection(doc.id, doc.data() || {})),
+    completedJobs: owned
+        .filter((doc) => completedRiderStatuses.has(text(doc.data().status).toLowerCase()))
+        .slice(0, RIDER_JOB_LIMIT)
+        .map((doc) => riderAssignedJobProjection(doc.id, doc.data() || {}, {completed: true})),
+  };
+}
+
+async function getNearbyRequestsHandler(data, context, dependencies = {}) {
   try {
     // Check if the user is authenticated
     if (!context.auth) {
@@ -125,14 +160,14 @@ const getNearbyRequests = functions.runWith({enforceAppCheck: true}).https.onCal
     const riderId = context.auth.uid;
 
     // Get rider's current position
-    const db = getFirestore();
+    const db = dependencies.db || getFirestore();
     const [riderDoc, riderProfileDoc, presenceDoc] = await Promise.all([
       db.collection("riders").doc(riderId).get(),
       db.collection("riderProfiles").doc(riderId).get(),
       db.collection("riderPresence").doc(riderId).get(),
     ]);
     if (!riderDoc.exists) {
-      throw new functions.https.HttpsError("not-found", "Rider not found");
+      throw new functions.https.HttpsError("permission-denied", "A Rider account is required.");
     }
 
     const riderData = {
@@ -140,18 +175,21 @@ const getNearbyRequests = functions.runWith({enforceAppCheck: true}).https.onCal
       ...(riderProfileDoc.exists ? riderProfileDoc.data() : {}),
     };
     const presence = presenceDoc.exists ? presenceDoc.data() : {};
+    const assignedDocs = await (dependencies.assignedRiderJobDocs || assignedRiderJobDocs)(db, riderId);
+    const riderJobs = projectAssignedRiderJobs(assignedDocs, riderId);
     const accountDecision = accountEligibilityDecision(riderData);
     if (!accountDecision.eligible) {
-      throw new functions.https.HttpsError("permission-denied", "Rider is not eligible for dispatch.");
+      throw new functions.https.HttpsError("permission-denied", "Rider is not authorized for dispatch.");
     }
     const presenceDecision = presenceEligibilityDecision({riderId, presence});
     if (!presenceDecision.eligible) {
-      throw new functions.https.HttpsError("failed-precondition", "Rider presence is not ready for dispatch.");
+      return {
+        nearestRequests: [],
+        ...riderJobs,
+      };
     }
 
-    const riderPosition = riderCoordinate(presence);
-
-    const requestDocs = await candidateRequestDocs(db, riderData);
+    const requestDocs = await (dependencies.candidateRequestDocs || candidateRequestDocs)(db, riderData);
     console.info("rider_offer_scan", {
       riderId,
       scanned: requestDocs.length,
@@ -250,16 +288,17 @@ const getNearbyRequests = functions.runWith({enforceAppCheck: true}).https.onCal
     });
 
     return {
-      riderId: riderId,
-      riderPosition: riderPosition,
       nearestRequests: nearestRequests,
+      ...riderJobs,
     };
   } catch (error) {
     if (error instanceof functions.https.HttpsError) throw error;
     console.error("Error in getNearbyRequests:", error);
     throw new functions.https.HttpsError("internal", error.message);
   }
-});
+}
+
+const getNearbyRequests = functions.runWith({enforceAppCheck: true}).https.onCall(getNearbyRequestsHandler);
 
 module.exports = getNearbyRequests;
-module.exports._private = {candidateRequestDocs, riderLocality, deliveryLocality, hasPickupGeo, isLiveDispatchOffer, offerExclusionReason, REQUEST_SCAN_LIMIT};
+module.exports._private = {assignedRiderJobDocs, candidateRequestDocs, getNearbyRequestsHandler, projectAssignedRiderJobs, riderLocality, deliveryLocality, hasPickupGeo, isLiveDispatchOffer, offerExclusionReason, REQUEST_SCAN_LIMIT, RIDER_JOB_LIMIT};

@@ -3201,9 +3201,8 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
   StreamSubscription<DocumentSnapshot<Map<String, dynamic>>>? _earningsSub;
   StreamSubscription<DocumentSnapshot<Map<String, dynamic>>>? _performanceSub;
   StreamSubscription<QuerySnapshot<Map<String, dynamic>>>? _ratingSub;
-  StreamSubscription<QuerySnapshot<Map<String, dynamic>>>? _availableJobsSub;
-  StreamSubscription<QuerySnapshot<Map<String, dynamic>>>? _acceptedJobsSub;
-  StreamSubscription<QuerySnapshot<Map<String, dynamic>>>? _completedJobsSub;
+  Timer? _riderJobProjectionTimer;
+  bool _riderJobProjectionLoading = false;
   DriverPerformanceMetric _performance = DriverPerformanceMetric.empty(
     'web-rider',
   );
@@ -3259,9 +3258,7 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
     _earningsSub?.cancel();
     _performanceSub?.cancel();
     _ratingSub?.cancel();
-    _availableJobsSub?.cancel();
-    _acceptedJobsSub?.cancel();
-    _completedJobsSub?.cancel();
+    _riderJobProjectionTimer?.cancel();
     _riderChatSub?.cancel();
     _stopRiderLiveLocationPublishing(status: 'offline');
     _fullName.dispose();
@@ -3326,8 +3323,7 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
         profile: riderProfile,
         verifiedSuperAdmin: _superAdminRiderBypass,
       )) {
-        _listenToAvailableJobs();
-        _listenToRiderJobs(user.uid);
+        _startRiderJobProjection();
       }
     } catch (_) {
       if (!mounted) return;
@@ -3390,8 +3386,7 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
         profile: _riderProfile,
         verifiedSuperAdmin: _superAdminRiderBypass,
       )) {
-        _listenToAvailableJobs();
-        _listenToRiderJobs(user.uid);
+        _startRiderJobProjection();
       }
       if (!mounted) return;
       setState(() {
@@ -3650,244 +3645,44 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
     });
   }
 
-  void _listenToAvailableJobs() {
-    _availableJobsSub?.cancel();
-    _availableJobsSub = FirebaseFirestore.instance
-        .collection('deliveryRequests')
-        .where('status', isEqualTo: 'requested')
-        .limit(20)
-        .snapshots()
-        .listen(
-      (snapshot) {
-        if (!mounted) return;
-        setState(() {
-          final jobs = snapshot.docs
-              .map((doc) => {'id': doc.id, ...doc.data()})
-              .where((job) {
-            if (!_isLiveRiderOffer(job)) return false;
-            final matchingStatus =
-                '${job['matchingStatus'] ?? 'available'}'.toLowerCase();
-            final ignoredBy = (job['ignoredByRiders'] as List?) ?? const [];
-            final rejectedBy = (job['rejectedByRiders'] as List?) ?? const [];
-            final currentRider = _riderUser?.uid;
-            if (currentRider != null &&
-                (ignoredBy.contains(currentRider) ||
-                    rejectedBy.contains(currentRider))) {
-              return false;
-            }
-            final riderVehicle = '${_riderProfile?['vehicleType'] ?? ''}';
-            final requiredVehicle =
-                '${job['vehicleType'] ?? job['irisRecommendedVehicle'] ?? ''}';
-            if (!_superAdminRiderBypass &&
-                riderVehicle.isNotEmpty &&
-                requiredVehicle.isNotEmpty &&
-                !DeliveryPricing.vehicleMeetsMinimum(
-                  riderVehicle,
-                  requiredVehicle,
-                )) {
-              return false;
-            }
-            final riderRank = _riderProfile?['rank'] ??
-                _riderProfile?['riderRank'] ??
-                'agent';
-            if (!_superAdminRiderBypass &&
-                !RiderDispatchPolicy.canViewJob(
-                  riderRank: riderRank,
-                  job: job,
-                )) {
-              return false;
-            }
-            return matchingStatus == 'available' ||
-                matchingStatus == 'requested';
-          }).toList();
-          jobs.sort(_compareRiderJobs);
-          _availableJobs = jobs;
-        });
-      },
-      onError: (_) {
-        if (!mounted) return;
-        setState(
-          () => _jobMessage = 'Could not load available jobs right now.',
-        );
-      },
+  void _startRiderJobProjection() {
+    _riderJobProjectionTimer?.cancel();
+    unawaited(_refreshRiderJobProjection());
+    _riderJobProjectionTimer = Timer.periodic(
+      const Duration(seconds: 20),
+      (_) => unawaited(_refreshRiderJobProjection()),
     );
   }
 
-  int _compareRiderJobs(Map<String, dynamic> a, Map<String, dynamic> b) {
-    final riderRank =
-        _riderProfile?['rank'] ?? _riderProfile?['riderRank'] ?? 'agent';
-    final rankPriority = RiderDispatchPolicy.priorityScore(
-      riderRank: riderRank,
-      job: b,
-    ).compareTo(
-      RiderDispatchPolicy.priorityScore(riderRank: riderRank, job: a),
-    );
-    if (rankPriority != 0) return rankPriority;
-    final serviceA = '${a['selectedServiceLevel'] ?? a['serviceLevel'] ?? ''}';
-    final serviceB = '${b['selectedServiceLevel'] ?? b['serviceLevel'] ?? ''}';
-    final priorityCompare = DeliveryPricing.matchingPriorityRank(
-      serviceA,
-    ).compareTo(DeliveryPricing.matchingPriorityRank(serviceB));
-    if (priorityCompare != 0) return priorityCompare;
-
-    final pickupCompare =
-        '${a['scheduledPickupDate'] ?? ''} ${a['scheduledPickupWindow'] ?? ''}'
-            .compareTo(
-      '${b['scheduledPickupDate'] ?? ''} ${b['scheduledPickupWindow'] ?? ''}',
-    );
-    if (pickupCompare != 0) return pickupCompare;
-
-    final createdCompare = _jobTimestampMillis(
-            b['createdAt'] ?? b['requestedAt'] ?? b['updatedAt'])
-        .compareTo(
-      _jobTimestampMillis(a['createdAt'] ?? a['requestedAt'] ?? a['updatedAt']),
-    );
-    if (createdCompare != 0) return createdCompare;
-
-    return _jobDistanceMiles(a).compareTo(_jobDistanceMiles(b));
-  }
-
-  bool _isLiveRiderOffer(Map<String, dynamic> job) {
-    const terminalStatuses = {
-      'accepted',
-      'assigned',
-      'collected',
-      'picked_up',
-      'navigating_to_pickup',
-      'arrived_at_pickup',
-      'pickup_verified',
-      'navigating_to_dropoff',
-      'in_transit',
-      'arrived_at_dropoff',
-      'delivered',
-      'completed',
-      'cancelled',
-      'canceled',
-      'expired',
-      'failed',
-      'blocked',
-    };
-    const paidStatuses = {
-      '',
-      'paid',
-      'succeeded',
-      'payment_confirmed',
-      'confirmed',
-      'roth_paid',
-      'stripe_paid',
-    };
-    const openMatchingStatuses = {
-      '',
-      'available',
-      'requested',
-      'broadcast',
-      'broadcasted',
-    };
-    const openDispatchStatuses = {
-      '',
-      'requested',
-      'available',
-      'broadcast',
-      'broadcasted',
-      'queued',
-      'waiting',
-    };
-    final status = '${job['status'] ?? ''}'.toLowerCase();
-    final deliveryStatus =
-        '${job['deliveryStatus'] ?? job['deliveryStage'] ?? ''}'.toLowerCase();
-    final matchingStatus = '${job['matchingStatus'] ?? ''}'.toLowerCase();
-    final dispatchStatus = '${job['dispatchStatus'] ?? ''}'.toLowerCase();
-    final paymentStatus =
-        '${job['paymentStatus'] ?? job['paymentState'] ?? ''}'.toLowerCase();
-    final assignedRider =
-        '${job['riderId'] ?? job['driverId'] ?? job['assignedRider'] ?? job['assignedRiderId'] ?? job['assignedDriverId'] ?? job['courierId'] ?? ''}'
-            .trim();
-    if (terminalStatuses.contains(status) ||
-        terminalStatuses.contains(deliveryStatus) ||
-        terminalStatuses.contains(matchingStatus) ||
-        terminalStatuses.contains(dispatchStatus)) {
-      return false;
-    }
-    if (assignedRider.isNotEmpty) return false;
-    if (!paidStatuses.contains(paymentStatus)) return false;
-    if (!openMatchingStatuses.contains(matchingStatus)) return false;
-    if (!openDispatchStatuses.contains(dispatchStatus)) return false;
-    final expiry = _jobTimestampMillis(
-      job['offerExpiresAt'] ??
-          job['dispatchExpiresAt'] ??
-          job['expiresAt'] ??
-          job['matchingExpiresAt'],
-    );
-    return expiry <= 0 || expiry > DateTime.now().millisecondsSinceEpoch;
-  }
-
-  int _jobTimestampMillis(Object? value) {
-    if (value is Timestamp) return value.millisecondsSinceEpoch;
-    if (value is DateTime) return value.millisecondsSinceEpoch;
-    if (value is num) return value.toInt();
-    if (value is String) {
-      return DateTime.tryParse(value)?.millisecondsSinceEpoch ?? 0;
-    }
-    return 0;
-  }
-
-  void _listenToRiderJobs(String riderId) {
-    _acceptedJobsSub?.cancel();
-    _completedJobsSub?.cancel();
-    _acceptedJobsSub = FirebaseFirestore.instance
-        .collection('deliveryRequests')
-        .where('riderId', isEqualTo: riderId)
-        .where(
-          'status',
-          whereIn: [
-            'accepted',
-            'assigned',
-            'navigating_to_pickup',
-            'en_route_to_pickup',
-            'arrived_at_pickup',
-            'waiting',
-            'pickup_verification',
-            'pickup_verified',
-            'collected',
-            'picked_up',
-            'navigating_to_dropoff',
-            'in_transit',
-            'arrived_at_dropoff',
-            'arriving',
-            'issue_reported',
-          ],
-        )
-        .limit(20)
-        .snapshots()
-        .listen(
-          (snapshot) {
-            if (!mounted) return;
-            setState(() {
-              _acceptedJobs = snapshot.docs
-                  .map((doc) => {'id': doc.id, ...doc.data()})
-                  .toList(growable: false);
-            });
-            _syncRiderLiveLocationPublishing();
-          },
-          onError: (_) {
-            if (!mounted) return;
-            setState(() => _jobMessage = 'Could not load accepted jobs.');
-          },
-        );
-    _completedJobsSub = FirebaseFirestore.instance
-        .collection('deliveryRequests')
-        .where('riderId', isEqualTo: riderId)
-        .where('status', isEqualTo: 'completed')
-        .limit(20)
-        .snapshots()
-        .listen((snapshot) {
+  Future<void> _refreshRiderJobProjection() async {
+    if (_riderJobProjectionLoading || _riderUser == null) return;
+    _riderJobProjectionLoading = true;
+    try {
+      await _ensureCircumFirebaseReady();
+      final result = await FirebaseFunctions.instanceFor(
+        region: 'us-central1',
+      ).httpsCallable('getAvailableRequests').call();
+      final payload = Map<String, dynamic>.from(result.data as Map);
+      List<Map<String, dynamic>> jobs(String key) =>
+          ((payload[key] as List?) ?? const [])
+              .whereType<Map>()
+              .map((job) => Map<String, dynamic>.from(job))
+              .toList(growable: false);
       if (!mounted) return;
       setState(() {
-        _completedJobs = snapshot.docs
-            .map((doc) => {'id': doc.id, ...doc.data()})
-            .toList(growable: false);
+        _availableJobs = jobs('nearestRequests');
+        _acceptedJobs = jobs('activeJobs');
+        _completedJobs = jobs('completedJobs');
       });
-    });
+      _syncRiderLiveLocationPublishing();
+    } catch (_) {
+      if (!mounted) return;
+      setState(
+        () => _jobMessage = 'Could not load Rider jobs right now.',
+      );
+    } finally {
+      _riderJobProjectionLoading = false;
+    }
   }
 
   Future<void> _acceptDeliveryJob(Map<String, dynamic> job) async {
@@ -3916,6 +3711,7 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
         region: 'us-central1',
       ).httpsCallable('acceptRideRequests').call({'requestId': requestId});
       await _startRiderLiveLocationPublishing(requestId, user.uid, 'accepted');
+      await _refreshRiderJobProjection();
       if (!mounted) return;
       setState(() => _jobMessage = 'Job accepted. Head to pickup.');
     } catch (_) {
@@ -4050,6 +3846,7 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
         () => _jobMessage =
             action == 'reject' ? 'Job rejected.' : 'Job hidden for now.',
       );
+      await _refreshRiderJobProjection();
     } catch (_) {
       if (!mounted) return;
       setState(() => _jobMessage = 'Could not update this job. Try again.');
@@ -4103,6 +3900,7 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
         () => _jobMessage =
             status == 'completed' ? 'Delivery completed.' : 'Job updated.',
       );
+      await _refreshRiderJobProjection();
     } catch (_) {
       if (!mounted) return;
       setState(() => _jobMessage = 'Could not update this job. Try again.');
@@ -5003,9 +4801,8 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
     await _earningsSub?.cancel();
     await _performanceSub?.cancel();
     await _ratingSub?.cancel();
-    await _availableJobsSub?.cancel();
-    await _acceptedJobsSub?.cancel();
-    await _completedJobsSub?.cancel();
+    _riderJobProjectionTimer?.cancel();
+    _riderJobProjectionTimer = null;
     await _riderChatSub?.cancel();
     await FirebaseAuth.instance.signOut();
     if (!mounted) return;
@@ -6974,9 +6771,6 @@ class _DriverJobCard extends StatelessWidget {
     final summary =
         (job['driverJobSummary'] as Map?)?.cast<String, dynamic>() ??
             const <String, dynamic>{};
-    final pricing =
-        (job['pricingBreakdown'] as Map?)?.cast<String, dynamic>() ??
-            const <String, dynamic>{};
     final customerWeight = _num(
       job['customerDeclaredWeight'] ?? job['senderEnteredWeightKg'],
     );
@@ -6995,26 +6789,21 @@ class _DriverJobCard extends StatelessWidget {
     final weightSource =
         '${job['irisWeightSource'] ?? summary['irisWeightSource'] ?? 'unknown'}';
     final distance = _num(summary['estimatedDistanceMiles']);
-    final fare = _num(summary['totalFare'] ?? job['fare'] ?? job['price']);
     final payout = _num(summary['driverPayout'] ?? job['driverPayout']);
     final riderBaseShare = _num(
-      summary['riderBaseShare'] ??
-          job['riderBaseShare'] ??
-          pricing['riderBaseShare'],
+      summary['riderBaseShare'] ?? job['riderBaseShare'],
     );
     final riderLabourShare = _num(
-      summary['riderLabourShare'] ??
-          job['riderLabourShare'] ??
-          pricing['riderLabourShare'],
+      summary['riderLabourShare'] ?? job['riderLabourShare'],
     );
     final assistedFee = _num(
-      summary['assistedFee'] ?? job['assistedFee'] ?? pricing['assistedFee'],
+      summary['assistedFee'] ?? job['assistedFee'],
     );
     final heavyDutyFee = _num(
-      summary['heavyDutyFee'] ?? job['heavyDutyFee'] ?? pricing['heavyDutyFee'],
+      summary['heavyDutyFee'] ?? job['heavyDutyFee'],
     );
     final twoPersonFee = _num(
-      summary['twoPersonFee'] ?? job['twoPersonFee'] ?? pricing['twoPersonFee'],
+      summary['twoPersonFee'] ?? job['twoPersonFee'],
     );
     final tip = _num(
       job['tipAmount'] ?? job['riderTip'] ?? summary['tipAmount'],
@@ -7250,9 +7039,8 @@ class _DriverJobCard extends StatelessWidget {
           _JobInfoLine(
             colors: colors,
             icon: Icons.payments,
-            label: 'Price',
-            value:
-                'Total ${_money(fare)} • distance ${_money(_num(pricing['distanceFare']))} • weight ${_money(_num(pricing['weightSurcharge']))} • payout ${_money(payout)}${tip > 0 ? ' • tip ${_money(tip)}' : ''}',
+            label: 'Rider earnings',
+            value: '${_money(payout)}${tip > 0 ? ' • tip ${_money(tip)}' : ''}',
           ),
           if (warnings.isNotEmpty) ...[
             const SizedBox(height: 8),

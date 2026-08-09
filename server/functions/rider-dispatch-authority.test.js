@@ -5,6 +5,7 @@ const {
   DEFAULT_MAX_DISPATCH_RADIUS_KM,
   accountEligibilityDecision,
   dispatchEligibilityDecision,
+  riderAssignedJobProjection,
   riderOfferProjection,
 } = require("./rider-dispatch-authority");
 
@@ -139,6 +140,20 @@ test("wrong vehicle and wrong service are rejected", () => {
   }).eligible, true);
 });
 
+test("a Rider who rejected or ignored an offer cannot see it again", () => {
+  for (const field of ["ignoredByRiders", "rejectedByRiders"]) {
+    const result = dispatchEligibilityDecision({
+      riderId: "rider-1",
+      profile,
+      presence,
+      delivery: {...delivery, [field]: ["rider-1"]},
+      now,
+    });
+    assert.equal(result.eligible, false);
+    assert.equal(result.reason, "rider_previously_declined");
+  }
+});
+
 test("Rider offer is an operational allowlist with no customer payment or token data", () => {
   const offer = riderOfferProjection("delivery-1", delivery, 0.2);
   const serialized = JSON.stringify(offer);
@@ -161,4 +176,36 @@ test("Rider offer is an operational allowlist with no customer payment or token 
   assert.equal("stripeCheckoutSessionId" in offer, false);
   assert.equal("recipient" in offer, false);
   assert.equal("senderId" in offer, false);
+});
+
+test("assigned and completed Rider jobs remain operational without payment metadata", () => {
+  const active = riderAssignedJobProjection("delivery-1", {
+    ...delivery,
+    status: "accepted",
+    senderDetails: {name: "Operational sender", phone: "+447700900010", email: "private@example.test"},
+    receiverDetails: {name: "Operational receiver", phone: "+447700900011", email: "receiver@example.test"},
+    stripeCustomerId: "cus_private",
+    stripePaymentIntentId: "pi_private_assigned",
+    paymentStatus: "paid",
+    pricingBreakdown: {total: 21.35, stripeFee: 0.82},
+    internalAudit: {reason: "private"},
+  });
+  const completed = riderAssignedJobProjection("delivery-1", {
+    ...delivery,
+    status: "completed",
+    senderDetails: {name: "Historical sender", phone: "+447700900012"},
+    receiverDetails: {name: "Historical receiver", phone: "+447700900013"},
+    completedAt: "2026-08-09T12:00:00.000Z",
+    stripePaymentIntentId: "pi_private_completed",
+  }, {completed: true});
+
+  assert.deepEqual(active.senderDetails, {name: "Operational sender", phone: "+447700900010"});
+  assert.equal("senderDetails" in completed, false);
+  assert.equal(completed.completedAt, "2026-08-09T12:00:00.000Z");
+  for (const projection of [active, completed]) {
+    const serialized = JSON.stringify(projection);
+    for (const privateValue of ["cus_private", "pi_private_assigned", "pi_private_completed", "private@example.test", "receiver@example.test", "pricingBreakdown", "internalAudit", "paymentStatus"]) {
+      assert.equal(serialized.includes(privateValue), false, privateValue);
+    }
+  }
 });
