@@ -12,7 +12,11 @@ function googlePlacesApiKey() {
   return `${process.env.GOOGLE_PLACES_API_KEY || ""}`.trim();
 }
 
-exports.searchFreeUkAddresses = functions.runWith({secrets: [googlePlacesApiKeySecret]}).https.onCall(async (data) => {
+exports.searchFreeUkAddresses = functions.runWith({
+  secrets: [googlePlacesApiKeySecret],
+  vpcConnector: "circum-fn-conn",
+  vpcConnectorEgressSettings: "ALL_TRAFFIC",
+}).https.onCall(async (data) => {
   const query = `${data && data.query || ""}`.trim();
   const sessionToken = `${data && data.sessionToken || ""}`.trim();
   if (query.length < 3) {
@@ -33,7 +37,11 @@ exports.searchFreeUkAddresses = functions.runWith({secrets: [googlePlacesApiKeyS
   }
 });
 
-exports.resolveUkAddressPlace = functions.runWith({secrets: [googlePlacesApiKeySecret]}).https.onCall(async (data) => {
+exports.resolveUkAddressPlace = functions.runWith({
+  secrets: [googlePlacesApiKeySecret],
+  vpcConnector: "circum-fn-conn",
+  vpcConnectorEgressSettings: "ALL_TRAFFIC",
+}).https.onCall(async (data) => {
   const placeId = `${data && data.placeId || ""}`.trim();
   const sessionToken = `${data && data.sessionToken || ""}`.trim();
   if (!placeId) {

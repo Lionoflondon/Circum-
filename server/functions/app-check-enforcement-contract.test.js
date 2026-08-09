@@ -31,6 +31,6 @@ test("financial and lifecycle mutation callables require App Check", () => {
 test("public address lookup remains intentionally callable without financial mutation enforcement", () => {
   const freeAddress = source("free-address-search.js");
   assert.match(freeAddress, /const googlePlacesApiKeySecret = defineSecret\("GOOGLE_PLACES_API_KEY"\)/);
-  assert.match(freeAddress, /searchFreeUkAddresses = functions\.runWith\(\{secrets: \[googlePlacesApiKeySecret\]\}\)\.https\.onCall/);
-  assert.match(freeAddress, /resolveUkAddressPlace = functions\.runWith\(\{secrets: \[googlePlacesApiKeySecret\]\}\)\.https\.onCall/);
+  assert.match(freeAddress, /searchFreeUkAddresses = functions\.runWith\(\{[\s\S]*?secrets: \[googlePlacesApiKeySecret\][\s\S]*?\}\)\.https\.onCall/);
+  assert.match(freeAddress, /resolveUkAddressPlace = functions\.runWith\(\{[\s\S]*?secrets: \[googlePlacesApiKeySecret\][\s\S]*?\}\)\.https\.onCall/);
 });

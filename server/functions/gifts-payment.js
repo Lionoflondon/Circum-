@@ -176,6 +176,8 @@ async function createStandardPaymentDraft({data, context}) {
 exports.createGiftPayment = (stripe) => functions.runWith({
   enforceAppCheck: true,
   secrets: ["GOOGLE_PLACES_API_KEY"],
+  vpcConnector: "circum-fn-conn",
+  vpcConnectorEgressSettings: "ALL_TRAFFIC",
 }).https.onCall(async (data, context) => {
   requireAuth(context);
   const campaignRequest = data.source === "sender_mobile_campaign" && data.campaignParticipant;

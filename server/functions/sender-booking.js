@@ -935,6 +935,8 @@ exports.getSenderRothBalance = functions.https.onCall(async (_, context) => {
 exports.createSenderBookingQuote = functions.runWith({
   enforceAppCheck: true,
   secrets: ["GOOGLE_ROUTES_API_KEY", "GOOGLE_PLACES_API_KEY"],
+  vpcConnector: "circum-fn-conn",
+  vpcConnectorEgressSettings: "ALL_TRAFFIC",
 }).https.onCall(async (data, context) => {
   const sender = requireSender(context);
   const db = getFirestore();
@@ -2064,6 +2066,8 @@ async function createPaidDeliveryFromSession(stripe, sender, data) {
 exports.createSenderPaidDelivery = (stripe) => functions.runWith({
   enforceAppCheck: true,
   secrets: ["GOOGLE_PLACES_API_KEY"],
+  vpcConnector: "circum-fn-conn",
+  vpcConnectorEgressSettings: "ALL_TRAFFIC",
 }).https.onCall(async (data, context) => {
   try {
     return await createPaidDeliveryFromSession(stripe, requireSender(context), data || {});
