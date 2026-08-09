@@ -897,6 +897,14 @@ class SendPackageBloc extends Bloc<SendPackageEvent, SendPackageState> {
         if (event.businessContext != null)
           'businessContext': event.businessContext,
         'selectedSpeed': event.selectedSpeed,
+        if (event.scheduledJourneyAt.trim().isNotEmpty)
+          'scheduledJourneyAt': event.scheduledJourneyAt.trim(),
+        if (event.scheduledJourneyAt.trim().isNotEmpty)
+          'deliveryTime': {
+            'type': 'scheduled',
+            'scheduledDate': event.scheduledDate.trim(),
+            'scheduledJourneyAt': event.scheduledJourneyAt.trim(),
+          },
         if (event.irisPhotoAnalysisId.trim().isNotEmpty)
           'irisPhotoAnalysisId': event.irisPhotoAnalysisId.trim(),
         'vanguardProtocolEnabled': event.vanguardProtocolEnabled,

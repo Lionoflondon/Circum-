@@ -7,6 +7,9 @@ const tracking = require("./sender-tracking-state-core");
 const {highestTrustAward} = require("./trust-award");
 const {planRoadChargeSettlement, pence} = require("./road-charge-settlement");
 const {standardSettlementAllowed, settlementProduct} = require("./settlement-product-guard");
+const {appendPoint, evaluateActualTraversal} = require("./actual-road-traversal");
+const {roadChargesFor} = require("./road-charge-settlement");
+const {createEntitlement, settleEntitlementToRoth} = require("./scheduled-road-charge-refunds");
 
 function text(value) {
   return `${value || ""}`.trim();
@@ -350,6 +353,7 @@ exports.updateDeliveryTrackingStatus = functions.https.onCall(async (data, conte
 
   const db = getFirestore();
   const riderId = context.auth.uid;
+  const refundEntitlementIds = [];
   const result = await db.runTransaction(async (transaction) => {
     const found = await findDelivery(db, transaction, deliveryId);
     if (!found) {
@@ -491,6 +495,52 @@ exports.updateDeliveryTrackingStatus = functions.https.onCall(async (data, conte
       existingAward : Number.isFinite(existingLedgerAward) && existingLedgerAward >= 0 ?
         existingLedgerAward : settlementValues(delivery).trustPoints;
     if (nextStatus === "delivered") patch.trustPointsAwarded = canonicalAward;
+    if (nextStatus === "delivered" && delivery.deliveryTime &&
+        delivery.deliveryTime.type === "scheduled" &&
+        ["standard", "business"].includes(settlementProduct(delivery))) {
+      const traversalRef = db.collection("deliveryTraversalEvidence").doc(found.id);
+      const traversalSnapshot = await transaction.get(traversalRef);
+      const traversal = traversalSnapshot.exists ? traversalSnapshot.data() || {} : {};
+      const actualTraversal = evaluateActualTraversal({
+        deliveryId: found.id,
+        riderId,
+        assignedVehicle,
+        points: traversal.points,
+      });
+      transaction.set(traversalRef, {
+        ...actualTraversal,
+        completeness: actualTraversal.evidenceCompleteness,
+        reconciledAt: FieldValue.serverTimestamp(),
+      }, {merge: true});
+      patch.actualRoadTraversalFacts = actualTraversal;
+      if (actualTraversal.evidenceCompleteness === "COMPLETE") {
+        for (const charge of roadChargesFor(delivery)) {
+          const entitlement = createEntitlement({
+            deliveryId: found.id,
+            quoteId: delivery.quoteId,
+            charge,
+            actualEvidence: {authoritative: true, incurred: actualTraversal.status === "INCURRED"},
+          });
+          entitlement.refundOwnerType = delivery.businessMode === true || delivery.businessId || delivery.businessAccountId ? "business" : "sender";
+          entitlement.refundOwnerId = entitlement.refundOwnerType === "business" ?
+            delivery.businessId || delivery.businessAccountId : delivery.senderId || delivery.userId;
+          entitlement.refundOwnerEmail = delivery.senderEmail || delivery.userEmail || null;
+          const actualCharge = actualTraversal.charges.find((item) => item.chargeId === charge.chargeId);
+          const prepaidPence = Number(charge.customerContributionPence || charge.amountPence || 0);
+          const actualPence = Number(actualCharge && (actualCharge.customerContributionPence || actualCharge.amountPence) || 0);
+          entitlement.refundablePence = Math.max(0, prepaidPence - actualPence);
+          if (entitlement.refundablePence === 0) entitlement.state = "CLOSED";
+          transaction.set(db.collection("roadChargeRefundEntitlements").doc(entitlement.entitlementId), {
+            ...entitlement,
+            actualTraversalVersion: actualTraversal.version,
+            actualTraversalStatus: actualTraversal.status,
+            createdAt: FieldValue.serverTimestamp(),
+            updatedAt: FieldValue.serverTimestamp(),
+          }, {merge: true});
+          refundEntitlementIds.push(entitlement.entitlementId);
+        }
+      }
+    }
     transaction.set(found.ref, patch, {merge: true});
     if (nextStatus === "delivered") {
       const settlement = settlementValues(delivery);
@@ -576,8 +626,19 @@ exports.updateDeliveryTrackingStatus = functions.https.onCall(async (data, conte
       requestId: delivery.requestId || found.id,
       status: nextStatus,
       senderTrackingState: tracking.senderTrackingStateForBackendStatus(nextStatus),
+      refundOwnerType: delivery.businessMode === true || delivery.businessId || delivery.businessAccountId ? "business" : "sender",
+      refundOwnerId: delivery.businessId || delivery.businessAccountId || delivery.senderId || delivery.userId || null,
+      refundOwnerEmail: delivery.senderEmail || delivery.userEmail || null,
     };
   });
+  if (refundEntitlementIds.length > 0) {
+    for (const entitlementId of [...new Set(refundEntitlementIds)]) {
+      const refundOwner = result.refundOwnerType === "business" ?
+        {type: "business", id: result.refundOwnerId} :
+        {type: "sender", id: result.refundOwnerId, email: result.refundOwnerEmail};
+      result.roadChargeRefund = await settleEntitlementToRoth({db, entitlementId, owner: refundOwner});
+    }
+  }
   if (result.verificationFailed) {
     throw new functions.https.HttpsError(
         "failed-precondition",
@@ -672,6 +733,26 @@ exports.updateDeliveryLiveLocation = functions.https.onCall(async (data, context
       lastBackendUploadAt: FieldValue.serverTimestamp(),
       updatedAt: FieldValue.serverTimestamp(),
     }, {merge: true});
+    if (["collected", "navigating_to_dropoff", "arrived_at_dropoff"].includes(currentStatus) ||
+        ["collected", "navigating_to_dropoff", "arrived_at_dropoff"].includes(trackingStatus)) {
+      const evidenceRef = db.collection("deliveryTraversalEvidence").doc(found.id);
+      const evidenceSnapshot = await transaction.get(evidenceRef);
+      const existing = evidenceSnapshot.exists ? evidenceSnapshot.data() || {} : {};
+      transaction.set(evidenceRef, {
+        deliveryId: found.id,
+        riderId,
+        assignedVehicleId: delivery.assignedVehicleId || null,
+        assignedVehicleClass: delivery.assignedVehicleClass || null,
+        evidenceVersion: "2026-08-actual-road-traversal-v1",
+        points: appendPoint(existing.points, {
+          latitude: location.latitude,
+          longitude: location.longitude,
+          at: new Date().toISOString(),
+        }),
+        completeness: "PARTIAL",
+        updatedAt: FieldValue.serverTimestamp(),
+      }, {merge: true});
+    }
     transaction.set(db.collection("riderPresence").doc(riderId), {
       riderId,
       isOnline: true,

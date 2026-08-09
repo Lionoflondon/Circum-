@@ -242,6 +242,7 @@ function sanitizeSenderDraftPayload(raw) {
     },
     deliveryTime: {
       type: timingType,
+      scheduledJourneyAt: cleanString(deliveryTime.scheduledJourneyAt, 40),
       scheduledDate: cleanString(deliveryTime.scheduledDate, 40),
       scheduledWindow: cleanString(deliveryTime.scheduledWindow, 80),
       customWindowStart: cleanString(deliveryTime.customWindowStart, 20),
@@ -312,6 +313,23 @@ function draftInactive(record) {
   );
   if (activityAt == null) return false;
   return Date.now() - activityAt > DRAFT_INACTIVITY_MINUTES * 60 * 1000;
+}
+
+function validatedScheduledJourneyAt(deliveryTime = {}) {
+  if (`${deliveryTime.type || "now"}` === "now") return null;
+  const value = `${deliveryTime.scheduledJourneyAt || ""}`.trim();
+  const at = value ? new Date(value) : null;
+  if (!at || Number.isNaN(at.getTime()) || at.getTime() < Date.now()) {
+    throw new functions.https.HttpsError("invalid-argument", "Choose a valid future journey time.");
+  }
+  const scheduledDate = `${deliveryTime.scheduledDate || ""}`.trim();
+  const londonDate = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Europe/London", year: "numeric", month: "2-digit", day: "2-digit",
+  }).format(at);
+  if (scheduledDate && londonDate !== scheduledDate) {
+    throw new functions.https.HttpsError("invalid-argument", "Journey time does not match the selected date.");
+  }
+  return at.toISOString();
 }
 
 function canonicalDraftResponse(record) {
@@ -721,6 +739,7 @@ function quotePayload(data, uid, serverPhotoAnalysis = null) {
       text(data.businessId || data.businessAccountId).length > 0 ? "business" : "standard",
     vehicleProfile: data.authoritativeVehicleProfile || {},
     vehicleId: data.authoritativeVehicleId || null,
+    at: data.scheduledJourneyAt ? new Date(data.scheduledJourneyAt) : undefined,
   });
   const roadChargeAmount = roadCharges.customerAmount;
   const vehicle = vehicleSurcharge(selectedVehicle);
@@ -774,6 +793,8 @@ function quotePayload(data, uid, serverPhotoAnalysis = null) {
     selectedSpeed,
     distanceMiles: Number(data.authoritativeRouteFacts ? data.authoritativeRouteFacts.distanceMiles : data.distanceMiles || 0),
     routeFacts: data.authoritativeRouteFacts || null,
+    scheduledJourneyAt: data.scheduledJourneyAt || null,
+    scheduledJourneyTimezone: data.scheduledJourneyAt ? "Europe/London" : null,
     roadCharges,
     weightKg,
     selectedVehicle,
@@ -922,15 +943,22 @@ exports.createSenderBookingQuote = functions.runWith({secrets: ["GOOGLE_ROUTES_A
   });
   const pickup = coordinate(data && (data.pickupPosition || data.pickup && data.pickup.position || data.pickup));
   const dropoff = coordinate(data && (data.dropoffPosition || data.dropoff && data.dropoff.position || data.dropoff));
+  const deliveryTime = cleanMap(data && data.deliveryTime);
+  const scheduledJourneyAt = validatedScheduledJourneyAt(deliveryTime);
   let authoritativeRouteFacts;
   try {
-    authoritativeRouteFacts = await getAuthoritativeRouteFacts({origin: pickup, destination: dropoff});
+    authoritativeRouteFacts = await getAuthoritativeRouteFacts({
+      origin: pickup,
+      destination: dropoff,
+      at: scheduledJourneyAt ? new Date(scheduledJourneyAt) : undefined,
+    });
   } catch (error) {
     console.error("Sender authoritative route evaluation failed", {code: error.code || "routes_failed"});
     throw new functions.https.HttpsError("failed-precondition", "We could not verify the route for this quote. Please check both addresses and try again.");
   }
   const quoteInput = data && typeof data === "object" ? {...data} : {};
   quoteInput.authoritativeRouteFacts = authoritativeRouteFacts;
+  quoteInput.scheduledJourneyAt = scheduledJourneyAt;
   const quote = quotePayload({
     ...quoteInput,
     ...(businessContext || {}),
@@ -2094,6 +2122,7 @@ exports.updateSenderPaymentIntentStatus = updateSenderPaymentIntentStatus;
 exports.handleSenderPaymentIntent = handleSenderPaymentIntent;
 exports._private = {
   sanitizeSenderDraftPayload,
+  validatedScheduledJourneyAt,
   draftExpired,
   draftInactive,
   stableId,

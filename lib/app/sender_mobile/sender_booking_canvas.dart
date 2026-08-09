@@ -17,6 +17,7 @@ import 'package:uuid/uuid.dart';
 
 import '../business/business_journey_context.dart';
 import '../../helper/bitmap_descriptor_helper.dart';
+import '../../helper/platform_view_visibility.dart';
 import '../send_package/bloc/send_package_bloc.dart';
 import '../send_package/models/place_coordinates.m.dart';
 import '../send_package/repo/place_api.dart';
@@ -25,6 +26,19 @@ import 'sender_booking_state.dart';
 import 'sender_finance.dart';
 import 'sender_saved_addresses.dart';
 import 'sender_tracking_screen.dart';
+
+String _scheduledJourneyIso(String date, String time) {
+  final value = '${date.trim()}T${time.trim()}:00';
+  final parsed = DateTime.tryParse(value);
+  return parsed?.toUtc().toIso8601String() ?? '';
+}
+
+String _londonTimeFromIso(String value) {
+  final parsed = DateTime.tryParse(value);
+  if (parsed == null) return '';
+  final local = parsed.toLocal();
+  return '${local.hour.toString().padLeft(2, '0')}:${local.minute.toString().padLeft(2, '0')}';
+}
 
 class SenderBookingCanvas extends StatefulWidget {
   const SenderBookingCanvas({super.key});
@@ -45,6 +59,7 @@ class _SenderBookingCanvasState extends State<SenderBookingCanvas> {
   final _receiverPhone = TextEditingController();
   final _notes = TextEditingController();
   final _scheduledDate = TextEditingController();
+  final _scheduledJourneyTime = TextEditingController();
   final _customWindowStart = TextEditingController();
   final _customWindowEnd = TextEditingController();
   final _item = TextEditingController();
@@ -151,6 +166,7 @@ class _SenderBookingCanvasState extends State<SenderBookingCanvas> {
     _receiverPhone.dispose();
     _notes.dispose();
     _scheduledDate.dispose();
+    _scheduledJourneyTime.dispose();
     _customWindowStart.dispose();
     _customWindowEnd.dispose();
     _item.dispose();
@@ -357,6 +373,8 @@ class _SenderBookingCanvasState extends State<SenderBookingCanvas> {
     _receiverPhone.text = restored.receiverPhone;
     _notes.text = restored.deliveryNotes;
     _scheduledDate.text = restored.scheduledDate;
+    _scheduledJourneyTime.text =
+        _londonTimeFromIso(restored.scheduledJourneyAt);
     _customWindowStart.text = restored.customWindowStart;
     _customWindowEnd.text = restored.customWindowEnd;
     _item.text = restored.itemName;
@@ -629,6 +647,7 @@ class _SenderBookingCanvasState extends State<SenderBookingCanvas> {
     _receiverPhone.clear();
     _notes.clear();
     _scheduledDate.clear();
+    _scheduledJourneyTime.clear();
     _customWindowStart.clear();
     _customWindowEnd.clear();
     _item.clear();
@@ -718,8 +737,8 @@ class _SenderBookingCanvasState extends State<SenderBookingCanvas> {
 
   Future<bool> _resolveTypedAddressIfNeeded() async {
     final pickup = _draft.step == SenderBookingStep.pickup;
-    final address = (pickup ? _draft.pickupAddress : _draft.dropoffAddress)
-        .trim();
+    final address =
+        (pickup ? _draft.pickupAddress : _draft.dropoffAddress).trim();
     final hasCoordinates = pickup
         ? _draft.pickupLat != null && _draft.pickupLng != null
         : _draft.dropoffLat != null && _draft.dropoffLng != null;
@@ -828,6 +847,7 @@ class _SenderBookingCanvasState extends State<SenderBookingCanvas> {
       draft.itemDescription,
       _manualWeightKg(_weight.text)?.toStringAsFixed(3) ?? '0',
       _irisPhotoAnalysisId ?? '',
+      draft.scheduledJourneyAt,
       business?.businessId ?? '',
     ].join('|');
     if (_lastBackendQuoteKey == quoteKey && engine.senderQuoteError.isEmpty) {
@@ -844,6 +864,8 @@ class _SenderBookingCanvasState extends State<SenderBookingCanvas> {
             fragile: _irisHasHandling(iris, 'fragile'),
             highValue: _irisHasHandling(iris, 'high value'),
             selectedVehicle: selectedVehicle,
+            scheduledJourneyAt: draft.scheduledJourneyAt,
+            scheduledDate: draft.scheduledDate,
             irisPhotoAnalysisId: _irisPhotoAnalysisId ?? '',
             businessContext: business?.toMap(),
           ),
@@ -1084,6 +1106,7 @@ class _SenderBookingCanvasState extends State<SenderBookingCanvas> {
                       receiverPhone: _receiverPhone,
                       notes: _notes,
                       scheduledDate: _scheduledDate,
+                      scheduledJourneyTime: _scheduledJourneyTime,
                       customWindowStart: _customWindowStart,
                       customWindowEnd: _customWindowEnd,
                       item: _item,
@@ -1273,6 +1296,7 @@ class _BookingPanel extends StatelessWidget {
   final TextEditingController receiverPhone;
   final TextEditingController notes;
   final TextEditingController scheduledDate;
+  final TextEditingController scheduledJourneyTime;
   final TextEditingController customWindowStart;
   final TextEditingController customWindowEnd;
   final TextEditingController item;
@@ -1303,6 +1327,7 @@ class _BookingPanel extends StatelessWidget {
     required this.receiverPhone,
     required this.notes,
     required this.scheduledDate,
+    required this.scheduledJourneyTime,
     required this.customWindowStart,
     required this.customWindowEnd,
     required this.item,
@@ -1495,6 +1520,7 @@ class _BookingPanel extends StatelessWidget {
         return _DeliveryTimePanel(
           draft: draft,
           scheduledDate: scheduledDate,
+          scheduledJourneyTime: scheduledJourneyTime,
           customWindowStart: customWindowStart,
           customWindowEnd: customWindowEnd,
           onDraft: onDraft,
@@ -1763,6 +1789,7 @@ class _RecipientPanel extends StatelessWidget {
 class _DeliveryTimePanel extends StatelessWidget {
   final SenderBookingDraft draft;
   final TextEditingController scheduledDate;
+  final TextEditingController scheduledJourneyTime;
   final TextEditingController customWindowStart;
   final TextEditingController customWindowEnd;
   final ValueChanged<SenderBookingDraft> onDraft;
@@ -1772,6 +1799,7 @@ class _DeliveryTimePanel extends StatelessWidget {
   const _DeliveryTimePanel({
     required this.draft,
     required this.scheduledDate,
+    required this.scheduledJourneyTime,
     required this.customWindowStart,
     required this.customWindowEnd,
     required this.onDraft,
@@ -1829,7 +1857,13 @@ class _DeliveryTimePanel extends StatelessWidget {
             selectedDate: draft.scheduledDate,
             onSelected: (value) {
               scheduledDate.text = value;
-              onDraft(draft.copyWith(scheduledDate: value));
+              onDraft(draft.copyWith(
+                scheduledDate: value,
+                scheduledJourneyAt: _scheduledJourneyIso(
+                  value,
+                  scheduledJourneyTime.text,
+                ),
+              ));
             },
           ),
           if (pastDate) ...[
@@ -1839,6 +1873,20 @@ class _DeliveryTimePanel extends StatelessWidget {
               style: TextStyle(color: Color(0xFFFCA5A5), fontSize: 12),
             ),
           ],
+          const SizedBox(height: 12),
+          const _SectionLabel('Exact journey time (London)'),
+          const SizedBox(height: 8),
+          _TextInput(
+            controller: scheduledJourneyTime,
+            hint: 'HH:MM',
+            keyboardType: TextInputType.datetime,
+            onChanged: (value) => onDraft(draft.copyWith(
+              scheduledJourneyAt: _scheduledJourneyIso(
+                draft.scheduledDate,
+                value,
+              ),
+            )),
+          ),
           const SizedBox(height: 12),
           const _SectionLabel('Preferred collection window'),
           const SizedBox(height: 8),
@@ -3237,6 +3285,8 @@ class _OptionsPanel extends StatelessWidget {
             fragile: _irisHasHandling(iris, 'fragile'),
             highValue: _irisHasHandling(iris, 'high value'),
             selectedVehicle: _selectedVehicleFor(draft, iris),
+            scheduledJourneyAt: draft.scheduledJourneyAt,
+            scheduledDate: draft.scheduledDate,
           ),
         );
   }
@@ -5130,6 +5180,7 @@ class _PaymentPanelState extends State<_PaymentPanel> {
               ? 'now'
               : 'scheduled',
           'scheduledDate': draft.scheduledDate,
+          'scheduledJourneyAt': draft.scheduledJourneyAt,
           'scheduledWindow': draft.scheduledWindow,
           'customWindowStart': draft.customWindowStart,
           'customWindowEnd': draft.customWindowEnd,
@@ -6444,6 +6495,11 @@ class _SenderMobileMapState extends State<_SenderMobileMap>
     final dropoff = _latLng(engine?.desinationCoordinate);
     final showGoogleMap = senderBookingMapShouldUseGoogle(pickup);
     final pickupForMap = pickup;
+    assertPlatformViewAttachVisibility(
+      viewName: 'SenderBookingGoogleMap',
+      opacity: 1,
+      attached: _mapController != null,
+    );
     return Stack(
       children: [
         AnimatedSwitcher(

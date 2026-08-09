@@ -123,6 +123,8 @@ class RequestSenderBookingQuote extends SendPackageEvent {
   final bool fragile;
   final bool highValue;
   final String selectedVehicle;
+  final String scheduledJourneyAt;
+  final String scheduledDate;
   final String irisPhotoAnalysisId;
   final Map<String, dynamic>? businessContext;
 
@@ -135,6 +137,8 @@ class RequestSenderBookingQuote extends SendPackageEvent {
     required this.fragile,
     required this.highValue,
     this.selectedVehicle = '',
+    this.scheduledJourneyAt = '',
+    this.scheduledDate = '',
     this.irisPhotoAnalysisId = '',
     this.businessContext,
   });

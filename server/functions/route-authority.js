@@ -44,7 +44,7 @@ function routeEntersCentralLondon(points) {
   return points.some((point) => point.latitude >= 51.48 && point.latitude <= 51.54 && point.longitude >= -0.20 && point.longitude <= 0.05);
 }
 
-async function getAuthoritativeRouteFacts({origin, destination, fetchImpl = global.fetch} = {}) {
+async function getAuthoritativeRouteFacts({origin, destination, at, fetchImpl = global.fetch} = {}) {
   const canonicalOrigin = coordinate(origin);
   const canonicalDestination = coordinate(destination);
   if (!canonicalOrigin || !canonicalDestination) {
@@ -87,7 +87,10 @@ async function getAuthoritativeRouteFacts({origin, destination, fetchImpl = glob
   const geometry = route.polyline && route.polyline.encodedPolyline ? decodePolyline(route.polyline.encodedPolyline) : [];
   const geography = deriveCircumRouteFacts(
       geometry.map((point) => [point.longitude, point.latitude]),
-      {googleTollSignal: Boolean(route.travelAdvisory && route.travelAdvisory.tollInfo)},
+      {
+        at: at || new Date(),
+        googleTollSignal: Boolean(route.travelAdvisory && route.travelAdvisory.tollInfo),
+      },
   );
   const fingerprint = routeFingerprint({
     origin: canonicalOrigin,
@@ -112,6 +115,7 @@ async function getAuthoritativeRouteFacts({origin, destination, fetchImpl = glob
     routeFingerprint: fingerprint,
     tollInfo: route.travelAdvisory && route.travelAdvisory.tollInfo || null,
     evaluatedAt: new Date().toISOString(),
+    journeyAt: (at || new Date()).toISOString(),
   };
 }
 

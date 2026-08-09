@@ -210,6 +210,7 @@ class SenderBookingDraft {
   final String deliveryNotes;
   final SenderDeliveryTimingType deliveryTimingType;
   final String scheduledDate;
+  final String scheduledJourneyAt;
   final String scheduledWindow;
   final String customWindowStart;
   final String customWindowEnd;
@@ -250,6 +251,7 @@ class SenderBookingDraft {
     this.deliveryNotes = '',
     this.deliveryTimingType = SenderDeliveryTimingType.now,
     this.scheduledDate = '',
+    this.scheduledJourneyAt = '',
     this.scheduledWindow = '',
     this.customWindowStart = '',
     this.customWindowEnd = '',
@@ -324,6 +326,7 @@ class SenderBookingDraft {
   bool get isDeliveryTimeValid {
     if (deliveryTimingType == SenderDeliveryTimingType.now) return true;
     if (!isSenderScheduledDateValid(scheduledDate)) return false;
+    if (DateTime.tryParse(scheduledJourneyAt) == null) return false;
     if (scheduledWindow.trim().isEmpty) return false;
     if (scheduledWindow == 'Custom') {
       return isSenderCustomWindowValid(customWindowStart, customWindowEnd);
@@ -376,6 +379,7 @@ class SenderBookingDraft {
     String? deliveryNotes,
     SenderDeliveryTimingType? deliveryTimingType,
     String? scheduledDate,
+    String? scheduledJourneyAt,
     String? scheduledWindow,
     String? customWindowStart,
     String? customWindowEnd,
@@ -419,6 +423,7 @@ class SenderBookingDraft {
       deliveryNotes: deliveryNotes ?? this.deliveryNotes,
       deliveryTimingType: deliveryTimingType ?? this.deliveryTimingType,
       scheduledDate: scheduledDate ?? this.scheduledDate,
+      scheduledJourneyAt: scheduledJourneyAt ?? this.scheduledJourneyAt,
       scheduledWindow: scheduledWindow ?? this.scheduledWindow,
       customWindowStart: customWindowStart ?? this.customWindowStart,
       customWindowEnd: customWindowEnd ?? this.customWindowEnd,
@@ -488,6 +493,7 @@ class SenderBookingDraft {
               ? 'now'
               : 'scheduled',
           'scheduledDate': scheduledDate,
+          'scheduledJourneyAt': scheduledJourneyAt,
           'scheduledWindow': scheduledWindow,
           'customWindowStart': customWindowStart,
           'customWindowEnd': customWindowEnd,
@@ -560,6 +566,7 @@ class SenderBookingDraft {
       deliveryNotes: '${recipient['deliveryNotes'] ?? ''}',
       deliveryTimingType: timingType,
       scheduledDate: '${deliveryTime['scheduledDate'] ?? ''}',
+      scheduledJourneyAt: '${deliveryTime['scheduledJourneyAt'] ?? ''}',
       scheduledWindow: '${deliveryTime['scheduledWindow'] ?? ''}',
       customWindowStart: '${deliveryTime['customWindowStart'] ?? ''}',
       customWindowEnd: '${deliveryTime['customWindowEnd'] ?? ''}',
