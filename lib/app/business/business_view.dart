@@ -1544,6 +1544,7 @@ class _BusinessViewState extends State<BusinessView> {
       'deliveries.view': 'View deliveries',
       'deliveries.create': 'Create deliveries',
       'deliveries.cancel': 'Cancel deliveries',
+      'deliveries.notes.modify': 'Modify delivery notes',
       'deliveries.status': 'View delivery status',
       'deliveries.rider_progress': 'View Rider progress',
       'deliveries.evidence': 'View evidence',
@@ -1551,6 +1552,7 @@ class _BusinessViewState extends State<BusinessView> {
       'finance.invoices.view': 'View invoices',
       'finance.invoices.download': 'Download invoices',
       'finance.payments.view': 'View payments',
+      'finance.payments.initiate': 'Initiate payments',
       'finance.roth.use': 'Use Roth',
       'finance.reports.export': 'Export finance reports',
       'team.invite': 'Invite members',
@@ -1560,6 +1562,7 @@ class _BusinessViewState extends State<BusinessView> {
       'reports.export': 'Export reports',
       'operations.active_deliveries': 'View active deliveries',
       'operations.incidents': 'View incidents',
+      'operations.incidents.acknowledge': 'Acknowledge incidents',
       'operations.support': 'Contact operations support',
     };
     final approved = await showDialog<bool>(

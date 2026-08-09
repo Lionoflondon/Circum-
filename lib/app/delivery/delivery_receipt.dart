@@ -52,31 +52,75 @@ DeliveryReceiptDetails deliveryReceiptFromRecord(
     }
   }
   return DeliveryReceiptDetails(
-    reference: referenceFormatter(_text(
-      record['deliveryReference'] ??
-          record['trackingReference'] ??
-          record['requestId'] ??
-          record['deliveryId'],
-    )),
+    reference: referenceFormatter(
+      _text(
+        record['deliveryReference'] ??
+            record['trackingReference'] ??
+            record['requestId'] ??
+            record['deliveryId'],
+      ),
+    ),
     pickup: _address(record['pickupDetails'], record['pickupAddress']),
     dropoff: _address(record['dropoffDetails'], record['dropoffAddress']),
     completedAt: _date(
       record['deliveredAt'] ?? record['completedAt'] ?? record['updatedAt'],
     ),
-    service: _service(record['selectedServiceLevel'] ??
-        record['selectedSpeed'] ??
-        snapshot['speed']),
-    currency: _text(record['currency'] ?? snapshot['currency'] ?? 'GBP')
-        .toUpperCase(),
+    service: _service(
+      record['selectedServiceLevel'] ??
+          record['selectedSpeed'] ??
+          snapshot['speed'],
+    ),
+    currency: _text(
+      record['currency'] ?? snapshot['currency'] ?? 'GBP',
+    ).toUpperCase(),
     paymentStatus: _paymentStatus(record['paymentStatus']),
     paymentMethod: _paymentMethod(record['paymentMethod']),
-    amountPaid: _number(record['paidAmount'] ??
-            pricing['amountDue'] ??
-            snapshot['amountDue'] ??
-            snapshot['total']) ??
+    amountPaid:
+        _number(
+          record['paidAmount'] ??
+              pricing['amountDue'] ??
+              snapshot['amountDue'] ??
+              snapshot['total'],
+        ) ??
         0,
     vatAmount: _number(record['vatAmount'] ?? snapshot['vatAmount']) ?? 0,
     lineItems: lineItems,
+  );
+}
+
+DeliveryReceiptDetails deliveryReceiptFromTrustProjection(
+  Map<String, dynamic> projection, {
+  required Map<String, dynamic> fallbackRecord,
+  required String Function(String) referenceFormatter,
+}) {
+  final receipt = _map(projection['receipt']);
+  if (receipt.isEmpty) {
+    return deliveryReceiptFromRecord(
+      fallbackRecord,
+      referenceFormatter: referenceFormatter,
+    );
+  }
+  final merged = <String, dynamic>{
+    ...fallbackRecord,
+    'deliveryReference': receipt['reference'],
+    'pickupAddress': projection['pickup'],
+    'dropoffAddress': projection['dropoff'],
+    'deliveredAt': receipt['dateMillis'] == null
+        ? fallbackRecord['deliveredAt']
+        : DateTime.fromMillisecondsSinceEpoch(receipt['dateMillis'] as int),
+    'selectedServiceLevel': receipt['serviceType'],
+    'currency': receipt['currency'],
+    'paidAmount': receipt['amountPaid'],
+    'paymentStatus': receipt['paymentStatus'],
+    'paymentMethod': receipt['paymentMethod'],
+    'vatAmount': receipt['vatAmount'],
+    'pricingBreakdown': {
+      'canonicalQuoteSnapshot': {'lineItems': receipt['lineItems']},
+    },
+  };
+  return deliveryReceiptFromRecord(
+    merged,
+    referenceFormatter: referenceFormatter,
   );
 }
 
@@ -122,21 +166,21 @@ String _date(Object? value) {
 }
 
 String _service(Object? value) => switch (_text(value).toLowerCase()) {
-      'economy' => 'Economy',
-      'express' => 'Express',
-      'standard' => 'Standard',
-      _ => 'Delivery service',
-    };
+  'economy' => 'Economy',
+  'express' => 'Express',
+  'standard' => 'Standard',
+  _ => 'Delivery service',
+};
 
 String _paymentStatus(Object? value) => switch (_text(value).toLowerCase()) {
-      'paid' || 'succeeded' || 'complete' || 'completed' => 'Paid',
-      'refunded' => 'Refunded',
-      _ => 'Payment status unavailable',
-    };
+  'paid' || 'succeeded' || 'complete' || 'completed' => 'Paid',
+  'refunded' => 'Refunded',
+  _ => 'Payment status unavailable',
+};
 
 String _paymentMethod(Object? value) => switch (_text(value).toLowerCase()) {
-      'card' => 'Card',
-      'roth' => 'Roth',
-      '' => 'Payment method unavailable',
-      _ => 'Payment method',
-    };
+  'card' => 'Card',
+  'roth' => 'Roth',
+  '' => 'Payment method unavailable',
+  _ => 'Payment method',
+};

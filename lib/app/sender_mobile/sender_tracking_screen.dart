@@ -126,8 +126,7 @@ bool senderPaymentCompleteForLiveMap(Object? status) {
     'payment_completed' ||
     'succeeded' ||
     'success' ||
-    'complete' =>
-      true,
+    'complete' => true,
     _ => false,
   };
 }
@@ -141,8 +140,7 @@ bool senderRiderAcceptedForLiveMap(SenderTrackingState state) {
     SenderTrackingState.inTransit ||
     SenderTrackingState.riderArrivingAtDropoff ||
     SenderTrackingState.delivered ||
-    SenderTrackingState.issue =>
-      true,
+    SenderTrackingState.issue => true,
     _ => false,
   };
 }
@@ -196,58 +194,45 @@ SenderTrackingState? senderTrackingStateForBackendStatus(Object? status) {
     'broadcast' ||
     'broadcasted' ||
     'broadcasting' ||
-    'available' =>
-      SenderTrackingState.findingRider,
+    'available' => SenderTrackingState.findingRider,
     'accepted' || 'rider_assigned' => SenderTrackingState.riderAssigned,
     'navigating_to_pickup' ||
-    'en_route_to_pickup' =>
-      SenderTrackingState.riderEnRouteToPickup,
+    'en_route_to_pickup' => SenderTrackingState.riderEnRouteToPickup,
     'arrived_at_pickup' ||
     'waiting' ||
     'waiting_for_collection' ||
     'waiting_charge_active' ||
     'waiting_charges_active' ||
-    'no_show_review' =>
-      SenderTrackingState.riderArrivedAtPickup,
+    'no_show_review' => SenderTrackingState.riderArrivedAtPickup,
     'pickup_verification' ||
     'pickup_verified' ||
-    'collected' =>
-      SenderTrackingState.pickupComplete,
+    'collected' => SenderTrackingState.pickupComplete,
     'delivery_on_going' ||
     'outfordelivery' ||
     'out_for_delivery' ||
-    'navigating_to_dropoff' =>
-      SenderTrackingState.inTransit,
+    'navigating_to_dropoff' => SenderTrackingState.inTransit,
     'arrived_at_dropoff' ||
     'pin_required' ||
-    'handover_pending' =>
-      SenderTrackingState.riderArrivingAtDropoff,
+    'handover_pending' => SenderTrackingState.riderArrivingAtDropoff,
     'awaiting_adjustment_review' ||
-    'awaiting_admin_review' =>
-      SenderTrackingState.adjustmentUnderReview,
-    'more_evidence_requested' ||
-    'adjustment_more_evidence_requested' =>
+    'awaiting_admin_review' => SenderTrackingState.adjustmentUnderReview,
+    'more_evidence_requested' || 'adjustment_more_evidence_requested' =>
       SenderTrackingState.adjustmentMoreEvidence,
     'awaiting_sender_adjustment' ||
-    'awaiting_sender_payment' =>
-      SenderTrackingState.adjustmentApproved,
+    'awaiting_sender_payment' => SenderTrackingState.adjustmentApproved,
     'rejected_by_admin' ||
-    'adjustment_rejected' =>
-      SenderTrackingState.adjustmentRejected,
+    'adjustment_rejected' => SenderTrackingState.adjustmentRejected,
     'delivered' ||
     'completed' ||
-    'delivery_completed' =>
-      SenderTrackingState.delivered,
+    'delivery_completed' => SenderTrackingState.delivered,
     'cancelled' ||
     'canceled' ||
     'cancelled_verified_discrepancy' ||
-    'sender_no_show_pickup' =>
-      SenderTrackingState.cancelled,
+    'sender_no_show_pickup' => SenderTrackingState.cancelled,
     'issue' ||
     'issue_reported' ||
     'failed' ||
-    'failed_delivery' =>
-      SenderTrackingState.issue,
+    'failed_delivery' => SenderTrackingState.issue,
     'error' => SenderTrackingState.error,
     _ => null,
   };
@@ -638,8 +623,7 @@ String senderCollectionPinStatusFor(
     SenderTrackingState.pickupComplete ||
     SenderTrackingState.inTransit ||
     SenderTrackingState.riderArrivingAtDropoff ||
-    SenderTrackingState.issue =>
-      '✓ Pickup verified',
+    SenderTrackingState.issue => '✓ Pickup verified',
     _ => 'Ready for pickup',
   };
 }
@@ -659,7 +643,8 @@ bool senderBackendVanguardEnabled(SendPackageState engine) {
   final data = engine.activeDeliveryData;
   final pricing = _mapFrom(data['pricingBreakdown']);
   final dispatchProtocol = _mapFrom(data['dispatchProtocol']);
-  final backendEnabled = _truthy(data['vanguardProtocolEnabled']) ||
+  final backendEnabled =
+      _truthy(data['vanguardProtocolEnabled']) ||
       _truthy(data['vanguardEnabled']) ||
       _truthy(data['requiresVanguard']) ||
       _truthy(dispatchProtocol['vanguard']) ||
@@ -667,7 +652,8 @@ bool senderBackendVanguardEnabled(SendPackageState engine) {
       _truthy(pricing['vanguardRequired']);
   if (!backendEnabled) return false;
 
-  final selectedOrRequired = _truthy(data['vanguardSelected']) ||
+  final selectedOrRequired =
+      _truthy(data['vanguardSelected']) ||
       _truthy(data['vanguardRequested']) ||
       _truthy(data['vanguardProtocolEnabled']) ||
       _truthy(data['requiresVanguard']) ||
@@ -675,7 +661,8 @@ bool senderBackendVanguardEnabled(SendPackageState engine) {
       _truthy(pricing['vanguardRequired']);
   if (!selectedOrRequired) return false;
 
-  final paidOrIncluded = _truthy(data['vanguardPaid']) ||
+  final paidOrIncluded =
+      _truthy(data['vanguardPaid']) ||
       _truthy(data['vanguardIncluded']) ||
       _truthy(pricing['vanguardIncluded']) ||
       _moneyValue(data['vanguardFee']) > 0 ||
@@ -841,8 +828,7 @@ bool senderCanCancelBeforeCollection(SenderTrackingState state) {
     SenderTrackingState.findingRider ||
     SenderTrackingState.riderAssigned ||
     SenderTrackingState.riderEnRouteToPickup ||
-    SenderTrackingState.riderArrivedAtPickup =>
-      true,
+    SenderTrackingState.riderArrivedAtPickup => true,
     _ => false,
   };
 }
@@ -903,12 +889,25 @@ class SenderMobileTrackingScreen extends StatefulWidget {
       _SenderMobileTrackingScreenState();
 }
 
+List<String> _approvedMilestones(Map<String, dynamic>? projection) {
+  final timeline = projection?['timeline'];
+  if (timeline is! Iterable) return const [];
+  return timeline
+      .whereType<Map>()
+      .map((event) => '${event['label'] ?? ''}'.trim())
+      .where((label) => label.isNotEmpty)
+      .take(8)
+      .toList(growable: false);
+}
+
 class _SenderMobileTrackingScreenState extends State<SenderMobileTrackingScreen>
     with TickerProviderStateMixin {
   late final AnimationController _mapDrift;
   late final AnimationController _pulse;
   late SenderTrackingState _lastState;
   bool _motionReduced = false;
+  Map<String, dynamic>? _customerTrust;
+  String _customerTrustDeliveryId = '';
 
   @override
   void initState() {
@@ -923,6 +922,7 @@ class _SenderMobileTrackingScreenState extends State<SenderMobileTrackingScreen>
     )..repeat();
     _lastState =
         widget.stateOverride ?? senderTrackingStateForEngine(widget.engine);
+    WidgetsBinding.instance.addPostFrameCallback((_) => _loadCustomerTrust());
   }
 
   @override
@@ -930,7 +930,7 @@ class _SenderMobileTrackingScreenState extends State<SenderMobileTrackingScreen>
     super.didChangeDependencies();
     final reduced =
         SenderAccessibilityScope.maybeOf(context)?.settings.reduceMotion ==
-            true;
+        true;
     if (reduced == _motionReduced) return;
     _motionReduced = reduced;
     if (reduced) {
@@ -945,11 +945,39 @@ class _SenderMobileTrackingScreenState extends State<SenderMobileTrackingScreen>
   @override
   void didUpdateWidget(covariant SenderMobileTrackingScreen oldWidget) {
     super.didUpdateWidget(oldWidget);
+    final deliveryId = senderActiveDeliveryIdFor(widget.engine);
+    if (deliveryId != _customerTrustDeliveryId) {
+      _customerTrust = null;
+      WidgetsBinding.instance.addPostFrameCallback((_) => _loadCustomerTrust());
+    }
     final next =
         widget.stateOverride ?? senderTrackingStateForEngine(widget.engine);
     if (next == _lastState) return;
     _lastState = next;
     WidgetsBinding.instance.addPostFrameCallback((_) => _announceState(next));
+  }
+
+  Future<void> _loadCustomerTrust() async {
+    final deliveryId = senderActiveDeliveryIdFor(widget.engine);
+    if (!mounted ||
+        deliveryId.isEmpty ||
+        deliveryId == _customerTrustDeliveryId) {
+      return;
+    }
+    _customerTrustDeliveryId = deliveryId;
+    try {
+      final result = await FirebaseFunctions.instance
+          .httpsCallable('getCustomerDeliveryTrust')
+          .call(<String, dynamic>{'deliveryId': deliveryId});
+      if (!mounted || senderActiveDeliveryIdFor(widget.engine) != deliveryId) {
+        return;
+      }
+      setState(
+        () => _customerTrust = Map<String, dynamic>.from(result.data as Map),
+      );
+    } catch (_) {
+      // Existing canonical tracking remains available if trust projection is unavailable.
+    }
   }
 
   Future<void> _announceState(SenderTrackingState state) async {
@@ -1015,12 +1043,12 @@ class _SenderMobileTrackingScreenState extends State<SenderMobileTrackingScreen>
     final baseVisibleContent = mapMode == SenderDeliveryMapMode.liveTracking
         ? content.copyWith(showAnonymousRiders: false)
         : state == SenderTrackingState.findingRider
-            ? content.copyWith(showRider: false, showRiderCard: false)
-            : content.copyWith(
-                showRider: false,
-                showAnonymousRiders: false,
-                showRiderCard: false,
-              );
+        ? content.copyWith(showRider: false, showRiderCard: false)
+        : content.copyWith(
+            showRider: false,
+            showAnonymousRiders: false,
+            showRiderCard: false,
+          );
     final collectionCredentialReady = senderCollectionCredentialAvailableFor(
       widget.engine,
     );
@@ -1028,7 +1056,8 @@ class _SenderMobileTrackingScreenState extends State<SenderMobileTrackingScreen>
       widget.engine,
     );
     final visibleContent = baseVisibleContent.copyWith(
-      showVanguard: baseVisibleContent.showVanguard &&
+      showVanguard:
+          baseVisibleContent.showVanguard &&
           senderBackendVanguardEnabled(widget.engine),
       showCollectionPin:
           baseVisibleContent.showCollectionPin && collectionCredentialReady,
@@ -1074,6 +1103,7 @@ class _SenderMobileTrackingScreenState extends State<SenderMobileTrackingScreen>
               content: visibleContent,
               engine: widget.engine,
               mapMode: mapMode,
+              customerTrust: _customerTrust,
               onOpenMessage: _openDeliveryChat,
               onOpenSupport: _openSupportChat,
               onViewReceipt: _openReceipt,
@@ -1110,8 +1140,9 @@ class _SenderMobileTrackingScreenState extends State<SenderMobileTrackingScreen>
   }
 
   void _openReceipt() {
-    final receipt = deliveryReceiptFromRecord(
-      widget.engine.activeDeliveryData,
+    final receipt = deliveryReceiptFromTrustProjection(
+      _customerTrust ?? const <String, dynamic>{},
+      fallbackRecord: widget.engine.activeDeliveryData,
       referenceFormatter: customerFacingDeliveryReference,
     );
     Navigator.of(context).push(
@@ -1142,7 +1173,8 @@ class _SenderMobileTrackingScreenState extends State<SenderMobileTrackingScreen>
       );
       return;
     }
-    final canCancel = quote['canCancel'] == true ||
+    final canCancel =
+        quote['canCancel'] == true ||
         (quote['decision'] is Map &&
             (quote['decision'] as Map)['canCancel'] == true);
     if (!canCancel) {
@@ -1163,7 +1195,8 @@ class _SenderMobileTrackingScreenState extends State<SenderMobileTrackingScreen>
       });
       if (result['success'] != true) {
         final decision = result['decision'];
-        final reason = result['backendReason'] ??
+        final reason =
+            result['backendReason'] ??
             (decision is Map ? decision['userFacingMessage'] : null) ??
             (decision is Map ? decision['adminFacingReason'] : null) ??
             'Cancellation could not be completed.';
@@ -1198,8 +1231,7 @@ bool senderShouldRequestDeliveryIntervention(SenderTrackingState state) {
     SenderTrackingState.adjustmentUnderReview ||
     SenderTrackingState.adjustmentMoreEvidence ||
     SenderTrackingState.adjustmentApproved ||
-    SenderTrackingState.adjustmentRejected =>
-      true,
+    SenderTrackingState.adjustmentRejected => true,
     _ => false,
   };
 }
@@ -1254,7 +1286,7 @@ class SenderTrackingMapLayer extends StatelessWidget {
   Widget build(BuildContext context) {
     final highContrast =
         SenderAccessibilityScope.maybeOf(context)?.settings.highContrast ??
-            false;
+        false;
     return AnimatedBuilder(
       animation: Listenable.merge([mapDrift, pulse]),
       builder: (context, _) {
@@ -1417,36 +1449,33 @@ class SenderTrackingMapAdapter {
     required SenderTrackingContent content,
     required bool stateDelivered,
   }) {
-    final pickup = _latLng(engine.pickupCoordinate) ??
+    final pickup =
+        _latLng(engine.pickupCoordinate) ??
         _latLng(engine.pickupDetails?.address) ??
-        _firstLatLngFromMap(
-          engine.activeDeliveryData,
-          const [
-            'pickup',
-            'pickupDetails',
-            'pickupAddress',
-            'pickupLocation',
-            'source',
-            'origin',
-            'from',
-          ],
-        );
-    final dropoff = _latLng(engine.desinationCoordinate) ??
+        _firstLatLngFromMap(engine.activeDeliveryData, const [
+          'pickup',
+          'pickupDetails',
+          'pickupAddress',
+          'pickupLocation',
+          'source',
+          'origin',
+          'from',
+        ]);
+    final dropoff =
+        _latLng(engine.desinationCoordinate) ??
         _latLng(engine.dropoffDetails?.address) ??
-        _firstLatLngFromMap(
-          engine.activeDeliveryData,
-          const [
-            'dropoff',
-            'dropoffDetails',
-            'dropoffAddress',
-            'dropoffLocation',
-            'destination',
-            'to',
-          ],
-        );
+        _firstLatLngFromMap(engine.activeDeliveryData, const [
+          'dropoff',
+          'dropoffDetails',
+          'dropoffAddress',
+          'dropoffLocation',
+          'destination',
+          'to',
+        ]);
     if (pickup == null || dropoff == null) return null;
 
-    final rider = _latLng(engine.riderLocation) ??
+    final rider =
+        _latLng(engine.riderLocation) ??
         _latLngFromMap(
           engine.activeDeliveryData['riderLocation'] ??
               engine.activeDeliveryData['liveLocation'] ??
@@ -1563,7 +1592,8 @@ class SenderTrackingMapAdapter {
     var bestDistance = double.infinity;
     for (var index = 0; index < route.length; index += 1) {
       final point = route[index];
-      final distance = math.pow(point.latitude - rider.latitude, 2) +
+      final distance =
+          math.pow(point.latitude - rider.latitude, 2) +
           math.pow(point.longitude - rider.longitude, 2);
       if (distance < bestDistance) {
         bestDistance = distance.toDouble();
@@ -1701,18 +1731,18 @@ class _SenderGoogleTrackingMapState extends State<SenderGoogleTrackingMap> {
   Future<void> _loadCircumMarkerIcons() async {
     final pickupIcon =
         await BitmapDescriptorHelper.getBitmapDescriptorFromSvgAsset(
-      'assets/svg/source_marker.svg',
-      const Size(27, 43),
-    );
+          'assets/svg/source_marker.svg',
+          const Size(27, 43),
+        );
     final dropoffIcon =
         await BitmapDescriptorHelper.getBitmapDescriptorFromSvgAsset(
-      'assets/svg/destination_marker.svg',
-      const Size(27, 43),
-    );
+          'assets/svg/destination_marker.svg',
+          const Size(27, 43),
+        );
     final riderIcon =
         await BitmapDescriptorHelper.getBitmapDescriptorFromSvgAsset(
-      'assets/svg/bike_top.svg',
-    );
+          'assets/svg/bike_top.svg',
+        );
     if (!mounted) return;
     setState(() {
       _pickupIcon = pickupIcon;
@@ -1819,9 +1849,9 @@ class _SenderGoogleTrackingMapState extends State<SenderGoogleTrackingMap> {
   }
 
   double _jitterDistance(LatLng a, LatLng b) => math.sqrt(
-        math.pow(a.latitude - b.latitude, 2) +
-            math.pow(a.longitude - b.longitude, 2),
-      );
+    math.pow(a.latitude - b.latitude, 2) +
+        math.pow(a.longitude - b.longitude, 2),
+  );
 }
 
 const _senderTrackingGoogleMapStyle = '''
@@ -1895,6 +1925,7 @@ class _TrackingPanelContent extends StatelessWidget {
   final SenderTrackingContent content;
   final SendPackageState engine;
   final SenderDeliveryMapMode mapMode;
+  final Map<String, dynamic>? customerTrust;
   final VoidCallback onOpenMessage;
   final VoidCallback onOpenSupport;
   final VoidCallback onViewReceipt;
@@ -1905,6 +1936,7 @@ class _TrackingPanelContent extends StatelessWidget {
     required this.content,
     required this.engine,
     required this.mapMode,
+    required this.customerTrust,
     required this.onOpenMessage,
     required this.onOpenSupport,
     required this.onViewReceipt,
@@ -1952,6 +1984,7 @@ class _TrackingPanelContent extends StatelessWidget {
           state: state,
           issue: content.issueVanguard,
           completed: state == SenderTrackingState.delivered,
+          milestones: _approvedMilestones(customerTrust),
         ),
         if (state == SenderTrackingState.findingRider) ...[
           const SizedBox(height: 12),
@@ -1964,11 +1997,7 @@ class _TrackingPanelContent extends StatelessWidget {
         ],
         if (content.showRiderCard) ...[
           const SizedBox(height: 12),
-          RiderCard(
-            engine: engine,
-            eta: content.eta,
-            liveStatus: content.pill,
-          ),
+          RiderCard(engine: engine, eta: content.eta, liveStatus: content.pill),
         ],
         if (state != SenderTrackingState.delivered && waiting.visible) ...[
           const SizedBox(height: 12),
@@ -2359,7 +2388,8 @@ class _ProofOfDeliverySection extends StatelessWidget {
                     if (context.mounted) {
                       ScaffoldMessenger.of(context).showSnackBar(
                         const SnackBar(
-                            content: Text('Delivery reference copied')),
+                          content: Text('Delivery reference copied'),
+                        ),
                       );
                     }
                   },
@@ -2385,8 +2415,8 @@ class _ProofStatusPill extends StatelessWidget {
     final color = lower.contains('available')
         ? const Color(0xFF34D399)
         : lower.contains('review')
-            ? const Color(0xFFFBBF24)
-            : const Color(0xFFF87171);
+        ? const Color(0xFFFBBF24)
+        : const Color(0xFFF87171);
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
       decoration: BoxDecoration(
@@ -2509,7 +2539,8 @@ class SenderWaitingSnapshot {
     final status = _normalizeTrackingStatus(
       data['status'] ?? data['deliveryStatus'] ?? engine.deliveryRequestStatus,
     );
-    final visible = waiting['active'] == true ||
+    final visible =
+        waiting['active'] == true ||
         status == 'arrived_at_pickup' ||
         status == 'waiting' ||
         status == 'waiting_for_collection' ||
@@ -2539,29 +2570,34 @@ class SenderWaitingSnapshot {
         : math.max(0, DateTime.now().difference(startedAt).inSeconds);
     final progress = remainingSeconds == null
         ? elapsedSeconds == null
-            ? 0.0
-            : (elapsedSeconds / totalSeconds).clamp(0.0, 1.0)
+              ? 0.0
+              : (elapsedSeconds / totalSeconds).clamp(0.0, 1.0)
         : ((totalSeconds - remainingSeconds) / totalSeconds).clamp(0.0, 1.0);
     final waitingContext = _normalizeTrackingStatus(
       data['waitingContextState'],
     );
-    final customerResponded = waitingContext == 'customer_responded' ||
+    final customerResponded =
+        waitingContext == 'customer_responded' ||
         data['customerResponded'] == true ||
         waiting['customerResponded'] == true;
-    final noShowAvailable = status == 'no_show_review' ||
+    final noShowAvailable =
+        status == 'no_show_review' ||
         status == 'sender_no_show_pickup' ||
         data['noShowAvailable'] == true ||
         waiting['noShowAvailable'] == true;
-    final waitingChargesActive = status == 'waiting_charge_active' ||
+    final waitingChargesActive =
+        status == 'waiting_charge_active' ||
         status == 'waiting_charges_active' ||
         data['waitingChargesActive'] == true ||
         waiting['waitingChargesActive'] == true;
-    final finalMinute = status == 'final_minute' ||
+    final finalMinute =
+        status == 'final_minute' ||
         data['waitingFinalMinute'] == true ||
         waiting['finalMinute'] == true;
     final charge = _customerWaitingCharge(data, waiting);
-    final chargeLabel =
-        charge == null ? null : _moneyText(charge.amount, charge.currency);
+    final chargeLabel = charge == null
+        ? null
+        : _moneyText(charge.amount, charge.currency);
     final stateLabel = _senderWaitingStateLabel(
       status: status,
       noShowAvailable: noShowAvailable,
@@ -2572,8 +2608,8 @@ class SenderWaitingSnapshot {
     final countdown = noShowAvailable
         ? 'No-show eligible'
         : remainingSeconds == null
-            ? 'Live countdown active'
-            : _durationLabel(remainingSeconds);
+        ? 'Live countdown active'
+        : _durationLabel(remainingSeconds);
     return SenderWaitingSnapshot(
       visible: true,
       stateLabel: stateLabel,
@@ -2585,8 +2621,8 @@ class SenderWaitingSnapshot {
       message: customerResponded
           ? 'Customer response received. Collection time continues.'
           : noShowAvailable
-              ? 'Your Circum Rider has completed the required waiting period. Contact your Circum Rider immediately if you still require this delivery.'
-              : 'Sender notified on arrival. Collection countdown is live.',
+          ? 'Your Circum Rider has completed the required waiting period. Contact your Circum Rider immediately if you still require this delivery.'
+          : 'Sender notified on arrival. Collection countdown is live.',
     );
   }
 }
@@ -2605,10 +2641,11 @@ class SenderWaitingCard extends StatelessWidget {
           ? const Color(0xFFF5A623)
           : const Color(0xFF3B82F6),
       surfaceColor: Colors.white.withValues(alpha: .052),
-      borderColor: (waiting.noShowAvailable
-              ? const Color(0xFFF5A623)
-              : const Color(0xFF3B82F6))
-          .withValues(alpha: .26),
+      borderColor:
+          (waiting.noShowAvailable
+                  ? const Color(0xFFF5A623)
+                  : const Color(0xFF3B82F6))
+              .withValues(alpha: .26),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -3091,8 +3128,9 @@ class RiderCard extends StatelessWidget {
                           color: const Color(0xFF34D399).withValues(alpha: .12),
                           borderRadius: BorderRadius.circular(999),
                           border: Border.all(
-                            color:
-                                const Color(0xFF34D399).withValues(alpha: .28),
+                            color: const Color(
+                              0xFF34D399,
+                            ).withValues(alpha: .28),
                           ),
                         ),
                         child: Text(
@@ -3191,13 +3229,13 @@ class VanguardChip extends StatelessWidget {
     final label = issue
         ? 'Vanguard reviewing'
         : completed
-            ? 'Vanguard completed'
-            : 'Vanguard active';
+        ? 'Vanguard completed'
+        : 'Vanguard active';
     final color = issue
         ? const Color(0xFFF5A623)
         : quiet
-            ? const Color(0xFF8B93A7)
-            : const Color(0xFF34D399);
+        ? const Color(0xFF8B93A7)
+        : const Color(0xFF34D399);
     return _StatusChip(label: label, color: color);
   }
 }
@@ -3251,8 +3289,8 @@ class _PINCardState extends State<PINCard> {
     final digits = pin == null || pin.isEmpty
         ? '••••••'
         : _revealed
-            ? _formatPin(pin)
-            : '••••••';
+        ? _formatPin(pin)
+        : '••••••';
     return GestureDetector(
       onTap: _reveal,
       onLongPress: _reveal,
@@ -3337,8 +3375,8 @@ class _PINCardState extends State<PINCard> {
                   pin == null || pin.isEmpty
                       ? 'Awaiting PIN'
                       : _revealed
-                          ? 'Auto-hides'
-                          : 'Tap to reveal',
+                      ? 'Auto-hides'
+                      : 'Tap to reveal',
                   style: const TextStyle(
                     color: _TrackingTokens.muted,
                     fontSize: 9.5,
@@ -3401,8 +3439,9 @@ class ProgressStepper extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     const labels = ['Assigned', 'Pickup', 'Transit', 'Delivered'];
-    final completeColor =
-        completed ? const Color(0xFF34D399) : const Color(0xFF3B82F6);
+    final completeColor = completed
+        ? const Color(0xFF34D399)
+        : const Color(0xFF3B82F6);
     return Column(
       children: [
         Row(
@@ -3420,8 +3459,8 @@ class ProgressStepper extends StatelessWidget {
                   color: issue && progress == step
                       ? const Color(0xFFF5A623)
                       : filled
-                          ? completeColor
-                          : Colors.white.withValues(alpha: .08),
+                      ? completeColor
+                      : Colors.white.withValues(alpha: .08),
                   borderRadius: BorderRadius.circular(99),
                   boxShadow: active
                       ? [
@@ -3462,12 +3501,14 @@ class LiveDeliveryTimeline extends StatelessWidget {
   final SenderTrackingState state;
   final bool issue;
   final bool completed;
+  final List<String> milestones;
 
   const LiveDeliveryTimeline({
     super.key,
     required this.state,
     this.issue = false,
     this.completed = false,
+    this.milestones = const [],
   });
 
   static const _labels = [
@@ -3486,13 +3527,11 @@ class LiveDeliveryTimeline extends StatelessWidget {
       SenderTrackingState.findingRider => 1,
       SenderTrackingState.riderAssigned => 3,
       SenderTrackingState.riderEnRouteToPickup ||
-      SenderTrackingState.riderArrivedAtPickup =>
-        4,
+      SenderTrackingState.riderArrivedAtPickup => 4,
       SenderTrackingState.pickupComplete => 5,
       SenderTrackingState.inTransit ||
       SenderTrackingState.riderArrivingAtDropoff ||
-      SenderTrackingState.issue =>
-        6,
+      SenderTrackingState.issue => 6,
       SenderTrackingState.delivered => 7,
       SenderTrackingState.cancelled => 2,
       _ => 0,
@@ -3501,14 +3540,17 @@ class LiveDeliveryTimeline extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final activeIndex = _activeIndex;
+    final labels = milestones.length >= 2 ? milestones : _labels;
+    final activeIndex = milestones.length >= 2
+        ? labels.length - 1
+        : _activeIndex;
     final activeColor = issue
         ? const Color(0xFFF5A623)
         : completed
-            ? const Color(0xFF34D399)
-            : const Color(0xFF3B82F6);
+        ? const Color(0xFF34D399)
+        : const Color(0xFF3B82F6);
     return Semantics(
-      label: 'Delivery timeline, current step ${_labels[activeIndex]}',
+      label: 'Delivery timeline, current step ${labels[activeIndex]}',
       child: AppGlassContainer(
         radius: 17,
         padding: const EdgeInsets.fromLTRB(12, 11, 12, 12),
@@ -3519,7 +3561,7 @@ class LiveDeliveryTimeline extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Row(
-              children: List.generate(_labels.length, (index) {
+              children: List.generate(labels.length, (index) {
                 final active = index == activeIndex;
                 final done = index < activeIndex || completed;
                 final color = active || done
@@ -3531,7 +3573,7 @@ class LiveDeliveryTimeline extends StatelessWidget {
                     curve: Curves.easeOut,
                     height: active ? 4 : 3,
                     margin: EdgeInsets.only(
-                      right: index == _labels.length - 1 ? 0 : 5,
+                      right: index == labels.length - 1 ? 0 : 5,
                     ),
                     decoration: BoxDecoration(
                       color: color,
@@ -3551,7 +3593,7 @@ class LiveDeliveryTimeline extends StatelessWidget {
             ),
             const SizedBox(height: 10),
             Text(
-              _labels[activeIndex].toUpperCase(),
+              labels[activeIndex].toUpperCase(),
               style: TextStyle(
                 color: activeColor,
                 fontFamily: 'JetBrains Mono',
@@ -3564,8 +3606,8 @@ class LiveDeliveryTimeline extends StatelessWidget {
             Wrap(
               spacing: 8,
               runSpacing: 4,
-              children: _labels.map((label) {
-                final index = _labels.indexOf(label);
+              children: labels.map((label) {
+                final index = labels.indexOf(label);
                 final isCurrent = index == activeIndex;
                 return Text(
                   label,
@@ -3792,8 +3834,9 @@ class _ProgressiveMatchChecklistState extends State<ProgressiveMatchChecklist> {
     _timer = Timer(const Duration(milliseconds: 750), () {
       if (!mounted) return;
       setState(() {
-        _visibleCount =
-            _visibleCount >= _items.length ? _items.length : _visibleCount + 1;
+        _visibleCount = _visibleCount >= _items.length
+            ? _items.length
+            : _visibleCount + 1;
       });
       if (_visibleCount < _items.length) _scheduleNext();
     });
@@ -3917,29 +3960,29 @@ class _DeliveryReceiptView extends StatelessWidget {
         : '${receipt.currency} ${amount.toStringAsFixed(2)}';
 
     Widget row(String label, String value, {bool strong = false}) => Padding(
-          padding: const EdgeInsets.symmetric(vertical: 7),
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              SizedBox(
-                width: 122,
-                child: Text(
-                  label,
-                  style: const TextStyle(color: _TrackingTokens.muted),
-                ),
-              ),
-              Expanded(
-                child: Text(
-                  value,
-                  style: TextStyle(
-                    color: Colors.white,
-                    fontWeight: strong ? FontWeight.w900 : FontWeight.w700,
-                  ),
-                ),
-              ),
-            ],
+      padding: const EdgeInsets.symmetric(vertical: 7),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          SizedBox(
+            width: 122,
+            child: Text(
+              label,
+              style: const TextStyle(color: _TrackingTokens.muted),
+            ),
           ),
-        );
+          Expanded(
+            child: Text(
+              value,
+              style: TextStyle(
+                color: Colors.white,
+                fontWeight: strong ? FontWeight.w900 : FontWeight.w700,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
 
     return Scaffold(
       backgroundColor: const Color(0xFF07090F),
@@ -4043,18 +4086,18 @@ class _TrackingActions extends StatelessWidget {
             label: empty
                 ? 'Send a parcel'
                 : finding
-                    ? 'Message Support'
-                    : delivered
-                        ? 'View receipt'
-                        : 'Message',
+                ? 'Message Support'
+                : delivered
+                ? 'View receipt'
+                : 'Message',
             primary: empty,
             onTap: finding
                 ? onOpenSupport
                 : empty
-                    ? null
-                    : delivered
-                        ? onViewReceipt
-                        : onOpenMessage,
+                ? null
+                : delivered
+                ? onViewReceipt
+                : onOpenMessage,
           ),
         ),
         const SizedBox(width: 8),
@@ -4063,10 +4106,10 @@ class _TrackingActions extends StatelessWidget {
             label: canCancel
                 ? 'Cancel Delivery'
                 : delivered
-                    ? 'Get help with this delivery'
-                    : intervention
-                        ? 'Request Delivery Intervention'
-                        : 'Support',
+                ? 'Get help with this delivery'
+                : intervention
+                ? 'Request Delivery Intervention'
+                : 'Support',
             primary: delivered || state == SenderTrackingState.issue,
             success: delivered,
             onTap: canCancel ? onCancelDelivery : onOpenSupport,
@@ -4384,7 +4427,7 @@ class _RecenterButton extends StatelessWidget {
   Widget build(BuildContext context) {
     final leftHanded =
         SenderAccessibilityScope.maybeOf(context)?.settings.leftHandedMode ==
-            true;
+        true;
     return Positioned(
       right: leftHanded ? null : 16,
       left: leftHanded ? 16 : null,
@@ -4948,24 +4991,25 @@ class _TrackingGridPainter extends CustomPainter {
       canvas.drawLine(Offset(0, y), Offset(size.width, y), grid);
     }
     final glow = Paint()
-      ..shader = RadialGradient(
-        colors: [
-          const Color(0xFF3B82F6).withValues(
-            alpha: searching
-                ? (highContrast ? .30 : .16)
-                : (highContrast ? .22 : .10),
-          ),
-          Colors.transparent,
-        ],
-      ).createShader(
-        Rect.fromCircle(
-          center: Offset(
-            size.width * (.35 + shimmer * .12),
-            size.height * .25,
-          ),
-          radius: size.width * .55,
-        ),
-      );
+      ..shader =
+          RadialGradient(
+            colors: [
+              const Color(0xFF3B82F6).withValues(
+                alpha: searching
+                    ? (highContrast ? .30 : .16)
+                    : (highContrast ? .22 : .10),
+              ),
+              Colors.transparent,
+            ],
+          ).createShader(
+            Rect.fromCircle(
+              center: Offset(
+                size.width * (.35 + shimmer * .12),
+                size.height * .25,
+              ),
+              radius: size.width * .55,
+            ),
+          );
     canvas.drawRect(Offset.zero & size, glow);
   }
 
@@ -5028,10 +5072,10 @@ class _SearchRingsPainter extends CustomPainter {
 }
 
 BoxDecoration _cardDecoration() => BoxDecoration(
-      color: Colors.white.withValues(alpha: .035),
-      borderRadius: BorderRadius.circular(16),
-      border: Border.all(color: Colors.white.withValues(alpha: .07)),
-    );
+  color: Colors.white.withValues(alpha: .035),
+  borderRadius: BorderRadius.circular(16),
+  border: Border.all(color: Colors.white.withValues(alpha: .07)),
+);
 
 String? _firstName(String? value) {
   final trimmed = value?.trim();
