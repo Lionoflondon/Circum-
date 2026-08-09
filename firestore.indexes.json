@@ -1,6 +1,25 @@
 {
   "indexes": [
     {
+      "collectionGroup": "riderPresence",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "isOnline",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "lastHeartbeatAt",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "__name__",
+          "order": "ASCENDING"
+        }
+      ],
+      "density": "SPARSE_ALL"
+    },
+    {
       "collectionGroup": "deliveryRequests",
       "queryScope": "COLLECTION",
       "fields": [
