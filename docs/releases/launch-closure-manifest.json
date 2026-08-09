@@ -1,0 +1,53 @@
+{
+  "manifestVersion": 1,
+  "candidateBase": "49d718ad483825f5a4450f02e7ca8970d7aa47f8",
+  "isolatedWorktree": true,
+  "ownerCheckoutUntouched": true,
+  "scope": {
+    "runtime": {
+      "applicationFunctions": "nodejs20",
+      "legacyFunctions": [
+        "ext-export-user-data-exportUserData (Firebase Extension, nodejs14)",
+        "ext-mailchimp-firebase-sync-* (Firebase Extension, 5 functions, nodejs18)"
+      ],
+      "action": "Extension updates verified; vendor versions remain current and still publish legacy runtimes."
+    },
+    "contention": [
+      "server/functions/scheduled-road-charge-refunds.emulator.test.js"
+    ],
+    "appCheck": [
+      "Sender quote/payment/finalization",
+      "Business checkout",
+      "Health+ booking",
+      "Gift payment",
+      "Rider acceptance",
+      "Support cash road-charge refund"
+    ],
+    "mapsCredentials": {
+      "backendSecret": "GOOGLE_PLACES_API_KEY",
+      "binding": "Firebase Functions Secret Manager binding",
+      "requiredBeforeDeploy": true
+    },
+    "dependencies": [
+      "server/functions/package-lock.json"
+    ],
+    "hosting": [
+      "hosting:app",
+      "hosting:public",
+      "hosting:admin"
+    ],
+    "excluded": [
+      "Rider Hosting",
+      "unrelated dirty-checkout files",
+      "pricing and lifecycle redesign",
+      "Functions outside the scoped security/runtime release"
+    ]
+  },
+  "deploymentGate": {
+    "requires": [
+      "GOOGLE_PLACES_API_KEY exists in Secret Manager for circum-2797c",
+      "vendor publishes Node 20-compatible extension revisions or approved replacement",
+      "candidate artifact provenance verified after deployment"
+    ]
+  }
+}

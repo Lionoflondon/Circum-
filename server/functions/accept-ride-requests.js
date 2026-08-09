@@ -136,7 +136,7 @@ const notifySender = async (deliveryRequest, payload) => {
   return true;
 };
 
-const acceptRideRequests = functions.https.onCall(async (data, context) => {
+const acceptRideRequests = functions.runWith({enforceAppCheck: true}).https.onCall(async (data, context) => {
   if (!context.auth) {
     throw new functions.https.HttpsError("unauthenticated", "User must be authenticated to accept a delivery.");
   }

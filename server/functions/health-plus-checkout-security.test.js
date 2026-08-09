@@ -89,7 +89,7 @@ test("Health+ checkout finalizes partial Roth only after Stripe confirms", () =>
 });
 
 test("Health+ booking and Sender actions are backend-authoritative callables", () => {
-  assert.match(source, /exports\.createHealthPlusBooking\s*=\s*functions(?:\.runWith\([^)]*\))?\.https\.onCall/);
+  assert.match(source, /exports\.createHealthPlusBooking\s*=\s*functions\.runWith\([\s\S]*?enforceAppCheck: true[\s\S]*?\)\.https\.onCall/);
   assert.match(source, /exports\.updateSenderHealthPlusBooking\s*=\s*functions\.https\.onCall/);
   assert.match(indexSource, /exports\.createHealthPlusBooking\s*=\s*healthPlus\.createHealthPlusBooking/);
   assert.match(indexSource, /exports\.updateSenderHealthPlusBooking\s*=\s*healthPlus\.updateSenderHealthPlusBooking/);

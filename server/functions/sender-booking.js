@@ -929,7 +929,10 @@ exports.getSenderRothBalance = functions.https.onCall(async (_, context) => {
   };
 });
 
-exports.createSenderBookingQuote = functions.runWith({secrets: ["GOOGLE_ROUTES_API_KEY"]}).https.onCall(async (data, context) => {
+exports.createSenderBookingQuote = functions.runWith({
+  enforceAppCheck: true,
+  secrets: ["GOOGLE_ROUTES_API_KEY"],
+}).https.onCall(async (data, context) => {
   const sender = requireSender(context);
   const db = getFirestore();
   const businessContext = await verifiedBusinessContext(db, sender, data && data.businessContext);
@@ -994,7 +997,7 @@ exports.createSenderBookingQuote = functions.runWith({secrets: ["GOOGLE_ROUTES_A
   };
 });
 
-exports.createSenderPaymentSession = (stripe) => functions.https.onCall(async (data, context) => {
+exports.createSenderPaymentSession = (stripe) => functions.runWith({enforceAppCheck: true}).https.onCall(async (data, context) => {
   const sender = requireSender(context);
   const quoteId = text(data.quoteId);
   if (!quoteId) {
@@ -2022,7 +2025,7 @@ async function createPaidDeliveryFromSession(stripe, sender, data) {
   };
 }
 
-exports.createSenderPaidDelivery = (stripe) => functions.https.onCall(async (data, context) => {
+exports.createSenderPaidDelivery = (stripe) => functions.runWith({enforceAppCheck: true}).https.onCall(async (data, context) => {
   try {
     return await createPaidDeliveryFromSession(stripe, requireSender(context), data || {});
   } catch (error) {
@@ -2095,7 +2098,7 @@ async function finalizeSenderCheckoutSession(stripe, sessionData, eventId = "") 
   });
 }
 
-exports.finalizeSenderWebCheckout = (stripe) => functions.https.onCall(async (data, context) => {
+exports.finalizeSenderWebCheckout = (stripe) => functions.runWith({enforceAppCheck: true}).https.onCall(async (data, context) => {
   const sender = requireSender(context);
   const sessionId = text(data.checkoutSessionId || data.sessionId);
   const paymentSessionId = text(data.paymentSessionId);

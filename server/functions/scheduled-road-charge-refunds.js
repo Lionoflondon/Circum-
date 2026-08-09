@@ -200,7 +200,7 @@ async function settleEntitlementToCash({
   });
 }
 
-const settleScheduledRoadChargeCashRefund = functions.https.onCall(async (data, context) => {
+const settleScheduledRoadChargeCashRefund = functions.runWith({enforceAppCheck: true}).https.onCall(async (data, context) => {
   const actorUid = requireAdmin(context, "Support or administrator access is required.");
   return settleEntitlementToCash({
     db: getFirestore(),

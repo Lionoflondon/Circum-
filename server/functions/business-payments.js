@@ -463,7 +463,7 @@ exports.adminCreateBusinessInvoice = functions.https.onCall(async (payload, cont
   };
 });
 
-exports.createBusinessRothCheckout = (stripe) => functions.https.onCall(async (data, context) => {
+exports.createBusinessRothCheckout = (stripe) => functions.runWith({enforceAppCheck: true}).https.onCall(async (data, context) => {
   const businessId = `${data.businessId || ""}`.trim();
   const amount = money(data.amount);
   if (!businessId || amount < 1) {
@@ -521,7 +521,7 @@ exports.createBusinessRothCheckout = (stripe) => functions.https.onCall(async (d
   return {checkoutUrl: session.url, sessionId: session.id, purchaseId: purchaseRef.id};
 });
 
-exports.createBusinessInvoiceCheckout = (stripe) => functions.https.onCall(async (data, context) => {
+exports.createBusinessInvoiceCheckout = (stripe) => functions.runWith({enforceAppCheck: true}).https.onCall(async (data, context) => {
   const businessId = `${data.businessId || ""}`.trim();
   const invoiceId = `${data.invoiceId || ""}`.trim();
   if (!businessId || !invoiceId) {

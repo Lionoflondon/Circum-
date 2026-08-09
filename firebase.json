@@ -277,5 +277,9 @@
         }
       ]
     }
-  ]
+  ],
+  "extensions": {
+    "export-user-data": "invertase/export-user-data@0.1.0",
+    "mailchimp-firebase-sync": "mailchimp/mailchimp-firebase-sync@0.5.4"
+  }
 }

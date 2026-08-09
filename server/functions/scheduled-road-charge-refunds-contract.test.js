@@ -11,7 +11,7 @@ test("cash exception is support-authorized and exported as a callable", () => {
   const index = fs.readFileSync(path.join(__dirname, "index.js"), "utf8");
   assert.equal(typeof refunds.settleEntitlementToCash, "function");
   assert.match(source, /requireAdmin\(context, "Support or administrator access is required\."\)/);
-  assert.match(source, /const settleScheduledRoadChargeCashRefund = functions\.https\.onCall/);
+  assert.match(source, /const settleScheduledRoadChargeCashRefund = functions\.runWith\(\{enforceAppCheck: true\}\)\.https\.onCall/);
   assert.match(index, /exports\.settleScheduledRoadChargeCashRefund/);
 });
 

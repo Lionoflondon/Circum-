@@ -152,7 +152,7 @@ async function createStandardPaymentDraft({data, context}) {
   return {giftDraftId: draftRef.id, gift: draft};
 }
 
-exports.createGiftPayment = (stripe) => functions.https.onCall(async (data, context) => {
+exports.createGiftPayment = (stripe) => functions.runWith({enforceAppCheck: true}).https.onCall(async (data, context) => {
   requireAuth(context);
   const campaignRequest = data.source === "sender_mobile_campaign" && data.campaignParticipant;
   const campaignDraft = campaignRequest ?
@@ -318,7 +318,7 @@ async function finalizeGiftPaymentSession({
   });
 }
 
-exports.finalizeGiftPayment = (stripe) => functions.https.onCall(async (data, context) => {
+exports.finalizeGiftPayment = (stripe) => functions.runWith({enforceAppCheck: true}).https.onCall(async (data, context) => {
   requireAuth(context);
   const giftDraftId = String(data.giftDraftId || "");
   const sessionId = String(data.sessionId || "");

@@ -37,9 +37,7 @@ test("concurrent scheduled road-charge Roth settlement is exactly once", {skip: 
   assert.equal(entitlement.data().state, STATES.rothSettled);
 });
 
-test("support cash exception is exactly once and cannot race Roth", {skip: !emulator}, async () => {
-  const db = getFirestore();
-  const id = `cash-emulator-${Date.now()}`;
+async function runCashAndRothRace(db, id) {
   await db.collection("roadChargeRefundEntitlements").doc(id).set({
     entitlementId: id,
     state: STATES.eligible,
@@ -62,14 +60,14 @@ test("support cash exception is exactly once and cannot race Roth", {skip: !emul
   });
   const actor = {authorized: true, uid: "support-agent-1"};
   const results = await Promise.all([
-    ...Array.from({length: 8}, () => settleEntitlementToCash({
+    ...Array.from({length: 4}, () => settleEntitlementToCash({
       db,
       entitlementId: id,
       actor,
       customerRequestReference: `support-case-${id}`,
       cashRefundReference: `cash-ref-${id}`,
     })),
-    ...Array.from({length: 8}, () => settleEntitlementToRoth({
+    ...Array.from({length: 4}, () => settleEntitlementToRoth({
       db,
       entitlementId: id,
       owner: {type: "sender", id: `owner-${id}`},
@@ -81,4 +79,11 @@ test("support cash exception is exactly once and cannot race Roth", {skip: !emul
   assert.equal(results.filter((result) => result.settled).length, 1);
   assert.equal(cashRefunds.size + transactions.size, 1);
   assert.ok([STATES.cashSettled, STATES.rothSettled].includes(entitlement.data().state));
+}
+
+test("support cash exception is exactly once and cannot race Roth", {skip: !emulator}, async () => {
+  const db = getFirestore();
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    await runCashAndRothRace(db, `cash-emulator-${Date.now()}-${attempt}`);
+  }
 });

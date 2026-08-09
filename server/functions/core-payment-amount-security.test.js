@@ -70,12 +70,14 @@ test("Sender mobile uses canonical quote, payment session, and paid delivery cal
 
 test("canonical payment authority calculates and records authoritative pricing", () => {
   assert.match(senderBookingSource, /exports\.createSenderBookingQuote/);
+  assert.match(senderBookingSource, /exports\.createSenderBookingQuote\s*=\s*functions\.runWith\([\s\S]*?enforceAppCheck: true/);
   assert.match(senderBookingSource, /verifiedPhotoAnalysis\(\{/);
   assert.match(senderBookingSource, /quoteInput\.authoritativeRouteFacts = authoritativeRouteFacts/);
   assert.match(senderBookingSource, /quotePayload\(\{\s*\.\.\.quoteInput,\s*\.\.\.\(businessContext \|\| \{\}\),\s*\}, sender\.uid, serverPhotoAnalysis\)/);
   assert.match(senderBookingSource, /clientDisplayQuote/);
   assert.match(senderBookingSource, /pricingDiscrepancyPence/);
   assert.match(senderBookingSource, /exports\.createSenderPaymentSession/);
+  assert.match(senderBookingSource, /exports\.createSenderPaymentSession\s*=\s*\(stripe\) => functions\.runWith\(\{enforceAppCheck: true\}\)/);
   assert.match(senderBookingSource, /const quoteSnap = await db\.collection\("senderBookingQuotes"\)/);
   assert.match(senderBookingSource, /quoteSnap\.data\(\)\.userId !== sender\.uid/);
   assert.match(senderBookingSource, /calculateWalletCheckout/);
@@ -128,6 +130,7 @@ test("Sender Stripe checkout refreshes stale customer records", () => {
 
 test("canonical paid delivery finalization requires succeeded payment and is idempotent", () => {
   assert.match(senderBookingSource, /exports\.createSenderPaidDelivery/);
+  assert.match(senderBookingSource, /exports\.createSenderPaidDelivery\s*=\s*\(stripe\) => functions\.runWith\(\{enforceAppCheck: true\}\)/);
   assert.match(senderBookingSource, /paymentSessionId/);
   assert.match(senderBookingSource, /Stripe payment must be confirmed before delivery creation/);
   assert.match(senderBookingSource, /senderDeliveryIdempotency/);

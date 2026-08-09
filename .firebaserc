@@ -16,5 +16,13 @@
         ]
       }
     }
+  },
+  "etags": {
+    "circum-2797c": {
+      "extensionInstances": {
+        "export-user-data": "08857805d3b134c5ac32fa7efb2b5bc445b2f3d2ca9695d52728b0c2219e4a22",
+        "mailchimp-firebase-sync": "2bfd9e8ff4320d960b47182de5cced6a4cbb4042936dffefc52bc3ff23d0a8aa"
+      }
+    }
   }
 }
