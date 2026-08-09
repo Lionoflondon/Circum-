@@ -314,7 +314,7 @@ function healthPlusVanguardFields() {
 exports.createHealthPlusBooking = functions.runWith({
   enforceAppCheck: true,
   secrets: ["GOOGLE_ROUTES_API_KEY", "GOOGLE_PLACES_API_KEY"],
-  vpcConnector: "circum-fn-conn",
+  vpcConnector: "circum-fn-conn-v2",
   vpcConnectorEgressSettings: "ALL_TRAFFIC",
 }).https.onCall(async (data, context) => {
   const sender = requireCallableSender(context);

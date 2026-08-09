@@ -14,7 +14,7 @@ function googlePlacesApiKey() {
 
 exports.searchFreeUkAddresses = functions.runWith({
   secrets: [googlePlacesApiKeySecret],
-  vpcConnector: "circum-fn-conn",
+  vpcConnector: "circum-fn-conn-v2",
   vpcConnectorEgressSettings: "ALL_TRAFFIC",
 }).https.onCall(async (data) => {
   const query = `${data && data.query || ""}`.trim();
@@ -39,7 +39,7 @@ exports.searchFreeUkAddresses = functions.runWith({
 
 exports.resolveUkAddressPlace = functions.runWith({
   secrets: [googlePlacesApiKeySecret],
-  vpcConnector: "circum-fn-conn",
+  vpcConnector: "circum-fn-conn-v2",
   vpcConnectorEgressSettings: "ALL_TRAFFIC",
 }).https.onCall(async (data) => {
   const placeId = `${data && data.placeId || ""}`.trim();

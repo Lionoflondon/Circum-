@@ -935,7 +935,7 @@ exports.getSenderRothBalance = functions.https.onCall(async (_, context) => {
 exports.createSenderBookingQuote = functions.runWith({
   enforceAppCheck: true,
   secrets: ["GOOGLE_ROUTES_API_KEY", "GOOGLE_PLACES_API_KEY"],
-  vpcConnector: "circum-fn-conn",
+  vpcConnector: "circum-fn-conn-v2",
   vpcConnectorEgressSettings: "ALL_TRAFFIC",
 }).https.onCall(async (data, context) => {
   const sender = requireSender(context);
@@ -2066,7 +2066,7 @@ async function createPaidDeliveryFromSession(stripe, sender, data) {
 exports.createSenderPaidDelivery = (stripe) => functions.runWith({
   enforceAppCheck: true,
   secrets: ["GOOGLE_PLACES_API_KEY"],
-  vpcConnector: "circum-fn-conn",
+  vpcConnector: "circum-fn-conn-v2",
   vpcConnectorEgressSettings: "ALL_TRAFFIC",
 }).https.onCall(async (data, context) => {
   try {
