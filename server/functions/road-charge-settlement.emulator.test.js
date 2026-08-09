@@ -4,6 +4,8 @@ const {initializeApp, getApps} = require("firebase-admin/app");
 const {getFirestore, FieldValue} = require("firebase-admin/firestore");
 const {planRoadChargeSettlement, dailyId} = require("./road-charge-settlement");
 
+const emulatorTest = process.env.FIRESTORE_EMULATOR_HOST ? test : test.skip;
+
 const app = getApps().length ? getApps()[0] : initializeApp({projectId: "circum-road-charge-test"});
 const db = getFirestore(app);
 
@@ -34,7 +36,7 @@ async function settle(deliveryId, charge, vehicleId = "vehicle-1") {
   });
 }
 
-test("emulator contention caps concurrent CCZ recovery at £18", async () => {
+emulatorTest("emulator contention caps concurrent CCZ recovery at £18", async () => {
   const day = `emulator-${Date.now()}`;
   const charge = {chargeId: "congestion_charge", type: "daily_zone_charge", amountPence: 1800, customerContributionPence: 900, chargingDate: day};
   const results = await Promise.all([
@@ -49,7 +51,7 @@ test("emulator contention caps concurrent CCZ recovery at £18", async () => {
   assert.equal(new Set(results.map((result, index) => result.duplicate ? `duplicate-${index}` : index)).size, 4);
 });
 
-test("emulator retry creates no duplicate crossing effect", async () => {
+emulatorTest("emulator retry creates no duplicate crossing effect", async () => {
   const day = `emulator-crossing-${Date.now()}`;
   const charge = {chargeId: "blackwall_silvertown", type: "route_toll", amountPence: 400, riderReimbursementPence: 400, chargingDate: day};
   const first = await settle(`crossing-${day}`, charge);
