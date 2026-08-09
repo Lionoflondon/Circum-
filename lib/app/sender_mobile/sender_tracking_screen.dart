@@ -3974,6 +3974,7 @@ class _DeliveryReceiptView extends StatelessWidget {
                 const Divider(color: Colors.white12),
                 for (final item in receipt.lineItems)
                   row(item.label, money(item.amount)),
+                if (receipt.vatAmount > 0) row('VAT', money(receipt.vatAmount)),
                 const Divider(color: Colors.white12),
                 row('Amount paid', money(receipt.amountPaid), strong: true),
                 row('Payment', receipt.paymentStatus),

@@ -15,6 +15,7 @@ class DeliveryReceiptDetails {
   final String paymentStatus;
   final String paymentMethod;
   final double amountPaid;
+  final double vatAmount;
   final List<DeliveryReceiptLineItem> lineItems;
 
   const DeliveryReceiptDetails({
@@ -27,6 +28,7 @@ class DeliveryReceiptDetails {
     required this.paymentStatus,
     required this.paymentMethod,
     required this.amountPaid,
+    required this.vatAmount,
     required this.lineItems,
   });
 }
@@ -73,6 +75,7 @@ DeliveryReceiptDetails deliveryReceiptFromRecord(
             snapshot['amountDue'] ??
             snapshot['total']) ??
         0,
+    vatAmount: _number(record['vatAmount'] ?? snapshot['vatAmount']) ?? 0,
     lineItems: lineItems,
   );
 }

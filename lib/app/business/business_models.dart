@@ -513,17 +513,17 @@ class BusinessWorkspaceData {
       ..sort((a, b) => (b.createdAt ?? DateTime(1970))
           .compareTo(a.createdAt ?? DateTime(1970)));
     return BusinessWorkspaceData(
-        account: account,
-        deliveries: merged,
-        invoices: invoices,
-        healthRequests: healthRequests,
-        giftRequests: giftRequests,
-        wallet: wallet,
-        summary: summary,
-        permissions: permissions,
-        role: role,
-        nextDeliveryCursor: page.nextCursor,
-      );
+      account: account,
+      deliveries: merged,
+      invoices: invoices,
+      healthRequests: healthRequests,
+      giftRequests: giftRequests,
+      wallet: wallet,
+      summary: summary,
+      permissions: permissions,
+      role: role,
+      nextDeliveryCursor: page.nextCursor,
+    );
   }
 }
 
@@ -559,6 +559,30 @@ class BusinessWorkspacePermissions {
         deliveries: data['deliveries'] == true,
         reports: data['reports'] == true,
         finance: data['finance'] == true,
+      );
+}
+
+class BusinessCustomRole {
+  final String id;
+  final String name;
+  final String description;
+  final List<String> permissions;
+
+  const BusinessCustomRole({
+    required this.id,
+    required this.name,
+    required this.description,
+    required this.permissions,
+  });
+
+  factory BusinessCustomRole.fromMap(Map<String, dynamic> data) =>
+      BusinessCustomRole(
+        id: '${data['roleId'] ?? ''}',
+        name: '${data['name'] ?? ''}',
+        description: '${data['description'] ?? ''}',
+        permissions: (data['permissions'] as List? ?? const [])
+            .map((value) => '$value')
+            .toList(growable: false),
       );
 }
 

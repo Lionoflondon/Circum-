@@ -47,6 +47,23 @@ abstract class BusinessRepository {
     String? status,
     bool remove = false,
   });
+  Future<List<BusinessCustomRole>> loadCustomRoles(BusinessAccount account);
+  Future<void> saveCustomRole({
+    required BusinessAccount account,
+    String? roleId,
+    required String name,
+    required String description,
+    required List<String> permissions,
+  });
+  Future<void> deleteCustomRole({
+    required BusinessAccount account,
+    required String roleId,
+  });
+  Future<void> assignCustomRole({
+    required BusinessAccount account,
+    required Map<String, dynamic> member,
+    required String roleId,
+  });
   Future<void> addIrisMoment({
     required BusinessAccount account,
     required Map<String, dynamic> moment,
@@ -382,6 +399,61 @@ class FirebaseBusinessRepository implements BusinessRepository {
         'status': status,
       });
     }
+  }
+
+  @override
+  Future<List<BusinessCustomRole>> loadCustomRoles(
+      BusinessAccount account) async {
+    final result = await functions
+        .httpsCallable('listBusinessCustomRoles')
+        .call({'businessId': account.id});
+    final data = Map<String, dynamic>.from(result.data as Map);
+    return (data['roles'] as List? ?? const [])
+        .whereType<Map>()
+        .map((item) =>
+            BusinessCustomRole.fromMap(Map<String, dynamic>.from(item)))
+        .toList(growable: false);
+  }
+
+  @override
+  Future<void> saveCustomRole({
+    required BusinessAccount account,
+    String? roleId,
+    required String name,
+    required String description,
+    required List<String> permissions,
+  }) async {
+    await functions.httpsCallable('saveBusinessCustomRole').call({
+      'businessId': account.id,
+      if (roleId != null && roleId.isNotEmpty) 'roleId': roleId,
+      'name': name,
+      'description': description,
+      'permissions': permissions,
+    });
+  }
+
+  @override
+  Future<void> deleteCustomRole({
+    required BusinessAccount account,
+    required String roleId,
+  }) async {
+    await functions.httpsCallable('deleteBusinessCustomRole').call({
+      'businessId': account.id,
+      'roleId': roleId,
+    });
+  }
+
+  @override
+  Future<void> assignCustomRole({
+    required BusinessAccount account,
+    required Map<String, dynamic> member,
+    required String roleId,
+  }) async {
+    await functions.httpsCallable('assignBusinessCustomRole').call({
+      'businessId': account.id,
+      'memberUserId': '${member['userId'] ?? member['email'] ?? ''}',
+      'roleId': roleId,
+    });
   }
 
   @override

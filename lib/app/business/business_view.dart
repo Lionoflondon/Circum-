@@ -654,10 +654,9 @@ class _BusinessViewState extends State<BusinessView> {
       ),
       Wrap(spacing: 8, runSpacing: 8, children: [
         _CompactAction(
-            label: 'Permissions',
+            label: 'Custom roles',
             icon: Icons.rule_rounded,
-            onTap: () =>
-                _showMessage('Permissions are applied through team roles.')),
+            onTap: _workspace!.role == 'owner' ? _manageCustomRoles : null),
         _CompactAction(
             label: 'Activity Log',
             icon: Icons.manage_history_rounded,
@@ -997,9 +996,7 @@ class _BusinessViewState extends State<BusinessView> {
             value: summary.averageDeliveryMinutes == null
                 ? 'N/A'
                 : '${summary.averageDeliveryMinutes} min',
-            bars: {
-              'Avg': summary.averageDeliveryMinutes ?? averageMinutes
-            }),
+            bars: {'Avg': summary.averageDeliveryMinutes ?? averageMinutes}),
         _MetricListCard(
             title: 'Top Pickup Locations',
             items: _topEntries(pickupLocations),
@@ -1212,7 +1209,8 @@ class _BusinessViewState extends State<BusinessView> {
                     title: Text(_statusLabel(event.type)),
                     subtitle: Text([
                       if (event.timestamp != null)
-                        DateFormat('d MMM yyyy, HH:mm').format(event.timestamp!),
+                        DateFormat('d MMM yyyy, HH:mm')
+                            .format(event.timestamp!),
                       if (event.actorType.isNotEmpty) event.actorType,
                     ].join(' · ')),
                   ),
@@ -1431,21 +1429,34 @@ class _BusinessViewState extends State<BusinessView> {
   Future<void> _handleMemberAction(
       Map<String, dynamic> member, String action) async {
     if (action == 'role') {
+      final customRoles = _workspace!.role == 'owner'
+          ? await _repository.loadCustomRoles(_account!)
+          : const <BusinessCustomRole>[];
+      if (!mounted) return;
       final role = await showDialog<String>(
         context: context,
         builder: (context) => SimpleDialog(
           backgroundColor: _raised,
           title: const Text('Change role'),
-          children: const ['owner', 'admin', 'dispatcher', 'finance', 'viewer']
-              .map((item) => SimpleDialogOption(
-                  onPressed: () => Navigator.pop(context, item),
-                  child: Text(_title(item))))
-              .toList(growable: false),
+          children: [
+            ...const ['admin', 'operations', 'dispatcher', 'finance', 'viewer']
+                .map((item) => SimpleDialogOption(
+                    onPressed: () => Navigator.pop(context, item),
+                    child: Text(_title(item)))),
+            ...customRoles.map((item) => SimpleDialogOption(
+                onPressed: () => Navigator.pop(context, 'custom:${item.id}'),
+                child: Text(item.name))),
+          ],
         ),
       );
       if (role == null) return;
-      await _repository.updateMember(
-          account: _account!, member: member, role: role);
+      if (role.startsWith('custom:')) {
+        await _repository.assignCustomRole(
+            account: _account!, member: member, roleId: role.substring(7));
+      } else {
+        await _repository.updateMember(
+            account: _account!, member: member, role: role);
+      }
     } else if (action == 'resend') {
       _showMessage('Invitation resent.');
       return;
@@ -1461,6 +1472,156 @@ class _BusinessViewState extends State<BusinessView> {
     }
     await _load(accountId: _account!.id);
     _showMessage('Team access updated.');
+  }
+
+  Future<void> _manageCustomRoles() async {
+    try {
+      final roles = await _repository.loadCustomRoles(_account!);
+      if (!mounted) return;
+      await showDialog<void>(
+        context: context,
+        builder: (dialogContext) => AlertDialog(
+          backgroundColor: _raised,
+          title: const Text('Custom roles'),
+          content: SizedBox(
+            width: 520,
+            child: roles.isEmpty
+                ? const Text('No custom roles yet.',
+                    style: TextStyle(color: _muted))
+                : ListView(
+                    shrinkWrap: true,
+                    children: roles
+                        .map((role) => ListTile(
+                              contentPadding: EdgeInsets.zero,
+                              title: Text(role.name),
+                              subtitle: Text(
+                                role.description.isEmpty
+                                    ? '${role.permissions.length} permissions'
+                                    : role.description,
+                                style: const TextStyle(color: _muted),
+                              ),
+                              trailing: IconButton(
+                                tooltip: 'Remove role',
+                                icon: const Icon(Icons.delete_outline_rounded),
+                                onPressed: () async {
+                                  await _repository.deleteCustomRole(
+                                      account: _account!, roleId: role.id);
+                                  if (dialogContext.mounted) {
+                                    Navigator.pop(dialogContext);
+                                  }
+                                  _showMessage('Custom role removed.');
+                                },
+                              ),
+                            ))
+                        .toList(growable: false),
+                  ),
+          ),
+          actions: [
+            TextButton(
+                onPressed: () => Navigator.pop(dialogContext),
+                child: const Text('Close')),
+            FilledButton.icon(
+              icon: const Icon(Icons.add_rounded),
+              label: const Text('Create role'),
+              onPressed: () {
+                Navigator.pop(dialogContext);
+                _createCustomRole();
+              },
+            ),
+          ],
+        ),
+      );
+    } catch (_) {
+      _showMessage('Custom roles could not be loaded.');
+    }
+  }
+
+  Future<void> _createCustomRole() async {
+    final name = TextEditingController();
+    final description = TextEditingController();
+    final selected = <String>{'deliveries.view', 'deliveries.status'};
+    const choices = <String, String>{
+      'deliveries.view': 'View deliveries',
+      'deliveries.create': 'Create deliveries',
+      'deliveries.cancel': 'Cancel deliveries',
+      'deliveries.status': 'View delivery status',
+      'deliveries.rider_progress': 'View Rider progress',
+      'deliveries.evidence': 'View evidence',
+      'deliveries.support': 'Contact support',
+      'finance.invoices.view': 'View invoices',
+      'finance.invoices.download': 'Download invoices',
+      'finance.payments.view': 'View payments',
+      'finance.roth.use': 'Use Roth',
+      'finance.reports.export': 'Export finance reports',
+      'team.invite': 'Invite members',
+      'team.remove': 'Remove members',
+      'team.roles.assign': 'Assign roles',
+      'reports.view': 'View reports',
+      'reports.export': 'Export reports',
+      'operations.active_deliveries': 'View active deliveries',
+      'operations.incidents': 'View incidents',
+      'operations.support': 'Contact operations support',
+    };
+    final approved = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => StatefulBuilder(
+        builder: (context, setDialogState) => AlertDialog(
+          backgroundColor: _raised,
+          title: const Text('Create custom role'),
+          content: SizedBox(
+            width: 560,
+            height: 520,
+            child: Column(children: [
+              TextField(
+                  controller: name,
+                  decoration: const InputDecoration(labelText: 'Role name')),
+              const SizedBox(height: 10),
+              TextField(
+                  controller: description,
+                  decoration: const InputDecoration(labelText: 'Description')),
+              const SizedBox(height: 10),
+              Expanded(
+                  child: ListView(
+                      children: choices.entries
+                          .map((entry) => CheckboxListTile(
+                                value: selected.contains(entry.key),
+                                title: Text(entry.value),
+                                onChanged: (value) => setDialogState(() =>
+                                    value == true
+                                        ? selected.add(entry.key)
+                                        : selected.remove(entry.key)),
+                              ))
+                          .toList(growable: false))),
+            ]),
+          ),
+          actions: [
+            TextButton(
+                onPressed: () => Navigator.pop(context, false),
+                child: const Text('Cancel')),
+            FilledButton(
+                onPressed: () => Navigator.pop(context, true),
+                child: const Text('Create')),
+          ],
+        ),
+      ),
+    );
+    if (approved != true || name.text.trim().isEmpty || selected.isEmpty) {
+      return;
+    }
+    try {
+      await _repository.saveCustomRole(
+          account: _account!,
+          name: name.text,
+          description: description.text,
+          permissions: selected.toList());
+      _showMessage('Custom role created.');
+      await _manageCustomRoles();
+    } catch (_) {
+      _showMessage('Custom role could not be created.');
+    } finally {
+      name.dispose();
+      description.dispose();
+    }
   }
 
   Future<void> _handleAccessRequest(
@@ -2580,7 +2741,7 @@ class _SecondaryButton extends StatelessWidget {
 class _CompactAction extends StatelessWidget {
   final String label;
   final IconData icon;
-  final VoidCallback onTap;
+  final VoidCallback? onTap;
   const _CompactAction(
       {required this.label, required this.icon, required this.onTap});
   @override
