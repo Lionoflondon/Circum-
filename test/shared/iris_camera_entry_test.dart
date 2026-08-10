@@ -48,6 +48,9 @@ void main() {
 
     expect(source, contains('maxWidth: 1280'));
     expect(source, isNot(contains('maxHeight: 1280')));
+    expect(source, contains('prepareIrisInferenceImage'));
+    expect(source, contains('payloadOptimized'));
+    expect(source, contains("'originalBytes': originalBytes.length"));
     expect(source, contains("'clientRequestId': clientRequestId"));
     expect(source, contains("'message': 'iris_visual_client_timing'"));
     expect(source, contains("'responseToRenderMs': responseToRenderMs"));

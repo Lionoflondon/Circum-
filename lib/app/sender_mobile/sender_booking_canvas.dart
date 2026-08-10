@@ -25,6 +25,7 @@ import '../send_package/repo/place_api.dart';
 import 'sender_accessibility.dart';
 import 'sender_booking_state.dart';
 import 'sender_finance.dart';
+import 'iris_inference_image.dart';
 import 'sender_saved_addresses.dart';
 import 'sender_tracking_screen.dart';
 
@@ -931,8 +932,16 @@ class _SenderBookingCanvasState extends State<SenderBookingCanvas> {
       final clientRequestId = const Uuid().v4();
       final preprocessingStopwatch = Stopwatch()..start();
       final readStopwatch = Stopwatch()..start();
-      final bytes = await picked.readAsBytes();
+      final originalBytes = await picked.readAsBytes();
       readStopwatch.stop();
+      final transformStopwatch = Stopwatch()..start();
+      final prepared = await compute(prepareIrisInferenceImage, {
+        'bytes': originalBytes,
+        'contentType': picked.mimeType ?? 'image/jpeg',
+      });
+      transformStopwatch.stop();
+      final bytes = prepared['bytes']! as Uint8List;
+      final inferenceContentType = prepared['contentType']! as String;
       final encodingStopwatch = Stopwatch()..start();
       final imageBase64 = base64Encode(bytes);
       encodingStopwatch.stop();
@@ -943,15 +952,17 @@ class _SenderBookingCanvasState extends State<SenderBookingCanvas> {
           .call({
         'clientRequestId': clientRequestId,
         'imageBase64': imageBase64,
-        'contentType': picked.mimeType ?? 'image/jpeg',
+        'contentType': inferenceContentType,
         'fileName': picked.name,
         'description': details,
         'declaredWeightText': _weight.text,
         'clientTimings': {
           'selectionMs': selectionStopwatch.elapsedMilliseconds,
           'imageReadMs': readStopwatch.elapsedMilliseconds,
+          'imageTransformMs': transformStopwatch.elapsedMilliseconds,
           'base64EncodingMs': encodingStopwatch.elapsedMilliseconds,
           'preCallMs': preprocessingStopwatch.elapsedMilliseconds,
+          'originalBytes': originalBytes.length,
           'inputBytes': bytes.length,
           'encodedCharacters': imageBase64.length,
         },
@@ -977,6 +988,7 @@ class _SenderBookingCanvasState extends State<SenderBookingCanvas> {
           'clientRequestId': clientRequestId,
           'selectionMs': selectionStopwatch.elapsedMilliseconds,
           'imageReadMs': readStopwatch.elapsedMilliseconds,
+          'imageTransformMs': transformStopwatch.elapsedMilliseconds,
           'base64EncodingMs': encodingStopwatch.elapsedMilliseconds,
           'preCallMs': preprocessingStopwatch.elapsedMilliseconds,
           'callableRoundTripMs': callableStopwatch.elapsedMilliseconds,
@@ -984,7 +996,9 @@ class _SenderBookingCanvasState extends State<SenderBookingCanvas> {
           'totalAfterSelectionMs': preprocessingStopwatch.elapsedMilliseconds +
               callableStopwatch.elapsedMilliseconds +
               responseToRenderMs,
+          'originalBytes': originalBytes.length,
           'inputBytes': bytes.length,
+          'payloadOptimized': prepared['optimized'],
           'encodedCharacters': imageBase64.length,
           'serverPerformance': data['performance'],
         }));
