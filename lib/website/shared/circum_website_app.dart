@@ -9782,49 +9782,15 @@ class _CustomerPortalState extends State<_CustomerPortal> {
     setState(() => _businessLoading = true);
     try {
       final db = FirebaseFirestore.instance;
-      final userSnap = await db.collection('users').doc(uid).get();
-      final userData = userSnap.data() ?? <String, dynamic>{};
-      final userEmail = (_senderUser?.email ?? '').trim().toLowerCase();
-      final ids = <String>{
-        for (final id
-            in (userData['businessWorkspaceIds'] as List? ?? const []))
-          '$id',
-        if ('${userData['lastBusinessWorkspaceId'] ?? ''}'.trim().isNotEmpty)
-          '${userData['lastBusinessWorkspaceId']}',
-      };
-      final ownedAccounts = await db
-          .collection('businessAccounts')
-          .where('createdByUserId', isEqualTo: uid)
-          .limit(20)
-          .get();
-      for (final doc in ownedAccounts.docs) {
-        ids.add(doc.id);
-      }
-      final teamLookupValues = [uid, if (userEmail.isNotEmpty) userEmail];
-      final teamAccounts = await db
-          .collection('businessAccounts')
-          .where('teamMemberIds', arrayContainsAny: teamLookupValues)
-          .limit(20)
-          .get();
-      for (final doc in teamAccounts.docs) {
-        ids.add(doc.id);
-      }
-      final memberships = await db
-          .collection('businessMemberships')
-          .where('userId', isEqualTo: uid)
-          .get();
-      for (final doc in memberships.docs) {
-        final status = '${doc.data()['status'] ?? 'active'}';
-        if (status == 'active') ids.add('${doc.data()['businessId'] ?? ''}');
-      }
-      ids.removeWhere((id) => id.trim().isEmpty);
-      final accounts = <Map<String, dynamic>>[];
-      for (final id in ids) {
-        final snap = await db.collection('businessAccounts').doc(id).get();
-        if (snap.exists) {
-          accounts.add({'id': snap.id, ...snap.data()!});
-        }
-      }
+      final result = await FirebaseFunctions.instanceFor(region: 'us-central1')
+          .httpsCallable('listBusinessAccounts')
+          .call();
+      final payload = Map<String, dynamic>.from(result.data as Map);
+      final accounts = (payload['accounts'] as List? ?? const [])
+          .whereType<Map>()
+          .map((item) => Map<String, dynamic>.from(item))
+          .where((account) => '${account['id'] ?? ''}'.trim().isNotEmpty)
+          .toList(growable: false);
       final selectedId = _selectedBusinessId != null &&
               accounts.any((account) => account['id'] == _selectedBusinessId)
           ? _selectedBusinessId!
