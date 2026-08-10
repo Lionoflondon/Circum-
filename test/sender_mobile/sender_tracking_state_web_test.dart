@@ -4,7 +4,9 @@ import 'package:circum/app/send_package/bloc/send_package_bloc.dart';
 import 'package:circum/app/send_package/models/delivery_restoration_coordinates.dart';
 import 'package:circum/app/send_package/models/place_coordinates.m.dart';
 import 'package:circum/app/sender_mobile/sender_booking_canvas.dart';
+import 'package:circum/app/sender_mobile/circum_route_presentation.dart';
 import 'package:circum/app/sender_mobile/sender_tracking_screen.dart';
+import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 
@@ -399,6 +401,25 @@ void main() {
 
     expect(absent?.route, isEmpty);
     expect(present?.route, hasLength(3));
+    expect(present?.completedRoute, hasLength(3));
+    expect(present?.remainingRoute, isEmpty);
+  });
+
+  test('CIRCUM energy pulse stays on canonical route points', () {
+    final route = List<int>.generate(24, (index) => index);
+    final segment = CircumRoutePresentation.energySegment(route, 0.6);
+
+    expect(segment, everyElement(isIn(route)));
+    expect(segment.length, inInclusiveRange(2, 12));
+    expect(CircumRoutePresentation.base, isNot(const Color(0xFFF44336)));
+  });
+
+  test('tracking renderer uses CIRCUM route contract and reduced motion', () {
+    final source = File('lib/app/sender_mobile/sender_tracking_screen.dart')
+        .readAsStringSync();
+    expect(source, contains("PolylineId('circum_route_energy')"));
+    expect(source, contains('maybeDisableAnimationsOf'));
+    expect(source, isNot(contains("PolylineId('remaining_route')")));
   });
 
   test('tracking map rejects malformed and out-of-UK canonical coordinates',

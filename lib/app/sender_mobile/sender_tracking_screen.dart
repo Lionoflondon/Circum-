@@ -18,6 +18,7 @@ import '../send_package/models/place_coordinates.m.dart';
 import '../send_package/view/ride_chats.dart';
 import 'design_system/sender_design_system.dart';
 import 'sender_accessibility.dart';
+import 'circum_route_presentation.dart';
 
 enum SenderTrackingState {
   noActiveDelivery,
@@ -1430,6 +1431,7 @@ class SenderTrackingMapSnapshot {
   final LatLng? rider;
   final List<LatLng> route;
   final int riderRouteIndex;
+  final bool terminal;
 
   const SenderTrackingMapSnapshot({
     required this.pickup,
@@ -1437,15 +1439,18 @@ class SenderTrackingMapSnapshot {
     required this.route,
     this.rider,
     this.riderRouteIndex = 0,
+    this.terminal = false,
   });
 
   List<LatLng> get completedRoute {
+    if (terminal) return route;
     if (rider == null || route.isEmpty) return const [];
     final safeIndex = riderRouteIndex.clamp(0, route.length - 1);
     return <LatLng>[...route.take(safeIndex + 1), rider!];
   }
 
   List<LatLng> get remainingRoute {
+    if (terminal) return const [];
     if (route.isEmpty) {
       return rider == null
           ? <LatLng>[pickup, dropoff]
@@ -1503,6 +1508,7 @@ class SenderTrackingMapAdapter {
       rider: content.showRider && !stateDelivered ? rider : null,
       route: route,
       riderRouteIndex: riderIndex,
+      terminal: stateDelivered,
     );
   }
 
@@ -1644,11 +1650,18 @@ class _SenderGoogleTrackingMapState extends State<SenderGoogleTrackingMap> {
   BitmapDescriptor? _dropoffIcon;
   BitmapDescriptor? _riderIcon;
   var _ready = false;
+  Timer? _energyTimer;
+  double _energyPhase = 0;
 
   @override
   void initState() {
     super.initState();
     _loadCircumMarkerIcons();
+    _energyTimer = Timer.periodic(const Duration(milliseconds: 220), (_) {
+      if (!mounted || ModalRoute.of(context)?.isCurrent != true) return;
+      if (MediaQuery.maybeDisableAnimationsOf(context) ?? false) return;
+      setState(() => _energyPhase = (_energyPhase + .045) % 1);
+    });
   }
 
   @override
@@ -1662,6 +1675,7 @@ class _SenderGoogleTrackingMapState extends State<SenderGoogleTrackingMap> {
 
   @override
   void dispose() {
+    _energyTimer?.cancel();
     _controller?.dispose();
     super.dispose();
   }
@@ -1766,12 +1780,18 @@ class _SenderGoogleTrackingMapState extends State<SenderGoogleTrackingMap> {
     if (snapshot.route.length < 2) return const {};
     final remaining = snapshot.remainingRoute;
     final completed = snapshot.completedRoute;
+    final energySource = snapshot.terminal
+        ? completed
+        : remaining.length >= 2
+            ? remaining
+            : completed;
+    final reduceMotion = MediaQuery.maybeDisableAnimationsOf(context) ?? false;
     return {
       if (remaining.length >= 2)
         Polyline(
           polylineId: const PolylineId('circum_remaining_route'),
           points: remaining,
-          color: const Color(0xFF60A5FA).withValues(alpha: .86),
+          color: CircumRoutePresentation.base.withValues(alpha: .90),
           width: 5,
           geodesic: true,
           startCap: Cap.roundCap,
@@ -1781,8 +1801,23 @@ class _SenderGoogleTrackingMapState extends State<SenderGoogleTrackingMap> {
         Polyline(
           polylineId: const PolylineId('circum_completed_route'),
           points: completed,
-          color: const Color(0xFF34D399).withValues(alpha: .54),
+          color: snapshot.terminal
+              ? CircumRoutePresentation.base.withValues(alpha: .90)
+              : CircumRoutePresentation.energy.withValues(alpha: .54),
           width: 5,
+          geodesic: true,
+          startCap: Cap.roundCap,
+          endCap: Cap.roundCap,
+        ),
+      if (!reduceMotion && energySource.length >= 2)
+        Polyline(
+          polylineId: const PolylineId('circum_route_energy'),
+          points: CircumRoutePresentation.energySegment(
+            energySource,
+            _energyPhase,
+          ),
+          color: CircumRoutePresentation.energy,
+          width: 7,
           geodesic: true,
           startCap: Cap.roundCap,
           endCap: Cap.roundCap,
@@ -4028,7 +4063,8 @@ class _DeliveryReceiptView extends StatelessWidget {
                 if (receipt.rothAppliedAmount > 0)
                   row('Roth applied', money(receipt.rothAppliedAmount)),
                 if (receipt.externalPaidAmount > 0)
-                  row('Card or wallet payment', money(receipt.externalPaidAmount)),
+                  row('Card or wallet payment',
+                      money(receipt.externalPaidAmount)),
                 row('Amount paid', money(receipt.amountPaid), strong: true),
                 row('Payment', receipt.paymentStatus),
                 row('Method', receipt.paymentMethod),
