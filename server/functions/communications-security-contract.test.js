@@ -20,9 +20,11 @@ test("payment metadata and product modules cannot select arbitrary push tokens",
 
 test("Business notification recipients come from server-owned workspace membership", () => {
   const source = read("business-access.js");
-  assert.match(source, /business\.ownerUid/);
-  assert.match(source, /business\.managerIds/);
+  assert.match(source, /collection\("businessMemberships"\)/);
+  assert.match(source, /where\("businessId", "==", businessId\)/);
+  assert.match(source, /where\("status", "==", "active"\)/);
   assert.match(source, /BUSINESS_ADMIN_ROLES\.has/);
+  assert.doesNotMatch(source, /business\.managerIds|teamMemberIds/);
   assert.match(source, /recipientId: request\.userId/);
   assert.doesNotMatch(source, /recipientId:\s*email/);
   assert.doesNotMatch(source, /collection\("notifications"\)\.doc\(\)/);

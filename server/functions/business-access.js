@@ -1,6 +1,6 @@
 /* eslint-disable max-len, require-jsdoc */
 const functions = require("firebase-functions/v1");
-const {getFirestore, FieldValue} = require("firebase-admin/firestore");
+const {getFirestore, FieldPath, FieldValue} = require("firebase-admin/firestore");
 const communicationEngine = require("./communication-engine");
 const {resolveBusinessAuthority, hasBusinessPermission} = require("./business-authority");
 
@@ -44,22 +44,6 @@ function slug(value, fallback = "business") {
   return normalised || fallback;
 }
 
-function memberRole(account = {}, uid, email) {
-  const members = Array.isArray(account.teamMembers) ? account.teamMembers : [];
-  const match = members.find(
-      (member) =>
-        (member.userId === uid ||
-        (email && `${member.email || ""}`.toLowerCase() === email)) &&
-        member.status !== "removed" &&
-        member.status !== "rejected",
-  );
-  if (match) return clean(match.role || "member");
-  if (account.createdByUserId === uid || account.ownerUid === uid) {
-    return "owner";
-  }
-  return "";
-}
-
 async function requireBusinessAdmin(db, businessId, context) {
   const uid = requireAuth(context);
   const email = cleanEmail(context.auth.token.email);
@@ -72,7 +56,8 @@ async function requireBusinessAdmin(db, businessId, context) {
     );
   }
   const account = snap.data() || {};
-  const role = memberRole(account, uid, email);
+  const authority = await resolveBusinessAuthority(db, account, businessId, {uid, email});
+  const role = authority.role;
   if (!BUSINESS_ADMIN_ROLES.has(role)) {
     throw new functions.https.HttpsError(
         "permission-denied",
@@ -130,7 +115,66 @@ async function reserveCompanyCode(db, businessId, uid) {
   );
 }
 
-exports.createBusinessAccount = functions
+function accountProjection(id, account, authority, irisMoments = [], teamMembers = []) {
+  const managesTeam = ["owner", "admin", "manager"].includes(authority.role);
+  return {
+    id,
+    businessName: account.businessName || "Business",
+    status: account.status || "pending",
+    approvalStatus: account.approvalStatus || account.status || "pending",
+    businessAddress: account.businessAddress || "",
+    companyNumber: account.companyNumber || "",
+    companyCode: account.companyCode || "",
+    connectedProducts: Array.isArray(account.connectedProducts) ? account.connectedProducts.slice(0, 20) : [],
+    defaultPickupAddresses: Array.isArray(account.defaultPickupAddresses) ? account.defaultPickupAddresses.slice(0, 10) : [],
+    contactName: managesTeam ? account.contactName || "" : "",
+    contactEmail: managesTeam ? account.contactEmail || "" : "",
+    phone: managesTeam ? account.phone || "" : "",
+    billingEmail: authority.financialAuthorized ? account.billingEmail || "" : "",
+    paymentPreferences: authority.financialAuthorized ? account.paymentPreferences || {} : {},
+    notificationPreferences: account.notificationPreferences || {},
+    teamMembers: managesTeam ? teamMembers.slice(0, 250) : [],
+    recognitions: account.recognitions || {},
+    irisMoments,
+    role: authority.role,
+  };
+}
+
+exports.listBusinessAccounts = functions.runWith({enforceAppCheck: true})
+    .region("us-central1").https.onCall(async (_data, context) => {
+      const uid = requireAuth(context);
+      const email = cleanEmail(context.auth.token.email);
+      const db = getFirestore();
+      const snapshots = await Promise.all([
+        db.collection("businessMemberships").where("userId", "==", uid).where("status", "==", "active").limit(50).get(),
+        ...(email ? [db.collection("businessMemberships").where("email", "==", email).where("status", "==", "active").limit(50).get()] : []),
+      ]);
+      const accounts = new Map();
+      snapshots.forEach((snapshot) => snapshot.docs.forEach((doc) => accounts.set(doc.data().businessId, null)));
+      const projected = [];
+      for (const id of accounts.keys()) {
+        const accountSnap = await db.collection("businessAccounts").doc(id).get();
+        if (!accountSnap.exists) continue;
+        const account = accountSnap.data() || {};
+        const authority = await resolveBusinessAuthority(db, account, id, {uid, email});
+        if (authority.member) {
+          const [moments, members] = await Promise.all([
+            db.collection("businessAccounts").doc(id).collection("irisMoments").orderBy("recordedAt", "desc").limit(20).get(),
+            authority.ownerOrAdmin ? db.collection("businessMemberships").where("businessId", "==", id).limit(250).get() : Promise.resolve({docs: []}),
+          ]);
+          projected.push(accountProjection(id, account, authority, moments.docs.map((doc) => ({
+            id: doc.id,
+            ...doc.data(),
+            recordedAtMillis: doc.data().recordedAt && typeof doc.data().recordedAt.toMillis === "function" ?
+              doc.data().recordedAt.toMillis() : null,
+          })), members.docs.map((doc) => ({membershipId: doc.id, ...doc.data()}))));
+        }
+      }
+      projected.sort((a, b) => clean(a.businessName).localeCompare(clean(b.businessName)));
+      return {accounts: projected};
+    });
+
+exports.createBusinessAccount = functions.runWith({enforceAppCheck: true})
     .region("us-central1")
     .https.onCall(async (data, context) => {
       const uid = requireAuth(context);
@@ -195,15 +239,6 @@ exports.createBusinessAccount = functions
       }
       const companyCode = await reserveCompanyCode(db, businessId, uid);
       const ownerName = clean(context.auth.token.name || businessEmail);
-      const now = new Date();
-      const ownerMember = {
-        userId: uid,
-        email: businessEmail,
-        name: ownerName,
-        role: "owner",
-        status: "active",
-        joinedAt: now,
-      };
       const batch = db.batch();
       batch.set(businessRef, {
         businessName: companyName,
@@ -226,9 +261,7 @@ exports.createBusinessAccount = functions
         verificationStatus: "pending",
         isApproved: false,
         joinPolicy: "approval_required",
-        teamMemberIds: [uid, businessEmail],
-        managerIds: [uid, businessEmail],
-        teamMembers: [ownerMember],
+        membershipAuthorityVersion: "business_memberships_v2",
         connectedProducts: ["business", "health+", "gifts", "vanguard"],
         notificationPreferences: {
           deliveryUpdates: true,
@@ -317,7 +350,7 @@ exports.createBusinessAccount = functions
       };
     });
 
-exports.ensureBusinessCompanyCode = functions
+exports.ensureBusinessCompanyCode = functions.runWith({enforceAppCheck: true})
     .region("us-central1")
     .https.onCall(async (data, context) => {
       const db = getFirestore();
@@ -328,12 +361,11 @@ exports.ensureBusinessCompanyCode = functions
             "Business workspace is required.",
         );
       }
-      const {uid, ref, account} = await requireBusinessAdmin(
+      const {uid, ref, account, role} = await requireBusinessAdmin(
           db,
           businessId,
           context,
       );
-      const role = memberRole(account, uid, cleanEmail(context.auth.token.email));
       if (!new Set(["owner", "admin"]).has(role)) {
         throw new functions.https.HttpsError(
             "permission-denied",
@@ -423,7 +455,7 @@ exports.ensureBusinessCompanyCode = functions
       return {businessId, companyCode};
     });
 
-exports.lookupBusinessByCompanyCode = functions
+exports.lookupBusinessByCompanyCode = functions.runWith({enforceAppCheck: true})
     .region("us-central1")
     .https.onCall(async (data, context) => {
       requireAuth(context);
@@ -462,7 +494,7 @@ exports.lookupBusinessByCompanyCode = functions
       };
     });
 
-exports.requestBusinessAccess = functions
+exports.requestBusinessAccess = functions.runWith({enforceAppCheck: true})
     .region("us-central1")
     .https.onCall(async (data, context) => {
       const uid = requireAuth(context);
@@ -481,44 +513,23 @@ exports.requestBusinessAccess = functions
         throw new functions.https.HttpsError("not-found", "Company not found.");
       }
       const business = businessSnap.data();
-      const existingIds = business.teamMemberIds || [];
-      if (
-        existingIds.includes(uid) ||
-      (userEmail && existingIds.includes(userEmail))
-      ) {
+      const existingMembership = await db.collection("businessMemberships").doc(`${businessId}_${uid}`).get();
+      if (existingMembership.exists && !["removed", "rejected"].includes(clean(existingMembership.data().status))) {
         return {status: "already_member", businessId};
       }
       const joinPolicy = business.joinPolicy || "approval_required";
       if (joinPolicy === "immediate") {
-        const member = {
-          userId: uid,
-          email: userEmail,
-          name: userName,
-          role,
-          status: "active",
-          joinedAt: new Date(),
-        };
         await db.runTransaction(async (tx) => {
-          tx.set(
-              businessRef,
-              {
-                teamMemberIds: FieldValue.arrayUnion(
-                    uid,
-                    ...(userEmail ? [userEmail] : []),
-                ),
-                teamMembers: FieldValue.arrayUnion(member),
-                updatedAt: FieldValue.serverTimestamp(),
-              },
-              {merge: true},
-          );
           tx.set(
               db.collection("businessMemberships").doc(`${businessId}_${uid}`),
               {
                 businessId,
                 userId: uid,
                 email: userEmail,
+                name: userName,
                 role,
                 status: "active",
+                joinedAt: FieldValue.serverTimestamp(),
                 createdAt: FieldValue.serverTimestamp(),
                 updatedAt: FieldValue.serverTimestamp(),
               },
@@ -550,14 +561,11 @@ exports.requestBusinessAccess = functions
           },
           {merge: true},
       );
-      const managerRecipients = [...new Set([
-        business.ownerUid,
-        business.createdByUserId,
-        ...(Array.isArray(business.managerIds) ? business.managerIds : []),
-        ...(Array.isArray(business.teamMembers) ? business.teamMembers
-            .filter((member) => BUSINESS_ADMIN_ROLES.has(clean(member.role)) && clean(member.status || "active") === "active")
-            .map((member) => member.userId) : []),
-      ].map(clean).filter((id) => id && !id.includes("@")))];
+      const managerMemberships = await db.collection("businessMemberships")
+          .where("businessId", "==", businessId).where("status", "==", "active").limit(250).get();
+      const managerRecipients = [...new Set(managerMemberships.docs
+          .map((doc) => doc.data()).filter((member) => BUSINESS_ADMIN_ROLES.has(clean(member.role)))
+          .map((member) => clean(member.userId)).filter(Boolean))];
       await Promise.all(managerRecipients.map((recipientId) => communicationEngine.emitNotification({
         recipientId,
         recipientRole: "sender",
@@ -574,7 +582,7 @@ exports.requestBusinessAccess = functions
       return {status: "pending", businessId};
     });
 
-exports.reviewBusinessAccessRequest = functions
+exports.reviewBusinessAccessRequest = functions.runWith({enforceAppCheck: true})
     .region("us-central1")
     .https.onCall(async (data, context) => {
       const uid = requireAuth(context);
@@ -601,8 +609,8 @@ exports.reviewBusinessAccessRequest = functions
         );
       }
       const business = businessSnap.data();
-      const managers = business.managerIds || [];
-      if (business.createdByUserId !== uid && !managers.includes(uid)) {
+      const reviewerAuthority = await resolveBusinessAuthority(db, business, request.businessId, {uid, email: cleanEmail(context.auth.token.email)});
+      if (!reviewerAuthority.ownerOrAdmin) {
         throw new functions.https.HttpsError(
             "permission-denied",
             "Only Business owners or admins can review access requests.",
@@ -611,14 +619,6 @@ exports.reviewBusinessAccessRequest = functions
       const role = BUSINESS_ROLES.has(request.roleRequested) ?
       request.roleRequested :
       "member";
-      const member = {
-        userId: request.userId,
-        email: request.email || "",
-        name: request.name || "",
-        role,
-        status: approved ? "active" : "rejected",
-        joinedAt: approved ? new Date() : null,
-      };
       const batch = db.batch();
       batch.set(
           requestRef,
@@ -632,18 +632,6 @@ exports.reviewBusinessAccessRequest = functions
       );
       if (approved) {
         batch.set(
-            businessRef,
-            {
-              teamMemberIds: FieldValue.arrayUnion(
-                  request.userId,
-                  ...(request.email ? [request.email] : []),
-              ),
-              teamMembers: FieldValue.arrayUnion(member),
-              updatedAt: FieldValue.serverTimestamp(),
-            },
-            {merge: true},
-        );
-        batch.set(
             db
                 .collection("businessMemberships")
                 .doc(`${request.businessId}_${request.userId}`),
@@ -651,8 +639,10 @@ exports.reviewBusinessAccessRequest = functions
               businessId: request.businessId,
               userId: request.userId,
               email: request.email || "",
+              name: request.name || "",
               role,
               status: "active",
+              joinedAt: FieldValue.serverTimestamp(),
               createdAt: FieldValue.serverTimestamp(),
               updatedAt: FieldValue.serverTimestamp(),
             },
@@ -692,7 +682,48 @@ exports.reviewBusinessAccessRequest = functions
       };
     });
 
-exports.updateBusinessProfile = functions
+exports.listBusinessAccessRequests = functions.runWith({enforceAppCheck: true})
+    .region("us-central1")
+    .https.onCall(async (data, context) => {
+      const businessId = clean(data && data.businessId);
+      if (!businessId) {
+        throw new functions.https.HttpsError("invalid-argument", "Business workspace is required.");
+      }
+      const db = getFirestore();
+      await requireBusinessAction(db, businessId, context, "team.invite");
+      const cursor = data && data.cursor || {};
+      let query = db.collection("businessJoinRequests")
+          .where("businessId", "==", businessId)
+          .where("status", "==", "pending")
+          .orderBy("createdAt", "desc")
+          .orderBy(FieldPath.documentId(), "desc")
+          .limit(51);
+      if (Number.isFinite(Number(cursor.createdAtMillis)) && clean(cursor.id)) {
+        query = query.startAfter(new Date(Number(cursor.createdAtMillis)), clean(cursor.id));
+      }
+      const snapshot = await query.get();
+      const visible = snapshot.docs.slice(0, 50);
+      const requests = visible.map((doc) => {
+        const request = doc.data() || {};
+        return {
+          id: doc.id,
+          businessId,
+          name: clean(request.name, "Applicant"),
+          email: cleanEmail(request.email),
+          roleRequested: BUSINESS_ROLES.has(clean(request.roleRequested)) ? clean(request.roleRequested) : "member",
+          status: "pending",
+          createdAtMillis: request.createdAt && typeof request.createdAt.toMillis === "function" ? request.createdAt.toMillis() : null,
+        };
+      });
+      const last = requests[requests.length - 1];
+      return {
+        requests,
+        nextCursor: snapshot.size > 50 && last && last.createdAtMillis ?
+          {createdAtMillis: last.createdAtMillis, id: last.id} : null,
+      };
+    });
+
+exports.updateBusinessProfile = functions.runWith({enforceAppCheck: true})
     .region("us-central1")
     .https.onCall(async (data, context) => {
       const businessId = clean(data.businessId);
@@ -791,16 +822,11 @@ exports.inviteBusinessMember = functions.runWith({enforceAppCheck: true})
             "Custom roles may invite standard members only.",
         );
       }
-      const existing = Array.isArray(account.teamMembers) ?
-      account.teamMembers :
-      [];
-      const active = existing.filter(
-          (member) =>
-            cleanEmail(member.email || member.userId) !== email &&
-        clean(member.status) !== "removed",
-      );
+      const invitedUser = await db.collection("users").where("email", "==", email).limit(1).get();
+      const invitedUserId = invitedUser.empty ? null : invitedUser.docs[0].id;
       const invited = {
-        userId: email,
+        businessId,
+        userId: invitedUserId,
         email,
         name: clean(data.name),
         role,
@@ -808,29 +834,13 @@ exports.inviteBusinessMember = functions.runWith({enforceAppCheck: true})
         invitedAt: new Date(),
         invitedByUserId: uid,
       };
-      const members = [...active, invited];
-      const ids = members.flatMap((member) =>
-        [clean(member.userId), cleanEmail(member.email)].filter(Boolean),
-      );
-      const managers = members
-          .filter(
-              (member) =>
-                BUSINESS_ADMIN_ROLES.has(clean(member.role)) &&
-          clean(member.status) !== "removed",
-          )
-          .flatMap((member) =>
-            [clean(member.userId), cleanEmail(member.email)].filter(Boolean),
-          );
-      await ref.set(
-          {
-            teamMembers: members,
-            teamMemberIds: [...new Set(ids)],
-            managerIds: [...new Set(managers)],
-            updatedAt: FieldValue.serverTimestamp(),
-            updatedByUserId: uid,
-          },
-          {merge: true},
-      );
+      const membershipId = invitedUserId ? `${businessId}_${invitedUserId}` : `${businessId}_invite_${email}`;
+      await db.collection("businessMemberships").doc(membershipId).set({
+        ...invited,
+        createdAt: FieldValue.serverTimestamp(),
+        updatedAt: FieldValue.serverTimestamp(),
+      }, {merge: true});
+      await ref.set({updatedAt: FieldValue.serverTimestamp(), updatedByUserId: uid}, {merge: true});
       await db.collection("businessAuditLogs").add({
         businessId,
         actorUserId: uid,
@@ -842,7 +852,6 @@ exports.inviteBusinessMember = functions.runWith({enforceAppCheck: true})
         reason: clean(data.reason) || null,
         createdAt: FieldValue.serverTimestamp(),
       });
-      const invitedUser = await db.collection("users").where("email", "==", email).limit(1).get();
       if (!invitedUser.empty) {
         const recipientId = invitedUser.docs[0].id;
         await communicationEngine.emitNotification({
@@ -861,7 +870,7 @@ exports.inviteBusinessMember = functions.runWith({enforceAppCheck: true})
       return {status: "invited", businessId, email, role};
     });
 
-exports.updateBusinessMemberStatus = functions
+exports.updateBusinessMemberStatus = functions.runWith({enforceAppCheck: true})
     .region("us-central1")
     .https.onCall(async (data, context) => {
       requireAuth(context);
@@ -878,51 +887,31 @@ exports.updateBusinessMemberStatus = functions
         );
       }
       const db = getFirestore();
-      const {uid, ref, account} = await requireBusinessAdmin(
+      const {uid, ref} = await requireBusinessAdmin(
           db,
           businessId,
           context,
       );
-      const members = Array.isArray(account.teamMembers) ?
-      account.teamMembers :
-      [];
-      const index = members.findIndex(
-          (member) =>
-            clean(member.userId) === memberUserId ||
-        cleanEmail(member.email) === memberUserId,
-      );
-      if (index < 0) {
+      const membershipRef = db.collection("businessMemberships").doc(`${businessId}_${memberUserId}`);
+      const membershipSnap = await membershipRef.get();
+      if (!membershipSnap.exists) {
         throw new functions.https.HttpsError(
             "not-found",
             "Team member not found.",
         );
       }
-      if (members[index].role === "owner") {
+      if (clean(membershipSnap.data().role) === "owner") {
         throw new functions.https.HttpsError(
             "failed-precondition",
             "Owner status cannot be changed here.",
         );
       }
-      members[index] = {
-        ...members[index],
+      await membershipRef.set({
         status: nextStatus,
-        updatedAt: new Date(),
+        updatedAt: FieldValue.serverTimestamp(),
         updatedByUserId: uid,
-      };
-      const activeIds = members
-          .filter((item) => clean(item.status) !== "removed")
-          .flatMap((item) =>
-            [clean(item.userId), cleanEmail(item.email)].filter(Boolean),
-          );
-      await ref.set(
-          {
-            teamMembers: members,
-            teamMemberIds: [...new Set(activeIds)],
-            updatedAt: FieldValue.serverTimestamp(),
-            updatedByUserId: uid,
-          },
-          {merge: true},
-      );
+      }, {merge: true});
+      await ref.set({updatedAt: FieldValue.serverTimestamp(), updatedByUserId: uid}, {merge: true});
       await db.collection("businessAuditLogs").add({
         businessId,
         actorUserId: uid,
@@ -934,27 +923,28 @@ exports.updateBusinessMemberStatus = functions
       return {status: nextStatus, businessId, memberUserId};
     });
 
-exports.recordBusinessIrisMoment = functions
+exports.recordBusinessIrisMoment = functions.runWith({enforceAppCheck: true})
     .region("us-central1")
     .https.onCall(async (data, context) => {
       const businessId = clean(data.businessId);
       const moment =
       data.moment && typeof data.moment === "object" ? data.moment : {};
+      const requestId = clean(data.requestId);
+      if (!requestId || !/^[A-Za-z0-9_-]{16,80}$/.test(requestId)) {
+        throw new functions.https.HttpsError("invalid-argument", "A valid request identity is required.");
+      }
       const db = getFirestore();
       const {uid, ref} = await requireBusinessAdmin(db, businessId, context);
       const record = {
         ...moment,
         recordedByUserId: uid,
-        recordedAt: new Date(),
+        recordedAt: FieldValue.serverTimestamp(),
       };
-      await ref.set(
-          {
-            irisMoments: FieldValue.arrayUnion(record),
-            updatedAt: FieldValue.serverTimestamp(),
-            updatedByUserId: uid,
-          },
-          {merge: true},
-      );
+      await ref.collection("irisMoments").doc(requestId).create(record).catch((error) => {
+        if (error && (error.code === 6 || error.code === "already-exists")) return;
+        throw error;
+      });
+      await ref.set({updatedAt: FieldValue.serverTimestamp(), updatedByUserId: uid}, {merge: true});
       await db.collection("businessAuditLogs").add({
         businessId,
         actorUserId: uid,
@@ -964,7 +954,7 @@ exports.recordBusinessIrisMoment = functions
       return {status: "recorded", businessId};
     });
 
-exports.updateBusinessMemberRole = functions
+exports.updateBusinessMemberRole = functions.runWith({enforceAppCheck: true})
     .region("us-central1")
     .https.onCall(async (data, context) => {
       requireAuth(context);
@@ -982,61 +972,32 @@ exports.updateBusinessMemberRole = functions
         );
       }
       const db = getFirestore();
-      const {uid, ref, account} = await requireBusinessAdmin(
+      const {uid, ref} = await requireBusinessAdmin(
           db,
           businessId,
           context,
       );
-      const members = Array.isArray(account.teamMembers) ?
-      account.teamMembers :
-      [];
-      const index = members.findIndex((member) => member.userId === memberUserId);
-      if (index < 0) {
+      const membershipRef = db.collection("businessMemberships").doc(`${businessId}_${memberUserId}`);
+      const membershipSnap = await membershipRef.get();
+      if (!membershipSnap.exists) {
         throw new functions.https.HttpsError(
             "not-found",
             "Team member not found.",
         );
       }
-      if (members[index].role === "owner") {
+      if (clean(membershipSnap.data().role) === "owner") {
         throw new functions.https.HttpsError(
             "failed-precondition",
             "Owner role cannot be changed here.",
         );
       }
-      members[index] = {
-        ...members[index],
+      await membershipRef.set({
         role: nextRole,
-        updatedAt: new Date(),
-      };
-      const managerIds = members
-          .filter(
-              (member) =>
-                BUSINESS_ADMIN_ROLES.has(clean(member.role)) &&
-          member.status !== "removed",
-          )
-          .flatMap((member) =>
-            [member.userId, cleanEmail(member.email)].filter(Boolean),
-          );
-      await ref.set(
-          {
-            teamMembers: members,
-            managerIds,
-            updatedAt: FieldValue.serverTimestamp(),
-            updatedByUserId: uid,
-          },
-          {merge: true},
-      );
-      await db
-          .collection("businessMemberships")
-          .doc(`${businessId}_${memberUserId}`)
-          .set(
-              {
-                role: nextRole,
-                updatedAt: FieldValue.serverTimestamp(),
-                updatedByUserId: uid,
-              },
-              {merge: true},
-          );
+        customRoleId: FieldValue.delete(),
+        updatedAt: FieldValue.serverTimestamp(),
+        updatedByUserId: uid,
+      }, {merge: true});
+      await ref.set({updatedAt: FieldValue.serverTimestamp(), updatedByUserId: uid}, {merge: true});
       await db.collection("businessAuditLogs").add({
         businessId,
         actorUserId: uid,
@@ -1061,23 +1022,22 @@ exports.removeBusinessMember = functions.runWith({enforceAppCheck: true})
         );
       }
       const db = getFirestore();
-      const {uid, ref, account, authority} = await requireBusinessAction(
+      const {uid, ref, authority} = await requireBusinessAction(
           db,
           businessId,
           context,
           "team.remove",
       );
-      const members = Array.isArray(account.teamMembers) ?
-      account.teamMembers :
-      [];
-      const member = members.find((item) => item.userId === memberUserId);
-      if (!member) {
+      const membershipRef = db.collection("businessMemberships").doc(`${businessId}_${memberUserId}`);
+      const membershipSnap = await membershipRef.get();
+      if (!membershipSnap.exists) {
         throw new functions.https.HttpsError(
             "not-found",
             "Team member not found.",
         );
       }
-      if (member.role === "owner") {
+      const member = membershipSnap.data() || {};
+      if (clean(member.role) === "owner") {
         throw new functions.https.HttpsError(
             "failed-precondition",
             "Owner cannot be removed.",
@@ -1090,35 +1050,8 @@ exports.removeBusinessMember = functions.runWith({enforceAppCheck: true})
             "Custom roles cannot remove Business administrators.",
         );
       }
-      const remaining = members.map((item) =>
-      item.userId === memberUserId ?
-        {...item, status: "removed", removedAt: new Date()} :
-        item,
-      );
-      const activeIds = remaining
-          .filter((item) => item.status !== "removed" && item.status !== "rejected")
-          .flatMap((item) => [item.userId, cleanEmail(item.email)].filter(Boolean));
-      const managerIds = remaining
-          .filter(
-              (item) =>
-                BUSINESS_ADMIN_ROLES.has(clean(item.role)) &&
-          item.status !== "removed",
-          )
-          .flatMap((item) => [item.userId, cleanEmail(item.email)].filter(Boolean));
-      await ref.set(
-          {
-            teamMembers: remaining,
-            teamMemberIds: activeIds,
-            managerIds,
-            updatedAt: FieldValue.serverTimestamp(),
-            updatedByUserId: uid,
-          },
-          {merge: true},
-      );
-      await db
-          .collection("businessMemberships")
-          .doc(`${businessId}_${memberUserId}`)
-          .set(
+      await ref.set({updatedAt: FieldValue.serverTimestamp(), updatedByUserId: uid}, {merge: true});
+      await membershipRef.set(
               {
                 status: "removed",
                 removedAt: FieldValue.serverTimestamp(),

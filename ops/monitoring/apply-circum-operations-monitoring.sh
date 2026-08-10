@@ -104,6 +104,9 @@ ensure_metric "circum_critical_function_errors" "Errors from critical payment, d
   'resource.type=("cloud_function" OR "cloud_run_revision") severity>=ERROR (resource.labels.function_name=~".*(Payment|payment|Dispatch|dispatch|Delivery|delivery|Notification|notification|Message|message|Account|account).*" OR resource.labels.service_name=~".*(payment|dispatch|delivery|notification|message|account).*")'
 ensure_metric "circum_payment_processing_errors" "Stripe webhook, checkout finalisation and payment processing errors." \
   'resource.type=("cloud_function" OR "cloud_run_revision") severity>=ERROR (textPayload=~"(?i)(stripe|payment|checkout|webhook|finali)" OR jsonPayload.message=~"(?i)(stripe|payment|checkout|webhook|finali)")'
+
+ensure_metric "circum_vertical_workflow_errors" "Health+, Gift procurement and Business workflow failures." \
+  'resource.type=("cloud_function" OR "cloud_run_revision") severity>=ERROR (textPayload=~"(?i)(health.plus|gift procurement|business export|invoice reconciliation|custody|recurring)" OR jsonPayload.message=~"(?i)(health.plus|gift procurement|business export|invoice reconciliation|custody|recurring)")'
 ensure_metric "circum_notification_delivery_errors" "Notification persistence, push delivery and retry failures." \
   'resource.type=("cloud_function" OR "cloud_run_revision") severity>=ERROR (textPayload=~"(?i)(notification|push|fcm|message delivery)" OR jsonPayload.message=~"(?i)(notification|push|fcm|message delivery)")'
 ensure_metric "circum_delivery_watchdog_errors" "Delivery lifecycle watchdog execution failures." \
@@ -113,6 +116,7 @@ ensure_policy "CIRCUM Critical Function Error Spike" "logging.googleapis.com/use
 ensure_policy "CIRCUM Payment Processing Failure" "logging.googleapis.com/user/circum_payment_processing_errors" 0 "0s"
 ensure_policy "CIRCUM Notification Failure Growth" "logging.googleapis.com/user/circum_notification_delivery_errors" 9 "300s"
 ensure_policy "CIRCUM Delivery Watchdog Failure" "logging.googleapis.com/user/circum_delivery_watchdog_errors" 0 "0s"
+ensure_policy "CIRCUM Vertical Workflow Failure" "logging.googleapis.com/user/circum_vertical_workflow_errors" 0 "0s"
 ensure_latency_policy
 
 echo "CIRCUM monitoring configuration is present for project $PROJECT_ID."

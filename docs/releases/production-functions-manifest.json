@@ -6,10 +6,10 @@
   "releaseShaSemantics": "SELF means the Git commit containing this manifest; the immutable SHA is recorded in the release report and deployment provenance.",
   "entryPoint": "server/functions/index.js",
   "inventory": {
-    "productionFunctions": 278,
-    "applicationFunctions": 272,
+    "productionFunctions": 288,
+    "applicationFunctions": 282,
     "extensionFunctions": 6,
-    "sourceExports": 272
+    "sourceExports": 282
   },
   "applicationFunctions": [
     {
@@ -1078,6 +1078,17 @@
       "releaseSha": "SELF"
     },
     {
+      "name": "decideGiftSubstitution",
+      "source": "server/functions/gift-procurement.js#decideGiftSubstitution",
+      "runtime": "nodejs22",
+      "region": "us-central1",
+      "trigger": {
+        "type": "callable"
+      },
+      "state": "ACTIVE",
+      "releaseSha": "SELF"
+    },
+    {
       "name": "deleteBusinessCustomRole",
       "source": "server/functions/business-custom-roles.js#deleteBusinessCustomRole",
       "runtime": "nodejs22",
@@ -1220,6 +1231,17 @@
         "timeZone": null
       },
       "productionSourceHash": "7aa4c8fc023643033b3f90258e479a2be5a1c52b",
+      "state": "ACTIVE",
+      "releaseSha": "SELF"
+    },
+    {
+      "name": "exportBusinessRecords",
+      "source": "server/functions/business-operations.js#exportBusinessRecords",
+      "runtime": "nodejs22",
+      "region": "us-central1",
+      "trigger": {
+        "type": "callable"
+      },
       "state": "ACTIVE",
       "releaseSha": "SELF"
     },
@@ -1457,6 +1479,17 @@
       "releaseSha": "SELF"
     },
     {
+      "name": "getIrisHealthMetrics",
+      "source": "server/functions/iris.js#getIrisHealthMetrics",
+      "runtime": "nodejs22",
+      "region": "us-central1",
+      "trigger": {
+        "type": "callable"
+      },
+      "state": "ACTIVE",
+      "releaseSha": "SELF"
+    },
+    {
       "name": "getIrisReferenceImage",
       "source": "server/functions/admin-iris-reference-images.js#getIrisReferenceImage",
       "runtime": "nodejs22",
@@ -1465,17 +1498,6 @@
         "type": "callable"
       },
       "productionSourceHash": "4bc8ea2cc8513ef98866bc645c3b7cb35221c277",
-      "state": "ACTIVE",
-      "releaseSha": "SELF"
-    },
-    {
-      "name": "getIrisHealthMetrics",
-      "source": "server/functions/iris.js#getIrisHealthMetrics",
-      "runtime": "nodejs22",
-      "region": "us-central1",
-      "trigger": {
-        "type": "callable"
-      },
       "state": "ACTIVE",
       "releaseSha": "SELF"
     },
@@ -1500,6 +1522,17 @@
         "type": "callable"
       },
       "productionSourceHash": "470c1dc565cbba354f8ffddcd67f5c932b37c8cb",
+      "state": "ACTIVE",
+      "releaseSha": "SELF"
+    },
+    {
+      "name": "getRiderHealthPickup",
+      "source": "server/functions/health-plus.js#getRiderHealthPickup",
+      "runtime": "nodejs22",
+      "region": "us-central1",
+      "trigger": {
+        "type": "callable"
+      },
       "state": "ACTIVE",
       "releaseSha": "SELF"
     },
@@ -1648,6 +1681,28 @@
       "releaseSha": "SELF"
     },
     {
+      "name": "listBusinessAccessRequests",
+      "source": "server/functions/business-access.js#listBusinessAccessRequests",
+      "runtime": "nodejs22",
+      "region": "us-central1",
+      "trigger": {
+        "type": "callable"
+      },
+      "state": "ACTIVE",
+      "releaseSha": "SELF"
+    },
+    {
+      "name": "listBusinessAccounts",
+      "source": "server/functions/business-access.js#listBusinessAccounts",
+      "runtime": "nodejs22",
+      "region": "us-central1",
+      "trigger": {
+        "type": "callable"
+      },
+      "state": "ACTIVE",
+      "releaseSha": "SELF"
+    },
+    {
       "name": "listBusinessCustomRoles",
       "source": "server/functions/business-custom-roles.js#listBusinessCustomRoles",
       "runtime": "nodejs22",
@@ -1766,6 +1821,19 @@
       },
       "productionSourceHash": "7aa4c8fc023643033b3f90258e479a2be5a1c52b",
       "state": "ACTIVE",
+      "releaseSha": "SELF"
+    },
+    {
+      "name": "migrateBusinessMembershipAuthority",
+      "source": "server/functions/business-membership-migration.js#migrateBusinessMembershipAuthority",
+      "runtime": "nodejs22",
+      "region": "us-central1",
+      "trigger": {
+        "type": "schedule",
+        "schedule": "every 10 minutes",
+        "timeZone": null
+      },
+      "state": "CANDIDATE",
       "releaseSha": "SELF"
     },
     {
@@ -2251,6 +2319,20 @@
       "releaseSha": "SELF"
     },
     {
+      "name": "onVerticalDeliveryMovementWrite",
+      "source": "server/functions/movement-ledger.js#onVerticalDeliveryMovementWrite",
+      "runtime": "nodejs22",
+      "region": "us-central1",
+      "trigger": {
+        "type": "event",
+        "eventType": "providers/cloud.firestore/eventTypes/document.write",
+        "resource": "projects/circum-2797c/databases/(default)/documents/deliveryRequests/{deliveryId}",
+        "retry": false
+      },
+      "state": "CANDIDATE",
+      "releaseSha": "SELF"
+    },
+    {
       "name": "operationsHealthRepair",
       "source": "server/functions/operations-health-centre.js#operationsHealthRepair",
       "runtime": "nodejs22",
@@ -2309,6 +2391,17 @@
         "timeZone": null
       },
       "productionSourceHash": "7aa4c8fc023643033b3f90258e479a2be5a1c52b",
+      "state": "ACTIVE",
+      "releaseSha": "SELF"
+    },
+    {
+      "name": "proposeGiftSubstitution",
+      "source": "server/functions/gift-procurement.js#proposeGiftSubstitution",
+      "runtime": "nodejs22",
+      "region": "us-central1",
+      "trigger": {
+        "type": "callable"
+      },
       "state": "ACTIVE",
       "releaseSha": "SELF"
     },
@@ -2414,6 +2507,17 @@
         "type": "https"
       },
       "productionSourceHash": "4bc8ea2cc8513ef98866bc645c3b7cb35221c277",
+      "state": "ACTIVE",
+      "releaseSha": "SELF"
+    },
+    {
+      "name": "recordHealthPlusEvidence",
+      "source": "server/functions/health-plus-evidence.js#recordHealthPlusEvidence",
+      "runtime": "nodejs22",
+      "region": "us-central1",
+      "trigger": {
+        "type": "callable"
+      },
       "state": "ACTIVE",
       "releaseSha": "SELF"
     },
@@ -3251,6 +3355,17 @@
         "type": "callable"
       },
       "productionSourceHash": "f74f841bd968616a3b2304b57817263acb5e7006",
+      "state": "ACTIVE",
+      "releaseSha": "SELF"
+    },
+    {
+      "name": "updateGiftProcurement",
+      "source": "server/functions/gift-procurement.js#updateGiftProcurement",
+      "runtime": "nodejs22",
+      "region": "us-central1",
+      "trigger": {
+        "type": "callable"
+      },
       "state": "ACTIVE",
       "releaseSha": "SELF"
     },

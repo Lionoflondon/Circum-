@@ -8,10 +8,10 @@ test("Business owner and finance-capable roles may perform financial actions", (
   }
 });
 
-test("ordinary and legacy-only members cannot gain financial authority", () => {
+test("ordinary members cannot gain financial authority and legacy arrays grant no access", () => {
   assert.equal(businessAuthority({teamMembers: [{userId: "u", role: "member", status: "active"}]}, {uid: "u"}).financialAuthorized, false);
   const legacy = businessAuthority({teamMemberIds: ["u"]}, {uid: "u"});
-  assert.equal(legacy.member, true);
+  assert.equal(legacy.member, false);
   assert.equal(legacy.financialAuthorized, false);
 });
 

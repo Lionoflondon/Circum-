@@ -46,63 +46,30 @@ service cloud.firestore {
         : '';
     }
 
-    function isBusinessMemberRecord() {
-      return signedIn() && (
-        resource.data.ownerUid == request.auth.uid ||
-        resource.data.createdByUserId == request.auth.uid ||
-        (
-          resource.data.teamMemberIds is list &&
-          (
-            request.auth.uid in resource.data.teamMemberIds ||
-            authEmail() in resource.data.teamMemberIds
-          )
-        )
-      );
-    }
-
     function canReadBusinessId(businessId) {
       return signedIn() &&
         businessId is string &&
         businessId.size() > 0 &&
-        exists(/databases/$(database)/documents/businessAccounts/$(businessId)) &&
-        (
-          get(/databases/$(database)/documents/businessAccounts/$(businessId)).data.ownerUid == request.auth.uid ||
-          get(/databases/$(database)/documents/businessAccounts/$(businessId)).data.createdByUserId == request.auth.uid ||
-          (
-            get(/databases/$(database)/documents/businessAccounts/$(businessId)).data.teamMemberIds is list &&
-            (
-              request.auth.uid in get(/databases/$(database)/documents/businessAccounts/$(businessId)).data.teamMemberIds ||
-              authEmail() in get(/databases/$(database)/documents/businessAccounts/$(businessId)).data.teamMemberIds
-            )
-          )
-        );
+        exists(/databases/$(database)/documents/businessMemberships/$(businessId + '_' + request.auth.uid)) &&
+        get(/databases/$(database)/documents/businessMemberships/$(businessId + '_' + request.auth.uid)).data.status == 'active';
     }
 
     function canReadBusinessFinance(businessId) {
       return signedIn() &&
         businessId is string &&
         businessId.size() > 0 &&
-        exists(/databases/$(database)/documents/businessAccounts/$(businessId)) &&
-        (
-          get(/databases/$(database)/documents/businessAccounts/$(businessId)).data.ownerUid == request.auth.uid ||
-          get(/databases/$(database)/documents/businessAccounts/$(businessId)).data.createdByUserId == request.auth.uid ||
-          (
-            exists(/databases/$(database)/documents/businessMemberships/$(businessId + '_' + request.auth.uid)) &&
-            get(/databases/$(database)/documents/businessMemberships/$(businessId + '_' + request.auth.uid)).data.status == 'active' &&
-            get(/databases/$(database)/documents/businessMemberships/$(businessId + '_' + request.auth.uid)).data.role in ['owner', 'admin', 'finance']
-          )
-        );
+        exists(/databases/$(database)/documents/businessMemberships/$(businessId + '_' + request.auth.uid)) &&
+        get(/databases/$(database)/documents/businessMemberships/$(businessId + '_' + request.auth.uid)).data.status == 'active' &&
+        get(/databases/$(database)/documents/businessMemberships/$(businessId + '_' + request.auth.uid)).data.role in ['owner', 'admin', 'finance'];
     }
 
     function isBusinessOwner(businessId) {
       return signedIn() &&
         businessId is string &&
         businessId.size() > 0 &&
-        exists(/databases/$(database)/documents/businessAccounts/$(businessId)) &&
-        (
-          get(/databases/$(database)/documents/businessAccounts/$(businessId)).data.ownerUid == request.auth.uid ||
-          get(/databases/$(database)/documents/businessAccounts/$(businessId)).data.createdByUserId == request.auth.uid
-        );
+        exists(/databases/$(database)/documents/businessMemberships/$(businessId + '_' + request.auth.uid)) &&
+        get(/databases/$(database)/documents/businessMemberships/$(businessId + '_' + request.auth.uid)).data.status == 'active' &&
+        get(/databases/$(database)/documents/businessMemberships/$(businessId + '_' + request.auth.uid)).data.role == 'owner';
     }
 
     function changesLegendFields() {
@@ -695,7 +662,7 @@ service cloud.firestore {
     }
 
     match /businessAccounts/{businessId} {
-      allow read: if isAdmin() || isBusinessMemberRecord();
+      allow read: if isAdmin() || isBusinessOwner(businessId);
       allow write: if isAdmin();
     }
 
@@ -728,8 +695,7 @@ service cloud.firestore {
 
     match /businessJoinRequests/{requestId} {
       allow read: if isAdmin() ||
-        (signedIn() && resource.data.userId == request.auth.uid) ||
-        canReadBusinessId(resource.data.businessId);
+        (signedIn() && resource.data.userId == request.auth.uid);
       allow write: if isAdmin();
     }
 
@@ -775,15 +741,9 @@ service cloud.firestore {
     }
 
     match /giftPaymentDrafts/{giftDraftId} {
-      allow create: if signedIn() &&
-        request.resource.data.senderId == request.auth.uid &&
-        request.resource.data.status == 'draft' &&
-        request.resource.data.paymentStatus == 'payment_pending' &&
-        request.resource.data.grossBudget is number &&
-        request.resource.data.grossBudget >= 50;
       allow read: if isAdmin() ||
         (signedIn() && resource.data.senderId == request.auth.uid);
-      allow update, delete: if isAdmin();
+      allow create, update, delete: if isAdmin();
     }
 
     match /giftBrands/{brandId} {
@@ -792,20 +752,9 @@ service cloud.firestore {
     }
 
     match /giftCampaignParticipants/{participantId} {
-      allow create: if signedIn() &&
-        request.resource.data.userId == request.auth.uid;
       allow read: if isAdmin() ||
         (signedIn() && resource.data.userId == request.auth.uid);
-      allow update: if isAdmin() ||
-        (signedIn() && resource.data.userId == request.auth.uid &&
-          !request.resource.data.diff(resource.data).changedKeys().hasAny([
-            'matchedParticipantId',
-            'matchScore',
-            'matchReason',
-            'matchStatus',
-            'matchLockedAt',
-            'matchApprovedBy'
-          ]));
+      allow create, update: if isAdmin();
       allow delete: if hasRole('super_admin');
     }
 
@@ -1056,34 +1005,26 @@ service cloud.firestore {
     }
 
     match /prescriptionPickups/{pickupId} {
-      allow read, update, delete: if isAdmin() ||
+      allow read: if isAdmin() ||
         canReadBusinessId(resource.data.businessId) ||
         (signedIn() && resource.data.senderId == request.auth.uid) ||
-        (signedIn() && resource.data.userId == request.auth.uid) ||
-        isAssignedRider();
-      allow create: if isAdmin() ||
-        (signedIn() && request.resource.data.senderId == request.auth.uid) ||
-        (signedIn() && request.resource.data.userId == request.auth.uid);
+        (signedIn() && resource.data.userId == request.auth.uid);
+      allow create, update, delete: if isAdmin();
     }
 
     match /healthPlusProfiles/{profileId} {
-      allow read, update: if isAdmin() ||
+      allow read: if isAdmin() ||
         (signedIn() && resource.data.senderId == request.auth.uid) ||
         (signedIn() && resource.data.userId == request.auth.uid);
-      allow create: if isAdmin() ||
-        (signedIn() && request.resource.data.senderId == request.auth.uid) ||
-        (signedIn() && request.resource.data.userId == request.auth.uid);
+      allow create, update: if isAdmin();
       allow delete: if hasRole('super_admin');
     }
 
     match /recurringPickupSchedules/{scheduleId} {
-      allow read, update: if isAdmin() ||
+      allow read: if isAdmin() ||
         (signedIn() && resource.data.senderId == request.auth.uid) ||
         (signedIn() && resource.data.userId == request.auth.uid);
-      allow create: if isAdmin() ||
-        (signedIn() && request.resource.data.senderId == request.auth.uid) ||
-        (signedIn() && request.resource.data.userId == request.auth.uid);
-      allow delete: if isAdmin();
+      allow create, update, delete: if isAdmin();
     }
 
     match /healthPlusNotifications/{notificationId} {

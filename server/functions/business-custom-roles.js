@@ -84,12 +84,13 @@ exports.deleteBusinessCustomRole = functions.runWith({enforceAppCheck: true})
       const db = getFirestore();
       const businessId = text(data && data.businessId);
       const roleId = text(data && data.roleId, 120);
-      const {uid, account} = await ownerAccess(db, businessId, context);
+      const {uid} = await ownerAccess(db, businessId, context);
       const roleRef = db.collection("businessCustomRoles").doc(roleId);
       const role = await roleRef.get();
       if (!role.exists || text(role.data().businessId) !== businessId) throw new functions.https.HttpsError("not-found", "Custom role not found.");
-      const inUse = (Array.isArray(account.teamMembers) ? account.teamMembers : []).some((member) => text(member.customRoleId) === roleId && text(member.status) !== "removed");
-      if (inUse) throw new functions.https.HttpsError("failed-precondition", "Reassign members before removing this role.");
+      const inUse = await db.collection("businessMemberships")
+          .where("businessId", "==", businessId).where("customRoleId", "==", roleId).limit(1).get();
+      if (!inUse.empty) throw new functions.https.HttpsError("failed-precondition", "Reassign members before removing this role.");
       await roleRef.delete();
       await audit(db, {businessId, actorUserId: uid, action: "business_custom_role_removed", roleId, previousPermissions: normalizedPermissions(role.data().permissions), newPermissions: []});
       return {status: "removed", roleId};
@@ -101,22 +102,21 @@ exports.assignBusinessCustomRole = functions.runWith({enforceAppCheck: true})
       const businessId = text(data && data.businessId);
       const roleId = text(data && data.roleId, 120);
       const memberUserId = text(data && data.memberUserId, 180);
-      const {uid, accountRef, account, authority} = await roleAssignmentAccess(db, businessId, context);
+      const {uid, accountRef, authority} = await roleAssignmentAccess(db, businessId, context);
       const role = await db.collection("businessCustomRoles").doc(roleId).get();
       if (!role.exists || text(role.data().businessId) !== businessId) throw new functions.https.HttpsError("not-found", "Custom role not found.");
-      const members = Array.isArray(account.teamMembers) ? [...account.teamMembers] : [];
-      const index = members.findIndex((member) => text(member.userId) === memberUserId || text(member.email).toLowerCase() === memberUserId.toLowerCase());
-      if (index < 0) throw new functions.https.HttpsError("not-found", "Team member not found.");
-      if (["owner", "admin", "manager"].includes(text(members[index].role).toLowerCase())) throw new functions.https.HttpsError("failed-precondition", "Business administrators cannot be replaced with a custom role.");
+      const membershipRef = db.collection("businessMemberships").doc(`${businessId}_${memberUserId}`);
+      const membership = await membershipRef.get();
+      if (!membership.exists) throw new functions.https.HttpsError("not-found", "Team member not found.");
+      if (["owner", "admin", "manager"].includes(text(membership.data().role).toLowerCase())) throw new functions.https.HttpsError("failed-precondition", "Business administrators cannot be replaced with a custom role.");
       const targetPermissions = normalizedPermissions(role.data().permissions);
       if (authority.role === "custom" && targetPermissions.some((permission) => !authority.permissions.includes(permission))) {
         throw new functions.https.HttpsError("permission-denied", "A custom role cannot grant permissions it does not hold.");
       }
-      const previousRole = text(members[index].role);
-      const previousRoleId = text(members[index].customRoleId);
-      members[index] = {...members[index], role: "custom", customRoleId: roleId, updatedAt: new Date(), updatedByUserId: uid};
-      await accountRef.set({teamMembers: members, updatedAt: FieldValue.serverTimestamp(), updatedByUserId: uid}, {merge: true});
-      await db.collection("businessMemberships").doc(`${businessId}_${memberUserId}`).set({role: "custom", customRoleId: roleId, updatedAt: FieldValue.serverTimestamp(), updatedByUserId: uid}, {merge: true});
+      const previousRole = text(membership.data().role);
+      const previousRoleId = text(membership.data().customRoleId);
+      await accountRef.set({updatedAt: FieldValue.serverTimestamp(), updatedByUserId: uid}, {merge: true});
+      await membershipRef.set({role: "custom", customRoleId: roleId, updatedAt: FieldValue.serverTimestamp(), updatedByUserId: uid}, {merge: true});
       await audit(db, {businessId, actorUserId: uid, targetUserId: memberUserId, action: "business_custom_role_assigned", previousRoleId: previousRoleId || null, newRoleId: roleId, previousState: {role: previousRole, customRoleId: previousRoleId || null}, newState: {role: "custom", customRoleId: roleId}, reason: text(data && data.reason, 300) || null});
       return {status: "assigned", businessId, memberUserId, roleId};
     });

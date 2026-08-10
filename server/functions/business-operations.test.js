@@ -4,7 +4,7 @@ const test = require("node:test");
 const assert = require("node:assert/strict");
 const fs = require("node:fs");
 const {businessAuthority} = require("./business-authority");
-const {sanitizeDelivery, sanitizeInvoice} = require("./business-operations")._private;
+const {sanitizeDelivery, sanitizeInvoice, csvCell} = require("./business-operations")._private;
 
 function doc(id, data) {
   return {id, data: () => data};
@@ -71,6 +71,16 @@ test("Business invoice projection omits provider payment identifiers", () => {
   assert.equal("stripeCustomerId" in result, false);
 });
 
+test("Business invoice history uses deterministic bounded cursor pagination", () => {
+  const source = fs.readFileSync("business-operations.js", "utf8");
+  const client = fs.readFileSync("../../lib/app/business/business_repository.dart", "utf8");
+  assert.match(source, /function invoicePageQuery/);
+  assert.match(source, /\.orderBy\("createdAt", "desc"\)[\s\S]*?\.orderBy\(FieldPath\.documentId\(\), "desc"\)/);
+  assert.match(source, /invoiceCursor/);
+  assert.match(source, /nextInvoiceCursor/);
+  assert.match(client, /loadInvoicePage/);
+});
+
 test("Business workspace client no longer reads operational or finance collections directly", () => {
   const source = fs.readFileSync("../../lib/app/business/business_repository.dart", "utf8");
   assert.match(source, /httpsCallable\('getBusinessOperationsWorkspace'\)/);
@@ -85,4 +95,21 @@ test("Business timeline is server-authorized, bounded, and client read-only", ()
   assert.match(source, /getBusinessDeliveryTimeline/);
   assert.match(source, /collection\("timeline"\)\.orderBy\("timestamp", "desc"\)\.limit\(100\)/);
   assert.match(rules, /match \/timeline\/\{eventId\}[\s\S]*?allow read: if isAdmin\(\);/);
+});
+
+test("Business exports are server-authorized, bounded, redacted and auditable", () => {
+  const source = fs.readFileSync("business-operations.js", "utf8");
+  assert.match(source, /exportBusinessRecords = functions\.runWith\(\{enforceAppCheck: true\}\)/);
+  assert.match(source, /\.limit\(500\)\.get\(\)/);
+  assert.match(source, /businessAuditLogs/);
+  assert.doesNotMatch(source, /stripePaymentIntentId.*csv|stripeCustomerId.*csv/);
+  assert.equal(csvCell("A \"quoted\" value"), "\"A \"\"quoted\"\" value\"");
+});
+
+test("Business account discovery uses a role-aware callable", () => {
+  const source = fs.readFileSync("../../lib/app/business/business_repository.dart", "utf8");
+  assert.match(source, /httpsCallable\('listBusinessAccounts'\)/);
+  assert.match(source, /httpsCallable\('listBusinessAccessRequests'\)/);
+  assert.doesNotMatch(source, /collection\('businessAccounts'\)/);
+  assert.doesNotMatch(source, /collection\('businessJoinRequests'\)/);
 });

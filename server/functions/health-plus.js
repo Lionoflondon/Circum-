@@ -506,6 +506,16 @@ exports.createHealthPlusBooking = functions.runWith({
         pharmacyName,
         pharmacyAddress,
         deliveryAddress,
+        pharmacyAddressCanonical,
+        deliveryAddressCanonical,
+        authoritativeRouteFacts,
+        authoritativePricing: authoritative,
+        roadCharges,
+        pricingInputs: {
+          distanceMiles: authoritative.distanceMiles,
+          medicationWeightKg: authoritative.medicationWeightKg,
+        },
+        medicationWeightKg: authoritative.medicationWeightKg,
         prescriptionType,
         subscriptionPlan,
         healthPlusPlan: subscriptionPlan,
@@ -603,7 +613,7 @@ exports.createHealthPlusBooking = functions.runWith({
   return result;
 });
 
-exports.updateSenderHealthPlusBooking = functions.https.onCall(async (data, context) => {
+exports.updateSenderHealthPlusBooking = functions.runWith({enforceAppCheck: true}).https.onCall(async (data, context) => {
   const sender = requireCallableSender(context);
   const action = text(data.action);
   const db = getFirestore();
@@ -677,6 +687,56 @@ exports.updateSenderHealthPlusBooking = functions.https.onCall(async (data, cont
   });
 
   return result;
+});
+
+exports.getRiderHealthPickup = functions.runWith({enforceAppCheck: true}).https.onCall(async (data, context) => {
+  const riderId = context.auth && context.auth.uid;
+  if (!riderId) {
+    throw new functions.https.HttpsError("unauthenticated", "Sign in with your CIRCUM Rider account.");
+  }
+  const pickupId = text(data && data.pickupId);
+  if (!pickupId) {
+    throw new functions.https.HttpsError("invalid-argument", "Health+ pickup is required.");
+  }
+  const db = getFirestore();
+  const deliveryId = `health_${pickupId}`;
+  const [pickupSnap, riderSnap, deliverySnap] = await Promise.all([
+    db.collection("prescriptionPickups").doc(pickupId).get(),
+    db.collection("riderProfiles").doc(riderId).get(),
+    db.collection("deliveryRequests").doc(deliveryId).get(),
+  ]);
+  if (!pickupSnap.exists || !riderSnap.exists) {
+    throw new functions.https.HttpsError("not-found", "Health+ pickup is unavailable.");
+  }
+  const pickup = pickupSnap.data() || {};
+  const rider = riderSnap.data() || {};
+  const delivery = deliverySnap.exists ? deliverySnap.data() || {} : {};
+  const assignedRiderId = text(delivery.assignedRiderId || delivery.riderId ||
+    delivery.assignedDriverId || pickup.assignedDriverId);
+  if (assignedRiderId !== riderId ||
+      !(rider.healthDispatchEligible === true || rider.healthPlusEligible === true || rider.healthCertified === true)) {
+    throw new functions.https.HttpsError("permission-denied", "This Health+ pickup is not assigned to you.");
+  }
+  return {
+    pickupId,
+    deliveryId,
+    status: text(pickup.status),
+    pharmacyName: text(pickup.pharmacyName),
+    pickupAddress: pickup.pharmacyAddressCanonical || {formattedAddress: text(pickup.pharmacyAddress)},
+    dropoffAddress: pickup.deliveryAddressCanonical || {formattedAddress: text(pickup.deliveryAddress)},
+    handling: {
+      fragile: pickup.fragile === true,
+      coldChainRequired: pickup.coldChainRequired === true,
+      temperatureSensitive: pickup.temperatureSensitive === true,
+      vanguardRequired: pickup.vanguardRequired === true || pickup.requiresVanguard === true,
+    },
+    verification: {
+      collectionPinRequired: pickup.collectionPinRequired === true,
+      deliveryPinRequired: pickup.deliveryPinRequired === true,
+      evidenceRequired: pickup.evidenceRequired === true,
+    },
+    instructions: text(pickup.deliveryInstructions || pickup.operationalInstructions),
+  };
 });
 
 exports.createHealthPlusCheckoutSession = functions.https.onRequest(async (req, res) => {

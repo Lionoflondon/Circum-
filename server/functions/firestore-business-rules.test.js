@@ -16,8 +16,8 @@ test.beforeEach(async () => {
   await env.clearFirestore();
   await env.withSecurityRulesDisabled(async (context) => {
     const db = context.firestore();
-    await setDoc(doc(db, "businessAccounts", "business-1"), {ownerUid: "owner", createdByUserId: "owner", teamMemberIds: ["owner", "ops", "finance", "viewer"]});
-    for (const [uid, role] of [["ops", "operations"], ["finance", "finance"], ["viewer", "viewer"]]) {
+    await setDoc(doc(db, "businessAccounts", "business-1"), {ownerUid: "owner", createdByUserId: "owner"});
+    for (const [uid, role] of [["owner", "owner"], ["ops", "operations"], ["finance", "finance"], ["viewer", "viewer"]]) {
       await setDoc(doc(db, "businessMemberships", `business-1_${uid}`), {businessId: "business-1", userId: uid, role, status: "active"});
     }
     await setDoc(doc(db, "businessInvoices", "invoice-1"), {businessId: "business-1", total: 100});

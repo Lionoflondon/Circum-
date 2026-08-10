@@ -40,24 +40,18 @@ function canonicalMemberRole(account = {}, uid, email) {
     identityMatches(item || {}, uid, email) &&
     !["removed", "rejected", "suspended"].includes(normalized(item.status)));
   if (member) return normalized(member.role || "member");
-  if (normalized(account.ownerUid) === normalized(uid) ||
-      normalized(account.createdByUserId) === normalized(uid)) return "owner";
   return "";
 }
 
 function businessAuthority(account = {}, {uid, email, customPermissions = []} = {}) {
   const role = canonicalMemberRole(account, uid, email);
-  const legacyIds = Array.isArray(account.teamMemberIds) ? account.teamMemberIds : [];
-  const legacyMember = legacyIds.some((value) =>
-    normalized(value) === normalized(uid) ||
-    Boolean(email && normalized(value) === normalized(email)));
-  const member = Boolean(role) || legacyMember;
+  const member = Boolean(role);
   const permissions = normalizedPermissions(customPermissions);
   const custom = Boolean(role === "custom" && permissions.length);
   const has = (permission) => permissions.includes(permission);
   return {
     member,
-    role: role || (legacyMember ? "legacy_member" : ""),
+    role,
     permissions,
     deliveryAuthorized: Boolean((role && OPERATIONS_ROLES.has(role)) ||
       (custom && ["deliveries.view", "deliveries.status", "operations.active_deliveries"].some(has))),
@@ -65,7 +59,7 @@ function businessAuthority(account = {}, {uid, email, customPermissions = []} = 
     financialAuthorized: Boolean((role && FINANCIAL_ROLES.has(role)) ||
       (custom && ["finance.invoices.view", "finance.payments.view"].some(has))),
     ownerOrAdmin: Boolean(role && ["owner", "admin", "manager"].includes(role)),
-    legacyOnly: !role && legacyMember,
+    legacyOnly: false,
   };
 }
 
@@ -76,7 +70,20 @@ function canonicalMember(account = {}, uid, email) {
 }
 
 async function resolveBusinessAuthority(db, account = {}, businessId, identity = {}) {
-  const member = canonicalMember(account, identity.uid, identity.email);
+  const uid = normalized(identity.uid);
+  let membership = null;
+  if (uid) {
+    const snap = await db.collection("businessMemberships").doc(`${businessId}_${uid}`).get();
+    if (snap.exists && normalized(snap.data().businessId) === normalized(businessId)) membership = snap.data();
+  }
+  if (!membership && identity.email) {
+    const emailSnap = await db.collection("businessMemberships")
+        .where("businessId", "==", businessId)
+        .where("email", "==", normalized(identity.email))
+        .limit(1).get();
+    if (!emailSnap.empty) membership = emailSnap.docs[0].data();
+  }
+  const member = membership && !["removed", "rejected", "suspended"].includes(normalized(membership.status)) ? membership : null;
   let customPermissions = [];
   if (member && normalized(member.role) === "custom" && `${member.customRoleId || ""}`.trim()) {
     const role = await db.collection("businessCustomRoles").doc(`${member.customRoleId}`.trim()).get();
@@ -84,7 +91,7 @@ async function resolveBusinessAuthority(db, account = {}, businessId, identity =
       customPermissions = role.data().permissions;
     }
   }
-  return businessAuthority(account, {...identity, customPermissions});
+  return businessAuthority({...account, teamMembers: member ? [member] : []}, {...identity, customPermissions});
 }
 
 function hasBusinessPermission(authority, permission, systemRoles = []) {

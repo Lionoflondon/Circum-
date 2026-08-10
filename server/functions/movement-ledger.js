@@ -31,7 +31,8 @@ function giftReady(data) {
 function healthReady(data) {
   const status = normalizedStatus(data.status);
   return data.collectionDetailsReady === true || data.readyForCollection === true ||
-    ["ready_for_collection", "pending_assignment", "requested"].includes(status);
+    ["ready_for_collection", "pending_assignment", "requested", "assigned",
+      "arrived_at_pickup", "collected", "out_for_delivery", "delivered"].includes(status);
 }
 
 function giftDeliveryStatus(data) {
@@ -48,8 +49,10 @@ function healthDeliveryStatus(data) {
   const status = normalizedStatus(data.status);
   if (isCompleted(status)) return "completed";
   if (status === "cancelled") return "cancelled";
-  if (["collected", "picked_up"].includes(status)) return "picked_up";
-  if (["in_transit", "travelling", "out_for_delivery"].includes(status)) return "in_transit";
+  if (status === "assigned") return "accepted";
+  if (["arrived_at_pickup", "awaiting_pharmacy_collection"].includes(status)) return "arrived_at_pickup";
+  if (["collected", "picked_up"].includes(status)) return "collected";
+  if (["in_transit", "travelling", "out_for_delivery"].includes(status)) return "navigating_to_dropoff";
   if (healthReady(data)) return "requested";
   return "scheduled";
 }
@@ -97,6 +100,15 @@ function giftMovement(giftId, data) {
 
 function healthMovement(pickupId, data, payment = {}) {
   const ready = healthReady(data);
+  const assignedRiderId = data.assignedRiderId || data.assignedDriverId || data.driverId || data.riderId || null;
+  const pickupCanonical = data.pharmacyAddressCanonical || {};
+  const dropoffCanonical = data.deliveryAddressCanonical || {};
+  const handlingRequirements = [
+    data.fragile === true ? "fragile" : null,
+    data.coldChainRequired === true ? "cold_chain" : null,
+    data.temperatureSensitive === true ? "temperature_sensitive" : null,
+    data.vanguardRequired === true || data.requiresVanguard === true ? "vanguard" : null,
+  ].filter(Boolean);
   return {
     id: `health_${pickupId}`,
     requestId: `health_${pickupId}`,
@@ -107,19 +119,22 @@ function healthMovement(pickupId, data, payment = {}) {
     healthPlusPickupId: pickupId,
     profileId: data.profileId || payment.profileId || null,
     status: healthDeliveryStatus(data),
-    matchingStatus: ready ? "available" : "held",
+    matchingStatus: assignedRiderId ? "accepted" : ready ? "available" : "held",
     readyForCollection: ready,
     customerId: data.senderId || data.userId || payment.userId || null,
     userId: data.senderId || data.userId || payment.userId || null,
     senderId: data.senderId || data.userId || payment.userId || null,
     senderEmail: data.email || payment.email || payment.userEmail || null,
-    assignedRiderId: data.assignedRiderId || data.driverId || data.riderId || null,
-    riderId: data.assignedRiderId || data.driverId || data.riderId || null,
+    assignedRiderId,
+    assignedDriverId: assignedRiderId,
+    riderId: assignedRiderId,
     preferredRiderId: data.preferredRiderId || null,
     preferredRiderName: data.preferredRiderName || null,
     preferredRiderPriority: Boolean(data.preferredRiderId),
     pickupAddress: data.pharmacyAddress || data.pickupAddress || "",
     dropoffAddress: data.deliveryAddress || data.dropoffAddress || "",
+    pickupPosition: pickupCanonical.coordinates || null,
+    dropoffPosition: dropoffCanonical.coordinates || null,
     scheduledAt: data.scheduledAt || data.nextPickupAt || data.scheduledPickupDate || null,
     scheduledPickupDate: data.scheduledPickupDate || data.preferredDay || null,
     scheduledPickupWindow: data.scheduledPickupWindow || data.preferredTime || null,
@@ -133,6 +148,13 @@ function healthMovement(pickupId, data, payment = {}) {
     displayTitle: "Prescription Collection",
     packageDescription: "Confidential sealed Health+ collection",
     healthPlusEnabled: true,
+    isHealthPlus: true,
+    requiredVehicle: data.requiredVehicle || data.vehicleRequirement || "",
+    handlingRequirements,
+    collectionPinRequired: data.collectionPinRequired === true,
+    deliveryPinRequired: data.deliveryPinRequired === true,
+    evidenceRequired: data.evidenceRequired === true,
+    custodyRequired: true,
     isVanguard: true,
     trustPoints: 6,
     planType: data.planType || data.subscriptionPlan || "core",
@@ -198,6 +220,44 @@ exports.onHealthPaymentMovementWrite = functions.firestore.document("healthPlusP
   return projectHealth(getFirestore(), context.params.pickupId, pickup.data() || {});
 });
 
+function healthSourceStatus(deliveryStatus) {
+  const status = normalizedStatus(deliveryStatus);
+  if (["accepted", "navigating_to_pickup"].includes(status)) return "assigned";
+  if (["arrived_at_pickup", "pickup_verification", "pickup_verified", "waiting"].includes(status)) return "arrived_at_pickup";
+  if (status === "collected") return "collected";
+  if (["navigating_to_dropoff", "arrived_at_dropoff", "pin_required"].includes(status)) return "out_for_delivery";
+  if (["completed", "delivered"].includes(status)) return "delivered";
+  if (["cancelled", "failed"].includes(status)) return status;
+  return "";
+}
+
+async function syncHealthSourceFromDelivery(db, deliveryId, delivery) {
+  if (normalizedStatus(delivery.sourceModule) !== "health_plus") return null;
+  const pickupId = `${delivery.healthPlusPickupId || delivery.healthPlusOrderId || ""}`.trim();
+  const status = healthSourceStatus(delivery.deliveryStage || delivery.deliveryStatus || delivery.status);
+  if (!pickupId || !status) return null;
+  const ref = db.collection("prescriptionPickups").doc(pickupId);
+  const snap = await ref.get();
+  if (!snap.exists) return null;
+  const pickup = snap.data() || {};
+  const riderId = delivery.assignedRiderId || delivery.riderId || delivery.assignedDriverId || null;
+  if (normalizedStatus(pickup.status) === status && `${pickup.assignedDriverId || ""}` === `${riderId || ""}`) return null;
+  await ref.set({
+    status,
+    assignedDriverId: riderId,
+    riderId,
+    canonicalDeliveryId: deliveryId,
+    lifecycleProjectedAt: FieldValue.serverTimestamp(),
+    updatedAt: FieldValue.serverTimestamp(),
+  }, {merge: true});
+  return pickupId;
+}
+
+exports.onVerticalDeliveryMovementWrite = functions.firestore.document("deliveryRequests/{deliveryId}").onWrite(async (change, context) => {
+  if (!change.after.exists) return null;
+  return syncHealthSourceFromDelivery(getFirestore(), context.params.deliveryId, change.after.data() || {});
+});
+
 module.exports.SERVICE_TYPES = SERVICE_TYPES;
 module.exports.giftMovement = giftMovement;
 module.exports.healthMovement = healthMovement;
@@ -205,3 +265,5 @@ module.exports.giftReady = giftReady;
 module.exports.healthReady = healthReady;
 module.exports.projectGift = projectGift;
 module.exports.projectHealth = projectHealth;
+module.exports.healthSourceStatus = healthSourceStatus;
+module.exports.syncHealthSourceFromDelivery = syncHealthSourceFromDelivery;

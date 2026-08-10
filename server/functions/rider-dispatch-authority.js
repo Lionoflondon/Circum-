@@ -79,14 +79,18 @@ function presenceEligibilityDecision({riderId, presence = {}, now = Date.now()})
 }
 
 function serviceName(delivery = {}) {
+  const source = lower(delivery.sourceModule || delivery.serviceType || delivery.productType)
+      .replace(/[^a-z0-9]+/g, "_");
+  if (delivery.isHealthPlus === true || delivery.healthPlusEnabled === true || source.startsWith("health")) {
+    return "health_plus";
+  }
+  if (delivery.isGift === true || source.startsWith("gift")) return "gifts";
   const iris = delivery.irisPrivate || delivery.iris || {};
   return lower(
       iris.workflow ||
       iris.recommendation && iris.recommendation.workflow ||
       delivery.workflow ||
-      delivery.sourceModule ||
-      delivery.serviceType ||
-      delivery.productType ||
+      source ||
       "standard",
   ).replace(/[^a-z0-9]+/g, "_");
 }
@@ -305,6 +309,20 @@ function riderAssignedJobProjection(deliveryId, delivery = {}, {completed = fals
       deliveryPinVerified: delivery.deliveryPinVerified === true,
     } : null,
   };
+
+  if (projection.isHealthPlus) {
+    const requirements = Array.isArray(delivery.handlingRequirements) ?
+      delivery.handlingRequirements.map(text).filter(Boolean).slice(0, 10) : [];
+    operational.healthPlus = {
+      pickupId: text(delivery.healthPlusPickupId || delivery.healthPlusOrderId),
+      readyForCollection: delivery.readyForCollection === true,
+      handlingRequirements: requirements,
+      custodyRequired: delivery.custodyRequired !== false,
+      collectionPinRequired: delivery.collectionPinRequired === true,
+      deliveryPinRequired: delivery.deliveryPinRequired === true,
+      evidenceRequired: delivery.evidenceRequired === true,
+    };
+  }
 
   if (!completed) {
     const sender = safePerson(

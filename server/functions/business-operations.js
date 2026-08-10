@@ -23,6 +23,10 @@ function money(value) {
   return Number.isFinite(parsed) ? Math.round(parsed * 100) / 100 : 0;
 }
 
+function csvCell(value) {
+  return `"${`${value == null ? "" : value}`.replace(/"/g, "\"\"")}"`;
+}
+
 function address(value) {
   if (value && typeof value === "object") {
     for (const key of ["formattedAddress", "addressLine1", "address", "description"]) {
@@ -89,6 +93,20 @@ function pageQuery(db, businessId, data = {}) {
       .orderBy("createdAt", "desc")
       .orderBy(FieldPath.documentId(), "desc");
   const cursor = data.cursor || {};
+  if (Number.isFinite(Number(cursor.createdAtMillis)) && text(cursor.id)) {
+    query = query.startAfter(new Date(Number(cursor.createdAtMillis)), text(cursor.id));
+  }
+  return {query: query.limit(pageSize + 1), pageSize};
+}
+
+function invoicePageQuery(db, businessId, data = {}) {
+  const requested = Math.floor(Number(data.invoicePageSize || PAGE_SIZE));
+  const pageSize = Math.max(1, Math.min(MAX_PAGE_SIZE, requested));
+  let query = db.collection("businessInvoices")
+      .where("businessId", "==", businessId)
+      .orderBy("createdAt", "desc")
+      .orderBy(FieldPath.documentId(), "desc");
+  const cursor = data.invoiceCursor || {};
   if (Number.isFinite(Number(cursor.createdAtMillis)) && text(cursor.id)) {
     query = query.startAfter(new Date(Number(cursor.createdAtMillis)), text(cursor.id));
   }
@@ -180,11 +198,13 @@ exports.getBusinessOperationsWorkspace = functions.runWith({enforceAppCheck: tru
       }
       if (authority.reportingAuthorized) response.summary = await reportSummary(db, businessId);
       if (mayViewInvoices) {
-        const invoices = await db.collection("businessInvoices")
-            .where("businessId", "==", businessId)
-            .orderBy("createdAt", "desc")
-            .orderBy(FieldPath.documentId(), "desc").limit(50).get();
-        response.invoices = invoices.docs.map(sanitizeInvoice);
+        const {query, pageSize} = invoicePageQuery(db, businessId, data || {});
+        const snapshot = await query.get();
+        const visible = snapshot.docs.slice(0, pageSize);
+        response.invoices = visible.map(sanitizeInvoice);
+        const last = response.invoices[response.invoices.length - 1];
+        response.nextInvoiceCursor = snapshot.size > pageSize && last && last.createdAtMillis ?
+          {createdAtMillis: last.createdAtMillis, id: visible[visible.length - 1].id} : null;
       }
       if (mayUseRoth) {
         const wallet = await db.collection("business_wallets").doc(businessId).get();
@@ -211,4 +231,47 @@ exports.getBusinessDeliveryTimeline = functions.runWith({enforceAppCheck: true})
       })};
     });
 
-exports._private = {sanitizeDelivery, sanitizeInvoice, pageQuery, reportSummary};
+exports.exportBusinessRecords = functions.runWith({enforceAppCheck: true})
+    .region("us-central1").https.onCall(async (data, context) => {
+      const businessId = text(data && data.businessId);
+      const kind = text(data && data.kind).toLowerCase();
+      if (!businessId || !["deliveries", "invoices"].includes(kind)) {
+        throw new functions.https.HttpsError("invalid-argument", "Choose a supported Business export.");
+      }
+      const db = getFirestore();
+      const {authority} = await authorizedAccount(db, businessId, context);
+      if (kind === "deliveries" && !authority.reportingAuthorized) {
+        throw new functions.https.HttpsError("permission-denied", "Reporting access is required.");
+      }
+      if (kind === "invoices" && !authority.financialAuthorized) {
+        throw new functions.https.HttpsError("permission-denied", "Finance access is required.");
+      }
+      const collection = kind === "deliveries" ? "deliveryRequests" : "businessInvoices";
+      const snapshot = await db.collection(collection)
+          .where("businessId", "==", businessId)
+          .orderBy("createdAt", "desc")
+          .orderBy(FieldPath.documentId(), "desc")
+          .limit(500).get();
+      const rows = kind === "deliveries" ? [
+        ["delivery_reference", "created_at", "status", "pickup", "dropoff", "service", "vehicle", "amount_gbp"],
+        ...snapshot.docs.map((doc) => {
+          const item = sanitizeDelivery(doc);
+          return [item.id, item.createdAtMillis ? new Date(item.createdAtMillis).toISOString() : "", item.status, item.pickup, item.dropoff, item.serviceLevel, item.vehicle, item.amount.toFixed(2)];
+        }),
+      ] : [
+        ["invoice_number", "created_at", "status", "total_gbp", "balance_due_gbp", "roth_applied_gbp", "delivery_count", "payment_reference"],
+        ...snapshot.docs.map((doc) => {
+          const item = sanitizeInvoice(doc);
+          return [item.invoiceNumber, item.createdAtMillis ? new Date(item.createdAtMillis).toISOString() : "", item.status, item.total.toFixed(2), item.balanceDue.toFixed(2), item.rothApplied.toFixed(2), item.deliveryCount, item.paymentReference];
+        }),
+      ];
+      const csv = rows.map((row) => row.map(csvCell).join(",")).join("\r\n");
+      await db.collection("businessAuditLogs").add({
+        businessId, actorUserId: context.auth.uid, action: `business_${kind}_exported`,
+        rowCount: snapshot.size, capped: snapshot.size === 500,
+        createdAt: require("firebase-admin/firestore").FieldValue.serverTimestamp(),
+      });
+      return {kind, csv, rowCount: snapshot.size, capped: snapshot.size === 500};
+    });
+
+exports._private = {sanitizeDelivery, sanitizeInvoice, pageQuery, invoicePageQuery, reportSummary, csvCell};

@@ -90,7 +90,7 @@ test("Health+ checkout finalizes partial Roth only after Stripe confirms", () =>
 
 test("Health+ booking and Sender actions are backend-authoritative callables", () => {
   assert.match(source, /exports\.createHealthPlusBooking\s*=\s*functions\.runWith\([\s\S]*?enforceAppCheck: true[\s\S]*?\)\.https\.onCall/);
-  assert.match(source, /exports\.updateSenderHealthPlusBooking\s*=\s*functions\.https\.onCall/);
+  assert.match(source, /exports\.updateSenderHealthPlusBooking\s*=\s*functions\.runWith\(\{enforceAppCheck: true\}\)\.https\.onCall/);
   assert.match(indexSource, /exports\.createHealthPlusBooking\s*=\s*healthPlus\.createHealthPlusBooking/);
   assert.match(indexSource, /exports\.updateSenderHealthPlusBooking\s*=\s*healthPlus\.updateSenderHealthPlusBooking/);
   assert.match(source, /db\.runTransaction/);
@@ -126,4 +126,15 @@ test("Website Health+ UI does not write authoritative Health+ records directly",
   assert.doesNotMatch(websiteSource, /collection\('healthPlusPayments'\)/);
   assert.doesNotMatch(websiteSource, /collection\('healthPlusNotifications'\)/);
   assert.doesNotMatch(websiteSource, /collection\('healthPlusUsageEvents'\)/);
+});
+
+test("Health+ Rider projection joins the canonical delivery assignment", () => {
+  const start = source.indexOf("exports.getRiderHealthPickup");
+  const end = source.indexOf("exports.createHealthPlusCheckoutSession", start);
+  const projection = source.slice(start, end);
+  assert.match(projection, /deliveryRequests"\)\.doc\(deliveryId\)/);
+  assert.match(projection, /assignedRiderId \|\| delivery\.riderId/);
+  assert.match(projection, /healthDispatchEligible === true/);
+  assert.doesNotMatch(projection, /prescriptionNotes/);
+  assert.doesNotMatch(projection, /diagnosis/);
 });

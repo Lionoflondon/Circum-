@@ -43,6 +43,7 @@ const acceptRideRequests = require("./accept-ride-requests");
 const sendMessage = require("./send-message");
 const sendRiderUpdate = require("./send-rider-update");
 const healthPlus = require("./health-plus");
+const healthPlusEvidence = require("./health-plus-evidence");
 const iris = require("./iris");
 const irisPhotoAnalysis = require("./iris-photo-analysis");
 const deliveryAdjustments = require("./delivery-adjustments");
@@ -68,12 +69,14 @@ const riderConnect = require("./rider-connect");
 const senderTrust = require("./sender-trust");
 const referrals = require("./referrals");
 const movementLedger = require("./movement-ledger");
+const businessMembershipMigration = require("./business-membership-migration");
 const movementTimeline = require("./movement-timeline");
 const deliveryEventProjections = require("./delivery-event-projections");
 const deliveryWatchdog = require("./delivery-watchdog");
 const businessMutations = require("./business-mutations");
 const marketplaceIntelligence = require("./marketplace-intelligence");
 const giftStoryAutomation = require("./gift-story-automation");
+const giftProcurement = require("./gift-procurement");
 const riderPresence = require("./rider-presence");
 const freeAddressSearch = require("./free-address-search");
 const senderBooking = require("./sender-booking");
@@ -127,6 +130,8 @@ exports.createHealthPlusBooking = healthPlus.createHealthPlusBooking;
 exports.updateSenderHealthPlusBooking =
   healthPlus.updateSenderHealthPlusBooking;
 exports.updateHealthPlusPickupStatus = healthPlus.updateHealthPlusPickupStatus;
+exports.getRiderHealthPickup = healthPlus.getRiderHealthPickup;
+exports.recordHealthPlusEvidence = healthPlusEvidence.recordHealthPlusEvidence;
 exports.analyseIris = iris.analyseIris;
 exports.getIrisHealthMetrics = iris.getIrisHealthMetrics;
 exports.analyseParcelPhotoForIris = irisPhotoAnalysis.analyseParcelPhotoForIris;
@@ -152,6 +157,9 @@ exports.escalateUnclaimedDeliveries =
 exports.awardLegendOnCompletion = legends.awardLegendOnCompletion;
 exports.createGiftPayment = giftsPayment.createGiftPayment(stripe);
 exports.finalizeGiftPayment = giftsPayment.finalizeGiftPayment(stripe);
+exports.updateGiftProcurement = giftProcurement.updateGiftProcurement;
+exports.proposeGiftSubstitution = giftProcurement.proposeGiftSubstitution;
+exports.decideGiftSubstitution = giftProcurement.decideGiftSubstitution;
 exports.cleanupExpiredGiftVoiceDrafts =
   giftsPayment.cleanupExpiredGiftVoiceDrafts;
 exports.onGiftRequestVoiceMediaDeleted =
@@ -249,6 +257,8 @@ exports.adminCreateBusinessInvoice =
 exports.createBusinessInvoiceCheckout =
   businessPayments.createBusinessInvoiceCheckout(stripe);
 exports.createBusinessAccount = businessAccess.createBusinessAccount;
+exports.listBusinessAccounts = businessAccess.listBusinessAccounts;
+exports.listBusinessAccessRequests = businessAccess.listBusinessAccessRequests;
 exports.ensureBusinessCompanyCode = businessAccess.ensureBusinessCompanyCode;
 exports.lookupBusinessByCompanyCode =
   businessAccess.lookupBusinessByCompanyCode;
@@ -265,6 +275,7 @@ exports.getBusinessOperationsWorkspace =
   businessOperations.getBusinessOperationsWorkspace;
 exports.getBusinessDeliveryTimeline =
   businessOperations.getBusinessDeliveryTimeline;
+exports.exportBusinessRecords = businessOperations.exportBusinessRecords;
 exports.saveBusinessCustomRole = businessCustomRoles.saveBusinessCustomRole;
 exports.deleteBusinessCustomRole = businessCustomRoles.deleteBusinessCustomRole;
 exports.assignBusinessCustomRole = businessCustomRoles.assignBusinessCustomRole;
@@ -371,6 +382,10 @@ exports.onGiftMovementWrite = movementLedger.onGiftMovementWrite;
 exports.onHealthMovementWrite = movementLedger.onHealthMovementWrite;
 exports.onHealthPaymentMovementWrite =
   movementLedger.onHealthPaymentMovementWrite;
+exports.onVerticalDeliveryMovementWrite =
+  movementLedger.onVerticalDeliveryMovementWrite;
+exports.migrateBusinessMembershipAuthority =
+  businessMembershipMigration.migrateBusinessMembershipAuthority;
 exports.onMovementTimelineWrite = movementTimeline.onMovementTimelineWrite;
 exports.onNotificationOperationalWrite = deliveryEventProjections.onNotificationOperationalWrite;
 exports.onChatOperationalCreate = deliveryEventProjections.onChatOperationalCreate;

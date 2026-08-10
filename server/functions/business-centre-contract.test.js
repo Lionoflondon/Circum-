@@ -129,11 +129,14 @@ test("Business signup creates one canonical pending company for Admin review", (
   assert.doesNotMatch(businessAccessSource, /status: "approved"[\s\S]{0,800}joinPolicy: "approval_required"/);
 });
 
-test("Business owners can read their own workspace but cannot write it directly", () => {
+test("Business owners retain direct read while members use role-aware projections", () => {
   assert.match(rulesSource, /function canReadBusinessId\(businessId\)/);
   assert.match(rulesSource, /match \/businessAccounts\/\{businessId\}/);
-  assert.match(rulesSource, /allow read: if isAdmin\(\) \|\| isBusinessMemberRecord\(\);/);
+  assert.match(rulesSource, /allow read: if isAdmin\(\) \|\| isBusinessOwner\(businessId\);/);
   assert.match(rulesSource, /allow write: if isAdmin\(\);/);
+  assert.match(businessAccessSource, /exports\.listBusinessAccounts = functions\.runWith\(\{enforceAppCheck: true\}\)/);
+  assert.match(businessAccessSource, /exports\.listBusinessAccessRequests = functions\.runWith\(\{enforceAppCheck: true\}\)/);
+  assert.match(businessAccessSource, /\.orderBy\("createdAt", "desc"\)[\s\S]*?\.limit\(51\)/);
   assert.match(rulesSource, /match \/businessMemberships\/\{membershipId\}/);
   assert.match(rulesSource, /match \/businessInvoices\/\{invoiceId\}/);
   assert.match(rulesSource, /match \/businessAuditLogs\/\{logId\}/);

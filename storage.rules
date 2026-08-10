@@ -53,11 +53,26 @@ service firebase.storage {
       return firestore.get(/databases/(default)/documents/deliveryRequests/$(deliveryId)).data;
     }
 
+    function healthPickup(pickupId) {
+      return firestore.get(/databases/(default)/documents/prescriptionPickups/$(pickupId)).data;
+    }
+
+    function isAssignedHealthRider(pickupId) {
+      return signedIn() &&
+        ((firestore.exists(/databases/(default)/documents/deliveryRequests/$('health_' + pickupId)) &&
+          (delivery('health_' + pickupId).assignedRiderId == request.auth.uid ||
+           delivery('health_' + pickupId).riderId == request.auth.uid ||
+           delivery('health_' + pickupId).assignedDriverId == request.auth.uid)) ||
+         (firestore.exists(/databases/(default)/documents/prescriptionPickups/$(pickupId)) &&
+          healthPickup(pickupId).assignedDriverId == request.auth.uid));
+    }
+
     function isAssignedDeliveryRider(deliveryId) {
       return signedIn() &&
         firestore.exists(/databases/(default)/documents/deliveryRequests/$(deliveryId)) &&
         (delivery(deliveryId).riderId == request.auth.uid ||
          delivery(deliveryId).driverId == request.auth.uid ||
+         delivery(deliveryId).assignedRiderId == request.auth.uid ||
          delivery(deliveryId).assignedDriverId == request.auth.uid);
     }
 
@@ -76,6 +91,16 @@ service firebase.storage {
       allow create: if isAssignedDeliveryRider(deliveryId) && isSafeUpload() &&
         request.resource.metadata.deliveryId == deliveryId &&
         request.resource.metadata.evidenceType == 'weight_discrepancy';
+      allow update, delete: if false;
+    }
+
+    match /health_delivery_evidence/{pickupId}/{evidenceType}/{fileName} {
+      allow read: if isAdmin() || isAssignedHealthRider(pickupId);
+      allow create: if isAssignedHealthRider(pickupId) && isSafeUpload() &&
+        evidenceType.matches('pickup|custody|handover|verification|exception') &&
+        request.resource.metadata.pickupId == pickupId &&
+        request.resource.metadata.uploadedBy == request.auth.uid &&
+        request.resource.metadata.evidenceType == evidenceType;
       allow update, delete: if false;
     }
 

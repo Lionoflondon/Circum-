@@ -215,3 +215,34 @@ test("assigned and completed Rider jobs remain operational without payment metad
     }
   }
 });
+
+test("assigned Health+ job exposes bounded custody policy without clinical data", () => {
+  const active = riderAssignedJobProjection("health-health-1", {
+    ...delivery,
+    sourceModule: "health_plus",
+    serviceType: "HEALTH_PLUS",
+    healthPlusPickupId: "health-1",
+    status: "accepted",
+    readyForCollection: true,
+    handlingRequirements: ["cold_chain", "vanguard"],
+    custodyRequired: true,
+    collectionPinRequired: true,
+    deliveryPinRequired: true,
+    evidenceRequired: true,
+    prescriptionNotes: "private clinical note",
+    providerFinancialData: {account: "private"},
+  });
+  assert.equal(active.isHealthPlus, true);
+  assert.deepEqual(active.healthPlus, {
+    pickupId: "health-1",
+    readyForCollection: true,
+    handlingRequirements: ["cold_chain", "vanguard"],
+    custodyRequired: true,
+    collectionPinRequired: true,
+    deliveryPinRequired: true,
+    evidenceRequired: true,
+  });
+  const serialized = JSON.stringify(active);
+  assert.equal(serialized.includes("private clinical note"), false);
+  assert.equal(serialized.includes("providerFinancialData"), false);
+});

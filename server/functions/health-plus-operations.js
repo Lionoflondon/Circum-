@@ -1,8 +1,10 @@
 /* eslint-disable max-len */
 /* eslint-disable require-jsdoc */
 const functions = require("firebase-functions/v1");
-const {getFirestore, FieldValue, Timestamp} = require("firebase-admin/firestore");
-const {buildCustodyEvent, buildHealthPlusPlanFields} = require("./health-plus-core");
+const {getFirestore, FieldPath, FieldValue, Timestamp} = require("firebase-admin/firestore");
+const {buildCustodyEvent, buildHealthPlusPlanFields, calculateAuthoritativeHealthPlusPricing} = require("./health-plus-core");
+const {getAuthoritativeRouteFacts} = require("./route-authority");
+const {evaluateRoadChargePolicy} = require("./road-charge-policy");
 
 const STATUS_EVENTS = {
   scheduled: ["booking_created", "Your Health+ collection has been scheduled.", "scheduled"],
@@ -111,6 +113,22 @@ async function queueHealthAdminNotification(db, pickup, type, title, body) {
   }, {merge: true});
 }
 
+async function recordHealthIncident(db, pickup, incidentType, severity) {
+  const incidentId = `health_${pickup.id}_${incidentType}`;
+  await db.collection("operationalIncidents").doc(incidentId).set({
+    incidentId,
+    healthPickupId: pickup.id,
+    deliveryId: pickup.deliveryId || null,
+    incidentType,
+    severity,
+    status: "OPEN",
+    currentDeliveryState: pickup.status || "scheduled",
+    assignedRider: pickup.assignedDriverId || null,
+    detectedAt: FieldValue.serverTimestamp(),
+    source: "health_plus_operations",
+  }, {merge: true});
+}
+
 exports.onHealthPlusPickupOperationalWrite = functions.firestore
     .document("prescriptionPickups/{pickupId}")
     .onWrite(async (change, context) => {
@@ -184,30 +202,41 @@ exports.processHealthPlusReminders = functions.pubsub
       const db = getFirestore();
       const now = new Date();
       const horizon = new Date(now.getTime() + 7 * DAY_MS);
-      const snapshot = await db.collection("prescriptionPickups")
-          .where("status", "in", ["scheduled", "assigned", "awaiting_pharmacy_collection"])
-          .limit(300)
-          .get();
-      await Promise.all(snapshot.docs.map(async (doc) => {
-        const pickup = {...doc.data(), id: doc.id};
-        const scheduledAt = asDate(pickup.scheduledAt || pickup.preferredPickupAt || pickup.scheduledPickupDate);
-        if (!scheduledAt || scheduledAt > horizon) return;
-        const msUntil = scheduledAt.getTime() - now.getTime();
-        if (msUntil <= DAY_MS && msUntil > 23 * HOUR_MS) {
-          await queueHealthNotification(db, pickup, "reminder_24h", "Health+ collection tomorrow", `Reminder: Your Health+ collection is scheduled for tomorrow at ${pickup.preferredTime || "the arranged time"}.`);
-          await queueHealthAdminNotification(db, pickup, "pickup_tomorrow", "Health+ pickup tomorrow", `${pickupLabel(pickup)} is scheduled tomorrow at ${pickup.preferredTime || "the arranged time"}.`);
-        }
-        if (msUntil <= 2 * HOUR_MS && msUntil > 90 * 60 * 1000) {
-          await queueHealthNotification(db, pickup, "reminder_2h", "Health+ collection due soon", "Your Health+ collection is scheduled in approximately 2 hours.");
-        }
-        if (msUntil <= DAY_MS && !pickup.assignedDriverId) {
-          await doc.ref.set({riskStatus: "no_rider_assigned", updatedAt: FieldValue.serverTimestamp()}, {merge: true});
-        }
-        if (msUntil < 0 && !["collected", "out_for_delivery", "delivered"].includes(pickup.status)) {
-          await doc.ref.set({riskStatus: "missed_medication_risk", status: "escalated", escalatedAt: FieldValue.serverTimestamp(), updatedAt: FieldValue.serverTimestamp()}, {merge: true});
-        }
-      }));
-      return null;
+      let processed = 0;
+      let cursor = null;
+      do {
+        let query = db.collection("prescriptionPickups")
+            .where("status", "in", ["scheduled", "assigned", "awaiting_pharmacy_collection"])
+            .orderBy(FieldPath.documentId())
+            .limit(300);
+        if (cursor) query = query.startAfter(cursor);
+        const snapshot = await query.get();
+        if (snapshot.empty) break;
+        await Promise.all(snapshot.docs.map(async (doc) => {
+          const pickup = {...doc.data(), id: doc.id};
+          const scheduledAt = asDate(pickup.scheduledAt || pickup.preferredPickupAt || pickup.scheduledPickupDate);
+          if (!scheduledAt || scheduledAt > horizon) return;
+          const msUntil = scheduledAt.getTime() - now.getTime();
+          if (msUntil <= DAY_MS && msUntil > 23 * HOUR_MS) {
+            await queueHealthNotification(db, pickup, "reminder_24h", "Health+ collection tomorrow", `Reminder: Your Health+ collection is scheduled for tomorrow at ${pickup.preferredTime || "the arranged time"}.`);
+            await queueHealthAdminNotification(db, pickup, "pickup_tomorrow", "Health+ pickup tomorrow", `${pickupLabel(pickup)} is scheduled tomorrow at ${pickup.preferredTime || "the arranged time"}.`);
+          }
+          if (msUntil <= 2 * HOUR_MS && msUntil > 90 * 60 * 1000) {
+            await queueHealthNotification(db, pickup, "reminder_2h", "Health+ collection due soon", "Your Health+ collection is scheduled in approximately 2 hours.");
+          }
+          if (msUntil <= DAY_MS && !pickup.assignedDriverId) {
+            await doc.ref.set({riskStatus: "no_rider_assigned", updatedAt: FieldValue.serverTimestamp()}, {merge: true});
+            await recordHealthIncident(db, pickup, "health_no_rider_assigned", "AMBER");
+          }
+          if (msUntil < 0 && !["collected", "out_for_delivery", "delivered"].includes(pickup.status)) {
+            await doc.ref.set({riskStatus: "missed_medication_risk", status: "escalated", escalatedAt: FieldValue.serverTimestamp(), updatedAt: FieldValue.serverTimestamp()}, {merge: true});
+            await recordHealthIncident(db, pickup, "health_missed_pickup", "RED");
+          }
+        }));
+        processed += snapshot.size;
+        cursor = snapshot.docs[snapshot.docs.length - 1];
+      } while (cursor);
+      return {processed};
     });
 
 exports.resetHealthPlusMonthlyUsage = functions.pubsub
@@ -232,7 +261,7 @@ exports.resetHealthPlusMonthlyUsage = functions.pubsub
           batch.set(doc.ref, {
             usedDeliveriesThisCycle: 0,
             remainingDeliveriesThisCycle: fields.includedDeliveries,
-            renewalDate: Timestamp.fromDate(new Date(Date.now() + 31 * 24 * 60 * 60 * 1000)),
+            renewalDate: Timestamp.fromDate(nextCalendarMonth(asDate(data.renewalDate) || new Date())),
             updatedAt: FieldValue.serverTimestamp(),
           }, {merge: true});
         });
@@ -249,21 +278,85 @@ function nextOccurrence(date, frequency) {
     frequency === "every_2_weeks" ? 14 :
       frequency === "every_28_days" ? 28 : 0;
   if (days) next.setDate(next.getDate() + days);
-  else next.setMonth(next.getMonth() + 1);
+  else return nextCalendarMonth(next);
   return next;
 }
 
-exports.generateHealthPlusRecurringBookings = functions.pubsub
+function nextCalendarMonth(date) {
+  const next = new Date(date);
+  const originalDay = next.getDate();
+  next.setDate(1);
+  next.setMonth(next.getMonth() + 1);
+  const lastDay = new Date(next.getFullYear(), next.getMonth() + 1, 0).getDate();
+  next.setDate(Math.min(originalDay, lastDay));
+  return next;
+}
+
+function canonicalCoordinates(address) {
+  const source = address && address.coordinates;
+  const latitude = Number(source && (source.latitude ?? source.lat));
+  const longitude = Number(source && (source.longitude ?? source.lng ?? source.lon));
+  return Number.isFinite(latitude) && Number.isFinite(longitude) ? {latitude, longitude} : null;
+}
+
+async function revalidateRecurringSchedule(schedule, occurrence, dependencies = {}) {
+  const origin = canonicalCoordinates(schedule.pharmacyAddressCanonical);
+  const destination = canonicalCoordinates(schedule.deliveryAddressCanonical);
+  const weight = Number(schedule.medicationWeightKg || schedule.pricingInputs && schedule.pricingInputs.medicationWeightKg);
+  const iris = schedule.iris || schedule.irisSnapshot || {};
+  const compliance = `${iris.compliance && iris.compliance.status || iris.status || "allowed"}`.toLowerCase();
+  const serviceability = `${iris.serviceability && iris.serviceability.status || schedule.serviceabilityStatus || "serviceable"}`.toLowerCase();
+  if (!origin || !destination || !Number.isFinite(weight) || weight <= 0) {
+    return {eligible: false, reason: "canonical_recurring_facts_missing"};
+  }
+  if (compliance !== "allowed" || serviceability !== "serviceable") {
+    return {eligible: false, reason: "health_serviceability_review_required"};
+  }
+  try {
+    const routeFacts = await (dependencies.getRouteFacts || getAuthoritativeRouteFacts)({origin, destination, at: occurrence});
+    const roadCharges = (dependencies.evaluateRoadCharges || evaluateRoadChargePolicy)({
+      routeFacts,
+      vehicle: "unknown",
+      product: "health_plus",
+      vehicleProfile: schedule.authoritativeVehicleProfile || {},
+      at: occurrence,
+    });
+    const pricing = (dependencies.calculatePricing || calculateAuthoritativeHealthPlusPricing)({
+      distanceMiles: routeFacts.distanceMiles,
+      medicationWeightKg: weight,
+      routeFacts,
+      roadCharges,
+      roadChargeCustomerAmount: roadCharges.customerAmount,
+      frequency: schedule.frequency,
+      subscriptionPlan: schedule.planType || schedule.subscriptionPlan || "core",
+    });
+    return {eligible: true, routeFacts, roadCharges, pricing, weight};
+  } catch (error) {
+    return {eligible: false, reason: error && error.code || "health_revalidation_failed"};
+  }
+}
+
+exports.generateHealthPlusRecurringBookings = functions.runWith({
+  secrets: ["GOOGLE_ROUTES_API_KEY"],
+  vpcConnector: "circum-fn-conn-v2",
+  vpcConnectorEgressSettings: "ALL_TRAFFIC",
+}).pubsub
     .schedule("every day 01:30")
     .timeZone("Europe/London")
     .onRun(async () => {
       const db = getFirestore();
       const horizon = new Date(Date.now() + 7 * DAY_MS);
-      const schedules = await db.collection("recurringPickupSchedules")
-          .where("status", "==", "active")
-          .limit(300)
-          .get();
-      await Promise.all(schedules.docs.map(async (scheduleDoc) => {
+      let processed = 0;
+      let cursor = null;
+      do {
+        let query = db.collection("recurringPickupSchedules")
+            .where("status", "==", "active")
+            .orderBy(FieldPath.documentId())
+            .limit(300);
+        if (cursor) query = query.startAfter(cursor);
+        const schedules = await query.get();
+        if (schedules.empty) break;
+        await Promise.all(schedules.docs.map(async (scheduleDoc) => {
         const schedule = scheduleDoc.data();
         if (schedule.paused === true) return;
         const occurrence = asDate(schedule.nextPickupAt);
@@ -271,6 +364,23 @@ exports.generateHealthPlusRecurringBookings = functions.pubsub
         const dateKey = occurrence.toISOString().slice(0, 10).replaceAll("-", "");
         const pickupId = `HPP-${scheduleDoc.id}-${dateKey}`;
         const pickupRef = db.collection("prescriptionPickups").doc(pickupId);
+        const revalidated = await revalidateRecurringSchedule(schedule, occurrence);
+        if (!revalidated.eligible) {
+          const reviewId = `${scheduleDoc.id}_${dateKey}`;
+          await db.collection("healthRecurringGenerationReviews").doc(reviewId).set({
+            reviewId,
+            scheduleId: scheduleDoc.id,
+            senderId: schedule.senderId || schedule.userId || null,
+            occurrenceAt: Timestamp.fromDate(occurrence),
+            reason: revalidated.reason,
+            status: "OPEN",
+            createdAt: FieldValue.serverTimestamp(),
+            updatedAt: FieldValue.serverTimestamp(),
+          }, {merge: true});
+          await recordHealthIncident(db, {...schedule, id: scheduleDoc.id}, "health_recurring_generation_blocked", "RED");
+          await queueHealthNotification(db, {...schedule, id: scheduleDoc.id}, "recurring_generation_review", "Health+ schedule needs review", "We could not safely create your next Health+ collection. Circum Operations is reviewing it.");
+          return;
+        }
         await db.runTransaction(async (transaction) => {
           const existing = await transaction.get(pickupRef);
           if (existing.exists) return;
@@ -286,6 +396,15 @@ exports.generateHealthPlusRecurringBookings = functions.pubsub
             pharmacyName: schedule.pharmacyName || null,
             pharmacyAddress: schedule.pharmacyAddress || "",
             deliveryAddress: schedule.deliveryAddress || "",
+            pharmacyAddressCanonical: schedule.pharmacyAddressCanonical || null,
+            deliveryAddressCanonical: schedule.deliveryAddressCanonical || null,
+            authoritativeRouteFacts: revalidated.routeFacts,
+            authoritativePricing: revalidated.pricing,
+            roadCharges: revalidated.roadCharges,
+            pricingInputs: {distanceMiles: revalidated.routeFacts.distanceMiles, medicationWeightKg: revalidated.weight},
+            medicationWeightKg: revalidated.weight,
+            recurringAuthorityRevalidatedAt: FieldValue.serverTimestamp(),
+            recurringAuthorityVersion: "health_recurring_revalidation_v1",
             prescriptionType: schedule.prescriptionType || null,
             prescriptionNotes: schedule.prescriptionNotes || null,
             planType: schedule.planType || schedule.subscriptionPlan || "core",
@@ -310,6 +429,11 @@ exports.generateHealthPlusRecurringBookings = functions.pubsub
             updatedAt: FieldValue.serverTimestamp(),
           }, {merge: true});
         });
-      }));
-      return null;
+        }));
+        processed += schedules.size;
+        cursor = schedules.docs[schedules.docs.length - 1];
+      } while (cursor);
+      return {processed};
     });
+
+exports._private = {asDate, nextOccurrence, nextCalendarMonth, canonicalCoordinates, revalidateRecurringSchedule};

@@ -25,6 +25,11 @@ test.before(async () => {
       assignedDriverId: "rider-1",
       status: "arrived_at_pickup",
     });
+    await setDoc(doc(context.firestore(), "prescriptionPickups/health-1"), {
+      senderId: "sender-1",
+      assignedDriverId: "rider-1",
+      status: "assigned",
+    });
   });
 });
 
@@ -68,4 +73,18 @@ test("legacy native Rider path remains assigned-Rider-only and metadata-bound", 
   const sender = environment.authenticatedContext("sender-1", {role: "sender", adminRole: "sender", roles: []}).storage();
   await assertFails(getBytes(ref(sender, path)));
   assert.ok(true);
+});
+
+test("Health evidence is assigned-Rider-only, typed and immutable", async () => {
+  const riderStorage = environment.authenticatedContext("rider-1", {role: "rider", adminRole: "rider", roles: []}).storage();
+  const healthMetadata = {
+    contentType: "image/jpeg",
+    customMetadata: {pickupId: "health-1", uploadedBy: "rider-1", evidenceType: "custody"},
+  };
+  const path = "health_delivery_evidence/health-1/custody/photo.jpg";
+  await assertSucceeds(uploadBytes(ref(riderStorage, path), bytes(), healthMetadata));
+  await assertSucceeds(getBytes(ref(riderStorage, path)));
+  await assertFails(deleteObject(ref(riderStorage, path)));
+  const wrongRider = environment.authenticatedContext("rider-2", {role: "rider", adminRole: "rider", roles: []}).storage();
+  await assertFails(uploadBytes(ref(wrongRider, "health_delivery_evidence/health-1/custody/wrong.jpg"), bytes(), {...healthMetadata, customMetadata: {...healthMetadata.customMetadata, uploadedBy: "rider-2"}}));
 });

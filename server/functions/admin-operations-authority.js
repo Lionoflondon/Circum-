@@ -441,7 +441,6 @@ function stringList(value) {
 function giftRequestEditorPatch(data, actor) {
   const patch = {};
   const stringFields = [
-    "status",
     "manualGiftPlan",
     "adminDecision",
     "internalNotes",
@@ -469,10 +468,6 @@ function giftRequestEditorPatch(data, actor) {
   if (Object.prototype.hasOwnProperty.call(data, "procurementEstimatedCost")) {
     const value = Number(data.procurementEstimatedCost);
     patch.procurementEstimatedCost = Number.isFinite(value) ? value : null;
-  }
-  if (Object.prototype.hasOwnProperty.call(data, "procurementActualCost")) {
-    const value = Number(data.procurementActualCost);
-    patch.procurementActualCost = Number.isFinite(value) ? value : null;
   }
   for (const field of ["giftStoryEnabled", "giftStoryApproved", "allowCircumSocialUse", "allowPublicPosting", "allowBrandTagging"]) {
     if (Object.prototype.hasOwnProperty.call(data, field)) patch[field] = data[field] === true;
@@ -728,43 +723,36 @@ exports.adminUpdateBusinessMember = functions.https.onCall(async (data, context)
   const actor = await resolveActor(context);
   requireOperations(actor, "Business Operations Admin access is required.");
   const businessId = clean(data.businessId);
-  const index = Number(data.memberIndex);
-  if (!businessId || !Number.isInteger(index) || index < 0) {
+  const memberUserId = clean(data.memberUserId);
+  if (!businessId || !memberUserId) {
     throw new functions.https.HttpsError("invalid-argument", "Business member is required.");
   }
   const db = getFirestore();
-  const ref = db.collection("businessAccounts").doc(businessId);
+  const ref = db.collection("businessMemberships").doc(`${businessId}_${memberUserId}`);
   let beforeMember = {};
   let afterMember = {};
   await db.runTransaction(async (tx) => {
     const snap = await tx.get(ref);
     if (!snap.exists) throw new functions.https.HttpsError("not-found", "Business account was not found.");
-    const account = snap.data() || {};
-    const members = Array.isArray(account.teamMembers) ? account.teamMembers.map((member) => ({...member})) : [];
-    if (index >= members.length) throw new functions.https.HttpsError("not-found", "Business member was not found.");
-    beforeMember = {...members[index]};
+    const member = snap.data() || {};
+    beforeMember = {...member};
+    if (clean(member.role).toLowerCase() === "owner") throw new functions.https.HttpsError("failed-precondition", "Business owner cannot be changed here.");
     if (data.remove === true) {
       afterMember = {memberRemoved: true, member: beforeMember.email || beforeMember.userId || null};
-      members.splice(index, 1);
+      tx.set(ref, {status: "removed", removedAt: FieldValue.serverTimestamp(), removedByAdmin: actor.uid, updatedAt: FieldValue.serverTimestamp()}, {merge: true});
     } else {
-      members[index] = {
-        ...members[index],
-        role: clean(data.role || members[index].role || "member"),
+      afterMember = {
+        ...member,
+        role: clean(data.role || member.role || "member"),
         updatedAt: Timestamp.now(),
         updatedByAdmin: actor.label,
       };
-      afterMember = {...members[index]};
+      tx.set(ref, {role: afterMember.role, updatedAt: FieldValue.serverTimestamp(), updatedByAdmin: actor.label}, {merge: true});
     }
-    tx.set(ref, {
-      teamMembers: members,
-      updatedAt: FieldValue.serverTimestamp(),
-      updatedBy: actor.uid,
-      updatedByEmail: actor.email || null,
-    }, {merge: true});
   });
   await writeAudit(db, actor, {
     actionType: data.remove === true ? "business_member_removed" : "business_member_role_updated",
-    recordType: "businessAccounts",
+    recordType: "businessMemberships",
     recordId: businessId,
     reason: clean(data.reason || "Business member updated from Admin"),
   }, beforeMember, afterMember);
