@@ -6,6 +6,8 @@ const {isDispatchable} = require("./iris-core");
 const {dispatchEligibilityDecision} = require("./rider-dispatch-authority");
 const communicationEngine = require("./communication-engine");
 const {dispatchDeliveryRequest} = require("./send-package");
+const {buildRiderVehicleSnapshot} = require("./rider-vehicle-snapshot");
+const {customerSafeRiderProjection} = require("./accept-ride-requests")._private;
 
 const text = (value) => `${value || ""}`.trim();
 function assignedRiderId(delivery = {}) {
@@ -483,10 +485,42 @@ exports.onSupportTicketCreated = functions.firestore.document("supportTickets/{t
 exports.onDisputeCreated = functions.firestore.document("disputes/{disputeId}").onCreate((snapshot, context) => notify({recipientRole: "admin", type: "dispute", title: "New dispute", body: "A delivery dispute needs review.", bookingId: text(snapshot.data().bookingId || snapshot.data().requestId), eventId: `dispute:${context.params.disputeId}`}));
 
 exports.onRiderProfileUpdated = functions.firestore.document("riderProfiles/{riderId}").onUpdate(async (change, context) => {
+  const db = getFirestore();
+  const riderId = context.params.riderId;
   const before = text(change.before.data().approvalStatus || change.before.data().verificationStatus);
   const after = text(change.after.data().approvalStatus || change.after.data().verificationStatus);
-  if (!after || before === after) return;
-  if (["approved", "verified", "rejected"].includes(after.toLowerCase())) await notify({recipientId: context.params.riderId, recipientRole: "rider", type: "verification_update", title: after.toLowerCase() === "rejected" ? "Verification update" : "Verification approved", body: after.toLowerCase() === "rejected" ? "Your rider verification needs attention." : "Your rider account has been approved.", data: {status: after.toLowerCase()}});
+  if (after && before !== after && ["approved", "verified", "rejected"].includes(after.toLowerCase())) {
+    await notify({recipientId: riderId, recipientRole: "rider", type: "verification_update", title: after.toLowerCase() === "rejected" ? "Verification update" : "Verification approved", body: after.toLowerCase() === "rejected" ? "Your rider verification needs attention." : "Your rider account has been approved.", data: {status: after.toLowerCase()}});
+  }
+
+  const presence = await db.collection("riderPresence").doc(riderId).get();
+  const activeDeliveryId = text(presence.exists && (presence.data().activeDeliveryId || presence.data().currentDeliveryId));
+  if (!activeDeliveryId) return;
+  const [delivery, rider] = await Promise.all([
+    db.collection("deliveryRequests").doc(activeDeliveryId).get(),
+    db.collection("riders").doc(riderId).get(),
+  ]);
+  if (!delivery.exists || assignedRiderId(delivery.data()) !== riderId) return;
+  const profile = {...(rider.exists ? rider.data() : {}), ...change.after.data()};
+  const projection = customerSafeRiderProjection(
+      riderId, profile, delivery.data(), buildRiderVehicleSnapshot(profile));
+  await delivery.ref.set({
+    riderName: projection.displayName,
+    driverName: projection.displayName,
+    courierName: projection.displayName,
+    assignedRiderProfile: projection,
+    assignedVehicleSnapshot: projection.vehicle,
+    riderPhotoUrl: projection.photoUrl,
+    riderPhotoVersion: projection.photoVersion,
+    riderUsername: projection.username,
+    riderRank: projection.rank,
+    riderRankAssigned: projection.rankAssigned,
+    riderVerified: projection.verified,
+    riderCompletedDeliveries: projection.completedDeliveries,
+    riderRating: projection.rating,
+    riderQualifications: projection.qualifications,
+    riderProjectionUpdatedAt: FieldValue.serverTimestamp(),
+  }, {merge: true});
 });
 
 exports.onPayoutUpdated = functions.firestore.document("payoutRequests/{requestId}").onUpdate(async (change, context) => {

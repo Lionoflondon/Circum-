@@ -26,6 +26,73 @@ test("accepted delivery persists the authoritative assigned vehicle snapshot", (
   assert.match(source, /assignedVehicleSnapshot/);
 });
 
+test("customer Rider projection is bounded, truthful, and strips private vehicle data", () => {
+  const {customerSafeRiderProjection, customerSafeVehicle} =
+    require("./accept-ride-requests")._private;
+  const vehicle = customerSafeVehicle({
+    type: "Car",
+    manufacturer: "Volvo",
+    model: "EX30",
+    colour: "Blue",
+    registration: "AB12 CDE",
+    verificationStatus: "verified",
+    insurance: "private-policy",
+    mot: "private-mot",
+    capacity: "private-capacity",
+  });
+  const projection = customerSafeRiderProjection("rider-1", {
+    fullName: "Ayo Rider",
+    username: "@ayo",
+    profilePhotoUrl: "https://images.example/rider.jpg",
+    riderRank: "veteran",
+    rankOverride: true,
+    verificationStatus: "verified",
+    completedDeliveries: 42,
+    averageRating: 4.8,
+    phoneNumber: "+447000000000",
+    email: "private@example.com",
+    earnings: 900,
+  }, {requiresVanguard: true}, vehicle);
+
+  assert.equal(projection.username, "ayo");
+  assert.equal(projection.rank, "veteran");
+  assert.equal(projection.rankAssigned, true);
+  assert.equal(projection.verified, true);
+  assert.equal(projection.rating, 4.8);
+  assert.deepEqual(projection.qualifications, ["Vanguard"]);
+  assert.equal("insurance" in projection.vehicle, false);
+  assert.equal("mot" in projection.vehicle, false);
+  assert.equal("capacity" in projection.vehicle, false);
+  assert.equal("phoneNumber" in projection, false);
+  assert.equal("email" in projection, false);
+  assert.equal("earnings" in projection, false);
+});
+
+test("acceptance overwrites all reassignment-sensitive Rider identity fields", () => {
+  const source = fs.readFileSync(path.join(__dirname, "accept-ride-requests.js"), "utf8");
+  for (const field of [
+    "assignedRiderProfile", "riderPhotoUrl", "riderPhotoVersion",
+    "riderUsername", "riderRank", "riderRankAssigned", "riderVerified",
+    "riderCompletedDeliveries", "riderRating", "riderQualifications",
+    "assignedVehicleSnapshot",
+  ]) {
+    assert.match(source, new RegExp(`${field}: customer`));
+  }
+});
+
+test("profile changes refresh only the Rider's current canonical assignment", () => {
+  const source = fs.readFileSync(path.join(__dirname, "platform-notifications.js"), "utf8");
+  const start = source.indexOf("exports.onRiderProfileUpdated");
+  const end = source.indexOf("exports.onPayoutUpdated", start);
+  const handler = source.slice(start, end);
+  assert.match(handler, /riderPresence/);
+  assert.match(handler, /activeDeliveryId/);
+  assert.match(handler, /assignedRiderId\(delivery\.data\(\)\) !== riderId/);
+  assert.match(handler, /customerSafeRiderProjection/);
+  assert.match(handler, /assignedRiderProfile: projection/);
+  assert.doesNotMatch(handler, /where\("assignedRiderId"/);
+});
+
 test("accept rejects stale, assigned, unpaid, or terminal offers with diagnostics", () => {
   const source = fs.readFileSync(
       path.join(__dirname, "accept-ride-requests.js"),

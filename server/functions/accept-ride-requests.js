@@ -36,6 +36,56 @@ const offerCreatedMillis = (delivery = {}) =>
 const assignedRiderId = (delivery = {}) =>
   cleanText(delivery.riderId || delivery.driverId || delivery.assignedRider || delivery.assignedRiderId || delivery.assignedDriverId || delivery.courierId);
 
+const canonicalRank = (value) => {
+  const rank = cleanText(value).toLowerCase();
+  return ["agent", "sentinel", "warden", "knight", "veteran"].includes(rank) ? rank : "agent";
+};
+
+const customerSafeVehicle = (snapshot = {}) => ({
+  type: cleanText(snapshot.type) || null,
+  manufacturer: cleanText(snapshot.manufacturer) || null,
+  model: cleanText(snapshot.model) || null,
+  colour: cleanText(snapshot.colour) || null,
+  registration: cleanText(snapshot.registration) || null,
+  verificationStatus: cleanText(snapshot.verificationStatus) || null,
+});
+
+const relevantQualifications = (rider = {}, delivery = {}) => {
+  const qualifications = [];
+  const workflow = cleanText(delivery.workflow || delivery.serviceType || delivery.deliveryType).toLowerCase();
+  if ((delivery.isHealthPlus === true || workflow.includes("health")) &&
+      (rider.healthPlusEligible === true || rider.healthEligible === true)) qualifications.push("Health+");
+  if ((delivery.requiresVanguard === true || delivery.isVanguard === true || workflow.includes("vanguard")) &&
+      rider.vanguardEligible !== false) qualifications.push("Vanguard");
+  if (delivery.isGift === true || workflow.includes("gift")) qualifications.push("Gift delivery");
+  if ((delivery.isHeavyDuty === true || workflow.includes("heavy")) && rider.heavyDutyEligible !== false) qualifications.push("Heavy Duty");
+  return qualifications;
+};
+
+const customerSafeRiderProjection = (riderId, rider = {}, delivery = {}, vehicleSnapshot = {}) => {
+  const ratingValue = Number(rider.averageRating ?? rider.rating);
+  const completedValue = Number(rider.completedDeliveries);
+  const rankSource = cleanText(rider.rankSource).toLowerCase();
+  const assignedRank = rider.rankOverride === true || rankSource === "manual" || Boolean(cleanText(rider.rankUpdatedBy));
+  const verification = cleanText(rider.verificationStatus || rider.approvalStatus).toLowerCase();
+  return {
+    riderId,
+    displayName: cleanText(rider.fullName || rider.name || rider.displayName, "Circum Rider"),
+    username: cleanText(rider.username || rider.handle).replace(/^@+/, "") || null,
+    photoUrl: cleanText(rider.photoURL || rider.profilePhotoUrl || rider.avatarUrl) || null,
+    photoVersion: Number.isFinite(Number(rider.profilePhotoVersion)) ? Number(rider.profilePhotoVersion) : null,
+    rank: canonicalRank(rider.riderRank || rider.rank),
+    rankAssigned: assignedRank,
+    verified: ["verified", "approved", "active"].includes(verification) || rider.isVerified === true,
+    completedDeliveries: Number.isFinite(completedValue) && completedValue >= 0 ? Math.floor(completedValue) : null,
+    rating: Number.isFinite(ratingValue) && ratingValue >= 1 && ratingValue <= 5 ? Math.round(ratingValue * 10) / 10 : null,
+    vehicle: customerSafeVehicle(vehicleSnapshot),
+    qualifications: relevantQualifications(rider, delivery),
+    contactMethod: "circum_relay",
+    maskedCommunicationOnly: true,
+  };
+};
+
 const offerExclusionReason = (delivery = {}, riderId = "", now = Date.now()) => {
   const status = cleanText(delivery.status).toLowerCase();
   const deliveryStatus = cleanText(delivery.deliveryStatus || delivery.deliveryStage).toLowerCase();
@@ -57,10 +107,12 @@ const offerExclusionReason = (delivery = {}, riderId = "", now = Date.now()) => 
   return "";
 };
 
-const riderPayload = (riderId, rider) => {
+const riderPayload = (riderId, rider, delivery = {}) => {
   const vehicle = rider.vehicle || rider.vehicleDetails || {};
+  const safe = customerSafeRiderProjection(
+      riderId, rider, delivery, buildRiderVehicleSnapshot(rider));
   return {
-    courierName: cleanText(rider.fullName || rider.name || rider.displayName || rider.email, "Circum rider"),
+    courierName: safe.displayName,
     phoneNumber: "",
     contactMethod: "circum_relay",
     maskedCommunicationOnly: true,
@@ -68,9 +120,16 @@ const riderPayload = (riderId, rider) => {
     typeOfVehicle: cleanText(rider.vehicleType || vehicle.type, "Vehicle"),
     plateNumber: cleanText(rider.plateNumber || rider.vehicleRegistration || vehicle.registration),
     estimatedDeliveryTime: cleanText(rider.estimatedDeliveryTime, "On the way"),
-    rating: cleanText(rider.rating || rider.averageRating, "New"),
     riderId,
-    photoURL: cleanText(rider.photoURL || rider.profilePhotoUrl || rider.avatarUrl, "null"),
+    photoURL: safe.photoUrl,
+    username: safe.username,
+    riderRank: safe.rank,
+    rankAssigned: safe.rankAssigned,
+    verified: safe.verified,
+    completedDeliveries: safe.completedDeliveries,
+    rating: safe.rating,
+    vehicle: safe.vehicle,
+    qualifications: safe.qualifications,
   };
 };
 
@@ -207,12 +266,15 @@ const acceptRideRequestHandler = async (data, context, dependencies = {}) => {
       throw new functions.https.HttpsError("failed-precondition", `Delivery request is not open for acceptance: ${currentStatus}.`);
     }
 
-    const payload = riderPayload(riderId, rider);
+    const payload = riderPayload(riderId, rider, found.data);
     const senderId = senderIdFor(found.data);
     if (!senderId) {
       throw new functions.https.HttpsError("failed-precondition", "Delivery owner is unavailable.");
     }
     const assignedVehicle = buildRiderVehicleSnapshot(rider);
+    const customerRider = customerSafeRiderProjection(
+        riderId, rider, found.data, assignedVehicle);
+    const customerVehicle = customerRider.vehicle;
     const assignedVehicleClass = assignedVehicle.type || payload.typeOfVehicle;
     const assignedVehicleId = assignedVehicle.registration || null;
     transaction.set(found.ref, {
@@ -233,7 +295,17 @@ const acceptRideRequestHandler = async (data, context, dependencies = {}) => {
       driverPlateNumber: payload.plateNumber,
       assignedVehicleId,
       assignedVehicleClass,
-      assignedVehicleSnapshot: assignedVehicle,
+      assignedVehicleSnapshot: customerVehicle,
+      assignedRiderProfile: customerRider,
+      riderPhotoUrl: customerRider.photoUrl,
+      riderPhotoVersion: customerRider.photoVersion,
+      riderUsername: customerRider.username,
+      riderRank: customerRider.rank,
+      riderRankAssigned: customerRider.rankAssigned,
+      riderVerified: customerRider.verified,
+      riderCompletedDeliveries: customerRider.completedDeliveries,
+      riderRating: customerRider.rating,
+      riderQualifications: customerRider.qualifications,
       acceptedAt: FieldValue.serverTimestamp(),
       updatedAt: FieldValue.serverTimestamp(),
     }, {merge: true});
@@ -302,5 +374,7 @@ module.exports._private = {
   acceptRideRequestHandler,
   offerExclusionReason,
   riderPayload,
+  customerSafeRiderProjection,
+  customerSafeVehicle,
   senderIdFor,
 };
