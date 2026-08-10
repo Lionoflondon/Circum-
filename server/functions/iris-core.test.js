@@ -16,16 +16,16 @@ const {
   riderDispatchPriority,
 } = require("./iris-core");
 
-test("weight band boundaries match Iris v1", () => {
+test("weight band boundaries match canonical commercial policy", () => {
   assert.equal(weightBandFor(0).label, "Small Parcel");
-  assert.equal(weightBandFor(2).label, "Small Parcel");
-  assert.equal(weightBandFor(2.1).label, "Medium Parcel");
+  assert.equal(weightBandFor(5).label, "Small Parcel");
+  assert.equal(weightBandFor(5.1).label, "Medium Parcel");
   assert.equal(weightBandFor(10).label, "Medium Parcel");
-  assert.equal(weightBandFor(10.1).label, "Large Parcel");
-  assert.equal(weightBandFor(25).label, "Large Parcel");
-  assert.equal(weightBandFor(25.1).label, "Heavy Goods");
-  assert.equal(weightBandFor(50).label, "Heavy Goods");
-  assert.equal(weightBandFor(50.1).label, "Heavy Duty Freight");
+  assert.equal(weightBandFor(10.1).label, "Heavy Parcel");
+  assert.equal(weightBandFor(20).label, "Heavy Parcel");
+  assert.equal(weightBandFor(20.1).label, "Large Item");
+  assert.equal(weightBandFor(40).label, "Large Item");
+  assert.equal(weightBandFor(40.1).label, "Extra Heavy");
 });
 
 test("electronics examples include iPhone 13 and 65-inch TV", () => {
@@ -36,7 +36,7 @@ test("electronics examples include iPhone 13 and 65-inch TV", () => {
 
   const tv = classifyIris({description: "65-inch TV", distanceMiles: 4});
   assert.equal(tv.recommendation.category, "Electronics");
-  assert.equal(tv.recommendation.weightBand.label, "Heavy Goods");
+  assert.equal(tv.recommendation.weightBand.label, "Large Item");
   assert.ok(tv.recommendation.handlingFlags.includes("Van Required"));
   assert.ok(tv.recommendation.handlingFlags.includes("Two Person Lift"));
   assert.equal(tv.serviceability.status, "serviceable");
@@ -47,7 +47,7 @@ test("electronics examples include iPhone 13 and 65-inch TV", () => {
 test("furniture and heavy goods classify with van/two-person handling", () => {
   const sofa = classifyIris({description: "large sofa", distanceMiles: 3});
   assert.equal(sofa.recommendation.category, "Furniture & Home");
-  assert.ok(["Heavy Goods", "Large Parcel"].includes(sofa.recommendation.weightBand.label));
+  assert.ok(["Large Item", "Extra Heavy"].includes(sofa.recommendation.weightBand.label));
   assert.ok(sofa.recommendation.handlingFlags.includes("Van Required"));
 });
 
@@ -134,13 +134,13 @@ test("dispatch allows server-generated compliant IRIS", () => {
 
 test("required object validation scenarios classify deterministically", () => {
   const cases = [
-    ["bicycle", "Personal Items & Luggage", "Large Parcel", ["Van Required"]],
-    ["dresser cabinet", "Furniture & Home", "Heavy Goods", ["Van Required", "Two Person Lift"]],
-    ["chest of drawers", "Furniture & Home", "Heavy Goods", ["Van Required", "Two Person Lift"]],
+    ["bicycle", "Personal Items & Luggage", "Heavy Parcel", ["Van Required"]],
+    ["dresser cabinet", "Furniture & Home", "Large Item", ["Van Required", "Two Person Lift"]],
+    ["chest of drawers", "Furniture & Home", "Large Item", ["Van Required", "Two Person Lift"]],
     ["car tyre", "Tools & Machinery", "Medium Parcel", ["Bulky", "Awkward Shape"]],
-    ["box of books", "Personal Items & Luggage", "Large Parcel", ["Bulky"]],
-    ["rolled rug", "Furniture & Home", "Large Parcel", ["Van Required", "Awkward Shape"]],
-    ["TV", "Electronics", "Heavy Goods", ["Fragile", "Van Required", "Two Person Lift"]],
+    ["box of books", "Personal Items & Luggage", "Heavy Parcel", ["Bulky"]],
+    ["rolled rug", "Furniture & Home", "Heavy Parcel", ["Van Required", "Awkward Shape"]],
+    ["TV", "Electronics", "Large Item", ["Fragile", "Van Required", "Two Person Lift"]],
     ["medication package", "Medical & Pharmacy", "Small Parcel", ["Temperature Sensitive"]],
     ["laptop", "Electronics", "Small Parcel", ["Fragile", "High Value"]],
     ["iPhone", "Electronics", "Small Parcel", ["Fragile", "High Value"]],
@@ -162,7 +162,7 @@ test("semantic stress cases avoid absurd vehicle and weight recommendations", ()
     ["wedding ring", "Fragile & Valuable", "Small Parcel", "any"],
     ["USB cable", "Electronics", "Small Parcel", "any"],
     ["passport", "Documents", "Small Parcel", "any"],
-    ["concrete mixer", "Tools & Machinery", "Heavy Duty Freight", "van"],
+    ["concrete mixer", "Tools & Machinery", "Extra Heavy", "van"],
     ["bricks", "Tools & Machinery", "Small Parcel", "any"],
     ["blood samples", "Medical & Pharmacy", "Small Parcel", "any"],
     ["perfume", "Fragile & Valuable", "Small Parcel", "any"],
@@ -181,7 +181,7 @@ test("common TV synonyms classify consistently without making accessories heavy 
   for (const input of tvInputs) {
     const result = classifyIris({description: input});
     assert.equal(result.recommendation.category, "Electronics", input);
-    assert.ok(["Large Parcel", "Heavy Goods"].includes(result.recommendation.weightBand.label), input);
+    assert.ok(["Heavy Parcel", "Large Item"].includes(result.recommendation.weightBand.label), input);
     assert.equal(result.internal.riderMatching.vehicleRequired, "van", input);
   }
   const remote = classifyIris({description: "TV remote"});
@@ -194,14 +194,14 @@ test("plurality scales weight vehicle and dispatch requirements sensibly", () =>
   const twentyLaptops = classifyIris({description: "20 laptops"});
   const hundredLaptops = classifyIris({description: "100 laptops"});
   assert.equal(oneLaptop.recommendation.weightBand.label, "Small Parcel");
-  assert.equal(twentyLaptops.recommendation.weightBand.label, "Heavy Goods");
+  assert.equal(twentyLaptops.recommendation.weightBand.label, "Large Item");
   assert.equal(twentyLaptops.internal.riderMatching.vehicleRequired, "van");
-  assert.equal(hundredLaptops.recommendation.weightBand.label, "Heavy Duty Freight");
+  assert.equal(hundredLaptops.recommendation.weightBand.label, "Extra Heavy");
   assert.equal(hundredLaptops.serviceability.verificationRequired, true);
 
   const dresses = classifyIris({description: "50 wedding dresses"});
   assert.equal(dresses.recommendation.category, "Clothing & Fashion");
-  assert.equal(dresses.recommendation.weightBand.label, "Heavy Duty Freight");
+  assert.equal(dresses.recommendation.weightBand.label, "Extra Heavy");
   assert.equal(dresses.internal.riderMatching.vehicleRequired, "van");
 });
 
@@ -793,7 +793,7 @@ test("dimensional intelligence affects operational vehicle recommendations", () 
     deliveryFloor: 3,
     liftAvailable: false,
   });
-  assert.equal(treadmill.recommendation.weightBand.label, "Heavy Duty Freight");
+  assert.equal(treadmill.recommendation.weightBand.label, "Extra Heavy");
   assert.equal(treadmill.operationalRecommendation.vehicleRecommendation.heavyDutySuitable, true);
   assert.equal(treadmill.internal.accessIntelligence.additionalPersonRecommended, true);
 });
@@ -1143,14 +1143,14 @@ test("learning memory improves confidence only after repeated successful example
   const one = classifyIris({
     description: "boxed espresso machine",
     completedExamples: [
-      {iris: {learningSnapshot: {customerDeclaration: {description: "boxed espresso machine"}, finalOutcome: {finalCategory: "Electronics", finalWeightBand: "Medium Parcel"}}}},
+      {trusted: true, iris: {learningSnapshot: {customerDeclaration: {description: "boxed espresso machine"}, finalOutcome: {finalCategory: "Electronics", finalWeightBand: "Medium Parcel"}}}},
     ],
   });
   const repeated = classifyIris({
     description: "boxed espresso machine",
     completedExamples: [
-      {iris: {learningSnapshot: {customerDeclaration: {description: "boxed espresso machine"}, finalOutcome: {finalCategory: "Electronics", finalWeightBand: "Medium Parcel"}}}},
-      {iris: {learningSnapshot: {customerDeclaration: {description: "espresso machine boxed"}, finalOutcome: {finalCategory: "Electronics", finalWeightBand: "Medium Parcel"}}}},
+      {trusted: true, iris: {learningSnapshot: {customerDeclaration: {description: "boxed espresso machine"}, finalOutcome: {finalCategory: "Electronics", finalWeightBand: "Medium Parcel"}}}},
+      {trusted: true, iris: {learningSnapshot: {customerDeclaration: {description: "espresso machine boxed"}, finalOutcome: {finalCategory: "Electronics", finalWeightBand: "Medium Parcel"}}}},
     ],
   });
   assert.equal(one.internal.learningMatchedExamples, 1);
@@ -1163,19 +1163,49 @@ test("learning memory never overrides prohibited compliance", () => {
   const result = classifyIris({
     description: "explosives in a box",
     completedExamples: [
-      {iris: {learningSnapshot: {customerDeclaration: {description: "explosives in a box"}, finalOutcome: {finalCategory: "Documents", finalWeightBand: "Small Parcel"}}}},
-      {iris: {learningSnapshot: {customerDeclaration: {description: "explosives box"}, finalOutcome: {finalCategory: "Documents", finalWeightBand: "Small Parcel"}}}},
+      {trusted: true, iris: {learningSnapshot: {customerDeclaration: {description: "explosives in a box"}, finalOutcome: {finalCategory: "Documents", finalWeightBand: "Small Parcel"}}}},
+      {trusted: true, iris: {learningSnapshot: {customerDeclaration: {description: "explosives box"}, finalOutcome: {finalCategory: "Documents", finalWeightBand: "Small Parcel"}}}},
     ],
   });
   assert.equal(result.compliance.status, "prohibited");
 });
 
+test("raw feedback cannot affect inference and promoted canonical knowledge can", () => {
+  const raw = classifyIris({
+    description: "boxed espresso machine",
+    completedExamples: [
+      {iris: {learningSnapshot: {customerDeclaration: {description: "boxed espresso machine"}, finalOutcome: {finalCategory: "Medical & Pharmacy", finalWeightBand: "Extra Heavy"}}}},
+      {iris: {learningSnapshot: {customerDeclaration: {description: "boxed espresso machine"}, finalOutcome: {finalCategory: "Medical & Pharmacy", finalWeightBand: "Extra Heavy"}}}},
+    ],
+  });
+  assert.notEqual(raw.recommendation.category, "Medical & Pharmacy");
+
+  const promoted = classifyIris({
+    description: "calibrated parcel",
+    canonicalKnowledge: [{
+      canonicalId: "calibrated_parcel",
+      canonicalName: "calibrated parcel",
+      category: "Business & Commercial",
+      knownWeight: 12,
+      status: "active",
+      repositoryReviewStatus: "promoted",
+    }],
+    engineVersion: "iris-engine-v1",
+    knowledgeVersion: "iris-knowledge-v1",
+  });
+  assert.equal(promoted.recommendation.category, "Business & Commercial");
+  assert.equal(promoted.recommendation.estimatedWeightKg, 12);
+  assert.equal(promoted.recommendation.weightBand.label, "Heavy Parcel");
+  assert.equal(promoted.knowledgeVersion, "iris-knowledge-v1");
+  assert.equal(promoted.internal.canonicalKnowledgeMatch, "calibrated_parcel");
+});
+
 test("authoritative weight prevents low declarations from reducing operational pricing facts", () => {
   const cases = [
-    ["two TVs", "1 kg", 64, "Heavy Duty Freight"],
-    ["one TV and three laptops", "5 kg", 38, "Heavy Goods"],
-    ["treadmill", "1 kg", 70, "Heavy Duty Freight"],
-    ["100 bricks", "1 kg", 30, "Heavy Goods"],
+    ["two TVs", "1 kg", 64, "Extra Heavy"],
+    ["one TV and three laptops", "5 kg", 38, "Large Item"],
+    ["treadmill", "1 kg", 70, "Extra Heavy"],
+    ["100 bricks", "1 kg", 30, "Large Item"],
   ];
   for (const [description, declaredWeight, expectedWeight, expectedBand] of cases) {
     const result = classifyIris({description, weight: declaredWeight});

@@ -1,5 +1,6 @@
 /* eslint-disable max-len, require-jsdoc */
 const functions = require("firebase-functions/v1");
+const crypto = require("crypto");
 const {getFirestore} = require("firebase-admin/firestore");
 const communicationEngine = require("./communication-engine");
 const stripeConfig = functions.config().stripe || {};
@@ -21,6 +22,9 @@ const stripe = new Proxy({}, {
   },
 });
 const iris = require("./iris-core");
+const {repriceWeightFromQuote, weightBandFor, WEIGHT_POLICY_VERSION} = require("./canonical-weight-policy");
+const {normalizeVehicleClass, vehicleCanHandle} = require("./vehicle-dispatch");
+const {enforceIrisRequestLimit} = require("./iris-request-guard");
 const {
   DISCREPANCY_REASONS,
   buildAdjustment,
@@ -55,13 +59,14 @@ async function bookingReference(db, requestId) {
   return query.empty ? null : query.docs[0];
 }
 
-exports.reportLoadDiscrepancy = functions.https.onCall(async (data, context) => {
+exports.reportLoadDiscrepancy = functions.runWith({enforceAppCheck: true}).https.onCall(async (data, context) => {
   if (!context.auth) throw new functions.https.HttpsError("unauthenticated", "Authentication required.");
   const {requestId, reason, evidencePhotos = [], observedWeightKg, observedDescription, observedVehicleType, riderNotes, dimensions} = data;
   if (!requestId || !DISCREPANCY_REASONS.includes(reason)) throw new functions.https.HttpsError("invalid-argument", "A booking and supported discrepancy reason are required.");
   if (!Array.isArray(evidencePhotos) || evidencePhotos.length === 0) throw new functions.https.HttpsError("invalid-argument", "At least one evidence photo is required.");
 
   const db = getFirestore();
+  await enforceIrisRequestLimit({db, uid: context.auth.uid, action: "report_load_discrepancy"});
   const bookingSnapshot = await bookingReference(db, requestId);
   if (!bookingSnapshot) throw new functions.https.HttpsError("not-found", "Booking not found.");
   const requestRef = bookingSnapshot.ref;
@@ -70,7 +75,8 @@ exports.reportLoadDiscrepancy = functions.https.onCall(async (data, context) => 
   if (![booking.riderId, booking.driverId, booking.assignedDriverId].includes(riderId)) throw new functions.https.HttpsError("permission-denied", "Only the assigned rider can report this discrepancy.");
   if (booking.status === "awaiting_sender_adjustment") throw new functions.https.HttpsError("failed-precondition", "This booking already has a pending adjustment.");
 
-  const originalWeightKg = Number(booking.finalWeightUsed || booking.finalChargeableWeight || booking.confirmedWeightKg || booking.weightKg || 0);
+  const paidQuote = booking.pricingBreakdown && typeof booking.pricingBreakdown === "object" ? booking.pricingBreakdown : {};
+  const originalWeightKg = Number(booking.finalWeightUsed || booking.finalChargeableWeight || booking.confirmedWeightKg || booking.weightKg || paidQuote.weightKg || booking.parcel && booking.parcel.weightKg || 0);
   const description = observedDescription || booking.packageDescription || booking.description || "Parcel";
   const recalculated = iris.classifyIris({
     description: dimensions ? `${description}; dimensions ${dimensions}` : description,
@@ -83,10 +89,27 @@ exports.reportLoadDiscrepancy = functions.https.onCall(async (data, context) => 
   const recalculatedVehicle = `${observedVehicleType || (recalculated.recommendation && recalculated.recommendation.vehicleType) || ""}`.toLowerCase();
   const vehicleSuitabilityChanged = Boolean(recalculatedVehicle && recalculatedVehicle !== previousVehicle);
   if (!isMaterialDiscrepancy({reason, originalWeightKg, observedWeightKg, vehicleSuitabilityChanged})) throw new functions.https.HttpsError("failed-precondition", "The reported difference does not meet the material adjustment threshold.");
-  const revisedQuote = Number(recalculated.recommendation && recalculated.recommendation.estimatedPrice || booking.price || booking.quote || 0);
-  const originalQuote = Number(booking.paidAmount || booking.price || booking.quote || 0);
+  const proposedWeightKg = Number(observedWeightKg) || originalWeightKg;
+  const originalQuoteSnapshot = {
+    ...paidQuote,
+    weightKg: originalWeightKg,
+    total: Number(paidQuote.total || booking.paidAmount || booking.price || booking.quote || 0),
+  };
+  const revisedQuoteSnapshot = repriceWeightFromQuote(originalQuoteSnapshot, proposedWeightKg);
+  const revisedQuote = revisedQuoteSnapshot.total;
+  const originalQuote = originalQuoteSnapshot.total;
   const senderId = booking.senderId || booking.userId;
-  const adjustmentRef = db.collection("deliveryAdjustments").doc();
+  const adjustmentId = crypto.createHash("sha256").update(JSON.stringify({
+    requestId: requestRef.id,
+    riderId,
+    reason,
+    observedWeightKg: Number(observedWeightKg) || null,
+    observedDescription: description,
+    observedVehicleType: observedVehicleType || null,
+    dimensions: dimensions || null,
+    evidencePhotos: evidencePhotos.slice().sort(),
+  })).digest("hex").slice(0, 40);
+  const adjustmentRef = db.collection("deliveryAdjustments").doc(adjustmentId);
   const adjustment = buildAdjustment({
     bookingId: requestRef.id,
     bookingRequestId: requestId,
@@ -103,19 +126,28 @@ exports.reportLoadDiscrepancy = functions.https.onCall(async (data, context) => 
       observedDescription: description,
       observedVehicleType: observedVehicleType || null,
       dimensions: dimensions || null,
+      proposedWeightBand: weightBandFor(proposedWeightKg),
     },
-    irisCalculationMetadata: recalculated,
+    irisCalculationMetadata: {
+      engineVersion: recalculated.engineVersion || recalculated.version,
+      knowledgeVersion: recalculated.knowledgeVersion || null,
+      recommendation: recalculated.recommendation,
+      financialAuthority: false,
+    },
+    originalQuoteSnapshot,
+    revisedQuoteSnapshot,
   });
 
+  let idempotent = false;
   await db.runTransaction(async (transaction) => {
+    const existingAdjustment = await transaction.get(adjustmentRef);
+    if (existingAdjustment.exists) {
+      idempotent = true;
+      return;
+    }
     const latest = await transaction.get(requestRef);
     const latestStatus = latest.data().status;
     if (latestStatus === "awaiting_sender_adjustment" || latestStatus === "awaiting_adjustment_review") throw new functions.https.HttpsError("failed-precondition", "A pending adjustment already exists.");
-    if (adjustment.additionalAmount <= 0) {
-      transaction.set(adjustmentRef, {...adjustment, status: "closed_no_charge", adminDecision: "not_required", senderDecision: "not_required"});
-      transaction.update(requestRef, {lastAdjustmentId: adjustmentRef.id, updatedAt: Date.now()});
-      return;
-    }
     const discrepancySummary = {
       adjustmentId: adjustmentRef.id,
       originalQuote: adjustment.originalQuote,
@@ -143,11 +175,14 @@ exports.reportLoadDiscrepancy = functions.https.onCall(async (data, context) => 
       updatedAt: Date.now(),
     });
   });
-  if (adjustment.additionalAmount > 0) await notifyUser(senderId, "sender", "Booking adjustment under review", "A rider has reported a parcel difference. Circum is reviewing the evidence.", {type: "delivery_adjustment_review", requestId, adjustmentId: adjustmentRef.id});
-  return {success: true, adjustmentId: adjustmentRef.id, additionalAmount: adjustment.additionalAmount, status: adjustment.additionalAmount > 0 ? "awaiting_admin_review" : "closed_no_charge"};
+  if (idempotent) {
+    return {success: true, idempotent: true, adjustmentId: adjustmentRef.id, additionalAmount: adjustment.additionalAmount, status: "awaiting_admin_review"};
+  }
+  await notifyUser(senderId, "sender", "Parcel details under review", "Your rider believes the parcel may not match the selected weight band. CIRCUM is reviewing the evidence; no additional charge is final yet.", {type: "delivery_adjustment_review", requestId, adjustmentId: adjustmentRef.id});
+  return {success: true, idempotent: false, adjustmentId: adjustmentRef.id, additionalAmount: adjustment.additionalAmount, status: "awaiting_admin_review"};
 });
 
-exports.reviewDeliveryAdjustment = functions.https.onCall(async (data, context) => {
+exports.reviewDeliveryAdjustment = functions.runWith({enforceAppCheck: true}).https.onCall(async (data, context) => {
   if (!context.auth) throw new functions.https.HttpsError("unauthenticated", "Authentication required.");
   const token = context.auth.token || {};
   const role = `${token.role || token.adminRole || ""}`.toLowerCase();
@@ -170,6 +205,7 @@ exports.reviewDeliveryAdjustment = functions.https.onCall(async (data, context) 
     const bookingSnapshot = await transaction.get(bookingRef);
     if (!bookingSnapshot.exists) throw new functions.https.HttpsError("not-found", "Booking not found.");
     const previousStatus = bookingSnapshot.data().preAdjustmentStatus || "accepted";
+    const booking = bookingSnapshot.data();
     const reviewedAt = Date.now();
     const review = {
       adminDecision: decision,
@@ -180,15 +216,74 @@ exports.reviewDeliveryAdjustment = functions.https.onCall(async (data, context) 
       updatedAt: reviewedAt,
     };
     if (decision === "approve") {
-      transaction.update(adjustmentRef, {...review, status: "awaiting_sender_payment", senderDecision: "pending"});
+      const finalWeightKg = Number(adjustment.observations && (adjustment.observations.observedWeightKg || adjustment.observations.originalWeightKg) || 0);
+      const finalWeightBand = weightBandFor(finalWeightKg);
+      const requiredVehicle = normalizeVehicleClass(
+          adjustment.observations && adjustment.observations.observedVehicleType ||
+          (finalWeightKg >= 40 ? "van" : booking.requiredVehicle || booking.vehicleRequirement || "any"),
+          "any",
+      );
+      const assignedVehicle = normalizeVehicleClass(booking.assignedVehicleClass || booking.assignedVehicleSnapshot && booking.assignedVehicleSnapshot.type || booking.vehicleType, null);
+      const vehicleCompatible = !assignedVehicle || vehicleCanHandle(assignedVehicle, requiredVehicle);
+      const needsPayment = Number(adjustment.additionalAmount || 0) > 0;
+      const nextStatus = needsPayment ? "awaiting_sender_payment" : !vehicleCompatible ? "vehicle_reassignment_required" : "resolved_no_charge";
+      transaction.update(adjustmentRef, {
+        ...review,
+        status: nextStatus,
+        senderDecision: needsPayment ? "pending" : "not_required",
+        finalCanonicalWeightKg: finalWeightKg,
+        finalCanonicalWeightBand: finalWeightBand,
+        requiredVehicle,
+        vehicleCompatible,
+        pricingConsequenceReference: adjustmentRef.id,
+      });
       transaction.update(bookingRef, {
-        "status": "awaiting_sender_adjustment",
+        "status": !vehicleCompatible ? "awaiting_vehicle_reassignment" : needsPayment ? "awaiting_sender_adjustment" : previousStatus,
+        "finalWeightUsed": finalWeightKg,
+        "finalChargeableWeight": finalWeightKg,
+        "confirmedWeightKg": finalWeightKg,
+        "confirmedWeightBand": finalWeightBand.label,
+        "weightPolicyVersion": WEIGHT_POLICY_VERSION,
+        "requiredVehicle": requiredVehicle,
+        "vehicleRequirement": requiredVehicle,
         "loadDiscrepancy.adminDecision": "approved",
         "loadDiscrepancy.adminReviewNote": note,
         "loadDiscrepancy.adminReviewedAt": reviewedAt,
         "updatedAt": reviewedAt,
       });
-      notify = {userId: adjustment.senderId, title: "Booking update approved", body: `Additional payment required: £${Number(adjustment.additionalAmount || 0).toFixed(2)}`, type: "delivery_adjustment"};
+      transaction.set(db.collection("irisLearningCases").doc(`weight_discrepancy_${adjustmentId}`), {
+        caseType: "weight_discrepancy",
+        deliveryId: adjustment.bookingId,
+        adjustmentId,
+        rawRiderObservation: adjustment.observations || {},
+        evidenceReferences: adjustment.evidencePhotos || [],
+        adminAdjudication: {
+          decision: "approved",
+          finalWeightKg,
+          finalWeightBand: finalWeightBand.label,
+          reviewedBy: context.auth.uid,
+          reviewedAt,
+        },
+        learningStatus: "pending_review",
+        reviewStatus: "pending_review",
+        productionKnowledgeEligible: false,
+        createdAt: reviewedAt,
+        updatedAt: reviewedAt,
+      }, {merge: true});
+      if (!vehicleCompatible) {
+        transaction.set(db.collection("operationalIncidents").doc(`weight_vehicle_mismatch_${adjustment.bookingId}`), {
+          deliveryId: adjustment.bookingId,
+          incidentType: "weight_vehicle_mismatch",
+          severity: "RED",
+          status: "OPEN",
+          currentDeliveryState: "awaiting_vehicle_reassignment",
+          assignedRider: adjustment.riderId,
+          adjustmentId,
+          detectedAt: reviewedAt,
+          updatedAt: reviewedAt,
+        }, {merge: true});
+      }
+      notify = needsPayment ? {userId: adjustment.senderId, recipientRole: "sender", title: "Booking update approved", body: `Additional payment required: £${Number(adjustment.additionalAmount || 0).toFixed(2)}`, type: "delivery_adjustment"} : {userId: adjustment.senderId, recipientRole: "sender", title: "Parcel review complete", body: "CIRCUM reviewed the parcel details. No additional payment is required.", type: "delivery_adjustment_resolved"};
       return;
     }
     if (decision === "reject") {
@@ -201,7 +296,7 @@ exports.reviewDeliveryAdjustment = functions.https.onCall(async (data, context) 
         "requiresAdminReview": false,
         "updatedAt": reviewedAt,
       });
-      notify = {userId: adjustment.riderId, title: "Parcel report reviewed", body: "Circum rejected the parcel adjustment after review.", type: "delivery_adjustment_rejected"};
+      notify = {userId: adjustment.riderId, recipientRole: "rider", title: "Parcel report reviewed", body: "Circum rejected the parcel adjustment after review.", type: "delivery_adjustment_rejected"};
       return;
     }
     transaction.update(adjustmentRef, {...review, status: "more_evidence_requested"});
@@ -210,13 +305,13 @@ exports.reviewDeliveryAdjustment = functions.https.onCall(async (data, context) 
       "loadDiscrepancy.adminReviewNote": note,
       "updatedAt": reviewedAt,
     });
-    notify = {userId: adjustment.riderId, title: "More evidence needed", body: "Circum needs more evidence for the parcel report.", type: "delivery_adjustment_more_evidence"};
+    notify = {userId: adjustment.riderId, recipientRole: "rider", title: "More evidence needed", body: "Circum needs more evidence for the parcel report.", type: "delivery_adjustment_more_evidence"};
   });
-  if (notify) await notifyUser(notify.userId, "rider", notify.title, notify.body, {type: notify.type, adjustmentId});
+  if (notify) await notifyUser(notify.userId, notify.recipientRole, notify.title, notify.body, {type: notify.type, adjustmentId});
   return {success: true, adjustmentId, decision};
 });
 
-exports.cancelAdjustedCollection = functions.https.onCall(async (data, context) => {
+exports.cancelAdjustedCollection = functions.runWith({enforceAppCheck: true}).https.onCall(async (data, context) => {
   if (!context.auth) throw new functions.https.HttpsError("unauthenticated", "Authentication required.");
   const db = getFirestore();
   const adjustmentRef = db.collection("deliveryAdjustments").doc(data.adjustmentId);
@@ -231,7 +326,7 @@ exports.cancelAdjustedCollection = functions.https.onCall(async (data, context) 
   return {success: true};
 });
 
-exports.createDeliveryAdjustmentPayment = functions.https.onCall(async (data, context) => {
+exports.createDeliveryAdjustmentPayment = functions.runWith({enforceAppCheck: true}).https.onCall(async (data, context) => {
   if (!context.auth) throw new functions.https.HttpsError("unauthenticated", "Authentication required.");
   const db = getFirestore();
   const adjustmentRef = db.collection("deliveryAdjustments").doc(data.adjustmentId);
@@ -250,7 +345,7 @@ exports.createDeliveryAdjustmentPayment = functions.https.onCall(async (data, co
   return {clientSecret: intent.client_secret, paymentIntentId: intent.id, amount};
 });
 
-exports.finalizeDeliveryAdjustmentPayment = functions.https.onCall(async (data, context) => {
+exports.finalizeDeliveryAdjustmentPayment = functions.runWith({enforceAppCheck: true}).https.onCall(async (data, context) => {
   if (!context.auth) throw new functions.https.HttpsError("unauthenticated", "Authentication required.");
   const db = getFirestore();
   const adjustmentRef = db.collection("deliveryAdjustments").doc(data.adjustmentId);
@@ -265,8 +360,17 @@ exports.finalizeDeliveryAdjustmentPayment = functions.https.onCall(async (data, 
     const booking = await transaction.get(bookingRef);
     if (latest.data().status === "paid") return;
     transaction.update(adjustmentRef, {status: "paid", paymentStatus: "succeeded", senderDecision: "approved_and_paid", paidAt: Date.now(), updatedAt: Date.now()});
-    transaction.update(bookingRef, {"status": booking.data().preAdjustmentStatus || "accepted", "price": latest.data().revisedQuote, "paidAmount": latest.data().revisedQuote, "adjustmentResolvedBy": "sender_payment", "loadDiscrepancy.senderDecision": "approved_and_paid", "updatedAt": Date.now()});
+    const revisedSnapshot = latest.data().revisedQuoteSnapshot || {};
+    transaction.update(bookingRef, {"status": latest.data().vehicleCompatible === false ? "awaiting_vehicle_reassignment" : booking.data().preAdjustmentStatus || "accepted", "price": latest.data().revisedQuote, "paidAmount": latest.data().revisedQuote, "pricingBreakdown": revisedSnapshot, "riderPayout": revisedSnapshot.riderPayout, "driverPayout": revisedSnapshot.driverPayout, "riderEarning": revisedSnapshot.riderEarning, "platformRevenue": revisedSnapshot.platformRevenue, "finalWeightUsed": latest.data().finalCanonicalWeightKg, "confirmedWeightKg": latest.data().finalCanonicalWeightKg, "confirmedWeightBand": latest.data().finalCanonicalWeightBand && latest.data().finalCanonicalWeightBand.label, "weightPolicyVersion": WEIGHT_POLICY_VERSION, "adjustmentResolvedBy": "sender_payment", "loadDiscrepancy.senderDecision": "approved_and_paid", "updatedAt": Date.now()});
   });
-  await notifyUser(adjustment.data().riderId, "rider", "Booking adjustment paid", "The sender paid the revised quote. You may continue the collection.", {type: "delivery_adjustment_paid", adjustmentId: adjustment.id});
+  await notifyUser(
+      adjustment.data().riderId,
+      "rider",
+      "Booking adjustment paid",
+      adjustment.data().vehicleCompatible === false ?
+        "The revised quote is paid. Keep collection paused while CIRCUM arranges a compatible vehicle." :
+        "The sender paid the revised quote. You may continue the collection.",
+      {type: "delivery_adjustment_paid", adjustmentId: adjustment.id},
+  );
   return {success: true};
 });

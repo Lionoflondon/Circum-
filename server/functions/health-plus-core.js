@@ -1,4 +1,5 @@
 /* eslint-disable require-jsdoc */
+const {weightBandFor: canonicalWeightBandFor} = require("./canonical-weight-policy");
 const HEALTH_PLUS_MINIMUM_PENCE = 1100;
 const HEALTH_PLUS_SERVICE_FEE_PENCE = 120;
 const HEALTH_PLUS_BASIC_MONTHLY_PENCE = 1100;
@@ -8,14 +9,6 @@ const DELIVERY_BASE_FARE_PENCE = 500;
 const ADDITIONAL_FARE_PER_MILE_PENCE = 150;
 const SHORT_TRIP_FARE_FLOOR_MILES = 1.6;
 const MAX_VALIDATED_MEDICATION_WEIGHT_KG = 1000;
-
-const WEIGHT_BANDS = [
-  {category: "Small Parcel", minKg: 0, maxKg: 5, surchargePence: 0},
-  {category: "Medium Parcel", minKg: 5, maxKg: 10, surchargePence: 300},
-  {category: "Heavy Parcel", minKg: 10, maxKg: 20, surchargePence: 700},
-  {category: "Large Item", minKg: 20, maxKg: 40, surchargePence: 1500},
-  {category: "Extra Heavy", minKg: 40, maxKg: null, surchargePence: 2500},
-];
 
 const PICKUP_STATUSES = [
   "scheduled",
@@ -138,12 +131,8 @@ function buildCustodyEvent({
 }
 
 function weightBandFor(weightKg) {
-  const weight = Math.max(0, Number(weightKg || 0));
-  return WEIGHT_BANDS.find((band) => {
-    const aboveMinimum = weight > band.minKg || band.minKg === 0 && weight >= 0;
-    const belowMaximum = band.maxKg == null || weight <= band.maxKg;
-    return aboveMinimum && belowMaximum;
-  }) || WEIGHT_BANDS[0];
+  const band = canonicalWeightBandFor(weightKg);
+  return {category: band.label, minKg: band.minKg, maxKg: band.maxKg, surchargePence: band.surchargeGbp * 100};
 }
 
 function calculateDistanceFarePence(distanceMiles) {

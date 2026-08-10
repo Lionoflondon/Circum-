@@ -5,6 +5,7 @@ const crypto = require("crypto");
 const functions = require("firebase-functions/v1");
 const {getFirestore, FieldValue} = require("firebase-admin/firestore");
 const {classifyIris, weightBandFor} = require("./iris-core");
+const {enforceIrisRequestLimit} = require("./iris-request-guard");
 
 const MAX_IMAGE_BYTES = 10 * 1024 * 1024;
 const MIN_IMAGE_BYTES = 128;
@@ -174,10 +175,12 @@ function buildPhotoAnalysis({uid, data, bytes, contentType}) {
   };
 }
 
-const analyseParcelPhotoForIris = functions.https.onCall(async (data, context) => {
+const analyseParcelPhotoForIris = functions.runWith({enforceAppCheck: true}).https.onCall(async (data, context) => {
+  const startedAt = Date.now();
   if (!context.auth) {
     throw new functions.https.HttpsError("unauthenticated", "Sign in to analyse a parcel photo.");
   }
+  await enforceIrisRequestLimit({db: getFirestore(), uid: context.auth.uid, action: "analyse_iris_photo"});
   const bytes = decodeBase64Image(data || {});
   const contentType = detectImageType(bytes, data && data.contentType);
   const analysis = buildPhotoAnalysis({uid: context.auth.uid, data: data || {}, bytes, contentType});
@@ -186,6 +189,12 @@ const analyseParcelPhotoForIris = functions.https.onCall(async (data, context) =
     createdAt: FieldValue.serverTimestamp(),
     expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000),
   }, {merge: true});
+  functions.logger.info("iris_classification_timing", {
+    endpoint: "analyseParcelPhotoForIris",
+    totalMs: Date.now() - startedAt,
+    confidence: analysis.confidence,
+    imageQuality: analysis.imageQuality,
+  });
   return {
     ...analysis,
     imageHash: undefined,

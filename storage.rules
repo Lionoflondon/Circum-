@@ -49,6 +49,34 @@ service firebase.storage {
         request.resource.contentType.matches('audio/webm|audio/mpeg|audio/mp4|audio/aac|audio/ogg');
     }
 
+    function delivery(deliveryId) {
+      return firestore.get(/databases/(default)/documents/deliveryRequests/$(deliveryId)).data;
+    }
+
+    function isAssignedDeliveryRider(deliveryId) {
+      return signedIn() &&
+        firestore.exists(/databases/(default)/documents/deliveryRequests/$(deliveryId)) &&
+        (delivery(deliveryId).riderId == request.auth.uid ||
+         delivery(deliveryId).driverId == request.auth.uid ||
+         delivery(deliveryId).assignedDriverId == request.auth.uid);
+    }
+
+    match /delivery-discrepancies/{deliveryId}/{riderId}/{fileName} {
+      allow read: if isAdmin() || isAssignedDeliveryRider(deliveryId) ||
+        (signedIn() && firestore.exists(/databases/(default)/documents/deliveryRequests/$(deliveryId)) &&
+         delivery(deliveryId).senderId == request.auth.uid);
+      allow create: if request.auth.uid == riderId && isAssignedDeliveryRider(deliveryId) && isSafeUpload();
+      allow update, delete: if false;
+    }
+
+    match /delivery_weight_evidence/{deliveryId}/{context}/{fileName} {
+      allow read: if isAdmin() || isAssignedDeliveryRider(deliveryId) ||
+        (signedIn() && firestore.exists(/databases/(default)/documents/deliveryRequests/$(deliveryId)) &&
+         delivery(deliveryId).senderId == request.auth.uid);
+      allow create: if isAssignedDeliveryRider(deliveryId) && isSafeUpload();
+      allow update, delete: if false;
+    }
+
     match /riderDocuments/{riderId}/{allPaths=**} {
       allow read: if isAdmin() || (signedIn() && request.auth.uid == riderId);
       allow create, update: if isAdmin() && isSafeUpload();

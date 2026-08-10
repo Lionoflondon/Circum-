@@ -2,6 +2,11 @@
 const vehicleDispatch = require("./vehicle-dispatch");
 const {accountEligibilityDecision} = require("./rider-dispatch-authority");
 const deliveryPolicy = require("./circum-delivery-policy.json");
+const {
+  WEIGHT_BANDS,
+  WEIGHT_POLICY_VERSION,
+  weightBandFor,
+} = require("./canonical-weight-policy");
 const CATEGORIES = Object.freeze([
   "Documents",
   "Electronics",
@@ -14,14 +19,6 @@ const CATEGORIES = Object.freeze([
   "Business & Commercial",
   "Fragile & Valuable",
   "Other",
-]);
-
-const WEIGHT_BANDS = Object.freeze([
-  {id: "small_parcel", label: "Small Parcel", minKg: 0, maxKg: 2, baseGbp: 0},
-  {id: "medium_parcel", label: "Medium Parcel", minKg: 2, maxKg: 10, baseGbp: 3},
-  {id: "large_parcel", label: "Large Parcel", minKg: 10, maxKg: 25, baseGbp: 8},
-  {id: "heavy_goods", label: "Heavy Goods", minKg: 25, maxKg: 50, baseGbp: 18},
-  {id: "heavy_duty_freight", label: "Heavy Duty Freight", minKg: 50, maxKg: null, baseGbp: 35},
 ]);
 
 const HANDLING_FLAGS = Object.freeze([
@@ -1384,15 +1381,6 @@ function estimateCombinedWeightKg(rawText) {
   return summarizeShipmentItems(items).combinedWeightKg;
 }
 
-function weightBandFor(weightKg) {
-  const normalizedWeight = Math.max(0, Number(weightKg) || 0);
-  return WEIGHT_BANDS.find((band) => {
-    const aboveMinimum = band.minKg === 0 ? normalizedWeight >= 0 : normalizedWeight > band.minKg;
-    const belowMaximum = band.maxKg == null || normalizedWeight <= band.maxKg;
-    return aboveMinimum && belowMaximum;
-  }) || WEIGHT_BANDS[WEIGHT_BANDS.length - 1];
-}
-
 function estimateIrisWeightKg(rawText, normalizedText = normalize(rawText)) {
   const combined = estimateCombinedWeightKg(rawText);
   if (combined != null) return combined;
@@ -2024,6 +2012,9 @@ function customerSafeIris(iris) {
     (protection.reasons || []).join(", ");
   return {
     version: iris.version || "v1",
+    engineVersion: iris.engineVersion || iris.version || "iris-engine-v1",
+    knowledgeVersion: iris.knowledgeVersion || "iris-knowledge-baseline-v1",
+    weightPolicyVersion: iris.weightPolicyVersion || WEIGHT_POLICY_VERSION,
     workflow: iris.workflow || "Standard",
     itemName: recommendation.detectedItem || null,
     totalWeightKg: recommendation.estimatedWeightKg || null,
@@ -2086,6 +2077,9 @@ function similarLearningMatches(description, completedExamples = []) {
   if (!text) return [];
   const tokens = new Set(text.split(" ").filter((token) => token.length >= 4));
   return completedExamples.filter((example) => {
+    const trusted = example && (example.trusted === true ||
+      example.reviewStatus === "approved" || example.reviewStatus === "promoted");
+    if (!trusted) return false;
     const snapshot = example.iris && example.iris.learningSnapshot ? example.iris.learningSnapshot : example.learningSnapshot;
     if (!snapshot || !snapshot.finalOutcome) return false;
     const source = normalize([
@@ -2124,6 +2118,16 @@ function applyLearningMemory(recommendation, description, completedExamples) {
   };
 }
 
+function approvedCanonicalMatch(description, canonicalKnowledge = []) {
+  const normalizedDescription = normalize(description);
+  if (!normalizedDescription || !Array.isArray(canonicalKnowledge)) return null;
+  return canonicalKnowledge.find((record) => {
+    if (!record || record.status !== "active" || record.repositoryReviewStatus !== "promoted") return false;
+    const name = normalize(record.canonicalName || record.objectName || "");
+    return name && (normalizedDescription === name || normalizedDescription.includes(name));
+  }) || null;
+}
+
 function classifyIris(input = {}) {
   const description = safeText(input.description || input.packageDescription || "");
   const text = normalize(description);
@@ -2141,8 +2145,11 @@ function classifyIris(input = {}) {
     shipmentItems,
     photoEstimatedWeightKg: input.photoEstimatedWeightKg,
   });
-  const estimatedWeightKg = weightAuthority.authoritativeWeightKg;
-  const baseCategory = classifyCategory(text, shipmentSummary);
+  const canonicalMatch = approvedCanonicalMatch(description, input.canonicalKnowledge);
+  const canonicalWeightKg = Number(canonicalMatch && canonicalMatch.knownWeight);
+  const estimatedWeightKg = Number.isFinite(canonicalWeightKg) && canonicalWeightKg > 0 ?
+    Math.max(weightAuthority.authoritativeWeightKg, canonicalWeightKg) : weightAuthority.authoritativeWeightKg;
+  const baseCategory = canonicalMatch && canonicalMatch.category || classifyCategory(text, shipmentSummary);
   const baseWeightBand = weightBandFor(estimatedWeightKg);
   const handlingFlags = handlingFlagsFor(text, baseCategory, estimatedWeightKg, shipmentSummary);
   const internalContext = internalContextFor(text, baseCategory, estimatedWeightKg);
@@ -2180,7 +2187,7 @@ function classifyIris(input = {}) {
     estimatedPrice: price.total,
     confidencePercent: text ? 82 : 55,
   };
-  const recommendation = compliance.status === "allowed" ?
+  const recommendation = compliance.status === "allowed" && !canonicalMatch ?
     applyLearningMemory(baseRecommendation, description, input.completedExamples || []) :
     baseRecommendation;
   const authoritativeRecommendation = {
@@ -2238,7 +2245,10 @@ function classifyIris(input = {}) {
   if (access.loadingTimeWarning) operationalWarnings.push("Access conditions may require additional handover time.");
   if (dimensionalBand.id === "oversized" || dimensionalBand.id === "long") operationalWarnings.push("Item dimensions may constrain vehicle choice.");
   const iris = {
-    version: "v1",
+    version: input.engineVersion || "iris-engine-v1",
+    engineVersion: input.engineVersion || "iris-engine-v1",
+    knowledgeVersion: input.knowledgeVersion || "iris-knowledge-baseline-v1",
+    weightPolicyVersion: WEIGHT_POLICY_VERSION,
     status: compliance.status,
     workflow,
     vanguardRequired: vanguardPolicy.required,
@@ -2281,6 +2291,7 @@ function classifyIris(input = {}) {
       } : null,
       accessIntelligence: access,
       learningMatchedExamples: authoritativeRecommendation.learningMatchedExamples || 0,
+      canonicalKnowledgeMatch: canonicalMatch ? canonicalMatch.canonicalId || canonicalMatch.id || null : null,
     },
     compliance: {
       status: compliance.status,

@@ -39,6 +39,13 @@ test("rider document uploads use backend callable and canonical matrix", () => {
   assert.match(riderAccount, /source: "cloud-functions"/);
 });
 
+test("weight discrepancy evidence is create-only for the assigned Rider", () => {
+  assert.match(storageRules, /match \/delivery-discrepancies\/\{deliveryId\}\/\{riderId\}\/\{fileName\}/);
+  assert.match(storageRules, /match \/delivery_weight_evidence\/\{deliveryId\}\/\{context\}\/\{fileName\}/);
+  assert.match(storageRules, /allow create: if request\.auth\.uid == riderId && isAssignedDeliveryRider\(deliveryId\) && isSafeUpload\(\);/);
+  assert.match(storageRules, /allow update, delete: if false;/);
+});
+
 test("admin rider approval enforces application compliance without blocking Stripe self-service", () => {
   assert.match(adminAuthority, /approvalProjection/);
   assert.match(riderCanonicalAccount, /payoutReadiness/);

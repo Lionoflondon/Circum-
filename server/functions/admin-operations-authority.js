@@ -1176,7 +1176,7 @@ exports.adminUpdateIrisRepositoryRecord = functions.https.onCall(async (data, co
   return {ok: true, recordId: targetId};
 });
 
-exports.adminUpdateIrisCandidateWorkflow = functions.https.onCall(async (data, context) => {
+exports.adminUpdateIrisCandidateWorkflow = functions.runWith({enforceAppCheck: true}).https.onCall(async (data, context) => {
   const actor = await resolveActor(context);
   requireOperations(actor, "IRIS Operations Admin access is required.");
   const id = clean(data.candidateId);
@@ -1211,6 +1211,7 @@ exports.adminUpdateIrisCandidateWorkflow = functions.https.onCall(async (data, c
       sourceCandidateId: id,
       status: "active",
       repositoryReviewStatus: "promoted",
+      knowledgeVersion: "iris-knowledge-v1",
       createdAt: FieldValue.serverTimestamp(),
       updatedAt: FieldValue.serverTimestamp(),
       updatedBy: actor.label,

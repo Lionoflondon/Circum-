@@ -8,6 +8,7 @@ const {calculateWalletCheckout, roundMoney, minorUnits} = require("./wallet-core
 const {verifiedStripePaidGbpSession} = require("./roth-ledger-core");
 const vanguardProtocol = require("./vanguard-protocol-core");
 const {classifyIris, normalDispatchEligibilityForInput} = require("./iris-core");
+const {WEIGHT_POLICY_VERSION, weightBandFor, weightSurcharge} = require("./canonical-weight-policy");
 const {verifiedPhotoAnalysis} = require("./iris-photo-analysis");
 const {dispatchDeliveryRequest} = require("./send-package");
 const {getAuthoritativeRouteFacts} = require("./route-authority");
@@ -504,15 +505,6 @@ function speedKey(value) {
   return "standard";
 }
 
-function weightSurcharge(weightKg) {
-  const weight = Math.max(0, Number(weightKg || 0));
-  if (weight > 40) return 25;
-  if (weight > 20) return 15;
-  if (weight > 10) return 7;
-  if (weight > 5) return 3;
-  return 0;
-}
-
 function distanceFare(distanceMiles) {
   const distance = Math.max(0, Number(distanceMiles || 0));
   if (distance < SHORT_TRIP_FARE_FLOOR_MILES) return 0;
@@ -841,6 +833,8 @@ function quotePayload(data, uid, serverPhotoAnalysis = null) {
     scheduledJourneyTimezone: data.scheduledJourneyAt ? "Europe/London" : null,
     roadCharges,
     weightKg,
+    weightBand: weightBandFor(weightKg),
+    weightPolicyVersion: WEIGHT_POLICY_VERSION,
     selectedVehicle,
     vehicleType: selectedVehicle,
     vehicleSurcharge: vehicle,

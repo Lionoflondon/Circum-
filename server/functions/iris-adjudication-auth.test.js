@@ -8,7 +8,7 @@ const iris = fs.readFileSync(path.join(__dirname, "iris.js"), "utf8");
 const adminAuth = fs.readFileSync(path.join(__dirname, "admin-auth.js"), "utf8");
 
 test("adjudicateIris requires admin authorization before any privileged access", () => {
-  const functionStart = iris.indexOf("const adjudicateIris = functions.https.onCall");
+  const functionStart = iris.indexOf("const adjudicateIris = functions.runWith({enforceAppCheck: true}).https.onCall");
   const guard = iris.indexOf("const adminUid = requireAdmin(context", functionStart);
   const firestore = iris.indexOf("const db = getFirestore()", functionStart);
   const firstDeliveryRead = iris.indexOf("collection(\"deliveryRequests\")", functionStart);
@@ -43,8 +43,8 @@ test("adjudicateIris protected operations remain behind the guard", () => {
 });
 
 test("analyseIris remains ordinary authenticated and is not admin-gated", () => {
-  const analyseStart = iris.indexOf("const analyseIris = functions.https.onCall");
-  const adjudicateStart = iris.indexOf("const adjudicateIris = functions.https.onCall");
+  const analyseStart = iris.indexOf("const analyseIris = functions.runWith({enforceAppCheck: true}).https.onCall");
+  const adjudicateStart = iris.indexOf("const adjudicateIris = functions.runWith({enforceAppCheck: true}).https.onCall");
   const analyseBody = iris.slice(analyseStart, adjudicateStart);
   assert.match(analyseBody, /if \(!context\.auth\)/);
   assert.doesNotMatch(analyseBody, /requireAdmin/);

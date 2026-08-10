@@ -20,7 +20,7 @@ test("additional amount cannot be negative", () => {
   assert.equal(additionalAmount(20, 18), 0);
 });
 
-test("new adjustments keep sender payment pending until Admin review", () => {
+test("new adjustments remain under Admin review before sender payment", () => {
   const adjustment = buildAdjustment({
     bookingId: "booking-1",
     bookingRequestId: "request-1",
@@ -30,7 +30,7 @@ test("new adjustments keep sender payment pending until Admin review", () => {
     revisedQuote: 14,
     riderReason: "weight_exceeded",
   });
-  assert.equal(adjustment.status, "awaiting_sender_payment");
+  assert.equal(adjustment.status, "awaiting_admin_review");
   assert.equal(adjustment.senderDecision, "pending");
   assert.equal(adjustment.additionalAmount, 4);
 });
@@ -40,9 +40,11 @@ test("delivery adjustment callable requires Admin review before sender payment",
   assert.match(source, /exports\.reviewDeliveryAdjustment/);
   assert.match(source, /status: "awaiting_admin_review"/);
   assert.match(source, /status: "awaiting_adjustment_review"/);
-  assert.match(source, /status: "awaiting_sender_payment"/);
+  assert.match(source, /nextStatus = needsPayment \? "awaiting_sender_payment" : !vehicleCompatible \? "vehicle_reassignment_required"/);
   assert.match(source, /adminDecision !== "approve"/);
   assert.match(source, /request_more_evidence/);
+  assert.match(source, /repriceWeightFromQuote/);
+  assert.doesNotMatch(source, /recommendation && recalculated\.recommendation\.estimatedPrice/);
 });
 
 test("Admin review UX exposes production review controls and audit fields", () => {

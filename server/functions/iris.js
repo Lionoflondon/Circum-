@@ -8,6 +8,11 @@ const {
   privateIris,
 } = require("./iris-core");
 const {requireAdmin} = require("./admin-auth");
+const {enforceIrisRequestLimit} = require("./iris-request-guard");
+
+const IRIS_ENGINE_VERSION = "iris-engine-v1";
+const IRIS_KNOWLEDGE_VERSION = "iris-knowledge-v1";
+let canonicalKnowledgeCache = {expiresAt: 0, records: []};
 
 function clean(value) {
   return `${value || ""}`.trim().toLowerCase();
@@ -25,26 +30,46 @@ function requireIrisAdmin(context) {
   }
 }
 
-async function loadLearningExamples(description) {
-  const text = `${description || ""}`.trim();
-  if (!text) return [];
-  const snapshot = await getFirestore().collection("history")
-      .where("iris.learningSnapshot.version", "==", "v1")
-      .limit(40)
-      .get();
-  return snapshot.docs.map((doc) => ({id: doc.id, ...doc.data()}));
+async function loadCanonicalKnowledge() {
+  const now = Date.now();
+  if (canonicalKnowledgeCache.expiresAt > now) return canonicalKnowledgeCache.records;
+  const snapshot = await getFirestore().collection("irisCanonicalObjects")
+      .where("status", "==", "active").limit(200).get();
+  const records = snapshot.docs.map((doc) => ({id: doc.id, ...doc.data()}));
+  canonicalKnowledgeCache = {records, expiresAt: now + 5 * 60 * 1000};
+  return records;
 }
 
-const analyseIris = functions.https.onCall(async (data, context) => {
+const analyseIris = functions.runWith({enforceAppCheck: true}).https.onCall(async (data, context) => {
+  const startedAt = Date.now();
   if (!context.auth) {
     throw new functions.https.HttpsError("unauthenticated",
         "User must be authenticated to call Iris.");
   }
-  const completedExamples = await loadLearningExamples(data.description || data.packageDescription);
-  return customerSafeIris(classifyIris({...data, completedExamples}));
+  await enforceIrisRequestLimit({db: getFirestore(), uid: context.auth.uid, action: "analyse_iris"});
+  const guardCompletedAt = Date.now();
+  const canonicalKnowledge = await loadCanonicalKnowledge();
+  const knowledgeCompletedAt = Date.now();
+  const result = customerSafeIris(classifyIris({
+    ...data,
+    canonicalKnowledge,
+    engineVersion: IRIS_ENGINE_VERSION,
+    knowledgeVersion: IRIS_KNOWLEDGE_VERSION,
+  }));
+  functions.logger.info("iris_classification_timing", {
+    endpoint: "analyseIris",
+    engineVersion: IRIS_ENGINE_VERSION,
+    knowledgeVersion: IRIS_KNOWLEDGE_VERSION,
+    guardMs: guardCompletedAt - startedAt,
+    knowledgeMs: knowledgeCompletedAt - guardCompletedAt,
+    inferenceMs: Date.now() - knowledgeCompletedAt,
+    totalMs: Date.now() - startedAt,
+    status: result.status,
+  });
+  return result;
 });
 
-const adjudicateIris = functions.https.onCall(async (data, context) => {
+const adjudicateIris = functions.runWith({enforceAppCheck: true}).https.onCall(async (data, context) => {
   const adminUid = requireAdmin(context, "IRIS administrator access is required.");
   requireIrisAdmin(context);
   const {requestId, decision, finalCategory, finalWeightBand, finalHandlingFlags, reason, referralType, serviceabilityStatus} = data;
