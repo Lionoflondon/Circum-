@@ -20,8 +20,10 @@ const MIN_IMAGE_BYTES = 128;
 const ALLOWED_CONTENT_TYPES = new Set(["image/jpeg", "image/png", "image/webp"]);
 const moduleStartedAt = Date.now();
 let invocationCount = 0;
-if (process.env.FUNCTION_TARGET === "analyseParcelPhotoForIris" ||
-    `${process.env.K_SERVICE || ""}`.includes("analyseparcelphotoforiris")) {
+
+function startVisualRuntimeWarmup() {
+  if (process.env.FUNCTION_TARGET !== "analyseParcelPhotoForIris" &&
+      !`${process.env.K_SERVICE || ""}`.includes("analyseparcelphotoforiris")) return;
   warmVisualRuntime(getFirestore()).catch((error) => {
     functions.logger.warn("iris_visual_runtime_warmup_failed", {
       reason: `${error && error.message || "runtime_warmup_failed"}`.slice(0, 80),
@@ -397,6 +399,7 @@ async function verifiedPhotoAnalysis({db, uid, analysisId, description = ""}) {
 
 module.exports = {
   analyseParcelPhotoForIris,
+  startVisualRuntimeWarmup,
   adminSetIrisVisualModelState,
   verifiedPhotoAnalysis,
   _private: {
