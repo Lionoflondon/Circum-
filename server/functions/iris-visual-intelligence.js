@@ -11,6 +11,7 @@ const VISUAL_STATE_CACHE_MS = 60 * 1000;
 const VISUAL_RESULT_CACHE_MS = 10 * 60 * 1000;
 const MAX_CACHED_VISUAL_RESULTS = 100;
 let visualStateCache = null;
+let visualStateLoadPromise = null;
 let imageAnnotatorClient = null;
 const visualResultCache = new Map();
 
@@ -48,10 +49,18 @@ function normalizeVisualModelState(value = {}) {
 
 async function currentVisualModelState(db, now = Date.now()) {
   if (visualStateCache && visualStateCache.expiresAt > now) return visualStateCache.value;
-  const snapshot = await db.collection("irisVisualModelState").doc("current").get();
-  const value = normalizeVisualModelState(snapshot.exists ? snapshot.data() : {});
-  visualStateCache = {value, expiresAt: now + VISUAL_STATE_CACHE_MS};
-  return value;
+  if (visualStateLoadPromise) return visualStateLoadPromise;
+  visualStateLoadPromise = (async () => {
+    const snapshot = await db.collection("irisVisualModelState").doc("current").get();
+    const value = normalizeVisualModelState(snapshot.exists ? snapshot.data() : {});
+    visualStateCache = {value, expiresAt: Date.now() + VISUAL_STATE_CACHE_MS};
+    return value;
+  })();
+  try {
+    return await visualStateLoadPromise;
+  } finally {
+    visualStateLoadPromise = null;
+  }
 }
 
 function clearVisualModelStateCache() {
@@ -60,6 +69,7 @@ function clearVisualModelStateCache() {
 
 function clearVisualRuntimeCaches() {
   visualStateCache = null;
+  visualStateLoadPromise = null;
   imageAnnotatorClient = null;
   visualResultCache.clear();
 }
@@ -86,6 +96,14 @@ function visualClient() {
   const vision = require("@google-cloud/vision");
   imageAnnotatorClient = new vision.ImageAnnotatorClient();
   return imageAnnotatorClient;
+}
+
+async function warmVisualRuntime(db) {
+  const client = visualClient();
+  const tasks = [];
+  if (typeof client.initialize === "function") tasks.push(client.initialize());
+  if (db) tasks.push(currentVisualModelState(db));
+  await Promise.all(tasks);
 }
 
 function boundedScore(value) {
@@ -213,5 +231,6 @@ module.exports = {
   normalizeVisualModelState,
   shadowComparison,
   visualEvidenceFromResponse,
+  warmVisualRuntime,
   _private: {riskClues, sanitizedAnnotations, strongestCategory},
 };

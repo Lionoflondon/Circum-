@@ -12,6 +12,7 @@ const {
   currentVisualModelState,
   inferVisualEvidence,
   shadowComparison,
+  warmVisualRuntime,
 } = require("./iris-visual-intelligence");
 
 const MAX_IMAGE_BYTES = 10 * 1024 * 1024;
@@ -19,6 +20,14 @@ const MIN_IMAGE_BYTES = 128;
 const ALLOWED_CONTENT_TYPES = new Set(["image/jpeg", "image/png", "image/webp"]);
 const moduleStartedAt = Date.now();
 let invocationCount = 0;
+if (process.env.FUNCTION_TARGET === "analyseParcelPhotoForIris" ||
+    `${process.env.K_SERVICE || ""}`.includes("analyseparcelphotoforiris")) {
+  warmVisualRuntime(getFirestore()).catch((error) => {
+    functions.logger.warn("iris_visual_runtime_warmup_failed", {
+      reason: `${error && error.message || "runtime_warmup_failed"}`.slice(0, 80),
+    });
+  });
+}
 
 function text(value, max = 1000) {
   return `${value || ""}`.trim().slice(0, max);
@@ -293,6 +302,13 @@ const analyseParcelPhotoForIris = functions.runWith({enforceAppCheck: true}).htt
     inputWidth: analysis.width,
     inputHeight: analysis.height,
     providerResultReused: visualShadow && visualShadow.providerResultReused === true,
+    clientTimings: {
+      imageReadMs: boundedMetric(clientTimings.imageReadMs),
+      base64EncodingMs: boundedMetric(clientTimings.base64EncodingMs),
+      preCallMs: boundedMetric(clientTimings.preCallMs),
+      inputBytes: boundedMetric(clientTimings.inputBytes, MAX_IMAGE_BYTES),
+      encodedCharacters: boundedMetric(clientTimings.encodedCharacters, Math.ceil(MAX_IMAGE_BYTES * 1.4)),
+    },
     stageTimings,
     totalMs: stageTimings.totalBackendMs,
     confidence: analysis.confidence,
