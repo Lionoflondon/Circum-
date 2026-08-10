@@ -422,6 +422,102 @@ void main() {
     expect(source, isNot(contains("PolylineId('remaining_route')")));
   });
 
+  test('assigned Rider trust view projects photo, rank, vehicle and experience', () {
+    final rider = AssignedRiderTrustView.fromDelivery({
+      'assignedRiderId': 'rider-1',
+      'assignedRiderProfile': {
+        'riderId': 'rider-1',
+        'displayName': 'Ayo Rider',
+        'username': 'ayo',
+        'photoUrl': 'https://images.example/rider.jpg',
+        'photoVersion': 3,
+        'rank': 'veteran',
+        'rankAssigned': true,
+        'verified': true,
+        'completedDeliveries': 42,
+        'rating': 4.8,
+        'vehicle': {
+          'type': 'Car',
+          'manufacturer': 'Volvo',
+          'model': 'EX30',
+          'colour': 'Blue',
+          'registration': 'AB12 CDE',
+        },
+        'qualifications': ['Vanguard'],
+      },
+      'riderEtaText': '6 min',
+      'riderDistanceText': '1.2 mi',
+    });
+
+    expect(rider.displayName, 'Ayo Rider');
+    expect(rider.photoUrl, 'https://images.example/rider.jpg');
+    expect(rider.rank, 'Veteran');
+    expect(rider.rankAssigned, isTrue);
+    expect(rider.vehicleLabel, 'Blue · Volvo EX30 · Car · AB12 CDE');
+    expect(rider.experienceLabel, '42 completed · 4.8 rating');
+    expect(rider.etaDistanceLabel, '6 min · 1.2 mi');
+    expect(rider.qualifications, ['Vanguard']);
+  });
+
+  test('assigned Rider trust view fails safely for missing or invalid fields', () {
+    final rider = AssignedRiderTrustView.fromDelivery({
+      'assignedRiderId': 'rider-2',
+      'riderName': 'Circum Rider',
+      'riderPhotoUrl': 'http://insecure.example/rider.jpg',
+      'riderRating': 9,
+    });
+
+    expect(rider.photoUrl, isEmpty);
+    expect(rider.rank, 'Agent');
+    expect(rider.rating, isNull);
+    expect(rider.vehicleLabel, 'Vehicle details updating');
+    expect(rider.etaDistanceLabel, 'Updating ETA');
+  });
+
+  testWidgets('Rider card drops old identity on reassignment and closes contact terminally',
+      (tester) async {
+    SendPackageState stateFor(String id, String name, {bool assigned = false}) =>
+        SendPackageState(activeDeliveryData: {
+          'assignedRiderId': id,
+          'assignedRiderProfile': {
+            'riderId': id,
+            'displayName': name,
+            'rank': 'veteran',
+            'rankAssigned': assigned,
+            'verified': true,
+            'vehicle': {'type': 'Van', 'registration': 'CIR 1'},
+          },
+        });
+
+    await tester.pumpWidget(MaterialApp(
+      home: Scaffold(
+        body: RiderCard(
+          engine: stateFor('old', 'Old Rider'),
+          liveStatus: 'Assigned',
+          onMessage: () {},
+        ),
+      ),
+    ));
+    expect(find.text('Old Rider'), findsOneWidget);
+    expect(find.byTooltip('Message Rider'), findsOneWidget);
+
+    await tester.pumpWidget(MaterialApp(
+      home: Scaffold(
+        body: RiderCard(
+          engine: stateFor('new', 'New Rider', assigned: true),
+          liveStatus: 'On the way',
+          terminal: true,
+          onMessage: () {},
+        ),
+      ),
+    ));
+    await tester.pump();
+    expect(find.text('Old Rider'), findsNothing);
+    expect(find.text('New Rider'), findsOneWidget);
+    expect(find.text('Assigned Veteran'), findsOneWidget);
+    expect(find.byTooltip('Message Rider'), findsNothing);
+  });
+
   test('tracking map rejects malformed and out-of-UK canonical coordinates',
       () {
     final snapshot = SenderTrackingMapAdapter.snapshotFor(

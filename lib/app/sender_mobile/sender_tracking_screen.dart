@@ -2045,7 +2045,12 @@ class _TrackingPanelContent extends StatelessWidget {
         ],
         if (content.showRiderCard) ...[
           const SizedBox(height: 12),
-          RiderCard(engine: engine, eta: content.eta, liveStatus: content.pill),
+          RiderCard(
+            engine: engine,
+            liveStatus: content.pill,
+            terminal: state == SenderTrackingState.delivered,
+            onMessage: onOpenMessage,
+          ),
         ],
         if (state != SenderTrackingState.delivered && waiting.visible) ...[
           const SizedBox(height: 12),
@@ -3107,139 +3112,315 @@ class _VanguardCollectionPinCardState extends State<VanguardCollectionPinCard> {
 
 class RiderCard extends StatelessWidget {
   final SendPackageState engine;
-  final String eta;
   final String liveStatus;
+  final bool terminal;
+  final VoidCallback? onMessage;
 
   const RiderCard({
     super.key,
     required this.engine,
-    required this.eta,
     required this.liveStatus,
+    this.terminal = false,
+    this.onMessage,
   });
 
   @override
   Widget build(BuildContext context) {
-    final data = engine.deliveryData;
-    final name = _firstName(data?.courierName) ?? 'Your Circum Rider';
-    final vehicle = data?.typeOfVehicle.trim().isNotEmpty == true
-        ? _riderVehicleLabel(data!.typeOfVehicle)
-        : 'Vehicle pending';
-    final rank = _riderTrustRank(engine.activeDeliveryData);
+    final rider = AssignedRiderTrustView.fromDelivery(engine.activeDeliveryData);
+    final rankColor = _senderRankColor(rider.rank);
     return Container(
       padding: const EdgeInsets.all(12),
       decoration: _cardDecoration(),
-      child: Row(
+      child: Column(
         children: [
-          CircleAvatar(
-            radius: 22,
-            backgroundColor: const Color(0xFF1B2440),
-            child: Text(
-              name.isEmpty ? 'R' : name[0].toUpperCase(),
-              style: const TextStyle(
-                color: Colors.white,
-                fontFamily: 'DM Serif Display',
-                fontSize: 18,
-              ),
-            ),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  name,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 17,
-                    fontWeight: FontWeight.w800,
-                  ),
-                ),
-                const SizedBox(height: 5),
-                Row(
+          Row(
+            children: [
+              _AssignedRiderAvatar(rider: rider),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Flexible(
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 7,
-                          vertical: 3,
-                        ),
-                        decoration: BoxDecoration(
-                          color: const Color(0xFF34D399).withValues(alpha: .12),
-                          borderRadius: BorderRadius.circular(999),
-                          border: Border.all(
-                            color: const Color(
-                              0xFF34D399,
-                            ).withValues(alpha: .28),
-                          ),
-                        ),
-                        child: Text(
-                          rank,
-                          overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(
-                            color: Color(0xFF34D399),
-                            fontSize: 10.5,
-                            fontWeight: FontWeight.w800,
-                          ),
-                        ),
+                    Text(
+                      rider.displayName,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 17,
+                        fontWeight: FontWeight.w800,
                       ),
                     ),
-                    const SizedBox(width: 7),
-                    Flexible(
-                      child: Text(
-                        'Circum Rider',
+                    if (rider.username.isNotEmpty)
+                      Text(
+                        '@${rider.username}',
+                        maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                         style: const TextStyle(
                           color: _TrackingTokens.muted,
                           fontSize: 11.5,
-                          fontWeight: FontWeight.w700,
                         ),
                       ),
+                    const SizedBox(height: 5),
+                    Wrap(
+                      spacing: 7,
+                      runSpacing: 5,
+                      crossAxisAlignment: WrapCrossAlignment.center,
+                      children: [
+                        _RiderTrustPill(
+                          label: rider.rankAssigned
+                              ? 'Assigned ${rider.rank}'
+                              : rider.rank,
+                          color: rankColor,
+                        ),
+                        if (rider.verified)
+                          const _RiderTrustPill(
+                            label: 'Verified Rider',
+                            color: Color(0xFF34D399),
+                            icon: Icons.verified_rounded,
+                          ),
+                      ],
                     ),
                   ],
                 ),
-                const SizedBox(height: 3),
-                Text(
-                  '$vehicle${liveStatus.isEmpty ? '' : ' · $liveStatus'}',
-                  maxLines: 1,
+              ),
+              if (!terminal && onMessage != null)
+                Semantics(
+                  button: true,
+                  label: 'Message ${rider.displayName}',
+                  child: IconButton(
+                    tooltip: 'Message Rider',
+                    onPressed: onMessage,
+                    icon: const Icon(Icons.chat_bubble_outline_rounded),
+                    color: const Color(0xFF60A5FA),
+                  ),
+                ),
+            ],
+          ),
+          const SizedBox(height: 9),
+          Row(
+            children: [
+              const Icon(Icons.directions_car_filled_outlined,
+                  size: 15, color: _TrackingTokens.muted),
+              const SizedBox(width: 6),
+              Expanded(
+                child: Text(
+                  rider.vehicleLabel,
+                  maxLines: 2,
                   overflow: TextOverflow.ellipsis,
                   style: const TextStyle(
-                    color: _TrackingTokens.muted,
+                    color: _TrackingTokens.mid,
                     fontSize: 11.5,
                   ),
                 ),
-              ],
-            ),
+              ),
+              const SizedBox(width: 8),
+              ETABadge(value: rider.etaDistanceLabel),
+            ],
           ),
-          if (eta.isNotEmpty) ETABadge(value: eta),
+          if (rider.experienceLabel.isNotEmpty || rider.qualifications.isNotEmpty) ...[
+            const SizedBox(height: 8),
+            Align(
+              alignment: Alignment.centerLeft,
+              child: Text(
+                [
+                  if (rider.experienceLabel.isNotEmpty) rider.experienceLabel,
+                  ...rider.qualifications,
+                  if (liveStatus.isNotEmpty) liveStatus,
+                ].join(' · '),
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(color: _TrackingTokens.muted, fontSize: 10.5),
+              ),
+            ),
+          ],
         ],
       ),
     );
   }
 }
 
-String _riderTrustRank(Map<String, dynamic> data) {
-  for (final key in const [
-    'trustRank',
-    'riderRank',
-    'rank',
-    'trustTier',
-    'trustLevel',
-  ]) {
-    final value = '${data[key] ?? ''}'.trim();
-    if (value.isNotEmpty && value.toLowerCase() != 'null') {
-      return value;
+class AssignedRiderTrustView {
+  final String riderId;
+  final String displayName;
+  final String username;
+  final String photoUrl;
+  final Object? photoVersion;
+  final String rank;
+  final bool rankAssigned;
+  final bool verified;
+  final int? completedDeliveries;
+  final double? rating;
+  final String vehicleLabel;
+  final String etaDistanceLabel;
+  final List<String> qualifications;
+
+  const AssignedRiderTrustView({
+    required this.riderId,
+    required this.displayName,
+    required this.username,
+    required this.photoUrl,
+    required this.photoVersion,
+    required this.rank,
+    required this.rankAssigned,
+    required this.verified,
+    required this.completedDeliveries,
+    required this.rating,
+    required this.vehicleLabel,
+    required this.etaDistanceLabel,
+    required this.qualifications,
+  });
+
+  factory AssignedRiderTrustView.fromDelivery(Map<String, dynamic> delivery) {
+    final profile = _mapFrom(delivery['assignedRiderProfile']);
+    final vehicle = _mapFrom(
+      profile['vehicle'] ?? delivery['assignedVehicleSnapshot'],
+    );
+    String text(List<Object?> values) {
+      for (final value in values) {
+        final candidate = '${value ?? ''}'.trim();
+        if (candidate.isNotEmpty && candidate.toLowerCase() != 'null') return candidate;
+      }
+      return '';
     }
+    final displayName = text([
+      profile['displayName'], delivery['riderName'], delivery['driverName'],
+      delivery['courierName'],
+    ]);
+    final rank = _canonicalSenderRank(text([
+      profile['rank'], delivery['riderRank'], delivery['rank'],
+    ]));
+    final makeModel = [vehicle['manufacturer'], vehicle['model']]
+        .map((value) => '${value ?? ''}'.trim())
+        .where((value) => value.isNotEmpty)
+        .join(' ');
+    final vehicleLabel = [
+      text([vehicle['colour']]), makeModel,
+      text([vehicle['type'], delivery['driverVehicle']]),
+      text([vehicle['registration'], delivery['driverPlateNumber']]),
+    ].where((value) => value.isNotEmpty).join(' · ');
+    final eta = text([
+      delivery['riderEtaText'], delivery['etaText'], delivery['liveEtaText'],
+    ]);
+    final distance = text([
+      delivery['riderDistanceText'], delivery['distanceToRiderText'],
+      delivery['liveDistanceText'],
+    ]);
+    final qualifications = (profile['qualifications'] ?? delivery['riderQualifications']);
+    return AssignedRiderTrustView(
+      riderId: text([profile['riderId'], delivery['assignedRiderId'], delivery['riderId']]),
+      displayName: displayName.isEmpty ? 'Your Circum Rider' : displayName,
+      username: text([profile['username'], delivery['riderUsername']]).replaceFirst(RegExp(r'^@+'), ''),
+      photoUrl: _safeRiderPhotoUrl(text([profile['photoUrl'], delivery['riderPhotoUrl'], delivery['photoURL']])),
+      photoVersion: profile['photoVersion'] ?? delivery['riderPhotoVersion'],
+      rank: rank,
+      rankAssigned: profile['rankAssigned'] == true || delivery['riderRankAssigned'] == true,
+      verified: profile['verified'] == true || delivery['riderVerified'] == true,
+      completedDeliveries: _nonNegativeInt(profile['completedDeliveries'] ?? delivery['riderCompletedDeliveries']),
+      rating: _safeRating(profile['rating'] ?? delivery['riderRating']),
+      vehicleLabel: vehicleLabel.isEmpty ? 'Vehicle details updating' : vehicleLabel,
+      etaDistanceLabel: [eta, distance].where((value) => value.isNotEmpty).join(' · ').isEmpty
+          ? 'Updating ETA'
+          : [eta, distance].where((value) => value.isNotEmpty).join(' · '),
+      qualifications: qualifications is List
+          ? qualifications.map((value) => '$value'.trim()).where((value) => value.isNotEmpty).take(3).toList()
+          : const [],
+    );
   }
-  return 'Trust rank pending';
+
+  String get experienceLabel {
+    final parts = <String>[];
+    if (completedDeliveries != null) parts.add('$completedDeliveries completed');
+    if (rating != null) parts.add('${rating!.toStringAsFixed(1)} rating');
+    return parts.join(' · ');
+  }
 }
 
-String _riderVehicleLabel(String value) {
-  final normalized = value.trim().toLowerCase();
-  if (normalized.isEmpty) return 'Vehicle pending';
-  return normalized[0].toUpperCase() + normalized.substring(1);
+class _AssignedRiderAvatar extends StatelessWidget {
+  final AssignedRiderTrustView rider;
+  const _AssignedRiderAvatar({required this.rider});
+
+  @override
+  Widget build(BuildContext context) {
+    final fallback = Center(
+      child: Text(
+        rider.displayName.isEmpty ? 'C' : rider.displayName[0].toUpperCase(),
+        style: const TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.w800),
+      ),
+    );
+    return Semantics(
+      image: true,
+      label: '${rider.displayName} profile photo',
+      child: CircleAvatar(
+        key: ValueKey('${rider.riderId}:${rider.photoVersion}:${rider.photoUrl}'),
+        radius: 25,
+        backgroundColor: const Color(0xFF13233F),
+        child: rider.photoUrl.isEmpty
+            ? fallback
+            : ClipOval(
+                child: Image.network(
+                  rider.photoUrl,
+                  width: 50,
+                  height: 50,
+                  fit: BoxFit.cover,
+                  errorBuilder: (_, __, ___) => fallback,
+                ),
+              ),
+      ),
+    );
+  }
+}
+
+class _RiderTrustPill extends StatelessWidget {
+  final String label;
+  final Color color;
+  final IconData? icon;
+  const _RiderTrustPill({required this.label, required this.color, this.icon});
+
+  @override
+  Widget build(BuildContext context) => Container(
+        padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+        decoration: BoxDecoration(
+          color: color.withValues(alpha: .12),
+          borderRadius: BorderRadius.circular(999),
+          border: Border.all(color: color.withValues(alpha: .30)),
+        ),
+        child: Row(mainAxisSize: MainAxisSize.min, children: [
+          if (icon != null) ...[Icon(icon, size: 11, color: color), const SizedBox(width: 4)],
+          Text(label, style: TextStyle(color: color, fontSize: 10.5, fontWeight: FontWeight.w800)),
+        ]),
+      );
+}
+
+String _canonicalSenderRank(String value) {
+  final rank = value.trim().toLowerCase();
+  const ranks = {'agent', 'sentinel', 'warden', 'knight', 'veteran'};
+  final safe = ranks.contains(rank) ? rank : 'agent';
+  return '${safe[0].toUpperCase()}${safe.substring(1)}';
+}
+
+Color _senderRankColor(String rank) => switch (rank.toLowerCase()) {
+      'agent' => const Color(0xFF94A3B8),
+      'sentinel' => const Color(0xFF60A5FA),
+      'warden' => const Color(0xFF34D399),
+      'knight' => const Color(0xFFA78BFA),
+      'veteran' => const Color(0xFFF5C451),
+      _ => const Color(0xFF94A3B8),
+    };
+
+String _safeRiderPhotoUrl(String value) {
+  final uri = Uri.tryParse(value);
+  return uri != null && uri.scheme == 'https' ? value : '';
+}
+
+int? _nonNegativeInt(Object? value) {
+  final parsed = value is num ? value.toInt() : int.tryParse('${value ?? ''}');
+  return parsed != null && parsed >= 0 ? parsed : null;
+}
+
+double? _safeRating(Object? value) {
+  final parsed = _numberFrom(value);
+  return parsed != null && parsed >= 1 && parsed <= 5 ? parsed : null;
 }
 
 class IRISChip extends StatelessWidget {
@@ -5123,12 +5304,6 @@ BoxDecoration _cardDecoration() => BoxDecoration(
       borderRadius: BorderRadius.circular(16),
       border: Border.all(color: Colors.white.withValues(alpha: .07)),
     );
-
-String? _firstName(String? value) {
-  final trimmed = value?.trim();
-  if (trimmed == null || trimmed.isEmpty) return null;
-  return trimmed.split(RegExp(r'\s+')).first;
-}
 
 String _formatPin(String value) {
   final cleaned = value.replaceAll(RegExp(r'\s+'), '');
