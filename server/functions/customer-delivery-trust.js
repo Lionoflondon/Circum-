@@ -60,6 +60,8 @@ function receipt(data, deliveryId) {
     amountPaid: amount(data.paidAmount || pricing.amountDue || snapshot.amountDue || snapshot.total),
     paymentStatus: text(data.paymentStatus || "unavailable", 40).toLowerCase(),
     paymentMethod: text(data.paymentMethod || "unavailable", 40).toLowerCase(),
+    rothAppliedAmount: amount(data.rothAppliedAmount),
+    externalPaidAmount: amount(data.remainingAmount),
     vatAmount: amount(data.vatAmount || snapshot.vatAmount),
     completionStatus: text(data.deliveryStatus || data.status || "requested", 60).toLowerCase(),
     lineItems: rawItems.slice(0, 30).map((item) => ({label: text(item && item.label, 100), amount: amount(item && item.amount)})).filter((item) => item.label && item.amount !== 0),
