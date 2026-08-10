@@ -98,8 +98,8 @@ const legacyFinancialEndpoints = require("./legacy-financial-endpoints");
 const {routeCheckoutSessionCompleted} = require("./checkout-session-router");
 
 initializeApp();
-irisPhotoAnalysis.startVisualRuntimeWarmup();
 getFirestore().settings({ignoreUndefinedProperties: true});
+irisPhotoAnalysis.startVisualRuntimeWarmup();
 
 function allowCors(req, res) {
   res.set("Access-Control-Allow-Origin", "*");
