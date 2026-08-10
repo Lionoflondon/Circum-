@@ -1115,6 +1115,7 @@ class _SenderBookingCanvasState extends State<SenderBookingCanvas> {
             child: SenderMobileTrackingScreen(
               engine: engine,
               stateOverride: senderTrackingStateForEngine(engine),
+              onStartBooking: _resetBookingSession,
             ),
           );
         }

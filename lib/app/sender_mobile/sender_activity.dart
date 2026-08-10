@@ -229,6 +229,8 @@ class FirebaseSenderActivityRepository implements SenderActivityRepository {
     return firestore
         .collection('deliveryRequests')
         .where('senderId', isEqualTo: uid)
+        .orderBy('updatedAt', descending: true)
+        .orderBy(FieldPath.documentId, descending: true)
         .limit(20)
         .snapshots()
         .map((snapshot) {
@@ -266,21 +268,39 @@ class FirebaseSenderActivityRepository implements SenderActivityRepository {
       deliveryQuery.get(),
     );
     final legacyFuture = _legacyDeliveryDocs(uid, cursor);
+    Query<Map<String, dynamic>> giftQuery = firestore
+        .collection('giftRequests')
+        .where('senderId', isEqualTo: uid)
+        .orderBy('createdAt', descending: true)
+        .orderBy(FieldPath.documentId, descending: true)
+        .limit(_historyPageSize);
+    final giftAnchor = cursor?.legacyAnchors['giftRequests'];
+    if (giftAnchor != null) {
+      giftQuery = giftQuery.startAfter([
+        Timestamp.fromMillisecondsSinceEpoch(giftAnchor.millis),
+        giftAnchor.documentId,
+      ]);
+    }
+    Query<Map<String, dynamic>> healthQuery = firestore
+        .collection('prescriptionPickups')
+        .where('profileId', isEqualTo: uid)
+        .orderBy('createdAt', descending: true)
+        .orderBy(FieldPath.documentId, descending: true)
+        .limit(_historyPageSize);
+    final healthAnchor = cursor?.legacyAnchors['prescriptionPickups'];
+    if (healthAnchor != null) {
+      healthQuery = healthQuery.startAfter([
+        Timestamp.fromMillisecondsSinceEpoch(healthAnchor.millis),
+        healthAnchor.documentId,
+      ]);
+    }
     final giftsFuture = _optionalActivityDocs(
       'giftRequests',
-      firestore
-          .collection('giftRequests')
-          .where('senderId', isEqualTo: uid)
-          .limit(_historyPageSize)
-          .get(),
+      giftQuery.get(),
     );
     final healthFuture = _optionalActivityDocs(
       'prescriptionPickups',
-      firestore
-          .collection('prescriptionPickups')
-          .where('profileId', isEqualTo: uid)
-          .limit(_historyPageSize)
-          .get(),
+      healthQuery.get(),
     );
     final walletFuture = _optionalWalletTransactions(pageToken);
     final deliveries = await deliveriesFuture;
@@ -348,6 +368,16 @@ class FirebaseSenderActivityRepository implements SenderActivityRepository {
         nextLegacyAnchors[field] =
             _LegacyAnchor(_timestampMillis(data[field]), doc.id);
       }
+    }
+    if (gifts.isNotEmpty) {
+      final doc = gifts.last;
+      nextLegacyAnchors['giftRequests'] =
+          _LegacyAnchor(_timestampMillis(doc.data()['createdAt']), doc.id);
+    }
+    if (health.isNotEmpty) {
+      final doc = health.last;
+      nextLegacyAnchors['prescriptionPickups'] =
+          _LegacyAnchor(_timestampMillis(doc.data()['createdAt']), doc.id);
     }
     final nextCursor = hasMore && lastDelivery != null
         ? _HistoryCursor(

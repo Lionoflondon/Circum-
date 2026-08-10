@@ -1639,6 +1639,8 @@ class SendPackageBloc extends Bloc<SendPackageEvent, SendPackageState> {
     'canceled',
     'cancelled_verified_discrepancy',
     'sender_no_show_pickup',
+    'no_show',
+    'failed',
     'archived',
   };
 
@@ -1795,7 +1797,8 @@ class SendPackageBloc extends Bloc<SendPackageEvent, SendPackageState> {
           await prefs.remove('activeRequest');
         }
 
-        if (requestStatus == 'completed' || requestStatus == 'delivered') {
+        if (const {'completed', 'delivered', 'delivery_completed'}
+            .contains(normalizedRequestStatus)) {
           status = DeliveryStatus.deliveryCompleted;
           emit(
             state.copyWith(
@@ -1809,7 +1812,7 @@ class SendPackageBloc extends Bloc<SendPackageEvent, SendPackageState> {
           );
         }
 
-        if (requestStatus == 'cancelled' || requestStatus == 'canceled') {
+        if (_cancelledRequestStatuses.contains(normalizedRequestStatus)) {
           emit(
             state.copyWith(
               deliveryStatus: DeliveryStatus.inital,
