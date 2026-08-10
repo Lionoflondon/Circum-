@@ -1774,23 +1774,10 @@ class FirebaseSenderHomeRepository implements SenderHomeRepository {
         giftCount: 0,
       );
     }
-    final email = (user.email ?? '').trim().toLowerCase();
     final profileSnapshot = await profileAuthority.load('home.summary.profile');
     final results = await Future.wait([
       firestore.collection('healthPlusProfiles').doc(user.uid).get(),
-      firestore
-          .collection('businessAccounts')
-          .where('createdByUserId', isEqualTo: user.uid)
-          .limit(20)
-          .get(),
-      firestore
-          .collection('businessAccounts')
-          .where(
-            'teamMemberIds',
-            arrayContainsAny: [user.uid, if (email.isNotEmpty) email],
-          )
-          .limit(20)
-          .get(),
+      functions.httpsCallable('listBusinessAccounts').call(),
       firestore
           .collection('giftRequests')
           .where('senderId', isEqualTo: user.uid)
@@ -1798,12 +1785,14 @@ class FirebaseSenderHomeRepository implements SenderHomeRepository {
           .get(),
     ]);
     final healthSnapshot = results[0] as DocumentSnapshot<Map<String, dynamic>>;
-    final ownedSnapshot = results[1] as QuerySnapshot<Map<String, dynamic>>;
-    final teamSnapshot = results[2] as QuerySnapshot<Map<String, dynamic>>;
-    final giftsSnapshot = results[3] as QuerySnapshot<Map<String, dynamic>>;
+    final businessResult = results[1] as HttpsCallableResult<dynamic>;
+    final giftsSnapshot = results[2] as QuerySnapshot<Map<String, dynamic>>;
     final profile = profileSnapshot.data;
-    final ownedBusinesses = ownedSnapshot.docs.map((doc) => doc.id).toSet();
-    final teamBusinesses = teamSnapshot.docs.map((doc) => doc.id).toSet();
+    final businesses =
+        (Map<String, dynamic>.from(businessResult.data as Map)['accounts']
+                    as List? ??
+                const [])
+            .length;
     final trustPoints =
         ((profile['senderTrustPoints'] ?? profile['trustPoints']) as num?)
                 ?.toInt() ??
@@ -1820,8 +1809,7 @@ class FirebaseSenderHomeRepository implements SenderHomeRepository {
     return SenderHomeSummary(
       displayName: '${profile['displayName'] ?? user.displayName ?? ''}'.trim(),
       healthProfileExists: healthSnapshot.exists,
-      businessAccountCount:
-          <String>{...ownedBusinesses, ...teamBusinesses}.length,
+      businessAccountCount: businesses,
       giftCount: giftsSnapshot.docs.length,
       trustPoints: trustPoints,
       trustTier: trustTier,

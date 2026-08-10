@@ -1,6 +1,7 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:cloud_functions/cloud_functions.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:uuid/uuid.dart';
 
 import 'business_models.dart';
 
@@ -14,6 +15,14 @@ abstract class BusinessRepository {
   Future<BusinessDeliveryPage> loadDeliveryPage({
     required BusinessAccount account,
     required Map<String, dynamic> cursor,
+  });
+  Future<BusinessInvoicePage> loadInvoicePage({
+    required BusinessAccount account,
+    required Map<String, dynamic> cursor,
+  });
+  Future<String> exportRecords({
+    required BusinessAccount account,
+    required String kind,
   });
   Future<BusinessCreatedResult> createBusinessAccount(
     BusinessCreateDraft draft,
@@ -98,31 +107,15 @@ class FirebaseBusinessRepository implements BusinessRepository {
 
   @override
   Future<List<BusinessAccount>> loadAccounts() async {
-    final user = _user;
-    final email = (user.email ?? '').trim().toLowerCase();
-    final snapshots = await Future.wait([
-      firestore
-          .collection('businessAccounts')
-          .where('createdByUserId', isEqualTo: user.uid)
-          .limit(20)
-          .get(),
-      firestore
-          .collection('businessAccounts')
-          .where(
-            'teamMemberIds',
-            arrayContainsAny: [user.uid, if (email.isNotEmpty) email],
-          )
-          .limit(20)
-          .get(),
-    ]);
-    final byId = <String, BusinessAccount>{};
-    for (final snapshot in snapshots) {
-      for (final doc in snapshot.docs) {
-        byId[doc.id] = BusinessAccount.fromMap(doc.id, doc.data());
-      }
-    }
-    final accounts = byId.values.toList(growable: false)
-      ..sort((a, b) => a.name.compareTo(b.name));
+    _user;
+    final result = await functions.httpsCallable('listBusinessAccounts').call();
+    final data = Map<String, dynamic>.from(result.data as Map);
+    final accounts =
+        (data['accounts'] as List? ?? const []).whereType<Map>().map((item) {
+      final map = Map<String, dynamic>.from(item);
+      return BusinessAccount.fromMap('${map['id'] ?? ''}', map);
+    }).toList(growable: false)
+          ..sort((a, b) => a.name.compareTo(b.name));
     return accounts;
   }
 
@@ -204,6 +197,9 @@ class FirebaseBusinessRepository implements BusinessRepository {
       nextDeliveryCursor: data['nextCursor'] is Map
           ? Map<String, dynamic>.from(data['nextCursor'] as Map)
           : null,
+      nextInvoiceCursor: data['nextInvoiceCursor'] is Map
+          ? Map<String, dynamic>.from(data['nextInvoiceCursor'] as Map)
+          : null,
     );
   }
 
@@ -246,6 +242,43 @@ class FirebaseBusinessRepository implements BusinessRepository {
           ? Map<String, dynamic>.from(data['nextCursor'] as Map)
           : null,
     );
+  }
+
+  @override
+  Future<BusinessInvoicePage> loadInvoicePage({
+    required BusinessAccount account,
+    required Map<String, dynamic> cursor,
+  }) async {
+    final callable =
+        await functions.httpsCallable('getBusinessOperationsWorkspace').call({
+      'businessId': account.id,
+      'invoicePageSize': 20,
+      'invoiceCursor': cursor,
+    });
+    final data = Map<String, dynamic>.from(callable.data as Map);
+    return BusinessInvoicePage(
+      invoices:
+          (data['invoices'] as List? ?? const []).whereType<Map>().map((item) {
+        final map = Map<String, dynamic>.from(item);
+        return BusinessInvoice.fromMap('${map['id'] ?? ''}', map);
+      }).toList(growable: false),
+      nextCursor: data['nextInvoiceCursor'] is Map
+          ? Map<String, dynamic>.from(data['nextInvoiceCursor'] as Map)
+          : null,
+    );
+  }
+
+  @override
+  Future<String> exportRecords({
+    required BusinessAccount account,
+    required String kind,
+  }) async {
+    final result = await functions.httpsCallable('exportBusinessRecords').call({
+      'businessId': account.id,
+      'kind': kind,
+    });
+    final data = Map<String, dynamic>.from(result.data as Map);
+    return '${data['csv'] ?? ''}';
   }
 
   @override
@@ -305,20 +338,25 @@ class FirebaseBusinessRepository implements BusinessRepository {
   Future<List<BusinessAccessRequest>> loadPendingAccessRequests(
     BusinessAccount account,
   ) async {
-    final snapshot = await firestore
-        .collection('businessJoinRequests')
-        .where('businessId', isEqualTo: account.id)
-        .where('status', isEqualTo: 'pending')
-        .limit(50)
-        .get();
-    return snapshot.docs
-        .map((doc) => BusinessAccessRequest.fromMap(doc.id, doc.data()))
-        .toList(growable: false)
-      ..sort(
-        (a, b) => (b.createdAt ?? DateTime(1970)).compareTo(
-          a.createdAt ?? DateTime(1970),
-        ),
-      );
+    final requests = <BusinessAccessRequest>[];
+    Map<String, dynamic>? cursor;
+    do {
+      final result = await functions
+          .httpsCallable('listBusinessAccessRequests')
+          .call(
+              {'businessId': account.id, if (cursor != null) 'cursor': cursor});
+      final data = Map<String, dynamic>.from(result.data as Map);
+      requests.addAll(
+          (data['requests'] as List? ?? const []).whereType<Map>().map((item) {
+        final map = Map<String, dynamic>.from(item);
+        map['createdAt'] = map['createdAtMillis'];
+        return BusinessAccessRequest.fromMap('${map['id'] ?? ''}', map);
+      }));
+      cursor = data['nextCursor'] is Map
+          ? Map<String, dynamic>.from(data['nextCursor'] as Map)
+          : null;
+    } while (cursor != null && requests.length < 500);
+    return requests;
   }
 
   @override
@@ -464,6 +502,7 @@ class FirebaseBusinessRepository implements BusinessRepository {
     await functions.httpsCallable('recordBusinessIrisMoment').call({
       'businessId': account.id,
       'moment': moment,
+      'requestId': const Uuid().v4(),
     });
   }
 

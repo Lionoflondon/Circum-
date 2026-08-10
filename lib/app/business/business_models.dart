@@ -476,6 +476,7 @@ class BusinessWorkspaceData {
   final BusinessWorkspacePermissions permissions;
   final String role;
   final Map<String, dynamic>? nextDeliveryCursor;
+  final Map<String, dynamic>? nextInvoiceCursor;
 
   const BusinessWorkspaceData({
     required this.account,
@@ -488,6 +489,7 @@ class BusinessWorkspaceData {
     this.permissions = BusinessWorkspacePermissions.none,
     this.role = '',
     this.nextDeliveryCursor,
+    this.nextInvoiceCursor,
   });
 
   int get monthlyDeliveries => summary.monthlyDeliveries;
@@ -523,6 +525,30 @@ class BusinessWorkspaceData {
       permissions: permissions,
       role: role,
       nextDeliveryCursor: page.nextCursor,
+      nextInvoiceCursor: nextInvoiceCursor,
+    );
+  }
+
+  BusinessWorkspaceData withInvoicePage(BusinessInvoicePage page) {
+    final byId = <String, BusinessInvoice>{
+      for (final invoice in invoices) invoice.id: invoice,
+      for (final invoice in page.invoices) invoice.id: invoice,
+    };
+    final merged = byId.values.toList(growable: false)
+      ..sort((a, b) => (b.createdAt ?? DateTime(1970))
+          .compareTo(a.createdAt ?? DateTime(1970)));
+    return BusinessWorkspaceData(
+      account: account,
+      deliveries: deliveries,
+      invoices: merged,
+      healthRequests: healthRequests,
+      giftRequests: giftRequests,
+      wallet: wallet,
+      summary: summary,
+      permissions: permissions,
+      role: role,
+      nextDeliveryCursor: nextDeliveryCursor,
+      nextInvoiceCursor: page.nextCursor,
     );
   }
 }
@@ -533,6 +559,16 @@ class BusinessDeliveryPage {
 
   const BusinessDeliveryPage({
     required this.deliveries,
+    required this.nextCursor,
+  });
+}
+
+class BusinessInvoicePage {
+  final List<BusinessInvoice> invoices;
+  final Map<String, dynamic>? nextCursor;
+
+  const BusinessInvoicePage({
+    required this.invoices,
     required this.nextCursor,
   });
 }

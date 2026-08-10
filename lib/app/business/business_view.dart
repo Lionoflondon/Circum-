@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -547,8 +549,7 @@ class _BusinessViewState extends State<BusinessView> {
         _CompactAction(
             label: 'Export CSV',
             icon: Icons.table_view_rounded,
-            onTap: () =>
-                _showMessage('Delivery CSV export is being prepared.')),
+            onTap: _working ? null : () => _exportCsv('deliveries')),
       ]),
     ]);
   }
@@ -595,25 +596,20 @@ class _BusinessViewState extends State<BusinessView> {
       else
         ...invoices.map((invoice) =>
             _invoiceRow(invoice, onTap: () => _showInvoiceDetails(invoice))),
+      if (_workspace!.nextInvoiceCursor != null) ...[
+        const SizedBox(height: 8),
+        _SecondaryButton(
+          label: 'Load more invoices',
+          icon: Icons.expand_more_rounded,
+          onTap: _working ? null : _loadMoreInvoices,
+        ),
+      ],
       const SizedBox(height: 8),
       Wrap(spacing: 8, runSpacing: 8, children: [
         _CompactAction(
-            label: 'Download PDF',
-            icon: Icons.picture_as_pdf_rounded,
-            onTap: () => _showMessage('Select an invoice to download PDF.')),
-        _CompactAction(
             label: 'Download CSV',
             icon: Icons.table_view_rounded,
-            onTap: () => _showMessage('Invoice CSV export is being prepared.')),
-        _CompactAction(
-            label: 'VAT Invoices',
-            icon: Icons.description_rounded,
-            onTap: () => _showMessage('VAT invoices use existing records.')),
-        _CompactAction(
-            label: 'Statement History',
-            icon: Icons.history_rounded,
-            onTap: () => _showMessage(
-                'Statement history uses your existing invoice records.')),
+            onTap: _working ? null : () => _exportCsv('invoices')),
         _CompactAction(
             label: 'Roth Offset Used',
             icon: Icons.diamond_outlined,
@@ -1677,22 +1673,6 @@ class _BusinessViewState extends State<BusinessView> {
                       Navigator.pop(context);
                       await _chooseInvoicePayment(invoice);
                     }),
-              const SizedBox(height: 8),
-              Row(children: [
-                Expanded(
-                    child: _SecondaryButton(
-                        label: 'Download PDF',
-                        icon: Icons.picture_as_pdf_rounded,
-                        onTap: () =>
-                            _showMessage('Invoice PDF is being prepared.'))),
-                const SizedBox(width: 8),
-                Expanded(
-                    child: _SecondaryButton(
-                        label: 'Download CSV',
-                        icon: Icons.table_view_rounded,
-                        onTap: () =>
-                            _showMessage('Invoice CSV is being prepared.'))),
-              ]),
             ]),
       ),
     );
@@ -1731,6 +1711,42 @@ class _BusinessViewState extends State<BusinessView> {
       }
     } catch (error) {
       _showMessage('Invoice payment could not start: $error');
+    } finally {
+      if (mounted) setState(() => _working = false);
+    }
+  }
+
+  Future<void> _exportCsv(String kind) async {
+    final account = _account;
+    if (account == null) return;
+    setState(() => _working = true);
+    try {
+      final csv = await _repository.exportRecords(account: account, kind: kind);
+      final uri = Uri.dataFromString(csv, mimeType: 'text/csv', encoding: utf8);
+      if (!await launchUrl(uri, mode: LaunchMode.externalApplication)) {
+        throw StateError('The export could not open.');
+      }
+    } catch (_) {
+      _showMessage('The Business export is unavailable right now.');
+    } finally {
+      if (mounted) setState(() => _working = false);
+    }
+  }
+
+  Future<void> _loadMoreInvoices() async {
+    final account = _account;
+    final workspace = _workspace;
+    final cursor = workspace?.nextInvoiceCursor;
+    if (account == null || workspace == null || cursor == null) return;
+    setState(() => _working = true);
+    try {
+      final page = await _repository.loadInvoicePage(
+        account: account,
+        cursor: cursor,
+      );
+      if (mounted) setState(() => _workspace = workspace.withInvoicePage(page));
+    } catch (_) {
+      _showMessage('More invoices could not be loaded right now.');
     } finally {
       if (mounted) setState(() => _working = false);
     }
