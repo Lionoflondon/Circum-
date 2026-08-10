@@ -444,7 +444,11 @@ void main() {
       expect(source, contains(destination));
     }
 
-    expect(source, contains("title: 'Help Shape Circum'"));
+    expect(
+        source,
+        contains(
+            "initialMessage: 'Hi, I would like to share feedback about Circum.'"));
+    expect(source, contains("supportTopic: 'general_feedback'"));
     expect(source, contains("title: 'Community Requests'"));
     expect(source, contains('closeImmediately'));
     expect(source, contains('initialMessage'));
@@ -459,6 +463,16 @@ void main() {
     for (final forbidden in forbiddenDestinations) {
       expect(source, isNot(contains(forbidden)));
     }
+  });
+
+  test('Sender username changes use backend transactional authority', () {
+    final source = read('lib/app/sender_mobile/sender_mobile_profile.dart');
+    expect(source, contains("httpsCallable('claimSenderUsername')"));
+    expect(
+      source,
+      contains(
+          "httpsCallable('updateSenderProfile').call({\n      'displayName': displayName.trim(),\n      'phone': phone.trim(),"),
+    );
   });
 
   test('Sender mobile sources do not import cross-product UI destinations', () {

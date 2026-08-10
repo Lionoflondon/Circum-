@@ -16,6 +16,7 @@ class RideChatPageView extends StatefulWidget {
   final String title;
   final String? initialMessage;
   final bool supportConversation;
+  final String supportTopic;
 
   const RideChatPageView({
     super.key,
@@ -23,6 +24,7 @@ class RideChatPageView extends StatefulWidget {
     this.title = 'Delivery chat',
     this.initialMessage,
     this.supportConversation = false,
+    this.supportTopic = 'general_support',
   });
 
   @override
@@ -104,7 +106,7 @@ class _RideChatPageViewState extends State<RideChatPageView> {
       final result = await FirebaseFunctions.instance
           .httpsCallable('getOrCreateSupportConversation')
           .call({
-        'topic': 'wallet_support',
+        'topic': widget.supportTopic,
         'title': 'Circum Support',
         'participantRole': 'sender',
       });

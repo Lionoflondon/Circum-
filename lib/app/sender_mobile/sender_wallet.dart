@@ -1426,6 +1426,7 @@ class _WalletSupportScreen extends StatelessWidget {
                     builder: (_) => const RideChatPageView(
                       title: 'Circum Support',
                       supportConversation: true,
+                      supportTopic: 'wallet_support',
                       initialMessage: 'Hi, I need help with my wallet.',
                     ),
                     settings: RouteSettings(

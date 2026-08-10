@@ -480,10 +480,14 @@ class FirebaseSenderMobileProfileRepository
   }) async {
     final user =
         await profileAuthority.requireRestoredUser('profile.save.auth');
-    final normalizedUsername = username.trim().replaceFirst(RegExp(r'^@'), '');
+    final usernameResult = await functions
+        .httpsCallable('claimSenderUsername')
+        .call({'username': username}).timeout(
+            SenderProfileAuthority.senderAccountEnsureTimeout);
+    final usernameData = Map<String, dynamic>.from(usernameResult.data as Map);
+    final normalizedUsername = '${usernameData['username'] ?? ''}'.trim();
     await functions.httpsCallable('updateSenderProfile').call({
       'displayName': displayName.trim(),
-      'username': normalizedUsername,
       'phone': phone.trim(),
     }).timeout(SenderProfileAuthority.senderAccountEnsureTimeout);
     if (user.displayName != displayName.trim()) {
@@ -908,6 +912,16 @@ class _SenderMobileProfileViewState extends State<SenderMobileProfileView> {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Profile saved.')),
       );
+    } on FirebaseFunctionsException catch (error) {
+      if (!mounted) return;
+      setState(() {
+        _saving = false;
+        _error = error.code == 'already-exists'
+            ? 'That username is not available.'
+            : error.code == 'invalid-argument'
+                ? (error.message ?? 'Choose a valid username.')
+                : 'Your changes could not be saved. Please try again.';
+      });
     } catch (_) {
       if (!mounted) return;
       setState(() {
@@ -1289,36 +1303,11 @@ class _SenderMobileProfileViewState extends State<SenderMobileProfileView> {
 
   Future<void> _openFeedback() => Navigator.of(context).push(
         MaterialPageRoute<void>(
-          builder: (_) => const _SenderClosedSubmissionScreen(
-            title: 'Help Shape Circum',
-            subtitle:
-                'Send feedback to Circum Admin. This creates a closed admin note, not a live chat.',
-            topic: 'sender_feedback',
-            messageLabel: 'What should the Circum team know?',
-            messageHint:
-                'Tell us what worked, what broke, or what would improve Circum.',
-            submitLabel: 'Send feedback',
-            successMessage: 'Feedback sent to Circum Admin.',
-            rows: [
-              _SenderSubmissionInfo(
-                icon: Icons.lightbulb_outline_rounded,
-                title: 'Product feedback',
-                subtitle:
-                    'Tell us what would make Circum booking, tracking or support better.',
-              ),
-              _SenderSubmissionInfo(
-                icon: Icons.bug_report_outlined,
-                title: 'Report a Circum issue',
-                subtitle:
-                    'Share broken flows, confusing moments or missing Circum details.',
-              ),
-              _SenderSubmissionInfo(
-                icon: Icons.favorite_border_rounded,
-                title: 'What worked well',
-                subtitle:
-                    'Positive feedback helps the Circum team protect the good parts.',
-              ),
-            ],
+          builder: (_) => const RideChatPageView(
+            title: 'Circum Support',
+            supportConversation: true,
+            supportTopic: 'general_feedback',
+            initialMessage: 'Hi, I would like to share feedback about Circum.',
           ),
           settings: const RouteSettings(
               name: '/sender-mobile/profile/help-shape-circum'),
