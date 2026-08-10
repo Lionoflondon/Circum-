@@ -6,10 +6,10 @@
   "releaseShaSemantics": "SELF means the Git commit containing this manifest; the immutable SHA is recorded in the release report and deployment provenance.",
   "entryPoint": "server/functions/index.js",
   "inventory": {
-    "productionFunctions": 276,
-    "applicationFunctions": 270,
+    "productionFunctions": 277,
+    "applicationFunctions": 271,
     "extensionFunctions": 6,
-    "sourceExports": 270
+    "sourceExports": 271
   },
   "applicationFunctions": [
     {
@@ -1453,6 +1453,17 @@
         "type": "callable"
       },
       "productionSourceHash": "4bc8ea2cc8513ef98866bc645c3b7cb35221c277",
+      "state": "ACTIVE",
+      "releaseSha": "SELF"
+    },
+    {
+      "name": "getIrisHealthMetrics",
+      "source": "server/functions/iris.js#getIrisHealthMetrics",
+      "runtime": "nodejs22",
+      "region": "us-central1",
+      "trigger": {
+        "type": "callable"
+      },
       "state": "ACTIVE",
       "releaseSha": "SELF"
     },

@@ -2,6 +2,7 @@
 const functions = require("firebase-functions/v1");
 const {getFirestore, FieldValue} = require("firebase-admin/firestore");
 const {
+  IRIS_ENGINE_VERSION,
   classifyIris,
   createLearningSnapshot,
   customerSafeIris,
@@ -9,10 +10,10 @@ const {
 } = require("./iris-core");
 const {requireAdmin} = require("./admin-auth");
 const {enforceIrisRequestLimit} = require("./iris-request-guard");
+const {healthProjection, latencyBucketKey} = require("./iris-maturity-core");
 
-const IRIS_ENGINE_VERSION = "iris-engine-v1";
 const IRIS_KNOWLEDGE_VERSION = "iris-knowledge-v1";
-let canonicalKnowledgeCache = {expiresAt: 0, records: []};
+let canonicalKnowledgeCache = {expiresAt: 0, records: [], knowledgeVersion: IRIS_KNOWLEDGE_VERSION, lookupKey: null};
 
 function clean(value) {
   return `${value || ""}`.trim().toLowerCase();
@@ -30,14 +31,52 @@ function requireIrisAdmin(context) {
   }
 }
 
-async function loadCanonicalKnowledge() {
+async function loadCanonicalKnowledge(description) {
   const now = Date.now();
-  if (canonicalKnowledgeCache.expiresAt > now) return canonicalKnowledgeCache.records;
-  const snapshot = await getFirestore().collection("irisCanonicalObjects")
-      .where("status", "==", "active").limit(200).get();
+  const lookupKey = clean(description);
+  if (canonicalKnowledgeCache.expiresAt > now && (!canonicalKnowledgeCache.lookupKey || canonicalKnowledgeCache.lookupKey === lookupKey)) return canonicalKnowledgeCache;
+  const db = getFirestore();
+  const [exact, state] = await Promise.all([
+    lookupKey ? db.collection("irisCanonicalObjects").where("lookupKeys", "array-contains", lookupKey).limit(10).get() : Promise.resolve(null),
+    db.collection("irisKnowledgeState").doc("current").get(),
+  ]);
+  const exactPromoted = exact && exact.docs.some((doc) => doc.data().status === "active" && doc.data().repositoryReviewStatus === "promoted");
+  const snapshot = exactPromoted ? exact : await db.collection("irisCanonicalObjects").where("status", "==", "active").where("repositoryReviewStatus", "==", "promoted").limit(200).get();
   const records = snapshot.docs.map((doc) => ({id: doc.id, ...doc.data()}));
-  canonicalKnowledgeCache = {records, expiresAt: now + 5 * 60 * 1000};
-  return records;
+  const knowledgeVersion = state.exists && state.data().knowledgeVersion || IRIS_KNOWLEDGE_VERSION;
+  canonicalKnowledgeCache = {records, knowledgeVersion, lookupKey: exactPromoted ? lookupKey : null, expiresAt: now + 60 * 1000};
+  return canonicalKnowledgeCache;
+}
+
+function metricDate(now = new Date()) {
+ return now.toISOString().slice(0, 10);
+}
+
+async function recordIrisRequestMetric({result, durationMs, failed = false, timeout = false}) {
+  const confidence = Number(result && result.recommendation && result.recommendation.confidencePercent || 0);
+  const path = result && result.internal && result.internal.inferencePath;
+  const bucket = latencyBucketKey(durationMs);
+  await getFirestore().collection("irisMetricsDaily").doc(metricDate()).set({
+    metricDate: metricDate(),
+    requestCount: FieldValue.increment(1),
+    latencyBuckets: {[bucket]: FieldValue.increment(1)},
+    failureCount: FieldValue.increment(failed ? 1 : 0),
+    timeoutCount: FieldValue.increment(timeout ? 1 : 0),
+    unsupportedCount: FieldValue.increment(result && ["unsupported", "prohibited"].includes(result.status) ? 1 : 0),
+    lowConfidenceCount: FieldValue.increment(confidence < 50 ? 1 : 0),
+    fastPathCount: FieldValue.increment(path === "canonical_fast_path" ? 1 : 0),
+    engineVersion: result && result.engineVersion || IRIS_ENGINE_VERSION,
+    knowledgeVersion: result && result.knowledgeVersion || IRIS_KNOWLEDGE_VERSION,
+    updatedAt: FieldValue.serverTimestamp(),
+  }, {merge: true});
+}
+
+async function safelyRecordIrisRequestMetric(metric) {
+  try {
+    await recordIrisRequestMetric(metric);
+  } catch (error) {
+    functions.logger.warn("iris_metric_write_failed", {message: error && error.message});
+  }
 }
 
 const analyseIris = functions.runWith({enforceAppCheck: true}).https.onCall(async (data, context) => {
@@ -46,27 +85,55 @@ const analyseIris = functions.runWith({enforceAppCheck: true}).https.onCall(asyn
     throw new functions.https.HttpsError("unauthenticated",
         "User must be authenticated to call Iris.");
   }
-  await enforceIrisRequestLimit({db: getFirestore(), uid: context.auth.uid, action: "analyse_iris"});
-  const guardCompletedAt = Date.now();
-  const canonicalKnowledge = await loadCanonicalKnowledge();
-  const knowledgeCompletedAt = Date.now();
-  const result = customerSafeIris(classifyIris({
-    ...data,
-    canonicalKnowledge,
-    engineVersion: IRIS_ENGINE_VERSION,
-    knowledgeVersion: IRIS_KNOWLEDGE_VERSION,
-  }));
-  functions.logger.info("iris_classification_timing", {
-    endpoint: "analyseIris",
-    engineVersion: IRIS_ENGINE_VERSION,
-    knowledgeVersion: IRIS_KNOWLEDGE_VERSION,
-    guardMs: guardCompletedAt - startedAt,
-    knowledgeMs: knowledgeCompletedAt - guardCompletedAt,
-    inferenceMs: Date.now() - knowledgeCompletedAt,
-    totalMs: Date.now() - startedAt,
-    status: result.status,
-  });
-  return result;
+  let knowledge;
+  try {
+    await enforceIrisRequestLimit({db: getFirestore(), uid: context.auth.uid, action: "analyse_iris"});
+    const guardCompletedAt = Date.now();
+    knowledge = await loadCanonicalKnowledge(data && (data.description || data.packageDescription));
+    const knowledgeCompletedAt = Date.now();
+    const classified = classifyIris({
+      ...data,
+      canonicalKnowledge: knowledge.records,
+      engineVersion: IRIS_ENGINE_VERSION,
+      knowledgeVersion: knowledge.knowledgeVersion,
+    });
+    const result = customerSafeIris(classified);
+    const totalMs = Date.now() - startedAt;
+    await safelyRecordIrisRequestMetric({result: classified, durationMs: totalMs});
+    functions.logger.info("iris_classification_timing", {
+      endpoint: "analyseIris",
+      engineVersion: IRIS_ENGINE_VERSION,
+      knowledgeVersion: knowledge.knowledgeVersion,
+      guardMs: guardCompletedAt - startedAt,
+      knowledgeMs: knowledgeCompletedAt - guardCompletedAt,
+      inferenceMs: Date.now() - knowledgeCompletedAt,
+      totalMs,
+      status: result.status,
+    });
+    return result;
+  } catch (error) {
+    const message = clean(error && error.message);
+    await safelyRecordIrisRequestMetric({
+      result: {engineVersion: IRIS_ENGINE_VERSION, knowledgeVersion: knowledge && knowledge.knowledgeVersion},
+      durationMs: Date.now() - startedAt,
+      failed: true,
+      timeout: message.includes("timeout") || message.includes("deadline"),
+    });
+    throw error;
+  }
+});
+
+const getIrisHealthMetrics = functions.runWith({enforceAppCheck: true}).https.onCall(async (data, context) => {
+  requireAdmin(context, "IRIS administrator access is required.");
+  requireIrisAdmin(context);
+  const days = Math.max(1, Math.min(30, Number(data && data.days) || 7));
+  const snapshot = await getFirestore().collection("irisMetricsDaily").orderBy("metricDate", "desc").limit(days).get();
+  const daily = snapshot.docs.map((doc) => ({date: doc.id, ...healthProjection(doc.data()), engineVersion: doc.data().engineVersion || null, knowledgeVersion: doc.data().knowledgeVersion || null}));
+  const [learning, promoted] = await Promise.all([
+    getFirestore().collection("irisLearningCases").where("reviewStatus", "in", ["pending_review", "approved"]).count().get(),
+    getFirestore().collection("irisCanonicalObjects").where("status", "==", "active").where("repositoryReviewStatus", "==", "promoted").count().get(),
+  ]);
+  return {days, daily, learningQueueSize: learning.data().count, promotedKnowledgeCount: promoted.data().count, engineVersion: IRIS_ENGINE_VERSION, currentKnowledgeVersion: daily[0] && daily[0].knowledgeVersion || IRIS_KNOWLEDGE_VERSION};
 });
 
 const adjudicateIris = functions.runWith({enforceAppCheck: true}).https.onCall(async (data, context) => {
@@ -83,6 +150,9 @@ const adjudicateIris = functions.runWith({enforceAppCheck: true}).https.onCall(a
     throw new functions.https.HttpsError("not-found", "Delivery request not found.");
   }
   const doc = snapshot.docs[0];
+  const current = doc.data() || {};
+  const priorIris = current.iris || {};
+  const priorRecommendation = priorIris.recommendation || {};
   const adjudication = {
     adminUserId: adminUid,
     createdBy: adminUid,
@@ -122,6 +192,21 @@ const adjudicateIris = functions.runWith({enforceAppCheck: true}).https.onCall(a
     reason,
     createdAt: FieldValue.serverTimestamp(),
   });
+  const categoryAdjudicated = Boolean(finalCategory);
+  const weightBandAdjudicated = Boolean(finalWeightBand);
+  const categoryCorrect = categoryAdjudicated && clean(priorRecommendation.category) === clean(finalCategory);
+  const weightBandCorrect = weightBandAdjudicated && clean(priorRecommendation.weightBand && priorRecommendation.weightBand.label) === clean(finalWeightBand);
+  const adminOverride = decision === "corrected" || (categoryAdjudicated && !categoryCorrect) || (weightBandAdjudicated && !weightBandCorrect);
+  await db.collection("irisMetricsDaily").doc(metricDate()).set({
+    metricDate: metricDate(),
+    adjudicatedTruthCount: FieldValue.increment(1),
+    classificationAdjudicatedCount: FieldValue.increment(categoryAdjudicated ? 1 : 0),
+    classificationCorrectCount: FieldValue.increment(categoryCorrect ? 1 : 0),
+    weightBandAdjudicatedCount: FieldValue.increment(weightBandAdjudicated ? 1 : 0),
+    weightBandCorrectCount: FieldValue.increment(weightBandCorrect ? 1 : 0),
+    adminOverrideCount: FieldValue.increment(adminOverride ? 1 : 0),
+    updatedAt: FieldValue.serverTimestamp(),
+  }, {merge: true});
   if (referralType) {
     await db.collection("irisReferrals").doc(requestId).set({
       requestId,
@@ -168,6 +253,7 @@ async function writeLearningSnapshotForRequest(requestId, completedAt) {
 module.exports = {
   analyseIris,
   adjudicateIris,
+  getIrisHealthMetrics,
   writeLearningSnapshotForRequest,
   customerSafeIris,
   privateIris,

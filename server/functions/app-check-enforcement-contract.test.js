@@ -26,6 +26,7 @@ test("financial and lifecycle mutation callables require App Check", () => {
     ["send-rider-update.js", /const sendRiderUpdate = functions\.runWith\(\{enforceAppCheck: true\}\)/],
     ["scheduled-road-charge-refunds.js", /const settleScheduledRoadChargeCashRefund = functions\.runWith\(\{enforceAppCheck: true\}\)/],
     ["iris.js", /const analyseIris = functions\.runWith\(\{enforceAppCheck: true\}\)\.https\.onCall/],
+    ["iris.js", /const getIrisHealthMetrics = functions\.runWith\(\{enforceAppCheck: true\}\)\.https\.onCall/],
     ["iris.js", /const adjudicateIris = functions\.runWith\(\{enforceAppCheck: true\}\)\.https\.onCall/],
     ["iris-photo-analysis.js", /const analyseParcelPhotoForIris = functions\.runWith\(\{enforceAppCheck: true\}\)\.https\.onCall/],
     ["delivery-adjustments.js", /exports\.reportLoadDiscrepancy = functions\.runWith\(\{enforceAppCheck: true\}\)\.https\.onCall/],

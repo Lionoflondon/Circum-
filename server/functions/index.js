@@ -127,6 +127,7 @@ exports.updateSenderHealthPlusBooking =
   healthPlus.updateSenderHealthPlusBooking;
 exports.updateHealthPlusPickupStatus = healthPlus.updateHealthPlusPickupStatus;
 exports.analyseIris = iris.analyseIris;
+exports.getIrisHealthMetrics = iris.getIrisHealthMetrics;
 exports.analyseParcelPhotoForIris = irisPhotoAnalysis.analyseParcelPhotoForIris;
 exports.adjudicateIris = iris.adjudicateIris;
 exports.reportLoadDiscrepancy = deliveryAdjustments.reportLoadDiscrepancy;

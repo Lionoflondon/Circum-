@@ -7347,11 +7347,33 @@ class _IrisPolicyCentre extends StatelessWidget {
   }
 }
 
-class _IrisHealthPanel extends StatelessWidget {
+class _IrisHealthPanel extends StatefulWidget {
   const _IrisHealthPanel({required this.records, required this.evidence});
 
   final List<Map<String, dynamic>> records;
   final List<Map<String, dynamic>> evidence;
+
+  @override
+  State<_IrisHealthPanel> createState() => _IrisHealthPanelState();
+}
+
+class _IrisHealthPanelState extends State<_IrisHealthPanel> {
+  late final Future<Map<String, dynamic>> _health = _loadHealth();
+
+  Future<Map<String, dynamic>> _loadHealth() async {
+    final response = await FirebaseFunctions.instance
+        .httpsCallable('getIrisHealthMetrics')
+        .call<Map<String, dynamic>>({'days': 7});
+    return Map<String, dynamic>.from(response.data);
+  }
+
+  String _metric(Map<String, dynamic> record, String key) {
+    final value = record[key];
+    if (value == null) return 'n/a';
+    return value is num
+        ? value.toStringAsFixed(value % 1 == 0 ? 0 : 1)
+        : '$value';
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -7367,35 +7389,119 @@ class _IrisHealthPanel extends StatelessWidget {
               style: TextStyle(fontSize: 22, fontWeight: FontWeight.w800),
             ),
             const SizedBox(height: 14),
-            Wrap(
-              spacing: 10,
-              runSpacing: 10,
-              children: [
-                _HealthChip(
-                  'Queue depth',
-                  records.where(_isIrisPending).length,
-                ),
-                _HealthChip('Failures', records.where(_hasIrisFailure).length),
-                _HealthChip(
-                  'Retries',
-                  _countRecordsContaining(records, 'retry'),
-                ),
-                _HealthChip('Evidence growth', evidence.length),
-                _HealthChip(
-                  'Storage records',
-                  evidence
-                      .where(
-                        (item) => '${item['storagePath'] ?? item['url'] ?? ''}'
-                            .trim()
-                            .isNotEmpty,
-                      )
-                      .length,
-                ),
-                _HealthChip(
-                  'Active model',
-                  _distinctValues(records, 'modelVersion').length,
-                ),
-              ],
+            FutureBuilder<Map<String, dynamic>>(
+              future: _health,
+              builder: (context, snapshot) {
+                final payload = snapshot.data ?? const <String, dynamic>{};
+                final daily = payload['daily'] is List
+                    ? List<dynamic>.from(payload['daily'] as List)
+                    : const <dynamic>[];
+                final latest = daily.isNotEmpty && daily.first is Map
+                    ? Map<String, dynamic>.from(daily.first as Map)
+                    : const <String, dynamic>{};
+                final latency = latest['latencyMs'] is Map
+                    ? Map<String, dynamic>.from(latest['latencyMs'] as Map)
+                    : const <String, dynamic>{};
+                return Wrap(
+                  spacing: 10,
+                  runSpacing: 10,
+                  children: [
+                    _HealthChip(
+                      'Requests',
+                      int.tryParse(_metric(latest, 'requestVolume')) ?? 0,
+                    ),
+                    _HealthChip(
+                      'Learning queue',
+                      payload['learningQueueSize'] as int? ??
+                          widget.records.where(_isIrisPending).length,
+                    ),
+                    _HealthChip(
+                      'Promoted knowledge',
+                      payload['promotedKnowledgeCount'] as int? ?? 0,
+                    ),
+                    _HealthChip(
+                      'Low confidence %',
+                      double.tryParse(
+                            _metric(latest, 'lowConfidenceRatePercent'),
+                          )?.round() ??
+                          0,
+                    ),
+                    _HealthChip(
+                      'Unsupported %',
+                      double.tryParse(
+                            _metric(latest, 'unsupportedRatePercent'),
+                          )?.round() ??
+                          0,
+                    ),
+                    _HealthChip(
+                      'Failures %',
+                      double.tryParse(_metric(latest, 'failureRatePercent'))
+                              ?.round() ??
+                          widget.records.where(_hasIrisFailure).length,
+                    ),
+                    _HealthChip(
+                      'Timeouts %',
+                      double.tryParse(_metric(latest, 'timeoutRatePercent'))
+                              ?.round() ??
+                          0,
+                    ),
+                    _HealthChip(
+                      'Fast path %',
+                      double.tryParse(_metric(latest, 'fastPathRatePercent'))
+                              ?.round() ??
+                          0,
+                    ),
+                    _HealthChip(
+                      'Latency p50 ms',
+                      (latency['p50'] as num?)?.round() ?? 0,
+                    ),
+                    _HealthChip(
+                      'Latency p95 ms',
+                      (latency['p95'] as num?)?.round() ?? 0,
+                    ),
+                    _HealthChip(
+                      'Latency p99 ms',
+                      (latency['p99'] as num?)?.round() ?? 0,
+                    ),
+                    _HealthChip(
+                      'Rider disagreement %',
+                      double.tryParse(
+                            _metric(latest, 'riderDisagreementRatePercent'),
+                          )?.round() ??
+                          0,
+                    ),
+                    _HealthChip(
+                      'Admin override %',
+                      double.tryParse(
+                            _metric(latest, 'adminOverrideRatePercent'),
+                          )?.round() ??
+                          0,
+                    ),
+                    _HealthChip(
+                      'Adjudicated truth',
+                      (latest['adjudicatedTruthCount'] as num?)?.round() ?? 0,
+                    ),
+                    _HealthChip(
+                      'Category accuracy %',
+                      double.tryParse(
+                            _metric(latest, 'classificationAccuracyPercent'),
+                          )?.round() ??
+                          0,
+                    ),
+                    _HealthChip(
+                      'Weight accuracy %',
+                      double.tryParse(
+                            _metric(latest, 'weightBandAccuracyPercent'),
+                          )?.round() ??
+                          0,
+                    ),
+                    _HealthChip(
+                      'Evidence growth',
+                      widget.evidence.length,
+                    ),
+                  ],
+                );
+              },
             ),
           ],
         ),

@@ -1197,43 +1197,54 @@ exports.adminUpdateIrisCandidateWorkflow = functions.runWith({enforceAppCheck: t
     if (!canonicalId) {
       throw new functions.https.HttpsError("invalid-argument", "IRIS canonical record is required.");
     }
-    const batch = db.batch();
-    batch.set(db.collection("irisCanonicalObjects").doc(canonicalId), {
-      canonicalId,
-      objectName: record.objectName || record.enteredText || record.category || id,
-      canonicalName: record.canonicalName || record.enteredText || record.objectName || id,
-      category: record.category || record.irisCategory || null,
-      subcategory: record.subcategory || null,
-      knownWeight: record.knownWeight || record.estimatedWeight || record.irisEstimatedWeight || null,
-      weightBand: record.weightBand || null,
-      vehicleRecommendation: record.vehicleRecommendation || record.recommendedVehicle || null,
-      handlingRequirements: record.handlingRequirements || record.handlingNotes || null,
-      sourceCandidateId: id,
-      status: "active",
-      repositoryReviewStatus: "promoted",
-      knowledgeVersion: "iris-knowledge-v1",
-      createdAt: FieldValue.serverTimestamp(),
-      updatedAt: FieldValue.serverTimestamp(),
-      updatedBy: actor.label,
-    }, {merge: true});
-    const candidatePatch = {
-      learningStatus: "promoted",
-      reviewStatus: "promoted",
-      repositoryPromotionStatus: "committed",
-      promotedCanonicalId: canonicalId,
-      reviewedAt: FieldValue.serverTimestamp(),
-      reviewedBy: actor.label,
-      updatedAt: FieldValue.serverTimestamp(),
-    };
-    batch.set(candidateRef, candidatePatch, {merge: true});
-    await batch.commit();
+    const canonicalRef = db.collection("irisCanonicalObjects").doc(canonicalId);
+    const stateRef = db.collection("irisKnowledgeState").doc("current");
+    let knowledgeVersion;
+    let idempotent = false;
+    await db.runTransaction(async (transaction) => {
+      const [latestCandidate, state] = await Promise.all([transaction.get(candidateRef), transaction.get(stateRef)]);
+      const latest = latestCandidate.data() || {};
+      const latestCanonicalId = slugId(latest.canonicalName || latest.objectName || latest.enteredText || latest.category || id);
+      if (latestCanonicalId !== canonicalId) {
+        throw new functions.https.HttpsError("failed-precondition", "IRIS candidate changed during promotion. Review it again.");
+      }
+      if (latest.repositoryPromotionStatus === "committed" && latest.promotedCanonicalId === canonicalId && latest.knowledgeVersion) {
+        knowledgeVersion = latest.knowledgeVersion;
+        idempotent = true;
+        return;
+      }
+      const nextVersion = Number(state.exists && state.data().versionNumber || 1) + 1;
+      knowledgeVersion = `iris-knowledge-v${nextVersion}`;
+      const canonicalName = latest.canonicalName || latest.enteredText || latest.objectName || id;
+      transaction.set(canonicalRef, {
+        canonicalId,
+        objectName: latest.objectName || latest.enteredText || latest.category || id,
+        canonicalName,
+        lookupKeys: [...new Set([lower(canonicalName), lower(latest.objectName), ...(Array.isArray(latest.aliases) ? latest.aliases.map(lower) : [])].filter(Boolean))],
+        category: latest.category || latest.irisCategory || null,
+        subcategory: latest.subcategory || null,
+        knownWeight: latest.knownWeight || latest.estimatedWeight || latest.irisEstimatedWeight || null,
+        weightBand: latest.weightBand || null,
+        vehicleRecommendation: latest.vehicleRecommendation || latest.recommendedVehicle || null,
+        handlingRequirements: latest.handlingRequirements || latest.handlingNotes || null,
+        sourceCandidateId: id,
+        status: "active",
+        repositoryReviewStatus: "promoted",
+        knowledgeVersion,
+        createdAt: FieldValue.serverTimestamp(),
+        updatedAt: FieldValue.serverTimestamp(),
+        updatedBy: actor.label,
+      }, {merge: true});
+      transaction.set(candidateRef, {learningStatus: "promoted", reviewStatus: "promoted", repositoryPromotionStatus: "committed", promotedCanonicalId: canonicalId, knowledgeVersion, reviewedAt: FieldValue.serverTimestamp(), reviewedBy: actor.label, updatedAt: FieldValue.serverTimestamp()}, {merge: true});
+      transaction.set(stateRef, {versionNumber: nextVersion, knowledgeVersion, promotedCanonicalId: canonicalId, promotedCandidateId: id, promotedAt: FieldValue.serverTimestamp(), promotedBy: actor.label}, {merge: true});
+    });
     await writeAudit(db, actor, {
       actionType: "iris_candidate_promoted",
       recordType: collection,
       recordId: id,
       reason: clean(data.reason || "Candidate promoted to Canonical Repository from Admin"),
-    }, record, {promotedCanonicalId: canonicalId});
-    return {ok: true, canonicalId};
+    }, record, {promotedCanonicalId: canonicalId, knowledgeVersion, idempotent});
+    return {ok: true, canonicalId, knowledgeVersion, idempotent};
   }
   const patch = {
     learningStatus: action,

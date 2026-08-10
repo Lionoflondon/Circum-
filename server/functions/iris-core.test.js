@@ -1198,6 +1198,18 @@ test("raw feedback cannot affect inference and promoted canonical knowledge can"
   assert.equal(promoted.recommendation.weightBand.label, "Heavy Parcel");
   assert.equal(promoted.knowledgeVersion, "iris-knowledge-v1");
   assert.equal(promoted.internal.canonicalKnowledgeMatch, "calibrated_parcel");
+  assert.equal(promoted.internal.inferencePath, "canonical_fast_path");
+  assert.equal(promoted.recommendation.confidenceBand, "HIGH");
+});
+
+test("low-information results expose a safe targeted resolution without private policy detail", () => {
+  const result = classifyIris({description: "box"});
+  const safe = customerSafeIris(result);
+  assert.equal(result.riskResolution.resolution, "NEEDS_INFO");
+  assert.equal(safe.riskResolution.resolution, "NEEDS_INFO");
+  assert.ok(safe.riskResolution.targetedQuestions.length > 0);
+  assert.equal(safe.riskResolution.reasonCodes, undefined);
+  assert.equal(safe.recommendation.confidenceBand, "LOW");
 });
 
 test("authoritative weight prevents low declarations from reducing operational pricing facts", () => {
@@ -1388,6 +1400,16 @@ test("legitimate Health+ medical deliveries remain allowed and serviceable", () 
     assert.equal(result.verification.verifiedRecipientRequired, true, description);
     assert.equal(result.verification.photoEvidenceRequired, true, description);
   }
+});
+
+test("Health+ customer projection exposes handling requirements without clinical text", () => {
+  const clinicalText = "Insulin delivery for a private diabetes treatment plan";
+  const safe = customerSafeIris(classifyIris({description: clinicalText}));
+  const encoded = JSON.stringify(safe);
+  assert.equal(safe.workflow, "Health+");
+  assert.ok(safe.recommendation.handlingFlags.includes("Temperature Sensitive"));
+  assert.doesNotMatch(encoded, /diabetes|treatment plan/i);
+  assert.equal(safe.riskResolution.resolution, "CLEAR");
 });
 
 test("declared dynamic London access concerns request live routing without claiming consultation", () => {

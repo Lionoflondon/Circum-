@@ -7,6 +7,8 @@ const {
   WEIGHT_POLICY_VERSION,
   weightBandFor,
 } = require("./canonical-weight-policy");
+const {confidenceProfile, riskResolution} = require("./iris-maturity-core");
+const IRIS_ENGINE_VERSION = "iris-engine-v2";
 const CATEGORIES = Object.freeze([
   "Documents",
   "Electronics",
@@ -2010,20 +2012,23 @@ function customerSafeIris(iris) {
     protection.level === "enhanced_verification_recommended";
   const vanguardReason = iris.vanguardRequiredReason ||
     (protection.reasons || []).join(", ");
+  const customerDetectedItem = iris.workflow === "Health+" ?
+    "Medical parcel" : recommendation.detectedItem || null;
   return {
     version: iris.version || "v1",
     engineVersion: iris.engineVersion || iris.version || "iris-engine-v1",
     knowledgeVersion: iris.knowledgeVersion || "iris-knowledge-baseline-v1",
     weightPolicyVersion: iris.weightPolicyVersion || WEIGHT_POLICY_VERSION,
+    status: iris.status || iris.compliance && iris.compliance.status || "unsupported",
     workflow: iris.workflow || "Standard",
-    itemName: recommendation.detectedItem || null,
+    itemName: customerDetectedItem,
     totalWeightKg: recommendation.estimatedWeightKg || null,
     recommendedVehicle,
     vanguardRequired,
     vanguardRequiredReason: vanguardRequired ? vanguardReason : null,
     vanguardRecommended,
     recommendation: {
-      detectedItem: recommendation.detectedItem || null,
+      detectedItem: customerDetectedItem,
       estimatedWeightKg: recommendation.estimatedWeightKg || null,
       handlingFlags: recommendation.handlingFlags || [],
       recommendedVehicle,
@@ -2033,8 +2038,14 @@ function customerSafeIris(iris) {
       category: recommendation.category || null,
       weightBand: recommendation.weightBand || null,
       confidencePercent: recommendation.confidencePercent || null,
+      confidenceBand: recommendation.confidenceBand || null,
+      confidenceSignals: recommendation.confidenceSignals || [],
       customerSafeExplanation: customerSafeExplanation(iris),
     },
+    riskResolution: iris.riskResolution ? {
+      resolution: iris.riskResolution.resolution,
+      targetedQuestions: iris.riskResolution.targetedQuestions || [],
+    } : null,
     vanguard: {
       required: vanguardRequired,
       recommended: vanguardRecommended,
@@ -2164,6 +2175,7 @@ function classifyIris(input = {}) {
   if (!price.normalCheckoutEligible) {
     price.checkoutBlockReason = "not_allowed_for_normal_dispatch";
   }
+  const confidence = confidenceProfile({description, canonicalMatch, shipmentItems, declaredWeightText, photoEstimatedWeightKg: input.photoEstimatedWeightKg, complianceStatus: compliance.status, weightAuthority});
   const baseRecommendation = {
     detectedItem: description.trim() || baseCategory,
     detectedItems: shipmentItems.length ? shipmentItems.map((item) => ({
@@ -2185,7 +2197,9 @@ function classifyIris(input = {}) {
     estimatedWeightKg,
     handlingFlags,
     estimatedPrice: price.total,
-    confidencePercent: text ? 82 : 55,
+    confidencePercent: confidence.score,
+    confidenceBand: confidence.band,
+    confidenceSignals: confidence.signals,
   };
   const recommendation = compliance.status === "allowed" && !canonicalMatch ?
     applyLearningMemory(baseRecommendation, description, input.completedExamples || []) :
@@ -2240,13 +2254,14 @@ function classifyIris(input = {}) {
     category: authoritativeRecommendation.category,
     text,
   });
+  const risk = riskResolution({compliance, serviceability, handlingFlags: authoritativeRecommendation.handlingFlags, workflow});
   const operationalWarnings = [];
   if (access.vehicleAccessWarning) operationalWarnings.push("Declared access or loading constraints may affect rider approach.");
   if (access.loadingTimeWarning) operationalWarnings.push("Access conditions may require additional handover time.");
   if (dimensionalBand.id === "oversized" || dimensionalBand.id === "long") operationalWarnings.push("Item dimensions may constrain vehicle choice.");
   const iris = {
-    version: input.engineVersion || "iris-engine-v1",
-    engineVersion: input.engineVersion || "iris-engine-v1",
+    version: input.engineVersion || IRIS_ENGINE_VERSION,
+    engineVersion: input.engineVersion || IRIS_ENGINE_VERSION,
     knowledgeVersion: input.knowledgeVersion || "iris-knowledge-baseline-v1",
     weightPolicyVersion: WEIGHT_POLICY_VERSION,
     status: compliance.status,
@@ -2292,6 +2307,8 @@ function classifyIris(input = {}) {
       accessIntelligence: access,
       learningMatchedExamples: authoritativeRecommendation.learningMatchedExamples || 0,
       canonicalKnowledgeMatch: canonicalMatch ? canonicalMatch.canonicalId || canonicalMatch.id || null : null,
+      inferencePath: canonicalMatch ? "canonical_fast_path" : "deterministic_analysis",
+      confidenceCalibration: confidence,
     },
     compliance: {
       status: compliance.status,
@@ -2299,6 +2316,7 @@ function classifyIris(input = {}) {
       customerMessage: compliance.customerMessage,
       referralType: compliance.referralType,
     },
+    riskResolution: risk,
     serviceability,
     verification: {
       ...verificationPolicy,
@@ -2508,6 +2526,7 @@ module.exports = {
   INTERNAL_CONTEXTS,
   classifyIris,
   customerSafeIris,
+  IRIS_ENGINE_VERSION,
   privateIris,
   calculatePrice,
   weightBandFor,

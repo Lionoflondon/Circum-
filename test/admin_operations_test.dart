@@ -1287,5 +1287,26 @@ void main() {
       expect(source, contains('bool _notificationNeedsRetry'));
       expect(source, contains('Retry'));
     });
+
+    test('IRIS Health uses bounded authoritative backend metrics', () {
+      final source = File(
+        'lib/app/admin/admin_phase1_shell.dart',
+      ).readAsStringSync();
+
+      expect(source, contains("httpsCallable('getIrisHealthMetrics')"));
+      expect(source, contains("{'days': 7}"));
+      for (final label in [
+        'Latency p50 ms',
+        'Latency p95 ms',
+        'Latency p99 ms',
+        'Low confidence %',
+        'Rider disagreement %',
+        'Admin override %',
+        'Promoted knowledge',
+      ]) {
+        expect(source, contains(label));
+      }
+      expect(source, isNot(contains("collection('irisMetricsDaily')")));
+    });
   });
 }
