@@ -1,6 +1,16 @@
 {
   "indexes": [
     {
+      "collectionGroup": "deliveryRequests",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {"fieldPath": "senderId", "order": "ASCENDING"},
+        {"fieldPath": "updatedAt", "order": "DESCENDING"},
+        {"fieldPath": "__name__", "order": "DESCENDING"}
+      ],
+      "density": "SPARSE_ALL"
+    },
+    {
       "collectionGroup": "businessMemberships",
       "queryScope": "COLLECTION",
       "fields": [
@@ -97,11 +107,31 @@
       "density": "SPARSE_ALL"
     },
     {
+      "collectionGroup": "prescriptionPickups",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {"fieldPath": "profileId", "order": "ASCENDING"},
+        {"fieldPath": "createdAt", "order": "DESCENDING"},
+        {"fieldPath": "__name__", "order": "DESCENDING"}
+      ],
+      "density": "SPARSE_ALL"
+    },
+    {
       "collectionGroup": "giftRequests",
       "queryScope": "COLLECTION",
       "fields": [
         {"fieldPath": "businessId", "order": "ASCENDING"},
         {"fieldPath": "createdAt", "order": "DESCENDING"}
+      ],
+      "density": "SPARSE_ALL"
+    },
+    {
+      "collectionGroup": "giftRequests",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {"fieldPath": "senderId", "order": "ASCENDING"},
+        {"fieldPath": "createdAt", "order": "DESCENDING"},
+        {"fieldPath": "__name__", "order": "DESCENDING"}
       ],
       "density": "SPARSE_ALL"
     },

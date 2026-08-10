@@ -2,6 +2,7 @@
 const riderPresenceCore = require("./rider-presence-core");
 const {riderVehicleMatchesRequest} = require("./vehicle-dispatch");
 const {dispatchIntelligenceSignal} = require("./marketplace-intelligence");
+const {decodePolyline} = require("./route-authority");
 
 const DEFAULT_MAX_DISPATCH_RADIUS_KM = 25;
 const BLOCKED_ACCOUNT_STATUSES = new Set(["suspended", "frozen", "closed", "rejected", "disabled"]);
@@ -211,6 +212,11 @@ function riderOfferProjection(deliveryId, delivery = {}, distanceFromRiderKm = 0
       delivery.dropOffPosition || delivery.dropoffPosition || delivery.dropoffCoordinates,
   );
   const payout = Number(delivery.riderEarning ?? delivery.riderPayout ?? delivery.driverPayout ?? 0);
+  const pricing = delivery.pricingBreakdown && typeof delivery.pricingBreakdown === "object" ? delivery.pricingBreakdown : {};
+  const routeFacts = delivery.routeFacts || delivery.authoritativeRouteFacts || pricing.routeFacts || {};
+  const routePoints = Array.isArray(delivery.routeGeometry) ? delivery.routeGeometry :
+    Array.isArray(delivery.authoritativeRouteGeometry) ? delivery.authoritativeRouteGeometry :
+      text(routeFacts.encodedPolyline) ? decodePolyline(text(routeFacts.encodedPolyline)) : [];
   const summary = delivery.driverJobSummary && typeof delivery.driverJobSummary === "object" ? delivery.driverJobSummary : {};
   const parcel = delivery.parcel && typeof delivery.parcel === "object" ? delivery.parcel : {};
   return {
@@ -240,6 +246,7 @@ function riderOfferProjection(deliveryId, delivery = {}, distanceFromRiderKm = 0
     riderEarning: Number.isFinite(payout) ? payout : 0,
     riderPayout: Number.isFinite(payout) ? payout : 0,
     driverPayout: Number.isFinite(payout) ? payout : 0,
+    routeGeometry: routePoints.map(safePosition).filter(Boolean).slice(0, 500),
     price: Number.isFinite(payout) ? payout : 0,
     currency: text(delivery.currency || "GBP").toUpperCase(),
     driverJobSummary: {
@@ -272,6 +279,8 @@ function riderAssignedJobProjection(deliveryId, delivery = {}, {completed = fals
   const heavyDutyFee = Number(delivery.heavyDutyFee ?? summary.heavyDutyFee ?? 0);
   const twoPersonFee = Number(delivery.twoPersonFee ?? summary.twoPersonFee ?? 0);
   const tipAmount = Number(delivery.tipAmount ?? delivery.riderTip ?? summary.tipAmount ?? 0);
+  const canonicalBreakdown = delivery.riderEarningBreakdown &&
+    typeof delivery.riderEarningBreakdown === "object" ? delivery.riderEarningBreakdown : {};
 
   const operational = {
     ...projection,
@@ -298,6 +307,12 @@ function riderAssignedJobProjection(deliveryId, delivery = {}, {completed = fals
     heavyDutyFee: Number.isFinite(heavyDutyFee) ? heavyDutyFee : 0,
     twoPersonFee: Number.isFinite(twoPersonFee) ? twoPersonFee : 0,
     tipAmount: Number.isFinite(tipAmount) ? tipAmount : 0,
+    riderEarningBreakdown: {
+      delivery: Number(canonicalBreakdown.delivery ?? canonicalBreakdown.deliveryAmount ?? delivery.riderDeliveryEarning ?? 0),
+      tip: Number(canonicalBreakdown.tip ?? tipAmount ?? 0),
+      waiting: Number(canonicalBreakdown.waiting ?? delivery.riderWaitingEarning ?? delivery.noShowEarning ?? 0),
+      adjustment: Number(canonicalBreakdown.adjustment ?? delivery.riderAdjustment ?? 0),
+    },
     scheduledPickupDate: delivery.scheduledPickupDate || null,
     scheduledPickupWindow: delivery.scheduledPickupWindow || null,
     deliveryTimingType: text(delivery.deliveryTimingType),

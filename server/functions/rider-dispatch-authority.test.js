@@ -87,6 +87,21 @@ test("eligible Rider passes the shared dispatch predicate", () => {
   assert.equal(result.intelligence.advisoryOnly, true);
 });
 
+test("Rider projection exposes authoritative route geometry and earnings components", () => {
+  const projected = riderAssignedJobProjection("delivery-1", {
+    ...delivery,
+    pricingBreakdown: {routeFacts: {encodedPolyline: "_p~iF~ps|U_ulLnnqC_mqNvxq`@"}},
+    riderEarningBreakdown: {delivery: 5.25, tip: 1.5, waiting: 0.75, adjustment: 0},
+  }, {completed: true});
+  assert.equal(projected.routeGeometry.length, 3);
+  assert.deepEqual(projected.riderEarningBreakdown, {
+    delivery: 5.25,
+    tip: 1.5,
+    waiting: 0.75,
+    adjustment: 0,
+  });
+});
+
 test("reliability cannot bypass or veto canonical dispatch eligibility", () => {
   assert.equal(dispatchEligibilityDecision({riderId: "rider-1", profile: {...profile, reliabilityScore: 5, reliabilityRiskLevel: "RED"}, presence, delivery, now}).eligible, true);
   assert.equal(dispatchEligibilityDecision({riderId: "rider-1", profile: {...profile, reliabilityScore: 100}, presence: {...presence, isOnline: false}, delivery, now}).reason, "offline");
