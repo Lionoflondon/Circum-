@@ -74,6 +74,7 @@
         "lib/app/health_plus/",
         "lib/app/history/",
         "lib/app/iris/",
+        "lib/shared/iris_camera_entry.dart",
         "lib/app/media/",
         "lib/app/onboarding/",
         "lib/app/platform/",
@@ -94,6 +95,7 @@
         "test/gifts_",
         "test/health_plus_test.dart",
         "test/iris_",
+        "test/shared/iris_camera_entry_test.dart",
         "test/role_access_test.dart",
         "test/special_handling_engine_test.dart",
         "test/vanguard_protection_test.dart",
@@ -232,15 +234,17 @@
       "output": "server/functions"
     }
   },
-  "sharedFiles": [
-    "deploy-manifest.json",
-    "lib/shared/iris_camera_entry.dart"
-  ],
+  "sharedFiles": [],
   "allowedDependencyIntersections": [
     {
       "products": ["sender-app", "website"],
       "files": ["lib/env/env.dart"],
       "reason": "Shared read-only build-time environment accessors."
+    },
+    {
+      "products": ["sender-app", "website"],
+      "files": ["lib/shared/iris_camera_entry.dart"],
+      "reason": "One presentation-only IRIS camera interaction contract consumed by both Sender booking surfaces."
     }
   ],
   "blockedPrefixes": [
