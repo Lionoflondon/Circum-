@@ -6,6 +6,9 @@ const crypto = require("crypto");
 const VISUAL_MODEL_VERSION = "google-cloud-vision-v1-builtin-stable-2026-08-shadow-1";
 const VISUAL_MODEL_PROVIDER = "google_cloud_vision";
 const VISUAL_INFERENCE_MODE = "SHADOW";
+const VISUAL_SYSTEM_STATUS = "PRODUCTION";
+const VISUAL_AUTHORITY_MODE = "EVIDENCE_ONLY";
+const VISUAL_EVALUATION_MODE = "SHADOW";
 const MAX_VISUAL_RESULTS = 10;
 const VISUAL_STATE_CACHE_MS = 60 * 1000;
 const VISUAL_RESULT_CACHE_MS = 10 * 60 * 1000;
@@ -39,11 +42,19 @@ function clean(value, max = 120) {
 function normalizeVisualModelState(value = {}) {
   const enabled = value.enabled !== false && value.mode !== "DISABLED";
   const requestedVersion = clean(value.visualModelVersion, 100);
+  const requestedAuthority = `${value.authorityMode || VISUAL_AUTHORITY_MODE}`.trim().toUpperCase();
+  const requestedEvaluation = `${value.evaluationMode || value.mode || VISUAL_EVALUATION_MODE}`.trim().toUpperCase();
+  const safeAuthority = requestedAuthority === VISUAL_AUTHORITY_MODE;
+  const safeEvaluation = requestedEvaluation === VISUAL_EVALUATION_MODE;
+  const active = enabled && safeAuthority && safeEvaluation && (!requestedVersion || requestedVersion === VISUAL_MODEL_VERSION);
   return Object.freeze({
-    enabled: enabled && (!requestedVersion || requestedVersion === VISUAL_MODEL_VERSION),
-    mode: enabled ? VISUAL_INFERENCE_MODE : "DISABLED",
-    visualModelVersion: enabled ? VISUAL_MODEL_VERSION : null,
-    rejectedUnknownVersion: Boolean(requestedVersion && requestedVersion !== VISUAL_MODEL_VERSION),
+    enabled: active,
+    mode: active ? VISUAL_INFERENCE_MODE : "DISABLED",
+    systemStatus: VISUAL_SYSTEM_STATUS,
+    evaluationMode: active ? VISUAL_EVALUATION_MODE : "DISABLED",
+    authorityMode: VISUAL_AUTHORITY_MODE,
+    visualModelVersion: active ? VISUAL_MODEL_VERSION : null,
+    rejectedUnknownVersion: Boolean(requestedVersion && requestedVersion !== VISUAL_MODEL_VERSION) || !safeAuthority || !safeEvaluation,
   });
 }
 
@@ -111,6 +122,34 @@ function boundedScore(value) {
   return Number.isFinite(score) ? Math.max(0, Math.min(1, Math.round(score * 1000) / 1000)) : 0;
 }
 
+function confidenceBand(value) {
+  const score = boundedScore(value);
+  return score >= 0.8 ? "HIGH" : score >= 0.5 ? "MEDIUM" : "LOW";
+}
+
+function calibratedVisualConfidence({providerConfidence, verifiedSamples = 0, verifiedCorrect = 0} = {}) {
+  const providerScore = boundedScore(providerConfidence);
+  const sampleSize = Math.max(0, Math.floor(Number(verifiedSamples) || 0));
+  const correct = Math.max(0, Math.min(sampleSize, Math.floor(Number(verifiedCorrect) || 0)));
+  if (sampleSize < 30) {
+    return Object.freeze({
+      band: confidenceBand(providerScore),
+      calibrated: false,
+      sampleSize,
+      basis: "INSUFFICIENT_VERIFIED_OUTCOMES",
+    });
+  }
+  const observedAccuracy = correct / sampleSize;
+  const conservativeScore = Math.min(providerScore, observedAccuracy);
+  return Object.freeze({
+    band: confidenceBand(conservativeScore),
+    calibrated: true,
+    sampleSize,
+    observedAccuracy: Math.round(observedAccuracy * 1000) / 1000,
+    basis: "VERIFIED_OUTCOMES",
+  });
+}
+
 function sanitizedAnnotations(response = {}) {
   const objects = (response.localizedObjectAnnotations || []).slice(0, MAX_VISUAL_RESULTS).map((item) => ({
     name: clean(item.name),
@@ -150,10 +189,14 @@ function visualEvidenceFromResponse({response, requestId, imageHash, observedAt 
   const category = strongestCategory(annotations);
   const risks = riskClues(annotations);
   const confidenceScore = primary ? primary.confidence : 0;
+  const calibratedConfidence = calibratedVisualConfidence({providerConfidence: confidenceScore});
   return {
     requestId,
     imageHash,
     mode: VISUAL_INFERENCE_MODE,
+    systemStatus: VISUAL_SYSTEM_STATUS,
+    evaluationMode: VISUAL_EVALUATION_MODE,
+    authorityMode: VISUAL_AUTHORITY_MODE,
     provider: VISUAL_MODEL_PROVIDER,
     visualModelVersion: VISUAL_MODEL_VERSION,
     timestamp: observedAt,
@@ -161,13 +204,14 @@ function visualEvidenceFromResponse({response, requestId, imageHash, observedAt 
     candidateObject: primary ? primary.name : null,
     candidateCategory: category ? category.category : null,
     confidenceScore,
-    confidence: confidenceScore >= 0.8 ? "HIGH" : confidenceScore >= 0.5 ? "MEDIUM" : "LOW",
+    confidence: calibratedConfidence.band,
+    calibratedConfidence,
     handlingClues: risks.map((risk) => risk.code),
     riskClues: risks,
     sizeCue: risks.some((risk) => risk.code === "possible_oversized_item") ? "POSSIBLY_OVERSIZED" : "UNKNOWN",
     weightCue: risks.some((risk) => risk.code === "possible_oversized_item") ? "POTENTIALLY_HEAVY" : "UNKNOWN",
     annotations,
-    authority: "EVIDENCE_ONLY",
+    authority: VISUAL_AUTHORITY_MODE,
     affectsCustomerDecision: false,
     affectsPricing: false,
     affectsWeightAuthority: false,
@@ -175,18 +219,86 @@ function visualEvidenceFromResponse({response, requestId, imageHash, observedAt 
   };
 }
 
-function shadowComparison({deterministic = {}, visual = {}}) {
-  const deterministicItem = clean(deterministic.inferredItemName || deterministic.detectedItem);
-  const deterministicCategory = clean(deterministic.inferredCategory || deterministic.category);
-  const visualItem = clean(visual.candidateObject);
-  const visualCategory = clean(visual.candidateCategory);
+function normalizedSignal(value = {}) {
   return {
-    objectAgreement: Boolean(deterministicItem && visualItem && (deterministicItem.includes(visualItem) || visualItem.includes(deterministicItem))),
-    categoryAgreement: Boolean(deterministicCategory && visualCategory && deterministicCategory === visualCategory),
-    deterministicItemHash: deterministicItem ? crypto.createHash("sha256").update(deterministicItem).digest("hex") : null,
-    visualItemHash: visualItem ? crypto.createHash("sha256").update(visualItem).digest("hex") : null,
-    requiresReview: visual.status === "UNCERTAIN" || (visual.riskClues || []).length > 0,
+    item: clean(value.item || value.detectedItem || value.inferredItemName || value.candidateObject),
+    category: clean(value.category || value.inferredCategory || value.candidateCategory),
+    weightBand: clean(value.weightBand && value.weightBand.label || value.weightBand || value.weightClass || value.proposedWeightBand),
+    handling: new Set((value.handlingFlags || value.handlingClues || value.finalHandlingFlags || []).map(clean).filter(Boolean)),
+    risks: new Set((value.riskCodes || value.riskClues || []).map((entry) => clean(entry && entry.code || entry)).filter(Boolean)),
   };
+}
+
+function valuesAgree(left, right) {
+  if (!left || !right) return null;
+  return left === right || left.includes(right) || right.includes(left);
+}
+
+function trustedTruth({admin = {}, measured = {}, finalOutcome = {}, approvedKnowledge = {}} = {}) {
+  const candidates = [
+    ["ADMIN_ADJUDICATION", admin],
+    ["MEASURED_EVIDENCE", measured],
+    ["FINAL_VERIFIED_OUTCOME", finalOutcome],
+    ["APPROVED_CANONICAL_KNOWLEDGE", approvedKnowledge],
+  ];
+  for (const [source, value] of candidates) {
+    const signal = normalizedSignal(value);
+    if (signal.item || signal.category || signal.weightBand || signal.handling.size || signal.risks.size) {
+      return {source, verified: true, signal};
+    }
+  }
+  return {source: null, verified: false, signal: normalizedSignal()};
+}
+
+function comparisonStatus(checks, visual) {
+  if (!visual.item && !visual.category && !visual.weightBand && !visual.handling.size && !visual.risks.size) return "UNKNOWN";
+  const known = checks.filter((value) => value !== null);
+  if (!known.length) return "UNKNOWN";
+  if (known.every(Boolean)) return "AGREEMENT";
+  if (known.every((value) => !value)) return "DISAGREEMENT";
+  return "PARTIAL_AGREEMENT";
+}
+
+function buildVisualComparisonProjection({sender = {}, deterministic = {}, visual = {}, rider = {}, admin = {}, measured = {}, finalOutcome = {}, approvedKnowledge = {}} = {}) {
+  const signals = {
+    sender: normalizedSignal(sender),
+    deterministic: normalizedSignal(deterministic),
+    visual: normalizedSignal(visual),
+    rider: normalizedSignal(rider),
+  };
+  const truth = trustedTruth({admin, measured, finalOutcome, approvedKnowledge});
+  const objectAgreement = valuesAgree(signals.deterministic.item, signals.visual.item);
+  const categoryAgreement = valuesAgree(signals.deterministic.category, signals.visual.category);
+  const weightBandAgreement = valuesAgree(signals.deterministic.weightBand, signals.visual.weightBand);
+  const senderCategoryAgreement = valuesAgree(signals.sender.category, signals.visual.category);
+  const riderCategoryAgreement = valuesAgree(signals.rider.category, signals.visual.category);
+  const truthCategoryCorrect = truth.verified ? valuesAgree(truth.signal.category, signals.visual.category) : null;
+  const truthWeightBandCorrect = truth.verified ? valuesAgree(truth.signal.weightBand, signals.visual.weightBand) : null;
+  const checks = [objectAgreement, categoryAgreement, weightBandAgreement, senderCategoryAgreement, riderCategoryAgreement];
+  const status = comparisonStatus(checks, signals.visual);
+  return {
+    status,
+    objectAgreement,
+    categoryAgreement,
+    weightBandAgreement,
+    senderCategoryAgreement,
+    riderCategoryAgreement,
+    truth: {
+      verified: truth.verified,
+      source: truth.source,
+      visualCategoryCorrect: truthCategoryCorrect,
+      visualWeightBandCorrect: truthWeightBandCorrect,
+    },
+    deterministicItemHash: signals.deterministic.item ? crypto.createHash("sha256").update(signals.deterministic.item).digest("hex") : null,
+    visualItemHash: signals.visual.item ? crypto.createHash("sha256").update(signals.visual.item).digest("hex") : null,
+    requiresReview: visual.status === "UNCERTAIN" || status === "DISAGREEMENT" || (visual.riskClues || []).length > 0,
+    authorityMode: VISUAL_AUTHORITY_MODE,
+    affectsProductionTruth: false,
+  };
+}
+
+function shadowComparison(input = {}) {
+  return buildVisualComparisonProjection(input);
 }
 
 async function inferVisualEvidence({bytes, requestId, imageHash, client, timeoutMs = 4500, reuseResults = !client}) {
@@ -222,6 +334,9 @@ async function inferVisualEvidence({bytes, requestId, imageHash, client, timeout
 module.exports = {
   MAX_VISUAL_RESULTS,
   VISUAL_INFERENCE_MODE,
+  VISUAL_SYSTEM_STATUS,
+  VISUAL_AUTHORITY_MODE,
+  VISUAL_EVALUATION_MODE,
   VISUAL_MODEL_PROVIDER,
   VISUAL_MODEL_VERSION,
   clearVisualRuntimeCaches,
@@ -229,6 +344,8 @@ module.exports = {
   currentVisualModelState,
   inferVisualEvidence,
   normalizeVisualModelState,
+  calibratedVisualConfidence,
+  buildVisualComparisonProjection,
   shadowComparison,
   visualEvidenceFromResponse,
   warmVisualRuntime,

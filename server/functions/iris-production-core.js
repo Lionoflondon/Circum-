@@ -1,6 +1,8 @@
 /* eslint-disable max-len, require-jsdoc */
 const crypto = require("crypto");
 
+// Compatibility-only decision projection. Production classification is owned by
+// iris-core.js; this module is intentionally not imported by any deployable path.
 const IRIS_PRODUCTION_VERSION = "ipil-v1";
 
 function numberValue(value, fallback = 0) {

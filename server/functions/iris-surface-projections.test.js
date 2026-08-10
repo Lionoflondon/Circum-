@@ -39,4 +39,8 @@ test("Scheduled, Vanguard and Heavy Duty are projections, not classifiers", () =
   assert.equal(projectIrisForSurface(iris, "scheduled", {scheduledJourneyAt: "2026-08-12T08:00:00Z"}).timingSensitive, true);
   assert.equal(projectIrisForSurface(iris, "vanguard").enhancedVerification, true);
   assert.equal(projectIrisForSurface(iris, "heavy_duty").collectionHoldIfUnsuitable, true);
+  const marketplace = projectIrisForSurface(iris, "marketplace");
+  assert.equal(marketplace.engineVersion, iris.engineVersion);
+  assert.equal(marketplace.operationalRiskClass, iris.riskResolution.resolution);
+  assert.equal("confidence" in marketplace, false);
 });

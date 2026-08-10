@@ -42,6 +42,12 @@ test("adjudicateIris protected operations remain behind the guard", () => {
   }
 });
 
+test("visual quality records only compatible adjudicated truth", () => {
+  assert.match(iris, /possible_fragile_item: "fragile"/);
+  assert.match(iris, /Risk accuracy remains unreported until that stronger truth exists/);
+  assert.match(iris, /const riskAdjudicated = false/);
+});
+
 test("analyseIris remains ordinary authenticated and is not admin-gated", () => {
   const analyseStart = iris.indexOf("const analyseIris = functions.runWith({enforceAppCheck: true}).https.onCall");
   const nextCallableStart = iris.indexOf("const getIrisHealthMetrics = functions.runWith({enforceAppCheck: true}).https.onCall");

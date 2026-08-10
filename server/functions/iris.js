@@ -21,6 +21,18 @@ function clean(value) {
   return `${value || ""}`.trim().toLowerCase();
 }
 
+function canonicalVisualHandling(value) {
+  const normalized = clean(value);
+  const aliases = {
+    possible_battery_or_electronics: "battery",
+    possible_liquid_container: "liquid",
+    possible_fragile_item: "fragile",
+    possible_perishable_item: "perishable",
+    possible_oversized_item: "oversized",
+  };
+  return aliases[normalized] || normalized;
+}
+
 function requireIrisAdmin(context) {
   const token = context.auth && context.auth.token ? context.auth.token : {};
   const roles = Array.isArray(token.roles) ? token.roles.map(clean) : [];
@@ -140,13 +152,15 @@ const getIrisHealthMetrics = functions.runWith({enforceAppCheck: true}).https.on
   const days = Math.max(1, Math.min(30, Number(data && data.days) || 7));
   const snapshot = await getFirestore().collection("irisMetricsDaily").orderBy("metricDate", "desc").limit(days).get();
   const daily = snapshot.docs.map((doc) => ({date: doc.id, ...healthProjection(doc.data()), engineVersion: doc.data().engineVersion || null, knowledgeVersion: doc.data().knowledgeVersion || null}));
-  const [learning, promoted] = await Promise.all([
+  const [learning, promoted, visualStateSnapshot] = await Promise.all([
     getFirestore().collection("irisLearningCases").where("reviewStatus", "in", ["pending_review", "approved"]).count().get(),
     getFirestore().collection("irisCanonicalObjects").where("status", "==", "active").where("repositoryReviewStatus", "==", "promoted").count().get(),
+    getFirestore().collection("irisVisualModelState").doc("current").get(),
   ]);
   const knowledge = await getFirestore().collection("irisCanonicalObjects").where("status", "==", "active").limit(200).get();
   const qualityCandidates = knowledgeQualityCandidates(knowledge.docs.map((doc) => ({id: doc.id, ...doc.data()})));
-  return {days, daily, learningQueueSize: learning.data().count, promotedKnowledgeCount: promoted.data().count, engineVersion: IRIS_ENGINE_VERSION, currentKnowledgeVersion: daily[0] && daily[0].knowledgeVersion || IRIS_KNOWLEDGE_VERSION, visualModelVersion: daily[0] && daily[0].visualModelVersion || null, visualInferenceMode: "SHADOW", dataQuality: {boundedRecordsInspected: knowledge.size, reviewCandidateCount: qualityCandidates.length, candidates: qualityCandidates.slice(0, 50)}};
+  const visualState = visualStateSnapshot.exists ? visualStateSnapshot.data() || {} : {};
+  return {days, daily, learningQueueSize: learning.data().count, promotedKnowledgeCount: promoted.data().count, engineVersion: IRIS_ENGINE_VERSION, currentKnowledgeVersion: daily[0] && daily[0].knowledgeVersion || IRIS_KNOWLEDGE_VERSION, visualModelVersion: visualState.visualModelVersion || daily[0] && daily[0].visualModelVersion || null, visualSystemStatus: visualState.systemStatus || "PRODUCTION", visualEvaluationMode: visualState.evaluationMode || visualState.mode || "SHADOW", visualAuthorityMode: visualState.authorityMode || "EVIDENCE_ONLY", promotionReviewState: "POLICY_THRESHOLDS_REQUIRED", automaticPromotionAllowed: false, dataQuality: {boundedRecordsInspected: knowledge.size, reviewCandidateCount: qualityCandidates.length, candidates: qualityCandidates.slice(0, 50)}};
 });
 
 const adjudicateIris = functions.runWith({enforceAppCheck: true}).https.onCall(async (data, context) => {
@@ -210,6 +224,60 @@ const adjudicateIris = functions.runWith({enforceAppCheck: true}).https.onCall(a
   const categoryCorrect = categoryAdjudicated && clean(priorRecommendation.category) === clean(finalCategory);
   const weightBandCorrect = weightBandAdjudicated && clean(priorRecommendation.weightBand && priorRecommendation.weightBand.label) === clean(finalWeightBand);
   const adminOverride = decision === "corrected" || (categoryAdjudicated && !categoryCorrect) || (weightBandAdjudicated && !weightBandCorrect);
+  const visualAnalysisId = current.irisPhotoAnalysisId || current.irisPhotoAnalysis && current.irisPhotoAnalysis.analysisId || priorIris.photoAnalysis && priorIris.photoAnalysis.analysisId || null;
+  let visualTruthMetrics = {};
+  if (visualAnalysisId) {
+    const visualSnapshot = await db.collection("irisVisualShadowResults").doc(visualAnalysisId).get();
+    if (visualSnapshot.exists) {
+      const visual = visualSnapshot.data() || {};
+      const visualCategoryAdjudicated = Boolean(finalCategory);
+      const visualWeightAdjudicated = Boolean(finalWeightBand && visual.weightBandCue);
+      const visualCategoryCorrect = visualCategoryAdjudicated && clean(visual.candidateCategory) === clean(finalCategory);
+      const visualWeightCorrect = visualWeightAdjudicated && clean(visual.weightBandCue) === clean(finalWeightBand);
+      const truthHandling = new Set((finalHandlingFlags || []).map(clean));
+      const visualHandling = new Set((visual.handlingClues || []).map(canonicalVisualHandling));
+      const handlingAdjudicated = truthHandling.size > 0;
+      const handlingCorrect = handlingAdjudicated && [...truthHandling].every((value) => visualHandling.has(value));
+      // Handling adjudication is not a dedicated hazardous-goods truth label.
+      // Risk accuracy remains unreported until that stronger truth exists.
+      const riskAdjudicated = false;
+      visualTruthMetrics = {
+        visualAdjudicatedTruthCount: FieldValue.increment(1),
+        visualClassificationAdjudicatedCount: FieldValue.increment(visualCategoryAdjudicated ? 1 : 0),
+        visualClassificationCorrectCount: FieldValue.increment(visualCategoryCorrect ? 1 : 0),
+        visualWeightBandAdjudicatedCount: FieldValue.increment(visualWeightAdjudicated ? 1 : 0),
+        visualWeightBandCorrectCount: FieldValue.increment(visualWeightCorrect ? 1 : 0),
+        visualHandlingAdjudicatedCount: FieldValue.increment(handlingAdjudicated ? 1 : 0),
+        visualHandlingCorrectCount: FieldValue.increment(handlingCorrect ? 1 : 0),
+        visualRiskAdjudicatedCount: FieldValue.increment(riskAdjudicated ? 1 : 0),
+        visualRiskCorrectCount: FieldValue.increment(0),
+        visualRiskFalsePositiveCount: FieldValue.increment(0),
+        visualRiskFalseNegativeCount: FieldValue.increment(0),
+        visualCorrectionCount: FieldValue.increment((visualCategoryAdjudicated && !visualCategoryCorrect) || (visualWeightAdjudicated && !visualWeightCorrect) ? 1 : 0),
+      };
+      await visualSnapshot.ref.set({
+        trustedOutcome: {
+          source: "ADMIN_ADJUDICATION",
+          category: finalCategory || null,
+          weightBand: finalWeightBand || null,
+          handlingFlags: finalHandlingFlags || [],
+          visualCategoryCorrect: visualCategoryAdjudicated ? visualCategoryCorrect : null,
+          visualWeightBandCorrect: visualWeightAdjudicated ? visualWeightCorrect : null,
+        },
+        updatedAt: FieldValue.serverTimestamp(),
+      }, {merge: true});
+      await db.collection("irisLearningCases").doc(`visual_${visualAnalysisId}`).set({
+        reviewStatus: "adjudicated",
+        learningStatus: "adjudicated",
+        trustedOutcomeSource: "ADMIN_ADJUDICATION",
+        trustedCategory: finalCategory || null,
+        trustedWeightBand: finalWeightBand || null,
+        reviewedBy: adminUid,
+        reviewedAt: FieldValue.serverTimestamp(),
+        productionTruthAffected: false,
+      }, {merge: true});
+    }
+  }
   await db.collection("irisMetricsDaily").doc(metricDate()).set({
     metricDate: metricDate(),
     adjudicatedTruthCount: FieldValue.increment(1),
@@ -218,6 +286,7 @@ const adjudicateIris = functions.runWith({enforceAppCheck: true}).https.onCall(a
     weightBandAdjudicatedCount: FieldValue.increment(weightBandAdjudicated ? 1 : 0),
     weightBandCorrectCount: FieldValue.increment(weightBandCorrect ? 1 : 0),
     adminOverrideCount: FieldValue.increment(adminOverride ? 1 : 0),
+    ...visualTruthMetrics,
     updatedAt: FieldValue.serverTimestamp(),
   }, {merge: true});
   if (referralType) {

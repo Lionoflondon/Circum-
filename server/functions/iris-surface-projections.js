@@ -94,6 +94,15 @@ function projectIrisForSurface(iris = {}, surface, context = {}) {
         twoPersonRequired: base.handlingRequirements.includes("Two Person Lift"),
         collectionHoldIfUnsuitable: true,
       };
+    case "marketplace":
+      return {
+        category: base.category,
+        weightBand: base.weightBand,
+        handlingRequirements: base.handlingRequirements,
+        serviceRequirement: base.serviceRequirement,
+        operationalRiskClass: value(iris, ["riskResolution", "resolution"], "REVIEW"),
+        ...versions(iris),
+      };
     case "admin":
       return {
         ...base,

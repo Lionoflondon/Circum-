@@ -24,6 +24,9 @@ test("visual inference produces versioned shadow-only structured evidence", () =
     observedAt: new Date("2026-08-10T10:00:00.000Z"),
   });
   assert.equal(result.mode, "SHADOW");
+  assert.equal(result.systemStatus, "PRODUCTION");
+  assert.equal(result.evaluationMode, "SHADOW");
+  assert.equal(result.authorityMode, "EVIDENCE_ONLY");
   assert.equal(result.visualModelVersion, visual.VISUAL_MODEL_VERSION);
   assert.equal(result.candidateObject, "electronics");
   assert.equal(result.candidateCategory, "Electronics");
@@ -85,6 +88,24 @@ test("provider timeout rejects without manufacturing visual evidence", async () 
   );
 });
 
+test("provider rejection, rate limiting and malformed responses fail closed", async () => {
+  const cases = [
+    {client: {annotateImage: async () => [{error: {message: "bad request"}}]}},
+    {client: {annotateImage: async () => {
+      throw new Error("RESOURCE_EXHAUSTED");
+    }}},
+    {client: {annotateImage: async () => [null]}},
+  ];
+  for (const [index, entry] of cases.entries()) {
+    await assert.rejects(visual.inferVisualEvidence({
+      bytes: Buffer.from("image"),
+      requestId: `provider-failure-${index}`,
+      imageHash: `failure-hash-${index}`,
+      client: entry.client,
+    }));
+  }
+});
+
 test("same versioned visual request reuses one provider result", async () => {
   visual.clearVisualRuntimeCaches();
   let calls = 0;
@@ -113,6 +134,9 @@ test("visual model state fails closed for unknown versions and supports rollback
   assert.deepEqual(visual.normalizeVisualModelState({enabled: true, visualModelVersion: visual.VISUAL_MODEL_VERSION}), {
     enabled: true,
     mode: "SHADOW",
+    systemStatus: "PRODUCTION",
+    evaluationMode: "SHADOW",
+    authorityMode: "EVIDENCE_ONLY",
     visualModelVersion: visual.VISUAL_MODEL_VERSION,
     rejectedUnknownVersion: false,
   });
@@ -122,4 +146,56 @@ test("visual model state fails closed for unknown versions and supports rollback
   const rolledBack = visual.normalizeVisualModelState({enabled: false, mode: "DISABLED"});
   assert.equal(rolledBack.enabled, false);
   assert.equal(rolledBack.visualModelVersion, null);
+});
+
+test("visual model state rejects attempted authority or evaluation promotion", () => {
+  const authority = visual.normalizeVisualModelState({
+    enabled: true,
+    authorityMode: "CLASSIFICATION_SUPPORT",
+    visualModelVersion: visual.VISUAL_MODEL_VERSION,
+  });
+  const evaluation = visual.normalizeVisualModelState({
+    enabled: true,
+    evaluationMode: "LIVE",
+    visualModelVersion: visual.VISUAL_MODEL_VERSION,
+  });
+  assert.equal(authority.enabled, false);
+  assert.equal(authority.authorityMode, "EVIDENCE_ONLY");
+  assert.equal(evaluation.enabled, false);
+  assert.equal(evaluation.evaluationMode, "DISABLED");
+});
+
+test("confidence remains a bounded band until verified sample size is sufficient", () => {
+  const insufficient = visual.calibratedVisualConfidence({providerConfidence: 0.91, verifiedSamples: 12, verifiedCorrect: 12});
+  assert.deepEqual(insufficient, {
+    band: "HIGH",
+    calibrated: false,
+    sampleSize: 12,
+    basis: "INSUFFICIENT_VERIFIED_OUTCOMES",
+  });
+  const calibrated = visual.calibratedVisualConfidence({providerConfidence: 0.91, verifiedSamples: 100, verifiedCorrect: 62});
+  assert.equal(calibrated.calibrated, true);
+  assert.equal(calibrated.band, "MEDIUM");
+  assert.equal(calibrated.observedAccuracy, 0.62);
+});
+
+test("bounded comparison separates agreement from truth-qualified accuracy", () => {
+  const noTruth = visual.buildVisualComparisonProjection({
+    sender: {category: "Electronics"},
+    deterministic: {inferredItemName: "laptop", inferredCategory: "Electronics"},
+    visual: {candidateObject: "laptop", candidateCategory: "Electronics", status: "COMPLETED", riskClues: []},
+  });
+  assert.equal(noTruth.status, "AGREEMENT");
+  assert.equal(noTruth.truth.verified, false);
+  assert.equal(noTruth.truth.visualCategoryCorrect, null);
+
+  const adjudicated = visual.buildVisualComparisonProjection({
+    deterministic: {inferredCategory: "Electronics"},
+    visual: {candidateCategory: "Electronics", status: "COMPLETED", riskClues: []},
+    admin: {category: "Clothing & Fashion"},
+  });
+  assert.equal(adjudicated.truth.verified, true);
+  assert.equal(adjudicated.truth.source, "ADMIN_ADJUDICATION");
+  assert.equal(adjudicated.truth.visualCategoryCorrect, false);
+  assert.equal(adjudicated.affectsProductionTruth, false);
 });

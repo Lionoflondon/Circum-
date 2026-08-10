@@ -5,9 +5,13 @@ const crypto = require("crypto");
 const functions = require("firebase-functions/v1");
 const {getFirestore, FieldValue} = require("firebase-admin/firestore");
 const {classifyIris, weightBandFor} = require("./iris-core");
+const {WEIGHT_POLICY_VERSION} = require("./canonical-weight-policy");
 const {enforceIrisRequestLimit} = require("./iris-request-guard");
 const {
   VISUAL_MODEL_VERSION,
+  VISUAL_SYSTEM_STATUS,
+  VISUAL_AUTHORITY_MODE,
+  VISUAL_EVALUATION_MODE,
   clearVisualModelStateCache,
   currentVisualModelState,
   inferVisualEvidence,
@@ -38,6 +42,26 @@ function text(value, max = 1000) {
 function boundedMetric(value, max = 60000) {
   const number = Number(value);
   return Number.isFinite(number) ? Math.max(0, Math.min(max, Math.round(number))) : 0;
+}
+
+function visualDomain(value) {
+  const normalized = text(value, 80).toLowerCase().replace(/[\s-]+/g, "_");
+  const aliases = {
+    health: "health_plus",
+    "health+": "health_plus",
+    heavy_duty: "heavy_duty",
+    gifts: "gift",
+  };
+  const domain = aliases[normalized] || normalized || "standard";
+  return new Set(["standard", "business", "gift", "health_plus", "vanguard", "heavy_duty", "scheduled", "marketplace"]).has(domain) ? domain : "standard";
+}
+
+function visualOperationalStatus({visual, stateEnabled, error}) {
+  if (visual) return visual.status === "UNCERTAIN" ? "LOW_CONFIDENCE" : "COMPLETED";
+  if (!stateEnabled) return "DISABLED";
+  const reason = `${error && error.message || ""}`.toLowerCase();
+  if (reason.includes("timeout") || reason.includes("unavailable") || reason.includes("rate")) return "UNAVAILABLE";
+  return "FAILED";
 }
 
 function decodeBase64Image(data) {
@@ -175,6 +199,7 @@ function buildPhotoAnalysis({uid, data, bytes, contentType, stageTimings = null,
     source: "backend_parcel_photo_verification",
     imageIntelligenceStatus: "verification_only",
     visualModelVersion: VISUAL_MODEL_VERSION,
+    weightPolicyVersion: WEIGHT_POLICY_VERSION,
     engineVersion: baseIris.engineVersion || null,
     knowledgeVersion: baseIris.knowledgeVersion || null,
     imageHash,
@@ -229,6 +254,7 @@ const analyseParcelPhotoForIris = functions.runWith({enforceAppCheck: true}).htt
   const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000);
   let visualShadow = null;
   let visualFailure = false;
+  let visualError = null;
   const visionStartedAt = Date.now();
   try {
     if (!visualState.enabled) throw new Error("visual_shadow_disabled");
@@ -238,6 +264,7 @@ const analyseParcelPhotoForIris = functions.runWith({enforceAppCheck: true}).htt
       imageHash: analysis.imageHash,
     });
   } catch (error) {
+    visualError = error;
     visualFailure = visualState.enabled;
     functions.logger.warn("iris_visual_shadow_failed", {
       requestId: analysis.analysisId,
@@ -247,8 +274,14 @@ const analyseParcelPhotoForIris = functions.runWith({enforceAppCheck: true}).htt
   }
   stageTimings.visionRpcMs = Date.now() - visionStartedAt;
   const comparisonStartedAt = Date.now();
-  const comparison = visualShadow ? shadowComparison({deterministic: analysis, visual: visualShadow}) : null;
+  const comparison = visualShadow ? shadowComparison({
+    deterministic: analysis,
+    visual: visualShadow,
+    sender: {item: analysis.description, weightBand: analysis.declaredWeightText},
+  }) : null;
   stageTimings.shadowComparisonMs = Date.now() - comparisonStartedAt;
+  const operationalStatus = visualOperationalStatus({visual: visualShadow, stateEnabled: visualState.enabled, error: visualError});
+  const domain = visualDomain(data && (data.workflow || data.productType || data.serviceType));
   const persistenceStartedAt = Date.now();
   const batch = db.batch();
   batch.set(db.collection("irisPhotoAnalyses").doc(analysis.analysisId), {
@@ -256,7 +289,10 @@ const analyseParcelPhotoForIris = functions.runWith({enforceAppCheck: true}).htt
     clientRequestId,
     createdAt: FieldValue.serverTimestamp(),
     expiresAt,
-    visualShadowStatus: visualShadow ? visualShadow.status : visualState.enabled ? "FAILED" : "DISABLED",
+    visualShadowStatus: operationalStatus,
+    visualSystemStatus: VISUAL_SYSTEM_STATUS,
+    visualEvaluationMode: VISUAL_EVALUATION_MODE,
+    visualAuthorityMode: VISUAL_AUTHORITY_MODE,
   }, {merge: true});
   if (visualShadow) {
     batch.set(db.collection("irisVisualShadowResults").doc(analysis.analysisId), {
@@ -267,9 +303,45 @@ const analyseParcelPhotoForIris = functions.runWith({enforceAppCheck: true}).htt
       clientRequestId,
       engineVersion: analysis.engineVersion,
       knowledgeVersion: analysis.knowledgeVersion,
+      weightPolicyVersion: analysis.weightPolicyVersion,
+      domain,
       createdAt: FieldValue.serverTimestamp(),
       expiresAt,
     }, {merge: false});
+  }
+  if (visualShadow && comparison && comparison.requiresReview) {
+    const candidateId = `visual_${analysis.analysisId}`;
+    const candidate = {
+      candidateId,
+      analysisId: analysis.analysisId,
+      userId: context.auth.uid,
+      source: "visual_iris_comparison",
+      evidenceType: "VISUAL_OBSERVATION",
+      reviewStatus: "pending_review",
+      learningStatus: "pending_review",
+      status: "pending_review",
+      comparisonStatus: comparison.status,
+      deterministicItemHash: comparison.deterministicItemHash,
+      visualItemHash: comparison.visualItemHash,
+      deterministicCategory: analysis.inferredCategory,
+      visualCategory: visualShadow.candidateCategory,
+      visualConfidence: visualShadow.confidence,
+      riskCodes: visualShadow.riskClues.map((entry) => entry.code).slice(0, 10),
+      visualModelVersion: VISUAL_MODEL_VERSION,
+      engineVersion: analysis.engineVersion,
+      knowledgeVersion: analysis.knowledgeVersion,
+      weightPolicyVersion: analysis.weightPolicyVersion,
+      authorityMode: VISUAL_AUTHORITY_MODE,
+      productionTruthAffected: false,
+      createdAt: FieldValue.serverTimestamp(),
+      updatedAt: FieldValue.serverTimestamp(),
+      expiresAt,
+    };
+    batch.set(db.collection("irisLearningCases").doc(candidateId), candidate, {merge: true});
+    batch.set(db.collection("iris_learning_review_candidates").doc(candidateId), {
+      ...candidate,
+      canonicalCollection: "irisLearningCases",
+    }, {merge: true});
   }
   const metricDate = new Date().toISOString().slice(0, 10);
   const clientTimings = data && typeof data.clientTimings === "object" ? data.clientTimings : {};
@@ -281,14 +353,35 @@ const analyseParcelPhotoForIris = functions.runWith({enforceAppCheck: true}).htt
     visualObjectAgreementCount: FieldValue.increment(comparison && comparison.objectAgreement ? 1 : 0),
     visualCategoryAgreementCount: FieldValue.increment(comparison && comparison.categoryAgreement ? 1 : 0),
     visualReviewSignalCount: FieldValue.increment(comparison && comparison.requiresReview ? 1 : 0),
+    visualAgreementCount: FieldValue.increment(comparison && comparison.status === "AGREEMENT" ? 1 : 0),
+    visualPartialAgreementCount: FieldValue.increment(comparison && comparison.status === "PARTIAL_AGREEMENT" ? 1 : 0),
+    visualDisagreementCount: FieldValue.increment(comparison && comparison.status === "DISAGREEMENT" ? 1 : 0),
+    visualUnknownComparisonCount: FieldValue.increment(!comparison || comparison.status === "UNKNOWN" ? 1 : 0),
+    visualLowConfidenceCount: FieldValue.increment(operationalStatus === "LOW_CONFIDENCE" ? 1 : 0),
+    visualUnavailableCount: FieldValue.increment(operationalStatus === "UNAVAILABLE" ? 1 : 0),
     visualProviderReuseCount: FieldValue.increment(visualShadow && visualShadow.providerResultReused ? 1 : 0),
     visualColdInvocationCount: FieldValue.increment(coldInvocation ? 1 : 0),
     visualVisionRpcTotalMs: FieldValue.increment(stageTimings.visionRpcMs),
     visualClientPreCallTotalMs: FieldValue.increment(boundedMetric(clientTimings.preCallMs)),
     visualClientImageReadTotalMs: FieldValue.increment(boundedMetric(clientTimings.imageReadMs)),
+    visualClientImageTransformTotalMs: FieldValue.increment(boundedMetric(clientTimings.imageTransformMs)),
     visualClientBase64EncodingTotalMs: FieldValue.increment(boundedMetric(clientTimings.base64EncodingMs)),
+    visualOriginalBytesTotal: FieldValue.increment(boundedMetric(clientTimings.originalBytes, MAX_IMAGE_BYTES)),
     visualInputBytesTotal: FieldValue.increment(boundedMetric(clientTimings.inputBytes, MAX_IMAGE_BYTES)),
     visualModelVersion: VISUAL_MODEL_VERSION,
+    visualSystemStatus: VISUAL_SYSTEM_STATUS,
+    visualEvaluationMode: VISUAL_EVALUATION_MODE,
+    visualAuthorityMode: VISUAL_AUTHORITY_MODE,
+    visualDomainMetrics: {
+      [domain]: {
+        requestCount: FieldValue.increment(1),
+        successCount: FieldValue.increment(visualShadow ? 1 : 0),
+        failureCount: FieldValue.increment(visualFailure ? 1 : 0),
+        reviewCount: FieldValue.increment(comparison && comparison.requiresReview ? 1 : 0),
+        agreementCount: FieldValue.increment(comparison && comparison.status === "AGREEMENT" ? 1 : 0),
+        disagreementCount: FieldValue.increment(comparison && comparison.status === "DISAGREEMENT" ? 1 : 0),
+      },
+    },
     updatedAt: FieldValue.serverTimestamp(),
   }, {merge: true});
   await batch.commit();
@@ -306,8 +399,10 @@ const analyseParcelPhotoForIris = functions.runWith({enforceAppCheck: true}).htt
     providerResultReused: visualShadow && visualShadow.providerResultReused === true,
     clientTimings: {
       imageReadMs: boundedMetric(clientTimings.imageReadMs),
+      imageTransformMs: boundedMetric(clientTimings.imageTransformMs),
       base64EncodingMs: boundedMetric(clientTimings.base64EncodingMs),
       preCallMs: boundedMetric(clientTimings.preCallMs),
+      originalBytes: boundedMetric(clientTimings.originalBytes, MAX_IMAGE_BYTES),
       inputBytes: boundedMetric(clientTimings.inputBytes, MAX_IMAGE_BYTES),
       encodedCharacters: boundedMetric(clientTimings.encodedCharacters, Math.ceil(MAX_IMAGE_BYTES * 1.4)),
     },
@@ -315,7 +410,10 @@ const analyseParcelPhotoForIris = functions.runWith({enforceAppCheck: true}).htt
     totalMs: stageTimings.totalBackendMs,
     confidence: analysis.confidence,
     imageQuality: analysis.imageQuality,
-    visualShadowStatus: visualShadow ? visualShadow.status : visualState.enabled ? "FAILED" : "DISABLED",
+    visualShadowStatus: operationalStatus,
+    visualSystemStatus: VISUAL_SYSTEM_STATUS,
+    visualEvaluationMode: VISUAL_EVALUATION_MODE,
+    visualAuthorityMode: VISUAL_AUTHORITY_MODE,
     visualModelVersion: visualState.visualModelVersion,
   });
   return {
@@ -361,6 +459,9 @@ const adminSetIrisVisualModelState = functions.runWith({enforceAppCheck: true}).
     transaction.set(stateRef, {
       enabled,
       mode: enabled ? "SHADOW" : "DISABLED",
+      systemStatus: VISUAL_SYSTEM_STATUS,
+      evaluationMode: enabled ? VISUAL_EVALUATION_MODE : "DISABLED",
+      authorityMode: VISUAL_AUTHORITY_MODE,
       visualModelVersion: enabled ? VISUAL_MODEL_VERSION : null,
       previousVisualModelVersion: previous.visualModelVersion || VISUAL_MODEL_VERSION,
       lastAction: action,
@@ -373,14 +474,14 @@ const adminSetIrisVisualModelState = functions.runWith({enforceAppCheck: true}).
       action,
       reason,
       previousState: previous,
-      newState: {enabled, mode: enabled ? "SHADOW" : "DISABLED", visualModelVersion: enabled ? VISUAL_MODEL_VERSION : null},
+      newState: {enabled, systemStatus: VISUAL_SYSTEM_STATUS, evaluationMode: enabled ? VISUAL_EVALUATION_MODE : "DISABLED", authorityMode: VISUAL_AUTHORITY_MODE, visualModelVersion: enabled ? VISUAL_MODEL_VERSION : null},
       actorId: context.auth.uid,
       createdAt: FieldValue.serverTimestamp(),
       immutable: true,
     });
   });
   clearVisualModelStateCache();
-  return {ok: true, action, mode: action === "RESUME" ? "SHADOW" : "DISABLED", visualModelVersion: action === "RESUME" ? VISUAL_MODEL_VERSION : null};
+  return {ok: true, action, systemStatus: VISUAL_SYSTEM_STATUS, evaluationMode: action === "RESUME" ? VISUAL_EVALUATION_MODE : "DISABLED", authorityMode: VISUAL_AUTHORITY_MODE, visualModelVersion: action === "RESUME" ? VISUAL_MODEL_VERSION : null};
 });
 
 async function verifiedPhotoAnalysis({db, uid, analysisId, description = ""}) {

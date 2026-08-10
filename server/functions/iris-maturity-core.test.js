@@ -64,7 +64,7 @@ test("latency buckets provide deterministic bounded percentiles", () => {
 });
 
 test("health projection reports only count-backed quality and performance metrics", () => {
-  const result = healthProjection({requestCount: 100, latencyBuckets: {lte_250: 50, lte_1000: 45, lte_5000: 5}, failureCount: 2, timeoutCount: 1, lowConfidenceCount: 10, fastPathCount: 40, riderDisagreementCount: 4, adminOverrideCount: 3, adjudicatedTruthCount: 8, classificationAdjudicatedCount: 8, classificationCorrectCount: 6, weightBandAdjudicatedCount: 8, weightBandCorrectCount: 7, visualShadowRequestCount: 20, visualShadowSuccessCount: 18, visualShadowFailureCount: 2, visualObjectAgreementCount: 12, visualCategoryAgreementCount: 15, visualReviewSignalCount: 4});
+  const result = healthProjection({requestCount: 100, latencyBuckets: {lte_250: 50, lte_1000: 45, lte_5000: 5}, failureCount: 2, timeoutCount: 1, lowConfidenceCount: 10, fastPathCount: 40, riderDisagreementCount: 4, adminOverrideCount: 3, adjudicatedTruthCount: 8, classificationAdjudicatedCount: 8, classificationCorrectCount: 6, weightBandAdjudicatedCount: 8, weightBandCorrectCount: 7, visualShadowRequestCount: 20, visualShadowSuccessCount: 18, visualShadowFailureCount: 2, visualObjectAgreementCount: 12, visualCategoryAgreementCount: 15, visualReviewSignalCount: 4, visualDomainMetrics: {health_plus: {requestCount: 4, successCount: 3, failureCount: 1, reviewCount: 2, agreementCount: 1, disagreementCount: 1}}});
   assert.equal(result.failureRatePercent, 2);
   assert.equal(result.lowConfidenceRatePercent, 10);
   assert.equal(result.fastPathRatePercent, 40);
@@ -77,4 +77,12 @@ test("health projection reports only count-backed quality and performance metric
   assert.equal(result.visualCategoryAgreementRatePercent, 75);
   assert.equal(result.visualReviewSignalRatePercent, 20);
   assert.equal(result.visualClassificationAccuracyPercent, null);
+  assert.deepEqual(result.domainScorecards.health_plus, {
+    requestCount: 4,
+    successRatePercent: 75,
+    failureRatePercent: 25,
+    reviewRatePercent: 50,
+    agreementRatePercent: 25,
+    disagreementRatePercent: 25,
+  });
 });

@@ -37,6 +37,7 @@ test("backend parcel photo analysis emits IRIS-compatible weight evidence", () =
   assert.equal(analysis.source, "backend_parcel_photo_verification");
   assert.equal(analysis.imageIntelligenceStatus, "verification_only");
   assert.match(analysis.visualModelVersion, /^google-cloud-vision-v1-builtin-stable-/);
+  assert.equal(analysis.weightPolicyVersion, "circum-weight-bands-v1");
   assert.equal(analysis.userId, "sender-1");
   assert.ok(analysis.analysisId);
   assert.ok(analysis.estimatedWeightKg > 0);
