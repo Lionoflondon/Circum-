@@ -19,7 +19,7 @@ const CUSTOMER_EVENTS = new Map([
   ["Completed", "Delivered"],
   ["Cancelled", "Delivery cancelled"],
   ["Refunded", "Refund processed"],
-  ["NoShowSettlementCollected", "Pickup no-show charge collected"],
+  ["NoShowSettlementApplied", "Pickup no-show charge applied"],
 ]);
 
 function text(value, max = 300) {

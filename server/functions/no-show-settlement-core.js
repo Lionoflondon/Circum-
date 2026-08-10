@@ -12,24 +12,25 @@ function authorityDecision({delivery = {}, paymentSession = {}, paymentIntent = 
   const senderId = text(delivery.senderId || delivery.userId);
   const sessionId = text(delivery.paymentSessionId);
   const intentId = text(delivery.stripePaymentIntentId);
-  const customerId = text(delivery.stripeCustomerId);
   const intentMetadata = paymentIntent.metadata || {};
-  const paymentMethodId = text(paymentIntent.payment_method && paymentIntent.payment_method.id || paymentIntent.payment_method);
-  const explicitFutureUse = paymentIntent.setup_future_usage === "off_session" ||
-    paymentSession.futureUsageAuthorized === true;
-  const linked = sessionId && paymentSession.userId === senderId &&
-    text(paymentSession.stripePaymentIntentId) === intentId &&
-    text(paymentSession.stripeCustomerId) === customerId &&
-    text(intentMetadata.paymentSessionId) === sessionId &&
-    text(intentMetadata.userId) === senderId;
-  if (!senderId || !sessionId || !intentId || !customerId) return {allowed: false, reason: "missing_payment_authority"};
-  if (!linked) return {allowed: false, reason: "payment_authority_mismatch"};
-  if (!explicitFutureUse) return {allowed: false, reason: "off_session_authority_unproven"};
-  if (!paymentMethodId) return {allowed: false, reason: "payment_method_unavailable"};
-  if (text(paymentIntent.customer && paymentIntent.customer.id || paymentIntent.customer) !== customerId) {
-    return {allowed: false, reason: "payment_customer_mismatch"};
+  const paymentStatus = text(delivery.paymentStatus).toLowerCase();
+  const paidAmountPence = Math.round(Number(delivery.paidAmount || 0) * 100);
+  const sessionLinked = sessionId && paymentSession.userId === senderId;
+  if (!senderId || !sessionId || !sessionLinked) return {allowed: false, reason: "missing_payment_authority"};
+  if (!["paid", "succeeded", "success", "captured"].includes(paymentStatus) || paidAmountPence < AMOUNTS.customerPence) {
+    return {allowed: false, reason: "paid_amount_insufficient"};
   }
-  return {allowed: true, customerId, paymentMethodId, paymentIntentId: intentId, sessionId};
+  if (intentId) {
+    const linked = text(paymentSession.stripePaymentIntentId) === intentId &&
+      text(intentMetadata.paymentSessionId) === sessionId &&
+      text(intentMetadata.userId) === senderId;
+    if (!linked || text(paymentIntent.status) !== "succeeded") {
+      return {allowed: false, reason: "payment_authority_mismatch"};
+    }
+  } else if (Number(delivery.remainingAmount || 0) > 0 || Number(delivery.rothAppliedAmount || 0) < 7) {
+    return {allowed: false, reason: "payment_authority_mismatch"};
+  }
+  return {allowed: true, paymentIntentId: intentId || null, paymentReference: intentId || sessionId, sessionId, paidAmountPence};
 }
 
 function pendingFinancial(deliveryId, riderId) {
@@ -46,6 +47,7 @@ function pendingFinancial(deliveryId, riderId) {
     customerCollected: 0,
     riderCredited: 0,
     platformRealized: 0,
+    additionalCustomerCharge: 0,
     attemptCount: 0,
   };
 }

@@ -48,7 +48,7 @@ async function markFailure(db, deliveryId, reason, details = {}) {
   return result;
 }
 
-async function settleCollected(db, deliveryId, stripeIntent) {
+async function settleCollected(db, deliveryId, paymentAuthority) {
   return db.runTransaction(async (transaction) => {
     const deliveryRef = db.collection("deliveryRequests").doc(deliveryId);
     const settlementRef = db.collection("noShowSettlements").doc(deliveryId);
@@ -74,7 +74,7 @@ async function settleCollected(db, deliveryId, stripeIntent) {
         type: "no_show_fee",
         amount: 4,
         status: "completed",
-        source: "no_show_customer_collection",
+        source: "no_show_deduction_from_paid_delivery",
         createdAt: FieldValue.serverTimestamp(),
       });
       transaction.set(db.collection("riderEarnings").doc(riderId), {
@@ -95,7 +95,8 @@ async function settleCollected(db, deliveryId, stripeIntent) {
         amount: 3,
         currency: "GBP",
         status: "realized",
-        stripePaymentIntentId: stripeIntent.id,
+        paymentReference: paymentAuthority.paymentReference,
+        stripePaymentIntentId: paymentAuthority.paymentIntentId || null,
         createdAt: FieldValue.serverTimestamp(),
       });
     }
@@ -105,7 +106,10 @@ async function settleCollected(db, deliveryId, stripeIntent) {
       customerCollected: 7,
       riderCredited: 4,
       platformRealized: 3,
-      stripePaymentIntentId: stripeIntent.id,
+      additionalCustomerCharge: 0,
+      deductedFromPaidAmount: 7,
+      paymentReference: paymentAuthority.paymentReference,
+      stripePaymentIntentId: paymentAuthority.paymentIntentId || null,
       settledAt: FieldValue.serverTimestamp(),
       updatedAt: FieldValue.serverTimestamp(),
     };
@@ -115,6 +119,8 @@ async function settleCollected(db, deliveryId, stripeIntent) {
       customerCollected: settled.customerCollected,
       riderCredited: settled.riderCredited,
       platformRealized: settled.platformRealized,
+      additionalCustomerCharge: settled.additionalCustomerCharge,
+      deductedFromPaidAmount: settled.deductedFromPaidAmount,
       settledAt: settled.settledAt,
       updatedAt: settled.updatedAt,
     };
@@ -124,13 +130,13 @@ async function settleCollected(db, deliveryId, stripeIntent) {
     }, {merge: true});
     transaction.set(db.collection("operationsIncidents").doc(`no_show_settlement_${deliveryId}`), {
       status: "resolved",
-      resolution: "customer_collected_rider_and_platform_settled",
+      resolution: "deducted_from_paid_amount_rider_and_platform_settled",
       resolvedAt: FieldValue.serverTimestamp(),
       updatedAt: FieldValue.serverTimestamp(),
     }, {merge: true});
     transaction.set(deliveryRef.collection("timeline").doc(`no_show_settled_${deliveryId}`), {
       eventId: `no_show_settled_${deliveryId}`,
-      eventType: "NoShowSettlementCollected",
+      eventType: "NoShowSettlementApplied",
       deliveryId,
       immutable: true,
       customerCollected: 7,
@@ -152,11 +158,13 @@ async function processNoShowSettlement({db, stripe, deliveryId}) {
   if ((settlementSnap.data() || {}).state === "SETTLED") return {success: true, state: "SETTLED", duplicate: true};
   const sessionId = text(delivery.paymentSessionId);
   const sessionSnap = sessionId ? await db.collection("senderPaymentSessions").doc(sessionId).get() : null;
-  let originalIntent;
-  try {
-    originalIntent = delivery.stripePaymentIntentId ? await stripe.paymentIntents.retrieve(delivery.stripePaymentIntentId) : null;
-  } catch (error) {
-    return markFailure(db, deliveryId, "original_payment_unavailable", {providerCode: text(error && error.code)});
+  let originalIntent = {};
+  if (delivery.stripePaymentIntentId) {
+    try {
+      originalIntent = await stripe.paymentIntents.retrieve(delivery.stripePaymentIntentId);
+    } catch (error) {
+      return markFailure(db, deliveryId, "original_payment_unavailable", {providerCode: text(error && error.code)});
+    }
   }
   const authority = core.authorityDecision({
     delivery,
@@ -164,32 +172,7 @@ async function processNoShowSettlement({db, stripe, deliveryId}) {
     paymentIntent: originalIntent || {},
   });
   if (!authority.allowed) return markFailure(db, deliveryId, authority.reason);
-  let intent;
-  try {
-    intent = await stripe.paymentIntents.create({
-      amount: core.AMOUNTS.customerPence,
-      currency: "gbp",
-      customer: authority.customerId,
-      payment_method: authority.paymentMethodId,
-      off_session: true,
-      confirm: true,
-      description: "Circum pickup no-show charge",
-      metadata: {
-        paymentType: "delivery_no_show",
-        deliveryId,
-        paymentSessionId: authority.sessionId,
-        originalPaymentIntentId: authority.paymentIntentId,
-      },
-    }, {idempotencyKey: `no_show_settlement_${deliveryId}`});
-  } catch (error) {
-    return markFailure(db, deliveryId, "collection_declined", {providerCode: text(error && error.code)});
-  }
-  if (!intent || intent.status !== "succeeded") {
-    return markFailure(db, deliveryId, `collection_${text(intent && intent.status) || "not_succeeded"}`, {
-      stripePaymentIntentId: intent && intent.id || null,
-    });
-  }
-  return settleCollected(db, deliveryId, intent);
+  return settleCollected(db, deliveryId, authority);
 }
 
 async function processPendingNoShowSettlements({db = getFirestore(), stripe, limit = 25} = {}) {

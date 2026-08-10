@@ -6,9 +6,9 @@ const core = require("./no-show-settlement-core");
 
 function fixture(overrides = {}) {
   return {
-    delivery: {senderId: "sender-a", paymentSessionId: "session-a", stripePaymentIntentId: "pi-a", stripeCustomerId: "cus-a"},
-    paymentSession: {userId: "sender-a", stripePaymentIntentId: "pi-a", stripeCustomerId: "cus-a", futureUsageAuthorized: true},
-    paymentIntent: {id: "pi-a", customer: "cus-a", payment_method: "pm-a", metadata: {userId: "sender-a", paymentSessionId: "session-a"}},
+    delivery: {senderId: "sender-a", paymentSessionId: "session-a", stripePaymentIntentId: "pi-a", paidAmount: 15, paymentStatus: "paid", remainingAmount: 15},
+    paymentSession: {userId: "sender-a", stripePaymentIntentId: "pi-a"},
+    paymentIntent: {id: "pi-a", status: "succeeded", metadata: {userId: "sender-a", paymentSessionId: "session-a"}},
     ...overrides,
   };
 }
@@ -19,7 +19,7 @@ test("no-show amounts preserve collect-first policy", () => {
     settlementId: "no_show_delivery-a", idempotencyKey: "no_show_settlement_delivery-a",
     deliveryId: "delivery-a", riderId: "rider-a", state: "SETTLEMENT_PENDING",
     settlementStatus: "pending_collection", customerCharge: 7, riderCompensation: 4,
-    platformAmount: 3, customerCollected: 0, riderCredited: 0, platformRealized: 0,
+    platformAmount: 3, customerCollected: 0, riderCredited: 0, platformRealized: 0, additionalCustomerCharge: 0,
     attemptCount: 0,
   });
 });
@@ -31,22 +31,20 @@ test("no-show retries use bounded backoff and exhaust after five attempts", () =
   assert.deepEqual(core.retryDecision(5, now), {exhausted: true, nextAttemptAt: null});
 });
 
-test("explicit, delivery-bound off-session authority is accepted", () => {
+test("delivery-bound existing payment authority is accepted without a new charge", () => {
   assert.equal(core.authorityDecision(fixture()).allowed, true);
-  const input = fixture();
-  input.paymentSession.futureUsageAuthorized = false;
-  input.paymentIntent.setup_future_usage = "off_session";
-  assert.equal(core.authorityDecision(input).allowed, true);
+  const rothOnly = fixture({
+    delivery: {senderId: "sender-a", paymentSessionId: "session-a", paidAmount: 12, paymentStatus: "paid", remainingAmount: 0, rothAppliedAmount: 12},
+    paymentSession: {userId: "sender-a"}, paymentIntent: {},
+  });
+  assert.equal(core.authorityDecision(rothOnly).allowed, true);
 });
 
 test("legacy or mismatched authority fails closed", () => {
   const legacy = fixture();
-  legacy.paymentSession.futureUsageAuthorized = false;
-  assert.equal(core.authorityDecision(legacy).reason, "off_session_authority_unproven");
+  legacy.delivery.paidAmount = 6.99;
+  assert.equal(core.authorityDecision(legacy).reason, "paid_amount_insufficient");
   const wrongSender = fixture();
   wrongSender.paymentIntent.metadata.userId = "sender-b";
   assert.equal(core.authorityDecision(wrongSender).reason, "payment_authority_mismatch");
-  const wrongCustomer = fixture();
-  wrongCustomer.paymentIntent.customer = "cus-b";
-  assert.equal(core.authorityDecision(wrongCustomer).reason, "payment_customer_mismatch");
 });
