@@ -5,6 +5,7 @@ const functions = require("firebase-functions/v1");
 const {getFirestore, FieldValue} = require("firebase-admin/firestore");
 const {getAuth} = require("firebase-admin/auth");
 const rothLedger = require("./roth-ledger");
+const communicationEngine = require("./communication-engine");
 const {BALANCE_TYPES, TRANSACTION_TYPES} = require("./roth-ledger-core");
 const {
   DEFAULT_REFERRAL_REWARD_ROTH,
@@ -13,6 +14,13 @@ const {
 } = require("./referral-core");
 
 const DEFAULT_REWARD = DEFAULT_REFERRAL_REWARD_ROTH;
+const REFERRAL_HISTORY_PAGE_SIZE = 20;
+const APPROVED_QUALIFYING_EVENTS = new Set([
+  "sender_completed_paid_booking",
+  "rider_completed_delivery",
+  "gift_request_completed",
+  "health_plus_completed",
+]);
 
 function requireAuth(context) {
   if (!context.auth) {
@@ -41,23 +49,46 @@ function codeFromUser(user) {
   return `${source || "CIRCUM"}${user.uid.slice(0, 4).toUpperCase()}`.slice(0, 12);
 }
 
-exports.ensureReferralCode = functions.https.onCall(async (data, context) => {
+exports.ensureReferralCode = functions.runWith({enforceAppCheck: true}).https.onCall(async (data, context) => {
   requireAuth(context);
   const db = getFirestore();
   const uid = context.auth.uid;
   const userRef = db.collection("users").doc(uid);
-  const snap = await userRef.get();
-  const existing = normalizeCode(snap.data() && snap.data().referralCode);
-  if (existing) {
-    return {referralCode: existing, referralLink: `https://circumuk.com/join/${existing}`};
-  }
   const authUser = await getAuth().getUser(uid);
+  const currentUser = await userRef.get();
+  const reservedCode = normalizeCode(currentUser.data() && currentUser.data().referralCode);
+  if (reservedCode) {
+    const reservedRef = db.collection("referralCodes").doc(reservedCode);
+    await db.runTransaction(async (transaction) => {
+      const reservation = await transaction.get(reservedRef);
+      if (reservation.exists && reservation.data().userId !== uid) {
+        throw new functions.https.HttpsError("failed-precondition", "Referral code reservation is inconsistent.");
+      }
+      transaction.set(reservedRef, {
+        code: reservedCode,
+        userId: uid,
+        userEmail: normalizeEmail(authUser.email),
+        createdAt: reservation.exists ? reservation.data().createdAt : FieldValue.serverTimestamp(),
+        updatedAt: FieldValue.serverTimestamp(),
+      }, {merge: true});
+    });
+    return {referralCode: reservedCode, referralLink: `https://circumuk.com/join/${reservedCode}`};
+  }
   let code = codeFromUser(authUser);
   for (let attempt = 0; attempt < 5; attempt++) {
     const codeRef = db.collection("referralCodes").doc(code);
     try {
+      let canonicalCode = code;
       await db.runTransaction(async (transaction) => {
-        const codeSnap = await transaction.get(codeRef);
+        const [userSnap, codeSnap] = await Promise.all([
+          transaction.get(userRef),
+          transaction.get(codeRef),
+        ]);
+        const existing = normalizeCode(userSnap.data() && userSnap.data().referralCode);
+        if (existing) {
+          canonicalCode = existing;
+          return;
+        }
         if (codeSnap.exists && codeSnap.data().userId !== uid) throw new Error("collision");
         transaction.set(codeRef, {
           code,
@@ -71,7 +102,7 @@ exports.ensureReferralCode = functions.https.onCall(async (data, context) => {
           updatedAt: FieldValue.serverTimestamp(),
         }, {merge: true});
       });
-      return {referralCode: code, referralLink: `https://circumuk.com/join/${code}`};
+      return {referralCode: canonicalCode, referralLink: `https://circumuk.com/join/${canonicalCode}`};
     } catch (error) {
       code = `${codeFromUser(authUser).slice(0, 8)}${Math.floor(Math.random() * 9000) + 1000}`;
     }
@@ -79,7 +110,7 @@ exports.ensureReferralCode = functions.https.onCall(async (data, context) => {
   throw new functions.https.HttpsError("already-exists", "Could not create a unique referral code.");
 });
 
-exports.attachReferralCode = functions.https.onCall(async (data, context) => {
+exports.attachReferralCode = functions.runWith({enforceAppCheck: true}).https.onCall(async (data, context) => {
   requireAuth(context);
   const code = normalizeCode(data.referralCode);
   if (!code) throw new functions.https.HttpsError("invalid-argument", "Referral code is required.");
@@ -93,22 +124,29 @@ exports.attachReferralCode = functions.https.onCall(async (data, context) => {
   const referrerEmail = normalizeEmail(codeSnap.data().userEmail || await userEmail(referrerUserId));
   const referredEmail = normalizeEmail(context.auth.token.email || await userEmail(referredUserId));
   const referralId = referredUserId;
-  if (referrerUserId === referredUserId || (referrerEmail && referrerEmail === referredEmail)) {
-    await db.collection("referrals").doc(referralId).set({
-      referrerUserId,
-      referredUserId,
-      referralCode: code,
-      status: "rejected",
-      rejectionReason: "Self-referral blocked.",
-      createdAt: FieldValue.serverTimestamp(),
-      rejectedAt: FieldValue.serverTimestamp(),
-    }, {merge: true});
-    return {status: "rejected"};
-  }
+  const selfReferral = referrerUserId === referredUserId ||
+    (referrerEmail && referrerEmail === referredEmail);
+  let resultStatus = selfReferral ? REFERRAL_STATUSES.rejected : REFERRAL_STATUSES.signedUp;
   await db.runTransaction(async (transaction) => {
     const referralRef = db.collection("referrals").doc(referralId);
     const existing = await transaction.get(referralRef);
-    if (existing.exists) return;
+    if (existing.exists) {
+      resultStatus = existing.data().status;
+      return;
+    }
+    if (selfReferral) {
+      transaction.create(referralRef, {
+        referrerUserId,
+        referredUserId,
+        referralCode: code,
+        status: REFERRAL_STATUSES.rejected,
+        rewardStatus: REFERRAL_STATUSES.rejected,
+        rejectionReason: "Self-referral blocked.",
+        createdAt: FieldValue.serverTimestamp(),
+        rejectedAt: FieldValue.serverTimestamp(),
+      });
+      return;
+    }
     transaction.set(referralRef, {
       referrerUserId,
       inviterUserId: referrerUserId,
@@ -132,26 +170,21 @@ exports.attachReferralCode = functions.https.onCall(async (data, context) => {
       updatedAt: FieldValue.serverTimestamp(),
     }, {merge: true});
   });
-  return {status: REFERRAL_STATUSES.signedUp};
+  return {status: resultStatus};
 });
 
-exports.activateReferral = functions.https.onCall(async (data, context) => {
+exports.activateReferral = functions.runWith({enforceAppCheck: true}).https.onCall(async (_data, context) => {
   requireAuth(context);
-  const referredUserId = `${data.referredUserId || context.auth.uid}`.trim();
-  if (referredUserId !== context.auth.uid && !context.auth.token.admin) {
-    throw new functions.https.HttpsError("permission-denied", "Cannot activate another user's referral.");
-  }
-  const activityType = `${data.activityType || "activity"}`.trim();
-  const activityId = `${data.activityId || ""}`.trim();
-  return activateReferralForUser({
-    referredUserId,
-    activityType,
-    activityId,
-    userEmail: context.auth.token.email,
-  });
+  throw new functions.https.HttpsError(
+      "permission-denied",
+      "Referral rewards are issued automatically after a verified qualifying activity.",
+  );
 });
 
 async function activateReferralForUser({referredUserId, activityType, activityId, userEmail = ""}) {
+  if (!APPROVED_QUALIFYING_EVENTS.has(activityType) || !`${activityId || ""}`.trim()) {
+    throw new Error("Referral qualification requires an approved canonical activity.");
+  }
   const db = getFirestore();
   const referralRef = db.collection("referrals").doc(referredUserId);
   const snap = await referralRef.get();
@@ -160,11 +193,22 @@ async function activateReferralForUser({referredUserId, activityType, activityId
   }
   const referral = snap.data();
   if (referral.referrerUserId === referredUserId) return {status: "rejected"};
-  const reward = Number(referral.rewardAmount || DEFAULT_REWARD);
+  const reward = DEFAULT_REWARD;
   try {
+    let qualificationClaimed = false;
     await db.runTransaction(async (transaction) => {
       const latest = await transaction.get(referralRef);
-      if (!latest.exists || latest.data().status === REFERRAL_STATUSES.rothAwarded || latest.data().status === "rewarded") return;
+      if (!latest.exists) return;
+      const current = latest.data();
+      if (current.status === REFERRAL_STATUSES.rothAwarded || current.status === "rewarded" ||
+          current.status === REFERRAL_STATUSES.rejected) return;
+      if (current.status === REFERRAL_STATUSES.firstQualifyingDeliveryCompleted) {
+        qualificationClaimed = current.qualifyingActivityId === activityId &&
+          current.qualifyingActivityType === activityType;
+        return;
+      }
+      if (current.status !== REFERRAL_STATUSES.signedUp) return;
+      qualificationClaimed = true;
       transaction.set(referralRef, {
         status: REFERRAL_STATUSES.firstQualifyingDeliveryCompleted,
         rewardStatus: REFERRAL_STATUSES.firstQualifyingDeliveryCompleted,
@@ -175,6 +219,11 @@ async function activateReferralForUser({referredUserId, activityType, activityId
         updatedAt: FieldValue.serverTimestamp(),
       }, {merge: true});
     });
+    if (!qualificationClaimed) {
+      const current = await referralRef.get();
+      return {status: current.exists ? current.data().status : "none"};
+    }
+    const rewardIdentity = `${referredUserId}_${activityId}`;
     await rothLedger.recordRothMovement({
       db,
       userId: referral.referrerUserId,
@@ -184,7 +233,7 @@ async function activateReferralForUser({referredUserId, activityType, activityId
       type: TRANSACTION_TYPES.referralReward,
       reason: "Referral activated after first completed activity",
       relatedEntityId: referredUserId,
-      transactionId: `referral_reward_${referredUserId}_referrer`,
+      transactionId: `referral_reward_${rewardIdentity}_referrer`,
       metadata: referralRewardFinanceMetadata({
         referralCode: referral.referralCode,
         inviterUserId: referral.referrerUserId,
@@ -205,7 +254,7 @@ async function activateReferralForUser({referredUserId, activityType, activityId
       type: TRANSACTION_TYPES.referralWelcomeReward,
       reason: "Joined through referral and completed first activity",
       relatedEntityId: referredUserId,
-      transactionId: `referral_reward_${referredUserId}_referred`,
+      transactionId: `referral_reward_${rewardIdentity}_referred`,
       metadata: referralRewardFinanceMetadata({
         referralCode: referral.referralCode,
         inviterUserId: referral.referrerUserId,
@@ -228,6 +277,24 @@ async function activateReferralForUser({referredUserId, activityType, activityId
       rewardIssuedAt: FieldValue.serverTimestamp(),
       updatedAt: FieldValue.serverTimestamp(),
     }, {merge: true});
+    await Promise.all([
+      communicationEngine.emitNotification({
+        recipientId: referral.referrerUserId,
+        recipientRole: "sender",
+        type: "referral_reward_issued",
+        title: "Referral reward added",
+        body: `${reward} Roth has been added to your Wallet.`,
+        data: {referralId: referredUserId, role: "inviter"},
+      }),
+      communicationEngine.emitNotification({
+        recipientId: referredUserId,
+        recipientRole: "sender",
+        type: "referral_welcome_reward_issued",
+        title: "Welcome reward added",
+        body: `${reward} Roth has been added to your Wallet.`,
+        data: {referralId: referredUserId, role: "referred_user"},
+      }),
+    ]);
     return {status: REFERRAL_STATUSES.rothAwarded, rewardAmount: reward};
   } catch (error) {
     console.error("Referral activation failed", error);
@@ -241,6 +308,50 @@ async function activateReferralForUser({referredUserId, activityType, activityId
     return {status: "review"};
   }
 }
+
+exports.getReferralDashboard = functions.runWith({enforceAppCheck: true}).https.onCall(async (data, context) => {
+  requireAuth(context);
+  const uid = context.auth.uid;
+  const requestedPageSize = Number(data && data.pageSize || REFERRAL_HISTORY_PAGE_SIZE);
+  const pageSize = Number.isFinite(requestedPageSize) ?
+    Math.min(50, Math.max(1, Math.floor(requestedPageSize))) : REFERRAL_HISTORY_PAGE_SIZE;
+  const cursor = `${data && data.pageToken || ""}`.trim();
+  const db = getFirestore();
+  const userSnap = await db.collection("users").doc(uid).get();
+  const code = normalizeCode(userSnap.data() && userSnap.data().referralCode);
+  let query = db.collection("referrals")
+      .where("referrerUserId", "==", uid)
+      .orderBy("createdAt", "desc")
+      .orderBy("__name__", "desc")
+      .limit(pageSize + 1);
+  if (cursor) {
+    const cursorSnap = await db.collection("referrals").doc(cursor).get();
+    if (!cursorSnap.exists || cursorSnap.data().referrerUserId !== uid) {
+      throw new functions.https.HttpsError("invalid-argument", "Referral history cursor is invalid.");
+    }
+    query = query.startAfter(cursorSnap);
+  }
+  const snapshot = await query.get();
+  const docs = snapshot.docs.slice(0, pageSize);
+  return {
+    referralCode: code || null,
+    referralLink: code ? `https://circumuk.com/join/${code}` : null,
+    referrals: docs.map((doc) => {
+      const value = doc.data();
+      return {
+        referralId: doc.id,
+        status: value.status || REFERRAL_STATUSES.invited,
+        rewardStatus: value.rewardStatus || value.status || REFERRAL_STATUSES.invited,
+        rewardAmount: Number(value.rewardAmount || DEFAULT_REWARD),
+        rewardCurrency: "ROTH",
+        createdAt: value.createdAt || null,
+        qualifiedAt: value.activatedAt || null,
+        rewardedAt: value.rewardedAt || null,
+      };
+    }),
+    nextPageToken: snapshot.docs.length > pageSize ? docs[docs.length - 1].id : null,
+  };
+});
 
 function becameCompleted(before, after) {
   const was = `${before.status || before.giftStatus || ""}`.toLowerCase();
@@ -256,7 +367,7 @@ exports.activateReferralOnDeliveryCompleted = functions.firestore
       const after = change.after.data() || {};
       if (!becameCompleted(before, after)) return null;
       const payment = `${after.paymentStatus || ""}`.toLowerCase();
-      if (payment && !["paid", "succeeded", "success"].includes(payment)) return null;
+      if (!["paid", "succeeded", "success"].includes(payment)) return null;
       const deliveryId = context.params.deliveryId;
       const senderId = `${after.senderId || after.userId || ""}`;
       const riderId = `${after.riderId || after.assignedRiderId || ""}`;
@@ -290,6 +401,7 @@ exports.activateReferralOnHealthPlusCompleted = functions.firestore
       const before = change.before.data() || {};
       const after = change.after.data() || {};
       if (!becameCompleted(before, after)) return null;
+      if (!["paid", "succeeded", "success"].includes(`${after.paymentStatus || ""}`.toLowerCase())) return null;
       const userId = `${after.senderId || after.userId || after.profileId || ""}`;
       if (!userId) return null;
       return activateReferralForUser({

@@ -255,7 +255,7 @@ exports.previewSenderCancellation = functions.runWith({enforceAppCheck: true}).h
   };
 });
 
-exports.recordRiderArrival = functions.https.onCall(async (data, context) => {
+exports.recordRiderArrival = functions.runWith({enforceAppCheck: true}).https.onCall(async (data, context) => {
   const uid = requireAuth(context);
   const deliveryId = text(data.deliveryId);
   if (!deliveryId) throw new functions.https.HttpsError("invalid-argument", "deliveryId is required.");
@@ -315,7 +315,7 @@ exports.recordRiderArrival = functions.https.onCall(async (data, context) => {
   });
 });
 
-exports.recordArrivalZoneCheck = functions.https.onCall(async (data, context) => {
+exports.recordArrivalZoneCheck = functions.runWith({enforceAppCheck: true}).https.onCall(async (data, context) => {
   const uid = requireAuth(context);
   const deliveryId = text(data.deliveryId);
   if (!deliveryId) throw new functions.https.HttpsError("invalid-argument", "deliveryId is required.");
@@ -355,7 +355,7 @@ exports.recordArrivalZoneCheck = functions.https.onCall(async (data, context) =>
   });
 });
 
-exports.recordCustomerArrivalResponse = functions.https.onCall(async (data, context) => {
+exports.recordCustomerArrivalResponse = functions.runWith({enforceAppCheck: true}).https.onCall(async (data, context) => {
   const uid = requireAuth(context);
   const deliveryId = text(data.deliveryId);
   if (!deliveryId) throw new functions.https.HttpsError("invalid-argument", "deliveryId is required.");
@@ -376,7 +376,7 @@ exports.recordCustomerArrivalResponse = functions.https.onCall(async (data, cont
   });
 });
 
-exports.reportWaitingContext = functions.https.onCall(async (data, context) => {
+exports.reportWaitingContext = functions.runWith({enforceAppCheck: true}).https.onCall(async (data, context) => {
   const uid = requireAuth(context);
   const deliveryId = text(data.deliveryId);
   const waitingType = text(data.type);
@@ -412,7 +412,7 @@ exports.reportWaitingContext = functions.https.onCall(async (data, context) => {
   });
 });
 
-exports.markRiderNoShow = functions.https.onCall(async (data, context) => {
+exports.markRiderNoShow = functions.runWith({enforceAppCheck: true}).https.onCall(async (data, context) => {
   const uid = requireAuth(context);
   const deliveryId = text(data.deliveryId);
   const idempotencyKey = text(data.idempotencyKey || `${deliveryId}:no_show:${uid}`);
@@ -427,21 +427,24 @@ exports.markRiderNoShow = functions.https.onCall(async (data, context) => {
     const now = Date.now();
     const decision = core.noShowDecision({deliveryId, riderId: uid, delivery, serverNow: now});
     if (!decision.allowed) return {success: false, decision};
-    const financial = core.financialAction({
-      idempotencyKey,
-      chargeType: "no_show_fee",
-      amount: decision.feeAmount,
-      riderCompensation: decision.riderCompensation,
-      platformRetainedAmount: decision.platformRetainedAmount,
-      deliveryId,
-      riderId: uid,
-      actorId: uid,
-      actorType: "rider",
-      reason: "sender_no_show_after_free_wait",
-      startTime: decision.waitStartedAt,
-      endTime: now,
-      serverNow: now,
-    });
+    const financial = {
+      ...core.financialAction({
+        idempotencyKey,
+        chargeType: "no_show_fee",
+        amount: decision.feeAmount,
+        riderCompensation: decision.riderCompensation,
+        platformRetainedAmount: decision.platformRetainedAmount,
+        deliveryId,
+        riderId: uid,
+        actorId: uid,
+        actorType: "rider",
+        reason: "sender_no_show_after_free_wait",
+        startTime: decision.waitStartedAt,
+        endTime: now,
+        serverNow: now,
+      }),
+      settlementStatus: "pending_approved_collection_authority",
+    };
     const evidence = core.evidencePackage({
       deliveryId,
       riderId: uid,
@@ -455,6 +458,17 @@ exports.markRiderNoShow = functions.https.onCall(async (data, context) => {
     const evidenceRef = db.collection("deliveryPolicyEvidence").doc();
     const event = {...decision.auditEvent, financial, evidenceId: evidenceRef.id};
     transaction.set(evidenceRef, evidence);
+    transaction.set(db.collection("operationsIncidents").doc(`no_show_settlement_${deliveryId}`), {
+      incidentId: `no_show_settlement_${deliveryId}`,
+      incidentType: "no_show_settlement_authority_required",
+      severity: "red",
+      status: "open",
+      deliveryId,
+      riderId: uid,
+      financial,
+      createdAt: FieldValue.serverTimestamp(),
+      updatedAt: FieldValue.serverTimestamp(),
+    }, {merge: true});
     transaction.set(idemRef, {success: true, decision, financial, evidenceId: evidenceRef.id, createdAt: now});
     transaction.update(ref, policyPatch({
       state: "sender_no_show_pickup",

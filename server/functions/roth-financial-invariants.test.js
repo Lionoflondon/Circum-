@@ -150,12 +150,10 @@ test("business Roth credits and debits carry previous/resulting balance invarian
   assert.match(source, /previousBalance: previousWalletBalance,\s*resultingBalance: resultingWalletBalance,/s);
 });
 
-test("Roth-enabled service map covers delivery, Health+ and gifts checkout spend labels", () => {
+test("generic client Roth debit entrypoints are disabled", () => {
   const source = read("roth-ledger.js");
-  assert.match(source, /service === "gifts" \? "gift_payment"/);
-  assert.match(source, /service === "health_plus" \? "health_payment"/);
-  assert.match(source, /"delivery_payment"/);
-  assert.match(source, /transactionId: `wallet_\$\{service\}_\$\{referenceId\}`/);
+  assert.match(source, /exports\.requestSenderWalletDebit[\s\S]*?Roth is applied only through a verified CIRCUM checkout/);
+  assert.match(source, /exports\.applyCheckoutRoth[\s\S]*?Roth is applied only through the canonical payment session/);
 });
 
 test("representative Roth lifecycle invariants reconcile by user and business", () => {

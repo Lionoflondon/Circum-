@@ -374,6 +374,7 @@ exports.adminUpdateSenderTrust = senderTrust.adminUpdateSenderTrust;
 exports.ensureReferralCode = referrals.ensureReferralCode;
 exports.attachReferralCode = referrals.attachReferralCode;
 exports.activateReferral = referrals.activateReferral;
+exports.getReferralDashboard = referrals.getReferralDashboard;
 exports.activateReferralOnDeliveryCompleted =
   referrals.activateReferralOnDeliveryCompleted;
 exports.activateReferralOnGiftCompleted =

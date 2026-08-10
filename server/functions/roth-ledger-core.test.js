@@ -182,6 +182,8 @@ test("verified Stripe paid GBP session rejects mismatched expected amount", () =
 
 test("sender wallet history prefers canonical walletId query with bounded legacy fallback", () => {
   const source = fs.readFileSync("roth-ledger.js", "utf8");
-  assert.match(source, /collection\("walletTransactions"\)\s*\.where\("walletId", "==", identity\.walletId\)\s*\.orderBy\("createdAt", "desc"\)\s*\.limit\(100\)/);
-  assert.match(source, /walletSnap\.empty \? await db\.collection\("walletTransactions"\)\s*\.where\("uid", "==", context\.auth\.uid\)\s*\.orderBy\("createdAt", "desc"\)\s*\.limit\(100\)/);
+  assert.match(source, /where\("walletId", "==", identity\.walletId\)[\s\S]*?orderBy\("createdAt", "desc"\)[\s\S]*?orderBy\("__name__", "desc"\)[\s\S]*?limit\(pageSize \+ 1\)/);
+  assert.match(source, /if \(cursorId && !legacyPage\)[\s\S]*?query = query\.startAfter\(cursor\)/);
+  assert.match(source, /legacyPage \? \{empty: true, docs: \[\]\} : await query\.get\(\)/);
+  assert.match(source, /`legacy:\$\{legacyUidSnap\.docs\[pageSize - 1\]\.id\}`/);
 });

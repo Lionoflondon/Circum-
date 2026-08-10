@@ -138,6 +138,22 @@ test("Stripe Connect webhook replay ledger is server-owned only", () => {
   );
 });
 
+test("referral, Roth, quote, and payment-session authority is server-only", () => {
+  for (const collection of [
+    "wallets",
+    "walletTransactions",
+    "referrals",
+    "referralCodes",
+    "senderBookingQuotes",
+    "senderPaymentSessions",
+  ]) {
+    assert.match(
+        rules,
+        new RegExp(`match /${collection}/\\{[^}]+\\} \\{[\\s\\S]*?allow create, update, delete: if false;`),
+    );
+  }
+});
+
 test("rider applications and documents are backend/admin write-authoritative", () => {
   assert.match(
       rules,

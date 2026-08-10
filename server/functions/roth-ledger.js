@@ -14,7 +14,6 @@ const {
   verifiedStripeRothPurchase,
   senderWalletProjectionRecord,
   walletTransactionView,
-  paginateWalletTransactions,
 } = require("./roth-ledger-core");
 const {
   canRedeemGiftCard,
@@ -136,8 +135,9 @@ async function initialiseSenderWalletRecord(context) {
     const projection = projectionSnap.exists ? projectionSnap.data() : {};
     const legacy = legacySnap.exists ? legacySnap.data() : {};
     const role = roleSnap.exists ? roleSnap.data() : {};
-    const balance = roundWalletMoney(legacy.balance == null ?
-      (legacy.rothCredit == null ? role.balance || 0 : legacy.rothCredit) : legacy.balance);
+    const balance = roundWalletMoney(legacySnap.exists ?
+      (legacy.balance == null ? legacy.rothCredit || 0 : legacy.balance) :
+      (projection.balanceRoth == null ? projection.balance || 0 : projection.balanceRoth));
     const frozen = legacy.isFrozen === true || projection.status === "frozen";
     const now = FieldValue.serverTimestamp();
     const record = senderWalletProjectionRecord({
@@ -148,15 +148,21 @@ async function initialiseSenderWalletRecord(context) {
       createdAt: projection.createdAt || legacy.createdAt || now,
       updatedAt: now,
     });
-    transaction.set(projectionRef, record, {merge: true});
+    transaction.set(projectionRef, {
+      ...record,
+      authority: "projection",
+      projectionOf: `wallets/${identity.walletId}`,
+    }, {merge: true});
     transaction.set(legacyRef, {
       userId: identity.walletId, uid: context.auth.uid, userEmail: identity.userEmail,
       normalizedEmail: identity.userEmail, balance, rothCredit: balance,
+      authority: "canonical_ledger_balance",
       currency: legacy.currency || "GBP", isFrozen: frozen,
       createdAt: legacy.createdAt || now, updatedAt: now,
     }, {merge: true});
     transaction.set(roleRef, {
       balance, balanceRoth: balance, currency: "ROTH", walletType: "sender",
+      authority: "projection", projectionOf: `wallets/${identity.walletId}`,
       createdAt: role.createdAt || now, updatedAt: now,
     }, {merge: true});
     result = {
@@ -208,13 +214,26 @@ async function recordRothMovement({
     db.collection("walletTransactions").doc(transactionId) :
     db.collection("walletTransactions").doc();
   const senderWalletRef = identity.uid ? db.collection("senderWallets").doc(identity.uid) : null;
+  const roleWalletRef = identity.uid ?
+    db.collection("users").doc(identity.uid).collection("wallets").doc("sender") : null;
+  let result = {transactionId: ledgerRef.id};
   await db.runTransaction(async (transaction) => {
-    const [existingLedger, wallet, senderWalletSnap] = await Promise.all([
+    const [existingLedger, wallet, senderWalletSnap, roleWalletSnap] = await Promise.all([
       transaction.get(ledgerRef),
       transaction.get(walletRef),
       senderWalletRef ? transaction.get(senderWalletRef) : Promise.resolve(null),
+      roleWalletRef ? transaction.get(roleWalletRef) : Promise.resolve(null),
     ]);
-    if (existingLedger.exists) return;
+    if (existingLedger.exists) {
+      const existing = existingLedger.data();
+      const sameMovement = existing.walletId === identity.walletId &&
+        roundMoney(existing.amount) === roundedAmount &&
+        existing.balanceType === balanceType && existing.type === type &&
+        `${existing.relatedEntityId || ""}` === `${relatedEntityId || ""}`;
+      if (!sameMovement) throw new Error("Idempotency key is already bound to another Roth movement.");
+      result = {transactionId: ledgerRef.id, idempotent: true};
+      return;
+    }
     const walletData = wallet.exists ? wallet.data() : {};
     const senderWallet = senderWalletSnap && senderWalletSnap.exists ? senderWalletSnap.data() : {};
     const rawBalance = balanceType === BALANCE_TYPES.rothCredit ?
@@ -233,6 +252,7 @@ async function recordRothMovement({
       uid: identity.uid,
       userEmail: identity.userEmail,
       normalizedEmail: identity.userEmail,
+      authority: "canonical_ledger_balance",
       balance: balanceType === BALANCE_TYPES.rothCredit && !ledgerOnly ?
         balanceAfter :
         roundMoney(walletData.balance == null ? walletData.rothCredit : walletData.balance),
@@ -248,14 +268,31 @@ async function recordRothMovement({
       updatedAt: now,
     }, {merge: true});
     if (senderWalletRef && balanceType === BALANCE_TYPES.rothCredit && !ledgerOnly) {
-      transaction.set(senderWalletRef, senderWalletProjectionRecord({
-        userId: identity.uid,
+      transaction.set(senderWalletRef, {
+        ...senderWalletProjectionRecord({
+          userId: identity.uid,
+          balance: balanceAfter,
+          frozen: walletData.isFrozen === true,
+          version: Number(senderWallet.version || 0) + 1,
+          createdAt: senderWallet.createdAt || walletData.createdAt || now,
+          updatedAt: now,
+        }),
+        authority: "projection",
+        projectionOf: `wallets/${identity.walletId}`,
+      }, {merge: true});
+    }
+    if (roleWalletRef && balanceType === BALANCE_TYPES.rothCredit && !ledgerOnly) {
+      const roleWallet = roleWalletSnap && roleWalletSnap.exists ? roleWalletSnap.data() : {};
+      transaction.set(roleWalletRef, {
         balance: balanceAfter,
-        frozen: walletData.isFrozen === true,
-        version: Number(senderWallet.version || 0) + 1,
-        createdAt: senderWallet.createdAt || walletData.createdAt || now,
+        balanceRoth: balanceAfter,
+        currency: "ROTH",
+        walletType: "sender",
+        authority: "projection",
+        projectionOf: `wallets/${identity.walletId}`,
+        createdAt: roleWallet.createdAt || walletData.createdAt || now,
         updatedAt: now,
-      }), {merge: true});
+      }, {merge: true});
     }
     transaction.set(ledgerRef, {
       id: ledgerRef.id,
@@ -291,8 +328,19 @@ async function recordRothMovement({
       createdAt: now,
       metadata,
     });
+    if (issuedByAdminId && transactionId) {
+      transaction.set(db.collection("adminAuditLogs").doc(`roth_${ledgerRef.id}`), {
+        adminUserId: issuedByAdminId,
+        adminEmail: issuedByAdminEmail || null,
+        actionType: roundedAmount < 0 ? "roth_credit_debited" : "roth_credit_issued",
+        recordType: "wallets",
+        recordId: identity.walletId,
+        newValue: {amount: roundedAmount, reason: reason || type, transactionId: ledgerRef.id},
+        createdAt: now,
+      });
+    }
   });
-  return {transactionId: ledgerRef.id};
+  return result;
 }
 
 async function safeRecordRothMovement(args) {
@@ -428,16 +476,36 @@ exports.getSenderWallet = functions.runWith({enforceAppCheck: true}).https.onCal
 exports.getSenderWalletTransactions = functions.runWith({enforceAppCheck: true}).https.onCall(async (data, context) => {
   const identity = await requireSenderIdentity(context);
   const db = getFirestore();
-  const walletSnap = await db.collection("walletTransactions")
+  const pageSize = Math.min(50, Math.max(1, Number(data && data.pageSize || 20)));
+  const pageToken = `${data && data.pageToken || ""}`.trim();
+  const legacyPage = pageToken.startsWith("legacy:");
+  const cursorId = legacyPage ? pageToken.slice("legacy:".length) : pageToken;
+  let query = db.collection("walletTransactions")
       .where("walletId", "==", identity.walletId)
       .orderBy("createdAt", "desc")
-      .limit(100)
-      .get();
-  const legacyUidSnap = walletSnap.empty ? await db.collection("walletTransactions")
+      .orderBy("__name__", "desc")
+      .limit(pageSize + 1);
+  if (cursorId && !legacyPage) {
+    const cursor = await db.collection("walletTransactions").doc(cursorId).get();
+    if (!cursor.exists || cursor.data().walletId !== identity.walletId) {
+      throw new functions.https.HttpsError("invalid-argument", "Wallet history cursor is invalid.");
+    }
+    query = query.startAfter(cursor);
+  }
+  const walletSnap = legacyPage ? {empty: true, docs: []} : await query.get();
+  let legacyQuery = db.collection("walletTransactions")
       .where("uid", "==", context.auth.uid)
       .orderBy("createdAt", "desc")
-      .limit(100)
-      .get() : {docs: []};
+      .orderBy("__name__", "desc")
+      .limit(pageSize + 1);
+  if (legacyPage) {
+    const cursor = await db.collection("walletTransactions").doc(cursorId).get();
+    if (!cursor.exists || cursor.data().uid !== context.auth.uid) {
+      throw new functions.https.HttpsError("invalid-argument", "Wallet history cursor is invalid.");
+    }
+    legacyQuery = legacyQuery.startAfter(cursor);
+  }
+  const legacyUidSnap = walletSnap.empty ? await legacyQuery.get() : {docs: []};
   const seen = new Set();
   const records = [...walletSnap.docs, ...legacyUidSnap.docs].filter((doc) => {
     if (seen.has(doc.id)) return false;
@@ -448,13 +516,11 @@ exports.getSenderWalletTransactions = functions.runWith({enforceAppCheck: true})
     const createdAt = doc.data().createdAt;
     return {...value, createdAtMillis: createdAt && typeof createdAt.toMillis === "function" ? createdAt.toMillis() : 0};
   });
-  const page = paginateWalletTransactions(records, {
-    pageSize: data && data.pageSize,
-    pageOffset: Number(data && data.pageToken || 0),
-  });
+  const page = records.slice(0, pageSize);
   return {
-    transactions: page.records.map(({createdAtMillis, ...record}) => record),
-    nextPageToken: page.nextPageToken,
+    transactions: page.map(({createdAtMillis, ...record}) => record),
+    nextPageToken: records.length > pageSize ? (walletSnap.docs.length > 0 ?
+      walletSnap.docs[pageSize - 1].id : `legacy:${legacyUidSnap.docs[pageSize - 1].id}`) : null,
   };
 });
 
@@ -468,24 +534,12 @@ exports.completeSenderWalletOnboarding = functions.runWith({enforceAppCheck: tru
   return {completed: true};
 });
 
-exports.requestSenderWalletDebit = functions.runWith({enforceAppCheck: true}).https.onCall(async (data, context) => {
+exports.requestSenderWalletDebit = functions.runWith({enforceAppCheck: true}).https.onCall(async (_data, context) => {
   await requireSenderIdentity(context);
-  const amount = roundWalletMoney(data.amount);
-  const idempotencyKey = `${data.idempotencyKey || ""}`.trim();
-  const relatedEntityId = `${data.relatedEntityId || ""}`.trim();
-  if (amount <= 0 || !idempotencyKey || !relatedEntityId) {
-    throw new functions.https.HttpsError("invalid-argument", "A positive amount, reference and idempotency key are required.");
-  }
-  try {
-    return await applyWalletDebit({
-      userId: context.auth.uid, uid: context.auth.uid, userEmail: context.auth.token.email,
-      amount, type: TRANSACTION_TYPES.checkoutSpend, referenceId: relatedEntityId,
-      notes: "Roth used on an eligible Circum purchase.", transactionId: idempotencyKey,
-      metadata: {source: "sender_wallet", ...(data.metadata || {})},
-    });
-  } catch (error) {
-    throw new functions.https.HttpsError("failed-precondition", error.message);
-  }
+  throw new functions.https.HttpsError(
+      "permission-denied",
+      "Roth is applied only through a verified CIRCUM checkout.",
+  );
 });
 
 exports.requestSenderWalletRefund = functions.runWith({enforceAppCheck: true}).https.onCall(async (data, context) => {
@@ -646,29 +700,14 @@ async function recordWalletTopUpFromStripeSession(sessionData, eventId = null) {
 
 exports.recordWalletTopUpFromStripeSession = recordWalletTopUpFromStripeSession;
 
-exports.applyCheckoutRoth = functions.runWith({enforceAppCheck: true}).https.onCall(async (data, context) => {
+exports.applyCheckoutRoth = functions.runWith({enforceAppCheck: true}).https.onCall(async (_data, context) => {
   if (!context.auth) {
     throw new functions.https.HttpsError("unauthenticated", "Sign in to use Roth.");
   }
-  const amount = roundWalletMoney(data.amount);
-  const referenceId = `${data.referenceId || ""}`.trim();
-  const service = `${data.service || "delivery"}`.trim().toLowerCase();
-  if (amount <= 0 || !referenceId) {
-    throw new functions.https.HttpsError("invalid-argument", "Amount and reference are required.");
-  }
-  const type = service === "gifts" ? "gift_payment" :
-    service === "health_plus" ? "health_payment" :
-      "delivery_payment";
-  return applyWalletDebit({
-    userId: context.auth.uid,
-    userEmail: context.auth.token.email,
-    amount,
-    type,
-    referenceId,
-    notes: `Roth applied to ${service.replace("_", " ")} checkout.`,
-    transactionId: `wallet_${service}_${referenceId}`,
-    metadata: {service, source: "checkout_roth"},
-  });
+  throw new functions.https.HttpsError(
+      "permission-denied",
+      "Roth is applied only through the canonical payment session.",
+  );
 });
 
 exports.issueRothToWallets = functions.runWith({enforceAppCheck: true}).https.onCall(async (data, context) => {
@@ -913,8 +952,9 @@ exports.debitRothCredit = functions.runWith({enforceAppCheck: true}).https.onCal
   const rawUser = `${data.userId || data.email || ""}`.trim();
   const amount = Number(data.amount || 0);
   const reason = `${data.reason || ""}`.trim();
-  if (!rawUser || amount <= 0 || !reason) {
-    throw new functions.https.HttpsError("invalid-argument", "User, amount and reason are required.");
+  const idempotencyKey = `${data.idempotencyKey || ""}`.trim();
+  if (!rawUser || amount <= 0 || !reason || !idempotencyKey) {
+    throw new functions.https.HttpsError("invalid-argument", "User, amount, reason and idempotency key are required.");
   }
   const identity = await resolveWalletIdentity({userId: rawUser, email: data.email});
   const result = await recordRothMovement({
@@ -928,16 +968,9 @@ exports.debitRothCredit = functions.runWith({enforceAppCheck: true}).https.onCal
     paymentProvider: "manual_admin",
     issuedByAdminId: context.auth.uid,
     issuedByAdminEmail: context.auth.token.email || null,
+    transactionId: `admin_roth_debit_${idempotencyKey}`,
+    relatedEntityId: `${data.relatedEntityId || idempotencyKey}`,
     metadata: {source: "admin_debit_roth", input: rawUser},
-  });
-  await writeRothAudit({
-    adminId: context.auth.uid,
-    adminEmail: context.auth.token.email || null,
-    action: "roth_credit_debited",
-    userId: identity.walletId,
-    amount: -Math.abs(amount),
-    reason,
-    metadata: {uid: identity.uid, userEmail: identity.userEmail},
   });
   return result;
 });

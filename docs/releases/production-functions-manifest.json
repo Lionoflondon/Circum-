@@ -6,10 +6,10 @@
   "releaseShaSemantics": "SELF means the Git commit containing this manifest; the immutable SHA is recorded in the release report and deployment provenance.",
   "entryPoint": "server/functions/index.js",
   "inventory": {
-    "productionFunctions": 290,
-    "applicationFunctions": 284,
+    "productionFunctions": 291,
+    "applicationFunctions": 285,
     "extensionFunctions": 6,
-    "sourceExports": 284
+    "sourceExports": 285
   },
   "applicationFunctions": [
     {
@@ -1521,6 +1521,18 @@
         "type": "callable"
       },
       "productionSourceHash": "470c1dc565cbba354f8ffddcd67f5c932b37c8cb",
+      "state": "ACTIVE",
+      "releaseSha": "SELF"
+    },
+    {
+      "name": "getReferralDashboard",
+      "source": "server/functions/referrals.js#getReferralDashboard",
+      "runtime": "nodejs22",
+      "region": "us-central1",
+      "trigger": {
+        "type": "callable"
+      },
+      "productionSourceHash": "1019a97b5722c7c40c476d7d2c4b5068fad3518f",
       "state": "ACTIVE",
       "releaseSha": "SELF"
     },

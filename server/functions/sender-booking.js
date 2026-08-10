@@ -12,7 +12,7 @@ const {PRICING_SNAPSHOT_VERSION, WEIGHT_POLICY_VERSION, weightBandFor, weightSur
 const {verifiedPhotoAnalysis} = require("./iris-photo-analysis");
 const {dispatchDeliveryRequest} = require("./send-package");
 const {getAuthoritativeRouteFacts} = require("./route-authority");
-const {evaluateRoadChargePolicy} = require("./road-charge-policy");
+const {ROAD_CHARGE_POLICY_VERSION, evaluateRoadChargePolicy} = require("./road-charge-policy");
 const {resolveCanonicalAddressPair, canonicalAddressPair, sameCanonicalAddress} = require("./canonical-address-authority");
 const {resolveBusinessAuthority, hasBusinessPermission} = require("./business-authority");
 
@@ -33,6 +33,10 @@ const PLATFORM_DELIVERY_FARE_SHARE = 0.35;
 const DRAFT_SCHEMA_VERSION = 1;
 const DRAFT_RETENTION_DAYS = 30;
 const DRAFT_INACTIVITY_MINUTES = 10;
+const QUOTE_VALIDITY_MINUTES = 10;
+const SERVICE_TARIFF_VERSION = "sender-service-tariff-v1";
+const VEHICLE_TARIFF_VERSION = "sender-vehicle-tariff-v1";
+const TAX_TREATMENT_VERSION = "vat-not-configured-v1";
 const MAX_DRAFT_BYTES = 32768;
 const MAX_STRING_LENGTH = 1000;
 const MAX_DEPTH = 6;
@@ -119,6 +123,20 @@ function vehicleSurcharge(value) {
 function vehicleLabel(value) {
   const vehicle = canonicalVehicle(value);
   return vehicle === "van" ? "Van" : vehicle === "car" ? "Car" : "Motorbike";
+}
+
+function minimumVehicleForWeight(weightKg) {
+  const weight = Math.max(0, Number(weightKg || 0));
+  if (weight > 10) return "van";
+  if (weight > 5) return "car";
+  return "motorbike";
+}
+
+function maxVehicle(required, requested) {
+  const order = {motorbike: 0, car: 1, van: 2};
+  const canonicalRequired = canonicalVehicle(required);
+  const canonicalRequested = canonicalVehicle(requested);
+  return order[canonicalRequested] >= order[canonicalRequired] ? canonicalRequested : canonicalRequired;
 }
 
 function firstMoney(...values) {
@@ -518,9 +536,12 @@ function speedAdjustment(subtotal, speed) {
 }
 
 function riderEligibleFareFromQuote(quote = {}) {
+  if (Number.isFinite(Number(quote.riderEligibleFare))) return money(quote.riderEligibleFare);
   if (Array.isArray(quote.lineItems)) {
     const eligible = quote.lineItems
-        .filter((item) => `${item && item.key || ""}`.toLowerCase() !== "vanguard")
+        .filter((item) => !["vanguard", "road_toll", "daily_zone_charge"].includes(
+            `${item && item.key || ""}`.toLowerCase(),
+        ))
         .reduce((sum, item) => sum + Number(item && item.amount || 0), 0);
     if (Number.isFinite(eligible) && eligible > 0) return money(eligible);
   }
@@ -760,12 +781,14 @@ function quotePayload(data, uid, serverPhotoAnalysis = null) {
   const base = BASE_FARE_GBP;
   const distance = distanceFare(data.authoritativeRouteFacts ? data.authoritativeRouteFacts.distanceMiles : data.distanceMiles);
   const weight = weightSurcharge(weightKg);
-  const selectedVehicle = canonicalVehicle(
+  const requestedVehicle = canonicalVehicle(
       data.selectedVehicle ||
       data.vehicleType ||
       data.recommendedVehicle ||
       data.iris && (data.iris.recommendedVehicle || data.iris.vehicleType),
   );
+  const requiredVehicle = minimumVehicleForWeight(weightKg);
+  const selectedVehicle = maxVehicle(requiredVehicle, requestedVehicle);
   const roadCharges = evaluateRoadChargePolicy({
     routeFacts: data.authoritativeRouteFacts,
     vehicle: selectedVehicle,
@@ -777,8 +800,9 @@ function quotePayload(data, uid, serverPhotoAnalysis = null) {
   });
   const roadChargeAmount = roadCharges.customerAmount;
   const vehicle = vehicleSurcharge(selectedVehicle);
-  const subtotal = money(base + distance + weight + vehicle + roadChargeAmount);
-  const speed = money(speedAdjustment(subtotal, selectedSpeed));
+  const fareSubtotal = money(base + distance + weight + vehicle);
+  const subtotal = money(fareSubtotal + roadChargeAmount);
+  const speed = money(speedAdjustment(fareSubtotal, selectedSpeed));
   const parcelData = cleanMap(data.parcel);
   const highValueParcel = data.highValue === true || parcelData.highValue === true;
   const surfaceText = text(data.sourceModule || data.serviceType || data.type).toLowerCase();
@@ -802,13 +826,14 @@ function quotePayload(data, uid, serverPhotoAnalysis = null) {
           "Vanguard is required for Gifts deliveries." :
           data.iris && data.iris.vanguardRequiredReason || "";
   const total = money(Math.max(0, subtotal + speed + vanguard));
-  const riderBaseShare = money(Math.max(0, subtotal + speed) * RIDER_DELIVERY_FARE_SHARE);
-  const platformBaseShare = money(Math.max(0, subtotal + speed) * PLATFORM_DELIVERY_FARE_SHARE);
+  const riderEligibleFare = money(Math.max(0, subtotal + speed - roadChargeAmount));
+  const riderBaseShare = money(riderEligibleFare * RIDER_DELIVERY_FARE_SHARE);
+  const platformBaseShare = money(riderEligibleFare * PLATFORM_DELIVERY_FARE_SHARE);
   const totalRiderEarnings = riderBaseShare;
-  const totalCircumRevenue = money(total - totalRiderEarnings);
+  const totalCircumRevenue = money(platformBaseShare + vanguard);
   const quoteId = text(data.quoteId) || `sender_quote_${uid}_${Date.now()}`;
   const speedOptions = ["standard", "express"].map((speedOption) => {
-    const optionSpeed = money(speedAdjustment(subtotal, speedOption));
+    const optionSpeed = money(speedAdjustment(fareSubtotal, speedOption));
     const optionTotal = money(Math.max(0, subtotal + optionSpeed + vanguard));
     return {
       speed: `${speedOption[0].toUpperCase()}${speedOption.slice(1)}`,
@@ -836,6 +861,12 @@ function quotePayload(data, uid, serverPhotoAnalysis = null) {
     weightBand: weightBandFor(weightKg),
     weightPolicyVersion: WEIGHT_POLICY_VERSION,
     pricingSnapshotVersion: PRICING_SNAPSHOT_VERSION,
+    serviceTariffVersion: SERVICE_TARIFF_VERSION,
+    vehicleTariffVersion: VEHICLE_TARIFF_VERSION,
+    roadChargePolicyVersion: ROAD_CHARGE_POLICY_VERSION,
+    taxTreatmentVersion: TAX_TREATMENT_VERSION,
+    taxTreatmentState: "NOT_CONFIGURED",
+    requiredVehicle,
     selectedVehicle,
     vehicleType: selectedVehicle,
     vehicleSurcharge: vehicle,
@@ -861,6 +892,8 @@ function quotePayload(data, uid, serverPhotoAnalysis = null) {
     riderPayout: totalRiderEarnings,
     riderEarning: totalRiderEarnings,
     riderBaseShare,
+    riderEligibleFare,
+    roadChargePassThrough: roadChargeAmount,
     riderLabourShare: 0,
     circumBaseShare: platformBaseShare,
     circumLabourShare: 0,
@@ -1042,6 +1075,7 @@ exports.createSenderBookingQuote = functions.runWith({
     pricingDiscrepancy: discrepancy,
     pricingDiscrepancyPence: discrepancy == null ? null : minorUnits(discrepancy, "gbp"),
     createdAt: FieldValue.serverTimestamp(),
+    expiresAt: Timestamp.fromMillis(Date.now() + QUOTE_VALIDITY_MINUTES * 60 * 1000),
   }, {merge: true});
   return {
     ...quote,
@@ -1159,6 +1193,18 @@ exports.createSenderPaymentSession = (stripe) => functions.runWith({enforceAppCh
       };
     }
   }
+  const quoteCreatedAt = timestampMillis(quote.createdAt);
+  const quoteExpiresAt = timestampMillis(quote.expiresAt) ||
+    (quoteCreatedAt == null ? null : quoteCreatedAt + QUOTE_VALIDITY_MINUTES * 60 * 1000);
+  if (quoteExpiresAt == null || quoteExpiresAt <= Date.now() ||
+      quote.pricingSnapshotVersion !== PRICING_SNAPSHOT_VERSION ||
+      quote.weightPolicyVersion !== WEIGHT_POLICY_VERSION ||
+      quote.roadChargePolicyVersion !== ROAD_CHARGE_POLICY_VERSION) {
+    throw new functions.https.HttpsError(
+        "failed-precondition",
+        "This quote has expired or its pricing policy changed. Request a fresh quote before payment.",
+    );
+  }
   const sessionBase = {
     paymentSessionId: sessionRef.id,
     quoteId,
@@ -1182,6 +1228,8 @@ exports.createSenderPaymentSession = (stripe) => functions.runWith({enforceAppCh
     remainingAmount: split.remainingGbp,
     currency: "GBP",
     paymentSessionKey: requestedSessionKey,
+    quoteValidatedAt: FieldValue.serverTimestamp(),
+    quoteExpiresAt: quote.expiresAt || Timestamp.fromMillis(quoteExpiresAt),
     createdAt: FieldValue.serverTimestamp(),
     updatedAt: FieldValue.serverTimestamp(),
   };
