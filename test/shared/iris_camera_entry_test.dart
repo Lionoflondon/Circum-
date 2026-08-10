@@ -41,6 +41,18 @@ void main() {
     expect(source, isNot(contains('Visual estimate')));
   });
 
+  test('Sender bounds the inference image and records correlated timing', () {
+    final source = File(
+      'lib/app/sender_mobile/sender_booking_canvas.dart',
+    ).readAsStringSync();
+
+    expect(source, contains('maxWidth: 1280'));
+    expect(source, contains('maxHeight: 1280'));
+    expect(source, contains("'clientRequestId': clientRequestId"));
+    expect(source, contains("'message': 'iris_visual_client_timing'"));
+    expect(source, contains("'responseToRenderMs': responseToRenderMs"));
+  });
+
   testWidgets('IRIS camera entry exposes Take Photo and Choose Photo',
       (tester) async {
     var tookPhoto = false;

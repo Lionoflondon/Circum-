@@ -901,6 +901,7 @@ class _SenderBookingCanvasState extends State<SenderBookingCanvas> {
   }
 
   Future<void> _pickParcelPhoto(ImageSource source) async {
+    final selectionStopwatch = Stopwatch()..start();
     final details = [
       _item.text,
       _description.text,
@@ -918,8 +919,9 @@ class _SenderBookingCanvasState extends State<SenderBookingCanvas> {
     try {
       final picked = await ImagePicker().pickImage(
         source: source,
-        imageQuality: 72,
-        maxWidth: 1600,
+        imageQuality: 68,
+        maxWidth: 1280,
+        maxHeight: 1280,
       );
       if (picked == null) {
         if (mounted) {
@@ -927,16 +929,36 @@ class _SenderBookingCanvasState extends State<SenderBookingCanvas> {
         }
         return;
       }
+      final clientRequestId = const Uuid().v4();
+      final preprocessingStopwatch = Stopwatch()..start();
+      final readStopwatch = Stopwatch()..start();
       final bytes = await picked.readAsBytes();
+      readStopwatch.stop();
+      final encodingStopwatch = Stopwatch()..start();
+      final imageBase64 = base64Encode(bytes);
+      encodingStopwatch.stop();
+      preprocessingStopwatch.stop();
+      final callableStopwatch = Stopwatch()..start();
       final result = await FirebaseFunctions.instance
           .httpsCallable('analyseParcelPhotoForIris')
           .call({
-        'imageBase64': base64Encode(bytes),
+        'clientRequestId': clientRequestId,
+        'imageBase64': imageBase64,
         'contentType': picked.mimeType ?? 'image/jpeg',
         'fileName': picked.name,
         'description': details,
         'declaredWeightText': _weight.text,
+        'clientTimings': {
+          'selectionMs': selectionStopwatch.elapsedMilliseconds,
+          'imageReadMs': readStopwatch.elapsedMilliseconds,
+          'base64EncodingMs': encodingStopwatch.elapsedMilliseconds,
+          'preCallMs': preprocessingStopwatch.elapsedMilliseconds,
+          'inputBytes': bytes.length,
+          'encodedCharacters': imageBase64.length,
+        },
       }).timeout(const Duration(seconds: 20));
+      callableStopwatch.stop();
+      final responseReceivedAt = DateTime.now();
       final data = result.data is Map
           ? Map<String, dynamic>.from(result.data as Map)
           : <String, dynamic>{};
@@ -947,6 +969,26 @@ class _SenderBookingCanvasState extends State<SenderBookingCanvas> {
         _irisPhotoAnalysisId = '${data['analysisId'] ?? ''}'.trim();
         _photoEstimatedWeightKg = estimate;
         _parcelPhotoMessage = 'Photo added to help IRIS verify your parcel.';
+      });
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        final responseToRenderMs =
+            DateTime.now().difference(responseReceivedAt).inMilliseconds;
+        debugPrint(jsonEncode({
+          'message': 'iris_visual_client_timing',
+          'clientRequestId': clientRequestId,
+          'selectionMs': selectionStopwatch.elapsedMilliseconds,
+          'imageReadMs': readStopwatch.elapsedMilliseconds,
+          'base64EncodingMs': encodingStopwatch.elapsedMilliseconds,
+          'preCallMs': preprocessingStopwatch.elapsedMilliseconds,
+          'callableRoundTripMs': callableStopwatch.elapsedMilliseconds,
+          'responseToRenderMs': responseToRenderMs,
+          'totalAfterSelectionMs': preprocessingStopwatch.elapsedMilliseconds +
+              callableStopwatch.elapsedMilliseconds +
+              responseToRenderMs,
+          'inputBytes': bytes.length,
+          'encodedCharacters': imageBase64.length,
+          'serverPerformance': data['performance'],
+        }));
       });
     } on FirebaseFunctionsException catch (error) {
       if (!mounted) return;
