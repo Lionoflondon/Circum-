@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:circum/shared/iris_camera_entry.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -26,6 +28,19 @@ Widget _host({
 }
 
 void main() {
+  test('Sender never presents the deterministic estimate as visual inference',
+      () {
+    final source = File(
+      'lib/app/sender_mobile/sender_booking_canvas.dart',
+    ).readAsStringSync();
+
+    expect(
+        source,
+        contains(
+            "'IRIS estimate \${estimatedWeightKg!.toStringAsFixed(2)} kg.'"));
+    expect(source, isNot(contains('Visual estimate')));
+  });
+
   testWidgets('IRIS camera entry exposes Take Photo and Choose Photo',
       (tester) async {
     var tookPhoto = false;

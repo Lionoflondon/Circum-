@@ -2354,7 +2354,7 @@ class _ParcelPhotoStatus extends StatelessWidget {
       else
         'Optional photo helps IRIS confirm handling.',
       if (estimatedWeightKg != null)
-        'Visual estimate ${estimatedWeightKg!.toStringAsFixed(2)} kg.',
+        'IRIS estimate ${estimatedWeightKg!.toStringAsFixed(2)} kg.',
     ];
     return Padding(
       padding: const EdgeInsets.only(top: 7),
