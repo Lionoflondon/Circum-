@@ -2,6 +2,9 @@
 
 /* eslint-disable max-len, require-jsdoc */
 const {FieldValue} = require("firebase-admin/firestore");
+const functions = require("firebase-functions/v1");
+const {getFirestore} = require("firebase-admin/firestore");
+const {requireAdmin} = require("./admin-auth");
 const core = require("./no-show-settlement-core");
 
 function text(value) {
@@ -16,10 +19,15 @@ async function markFailure(db, deliveryId, reason, details = {}) {
     if (current.exists && (current.data() || {}).state === "SETTLED") {
       return {success: true, state: "SETTLED", duplicate: true};
     }
+    const attemptCount = Number(current.exists && (current.data() || {}).attemptCount || 0) + 1;
+    const retry = core.retryDecision(attemptCount);
     transaction.set(settlementRef, {
-      state: "COLLECTION_FAILED",
-      settlementStatus: "collection_failed",
+      state: retry.exhausted ? "REVIEW_REQUIRED" : "SETTLEMENT_PENDING",
+      settlementStatus: retry.exhausted ? "retry_exhausted" : "pending_collection",
       failureReason: reason,
+      lastAttemptStatus: "failed",
+      attemptCount,
+      nextAttemptAt: retry.nextAttemptAt,
       customerCollected: 0,
       riderCredited: 0,
       platformRealized: 0,
@@ -35,7 +43,7 @@ async function markFailure(db, deliveryId, reason, details = {}) {
       failureReason: reason,
       updatedAt: FieldValue.serverTimestamp(),
     }, {merge: true});
-    return {success: false, state: "COLLECTION_FAILED", reason};
+    return {success: false, state: retry.exhausted ? "REVIEW_REQUIRED" : "SETTLEMENT_PENDING", reason, attemptCount};
   });
   return result;
 }
@@ -120,6 +128,16 @@ async function settleCollected(db, deliveryId, stripeIntent) {
       resolvedAt: FieldValue.serverTimestamp(),
       updatedAt: FieldValue.serverTimestamp(),
     }, {merge: true});
+    transaction.set(deliveryRef.collection("timeline").doc(`no_show_settled_${deliveryId}`), {
+      eventId: `no_show_settled_${deliveryId}`,
+      eventType: "NoShowSettlementCollected",
+      deliveryId,
+      immutable: true,
+      customerCollected: 7,
+      riderCredited: 4,
+      platformRealized: 3,
+      timestamp: FieldValue.serverTimestamp(),
+    });
     return {success: true, state: "SETTLED"};
   });
 }
@@ -174,4 +192,42 @@ async function processNoShowSettlement({db, stripe, deliveryId}) {
   return settleCollected(db, deliveryId, intent);
 }
 
-module.exports = {processNoShowSettlement, settleCollected};
+async function processPendingNoShowSettlements({db = getFirestore(), stripe, limit = 25} = {}) {
+  const snapshot = await db.collection("noShowSettlements")
+      .where("state", "==", "SETTLEMENT_PENDING")
+      .where("nextAttemptAt", "<=", new Date())
+      .orderBy("nextAttemptAt", "asc")
+      .limit(Math.min(Math.max(1, limit), 50)).get();
+  const results = [];
+  for (const doc of snapshot.docs) {
+    results.push({deliveryId: doc.id, ...(await processNoShowSettlement({db, stripe, deliveryId: doc.id}))});
+  }
+  return {processed: results.length, results};
+}
+
+function scheduledNoShowSettlementRetries(stripe) {
+  return functions.pubsub.schedule("every 5 minutes").timeZone("Europe/London")
+      .onRun(() => processPendingNoShowSettlements({stripe}));
+}
+
+function adminRetryNoShowSettlement(stripe) {
+  return functions.runWith({enforceAppCheck: true}).https.onCall(async (data, context) => {
+    const actorUid = requireAdmin(context, "Finance or Operations Admin access is required.");
+    const deliveryId = text(data && data.deliveryId);
+    const reason = text(data && data.reason);
+    if (!deliveryId || reason.length < 8) {
+      throw new functions.https.HttpsError("invalid-argument", "Delivery and a meaningful retry reason are required.");
+    }
+    const db = getFirestore();
+    await db.collection("adminAuditLogs").doc(`no_show_retry_${deliveryId}_${Date.now()}`).set({
+      action: "no_show_settlement_retry_requested",
+      deliveryId,
+      reason: reason.slice(0, 500),
+      actorUid,
+      createdAt: FieldValue.serverTimestamp(),
+    });
+    return processNoShowSettlement({db, stripe, deliveryId});
+  });
+}
+
+module.exports = {processNoShowSettlement, processPendingNoShowSettlements, scheduledNoShowSettlementRetries, adminRetryNoShowSettlement, settleCollected};

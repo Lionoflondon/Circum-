@@ -1,6 +1,14 @@
 {
   "indexes": [
     {
+      "collectionGroup": "noShowSettlements",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {"fieldPath": "state", "order": "ASCENDING"},
+        {"fieldPath": "nextAttemptAt", "order": "ASCENDING"}
+      ]
+    },
+    {
       "collectionGroup": "deliveryRequests",
       "queryScope": "COLLECTION",
       "fields": [

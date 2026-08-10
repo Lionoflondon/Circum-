@@ -393,12 +393,15 @@ exports.onDeliveryUpdated = functions.firestore.document("deliveryRequests/{deli
   const oldWaitingContext = text(before.waitingContextState).toLowerCase();
   const waitingContext = text(after.waitingContextState).toLowerCase();
   const oldWaitingCharge = Number(customerWaitingCharge(before).amount || 0);
+  const oldWaitingSettlement = customerWaitingCharge(before);
   const waitingCharge = customerWaitingCharge(after);
   const waitingChargeAmount = Number(waitingCharge.amount || 0);
   if (!statusChanged &&
       oldPayment === payment &&
       oldWaitingContext === waitingContext &&
-      oldWaitingCharge === waitingChargeAmount) {
+      oldWaitingCharge === waitingChargeAmount &&
+      oldWaitingSettlement.collected === waitingCharge.collected &&
+      oldWaitingSettlement.settlementStatus === waitingCharge.settlementStatus) {
     return;
   }
   if (statusChanged) {
@@ -457,6 +460,7 @@ exports.onDeliveryUpdated = functions.firestore.document("deliveryRequests/{deli
   if (ids.senderId && oldPayment !== payment && ["failed", "declined"].includes(payment)) await notify({recipientId: ids.senderId, recipientRole: "shipper", type: "payment_failed", title: "Payment failed", body: "Your delivery payment was not completed.", bookingId: ids.bookingId, data: {category: "Payments", status: payment}});
   if (ids.senderId && oldWaitingContext !== waitingContext && waitingContext === "customer_responded") await notify({recipientId: ids.senderId, recipientRole: "shipper", type: "customer_responded", title: "Customer response received", body: "Waiting continues under the current policy.", bookingId: ids.bookingId, data: {category: "Deliveries", status: waitingContext}});
   if (ids.senderId && oldWaitingCharge !== waitingChargeAmount && waitingChargeAmount > 0) await notify({recipientId: ids.senderId, recipientRole: "shipper", type: "waiting_charge_updated", title: "Waiting charge updated", body: `Additional waiting charge: ${moneyText(waitingCharge.amount, waitingCharge.currency)}.`, bookingId: ids.bookingId, data: {category: "Payments", amount: waitingChargeAmount}});
+  if (ids.senderId && !oldWaitingSettlement.collected && waitingCharge.collected) await notify({recipientId: ids.senderId, recipientRole: "shipper", type: "no_show_charge_collected", title: "No-show charge collected", body: `${moneyText(waitingCharge.amount, waitingCharge.currency)} was collected for the pickup no-show.`, bookingId: ids.bookingId, eventId: `no_show_settled:${change.after.id}`, data: {category: "Payments", amount: waitingChargeAmount}});
   if (ids.riderId && statusChanged && (status.includes("cancel") || status === "updated")) await notify({recipientId: ids.riderId, recipientRole: "rider", type: status.includes("cancel") ? "delivery_cancelled" : "delivery_updated", title: status.includes("cancel") ? "Delivery cancelled" : "Delivery updated", body: status.includes("cancel") ? "A delivery assigned to you was cancelled." : "An assigned delivery has been updated.", bookingId: ids.bookingId, data: {status}});
 });
 

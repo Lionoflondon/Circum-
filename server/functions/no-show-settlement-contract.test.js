@@ -17,3 +17,19 @@ test("collection precedes all realized financial effects and retries are determi
   assert.match(source, /confirm: true/);
   assert.match(source, /current\.data\(\) \|\| \{\}\)\.state === "SETTLED"/);
 });
+
+test("scheduler and Admin retry reuse the canonical bounded processor", () => {
+  assert.match(source, /where\("state", "==", "SETTLEMENT_PENDING"\)/);
+  assert.match(source, /where\("nextAttemptAt", "<=", new Date\(\)\)/);
+  assert.match(source, /limit\(Math\.min\(Math\.max\(1, limit\), 50\)\)/);
+  assert.match(source, /processNoShowSettlement\(\{db, stripe, deliveryId: doc\.id\}\)/);
+  assert.match(source, /enforceAppCheck: true/);
+  assert.match(source, /requireAdmin\(context/);
+  assert.match(source, /no_show_settlement_retry_requested/);
+});
+
+test("settlement records deterministic operational and receipt truth", () => {
+  assert.match(source, /doc\(`no_show_settled_\$\{deliveryId\}`\)/);
+  assert.match(source, /eventType: "NoShowSettlementCollected"/);
+  assert.match(source, /customerCollected: 7[\s\S]*riderCredited: 4[\s\S]*platformRealized: 3/);
+});

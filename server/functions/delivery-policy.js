@@ -466,6 +466,7 @@ function markRiderNoShow(stripe) {
       senderId: delivery.senderId || delivery.userId,
       paymentSessionId: delivery.paymentSessionId || null,
       originalPaymentIntentId: delivery.stripePaymentIntentId || null,
+      nextAttemptAt: new Date(),
       createdAt: FieldValue.serverTimestamp(),
       updatedAt: FieldValue.serverTimestamp(),
     }, {merge: true});

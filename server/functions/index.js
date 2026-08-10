@@ -52,6 +52,7 @@ const legends = require("./legends");
 const giftsPayment = require("./gifts-payment");
 const communicationEngine = require("./communication-engine");
 const deliveryPolicy = require("./delivery-policy");
+const noShowSettlement = require("./no-show-settlement");
 const deliveryTracking = require("./delivery-tracking");
 const deliveryCompletedEvent = require("./delivery-completed-event");
 const deliveryEvidence = require("./delivery-evidence");
@@ -168,6 +169,8 @@ exports.onGiftRequestVoiceMediaDeleted =
 exports.recordRiderArrival = deliveryPolicy.recordRiderArrival;
 exports.reportWaitingContext = deliveryPolicy.reportWaitingContext;
 exports.markRiderNoShow = deliveryPolicy.markRiderNoShow(stripe);
+exports.processNoShowSettlementRetries = noShowSettlement.scheduledNoShowSettlementRetries(stripe);
+exports.adminRetryNoShowSettlement = noShowSettlement.adminRetryNoShowSettlement(stripe);
 exports.cancelDelivery = deliveryPolicy.requestSenderCancellation;
 exports.updateDeliveryTrackingStatus =
   deliveryTracking.updateDeliveryTrackingStatus;

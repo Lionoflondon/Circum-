@@ -19,6 +19,7 @@ const CUSTOMER_EVENTS = new Map([
   ["Completed", "Delivered"],
   ["Cancelled", "Delivery cancelled"],
   ["Refunded", "Refund processed"],
+  ["NoShowSettlementCollected", "Pickup no-show charge collected"],
 ]);
 
 function text(value, max = 300) {
@@ -52,6 +53,7 @@ function receipt(data, deliveryId) {
   const pricing = data.pricingBreakdown && typeof data.pricingBreakdown === "object" ? data.pricingBreakdown : {};
   const snapshot = pricing.canonicalQuoteSnapshot && typeof pricing.canonicalQuoteSnapshot === "object" ? pricing.canonicalQuoteSnapshot : {};
   const rawItems = Array.isArray(snapshot.lineItems) ? snapshot.lineItems : (Array.isArray(pricing.lineItems) ? pricing.lineItems : []);
+  const noShow = data.noShowFinancial && data.noShowFinancial.settlementStatus === "settled" ? [{label: "Pickup no-show charge", amount: amount(data.noShowFinancial.customerCollected)}] : [];
   return {
     reference: text(data.deliveryReference || data.trackingReference || deliveryId, 100),
     dateMillis: millis(data.deliveredAt || data.completedAt || data.createdAt),
@@ -64,7 +66,7 @@ function receipt(data, deliveryId) {
     externalPaidAmount: amount(data.remainingAmount),
     vatAmount: amount(data.vatAmount || snapshot.vatAmount),
     completionStatus: text(data.deliveryStatus || data.status || "requested", 60).toLowerCase(),
-    lineItems: rawItems.slice(0, 30).map((item) => ({label: text(item && item.label, 100), amount: amount(item && item.amount)})).filter((item) => item.label && item.amount !== 0),
+    lineItems: [...rawItems.slice(0, 29).map((item) => ({label: text(item && item.label, 100), amount: amount(item && item.amount)})).filter((item) => item.label && item.amount !== 0), ...noShow],
   };
 }
 

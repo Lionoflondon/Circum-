@@ -20,7 +20,15 @@ test("no-show amounts preserve collect-first policy", () => {
     deliveryId: "delivery-a", riderId: "rider-a", state: "SETTLEMENT_PENDING",
     settlementStatus: "pending_collection", customerCharge: 7, riderCompensation: 4,
     platformAmount: 3, customerCollected: 0, riderCredited: 0, platformRealized: 0,
+    attemptCount: 0,
   });
+});
+
+test("no-show retries use bounded backoff and exhaust after five attempts", () => {
+  const now = Date.UTC(2026, 7, 10);
+  assert.equal(core.retryDecision(1, now).nextAttemptAt.getTime(), now + 5 * 60 * 1000);
+  assert.equal(core.retryDecision(4, now).nextAttemptAt.getTime(), now + 240 * 60 * 1000);
+  assert.deepEqual(core.retryDecision(5, now), {exhausted: true, nextAttemptAt: null});
 });
 
 test("explicit, delivery-bound off-session authority is accepted", () => {

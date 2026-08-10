@@ -1,6 +1,8 @@
 "use strict";
 
 const AMOUNTS = Object.freeze({customerPence: 700, riderPence: 400, platformPence: 300});
+const MAX_ATTEMPTS = 5;
+const RETRY_DELAYS_MS = Object.freeze([5, 15, 60, 240].map((minutes) => minutes * 60 * 1000));
 
 function text(value) {
   return `${value || ""}`.trim();
@@ -44,7 +46,15 @@ function pendingFinancial(deliveryId, riderId) {
     customerCollected: 0,
     riderCredited: 0,
     platformRealized: 0,
+    attemptCount: 0,
   };
 }
 
-module.exports = {AMOUNTS, authorityDecision, pendingFinancial};
+function retryDecision(attemptCount, now = Date.now()) {
+  const attempts = Math.max(1, Number(attemptCount) || 1);
+  if (attempts >= MAX_ATTEMPTS) return {exhausted: true, nextAttemptAt: null};
+  const delay = RETRY_DELAYS_MS[Math.min(attempts - 1, RETRY_DELAYS_MS.length - 1)];
+  return {exhausted: false, nextAttemptAt: new Date(now + delay)};
+}
+
+module.exports = {AMOUNTS, MAX_ATTEMPTS, RETRY_DELAYS_MS, authorityDecision, pendingFinancial, retryDecision};
