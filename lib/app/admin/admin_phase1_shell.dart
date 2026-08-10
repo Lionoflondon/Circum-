@@ -7409,6 +7409,22 @@ class _IrisHealthPanelState extends State<_IrisHealthPanel> {
                   spacing: 10,
                   runSpacing: 10,
                   children: [
+                    _HealthStatusChip(
+                      'Visual system',
+                      '${payload['visualSystemStatus'] ?? 'PRODUCTION'}',
+                    ),
+                    _HealthStatusChip(
+                      'Visual authority',
+                      '${payload['visualAuthorityMode'] ?? 'EVIDENCE_ONLY'}',
+                    ),
+                    _HealthStatusChip(
+                      'Evaluation mode',
+                      '${payload['visualEvaluationMode'] ?? 'SHADOW'}',
+                    ),
+                    _HealthStatusChip(
+                      'Promotion review',
+                      '${payload['promotionReviewState'] ?? 'POLICY_THRESHOLDS_REQUIRED'}',
+                    ),
                     _HealthChip(
                       'Requests',
                       int.tryParse(_metric(latest, 'requestVolume')) ?? 0,
@@ -7463,7 +7479,8 @@ class _IrisHealthPanelState extends State<_IrisHealthPanel> {
                     ),
                     _HealthChip(
                       'Visual shadow requests',
-                      (latest['visualShadowRequestCount'] as num?)?.round() ?? 0,
+                      (latest['visualShadowRequestCount'] as num?)?.round() ??
+                          0,
                     ),
                     _HealthChip(
                       'Visual success %',
@@ -7475,7 +7492,8 @@ class _IrisHealthPanelState extends State<_IrisHealthPanel> {
                     _HealthChip(
                       'Visual category agreement %',
                       double.tryParse(
-                            _metric(latest, 'visualCategoryAgreementRatePercent'),
+                            _metric(
+                                latest, 'visualCategoryAgreementRatePercent'),
                           )?.round() ??
                           0,
                     ),
@@ -7483,6 +7501,29 @@ class _IrisHealthPanelState extends State<_IrisHealthPanel> {
                       'Visual review signals %',
                       double.tryParse(
                             _metric(latest, 'visualReviewSignalRatePercent'),
+                          )?.round() ??
+                          0,
+                    ),
+                    _HealthChip(
+                      'Visual disagreement %',
+                      double.tryParse(
+                            _metric(latest, 'visualDisagreementRatePercent'),
+                          )?.round() ??
+                          0,
+                    ),
+                    _HealthChip(
+                      'Visual adjudicated truth',
+                      (latest['visualAdjudicatedTruthCount'] as num?)
+                              ?.round() ??
+                          0,
+                    ),
+                    _HealthChip(
+                      'Visual category accuracy %',
+                      double.tryParse(
+                            _metric(
+                              latest,
+                              'visualClassificationAccuracyPercent',
+                            ),
                           )?.round() ??
                           0,
                     ),
@@ -11416,6 +11457,22 @@ class _HealthChip extends StatelessWidget {
 
   final String label;
   final int value;
+
+  @override
+  Widget build(BuildContext context) {
+    return Chip(
+      label: Text('$label: $value'),
+      backgroundColor: Colors.white.withValues(alpha: .08),
+      side: BorderSide(color: Colors.white.withValues(alpha: .12)),
+    );
+  }
+}
+
+class _HealthStatusChip extends StatelessWidget {
+  const _HealthStatusChip(this.label, this.value);
+
+  final String label;
+  final String value;
 
   @override
   Widget build(BuildContext context) {

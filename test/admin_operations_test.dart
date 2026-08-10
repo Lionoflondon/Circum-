@@ -1307,6 +1307,13 @@ void main() {
         'Visual success %',
         'Visual category agreement %',
         'Visual review signals %',
+        'Visual system',
+        'Visual authority',
+        'Evaluation mode',
+        'Promotion review',
+        'Visual disagreement %',
+        'Visual adjudicated truth',
+        'Visual category accuracy %',
       ]) {
         expect(source, contains(label));
       }
