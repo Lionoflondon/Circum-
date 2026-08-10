@@ -61,7 +61,7 @@ node - "$OUTPUT_DIR/index.html" "$WEB_GOOGLE_MAPS_API_KEY" <<'NODE'
 const fs = require('fs');
 const [indexPath, apiKey] = process.argv.slice(2);
 let html = fs.readFileSync(indexPath, 'utf8');
-const mapsScript = `<script src="https://maps.googleapis.com/maps/api/js?key=${encodeURIComponent(apiKey)}"></script>`;
+const mapsScript = `<script async defer src="https://maps.googleapis.com/maps/api/js?key=${encodeURIComponent(apiKey)}&loading=async"></script>`;
 if (!html.includes('maps.googleapis.com/maps/api/js')) {
   html = html.replace('</head>', `  ${mapsScript}\n</head>`);
 }

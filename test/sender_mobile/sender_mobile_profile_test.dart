@@ -345,13 +345,14 @@ void main() {
           ),
         ),
       );
-      await tester.pumpAndSettle();
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 50));
 
       expect(find.text('Jason Sender'), findsOneWidget);
       expect(repository.maxActiveWatchers, lessThanOrEqualTo(1));
 
       await tester.pumpWidget(const SizedBox.shrink());
-      await tester.pumpAndSettle();
+      await tester.pump();
       expect(repository.activeWatchers, 0);
     }
   });
