@@ -260,8 +260,9 @@ class _AdminPhaseOneShellState extends State<AdminPhaseOneShell> {
   Future<Map<String, dynamic>> _callRiderAuthority(
     Map<String, Object?> payload,
   ) async {
-    final result =
-        await _functions.httpsCallable('adminReviewRider').call(payload);
+    final result = await _functions
+        .httpsCallable('adminReviewRider')
+        .call(payload);
     return Map<String, dynamic>.from(result.data as Map? ?? {});
   }
 
@@ -393,8 +394,8 @@ class _AdminPhaseOneShellState extends State<AdminPhaseOneShell> {
         send
             ? 'stripe_onboarding_link_sent'
             : copy
-                ? 'stripe_onboarding_link_copied'
-                : 'stripe_onboarding_link_generated',
+            ? 'stripe_onboarding_link_copied'
+            : 'stripe_onboarding_link_generated',
         previousStatus:
             '${rider['stripeConnectStatus'] ?? rider['stripeStatus'] ?? ''}',
         newStatus: 'onboarding_link_ready',
@@ -404,8 +405,8 @@ class _AdminPhaseOneShellState extends State<AdminPhaseOneShell> {
         () => _message = send
             ? 'Payout setup link sent to Rider.'
             : copy
-                ? 'Payout setup link copied.'
-                : 'Fresh payout setup link generated.',
+            ? 'Payout setup link copied.'
+            : 'Fresh payout setup link generated.',
       );
       await _loadAdminData();
       return url;
@@ -539,8 +540,8 @@ class _AdminPhaseOneShellState extends State<AdminPhaseOneShell> {
       nextStatus == 'approved'
           ? 'document_approved'
           : nextStatus == 'rejected'
-              ? 'document_rejected'
-              : 'document_replacement_requested',
+          ? 'document_rejected'
+          : 'document_replacement_requested',
       previousStatus: previous,
       newStatus: nextStatus,
     );
@@ -703,7 +704,8 @@ class _AdminPhaseOneShellState extends State<AdminPhaseOneShell> {
         'requestId': requestId,
         'decision': decision,
         'finalCategory': delivery['category'] ?? delivery['irisCategory'],
-        'finalWeightBand': delivery['weightBand'] ??
+        'finalWeightBand':
+            delivery['weightBand'] ??
             delivery['irisWeightBand'] ??
             delivery['declaredWeight'],
         'reason': reason,
@@ -961,14 +963,15 @@ class _AdminPhaseOneShellState extends State<AdminPhaseOneShell> {
     );
     if (confirmed != true) return;
     try {
-      final result =
-          await _functions.httpsCallable('adminCreateBusinessInvoice').call({
-        'businessId': selectedBusinessId,
-        'amount': double.tryParse(amount.text.trim()) ?? 0,
-        'description': description.text.trim(),
-        'dueDate': dueDate.text.trim(),
-        'reason': reason.text.trim(),
-      });
+      final result = await _functions
+          .httpsCallable('adminCreateBusinessInvoice')
+          .call({
+            'businessId': selectedBusinessId,
+            'amount': double.tryParse(amount.text.trim()) ?? 0,
+            'description': description.text.trim(),
+            'dueDate': dueDate.text.trim(),
+            'reason': reason.text.trim(),
+          });
       final data = Map<String, dynamic>.from(result.data as Map);
       setState(
         () => _message =
@@ -991,8 +994,9 @@ class _AdminPhaseOneShellState extends State<AdminPhaseOneShell> {
       return;
     }
     final businessId = '${member['businessId'] ?? member['id'] ?? ''}'.trim();
-    final index =
-        member['memberIndex'] is int ? member['memberIndex'] as int : -1;
+    final index = member['memberIndex'] is int
+        ? member['memberIndex'] as int
+        : -1;
     if (businessId.isEmpty || index < 0) return;
     await _functions.httpsCallable('adminUpdateBusinessMember').call({
       'businessId': businessId,
@@ -1010,8 +1014,9 @@ class _AdminPhaseOneShellState extends State<AdminPhaseOneShell> {
       return;
     }
     final businessId = '${member['businessId'] ?? member['id'] ?? ''}'.trim();
-    final index =
-        member['memberIndex'] is int ? member['memberIndex'] as int : -1;
+    final index = member['memberIndex'] is int
+        ? member['memberIndex'] as int
+        : -1;
     if (businessId.isEmpty || index < 0) return;
     await _functions.httpsCallable('adminUpdateBusinessMember').call({
       'businessId': businessId,
@@ -1070,8 +1075,9 @@ class _AdminPhaseOneShellState extends State<AdminPhaseOneShell> {
         'conversationId': ticket['conversationId'] ?? ticket['chatId'],
         'status': status,
         'assignedTo': status == 'assigned' ? _user?.email : null,
-        'resolutionNote':
-            status == 'resolved' ? 'Resolved from Circum Admin' : null,
+        'resolutionNote': status == 'resolved'
+            ? 'Resolved from Circum Admin'
+            : null,
         'reason': 'Support workflow action confirmed from Admin',
       });
       await _writeAudit(
@@ -1140,10 +1146,10 @@ class _AdminPhaseOneShellState extends State<AdminPhaseOneShell> {
       await _functions
           .httpsCallable('adminUpdateGiftCampaignParticipant')
           .call({
-        'participantId': id,
-        'status': status,
-        'reason': 'Gift campaign participant reviewed from Admin',
-      });
+            'participantId': id,
+            'status': status,
+            'reason': 'Gift campaign participant reviewed from Admin',
+          });
       setState(() => _message = 'Gift campaign participant $id updated.');
       await _loadAdminData();
     } on FirebaseFunctionsException catch (error) {
@@ -1178,7 +1184,8 @@ class _AdminPhaseOneShellState extends State<AdminPhaseOneShell> {
       await _loadAdminData();
     } on FirebaseFunctionsException catch (error) {
       setState(
-          () => _message = error.message ?? 'Brand Partner action failed.');
+        () => _message = error.message ?? 'Brand Partner action failed.',
+      );
     }
   }
 
@@ -1262,20 +1269,21 @@ class _AdminPhaseOneShellState extends State<AdminPhaseOneShell> {
                   DropdownButtonFormField<String>(
                     initialValue: status,
                     decoration: const InputDecoration(labelText: 'Status'),
-                    items: const [
-                      'pending',
-                      'approved',
-                      'paused',
-                      'suspended',
-                      'inactive',
-                    ]
-                        .map(
-                          (value) => DropdownMenuItem(
-                            value: value,
-                            child: Text(value),
-                          ),
-                        )
-                        .toList(),
+                    items:
+                        const [
+                              'pending',
+                              'approved',
+                              'paused',
+                              'suspended',
+                              'inactive',
+                            ]
+                            .map(
+                              (value) => DropdownMenuItem(
+                                value: value,
+                                child: Text(value),
+                              ),
+                            )
+                            .toList(),
                     onChanged: (value) =>
                         setDialogState(() => status = value ?? status),
                   ),
@@ -1463,8 +1471,10 @@ class _AdminPhaseOneShellState extends State<AdminPhaseOneShell> {
     if (!confirmed) return;
     try {
       await _functions.httpsCallable('adminBulkGiftCampaignAction').call({
-        'participantIds':
-            selected.map(_idFor).where((id) => id.isNotEmpty).toList(),
+        'participantIds': selected
+            .map(_idFor)
+            .where((id) => id.isNotEmpty)
+            .toList(),
         'action': action,
         'reason': 'Bulk Campaign Matching workflow confirmed from Admin',
       });
@@ -1472,7 +1482,8 @@ class _AdminPhaseOneShellState extends State<AdminPhaseOneShell> {
       await _loadAdminData();
     } on FirebaseFunctionsException catch (error) {
       setState(
-          () => _message = error.message ?? 'Bulk campaign action failed.');
+        () => _message = error.message ?? 'Bulk campaign action failed.',
+      );
     }
   }
 
@@ -1483,9 +1494,6 @@ class _AdminPhaseOneShellState extends State<AdminPhaseOneShell> {
     }
     final id = _idFor(gift);
     if (id.isEmpty) return;
-    final status = TextEditingController(
-      text: '${gift['status'] ?? 'submitted'}',
-    );
     final plan = TextEditingController(text: '${gift['manualGiftPlan'] ?? ''}');
     final decision = TextEditingController(
       text: '${gift['adminDecision'] ?? ''}',
@@ -1514,9 +1522,9 @@ class _AdminPhaseOneShellState extends State<AdminPhaseOneShell> {
       text: _adminStringList(
         gift['giftsTeamWorkspace'] is Map
             ? (gift['giftsTeamWorkspace'] as Map)['irisCollaboration'] is Map
-                ? ((gift['giftsTeamWorkspace'] as Map)['irisCollaboration']
-                    as Map)['acceptedSignals']
-                : gift['irisAcceptedSignals']
+                  ? ((gift['giftsTeamWorkspace'] as Map)['irisCollaboration']
+                        as Map)['acceptedSignals']
+                  : gift['irisAcceptedSignals']
             : gift['irisAcceptedSignals'],
       ).join(', '),
     );
@@ -1568,12 +1576,6 @@ class _AdminPhaseOneShellState extends State<AdminPhaseOneShell> {
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  TextField(
-                    controller: status,
-                    decoration: const InputDecoration(
-                      labelText: 'Workflow status',
-                    ),
-                  ),
                   TextField(
                     controller: plan,
                     maxLines: 2,
@@ -1675,20 +1677,21 @@ class _AdminPhaseOneShellState extends State<AdminPhaseOneShell> {
                   DropdownButtonFormField<String>(
                     initialValue: privacy,
                     decoration: const InputDecoration(labelText: 'Privacy'),
-                    items: const [
-                      'private',
-                      'unlisted',
-                      'public',
-                      'social_media',
-                      'circum_marketing',
-                    ]
-                        .map(
-                          (value) => DropdownMenuItem(
-                            value: value,
-                            child: Text(value),
-                          ),
-                        )
-                        .toList(),
+                    items:
+                        const [
+                              'private',
+                              'unlisted',
+                              'public',
+                              'social_media',
+                              'circum_marketing',
+                            ]
+                            .map(
+                              (value) => DropdownMenuItem(
+                                value: value,
+                                child: Text(value),
+                              ),
+                            )
+                            .toList(),
                     onChanged: (value) =>
                         setDialogState(() => privacy = value ?? privacy),
                   ),
@@ -1697,21 +1700,22 @@ class _AdminPhaseOneShellState extends State<AdminPhaseOneShell> {
                     decoration: const InputDecoration(
                       labelText: 'Content status',
                     ),
-                    items: const [
-                      'not_started',
-                      'consent_pending',
-                      'ready_to_edit',
-                      'approved',
-                      'posted',
-                      'archived',
-                    ]
-                        .map(
-                          (value) => DropdownMenuItem(
-                            value: value,
-                            child: Text(value),
-                          ),
-                        )
-                        .toList(),
+                    items:
+                        const [
+                              'not_started',
+                              'consent_pending',
+                              'ready_to_edit',
+                              'approved',
+                              'posted',
+                              'archived',
+                            ]
+                            .map(
+                              (value) => DropdownMenuItem(
+                                value: value,
+                                child: Text(value),
+                              ),
+                            )
+                            .toList(),
                     onChanged: (value) => setDialogState(
                       () => contentStatus = value ?? contentStatus,
                     ),
@@ -1783,14 +1787,12 @@ class _AdminPhaseOneShellState extends State<AdminPhaseOneShell> {
     );
     final collection = '${gift['_collection'] ?? 'giftRequests'}';
     final patch = <String, Object?>{
-      'status': status.text.trim(),
       'manualGiftPlan': plan.text.trim(),
       'adminDecision': decision.text.trim(),
       'internalNotes': notes.text.trim(),
       'procurementItemTitle': procurementTitle.text.trim(),
       'procurementSupplier': procurementSupplier.text.trim(),
       'procurementEstimatedCost': double.tryParse(procurementCost.text.trim()),
-      'procurementActualCost': double.tryParse(procurementCost.text.trim()),
       'procurementOrderReference': procurementOrder.text.trim(),
       'procurementDeliveryEta': procurementEta.text.trim(),
       'procurementNotes': procurementNotes.text.trim(),
@@ -1803,8 +1805,9 @@ class _AdminPhaseOneShellState extends State<AdminPhaseOneShell> {
       'giftStoryCircumMessage': storyMessage.text.trim(),
       'giftStoryPhotoUrls': _csvValues(storyPhotos.text),
       'giftStoryPhotos': _csvValues(storyPhotos.text),
-      'giftStoryCustomAudioUrl':
-          storyAudio.text.trim().isEmpty ? null : storyAudio.text.trim(),
+      'giftStoryCustomAudioUrl': storyAudio.text.trim().isEmpty
+          ? null
+          : storyAudio.text.trim(),
       'giftStorySharePrivacy': privacy,
       'contentUsageScope': privacy,
       'contentStatus': contentStatus,
@@ -1818,7 +1821,6 @@ class _AdminPhaseOneShellState extends State<AdminPhaseOneShell> {
       'postedYouTubeShortsUrl': youtube.text.trim(),
     };
     for (final controller in [
-      status,
       plan,
       decision,
       notes,
@@ -1971,11 +1973,11 @@ class _AdminPhaseOneShellState extends State<AdminPhaseOneShell> {
         await _functions
             .httpsCallable('adminUpdateIrisCandidateWorkflow')
             .call({
-          'candidateId': id,
-          'collection': collection,
-          'action': action,
-          'reason': 'Candidate promoted to Canonical Repository from Admin',
-        });
+              'candidateId': id,
+              'collection': collection,
+              'action': action,
+              'reason': 'Candidate promoted to Canonical Repository from Admin',
+            });
         setState(() => _message = 'IRIS candidate promoted to $canonicalId.');
         await _loadAdminData();
       } on FirebaseFunctionsException catch (error) {
@@ -2013,17 +2015,34 @@ class _AdminPhaseOneShellState extends State<AdminPhaseOneShell> {
     if (id.isEmpty) return;
     final collection = '${gift['_collection'] ?? 'giftRequests'}';
     try {
-      await _functions.httpsCallable('adminUpdateGiftWorkspace').call({
-        'giftId': id,
-        'collection': collection,
-        'action': action,
-        'reason': 'Gift Team workspace action confirmed from Admin',
-      });
+      const procurementActions = {
+        'procurement_review',
+        'sourcing',
+        'unavailable',
+        'procurement_failed',
+      };
+      if (procurementActions.contains(action) && collection == 'giftRequests') {
+        await _functions.httpsCallable('updateGiftProcurement').call({
+          'giftId': id,
+          'status': action,
+          'idempotencyKey':
+              'admin_${action}_${DateTime.now().millisecondsSinceEpoch}',
+          'reason': 'Gift Team procurement action confirmed from Admin',
+        });
+      } else {
+        await _functions.httpsCallable('adminUpdateGiftWorkspace').call({
+          'giftId': id,
+          'collection': collection,
+          'action': action,
+          'reason': 'Gift Team workspace action confirmed from Admin',
+        });
+      }
       setState(() => _message = 'Gift workspace $id marked $action.');
       await _loadAdminData();
     } on FirebaseFunctionsException catch (error) {
       setState(
-          () => _message = error.message ?? 'Gift workspace action failed.');
+        () => _message = error.message ?? 'Gift workspace action failed.',
+      );
     }
   }
 
@@ -2061,7 +2080,8 @@ class _AdminPhaseOneShellState extends State<AdminPhaseOneShell> {
       } else if (action == 'update_privacy') {
         await _functions.httpsCallable('updateGiftStoryPrivacy').call({
           'giftRequestId': id,
-          'privacy': gift['giftStorySharePrivacy'] ??
+          'privacy':
+              gift['giftStorySharePrivacy'] ??
               gift['contentUsageScope'] ??
               'private',
         });
@@ -2361,14 +2381,14 @@ class _AdminPhaseOneShellState extends State<AdminPhaseOneShell> {
     try {
       await _functions
           .httpsCallable(
-        action == 'grant' ? 'grantRecognition' : 'revokeRecognition',
-      )
+            action == 'grant' ? 'grantRecognition' : 'revokeRecognition',
+          )
           .call({
-        'type': type,
-        'subjectCollection': subject.collection,
-        'subjectId': subject.id,
-        'reason': reason,
-      });
+            'type': type,
+            'subjectCollection': subject.collection,
+            'subjectId': subject.id,
+            'reason': reason,
+          });
       await _writeAudit(
         AdminAuditEntry(
           adminUserId: _user?.uid ?? 'unknown-admin',
@@ -2544,7 +2564,8 @@ class _AdminPhaseOneShellState extends State<AdminPhaseOneShell> {
       setState(() => _message = 'Enter a valid Admin email address.');
       return;
     }
-    final selectedRole = role ??
+    final selectedRole =
+        role ??
         AdminRole.fromString('${existing?['role'] ?? ''}') ??
         AdminRole.operationsAdmin;
     final documentId = '${existing?['id'] ?? normalizedEmail}'.trim();
@@ -2638,20 +2659,20 @@ class _AdminPhaseOneShellState extends State<AdminPhaseOneShell> {
         .limit(150)
         .snapshots()
         .listen(
-      (snapshot) {
-        if (!mounted) return;
-        setState(() {
-          _selectedChatMessages = snapshot.docs
-              .map((doc) => {'id': doc.id, ...doc.data()})
-              .toList(growable: false);
-        });
-      },
-      onError: (_) {
-        if (mounted) {
-          setState(() => _message = 'Could not load conversation history.');
-        }
-      },
-    );
+          (snapshot) {
+            if (!mounted) return;
+            setState(() {
+              _selectedChatMessages = snapshot.docs
+                  .map((doc) => {'id': doc.id, ...doc.data()})
+                  .toList(growable: false);
+            });
+          },
+          onError: (_) {
+            if (mounted) {
+              setState(() => _message = 'Could not load conversation history.');
+            }
+          },
+        );
   }
 
   Future<void> _openSupportConversation(Map<String, dynamic> ticket) async {
@@ -2665,10 +2686,11 @@ class _AdminPhaseOneShellState extends State<AdminPhaseOneShell> {
       final result = await _functions
           .httpsCallable('getOrCreateSupportConversation')
           .call({
-        'ticketId': ticketId,
-        'userId': ticket['userId'] ?? ticket['senderId'] ?? ticket['riderId'],
-        'deliveryId': ticket['deliveryId'] ?? ticket['requestId'],
-      });
+            'ticketId': ticketId,
+            'userId':
+                ticket['userId'] ?? ticket['senderId'] ?? ticket['riderId'],
+            'deliveryId': ticket['deliveryId'] ?? ticket['requestId'],
+          });
       final data = Map<String, dynamic>.from(result.data as Map? ?? {});
       final chatId =
           '${data['chatId'] ?? data['conversationId'] ?? ticket['chatId'] ?? ticket['conversationId'] ?? ''}'
@@ -2709,12 +2731,13 @@ class _AdminPhaseOneShellState extends State<AdminPhaseOneShell> {
     final riderId = _riderId(rider);
     if (riderId.isEmpty) return;
     try {
-      final result =
-          await _functions.httpsCallable('startAdminConversation').call({
-        'participantId': riderId,
-        'participantRole': 'rider',
-        'riderId': riderId,
-      });
+      final result = await _functions
+          .httpsCallable('startAdminConversation')
+          .call({
+            'participantId': riderId,
+            'participantRole': 'rider',
+            'riderId': riderId,
+          });
       final data = Map<String, dynamic>.from(result.data as Map? ?? {});
       final chatId =
           '${data['chatId'] ?? data['conversationId'] ?? data['id'] ?? ''}'
@@ -3078,8 +3101,9 @@ class _AdminPhaseOneShellState extends State<AdminPhaseOneShell> {
       ),
     );
     final reasonText = reason.text.trim();
-    final pointDelta =
-        needsPoints ? (int.tryParse(points.text.trim()) ?? 0).abs() : 0;
+    final pointDelta = needsPoints
+        ? (int.tryParse(points.text.trim()) ?? 0).abs()
+        : 0;
     points.dispose();
     reason.dispose();
     if (confirmed != true) return;
@@ -3088,14 +3112,15 @@ class _AdminPhaseOneShellState extends State<AdminPhaseOneShell> {
       return;
     }
     try {
-      final result =
-          await _functions.httpsCallable('adminUpdateSenderTrust').call({
-        'senderId': senderId,
-        'action': action,
-        if (needsPoints) 'points': pointDelta,
-        if (needsTier) 'tier': selectedTier,
-        'reason': reasonText,
-      });
+      final result = await _functions
+          .httpsCallable('adminUpdateSenderTrust')
+          .call({
+            'senderId': senderId,
+            'action': action,
+            if (needsPoints) 'points': pointDelta,
+            if (needsTier) 'tier': selectedTier,
+            'reason': reasonText,
+          });
       final data = Map<String, dynamic>.from(result.data as Map);
       await _writeAudit(
         AdminAuditEntry(
@@ -3139,7 +3164,8 @@ class _AdminPhaseOneShellState extends State<AdminPhaseOneShell> {
       await _loadAdminData();
     } on FirebaseFunctionsException catch (error) {
       setState(
-          () => _message = error.message ?? 'Message report update failed.');
+        () => _message = error.message ?? 'Message report update failed.',
+      );
     }
   }
 
@@ -3171,10 +3197,9 @@ class _AdminPhaseOneShellState extends State<AdminPhaseOneShell> {
     );
     if (confirmed != true) return;
     try {
-      final result =
-          await _functions.httpsCallable('pipelineHealthReset').call({
-        'reason': reason,
-      });
+      final result = await _functions.httpsCallable('pipelineHealthReset').call(
+        {'reason': reason},
+      );
       final data = Map<String, dynamic>.from(result.data as Map);
       if (!mounted) return;
       await showDialog<void>(
@@ -3203,11 +3228,12 @@ class _AdminPhaseOneShellState extends State<AdminPhaseOneShell> {
       return;
     }
     try {
-      final result =
-          await _functions.httpsCallable('operationsHealthScan').call({
-        'correlationId':
-            'admin-health-scan-${DateTime.now().millisecondsSinceEpoch}',
-      });
+      final result = await _functions
+          .httpsCallable('operationsHealthScan')
+          .call({
+            'correlationId':
+                'admin-health-scan-${DateTime.now().millisecondsSinceEpoch}',
+          });
       final data = Map<String, dynamic>.from(result.data as Map);
       if (!mounted) return;
       await showDialog<void>(
@@ -3257,10 +3283,9 @@ class _AdminPhaseOneShellState extends State<AdminPhaseOneShell> {
     );
     if (confirmed != true) return;
     try {
-      final result =
-          await _functions.httpsCallable('operationsHealthRepair').call({
-        'reason': reason,
-      });
+      final result = await _functions
+          .httpsCallable('operationsHealthRepair')
+          .call({'reason': reason});
       final data = Map<String, dynamic>.from(result.data as Map);
       if (!mounted) return;
       await showDialog<void>(
@@ -3315,10 +3340,9 @@ class _AdminPhaseOneShellState extends State<AdminPhaseOneShell> {
     );
     if (deliveryId == null || deliveryId.trim().isEmpty) return;
     try {
-      final result =
-          await _functions.httpsCallable('liveDeliveryDiagnostics').call({
-        'deliveryId': deliveryId.trim(),
-      });
+      final result = await _functions
+          .httpsCallable('liveDeliveryDiagnostics')
+          .call({'deliveryId': deliveryId.trim()});
       final data = Map<String, dynamic>.from(result.data as Map);
       if (!mounted) return;
       await showDialog<void>(
@@ -3365,8 +3389,10 @@ class _AdminPhaseOneShellState extends State<AdminPhaseOneShell> {
     final failures = items
         .where((item) => item['status'] != 'PASS')
         .take(8)
-        .map((item) =>
-            '${item['status']} ${item['service']}: ${item['rootCause']}\nRemediation: ${item['suggestedRemediation']}')
+        .map(
+          (item) =>
+              '${item['status']} ${item['service']}: ${item['rootCause']}\nRemediation: ${item['suggestedRemediation']}',
+        )
         .join('\n\n');
     return [
       'Result: ${data['result'] ?? 'n/a'}',
@@ -3400,8 +3426,10 @@ class _AdminPhaseOneShellState extends State<AdminPhaseOneShell> {
         .map((item) => Map<String, dynamic>.from(item))
         .toList(growable: false);
     final lines = stages
-        .map((stage) =>
-            '${stage['status']} ${stage['stage']}: ${stage['rootCause']}')
+        .map(
+          (stage) =>
+              '${stage['status']} ${stage['stage']}: ${stage['rootCause']}',
+        )
         .join('\n');
     return [
       'Delivery: ${data['deliveryId'] ?? 'n/a'}',
@@ -3472,8 +3500,7 @@ class _AdminPhaseOneShellState extends State<AdminPhaseOneShell> {
     return switch (error.code) {
       'user-not-found' => 'No employee account found for that email.',
       'wrong-password' ||
-      'invalid-credential' =>
-        'Those sign-in details are not right.',
+      'invalid-credential' => 'Those sign-in details are not right.',
       _ => 'Admin sign in failed. Please check the details.',
     };
   }
@@ -3651,58 +3678,59 @@ class _AdminPhaseOneShellState extends State<AdminPhaseOneShell> {
       ),
       endDrawer: _selectedRider == null
           ? _selectedDelivery == null
-              ? _selectedHealthPlus == null
-                  ? _selectedAccount == null
-                      ? null
-                      : _AccountProfileDrawer(
-                          account: _selectedAccount!,
-                          accountType: _selectedAccountType,
+                ? _selectedHealthPlus == null
+                      ? _selectedAccount == null
+                            ? null
+                            : _AccountProfileDrawer(
+                                account: _selectedAccount!,
+                                accountType: _selectedAccountType,
+                                deliveries: _data.deliveries,
+                                payments: _data.payments,
+                                supportTickets: _data.supportTickets,
+                                giftOrders: _data.giftOrders,
+                                businessAccounts: _data.businessAccounts,
+                                users: _data.users,
+                                onClose: () =>
+                                    setState(() => _selectedAccount = null),
+                                onSetSenderStatus: (status) =>
+                                    _setSenderAccountStatus(
+                                      _selectedAccount!,
+                                      status,
+                                    ),
+                                onSetBusinessStatus: (status) =>
+                                    _setBusinessAccountStatus(
+                                      _selectedAccount!,
+                                      status,
+                                    ),
+                                onRequestDuplicateMerge: (duplicate) =>
+                                    _requestDuplicateMerge(
+                                      _selectedAccount!,
+                                      duplicate,
+                                    ),
+                              )
+                      : _HealthPlusOperationsDrawer(
+                          record: _selectedHealthPlus!,
                           deliveries: _data.deliveries,
-                          payments: _data.payments,
                           supportTickets: _data.supportTickets,
-                          giftOrders: _data.giftOrders,
-                          businessAccounts: _data.businessAccounts,
-                          users: _data.users,
+                          auditLogs: _data.auditLogs,
                           onClose: () =>
-                              setState(() => _selectedAccount = null),
-                          onSetSenderStatus: (status) =>
-                              _setSenderAccountStatus(
-                            _selectedAccount!,
+                              setState(() => _selectedHealthPlus = null),
+                          onSetStatus: (status) => _updateHealthPlusPickup(
+                            _selectedHealthPlus!,
                             status,
-                          ),
-                          onSetBusinessStatus: (status) =>
-                              _setBusinessAccountStatus(
-                            _selectedAccount!,
-                            status,
-                          ),
-                          onRequestDuplicateMerge: (duplicate) =>
-                              _requestDuplicateMerge(
-                            _selectedAccount!,
-                            duplicate,
                           ),
                         )
-                  : _HealthPlusOperationsDrawer(
-                      record: _selectedHealthPlus!,
-                      deliveries: _data.deliveries,
-                      supportTickets: _data.supportTickets,
-                      auditLogs: _data.auditLogs,
-                      onClose: () => setState(() => _selectedHealthPlus = null),
-                      onSetStatus: (status) => _updateHealthPlusPickup(
-                        _selectedHealthPlus!,
-                        status,
-                      ),
-                    )
-              : _DeliveryOperationsDrawer(
-                  delivery: _selectedDelivery!,
-                  riders: _data.riders,
-                  payments: _data.payments,
-                  supportTickets: _data.supportTickets,
-                  chats: _data.chats,
-                  auditLogs: _data.auditLogs,
-                  onClose: () => setState(() => _selectedDelivery = null),
-                  onSetStatus: (status) =>
-                      _setDeliveryOperationStatus(_selectedDelivery!, status),
-                )
+                : _DeliveryOperationsDrawer(
+                    delivery: _selectedDelivery!,
+                    riders: _data.riders,
+                    payments: _data.payments,
+                    supportTickets: _data.supportTickets,
+                    chats: _data.chats,
+                    auditLogs: _data.auditLogs,
+                    onClose: () => setState(() => _selectedDelivery = null),
+                    onSetStatus: (status) =>
+                        _setDeliveryOperationStatus(_selectedDelivery!, status),
+                  )
           : _RiderProfileDrawer(
               rider: _selectedRider!,
               deliveries: _data.deliveries,
@@ -3833,61 +3861,61 @@ class AdminDataBundle {
   final List<Map<String, dynamic>> riderPresence;
 
   static AdminDataBundle empty() => const AdminDataBundle(
-        deliveries: [],
-        users: [],
-        riders: [],
-        adminUsers: [],
-        payments: [],
-        payoutRequests: [],
-        riderEarnings: [],
-        riderWalletTransactions: [],
-        wallets: [],
-        walletTransactions: [],
-        businessWallets: [],
-        businessInvoices: [],
-        businessRothPurchases: [],
-        deliveryTips: [],
-        ratings: [],
-        supportTickets: [],
-        healthPlusPayments: [],
-        healthPlusPickups: [],
-        healthPlusProfiles: [],
-        recurringPickupSchedules: [],
-        healthPlusCustodyArchive: [],
-        businessAccounts: [],
-        giftOrders: [],
-        giftRequests: [],
-        giftBrands: [],
-        giftCampaignParticipants: [],
-        giftCampaignMatches: [],
-        auditLogs: [],
-        chats: [],
-        riderApplications: [],
-        riderDocuments: [],
-        riderOnboardingEvents: [],
-        driverPerformanceMetrics: [],
-        websiteVisitors: [],
-        irisCanonicalObjects: [],
-        irisLearningCases: [],
-        irisLearningOutliers: [],
-        irisPolicies: [],
-        irisEvidence: [],
-        irisReferenceImages: [],
-        platformConfig: [],
-        platformStatus: [],
-        platformNotices: [],
-        platformVersions: [],
-        notifications: [],
-        messageReports: [],
-        adminNotes: [],
-        senderTrustEvents: [],
-        recognitionAwards: [],
-        recognitionAuditLogs: [],
-        recognitionCounters: [],
-        rateLimits: [],
-        senderDrafts: [],
-        riderPresence: [],
-      );
+    deliveries: [],
+    users: [],
+    riders: [],
+    adminUsers: [],
+    payments: [],
+    payoutRequests: [],
+    riderEarnings: [],
+    riderWalletTransactions: [],
+    wallets: [],
+    walletTransactions: [],
+    businessWallets: [],
+    businessInvoices: [],
+    businessRothPurchases: [],
+    deliveryTips: [],
+    ratings: [],
+    supportTickets: [],
+    healthPlusPayments: [],
+    healthPlusPickups: [],
+    healthPlusProfiles: [],
+    recurringPickupSchedules: [],
+    healthPlusCustodyArchive: [],
+    businessAccounts: [],
+    giftOrders: [],
+    giftRequests: [],
+    giftBrands: [],
+    giftCampaignParticipants: [],
+    giftCampaignMatches: [],
+    auditLogs: [],
+    chats: [],
+    riderApplications: [],
+    riderDocuments: [],
+    riderOnboardingEvents: [],
+    driverPerformanceMetrics: [],
+    websiteVisitors: [],
+    irisCanonicalObjects: [],
+    irisLearningCases: [],
+    irisLearningOutliers: [],
+    irisPolicies: [],
+    irisEvidence: [],
+    irisReferenceImages: [],
+    platformConfig: [],
+    platformStatus: [],
+    platformNotices: [],
+    platformVersions: [],
+    notifications: [],
+    messageReports: [],
+    adminNotes: [],
+    senderTrustEvents: [],
+    recognitionAwards: [],
+    recognitionAuditLogs: [],
+    recognitionCounters: [],
+    rateLimits: [],
+    senderDrafts: [],
+    riderPresence: [],
+  );
 }
 
 class AdminRepository {
@@ -4569,103 +4597,104 @@ class _AdminModuleBody extends StatelessWidget {
   final ValueChanged<Map<String, dynamic>> onDuplicateDelivery;
   final Future<void> Function(Map<String, dynamic>, String) onSetRiderStatus;
   final Future<void> Function(Map<String, dynamic>, String)
-      onSetDeliveryOperationStatus;
+  onSetDeliveryOperationStatus;
   final Future<void> Function(Map<String, dynamic>) onResolveStaleDeliveryLock;
   final Future<void> Function(Map<String, dynamic>) onArchiveDelivery;
   final Future<void> Function(Map<String, dynamic>, String)
-      onSetIrisReviewStatus;
+  onSetIrisReviewStatus;
   final Future<void> Function(Map<String, dynamic>, String)
-      onAdjudicateIrisReferral;
+  onAdjudicateIrisReferral;
   final Future<void> Function(Map<String, dynamic>) onLoadIrisReferenceImage;
   final Future<void> Function(Map<String, dynamic>)
-      onFinalizeIrisReferenceImage;
+  onFinalizeIrisReferenceImage;
   final Future<void> Function(Map<String, dynamic>) onDeleteIrisReferenceImage;
   final Future<void> Function(Map<String, dynamic>, String)
-      onUpdateSupportTicket;
+  onUpdateSupportTicket;
   final Future<void> Function(Map<String, dynamic>, String)
-      onUpdateGiftWorkflow;
+  onUpdateGiftWorkflow;
   final Future<void> Function(Map<String, dynamic>, String)
-      onUpdateHealthPlusPickup;
+  onUpdateHealthPlusPickup;
   final Future<void> Function(Map<String, dynamic>, String)
-      onUpdateFinanceWorkflow;
+  onUpdateFinanceWorkflow;
   final Future<void> Function(Map<String, dynamic>) onIssueRoth;
   final Future<void> Function({
     required String recipient,
     required double amount,
     required String reason,
     required String walletTarget,
-  }) onIssueManualRothCredit;
+  })
+  onIssueManualRothCredit;
   final Future<void> Function(Map<String, dynamic>, String, String)
-      onManageRecognition;
+  onManageRecognition;
   final Future<void> Function(Map<String, dynamic>, bool) onSetWalletFrozen;
   final Future<void> Function(Map<String, dynamic>, String)
-      onProcessPayoutRequest;
+  onProcessPayoutRequest;
   final Future<void> Function(Map<String, dynamic>, String) onModerateRating;
   final Future<void> Function(Map<String, dynamic>) onSyncRiderStripe;
   final Future<void> Function(Map<String, dynamic>) onResetRiderStripe;
   final Future<String?> Function(Map<String, dynamic>, {bool copy, bool send})
-      onGenerateRiderStripeLink;
+  onGenerateRiderStripeLink;
   final Future<void> Function(Map<String, dynamic>) onOpenRiderStripeDashboard;
   final Future<void> Function(Map<String, dynamic>, String)
-      onMarkRiderStripeInvestigation;
+  onMarkRiderStripeInvestigation;
   final Future<void> Function(Map<String, dynamic>)
-      onRequestRiderMoreInformation;
+  onRequestRiderMoreInformation;
   final Future<void> Function(Map<String, dynamic>, String)
-      onReviewRiderDocument;
+  onReviewRiderDocument;
   final Future<void> Function(Map<String, dynamic>) onRemoveRiderProfilePhoto;
   final Future<void> Function(Map<String, dynamic>, String)
-      onUpdateHealthPlusProfile;
+  onUpdateHealthPlusProfile;
   final Future<void> Function(Map<String, dynamic>, String)
-      onUpdateHealthPlusSchedule;
+  onUpdateHealthPlusSchedule;
   final Future<void> Function(Map<String, dynamic>, String)
-      onUpdateGiftCampaignParticipant;
+  onUpdateGiftCampaignParticipant;
   final Future<void> Function(Map<String, dynamic>, String)
-      onSetGiftBrandStatus;
+  onSetGiftBrandStatus;
   final Future<void> Function(Map<String, dynamic>?) onEditGiftBrandPartner;
   final Future<void> Function(Map<String, dynamic>, List<Map<String, dynamic>>)
-      onSuggestGiftCampaignMatch;
+  onSuggestGiftCampaignMatch;
   final Future<void> Function(Map<String, dynamic>, List<Map<String, dynamic>>)
-      onApproveGiftCampaignMatch;
+  onApproveGiftCampaignMatch;
   final Future<void> Function(List<Map<String, dynamic>>, String)
-      onBulkGiftCampaignAction;
+  onBulkGiftCampaignAction;
   final Future<void> Function(Map<String, dynamic>) onEditGiftRequest;
   final Future<void> Function(Map<String, dynamic>, String)
-      onUpdateGiftStoryAccess;
+  onUpdateGiftStoryAccess;
   final Future<void> Function(Map<String, dynamic>, String)
-      onUpdateGiftStoryMedia;
+  onUpdateGiftStoryMedia;
   final Future<void> Function(Map<String, dynamic>, String)
-      onUpdateGiftWorkspace;
+  onUpdateGiftWorkspace;
   final Future<void> Function(Map<String, dynamic>, String)
-      onUpdateIrisRepositoryRecord;
+  onUpdateIrisRepositoryRecord;
   final Future<void> Function(Map<String, dynamic>, String)
-      onUpdateIrisCandidateWorkflow;
+  onUpdateIrisCandidateWorkflow;
   final Future<void> Function(Map<String, dynamic>, String)
-      onSetBusinessOperationStatus;
+  onSetBusinessOperationStatus;
   final Future<void> Function() onCreateBusinessInvoice;
   final Future<void> Function(Map<String, dynamic>, String)
-      onChangeBusinessMemberRole;
+  onChangeBusinessMemberRole;
   final Future<void> Function(Map<String, dynamic>) onRemoveBusinessMember;
   final Future<void> Function(Map<String, dynamic>, String)
-      onUpdatePlatformRecord;
+  onUpdatePlatformRecord;
   final ValueChanged<Map<String, dynamic>> onOpenRiderProfile;
   final ValueChanged<Map<String, dynamic>> onOpenDeliveryProfile;
   final ValueChanged<Map<String, dynamic>> onOpenHealthPlusProfile;
   final void Function(Map<String, dynamic>, String) onOpenAccountProfile;
   final Future<void> Function(Map<String, dynamic>, String)
-      onSetSenderAccountStatus;
+  onSetSenderAccountStatus;
   final Future<void> Function(Map<String, dynamic>, String)
-      onSetBusinessAccountStatus;
+  onSetBusinessAccountStatus;
   final Future<void> Function(Map<String, dynamic>, Map<String, dynamic>)
-      onRequestDuplicateMerge;
+  onRequestDuplicateMerge;
   final TextEditingController adminInviteEmail;
   final TextEditingController adminInviteNote;
   final AdminRole adminInviteRole;
   final ValueChanged<AdminRole> onAdminInviteRoleChanged;
   final VoidCallback onCreateAdminUser;
   final Future<void> Function(Map<String, dynamic>, String)
-      onSetAdminUserStatus;
+  onSetAdminUserStatus;
   final Future<void> Function(Map<String, dynamic>, AdminRole)
-      onSetAdminUserRole;
+  onSetAdminUserRole;
   final TextEditingController announcementTitle;
   final TextEditingController announcementBody;
   final Future<void> Function(String) onSendPlatformAnnouncement;
@@ -4675,7 +4704,7 @@ class _AdminModuleBody extends StatelessWidget {
   final ValueChanged<Map<String, dynamic>> onSelectChat;
   final VoidCallback onSendChatMessage;
   final Future<void> Function(Map<String, dynamic>, String)
-      onResolveMessageReport;
+  onResolveMessageReport;
   final Future<void> Function(Map<String, dynamic>) onOpenSupportConversation;
   final Future<void> Function(Map<String, dynamic>) onStartRiderConversation;
   final Future<void> Function(Map<String, dynamic>, String) onAddAdminNote;
@@ -4695,369 +4724,369 @@ class _AdminModuleBody extends StatelessWidget {
         switch (module) {
           AdminModule.dashboard => _Dashboard(metrics: metrics, data: data),
           AdminModule.visitorAnalytics => _VisitorAnalyticsModule(
-              records: data.websiteVisitors,
-            ),
+            records: data.websiteVisitors,
+          ),
           AdminModule.governance => _GovernanceOperationsModule(
-              rateLimits: data.rateLimits,
-              senderDrafts: data.senderDrafts,
-              riderPresence: data.riderPresence,
-              users: data.users,
-              riders: data.riders,
-              deliveries: data.deliveries,
-              payments: data.payments,
-              wallets: data.wallets,
-              businessInvoices: data.businessInvoices,
-              businessAccounts: data.businessAccounts,
-              healthPlusPickups: data.healthPlusPickups,
-              recurringPickupSchedules: data.recurringPickupSchedules,
-              giftOrders: data.giftOrders,
-              giftRequests: data.giftRequests,
-              giftCampaignMatches: data.giftCampaignMatches,
-              irisEvidence: data.irisEvidence,
-              irisCanonicalObjects: data.irisCanonicalObjects,
-              irisLearningCases: data.irisLearningCases,
-              notifications: data.notifications,
-              chats: data.chats,
-              auditLogs: data.auditLogs,
-              query: query,
-              canRecover: canManageIssues,
-              onGovernanceAction: onGovernanceAction,
-              onPipelineHealthReset: onPipelineHealthReset,
-              onOperationsHealthScan: onOperationsHealthScan,
-              onOperationsHealthRepair: onOperationsHealthRepair,
-              onLiveDeliveryDiagnostics: onLiveDeliveryDiagnostics,
-              onRetryNotificationDelivery: onRetryNotificationDelivery,
-              onOpenDelivery: onOpenDeliveryProfile,
-            ),
+            rateLimits: data.rateLimits,
+            senderDrafts: data.senderDrafts,
+            riderPresence: data.riderPresence,
+            users: data.users,
+            riders: data.riders,
+            deliveries: data.deliveries,
+            payments: data.payments,
+            wallets: data.wallets,
+            businessInvoices: data.businessInvoices,
+            businessAccounts: data.businessAccounts,
+            healthPlusPickups: data.healthPlusPickups,
+            recurringPickupSchedules: data.recurringPickupSchedules,
+            giftOrders: data.giftOrders,
+            giftRequests: data.giftRequests,
+            giftCampaignMatches: data.giftCampaignMatches,
+            irisEvidence: data.irisEvidence,
+            irisCanonicalObjects: data.irisCanonicalObjects,
+            irisLearningCases: data.irisLearningCases,
+            notifications: data.notifications,
+            chats: data.chats,
+            auditLogs: data.auditLogs,
+            query: query,
+            canRecover: canManageIssues,
+            onGovernanceAction: onGovernanceAction,
+            onPipelineHealthReset: onPipelineHealthReset,
+            onOperationsHealthScan: onOperationsHealthScan,
+            onOperationsHealthRepair: onOperationsHealthRepair,
+            onLiveDeliveryDiagnostics: onLiveDeliveryDiagnostics,
+            onRetryNotificationDelivery: onRetryNotificationDelivery,
+            onOpenDelivery: onOpenDeliveryProfile,
+          ),
           AdminModule.recognition => _RecognitionOperationsModule(
-              users: data.users,
-              riders: data.riders,
-              businessAccounts: data.businessAccounts,
-              awards: data.recognitionAwards,
-              auditLogs: data.recognitionAuditLogs,
-              counters: data.recognitionCounters,
-              query: query,
-              canManageRecognition: canManageIssues,
-              onManageRecognition: onManageRecognition,
-            ),
+            users: data.users,
+            riders: data.riders,
+            businessAccounts: data.businessAccounts,
+            awards: data.recognitionAwards,
+            auditLogs: data.recognitionAuditLogs,
+            counters: data.recognitionCounters,
+            query: query,
+            canManageRecognition: canManageIssues,
+            onManageRecognition: onManageRecognition,
+          ),
           AdminModule.discrepancyReview => _IrisOperationsModule(
-              deliveries: data.deliveries,
-              auditLogs: data.auditLogs,
-              canonicalObjects: data.irisCanonicalObjects,
-              learningCases: data.irisLearningCases,
-              policies: data.irisPolicies,
-              evidenceRecords: data.irisEvidence,
-              referenceImages: data.irisReferenceImages,
-              query: query,
-              canManageIris: canEditDeliveries,
-              onOpenDelivery: onOpenDeliveryProfile,
-              onSetIrisReviewStatus: onSetIrisReviewStatus,
-              onAdjudicateIrisReferral: onAdjudicateIrisReferral,
-              onLoadReferenceImage: onLoadIrisReferenceImage,
-              onFinalizeReferenceImage: onFinalizeIrisReferenceImage,
-              onDeleteReferenceImage: onDeleteIrisReferenceImage,
-              onUpdateRepositoryRecord: onUpdateIrisRepositoryRecord,
-              onUpdateCandidateWorkflow: onUpdateIrisCandidateWorkflow,
-            ),
+            deliveries: data.deliveries,
+            auditLogs: data.auditLogs,
+            canonicalObjects: data.irisCanonicalObjects,
+            learningCases: data.irisLearningCases,
+            policies: data.irisPolicies,
+            evidenceRecords: data.irisEvidence,
+            referenceImages: data.irisReferenceImages,
+            query: query,
+            canManageIris: canEditDeliveries,
+            onOpenDelivery: onOpenDeliveryProfile,
+            onSetIrisReviewStatus: onSetIrisReviewStatus,
+            onAdjudicateIrisReferral: onAdjudicateIrisReferral,
+            onLoadReferenceImage: onLoadIrisReferenceImage,
+            onFinalizeReferenceImage: onFinalizeIrisReferenceImage,
+            onDeleteReferenceImage: onDeleteIrisReferenceImage,
+            onUpdateRepositoryRecord: onUpdateIrisRepositoryRecord,
+            onUpdateCandidateWorkflow: onUpdateIrisCandidateWorkflow,
+          ),
           AdminModule.irisRepository => _IrisRepositoryGovernanceModule(
-              canonicalObjects: data.irisCanonicalObjects,
-              referenceImages: data.irisReferenceImages,
-              auditLogs: data.auditLogs,
-              query: query,
-              canManageIris: canEditDeliveries,
-              onUpdateRepositoryRecord: onUpdateIrisRepositoryRecord,
-              onLoadReferenceImage: onLoadIrisReferenceImage,
-              onFinalizeReferenceImage: onFinalizeIrisReferenceImage,
-              onDeleteReferenceImage: onDeleteIrisReferenceImage,
-            ),
+            canonicalObjects: data.irisCanonicalObjects,
+            referenceImages: data.irisReferenceImages,
+            auditLogs: data.auditLogs,
+            query: query,
+            canManageIris: canEditDeliveries,
+            onUpdateRepositoryRecord: onUpdateIrisRepositoryRecord,
+            onLoadReferenceImage: onLoadIrisReferenceImage,
+            onFinalizeReferenceImage: onFinalizeIrisReferenceImage,
+            onDeleteReferenceImage: onDeleteIrisReferenceImage,
+          ),
           AdminModule.irisCandidates => _IrisCandidateWorkflowModule(
-              deliveries: data.deliveries,
-              learningCases: data.irisLearningCases,
-              evidenceRecords: data.irisEvidence,
-              query: query,
-              canManageIris: canEditDeliveries,
-              onUpdateCandidateWorkflow: onUpdateIrisCandidateWorkflow,
-            ),
+            deliveries: data.deliveries,
+            learningCases: data.irisLearningCases,
+            evidenceRecords: data.irisEvidence,
+            query: query,
+            canManageIris: canEditDeliveries,
+            onUpdateCandidateWorkflow: onUpdateIrisCandidateWorkflow,
+          ),
           AdminModule.deliveries => _DeliveryOperationsModule(
-              deliveries: data.deliveries,
-              riders: data.riders,
-              query: query,
-              canDuplicateDeliveries: canDuplicateDeliveries,
-              canEditDeliveries: canEditDeliveries,
-              onOpenDelivery: onOpenDeliveryProfile,
-              onDuplicateDelivery: onDuplicateDelivery,
-              onSetDeliveryOperationStatus: onSetDeliveryOperationStatus,
-              onResolveStaleDeliveryLock: onResolveStaleDeliveryLock,
-              onArchiveDelivery: onArchiveDelivery,
-            ),
+            deliveries: data.deliveries,
+            riders: data.riders,
+            query: query,
+            canDuplicateDeliveries: canDuplicateDeliveries,
+            canEditDeliveries: canEditDeliveries,
+            onOpenDelivery: onOpenDeliveryProfile,
+            onDuplicateDelivery: onDuplicateDelivery,
+            onSetDeliveryOperationStatus: onSetDeliveryOperationStatus,
+            onResolveStaleDeliveryLock: onResolveStaleDeliveryLock,
+            onArchiveDelivery: onArchiveDelivery,
+          ),
           AdminModule.users => Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                _RecordModule(
-                  title: 'Users',
-                  subtitle: 'Sender and customer account records.',
-                  records: data.users,
-                  query: query,
-                  fields: const [
-                    'id',
-                    'fullName',
-                    'name',
-                    'email',
-                    'phone',
-                    'status',
-                    'accountStatus',
-                    'verificationStatus',
-                  ],
-                  columns: const ['Name', 'Email', 'Status', 'Verification'],
-                  row: (record) => [
-                    '${record['fullName'] ?? record['name'] ?? record['id']}',
-                    '${record['email'] ?? 'Not recorded'}',
-                    '${record['status'] ?? record['accountStatus'] ?? 'active'}',
-                    '${record['verificationStatus'] ?? record['kycStatus'] ?? 'not_required'}',
-                  ],
-                  actions: (record) => _accountActions(
-                    account: record,
-                    accountType: 'sender',
-                    allAccounts: data.users,
-                    onOpen: onOpenAccountProfile,
-                    onSetStatus: onSetSenderAccountStatus,
-                    onRequestDuplicateMerge: onRequestDuplicateMerge,
-                    onAddAdminNote: onAddAdminNote,
-                    onUpdateSenderTrust: onUpdateSenderTrust,
-                  ),
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              _RecordModule(
+                title: 'Users',
+                subtitle: 'Sender and customer account records.',
+                records: data.users,
+                query: query,
+                fields: const [
+                  'id',
+                  'fullName',
+                  'name',
+                  'email',
+                  'phone',
+                  'status',
+                  'accountStatus',
+                  'verificationStatus',
+                ],
+                columns: const ['Name', 'Email', 'Status', 'Verification'],
+                row: (record) => [
+                  '${record['fullName'] ?? record['name'] ?? record['id']}',
+                  '${record['email'] ?? 'Not recorded'}',
+                  '${record['status'] ?? record['accountStatus'] ?? 'active'}',
+                  '${record['verificationStatus'] ?? record['kycStatus'] ?? 'not_required'}',
+                ],
+                actions: (record) => _accountActions(
+                  account: record,
+                  accountType: 'sender',
+                  allAccounts: data.users,
+                  onOpen: onOpenAccountProfile,
+                  onSetStatus: onSetSenderAccountStatus,
+                  onRequestDuplicateMerge: onRequestDuplicateMerge,
+                  onAddAdminNote: onAddAdminNote,
+                  onUpdateSenderTrust: onUpdateSenderTrust,
                 ),
-                const SizedBox(height: 18),
-                _SenderTrustTimelinePanel(
-                  records: data.senderTrustEvents,
-                  users: data.users,
-                  query: query,
-                ),
-              ],
-            ),
+              ),
+              const SizedBox(height: 18),
+              _SenderTrustTimelinePanel(
+                records: data.senderTrustEvents,
+                users: data.users,
+                query: query,
+              ),
+            ],
+          ),
           AdminModule.riders => _RiderOperationsModule(
-              riders: data.riders,
-              deliveries: data.deliveries,
-              applications: data.riderApplications,
-              documents: data.riderDocuments,
-              onboardingEvents: data.riderOnboardingEvents,
-              driverPerformanceMetrics: data.driverPerformanceMetrics,
-              auditLogs: data.auditLogs,
-              adminNotes: data.adminNotes,
-              ratings: data.ratings,
-              payments: data.payments,
-              query: query,
-              canManageRiders: canManageRiders,
-              onOpenRiderProfile: onOpenRiderProfile,
-              onSetRiderStatus: onSetRiderStatus,
-              onSyncRiderStripe: onSyncRiderStripe,
-              onResetRiderStripe: onResetRiderStripe,
-              onRequestMoreInformation: onRequestRiderMoreInformation,
-              onReviewDocument: onReviewRiderDocument,
-              onRemoveProfilePhoto: onRemoveRiderProfilePhoto,
-              onStartRiderConversation: onStartRiderConversation,
-            ),
+            riders: data.riders,
+            deliveries: data.deliveries,
+            applications: data.riderApplications,
+            documents: data.riderDocuments,
+            onboardingEvents: data.riderOnboardingEvents,
+            driverPerformanceMetrics: data.driverPerformanceMetrics,
+            auditLogs: data.auditLogs,
+            adminNotes: data.adminNotes,
+            ratings: data.ratings,
+            payments: data.payments,
+            query: query,
+            canManageRiders: canManageRiders,
+            onOpenRiderProfile: onOpenRiderProfile,
+            onSetRiderStatus: onSetRiderStatus,
+            onSyncRiderStripe: onSyncRiderStripe,
+            onResetRiderStripe: onResetRiderStripe,
+            onRequestMoreInformation: onRequestRiderMoreInformation,
+            onReviewDocument: onReviewRiderDocument,
+            onRemoveProfilePhoto: onRemoveRiderProfilePhoto,
+            onStartRiderConversation: onStartRiderConversation,
+          ),
           AdminModule.verification => _RecordModule(
-              title: 'Verification',
-              subtitle: 'Rider verification and document review inputs.',
-              records: data.riders,
-              query: query,
-              fields: const [
-                'id',
-                'fullName',
-                'verificationStatus',
-                'approvalStatus',
-              ],
-              columns: const ['Rider', 'Verification', 'Approval', 'Updated'],
-              row: (record) => [
-                '${record['fullName'] ?? record['name'] ?? record['id']}',
-                '${record['verificationStatus'] ?? 'pending'}',
-                '${record['approvalStatus'] ?? 'pending'}',
-                _date(record['updatedAt'] ?? record['createdAt']),
-              ],
-              actions: canManageRiders
-                  ? (record) => _riderActions(
-                        record,
-                        onSetRiderStatus,
-                        onOpenRiderProfile,
-                        onSyncRiderStripe: onSyncRiderStripe,
-                        onResetRiderStripe: onResetRiderStripe,
-                        onRequestMoreInformation: onRequestRiderMoreInformation,
-                        onRemoveProfilePhoto: onRemoveRiderProfilePhoto,
-                      )
-                  : null,
-            ),
+            title: 'Verification',
+            subtitle: 'Rider verification and document review inputs.',
+            records: data.riders,
+            query: query,
+            fields: const [
+              'id',
+              'fullName',
+              'verificationStatus',
+              'approvalStatus',
+            ],
+            columns: const ['Rider', 'Verification', 'Approval', 'Updated'],
+            row: (record) => [
+              '${record['fullName'] ?? record['name'] ?? record['id']}',
+              '${record['verificationStatus'] ?? 'pending'}',
+              '${record['approvalStatus'] ?? 'pending'}',
+              _date(record['updatedAt'] ?? record['createdAt']),
+            ],
+            actions: canManageRiders
+                ? (record) => _riderActions(
+                    record,
+                    onSetRiderStatus,
+                    onOpenRiderProfile,
+                    onSyncRiderStripe: onSyncRiderStripe,
+                    onResetRiderStripe: onResetRiderStripe,
+                    onRequestMoreInformation: onRequestRiderMoreInformation,
+                    onRemoveProfilePhoto: onRemoveRiderProfilePhoto,
+                  )
+                : null,
+          ),
           AdminModule.support => _SupportOperationsModule(
-              tickets: data.supportTickets,
-              deliveries: data.deliveries,
-              payments: data.payments,
-              chats: data.chats,
-              adminNotes: data.adminNotes,
-              auditLogs: data.auditLogs,
-              query: query,
-              canManageIssues: canManageIssues,
-              onUpdateSupportTicket: onUpdateSupportTicket,
-              onOpenSupportConversation: onOpenSupportConversation,
-              onAddAdminNote: onAddAdminNote,
-            ),
+            tickets: data.supportTickets,
+            deliveries: data.deliveries,
+            payments: data.payments,
+            chats: data.chats,
+            adminNotes: data.adminNotes,
+            auditLogs: data.auditLogs,
+            query: query,
+            canManageIssues: canManageIssues,
+            onUpdateSupportTicket: onUpdateSupportTicket,
+            onOpenSupportConversation: onOpenSupportConversation,
+            onAddAdminNote: onAddAdminNote,
+          ),
           AdminModule.finance => _FinanceOperationsModule(
-              payments: data.payments,
-              users: data.users,
-              riders: data.riders,
-              payoutRequests: data.payoutRequests,
-              riderEarnings: data.riderEarnings,
-              riderWalletTransactions: data.riderWalletTransactions,
-              wallets: data.wallets,
-              walletTransactions: data.walletTransactions,
-              businessWallets: data.businessWallets,
-              businessInvoices: data.businessInvoices,
-              businessRothPurchases: data.businessRothPurchases,
-              deliveryTips: data.deliveryTips,
-              ratings: data.ratings,
-              deliveries: data.deliveries,
-              supportTickets: data.supportTickets,
-              auditLogs: data.auditLogs,
-              query: query,
-              canManageFinance: canManageFinance,
-              onUpdateFinanceWorkflow: onUpdateFinanceWorkflow,
-              onIssueRoth: onIssueRoth,
-              onIssueManualRothCredit: onIssueManualRothCredit,
-              onSetWalletFrozen: onSetWalletFrozen,
-              onProcessPayoutRequest: onProcessPayoutRequest,
-              onModerateRating: onModerateRating,
-              onSyncRiderStripe: onSyncRiderStripe,
-              onGenerateRiderStripeLink: onGenerateRiderStripeLink,
-              onOpenRiderStripeDashboard: onOpenRiderStripeDashboard,
-              onMarkRiderStripeInvestigation: onMarkRiderStripeInvestigation,
-            ),
+            payments: data.payments,
+            users: data.users,
+            riders: data.riders,
+            payoutRequests: data.payoutRequests,
+            riderEarnings: data.riderEarnings,
+            riderWalletTransactions: data.riderWalletTransactions,
+            wallets: data.wallets,
+            walletTransactions: data.walletTransactions,
+            businessWallets: data.businessWallets,
+            businessInvoices: data.businessInvoices,
+            businessRothPurchases: data.businessRothPurchases,
+            deliveryTips: data.deliveryTips,
+            ratings: data.ratings,
+            deliveries: data.deliveries,
+            supportTickets: data.supportTickets,
+            auditLogs: data.auditLogs,
+            query: query,
+            canManageFinance: canManageFinance,
+            onUpdateFinanceWorkflow: onUpdateFinanceWorkflow,
+            onIssueRoth: onIssueRoth,
+            onIssueManualRothCredit: onIssueManualRothCredit,
+            onSetWalletFrozen: onSetWalletFrozen,
+            onProcessPayoutRequest: onProcessPayoutRequest,
+            onModerateRating: onModerateRating,
+            onSyncRiderStripe: onSyncRiderStripe,
+            onGenerateRiderStripeLink: onGenerateRiderStripeLink,
+            onOpenRiderStripeDashboard: onOpenRiderStripeDashboard,
+            onMarkRiderStripeInvestigation: onMarkRiderStripeInvestigation,
+          ),
           AdminModule.healthPlus => _HealthPlusOperationsModule(
-              pickups: data.healthPlusPickups,
-              profiles: data.healthPlusProfiles,
-              schedules: data.recurringPickupSchedules,
-              custodyArchive: data.healthPlusCustodyArchive,
-              payments: data.healthPlusPayments,
-              deliveries: data.deliveries,
-              supportTickets: data.supportTickets,
-              query: query,
-              canManageHealthPlus: canManageHealthPlus,
-              onOpen: onOpenHealthPlusProfile,
-              onUpdateHealthPlusPickup: onUpdateHealthPlusPickup,
-              onUpdateHealthPlusProfile: onUpdateHealthPlusProfile,
-              onUpdateHealthPlusSchedule: onUpdateHealthPlusSchedule,
-            ),
+            pickups: data.healthPlusPickups,
+            profiles: data.healthPlusProfiles,
+            schedules: data.recurringPickupSchedules,
+            custodyArchive: data.healthPlusCustodyArchive,
+            payments: data.healthPlusPayments,
+            deliveries: data.deliveries,
+            supportTickets: data.supportTickets,
+            query: query,
+            canManageHealthPlus: canManageHealthPlus,
+            onOpen: onOpenHealthPlusProfile,
+            onUpdateHealthPlusPickup: onUpdateHealthPlusPickup,
+            onUpdateHealthPlusProfile: onUpdateHealthPlusProfile,
+            onUpdateHealthPlusSchedule: onUpdateHealthPlusSchedule,
+          ),
           AdminModule.business => _BusinessOperationsModule(
-              accounts: data.businessAccounts,
-              deliveries: data.deliveries,
-              healthPlusPickups: data.healthPlusPickups,
-              giftRecords: [...data.giftOrders, ...data.giftRequests],
-              businessWallets: data.businessWallets,
-              businessInvoices: data.businessInvoices,
-              businessRothPurchases: data.businessRothPurchases,
-              auditLogs: data.auditLogs,
-              payments: data.payments,
-              supportTickets: data.supportTickets,
-              query: query,
-              onOpenAccountProfile: onOpenAccountProfile,
-              onSetBusinessAccountStatus: onSetBusinessAccountStatus,
-              onSetBusinessOperationStatus: onSetBusinessOperationStatus,
-              onCreateBusinessInvoice: onCreateBusinessInvoice,
-              onChangeBusinessMemberRole: onChangeBusinessMemberRole,
-              onRemoveBusinessMember: onRemoveBusinessMember,
-              onRequestDuplicateMerge: onRequestDuplicateMerge,
-            ),
+            accounts: data.businessAccounts,
+            deliveries: data.deliveries,
+            healthPlusPickups: data.healthPlusPickups,
+            giftRecords: [...data.giftOrders, ...data.giftRequests],
+            businessWallets: data.businessWallets,
+            businessInvoices: data.businessInvoices,
+            businessRothPurchases: data.businessRothPurchases,
+            auditLogs: data.auditLogs,
+            payments: data.payments,
+            supportTickets: data.supportTickets,
+            query: query,
+            onOpenAccountProfile: onOpenAccountProfile,
+            onSetBusinessAccountStatus: onSetBusinessAccountStatus,
+            onSetBusinessOperationStatus: onSetBusinessOperationStatus,
+            onCreateBusinessInvoice: onCreateBusinessInvoice,
+            onChangeBusinessMemberRole: onChangeBusinessMemberRole,
+            onRemoveBusinessMember: onRemoveBusinessMember,
+            onRequestDuplicateMerge: onRequestDuplicateMerge,
+          ),
           AdminModule.gifts => _GiftsOperationsModule(
-              gifts: [...data.giftOrders, ...data.giftRequests],
-              brands: data.giftBrands,
-              participants: data.giftCampaignParticipants,
-              campaignMatches: data.giftCampaignMatches,
-              deliveries: data.deliveries,
-              payments: data.payments,
-              supportTickets: data.supportTickets,
-              auditLogs: data.auditLogs,
-              query: query,
-              canManageIssues: canManageIssues,
-              onUpdateGiftWorkflow: onUpdateGiftWorkflow,
-              onUpdateGiftCampaignParticipant: onUpdateGiftCampaignParticipant,
-              onSetGiftBrandStatus: onSetGiftBrandStatus,
-              onEditGiftBrandPartner: onEditGiftBrandPartner,
-              onSuggestGiftCampaignMatch: onSuggestGiftCampaignMatch,
-              onApproveGiftCampaignMatch: onApproveGiftCampaignMatch,
-              onBulkGiftCampaignAction: onBulkGiftCampaignAction,
-              onEditGiftRequest: onEditGiftRequest,
-              onUpdateGiftStoryAccess: onUpdateGiftStoryAccess,
-              onUpdateGiftStoryMedia: onUpdateGiftStoryMedia,
-              onUpdateGiftWorkspace: onUpdateGiftWorkspace,
-            ),
+            gifts: [...data.giftOrders, ...data.giftRequests],
+            brands: data.giftBrands,
+            participants: data.giftCampaignParticipants,
+            campaignMatches: data.giftCampaignMatches,
+            deliveries: data.deliveries,
+            payments: data.payments,
+            supportTickets: data.supportTickets,
+            auditLogs: data.auditLogs,
+            query: query,
+            canManageIssues: canManageIssues,
+            onUpdateGiftWorkflow: onUpdateGiftWorkflow,
+            onUpdateGiftCampaignParticipant: onUpdateGiftCampaignParticipant,
+            onSetGiftBrandStatus: onSetGiftBrandStatus,
+            onEditGiftBrandPartner: onEditGiftBrandPartner,
+            onSuggestGiftCampaignMatch: onSuggestGiftCampaignMatch,
+            onApproveGiftCampaignMatch: onApproveGiftCampaignMatch,
+            onBulkGiftCampaignAction: onBulkGiftCampaignAction,
+            onEditGiftRequest: onEditGiftRequest,
+            onUpdateGiftStoryAccess: onUpdateGiftStoryAccess,
+            onUpdateGiftStoryMedia: onUpdateGiftStoryMedia,
+            onUpdateGiftWorkspace: onUpdateGiftWorkspace,
+          ),
           AdminModule.troubleshooting => _TroubleshootingModule(
-              deliveries: data.deliveries,
-              payments: data.payments,
-              supportTickets: data.supportTickets,
-              ratings: data.ratings,
-              query: query,
-              canManageIssues: canManageIssues,
-              onOpenDelivery: onOpenDeliveryProfile,
-              onUpdateSupportTicket: onUpdateSupportTicket,
-              onSetDeliveryOperationStatus: onSetDeliveryOperationStatus,
-              onUpdateFinanceWorkflow: onUpdateFinanceWorkflow,
-              onModerateRating: onModerateRating,
-            ),
+            deliveries: data.deliveries,
+            payments: data.payments,
+            supportTickets: data.supportTickets,
+            ratings: data.ratings,
+            query: query,
+            canManageIssues: canManageIssues,
+            onOpenDelivery: onOpenDeliveryProfile,
+            onUpdateSupportTicket: onUpdateSupportTicket,
+            onSetDeliveryOperationStatus: onSetDeliveryOperationStatus,
+            onUpdateFinanceWorkflow: onUpdateFinanceWorkflow,
+            onModerateRating: onModerateRating,
+          ),
           AdminModule.analytics => _HistoricalAnalyticsModule(
-              metrics: metrics,
-              deliveries: data.deliveries,
-              payments: data.payments,
-              users: data.users,
-              riders: data.riders,
-              driverPerformanceMetrics: data.driverPerformanceMetrics,
-              giftCampaignMatches: data.giftCampaignMatches,
-              irisLearningOutliers: data.irisLearningOutliers,
-              healthPlusPickups: data.healthPlusPickups,
-              gifts: [...data.giftOrders, ...data.giftRequests],
-              supportTickets: data.supportTickets,
-            ),
+            metrics: metrics,
+            deliveries: data.deliveries,
+            payments: data.payments,
+            users: data.users,
+            riders: data.riders,
+            driverPerformanceMetrics: data.driverPerformanceMetrics,
+            giftCampaignMatches: data.giftCampaignMatches,
+            irisLearningOutliers: data.irisLearningOutliers,
+            healthPlusPickups: data.healthPlusPickups,
+            gifts: [...data.giftOrders, ...data.giftRequests],
+            supportTickets: data.supportTickets,
+          ),
           AdminModule.audit => _AuditCentreModule(
-              auditLogs: data.auditLogs,
-              users: data.users,
-              riders: data.riders,
-              businessAccounts: data.businessAccounts,
-              deliveries: data.deliveries,
-              gifts: [...data.giftOrders, ...data.giftRequests],
-              healthPlusPickups: data.healthPlusPickups,
-              supportTickets: data.supportTickets,
-              payments: data.payments,
-              query: query,
-            ),
+            auditLogs: data.auditLogs,
+            users: data.users,
+            riders: data.riders,
+            businessAccounts: data.businessAccounts,
+            deliveries: data.deliveries,
+            gifts: [...data.giftOrders, ...data.giftRequests],
+            healthPlusPickups: data.healthPlusPickups,
+            supportTickets: data.supportTickets,
+            payments: data.payments,
+            query: query,
+          ),
           AdminModule.chat => _ChatModule(
-              records: data.chats,
-              messageReports: data.messageReports,
-              selectedChatMessages: selectedChatMessages,
-              query: query,
-              message: chatMessage,
-              selectedChat: selectedChat,
-              onSelectChat: onSelectChat,
-              onSendChatMessage: onSendChatMessage,
-              onResolveMessageReport: onResolveMessageReport,
-            ),
+            records: data.chats,
+            messageReports: data.messageReports,
+            selectedChatMessages: selectedChatMessages,
+            query: query,
+            message: chatMessage,
+            selectedChat: selectedChat,
+            onSelectChat: onSelectChat,
+            onSendChatMessage: onSendChatMessage,
+            onResolveMessageReport: onResolveMessageReport,
+          ),
           AdminModule.settings => _SettingsModule(
-              canManageAdmins: canManageAdmins,
-              adminUsers: data.adminUsers,
-              platformConfig: data.platformConfig,
-              platformStatus: data.platformStatus,
-              platformNotices: data.platformNotices,
-              platformVersions: data.platformVersions,
-              notifications: data.notifications,
-              auditLogs: data.auditLogs,
-              inviteEmail: adminInviteEmail,
-              inviteNote: adminInviteNote,
-              inviteRole: adminInviteRole,
-              onInviteRoleChanged: onAdminInviteRoleChanged,
-              onCreateAdminUser: onCreateAdminUser,
-              onSetAdminUserStatus: onSetAdminUserStatus,
-              onSetAdminUserRole: onSetAdminUserRole,
-              announcementTitle: announcementTitle,
-              announcementBody: announcementBody,
-              onSendPlatformAnnouncement: onSendPlatformAnnouncement,
-              onUpdatePlatformRecord: onUpdatePlatformRecord,
-              onRetryNotificationDelivery: onRetryNotificationDelivery,
-            ),
+            canManageAdmins: canManageAdmins,
+            adminUsers: data.adminUsers,
+            platformConfig: data.platformConfig,
+            platformStatus: data.platformStatus,
+            platformNotices: data.platformNotices,
+            platformVersions: data.platformVersions,
+            notifications: data.notifications,
+            auditLogs: data.auditLogs,
+            inviteEmail: adminInviteEmail,
+            inviteNote: adminInviteNote,
+            inviteRole: adminInviteRole,
+            onInviteRoleChanged: onAdminInviteRoleChanged,
+            onCreateAdminUser: onCreateAdminUser,
+            onSetAdminUserStatus: onSetAdminUserStatus,
+            onSetAdminUserRole: onSetAdminUserRole,
+            announcementTitle: announcementTitle,
+            announcementBody: announcementBody,
+            onSendPlatformAnnouncement: onSendPlatformAnnouncement,
+            onUpdatePlatformRecord: onUpdatePlatformRecord,
+            onRetryNotificationDelivery: onRetryNotificationDelivery,
+          ),
         },
       ],
     );
@@ -5092,11 +5121,11 @@ class _HealthPlusOperationsModule extends StatelessWidget {
   final bool canManageHealthPlus;
   final ValueChanged<Map<String, dynamic>> onOpen;
   final Future<void> Function(Map<String, dynamic>, String)
-      onUpdateHealthPlusPickup;
+  onUpdateHealthPlusPickup;
   final Future<void> Function(Map<String, dynamic>, String)
-      onUpdateHealthPlusProfile;
+  onUpdateHealthPlusProfile;
   final Future<void> Function(Map<String, dynamic>, String)
-      onUpdateHealthPlusSchedule;
+  onUpdateHealthPlusSchedule;
 
   @override
   Widget build(BuildContext context) {
@@ -5364,29 +5393,29 @@ class _HealthPlusOperationsModule extends StatelessWidget {
           ],
           actions: canManageHealthPlus
               ? (record) => [
-                    _MiniAction(
-                      label: 'Approve',
-                      onPressed: () => unawaited(
-                        onUpdateHealthPlusSchedule(record, 'approved'),
-                      ),
+                  _MiniAction(
+                    label: 'Approve',
+                    onPressed: () => unawaited(
+                      onUpdateHealthPlusSchedule(record, 'approved'),
                     ),
-                    _MiniAction(
-                      label: 'Pause',
-                      onPressed: () => unawaited(
-                          onUpdateHealthPlusSchedule(record, 'paused')),
+                  ),
+                  _MiniAction(
+                    label: 'Pause',
+                    onPressed: () =>
+                        unawaited(onUpdateHealthPlusSchedule(record, 'paused')),
+                  ),
+                  _MiniAction(
+                    label: 'Resume',
+                    onPressed: () =>
+                        unawaited(onUpdateHealthPlusSchedule(record, 'active')),
+                  ),
+                  _MiniAction(
+                    label: 'Cancel',
+                    onPressed: () => unawaited(
+                      onUpdateHealthPlusSchedule(record, 'cancelled'),
                     ),
-                    _MiniAction(
-                      label: 'Resume',
-                      onPressed: () => unawaited(
-                          onUpdateHealthPlusSchedule(record, 'active')),
-                    ),
-                    _MiniAction(
-                      label: 'Cancel',
-                      onPressed: () => unawaited(
-                        onUpdateHealthPlusSchedule(record, 'cancelled'),
-                      ),
-                    ),
-                  ]
+                  ),
+                ]
               : null,
         ),
         const SizedBox(height: 18),
@@ -5455,15 +5484,15 @@ class _BusinessOperationsModule extends StatelessWidget {
   final String query;
   final void Function(Map<String, dynamic>, String) onOpenAccountProfile;
   final Future<void> Function(Map<String, dynamic>, String)
-      onSetBusinessAccountStatus;
+  onSetBusinessAccountStatus;
   final Future<void> Function(Map<String, dynamic>, String)
-      onSetBusinessOperationStatus;
+  onSetBusinessOperationStatus;
   final Future<void> Function() onCreateBusinessInvoice;
   final Future<void> Function(Map<String, dynamic>, String)
-      onChangeBusinessMemberRole;
+  onChangeBusinessMemberRole;
   final Future<void> Function(Map<String, dynamic>) onRemoveBusinessMember;
   final Future<void> Function(Map<String, dynamic>, Map<String, dynamic>)
-      onRequestDuplicateMerge;
+  onRequestDuplicateMerge;
 
   @override
   Widget build(BuildContext context) {
@@ -5604,174 +5633,172 @@ class _BusinessOperationsModule extends StatelessWidget {
   }
 
   Widget _businessCompaniesWorkspace() => _tabWorkspace(
-        child: _RecordModule(
-          title: 'Business Companies',
-          subtitle:
-              'Company profiles, approval status, team members and linked business deliveries.',
-          records: accounts,
-          query: query,
-          fields: const [
-            'id',
-            'businessId',
-            'businessName',
-            'companyName',
-            'ownerName',
-            'ownerEmail',
-            'contactName',
-            'contactEmail',
-            'billingEmail',
-            'status',
-            'verificationStatus',
-          ],
-          columns: const ['Business', 'Contact', 'Team', 'Status'],
-          row: (record) {
-            final id = _businessAccountId(record);
-            return [
-              '${record['businessName'] ?? record['companyName'] ?? id}\n$id',
-              '${record['contactName'] ?? record['ownerName'] ?? ''}\n${record['contactEmail'] ?? record['billingEmail'] ?? record['ownerEmail'] ?? ''}',
-              '${_membersFor(id).length} members\n${_deliveriesFor(id).length} deliveries',
-              '${record['status'] ?? 'pending'} / ${record['verificationStatus'] ?? 'pending'}',
-            ];
-          },
-          actions: (record) => [
-            ..._accountActions(
-              account: record,
-              accountType: 'business',
-              allAccounts: accounts,
-              onOpen: onOpenAccountProfile,
-              onSetStatus: onSetBusinessAccountStatus,
-              onRequestDuplicateMerge: onRequestDuplicateMerge,
-            ),
-            for (final action in const [
-              ('Verify', 'verified'),
-              ('Manager', 'manager_assigned'),
-              ('Close review', 'business_close_review'),
-            ])
-              _MiniAction(
-                label: action.$1,
-                onPressed: () =>
-                    unawaited(onSetBusinessOperationStatus(record, action.$2)),
-              ),
-          ],
+    child: _RecordModule(
+      title: 'Business Companies',
+      subtitle:
+          'Company profiles, approval status, team members and linked business deliveries.',
+      records: accounts,
+      query: query,
+      fields: const [
+        'id',
+        'businessId',
+        'businessName',
+        'companyName',
+        'ownerName',
+        'ownerEmail',
+        'contactName',
+        'contactEmail',
+        'billingEmail',
+        'status',
+        'verificationStatus',
+      ],
+      columns: const ['Business', 'Contact', 'Team', 'Status'],
+      row: (record) {
+        final id = _businessAccountId(record);
+        return [
+          '${record['businessName'] ?? record['companyName'] ?? id}\n$id',
+          '${record['contactName'] ?? record['ownerName'] ?? ''}\n${record['contactEmail'] ?? record['billingEmail'] ?? record['ownerEmail'] ?? ''}',
+          '${_membersFor(id).length} members\n${_deliveriesFor(id).length} deliveries',
+          '${record['status'] ?? 'pending'} / ${record['verificationStatus'] ?? 'pending'}',
+        ];
+      },
+      actions: (record) => [
+        ..._accountActions(
+          account: record,
+          accountType: 'business',
+          allAccounts: accounts,
+          onOpen: onOpenAccountProfile,
+          onSetStatus: onSetBusinessAccountStatus,
+          onRequestDuplicateMerge: onRequestDuplicateMerge,
         ),
-      );
+        for (final action in const [
+          ('Verify', 'verified'),
+          ('Manager', 'manager_assigned'),
+          ('Close review', 'business_close_review'),
+        ])
+          _MiniAction(
+            label: action.$1,
+            onPressed: () =>
+                unawaited(onSetBusinessOperationStatus(record, action.$2)),
+          ),
+      ],
+    ),
+  );
 
   Widget _businessMembersWorkspace(
     List<Map<String, dynamic>> members,
-  ) =>
-      _tabWorkspace(
-        child: _RecordModule(
-          title: 'Business Members',
-          subtitle:
-              'Owners, invites, permissions, roles, removal, history and audit.',
-          records: members,
-          query: query,
-          fields: const [
-            'businessName',
-            'businessId',
-            'name',
-            'email',
-            'userId',
-            'role',
-            'status',
-            'inviteStatus',
-          ],
-          columns: const ['Member', 'Email / UID', 'Role', 'Status'],
-          row: (record) => [
-            '${record['name'] ?? record['email'] ?? 'Member'}\n${record['businessName'] ?? record['businessId'] ?? ''}',
-            '${record['email'] ?? record['userId'] ?? record['uid'] ?? ''}',
-            '${record['role'] ?? record['permission'] ?? 'member'}',
-            '${record['status'] ?? record['inviteStatus'] ?? 'active'}',
-          ],
-          actions: (record) {
-            final editable = (record['memberIndex'] is int) &&
-                (record['memberIndex'] as int) >= 0;
-            return [
-              if (editable)
-                for (final role in const [
-                  'owner',
-                  'admin',
-                  'operations',
-                  'finance',
-                  'viewer',
-                ])
-                  _MiniAction(
-                    label: role,
-                    onPressed: () =>
-                        unawaited(onChangeBusinessMemberRole(record, role)),
-                  ),
-              if (editable)
-                _MiniAction(
-                  label: 'Remove',
-                  onPressed: () => unawaited(onRemoveBusinessMember(record)),
-                ),
-            ];
-          },
-        ),
-      );
+  ) => _tabWorkspace(
+    child: _RecordModule(
+      title: 'Business Members',
+      subtitle:
+          'Owners, invites, permissions, roles, removal, history and audit.',
+      records: members,
+      query: query,
+      fields: const [
+        'businessName',
+        'businessId',
+        'name',
+        'email',
+        'userId',
+        'role',
+        'status',
+        'inviteStatus',
+      ],
+      columns: const ['Member', 'Email / UID', 'Role', 'Status'],
+      row: (record) => [
+        '${record['name'] ?? record['email'] ?? 'Member'}\n${record['businessName'] ?? record['businessId'] ?? ''}',
+        '${record['email'] ?? record['userId'] ?? record['uid'] ?? ''}',
+        '${record['role'] ?? record['permission'] ?? 'member'}',
+        '${record['status'] ?? record['inviteStatus'] ?? 'active'}',
+      ],
+      actions: (record) {
+        final editable =
+            (record['memberIndex'] is int) &&
+            (record['memberIndex'] as int) >= 0;
+        return [
+          if (editable)
+            for (final role in const [
+              'owner',
+              'admin',
+              'operations',
+              'finance',
+              'viewer',
+            ])
+              _MiniAction(
+                label: role,
+                onPressed: () =>
+                    unawaited(onChangeBusinessMemberRole(record, role)),
+              ),
+          if (editable)
+            _MiniAction(
+              label: 'Remove',
+              onPressed: () => unawaited(onRemoveBusinessMember(record)),
+            ),
+        ];
+      },
+    ),
+  );
 
   Widget _businessDeliveriesWorkspace(
     List<Map<String, dynamic>> records,
-  ) =>
-      _tabWorkspace(
-        child: _RecordModule(
-          title: 'Business Deliveries',
-          subtitle:
-              'Business-created deliveries with tracking, exceptions, IRIS, Health+, Gifts, Vanguard and history.',
-          records: records,
-          query: query,
-          fields: const [
-            'id',
-            'requestId',
-            'trackingId',
-            'businessId',
-            'businessName',
-            'senderName',
-            'recipientName',
-            'status',
-            'deliveryStatus',
-            'serviceType',
-            'irisReviewStatus',
-          ],
-          columns: const ['Delivery', 'Business', 'Route', 'Status'],
-          row: (record) => [
-            '${_recordId(record)}\n${record['trackingId'] ?? ''}',
-            _businessNameFor(record),
-            '${record['pickupAddress'] ?? record['pickup'] ?? 'Pickup'} -> ${record['dropoffAddress'] ?? record['dropoff'] ?? 'Dropoff'}',
-            '${record['status'] ?? record['deliveryStatus'] ?? 'unknown'} / ${record['irisReviewStatus'] ?? record['paymentStatus'] ?? 'review n/a'}',
-          ],
-        ),
-      );
+  ) => _tabWorkspace(
+    child: _RecordModule(
+      title: 'Business Deliveries',
+      subtitle:
+          'Business-created deliveries with tracking, exceptions, IRIS, Health+, Gifts, Vanguard and history.',
+      records: records,
+      query: query,
+      fields: const [
+        'id',
+        'requestId',
+        'trackingId',
+        'businessId',
+        'businessName',
+        'senderName',
+        'recipientName',
+        'status',
+        'deliveryStatus',
+        'serviceType',
+        'irisReviewStatus',
+      ],
+      columns: const ['Delivery', 'Business', 'Route', 'Status'],
+      row: (record) => [
+        '${_recordId(record)}\n${record['trackingId'] ?? ''}',
+        _businessNameFor(record),
+        '${record['pickupAddress'] ?? record['pickup'] ?? 'Pickup'} -> ${record['dropoffAddress'] ?? record['dropoff'] ?? 'Dropoff'}',
+        '${record['status'] ?? record['deliveryStatus'] ?? 'unknown'} / ${record['irisReviewStatus'] ?? record['paymentStatus'] ?? 'review n/a'}',
+      ],
+    ),
+  );
 
   Widget _businessHealthWorkspace(
     List<Map<String, dynamic>> records,
-  ) =>
-      _tabWorkspace(
-        child: _RecordModule(
-          title: 'Business Health+',
-          subtitle:
-              'Health+ jobs created under Business accounts with intervention kept in Health+ authority.',
-          records: records,
-          query: query,
-          fields: const [
-            'id',
-            'businessId',
-            'businessName',
-            'patientName',
-            'customerName',
-            'senderName',
-            'pharmacyName',
-            'status',
-          ],
-          columns: const ['Record', 'Customer', 'Pharmacy', 'Status'],
-          row: (record) => [
-            '${_recordId(record)}\n${_businessNameFor(record)}',
-            '${record['patientName'] ?? record['customerName'] ?? record['senderName'] ?? ''}',
-            '${record['pharmacyName'] ?? record['pharmacyAddress'] ?? ''}',
-            '${record['status'] ?? 'scheduled'}',
-          ],
-        ),
-      );
+  ) => _tabWorkspace(
+    child: _RecordModule(
+      title: 'Business Health+',
+      subtitle:
+          'Health+ jobs created under Business accounts with intervention kept in Health+ authority.',
+      records: records,
+      query: query,
+      fields: const [
+        'id',
+        'businessId',
+        'businessName',
+        'patientName',
+        'customerName',
+        'senderName',
+        'pharmacyName',
+        'status',
+      ],
+      columns: const ['Record', 'Customer', 'Pharmacy', 'Status'],
+      row: (record) => [
+        '${_recordId(record)}\n${_businessNameFor(record)}',
+        '${record['patientName'] ?? record['customerName'] ?? record['senderName'] ?? ''}',
+        '${record['pharmacyName'] ?? record['pharmacyAddress'] ?? ''}',
+        '${record['status'] ?? 'scheduled'}',
+      ],
+    ),
+  );
 
   Widget _businessGiftsWorkspace(List<Map<String, dynamic>> records) =>
       _tabWorkspace(
@@ -5802,127 +5829,79 @@ class _BusinessOperationsModule extends StatelessWidget {
 
   Widget _businessVanguardWorkspace(
     List<Map<String, dynamic>> records,
-  ) =>
-      _tabWorkspace(
-        child: _RecordModule(
-          title: 'Business Vanguard',
-          subtitle:
-              'Vanguard status across business deliveries, selected, policy-applied and required handling.',
-          records: records,
-          query: query,
-          fields: const [
-            'id',
-            'requestId',
-            'businessId',
-            'businessName',
-            'status',
-            'serviceType',
-            'vanguardSource',
-            'vanguardPolicySource',
-          ],
-          columns: const ['Delivery', 'Service', 'Status', 'Vanguard Source'],
-          row: (record) => [
-            '${_recordId(record)}\n${_businessNameFor(record)}',
-            '${record['serviceType'] ?? record['service'] ?? 'business'}',
-            '${record['status'] ?? record['deliveryStatus'] ?? 'active'}',
-            '${record['vanguardSource'] ?? record['vanguardPolicySource'] ?? (record['vanguardRequired'] == true ? 'required' : 'selected')}',
-          ],
-        ),
-      );
+  ) => _tabWorkspace(
+    child: _RecordModule(
+      title: 'Business Vanguard',
+      subtitle:
+          'Vanguard status across business deliveries, selected, policy-applied and required handling.',
+      records: records,
+      query: query,
+      fields: const [
+        'id',
+        'requestId',
+        'businessId',
+        'businessName',
+        'status',
+        'serviceType',
+        'vanguardSource',
+        'vanguardPolicySource',
+      ],
+      columns: const ['Delivery', 'Service', 'Status', 'Vanguard Source'],
+      row: (record) => [
+        '${_recordId(record)}\n${_businessNameFor(record)}',
+        '${record['serviceType'] ?? record['service'] ?? 'business'}',
+        '${record['status'] ?? record['deliveryStatus'] ?? 'active'}',
+        '${record['vanguardSource'] ?? record['vanguardPolicySource'] ?? (record['vanguardRequired'] == true ? 'required' : 'selected')}',
+      ],
+    ),
+  );
 
   Widget _businessInvoicesWorkspace(
     List<Map<String, dynamic>> invoices,
-  ) =>
-      _tabWorkspace(
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Align(
-              alignment: Alignment.centerRight,
-              child: FilledButton.icon(
-                onPressed: () => unawaited(onCreateBusinessInvoice()),
-                icon: const Icon(Icons.receipt_long_rounded),
-                label: const Text('Generate invoice'),
-              ),
-            ),
-            const SizedBox(height: 12),
-            _RecordModule(
-              title: 'Business Invoices',
-              subtitle:
-                  'Invoice generation, review, history, editing and audit.',
-              records: invoices,
-              query: query,
-              fields: const [
-                'id',
-                'invoiceId',
-                'invoiceNumber',
-                'businessId',
-                'businessName',
-                'status',
-                'invoiceStatus',
-                'billingEmail',
-              ],
-              columns: const ['Invoice', 'Breakdown', 'Status', 'Amount'],
-              row: (record) => [
-                '${record['invoiceNumber'] ?? record['invoiceId'] ?? _recordId(record)}\n${_businessNameFor(record)}',
-                '${record['billingPeriodStart'] ?? 'Period'} -> ${record['billingPeriodEnd'] ?? ''}\n${(record['lineItems'] as List?)?.length ?? record['invoiceDeliveryCount'] ?? 0} line item(s)',
-                '${record['status'] ?? record['invoiceStatus'] ?? 'draft'}',
-                _money(
-                  record['total'] ??
-                      record['invoiceAmount'] ??
-                      record['balanceDue'],
-                ),
-              ],
-              actions: (record) => [
-                for (final action in const [
-                  ('Issue', 'invoice_issue_review'),
-                  ('Cancel', 'invoice_cancel_review'),
-                  ('Adjust', 'subscription_adjust_review'),
-                ])
-                  _MiniAction(
-                    label: action.$1,
-                    onPressed: () => unawaited(
-                        onSetBusinessOperationStatus(record, action.$2)),
-                  ),
-              ],
-            ),
-          ],
+  ) => _tabWorkspace(
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Align(
+          alignment: Alignment.centerRight,
+          child: FilledButton.icon(
+            onPressed: () => unawaited(onCreateBusinessInvoice()),
+            icon: const Icon(Icons.receipt_long_rounded),
+            label: const Text('Generate invoice'),
+          ),
         ),
-      );
-
-  Widget _businessRothWorkspace(
-    List<Map<String, dynamic>> roth,
-  ) =>
-      _tabWorkspace(
-        child: _RecordModule(
-          title: 'Business Roth',
-          subtitle:
-              'Business Roth purchases, usage, ledger, history and audit.',
-          records: roth,
+        const SizedBox(height: 12),
+        _RecordModule(
+          title: 'Business Invoices',
+          subtitle: 'Invoice generation, review, history, editing and audit.',
+          records: invoices,
           query: query,
           fields: const [
             'id',
+            'invoiceId',
+            'invoiceNumber',
             'businessId',
             'businessName',
-            'purchaseId',
             'status',
-            'direction',
-            'type',
-            'source',
+            'invoiceStatus',
+            'billingEmail',
           ],
-          columns: const ['Business', 'Source', 'Status', 'Amount'],
+          columns: const ['Invoice', 'Breakdown', 'Status', 'Amount'],
           row: (record) => [
-            '${_businessNameFor(record)}\n${record['purchaseId'] ?? record['businessId'] ?? _recordId(record)}',
-            '${record['type'] ?? record['source'] ?? 'business_roth'}\n${record['note'] ?? record['reason'] ?? ''}',
-            '${record['status'] ?? record['direction'] ?? 'active'}',
+            '${record['invoiceNumber'] ?? record['invoiceId'] ?? _recordId(record)}\n${_businessNameFor(record)}',
+            '${record['billingPeriodStart'] ?? 'Period'} -> ${record['billingPeriodEnd'] ?? ''}\n${(record['lineItems'] as List?)?.length ?? record['invoiceDeliveryCount'] ?? 0} line item(s)',
+            '${record['status'] ?? record['invoiceStatus'] ?? 'draft'}',
             _money(
-                record['amount'] ?? record['amountGbp'] ?? record['balance']),
+              record['total'] ??
+                  record['invoiceAmount'] ??
+                  record['balanceDue'],
+            ),
           ],
           actions: (record) => [
             for (final action in const [
-              ('Credit', 'roth_credit_review'),
-              ('Debit', 'roth_debit_review'),
-              ('Freeze', 'roth_freeze_review'),
+              ('Issue', 'invoice_issue_review'),
+              ('Cancel', 'invoice_cancel_review'),
+              ('Adjust', 'subscription_adjust_review'),
             ])
               _MiniAction(
                 label: action.$1,
@@ -5931,63 +5910,98 @@ class _BusinessOperationsModule extends StatelessWidget {
               ),
           ],
         ),
-      );
+      ],
+    ),
+  );
+
+  Widget _businessRothWorkspace(
+    List<Map<String, dynamic>> roth,
+  ) => _tabWorkspace(
+    child: _RecordModule(
+      title: 'Business Roth',
+      subtitle: 'Business Roth purchases, usage, ledger, history and audit.',
+      records: roth,
+      query: query,
+      fields: const [
+        'id',
+        'businessId',
+        'businessName',
+        'purchaseId',
+        'status',
+        'direction',
+        'type',
+        'source',
+      ],
+      columns: const ['Business', 'Source', 'Status', 'Amount'],
+      row: (record) => [
+        '${_businessNameFor(record)}\n${record['purchaseId'] ?? record['businessId'] ?? _recordId(record)}',
+        '${record['type'] ?? record['source'] ?? 'business_roth'}\n${record['note'] ?? record['reason'] ?? ''}',
+        '${record['status'] ?? record['direction'] ?? 'active'}',
+        _money(record['amount'] ?? record['amountGbp'] ?? record['balance']),
+      ],
+      actions: (record) => [
+        for (final action in const [
+          ('Credit', 'roth_credit_review'),
+          ('Debit', 'roth_debit_review'),
+          ('Freeze', 'roth_freeze_review'),
+        ])
+          _MiniAction(
+            label: action.$1,
+            onPressed: () =>
+                unawaited(onSetBusinessOperationStatus(record, action.$2)),
+          ),
+      ],
+    ),
+  );
 
   Widget _businessAnalyticsWorkspace(
     List<Map<String, dynamic>> analytics,
-  ) =>
-      _tabWorkspace(
-        child: _RecordModule(
-          title: 'Business Analytics',
-          subtitle:
-              'Per-business delivery volume, spend, service mix, Vanguard usage, Health+ and Gifts volume.',
-          records: analytics,
-          query: query,
-          fields: const ['businessName', 'businessId'],
-          columns: const [
-            'Business',
-            'Volume / Spend',
-            'On-time',
-            'Service Mix'
-          ],
-          row: (record) => [
-            '${record['businessName'] ?? 'Business'}',
-            '${record['monthlyDeliveries'] ?? 0} deliveries\n${_money(record['spend'])} spend',
-            '${(_numberFrom(record['onTimeRate'])).toStringAsFixed(1)}% complete/on-time proxy',
-            'Vanguard ${record['vanguardUsage'] ?? 0}\nHealth+ ${record['healthUsage'] ?? 0}\nGifts ${record['giftsUsage'] ?? 0}',
-          ],
-        ),
-      );
+  ) => _tabWorkspace(
+    child: _RecordModule(
+      title: 'Business Analytics',
+      subtitle:
+          'Per-business delivery volume, spend, service mix, Vanguard usage, Health+ and Gifts volume.',
+      records: analytics,
+      query: query,
+      fields: const ['businessName', 'businessId'],
+      columns: const ['Business', 'Volume / Spend', 'On-time', 'Service Mix'],
+      row: (record) => [
+        '${record['businessName'] ?? 'Business'}',
+        '${record['monthlyDeliveries'] ?? 0} deliveries\n${_money(record['spend'])} spend',
+        '${(_numberFrom(record['onTimeRate'])).toStringAsFixed(1)}% complete/on-time proxy',
+        'Vanguard ${record['vanguardUsage'] ?? 0}\nHealth+ ${record['healthUsage'] ?? 0}\nGifts ${record['giftsUsage'] ?? 0}',
+      ],
+    ),
+  );
 
   Widget _businessAuditWorkspace(
     List<Map<String, dynamic>> audit,
-  ) =>
-      _tabWorkspace(
-        child: _RecordModule(
-          title: 'Business Audit Log',
-          subtitle:
-              'Company, member, delivery, invoice, Roth and admin intervention events tied to Business accounts.',
-          records: audit,
-          query: query,
-          fields: const [
-            'businessId',
-            'businessName',
-            'action',
-            'actionType',
-            'recordType',
-            'recordId',
-            'adminEmail',
-            'reason',
-          ],
-          columns: const ['Action', 'Record', 'Admin', 'Reason / Time'],
-          row: (record) => [
-            '${record['actionType'] ?? record['action'] ?? 'Business action'}\n${_businessNameFor(record)}',
-            '${record['recordType'] ?? ''}\n${record['recordId'] ?? record['businessId'] ?? ''}',
-            '${record['adminEmail'] ?? record['adminId'] ?? 'admin'}',
-            '${record['reason'] ?? ''}\n${_date(record['createdAt'] ?? record['timestamp'])}',
-          ],
-        ),
-      );
+  ) => _tabWorkspace(
+    child: _RecordModule(
+      title: 'Business Audit Log',
+      subtitle:
+          'Company, member, delivery, invoice, Roth and admin intervention events tied to Business accounts.',
+      records: audit,
+      query: query,
+      fields: const [
+        'businessId',
+        'businessName',
+        'action',
+        'actionType',
+        'recordType',
+        'recordId',
+        'adminEmail',
+        'reason',
+      ],
+      columns: const ['Action', 'Record', 'Admin', 'Reason / Time'],
+      row: (record) => [
+        '${record['actionType'] ?? record['action'] ?? 'Business action'}\n${_businessNameFor(record)}',
+        '${record['recordType'] ?? ''}\n${record['recordId'] ?? record['businessId'] ?? ''}',
+        '${record['adminEmail'] ?? record['adminId'] ?? 'admin'}',
+        '${record['reason'] ?? ''}\n${_date(record['createdAt'] ?? record['timestamp'])}',
+      ],
+    ),
+  );
 
   Widget _tabWorkspace({required Widget child}) {
     return ListView(padding: const EdgeInsets.all(16), children: [child]);
@@ -5998,60 +6012,62 @@ class _BusinessOperationsModule extends StatelessWidget {
 
   List<Map<String, dynamic>> _businessHealthPlusRows(
     List<Map<String, dynamic>> businessDeliveries,
-  ) =>
-      [
-        ...businessDeliveries.where(
-          (item) =>
-              _serviceType(item).contains('health') ||
-              '${item['sourceModule'] ?? ''}'.toLowerCase().contains('health'),
-        ),
-        ...healthPlusPickups.where(_isBusinessRecord),
-      ].toList(growable: false);
+  ) => [
+    ...businessDeliveries.where(
+      (item) =>
+          _serviceType(item).contains('health') ||
+          '${item['sourceModule'] ?? ''}'.toLowerCase().contains('health'),
+    ),
+    ...healthPlusPickups.where(_isBusinessRecord),
+  ].toList(growable: false);
 
   List<Map<String, dynamic>> _businessGiftRows(
     List<Map<String, dynamic>> businessDeliveries,
-  ) =>
-      [
-        ...businessDeliveries.where(
-          (item) =>
-              _serviceType(item).contains('gift') ||
-              '${item['sourceModule'] ?? ''}'.toLowerCase().contains('gift'),
-        ),
-        ...giftRecords.where(_isBusinessRecord),
-      ].toList(growable: false);
+  ) => [
+    ...businessDeliveries.where(
+      (item) =>
+          _serviceType(item).contains('gift') ||
+          '${item['sourceModule'] ?? ''}'.toLowerCase().contains('gift'),
+    ),
+    ...giftRecords.where(_isBusinessRecord),
+  ].toList(growable: false);
 
   List<Map<String, dynamic>> _businessInvoiceRows(
     List<Map<String, dynamic>> businessDeliveries,
   ) {
     if (businessInvoices.isNotEmpty) return businessInvoices;
-    return accounts.map((account) {
-      final id = _businessAccountId(account);
-      final scoped = businessDeliveries
-          .where((delivery) => _businessRecordId(delivery) == id)
-          .toList(growable: false);
-      final amount = scoped.fold<double>(
-        0,
-        (total, delivery) =>
-            total +
-            _numberFrom(
-              delivery['finalAmount'] ?? delivery['price'] ?? delivery['quote'],
-            ),
-      );
-      return {
-        ...account,
-        'id': id,
-        'businessId': id,
-        'invoiceAmount': account['outstandingInvoiceAmount'] ?? amount,
-        'invoiceStatus': account['invoiceStatus'] ?? 'draft',
-        'invoiceDeliveryCount': scoped.length,
-      };
-    }).toList(growable: false);
+    return accounts
+        .map((account) {
+          final id = _businessAccountId(account);
+          final scoped = businessDeliveries
+              .where((delivery) => _businessRecordId(delivery) == id)
+              .toList(growable: false);
+          final amount = scoped.fold<double>(
+            0,
+            (total, delivery) =>
+                total +
+                _numberFrom(
+                  delivery['finalAmount'] ??
+                      delivery['price'] ??
+                      delivery['quote'],
+                ),
+          );
+          return {
+            ...account,
+            'id': id,
+            'businessId': id,
+            'invoiceAmount': account['outstandingInvoiceAmount'] ?? amount,
+            'invoiceStatus': account['invoiceStatus'] ?? 'draft',
+            'invoiceDeliveryCount': scoped.length,
+          };
+        })
+        .toList(growable: false);
   }
 
   List<Map<String, dynamic>> _businessAnalyticsRows(
     List<Map<String, dynamic>> businessDeliveries,
-  ) =>
-      accounts.map((account) {
+  ) => accounts
+      .map((account) {
         final id = _businessAccountId(account);
         final scoped = businessDeliveries
             .where((delivery) => _businessRecordId(delivery) == id)
@@ -6089,7 +6105,8 @@ class _BusinessOperationsModule extends StatelessWidget {
               .where((item) => _serviceType(item).contains('gift'))
               .length,
         };
-      }).toList(growable: false);
+      })
+      .toList(growable: false);
 
   List<Map<String, dynamic>> _businessMemberRows() {
     final rows = <Map<String, dynamic>>[];
@@ -6163,8 +6180,8 @@ class _BusinessOperationsModule extends StatelessWidget {
           .trim();
 
   String _businessNameFor(Map<String, dynamic> item) {
-    final direct =
-        '${item['businessName'] ?? item['companyName'] ?? ''}'.trim();
+    final direct = '${item['businessName'] ?? item['companyName'] ?? ''}'
+        .trim();
     if (direct.isNotEmpty) return direct;
     final businessId = _businessRecordId(item);
     final account = accounts.firstWhere(
@@ -6201,7 +6218,7 @@ class _RecognitionOperationsModule extends StatelessWidget {
   final String query;
   final bool canManageRecognition;
   final Future<void> Function(Map<String, dynamic>, String, String)
-      onManageRecognition;
+  onManageRecognition;
 
   @override
   Widget build(BuildContext context) {
@@ -6257,20 +6274,20 @@ class _RecognitionOperationsModule extends StatelessWidget {
           },
           actions: canManageRecognition
               ? (record) => [
-                    for (final type in _recognitionTypesFor(record)) ...[
-                      _MiniAction(
-                        label: 'Grant ${_recognitionTypeLabel(type)}',
-                        onPressed: () => unawaited(
-                            onManageRecognition(record, 'grant', type)),
+                  for (final type in _recognitionTypesFor(record)) ...[
+                    _MiniAction(
+                      label: 'Grant ${_recognitionTypeLabel(type)}',
+                      onPressed: () =>
+                          unawaited(onManageRecognition(record, 'grant', type)),
+                    ),
+                    _MiniAction(
+                      label: 'Revoke ${_recognitionTypeLabel(type)}',
+                      onPressed: () => unawaited(
+                        onManageRecognition(record, 'revoke', type),
                       ),
-                      _MiniAction(
-                        label: 'Revoke ${_recognitionTypeLabel(type)}',
-                        onPressed: () => unawaited(
-                          onManageRecognition(record, 'revoke', type),
-                        ),
-                      ),
-                    ],
-                  ]
+                    ),
+                  ],
+                ]
               : null,
         ),
         const SizedBox(height: 18),
@@ -6398,16 +6415,16 @@ class _IrisOperationsModule extends StatelessWidget {
   final bool canManageIris;
   final ValueChanged<Map<String, dynamic>> onOpenDelivery;
   final Future<void> Function(Map<String, dynamic>, String)
-      onSetIrisReviewStatus;
+  onSetIrisReviewStatus;
   final Future<void> Function(Map<String, dynamic>, String)
-      onAdjudicateIrisReferral;
+  onAdjudicateIrisReferral;
   final Future<void> Function(Map<String, dynamic>) onLoadReferenceImage;
   final Future<void> Function(Map<String, dynamic>) onFinalizeReferenceImage;
   final Future<void> Function(Map<String, dynamic>) onDeleteReferenceImage;
   final Future<void> Function(Map<String, dynamic>, String)
-      onUpdateRepositoryRecord;
+  onUpdateRepositoryRecord;
   final Future<void> Function(Map<String, dynamic>, String)
-      onUpdateCandidateWorkflow;
+  onUpdateCandidateWorkflow;
 
   @override
   Widget build(BuildContext context) {
@@ -6710,7 +6727,7 @@ class _IrisCanonicalLibraryModule extends StatelessWidget {
   final Future<void> Function(Map<String, dynamic>) onFinalizeReferenceImage;
   final Future<void> Function(Map<String, dynamic>) onDeleteReferenceImage;
   final Future<void> Function(Map<String, dynamic>, String)
-      onUpdateRepositoryRecord;
+  onUpdateRepositoryRecord;
 
   @override
   Widget build(BuildContext context) {
@@ -6748,9 +6765,8 @@ class _IrisCanonicalLibraryModule extends StatelessWidget {
                     onPressed: records.isEmpty
                         ? null
                         : () => unawaited(
-                              onUpdateRepositoryRecord(
-                                  records.first, action.$2),
-                            ),
+                            onUpdateRepositoryRecord(records.first, action.$2),
+                          ),
                   ),
               ],
             ),
@@ -6785,42 +6801,42 @@ class _IrisCanonicalLibraryModule extends StatelessWidget {
           ],
           actions: canManageIris
               ? (record) => [
-                    _MiniAction(
-                      label: 'Edit',
-                      onPressed: () =>
-                          unawaited(onUpdateRepositoryRecord(record, 'edited')),
+                  _MiniAction(
+                    label: 'Edit',
+                    onPressed: () =>
+                        unawaited(onUpdateRepositoryRecord(record, 'edited')),
+                  ),
+                  _MiniAction(
+                    label: 'Duplicate',
+                    onPressed: () => unawaited(
+                      onUpdateRepositoryRecord(record, 'duplicate_review'),
                     ),
-                    _MiniAction(
-                      label: 'Duplicate',
-                      onPressed: () => unawaited(
-                        onUpdateRepositoryRecord(record, 'duplicate_review'),
-                      ),
+                  ),
+                  _MiniAction(
+                    label: 'Deactivate',
+                    onPressed: () => unawaited(
+                      onUpdateRepositoryRecord(record, 'deactivated'),
                     ),
-                    _MiniAction(
-                      label: 'Deactivate',
-                      onPressed: () => unawaited(
-                        onUpdateRepositoryRecord(record, 'deactivated'),
-                      ),
+                  ),
+                  _MiniAction(
+                    label: 'History',
+                    onPressed: () => unawaited(
+                      onUpdateRepositoryRecord(record, 'history_reviewed'),
                     ),
-                    _MiniAction(
-                      label: 'History',
-                      onPressed: () => unawaited(
-                        onUpdateRepositoryRecord(record, 'history_reviewed'),
-                      ),
+                  ),
+                  _MiniAction(
+                    label: 'Bulk export',
+                    onPressed: () => unawaited(
+                      onUpdateRepositoryRecord(record, 'bulk_exported'),
                     ),
-                    _MiniAction(
-                      label: 'Bulk export',
-                      onPressed: () => unawaited(
-                        onUpdateRepositoryRecord(record, 'bulk_exported'),
-                      ),
-                    ),
-                    ..._irisReferenceImageActions(
-                      record,
-                      onLoadReferenceImage: onLoadReferenceImage,
-                      onFinalizeReferenceImage: onFinalizeReferenceImage,
-                      onDeleteReferenceImage: onDeleteReferenceImage,
-                    ),
-                  ]
+                  ),
+                  ..._irisReferenceImageActions(
+                    record,
+                    onLoadReferenceImage: onLoadReferenceImage,
+                    onFinalizeReferenceImage: onFinalizeReferenceImage,
+                    onDeleteReferenceImage: onDeleteReferenceImage,
+                  ),
+                ]
               : null,
         ),
       ],
@@ -6847,7 +6863,7 @@ class _IrisRepositoryGovernanceModule extends StatelessWidget {
   final String query;
   final bool canManageIris;
   final Future<void> Function(Map<String, dynamic>, String)
-      onUpdateRepositoryRecord;
+  onUpdateRepositoryRecord;
   final Future<void> Function(Map<String, dynamic>) onLoadReferenceImage;
   final Future<void> Function(Map<String, dynamic>) onFinalizeReferenceImage;
   final Future<void> Function(Map<String, dynamic>) onDeleteReferenceImage;
@@ -6904,12 +6920,13 @@ class _IrisCandidateWorkflowModule extends StatelessWidget {
   final String query;
   final bool canManageIris;
   final Future<void> Function(Map<String, dynamic>, String)
-      onUpdateCandidateWorkflow;
+  onUpdateCandidateWorkflow;
 
   @override
   Widget build(BuildContext context) {
-    final deliveryCandidates =
-        deliveries.where(_isLearningCandidate).toList(growable: false);
+    final deliveryCandidates = deliveries
+        .where(_isLearningCandidate)
+        .toList(growable: false);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -6945,7 +6962,7 @@ class _IrisAliasManagerModule extends StatelessWidget {
   final String query;
   final bool canManageIris;
   final Future<void> Function(Map<String, dynamic>, String)
-      onUpdateRepositoryRecord;
+  onUpdateRepositoryRecord;
 
   @override
   Widget build(BuildContext context) {
@@ -6975,18 +6992,18 @@ class _IrisAliasManagerModule extends StatelessWidget {
       ],
       actions: canManageIris
           ? (record) => [
-                for (final action in const [
-                  ('Edit', 'alias_edited'),
-                  ('Merge', 'alias_merged'),
-                  ('Delete', 'alias_deleted'),
-                  ('Audit', 'alias_history_reviewed'),
-                ])
-                  _MiniAction(
-                    label: action.$1,
-                    onPressed: () =>
-                        unawaited(onUpdateRepositoryRecord(record, action.$2)),
-                  ),
-              ]
+              for (final action in const [
+                ('Edit', 'alias_edited'),
+                ('Merge', 'alias_merged'),
+                ('Delete', 'alias_deleted'),
+                ('Audit', 'alias_history_reviewed'),
+              ])
+                _MiniAction(
+                  label: action.$1,
+                  onPressed: () =>
+                      unawaited(onUpdateRepositoryRecord(record, action.$2)),
+                ),
+            ]
           : null,
     );
   }
@@ -7004,7 +7021,7 @@ class _IrisCategoryGovernanceModule extends StatelessWidget {
   final String query;
   final bool canManageIris;
   final Future<void> Function(Map<String, dynamic>, String)
-      onUpdateRepositoryRecord;
+  onUpdateRepositoryRecord;
 
   @override
   Widget build(BuildContext context) {
@@ -7040,18 +7057,18 @@ class _IrisCategoryGovernanceModule extends StatelessWidget {
       ],
       actions: canManageIris
           ? (record) => [
-                for (final action in const [
-                  ('Edit', 'category_edited'),
-                  ('Merge', 'category_merged'),
-                  ('Activate', 'activated'),
-                  ('History', 'category_history_reviewed'),
-                ])
-                  _MiniAction(
-                    label: action.$1,
-                    onPressed: () =>
-                        unawaited(onUpdateRepositoryRecord(record, action.$2)),
-                  ),
-              ]
+              for (final action in const [
+                ('Edit', 'category_edited'),
+                ('Merge', 'category_merged'),
+                ('Activate', 'activated'),
+                ('History', 'category_history_reviewed'),
+              ])
+                _MiniAction(
+                  label: action.$1,
+                  onPressed: () =>
+                      unawaited(onUpdateRepositoryRecord(record, action.$2)),
+                ),
+            ]
           : null,
     );
   }
@@ -7069,7 +7086,7 @@ class _IrisImportSettingsModule extends StatelessWidget {
   final List<Map<String, dynamic>> auditLogs;
   final bool canManageIris;
   final Future<void> Function(Map<String, dynamic>, String)
-      onUpdateRepositoryRecord;
+  onUpdateRepositoryRecord;
 
   @override
   Widget build(BuildContext context) {
@@ -7107,18 +7124,18 @@ class _IrisImportSettingsModule extends StatelessWidget {
       ],
       actions: canManageIris
           ? (record) => [
-                for (final action in const [
-                  ('Review import', 'import_reviewed'),
-                  ('Validate', 'import_validated'),
-                  ('Approve import', 'import_approved'),
-                  ('Settings', 'settings_reviewed'),
-                ])
-                  _MiniAction(
-                    label: action.$1,
-                    onPressed: () =>
-                        unawaited(onUpdateRepositoryRecord(record, action.$2)),
-                  ),
-              ]
+              for (final action in const [
+                ('Review import', 'import_reviewed'),
+                ('Validate', 'import_validated'),
+                ('Approve import', 'import_approved'),
+                ('Settings', 'settings_reviewed'),
+              ])
+                _MiniAction(
+                  label: action.$1,
+                  onPressed: () =>
+                      unawaited(onUpdateRepositoryRecord(record, action.$2)),
+                ),
+            ]
           : null,
     );
   }
@@ -7202,11 +7219,11 @@ class _IrisReferenceImageLifecycleModule extends StatelessWidget {
           ],
           actions: canManageIris
               ? (record) => _irisReferenceImageActions(
-                    record,
-                    onLoadReferenceImage: onLoadReferenceImage,
-                    onFinalizeReferenceImage: onFinalizeReferenceImage,
-                    onDeleteReferenceImage: onDeleteReferenceImage,
-                  )
+                  record,
+                  onLoadReferenceImage: onLoadReferenceImage,
+                  onFinalizeReferenceImage: onFinalizeReferenceImage,
+                  onDeleteReferenceImage: onDeleteReferenceImage,
+                )
               : null,
         ),
       ],
@@ -7265,7 +7282,7 @@ class _IrisLearningCentre extends StatelessWidget {
   final String query;
   final bool canManageIris;
   final Future<void> Function(Map<String, dynamic>, String)
-      onUpdateCandidateWorkflow;
+  onUpdateCandidateWorkflow;
 
   @override
   Widget build(BuildContext context) {
@@ -7297,21 +7314,21 @@ class _IrisLearningCentre extends StatelessWidget {
       ],
       actions: canManageIris
           ? (record) => [
-                for (final action in const [
-                  ('Approve', 'approved'),
-                  ('Reject', 'rejected'),
-                  ('Promote', 'promoted'),
-                  ('Merge existing', 'merge_existing'),
-                  ('Save alias', 'save_alias'),
-                  ('Suspicious', 'suspicious'),
-                  ('History', 'history_reviewed'),
-                ])
-                  _MiniAction(
-                    label: action.$1,
-                    onPressed: () =>
-                        unawaited(onUpdateCandidateWorkflow(record, action.$2)),
-                  ),
-              ]
+              for (final action in const [
+                ('Approve', 'approved'),
+                ('Reject', 'rejected'),
+                ('Promote', 'promoted'),
+                ('Merge existing', 'merge_existing'),
+                ('Save alias', 'save_alias'),
+                ('Suspicious', 'suspicious'),
+                ('History', 'history_reviewed'),
+              ])
+                _MiniAction(
+                  label: action.$1,
+                  onPressed: () =>
+                      unawaited(onUpdateCandidateWorkflow(record, action.$2)),
+                ),
+            ]
           : null,
     );
   }
@@ -7555,30 +7572,32 @@ class _FinanceOperationsModule extends StatelessWidget {
   final String query;
   final bool canManageFinance;
   final Future<void> Function(Map<String, dynamic>, String)
-      onUpdateFinanceWorkflow;
+  onUpdateFinanceWorkflow;
   final Future<void> Function(Map<String, dynamic>) onIssueRoth;
   final Future<void> Function({
     required String recipient,
     required double amount,
     required String reason,
     required String walletTarget,
-  }) onIssueManualRothCredit;
+  })
+  onIssueManualRothCredit;
   final Future<void> Function(Map<String, dynamic>, bool) onSetWalletFrozen;
   final Future<void> Function(Map<String, dynamic>, String)
-      onProcessPayoutRequest;
+  onProcessPayoutRequest;
   final Future<void> Function(Map<String, dynamic>, String) onModerateRating;
   final Future<void> Function(Map<String, dynamic>) onSyncRiderStripe;
   final Future<String?> Function(Map<String, dynamic>, {bool copy, bool send})
-      onGenerateRiderStripeLink;
+  onGenerateRiderStripeLink;
   final Future<void> Function(Map<String, dynamic>) onOpenRiderStripeDashboard;
   final Future<void> Function(Map<String, dynamic>, String)
-      onMarkRiderStripeInvestigation;
+  onMarkRiderStripeInvestigation;
 
   @override
   Widget build(BuildContext context) {
     final todayRevenue = _financeTotalToday(payments);
-    final outstandingSettlements =
-        payments.where(_isOutstandingSettlement).length;
+    final outstandingSettlements = payments
+        .where(_isOutstandingSettlement)
+        .length;
     final pendingRefunds = payments.where(_isPendingRefund).length;
     final failedPayments = payments.where(_isFailedPayment).length;
     final investigations = payments.where(_isFinanceInvestigation).length;
@@ -7691,25 +7710,25 @@ class _FinanceOperationsModule extends StatelessWidget {
           ],
           actions: canManageFinance
               ? (record) => [
-                    for (final action in const [
-                      ('Assign', 'review_assigned'),
-                      ('Reconcile', 'reconciled'),
-                      ('Escalate', 'escalated'),
-                      ('Credit review', 'wallet_credit_review'),
-                      ('Debit review', 'wallet_debit_review'),
-                      ('Issue Roth', 'roth_issue_review'),
-                      ('Remove Roth', 'roth_remove_review'),
-                      ('Approve refund', 'refund_approved'),
-                      ('Reject refund', 'refund_rejected'),
-                      ('Investigate', 'investigation_flagged'),
-                      ('Resolve', 'investigation_resolved'),
-                    ])
-                      _MiniAction(
-                        label: action.$1,
-                        onPressed: () => unawaited(
-                            onUpdateFinanceWorkflow(record, action.$2)),
-                      ),
-                  ]
+                  for (final action in const [
+                    ('Assign', 'review_assigned'),
+                    ('Reconcile', 'reconciled'),
+                    ('Escalate', 'escalated'),
+                    ('Credit review', 'wallet_credit_review'),
+                    ('Debit review', 'wallet_debit_review'),
+                    ('Issue Roth', 'roth_issue_review'),
+                    ('Remove Roth', 'roth_remove_review'),
+                    ('Approve refund', 'refund_approved'),
+                    ('Reject refund', 'refund_rejected'),
+                    ('Investigate', 'investigation_flagged'),
+                    ('Resolve', 'investigation_resolved'),
+                  ])
+                    _MiniAction(
+                      label: action.$1,
+                      onPressed: () =>
+                          unawaited(onUpdateFinanceWorkflow(record, action.$2)),
+                    ),
+                ]
               : null,
         ),
         const SizedBox(height: 18),
@@ -7881,7 +7900,7 @@ class _FinanceLedgerPanel extends StatelessWidget {
   final Future<void> Function(Map<String, dynamic>) onIssueRoth;
   final Future<void> Function(Map<String, dynamic>, bool) onSetWalletFrozen;
   final Future<void> Function(Map<String, dynamic>, String)
-      onProcessPayoutRequest;
+  onProcessPayoutRequest;
 
   @override
   Widget build(BuildContext context) {
@@ -7980,21 +7999,20 @@ class _FinanceLedgerPanel extends StatelessWidget {
           ],
           actions: canManageFinance
               ? (record) => [
-                    _MiniAction(
-                      label: 'Issue Roth',
-                      onPressed: () => unawaited(onIssueRoth(record)),
-                    ),
-                    _MiniAction(
-                      label: 'Freeze',
-                      onPressed: () =>
-                          unawaited(onSetWalletFrozen(record, true)),
-                    ),
-                    _MiniAction(
-                      label: 'Unfreeze',
-                      onPressed: () =>
-                          unawaited(onSetWalletFrozen(record, false)),
-                    ),
-                  ]
+                  _MiniAction(
+                    label: 'Issue Roth',
+                    onPressed: () => unawaited(onIssueRoth(record)),
+                  ),
+                  _MiniAction(
+                    label: 'Freeze',
+                    onPressed: () => unawaited(onSetWalletFrozen(record, true)),
+                  ),
+                  _MiniAction(
+                    label: 'Unfreeze',
+                    onPressed: () =>
+                        unawaited(onSetWalletFrozen(record, false)),
+                  ),
+                ]
               : null,
         ),
       ],
@@ -8062,7 +8080,8 @@ class _ManualRothCreditPanel extends StatefulWidget {
     required double amount,
     required String reason,
     required String walletTarget,
-  }) onIssueManualRothCredit;
+  })
+  onIssueManualRothCredit;
 
   @override
   State<_ManualRothCreditPanel> createState() => _ManualRothCreditPanelState();
@@ -8085,15 +8104,21 @@ class _ManualRothCreditPanelState extends State<_ManualRothCreditPanel> {
   @override
   Widget build(BuildContext context) {
     final examples = [
-      ...widget.users.take(4).map(
+      ...widget.users
+          .take(4)
+          .map(
             (user) =>
                 '${user['email'] ?? user['uid'] ?? user['id'] ?? 'Sender'}',
           ),
-      ...widget.riders.take(2).map(
+      ...widget.riders
+          .take(2)
+          .map(
             (rider) =>
                 '${rider['email'] ?? rider['uid'] ?? rider['id'] ?? 'Rider'}',
           ),
-      ...widget.businessWallets.take(2).map(
+      ...widget.businessWallets
+          .take(2)
+          .map(
             (wallet) =>
                 '${wallet['businessId'] ?? wallet['walletId'] ?? wallet['id'] ?? 'Business'}',
           ),
@@ -8163,7 +8188,7 @@ class _ManualRothCreditPanelState extends State<_ManualRothCreditPanel> {
                     ],
                     onChanged: widget.canManageFinance
                         ? (value) =>
-                            setState(() => _walletTarget = value ?? 'sender')
+                              setState(() => _walletTarget = value ?? 'sender')
                         : null,
                   ),
                 ),
@@ -8181,13 +8206,13 @@ class _ManualRothCreditPanelState extends State<_ManualRothCreditPanel> {
                 FilledButton.icon(
                   onPressed: widget.canManageFinance
                       ? () => unawaited(
-                            widget.onIssueManualRothCredit(
-                              recipient: _recipient.text,
-                              amount: double.tryParse(_amount.text.trim()) ?? 0,
-                              reason: _reason.text,
-                              walletTarget: _walletTarget,
-                            ),
-                          )
+                          widget.onIssueManualRothCredit(
+                            recipient: _recipient.text,
+                            amount: double.tryParse(_amount.text.trim()) ?? 0,
+                            reason: _reason.text,
+                            walletTarget: _walletTarget,
+                          ),
+                        )
                       : null,
                   icon: const Icon(Icons.add_card_rounded),
                   label: const Text('Issue Roth'),
@@ -8228,10 +8253,10 @@ class _StripeConnectOperationsPanel extends StatelessWidget {
   final bool canManageFinance;
   final Future<void> Function(Map<String, dynamic>) onSyncRiderStripe;
   final Future<String?> Function(Map<String, dynamic>, {bool copy, bool send})
-      onGenerateRiderStripeLink;
+  onGenerateRiderStripeLink;
   final Future<void> Function(Map<String, dynamic>) onOpenRiderStripeDashboard;
   final Future<void> Function(Map<String, dynamic>, String)
-      onMarkRiderStripeInvestigation;
+  onMarkRiderStripeInvestigation;
 
   @override
   Widget build(BuildContext context) {
@@ -8325,51 +8350,51 @@ class _StripeConnectOperationsPanel extends StatelessWidget {
           ],
           actions: canManageFinance
               ? (record) => [
-                    _MiniAction(
-                      label: 'Retry sync',
-                      onPressed: () => unawaited(onSyncRiderStripe(record)),
+                  _MiniAction(
+                    label: 'Retry sync',
+                    onPressed: () => unawaited(onSyncRiderStripe(record)),
+                  ),
+                  _MiniAction(
+                    label: 'Generate link',
+                    onPressed: () =>
+                        unawaited(onGenerateRiderStripeLink(record)),
+                  ),
+                  _MiniAction(
+                    label: 'Copy link',
+                    onPressed: () => unawaited(
+                      onGenerateRiderStripeLink(record, copy: true),
                     ),
-                    _MiniAction(
-                      label: 'Generate link',
-                      onPressed: () =>
-                          unawaited(onGenerateRiderStripeLink(record)),
+                  ),
+                  _MiniAction(
+                    label: 'Send link',
+                    onPressed: () => unawaited(
+                      onGenerateRiderStripeLink(record, send: true),
                     ),
-                    _MiniAction(
-                      label: 'Copy link',
-                      onPressed: () => unawaited(
-                        onGenerateRiderStripeLink(record, copy: true),
+                  ),
+                  _MiniAction(
+                    label: 'Open Stripe',
+                    onPressed: () =>
+                        unawaited(onOpenRiderStripeDashboard(record)),
+                  ),
+                  _MiniAction(
+                    label: 'Investigate',
+                    onPressed: () => unawaited(
+                      onMarkRiderStripeInvestigation(
+                        record,
+                        'stripe_manual_investigation',
                       ),
                     ),
-                    _MiniAction(
-                      label: 'Send link',
-                      onPressed: () => unawaited(
-                        onGenerateRiderStripeLink(record, send: true),
+                  ),
+                  _MiniAction(
+                    label: 'Escalate',
+                    onPressed: () => unawaited(
+                      onMarkRiderStripeInvestigation(
+                        record,
+                        'stripe_support_escalated',
                       ),
                     ),
-                    _MiniAction(
-                      label: 'Open Stripe',
-                      onPressed: () =>
-                          unawaited(onOpenRiderStripeDashboard(record)),
-                    ),
-                    _MiniAction(
-                      label: 'Investigate',
-                      onPressed: () => unawaited(
-                        onMarkRiderStripeInvestigation(
-                          record,
-                          'stripe_manual_investigation',
-                        ),
-                      ),
-                    ),
-                    _MiniAction(
-                      label: 'Escalate',
-                      onPressed: () => unawaited(
-                        onMarkRiderStripeInvestigation(
-                          record,
-                          'stripe_support_escalated',
-                        ),
-                      ),
-                    ),
-                  ]
+                  ),
+                ]
               : null,
         ),
         const SizedBox(height: 18),
@@ -8590,7 +8615,7 @@ class _RatingsTipsModule extends StatelessWidget {
             rating: rating,
             tip:
                 tipByDelivery['${rating['deliveryId'] ?? _recordId(rating)}'] ??
-                    const {},
+                const {},
           ),
         )
         .toList(growable: false);
@@ -8600,7 +8625,7 @@ class _RatingsTipsModule extends StatelessWidget {
     final avgStars = records.isEmpty
         ? 0.0
         : records.fold<num>(0, (total, record) => total + record.stars) /
-            records.length;
+              records.length;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -8807,15 +8832,15 @@ class _RiderOperationsModule extends StatelessWidget {
           ],
           actions: canManageRiders
               ? (record) => _riderActions(
-                    record,
-                    onSetRiderStatus,
-                    onOpenRiderProfile,
-                    onSyncRiderStripe: onSyncRiderStripe,
-                    onResetRiderStripe: onResetRiderStripe,
-                    onRequestMoreInformation: onRequestMoreInformation,
-                    onRemoveProfilePhoto: onRemoveProfilePhoto,
-                    onStartRiderConversation: onStartRiderConversation,
-                  )
+                  record,
+                  onSetRiderStatus,
+                  onOpenRiderProfile,
+                  onSyncRiderStripe: onSyncRiderStripe,
+                  onResetRiderStripe: onResetRiderStripe,
+                  onRequestMoreInformation: onRequestMoreInformation,
+                  onRemoveProfilePhoto: onRemoveProfilePhoto,
+                  onStartRiderConversation: onStartRiderConversation,
+                )
               : null,
         ),
         const SizedBox(height: 18),
@@ -8889,23 +8914,23 @@ class _RiderOperationsModule extends StatelessWidget {
           ],
           actions: canManageRiders
               ? (record) => [
-                    _MiniAction(
-                      label: 'Approve',
-                      onPressed: () =>
-                          unawaited(onReviewDocument(record, 'approved')),
+                  _MiniAction(
+                    label: 'Approve',
+                    onPressed: () =>
+                        unawaited(onReviewDocument(record, 'approved')),
+                  ),
+                  _MiniAction(
+                    label: 'Reject',
+                    onPressed: () =>
+                        unawaited(onReviewDocument(record, 'rejected')),
+                  ),
+                  _MiniAction(
+                    label: 'Request replacement',
+                    onPressed: () => unawaited(
+                      onReviewDocument(record, 'replacement_requested'),
                     ),
-                    _MiniAction(
-                      label: 'Reject',
-                      onPressed: () =>
-                          unawaited(onReviewDocument(record, 'rejected')),
-                    ),
-                    _MiniAction(
-                      label: 'Request replacement',
-                      onPressed: () => unawaited(
-                        onReviewDocument(record, 'replacement_requested'),
-                      ),
-                    ),
-                  ]
+                  ),
+                ]
               : null,
         ),
         const SizedBox(height: 18),
@@ -8966,31 +8991,31 @@ class _RiderOperationsModule extends StatelessWidget {
           ],
           actions: canManageRiders
               ? (record) => [
-                    _MiniAction(
-                      label: 'Review',
-                      onPressed: () => unawaited(
-                        onSetRiderStatus(
-                          _riderForMetric(record),
-                          'performance_review',
-                        ),
+                  _MiniAction(
+                    label: 'Review',
+                    onPressed: () => unawaited(
+                      onSetRiderStatus(
+                        _riderForMetric(record),
+                        'performance_review',
                       ),
                     ),
-                    _MiniAction(
-                      label: 'Warn',
-                      onPressed: () => unawaited(
-                        onSetRiderStatus(
-                          _riderForMetric(record),
-                          'warning_issued',
-                        ),
+                  ),
+                  _MiniAction(
+                    label: 'Warn',
+                    onPressed: () => unawaited(
+                      onSetRiderStatus(
+                        _riderForMetric(record),
+                        'warning_issued',
                       ),
                     ),
-                    _MiniAction(
-                      label: 'Suspend',
-                      onPressed: () => unawaited(
-                        onSetRiderStatus(_riderForMetric(record), 'suspended'),
-                      ),
+                  ),
+                  _MiniAction(
+                    label: 'Suspend',
+                    onPressed: () => unawaited(
+                      onSetRiderStatus(_riderForMetric(record), 'suspended'),
                     ),
-                  ]
+                  ),
+                ]
               : null,
         ),
         const SizedBox(height: 18),
@@ -9048,8 +9073,13 @@ String _sectionStatusSummary(Map<String, dynamic> record) {
   final sections = record['sectionStatus'];
   if (sections is! Map || sections.isEmpty) return 'No section status';
   final complete = sections.values
-      .where((value) => {'submitted', 'approved', 'verified'}
-          .contains('$value'.trim().toLowerCase()))
+      .where(
+        (value) => {
+          'submitted',
+          'approved',
+          'verified',
+        }.contains('$value'.trim().toLowerCase()),
+      )
       .length;
   return '$complete/${sections.length} sections complete';
 }
@@ -9177,7 +9207,7 @@ class _DeliveryOperationsModule extends StatefulWidget {
   final ValueChanged<Map<String, dynamic>> onOpenDelivery;
   final ValueChanged<Map<String, dynamic>> onDuplicateDelivery;
   final Future<void> Function(Map<String, dynamic>, String)
-      onSetDeliveryOperationStatus;
+  onSetDeliveryOperationStatus;
   final Future<void> Function(Map<String, dynamic>) onResolveStaleDeliveryLock;
   final Future<void> Function(Map<String, dynamic>) onArchiveDelivery;
 
@@ -9207,8 +9237,9 @@ class _DeliveryOperationsModuleState extends State<_DeliveryOperationsModule> {
     final stale = deliveries.where(_isStaleDelivery).toList();
     final recoverable = deliveries.where(_isRecoverableDelivery).toList();
     final archived = deliveries.where(_isArchivedDelivery).toList();
-    final enhancedCustody =
-        deliveries.where(_needsEnhancedCustodyReview).toList();
+    final enhancedCustody = deliveries
+        .where(_needsEnhancedCustodyReview)
+        .toList();
     final attentionCards = [
       _DeliveryAttentionData(
         title: 'Rider Offline',
@@ -9660,10 +9691,10 @@ class _DeliveryNeedsAttentionPanel extends StatelessWidget {
             final columns = constraints.maxWidth >= 1320
                 ? 6
                 : constraints.maxWidth >= 980
-                    ? 3
-                    : constraints.maxWidth >= 620
-                        ? 2
-                        : 1;
+                ? 3
+                : constraints.maxWidth >= 620
+                ? 2
+                : 1;
             final width =
                 (constraints.maxWidth - ((columns - 1) * 12)) / columns;
             return Wrap(
@@ -9934,8 +9965,9 @@ class _DeliveryGlassRow extends StatelessWidget {
   Widget build(BuildContext context) {
     final primary = actions.isNotEmpty ? actions.first : null;
     final secondary = actions.length > 2 ? actions[2] : null;
-    final overflow =
-        actions.length > 1 ? actions.skip(1).toList() : const <Widget>[];
+    final overflow = actions.length > 1
+        ? actions.skip(1).toList()
+        : const <Widget>[];
     return InkWell(
       borderRadius: BorderRadius.circular(22),
       onTap: onTap,
@@ -10119,22 +10151,14 @@ class _DeliveryCommandCentre extends StatelessWidget {
         'Media',
         Icons.photo_library_rounded,
         [
-          '${_historyCount(record, const [
-                'evidence',
-                'photos',
-                'images'
-              ])} media item(s)',
+          '${_historyCount(record, const ['evidence', 'photos', 'images'])} media item(s)',
         ],
       ),
       (
         'Audit Log',
         Icons.history_rounded,
         [
-          '${_historyCount(record, const [
-                'auditTrail',
-                'adminAuditTrail',
-                'timeline'
-              ])} audit item(s)',
+          '${_historyCount(record, const ['auditTrail', 'adminAuditTrail', 'timeline'])} audit item(s)',
         ],
       ),
       (
@@ -10169,8 +10193,8 @@ class _DeliveryCommandCentre extends StatelessWidget {
               final columns = constraints.maxWidth >= 1220
                   ? 4
                   : constraints.maxWidth >= 820
-                      ? 2
-                      : 1;
+                  ? 2
+                  : 1;
               final width =
                   (constraints.maxWidth - ((columns - 1) * 12)) / columns;
               return Wrap(
@@ -10258,8 +10282,8 @@ class _AdminProofOfDeliveryPanel extends StatelessWidget {
     final color = proof.statusLabel.toLowerCase().contains('available')
         ? const Color(0xFF34D399)
         : proof.statusLabel.toLowerCase().contains('review')
-            ? const Color(0xFFFBBF24)
-            : const Color(0xFFF87171);
+        ? const Color(0xFFFBBF24)
+        : const Color(0xFFF87171);
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.all(16),
@@ -10506,10 +10530,7 @@ class _DeliveryArchiveBrowser extends StatelessWidget {
                                 unawaited(onArchiveDelivery(record)),
                           ),
                         _DeliveryStatusChip(
-                          'Audit ${_historyCount(record, const [
-                                'auditTrail',
-                                'adminAuditTrail'
-                              ])}',
+                          'Audit ${_historyCount(record, const ['auditTrail', 'adminAuditTrail'])}',
                         ),
                       ],
                     ),
@@ -10996,7 +11017,8 @@ List<Map<String, dynamic>> _platformPulseRecords(AdminDataBundle data) {
     for (final business in data.businessAccounts.take(3))
       {
         ...business,
-        'label': business['businessName'] ??
+        'label':
+            business['businessName'] ??
             business['companyName'] ??
             _recordId(business),
         'domain': 'Business',
@@ -11032,7 +11054,7 @@ class _ChatModule extends StatelessWidget {
   final ValueChanged<Map<String, dynamic>> onSelectChat;
   final VoidCallback onSendChatMessage;
   final Future<void> Function(Map<String, dynamic>, String)
-      onResolveMessageReport;
+  onResolveMessageReport;
 
   @override
   Widget build(BuildContext context) {
@@ -11263,8 +11285,8 @@ class _ChatMessageHistoryPanel extends StatelessWidget {
 }
 
 String _chatSenderLabel(Map<String, dynamic> message) {
-  final name =
-      '${message['senderName'] ?? message['senderDisplayName'] ?? ''}'.trim();
+  final name = '${message['senderName'] ?? message['senderDisplayName'] ?? ''}'
+      .trim();
   if (name.isNotEmpty) return name;
   final email = '${message['senderEmail'] ?? ''}'.trim();
   if (email.isNotEmpty) return email;
@@ -11281,7 +11303,8 @@ String _chatConversationLabel(
   Map<String, dynamic> chat, [
   List<Map<String, dynamic>> messages = const [],
 ]) {
-  final senderName = _chatPartyName(chat, const [
+  final senderName =
+      _chatPartyName(chat, const [
         'senderName',
         'senderDisplayName',
         'customerName',
@@ -11289,7 +11312,8 @@ String _chatConversationLabel(
         'bookedByName',
       ]) ??
       _chatMessagePartyName(messages, const ['sender', 'shipper', 'user']);
-  final riderName = _chatPartyName(chat, const [
+  final riderName =
+      _chatPartyName(chat, const [
         'riderName',
         'driverName',
         'courierName',
@@ -11300,8 +11324,9 @@ String _chatConversationLabel(
     'admin',
     'support',
   ]);
-  final type =
-      '${chat['type'] ?? chat['conversationType'] ?? ''}'.trim().toLowerCase();
+  final type = '${chat['type'] ?? chat['conversationType'] ?? ''}'
+      .trim()
+      .toLowerCase();
 
   if (senderName != null && riderName != null) {
     return '$senderName ↔ $riderName';
@@ -11365,8 +11390,8 @@ class _AdminNotesPanel extends StatelessWidget {
     final scoped = recordType == null
         ? records
         : records
-            .where((record) => '${record['recordType']}' == recordType)
-            .toList(growable: false);
+              .where((record) => '${record['recordType']}' == recordType)
+              .toList(growable: false);
     final filtered = adminSearch(scoped, query, const [
       'id',
       'recordId',
@@ -11376,8 +11401,9 @@ class _AdminNotesPanel extends StatelessWidget {
       'operatorEmail',
       'operatorId',
     ]);
-    final pinned =
-        filtered.where((record) => record['pinned'] == true).toList();
+    final pinned = filtered
+        .where((record) => record['pinned'] == true)
+        .toList();
     final ordered = [...pinned, ...filtered.where((r) => r['pinned'] != true)];
     return DecoratedBox(
       decoration: _panelDecoration(),
@@ -11639,25 +11665,25 @@ class _GiftsOperationsModule extends StatefulWidget {
   final String query;
   final bool canManageIssues;
   final Future<void> Function(Map<String, dynamic>, String)
-      onUpdateGiftWorkflow;
+  onUpdateGiftWorkflow;
   final Future<void> Function(Map<String, dynamic>, String)
-      onUpdateGiftCampaignParticipant;
+  onUpdateGiftCampaignParticipant;
   final Future<void> Function(Map<String, dynamic>, String)
-      onSetGiftBrandStatus;
+  onSetGiftBrandStatus;
   final Future<void> Function(Map<String, dynamic>?) onEditGiftBrandPartner;
   final Future<void> Function(Map<String, dynamic>, List<Map<String, dynamic>>)
-      onSuggestGiftCampaignMatch;
+  onSuggestGiftCampaignMatch;
   final Future<void> Function(Map<String, dynamic>, List<Map<String, dynamic>>)
-      onApproveGiftCampaignMatch;
+  onApproveGiftCampaignMatch;
   final Future<void> Function(List<Map<String, dynamic>>, String)
-      onBulkGiftCampaignAction;
+  onBulkGiftCampaignAction;
   final Future<void> Function(Map<String, dynamic>) onEditGiftRequest;
   final Future<void> Function(Map<String, dynamic>, String)
-      onUpdateGiftStoryAccess;
+  onUpdateGiftStoryAccess;
   final Future<void> Function(Map<String, dynamic>, String)
-      onUpdateGiftStoryMedia;
+  onUpdateGiftStoryMedia;
   final Future<void> Function(Map<String, dynamic>, String)
-      onUpdateGiftWorkspace;
+  onUpdateGiftWorkspace;
 
   @override
   State<_GiftsOperationsModule> createState() => _GiftsOperationsModuleState();
@@ -11764,8 +11790,9 @@ class _GiftsOperationsModuleState extends State<_GiftsOperationsModule> {
     final workflowGifts = filtered
         .where((gift) => !_isCampaignGiftRecord(gift))
         .toList(growable: false);
-    final campaignGifts =
-        filtered.where(_isCampaignGiftRecord).toList(growable: false);
+    final campaignGifts = filtered
+        .where(_isCampaignGiftRecord)
+        .toList(growable: false);
     final filteredParticipants = _applyGiftOperationalFilters(
       searchedParticipants,
       campaign: _campaignFilter,
@@ -11841,16 +11868,16 @@ class _GiftsOperationsModuleState extends State<_GiftsOperationsModule> {
             key: ValueKey(_tab),
             child: switch (_tab) {
               _GiftsWorkspaceTab.workflow => _giftWorkflowWorkspace(
-                  workflowGifts,
-                ),
+                workflowGifts,
+              ),
               _GiftsWorkspaceTab.campaigns => _giftCampaignWorkspace(
-                  campaignGifts,
-                  filteredParticipants,
-                  filteredMatches,
-                ),
+                campaignGifts,
+                filteredParticipants,
+                filteredMatches,
+              ),
               _GiftsWorkspaceTab.brandPartners => _giftBrandPartnerWorkspace(
-                  filteredBrands,
-                ),
+                filteredBrands,
+              ),
             },
           ),
         ),
@@ -11859,12 +11886,13 @@ class _GiftsOperationsModuleState extends State<_GiftsOperationsModule> {
   }
 
   Widget _giftWorkflowWorkspace(List<Map<String, dynamic>> gifts) {
-    final selected = _selectedGift != null &&
+    final selected =
+        _selectedGift != null &&
             gifts.any((gift) => _recordId(gift) == _recordId(_selectedGift!))
         ? _selectedGift!
         : gifts.isEmpty
-            ? null
-            : gifts.first;
+        ? null
+        : gifts.first;
     return Column(
       children: [
         _GiftWorkspaceHeader(
@@ -12232,8 +12260,8 @@ class _GiftsOperationsModuleState extends State<_GiftsOperationsModule> {
         final columns = constraints.maxWidth >= 1500
             ? 3
             : constraints.maxWidth >= 980
-                ? 2
-                : 1;
+            ? 2
+            : 1;
         final width = (constraints.maxWidth - ((columns - 1) * 16)) / columns;
         return Wrap(
           spacing: 16,
@@ -12317,7 +12345,7 @@ class _GiftPeopleLedWorkspace extends StatelessWidget {
   final ValueChanged<Map<String, dynamic>> onSelectGift;
   final Future<void> Function(Map<String, dynamic>) onEditGift;
   final Future<void> Function(Map<String, dynamic>, String)
-      onUpdateGiftWorkflow;
+  onUpdateGiftWorkflow;
   final Future<void> Function(Map<String, dynamic>, String) onUpdateWorkspace;
   final Future<void> Function(Map<String, dynamic>, String) onUpdateStoryAccess;
   final Future<void> Function(Map<String, dynamic>, String) onUpdateStoryMedia;
@@ -12589,7 +12617,7 @@ class _GiftPersonWorkspace extends StatelessWidget {
   final bool canManage;
   final Future<void> Function(Map<String, dynamic>) onEditGift;
   final Future<void> Function(Map<String, dynamic>, String)
-      onUpdateGiftWorkflow;
+  onUpdateGiftWorkflow;
   final Future<void> Function(Map<String, dynamic>, String) onUpdateWorkspace;
   final Future<void> Function(Map<String, dynamic>, String) onUpdateStoryAccess;
   final Future<void> Function(Map<String, dynamic>, String) onUpdateStoryMedia;
@@ -13063,7 +13091,7 @@ class _GiftTimelineWorkspacePanel extends StatelessWidget {
   final Map<String, dynamic> gift;
   final bool canManage;
   final Future<void> Function(Map<String, dynamic>, String)
-      onUpdateGiftWorkflow;
+  onUpdateGiftWorkflow;
   final Future<void> Function(Map<String, dynamic>, String) onUpdateWorkspace;
 
   @override
@@ -13110,10 +13138,10 @@ class _GiftTimelineWorkspacePanel extends StatelessWidget {
                 borderRadius: BorderRadius.circular(14),
                 onTap: canManage
                     ? () => unawaited(
-                          step.$2 == 'archived'
-                              ? onUpdateGiftWorkflow(gift, step.$2)
-                              : onUpdateWorkspace(gift, step.$2),
-                        )
+                        step.$2 == 'archived'
+                            ? onUpdateGiftWorkflow(gift, step.$2)
+                            : onUpdateWorkspace(gift, step.$2),
+                      )
                     : null,
                 child: Row(
                   children: [
@@ -13164,8 +13192,9 @@ class _GiftWorkspaceLine extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final display =
-        value.trim().isEmpty || value == 'null' ? 'Not recorded' : value.trim();
+    final display = value.trim().isEmpty || value == 'null'
+        ? 'Not recorded'
+        : value.trim();
     return Padding(
       padding: const EdgeInsets.only(bottom: 10),
       child: Column(
@@ -14805,16 +14834,16 @@ class _GiftStatusChip extends StatelessWidget {
     final color = lower.contains('reject') || lower.contains('suspend')
         ? const Color(0xFFFF6B7A)
         : lower.contains('supplier') || lower.contains('await')
-            ? const Color(0xFFFBBF24)
-            : lower.contains('pending') || lower.contains('review')
-                ? const Color(0xFFC084FC)
-                : lower.contains('active') || lower.contains('publish')
-                    ? const Color(0xFF60A5FA)
-                    : lower.contains('approve') ||
-                            lower.contains('complete') ||
-                            lower.contains('ready')
-                        ? const Color(0xFF34D399)
-                        : Colors.white;
+        ? const Color(0xFFFBBF24)
+        : lower.contains('pending') || lower.contains('review')
+        ? const Color(0xFFC084FC)
+        : lower.contains('active') || lower.contains('publish')
+        ? const Color(0xFF60A5FA)
+        : lower.contains('approve') ||
+              lower.contains('complete') ||
+              lower.contains('ready')
+        ? const Color(0xFF34D399)
+        : Colors.white;
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
       decoration: BoxDecoration(
@@ -15000,8 +15029,8 @@ class _GiftCardMeta extends StatelessWidget {
 }
 
 String _giftMatchBucket(Map<String, dynamic> record) {
-  final status =
-      '${record['status'] ?? record['matchStatus'] ?? ''}'.toLowerCase();
+  final status = '${record['status'] ?? record['matchStatus'] ?? ''}'
+      .toLowerCase();
   if (status.contains('approve')) return 'approved';
   if (status.contains('reject')) return 'rejected';
   if (status.contains('manual') || status.contains('review')) return 'manual';
@@ -15115,7 +15144,8 @@ String _giftWorkflowStage(Map<String, dynamic> record) {
 }
 
 String _giftBudgetSummary(Map<String, dynamic> record) {
-  final value = record['budget'] ??
+  final value =
+      record['budget'] ??
       record['giftBudget'] ??
       record['maxBudget'] ??
       record['budgetPence'];
@@ -15128,7 +15158,8 @@ String _giftBudgetSummary(Map<String, dynamic> record) {
 }
 
 String _giftIrisConfidenceSummary(Map<String, dynamic> record) {
-  final value = record['irisConfidence'] ??
+  final value =
+      record['irisConfidence'] ??
       record['confidenceScore'] ??
       _mapValue(record['iris'], 'confidence') ??
       _mapValue(record['irisAnalysis'], 'confidence');
@@ -15159,7 +15190,8 @@ bool _hasGiftImages(Map<String, dynamic> record) {
 }
 
 String _giftImageSummary(Map<String, dynamic> record) {
-  final photos = record['giftStoryPhotoUrls'] ??
+  final photos =
+      record['giftStoryPhotoUrls'] ??
       record['imageUrls'] ??
       record['photos'] ??
       const [];
@@ -15354,6 +15386,7 @@ List<(String, String)> _giftOperationsLines(Map<String, dynamic> record) {
       'Purchase Status',
       '${record['purchaseStatus'] ?? record['procurementStatus'] ?? 'Not purchased'}',
     ),
+    ('Time in current stage', _giftProcurementAge(record)),
     ('Gift Status', _giftWorkspaceProgress(record).join(' · ')),
     (
       'Dispatch Status',
@@ -15362,6 +15395,28 @@ List<(String, String)> _giftOperationsLines(Map<String, dynamic> record) {
     ('Story Status', _giftStorySummary(record)),
     ('Ready Status', _giftWorkflowStatus(record)),
   ];
+}
+
+String _giftProcurementAge(Map<String, dynamic> record) {
+  final raw =
+      record['procurementUpdatedAt'] ??
+      record['procurementCommittedAt'] ??
+      record['updatedAt'] ??
+      record['createdAt'];
+  final startedAt = switch (raw) {
+    Timestamp value => value.toDate(),
+    DateTime value => value,
+    String value => DateTime.tryParse(value),
+    _ => null,
+  };
+  if (startedAt == null) return 'Not available';
+  final age = DateTime.now().difference(startedAt);
+  if (age.isNegative) return 'Just updated';
+  if (age.inDays > 0) return '${age.inDays}d ${age.inHours.remainder(24)}h';
+  if (age.inHours > 0) {
+    return '${age.inHours}h ${age.inMinutes.remainder(60)}m';
+  }
+  return '${age.inMinutes.clamp(0, 59)}m';
 }
 
 List<Map<String, dynamic>> _applyGiftOperationalFilters(
@@ -15404,27 +15459,31 @@ List<Map<String, dynamic>> _applyGiftOperationalFilters(
         ]),
       )
       .where((record) {
-    if (story.isEmpty) return true;
-    final lower = story.toLowerCase();
-    final summary = _giftStorySummary(record).toLowerCase();
-    if (lower == 'story available') return _hasGiftStory(record);
-    if (lower == 'no story') return !_hasGiftStory(record);
-    return summary.contains(lower) ||
-        '${record['storyStatus'] ?? record['giftStoryVideoStatus'] ?? ''}'
-            .toLowerCase()
-            .contains(lower);
-  }).where((record) {
-    if (stage.isEmpty) return true;
-    return _giftOperationalStage(record).toLowerCase() == stage.toLowerCase();
-  }).where((record) {
-    if (match.isEmpty) return true;
-    final matched =
-        '${record['suggestedParticipantId'] ?? record['matchedGiftId'] ?? record['brandName'] ?? record['partnerName'] ?? ''}'
+        if (story.isEmpty) return true;
+        final lower = story.toLowerCase();
+        final summary = _giftStorySummary(record).toLowerCase();
+        if (lower == 'story available') return _hasGiftStory(record);
+        if (lower == 'no story') return !_hasGiftStory(record);
+        return summary.contains(lower) ||
+            '${record['storyStatus'] ?? record['giftStoryVideoStatus'] ?? ''}'
+                .toLowerCase()
+                .contains(lower);
+      })
+      .where((record) {
+        if (stage.isEmpty) return true;
+        return _giftOperationalStage(record).toLowerCase() ==
+            stage.toLowerCase();
+      })
+      .where((record) {
+        if (match.isEmpty) return true;
+        final matched =
+            '${record['suggestedParticipantId'] ?? record['matchedGiftId'] ?? record['brandName'] ?? record['partnerName'] ?? ''}'
                 .trim()
                 .isNotEmpty ||
             _giftMatchBucket(record) == 'approved';
-    return match == 'Matched' ? matched : !matched;
-  }).toList(growable: false);
+        return match == 'Matched' ? matched : !matched;
+      })
+      .toList(growable: false);
 }
 
 bool _giftRecordMatchesFilter(
@@ -15501,7 +15560,7 @@ class _GiftBrandPartnersModule extends StatelessWidget {
   final String query;
   final bool canManageIssues;
   final Future<void> Function(Map<String, dynamic>, String)
-      onSetGiftBrandStatus;
+  onSetGiftBrandStatus;
   final Future<void> Function(Map<String, dynamic>?) onEditGiftBrandPartner;
 
   @override
@@ -15577,10 +15636,10 @@ class _GiftBrandPartnersModule extends StatelessWidget {
           ],
           actions: canManageIssues
               ? (record) => _giftBrandPartnerActions(
-                    record,
-                    onSetGiftBrandStatus,
-                    onEditGiftBrandPartner,
-                  )
+                  record,
+                  onSetGiftBrandStatus,
+                  onEditGiftBrandPartner,
+                )
               : null,
         ),
         const SizedBox(height: 18),
@@ -15632,9 +15691,9 @@ class _GiftTeamWorkspaceModule extends StatelessWidget {
   final String query;
   final bool canManageIssues;
   final Future<void> Function(Map<String, dynamic>, String)
-      onUpdateGiftWorkspace;
+  onUpdateGiftWorkspace;
   final Future<void> Function(Map<String, dynamic>, String)
-      onUpdateGiftStoryMedia;
+  onUpdateGiftStoryMedia;
 
   @override
   Widget build(BuildContext context) {
@@ -15662,31 +15721,23 @@ class _GiftTeamWorkspaceModule extends StatelessWidget {
           records: records,
           query: '',
           fields: const [],
-          columns: const ['Gift', 'Workspace', 'Procurement', 'IRIS'],
+          columns: const ['Gift', 'Workspace', 'Procurement', 'Age', 'IRIS'],
           row: (record) => [
             '${record['giftName'] ?? record['title'] ?? _recordId(record)}',
             _giftWorkspaceSummary(record),
             _giftProcurementSummary(record),
+            _giftProcurementAge(record),
             _giftIrisSelectionSummary(record),
           ],
           actions: canManageIssues
               ? (record) => [
-                    for (final action in const [
-                      ('Assign', 'assigned'),
-                      ('Curating', 'curating'),
-                      ('Supplier pending', 'supplier_pending'),
-                      ('Approval pending', 'approval_pending'),
-                      ('Ready procurement', 'ready_for_procurement'),
-                      ('Ready rider', 'ready_for_rider'),
-                      ('Ready scheduling', 'ready_for_scheduling'),
-                      ('Ready delivery', 'ready_for_delivery'),
-                    ])
-                      _MiniAction(
-                        label: action.$1,
-                        onPressed: () =>
-                            unawaited(onUpdateGiftWorkspace(record, action.$2)),
-                      ),
-                  ]
+                  for (final action in _giftProcurementActions(record))
+                    _MiniAction(
+                      label: action.$1,
+                      onPressed: () =>
+                          unawaited(onUpdateGiftWorkspace(record, action.$2)),
+                    ),
+                ]
               : null,
         ),
         const SizedBox(height: 18),
@@ -15706,52 +15757,71 @@ class _GiftTeamWorkspaceModule extends StatelessWidget {
           ],
           actions: canManageIssues
               ? (record) => [
-                    _MiniAction(
-                      label: 'Download video',
-                      onPressed: () => unawaited(
-                        onUpdateGiftStoryMedia(record, 'download_video'),
-                      ),
+                  _MiniAction(
+                    label: 'Download video',
+                    onPressed: () => unawaited(
+                      onUpdateGiftStoryMedia(record, 'download_video'),
                     ),
-                    _MiniAction(
-                      label: 'Create upload',
-                      onPressed: () => unawaited(
-                        onUpdateGiftStoryMedia(record, 'create_video_upload'),
-                      ),
+                  ),
+                  _MiniAction(
+                    label: 'Create upload',
+                    onPressed: () => unawaited(
+                      onUpdateGiftStoryMedia(record, 'create_video_upload'),
                     ),
-                    _MiniAction(
-                      label: 'Finalize upload',
-                      onPressed: () => unawaited(
-                        onUpdateGiftStoryMedia(record, 'finalize_video_upload'),
-                      ),
+                  ),
+                  _MiniAction(
+                    label: 'Finalize upload',
+                    onPressed: () => unawaited(
+                      onUpdateGiftStoryMedia(record, 'finalize_video_upload'),
                     ),
-                    _MiniAction(
-                      label: 'Record preview',
-                      onPressed: () => unawaited(
-                        onUpdateGiftStoryMedia(record, 'record_preview_event'),
-                      ),
+                  ),
+                  _MiniAction(
+                    label: 'Record preview',
+                    onPressed: () => unawaited(
+                      onUpdateGiftStoryMedia(record, 'record_preview_event'),
                     ),
-                    _MiniAction(
-                      label: 'Update privacy',
-                      onPressed: () => unawaited(
-                        onUpdateGiftStoryMedia(record, 'update_privacy'),
-                      ),
+                  ),
+                  _MiniAction(
+                    label: 'Update privacy',
+                    onPressed: () => unawaited(
+                      onUpdateGiftStoryMedia(record, 'update_privacy'),
                     ),
-                    _MiniAction(
-                      label: 'Extend',
-                      onPressed: () =>
-                          unawaited(onUpdateGiftStoryMedia(record, 'extend')),
-                    ),
-                    _MiniAction(
-                      label: 'Revoke',
-                      onPressed: () =>
-                          unawaited(onUpdateGiftStoryMedia(record, 'revoke')),
-                    ),
-                  ]
+                  ),
+                  _MiniAction(
+                    label: 'Extend',
+                    onPressed: () =>
+                        unawaited(onUpdateGiftStoryMedia(record, 'extend')),
+                  ),
+                  _MiniAction(
+                    label: 'Revoke',
+                    onPressed: () =>
+                        unawaited(onUpdateGiftStoryMedia(record, 'revoke')),
+                  ),
+                ]
               : null,
         ),
       ],
     );
   }
+}
+
+List<(String, String)> _giftProcurementActions(Map<String, dynamic> record) {
+  final status =
+      '${record['procurementStatus'] ?? record['giftStatus'] ?? record['status'] ?? ''}'
+          .trim()
+          .toLowerCase();
+  return switch (status) {
+    'submitted_for_review' => const [('Review', 'procurement_review')],
+    'procurement_review' => const [('Start sourcing', 'sourcing')],
+    'sourcing' => const [
+      ('Item unavailable', 'unavailable'),
+      ('Procurement issue', 'procurement_failed'),
+    ],
+    'unavailable' ||
+    'procurement_failed' ||
+    'substitution_required' => const [('Continue sourcing', 'sourcing')],
+    _ => const [],
+  };
 }
 
 class _TroubleshootingModule extends StatelessWidget {
@@ -15777,11 +15847,11 @@ class _TroubleshootingModule extends StatelessWidget {
   final bool canManageIssues;
   final ValueChanged<Map<String, dynamic>> onOpenDelivery;
   final Future<void> Function(Map<String, dynamic>, String)
-      onUpdateSupportTicket;
+  onUpdateSupportTicket;
   final Future<void> Function(Map<String, dynamic>, String)
-      onSetDeliveryOperationStatus;
+  onSetDeliveryOperationStatus;
   final Future<void> Function(Map<String, dynamic>, String)
-      onUpdateFinanceWorkflow;
+  onUpdateFinanceWorkflow;
   final Future<void> Function(Map<String, dynamic>, String) onModerateRating;
 
   @override
@@ -15854,13 +15924,13 @@ class _TroubleshootingModule extends StatelessWidget {
           ],
           actions: canManageIssues
               ? (record) => _troubleshootingActions(
-                    record,
-                    onOpenDelivery: onOpenDelivery,
-                    onUpdateSupportTicket: onUpdateSupportTicket,
-                    onSetDeliveryOperationStatus: onSetDeliveryOperationStatus,
-                    onUpdateFinanceWorkflow: onUpdateFinanceWorkflow,
-                    onModerateRating: onModerateRating,
-                  )
+                  record,
+                  onOpenDelivery: onOpenDelivery,
+                  onUpdateSupportTicket: onUpdateSupportTicket,
+                  onSetDeliveryOperationStatus: onSetDeliveryOperationStatus,
+                  onUpdateFinanceWorkflow: onUpdateFinanceWorkflow,
+                  onModerateRating: onModerateRating,
+                )
               : null,
         ),
       ],
@@ -16050,7 +16120,7 @@ class _GiftStoryMediaModule extends StatelessWidget {
   final String query;
   final bool canManageIssues;
   final Future<void> Function(Map<String, dynamic>, String)
-      onUpdateGiftStoryMedia;
+  onUpdateGiftStoryMedia;
 
   @override
   Widget build(BuildContext context) {
@@ -16090,45 +16160,45 @@ class _GiftStoryMediaModule extends StatelessWidget {
           ],
           actions: canManageIssues
               ? (record) => [
-                    _MiniAction(
-                      label: 'Download video',
-                      onPressed: () => unawaited(
-                        onUpdateGiftStoryMedia(record, 'download_video'),
-                      ),
+                  _MiniAction(
+                    label: 'Download video',
+                    onPressed: () => unawaited(
+                      onUpdateGiftStoryMedia(record, 'download_video'),
                     ),
-                    _MiniAction(
-                      label: 'Create upload',
-                      onPressed: () => unawaited(
-                        onUpdateGiftStoryMedia(record, 'create_video_upload'),
-                      ),
+                  ),
+                  _MiniAction(
+                    label: 'Create upload',
+                    onPressed: () => unawaited(
+                      onUpdateGiftStoryMedia(record, 'create_video_upload'),
                     ),
-                    _MiniAction(
-                      label: 'Finalize upload',
-                      onPressed: () => unawaited(
-                        onUpdateGiftStoryMedia(record, 'finalize_video_upload'),
-                      ),
+                  ),
+                  _MiniAction(
+                    label: 'Finalize upload',
+                    onPressed: () => unawaited(
+                      onUpdateGiftStoryMedia(record, 'finalize_video_upload'),
                     ),
-                    _MiniAction(
-                      label: 'Retry story',
-                      onPressed: () =>
-                          unawaited(onUpdateGiftStoryMedia(record, 'retry')),
-                    ),
-                    _MiniAction(
-                      label: 'Regenerate link',
-                      onPressed: () => unawaited(
-                          onUpdateGiftStoryMedia(record, 'regenerate')),
-                    ),
-                    _MiniAction(
-                      label: 'Extend',
-                      onPressed: () =>
-                          unawaited(onUpdateGiftStoryMedia(record, 'extend')),
-                    ),
-                    _MiniAction(
-                      label: 'Revoke',
-                      onPressed: () =>
-                          unawaited(onUpdateGiftStoryMedia(record, 'revoke')),
-                    ),
-                  ]
+                  ),
+                  _MiniAction(
+                    label: 'Retry story',
+                    onPressed: () =>
+                        unawaited(onUpdateGiftStoryMedia(record, 'retry')),
+                  ),
+                  _MiniAction(
+                    label: 'Regenerate link',
+                    onPressed: () =>
+                        unawaited(onUpdateGiftStoryMedia(record, 'regenerate')),
+                  ),
+                  _MiniAction(
+                    label: 'Extend',
+                    onPressed: () =>
+                        unawaited(onUpdateGiftStoryMedia(record, 'extend')),
+                  ),
+                  _MiniAction(
+                    label: 'Revoke',
+                    onPressed: () =>
+                        unawaited(onUpdateGiftStoryMedia(record, 'revoke')),
+                  ),
+                ]
               : null,
         ),
       ],
@@ -16154,13 +16224,13 @@ class _GiftCampaignMatchesModule extends StatelessWidget {
   final String query;
   final bool canManageIssues;
   final Future<void> Function(Map<String, dynamic>, String)
-      onUpdateGiftCampaignParticipant;
+  onUpdateGiftCampaignParticipant;
   final Future<void> Function(Map<String, dynamic>, List<Map<String, dynamic>>)
-      onSuggestGiftCampaignMatch;
+  onSuggestGiftCampaignMatch;
   final Future<void> Function(Map<String, dynamic>, List<Map<String, dynamic>>)
-      onApproveGiftCampaignMatch;
+  onApproveGiftCampaignMatch;
   final Future<void> Function(List<Map<String, dynamic>>, String)
-      onBulkGiftCampaignAction;
+  onBulkGiftCampaignAction;
 
   @override
   Widget build(BuildContext context) {
@@ -16254,37 +16324,37 @@ class _GiftCampaignMatchesModule extends StatelessWidget {
           ],
           actions: canManageIssues
               ? (record) => [
-                    _MiniAction(
-                      label: 'Suggest',
-                      onPressed: () => unawaited(
-                        onSuggestGiftCampaignMatch(record, participants),
-                      ),
+                  _MiniAction(
+                    label: 'Suggest',
+                    onPressed: () => unawaited(
+                      onSuggestGiftCampaignMatch(record, participants),
                     ),
-                    _MiniAction(
-                      label: 'Approve match',
-                      onPressed: () => unawaited(
-                        onApproveGiftCampaignMatch(record, participants),
-                      ),
+                  ),
+                  _MiniAction(
+                    label: 'Approve match',
+                    onPressed: () => unawaited(
+                      onApproveGiftCampaignMatch(record, participants),
                     ),
-                    _MiniAction(
-                      label: 'Approve',
-                      onPressed: () => unawaited(
-                        onUpdateGiftCampaignParticipant(record, 'approved'),
-                      ),
+                  ),
+                  _MiniAction(
+                    label: 'Approve',
+                    onPressed: () => unawaited(
+                      onUpdateGiftCampaignParticipant(record, 'approved'),
                     ),
-                    _MiniAction(
-                      label: 'Reject',
-                      onPressed: () => unawaited(
-                        onUpdateGiftCampaignParticipant(record, 'rejected'),
-                      ),
+                  ),
+                  _MiniAction(
+                    label: 'Reject',
+                    onPressed: () => unawaited(
+                      onUpdateGiftCampaignParticipant(record, 'rejected'),
                     ),
-                    _MiniAction(
-                      label: 'Assign later',
-                      onPressed: () => unawaited(
-                        onUpdateGiftCampaignParticipant(record, 'assign_later'),
-                      ),
+                  ),
+                  _MiniAction(
+                    label: 'Assign later',
+                    onPressed: () => unawaited(
+                      onUpdateGiftCampaignParticipant(record, 'assign_later'),
                     ),
-                  ]
+                  ),
+                ]
               : null,
         ),
       ],
@@ -16316,7 +16386,7 @@ class _SupportOperationsModule extends StatelessWidget {
   final String query;
   final bool canManageIssues;
   final Future<void> Function(Map<String, dynamic>, String)
-      onUpdateSupportTicket;
+  onUpdateSupportTicket;
   final Future<void> Function(Map<String, dynamic>) onOpenSupportConversation;
   final Future<void> Function(Map<String, dynamic>, String) onAddAdminNote;
 
@@ -16408,11 +16478,11 @@ class _SupportOperationsModule extends StatelessWidget {
           ],
           actions: canManageIssues
               ? (record) => _supportActions(
-                    record,
-                    onUpdateSupportTicket,
-                    onOpenSupportConversation,
-                    onAddAdminNote,
-                  )
+                  record,
+                  onUpdateSupportTicket,
+                  onOpenSupportConversation,
+                  onAddAdminNote,
+                )
               : null,
         ),
         const SizedBox(height: 18),
@@ -16518,21 +16588,27 @@ class _AuditCentreModule extends StatelessWidget {
       'severity',
       'outcome',
     ]);
-    final today =
-        auditLogs.where((log) => _isSameDay(log, DateTime.now())).length;
+    final today = auditLogs
+        .where((log) => _isSameDay(log, DateTime.now()))
+        .length;
     final approvals = auditLogs
         .where((log) => _hasAnyText(log, const ['approve', 'approved']))
         .length;
-    final suspensions =
-        auditLogs.where((log) => _hasAnyText(log, const ['suspend'])).length;
-    final refunds =
-        auditLogs.where((log) => _hasAnyText(log, const ['refund'])).length;
-    final overrides =
-        auditLogs.where((log) => _hasAnyText(log, const ['override'])).length;
-    final escalations =
-        auditLogs.where((log) => _hasAnyText(log, const ['escalat'])).length;
-    final critical =
-        auditLogs.where((log) => _auditSeverity(log) == 'critical').length;
+    final suspensions = auditLogs
+        .where((log) => _hasAnyText(log, const ['suspend']))
+        .length;
+    final refunds = auditLogs
+        .where((log) => _hasAnyText(log, const ['refund']))
+        .length;
+    final overrides = auditLogs
+        .where((log) => _hasAnyText(log, const ['override']))
+        .length;
+    final escalations = auditLogs
+        .where((log) => _hasAnyText(log, const ['escalat']))
+        .length;
+    final critical = auditLogs
+        .where((log) => _auditSeverity(log) == 'critical')
+        .length;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -16901,14 +16977,14 @@ class _SettingsModule extends StatelessWidget {
   final ValueChanged<AdminRole> onInviteRoleChanged;
   final VoidCallback onCreateAdminUser;
   final Future<void> Function(Map<String, dynamic>, String)
-      onSetAdminUserStatus;
+  onSetAdminUserStatus;
   final Future<void> Function(Map<String, dynamic>, AdminRole)
-      onSetAdminUserRole;
+  onSetAdminUserRole;
   final TextEditingController announcementTitle;
   final TextEditingController announcementBody;
   final Future<void> Function(String) onSendPlatformAnnouncement;
   final Future<void> Function(Map<String, dynamic>, String)
-      onUpdatePlatformRecord;
+  onUpdatePlatformRecord;
   final Future<void> Function(Map<String, dynamic>) onRetryNotificationDelivery;
 
   @override
@@ -16919,15 +16995,18 @@ class _SettingsModule extends StatelessWidget {
       ...platformNotices,
       ...platformVersions,
     ];
-    final activeServices =
-        platformStatus.where((record) => _platformEnabled(record)).length;
+    final activeServices = platformStatus
+        .where((record) => _platformEnabled(record))
+        .length;
     final maintenance = platformConfig
         .where((record) => record['maintenanceMode'] == true)
         .length;
-    final activeNotices =
-        platformNotices.where((record) => _platformPublished(record)).length;
-    final failedNotifications =
-        notifications.where(_notificationNeedsRetry).length;
+    final activeNotices = platformNotices
+        .where((record) => _platformPublished(record))
+        .length;
+    final failedNotifications = notifications
+        .where(_notificationNeedsRetry)
+        .length;
     final platformAudit = auditLogs
         .where(
           (log) =>
@@ -17056,7 +17135,7 @@ class _SettingsModule extends StatelessWidget {
           ],
           actions: canManageAdmins
               ? (record) =>
-                  _platformNoticeActions(record, onUpdatePlatformRecord)
+                    _platformNoticeActions(record, onUpdatePlatformRecord)
               : null,
         ),
         const SizedBox(height: 18),
@@ -17089,13 +17168,13 @@ class _SettingsModule extends StatelessWidget {
           ],
           actions: canManageAdmins
               ? (record) => [
-                    if (_notificationNeedsRetry(record))
-                      _MiniAction(
-                        label: 'Retry',
-                        onPressed: () =>
-                            unawaited(onRetryNotificationDelivery(record)),
-                      ),
-                  ]
+                  if (_notificationNeedsRetry(record))
+                    _MiniAction(
+                      label: 'Retry',
+                      onPressed: () =>
+                          unawaited(onRetryNotificationDelivery(record)),
+                    ),
+                ]
               : null,
         ),
         const SizedBox(height: 18),
@@ -17223,10 +17302,10 @@ class _SettingsModule extends StatelessWidget {
           ],
           actions: canManageAdmins
               ? (record) => _adminUserActions(
-                    record,
-                    onSetAdminUserStatus,
-                    onSetAdminUserRole,
-                  )
+                  record,
+                  onSetAdminUserStatus,
+                  onSetAdminUserRole,
+                )
               : null,
         ),
       ],
@@ -17600,8 +17679,8 @@ class _GovernanceOperationsModule extends StatelessWidget {
     final recentGovernanceAudit = auditLogs
         .where(
           (record) => '${record['actionType'] ?? ''}'.toLowerCase().contains(
-                'governance_',
-              ),
+            'governance_',
+          ),
         )
         .toList(growable: false);
 
@@ -17673,11 +17752,7 @@ class _GovernanceOperationsModule extends StatelessWidget {
           spacing: 12,
           runSpacing: 12,
           children: [
-            _MetricCard(
-              'Production health',
-              'Scan',
-              'PASS / WARNING / FAIL',
-            ),
+            _MetricCard('Production health', 'Scan', 'PASS / WARNING / FAIL'),
             _MetricCard(
               'Address limits',
               '${rateLimits.length}',
@@ -17738,13 +17813,13 @@ class _GovernanceOperationsModule extends StatelessWidget {
           ],
           actions: canRecover
               ? (record) => [
-                    _MiniAction(
-                      label: 'Reset',
-                      onPressed: () => unawaited(
-                        onGovernanceAction(record, 'reset_address_rate_limit'),
-                      ),
+                  _MiniAction(
+                    label: 'Reset',
+                    onPressed: () => unawaited(
+                      onGovernanceAction(record, 'reset_address_rate_limit'),
                     ),
-                  ]
+                  ),
+                ]
               : null,
         ),
         const SizedBox(height: 14),
@@ -17764,25 +17839,25 @@ class _GovernanceOperationsModule extends StatelessWidget {
           ],
           actions: canRecover
               ? (record) => [
-                    _MiniAction(
-                      label: 'Restore',
-                      onPressed: () => unawaited(
-                        onGovernanceAction(record, 'restore_sender_draft'),
-                      ),
+                  _MiniAction(
+                    label: 'Restore',
+                    onPressed: () => unawaited(
+                      onGovernanceAction(record, 'restore_sender_draft'),
                     ),
-                    _MiniAction(
-                      label: 'Expire',
-                      onPressed: () => unawaited(
-                        onGovernanceAction(record, 'expire_sender_draft'),
-                      ),
+                  ),
+                  _MiniAction(
+                    label: 'Expire',
+                    onPressed: () => unawaited(
+                      onGovernanceAction(record, 'expire_sender_draft'),
                     ),
-                    _MiniAction(
-                      label: 'Delete',
-                      onPressed: () => unawaited(
-                        onGovernanceAction(record, 'delete_sender_draft'),
-                      ),
+                  ),
+                  _MiniAction(
+                    label: 'Delete',
+                    onPressed: () => unawaited(
+                      onGovernanceAction(record, 'delete_sender_draft'),
                     ),
-                  ]
+                  ),
+                ]
               : null,
         ),
         const SizedBox(height: 14),
@@ -17802,31 +17877,31 @@ class _GovernanceOperationsModule extends StatelessWidget {
           ],
           actions: canRecover
               ? (record) => [
-                    _MiniAction(
-                      label: 'Recover account',
-                      onPressed: () => unawaited(
-                        onGovernanceAction(
-                          record,
-                          'recover_sender_account_state',
-                        ),
+                  _MiniAction(
+                    label: 'Recover account',
+                    onPressed: () => unawaited(
+                      onGovernanceAction(
+                        record,
+                        'recover_sender_account_state',
                       ),
                     ),
-                    _MiniAction(
-                      label: 'Recover onboarding',
-                      onPressed: () => unawaited(
-                        onGovernanceAction(record, 'recover_sender_onboarding'),
+                  ),
+                  _MiniAction(
+                    label: 'Recover onboarding',
+                    onPressed: () => unawaited(
+                      onGovernanceAction(record, 'recover_sender_onboarding'),
+                    ),
+                  ),
+                  _MiniAction(
+                    label: 'Repair notifications',
+                    onPressed: () => unawaited(
+                      onGovernanceAction(
+                        record,
+                        'recover_sender_notifications',
                       ),
                     ),
-                    _MiniAction(
-                      label: 'Repair notifications',
-                      onPressed: () => unawaited(
-                        onGovernanceAction(
-                          record,
-                          'recover_sender_notifications',
-                        ),
-                      ),
-                    ),
-                  ]
+                  ),
+                ]
               : null,
         ),
         const SizedBox(height: 14),
@@ -17846,32 +17921,31 @@ class _GovernanceOperationsModule extends StatelessWidget {
           ],
           actions: canRecover
               ? (record) => [
-                    _MiniAction(
-                      label: 'Recover',
-                      onPressed: () => unawaited(
-                        onGovernanceAction(record, 'force_rider_offline'),
-                      ),
+                  _MiniAction(
+                    label: 'Recover',
+                    onPressed: () => unawaited(
+                      onGovernanceAction(record, 'force_rider_offline'),
                     ),
-                    _MiniAction(
-                      label: 'Restore',
-                      onPressed: () => unawaited(
-                        onGovernanceAction(record, 'force_rider_online'),
-                      ),
+                  ),
+                  _MiniAction(
+                    label: 'Restore',
+                    onPressed: () => unawaited(
+                      onGovernanceAction(record, 'force_rider_online'),
                     ),
-                    _MiniAction(
-                      label: 'Reset',
-                      onPressed: () => unawaited(
-                        onGovernanceAction(record, 'reset_rider_presence'),
-                      ),
+                  ),
+                  _MiniAction(
+                    label: 'Reset',
+                    onPressed: () => unawaited(
+                      onGovernanceAction(record, 'reset_rider_presence'),
                     ),
-                    _MiniAction(
-                      label: 'Repair',
-                      onPressed: () => unawaited(
-                        onGovernanceAction(
-                            record, 'reset_rider_dispatch_state'),
-                      ),
+                  ),
+                  _MiniAction(
+                    label: 'Repair',
+                    onPressed: () => unawaited(
+                      onGovernanceAction(record, 'reset_rider_dispatch_state'),
                     ),
-                  ]
+                  ),
+                ]
               : null,
         ),
         const SizedBox(height: 14),
@@ -17891,26 +17965,25 @@ class _GovernanceOperationsModule extends StatelessWidget {
           ],
           actions: canRecover
               ? (record) => [
-                    _MiniAction(
-                      label: 'Recover verification',
-                      onPressed: () => unawaited(
-                        onGovernanceAction(
-                            record, 'recover_rider_verification'),
-                      ),
+                  _MiniAction(
+                    label: 'Recover verification',
+                    onPressed: () => unawaited(
+                      onGovernanceAction(record, 'recover_rider_verification'),
                     ),
-                    _MiniAction(
-                      label: 'Restore',
-                      onPressed: () => unawaited(
-                        onGovernanceAction(record, 'restore_suspended_rider'),
-                      ),
+                  ),
+                  _MiniAction(
+                    label: 'Restore',
+                    onPressed: () => unawaited(
+                      onGovernanceAction(record, 'restore_suspended_rider'),
                     ),
-                    _MiniAction(
-                      label: 'Recover payout',
-                      onPressed: () => unawaited(
-                        onGovernanceAction(record, 'recover_payout_state'),
-                      ),
+                  ),
+                  _MiniAction(
+                    label: 'Recover payout',
+                    onPressed: () => unawaited(
+                      onGovernanceAction(record, 'recover_payout_state'),
                     ),
-                  ]
+                  ),
+                ]
               : null,
         ),
         const SizedBox(height: 14),
@@ -17936,54 +18009,52 @@ class _GovernanceOperationsModule extends StatelessWidget {
           ],
           actions: canRecover
               ? (record) => [
-                    _MiniAction(
-                      label: 'Open',
-                      onPressed: () => onOpenDelivery(record),
+                  _MiniAction(
+                    label: 'Open',
+                    onPressed: () => onOpenDelivery(record),
+                  ),
+                  _MiniAction(
+                    label: 'Repair tracking',
+                    onPressed: () => unawaited(
+                      onGovernanceAction(record, 'repair_tracking_state'),
                     ),
-                    _MiniAction(
-                      label: 'Repair tracking',
-                      onPressed: () => unawaited(
-                        onGovernanceAction(record, 'repair_tracking_state'),
-                      ),
+                  ),
+                  _MiniAction(
+                    label: 'Recover',
+                    onPressed: () => unawaited(
+                      onGovernanceAction(record, 'recover_delivery_lifecycle'),
                     ),
-                    _MiniAction(
-                      label: 'Recover',
-                      onPressed: () => unawaited(
-                        onGovernanceAction(
-                            record, 'recover_delivery_lifecycle'),
-                      ),
+                  ),
+                  _MiniAction(
+                    label: 'Resolve duplicate',
+                    onPressed: () => unawaited(
+                      onGovernanceAction(record, 'resolve_duplicate_delivery'),
                     ),
-                    _MiniAction(
-                      label: 'Resolve duplicate',
-                      onPressed: () => unawaited(
-                        onGovernanceAction(
-                            record, 'resolve_duplicate_delivery'),
-                      ),
+                  ),
+                  _MiniAction(
+                    label: 'Recover orphan',
+                    onPressed: () => unawaited(
+                      onGovernanceAction(record, 'recover_orphan_delivery'),
                     ),
-                    _MiniAction(
-                      label: 'Recover orphan',
-                      onPressed: () => unawaited(
-                        onGovernanceAction(record, 'recover_orphan_delivery'),
-                      ),
+                  ),
+                  _MiniAction(
+                    label: 'Reassign',
+                    onPressed: () =>
+                        unawaited(onGovernanceAction(record, 'reassign_rider')),
+                  ),
+                  _MiniAction(
+                    label: 'Reopen',
+                    onPressed: () => unawaited(
+                      onGovernanceAction(record, 'reopen_delivery'),
                     ),
-                    _MiniAction(
-                      label: 'Reassign',
-                      onPressed: () => unawaited(
-                          onGovernanceAction(record, 'reassign_rider')),
+                  ),
+                  _MiniAction(
+                    label: 'Repair custody',
+                    onPressed: () => unawaited(
+                      onGovernanceAction(record, 'repair_custody_chain'),
                     ),
-                    _MiniAction(
-                      label: 'Reopen',
-                      onPressed: () => unawaited(
-                        onGovernanceAction(record, 'reopen_delivery'),
-                      ),
-                    ),
-                    _MiniAction(
-                      label: 'Repair custody',
-                      onPressed: () => unawaited(
-                        onGovernanceAction(record, 'repair_custody_chain'),
-                      ),
-                    ),
-                  ]
+                  ),
+                ]
               : null,
         ),
         const SizedBox(height: 14),
@@ -18003,38 +18074,37 @@ class _GovernanceOperationsModule extends StatelessWidget {
           ],
           actions: canRecover
               ? (record) => [
-                    _MiniAction(
-                      label: 'Recover',
-                      onPressed: () => unawaited(
-                        onGovernanceAction(
-                            record, 'recover_business_membership'),
+                  _MiniAction(
+                    label: 'Recover',
+                    onPressed: () => unawaited(
+                      onGovernanceAction(record, 'recover_business_membership'),
+                    ),
+                  ),
+                  _MiniAction(
+                    label: 'Repair team',
+                    onPressed: () => unawaited(
+                      onGovernanceAction(record, 'recover_business_team'),
+                    ),
+                  ),
+                  _MiniAction(
+                    label: 'Repair permissions',
+                    onPressed: () => unawaited(
+                      onGovernanceAction(
+                        record,
+                        'recover_business_permissions',
                       ),
                     ),
-                    _MiniAction(
-                      label: 'Repair team',
-                      onPressed: () => unawaited(
-                        onGovernanceAction(record, 'recover_business_team'),
+                  ),
+                  _MiniAction(
+                    label: 'Recover subscription',
+                    onPressed: () => unawaited(
+                      onGovernanceAction(
+                        record,
+                        'recover_business_subscription',
                       ),
                     ),
-                    _MiniAction(
-                      label: 'Repair permissions',
-                      onPressed: () => unawaited(
-                        onGovernanceAction(
-                          record,
-                          'recover_business_permissions',
-                        ),
-                      ),
-                    ),
-                    _MiniAction(
-                      label: 'Recover subscription',
-                      onPressed: () => unawaited(
-                        onGovernanceAction(
-                          record,
-                          'recover_business_subscription',
-                        ),
-                      ),
-                    ),
-                  ]
+                  ),
+                ]
               : null,
         ),
         const SizedBox(height: 14),
@@ -18054,20 +18124,19 @@ class _GovernanceOperationsModule extends StatelessWidget {
           ],
           actions: canRecover
               ? (record) => [
-                    _MiniAction(
-                      label: 'Recover invoice',
-                      onPressed: () => unawaited(
-                        onGovernanceAction(record, 'recover_business_invoice'),
-                      ),
+                  _MiniAction(
+                    label: 'Recover invoice',
+                    onPressed: () => unawaited(
+                      onGovernanceAction(record, 'recover_business_invoice'),
                     ),
-                    _MiniAction(
-                      label: 'Recover invitation',
-                      onPressed: () => unawaited(
-                        onGovernanceAction(
-                            record, 'recover_business_invitation'),
-                      ),
+                  ),
+                  _MiniAction(
+                    label: 'Recover invitation',
+                    onPressed: () => unawaited(
+                      onGovernanceAction(record, 'recover_business_invitation'),
                     ),
-                  ]
+                  ),
+                ]
               : null,
         ),
         const SizedBox(height: 14),
@@ -18087,31 +18156,31 @@ class _GovernanceOperationsModule extends StatelessWidget {
           ],
           actions: canRecover
               ? (record) => [
-                    _MiniAction(
-                      label: 'Escalate',
-                      onPressed: () => unawaited(
-                        onGovernanceAction(record, 'escalate_health_plus'),
-                      ),
+                  _MiniAction(
+                    label: 'Escalate',
+                    onPressed: () => unawaited(
+                      onGovernanceAction(record, 'escalate_health_plus'),
                     ),
-                    _MiniAction(
-                      label: 'Recover booking',
-                      onPressed: () => unawaited(
-                        onGovernanceAction(record, 'recover_health_booking'),
-                      ),
+                  ),
+                  _MiniAction(
+                    label: 'Recover booking',
+                    onPressed: () => unawaited(
+                      onGovernanceAction(record, 'recover_health_booking'),
                     ),
-                    _MiniAction(
-                      label: 'Repair custody',
-                      onPressed: () => unawaited(
-                        onGovernanceAction(record, 'recover_health_custody'),
-                      ),
+                  ),
+                  _MiniAction(
+                    label: 'Repair custody',
+                    onPressed: () => unawaited(
+                      onGovernanceAction(record, 'recover_health_custody'),
                     ),
-                    _MiniAction(
-                      label: 'Recover checkout',
-                      onPressed: () => unawaited(
-                        onGovernanceAction(record, 'recover_health_checkout'),
-                      ),
+                  ),
+                  _MiniAction(
+                    label: 'Recover checkout',
+                    onPressed: () => unawaited(
+                      onGovernanceAction(record, 'recover_health_checkout'),
                     ),
-                  ]
+                  ),
+                ]
               : null,
         ),
         const SizedBox(height: 14),
@@ -18131,13 +18200,13 @@ class _GovernanceOperationsModule extends StatelessWidget {
           ],
           actions: canRecover
               ? (record) => [
-                    _MiniAction(
-                      label: 'Recover schedule',
-                      onPressed: () => unawaited(
-                        onGovernanceAction(record, 'recover_health_schedule'),
-                      ),
+                  _MiniAction(
+                    label: 'Recover schedule',
+                    onPressed: () => unawaited(
+                      onGovernanceAction(record, 'recover_health_schedule'),
                     ),
-                  ]
+                  ),
+                ]
               : null,
         ),
         const SizedBox(height: 14),
@@ -18157,31 +18226,31 @@ class _GovernanceOperationsModule extends StatelessWidget {
           ],
           actions: canRecover
               ? (record) => [
-                    _MiniAction(
-                      label: 'Recover campaign',
-                      onPressed: () => unawaited(
-                        onGovernanceAction(record, 'recover_gift_campaign'),
-                      ),
+                  _MiniAction(
+                    label: 'Recover campaign',
+                    onPressed: () => unawaited(
+                      onGovernanceAction(record, 'recover_gift_campaign'),
                     ),
-                    _MiniAction(
-                      label: 'Recover sourcing',
-                      onPressed: () => unawaited(
-                        onGovernanceAction(record, 'recover_gift_procurement'),
-                      ),
+                  ),
+                  _MiniAction(
+                    label: 'Recover sourcing',
+                    onPressed: () => unawaited(
+                      onGovernanceAction(record, 'recover_gift_procurement'),
                     ),
-                    _MiniAction(
-                      label: 'Recover supplier',
-                      onPressed: () => unawaited(
-                        onGovernanceAction(record, 'recover_gift_supplier'),
-                      ),
+                  ),
+                  _MiniAction(
+                    label: 'Recover supplier',
+                    onPressed: () => unawaited(
+                      onGovernanceAction(record, 'recover_gift_supplier'),
                     ),
-                    _MiniAction(
-                      label: 'Restore story',
-                      onPressed: () => unawaited(
-                        onGovernanceAction(record, 'recover_gift_story'),
-                      ),
+                  ),
+                  _MiniAction(
+                    label: 'Restore story',
+                    onPressed: () => unawaited(
+                      onGovernanceAction(record, 'recover_gift_story'),
                     ),
-                  ]
+                  ),
+                ]
               : null,
         ),
         const SizedBox(height: 14),
@@ -18201,13 +18270,13 @@ class _GovernanceOperationsModule extends StatelessWidget {
           ],
           actions: canRecover
               ? (record) => [
-                    _MiniAction(
-                      label: 'Recover matching',
-                      onPressed: () => unawaited(
-                        onGovernanceAction(record, 'recover_gift_matching'),
-                      ),
+                  _MiniAction(
+                    label: 'Recover matching',
+                    onPressed: () => unawaited(
+                      onGovernanceAction(record, 'recover_gift_matching'),
                     ),
-                  ]
+                  ),
+                ]
               : null,
         ),
         const SizedBox(height: 14),
@@ -18227,32 +18296,31 @@ class _GovernanceOperationsModule extends StatelessWidget {
           ],
           actions: canRecover
               ? (record) => [
-                    _MiniAction(
-                      label: 'Escalate',
-                      onPressed: () => unawaited(
-                        onGovernanceAction(record, 'override_iris_review'),
-                      ),
+                  _MiniAction(
+                    label: 'Escalate',
+                    onPressed: () => unawaited(
+                      onGovernanceAction(record, 'override_iris_review'),
                     ),
-                    _MiniAction(
-                      label: 'Reclassify',
-                      onPressed: () => unawaited(
-                        onGovernanceAction(record, 'reclassify_iris'),
-                      ),
+                  ),
+                  _MiniAction(
+                    label: 'Reclassify',
+                    onPressed: () => unawaited(
+                      onGovernanceAction(record, 'reclassify_iris'),
                     ),
-                    _MiniAction(
-                      label: 'Resolve weight',
-                      onPressed: () => unawaited(
-                        onGovernanceAction(
-                            record, 'resolve_iris_weight_dispute'),
-                      ),
+                  ),
+                  _MiniAction(
+                    label: 'Resolve weight',
+                    onPressed: () => unawaited(
+                      onGovernanceAction(record, 'resolve_iris_weight_dispute'),
                     ),
-                    _MiniAction(
-                      label: 'Recover learning',
-                      onPressed: () => unawaited(
-                        onGovernanceAction(record, 'recover_iris_learning_job'),
-                      ),
+                  ),
+                  _MiniAction(
+                    label: 'Recover learning',
+                    onPressed: () => unawaited(
+                      onGovernanceAction(record, 'recover_iris_learning_job'),
                     ),
-                  ]
+                  ),
+                ]
               : null,
         ),
         const SizedBox(height: 14),
@@ -18272,13 +18340,13 @@ class _GovernanceOperationsModule extends StatelessWidget {
           ],
           actions: canRecover
               ? (record) => [
-                    _MiniAction(
-                      label: 'Promote',
-                      onPressed: () => unawaited(
-                        onGovernanceAction(record, 'promote_iris_canonical'),
-                      ),
+                  _MiniAction(
+                    label: 'Promote',
+                    onPressed: () => unawaited(
+                      onGovernanceAction(record, 'promote_iris_canonical'),
                     ),
-                  ]
+                  ),
+                ]
               : null,
         ),
         const SizedBox(height: 14),
@@ -18298,30 +18366,30 @@ class _GovernanceOperationsModule extends StatelessWidget {
           ],
           actions: canRecover
               ? (record) => [
-                    _MiniAction(
-                      label: 'Retry checkout',
-                      onPressed: () => unawaited(
-                          onGovernanceAction(record, 'retry_checkout')),
+                  _MiniAction(
+                    label: 'Retry checkout',
+                    onPressed: () =>
+                        unawaited(onGovernanceAction(record, 'retry_checkout')),
+                  ),
+                  _MiniAction(
+                    label: 'Recover session',
+                    onPressed: () => unawaited(
+                      onGovernanceAction(record, 'recover_payment_session'),
                     ),
-                    _MiniAction(
-                      label: 'Recover session',
-                      onPressed: () => unawaited(
-                        onGovernanceAction(record, 'recover_payment_session'),
-                      ),
+                  ),
+                  _MiniAction(
+                    label: 'Retry webhook',
+                    onPressed: () => unawaited(
+                      onGovernanceAction(record, 'retry_payment_webhook'),
                     ),
-                    _MiniAction(
-                      label: 'Retry webhook',
-                      onPressed: () => unawaited(
-                        onGovernanceAction(record, 'retry_payment_webhook'),
-                      ),
+                  ),
+                  _MiniAction(
+                    label: 'Investigate',
+                    onPressed: () => unawaited(
+                      onGovernanceAction(record, 'investigate_stripe_state'),
                     ),
-                    _MiniAction(
-                      label: 'Investigate',
-                      onPressed: () => unawaited(
-                        onGovernanceAction(record, 'investigate_stripe_state'),
-                      ),
-                    ),
-                  ]
+                  ),
+                ]
               : null,
         ),
         const SizedBox(height: 14),
@@ -18341,20 +18409,19 @@ class _GovernanceOperationsModule extends StatelessWidget {
           ],
           actions: canRecover
               ? (record) => [
-                    _MiniAction(
-                      label: 'Reconcile',
-                      onPressed: () => unawaited(
-                        onGovernanceAction(record, 'reconcile_ledger'),
-                      ),
+                  _MiniAction(
+                    label: 'Reconcile',
+                    onPressed: () => unawaited(
+                      onGovernanceAction(record, 'reconcile_ledger'),
                     ),
-                    _MiniAction(
-                      label: 'Recover wallet',
-                      onPressed: () => unawaited(
-                        onGovernanceAction(
-                            record, 'recover_sender_wallet_state'),
-                      ),
+                  ),
+                  _MiniAction(
+                    label: 'Recover wallet',
+                    onPressed: () => unawaited(
+                      onGovernanceAction(record, 'recover_sender_wallet_state'),
                     ),
-                  ]
+                  ),
+                ]
               : null,
         ),
         const SizedBox(height: 14),
@@ -18387,31 +18454,30 @@ class _GovernanceOperationsModule extends StatelessWidget {
           ],
           actions: canRecover
               ? (record) => [
-                    _MiniAction(
-                      label: 'Retry',
-                      onPressed: () =>
-                          unawaited(onRetryNotificationDelivery(record)),
+                  _MiniAction(
+                    label: 'Retry',
+                    onPressed: () =>
+                        unawaited(onRetryNotificationDelivery(record)),
+                  ),
+                  _MiniAction(
+                    label: 'Replay',
+                    onPressed: () => unawaited(
+                      onGovernanceAction(record, 'replay_notification'),
                     ),
-                    _MiniAction(
-                      label: 'Replay',
-                      onPressed: () => unawaited(
-                        onGovernanceAction(record, 'replay_notification'),
-                      ),
+                  ),
+                  _MiniAction(
+                    label: 'Repair',
+                    onPressed: () => unawaited(
+                      onGovernanceAction(record, 'rebuild_notification_queue'),
                     ),
-                    _MiniAction(
-                      label: 'Repair',
-                      onPressed: () => unawaited(
-                        onGovernanceAction(
-                            record, 'rebuild_notification_queue'),
-                      ),
+                  ),
+                  _MiniAction(
+                    label: 'Clear',
+                    onPressed: () => unawaited(
+                      onGovernanceAction(record, 'clear_stuck_notification'),
                     ),
-                    _MiniAction(
-                      label: 'Clear',
-                      onPressed: () => unawaited(
-                        onGovernanceAction(record, 'clear_stuck_notification'),
-                      ),
-                    ),
-                  ]
+                  ),
+                ]
               : null,
         ),
         const SizedBox(height: 14),
@@ -18431,37 +18497,37 @@ class _GovernanceOperationsModule extends StatelessWidget {
           ],
           actions: canRecover
               ? (record) => [
-                    _MiniAction(
-                      label: 'Recover',
-                      onPressed: () => unawaited(
-                        onGovernanceAction(record, 'recover_chat_conversation'),
-                      ),
+                  _MiniAction(
+                    label: 'Recover',
+                    onPressed: () => unawaited(
+                      onGovernanceAction(record, 'recover_chat_conversation'),
                     ),
-                    _MiniAction(
-                      label: 'Restore',
-                      onPressed: () => unawaited(
-                        onGovernanceAction(record, 'restore_chat_messages'),
-                      ),
+                  ),
+                  _MiniAction(
+                    label: 'Restore',
+                    onPressed: () => unawaited(
+                      onGovernanceAction(record, 'restore_chat_messages'),
                     ),
-                    _MiniAction(
-                      label: 'Moderate',
-                      onPressed: () => unawaited(
-                        onGovernanceAction(record, 'moderate_chat_abuse'),
-                      ),
+                  ),
+                  _MiniAction(
+                    label: 'Moderate',
+                    onPressed: () => unawaited(
+                      onGovernanceAction(record, 'moderate_chat_abuse'),
                     ),
-                    _MiniAction(
-                      label: 'Export',
-                      onPressed: () => unawaited(
-                        onGovernanceAction(record, 'export_chat_conversation'),
-                      ),
+                  ),
+                  _MiniAction(
+                    label: 'Export',
+                    onPressed: () => unawaited(
+                      onGovernanceAction(record, 'export_chat_conversation'),
                     ),
-                    _MiniAction(
-                      label: 'Escalate',
-                      onPressed: () => unawaited(
-                        onGovernanceAction(record, 'place_chat_legal_hold'),
-                      ),
+                  ),
+                  _MiniAction(
+                    label: 'Escalate',
+                    onPressed: () => unawaited(
+                      onGovernanceAction(record, 'place_chat_legal_hold'),
                     ),
-                  ]
+                  ),
+                ]
               : null,
         ),
         const SizedBox(height: 14),
@@ -18481,33 +18547,33 @@ class _GovernanceOperationsModule extends StatelessWidget {
           ],
           actions: canRecover
               ? (record) => [
-                    _MiniAction(
-                      label: 'Resolve',
-                      onPressed: () =>
-                          unawaited(onGovernanceAction(record, 'force_logout')),
+                  _MiniAction(
+                    label: 'Resolve',
+                    onPressed: () =>
+                        unawaited(onGovernanceAction(record, 'force_logout')),
+                  ),
+                  _MiniAction(
+                    label: 'Lock',
+                    onPressed: () =>
+                        unawaited(onGovernanceAction(record, 'lock_account')),
+                  ),
+                  _MiniAction(
+                    label: 'Unlock',
+                    onPressed: () =>
+                        unawaited(onGovernanceAction(record, 'unlock_account')),
+                  ),
+                  _MiniAction(
+                    label: 'Restore',
+                    onPressed: () =>
+                        unawaited(onGovernanceAction(record, 'reset_mfa')),
+                  ),
+                  _MiniAction(
+                    label: 'Recover access',
+                    onPressed: () => unawaited(
+                      onGovernanceAction(record, 'recover_account_access'),
                     ),
-                    _MiniAction(
-                      label: 'Lock',
-                      onPressed: () =>
-                          unawaited(onGovernanceAction(record, 'lock_account')),
-                    ),
-                    _MiniAction(
-                      label: 'Unlock',
-                      onPressed: () => unawaited(
-                          onGovernanceAction(record, 'unlock_account')),
-                    ),
-                    _MiniAction(
-                      label: 'Restore',
-                      onPressed: () =>
-                          unawaited(onGovernanceAction(record, 'reset_mfa')),
-                    ),
-                    _MiniAction(
-                      label: 'Recover access',
-                      onPressed: () => unawaited(
-                        onGovernanceAction(record, 'recover_account_access'),
-                      ),
-                    ),
-                  ]
+                  ),
+                ]
               : null,
         ),
         const SizedBox(height: 14),
@@ -18703,8 +18769,9 @@ class _RecordModule extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final filtered =
-        fields.isEmpty ? records : adminSearch(records, query, fields);
+    final filtered = fields.isEmpty
+        ? records
+        : adminSearch(records, query, fields);
     return DecoratedBox(
       decoration: _panelDecoration(radius: 20),
       child: Padding(
@@ -18960,12 +19027,12 @@ List<Widget> _accountActions({
   required void Function(Map<String, dynamic>, String) onOpen,
   required Future<void> Function(Map<String, dynamic>, String) onSetStatus,
   required Future<void> Function(Map<String, dynamic>, Map<String, dynamic>)
-      onRequestDuplicateMerge,
+  onRequestDuplicateMerge,
   Future<void> Function(Map<String, dynamic>, String)? onAddAdminNote,
   Future<void> Function(Map<String, dynamic>, String)? onUpdateSenderTrust,
 }) {
-  final status =
-      '${account['accountStatus'] ?? account['status'] ?? ''}'.toLowerCase();
+  final status = '${account['accountStatus'] ?? account['status'] ?? ''}'
+      .toLowerCase();
   final duplicate = _firstLikelyDuplicate(account, allAccounts);
   final isBusiness = accountType == 'business';
   return [
@@ -19134,7 +19201,7 @@ List<Widget> _deliveryActions(
   required ValueChanged<Map<String, dynamic>> onDuplicate,
   required Future<void> Function(Map<String, dynamic>, String) onSetStatus,
   required Future<void> Function(Map<String, dynamic>)
-      onResolveStaleDeliveryLock,
+  onResolveStaleDeliveryLock,
   required Future<void> Function(Map<String, dynamic>) onArchiveDelivery,
 }) {
   return [
@@ -19448,8 +19515,8 @@ class _HealthPlusOperationsDrawer extends StatelessWidget {
                   child: Text(
                     'Health+ $id',
                     style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                          fontWeight: FontWeight.w900,
-                        ),
+                      fontWeight: FontWeight.w900,
+                    ),
                   ),
                 ),
                 IconButton(
@@ -19600,13 +19667,17 @@ class _RiderProfileDrawer extends StatelessWidget {
         .where((document) => _documentBelongsToRider(document, riderId))
         .toList(growable: false);
     final riderApplications = applications
-        .where((application) =>
-            '${application['riderId'] ?? application['uid'] ?? ''}'.trim() ==
-            riderId)
+        .where(
+          (application) =>
+              '${application['riderId'] ?? application['uid'] ?? ''}'.trim() ==
+              riderId,
+        )
         .toList(growable: false);
     final riderOnboardingEvents = onboardingEvents
-        .where((event) =>
-            '${event['riderId'] ?? event['uid'] ?? ''}'.trim() == riderId)
+        .where(
+          (event) =>
+              '${event['riderId'] ?? event['uid'] ?? ''}'.trim() == riderId,
+        )
         .toList(growable: false);
     final riderRatings = ratings
         .where((rating) => _recordReferencesRider(rating, riderId))
@@ -19634,7 +19705,8 @@ class _RiderProfileDrawer extends StatelessWidget {
         .length;
     final active = riderDeliveries.length - completed;
     final earnings = riderDeliveries.fold<double>(0, (total, delivery) {
-      final value = delivery['riderPayout'] ??
+      final value =
+          delivery['riderPayout'] ??
           delivery['driverPayout'] ??
           delivery['estimatedDriverPayout'];
       if (value is num) return total + value.toDouble();
@@ -19653,8 +19725,8 @@ class _RiderProfileDrawer extends StatelessWidget {
                   child: Text(
                     'Rider profile',
                     style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                          fontWeight: FontWeight.w800,
-                        ),
+                      fontWeight: FontWeight.w800,
+                    ),
                   ),
                 ),
                 IconButton(
@@ -19992,8 +20064,8 @@ class _DeliveryOperationsDrawer extends StatelessWidget {
                   child: Text(
                     'Delivery $deliveryId',
                     style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                          fontWeight: FontWeight.w900,
-                        ),
+                      fontWeight: FontWeight.w900,
+                    ),
                   ),
                 ),
                 IconButton(
@@ -20665,13 +20737,15 @@ String _healthPlanLabel(Map<String, dynamic> record) {
 }
 
 String _healthAllowanceLabel(Map<String, dynamic> record) {
-  final unlimited = record['unlimitedPickups'] == true ||
+  final unlimited =
+      record['unlimitedPickups'] == true ||
       record['unlimitedDeliveries'] == true;
   if (unlimited) return 'Unlimited pickups / fair-use monitored';
   final included = record['includedPickups'] ?? record['includedDeliveries'];
   final used =
       record['usedPickupsThisCycle'] ?? record['usedDeliveriesThisCycle'] ?? 0;
-  final remaining = record['remainingPickupsThisCycle'] ??
+  final remaining =
+      record['remainingPickupsThisCycle'] ??
       record['remainingDeliveriesThisCycle'];
   if (included != null && remaining != null) {
     return '$remaining of $included pickups remaining';
@@ -20854,8 +20928,8 @@ bool _isLowRating(Map<String, dynamic> rating) {
 }
 
 bool _isCompletedRecord(Map<String, dynamic> record) {
-  final text =
-      '${record['status'] ?? record['deliveryStatus'] ?? ''}'.toLowerCase();
+  final text = '${record['status'] ?? record['deliveryStatus'] ?? ''}'
+      .toLowerCase();
   return text.contains('complete') || text.contains('delivered');
 }
 
@@ -20875,11 +20949,11 @@ List<Widget> _troubleshootingActions(
   Map<String, dynamic> record, {
   required ValueChanged<Map<String, dynamic>> onOpenDelivery,
   required Future<void> Function(Map<String, dynamic>, String)
-      onUpdateSupportTicket,
+  onUpdateSupportTicket,
   required Future<void> Function(Map<String, dynamic>, String)
-      onSetDeliveryOperationStatus,
+  onSetDeliveryOperationStatus,
   required Future<void> Function(Map<String, dynamic>, String)
-      onUpdateFinanceWorkflow,
+  onUpdateFinanceWorkflow,
   required Future<void> Function(Map<String, dynamic>, String) onModerateRating,
 }) {
   final source = '${record['_source'] ?? ''}';
@@ -21080,8 +21154,9 @@ String _platformEnvironment(List<Map<String, dynamic>> configRecords) {
 
 // ignore: unused_element
 bool _isGiftActive(Map<String, dynamic> gift) {
-  final state =
-      '${gift['giftAdminStatus'] ?? gift['status'] ?? ''}'.trim().toLowerCase();
+  final state = '${gift['giftAdminStatus'] ?? gift['status'] ?? ''}'
+      .trim()
+      .toLowerCase();
   return state.isEmpty ||
       (!state.contains('delivered') &&
           !state.contains('cancel') &&
@@ -21097,17 +21172,18 @@ bool _hasGiftStory(Map<String, dynamic> gift) {
 }
 
 String _giftStorySummary(Map<String, dynamic> gift) {
-  final values = [
-    if (_hasGiftStory(gift)) 'available',
-    gift['storyStatus'],
-    gift['unlockStatus'],
-    gift['moderationState'],
-    gift['visibility'],
-    gift['archiveState'],
-  ]
-      .map((value) => '$value'.trim())
-      .where((value) => value.isNotEmpty && value != 'null')
-      .toList();
+  final values =
+      [
+            if (_hasGiftStory(gift)) 'available',
+            gift['storyStatus'],
+            gift['unlockStatus'],
+            gift['moderationState'],
+            gift['visibility'],
+            gift['archiveState'],
+          ]
+          .map((value) => '$value'.trim())
+          .where((value) => value.isNotEmpty && value != 'null')
+          .toList();
   return values.isEmpty ? 'No story' : values.join(' / ');
 }
 
@@ -21116,71 +21192,78 @@ String _giftWorkspaceSummary(Map<String, dynamic> gift) {
   if (workspace is! Map) return 'No workspace recorded';
   final assignment = workspace['assignment'];
   final readiness = workspace['readiness'];
-  final values = [
-    if (assignment is Map) assignment['assignedCurator'],
-    if (assignment is Map) assignment['status'],
-    workspace['curationNotesUpdatedBy'],
-    if (readiness is Map && readiness['readyForProcurement'] == true)
-      'ready procurement',
-    if (readiness is Map && readiness['readyForDelivery'] == true)
-      'ready delivery',
-  ]
-      .map((value) => '$value'.trim())
-      .where((value) => value.isNotEmpty && value != 'null')
-      .toList();
+  final values =
+      [
+            if (assignment is Map) assignment['assignedCurator'],
+            if (assignment is Map) assignment['status'],
+            workspace['curationNotesUpdatedBy'],
+            if (readiness is Map && readiness['readyForProcurement'] == true)
+              'ready procurement',
+            if (readiness is Map && readiness['readyForDelivery'] == true)
+              'ready delivery',
+          ]
+          .map((value) => '$value'.trim())
+          .where((value) => value.isNotEmpty && value != 'null')
+          .toList();
   return values.isEmpty ? 'Workspace open' : values.join(' / ');
 }
 
 String _giftProcurementSummary(Map<String, dynamic> gift) {
   final workspace = gift['giftsTeamWorkspace'];
   final supplier = workspace is Map ? workspace['supplierWorkspace'] : null;
-  final values = [
-    gift['procurementItemTitle'],
-    gift['procurementSupplier'],
-    if (supplier is Map) supplier['supplierStatus'],
-    if (supplier is Map) supplier['expectedFulfilment'],
-    gift['procurementEstimatedCost'],
-    gift['procurementActualCost'],
-  ]
-      .map((value) => '$value'.trim())
-      .where((value) => value.isNotEmpty && value != 'null')
-      .toList();
+  final values =
+      [
+            gift['procurementItemTitle'],
+            gift['procurementSupplier'],
+            if (supplier is Map) supplier['supplierStatus'],
+            if (supplier is Map) supplier['expectedFulfilment'],
+            gift['procurementEstimatedCost'],
+            gift['procurementActualCost'],
+          ]
+          .map((value) => '$value'.trim())
+          .where((value) => value.isNotEmpty && value != 'null')
+          .toList();
   return values.isEmpty ? 'No procurement plan' : values.join(' / ');
 }
 
 String _giftIrisSelectionSummary(Map<String, dynamic> gift) {
   final workspace = gift['giftsTeamWorkspace'];
-  final collaboration =
-      workspace is Map ? workspace['irisCollaboration'] : null;
+  final collaboration = workspace is Map
+      ? workspace['irisCollaboration']
+      : null;
   final plan = gift['approvedGiftPlan'];
-  final values = [
-    gift['irisSuggestion'],
-    if (gift['irisGiftRecommendation'] != null) 'recommendation saved',
-    if (plan is Map) plan['selectedRepositoryItemIds'],
-    if (collaboration is Map) collaboration['acceptedSignals'],
-    if (collaboration is Map) collaboration['rejectedSignals'],
-    if (collaboration is Map) collaboration['curatorFeedback'],
-  ]
-      .map((value) => '$value'.trim())
-      .where(
-        (value) => value.isNotEmpty && value != 'null' && value != '[]',
-      )
-      .toList();
+  final values =
+      [
+            gift['irisSuggestion'],
+            if (gift['irisGiftRecommendation'] != null) 'recommendation saved',
+            if (plan is Map) plan['selectedRepositoryItemIds'],
+            if (collaboration is Map) collaboration['acceptedSignals'],
+            if (collaboration is Map) collaboration['rejectedSignals'],
+            if (collaboration is Map) collaboration['curatorFeedback'],
+          ]
+          .map((value) => '$value'.trim())
+          .where(
+            (value) => value.isNotEmpty && value != 'null' && value != '[]',
+          )
+          .toList();
   return values.isEmpty ? 'No IRIS gift review' : values.join(' / ');
 }
 
 String _giftStoryAudioSummary(Map<String, dynamic> gift) {
   final mix = gift['giftStoryAudioMix'];
-  final values = [
-    gift['giftStoryMusicSource'],
-    gift['giftStoryCustomAudioUrl'] == null ? null : 'custom audio',
-    gift['giftStoryIncludeSenderVoiceNote'] == true ? 'sender voice' : null,
-    if (mix is Map) mix['voicePlacement'],
-    if (mix is Map) mix['musicDuckingLevel'],
-  ]
-      .map((value) => '$value'.trim())
-      .where((value) => value.isNotEmpty && value != 'null')
-      .toList();
+  final values =
+      [
+            gift['giftStoryMusicSource'],
+            gift['giftStoryCustomAudioUrl'] == null ? null : 'custom audio',
+            gift['giftStoryIncludeSenderVoiceNote'] == true
+                ? 'sender voice'
+                : null,
+            if (mix is Map) mix['voicePlacement'],
+            if (mix is Map) mix['musicDuckingLevel'],
+          ]
+          .map((value) => '$value'.trim())
+          .where((value) => value.isNotEmpty && value != 'null')
+          .toList();
   return values.isEmpty ? 'No audio mix' : values.join(' / ');
 }
 
@@ -21293,7 +21376,7 @@ String _averageDurationLabel(List<Duration> durations) {
   if (durations.isEmpty) return 'Not recorded';
   final minutes =
       durations.fold<int>(0, (total, item) => total + item.inMinutes) ~/
-          durations.length;
+      durations.length;
   if (minutes < 60) return '${minutes}m';
   return '${(minutes / 60).toStringAsFixed(1)}h';
 }
@@ -21313,20 +21396,21 @@ String _auditSeverity(Map<String, dynamic> log) {
 }
 
 String _linkedAuditObjects(Map<String, dynamic> log) {
-  final links = [
-    log['recordId'],
-    log['deliveryId'],
-    log['senderId'],
-    log['riderId'],
-    log['businessId'],
-    log['giftId'],
-    log['supportTicketId'],
-    log['paymentId'],
-    log['irisReviewId'],
-  ]
-      .map((value) => '$value'.trim())
-      .where((value) => value.isNotEmpty && value != 'null')
-      .toSet();
+  final links =
+      [
+            log['recordId'],
+            log['deliveryId'],
+            log['senderId'],
+            log['riderId'],
+            log['businessId'],
+            log['giftId'],
+            log['supportTicketId'],
+            log['paymentId'],
+            log['irisReviewId'],
+          ]
+          .map((value) => '$value'.trim())
+          .where((value) => value.isNotEmpty && value != 'null')
+          .toSet();
   return links.isEmpty ? 'No linked objects' : links.join(', ');
 }
 
@@ -21432,17 +21516,18 @@ bool _isIrisReferralRecord(Map<String, dynamic> record) {
 }
 
 String _irisDecisionLabel(Map<String, dynamic> record) {
-  final values = [
-    record['irisStatus'],
-    record['complianceStatus'],
-    _mapValue(record['iris'], 'status'),
-    _mapValue(_mapValue(record['iris'], 'compliance'), 'status'),
-    record['serviceabilityStatus'],
-    _mapValue(_mapValue(record['iris'], 'serviceability'), 'status'),
-  ]
-      .map((value) => '$value'.trim())
-      .where((value) => value.isNotEmpty && value != 'null')
-      .toList();
+  final values =
+      [
+            record['irisStatus'],
+            record['complianceStatus'],
+            _mapValue(record['iris'], 'status'),
+            _mapValue(_mapValue(record['iris'], 'compliance'), 'status'),
+            record['serviceabilityStatus'],
+            _mapValue(_mapValue(record['iris'], 'serviceability'), 'status'),
+          ]
+          .map((value) => '$value'.trim())
+          .where((value) => value.isNotEmpty && value != 'null')
+          .toList();
   return values.isEmpty ? 'Review required' : values.join(' / ');
 }
 
@@ -21473,18 +21558,19 @@ int _irisImageCount(Map<String, dynamic> record) {
 }
 
 String _irisWeightSummary(Map<String, dynamic> record) {
-  final values = [
-    record['irisEstimatedWeight'],
-    record['estimatedWeight'],
-    record['declaredWeight'],
-    record['verifiedWeight'],
-    record['riderVerifiedWeight'],
-    _mapValue(record['iris'], 'weight'),
-    _mapValue(record['irisEstimate'], 'weight'),
-  ]
-      .map((value) => '$value'.trim())
-      .where((value) => value.isNotEmpty && value != 'null')
-      .toList();
+  final values =
+      [
+            record['irisEstimatedWeight'],
+            record['estimatedWeight'],
+            record['declaredWeight'],
+            record['verifiedWeight'],
+            record['riderVerifiedWeight'],
+            _mapValue(record['iris'], 'weight'),
+            _mapValue(record['irisEstimate'], 'weight'),
+          ]
+          .map((value) => '$value'.trim())
+          .where((value) => value.isNotEmpty && value != 'null')
+          .toList();
   return values.isEmpty ? 'not recorded' : values.join(' / ');
 }
 
@@ -21570,7 +21656,8 @@ bool _isLearningCandidate(Map<String, dynamic> record) {
 }
 
 double _irisConfidence(Map<String, dynamic> record) {
-  final raw = record['irisConfidence'] ??
+  final raw =
+      record['irisConfidence'] ??
       record['confidence'] ??
       record['confidenceScore'] ??
       _mapValue(record['iris'], 'confidence') ??
@@ -21625,7 +21712,7 @@ String _averageIrisReviewTime(List<Map<String, dynamic>> records) {
   if (durations.isEmpty) return 'Not recorded';
   final minutes =
       durations.fold<int>(0, (total, item) => total + item.inMinutes) ~/
-          durations.length;
+      durations.length;
   if (minutes < 60) return '${minutes}m';
   return '${(minutes / 60).toStringAsFixed(1)}h';
 }
@@ -21702,15 +21789,18 @@ Map<String, int> _vehicleDistribution(List<Map<String, dynamic>> records) {
 }
 
 String _irisEstimateSummary(Map<String, dynamic> record) {
-  final weight = record['irisEstimatedWeight'] ??
+  final weight =
+      record['irisEstimatedWeight'] ??
       record['estimatedWeight'] ??
       _mapValue(record['iris'], 'weight') ??
       _mapValue(record['irisEstimate'], 'weight');
   final verified = record['verifiedWeight'] ?? record['riderVerifiedWeight'];
-  final category = record['category'] ??
+  final category =
+      record['category'] ??
       record['irisCategory'] ??
       _mapValue(record['iris'], 'category');
-  final vehicle = record['recommendedVehicle'] ??
+  final vehicle =
+      record['recommendedVehicle'] ??
       record['vehicleRecommendation'] ??
       _mapValue(record['iris'], 'vehicleType');
   return '${category ?? 'Object'} / ${weight ?? 'unknown'}kg / verified ${verified ?? 'n/a'} / ${vehicle ?? 'vehicle n/a'}';
@@ -21723,7 +21813,9 @@ Object? _mapValue(Object? value, String key) {
 
 double _financeTotalToday(List<Map<String, dynamic>> payments) {
   final now = DateTime.now();
-  return payments.where((payment) => _isSameDay(payment, now)).fold<double>(
+  return payments
+      .where((payment) => _isSameDay(payment, now))
+      .fold<double>(
         0,
         (total, payment) =>
             total + _numberFrom(payment['amount'] ?? payment['total']),
@@ -21744,8 +21836,8 @@ bool _isPendingRefund(Map<String, dynamic> payment) {
 }
 
 bool _isFailedPayment(Map<String, dynamic> payment) {
-  final text =
-      '${payment['status'] ?? payment['paymentStatus'] ?? ''}'.toLowerCase();
+  final text = '${payment['status'] ?? payment['paymentStatus'] ?? ''}'
+      .toLowerCase();
   return text.contains('fail') || text.contains('declin');
 }
 
@@ -21882,14 +21974,14 @@ bool _isArchivedDelivery(Map<String, dynamic> delivery) {
 }
 
 bool _isCompletedDelivery(Map<String, dynamic> delivery) {
-  final state =
-      '${delivery['status'] ?? delivery['deliveryStatus'] ?? ''}'.toLowerCase();
+  final state = '${delivery['status'] ?? delivery['deliveryStatus'] ?? ''}'
+      .toLowerCase();
   return state.contains('complete') || state.contains('delivered');
 }
 
 bool _isCancelledDelivery(Map<String, dynamic> delivery) {
-  final state =
-      '${delivery['status'] ?? delivery['deliveryStatus'] ?? ''}'.toLowerCase();
+  final state = '${delivery['status'] ?? delivery['deliveryStatus'] ?? ''}'
+      .toLowerCase();
   return state.contains('cancel');
 }
 
@@ -22026,7 +22118,8 @@ int _historyCountValue(Map<String, dynamic> record, List<String> fields) {
 
 bool _isSameDay(Map<String, dynamic> record, DateTime day) {
   DateTime? date;
-  final value = record['completedAt'] ??
+  final value =
+      record['completedAt'] ??
       record['cancelledAt'] ??
       record['updatedAt'] ??
       record['createdAt'];
@@ -22245,7 +22338,9 @@ int _jobsSince(Iterable<Map<String, dynamic>> deliveries, DateTime day) {
 }
 
 double _earningsSince(Iterable<Map<String, dynamic>> deliveries, DateTime day) {
-  return deliveries.where((item) => _isSameDay(item, day)).fold<double>(
+  return deliveries
+      .where((item) => _isSameDay(item, day))
+      .fold<double>(
         0,
         (total, delivery) =>
             total +
@@ -22259,23 +22354,26 @@ double _earningsSince(Iterable<Map<String, dynamic>> deliveries, DateTime day) {
 double _earningsThisWeek(Iterable<Map<String, dynamic>> deliveries) {
   final now = DateTime.now();
   final weekStart = now.subtract(Duration(days: now.weekday - 1));
-  return deliveries.where((item) {
-    DateTime? date;
-    final value = item['completedAt'] ?? item['updatedAt'] ?? item['createdAt'];
-    if (value is Timestamp) date = value.toDate();
-    if (value is DateTime) date = value;
-    if (value is String) date = DateTime.tryParse(value);
-    if (value is int) date = DateTime.fromMillisecondsSinceEpoch(value);
-    return date != null && !date.isBefore(weekStart);
-  }).fold<double>(
-    0,
-    (total, delivery) =>
-        total +
-        (double.tryParse(
-              '${delivery['riderPayout'] ?? delivery['driverPayout'] ?? delivery['estimatedDriverPayout'] ?? 0}',
-            ) ??
-            0),
-  );
+  return deliveries
+      .where((item) {
+        DateTime? date;
+        final value =
+            item['completedAt'] ?? item['updatedAt'] ?? item['createdAt'];
+        if (value is Timestamp) date = value.toDate();
+        if (value is DateTime) date = value;
+        if (value is String) date = DateTime.tryParse(value);
+        if (value is int) date = DateTime.fromMillisecondsSinceEpoch(value);
+        return date != null && !date.isBefore(weekStart);
+      })
+      .fold<double>(
+        0,
+        (total, delivery) =>
+            total +
+            (double.tryParse(
+                  '${delivery['riderPayout'] ?? delivery['driverPayout'] ?? delivery['estimatedDriverPayout'] ?? 0}',
+                ) ??
+                0),
+      );
 }
 
 String _historyCount(Map<String, dynamic> account, List<String> fields) {
