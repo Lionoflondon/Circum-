@@ -183,6 +183,57 @@ class _RideChatPageViewState extends State<RideChatPageView> {
     }
   }
 
+  Future<void> _reportMessage(String messageId) async {
+    final chatId = _chatId;
+    if (chatId == null) return;
+    final reason = await showModalBottomSheet<String>(
+      context: context,
+      builder: (context) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const ListTile(
+              title: Text('Report message'),
+              subtitle: Text('Circum Support will review this report.'),
+            ),
+            for (final reason in const [
+              'Harassment or abuse',
+              'Unsafe or threatening content',
+              'Spam or unrelated content',
+              'Other concern',
+            ])
+              ListTile(
+                title: Text(reason),
+                onTap: () => Navigator.pop(context, reason),
+              ),
+          ],
+        ),
+      ),
+    );
+    if (reason == null) return;
+    try {
+      await FirebaseFunctions.instance
+          .httpsCallable('reportCircumMessage')
+          .call({
+        'chatId': chatId,
+        'messageId': messageId,
+        'reason': reason,
+        'reportMutationId': const Uuid().v4(),
+      });
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Report sent to Circum Support.')),
+        );
+      }
+    } on FirebaseFunctionsException catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(error.message ?? 'Report could not be sent.')),
+        );
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final chatId = _chatId;
@@ -252,7 +303,9 @@ class _RideChatPageViewState extends State<RideChatPageView> {
                           const _ChatNotice('Circum Rider is typing...'),
                         Expanded(
                             child: _MessageStream(
-                                chatId: chatId, scrollController: _scroll)),
+                                chatId: chatId,
+                                scrollController: _scroll,
+                                onReport: _reportMessage)),
                         _Composer(
                           controller: _input,
                           hintText: widget.supportConversation
@@ -286,8 +339,13 @@ class _RideChatPageViewState extends State<RideChatPageView> {
 class _MessageStream extends StatelessWidget {
   final String chatId;
   final ScrollController scrollController;
+  final ValueChanged<String> onReport;
 
-  const _MessageStream({required this.chatId, required this.scrollController});
+  const _MessageStream({
+    required this.chatId,
+    required this.scrollController,
+    required this.onReport,
+  });
 
   @override
   Widget build(BuildContext context) =>
@@ -335,8 +393,10 @@ class _MessageStream extends StatelessWidget {
             padding: const EdgeInsets.all(AppTokens.space16),
             itemCount: messages.length,
             separatorBuilder: (_, __) => const SizedBox(height: 10),
-            itemBuilder: (context, index) =>
-                _MessageBubble(data: messages[index].data()),
+            itemBuilder: (context, index) => GestureDetector(
+              onLongPress: () => onReport(messages[index].id),
+              child: _MessageBubble(data: messages[index].data()),
+            ),
           );
         },
       );
