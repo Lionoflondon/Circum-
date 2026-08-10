@@ -7751,6 +7751,7 @@ class _CustomerPortalState extends State<_CustomerPortal> {
   bool _healthSubmitting = false;
   bool _businessLoading = false;
   bool _businessBusy = false;
+  bool _businessTermsAccepted = false;
   String _healthPrescriptionType = 'NHS prescription';
   String _healthSubscriptionPlan = 'basic';
   bool _ratingSubmitting = false;
@@ -8391,6 +8392,9 @@ class _CustomerPortalState extends State<_CustomerPortal> {
             if (user != null) await _loadBusinessWorkspaces(user.uid);
           },
           onCreateBusiness: _createBusinessAccount,
+          businessTermsAccepted: _businessTermsAccepted,
+          onBusinessTermsChanged: (value) =>
+              setState(() => _businessTermsAccepted = value),
           onJoinBusiness: _joinBusinessByCode,
           onEnsureCompanyCode: _ensureBusinessCompanyCode,
           onRotateCompanyCode: () => _ensureBusinessCompanyCode(rotate: true),
@@ -9903,6 +9907,10 @@ class _CustomerPortalState extends State<_CustomerPortal> {
 
   Future<void> _createBusinessAccount() async {
     if (_senderUser == null || _businessBusy) return;
+    if (!_businessTermsAccepted) {
+      setState(() => _businessMessage = 'Please accept the Business terms to continue.');
+      return;
+    }
     setState(() {
       _businessBusy = true;
       _businessMessage = 'Creating Business workspace...';
@@ -9920,7 +9928,7 @@ class _CustomerPortalState extends State<_CustomerPortal> {
         'businessAddress': _businessAddress.text.trim(),
         'vatNumber': _businessVatNumber.text.trim(),
         'businessSize': '1-10',
-        'acceptTerms': true,
+        'acceptTerms': _businessTermsAccepted,
       });
       final data = Map<String, dynamic>.from(result.data as Map);
       _selectedBusinessId = '${data['businessId']}';
@@ -13788,6 +13796,8 @@ class _BusinessCentreStep extends StatelessWidget {
   final VoidCallback onRefresh;
   final ValueChanged<String> onSelectBusiness;
   final VoidCallback onCreateBusiness;
+  final bool businessTermsAccepted;
+  final ValueChanged<bool> onBusinessTermsChanged;
   final VoidCallback onJoinBusiness;
   final VoidCallback onEnsureCompanyCode;
   final VoidCallback onRotateCompanyCode;
@@ -13832,6 +13842,8 @@ class _BusinessCentreStep extends StatelessWidget {
     required this.onRefresh,
     required this.onSelectBusiness,
     required this.onCreateBusiness,
+    required this.businessTermsAccepted,
+    required this.onBusinessTermsChanged,
     required this.onJoinBusiness,
     required this.onEnsureCompanyCode,
     required this.onRotateCompanyCode,
@@ -13915,6 +13927,8 @@ class _BusinessCentreStep extends StatelessWidget {
               companyCode: companyCode,
               onCreateBusiness: onCreateBusiness,
               onJoinBusiness: onJoinBusiness,
+              businessTermsAccepted: businessTermsAccepted,
+              onBusinessTermsChanged: onBusinessTermsChanged,
             )
           else
             _BusinessSectionTabs(
@@ -14233,6 +14247,8 @@ class _BusinessOnboardingPanel extends StatelessWidget {
   final TextEditingController vatNumber;
   final TextEditingController companyCode;
   final VoidCallback onCreateBusiness;
+  final bool businessTermsAccepted;
+  final ValueChanged<bool> onBusinessTermsChanged;
   final VoidCallback onJoinBusiness;
 
   const _BusinessOnboardingPanel({
@@ -14246,6 +14262,8 @@ class _BusinessOnboardingPanel extends StatelessWidget {
     required this.vatNumber,
     required this.companyCode,
     required this.onCreateBusiness,
+    required this.businessTermsAccepted,
+    required this.onBusinessTermsChanged,
     required this.onJoinBusiness,
   });
 
@@ -14294,6 +14312,14 @@ class _BusinessOnboardingPanel extends StatelessWidget {
                   colors: colors,
                   controller: vatNumber,
                   hint: 'VAT number optional',
+                ),
+                CheckboxListTile(
+                  contentPadding: EdgeInsets.zero,
+                  value: businessTermsAccepted,
+                  onChanged: (value) =>
+                      onBusinessTermsChanged(value ?? false),
+                  title: Text('I accept the Business terms',
+                      style: TextStyle(color: colors.primaryText)),
                 ),
                 const SizedBox(height: 14),
                 SizedBox(
