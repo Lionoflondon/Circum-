@@ -85,7 +85,6 @@ case "$SURFACE" in
       "lib/website/"
       "web/"
       "test/security/"
-      "test/website_"
       "test/web_platform_routing_test.dart"
       "scripts/"
       "docs/"

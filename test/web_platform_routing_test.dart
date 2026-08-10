@@ -130,6 +130,24 @@ void main() {
   });
 
   group('Circum Web Platform source guards', () {
+    test('public Website hands operational routes off before Flutter starts', () {
+      final index = File('web/index.html').readAsStringSync();
+      expect(index, contains("path === '/send'"));
+      expect(index, contains("path === '/rider'"));
+      expect(index, contains('window.location.replace'));
+      expect(index, contains('https://circum-app-2797c.web.app/'));
+      expect(index, contains('https://circum-rider-2797c.web.app/'));
+      expect(index.indexOf('handOffOperationalProducts'),
+          lessThan(index.indexOf('flutter_bootstrap.js')));
+    });
+
+    test('public Website fails protected startup closed when App Check fails', () {
+      final main = File('lib/main_public_web.dart').readAsStringSync();
+      expect(main, contains('await initializeCircumAppCheck()'));
+      expect(main, contains('_WebsiteSecurityRecovery'));
+      expect(main, isNot(contains('_activateAppCheckAfterStartup')));
+    });
+
     test(
       'Website bootstrap uses path resolver instead of product switching',
       () {
