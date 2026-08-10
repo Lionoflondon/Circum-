@@ -4025,6 +4025,10 @@ class _DeliveryReceiptView extends StatelessWidget {
                   row(item.label, money(item.amount)),
                 if (receipt.vatAmount > 0) row('VAT', money(receipt.vatAmount)),
                 const Divider(color: Colors.white12),
+                if (receipt.rothAppliedAmount > 0)
+                  row('Roth applied', money(receipt.rothAppliedAmount)),
+                if (receipt.externalPaidAmount > 0)
+                  row('Card or wallet payment', money(receipt.externalPaidAmount)),
                 row('Amount paid', money(receipt.amountPaid), strong: true),
                 row('Payment', receipt.paymentStatus),
                 row('Method', receipt.paymentMethod),

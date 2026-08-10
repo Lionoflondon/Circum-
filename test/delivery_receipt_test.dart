@@ -33,4 +33,20 @@ void main() {
     expect(receipt.lineItems.map((item) => item.label),
         ['Base delivery', 'Distance']);
   });
+
+  test('receipt renders mixed Roth and Apple Pay authority', () {
+    final receipt = deliveryReceiptFromRecord({
+      'requestId': 'sender_mixed_1',
+      'paidAmount': 30,
+      'rothAppliedAmount': 8,
+      'remainingAmount': 22,
+      'paymentStatus': 'paid',
+      'paymentMethod': 'roth_apple_pay',
+    }, referenceFormatter: customerFacingDeliveryReference);
+
+    expect(receipt.paymentMethod, 'Roth and Apple Pay');
+    expect(receipt.rothAppliedAmount, 8);
+    expect(receipt.externalPaidAmount, 22);
+    expect(receipt.amountPaid, 30);
+  });
 }

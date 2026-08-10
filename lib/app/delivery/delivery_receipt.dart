@@ -16,6 +16,8 @@ class DeliveryReceiptDetails {
   final String paymentMethod;
   final double amountPaid;
   final double vatAmount;
+  final double rothAppliedAmount;
+  final double externalPaidAmount;
   final List<DeliveryReceiptLineItem> lineItems;
 
   const DeliveryReceiptDetails({
@@ -29,6 +31,8 @@ class DeliveryReceiptDetails {
     required this.paymentMethod,
     required this.amountPaid,
     required this.vatAmount,
+    required this.rothAppliedAmount,
+    required this.externalPaidAmount,
     required this.lineItems,
   });
 }
@@ -84,6 +88,8 @@ DeliveryReceiptDetails deliveryReceiptFromRecord(
         ) ??
         0,
     vatAmount: _number(record['vatAmount'] ?? snapshot['vatAmount']) ?? 0,
+    rothAppliedAmount: _number(record['rothAppliedAmount']) ?? 0,
+    externalPaidAmount: _number(record['remainingAmount']) ?? 0,
     lineItems: lineItems,
   );
 }
@@ -114,6 +120,8 @@ DeliveryReceiptDetails deliveryReceiptFromTrustProjection(
     'paymentStatus': receipt['paymentStatus'],
     'paymentMethod': receipt['paymentMethod'],
     'vatAmount': receipt['vatAmount'],
+    'rothAppliedAmount': receipt['rothAppliedAmount'],
+    'remainingAmount': receipt['externalPaidAmount'],
     'pricingBreakdown': {
       'canonicalQuoteSnapshot': {'lineItems': receipt['lineItems']},
     },
@@ -180,7 +188,14 @@ String _paymentStatus(Object? value) => switch (_text(value).toLowerCase()) {
 
 String _paymentMethod(Object? value) => switch (_text(value).toLowerCase()) {
   'card' => 'Card',
+  'saved_card' => 'Saved card',
+  'apple_pay' => 'Apple Pay',
+  'google_pay' => 'Google Pay',
   'roth' => 'Roth',
+  'roth_card' => 'Roth and card',
+  'roth_saved_card' => 'Roth and saved card',
+  'roth_apple_pay' => 'Roth and Apple Pay',
+  'roth_google_pay' => 'Roth and Google Pay',
   '' => 'Payment method unavailable',
   _ => 'Payment method',
 };
