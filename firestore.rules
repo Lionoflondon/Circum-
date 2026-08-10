@@ -352,8 +352,6 @@ service cloud.firestore {
         'fullName',
         'firstName',
         'lastName',
-        'handle',
-        'username',
         'dateOfBirth',
         'gender',
         'homeAddress',
@@ -949,6 +947,7 @@ service cloud.firestore {
     match /users/{userId} {
       allow read: if isAdmin() || ownsSenderRecord(userId);
       allow create: if (isAdmin() || ownsSenderRecord(userId)) &&
+        (isAdmin() || !request.resource.data.keys().hasAny(['username', 'usernameCanonical', 'usernameUpdatedAt', 'handle'])) &&
         !request.resource.data.keys().hasAny([
           'isLegend',
           'legendNumber',
@@ -963,6 +962,7 @@ service cloud.firestore {
         ));
       allow update: if hasRole('super_admin') ||
         ((isAdmin() || ownsSenderRecord(userId)) &&
+          (isAdmin() || !request.resource.data.diff(resource.data).affectedKeys().hasAny(['username', 'usernameCanonical', 'usernameUpdatedAt', 'handle'])) &&
           !changesLegendFields() &&
           (isAdmin() || (
             !request.resource.data.diff(resource.data).affectedKeys().hasAny(userAdminOnlyRoleFields()) &&
@@ -970,6 +970,11 @@ service cloud.firestore {
             !hasUnsafeSelfUserTypeUpdate()
           )));
       allow delete: if hasRole('super_admin');
+    }
+
+    match /usernames/{username} {
+      allow read: if false;
+      allow create, update, delete: if false;
     }
 
     match /senderTrustEvents/{eventId} {

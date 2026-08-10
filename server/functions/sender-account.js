@@ -51,7 +51,6 @@ function cleanSenderProfilePatch(data, context) {
       [firstName, lastName].filter(Boolean).join(" "),
       120,
   );
-  const username = cleanText(data.username, 60).replace(/^@/, "");
   const phone = cleanText(data.phone || data.phoneNumber, 40);
   const patch = {
     accountType: "sender",
@@ -69,7 +68,6 @@ function cleanSenderProfilePatch(data, context) {
   }
   if (firstName) patch.firstName = firstName;
   if (lastName) patch.lastName = lastName;
-  if (username) patch.username = username;
   if (phone) {
     patch.phone = phone;
     patch.phoneNumber = phone;
@@ -83,7 +81,7 @@ function cleanSenderProfilePatch(data, context) {
   };
 }
 
-exports.updateSenderProfile = functions.https.onCall(async (data, context) => {
+exports.updateSenderProfile = functions.runWith({enforceAppCheck: true}).https.onCall(async (data, context) => {
   const uid = requireSender(context);
   const db = getFirestore();
   const ref = db.collection("users").doc(uid);

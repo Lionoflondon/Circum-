@@ -163,6 +163,9 @@ async function closeAccount(data, context) {
   }
 
   const db = getFirestore();
+  const closingProfile = await db.collection("users").doc(uid).get();
+  const retainedUsername = `${closingProfile.exists && closingProfile.data().username || ""}`
+      .trim().replace(/^@+/, "").toLowerCase();
   const batch = db.batch();
   const timestamp = FieldValue.serverTimestamp();
   const closure = {
@@ -177,6 +180,16 @@ async function closeAccount(data, context) {
 
   batch.set(db.collection("accountClosureAudit").doc(), closure);
   batch.set(db.collection("closedAccounts").doc(uid), closure, {merge: true});
+  if (retainedUsername) {
+    batch.set(db.collection("usernames").doc(retainedUsername), {
+      uid,
+      username: retainedUsername,
+      status: "retained",
+      current: false,
+      retainedReason: "account_closed",
+      updatedAt: timestamp,
+    }, {merge: true});
+  }
 
   const profileCollections = accountType === "rider" ?
     ["riders", "riderProfiles", "riderPresence"] :
@@ -186,6 +199,9 @@ async function closeAccount(data, context) {
       accountClosed: true,
       closedAt: timestamp,
       displayName: FieldValue.delete(),
+      username: FieldValue.delete(),
+      usernameCanonical: FieldValue.delete(),
+      usernameUpdatedAt: FieldValue.delete(),
       fullName: FieldValue.delete(),
       firstName: FieldValue.delete(),
       lastName: FieldValue.delete(),

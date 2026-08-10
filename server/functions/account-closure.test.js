@@ -27,3 +27,10 @@ test("sender account closure cleans owned Gift voice media", () => {
   assert.match(source, /cleanupGiftVoiceMediaForAccount/);
   assert.match(source, /accountType === "sender"/);
 });
+
+test("account closure retains handle ownership while removing profile presentation", () => {
+  assert.match(source, /collection\("usernames"\)\.doc\(retainedUsername\)/);
+  assert.match(source, /retainedReason: "account_closed"/);
+  assert.match(source, /username: FieldValue\.delete\(\)/);
+  assert.match(source, /usernameUpdatedAt: FieldValue\.delete\(\)/);
+});

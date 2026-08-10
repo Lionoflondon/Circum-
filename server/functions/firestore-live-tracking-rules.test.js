@@ -267,7 +267,6 @@ test("Rider profile self-writes are explicitly allowlisted", async () => {
   }));
   await assertSucceeds(setDoc(doc(riderDb, "riders", "rider-1"), {
     photoURL: "https://example.com/rider.jpg",
-    username: "riderone",
     vehicleType: "bike",
     updatedAt: serverTimestamp(),
   }, {merge: true}));
@@ -392,6 +391,32 @@ test("Sender profile self-writes cannot escalate roles", async () => {
   }, {merge: true}));
   await assertFails(setDoc(doc(senderDb, "users", "sender-1"), {
     roles: ["super_admin"],
+    updatedAt: serverTimestamp(),
+  }, {merge: true}));
+  await assertFails(setDoc(doc(senderDb, "users", "sender-1"), {
+    username: "forged_handle",
+    updatedAt: serverTimestamp(),
+  }, {merge: true}));
+  await assertFails(setDoc(doc(senderDb, "usernames", "forged_handle"), {
+    uid: "sender-1",
+    status: "active",
+  }));
+});
+
+test("Rider cannot self-assign an operations-owned username", async () => {
+  await testEnv.withSecurityRulesDisabled(async (context) => {
+    await setDoc(doc(context.firestore(), "riderProfiles", "rider-1"), {
+      uid: "rider-1",
+      name: "Rider One",
+    });
+  });
+  const riderDb = testEnv.authenticatedContext("rider-1").firestore();
+  await assertFails(setDoc(doc(riderDb, "riderProfiles", "rider-1"), {
+    username: "forged_rider",
+    updatedAt: serverTimestamp(),
+  }, {merge: true}));
+  await assertFails(setDoc(doc(riderDb, "riderProfiles", "rider-1"), {
+    handle: "forged_rider",
     updatedAt: serverTimestamp(),
   }, {merge: true}));
 });
