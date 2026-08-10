@@ -229,6 +229,15 @@
       "density": "SPARSE_ALL"
     },
     {
+      "collectionGroup": "notifications",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {"fieldPath": "retryable", "order": "ASCENDING"},
+        {"fieldPath": "nextRetryAt", "order": "ASCENDING"}
+      ],
+      "density": "SPARSE_ALL"
+    },
+    {
       "collectionGroup": "payoutRequests",
       "queryScope": "COLLECTION",
       "fields": [

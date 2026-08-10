@@ -182,6 +182,16 @@ test("assigned and completed Rider jobs remain operational without payment metad
   const active = riderAssignedJobProjection("delivery-1", {
     ...delivery,
     status: "accepted",
+    riderId: "rider-1",
+    waiting: {
+      startedAt: "2026-08-09T12:10:00.000Z",
+      noShowAvailableAt: "2026-08-09T12:13:00.000Z",
+      customerResponded: true,
+      noShowFeeAmount: 4,
+      noShowRiderCompensation: 2.5,
+      currency: "gbp",
+      internalNote: "private waiting note",
+    },
     senderDetails: {name: "Operational sender", phone: "+447700900010", email: "private@example.test"},
     receiverDetails: {name: "Operational receiver", phone: "+447700900011", email: "receiver@example.test"},
     stripeCustomerId: "cus_private",
@@ -200,11 +210,21 @@ test("assigned and completed Rider jobs remain operational without payment metad
   }, {completed: true});
 
   assert.deepEqual(active.senderDetails, {name: "Operational sender", phone: "+447700900010"});
+  assert.equal(active.riderId, "rider-1");
+  assert.equal(active.deliveryStage, "accepted");
+  assert.deepEqual(active.waiting, {
+    startedAt: "2026-08-09T12:10:00.000Z",
+    noShowAvailableAt: "2026-08-09T12:13:00.000Z",
+    customerResponded: true,
+    noShowFeeAmount: 4,
+    noShowRiderCompensation: 2.5,
+    currency: "GBP",
+  });
   assert.equal("senderDetails" in completed, false);
   assert.equal(completed.completedAt, "2026-08-09T12:00:00.000Z");
   for (const projection of [active, completed]) {
     const serialized = JSON.stringify(projection);
-    for (const privateValue of ["cus_private", "pi_private_assigned", "pi_private_completed", "private@example.test", "receiver@example.test", "pricingBreakdown", "internalAudit", "paymentStatus"]) {
+    for (const privateValue of ["cus_private", "pi_private_assigned", "pi_private_completed", "private@example.test", "receiver@example.test", "pricingBreakdown", "internalAudit", "paymentStatus", "private waiting note"]) {
       assert.equal(serialized.includes(privateValue), false, privateValue);
     }
   }

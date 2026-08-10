@@ -340,6 +340,12 @@ exports.updateSenderPushToken = functions.https.onCall(async (data, context) => 
     throw new functions.https.HttpsError("invalid-argument", "Push token is required.");
   }
   const db = getFirestore();
+  const tokenId = require("node:crypto").createHash("sha256").update(`${uid}|${fcmToken}`).digest("hex");
+  await db.collection("notificationTokens").doc(tokenId).set({
+    uid, role: "sender", token: fcmToken, active: data.revoke !== true,
+    updatedAt: FieldValue.serverTimestamp(),
+    createdAt: FieldValue.serverTimestamp(),
+  }, {merge: true});
   await db.collection("users").doc(uid).set({
     fcmToken,
     updatedAt: FieldValue.serverTimestamp(),

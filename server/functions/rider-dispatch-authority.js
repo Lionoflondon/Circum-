@@ -269,6 +269,9 @@ function riderAssignedJobProjection(deliveryId, delivery = {}, {completed = fals
 
   const operational = {
     ...projection,
+    riderId: text(delivery.riderId || delivery.driverId || delivery.assignedDriverId || delivery.assignedRiderId),
+    deliveryStatus: text(delivery.deliveryStatus || delivery.status),
+    deliveryStage: text(delivery.deliveryStage || delivery.deliveryStatus || delivery.status),
     pickupAccess: text(delivery.pickupAccess),
     dropoffAccess: text(delivery.dropoffAccess),
     normalizedItemName: text(delivery.normalizedItemName),
@@ -295,6 +298,20 @@ function riderAssignedJobProjection(deliveryId, delivery = {}, {completed = fals
     scheduledPickupDate: delivery.scheduledPickupDate || null,
     scheduledPickupWindow: delivery.scheduledPickupWindow || null,
     deliveryTimingType: text(delivery.deliveryTimingType),
+    waiting: delivery.waiting && typeof delivery.waiting === "object" ? {
+      startedAt: delivery.waiting.startedAt || null,
+      noShowAvailableAt: delivery.waiting.noShowAvailableAt || null,
+      customerResponded: delivery.waiting.customerResponded === true,
+      noShowFeeAmount: Number(delivery.waiting.noShowFeeAmount || 0),
+      noShowRiderCompensation: Number(delivery.waiting.noShowRiderCompensation || 0),
+      currency: text(delivery.waiting.currency || delivery.currency || "GBP").toUpperCase(),
+    } : null,
+    noShowFinancial: delivery.noShowFinancial && typeof delivery.noShowFinancial === "object" ? {
+      amount: Number(delivery.noShowFinancial.amount || 0),
+      riderCompensation: Number(delivery.noShowFinancial.riderCompensation || 0),
+      currency: text(delivery.noShowFinancial.currency || delivery.currency || "GBP").toUpperCase(),
+      status: text(delivery.noShowFinancial.status),
+    } : null,
     deliveredAt: completed ? delivery.deliveredAt || delivery.completedAt || null : null,
     completedAt: completed ? delivery.completedAt || delivery.deliveredAt || null : null,
     proofOfDelivery: completed ? {

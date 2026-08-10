@@ -264,6 +264,11 @@ exports.updateRiderPushToken = functions.https.onCall(async (data, context) => {
     throw new functions.https.HttpsError("invalid-argument", "Push token is required.");
   }
   const db = getFirestore();
+  const tokenId = require("node:crypto").createHash("sha256").update(`${rider.uid}|${fcmToken}`).digest("hex");
+  await db.collection("notificationTokens").doc(tokenId).set({
+    uid: rider.uid, role: "rider", token: fcmToken, active: data.revoke !== true,
+    updatedAt: FieldValue.serverTimestamp(), createdAt: FieldValue.serverTimestamp(),
+  }, {merge: true});
   const now = FieldValue.serverTimestamp();
   await db.runTransaction(async (transaction) => {
     transaction.set(db.collection("riderProfiles").doc(rider.uid), {

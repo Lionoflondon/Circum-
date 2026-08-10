@@ -23,7 +23,7 @@ test("notifications record delivery status, failures, and retries", () => {
   assert.match(source, /deliveryState:\s*"persisted"/);
   assert.match(source, /pushDeliveryStatus:\s*"pending"/);
   assert.match(source, /pushDeliveryStatus:\s*"sent"/);
-  assert.match(source, /pushDeliveryStatus:\s*"failed"/);
+  assert.match(source, /status: "failed"/);
   assert.match(source, /failureReason:\s*"push_token_missing"/);
   assert.match(source, /pushProvider:\s*"fcm"/);
   assert.match(source, /retryCount:\s*0/);
@@ -87,6 +87,8 @@ test("communication mutations enforce App Check and abuse reports are retry-safe
     assert.match(source, new RegExp(`exports\\.${callable} = protectedCallable\\.onCall`));
   }
   assert.match(source, /reportMutationId/);
+  assert.match(source, /chat\.ref\.collection\("messages"\)\.doc\(messageId\)\.get\(\)/);
+  assert.match(source, /\[chatId, messageId, context\.auth\.uid\]\.join\("\|"\)/);
   assert.match(source, /const reportId = `report_/);
   assert.doesNotMatch(source, /collection\("messageReports"\)\.add\(/);
 });
@@ -137,6 +139,13 @@ test("every Flutter communication mutation supplies an idempotency identity", ()
   assert.match(adminSource, /httpsCallable\('sendCircumAnnouncement'\)[\s\S]{0,300}'announcementId'/);
 });
 
+test("Sender chat exposes the canonical report-message control", () => {
+  const senderChat = fs.readFileSync("../../lib/app/send_package/view/ride_chats.dart", "utf8");
+  assert.match(senderChat, /httpsCallable\('reportCircumMessage'\)/);
+  assert.match(senderChat, /'reportMutationId': const Uuid\(\)\.v4\(\)/);
+  assert.match(senderChat, /onLongPress: \(\) => onReport\(messages\[index\]\.id\)/);
+});
+
 test("notification retry is backend-authoritative and audited", () => {
   assert.match(source, /async function retryNotificationDelivery/);
   assert.match(source, /async function claimNotificationRetry/);
@@ -154,6 +163,25 @@ test("notification retry is backend-authoritative and audited", () => {
       indexSource,
       /exports\.retryNotificationDelivery = communicationEngine\./,
   );
+});
+
+test("automated notification retries are bounded and become exhausted", () => {
+  const transient = communicationEngine.retryState(1, "messaging/internal-error", 0);
+  assert.equal(transient.status, "failed");
+  assert.equal(transient.retryable, true);
+  assert.equal(transient.nextRetryAt.getTime(), 5 * 60 * 1000);
+  assert.deepEqual(
+      communicationEngine.retryState(5, "messaging/internal-error", 0),
+      {status: "exhausted", retryable: false, nextRetryAt: null, permanent: false},
+  );
+  assert.equal(
+      communicationEngine.retryState(1, "messaging/registration-token-not-registered", 0).permanent,
+      true,
+  );
+  assert.match(source, /schedule\("every 5 minutes"\)/);
+  assert.match(source, /\.limit\(100\)/);
+  assert.match(source, /sendEachForMulticast/);
+  assert.match(source, /collection\("notificationTokens"\)/);
 });
 
 test("platform announcements persist notification ids and audit", () => {
