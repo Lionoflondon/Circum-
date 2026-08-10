@@ -14,8 +14,10 @@ Future<void> main() async {
       WidgetsFlutterBinding.ensureInitialized();
       _installAppCheckStartupBoundary();
       await Firebase.initializeApp(options: DefaultFirebaseOptions.web);
-      runApp(const CircumWebsiteApp());
-      unawaited(_activateAppCheckAfterStartup());
+      final appCheckStartup = await initializeCircumAppCheck();
+      runApp(appCheckStartup.blockStartup
+          ? _WebsiteSecurityRecovery(message: appCheckStartup.message)
+          : const CircumWebsiteApp());
     },
     (error, stack) {
       if (_isAppCheckStartupError(error)) {
@@ -35,17 +37,37 @@ Future<void> main() async {
   );
 }
 
-Future<void> _activateAppCheckAfterStartup() async {
-  try {
-    final appCheckStartup = await initializeCircumAppCheck();
-    if (appCheckStartup.blockStartup && kDebugMode) {
-      debugPrint('Website App Check warning: ${appCheckStartup.message}');
-    }
-  } catch (error) {
-    if (kDebugMode) {
-      debugPrint('Website App Check warning: $error');
-    }
-  }
+class _WebsiteSecurityRecovery extends StatelessWidget {
+  const _WebsiteSecurityRecovery({required this.message});
+  final String message;
+
+  @override
+  Widget build(BuildContext context) => MaterialApp(
+        home: Scaffold(
+          backgroundColor: const Color(0xff020713),
+          body: Center(
+            child: Padding(
+              padding: const EdgeInsets.all(24),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Icon(Icons.security_outlined, color: Color(0xff32d6a0), size: 40),
+                  const SizedBox(height: 16),
+                  const Text('Security check required', style: TextStyle(color: Colors.white, fontSize: 22)),
+                  const SizedBox(height: 8),
+                  Text(message, textAlign: TextAlign.center, style: const TextStyle(color: Color(0xffb8c2d8))),
+                  const SizedBox(height: 20),
+                  FilledButton.icon(
+                    onPressed: () => main(),
+                    icon: const Icon(Icons.refresh),
+                    label: const Text('Retry'),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      );
 }
 
 void _installAppCheckStartupBoundary() {

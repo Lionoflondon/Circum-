@@ -33,6 +33,24 @@
   <link rel="manifest" href="/manifest.json?v=circum-20260528">
 
   <script>
+    (function handOffOperationalProducts() {
+      var url = new URL(window.location.href);
+      var path = url.hash.indexOf('#/') === 0 ? url.hash.substring(1).split('?')[0] : url.pathname;
+      var app = (url.searchParams.get('app') || '').toLowerCase();
+      var sender = path === '/send' || path.indexOf('/send/') === 0 || ['sender', 'health', 'business', 'profile'].includes(app);
+      var rider = path === '/rider' || path.indexOf('/rider/') === 0 || ['rider', 'driver', 'earn', 'circum-order'].includes(app);
+      if (!sender && !rider) return;
+      var target = new URL(sender ? 'https://circum-app-2797c.web.app/' : 'https://circum-rider-2797c.web.app/');
+      var sourcePrefix = sender ? '/send' : '/rider';
+      var suffix = path.indexOf(sourcePrefix) === 0 ? path.substring(sourcePrefix.length) : '';
+      target.pathname = suffix || '/';
+      url.searchParams.delete('app');
+      target.search = url.searchParams.toString();
+      window.location.replace(target.toString());
+    })();
+  </script>
+
+  <script>
     // The value below is injected by flutter build, do not touch.
     const serviceWorkerVersion = null;
     if ('serviceWorker' in navigator) {
