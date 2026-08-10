@@ -1483,9 +1483,6 @@ class _AdminPhaseOneShellState extends State<AdminPhaseOneShell> {
     }
     final id = _idFor(gift);
     if (id.isEmpty) return;
-    final status = TextEditingController(
-      text: '${gift['status'] ?? 'submitted'}',
-    );
     final plan = TextEditingController(text: '${gift['manualGiftPlan'] ?? ''}');
     final decision = TextEditingController(
       text: '${gift['adminDecision'] ?? ''}',
@@ -1568,12 +1565,6 @@ class _AdminPhaseOneShellState extends State<AdminPhaseOneShell> {
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  TextField(
-                    controller: status,
-                    decoration: const InputDecoration(
-                      labelText: 'Workflow status',
-                    ),
-                  ),
                   TextField(
                     controller: plan,
                     maxLines: 2,
@@ -1783,14 +1774,12 @@ class _AdminPhaseOneShellState extends State<AdminPhaseOneShell> {
     );
     final collection = '${gift['_collection'] ?? 'giftRequests'}';
     final patch = <String, Object?>{
-      'status': status.text.trim(),
       'manualGiftPlan': plan.text.trim(),
       'adminDecision': decision.text.trim(),
       'internalNotes': notes.text.trim(),
       'procurementItemTitle': procurementTitle.text.trim(),
       'procurementSupplier': procurementSupplier.text.trim(),
       'procurementEstimatedCost': double.tryParse(procurementCost.text.trim()),
-      'procurementActualCost': double.tryParse(procurementCost.text.trim()),
       'procurementOrderReference': procurementOrder.text.trim(),
       'procurementDeliveryEta': procurementEta.text.trim(),
       'procurementNotes': procurementNotes.text.trim(),
@@ -1818,7 +1807,6 @@ class _AdminPhaseOneShellState extends State<AdminPhaseOneShell> {
       'postedYouTubeShortsUrl': youtube.text.trim(),
     };
     for (final controller in [
-      status,
       plan,
       decision,
       notes,
@@ -2013,12 +2001,28 @@ class _AdminPhaseOneShellState extends State<AdminPhaseOneShell> {
     if (id.isEmpty) return;
     final collection = '${gift['_collection'] ?? 'giftRequests'}';
     try {
-      await _functions.httpsCallable('adminUpdateGiftWorkspace').call({
-        'giftId': id,
-        'collection': collection,
-        'action': action,
-        'reason': 'Gift Team workspace action confirmed from Admin',
-      });
+      const procurementActions = {
+        'procurement_review',
+        'sourcing',
+        'unavailable',
+        'procurement_failed',
+      };
+      if (procurementActions.contains(action) && collection == 'giftRequests') {
+        await _functions.httpsCallable('updateGiftProcurement').call({
+          'giftId': id,
+          'status': action,
+          'idempotencyKey':
+              'admin_${action}_${DateTime.now().millisecondsSinceEpoch}',
+          'reason': 'Gift Team procurement action confirmed from Admin',
+        });
+      } else {
+        await _functions.httpsCallable('adminUpdateGiftWorkspace').call({
+          'giftId': id,
+          'collection': collection,
+          'action': action,
+          'reason': 'Gift Team workspace action confirmed from Admin',
+        });
+      }
       setState(() => _message = 'Gift workspace $id marked $action.');
       await _loadAdminData();
     } on FirebaseFunctionsException catch (error) {
@@ -15354,6 +15358,7 @@ List<(String, String)> _giftOperationsLines(Map<String, dynamic> record) {
       'Purchase Status',
       '${record['purchaseStatus'] ?? record['procurementStatus'] ?? 'Not purchased'}',
     ),
+    ('Time in current stage', _giftProcurementAge(record)),
     ('Gift Status', _giftWorkspaceProgress(record).join(' · ')),
     (
       'Dispatch Status',
@@ -15362,6 +15367,27 @@ List<(String, String)> _giftOperationsLines(Map<String, dynamic> record) {
     ('Story Status', _giftStorySummary(record)),
     ('Ready Status', _giftWorkflowStatus(record)),
   ];
+}
+
+String _giftProcurementAge(Map<String, dynamic> record) {
+  final raw = record['procurementUpdatedAt'] ??
+      record['procurementCommittedAt'] ??
+      record['updatedAt'] ??
+      record['createdAt'];
+  final startedAt = switch (raw) {
+    Timestamp value => value.toDate(),
+    DateTime value => value,
+    String value => DateTime.tryParse(value),
+    _ => null,
+  };
+  if (startedAt == null) return 'Not available';
+  final age = DateTime.now().difference(startedAt);
+  if (age.isNegative) return 'Just updated';
+  if (age.inDays > 0) return '${age.inDays}d ${age.inHours.remainder(24)}h';
+  if (age.inHours > 0) {
+    return '${age.inHours}h ${age.inMinutes.remainder(60)}m';
+  }
+  return '${age.inMinutes.clamp(0, 59)}m';
 }
 
 List<Map<String, dynamic>> _applyGiftOperationalFilters(
@@ -15662,25 +15688,17 @@ class _GiftTeamWorkspaceModule extends StatelessWidget {
           records: records,
           query: '',
           fields: const [],
-          columns: const ['Gift', 'Workspace', 'Procurement', 'IRIS'],
+          columns: const ['Gift', 'Workspace', 'Procurement', 'Age', 'IRIS'],
           row: (record) => [
             '${record['giftName'] ?? record['title'] ?? _recordId(record)}',
             _giftWorkspaceSummary(record),
             _giftProcurementSummary(record),
+            _giftProcurementAge(record),
             _giftIrisSelectionSummary(record),
           ],
           actions: canManageIssues
               ? (record) => [
-                    for (final action in const [
-                      ('Assign', 'assigned'),
-                      ('Curating', 'curating'),
-                      ('Supplier pending', 'supplier_pending'),
-                      ('Approval pending', 'approval_pending'),
-                      ('Ready procurement', 'ready_for_procurement'),
-                      ('Ready rider', 'ready_for_rider'),
-                      ('Ready scheduling', 'ready_for_scheduling'),
-                      ('Ready delivery', 'ready_for_delivery'),
-                    ])
+                    for (final action in _giftProcurementActions(record))
                       _MiniAction(
                         label: action.$1,
                         onPressed: () =>
@@ -15752,6 +15770,27 @@ class _GiftTeamWorkspaceModule extends StatelessWidget {
       ],
     );
   }
+}
+
+List<(String, String)> _giftProcurementActions(
+  Map<String, dynamic> record,
+) {
+  final status =
+      '${record['procurementStatus'] ?? record['giftStatus'] ?? record['status'] ?? ''}'
+          .trim()
+          .toLowerCase();
+  return switch (status) {
+    'submitted_for_review' => const [('Review', 'procurement_review')],
+    'procurement_review' => const [('Start sourcing', 'sourcing')],
+    'sourcing' => const [
+        ('Item unavailable', 'unavailable'),
+        ('Procurement issue', 'procurement_failed'),
+      ],
+    'unavailable' || 'procurement_failed' || 'substitution_required' => const [
+        ('Continue sourcing', 'sourcing')
+      ],
+    _ => const [],
+  };
 }
 
 class _TroubleshootingModule extends StatelessWidget {
