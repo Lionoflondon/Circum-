@@ -450,13 +450,20 @@ async function reportMessage(data, context) {
   const chatId = clean(data.chatId);
   const messageId = clean(data.messageId);
   const reason = clean(data.reason);
+  const reportMutationId = clean(data.reportMutationId || data.correlationId);
   if (!chatId || !messageId || !reason) throw new functions.https.HttpsError("invalid-argument", "A message and reason are required.");
+  if (!messageMutationIdPattern.test(reportMutationId)) {
+    throw new functions.https.HttpsError("invalid-argument", "A valid report mutation id is required.");
+  }
   const db = getFirestore();
   const chat = await db.collection("chats").doc(chatId).get();
   if (!chat.exists || (!isAdmin(context) && !(chat.data().participants || []).includes(context.auth.uid))) {
     throw new functions.https.HttpsError("permission-denied", "Conversation access denied.");
   }
-  const report = await db.collection("messageReports").add({
+  const reportId = `report_${createHash("sha256").update([chatId, messageId, context.auth.uid, reportMutationId].join("|")).digest("hex").slice(0, 40)}`;
+  const report = db.collection("messageReports").doc(reportId);
+  await report.create({
+    reportId,
     chatId,
     messageId,
     reporterId: context.auth.uid,
@@ -464,8 +471,10 @@ async function reportMessage(data, context) {
     deliveryId: clean(chat.data().deliveryId || chat.data().bookingId),
     createdAt: FieldValue.serverTimestamp(),
     status: "open",
+  }).catch((error) => {
+    if (!(error && (error.code === 6 || error.code === "already-exists"))) throw error;
   });
-  return {ok: true, reportId: report.id};
+  return {ok: true, reportId};
 }
 
 async function sendAnnouncement(data, context) {
@@ -872,16 +881,17 @@ exports.maskContactDetails = maskContactDetails;
 exports.messageDocumentId = messageDocumentId;
 exports.claimNotificationRetry = claimNotificationRetry;
 exports._sendCircumMessageHandler = sendMessage;
-exports.sendCircumMessage = functions.https.onCall(sendMessage);
-exports.startAdminConversation = functions.https.onCall(startAdminConversation);
-exports.getOrCreateSupportConversation = functions.https.onCall(getOrCreateSupportConversation);
-exports.submitWebsiteSupportRequest = functions.https.onCall(submitWebsiteSupportRequest);
-exports.updateSupportConversationStatus = functions.https.onCall(updateSupportConversationStatus);
-exports.markConversationRead = functions.https.onCall(markConversationRead);
-exports.setConversationTyping = functions.https.onCall(setConversationTyping);
-exports.reportCircumMessage = functions.https.onCall(reportMessage);
-exports.sendCircumAnnouncement = functions.https.onCall(sendAnnouncement);
-exports.retryNotificationDelivery = functions.https.onCall(retryNotificationDelivery);
+const protectedCallable = functions.runWith({enforceAppCheck: true}).https;
+exports.sendCircumMessage = protectedCallable.onCall(sendMessage);
+exports.startAdminConversation = protectedCallable.onCall(startAdminConversation);
+exports.getOrCreateSupportConversation = protectedCallable.onCall(getOrCreateSupportConversation);
+exports.submitWebsiteSupportRequest = protectedCallable.onCall(submitWebsiteSupportRequest);
+exports.updateSupportConversationStatus = protectedCallable.onCall(updateSupportConversationStatus);
+exports.markConversationRead = protectedCallable.onCall(markConversationRead);
+exports.setConversationTyping = protectedCallable.onCall(setConversationTyping);
+exports.reportCircumMessage = protectedCallable.onCall(reportMessage);
+exports.sendCircumAnnouncement = protectedCallable.onCall(sendAnnouncement);
+exports.retryNotificationDelivery = protectedCallable.onCall(retryNotificationDelivery);
 exports.closeDeliveryConversation = async (deliveryId, status) => {
   if (!terminalDeliveryStatuses.has(clean(status).toLowerCase())) return;
   await getFirestore().collection("chats").doc(clean(deliveryId)).set({

@@ -76,6 +76,21 @@ test("notification and message identities are deterministic", () => {
   );
 });
 
+test("communication mutations enforce App Check and abuse reports are retry-safe", () => {
+  assert.match(source, /const protectedCallable = functions\.runWith\(\{enforceAppCheck: true\}\)\.https/);
+  for (const callable of [
+    "sendCircumMessage", "startAdminConversation", "getOrCreateSupportConversation",
+    "submitWebsiteSupportRequest", "updateSupportConversationStatus",
+    "markConversationRead", "setConversationTyping", "reportCircumMessage",
+    "sendCircumAnnouncement", "retryNotificationDelivery",
+  ]) {
+    assert.match(source, new RegExp(`exports\\.${callable} = protectedCallable\\.onCall`));
+  }
+  assert.match(source, /reportMutationId/);
+  assert.match(source, /const reportId = `report_/);
+  assert.doesNotMatch(source, /collection\("messageReports"\)\.add\(/);
+});
+
 test("messages include backend-only diagnostic metadata", () => {
   assert.match(source, /messageId:\s*messageRef\.id/);
   assert.match(source, /conversationId:\s*chatId/);
@@ -133,7 +148,7 @@ test("notification retry is backend-authoritative and audited", () => {
   assert.match(source, /actionType:\s*"notification_retry_failed"/);
   assert.match(
       source,
-      /exports\.retryNotificationDelivery = functions\.https\.onCall/,
+      /exports\.retryNotificationDelivery = protectedCallable\.onCall/,
   );
   assert.match(
       indexSource,
