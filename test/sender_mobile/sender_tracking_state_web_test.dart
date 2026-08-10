@@ -11,6 +11,12 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 
 void main() {
+  test('pending no-show collection is not presented as a completed charge', () {
+    final source = File('lib/app/sender_mobile/sender_tracking_screen.dart')
+        .readAsStringSync();
+    expect(source, contains("financial['customerCollected'] != 7"));
+    expect(source, contains("settlementStatus != 'settled'"));
+  });
   test('Sender mobile preserves distinct pickup and drop-off coordinates', () {
     final restored = restoreDeliveryCoordinates({
       'pickupDetails': {

@@ -762,6 +762,16 @@ Map<String, dynamic> _mapFrom(Object? value) {
   Map<String, dynamic> waiting,
 ) {
   final financial = _mapFrom(data['noShowFinancial']);
+  final settlementStatus =
+      '${financial['settlementStatus'] ?? financial['state'] ?? ''}'
+          .trim()
+          .toLowerCase();
+  if (financial.isNotEmpty &&
+      financial['customerCollected'] != 7 &&
+      settlementStatus != 'settled' &&
+      settlementStatus != 'completed') {
+    return null;
+  }
   final amount = _numberFrom(
     financial['amount'] ??
         waiting['noShowFeeAmount'] ??
