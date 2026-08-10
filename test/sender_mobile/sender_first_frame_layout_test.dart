@@ -88,12 +88,6 @@ class _FakeWalletRepository implements SenderWalletRepository {
       SenderPaymentProfile.empty();
 
   @override
-  Future<void> requestDebit({
-    required double amount,
-    required String relatedEntityId,
-    required String idempotencyKey,
-  }) async {}
-
   @override
   Future<void> saveCheckoutPreference(
       SenderCheckoutPreference preference) async {}

@@ -3183,7 +3183,7 @@ class _OptionsPanel extends StatelessWidget {
           title: senderVanguardProtocolLabel,
           price: includedVanguard
               ? 'Included'
-              : '+£${senderVanguardAddOnPriceGbp.toStringAsFixed(2)}',
+              : 'Calculated in quote',
           subtitle: includedVanguard
               ? 'Protected throughout this delivery. Priority dispute support, enhanced custody tracking, and trusted rider prioritisation.'
               : 'Add Vanguard for pickup verification, secure custody, secure transit, and secure handover.',

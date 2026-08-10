@@ -21,7 +21,6 @@ enum SenderDeliveryTimingType { now, scheduled }
 enum SenderFallbackPaymentMethod { card, applePay, googlePay }
 
 const senderDeliverySpeeds = ['Standard', 'Express'];
-const senderVanguardAddOnPriceGbp = 1.99;
 const senderVanguardProtocolLabel = 'Vanguard Delivery Protocol';
 const senderRothPoundValue = 1.0;
 
@@ -308,11 +307,6 @@ class SenderBookingDraft {
 
   bool get exposesPaymentSuccess =>
       paymentStatus == SenderPaymentStatus.paid && bookingConfirmed;
-
-  double get addOnTotalGbp => vanguard ? senderVanguardAddOnPriceGbp : 0;
-
-  double? totalWithAddOns(double? deliveryPrice) =>
-      deliveryPrice == null ? null : deliveryPrice + addOnTotalGbp;
 
   bool get vanguardProtocolEnabled => vanguard;
 

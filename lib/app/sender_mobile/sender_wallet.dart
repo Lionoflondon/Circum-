@@ -195,11 +195,6 @@ abstract class SenderWalletRepository
   Stream<SenderWalletData> watch();
   Future<SenderWalletPage> transactions({String? pageToken});
   Future<void> completeOnboarding();
-  Future<void> requestDebit({
-    required double amount,
-    required String relatedEntityId,
-    required String idempotencyKey,
-  });
 }
 
 class FirebaseSenderWalletRepository implements SenderWalletRepository {
@@ -361,18 +356,6 @@ class FirebaseSenderWalletRepository implements SenderWalletRepository {
     await functions.httpsCallable('completeSenderWalletOnboarding').call();
   }
 
-  @override
-  Future<void> requestDebit({
-    required double amount,
-    required String relatedEntityId,
-    required String idempotencyKey,
-  }) async {
-    await functions.httpsCallable('requestSenderWalletDebit').call({
-      'amount': amount,
-      'relatedEntityId': relatedEntityId,
-      'idempotencyKey': idempotencyKey,
-    });
-  }
 }
 
 class SenderWalletView extends StatefulWidget {
@@ -1238,16 +1221,19 @@ class _SenderReferralScreenState extends State<SenderReferralScreen> {
           .httpsCallable('ensureReferralCode')
           .call();
       final data = Map<String, dynamic>.from(result.data as Map);
-      final referrals = await FirebaseFirestore.instance
-          .collection('referrals')
-          .where('referrerUserId', isEqualTo: user.uid)
-          .limit(100)
-          .get();
+      final dashboardResult = await FirebaseFunctions.instance
+          .httpsCallable('getReferralDashboard')
+          .call({'pageSize': 50});
+      final dashboard =
+          Map<String, dynamic>.from(dashboardResult.data as Map);
+      final referrals = (dashboard['referrals'] as List? ?? const [])
+          .map((item) => Map<String, dynamic>.from(item as Map))
+          .toList();
       if (!mounted) return;
       setState(() {
         _code = '${data['referralCode'] ?? ''}';
         _link = '${data['referralLink'] ?? ''}';
-        _referrals = referrals.docs.map((doc) => doc.data()).toList();
+        _referrals = referrals;
       });
     } catch (error) {
       if (mounted) setState(() => _error = '$error');
