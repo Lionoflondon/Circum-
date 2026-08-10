@@ -441,7 +441,6 @@ function stringList(value) {
 function giftRequestEditorPatch(data, actor) {
   const patch = {};
   const stringFields = [
-    "status",
     "manualGiftPlan",
     "adminDecision",
     "internalNotes",
@@ -469,10 +468,6 @@ function giftRequestEditorPatch(data, actor) {
   if (Object.prototype.hasOwnProperty.call(data, "procurementEstimatedCost")) {
     const value = Number(data.procurementEstimatedCost);
     patch.procurementEstimatedCost = Number.isFinite(value) ? value : null;
-  }
-  if (Object.prototype.hasOwnProperty.call(data, "procurementActualCost")) {
-    const value = Number(data.procurementActualCost);
-    patch.procurementActualCost = Number.isFinite(value) ? value : null;
   }
   for (const field of ["giftStoryEnabled", "giftStoryApproved", "allowCircumSocialUse", "allowPublicPosting", "allowBrandTagging"]) {
     if (Object.prototype.hasOwnProperty.call(data, field)) patch[field] = data[field] === true;

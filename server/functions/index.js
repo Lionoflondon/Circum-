@@ -70,6 +70,7 @@ const referrals = require("./referrals");
 const movementLedger = require("./movement-ledger");
 const movementTimeline = require("./movement-timeline");
 const giftStoryAutomation = require("./gift-story-automation");
+const giftProcurement = require("./gift-procurement");
 const riderPresence = require("./rider-presence");
 const freeAddressSearch = require("./free-address-search");
 const senderBooking = require("./sender-booking");
@@ -141,6 +142,9 @@ exports.escalateUnclaimedDeliveries =
 exports.awardLegendOnCompletion = legends.awardLegendOnCompletion;
 exports.createGiftPayment = giftsPayment.createGiftPayment(stripe);
 exports.finalizeGiftPayment = giftsPayment.finalizeGiftPayment(stripe);
+exports.updateGiftProcurement = giftProcurement.updateGiftProcurement;
+exports.proposeGiftSubstitution = giftProcurement.proposeGiftSubstitution;
+exports.decideGiftSubstitution = giftProcurement.decideGiftSubstitution;
 exports.cleanupExpiredGiftVoiceDrafts =
   giftsPayment.cleanupExpiredGiftVoiceDrafts;
 exports.onGiftRequestVoiceMediaDeleted =

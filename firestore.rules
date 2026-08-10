@@ -743,15 +743,9 @@ service cloud.firestore {
     }
 
     match /giftPaymentDrafts/{giftDraftId} {
-      allow create: if signedIn() &&
-        request.resource.data.senderId == request.auth.uid &&
-        request.resource.data.status == 'draft' &&
-        request.resource.data.paymentStatus == 'payment_pending' &&
-        request.resource.data.grossBudget is number &&
-        request.resource.data.grossBudget >= 50;
       allow read: if isAdmin() ||
         (signedIn() && resource.data.senderId == request.auth.uid);
-      allow update, delete: if isAdmin();
+      allow create, update, delete: if isAdmin();
     }
 
     match /giftBrands/{brandId} {
@@ -760,20 +754,9 @@ service cloud.firestore {
     }
 
     match /giftCampaignParticipants/{participantId} {
-      allow create: if signedIn() &&
-        request.resource.data.userId == request.auth.uid;
       allow read: if isAdmin() ||
         (signedIn() && resource.data.userId == request.auth.uid);
-      allow update: if isAdmin() ||
-        (signedIn() && resource.data.userId == request.auth.uid &&
-          !request.resource.data.diff(resource.data).changedKeys().hasAny([
-            'matchedParticipantId',
-            'matchScore',
-            'matchReason',
-            'matchStatus',
-            'matchLockedAt',
-            'matchApprovedBy'
-          ]));
+      allow create, update: if isAdmin();
       allow delete: if hasRole('super_admin');
     }
 

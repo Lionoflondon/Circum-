@@ -6,12 +6,42 @@
   "releaseShaSemantics": "SELF means the Git commit containing this manifest; the immutable SHA is recorded in the release report and deployment provenance.",
   "entryPoint": "server/functions/index.js",
   "inventory": {
-    "productionFunctions": 254,
-    "applicationFunctions": 248,
+    "productionFunctions": 257,
+    "applicationFunctions": 251,
     "extensionFunctions": 6,
-    "sourceExports": 248
+    "sourceExports": 251
   },
   "applicationFunctions": [
+    {
+      "name": "decideGiftSubstitution",
+      "source": "server/functions/gift-procurement.js#decideGiftSubstitution",
+      "runtime": "nodejs22",
+      "region": "us-central1",
+      "trigger": {"type": "callable"},
+      "productionSourceHash": "PENDING_DEPLOYMENT",
+      "state": "ACTIVE",
+      "releaseSha": "SELF"
+    },
+    {
+      "name": "proposeGiftSubstitution",
+      "source": "server/functions/gift-procurement.js#proposeGiftSubstitution",
+      "runtime": "nodejs22",
+      "region": "us-central1",
+      "trigger": {"type": "callable"},
+      "productionSourceHash": "PENDING_DEPLOYMENT",
+      "state": "ACTIVE",
+      "releaseSha": "SELF"
+    },
+    {
+      "name": "updateGiftProcurement",
+      "source": "server/functions/gift-procurement.js#updateGiftProcurement",
+      "runtime": "nodejs22",
+      "region": "us-central1",
+      "trigger": {"type": "callable"},
+      "productionSourceHash": "PENDING_DEPLOYMENT",
+      "state": "ACTIVE",
+      "releaseSha": "SELF"
+    },
     {
       "name": "acceptRideRequests",
       "source": "server/functions/index.js#acceptRideRequests",
