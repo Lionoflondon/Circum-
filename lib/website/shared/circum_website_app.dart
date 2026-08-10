@@ -14319,7 +14319,7 @@ class _BusinessOnboardingPanel extends StatelessWidget {
                   onChanged: (value) =>
                       onBusinessTermsChanged(value ?? false),
                   title: Text('I accept the Business terms',
-                      style: TextStyle(color: colors.primaryText)),
+                      style: TextStyle(color: colors.text)),
                 ),
                 const SizedBox(height: 14),
                 SizedBox(
