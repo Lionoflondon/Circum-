@@ -130,6 +130,7 @@ exports.analyseIris = iris.analyseIris;
 exports.analyseParcelPhotoForIris = irisPhotoAnalysis.analyseParcelPhotoForIris;
 exports.adjudicateIris = iris.adjudicateIris;
 exports.reportLoadDiscrepancy = deliveryAdjustments.reportLoadDiscrepancy;
+exports.getDeliveryAdjustmentEvidence = deliveryAdjustments.getDeliveryAdjustmentEvidence;
 exports.reviewDeliveryAdjustment = deliveryAdjustments.reviewDeliveryAdjustment;
 exports.cancelAdjustedCollection = deliveryAdjustments.cancelAdjustedCollection;
 exports.createDeliveryAdjustmentPayment =

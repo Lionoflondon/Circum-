@@ -44,6 +44,10 @@ test("delivery adjustment callable requires Admin review before sender payment",
   assert.match(source, /adminDecision !== "approve"/);
   assert.match(source, /request_more_evidence/);
   assert.match(source, /repriceWeightFromQuote/);
+  assert.match(source, /paidWeightSnapshot\(booking\)/);
+  assert.match(source, /verifyReferences/);
+  assert.match(source, /WeightDiscrepancySubmitted/);
+  assert.doesNotMatch(source, /booking\.finalWeightUsed \|\| booking\.finalChargeableWeight/);
   assert.doesNotMatch(source, /recommendation && recalculated\.recommendation\.estimatedPrice/);
 });
 

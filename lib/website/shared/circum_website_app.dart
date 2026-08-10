@@ -4669,7 +4669,7 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
                         error = null;
                       });
                       try {
-                        final urls = <String>[];
+                        final evidenceReferences = <Map<String, dynamic>>[];
                         for (var index = 0; index < photos.length; index++) {
                           final photo = photos[index];
                           final ref = FirebaseStorage.instance.ref(
@@ -4677,15 +4677,22 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
                           );
                           await ref.putData(
                             await photo.readAsBytes(),
-                            SettableMetadata(contentType: photo.mimeType),
+                            SettableMetadata(
+                              contentType: photo.mimeType,
+                              customMetadata: {
+                                'deliveryId': requestId,
+                                'uploadedBy': user.uid,
+                                'evidenceType': 'weight_discrepancy',
+                              },
+                            ),
                           );
-                          urls.add(await ref.getDownloadURL());
+                          evidenceReferences.add({'storagePath': ref.fullPath});
                         }
                         if (!dialogContext.mounted) return;
                         Navigator.of(dialogContext).pop({
                           'requestId': requestId,
                           'reason': reason,
-                          'evidencePhotos': urls,
+                          'evidencePhotos': evidenceReferences,
                           if (observedWeight != null)
                             'observedWeightKg': observedWeight,
                           if (description.text.trim().isNotEmpty)

@@ -62,18 +62,20 @@ service firebase.storage {
     }
 
     match /delivery-discrepancies/{deliveryId}/{riderId}/{fileName} {
-      allow read: if isAdmin() || isAssignedDeliveryRider(deliveryId) ||
-        (signedIn() && firestore.exists(/databases/(default)/documents/deliveryRequests/$(deliveryId)) &&
-         delivery(deliveryId).senderId == request.auth.uid);
-      allow create: if request.auth.uid == riderId && isAssignedDeliveryRider(deliveryId) && isSafeUpload();
+      allow read: if isAdmin() || isAssignedDeliveryRider(deliveryId);
+      allow create: if request.auth.uid == riderId && isAssignedDeliveryRider(deliveryId) &&
+        isSafeUpload() &&
+        request.resource.metadata.deliveryId == deliveryId &&
+        request.resource.metadata.uploadedBy == request.auth.uid &&
+        request.resource.metadata.evidenceType == 'weight_discrepancy';
       allow update, delete: if false;
     }
 
     match /delivery_weight_evidence/{deliveryId}/{context}/{fileName} {
-      allow read: if isAdmin() || isAssignedDeliveryRider(deliveryId) ||
-        (signedIn() && firestore.exists(/databases/(default)/documents/deliveryRequests/$(deliveryId)) &&
-         delivery(deliveryId).senderId == request.auth.uid);
-      allow create: if isAssignedDeliveryRider(deliveryId) && isSafeUpload();
+      allow read: if isAdmin() || isAssignedDeliveryRider(deliveryId);
+      allow create: if isAssignedDeliveryRider(deliveryId) && isSafeUpload() &&
+        request.resource.metadata.deliveryId == deliveryId &&
+        request.resource.metadata.evidenceType == 'weight_discrepancy';
       allow update, delete: if false;
     }
 

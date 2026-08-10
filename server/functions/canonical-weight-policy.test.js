@@ -12,6 +12,23 @@ test("canonical five-band policy is shared and effective at exact boundaries", (
     ["Large Item", 40, 15],
     ["Extra Heavy", null, 25],
   ]);
+  assert.deepEqual([0.01, 5, 5.01, 10, 10.01, 20, 20.01, 40, 40.01].map((value) => policy.weightBandFor(value).id), [
+    "small_parcel", "small_parcel", "medium_parcel", "medium_parcel", "heavy_parcel", "heavy_parcel", "large_item", "large_item", "extra_heavy",
+  ]);
+});
+
+test("paid weight authority comes only from a complete versioned quote snapshot", () => {
+  const quote = {
+    weightKg: 8,
+    weightBand: policy.weightBandFor(8),
+    weightPolicyVersion: policy.WEIGHT_POLICY_VERSION,
+    pricingSnapshotVersion: policy.PRICING_SNAPSHOT_VERSION,
+    total: 21.35,
+  };
+  assert.equal(policy.paidWeightSnapshot({pricingBreakdown: quote}).weightKg, 8);
+  assert.equal(policy.paidWeightSnapshot({weightKg: 8, paidWeightKg: 8}), null);
+  assert.equal(policy.paidWeightSnapshot({pricingBreakdown: {...quote, weightBand: policy.weightBandFor(2)}}), null);
+  assert.equal(policy.paidWeightSnapshot({pricingBreakdown: {...quote, pricingSnapshotVersion: null}}), null);
 });
 
 test("backend pricing, IRIS, and Health+ import one weight policy", () => {

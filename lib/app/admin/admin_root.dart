@@ -221,7 +221,34 @@ class _DeliveryAdjustmentCard extends StatefulWidget {
 class _DeliveryAdjustmentCardState extends State<_DeliveryAdjustmentCard> {
   bool _busy = false;
   String? _message;
+  List<String> _evidenceUrls = const [];
   final TextEditingController _note = TextEditingController();
+
+  @override
+  void initState() {
+    super.initState();
+    _loadEvidence();
+  }
+
+  Future<void> _loadEvidence() async {
+    try {
+      final result = await FirebaseFunctions.instance
+          .httpsCallable('getDeliveryAdjustmentEvidence')
+          .call({'adjustmentId': widget.id});
+      final data = Map<String, dynamic>.from(result.data as Map);
+      final evidence = data['evidence'] is Iterable
+          ? List<Object?>.from(data['evidence'] as Iterable)
+          : const <Object?>[];
+      if (!mounted) return;
+      setState(() => _evidenceUrls = evidence
+          .whereType<Map>()
+          .map((item) => '${item['url'] ?? ''}')
+          .where((url) => url.isNotEmpty)
+          .toList(growable: false));
+    } catch (_) {
+      // Evidence remains counted while the operator can retry by reopening.
+    }
+  }
 
   @override
   void dispose() {
@@ -325,11 +352,11 @@ class _DeliveryAdjustmentCardState extends State<_DeliveryAdjustmentCard> {
                   spacing: 8,
                   runSpacing: 8,
                   children: [
-                    for (final photo in photos.take(4))
+                    for (final photo in _evidenceUrls.take(4))
                       ClipRRect(
                         borderRadius: BorderRadius.circular(10),
                         child: Image.network(
-                          '$photo',
+                          photo,
                           width: 92,
                           height: 72,
                           fit: BoxFit.cover,

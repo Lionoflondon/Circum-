@@ -2,6 +2,7 @@
 const functions = require("firebase-functions/v1");
 const crypto = require("crypto");
 const {getFirestore} = require("firebase-admin/firestore");
+const {getStorage} = require("firebase-admin/storage");
 const communicationEngine = require("./communication-engine");
 const stripeConfig = functions.config().stripe || {};
 const {resolveStripeRuntimeConfig} = require("./stripe-config");
@@ -22,7 +23,9 @@ const stripe = new Proxy({}, {
   },
 });
 const iris = require("./iris-core");
-const {repriceWeightFromQuote, weightBandFor, WEIGHT_POLICY_VERSION} = require("./canonical-weight-policy");
+const {paidWeightSnapshot, repriceWeightFromQuote, weightBandFor, WEIGHT_POLICY_VERSION} = require("./canonical-weight-policy");
+const {verifyReferences} = require("./delivery-discrepancy-evidence");
+const {appendOperationalEvent} = require("./delivery-operational-events");
 const {normalizeVehicleClass, vehicleCanHandle} = require("./vehicle-dispatch");
 const {enforceIrisRequestLimit} = require("./iris-request-guard");
 const {
@@ -59,6 +62,37 @@ async function bookingReference(db, requestId) {
   return query.empty ? null : query.docs[0];
 }
 
+function isAdjustmentAdmin(context) {
+  const token = context.auth && context.auth.token || {};
+  const role = `${token.role || token.adminRole || ""}`.toLowerCase();
+  const roles = Array.isArray(token.roles) ? token.roles.map((item) => `${item}`.toLowerCase()) : [];
+  return token.admin === true || token.superAdmin === true ||
+    ["super_admin", "operations_admin", "support_agent", "driver_manager"].includes(role) ||
+    roles.some((item) => ["super_admin", "operations_admin", "support_agent", "driver_manager"].includes(item));
+}
+
+exports.getDeliveryAdjustmentEvidence = functions.runWith({enforceAppCheck: true}).https.onCall(async (data, context) => {
+  if (!context.auth) throw new functions.https.HttpsError("unauthenticated", "Authentication required.");
+  if (!isAdjustmentAdmin(context)) throw new functions.https.HttpsError("permission-denied", "Admin access required.");
+  const adjustmentId = `${data && data.adjustmentId || ""}`.trim();
+  if (!adjustmentId) throw new functions.https.HttpsError("invalid-argument", "Adjustment is required.");
+  const adjustment = await getFirestore().collection("deliveryAdjustments").doc(adjustmentId).get();
+  if (!adjustment.exists) throw new functions.https.HttpsError("not-found", "Adjustment not found.");
+  const references = Array.isArray(adjustment.data().evidencePhotos) ? adjustment.data().evidencePhotos : [];
+  const items = [];
+  for (const reference of references) {
+    if (!reference || reference.verified !== true || !reference.storagePath || !reference.generation) continue;
+    const [url] = await getStorage().bucket().file(reference.storagePath).getSignedUrl({
+      version: "v4",
+      action: "read",
+      expires: Date.now() + 5 * 60 * 1000,
+      queryParams: {generation: `${reference.generation}`},
+    });
+    items.push({evidenceId: reference.evidenceId, url, contentType: reference.contentType, uploadedAt: reference.uploadedAt});
+  }
+  return {adjustmentId, evidence: items};
+});
+
 exports.reportLoadDiscrepancy = functions.runWith({enforceAppCheck: true}).https.onCall(async (data, context) => {
   if (!context.auth) throw new functions.https.HttpsError("unauthenticated", "Authentication required.");
   const {requestId, reason, evidencePhotos = [], observedWeightKg, observedDescription, observedVehicleType, riderNotes, dimensions} = data;
@@ -73,10 +107,10 @@ exports.reportLoadDiscrepancy = functions.runWith({enforceAppCheck: true}).https
   const booking = bookingSnapshot.data();
   const riderId = context.auth.uid;
   if (![booking.riderId, booking.driverId, booking.assignedDriverId].includes(riderId)) throw new functions.https.HttpsError("permission-denied", "Only the assigned rider can report this discrepancy.");
-  if (booking.status === "awaiting_sender_adjustment") throw new functions.https.HttpsError("failed-precondition", "This booking already has a pending adjustment.");
-
-  const paidQuote = booking.pricingBreakdown && typeof booking.pricingBreakdown === "object" ? booking.pricingBreakdown : {};
-  const originalWeightKg = Number(booking.finalWeightUsed || booking.finalChargeableWeight || booking.confirmedWeightKg || booking.weightKg || paidQuote.weightKg || booking.parcel && booking.parcel.weightKg || 0);
+  const paid = paidWeightSnapshot(booking);
+  if (!paid) throw new functions.https.HttpsError("failed-precondition", "The paid parcel weight snapshot cannot be verified. CIRCUM support must review this delivery.");
+  const paidQuote = paid.quote;
+  const originalWeightKg = paid.weightKg;
   const description = observedDescription || booking.packageDescription || booking.description || "Parcel";
   const recalculated = iris.classifyIris({
     description: dimensions ? `${description}; dimensions ${dimensions}` : description,
@@ -102,14 +136,22 @@ exports.reportLoadDiscrepancy = functions.runWith({enforceAppCheck: true}).https
   const adjustmentId = crypto.createHash("sha256").update(JSON.stringify({
     requestId: requestRef.id,
     riderId,
-    reason,
-    observedWeightKg: Number(observedWeightKg) || null,
-    observedDescription: description,
-    observedVehicleType: observedVehicleType || null,
-    dimensions: dimensions || null,
-    evidencePhotos: evidencePhotos.slice().sort(),
+    adjustmentType: "delivery_load_discrepancy",
   })).digest("hex").slice(0, 40);
   const adjustmentRef = db.collection("deliveryAdjustments").doc(adjustmentId);
+  let evidenceReferences;
+  try {
+    evidenceReferences = await verifyReferences({
+      bucket: getStorage().bucket(),
+      references: evidencePhotos,
+      deliveryId: requestRef.id,
+      discrepancyId: adjustmentId,
+      riderId,
+    });
+  } catch (error) {
+    console.warn("Weight discrepancy evidence rejected", {deliveryId: requestRef.id, riderId, reason: error.message});
+    throw new functions.https.HttpsError("failed-precondition", "The evidence upload could not be verified.");
+  }
   const adjustment = buildAdjustment({
     bookingId: requestRef.id,
     bookingRequestId: requestId,
@@ -119,7 +161,7 @@ exports.reportLoadDiscrepancy = functions.runWith({enforceAppCheck: true}).https
     revisedQuote,
     riderReason: reason,
     riderNotes,
-    evidencePhotos,
+    evidencePhotos: evidenceReferences,
     observations: {
       originalWeightKg,
       observedWeightKg: Number(observedWeightKg) || null,
@@ -142,6 +184,34 @@ exports.reportLoadDiscrepancy = functions.runWith({enforceAppCheck: true}).https
   await db.runTransaction(async (transaction) => {
     const existingAdjustment = await transaction.get(adjustmentRef);
     if (existingAdjustment.exists) {
+      const existing = existingAdjustment.data();
+      if (existing.status === "more_evidence_requested") {
+        const byId = new Map([...(existing.evidencePhotos || []), ...evidenceReferences].map((item) => [item.evidenceId, item]));
+        transaction.update(adjustmentRef, {
+          evidencePhotos: [...byId.values()],
+          status: "awaiting_admin_review",
+          adminDecision: "pending",
+          adminReviewStatus: "pending",
+          updatedAt: Date.now(),
+        });
+        transaction.update(requestRef, {
+          "loadDiscrepancy.adminDecision": "pending",
+          "loadDiscrepancy.evidencePhotos": [...byId.values()],
+          updatedAt: Date.now(),
+        });
+        appendOperationalEvent(db, {
+          deliveryId: requestRef.id,
+          eventType: "WeightDiscrepancyEvidenceSubmitted",
+          correlationId: `${adjustmentId}:evidence:${[...byId.keys()].sort().join(",")}`,
+          actorType: "rider",
+          actorId: riderId,
+          source: "reportLoadDiscrepancy",
+          metadata: {adjustmentId, evidenceCount: byId.size},
+          previousState: "more_evidence_requested",
+          newState: "awaiting_admin_review",
+        }, {transaction});
+        return;
+      }
       idempotent = true;
       return;
     }
@@ -154,7 +224,7 @@ exports.reportLoadDiscrepancy = functions.runWith({enforceAppCheck: true}).https
       revisedQuote: adjustment.revisedQuote,
       additionalAmount: adjustment.additionalAmount,
       riderReason: reason,
-      evidencePhotos,
+      evidencePhotos: evidenceReferences,
       adminDecision: "pending",
       senderDecision: "pending",
       reportedAt: Date.now(),
@@ -174,6 +244,17 @@ exports.reportLoadDiscrepancy = functions.runWith({enforceAppCheck: true}).https
       requiresAdminReview: true,
       updatedAt: Date.now(),
     });
+    appendOperationalEvent(db, {
+      deliveryId: requestRef.id,
+      eventType: "WeightDiscrepancySubmitted",
+      correlationId: adjustmentId,
+      actorType: "rider",
+      actorId: riderId,
+      source: "reportLoadDiscrepancy",
+      metadata: {adjustmentId, reason, evidenceCount: evidenceReferences.length},
+      previousState: latest.data().status,
+      newState: "awaiting_adjustment_review",
+    }, {transaction});
   });
   if (idempotent) {
     return {success: true, idempotent: true, adjustmentId: adjustmentRef.id, additionalAmount: adjustment.additionalAmount, status: "awaiting_admin_review"};
@@ -184,11 +265,7 @@ exports.reportLoadDiscrepancy = functions.runWith({enforceAppCheck: true}).https
 
 exports.reviewDeliveryAdjustment = functions.runWith({enforceAppCheck: true}).https.onCall(async (data, context) => {
   if (!context.auth) throw new functions.https.HttpsError("unauthenticated", "Authentication required.");
-  const token = context.auth.token || {};
-  const role = `${token.role || token.adminRole || ""}`.toLowerCase();
-  const roles = Array.isArray(token.roles) ? token.roles.map((item) => `${item}`.toLowerCase()) : [];
-  const admin = token.admin === true || token.superAdmin === true || ["super_admin", "operations_admin", "support_agent", "driver_manager"].includes(role) || roles.some((item) => ["super_admin", "operations_admin", "support_agent", "driver_manager"].includes(item));
-  if (!admin) throw new functions.https.HttpsError("permission-denied", "Admin access required.");
+  if (!isAdjustmentAdmin(context)) throw new functions.https.HttpsError("permission-denied", "Admin access required.");
   const adjustmentId = `${data.adjustmentId || ""}`.trim();
   const decision = `${data.decision || ""}`.trim();
   const note = `${data.note || ""}`.trim();
@@ -251,6 +328,17 @@ exports.reviewDeliveryAdjustment = functions.runWith({enforceAppCheck: true}).ht
         "loadDiscrepancy.adminReviewedAt": reviewedAt,
         "updatedAt": reviewedAt,
       });
+      appendOperationalEvent(db, {
+        deliveryId: adjustment.bookingId,
+        eventType: "WeightDiscrepancyAdjudicated",
+        correlationId: `${adjustmentId}:approve`,
+        actorType: "admin",
+        actorId: context.auth.uid,
+        source: "reviewDeliveryAdjustment",
+        metadata: {adjustmentId, decision, finalWeightKg, finalWeightBand: finalWeightBand.id, requiredVehicle, vehicleCompatible},
+        previousState: "awaiting_adjustment_review",
+        newState: !vehicleCompatible ? "awaiting_vehicle_reassignment" : needsPayment ? "awaiting_sender_adjustment" : previousStatus,
+      }, {transaction});
       transaction.set(db.collection("irisLearningCases").doc(`weight_discrepancy_${adjustmentId}`), {
         caseType: "weight_discrepancy",
         deliveryId: adjustment.bookingId,

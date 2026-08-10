@@ -2,6 +2,7 @@
 "use strict";
 
 const WEIGHT_POLICY_VERSION = "circum-weight-bands-v1";
+const PRICING_SNAPSHOT_VERSION = "sender-booking-pricing-v1";
 
 const WEIGHT_BANDS = Object.freeze([
   Object.freeze({id: "small_parcel", label: "Small Parcel", minKg: 0, maxKg: 5, surchargeGbp: 0, baseGbp: 0}),
@@ -21,6 +22,26 @@ function weightBandFor(weightKg) {
 
 function weightSurcharge(weightKg) {
   return weightBandFor(weightKg).surchargeGbp;
+}
+
+function paidWeightSnapshot(delivery = {}) {
+  const quote = delivery.pricingBreakdown;
+  if (!quote || typeof quote !== "object") return null;
+  const weightKg = Number(quote.weightKg);
+  const total = Number(quote.total);
+  if (!Number.isFinite(weightKg) || weightKg <= 0 || !Number.isFinite(total) || total < 0) return null;
+  if (quote.weightPolicyVersion !== WEIGHT_POLICY_VERSION ||
+      quote.pricingSnapshotVersion !== PRICING_SNAPSHOT_VERSION) return null;
+  const expectedBand = weightBandFor(weightKg);
+  const band = quote.weightBand && typeof quote.weightBand === "object" ? quote.weightBand : null;
+  if (!band || band.id !== expectedBand.id) return null;
+  return Object.freeze({
+    weightKg,
+    weightBand: expectedBand,
+    weightPolicyVersion: quote.weightPolicyVersion,
+    pricingSnapshotVersion: quote.pricingSnapshotVersion,
+    quote,
+  });
 }
 
 function repriceWeightFromQuote(quote = {}, weightKg) {
@@ -68,6 +89,8 @@ function repriceWeightFromQuote(quote = {}, weightKg) {
 module.exports = {
   WEIGHT_BANDS,
   WEIGHT_POLICY_VERSION,
+  PRICING_SNAPSHOT_VERSION,
+  paidWeightSnapshot,
   repriceWeightFromQuote,
   weightBandFor,
   weightSurcharge,

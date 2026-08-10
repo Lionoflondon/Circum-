@@ -136,6 +136,9 @@ test("canonical paid delivery finalization requires succeeded payment and is ide
   assert.match(senderBookingSource, /senderDeliveryIdempotency/);
   assert.match(senderBookingSource, /paymentStatus: "paid"/);
   assert.match(senderBookingSource, /pricingBreakdown: quote/);
+  assert.match(senderBookingSource, /paidWeightKg: quote\.weightKg/);
+  assert.match(senderBookingSource, /paidWeightBand: quote\.weightBand/);
+  assert.match(senderBookingSource, /pricingSnapshotVersion: quote\.pricingSnapshotVersion/);
 });
 
 test("canonical backend delivery records include Rider display aliases", () => {

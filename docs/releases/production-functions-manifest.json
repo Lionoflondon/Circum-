@@ -6,10 +6,10 @@
   "releaseShaSemantics": "SELF means the Git commit containing this manifest; the immutable SHA is recorded in the release report and deployment provenance.",
   "entryPoint": "server/functions/index.js",
   "inventory": {
-    "productionFunctions": 275,
-    "applicationFunctions": 269,
+    "productionFunctions": 276,
+    "applicationFunctions": 270,
     "extensionFunctions": 6,
-    "sourceExports": 269
+    "sourceExports": 270
   },
   "applicationFunctions": [
     {
@@ -1401,6 +1401,17 @@
     {
       "name": "getCustomerDeliveryTrust",
       "source": "server/functions/customer-delivery-trust.js#getCustomerDeliveryTrust",
+      "runtime": "nodejs22",
+      "region": "us-central1",
+      "trigger": {
+        "type": "callable"
+      },
+      "state": "ACTIVE",
+      "releaseSha": "SELF"
+    },
+    {
+      "name": "getDeliveryAdjustmentEvidence",
+      "source": "server/functions/delivery-adjustments.js#getDeliveryAdjustmentEvidence",
       "runtime": "nodejs22",
       "region": "us-central1",
       "trigger": {

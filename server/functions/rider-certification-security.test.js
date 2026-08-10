@@ -42,7 +42,10 @@ test("rider document uploads use backend callable and canonical matrix", () => {
 test("weight discrepancy evidence is create-only for the assigned Rider", () => {
   assert.match(storageRules, /match \/delivery-discrepancies\/\{deliveryId\}\/\{riderId\}\/\{fileName\}/);
   assert.match(storageRules, /match \/delivery_weight_evidence\/\{deliveryId\}\/\{context\}\/\{fileName\}/);
-  assert.match(storageRules, /allow create: if request\.auth\.uid == riderId && isAssignedDeliveryRider\(deliveryId\) && isSafeUpload\(\);/);
+  assert.match(storageRules, /allow create: if request\.auth\.uid == riderId && isAssignedDeliveryRider\(deliveryId\) &&/);
+  assert.match(storageRules, /request\.resource\.metadata\.deliveryId == deliveryId/);
+  assert.match(storageRules, /request\.resource\.metadata\.evidenceType == 'weight_discrepancy'/);
+  assert.doesNotMatch(storageRules, /delivery\(deliveryId\)\.senderId == request\.auth\.uid/);
   assert.match(storageRules, /allow update, delete: if false;/);
 });
 

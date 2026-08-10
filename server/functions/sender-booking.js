@@ -8,7 +8,7 @@ const {calculateWalletCheckout, roundMoney, minorUnits} = require("./wallet-core
 const {verifiedStripePaidGbpSession} = require("./roth-ledger-core");
 const vanguardProtocol = require("./vanguard-protocol-core");
 const {classifyIris, normalDispatchEligibilityForInput} = require("./iris-core");
-const {WEIGHT_POLICY_VERSION, weightBandFor, weightSurcharge} = require("./canonical-weight-policy");
+const {PRICING_SNAPSHOT_VERSION, WEIGHT_POLICY_VERSION, weightBandFor, weightSurcharge} = require("./canonical-weight-policy");
 const {verifiedPhotoAnalysis} = require("./iris-photo-analysis");
 const {dispatchDeliveryRequest} = require("./send-package");
 const {getAuthoritativeRouteFacts} = require("./route-authority");
@@ -835,6 +835,7 @@ function quotePayload(data, uid, serverPhotoAnalysis = null) {
     weightKg,
     weightBand: weightBandFor(weightKg),
     weightPolicyVersion: WEIGHT_POLICY_VERSION,
+    pricingSnapshotVersion: PRICING_SNAPSHOT_VERSION,
     selectedVehicle,
     vehicleType: selectedVehicle,
     vehicleSurcharge: vehicle,
@@ -1936,6 +1937,10 @@ async function createPaidDeliveryFromSession(stripe, sender, data) {
       rothAppliedAmount: payment.rothAppliedAmount || 0,
       remainingAmount: payment.remainingAmount || 0,
       pricingBreakdown: quote,
+      paidWeightKg: quote.weightKg,
+      paidWeightBand: quote.weightBand,
+      paidWeightPolicyVersion: quote.weightPolicyVersion,
+      pricingSnapshotVersion: quote.pricingSnapshotVersion,
       currency: "GBP",
       status: "requested",
       deliveryStatus: "requested",
