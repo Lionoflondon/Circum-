@@ -39,12 +39,22 @@ async function claimUsername(data, context, dependencies = {}) {
   const uid = context.auth.uid;
   const userRef = db.collection("users").doc(uid);
   const targetRef = db.collection("usernames").doc(decision.username);
+  const legacyUsersQuery = db.collection("users").orderBy("username").limit(101);
   await db.runTransaction(async (transaction) => {
-    const [userSnapshot, targetSnapshot] = await Promise.all([
-      transaction.get(userRef), transaction.get(targetRef),
+    const [userSnapshot, targetSnapshot, legacyUsersSnapshot] = await Promise.all([
+      transaction.get(userRef), transaction.get(targetRef), transaction.get(legacyUsersQuery),
     ]);
     const user = userSnapshot.exists ? userSnapshot.data() || {} : {};
     const previous = normalizeUsername(user.username);
+    if (legacyUsersSnapshot.size > 100) {
+      throw new functions.https.HttpsError(
+          "failed-precondition", "Username migration must complete before new claims.");
+    }
+    const legacyOwner = legacyUsersSnapshot.docs.find((snapshot) =>
+      normalizeUsername((snapshot.data() || {}).username) === decision.username);
+    if (legacyOwner && legacyOwner.id !== uid) {
+      throw new functions.https.HttpsError("already-exists", "That username is not available.");
+    }
     if (targetSnapshot.exists && targetSnapshot.data().uid !== uid) {
       throw new functions.https.HttpsError("already-exists", "That username is not available.");
     }

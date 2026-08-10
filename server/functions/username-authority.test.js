@@ -20,6 +20,7 @@ test("username claim is one Firestore transaction and retains previous handles",
   assert.match(source, /db\.runTransaction/);
   assert.match(source, /targetSnapshot\.exists && targetSnapshot\.data\(\)\.uid !== uid/);
   assert.match(source, /status: "retained"/);
+  assert.match(source, /orderBy\("username"\)\.limit\(101\)/);
   assert.match(source, /enforceAppCheck: true/);
 });
 
@@ -39,15 +40,33 @@ function fakeFirestore(seed = {}) {
   const ref = (path) => ({path});
   const db = {
     collection(name) {
-      return {doc(id = `event-${records.size}`) {
- return ref(`${name}/${id}`);
-}};
+      return {
+        doc(id = `event-${records.size}`) {
+          return ref(`${name}/${id}`);
+        },
+        orderBy(field) {
+          return {limit(limit) {
+            return {query: true, name, field, limit};
+          }};
+        },
+      };
     },
     runTransaction(work) {
       const run = queue.then(async () => {
         const writes = [];
         const transaction = {
           async get(document) {
+            if (document.query) {
+              const docs = [...records.entries()]
+                  .filter(([path, value]) => path.startsWith(`${document.name}/`) &&
+                    typeof value[document.field] === "string")
+                  .sort((a, b) => a[1][document.field].localeCompare(b[1][document.field]))
+                  .slice(0, document.limit)
+                  .map(([path, value]) => ({
+                    id: path.slice(document.name.length + 1), data: () => value,
+                  }));
+              return {size: docs.length, docs};
+            }
             const value = records.get(document.path);
             return {exists: value !== undefined, data: () => value};
           },
@@ -91,4 +110,14 @@ test("changing a handle retains the old canonical name", async () => {
   assert.equal(store.records.get("usernames/first_name").status, "retained");
   assert.equal(store.records.get("usernames/second_name").uid, "user-a");
   assert.equal(store.records.get("users/user-a").username, "second_name");
+});
+
+test("legacy mixed-case handle remains owned before registry backfill", async () => {
+  const store = fakeFirestore({"users/legacy-owner": {username: "@Jason"}});
+  await assert.rejects(
+      authority.claimUsername({username: "jason"}, {auth: {uid: "attacker"}}, {db: store.db}),
+      (error) => error.code === "already-exists");
+  await authority.claimUsername(
+      {username: "jason"}, {auth: {uid: "legacy-owner"}}, {db: store.db});
+  assert.equal(store.records.get("usernames/jason").uid, "legacy-owner");
 });
