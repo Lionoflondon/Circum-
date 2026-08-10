@@ -232,7 +232,10 @@
       "output": "server/functions"
     }
   },
-  "sharedFiles": [],
+  "sharedFiles": [
+    "deploy-manifest.json",
+    "lib/shared/iris_camera_entry.dart"
+  ],
   "allowedDependencyIntersections": [
     {
       "products": ["sender-app", "website"],

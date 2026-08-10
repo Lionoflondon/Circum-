@@ -6,9 +6,11 @@ const {
   RISK_RESOLUTIONS,
   confidenceProfile,
   healthProjection,
+  knowledgeQualityCandidates,
   latencyBucketKey,
   percentileFromBuckets,
   riskResolution,
+  requestFingerprint,
 } = require("./iris-maturity-core");
 
 test("confidence is derived from evidence and bounded into stable bands", () => {
@@ -19,6 +21,24 @@ test("confidence is derived from evidence and bounded into stable bands", () => 
   assert.equal(sparse.band, "LOW");
   assert.ok(conflicting.score < confidenceProfile({description: "boxed television", shipmentItems: [{id: "tv"}], complianceStatus: "allowed"}).score);
   for (const profile of [canonical, sparse, conflicting]) assert.ok(profile.score >= 20 && profile.score <= 97);
+});
+
+test("request reuse fingerprint is deterministic and version-scoped", () => {
+  const input = {description: "Laptop", weight: "2 kg"};
+  const first = requestFingerprint({uid: "sender-1", input, engineVersion: "e1", knowledgeVersion: "k1"});
+  assert.equal(first, requestFingerprint({uid: "sender-1", input, engineVersion: "e1", knowledgeVersion: "k1"}));
+  assert.notEqual(first, requestFingerprint({uid: "sender-1", input, engineVersion: "e1", knowledgeVersion: "k2"}));
+});
+
+test("data quality audit creates bounded governed review candidates", () => {
+  const candidates = knowledgeQualityCandidates([
+    {id: "a", canonicalName: "Laptop", category: "Electronics", knownWeight: 2},
+    {id: "b", canonicalName: "Laptop", category: "Computers", knownWeight: 3},
+    {id: "c", canonicalName: "", category: null, knownWeight: null},
+  ]);
+  assert.ok(candidates.some((item) => item.type === "conflicting_label"));
+  assert.ok(candidates.some((item) => item.type === "missing_identity"));
+  assert.ok(candidates.some((item) => item.type === "missing_coverage"));
 });
 
 test("risk resolution uses the complete bounded operational taxonomy", () => {

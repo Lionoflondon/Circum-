@@ -10,10 +10,12 @@ const {
 } = require("./iris-core");
 const {requireAdmin} = require("./admin-auth");
 const {enforceIrisRequestLimit} = require("./iris-request-guard");
-const {healthProjection, latencyBucketKey} = require("./iris-maturity-core");
+const {healthProjection, knowledgeQualityCandidates, latencyBucketKey, requestFingerprint} = require("./iris-maturity-core");
 
 const IRIS_KNOWLEDGE_VERSION = "iris-knowledge-v1";
 let canonicalKnowledgeCache = {expiresAt: 0, records: [], knowledgeVersion: IRIS_KNOWLEDGE_VERSION, lookupKey: null};
+const inferenceResultCache = new Map();
+const INFERENCE_CACHE_TTL_MS = 2 * 60 * 1000;
 
 function clean(value) {
   return `${value || ""}`.trim().toLowerCase();
@@ -52,7 +54,7 @@ function metricDate(now = new Date()) {
  return now.toISOString().slice(0, 10);
 }
 
-async function recordIrisRequestMetric({result, durationMs, failed = false, timeout = false}) {
+async function recordIrisRequestMetric({result, durationMs, failed = false, timeout = false, reused = false}) {
   const confidence = Number(result && result.recommendation && result.recommendation.confidencePercent || 0);
   const path = result && result.internal && result.internal.inferencePath;
   const bucket = latencyBucketKey(durationMs);
@@ -65,6 +67,7 @@ async function recordIrisRequestMetric({result, durationMs, failed = false, time
     unsupportedCount: FieldValue.increment(result && ["unsupported", "prohibited"].includes(result.status) ? 1 : 0),
     lowConfidenceCount: FieldValue.increment(confidence < 50 ? 1 : 0),
     fastPathCount: FieldValue.increment(path === "canonical_fast_path" ? 1 : 0),
+    reusedRequestCount: FieldValue.increment(reused ? 1 : 0),
     engineVersion: result && result.engineVersion || IRIS_ENGINE_VERSION,
     knowledgeVersion: result && result.knowledgeVersion || IRIS_KNOWLEDGE_VERSION,
     updatedAt: FieldValue.serverTimestamp(),
@@ -91,6 +94,12 @@ const analyseIris = functions.runWith({enforceAppCheck: true}).https.onCall(asyn
     const guardCompletedAt = Date.now();
     knowledge = await loadCanonicalKnowledge(data && (data.description || data.packageDescription));
     const knowledgeCompletedAt = Date.now();
+    const fingerprint = requestFingerprint({uid: context.auth.uid, input: data || {}, engineVersion: IRIS_ENGINE_VERSION, knowledgeVersion: knowledge.knowledgeVersion});
+    const cached = inferenceResultCache.get(fingerprint);
+    if (cached && cached.expiresAt > Date.now()) {
+      await safelyRecordIrisRequestMetric({result: cached.classified, durationMs: Date.now() - startedAt, reused: true});
+      return cached.result;
+    }
     const classified = classifyIris({
       ...data,
       canonicalKnowledge: knowledge.records,
@@ -98,6 +107,8 @@ const analyseIris = functions.runWith({enforceAppCheck: true}).https.onCall(asyn
       knowledgeVersion: knowledge.knowledgeVersion,
     });
     const result = customerSafeIris(classified);
+    inferenceResultCache.set(fingerprint, {classified, result, expiresAt: Date.now() + INFERENCE_CACHE_TTL_MS});
+    if (inferenceResultCache.size > 100) inferenceResultCache.delete(inferenceResultCache.keys().next().value);
     const totalMs = Date.now() - startedAt;
     await safelyRecordIrisRequestMetric({result: classified, durationMs: totalMs});
     functions.logger.info("iris_classification_timing", {
@@ -133,7 +144,9 @@ const getIrisHealthMetrics = functions.runWith({enforceAppCheck: true}).https.on
     getFirestore().collection("irisLearningCases").where("reviewStatus", "in", ["pending_review", "approved"]).count().get(),
     getFirestore().collection("irisCanonicalObjects").where("status", "==", "active").where("repositoryReviewStatus", "==", "promoted").count().get(),
   ]);
-  return {days, daily, learningQueueSize: learning.data().count, promotedKnowledgeCount: promoted.data().count, engineVersion: IRIS_ENGINE_VERSION, currentKnowledgeVersion: daily[0] && daily[0].knowledgeVersion || IRIS_KNOWLEDGE_VERSION};
+  const knowledge = await getFirestore().collection("irisCanonicalObjects").where("status", "==", "active").limit(200).get();
+  const qualityCandidates = knowledgeQualityCandidates(knowledge.docs.map((doc) => ({id: doc.id, ...doc.data()})));
+  return {days, daily, learningQueueSize: learning.data().count, promotedKnowledgeCount: promoted.data().count, engineVersion: IRIS_ENGINE_VERSION, currentKnowledgeVersion: daily[0] && daily[0].knowledgeVersion || IRIS_KNOWLEDGE_VERSION, visualModelVersion: null, dataQuality: {boundedRecordsInspected: knowledge.size, reviewCandidateCount: qualityCandidates.length, candidates: qualityCandidates.slice(0, 50)}};
 });
 
 const adjudicateIris = functions.runWith({enforceAppCheck: true}).https.onCall(async (data, context) => {

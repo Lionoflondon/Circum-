@@ -16,6 +16,7 @@ import 'package:url_launcher/url_launcher.dart';
 import 'package:uuid/uuid.dart';
 
 import '../business/business_journey_context.dart';
+import '../../shared/iris_camera_entry.dart';
 import '../../helper/bitmap_descriptor_helper.dart';
 import '../../helper/platform_view_visibility.dart';
 import '../send_package/bloc/send_package_bloc.dart';
@@ -899,7 +900,7 @@ class _SenderBookingCanvasState extends State<SenderBookingCanvas> {
     );
   }
 
-  Future<void> _pickParcelPhoto() async {
+  Future<void> _pickParcelPhoto(ImageSource source) async {
     final details = [
       _item.text,
       _description.text,
@@ -916,7 +917,7 @@ class _SenderBookingCanvasState extends State<SenderBookingCanvas> {
     });
     try {
       final picked = await ImagePicker().pickImage(
-        source: kIsWeb ? ImageSource.gallery : ImageSource.camera,
+        source: source,
         imageQuality: 72,
         maxWidth: 1600,
       );
@@ -945,16 +946,14 @@ class _SenderBookingCanvasState extends State<SenderBookingCanvas> {
         _parcelPhoto = picked;
         _irisPhotoAnalysisId = '${data['analysisId'] ?? ''}'.trim();
         _photoEstimatedWeightKg = estimate;
-        _parcelPhotoMessage = estimate == null
-            ? 'Photo added. IRIS will use your item details.'
-            : 'Photo reviewed. Visual estimate ${estimate.toStringAsFixed(2)} kg.';
+        _parcelPhotoMessage = 'Photo added to help IRIS verify your parcel.';
       });
     } on FirebaseFunctionsException catch (error) {
       if (!mounted) return;
       setState(() {
         _parcelPhotoMessage = error.code == 'invalid-argument'
             ? 'Photo could not be used. Add a clear JPG, PNG or WebP under 10MB.'
-            : 'Photo could not be reviewed. You can continue with item details.';
+            : 'Photo could not be added. You can continue with item details.';
       });
     } catch (error, stackTrace) {
       _reportUnexpectedRestoreFailure(
@@ -965,7 +964,7 @@ class _SenderBookingCanvasState extends State<SenderBookingCanvas> {
       if (!mounted) return;
       setState(() {
         _parcelPhotoMessage =
-            'Photo could not be reviewed. You can continue with item details.';
+            'Photo could not be added. You can continue with item details.';
       });
     } finally {
       if (mounted) setState(() => _parcelPhotoBusy = false);
@@ -1120,7 +1119,9 @@ class _SenderBookingCanvasState extends State<SenderBookingCanvas> {
                       onSearchingPickupChanged: (value) =>
                           setState(() => _searchingPickup = value),
                       onParcelChanged: _onParcelChanged,
-                      onPhotoTap: _pickParcelPhoto,
+                      onTakePhoto: () => _pickParcelPhoto(ImageSource.camera),
+                      onChoosePhoto: () =>
+                          _pickParcelPhoto(ImageSource.gallery),
                       onPhotoRemove: _removeParcelPhoto,
                       onDraft: _setDraft,
                       onContinue: _advance,
@@ -1309,7 +1310,8 @@ class _BookingPanel extends StatelessWidget {
   final bool searchingPickup;
   final ValueChanged<bool> onSearchingPickupChanged;
   final VoidCallback onParcelChanged;
-  final VoidCallback onPhotoTap;
+  final Future<void> Function() onTakePhoto;
+  final Future<void> Function() onChoosePhoto;
   final VoidCallback onPhotoRemove;
   final ValueChanged<SenderBookingDraft> onDraft;
   final VoidCallback onContinue;
@@ -1340,7 +1342,8 @@ class _BookingPanel extends StatelessWidget {
     required this.searchingPickup,
     required this.onSearchingPickupChanged,
     required this.onParcelChanged,
-    required this.onPhotoTap,
+    required this.onTakePhoto,
+    required this.onChoosePhoto,
     required this.onPhotoRemove,
     required this.onDraft,
     required this.onContinue,
@@ -1545,7 +1548,8 @@ class _BookingPanel extends StatelessWidget {
           parcelPhotoBusy: parcelPhotoBusy,
           parcelPhotoMessage: parcelPhotoMessage,
           photoEstimatedWeightKg: photoEstimatedWeightKg,
-          onPhotoTap: onPhotoTap,
+          onTakePhoto: onTakePhoto,
+          onChoosePhoto: onChoosePhoto,
           onPhotoRemove: onPhotoRemove,
           onChanged: onParcelChanged,
           canContinue: draft.canContinue,
@@ -2066,7 +2070,8 @@ class _ParcelPanel extends StatelessWidget {
   final bool parcelPhotoBusy;
   final String? parcelPhotoMessage;
   final double? photoEstimatedWeightKg;
-  final VoidCallback onPhotoTap;
+  final Future<void> Function() onTakePhoto;
+  final Future<void> Function() onChoosePhoto;
   final VoidCallback onPhotoRemove;
   final VoidCallback onChanged;
   final bool canContinue;
@@ -2083,7 +2088,8 @@ class _ParcelPanel extends StatelessWidget {
     required this.parcelPhotoBusy,
     required this.parcelPhotoMessage,
     required this.photoEstimatedWeightKg,
-    required this.onPhotoTap,
+    required this.onTakePhoto,
+    required this.onChoosePhoto,
     required this.onPhotoRemove,
     required this.onChanged,
     required this.canContinue,
@@ -2105,7 +2111,8 @@ class _ParcelPanel extends StatelessWidget {
           parcelPhotoBusy: parcelPhotoBusy,
           parcelPhotoMessage: parcelPhotoMessage,
           photoEstimatedWeightKg: photoEstimatedWeightKg,
-          onPhotoTap: onPhotoTap,
+          onTakePhoto: onTakePhoto,
+          onChoosePhoto: onChoosePhoto,
           onPhotoRemove: onPhotoRemove,
           onChanged: onChanged,
           canContinue: canContinue,
@@ -2127,7 +2134,8 @@ class _IrisInputCard extends StatelessWidget {
   final bool parcelPhotoBusy;
   final String? parcelPhotoMessage;
   final double? photoEstimatedWeightKg;
-  final VoidCallback onPhotoTap;
+  final Future<void> Function() onTakePhoto;
+  final Future<void> Function() onChoosePhoto;
   final VoidCallback onPhotoRemove;
   final VoidCallback onChanged;
   final bool canContinue;
@@ -2144,7 +2152,8 @@ class _IrisInputCard extends StatelessWidget {
     required this.parcelPhotoBusy,
     required this.parcelPhotoMessage,
     required this.photoEstimatedWeightKg,
-    required this.onPhotoTap,
+    required this.onTakePhoto,
+    required this.onChoosePhoto,
     required this.onPhotoRemove,
     required this.onChanged,
     required this.canContinue,
@@ -2190,10 +2199,16 @@ class _IrisInputCard extends StatelessWidget {
                 ),
               ),
               const SizedBox(width: 10),
-              _ParcelPhotoAction(
-                photo: parcelPhoto,
-                busy: parcelPhotoBusy,
-                onTap: onPhotoTap,
+              IrisCameraEntry(
+                state: parcelPhotoBusy
+                    ? IrisCameraState.analysing
+                    : parcelPhoto != null
+                        ? IrisCameraState.completed
+                        : IrisCameraState.idle,
+                hasPhoto: parcelPhoto != null,
+                onTakePhoto: onTakePhoto,
+                onChoosePhoto: onChoosePhoto,
+                onRemove: onPhotoRemove,
               ),
             ],
           ),
@@ -2306,125 +2321,6 @@ class _IrisPresenceOrb extends StatelessWidget {
         Icons.auto_awesome_rounded,
         color: Colors.white,
         size: 18,
-      ),
-    );
-  }
-}
-
-class _ParcelPhotoAction extends StatelessWidget {
-  final XFile? photo;
-  final bool busy;
-  final VoidCallback onTap;
-
-  const _ParcelPhotoAction({
-    required this.photo,
-    required this.busy,
-    required this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final attached = photo != null;
-    final label = attached ? 'Replace parcel photo' : 'Add parcel photo';
-    return Semantics(
-      button: true,
-      label: label,
-      child: Tooltip(
-        message: label,
-        child: InkWell(
-          onTap: busy ? null : onTap,
-          borderRadius: BorderRadius.circular(16),
-          child: Container(
-            width: 52,
-            height: 52,
-            decoration: BoxDecoration(
-              color: attached
-                  ? const Color(0xFF22C55E).withValues(alpha: .14)
-                  : const Color(0xFF1D4ED8).withValues(alpha: .72),
-              borderRadius: BorderRadius.circular(16),
-              border: Border.all(
-                color: attached
-                    ? const Color(0xFF86EFAC).withValues(alpha: .45)
-                    : _Tokens.lightBlue.withValues(alpha: .8),
-              ),
-              boxShadow: [
-                BoxShadow(
-                  color:
-                      (attached ? const Color(0xFF22C55E) : _Tokens.lightBlue)
-                          .withValues(alpha: .18),
-                  blurRadius: 18,
-                  offset: const Offset(0, 10),
-                ),
-              ],
-            ),
-            child: Center(
-              child: busy
-                  ? const SizedBox(
-                      width: 19,
-                      height: 19,
-                      child: CircularProgressIndicator(
-                        strokeWidth: 2,
-                        color: _Tokens.lightBlue,
-                      ),
-                    )
-                  : attached
-                      ? const Icon(
-                          Icons.check_circle_rounded,
-                          color: Color(0xFF86EFAC),
-                          size: 23,
-                        )
-                      : const _TinyCameraGlyph(),
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _TinyCameraGlyph extends StatelessWidget {
-  const _TinyCameraGlyph();
-
-  @override
-  Widget build(BuildContext context) {
-    return SizedBox(
-      width: 23,
-      height: 19,
-      child: Stack(
-        alignment: Alignment.center,
-        children: [
-          Positioned(
-            top: 4,
-            child: Container(
-              width: 21,
-              height: 15,
-              decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(5),
-                border: Border.all(color: Colors.white, width: 1.8),
-              ),
-            ),
-          ),
-          Positioned(
-            top: 1,
-            left: 6,
-            child: Container(
-              width: 8,
-              height: 5,
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(3),
-              ),
-            ),
-          ),
-          Container(
-            width: 7,
-            height: 7,
-            decoration: BoxDecoration(
-              shape: BoxShape.circle,
-              border: Border.all(color: Colors.white, width: 1.8),
-            ),
-          ),
-        ],
       ),
     );
   }

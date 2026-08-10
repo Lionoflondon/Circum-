@@ -25,6 +25,10 @@ test("promotion is transaction-backed versioned auditable and retry-idempotent",
   assert.match(source, /idempotent = true/);
   assert.match(source, /knowledgeVersion = `iris-knowledge-v\$\{nextVersion\}`/);
   assert.match(source, /transaction\.set\(stateRef/);
+  assert.match(source, /collection\("irisKnowledgeVersions"\)/);
+  assert.match(source, /beforeCanonical/);
+  assert.match(source, /action === "rollback"/);
+  assert.match(source, /iris_knowledge_rolled_back/);
   assert.match(source, /actionType: "iris_candidate_promoted"/);
 });
 

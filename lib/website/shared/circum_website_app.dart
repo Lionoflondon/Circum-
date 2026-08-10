@@ -17,6 +17,7 @@ import 'package:circum/website/shared/policies/role_access.dart';
 import 'package:circum/website/shared/policies/sender_profile.dart';
 import 'package:circum/website/shared/policies/vanguard_protection.dart';
 import 'package:circum/env/env.dart';
+import 'package:circum/shared/iris_camera_entry.dart';
 import 'package:circum/web_platform_routing.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_auth/firebase_auth.dart';
@@ -8121,7 +8122,8 @@ class _CustomerPortalState extends State<_CustomerPortal> {
           parcelPhotoName: _parcelPhoto?.name,
           parcelPhotoBusy: _parcelPhotoBusy,
           parcelPhotoMessage: _parcelPhotoMessage,
-          onPickParcelPhoto: _pickParcelPhoto,
+          onTakeParcelPhoto: () => _pickParcelPhoto(ImageSource.camera),
+          onChooseParcelPhoto: () => _pickParcelPhoto(ImageSource.gallery),
           onRemoveParcelPhoto: () => setState(() {
             _parcelPhoto = null;
             _parcelPhotoCapturedAt = null;
@@ -10332,7 +10334,7 @@ class _CustomerPortalState extends State<_CustomerPortal> {
       _analyzing = true;
       _broadcasting = false;
       if (_parcelPhoto != null) {
-        _parcelPhotoMessage = 'IRIS is reviewing your item...';
+        _parcelPhotoMessage = 'Photo added to help IRIS verify your parcel.';
       }
     });
     await Future<void>.delayed(const Duration(milliseconds: 900));
@@ -10373,9 +10375,7 @@ class _CustomerPortalState extends State<_CustomerPortal> {
       _weightPricingReason = decision.reason;
       _analyzing = false;
       if (_parcelPhoto != null) {
-        _parcelPhotoMessage = estimate.weightSource == 'photo_match'
-            ? 'IRIS reviewed the photo and item details.'
-            : 'IRIS used the photo with your item details.';
+        _parcelPhotoMessage = 'Photo added to help IRIS verify your parcel.';
       }
       _checkoutState = decision.weightKg == null
           ? _CheckoutState.draft
@@ -10402,14 +10402,14 @@ class _CustomerPortalState extends State<_CustomerPortal> {
     }
   }
 
-  Future<void> _pickParcelPhoto() async {
+  Future<void> _pickParcelPhoto(ImageSource source) async {
     setState(() {
       _parcelPhotoBusy = true;
       _parcelPhotoMessage = null;
     });
     try {
       final picked = await ImagePicker().pickImage(
-        source: kIsWeb ? ImageSource.gallery : ImageSource.camera,
+        source: source,
         imageQuality: 82,
       );
       if (!mounted) return;
@@ -10852,7 +10852,7 @@ class _CustomerPortalState extends State<_CustomerPortal> {
     if (!shouldUseImage) {
       return textEstimate.copyWith(
         explanation:
-            '${textEstimate.explanation} IRIS also reviewed the photo for handling context.',
+            '${textEstimate.explanation} The photo is attached as supporting verification evidence.',
         handlingNotes: textEstimate.handlingNotes ?? imageInsight.handlingNotes,
         fragile: textEstimate.fragile || imageInsight.fragilityRisk == 'high',
         requiresVehicleReview:
@@ -17538,7 +17538,8 @@ class _DetailsStep extends StatelessWidget {
   final String? parcelPhotoName;
   final bool parcelPhotoBusy;
   final String? parcelPhotoMessage;
-  final VoidCallback onPickParcelPhoto;
+  final Future<void> Function() onTakeParcelPhoto;
+  final Future<void> Function() onChooseParcelPhoto;
   final VoidCallback onRemoveParcelPhoto;
   final bool analyzing;
   final VoidCallback onSubmit;
@@ -17598,7 +17599,8 @@ class _DetailsStep extends StatelessWidget {
     required this.parcelPhotoName,
     required this.parcelPhotoBusy,
     required this.parcelPhotoMessage,
-    required this.onPickParcelPhoto,
+    required this.onTakeParcelPhoto,
+    required this.onChooseParcelPhoto,
     required this.onRemoveParcelPhoto,
     required this.analyzing,
     required this.onSubmit,
@@ -17963,11 +17965,15 @@ class _DetailsStep extends StatelessWidget {
                     ),
                   ),
                   const SizedBox(width: 12),
-                  _PhotoButton(
-                    colors: colors,
-                    fileName: parcelPhotoName,
-                    busy: parcelPhotoBusy,
-                    onPick: onPickParcelPhoto,
+                  IrisCameraEntry(
+                    state: parcelPhotoBusy
+                        ? IrisCameraState.analysing
+                        : parcelPhotoName != null
+                            ? IrisCameraState.completed
+                            : IrisCameraState.idle,
+                    hasPhoto: parcelPhotoName != null,
+                    onTakePhoto: onTakeParcelPhoto,
+                    onChoosePhoto: onChooseParcelPhoto,
                     onRemove: onRemoveParcelPhoto,
                   ),
                 ],
@@ -19892,7 +19898,7 @@ class _IrisImageInsight {
       fragilityRisk: '${data['fragilityRisk'] ?? 'medium'}',
       valueRisk: '${data['valueRisk'] ?? 'low'}',
       handlingNotes:
-          '${data['handlingNotes'] ?? 'Backend verified the parcel photo before using it as an IRIS visual signal.'}',
+          '${data['handlingNotes'] ?? 'The photo is attached as supporting verification evidence.'}',
       riderGuidance:
           '${data['riderGuidance'] ?? 'Use the parcel photo to verify condition at pickup.'}',
       needsHumanReview: data['needsHumanReview'] == true,
@@ -23884,54 +23890,6 @@ class _CompactSelectBoxState extends State<_CompactSelectBox> {
             ),
           ),
         ],
-      ),
-    );
-  }
-}
-
-class _PhotoButton extends StatelessWidget {
-  final _CircumColors colors;
-  final String? fileName;
-  final bool busy;
-  final VoidCallback onPick;
-  final VoidCallback onRemove;
-
-  const _PhotoButton({
-    required this.colors,
-    required this.fileName,
-    required this.busy,
-    required this.onPick,
-    required this.onRemove,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final attached = fileName != null && fileName!.trim().isNotEmpty;
-    return Tooltip(
-      message: attached ? 'Remove parcel photo' : 'Add a parcel photo',
-      child: InkWell(
-        onTap: busy ? null : (attached ? onRemove : onPick),
-        borderRadius: BorderRadius.circular(16),
-        child: Container(
-          width: 58,
-          height: 58,
-          decoration: BoxDecoration(
-            color: attached ? const Color(0xff2563eb) : colors.text,
-            borderRadius: BorderRadius.circular(16),
-          ),
-          child: busy
-              ? Padding(
-                  padding: const EdgeInsets.all(18),
-                  child: CircularProgressIndicator(
-                    strokeWidth: 2,
-                    color: colors.inverseText,
-                  ),
-                )
-              : Icon(
-                  attached ? Icons.check_circle : Icons.photo_camera,
-                  color: colors.inverseText,
-                ),
-        ),
       ),
     );
   }

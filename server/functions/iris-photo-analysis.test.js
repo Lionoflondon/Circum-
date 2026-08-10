@@ -32,7 +32,9 @@ test("backend parcel photo analysis emits IRIS-compatible weight evidence", () =
 
   assert.equal(analysis.serverAuthored, true);
   assert.equal(analysis.authority, "backend");
-  assert.equal(analysis.source, "backend_parcel_photo_analysis");
+  assert.equal(analysis.source, "backend_parcel_photo_verification");
+  assert.equal(analysis.imageIntelligenceStatus, "verification_only");
+  assert.equal(analysis.visualModelVersion, null);
   assert.equal(analysis.userId, "sender-1");
   assert.ok(analysis.analysisId);
   assert.ok(analysis.estimatedWeightKg > 0);
@@ -72,7 +74,7 @@ test("sender quote uses verified server photo analysis without trusting client p
   }, "sender-1", {
     analysisId: "server-analysis",
     serverAuthored: true,
-    source: "backend_parcel_photo_analysis",
+    source: "backend_parcel_photo_verification",
     estimatedWeightKg: 12,
     weightClass: "Large Parcel",
     inferredItemName: "large TV",

@@ -319,7 +319,8 @@ void main() {
     expect(removeHandler, contains('_lastBackendQuoteKey = null'));
 
     final parcelChangeStart = canvas.indexOf('void _onParcelChanged()');
-    final photoPickerStart = canvas.indexOf('Future<void> _pickParcelPhoto()');
+    final photoPickerStart =
+        canvas.indexOf('Future<void> _pickParcelPhoto(ImageSource source)');
     expect(parcelChangeStart, isNonNegative);
     expect(photoPickerStart, greaterThan(parcelChangeStart));
     final parcelChangeHandler =

@@ -1192,6 +1192,39 @@ exports.adminUpdateIrisCandidateWorkflow = functions.runWith({enforceAppCheck: t
     throw new functions.https.HttpsError("not-found", "IRIS candidate was not found.");
   }
   const record = snap.data() || {};
+  if (action === "rollback") {
+    if (record.repositoryPromotionStatus === "rolled_back" && record.rollbackKnowledgeVersion) {
+      return {ok: true, canonicalId: record.promotedCanonicalId, knowledgeVersion: record.rollbackKnowledgeVersion, rolledBack: true, idempotent: true};
+    }
+    const promotedCanonicalId = clean(record.promotedCanonicalId);
+    const promotedVersion = clean(record.knowledgeVersion);
+    if (!promotedCanonicalId || !promotedVersion) {
+      throw new functions.https.HttpsError("failed-precondition", "This candidate has no promoted knowledge revision to roll back.");
+    }
+    const canonicalRef = db.collection("irisCanonicalObjects").doc(promotedCanonicalId);
+    const versionRef = db.collection("irisKnowledgeVersions").doc(promotedVersion);
+    const stateRef = db.collection("irisKnowledgeState").doc("current");
+    let rollbackVersion;
+    await db.runTransaction(async (transaction) => {
+      const [version, state] = await Promise.all([transaction.get(versionRef), transaction.get(stateRef)]);
+      if (!version.exists || version.data().sourceCandidateId !== id) {
+        throw new functions.https.HttpsError("failed-precondition", "The promoted knowledge revision is not available for rollback.");
+      }
+      const revision = version.data();
+      const nextVersion = Number(state.exists && state.data().versionNumber || 1) + 1;
+      rollbackVersion = `iris-knowledge-v${nextVersion}`;
+      if (revision.beforeCanonical && Object.keys(revision.beforeCanonical).length) {
+        transaction.set(canonicalRef, {...revision.beforeCanonical, knowledgeVersion: rollbackVersion, updatedAt: FieldValue.serverTimestamp(), updatedBy: actor.label});
+      } else {
+        transaction.set(canonicalRef, {status: "deactivated", repositoryReviewStatus: "rolled_back", knowledgeVersion: rollbackVersion, updatedAt: FieldValue.serverTimestamp(), updatedBy: actor.label}, {merge: true});
+      }
+      transaction.set(candidateRef, {repositoryPromotionStatus: "rolled_back", rollbackKnowledgeVersion: rollbackVersion, rolledBackAt: FieldValue.serverTimestamp(), rolledBackBy: actor.label, updatedAt: FieldValue.serverTimestamp()}, {merge: true});
+      transaction.set(stateRef, {versionNumber: nextVersion, previousKnowledgeVersion: promotedVersion, knowledgeVersion: rollbackVersion, rollbackOf: promotedVersion, rolledBackAt: FieldValue.serverTimestamp(), rolledBackBy: actor.label}, {merge: true});
+      transaction.set(db.collection("irisKnowledgeVersions").doc(rollbackVersion), {knowledgeVersion: rollbackVersion, previousKnowledgeVersion: promotedVersion, rollbackOf: promotedVersion, sourceCandidateId: id, canonicalId: promotedCanonicalId, restoredCanonical: revision.beforeCanonical || null, createdAt: FieldValue.serverTimestamp(), createdBy: actor.label});
+    });
+    await writeAudit(db, actor, {actionType: "iris_knowledge_rolled_back", recordType: collection, recordId: id, reason: clean(data.reason || "Promoted IRIS knowledge rolled back from Admin")}, record, {rollbackVersion});
+    return {ok: true, canonicalId: promotedCanonicalId, knowledgeVersion: rollbackVersion, rolledBack: true};
+  }
   if (action === "promoted") {
     const canonicalId = slugId(record.canonicalName || record.objectName || record.enteredText || record.category || id);
     if (!canonicalId) {
@@ -1202,7 +1235,7 @@ exports.adminUpdateIrisCandidateWorkflow = functions.runWith({enforceAppCheck: t
     let knowledgeVersion;
     let idempotent = false;
     await db.runTransaction(async (transaction) => {
-      const [latestCandidate, state] = await Promise.all([transaction.get(candidateRef), transaction.get(stateRef)]);
+      const [latestCandidate, state, previousCanonical] = await Promise.all([transaction.get(candidateRef), transaction.get(stateRef), transaction.get(canonicalRef)]);
       const latest = latestCandidate.data() || {};
       const latestCanonicalId = slugId(latest.canonicalName || latest.objectName || latest.enteredText || latest.category || id);
       if (latestCanonicalId !== canonicalId) {
@@ -1236,7 +1269,8 @@ exports.adminUpdateIrisCandidateWorkflow = functions.runWith({enforceAppCheck: t
         updatedBy: actor.label,
       }, {merge: true});
       transaction.set(candidateRef, {learningStatus: "promoted", reviewStatus: "promoted", repositoryPromotionStatus: "committed", promotedCanonicalId: canonicalId, knowledgeVersion, reviewedAt: FieldValue.serverTimestamp(), reviewedBy: actor.label, updatedAt: FieldValue.serverTimestamp()}, {merge: true});
-      transaction.set(stateRef, {versionNumber: nextVersion, knowledgeVersion, promotedCanonicalId: canonicalId, promotedCandidateId: id, promotedAt: FieldValue.serverTimestamp(), promotedBy: actor.label}, {merge: true});
+      transaction.set(stateRef, {versionNumber: nextVersion, previousKnowledgeVersion: state.exists && state.data().knowledgeVersion || null, knowledgeVersion, promotedCanonicalId: canonicalId, promotedCandidateId: id, promotedAt: FieldValue.serverTimestamp(), promotedBy: actor.label}, {merge: true});
+      transaction.set(db.collection("irisKnowledgeVersions").doc(knowledgeVersion), {knowledgeVersion, previousKnowledgeVersion: state.exists && state.data().knowledgeVersion || null, sourceCandidateId: id, canonicalId, beforeCanonical: previousCanonical.exists ? previousCanonical.data() : null, afterCanonical: {canonicalId, canonicalName, category: latest.category || latest.irisCategory || null, knownWeight: latest.knownWeight || latest.estimatedWeight || latest.irisEstimatedWeight || null, weightBand: latest.weightBand || null}, createdAt: FieldValue.serverTimestamp(), createdBy: actor.label});
     });
     await writeAudit(db, actor, {
       actionType: "iris_candidate_promoted",

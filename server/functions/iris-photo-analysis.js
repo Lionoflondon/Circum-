@@ -109,11 +109,6 @@ function visualQuality({bytes, width, height}) {
   return {score: 0.42, label: "limited"};
 }
 
-function visualWeightAdjustment({baseWeightKg, qualityScore, width, height}) {
-  if (!width || !height || qualityScore < 0.55) return baseWeightKg;
-  return baseWeightKg;
-}
-
 function buildPhotoAnalysis({uid, data, bytes, contentType}) {
   const dimensions = imageDimensions(bytes, contentType);
   if (!dimensions || !dimensions.width || !dimensions.height) {
@@ -133,14 +128,9 @@ function buildPhotoAnalysis({uid, data, bytes, contentType}) {
   });
   const quality = visualQuality({bytes, width: dimensions.width, height: dimensions.height});
   const baseWeight = Number(baseIris.recommendation && baseIris.recommendation.estimatedWeightKg || 2);
-  const visualWeightKg = visualWeightAdjustment({
-    baseWeightKg: baseWeight,
-    qualityScore: quality.score,
-    width: dimensions.width,
-    height: dimensions.height,
-  });
-  const confidence = Math.min(0.88, Math.max(0.38, quality.score));
-  const weightBand = weightBandFor(visualWeightKg);
+  const confidence = Math.max(0.2, Math.min(0.97,
+    Number(baseIris.recommendation && baseIris.recommendation.confidencePercent || 0) / 100));
+  const weightBand = weightBandFor(baseWeight);
   const imageHash = crypto.createHash("sha256").update(bytes).digest("hex");
   const descriptionHash = crypto.createHash("sha256").update(description.toLowerCase()).digest("hex");
   const analysisId = crypto.createHash("sha256")
@@ -152,7 +142,9 @@ function buildPhotoAnalysis({uid, data, bytes, contentType}) {
     userId: uid,
     serverAuthored: true,
     authority: "backend",
-    source: "backend_parcel_photo_analysis",
+    source: "backend_parcel_photo_verification",
+    imageIntelligenceStatus: "verification_only",
+    visualModelVersion: null,
     imageHash,
     descriptionHash,
     description,
@@ -166,12 +158,12 @@ function buildPhotoAnalysis({uid, data, bytes, contentType}) {
     confidence: confidence >= 0.7 ? "high" : confidence >= 0.55 ? "medium" : "low",
     inferredItemName: baseIris.recommendation && baseIris.recommendation.detectedItem || description || "Parcel",
     inferredCategory: baseIris.recommendation && baseIris.recommendation.category || "Parcel",
-    estimatedWeightKg: Math.round(visualWeightKg * 100) / 100,
+    estimatedWeightKg: Math.round(baseWeight * 100) / 100,
     baseIrisWeightKg: Math.round(baseWeight * 100) / 100,
     weightClass: weightBand.label,
     needsHumanReview: confidence < 0.7 || baseIris.verification && baseIris.verification.photoEvidenceRequired === true,
-    riderGuidance: "Use the parcel photo to verify item condition and approximate size at pickup.",
-    handlingNotes: "Backend verified the parcel photo before using it as an IRIS visual signal.",
+    riderGuidance: "Use the parcel photo as supporting evidence when verifying the parcel at pickup.",
+    handlingNotes: "The photo was validated and retained for verification; item classification came from the supplied item details.",
   };
 }
 

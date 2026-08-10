@@ -7402,6 +7402,9 @@ class _IrisHealthPanelState extends State<_IrisHealthPanel> {
                 final latency = latest['latencyMs'] is Map
                     ? Map<String, dynamic>.from(latest['latencyMs'] as Map)
                     : const <String, dynamic>{};
+                final dataQuality = payload['dataQuality'] is Map
+                    ? Map<String, dynamic>.from(payload['dataQuality'] as Map)
+                    : const <String, dynamic>{};
                 return Wrap(
                   spacing: 10,
                   runSpacing: 10,
@@ -7449,6 +7452,18 @@ class _IrisHealthPanelState extends State<_IrisHealthPanel> {
                       'Fast path %',
                       double.tryParse(_metric(latest, 'fastPathRatePercent'))
                               ?.round() ??
+                          0,
+                    ),
+                    _HealthChip(
+                      'Reused request %',
+                      double.tryParse(
+                            _metric(latest, 'reusedRequestRatePercent'),
+                          )?.round() ??
+                          0,
+                    ),
+                    _HealthChip(
+                      'Knowledge review',
+                      (dataQuality['reviewCandidateCount'] as num?)?.round() ??
                           0,
                     ),
                     _HealthChip(
