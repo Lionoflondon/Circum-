@@ -1303,6 +1303,10 @@ void main() {
         'Rider disagreement %',
         'Admin override %',
         'Promoted knowledge',
+        'Visual shadow requests',
+        'Visual success %',
+        'Visual category agreement %',
+        'Visual review signals %',
       ]) {
         expect(source, contains(label));
       }

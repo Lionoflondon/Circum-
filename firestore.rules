@@ -1159,6 +1159,26 @@ service cloud.firestore {
       allow delete: if hasRole('super_admin');
     }
 
+    match /irisPhotoAnalyses/{analysisId} {
+      allow read: if isAdmin();
+      allow write: if false;
+    }
+
+    match /irisVisualShadowResults/{analysisId} {
+      allow read: if isAdmin();
+      allow write: if false;
+    }
+
+    match /irisVisualModelState/{stateId} {
+      allow read: if isAdmin();
+      allow write: if false;
+    }
+
+    match /irisVisualModelEvents/{eventId} {
+      allow read: if isAdmin();
+      allow write: if false;
+    }
+
     match /{collection}/{document=**} {
       allow read: if isAdmin();
       allow write: if hasRole('super_admin') &&
@@ -1172,7 +1192,11 @@ service cloud.firestore {
           'operationalIncidents',
           'deliveryOperationalState',
           'riderReliabilityAdjustments',
-          'marketplaceRiskFlags'
+          'marketplaceRiskFlags',
+          'irisPhotoAnalyses',
+          'irisVisualShadowResults',
+          'irisVisualModelState',
+          'irisVisualModelEvents'
         ].hasAny([collection]);
     }
   }

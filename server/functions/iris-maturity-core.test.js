@@ -64,7 +64,7 @@ test("latency buckets provide deterministic bounded percentiles", () => {
 });
 
 test("health projection reports only count-backed quality and performance metrics", () => {
-  const result = healthProjection({requestCount: 100, latencyBuckets: {lte_250: 50, lte_1000: 45, lte_5000: 5}, failureCount: 2, timeoutCount: 1, lowConfidenceCount: 10, fastPathCount: 40, riderDisagreementCount: 4, adminOverrideCount: 3, adjudicatedTruthCount: 8, classificationAdjudicatedCount: 8, classificationCorrectCount: 6, weightBandAdjudicatedCount: 8, weightBandCorrectCount: 7});
+  const result = healthProjection({requestCount: 100, latencyBuckets: {lte_250: 50, lte_1000: 45, lte_5000: 5}, failureCount: 2, timeoutCount: 1, lowConfidenceCount: 10, fastPathCount: 40, riderDisagreementCount: 4, adminOverrideCount: 3, adjudicatedTruthCount: 8, classificationAdjudicatedCount: 8, classificationCorrectCount: 6, weightBandAdjudicatedCount: 8, weightBandCorrectCount: 7, visualShadowRequestCount: 20, visualShadowSuccessCount: 18, visualShadowFailureCount: 2, visualObjectAgreementCount: 12, visualCategoryAgreementCount: 15, visualReviewSignalCount: 4});
   assert.equal(result.failureRatePercent, 2);
   assert.equal(result.lowConfidenceRatePercent, 10);
   assert.equal(result.fastPathRatePercent, 40);
@@ -73,4 +73,8 @@ test("health projection reports only count-backed quality and performance metric
   assert.equal(result.weightBandCorrectCount, 7);
   assert.equal(result.classificationAccuracyPercent, 75);
   assert.equal(result.weightBandAccuracyPercent, 87.5);
+  assert.equal(result.visualShadowSuccessRatePercent, 90);
+  assert.equal(result.visualCategoryAgreementRatePercent, 75);
+  assert.equal(result.visualReviewSignalRatePercent, 20);
+  assert.equal(result.visualClassificationAccuracyPercent, null);
 });

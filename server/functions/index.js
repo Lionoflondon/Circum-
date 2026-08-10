@@ -129,6 +129,7 @@ exports.updateHealthPlusPickupStatus = healthPlus.updateHealthPlusPickupStatus;
 exports.analyseIris = iris.analyseIris;
 exports.getIrisHealthMetrics = iris.getIrisHealthMetrics;
 exports.analyseParcelPhotoForIris = irisPhotoAnalysis.analyseParcelPhotoForIris;
+exports.adminSetIrisVisualModelState = irisPhotoAnalysis.adminSetIrisVisualModelState;
 exports.adjudicateIris = iris.adjudicateIris;
 exports.reportLoadDiscrepancy = deliveryAdjustments.reportLoadDiscrepancy;
 exports.getDeliveryAdjustmentEvidence = deliveryAdjustments.getDeliveryAdjustmentEvidence;

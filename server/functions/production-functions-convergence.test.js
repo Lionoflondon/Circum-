@@ -18,11 +18,11 @@ const targetSources = Object.freeze({
 });
 
 test("production Function inventory is completely represented by source", () => {
-  assert.equal(manifest.inventory.productionFunctions, 277);
-  assert.equal(manifest.inventory.applicationFunctions, 271);
+  assert.equal(manifest.inventory.productionFunctions, 278);
+  assert.equal(manifest.inventory.applicationFunctions, 272);
   assert.equal(manifest.inventory.extensionFunctions, 6);
-  assert.equal(manifest.inventory.sourceExports, 271);
-  assert.equal(manifest.applicationFunctions.length, 271);
+  assert.equal(manifest.inventory.sourceExports, 272);
+  assert.equal(manifest.applicationFunctions.length, 272);
   assert.equal(
       manifest.extensions.reduce((count, extension) => count + extension.functions.length, 0),
       6,

@@ -34,7 +34,7 @@ test("backend parcel photo analysis emits IRIS-compatible weight evidence", () =
   assert.equal(analysis.authority, "backend");
   assert.equal(analysis.source, "backend_parcel_photo_verification");
   assert.equal(analysis.imageIntelligenceStatus, "verification_only");
-  assert.equal(analysis.visualModelVersion, null);
+  assert.match(analysis.visualModelVersion, /^google-cloud-vision-v1-builtin-stable-/);
   assert.equal(analysis.userId, "sender-1");
   assert.ok(analysis.analysisId);
   assert.ok(analysis.estimatedWeightKg > 0);
@@ -55,6 +55,33 @@ test("parcel photo signal does not replace text IRIS accuracy", () => {
       analysis.estimatedWeightKg,
       textOnly.recommendation.estimatedWeightKg,
   );
+});
+
+test("visual shadow fields cannot become quote weight or financial authority", () => {
+  const quote = senderBooking._private.quotePayload({
+    quoteId: "quote-shadow",
+    distanceMiles: 4,
+    weightKg: 2,
+    parcel: {description: "laptop", weightKg: 2},
+  }, "sender-1", {
+    analysisId: "server-analysis",
+    serverAuthored: true,
+    source: "backend_parcel_photo_verification",
+    estimatedWeightKg: 2,
+    weightClass: "Small Parcel",
+    inferredItemName: "laptop",
+    inferredCategory: "Electronics",
+    confidence: "high",
+    confidenceScore: 0.9,
+    visualShadow: {
+      estimatedWeightKg: 900,
+      candidateCategory: "Furniture & Large Items",
+      affectsPricing: false,
+    },
+  });
+  assert.equal(quote.weightKg, 2);
+  assert.equal(quote.photoEstimatedWeightKg, 2);
+  assert.equal(Object.hasOwn(quote.photoAnalysis, "visualShadow"), false);
 });
 
 test("sender quote uses verified server photo analysis without trusting client photo fields", () => {

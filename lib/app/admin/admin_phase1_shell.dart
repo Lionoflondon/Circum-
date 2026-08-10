@@ -7462,6 +7462,31 @@ class _IrisHealthPanelState extends State<_IrisHealthPanel> {
                           0,
                     ),
                     _HealthChip(
+                      'Visual shadow requests',
+                      (latest['visualShadowRequestCount'] as num?)?.round() ?? 0,
+                    ),
+                    _HealthChip(
+                      'Visual success %',
+                      double.tryParse(
+                            _metric(latest, 'visualShadowSuccessRatePercent'),
+                          )?.round() ??
+                          0,
+                    ),
+                    _HealthChip(
+                      'Visual category agreement %',
+                      double.tryParse(
+                            _metric(latest, 'visualCategoryAgreementRatePercent'),
+                          )?.round() ??
+                          0,
+                    ),
+                    _HealthChip(
+                      'Visual review signals %',
+                      double.tryParse(
+                            _metric(latest, 'visualReviewSignalRatePercent'),
+                          )?.round() ??
+                          0,
+                    ),
+                    _HealthChip(
                       'Knowledge review',
                       (dataQuality['reviewCandidateCount'] as num?)?.round() ??
                           0,

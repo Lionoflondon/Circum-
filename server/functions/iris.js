@@ -146,7 +146,7 @@ const getIrisHealthMetrics = functions.runWith({enforceAppCheck: true}).https.on
   ]);
   const knowledge = await getFirestore().collection("irisCanonicalObjects").where("status", "==", "active").limit(200).get();
   const qualityCandidates = knowledgeQualityCandidates(knowledge.docs.map((doc) => ({id: doc.id, ...doc.data()})));
-  return {days, daily, learningQueueSize: learning.data().count, promotedKnowledgeCount: promoted.data().count, engineVersion: IRIS_ENGINE_VERSION, currentKnowledgeVersion: daily[0] && daily[0].knowledgeVersion || IRIS_KNOWLEDGE_VERSION, visualModelVersion: null, dataQuality: {boundedRecordsInspected: knowledge.size, reviewCandidateCount: qualityCandidates.length, candidates: qualityCandidates.slice(0, 50)}};
+  return {days, daily, learningQueueSize: learning.data().count, promotedKnowledgeCount: promoted.data().count, engineVersion: IRIS_ENGINE_VERSION, currentKnowledgeVersion: daily[0] && daily[0].knowledgeVersion || IRIS_KNOWLEDGE_VERSION, visualModelVersion: daily[0] && daily[0].visualModelVersion || null, visualInferenceMode: "SHADOW", dataQuality: {boundedRecordsInspected: knowledge.size, reviewCandidateCount: qualityCandidates.length, candidates: qualityCandidates.slice(0, 50)}};
 });
 
 const adjudicateIris = functions.runWith({enforceAppCheck: true}).https.onCall(async (data, context) => {
