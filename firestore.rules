@@ -314,7 +314,9 @@ service cloud.firestore {
         'roles',
         'adminRole',
         'isAdmin',
-        'admin'
+        'admin',
+        'stripeCustomerId',
+        'customerId'
       ];
     }
 

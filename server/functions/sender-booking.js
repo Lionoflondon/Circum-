@@ -4,7 +4,7 @@
 const functions = require("firebase-functions/v1");
 const crypto = require("crypto");
 const {getFirestore, FieldValue, GeoPoint, Timestamp} = require("firebase-admin/firestore");
-const {calculateWalletCheckout, roundMoney, minorUnits} = require("./wallet-core");
+const {calculateWalletCheckout, canonicalSenderWalletBalance, roundMoney, minorUnits} = require("./wallet-core");
 const {verifiedStripePaidGbpSession} = require("./roth-ledger-core");
 const vanguardProtocol = require("./vanguard-protocol-core");
 const {classifyIris, normalDispatchEligibilityForInput} = require("./iris-core");
@@ -900,24 +900,18 @@ async function walletBalanceForSender(sender) {
   ]);
   const legacy = legacySnap.exists ? legacySnap.data() || {} : {};
   const projection = projectionSnap.exists ? projectionSnap.data() || {} : {};
-  const legacyBalance = legacy.balance == null ? legacy.rothCredit : legacy.balance;
-  const projectionBalance = projection.balance == null ?
-    projection.rothCredit : projection.balance;
-  const candidates = [legacyBalance, projectionBalance]
-      .map((value) => Number(value))
-      .filter((value) => Number.isFinite(value) && value >= 0);
-  const balance = candidates.length ? Math.max(...candidates) : 0;
-  if (legacySnap.exists && projectionSnap.exists &&
-      money(Number(legacyBalance || 0)) !== money(Number(projectionBalance || 0))) {
-    console.warn("Sender wallet projection drift detected during payment", {
-      userId: sender.uid,
-      walletId,
-      legacyBalance: money(Number(legacyBalance || 0)),
-      projectionBalance: money(Number(projectionBalance || 0)),
-      resolvedBalance: money(balance),
+  try {
+    return canonicalSenderWalletBalance({
+      ledgerWallet: legacySnap.exists ? legacy : null,
+      projectionWallet: projectionSnap.exists ? projection : null,
     });
+  } catch (error) {
+    console.error("Sender wallet authority drift blocked payment", {userId: sender.uid, walletId});
+    throw new functions.https.HttpsError(
+        "failed-precondition",
+        "Your Roth balance is being reconciled. Please try again shortly.",
+    );
   }
-  return money(balance);
 }
 
 async function ensureStripeCustomerForSender(stripe, sender) {
@@ -930,6 +924,19 @@ async function ensureStripeCustomerForSender(stripe, sender) {
     try {
       const existingCustomer = await stripe.customers.retrieve(existingCustomerId);
       if (existingCustomer && !existingCustomer.deleted) {
+        const ownerId = text(existingCustomer.metadata && existingCustomer.metadata.userId);
+        if (ownerId && ownerId !== sender.uid) {
+          throw new functions.https.HttpsError("permission-denied", "Stripe customer does not belong to this Sender.");
+        }
+        if (!ownerId) {
+          const customerEmail = text(existingCustomer.email).toLowerCase();
+          if (!sender.email || customerEmail !== text(sender.email).toLowerCase()) {
+            throw new functions.https.HttpsError("permission-denied", "Stripe customer ownership could not be verified.");
+          }
+          await stripe.customers.update(existingCustomerId, {
+            metadata: {...existingCustomer.metadata, userId: sender.uid},
+          });
+        }
         return existingCustomerId;
       }
     } catch (error) {
@@ -948,7 +955,7 @@ async function ensureStripeCustomerForSender(stripe, sender) {
     email: sender.email || undefined,
     name: sender.name || undefined,
     metadata: {userId: sender.uid, source: "sender_booking"},
-  });
+  }, {idempotencyKey: `sender_customer_${sender.uid}`});
   await userRef.set({
     stripeCustomerId: customer.id,
     customerId: customer.id,
@@ -1059,6 +1066,7 @@ exports.createSenderPaymentSession = (stripe) => functions.runWith({enforceAppCh
     throw new functions.https.HttpsError("not-found", "Booking quote not found.");
   }
   const quote = quoteSnap.data();
+  const deliveryPayload = cleanMap(data.deliveryPayload);
   if (Object.keys(deliveryPayload).length > 0) {
     let submittedAddresses;
     try {
@@ -1078,7 +1086,6 @@ exports.createSenderPaymentSession = (stripe) => functions.runWith({enforceAppCh
   const requestedFallback = text(data.fallbackMethod) || "card";
   const checkoutMode = text(data.checkoutMode);
   const webCheckout = checkoutMode === "web_checkout";
-  const deliveryPayload = cleanMap(data.deliveryPayload);
   const split = calculateWalletCheckout({
     orderTotalGbp: total,
     walletBalanceGbp: rothEnabled ? rothBalance : 0,
@@ -1805,12 +1812,10 @@ async function createPaidDeliveryFromSession(stripe, sender, data) {
       if (senderWallet.status === "frozen" || senderWallet.frozen === true) {
         throw new Error("Wallet is frozen.");
       }
-      const legacyBalance = Number(wallet.balance == null ? wallet.rothCredit : wallet.balance);
-      const projectionBalance = Number(senderWallet.balance == null ?
-        senderWallet.rothCredit : senderWallet.balance);
-      const availableBalances = [legacyBalance, projectionBalance]
-          .filter((value) => Number.isFinite(value) && value >= 0);
-      walletBalanceBefore = money(availableBalances.length ? Math.max(...availableBalances) : 0);
+      walletBalanceBefore = canonicalSenderWalletBalance({
+        ledgerWallet: walletSnap && walletSnap.exists ? wallet : null,
+        projectionWallet: senderWalletSnap && senderWalletSnap.exists ? senderWallet : null,
+      });
       if (walletBalanceBefore < rothAppliedAmount) {
         throw new Error("Insufficient Roth balance.");
       }

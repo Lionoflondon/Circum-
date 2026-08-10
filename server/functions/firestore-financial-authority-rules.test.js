@@ -102,6 +102,12 @@ test("users cannot self-write admin or rider role escalation fields", () => {
   );
 });
 
+test("users cannot choose Stripe customer identity", () => {
+  const block = rules.match(/function userAdminOnlyRoleFields\(\) \{[\s\S]*?\n {4}\}/)[0];
+  assert.match(block, /'stripeCustomerId'/);
+  assert.match(block, /'customerId'/);
+});
+
 test("rider earnings, wallet ledger, payout requests, and bank data are not client-writable", () => {
   assert.match(
       rules,

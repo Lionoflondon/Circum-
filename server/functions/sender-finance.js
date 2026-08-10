@@ -4,6 +4,23 @@
 const functions = require("firebase-functions/v1");
 const {getFirestore, FieldValue} = require("firebase-admin/firestore");
 
+function normalizedEmail(value) {
+  return `${value || ""}`.trim().toLowerCase();
+}
+
+async function assertCustomerOwnership({stripe, customer, sender}) {
+  const ownerId = `${customer && customer.metadata && customer.metadata.userId || ""}`.trim();
+  if (ownerId && ownerId !== sender.uid) {
+    throw new functions.https.HttpsError("permission-denied", "Stripe customer does not belong to this Sender.");
+  }
+  if (!ownerId) {
+    if (!sender.email || normalizedEmail(customer && customer.email) !== normalizedEmail(sender.email)) {
+      throw new functions.https.HttpsError("permission-denied", "Stripe customer ownership could not be verified.");
+    }
+    await stripe.customers.update(customer.id, {metadata: {...customer.metadata, userId: sender.uid}});
+  }
+}
+
 function requireSender(context) {
   if (!context.auth) {
     throw new functions.https.HttpsError("unauthenticated", "Sign in to manage payment methods.");
@@ -21,13 +38,19 @@ async function ensureStripeCustomer({stripe, sender}) {
   const userSnap = await userRef.get();
   const user = userSnap.exists ? userSnap.data() : {};
   if (user.stripeCustomerId || user.customerId) {
-    return user.stripeCustomerId || user.customerId;
+    const customerId = user.stripeCustomerId || user.customerId;
+    const customer = await stripe.customers.retrieve(customerId);
+    if (!customer || customer.deleted) {
+      throw new functions.https.HttpsError("failed-precondition", "Saved payment profile is unavailable.");
+    }
+    await assertCustomerOwnership({stripe, customer, sender});
+    return customerId;
   }
   const customer = await stripe.customers.create({
     email: sender.email || undefined,
     name: sender.name || undefined,
     metadata: {userId: sender.uid, source: "sender_mobile"},
-  });
+  }, {idempotencyKey: `sender_customer_${sender.uid}`});
   await userRef.set({
     stripeCustomerId: customer.id,
     customerId: customer.id,
@@ -49,7 +72,7 @@ function paymentMethodView(paymentMethod, defaultPaymentMethodId) {
   };
 }
 
-exports.listSenderPaymentMethods = (stripe) => functions.https.onCall(async (_, context) => {
+exports.listSenderPaymentMethods = (stripe) => functions.runWith({enforceAppCheck: true}).https.onCall(async (_, context) => {
   const sender = requireSender(context);
   const customerId = await ensureStripeCustomer({stripe, sender});
   const customer = await stripe.customers.retrieve(customerId);
@@ -77,7 +100,7 @@ exports.listSenderPaymentMethods = (stripe) => functions.https.onCall(async (_, 
   };
 });
 
-exports.createSenderSetupIntent = (stripe) => functions.https.onCall(async (_, context) => {
+exports.createSenderSetupIntent = (stripe) => functions.runWith({enforceAppCheck: true}).https.onCall(async (_, context) => {
   const sender = requireSender(context);
   const customerId = await ensureStripeCustomer({stripe, sender});
   const ephemeralKey = await stripe.ephemeralKeys.create(
@@ -97,7 +120,7 @@ exports.createSenderSetupIntent = (stripe) => functions.https.onCall(async (_, c
   };
 });
 
-exports.detachSenderPaymentMethod = (stripe) => functions.https.onCall(async (data, context) => {
+exports.detachSenderPaymentMethod = (stripe) => functions.runWith({enforceAppCheck: true}).https.onCall(async (data, context) => {
   const sender = requireSender(context);
   const paymentMethodId = `${data && data.paymentMethodId || ""}`.trim();
   if (!paymentMethodId) {
@@ -117,7 +140,7 @@ exports.detachSenderPaymentMethod = (stripe) => functions.https.onCall(async (da
   return {ok: true};
 });
 
-exports.setDefaultSenderPaymentMethod = (stripe) => functions.https.onCall(async (data, context) => {
+exports.setDefaultSenderPaymentMethod = (stripe) => functions.runWith({enforceAppCheck: true}).https.onCall(async (data, context) => {
   const sender = requireSender(context);
   const paymentMethodId = `${data && data.paymentMethodId || ""}`.trim();
   if (!paymentMethodId) {
@@ -138,7 +161,7 @@ exports.setDefaultSenderPaymentMethod = (stripe) => functions.https.onCall(async
   return {ok: true};
 });
 
-exports.saveSenderCheckoutPreference = functions.https.onCall(async (data, context) => {
+exports.saveSenderCheckoutPreference = functions.runWith({enforceAppCheck: true}).https.onCall(async (data, context) => {
   const sender = requireSender(context);
   const preference = `${data && data.preference || ""}`.trim();
   const allowed = new Set([

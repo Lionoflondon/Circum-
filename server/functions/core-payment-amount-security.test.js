@@ -199,15 +199,15 @@ test("Sender web Checkout verifies Stripe and defers Roth debit until delivery c
   assert.doesNotMatch(senderBookingSource, /rothLedger\.applyWalletDebit/);
 });
 
-test("Sender Roth payments resolve and debit canonical plus legacy wallet records", () => {
+test("Sender Roth payments fail closed on drift and debit both wallet records atomically", () => {
   assert.match(senderBookingSource, /function walletRefsForSender\(db, sender\)/);
   assert.match(senderBookingSource, /senderWalletRef: db\.collection\("senderWallets"\)\.doc\(sender\.uid\)/);
   assert.match(senderBookingSource, /const \[legacySnap, projectionSnap\] = await Promise\.all\(\[/);
   assert.match(senderBookingSource, /projectionSnap\.exists \? projectionSnap\.data\(\) \|\| \{\} : \{\}/);
-  assert.match(senderBookingSource, /Math\.max\(\.\.\.candidates\)/);
-  assert.match(senderBookingSource, /Sender wallet projection drift detected during payment/);
-  assert.match(senderBookingSource, /const projectionBalance = Number\(senderWallet\.balance == null \?/);
-  assert.match(senderBookingSource, /walletBalanceBefore = money\(availableBalances\.length \? Math\.max\(\.\.\.availableBalances\) : 0\)/);
+  assert.match(senderBookingSource, /canonicalSenderWalletBalance/);
+  assert.match(senderBookingSource, /Sender wallet authority drift blocked payment/);
+  assert.doesNotMatch(senderBookingSource, /Math\.max\(\.\.\.candidates\)/);
+  assert.doesNotMatch(senderBookingSource, /Math\.max\(\.\.\.availableBalances\)/);
   assert.match(senderBookingSource, /transaction\.set\(senderWalletRef, \{/);
   assert.match(senderBookingSource, /balance: walletBalanceAfter/);
 });

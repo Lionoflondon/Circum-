@@ -88,6 +88,21 @@ function calculateWalletCheckout({orderTotalGbp, walletBalanceGbp, selectedCurre
   };
 }
 
+function walletBalanceValue(record = {}) {
+  const value = record.balance == null ? record.rothCredit : record.balance;
+  const parsed = Number(value);
+  return Number.isFinite(parsed) && parsed >= 0 ? roundMoney(parsed) : null;
+}
+
+function canonicalSenderWalletBalance({ledgerWallet = null, projectionWallet = null} = {}) {
+  const ledgerBalance = ledgerWallet ? walletBalanceValue(ledgerWallet) : null;
+  const projectionBalance = projectionWallet ? walletBalanceValue(projectionWallet) : null;
+  if (ledgerBalance != null && projectionBalance != null && ledgerBalance !== projectionBalance) {
+    throw new Error("Sender wallet balance authority is out of sync.");
+  }
+  return ledgerBalance == null ? projectionBalance || 0 : ledgerBalance;
+}
+
 function canRedeemGiftCard(card) {
   if (!card) return false;
   const status = `${card.status || ""}`.toLowerCase();
@@ -102,6 +117,7 @@ function canRedeemGiftCard(card) {
 module.exports = {
   SUPPORTED_STRIPE_CURRENCIES,
   calculateWalletCheckout,
+  canonicalSenderWalletBalance,
   canRedeemGiftCard,
   estimateCurrencyAmountFromGbp,
   minorUnits,

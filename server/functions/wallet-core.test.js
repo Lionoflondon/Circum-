@@ -2,6 +2,7 @@ const test = require("node:test");
 const assert = require("node:assert/strict");
 const {
   calculateWalletCheckout,
+  canonicalSenderWalletBalance,
   canRedeemGiftCard,
   normalizeEmail,
   normalizeStripeCurrency,
@@ -64,4 +65,19 @@ test("gift card redemption requires active unredeemed card", () => {
 test("email normalization creates one canonical Roth wallet key", () => {
   assert.equal(normalizeEmail("  AyoJason600@GMAIL.COM "), "ayojason600@gmail.com");
   assert.equal(walletIdForEmail("  AyoJason600@GMAIL.COM "), "ayojason600@gmail.com");
+});
+
+test("canonical Sender wallet uses the ledger balance and permits a matching projection", () => {
+  assert.equal(canonicalSenderWalletBalance({
+    ledgerWallet: {balance: 10},
+    projectionWallet: {balance: 10},
+  }), 10);
+  assert.equal(canonicalSenderWalletBalance({ledgerWallet: {rothCredit: 8}}), 8);
+});
+
+test("canonical Sender wallet fails closed when its projection drifts", () => {
+  assert.throws(() => canonicalSenderWalletBalance({
+    ledgerWallet: {balance: 4},
+    projectionWallet: {balance: 10},
+  }), /out of sync/);
 });
