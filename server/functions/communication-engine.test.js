@@ -23,7 +23,7 @@ test("notifications record delivery status, failures, and retries", () => {
   assert.match(source, /deliveryState:\s*"persisted"/);
   assert.match(source, /pushDeliveryStatus:\s*"pending"/);
   assert.match(source, /pushDeliveryStatus:\s*"sent"/);
-  assert.match(source, /pushDeliveryStatus:\s*"failed"/);
+  assert.match(source, /status: "failed"/);
   assert.match(source, /failureReason:\s*"push_token_missing"/);
   assert.match(source, /pushProvider:\s*"fcm"/);
   assert.match(source, /retryCount:\s*0/);
@@ -133,12 +133,35 @@ test("notification retry is backend-authoritative and audited", () => {
   assert.match(source, /actionType:\s*"notification_retry_failed"/);
   assert.match(
       source,
-      /exports\.retryNotificationDelivery = functions\.https\.onCall/,
+      /exports\.retryNotificationDelivery = protectedCallable\.onCall/,
   );
   assert.match(
       indexSource,
       /exports\.retryNotificationDelivery = communicationEngine\./,
   );
+});
+
+test("automated notification retries are bounded and become exhausted", () => {
+  const transient = communicationEngine.retryState(1, "messaging/internal-error", 0);
+  assert.equal(transient.status, "failed");
+  assert.equal(transient.retryable, true);
+  assert.equal(transient.nextRetryAt.getTime(), 5 * 60 * 1000);
+  assert.deepEqual(
+      communicationEngine.retryState(5, "messaging/internal-error", 0),
+      {status: "exhausted", retryable: false, nextRetryAt: null, permanent: false},
+  );
+  assert.equal(
+      communicationEngine.retryState(
+          1,
+          "messaging/registration-token-not-registered",
+          0,
+      ).permanent,
+      true,
+  );
+  assert.match(source, /schedule\("every 5 minutes"\)/);
+  assert.match(source, /\.limit\(100\)/);
+  assert.match(source, /sendEachForMulticast/);
+  assert.match(source, /collection\("notificationTokens"\)/);
 });
 
 test("platform announcements persist notification ids and audit", () => {

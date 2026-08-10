@@ -6,10 +6,10 @@
   "releaseShaSemantics": "SELF means the Git commit containing this manifest; the immutable SHA is recorded in the release report and deployment provenance.",
   "entryPoint": "server/functions/index.js",
   "inventory": {
-    "productionFunctions": 288,
-    "applicationFunctions": 282,
+    "productionFunctions": 289,
+    "applicationFunctions": 283,
     "extensionFunctions": 6,
-    "sourceExports": 282
+    "sourceExports": 283
   },
   "applicationFunctions": [
     {
@@ -2391,6 +2391,18 @@
         "timeZone": null
       },
       "productionSourceHash": "7aa4c8fc023643033b3f90258e479a2be5a1c52b",
+      "state": "ACTIVE",
+      "releaseSha": "SELF"
+    },
+    {
+      "name": "processNotificationRetries",
+      "source": "server/functions/communication-engine.js#processNotificationRetries",
+      "runtime": "nodejs22",
+      "region": "us-central1",
+      "trigger": {
+        "type": "schedule"
+      },
+      "productionSourceHash": "PENDING_DEPLOYMENT",
       "state": "ACTIVE",
       "releaseSha": "SELF"
     },

@@ -25,6 +25,13 @@ const privateNotificationFieldPattern = /(fcm|push.?token|notification.?token|st
 const privateIdentifierPattern = /\b(?:sk|pk|rk)_(?:live|test)_[A-Za-z0-9_-]+\b|\b(?:pi|pm|ch|seti|src|tok|cs_(?:live|test))_[A-Za-z0-9_-]+\b|\beyJ[A-Za-z0-9_-]{40,}(?:\.[A-Za-z0-9_-]+){1,2}\b|\b[A-Za-z0-9_-]{40,}:[A-Za-z0-9_-]{20,}\b/gi;
 const sensitiveQueryPattern = /((?:[?&]|\b)(?:token|secret|client_secret|payment_intent)\s*=\s*)[^&\s]+/gi;
 const messageMutationIdPattern = /^[A-Za-z0-9._:-]{8,180}$/;
+const maxNotificationAttempts = 5;
+const retryDelaysMinutes = [1, 5, 15, 60, 240];
+const permanentPushErrors = new Set([
+  "messaging/invalid-registration-token",
+  "messaging/registration-token-not-registered",
+  "messaging/invalid-argument",
+]);
 
 function maskContactDetails(value) {
   return clean(value)
@@ -118,17 +125,37 @@ function destinationFor(type, data = {}) {
   return {route: "notifications"};
 }
 
-async function profileToken(uid, role) {
-  if (!uid) return "";
+async function profileTokens(uid, role) {
+  if (!uid) return [];
   const db = getFirestore();
+  const deviceTokens = await db.collection("notificationTokens")
+      .where("uid", "==", uid).limit(20).get();
+  const tokens = [...new Set(deviceTokens.docs
+      .filter((doc) => doc.data().active === true)
+      .map((doc) => clean(doc.data().token)).filter(Boolean))];
+  if (!deviceTokens.empty) return tokens;
   const collections = role === "rider" ? ["riderProfiles", "riders"] : ["users", "senders"];
   for (const collection of collections) {
     const doc = await db.collection(collection).doc(uid).get();
     if (!doc.exists) continue;
     const token = clean(doc.data().fcmToken || doc.data().pushToken);
-    if (token) return token;
+    if (token) return [token];
   }
-  return "";
+  return [];
+}
+
+function retryState(attempts, errorCode, now = Date.now()) {
+  const permanent = permanentPushErrors.has(clean(errorCode));
+  if (permanent || attempts >= maxNotificationAttempts) {
+    return {status: "exhausted", retryable: false, nextRetryAt: null, permanent};
+  }
+  const delay = retryDelaysMinutes[Math.min(attempts, retryDelaysMinutes.length - 1)];
+  return {status: "failed", retryable: true, nextRetryAt: new Date(now + delay * 60000), permanent: false};
+}
+
+async function sendPushToTokens(tokens, payload) {
+  if (!tokens.length) return {successCount: 0, failureCount: 0, responses: []};
+  return getMessaging().sendEachForMulticast({...payload, tokens});
 }
 
 async function participantDisplayName(uid, role, context) {
@@ -194,18 +221,17 @@ async function emitNotification({recipientId, recipientRole = "sender", type, ti
     transaction.set(ref, payload);
   });
   if (!shouldSend) return ref.id;
-  const token = await profileToken(recipientId, recipientRole);
-  if (!token) {
+  const tokens = await profileTokens(recipientId, recipientRole);
+  if (!tokens.length) {
     await ref.set({
-      pushDeliveryStatus: "skipped",
       deliveryStatus: "persisted",
       failureReason: "push_token_missing",
-      retryable: true,
+      retryable: false,
+      pushDeliveryStatus: "exhausted",
       updatedAt: FieldValue.serverTimestamp(),
     }, {merge: true});
   } else {
-    await getMessaging().send({
-      token,
+    await sendPushToTokens(tokens, {
       notification: {title: payload.title, body: payload.body},
       data: {
         type: payload.type,
@@ -217,28 +243,39 @@ async function emitNotification({recipientId, recipientRole = "sender", type, ti
         healthPickupId: clean(destination.healthPickupId),
         businessId: clean(destination.businessId),
       },
-    }).then((messageId) => ref.set({
+    }).then((result) => {
+      if (!result.successCount) {
+        const error = result.responses.find((item) => item.error)?.error;
+        throw error || new Error("push_failed");
+      }
+      return ref.set({
       pushDeliveryStatus: "sent",
       deliveryStatus: "sent",
       deliveryState: "sent",
-      messagingId: messageId,
+      pushDeviceSuccessCount: result.successCount,
+      pushDeviceFailureCount: result.failureCount,
       deliveryAttempts: FieldValue.increment(1),
       retryCount: FieldValue.increment(1),
       lastDeliveryAttemptAt: FieldValue.serverTimestamp(),
       sentAt: FieldValue.serverTimestamp(),
       retryable: false,
       updatedAt: FieldValue.serverTimestamp(),
-    }, {merge: true})).catch((error) => ref.set({
-      pushDeliveryStatus: "failed",
+    }, {merge: true});
+    }).catch((error) => {
+      const state = retryState(1, error && error.code);
+      return ref.set({
+      pushDeliveryStatus: state.status,
       deliveryStatus: "failed",
       deliveryState: "failed",
       failureReason: clean(error && (error.code || error.message)) || "push_failed",
       deliveryAttempts: FieldValue.increment(1),
       retryCount: FieldValue.increment(1),
       lastDeliveryAttemptAt: FieldValue.serverTimestamp(),
-      retryable: true,
+      retryable: state.retryable,
+      nextRetryAt: state.nextRetryAt,
       updatedAt: FieldValue.serverTimestamp(),
-    }, {merge: true}));
+    }, {merge: true});
+    });
   }
   return ref.id;
 }
@@ -450,13 +487,24 @@ async function reportMessage(data, context) {
   const chatId = clean(data.chatId);
   const messageId = clean(data.messageId);
   const reason = clean(data.reason);
+  const reportMutationId = clean(data.reportMutationId || data.correlationId);
   if (!chatId || !messageId || !reason) throw new functions.https.HttpsError("invalid-argument", "A message and reason are required.");
+  if (!messageMutationIdPattern.test(reportMutationId)) {
+    throw new functions.https.HttpsError("invalid-argument", "A valid report mutation id is required.");
+  }
   const db = getFirestore();
   const chat = await db.collection("chats").doc(chatId).get();
   if (!chat.exists || (!isAdmin(context) && !(chat.data().participants || []).includes(context.auth.uid))) {
     throw new functions.https.HttpsError("permission-denied", "Conversation access denied.");
   }
-  const report = await db.collection("messageReports").add({
+  const message = await chat.ref.collection("messages").doc(messageId).get();
+  if (!message.exists) {
+    throw new functions.https.HttpsError("not-found", "Message not found in this conversation.");
+  }
+  const reportId = `report_${createHash("sha256").update([chatId, messageId, context.auth.uid].join("|")).digest("hex").slice(0, 40)}`;
+  const report = db.collection("messageReports").doc(reportId);
+  await report.create({
+    reportId,
     chatId,
     messageId,
     reporterId: context.auth.uid,
@@ -464,8 +512,10 @@ async function reportMessage(data, context) {
     deliveryId: clean(chat.data().deliveryId || chat.data().bookingId),
     createdAt: FieldValue.serverTimestamp(),
     status: "open",
+  }).catch((error) => {
+    if (!(error && (error.code === 6 || error.code === "already-exists"))) throw error;
   });
-  return {ok: true, reportId: report.id};
+  return {ok: true, reportId};
 }
 
 async function sendAnnouncement(data, context) {
@@ -549,13 +599,13 @@ async function retryNotificationDelivery(data, context) {
   const db = getFirestore();
   const ref = db.collection("notifications").doc(notificationId);
   const notification = await claimNotificationRetry(db, notificationId);
-  const token = await profileToken(clean(notification.recipientId), clean(notification.recipientRole));
-  if (!token) {
+  const tokens = await profileTokens(clean(notification.recipientId), clean(notification.recipientRole));
+  if (!tokens.length) {
     await ref.set({
-      pushDeliveryStatus: "skipped",
       deliveryStatus: "persisted",
       failureReason: "push_token_missing",
-      retryable: true,
+      retryable: false,
+      pushDeliveryStatus: "exhausted",
       lastRetriedAt: FieldValue.serverTimestamp(),
       updatedAt: FieldValue.serverTimestamp(),
     }, {merge: true});
@@ -563,8 +613,7 @@ async function retryNotificationDelivery(data, context) {
   }
   const destination = notification.destination || {};
   try {
-    const messageId = await getMessaging().send({
-      token,
+    const result = await sendPushToTokens(tokens, {
       notification: {
         title: clean(notification.title) || "Circum update",
         body: clean(notification.body || notification.message),
@@ -580,10 +629,15 @@ async function retryNotificationDelivery(data, context) {
         businessId: clean(destination.businessId),
       },
     });
+    if (!result.successCount) {
+      const failure = result.responses.find((item) => item.error)?.error;
+      throw failure || new Error("push_failed");
+    }
     await ref.set({
       pushDeliveryStatus: "sent",
       deliveryStatus: "sent",
-      messagingId: messageId,
+      pushDeviceSuccessCount: result.successCount,
+      pushDeviceFailureCount: result.failureCount,
       deliveryAttempts: FieldValue.increment(1),
       lastRetriedAt: FieldValue.serverTimestamp(),
       sentAt: FieldValue.serverTimestamp(),
@@ -601,13 +655,16 @@ async function retryNotificationDelivery(data, context) {
     return {ok: true, notificationId, status: "sent"};
   } catch (error) {
     const reason = clean(error && (error.code || error.message)) || "push_failed";
+    const attempts = Number(notification.deliveryAttempts || 0) + 1;
+    const state = retryState(attempts, error && error.code);
     await ref.set({
-      pushDeliveryStatus: "failed",
+      pushDeliveryStatus: state.status,
       deliveryStatus: "failed",
       failureReason: reason,
       deliveryAttempts: FieldValue.increment(1),
       lastRetriedAt: FieldValue.serverTimestamp(),
-      retryable: true,
+      retryable: state.retryable,
+      nextRetryAt: state.nextRetryAt,
       updatedAt: FieldValue.serverTimestamp(),
     }, {merge: true});
     await db.collection("adminAuditLogs").doc().set({
@@ -620,6 +677,51 @@ async function retryNotificationDelivery(data, context) {
     });
     throw new functions.https.HttpsError("internal", "Notification retry failed.");
   }
+}
+
+async function processNotificationRetries() {
+  const db = getFirestore();
+  const due = await db.collection("notifications")
+      .where("retryable", "==", true).where("nextRetryAt", "<=", new Date()).limit(100).get();
+  let sent = 0;
+  let exhausted = 0;
+  for (const doc of due.docs) {
+    try {
+      const notification = await claimNotificationRetry(db, doc.id);
+      const tokens = await profileTokens(clean(notification.recipientId), clean(notification.recipientRole));
+      const attempts = Number(notification.deliveryAttempts || 0) + 1;
+      if (!tokens.length) {
+        await doc.ref.set({pushDeliveryStatus: "exhausted", retryable: false,
+          failureReason: "push_token_missing", deliveryAttempts: attempts,
+          updatedAt: FieldValue.serverTimestamp()}, {merge: true});
+        exhausted++;
+        continue;
+      }
+      const destination = notification.destination || {};
+      const result = await sendPushToTokens(tokens, {
+        notification: {title: clean(notification.title) || "Circum update",
+          body: clean(notification.body || notification.message)},
+        data: {type: clean(notification.type) || "system", notificationId: doc.id,
+          route: clean(destination.route) || "notifications"},
+      });
+      if (!result.successCount) throw result.responses.find((item) => item.error)?.error || new Error("push_failed");
+      await doc.ref.set({pushDeliveryStatus: "sent", deliveryStatus: "sent", retryable: false,
+        deliveryAttempts: attempts, pushDeviceSuccessCount: result.successCount,
+        pushDeviceFailureCount: result.failureCount, sentAt: FieldValue.serverTimestamp(),
+        updatedAt: FieldValue.serverTimestamp()}, {merge: true});
+      sent++;
+    } catch (error) {
+      const current = await doc.ref.get();
+      const attempts = Number((current.data() || {}).deliveryAttempts || 0) + 1;
+      const state = retryState(attempts, error && error.code);
+      await doc.ref.set({pushDeliveryStatus: state.status, retryable: state.retryable,
+        nextRetryAt: state.nextRetryAt, deliveryAttempts: attempts,
+        failureReason: clean(error && (error.code || error.message)) || "push_failed",
+        updatedAt: FieldValue.serverTimestamp()}, {merge: true});
+      if (!state.retryable) exhausted++;
+    }
+  }
+  return {processed: due.size, sent, exhausted};
 }
 
 async function startAdminConversation(data, context) {
@@ -871,17 +973,22 @@ exports.redactContactFields = redactContactFields;
 exports.maskContactDetails = maskContactDetails;
 exports.messageDocumentId = messageDocumentId;
 exports.claimNotificationRetry = claimNotificationRetry;
+exports.retryState = retryState;
+exports.processNotificationRetriesHandler = processNotificationRetries;
 exports._sendCircumMessageHandler = sendMessage;
-exports.sendCircumMessage = functions.https.onCall(sendMessage);
-exports.startAdminConversation = functions.https.onCall(startAdminConversation);
-exports.getOrCreateSupportConversation = functions.https.onCall(getOrCreateSupportConversation);
-exports.submitWebsiteSupportRequest = functions.https.onCall(submitWebsiteSupportRequest);
-exports.updateSupportConversationStatus = functions.https.onCall(updateSupportConversationStatus);
-exports.markConversationRead = functions.https.onCall(markConversationRead);
-exports.setConversationTyping = functions.https.onCall(setConversationTyping);
-exports.reportCircumMessage = functions.https.onCall(reportMessage);
-exports.sendCircumAnnouncement = functions.https.onCall(sendAnnouncement);
-exports.retryNotificationDelivery = functions.https.onCall(retryNotificationDelivery);
+const protectedCallable = functions.runWith({enforceAppCheck: true}).https;
+exports.sendCircumMessage = protectedCallable.onCall(sendMessage);
+exports.startAdminConversation = protectedCallable.onCall(startAdminConversation);
+exports.getOrCreateSupportConversation = protectedCallable.onCall(getOrCreateSupportConversation);
+exports.submitWebsiteSupportRequest = protectedCallable.onCall(submitWebsiteSupportRequest);
+exports.updateSupportConversationStatus = protectedCallable.onCall(updateSupportConversationStatus);
+exports.markConversationRead = protectedCallable.onCall(markConversationRead);
+exports.setConversationTyping = protectedCallable.onCall(setConversationTyping);
+exports.reportCircumMessage = protectedCallable.onCall(reportMessage);
+exports.sendCircumAnnouncement = protectedCallable.onCall(sendAnnouncement);
+exports.retryNotificationDelivery = protectedCallable.onCall(retryNotificationDelivery);
+exports.processNotificationRetries = functions.pubsub.schedule("every 5 minutes")
+    .timeZone("Europe/London").onRun(processNotificationRetries);
 exports.closeDeliveryConversation = async (deliveryId, status) => {
   if (!terminalDeliveryStatuses.has(clean(status).toLowerCase())) return;
   await getFirestore().collection("chats").doc(clean(deliveryId)).set({

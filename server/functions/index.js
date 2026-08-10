@@ -208,6 +208,7 @@ exports.updateSupportConversationStatus =
 exports.reportCircumMessage = communicationEngine.reportCircumMessage;
 exports.sendCircumAnnouncement = communicationEngine.sendCircumAnnouncement;
 exports.retryNotificationDelivery = communicationEngine.retryNotificationDelivery;
+exports.processNotificationRetries = communicationEngine.processNotificationRetries;
 exports.onHealthPlusPickupOperationalWrite =
   healthPlusOperations.onHealthPlusPickupOperationalWrite;
 exports.processHealthPlusReminders =
