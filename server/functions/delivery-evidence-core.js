@@ -55,6 +55,34 @@ function isVerifiedPhotoRecord(photo = {}) {
   return photo.immutable === true && photo.verified === true;
 }
 
+function evidencePurpose(value) {
+  const purpose = text(value).toUpperCase();
+  return ["PICKUP", "HANDOVER", "DISCREPANCY"].includes(purpose) ? purpose : null;
+}
+
+function transitionEvidenceDecision(photo = {}, expected = {}) {
+  const purpose = evidencePurpose(expected.purpose);
+  if (!isVerifiedPhotoRecord(photo)) return {allowed: false, reason: "Verified delivery evidence was not found."};
+  if (!purpose || evidencePurpose(photo.purpose || photo.context?.purpose) !== purpose) {
+    return {allowed: false, reason: "Delivery evidence does not match this lifecycle phase."};
+  }
+  if (text(photo.deliveryId) !== text(expected.deliveryId) || text(photo.uploadedBy) !== text(expected.riderId)) {
+    return {allowed: false, reason: "Delivery evidence ownership does not match this delivery."};
+  }
+  const expectedPath = photoStoragePath(expected.deliveryId, expected.photoId);
+  if (text(photo.id) !== text(expected.photoId) || text(photo.storagePath) !== expectedPath) {
+    return {allowed: false, reason: "Delivery evidence storage identity is invalid."};
+  }
+  if (!text(photo.generation) || !text(photo.checksum) || !text(photo.mimeType) ||
+      !(positiveNumber(photo.fileSize) > 0)) {
+    return {allowed: false, reason: "Delivery evidence immutable metadata is incomplete."};
+  }
+  return {allowed: true, evidence: {
+    photoId: text(photo.id), storagePath: text(photo.storagePath), generation: text(photo.generation),
+    checksum: text(photo.checksum), mimeType: text(photo.mimeType), fileSize: positiveNumber(photo.fileSize), purpose,
+  }};
+}
+
 function evidenceSummary(photo, uploaderId) {
   return {
     type: PHOTO,
@@ -63,6 +91,9 @@ function evidenceSummary(photo, uploaderId) {
     uploadedBy: uploaderId,
     capturedAt: photo.capturedAt || null,
     checksum: photo.checksum || null,
+    generation: text(photo.generation) || null,
+    purpose: evidencePurpose(photo.purpose || photo.context?.purpose),
+    context: photo.context || null,
     mimeType: photo.mimeType,
     width: positiveNumber(photo.width),
     height: positiveNumber(photo.height),
@@ -103,6 +134,8 @@ module.exports = {
   validatePhotoInput,
   completionEvidenceDecision,
   isVerifiedPhotoRecord,
+  evidencePurpose,
+  transitionEvidenceDecision,
   evidenceSummary,
   immutableStorageReference,
 };

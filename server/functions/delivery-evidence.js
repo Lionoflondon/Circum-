@@ -15,6 +15,15 @@ function assignedTo(delivery, uid) {
       .map(text).includes(uid);
 }
 
+function evidencePurposeForDelivery(delivery = {}) {
+  const status = text(delivery.status || delivery.deliveryStatus || delivery.deliveryStage).toLowerCase();
+  if (["arrived_at_pickup", "pickup_verification", "pickup_verified"].includes(status)) return "PICKUP";
+  if (["collected", "in_transit", "navigating_to_dropoff", "arrived_at_dropoff", "delivery_verification"].includes(status)) {
+    return "HANDOVER";
+  }
+  return null;
+}
+
 async function findDelivery(db, deliveryId) {
   const direct = await db.collection("deliveryRequests").doc(deliveryId).get();
   if (direct.exists) return direct;
@@ -22,7 +31,7 @@ async function findDelivery(db, deliveryId) {
   return query.empty ? null : query.docs[0];
 }
 
-exports.recordDeliveryEvidence = functions.https.onCall(async (data, context) => {
+exports.recordDeliveryEvidence = functions.runWith({enforceAppCheck: true}).https.onCall(async (data, context) => {
   if (!context.auth) throw new functions.https.HttpsError("unauthenticated", "Rider must be signed in.");
   const input = {...(data || {})};
   const decision = evidence.validatePhotoInput(input);
@@ -52,6 +61,11 @@ exports.recordDeliveryEvidence = functions.https.onCall(async (data, context) =>
   if (text(input.checksum) && text(metadata.md5Hash) && text(input.checksum) !== text(metadata.md5Hash)) {
     throw new functions.https.HttpsError("failed-precondition", "Evidence photo checksum does not match the upload.");
   }
+  const purpose = evidencePurposeForDelivery(delivery);
+  const declaredPurpose = evidence.evidencePurpose(input.purpose || input.context?.purpose);
+  if (!purpose || (declaredPurpose && declaredPurpose !== purpose)) {
+    throw new functions.https.HttpsError("failed-precondition", "Evidence does not match the current delivery phase.");
+  }
 
   const recordRef = db.collection("deliveryEvidence").doc(deliverySnapshot.id);
   const photoRef = recordRef.collection("photos").doc(decision.photoId);
@@ -62,6 +76,9 @@ exports.recordDeliveryEvidence = functions.https.onCall(async (data, context) =>
     fileSize: actualSize,
     mimeType: actualMime,
     checksum: text(input.checksum) || text(metadata.md5Hash),
+    generation: text(metadata.generation),
+    purpose,
+    context: {purpose},
     thumbnailPath: `deliveries/${decision.deliveryId}/evidence/thumbnails/${decision.photoId}.jpg`,
   }, context.auth.uid);
   await db.runTransaction(async (transaction) => {

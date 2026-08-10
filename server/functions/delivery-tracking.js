@@ -14,7 +14,8 @@ const {
   buildDeliveryCompletedEvent,
   publishDeliveryCompleted,
 } = require("./delivery-completed-event");
-const {completionEvidenceDecision} = require("./delivery-evidence-core");
+const evidenceCore = require("./delivery-evidence-core");
+const {completionEvidenceDecision} = evidenceCore;
 
 function text(value) {
   return `${value || ""}`.trim();
@@ -217,7 +218,7 @@ function evidenceRequirements(delivery, action, evidence = {}) {
       delivery.requiresVanguard === true ||
       delivery.secureHandoverRequired === true;
   if (!required) return {valid: true};
-  if (!text(evidence.photoUrl) && !text(evidence.photoId)) {
+  if (!text(evidence.photoId)) {
     return {valid: false, reason: "A delivery evidence photo is required."};
   }
   if (pickup && evidence.conditionConfirmed !== true) {
@@ -416,6 +417,27 @@ async function updateDeliveryTrackingStatusHandler(data, context, db = getFirest
     const privateDelivery = privateSnapshot.exists ? privateSnapshot.data() || {} : {};
     const evidenceRecordRef = db.collection("deliveryEvidence").doc(found.id);
     const evidenceRecordSnapshot = await transaction.get(evidenceRecordRef);
+    if (action === "verify_collection_pin" && evidenceDecision.valid &&
+        (delivery.verificationRequired === true || delivery.requiresVerification === true ||
+         delivery.requiresVanguard === true)) {
+      const photoId = text(evidence.photoId);
+      const photoSnapshot = await transaction.get(evidenceRecordRef.collection("photos").doc(photoId));
+      const verifiedEvidence = evidenceCore.transitionEvidenceDecision(
+          photoSnapshot.exists ? photoSnapshot.data() || {} : {},
+          {deliveryId: found.id, riderId, photoId, purpose: "PICKUP"},
+      );
+      if (!verifiedEvidence.allowed) {
+        throw new functions.https.HttpsError("failed-precondition", verifiedEvidence.reason);
+      }
+      evidence.photoId = verifiedEvidence.evidence.photoId;
+      evidence.storagePath = verifiedEvidence.evidence.storagePath;
+      evidence.generation = verifiedEvidence.evidence.generation;
+      evidence.checksum = verifiedEvidence.evidence.checksum;
+      evidence.mimeType = verifiedEvidence.evidence.mimeType;
+      evidence.fileSize = verifiedEvidence.evidence.fileSize;
+      evidence.purpose = verifiedEvidence.evidence.purpose;
+      delete evidence.photoUrl;
+    }
     if (nextStatus === "delivered") {
       const completionDecision = completionEvidenceDecision(
           evidenceRecordSnapshot.exists ? evidenceRecordSnapshot.data() || {} : {},
@@ -724,7 +746,7 @@ async function updateDeliveryTrackingStatusHandler(data, context, db = getFirest
 }
 
 exports.updateDeliveryTrackingStatus =
-  functions.https.onCall(updateDeliveryTrackingStatusHandler);
+  functions.runWith({enforceAppCheck: true}).https.onCall(updateDeliveryTrackingStatusHandler);
 
 async function completeDeliveryHandler(data, context, db = getFirestore()) {
   if (!context.auth) {
@@ -752,9 +774,9 @@ async function completeDeliveryHandler(data, context, db = getFirestore()) {
   }, context, db);
 }
 
-exports.completeDelivery = functions.https.onCall(completeDeliveryHandler);
+exports.completeDelivery = functions.runWith({enforceAppCheck: true}).https.onCall(completeDeliveryHandler);
 
-exports.updateDeliveryLiveLocation = functions.https.onCall(async (data, context) => {
+exports.updateDeliveryLiveLocation = functions.runWith({enforceAppCheck: true}).https.onCall(async (data, context) => {
   if (!context.auth) {
     throw new functions.https.HttpsError("unauthenticated", "Rider must be signed in.");
   }

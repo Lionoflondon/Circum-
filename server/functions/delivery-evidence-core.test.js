@@ -49,3 +49,24 @@ test("thumbnail-only photo records are not treated as verified evidence", () => 
   assert.equal(core.isVerifiedPhotoRecord({immutable: true, verified: false}), false);
   assert.equal(core.isVerifiedPhotoRecord({immutable: true, verified: true}), true);
 });
+
+function pickupPhoto(overrides = {}) {
+  return {
+    id: "photo-1", deliveryId: "delivery-1", uploadedBy: "rider-1",
+    storagePath: "deliveries/delivery-1/evidence/photos/photo-1.jpg",
+    generation: "42", checksum: "checksum", mimeType: "image/jpeg", fileSize: 1200,
+    purpose: "PICKUP", immutable: true, verified: true, ...overrides,
+  };
+}
+
+test("Vanguard pickup accepts only immutable evidence for this delivery, rider and phase", () => {
+  const expected = {deliveryId: "delivery-1", riderId: "rider-1", photoId: "photo-1", purpose: "PICKUP"};
+  assert.equal(core.transitionEvidenceDecision(pickupPhoto(), expected).allowed, true);
+  assert.equal(core.transitionEvidenceDecision(pickupPhoto({deliveryId: "delivery-2"}), expected).allowed, false);
+  assert.equal(core.transitionEvidenceDecision(pickupPhoto({uploadedBy: "rider-2"}), expected).allowed, false);
+  assert.equal(core.transitionEvidenceDecision(pickupPhoto({purpose: "HANDOVER"}), expected).allowed, false);
+  assert.equal(core.transitionEvidenceDecision(pickupPhoto({purpose: "DISCREPANCY"}), expected).allowed, false);
+  assert.equal(core.transitionEvidenceDecision(pickupPhoto({generation: null}), expected).allowed, false);
+  assert.equal(core.transitionEvidenceDecision(pickupPhoto({storagePath: "https://example.invalid/photo.jpg"}), expected).allowed, false);
+  assert.equal(core.transitionEvidenceDecision({id: "photo-1"}, expected).allowed, false);
+});

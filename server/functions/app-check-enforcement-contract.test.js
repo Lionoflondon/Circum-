@@ -40,6 +40,10 @@ test("financial and lifecycle mutation callables require App Check", () => {
     ["iris-photo-analysis.js", /const analyseParcelPhotoForIris = functions\.runWith\(\{enforceAppCheck: true\}\)\.https\.onCall/],
     ["iris-photo-analysis.js", /const adminSetIrisVisualModelState = functions\.runWith\(\{enforceAppCheck: true\}\)\.https\.onCall/],
     ["delivery-adjustments.js", /exports\.reportLoadDiscrepancy = functions\.runWith\(\{enforceAppCheck: true\}\)\.https\.onCall/],
+    ["delivery-evidence.js", /exports\.recordDeliveryEvidence = functions\.runWith\(\{enforceAppCheck: true\}\)\.https\.onCall/],
+    ["delivery-tracking.js", /exports\.updateDeliveryTrackingStatus\s*=\s*functions\.runWith\(\{enforceAppCheck: true\}\)\.https\.onCall/],
+    ["delivery-tracking.js", /exports\.completeDelivery = functions\.runWith\(\{enforceAppCheck: true\}\)\.https\.onCall/],
+    ["delivery-tracking.js", /exports\.updateDeliveryLiveLocation = functions\.runWith\(\{enforceAppCheck: true\}\)\.https\.onCall/],
     ["admin-operations-authority.js", /exports\.adminUpdateIrisCandidateWorkflow = functions\.runWith\(\{enforceAppCheck: true\}\)\.https\.onCall/],
   ];
   for (const [file, pattern] of expectations) {

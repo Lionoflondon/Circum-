@@ -223,13 +223,13 @@ test("required pickup evidence blocks incomplete verification", () => {
   assert.equal(deliveryTracking.evidenceRequirements(
       {verificationRequired: true},
       "verify_collection_pin",
-      {photoUrl: "secure-ref", conditionConfirmed: true},
+      {photoId: "photo-1", conditionConfirmed: true},
   ).valid, false);
   assert.equal(deliveryTracking.evidenceRequirements(
       {verificationRequired: true},
       "verify_collection_pin",
       {
-        photoUrl: "secure-ref",
+        photoId: "photo-1",
         conditionConfirmed: true,
         riderDeclarationAccepted: true,
       },
