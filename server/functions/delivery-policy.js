@@ -4,6 +4,8 @@ const {getFirestore, FieldValue} = require("firebase-admin/firestore");
 const core = require("./delivery-policy-core");
 const communicationEngine = require("./communication-engine");
 const {resolveBusinessAuthority, hasBusinessPermission} = require("./business-authority");
+const noShowSettlement = require("./no-show-settlement");
+const noShowSettlementCore = require("./no-show-settlement-core");
 
 function requireAuth(context) {
   if (!context.auth || !context.auth.uid) {
@@ -412,13 +414,14 @@ exports.reportWaitingContext = functions.runWith({enforceAppCheck: true}).https.
   });
 });
 
-exports.markRiderNoShow = functions.runWith({enforceAppCheck: true}).https.onCall(async (data, context) => {
-  const uid = requireAuth(context);
-  const deliveryId = text(data.deliveryId);
-  const idempotencyKey = text(data.idempotencyKey || `${deliveryId}:no_show:${uid}`);
-  if (!deliveryId) throw new functions.https.HttpsError("invalid-argument", "deliveryId is required.");
-  const db = getFirestore();
-  return db.runTransaction(async (transaction) => {
+function markRiderNoShow(stripe) {
+  return functions.runWith({enforceAppCheck: true}).https.onCall(async (data, context) => {
+    const uid = requireAuth(context);
+    const deliveryId = text(data.deliveryId);
+    const idempotencyKey = text(data.idempotencyKey || `${deliveryId}:no_show:${uid}`);
+    if (!deliveryId) throw new functions.https.HttpsError("invalid-argument", "deliveryId is required.");
+    const db = getFirestore();
+    const result = await db.runTransaction(async (transaction) => {
     const idemRef = idempotencyRef(deliveryId, idempotencyKey);
     const existing = await transaction.get(idemRef);
     if (existing.exists) return {...existing.data(), duplicate: true};
@@ -443,7 +446,7 @@ exports.markRiderNoShow = functions.runWith({enforceAppCheck: true}).https.onCal
         endTime: now,
         serverNow: now,
       }),
-      settlementStatus: "pending_approved_collection_authority",
+      ...noShowSettlementCore.pendingFinancial(deliveryId, uid),
     };
     const evidence = core.evidencePackage({
       deliveryId,
@@ -458,6 +461,14 @@ exports.markRiderNoShow = functions.runWith({enforceAppCheck: true}).https.onCal
     const evidenceRef = db.collection("deliveryPolicyEvidence").doc();
     const event = {...decision.auditEvent, financial, evidenceId: evidenceRef.id};
     transaction.set(evidenceRef, evidence);
+    transaction.set(db.collection("noShowSettlements").doc(deliveryId), {
+      ...financial,
+      senderId: delivery.senderId || delivery.userId,
+      paymentSessionId: delivery.paymentSessionId || null,
+      originalPaymentIntentId: delivery.stripePaymentIntentId || null,
+      createdAt: FieldValue.serverTimestamp(),
+      updatedAt: FieldValue.serverTimestamp(),
+    }, {merge: true});
     transaction.set(db.collection("operationsIncidents").doc(`no_show_settlement_${deliveryId}`), {
       incidentId: `no_show_settlement_${deliveryId}`,
       incidentType: "no_show_settlement_authority_required",
@@ -481,7 +492,13 @@ exports.markRiderNoShow = functions.runWith({enforceAppCheck: true}).https.onCal
       },
     }));
     return {success: true, decision, financial, evidenceId: evidenceRef.id};
+    });
+    if (!result.success) return result;
+    const settlement = await noShowSettlement.processNoShowSettlement({db, stripe, deliveryId});
+    return {...result, settlement};
   });
-});
+}
+
+exports.markRiderNoShow = markRiderNoShow;
 
 exports._core = core;

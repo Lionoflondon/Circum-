@@ -167,7 +167,7 @@ exports.onGiftRequestVoiceMediaDeleted =
   giftsPayment.onGiftRequestVoiceMediaDeleted;
 exports.recordRiderArrival = deliveryPolicy.recordRiderArrival;
 exports.reportWaitingContext = deliveryPolicy.reportWaitingContext;
-exports.markRiderNoShow = deliveryPolicy.markRiderNoShow;
+exports.markRiderNoShow = deliveryPolicy.markRiderNoShow(stripe);
 exports.cancelDelivery = deliveryPolicy.requestSenderCancellation;
 exports.updateDeliveryTrackingStatus =
   deliveryTracking.updateDeliveryTrackingStatus;

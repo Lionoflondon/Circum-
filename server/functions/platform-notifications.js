@@ -306,9 +306,15 @@ async function notifyGiftStatus({before = {}, after = {}, giftId}) {
 function customerWaitingCharge(data) {
   const waiting = data.waiting || {};
   const financial = data.noShowFinancial || {};
+  const settlementStatus = text(financial.settlementStatus || financial.state).toLowerCase();
+  const collected = Number(financial.customerCollected || 0) > 0 ||
+    ["settled", "completed"].includes(settlementStatus);
   return {
-    amount: financial.amount || waiting.noShowFeeAmount || data.waitingCharge || data.waitingChargeAmount || data.pickupNoShowSurchargeGbp,
+    amount: collected ? financial.customerCollected || financial.amount :
+      waiting.noShowFeeAmount || data.waitingCharge || data.waitingChargeAmount || data.pickupNoShowSurchargeGbp,
     currency: financial.currency || waiting.currency || data.currency || "GBP",
+    settlementStatus,
+    collected,
   };
 }
 
@@ -419,6 +425,11 @@ exports.onDeliveryUpdated = functions.firestore.document("deliveryRequests/{deli
     );
   }
   const chargeText = moneyText(waitingCharge.amount, waitingCharge.currency);
+  const noShowChargeCopy = waitingCharge.collected && chargeText ?
+    ` The ${chargeText} no-show charge was collected.` :
+    waitingCharge.settlementStatus ?
+      " Payment collection is pending; Circum will update the delivery record when it is resolved." :
+      chargeText ? ` A ${chargeText} no-show charge applies.` : "";
   const senderMessages = {
     accepted: ["Rider accepted", "A rider has accepted your delivery.", "Deliveries"],
     finding_rider: ["Searching for rider", "Circum is searching for an eligible rider.", "Deliveries"],
@@ -427,7 +438,7 @@ exports.onDeliveryUpdated = functions.firestore.document("deliveryRequests/{deli
     arrived: ["Rider arrived", "Your rider has arrived at the pickup.", "Deliveries"],
     arrived_at_pickup: ["Rider waiting", "Your rider has arrived. Free waiting has started.", "Deliveries"],
     rider_arrived_pickup: ["Waiting timer started", "Your Circum rider has arrived at the pickup address.", "Deliveries"],
-    sender_no_show_pickup: ["No-show", `Pickup was marked as no-show after the waiting period.${chargeText ? ` Additional waiting charge: ${chargeText}.` : ""}`, "Deliveries"],
+    sender_no_show_pickup: ["No-show", `Pickup was marked as no-show after the waiting period.${noShowChargeCopy}`, "Deliveries"],
     pickup_verified: ["Pickup confirmed", "Your rider has verified pickup.", "Deliveries"],
     collected: ["Delivery in progress", "Your parcel has been collected.", "Deliveries"],
     picked_up: ["Delivery in progress", "Your parcel has been collected.", "Deliveries"],

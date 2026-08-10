@@ -109,9 +109,10 @@ test("users cannot choose Stripe customer identity", () => {
 });
 
 test("rider earnings, wallet ledger, payout requests, and bank data are not client-writable", () => {
+  const earningsBlock = rules.match(/match \/riderEarnings\/\{riderId\} \{[\s\S]*?\n {4}\}/)[0];
   assert.match(
-      rules,
-      /match \/riderEarnings\/\{riderId\}[\s\S]*allow create, update: if isAdmin\(\);/,
+      earningsBlock,
+      /allow create, update, delete: if false;/,
   );
   assert.match(
       rules,
@@ -129,6 +130,18 @@ test("rider earnings, wallet ledger, payout requests, and bank data are not clie
       rules,
       /match \/riderEarningsReconciliations\/\{reconciliationId\}[\s\S]*allow read: if isFinanceAdmin\(\);[\s\S]*allow write: if false;/,
   );
+});
+
+test("no-show settlement, Rider credit, and platform effect are server-authored", () => {
+  for (const collection of [
+    "riderEarningTransactions",
+    "noShowSettlements",
+    "platformSettlementTransactions",
+  ]) {
+    const block = rules.match(new RegExp(`match /${collection}/\\{[^}]+\\} \\{[\\s\\S]*?\\n {4}\\}`))[0];
+    assert.match(block, /allow create, update, delete: if false;/);
+    assert.match(rules, new RegExp(`'${collection}'`));
+  }
 });
 
 test("Stripe Connect webhook replay ledger is server-owned only", () => {

@@ -83,7 +83,13 @@ test("Gift request statuses map to backend-owned notification events", () => {
 });
 
 test("unclaimed delivery reminder reuses the rider profile snapshot per run", () => {
-  const source = fs.readFileSync(path.join(__dirname, "platform-notifications.js"), "utf8");
+const source = fs.readFileSync(path.join(__dirname, "platform-notifications.js"), "utf8");
+
+test("pending no-show collection is not described as collected", () => {
+  assert.match(source, /waitingCharge\.collected && chargeText/);
+  assert.match(source, /Payment collection is pending/);
+  assert.match(source, /no-show charge was collected/);
+});
   assert.match(source, /let riderProfileDocs = null;/);
   assert.match(source, /if \(!riderProfileDocs\) \{/);
   assert.match(source, /riderProfileDocs = await onlineCandidateRiderRecords\(db\);/);

@@ -1095,8 +1095,23 @@ service cloud.firestore {
 
     match /riderEarnings/{riderId} {
       allow read: if isAdmin() || (signedIn() && riderId == request.auth.uid);
-      allow create, update: if isAdmin();
-      allow delete: if hasRole('super_admin');
+      allow create, update, delete: if false;
+    }
+
+    match /riderEarningTransactions/{transactionId} {
+      allow read: if isAdmin() ||
+        (signedIn() && resource.data.riderId == request.auth.uid);
+      allow create, update, delete: if false;
+    }
+
+    match /noShowSettlements/{settlementId} {
+      allow read: if isFinanceAdmin();
+      allow create, update, delete: if false;
+    }
+
+    match /platformSettlementTransactions/{transactionId} {
+      allow read: if isFinanceAdmin();
+      allow create, update, delete: if false;
     }
 
     match /riderEarningsReconciliations/{reconciliationId} {
@@ -1169,6 +1184,10 @@ service cloud.firestore {
           'deliveryRequests',
           'operationalIncidents',
           'deliveryOperationalState',
+          'riderEarnings',
+          'riderEarningTransactions',
+          'noShowSettlements',
+          'platformSettlementTransactions',
           'riderReliabilityAdjustments',
           'marketplaceRiskFlags',
           'irisPhotoAnalyses',

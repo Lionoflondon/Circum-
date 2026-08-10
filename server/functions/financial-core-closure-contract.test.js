@@ -37,14 +37,17 @@ test("quotes expire and exclude road-charge pass-through from percentage payout"
   assert.match(pricing, /requiredVehicle = minimumVehicleForWeight\(weightKg\)/);
 });
 
-test("no-show financial effect remains visible but uncollected without approved authority", () => {
-  assert.match(policy, /settlementStatus: "pending_approved_collection_authority"/);
+test("no-show collection uses explicit authority before deterministic settlement", () => {
+  assert.match(policy, /pendingFinancial\(deliveryId, uid\)/);
   assert.match(policy, /operationsIncidents"\)\.doc\(`no_show_settlement_\$\{deliveryId\}`\)/);
   assert.doesNotMatch(policy, /paymentIntents\.create|applyWalletDebit/);
 });
 
 test("financial collections cannot be directly mutated even by generic admin fallback", () => {
-  for (const collection of ["wallets", "walletTransactions", "referrals", "referralCodes", "senderBookingQuotes", "senderPaymentSessions"]) {
+  for (const collection of ["wallets", "walletTransactions", "referrals", "referralCodes", "senderBookingQuotes", "senderPaymentSessions", "riderEarningTransactions", "noShowSettlements", "platformSettlementTransactions"]) {
     assert.match(rules, new RegExp(`match /${collection}/\\{[^}]+\\} \\{[\\s\\S]*?allow create, update, delete: if false;`));
+  }
+  for (const collection of ["riderEarningTransactions", "noShowSettlements", "platformSettlementTransactions"]) {
+    assert.match(rules, new RegExp(`'${collection}'`));
   }
 });
