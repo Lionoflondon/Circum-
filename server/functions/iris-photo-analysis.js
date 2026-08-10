@@ -17,9 +17,16 @@ const {
 const MAX_IMAGE_BYTES = 10 * 1024 * 1024;
 const MIN_IMAGE_BYTES = 128;
 const ALLOWED_CONTENT_TYPES = new Set(["image/jpeg", "image/png", "image/webp"]);
+const moduleStartedAt = Date.now();
+let invocationCount = 0;
 
 function text(value, max = 1000) {
   return `${value || ""}`.trim().slice(0, max);
+}
+
+function boundedMetric(value, max = 60000) {
+  const number = Number(value);
+  return Number.isFinite(number) ? Math.max(0, Math.min(max, Math.round(number))) : 0;
 }
 
 function decodeBase64Image(data) {
@@ -116,7 +123,8 @@ function visualQuality({bytes, width, height}) {
   return {score: 0.42, label: "limited"};
 }
 
-function buildPhotoAnalysis({uid, data, bytes, contentType}) {
+function buildPhotoAnalysis({uid, data, bytes, contentType, stageTimings = null, now = Date.now}) {
+  const preparationStartedAt = now();
   const dimensions = imageDimensions(bytes, contentType);
   if (!dimensions || !dimensions.width || !dimensions.height) {
     throw new functions.https.HttpsError("invalid-argument", "Parcel photo dimensions could not be verified.");
@@ -126,6 +134,8 @@ function buildPhotoAnalysis({uid, data, bytes, contentType}) {
     throw new functions.https.HttpsError("invalid-argument", "Item details are required before IRIS can use a parcel photo.");
   }
   const declaredWeightText = text(data.declaredWeightText || data.weight, 80);
+  if (stageTimings) stageTimings.imageValidationMs = now() - preparationStartedAt;
+  const deterministicStartedAt = now();
   const baseIris = classifyIris({
     description,
     declaredWeightText,
@@ -133,6 +143,7 @@ function buildPhotoAnalysis({uid, data, bytes, contentType}) {
     speed: data.speed || data.selectedSpeed || "",
     vehicleType: data.vehicleType || "",
   });
+  if (stageTimings) stageTimings.deterministicInferenceMs = now() - deterministicStartedAt;
   const quality = visualQuality({bytes, width: dimensions.width, height: dimensions.height});
   const baseWeight = Number(baseIris.recommendation && baseIris.recommendation.estimatedWeightKg || 2);
   const confidence = Math.max(0.2, Math.min(0.97,
@@ -144,6 +155,7 @@ function buildPhotoAnalysis({uid, data, bytes, contentType}) {
       .update(`${uid}:${imageHash}:${descriptionHash}:${declaredWeightText}`)
       .digest("hex")
       .slice(0, 32);
+  if (stageTimings) stageTimings.analysisPreparationMs = now() - preparationStartedAt;
   return {
     analysisId,
     userId: uid,
@@ -178,18 +190,35 @@ function buildPhotoAnalysis({uid, data, bytes, contentType}) {
 
 const analyseParcelPhotoForIris = functions.runWith({enforceAppCheck: true}).https.onCall(async (data, context) => {
   const startedAt = Date.now();
+  invocationCount += 1;
+  const coldInvocation = invocationCount === 1;
+  const stageTimings = {};
   if (!context.auth) {
     throw new functions.https.HttpsError("unauthenticated", "Sign in to analyse a parcel photo.");
   }
-  await enforceIrisRequestLimit({db: getFirestore(), uid: context.auth.uid, action: "analyse_iris_photo"});
+  const clientRequestId = text(data && data.clientRequestId, 80) || null;
+  const decodeStartedAt = Date.now();
   const bytes = decodeBase64Image(data || {});
   const contentType = detectImageType(bytes, data && data.contentType);
-  const analysis = buildPhotoAnalysis({uid: context.auth.uid, data: data || {}, bytes, contentType});
+  stageTimings.base64DecodeMs = Date.now() - decodeStartedAt;
+  const analysis = buildPhotoAnalysis({uid: context.auth.uid, data: data || {}, bytes, contentType, stageTimings});
   const db = getFirestore();
+  const guardPromise = (async () => {
+    const guardStartedAt = Date.now();
+    await enforceIrisRequestLimit({db, uid: context.auth.uid, action: "analyse_iris_photo"});
+    stageTimings.rateLimitGuardMs = Date.now() - guardStartedAt;
+  })();
+  const visualStatePromise = (async () => {
+    const visualStateStartedAt = Date.now();
+    const state = await currentVisualModelState(db);
+    stageTimings.visualStateLookupMs = Date.now() - visualStateStartedAt;
+    return state;
+  })();
+  const [, visualState] = await Promise.all([guardPromise, visualStatePromise]);
   const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000);
-  const visualState = await currentVisualModelState(db);
   let visualShadow = null;
   let visualFailure = false;
+  const visionStartedAt = Date.now();
   try {
     if (!visualState.enabled) throw new Error("visual_shadow_disabled");
     visualShadow = await inferVisualEvidence({
@@ -205,27 +234,35 @@ const analyseParcelPhotoForIris = functions.runWith({enforceAppCheck: true}).htt
       reason: visualState.enabled ? `${error && error.message || "visual_inference_failed"}`.slice(0, 80) : "visual_shadow_disabled",
     });
   }
+  stageTimings.visionRpcMs = Date.now() - visionStartedAt;
+  const comparisonStartedAt = Date.now();
   const comparison = visualShadow ? shadowComparison({deterministic: analysis, visual: visualShadow}) : null;
-  const writes = [db.collection("irisPhotoAnalyses").doc(analysis.analysisId).set({
+  stageTimings.shadowComparisonMs = Date.now() - comparisonStartedAt;
+  const persistenceStartedAt = Date.now();
+  const batch = db.batch();
+  batch.set(db.collection("irisPhotoAnalyses").doc(analysis.analysisId), {
     ...analysis,
+    clientRequestId,
     createdAt: FieldValue.serverTimestamp(),
     expiresAt,
     visualShadowStatus: visualShadow ? visualShadow.status : visualState.enabled ? "FAILED" : "DISABLED",
-  }, {merge: true})];
+  }, {merge: true});
   if (visualShadow) {
-    writes.push(db.collection("irisVisualShadowResults").doc(analysis.analysisId).set({
+    batch.set(db.collection("irisVisualShadowResults").doc(analysis.analysisId), {
       ...visualShadow,
       comparison,
       userId: context.auth.uid,
       analysisId: analysis.analysisId,
+      clientRequestId,
       engineVersion: analysis.engineVersion,
       knowledgeVersion: analysis.knowledgeVersion,
       createdAt: FieldValue.serverTimestamp(),
       expiresAt,
-    }, {merge: false}));
+    }, {merge: false});
   }
   const metricDate = new Date().toISOString().slice(0, 10);
-  writes.push(db.collection("irisMetricsDaily").doc(metricDate).set({
+  const clientTimings = data && typeof data.clientTimings === "object" ? data.clientTimings : {};
+  batch.set(db.collection("irisMetricsDaily").doc(metricDate), {
     metricDate,
     visualShadowRequestCount: FieldValue.increment(1),
     visualShadowSuccessCount: FieldValue.increment(visualShadow ? 1 : 0),
@@ -233,13 +270,31 @@ const analyseParcelPhotoForIris = functions.runWith({enforceAppCheck: true}).htt
     visualObjectAgreementCount: FieldValue.increment(comparison && comparison.objectAgreement ? 1 : 0),
     visualCategoryAgreementCount: FieldValue.increment(comparison && comparison.categoryAgreement ? 1 : 0),
     visualReviewSignalCount: FieldValue.increment(comparison && comparison.requiresReview ? 1 : 0),
+    visualProviderReuseCount: FieldValue.increment(visualShadow && visualShadow.providerResultReused ? 1 : 0),
+    visualColdInvocationCount: FieldValue.increment(coldInvocation ? 1 : 0),
+    visualVisionRpcTotalMs: FieldValue.increment(stageTimings.visionRpcMs),
+    visualClientPreCallTotalMs: FieldValue.increment(boundedMetric(clientTimings.preCallMs)),
+    visualClientImageReadTotalMs: FieldValue.increment(boundedMetric(clientTimings.imageReadMs)),
+    visualClientBase64EncodingTotalMs: FieldValue.increment(boundedMetric(clientTimings.base64EncodingMs)),
+    visualInputBytesTotal: FieldValue.increment(boundedMetric(clientTimings.inputBytes, MAX_IMAGE_BYTES)),
     visualModelVersion: VISUAL_MODEL_VERSION,
     updatedAt: FieldValue.serverTimestamp(),
-  }, {merge: true}));
-  await Promise.all(writes);
+  }, {merge: true});
+  await batch.commit();
+  stageTimings.shadowPersistenceMs = Date.now() - persistenceStartedAt;
+  stageTimings.totalBackendMs = Date.now() - startedAt;
   functions.logger.info("iris_classification_timing", {
     endpoint: "analyseParcelPhotoForIris",
-    totalMs: Date.now() - startedAt,
+    requestId: analysis.analysisId,
+    clientRequestId,
+    coldInvocation,
+    moduleAgeMs: startedAt - moduleStartedAt,
+    inputBytes: bytes.length,
+    inputWidth: analysis.width,
+    inputHeight: analysis.height,
+    providerResultReused: visualShadow && visualShadow.providerResultReused === true,
+    stageTimings,
+    totalMs: stageTimings.totalBackendMs,
     confidence: analysis.confidence,
     imageQuality: analysis.imageQuality,
     visualShadowStatus: visualShadow ? visualShadow.status : visualState.enabled ? "FAILED" : "DISABLED",
@@ -247,10 +302,20 @@ const analyseParcelPhotoForIris = functions.runWith({enforceAppCheck: true}).htt
   });
   return {
     ...analysis,
+    clientRequestId,
     imageIntelligenceStatus: "visual_shadow",
     visualShadowStatus: visualShadow ? visualShadow.status : visualState.enabled ? "FAILED" : "DISABLED",
     imageHash: undefined,
     descriptionHash: undefined,
+    performance: {
+      requestId: analysis.analysisId,
+      coldInvocation,
+      inputBytes: bytes.length,
+      inputWidth: analysis.width,
+      inputHeight: analysis.height,
+      providerResultReused: visualShadow && visualShadow.providerResultReused === true,
+      stageTimings,
+    },
   };
 });
 

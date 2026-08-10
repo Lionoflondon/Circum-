@@ -23,11 +23,13 @@ test("backend parcel photo analysis requires meaningful text IRIS details", () =
 });
 
 test("backend parcel photo analysis emits IRIS-compatible weight evidence", () => {
+  const stageTimings = {};
   const analysis = photoAnalysis._private.buildPhotoAnalysis({
     uid: "sender-1",
     data: {description: "laptop in sleeve", declaredWeightText: "1 kg"},
     bytes: pngFixture({width: 1600, height: 1200, size: 220000}),
     contentType: "image/png",
+    stageTimings,
   });
 
   assert.equal(analysis.serverAuthored, true);
@@ -40,6 +42,9 @@ test("backend parcel photo analysis emits IRIS-compatible weight evidence", () =
   assert.ok(analysis.estimatedWeightKg > 0);
   assert.ok(analysis.weightClass);
   assert.ok(["low", "medium", "high"].includes(analysis.confidence));
+  assert.ok(Number.isFinite(stageTimings.imageValidationMs));
+  assert.ok(Number.isFinite(stageTimings.deterministicInferenceMs));
+  assert.ok(Number.isFinite(stageTimings.analysisPreparationMs));
 });
 
 test("parcel photo signal does not replace text IRIS accuracy", () => {

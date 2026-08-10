@@ -8,7 +8,11 @@ const VISUAL_MODEL_PROVIDER = "google_cloud_vision";
 const VISUAL_INFERENCE_MODE = "SHADOW";
 const MAX_VISUAL_RESULTS = 10;
 const VISUAL_STATE_CACHE_MS = 60 * 1000;
+const VISUAL_RESULT_CACHE_MS = 10 * 60 * 1000;
+const MAX_CACHED_VISUAL_RESULTS = 100;
 let visualStateCache = null;
+let imageAnnotatorClient = null;
+const visualResultCache = new Map();
 
 const CATEGORY_CLUES = Object.freeze([
   {category: "Electronics", terms: ["electronics", "electronic device", "computer", "laptop", "mobile phone", "television", "camera"]},
@@ -52,6 +56,36 @@ async function currentVisualModelState(db, now = Date.now()) {
 
 function clearVisualModelStateCache() {
   visualStateCache = null;
+}
+
+function clearVisualRuntimeCaches() {
+  visualStateCache = null;
+  imageAnnotatorClient = null;
+  visualResultCache.clear();
+}
+
+function cachedVisualResult(key, now = Date.now()) {
+  const cached = visualResultCache.get(key);
+  if (!cached || cached.expiresAt <= now) {
+    visualResultCache.delete(key);
+    return null;
+  }
+  return {...cached.value, providerResultReused: true};
+}
+
+function cacheVisualResult(key, value, now = Date.now()) {
+  if (visualResultCache.size >= MAX_CACHED_VISUAL_RESULTS) {
+    const oldest = visualResultCache.keys().next().value;
+    visualResultCache.delete(oldest);
+  }
+  visualResultCache.set(key, {value, expiresAt: now + VISUAL_RESULT_CACHE_MS});
+}
+
+function visualClient() {
+  if (imageAnnotatorClient) return imageAnnotatorClient;
+  const vision = require("@google-cloud/vision");
+  imageAnnotatorClient = new vision.ImageAnnotatorClient();
+  return imageAnnotatorClient;
 }
 
 function boundedScore(value) {
@@ -137,11 +171,13 @@ function shadowComparison({deterministic = {}, visual = {}}) {
   };
 }
 
-async function inferVisualEvidence({bytes, requestId, imageHash, client, timeoutMs = 4500}) {
-  const imageClient = client || (() => {
-    const vision = require("@google-cloud/vision");
-    return new vision.ImageAnnotatorClient();
-  })();
+async function inferVisualEvidence({bytes, requestId, imageHash, client, timeoutMs = 4500, reuseResults = !client}) {
+  const cacheKey = `${VISUAL_MODEL_VERSION}:${requestId}:${imageHash}`;
+  if (reuseResults) {
+    const cached = cachedVisualResult(cacheKey);
+    if (cached) return cached;
+  }
+  const imageClient = client || visualClient();
   const providerRequest = imageClient.annotateImage({
     image: {content: bytes},
     features: [
@@ -160,7 +196,9 @@ async function inferVisualEvidence({bytes, requestId, imageHash, client, timeout
     clearTimeout(timeoutHandle);
   }
   if (response && response.error && response.error.message) throw new Error("visual_provider_rejected_request");
-  return visualEvidenceFromResponse({response, requestId, imageHash});
+  const result = visualEvidenceFromResponse({response, requestId, imageHash});
+  if (reuseResults) cacheVisualResult(cacheKey, result);
+  return result;
 }
 
 module.exports = {
@@ -168,6 +206,7 @@ module.exports = {
   VISUAL_INFERENCE_MODE,
   VISUAL_MODEL_PROVIDER,
   VISUAL_MODEL_VERSION,
+  clearVisualRuntimeCaches,
   clearVisualModelStateCache,
   currentVisualModelState,
   inferVisualEvidence,

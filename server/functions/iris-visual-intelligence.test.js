@@ -85,6 +85,30 @@ test("provider timeout rejects without manufacturing visual evidence", async () 
   );
 });
 
+test("same versioned visual request reuses one provider result", async () => {
+  visual.clearVisualRuntimeCaches();
+  let calls = 0;
+  const client = {
+    async annotateImage() {
+      calls += 1;
+      return [providerResponse];
+    },
+  };
+  const input = {
+    bytes: Buffer.from("same-image"),
+    requestId: "request-reuse",
+    imageHash: "hash-reuse",
+    client,
+    reuseResults: true,
+  };
+  const first = await visual.inferVisualEvidence(input);
+  const second = await visual.inferVisualEvidence(input);
+  assert.equal(calls, 1);
+  assert.equal(first.providerResultReused, undefined);
+  assert.equal(second.providerResultReused, true);
+  assert.equal(second.authority, "EVIDENCE_ONLY");
+});
+
 test("visual model state fails closed for unknown versions and supports rollback disable", () => {
   assert.deepEqual(visual.normalizeVisualModelState({enabled: true, visualModelVersion: visual.VISUAL_MODEL_VERSION}), {
     enabled: true,
