@@ -1,5 +1,7 @@
 "use strict";
 
+const crypto = require("crypto");
+
 const PHOTO = "PHOTO";
 const PHOTO_PATH = /^deliveries\/([^/]+)\/evidence\/photos\/([^/]+)\.jpg$/;
 
@@ -72,6 +74,29 @@ function evidenceSummary(photo, uploaderId) {
   };
 }
 
+function immutableStorageReference({storagePath, metadata = {}, uploadedBy, deliveryId, context = {}, maxBytes = 15 * 1024 * 1024}) {
+  const contentType = text(metadata.contentType).toLowerCase();
+  const size = Number(metadata.size);
+  const generation = text(metadata.generation);
+  if (!storagePath || !generation || !contentType.match(/^image\/(jpeg|png|webp)$/) || !Number.isFinite(size) || size <= 0 || size > maxBytes) {
+    throw new Error("Evidence upload metadata is invalid.");
+  }
+  return Object.freeze({
+    evidenceId: crypto.createHash("sha256").update(`${storagePath}|${generation}`).digest("hex").slice(0, 40),
+    storagePath,
+    generation,
+    checksum: text(metadata.md5Hash) || null,
+    mimeType: contentType,
+    size,
+    uploadedAt: metadata.timeCreated || null,
+    uploadedBy: text(uploadedBy),
+    deliveryId: text(deliveryId) || null,
+    context,
+    immutable: true,
+    verified: true,
+  });
+}
+
 module.exports = {
   PHOTO,
   photoStoragePath,
@@ -79,4 +104,5 @@ module.exports = {
   completionEvidenceDecision,
   isVerifiedPhotoRecord,
   evidenceSummary,
+  immutableStorageReference,
 };

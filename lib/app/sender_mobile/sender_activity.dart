@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:cloud_functions/cloud_functions.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -117,6 +118,9 @@ class SenderActivityItem {
   final DateTime? riderMemberSince;
   final List<String> riderAchievements;
   final ProofOfDeliveryDetails? proofOfDelivery;
+  final bool procurementCommitted;
+  final String substitutionTitle;
+  final String substitutionReason;
 
   const SenderActivityItem({
     required this.id,
@@ -146,6 +150,9 @@ class SenderActivityItem {
     this.riderMemberSince,
     this.riderAchievements = const [],
     this.proofOfDelivery,
+    this.procurementCommitted = false,
+    this.substitutionTitle = '',
+    this.substitutionReason = '',
   });
 
   SenderActivityItem copyWith({bool? repeatRider}) => SenderActivityItem(
@@ -176,6 +183,9 @@ class SenderActivityItem {
         riderMemberSince: riderMemberSince,
         riderAchievements: riderAchievements,
         proofOfDelivery: proofOfDelivery,
+        procurementCommitted: procurementCommitted,
+        substitutionTitle: substitutionTitle,
+        substitutionReason: substitutionReason,
       );
 }
 
@@ -606,19 +616,46 @@ class FirebaseSenderActivityRepository implements SenderActivityRepository {
     );
   }
 
-  SenderActivityItem _gift(String id, Map<String, dynamic> data) =>
-      SenderActivityItem(
-        id: id,
-        type: SenderActivityType.gift,
-        title: _first([data['occasion'], 'Gift experience']),
-        status:
-            _status('${data['giftStatus'] ?? data['status'] ?? 'submitted'}'),
-        destination: _first([data['recipientName'], data['formattedAddress']]),
-        amount: _number(data['grossGiftBudget'] ?? data['budget']),
-        rothAmount: _number(data['rothApplied']),
-        rothDirection: 'debit',
-        occurredAt: _date(data['updatedAt'] ?? data['createdAt']),
-      );
+  SenderActivityItem _gift(String id, Map<String, dynamic> data) {
+    final substitution = _map(data['substitution']);
+    return SenderActivityItem(
+      id: id,
+      type: SenderActivityType.gift,
+      title: _first([data['occasion'], 'Gift experience']),
+      status: _giftCustomerStatus(data),
+      destination: _first([data['recipientName'], data['formattedAddress']]),
+      amount: _number(data['grossGiftBudget'] ?? data['budget']),
+      rothAmount: _number(data['rothApplied']),
+      rothDirection: 'debit',
+      occurredAt: _date(data['updatedAt'] ?? data['createdAt']),
+      procurementCommitted: data['procurementCommitted'] == true ||
+          data['procurementCommittedAt'] != null,
+      substitutionTitle: '${substitution['proposedReplacement'] ?? ''}'.trim(),
+      substitutionReason: '${substitution['reason'] ?? ''}'.trim(),
+    );
+  }
+
+  String _giftCustomerStatus(Map<String, dynamic> data) {
+    final internal =
+        '${data['procurementStatus'] ?? data['giftStatus'] ?? data['status'] ?? 'submitted'}'
+            .trim()
+            .toLowerCase();
+    const public = <String, String>{
+      'procurement_review': 'being sourced',
+      'sourcing': 'being sourced',
+      'item_confirmed': 'confirmed',
+      'purchased': 'confirmed',
+      'ready_for_collection': 'ready',
+      'rider_fulfilment': 'fulfilment underway',
+      'substitution_required': 'approval required',
+      'unavailable': 'unavailable',
+      'procurement_failed': 'needs attention',
+      'refunded': 'refunded',
+      'cancelled': 'cancelled',
+      'delivered': 'delivered',
+    };
+    return _status(public[internal] ?? internal);
+  }
 
   SenderActivityItem _health(String id, Map<String, dynamic> data) =>
       SenderActivityItem(
@@ -783,8 +820,10 @@ class _SenderActivityViewState extends State<SenderActivityView> {
     final query = value.trim();
     final generation = ++_searchGeneration;
     if (query.isEmpty) return;
-    while (mounted && generation == _searchGeneration &&
-        _nextPage != null && !_matchesCurrentQuery(query)) {
+    while (mounted &&
+        generation == _searchGeneration &&
+        _nextPage != null &&
+        !_matchesCurrentQuery(query)) {
       await _loadMore();
     }
   }
@@ -2208,44 +2247,126 @@ class ActivitySectionHeader extends StatelessWidget {
       );
 }
 
-class _ActivityDetail extends StatelessWidget {
+class _ActivityDetail extends StatefulWidget {
   final SenderActivityItem item;
   const _ActivityDetail({required this.item});
+
   @override
-  Widget build(BuildContext context) => Scaffold(
-        backgroundColor: _ActivityColors.bg,
-        appBar: AppBar(
-            backgroundColor: Colors.transparent, title: Text(item.title)),
-        body: ListView(padding: const EdgeInsets.all(20), children: [
-          _ActivityGlass(
-              child: Column(children: [
-            _Detail('Order ID', item.id),
-            _Detail('Service', _typeLabel(item.type)),
-            _Detail('Status', item.status),
-            if (item.pickup.isNotEmpty) _Detail('Pickup', item.pickup),
-            if (item.destination.isNotEmpty)
-              _Detail('Destination', item.destination),
-            if (item.amount != null)
-              _Detail('Amount paid', '£${item.amount!.toStringAsFixed(2)}'),
-            if (item.rothAmount != null)
-              _Detail('Roth', '${item.rothAmount!.toStringAsFixed(2)} Roth'),
-            if (_isCompletedDelivery(item)) ...[
-              _Detail(
-                'Proof of delivery',
-                item.proofOfDelivery?.statusLabel ?? 'Proof missing',
-              ),
-              if (item.proofOfDelivery?.hasAnyProof == true)
-                for (final row in item.proofOfDelivery!.visibleRows)
-                  _Detail(row.$1, row.$2),
-            ],
+  State<_ActivityDetail> createState() => _ActivityDetailState();
+}
+
+class _ActivityDetailState extends State<_ActivityDetail> {
+  bool _submitting = false;
+  String? _message;
+
+  Future<void> _decideSubstitution(bool approved) async {
+    if (_submitting) return;
+    setState(() {
+      _submitting = true;
+      _message = null;
+    });
+    try {
+      await FirebaseFunctions.instance
+          .httpsCallable('decideGiftSubstitution')
+          .call({
+        'giftId': widget.item.id,
+        'approved': approved,
+      });
+      if (!mounted) return;
+      setState(() => _message = approved
+          ? 'Substitution approved. Your Gift will continue to preparation.'
+          : 'The Gifts Team will continue sourcing another suitable option.');
+    } on FirebaseFunctionsException catch (error) {
+      if (!mounted) return;
+      setState(() =>
+          _message = error.message ?? 'We could not record your decision.');
+    } finally {
+      if (mounted) setState(() => _submitting = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final item = widget.item;
+    final needsSubstitution = item.type == SenderActivityType.gift &&
+        item.status == 'Approval required';
+    return Scaffold(
+      backgroundColor: _ActivityColors.bg,
+      appBar:
+          AppBar(backgroundColor: Colors.transparent, title: Text(item.title)),
+      body: ListView(padding: const EdgeInsets.all(20), children: [
+        _ActivityGlass(
+            child: Column(children: [
+          _Detail('Order ID', item.id),
+          _Detail('Service', _typeLabel(item.type)),
+          _Detail('Status', item.status),
+          if (item.pickup.isNotEmpty) _Detail('Pickup', item.pickup),
+          if (item.destination.isNotEmpty)
+            _Detail('Destination', item.destination),
+          if (item.amount != null)
+            _Detail('Amount paid', '£${item.amount!.toStringAsFixed(2)}'),
+          if (item.rothAmount != null)
+            _Detail('Roth', '${item.rothAmount!.toStringAsFixed(2)} Roth'),
+          if (_isCompletedDelivery(item)) ...[
             _Detail(
-                'Date',
-                item.occurredAt == null
-                    ? 'Pending'
-                    : DateFormat('d MMM yyyy, HH:mm').format(item.occurredAt!)),
-          ])),
-        ]),
-      );
+              'Proof of delivery',
+              item.proofOfDelivery?.statusLabel ?? 'Proof missing',
+            ),
+            if (item.proofOfDelivery?.hasAnyProof == true)
+              for (final row in item.proofOfDelivery!.visibleRows)
+                _Detail(row.$1, row.$2),
+          ],
+          _Detail(
+              'Date',
+              item.occurredAt == null
+                  ? 'Pending'
+                  : DateFormat('d MMM yyyy, HH:mm').format(item.occurredAt!)),
+          if (item.type == SenderActivityType.gift && item.procurementCommitted)
+            const _Detail(
+              'Order preparation',
+              'Your gift is now being prepared and procurement has started, so it can no longer be cancelled through the normal flow.',
+            ),
+        ])),
+        if (needsSubstitution) ...[
+          const SizedBox(height: 16),
+          _ActivityGlass(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                const Text('Review replacement',
+                    style: TextStyle(
+                        color: Colors.white, fontWeight: FontWeight.w700)),
+                if (item.substitutionTitle.isNotEmpty) ...[
+                  const SizedBox(height: 8),
+                  Text(item.substitutionTitle,
+                      style: const TextStyle(color: Colors.white)),
+                ],
+                if (item.substitutionReason.isNotEmpty) ...[
+                  const SizedBox(height: 6),
+                  Text(item.substitutionReason,
+                      style: const TextStyle(color: _ActivityColors.muted)),
+                ],
+                const SizedBox(height: 14),
+                FilledButton(
+                  onPressed:
+                      _submitting ? null : () => _decideSubstitution(true),
+                  child: const Text('Approve replacement'),
+                ),
+                TextButton(
+                  onPressed:
+                      _submitting ? null : () => _decideSubstitution(false),
+                  child: const Text('Ask the Gifts Team to keep sourcing'),
+                ),
+                if (_message != null)
+                  Text(_message!,
+                      style: const TextStyle(color: _ActivityColors.muted)),
+              ],
+            ),
+          ),
+        ],
+      ]),
+    );
+  }
 }
 
 class ActivityEmptyState extends StatelessWidget {
