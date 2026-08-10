@@ -919,9 +919,8 @@ class _SenderBookingCanvasState extends State<SenderBookingCanvas> {
     try {
       final picked = await ImagePicker().pickImage(
         source: source,
-        imageQuality: 68,
+        imageQuality: 72,
         maxWidth: 1280,
-        maxHeight: 1280,
       );
       if (picked == null) {
         if (mounted) {

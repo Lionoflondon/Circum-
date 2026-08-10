@@ -47,7 +47,7 @@ void main() {
     ).readAsStringSync();
 
     expect(source, contains('maxWidth: 1280'));
-    expect(source, contains('maxHeight: 1280'));
+    expect(source, isNot(contains('maxHeight: 1280')));
     expect(source, contains("'clientRequestId': clientRequestId"));
     expect(source, contains("'message': 'iris_visual_client_timing'"));
     expect(source, contains("'responseToRenderMs': responseToRenderMs"));
