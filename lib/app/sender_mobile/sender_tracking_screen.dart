@@ -404,7 +404,7 @@ SenderTrackingContent senderTrackingContentFor(
         showAnonymousRiders: true,
         showVanguard: true,
         riderPosition: Offset(.34, .44),
-        eta: 'Usually under 6 min',
+        eta: '',
       );
     case SenderTrackingState.riderAssigned:
       return const SenderTrackingContent(
@@ -421,7 +421,7 @@ SenderTrackingContent senderTrackingContentFor(
         showReceiverPin: false,
         showVanguard: true,
         riderPosition: Offset(.40, .46),
-        eta: '7 min',
+        eta: '',
       );
     case SenderTrackingState.riderEnRouteToPickup:
       return const SenderTrackingContent(
@@ -438,7 +438,7 @@ SenderTrackingContent senderTrackingContentFor(
         showReceiverPin: false,
         showVanguard: true,
         riderPosition: Offset(.32, .40),
-        eta: '4 min',
+        eta: '',
       );
     case SenderTrackingState.riderArrivedAtPickup:
       return const SenderTrackingContent(
@@ -472,7 +472,7 @@ SenderTrackingContent senderTrackingContentFor(
         showReceiverPin: true,
         showVanguard: true,
         riderPosition: Offset(.24, .34),
-        eta: '18 min',
+        eta: '',
       );
     case SenderTrackingState.inTransit:
       return const SenderTrackingContent(
@@ -489,7 +489,7 @@ SenderTrackingContent senderTrackingContentFor(
         showReceiverPin: true,
         showVanguard: true,
         riderPosition: Offset(.46, .50),
-        eta: '11 min',
+        eta: '',
       );
     case SenderTrackingState.riderArrivingAtDropoff:
       return const SenderTrackingContent(
@@ -506,7 +506,7 @@ SenderTrackingContent senderTrackingContentFor(
         showReceiverPin: true,
         showVanguard: true,
         riderPosition: Offset(.68, .62),
-        eta: '< 3 min',
+        eta: '',
       );
     case SenderTrackingState.adjustmentUnderReview:
       return const SenderTrackingContent(
@@ -2043,7 +2043,10 @@ class _TrackingPanelContent extends StatelessWidget {
           const SizedBox(height: 12),
           RiderCard(
             engine: engine,
-            eta: content.eta,
+            eta: _authoritativeEtaLabel(
+              engine.activeDeliveryData,
+              fallback: content.eta,
+            ),
             liveStatus: content.pill,
           ),
         ],
@@ -2144,6 +2147,32 @@ class _TrackingPanelContent extends StatelessWidget {
       ],
     );
   }
+}
+
+String _authoritativeEtaLabel(
+  Map<String, dynamic> delivery, {
+  required String fallback,
+}) {
+  final sources = <Map<String, dynamic>>[
+    delivery,
+    if (delivery['tracking'] is Map)
+      Map<String, dynamic>.from(delivery['tracking'] as Map),
+    if (delivery['route'] is Map)
+      Map<String, dynamic>.from(delivery['route'] as Map),
+  ];
+  for (final source in sources) {
+    final text = '${source['etaText'] ?? source['liveEta'] ?? ''}'.trim();
+    if (text.isNotEmpty && text.toLowerCase() != 'null') return text;
+    final seconds = source['etaSeconds'] ?? source['routeDurationSeconds'];
+    if (seconds is num && seconds.isFinite && seconds >= 0) {
+      final minutes = (seconds / 60).ceil();
+      return minutes <= 1 ? '< 1 min' : '$minutes min';
+    }
+  }
+  if (fallback == 'Arrived' || fallback == 'Paused' || fallback == 'Review pending' || fallback == 'Resuming') {
+    return fallback;
+  }
+  return 'Updating ETA';
 }
 
 class _DeliveredConfirmationOverlay extends StatefulWidget {
