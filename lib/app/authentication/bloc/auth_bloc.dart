@@ -85,14 +85,11 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
 
   Future<void> _updateSenderProfile({
     String? displayName,
-    String? username,
     String? phone,
   }) async {
     final payload = <String, dynamic>{
       if (displayName != null && displayName.trim().isNotEmpty)
         'displayName': displayName.trim(),
-      if (username != null && username.trim().isNotEmpty)
-        'username': username.trim(),
       if (phone != null && phone.trim().isNotEmpty) 'phone': phone.trim(),
     };
     await functions.httpsCallable('updateSenderProfile').call(payload);

@@ -483,8 +483,10 @@ class FirebaseSenderMobileProfileRepository
     final normalizedUsername = username.trim().replaceFirst(RegExp(r'^@'), '');
     await functions.httpsCallable('updateSenderProfile').call({
       'displayName': displayName.trim(),
-      'username': normalizedUsername,
       'phone': phone.trim(),
+    }).timeout(SenderProfileAuthority.senderAccountEnsureTimeout);
+    await functions.httpsCallable('claimCircumUsername').call({
+      'username': normalizedUsername,
     }).timeout(SenderProfileAuthority.senderAccountEnsureTimeout);
     if (user.displayName != displayName.trim()) {
       await user.updateDisplayName(displayName.trim());
