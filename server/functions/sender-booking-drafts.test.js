@@ -142,15 +142,17 @@ test("sender quote charges distance in miles", () => {
 });
 
 test("scheduled journey time is required and normalized for road-charge pricing", () => {
+  const future = new Date(Date.now() + 60 * 60 * 1000);
+  const futureIso = future.toISOString();
   const at = _private.validatedScheduledJourneyAt({
     type: "scheduled",
-    scheduledDate: "2026-08-10",
-    scheduledJourneyAt: "2026-08-10T11:30:00Z",
+    scheduledDate: futureIso.slice(0, 10),
+    scheduledJourneyAt: futureIso,
   });
-  assert.equal(at, "2026-08-10T11:30:00.000Z");
+  assert.equal(at, futureIso);
   assert.throws(() => _private.validatedScheduledJourneyAt({
     type: "scheduled",
-    scheduledDate: "2026-08-10",
+    scheduledDate: futureIso.slice(0, 10),
   }), /exact future journey time|valid future journey time/);
 });
 
