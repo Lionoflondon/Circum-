@@ -366,7 +366,7 @@ exports.recordRiderJobDecision = functions.https.onCall(async (data, context) =>
   return {ok: true, requestId, action};
 });
 
-exports.ensureRiderRothWallet = functions.https.onCall(async (data, context) => {
+exports.ensureRiderRothWallet = functions.runWith({enforceAppCheck: true}).https.onCall(async (data, context) => {
   const rider = requireRider(context);
   const requestedRiderId = text(data.riderId, 180);
   if (requestedRiderId && requestedRiderId !== rider.uid) {

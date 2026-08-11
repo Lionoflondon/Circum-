@@ -24,6 +24,8 @@ test("Rider self-service authority callables are exported", () => {
   assert.match(indexSource, /exports\.submitRiderApplication\s*=\s*riderAccount\.submitRiderApplication/);
   assert.match(indexSource, /exports\.updateRiderApplicationSection\s*=\s*riderAccount\.updateRiderApplicationSection/);
   assert.match(indexSource, /exports\.submitRiderDocument\s*=\s*riderAccount\.submitRiderDocument/);
+  assert.match(source, /exports\.ensureRiderRothWallet\s*=\s*functions\.runWith\(\{enforceAppCheck: true\}\)\.https\.onCall/);
+  assert.match(indexSource, /exports\.ensureRiderRothWallet\s*=\s*riderAccount\.ensureRiderRothWallet/);
 });
 
 test("Rider self-service authority validates auth ownership documents and audit", () => {
