@@ -35,6 +35,7 @@ enum AdminPermission {
   manageHealthPlus,
   viewSupport,
   manageIssues,
+  usernameMigration,
   viewAudit,
 }
 
@@ -148,6 +149,7 @@ class AdminAccessPolicy {
       AdminPermission.manageHealthPlus,
       AdminPermission.viewSupport,
       AdminPermission.manageIssues,
+      AdminPermission.usernameMigration,
       AdminPermission.viewAudit,
     ],
     AdminRole.supportAgent: [

@@ -157,10 +157,24 @@ transaction.create(registryRef, {
 
 exports.migrateCircumUsernames = functions.runWith({enforceAppCheck: true}).https.onCall(async (data, context) => {
   const actor = requireAdmin(context, "Username migration requires administrator access.");
-  return migratePage({
+  const roles = [context.auth.token.adminRole, context.auth.token.role,
+    ...(Array.isArray(context.auth.token.roles) ? context.auth.token.roles : [])]
+      .map((role) => `${role || ""}`.trim().toLowerCase());
+  if (!roles.includes("super_admin") && !roles.includes("operations_admin")) {
+    throw new functions.https.HttpsError("permission-denied", "Username migration requires Operations access.");
+  }
+  const result = await migratePage({
     db: getFirestore(), actor, cursor: data && data.cursor,
     pageSize: data && data.pageSize, dryRun: data && data.dryRun !== false,
   });
+  await getFirestore().collection("adminAuditLogs").doc(`username_migration_${actor}_${Date.now()}`).set({
+    actionType: "username_migration",
+    actorUid: actor,
+    dryRun: data && data.dryRun !== false,
+    counts: result.counts,
+    createdAt: FieldValue.serverTimestamp(),
+  });
+  return result;
 });
 
 exports._candidateRowsForUser = candidateRowsForUser;

@@ -1176,7 +1176,8 @@ class _AdminPhaseOneShellState extends State<AdminPhaseOneShell> {
       await _loadAdminData();
     } on FirebaseFunctionsException catch (error) {
       setState(
-          () => _message = error.message ?? 'Brand Partner action failed.');
+        () => _message = error.message ?? 'Brand Partner action failed.',
+      );
     }
   }
 
@@ -1470,7 +1471,8 @@ class _AdminPhaseOneShellState extends State<AdminPhaseOneShell> {
       await _loadAdminData();
     } on FirebaseFunctionsException catch (error) {
       setState(
-          () => _message = error.message ?? 'Bulk campaign action failed.');
+        () => _message = error.message ?? 'Bulk campaign action failed.',
+      );
     }
   }
 
@@ -2021,7 +2023,8 @@ class _AdminPhaseOneShellState extends State<AdminPhaseOneShell> {
       await _loadAdminData();
     } on FirebaseFunctionsException catch (error) {
       setState(
-          () => _message = error.message ?? 'Gift workspace action failed.');
+        () => _message = error.message ?? 'Gift workspace action failed.',
+      );
     }
   }
 
@@ -3135,7 +3138,8 @@ class _AdminPhaseOneShellState extends State<AdminPhaseOneShell> {
       await _loadAdminData();
     } on FirebaseFunctionsException catch (error) {
       setState(
-          () => _message = error.message ?? 'Message report update failed.');
+        () => _message = error.message ?? 'Message report update failed.',
+      );
     }
   }
 
@@ -3167,10 +3171,9 @@ class _AdminPhaseOneShellState extends State<AdminPhaseOneShell> {
     );
     if (confirmed != true) return;
     try {
-      final result =
-          await _functions.httpsCallable('pipelineHealthReset').call({
-        'reason': reason,
-      });
+      final result = await _functions.httpsCallable('pipelineHealthReset').call(
+        {'reason': reason},
+      );
       final data = Map<String, dynamic>.from(result.data as Map);
       if (!mounted) return;
       await showDialog<void>(
@@ -3253,10 +3256,9 @@ class _AdminPhaseOneShellState extends State<AdminPhaseOneShell> {
     );
     if (confirmed != true) return;
     try {
-      final result =
-          await _functions.httpsCallable('operationsHealthRepair').call({
-        'reason': reason,
-      });
+      final result = await _functions
+          .httpsCallable('operationsHealthRepair')
+          .call({'reason': reason});
       final data = Map<String, dynamic>.from(result.data as Map);
       if (!mounted) return;
       await showDialog<void>(
@@ -3277,6 +3279,60 @@ class _AdminPhaseOneShellState extends State<AdminPhaseOneShell> {
     } on FirebaseFunctionsException catch (error) {
       setState(() => _message = _functionsMessage(error));
     }
+  }
+
+  Future<void> _usernameMigration({required bool dryRun}) async {
+    if (!_can(AdminPermission.usernameMigration)) {
+      setState(() => _message = 'Your role cannot run username migration.');
+      return;
+    }
+    try {
+      final result = await _functions
+          .httpsCallable('migrateCircumUsernames')
+          .call({'dryRun': dryRun, 'pageSize': 50});
+      final data = Map<String, dynamic>.from(result.data as Map);
+      if (!mounted) return;
+      await showDialog<void>(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: Text(
+            dryRun
+                ? 'Username migration dry run'
+                : 'Username migration complete',
+          ),
+          content: Text(_usernameMigrationSummary(data)),
+          actions: [
+            FilledButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Done'),
+            ),
+          ],
+        ),
+      );
+      setState(
+        () => _message = dryRun
+            ? 'Username migration dry run completed.'
+            : 'Safe username migration completed.',
+      );
+    } on FirebaseFunctionsException catch (error) {
+      setState(() => _message = _functionsMessage(error));
+    }
+  }
+
+  String _usernameMigrationSummary(Map<String, dynamic> data) {
+    final counts = Map<String, dynamic>.from(
+      data['counts'] as Map? ?? const {},
+    );
+    return [
+      'Accounts scanned: ${counts['scanned'] ?? 0}',
+      'Already canonical: ${counts['ALREADY_CANONICAL'] ?? 0}',
+      'Migratable: ${counts['MIGRATED'] ?? 0}',
+      'Same-UID aliases: ${counts['sameUidAliases'] ?? 0}',
+      'Cross-UID collisions: ${counts['COLLISION_REVIEW_REQUIRED'] ?? 0}',
+      'Invalid handles: ${counts['INVALID_LEGACY_HANDLE'] ?? 0}',
+      'Missing handles: ${counts['MISSING_HANDLE'] ?? 0}',
+      'Review required: ${counts['COLLISION_REVIEW_REQUIRED'] ?? 0}',
+    ].join('\n');
   }
 
   Future<void> _liveDeliveryDiagnostics() async {
@@ -3311,10 +3367,9 @@ class _AdminPhaseOneShellState extends State<AdminPhaseOneShell> {
     );
     if (deliveryId == null || deliveryId.trim().isEmpty) return;
     try {
-      final result =
-          await _functions.httpsCallable('liveDeliveryDiagnostics').call({
-        'deliveryId': deliveryId.trim(),
-      });
+      final result = await _functions
+          .httpsCallable('liveDeliveryDiagnostics')
+          .call({'deliveryId': deliveryId.trim()});
       final data = Map<String, dynamic>.from(result.data as Map);
       if (!mounted) return;
       await showDialog<void>(
@@ -3361,8 +3416,10 @@ class _AdminPhaseOneShellState extends State<AdminPhaseOneShell> {
     final failures = items
         .where((item) => item['status'] != 'PASS')
         .take(8)
-        .map((item) =>
-            '${item['status']} ${item['service']}: ${item['rootCause']}\nRemediation: ${item['suggestedRemediation']}')
+        .map(
+          (item) =>
+              '${item['status']} ${item['service']}: ${item['rootCause']}\nRemediation: ${item['suggestedRemediation']}',
+        )
         .join('\n\n');
     return [
       'Result: ${data['result'] ?? 'n/a'}',
@@ -3396,8 +3453,10 @@ class _AdminPhaseOneShellState extends State<AdminPhaseOneShell> {
         .map((item) => Map<String, dynamic>.from(item))
         .toList(growable: false);
     final lines = stages
-        .map((stage) =>
-            '${stage['status']} ${stage['stage']}: ${stage['rootCause']}')
+        .map(
+          (stage) =>
+              '${stage['status']} ${stage['stage']}: ${stage['rootCause']}',
+        )
         .join('\n');
     return [
       'Delivery: ${data['deliveryId'] ?? 'n/a'}',
@@ -3637,6 +3696,13 @@ class _AdminPhaseOneShellState extends State<AdminPhaseOneShell> {
                       onOperationsHealthScan: _operationsHealthScan,
                       onOperationsHealthRepair: _operationsHealthRepair,
                       onLiveDeliveryDiagnostics: _liveDeliveryDiagnostics,
+                      canMigrateUsernames: _can(
+                        AdminPermission.usernameMigration,
+                      ),
+                      onUsernameMigrationDryRun: () =>
+                          _usernameMigration(dryRun: true),
+                      onUsernameMigrationExecute: () =>
+                          _usernameMigration(dryRun: false),
                     ),
                   ),
                 ],
@@ -4549,6 +4615,9 @@ class _AdminModuleBody extends StatelessWidget {
     required this.onOperationsHealthScan,
     required this.onOperationsHealthRepair,
     required this.onLiveDeliveryDiagnostics,
+    required this.canMigrateUsernames,
+    required this.onUsernameMigrationDryRun,
+    required this.onUsernameMigrationExecute,
   });
 
   final AdminModule module;
@@ -4682,6 +4751,9 @@ class _AdminModuleBody extends StatelessWidget {
   final Future<void> Function() onOperationsHealthScan;
   final Future<void> Function() onOperationsHealthRepair;
   final Future<void> Function() onLiveDeliveryDiagnostics;
+  final bool canMigrateUsernames;
+  final Future<void> Function() onUsernameMigrationDryRun;
+  final Future<void> Function() onUsernameMigrationExecute;
 
   @override
   Widget build(BuildContext context) {
@@ -4722,6 +4794,9 @@ class _AdminModuleBody extends StatelessWidget {
               onOperationsHealthScan: onOperationsHealthScan,
               onOperationsHealthRepair: onOperationsHealthRepair,
               onLiveDeliveryDiagnostics: onLiveDeliveryDiagnostics,
+              canMigrateUsernames: canMigrateUsernames,
+              onUsernameMigrationDryRun: onUsernameMigrationDryRun,
+              onUsernameMigrationExecute: onUsernameMigrationExecute,
               onRetryNotificationDelivery: onRetryNotificationDelivery,
               onOpenDelivery: onOpenDeliveryProfile,
             ),
@@ -9044,8 +9119,13 @@ String _sectionStatusSummary(Map<String, dynamic> record) {
   final sections = record['sectionStatus'];
   if (sections is! Map || sections.isEmpty) return 'No section status';
   final complete = sections.values
-      .where((value) => {'submitted', 'approved', 'verified'}
-          .contains('$value'.trim().toLowerCase()))
+      .where(
+        (value) => {
+          'submitted',
+          'approved',
+          'verified',
+        }.contains('$value'.trim().toLowerCase()),
+      )
       .length;
   return '$complete/${sections.length} sections complete';
 }
@@ -17367,6 +17447,9 @@ class _GovernanceOperationsModule extends StatelessWidget {
     required this.onOperationsHealthScan,
     required this.onOperationsHealthRepair,
     required this.onLiveDeliveryDiagnostics,
+    required this.canMigrateUsernames,
+    required this.onUsernameMigrationDryRun,
+    required this.onUsernameMigrationExecute,
     required this.onRetryNotificationDelivery,
     required this.onOpenDelivery,
   });
@@ -17399,6 +17482,9 @@ class _GovernanceOperationsModule extends StatelessWidget {
   final Future<void> Function() onOperationsHealthScan;
   final Future<void> Function() onOperationsHealthRepair;
   final Future<void> Function() onLiveDeliveryDiagnostics;
+  final bool canMigrateUsernames;
+  final Future<void> Function() onUsernameMigrationDryRun;
+  final Future<void> Function() onUsernameMigrationExecute;
   final Future<void> Function(Map<String, dynamic>) onRetryNotificationDelivery;
   final ValueChanged<Map<String, dynamic>> onOpenDelivery;
 
@@ -17658,6 +17744,19 @@ class _GovernanceOperationsModule extends StatelessWidget {
                       icon: const Icon(Icons.route_rounded),
                       label: const Text('Live Delivery Diagnostics'),
                     ),
+                    if (canMigrateUsernames) ...[
+                      OutlinedButton.icon(
+                        onPressed: () => unawaited(onUsernameMigrationDryRun()),
+                        icon: const Icon(Icons.fact_check_rounded),
+                        label: const Text('Username Migration Dry Run'),
+                      ),
+                      OutlinedButton.icon(
+                        onPressed: () =>
+                            unawaited(onUsernameMigrationExecute()),
+                        icon: const Icon(Icons.sync_rounded),
+                        label: const Text('Execute Safe Username Migration'),
+                      ),
+                    ],
                   ],
                 ),
               ],
@@ -17669,11 +17768,7 @@ class _GovernanceOperationsModule extends StatelessWidget {
           spacing: 12,
           runSpacing: 12,
           children: [
-            _MetricCard(
-              'Production health',
-              'Scan',
-              'PASS / WARNING / FAIL',
-            ),
+            _MetricCard('Production health', 'Scan', 'PASS / WARNING / FAIL'),
             _MetricCard(
               'Address limits',
               '${rateLimits.length}',
@@ -19596,13 +19691,17 @@ class _RiderProfileDrawer extends StatelessWidget {
         .where((document) => _documentBelongsToRider(document, riderId))
         .toList(growable: false);
     final riderApplications = applications
-        .where((application) =>
-            '${application['riderId'] ?? application['uid'] ?? ''}'.trim() ==
-            riderId)
+        .where(
+          (application) =>
+              '${application['riderId'] ?? application['uid'] ?? ''}'.trim() ==
+              riderId,
+        )
         .toList(growable: false);
     final riderOnboardingEvents = onboardingEvents
-        .where((event) =>
-            '${event['riderId'] ?? event['uid'] ?? ''}'.trim() == riderId)
+        .where(
+          (event) =>
+              '${event['riderId'] ?? event['uid'] ?? ''}'.trim() == riderId,
+        )
         .toList(growable: false);
     final riderRatings = ratings
         .where((rating) => _recordReferencesRider(rating, riderId))
