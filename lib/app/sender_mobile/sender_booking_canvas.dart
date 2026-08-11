@@ -85,6 +85,9 @@ class _SenderBookingCanvasState extends State<SenderBookingCanvas> {
   String? _irisPhotoAnalysisId;
   double? _photoEstimatedWeightKg;
   bool _resettingBooking = false;
+  final DraggableScrollableController _bookingSheetController =
+      DraggableScrollableController();
+  SenderBookingStep? _lastSheetStep;
 
   @override
   void initState() {
@@ -172,11 +175,23 @@ class _SenderBookingCanvasState extends State<SenderBookingCanvas> {
     _item.dispose();
     _description.dispose();
     _weight.dispose();
+    _bookingSheetController.dispose();
     super.dispose();
   }
 
   void _setDraft(SenderBookingDraft next) {
     setState(() => _draft = next);
+    if (_lastSheetStep != next.step) {
+      _lastSheetStep = next.step;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted || !_bookingSheetController.isAttached) return;
+        _bookingSheetController.animateTo(
+          _bookingSheetExtentFor(next.step),
+          duration: const Duration(milliseconds: 220),
+          curve: Curves.easeOutCubic,
+        );
+      });
+    }
     if (!_restoringDraft) _scheduleDraftSave(next);
   }
 
@@ -1094,38 +1109,48 @@ class _SenderBookingCanvasState extends State<SenderBookingCanvas> {
                       onBack: _back,
                       onCancel: _confirmCancelBooking,
                     ),
-                    const Spacer(),
-                    _BookingPanel(
-                      draft: _draft,
-                      engine: engine,
-                      draftId: _draftId,
-                      senderUid: _uid,
-                      pickup: _pickup,
-                      dropoff: _dropoff,
-                      receiverName: _receiverName,
-                      receiverPhone: _receiverPhone,
-                      notes: _notes,
-                      scheduledDate: _scheduledDate,
-                      scheduledJourneyTime: _scheduledJourneyTime,
-                      customWindowStart: _customWindowStart,
-                      customWindowEnd: _customWindowEnd,
-                      item: _item,
-                      description: _description,
-                      weight: _weight,
-                      parcelPhoto: _parcelPhoto,
-                      parcelPhotoBusy: _parcelPhotoBusy,
-                      parcelPhotoMessage: _parcelPhotoMessage,
-                      photoEstimatedWeightKg: _photoEstimatedWeightKg,
-                      searchingPickup: _searchingPickup,
-                      onSearchingPickupChanged: (value) =>
-                          setState(() => _searchingPickup = value),
-                      onParcelChanged: _onParcelChanged,
-                      onPhotoTap: _pickParcelPhoto,
-                      onPhotoRemove: _removeParcelPhoto,
-                      onDraft: _setDraft,
-                      onContinue: _advance,
-                      addressResolutionMessage: _addressResolutionMessage,
-                      addressResolving: _addressResolving,
+                    Expanded(
+                      child: DraggableScrollableSheet(
+                        initialChildSize: _bookingSheetExtentFor(_draft.step),
+                        minChildSize: .18,
+                        maxChildSize: .90,
+                        snap: true,
+                        snapSizes: const [.18, .45, .90],
+                        controller: _bookingSheetController,
+                        builder: (context, scrollController) => _BookingPanel(
+                          scrollController: scrollController,
+                          draft: _draft,
+                          engine: engine,
+                          draftId: _draftId,
+                          senderUid: _uid,
+                          pickup: _pickup,
+                          dropoff: _dropoff,
+                          receiverName: _receiverName,
+                          receiverPhone: _receiverPhone,
+                          notes: _notes,
+                          scheduledDate: _scheduledDate,
+                          scheduledJourneyTime: _scheduledJourneyTime,
+                          customWindowStart: _customWindowStart,
+                          customWindowEnd: _customWindowEnd,
+                          item: _item,
+                          description: _description,
+                          weight: _weight,
+                          parcelPhoto: _parcelPhoto,
+                          parcelPhotoBusy: _parcelPhotoBusy,
+                          parcelPhotoMessage: _parcelPhotoMessage,
+                          photoEstimatedWeightKg: _photoEstimatedWeightKg,
+                          searchingPickup: _searchingPickup,
+                          onSearchingPickupChanged: (value) =>
+                              setState(() => _searchingPickup = value),
+                          onParcelChanged: _onParcelChanged,
+                          onPhotoTap: _pickParcelPhoto,
+                          onPhotoRemove: _removeParcelPhoto,
+                          onDraft: _setDraft,
+                          onContinue: _advance,
+                          addressResolutionMessage: _addressResolutionMessage,
+                          addressResolving: _addressResolving,
+                        ),
+                      ),
                     ),
                   ],
                 ),
@@ -1150,6 +1175,25 @@ class _SenderBookingCanvasState extends State<SenderBookingCanvas> {
       case DeliveryStatus.addressesSelected:
         return null;
     }
+  }
+}
+
+double _bookingSheetExtentFor(SenderBookingStep step) {
+  switch (step) {
+    case SenderBookingStep.recipient:
+    case SenderBookingStep.iris:
+    case SenderBookingStep.options:
+    case SenderBookingStep.review:
+    case SenderBookingStep.payment:
+      return .90;
+    case SenderBookingStep.pickup:
+    case SenderBookingStep.dropoff:
+    case SenderBookingStep.deliveryTime:
+    case SenderBookingStep.parcel:
+      return .45;
+    case SenderBookingStep.findingRider:
+    case SenderBookingStep.liveTracking:
+      return .45;
   }
 }
 
@@ -1286,6 +1330,7 @@ class _TopBar extends StatelessWidget {
 }
 
 class _BookingPanel extends StatelessWidget {
+  final ScrollController scrollController;
   final SenderBookingDraft draft;
   final SendPackageState engine;
   final String? draftId;
@@ -1317,6 +1362,7 @@ class _BookingPanel extends StatelessWidget {
   final bool addressResolving;
 
   const _BookingPanel({
+    required this.scrollController,
     required this.draft,
     required this.engine,
     required this.draftId,
@@ -1352,49 +1398,43 @@ class _BookingPanel extends StatelessWidget {
   Widget build(BuildContext context) {
     final content = _content(context);
     final bottomInset = MediaQuery.paddingOf(context).bottom;
-    final maxPanelHeight = math.max(
-      320.0,
-      MediaQuery.sizeOf(context).height - bottomInset - 150,
-    );
     return Padding(
       padding: EdgeInsets.fromLTRB(14, 0, 14, bottomInset + 12),
-      child: ConstrainedBox(
-        constraints: BoxConstraints(maxHeight: maxPanelHeight),
-        child: _Glass(
-          child: AnimatedSwitcher(
-            duration: const Duration(milliseconds: 280),
-            child: SingleChildScrollView(
-              key: ValueKey(draft.step),
-              physics: const BouncingScrollPhysics(),
-              padding: EdgeInsets.only(bottom: bottomInset + 28),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Center(
-                    child: Container(
-                      height: 5,
-                      width: 48,
-                      margin: const EdgeInsets.only(bottom: 14),
-                      decoration: BoxDecoration(
-                        color: Colors.white.withValues(alpha: .18),
-                        borderRadius: BorderRadius.circular(999),
-                      ),
+      child: _Glass(
+        child: AnimatedSwitcher(
+          duration: const Duration(milliseconds: 280),
+          child: SingleChildScrollView(
+            controller: scrollController,
+            key: ValueKey(draft.step),
+            physics: const BouncingScrollPhysics(),
+            padding: EdgeInsets.only(bottom: bottomInset + 28),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Center(
+                  child: Container(
+                    height: 5,
+                    width: 48,
+                    margin: const EdgeInsets.only(bottom: 14),
+                    decoration: BoxDecoration(
+                      color: Colors.white.withValues(alpha: .18),
+                      borderRadius: BorderRadius.circular(999),
                     ),
                   ),
-                  Text(
-                    senderStepTitle(draft.step),
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontSize: 24,
-                      height: 1.08,
-                      fontWeight: FontWeight.w900,
-                    ),
+                ),
+                Text(
+                  senderStepTitle(draft.step),
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 24,
+                    height: 1.08,
+                    fontWeight: FontWeight.w900,
                   ),
-                  const SizedBox(height: 14),
-                  content,
-                ],
-              ),
+                ),
+                const SizedBox(height: 14),
+                content,
+              ],
             ),
           ),
         ),
