@@ -3725,6 +3725,9 @@ class _AdminPhaseOneShellState extends State<AdminPhaseOneShell> {
                           giftOrders: _data.giftOrders,
                           businessAccounts: _data.businessAccounts,
                           users: _data.users,
+                          usernames: _data.usernames,
+                          usernameMigrationStates:
+                              _data.usernameMigrationStates,
                           onClose: () =>
                               setState(() => _selectedAccount = null),
                           onSetSenderStatus: (status) =>
@@ -3785,6 +3788,8 @@ class AdminDataBundle {
   const AdminDataBundle({
     required this.deliveries,
     required this.users,
+    required this.usernames,
+    required this.usernameMigrationStates,
     required this.riders,
     required this.adminUsers,
     required this.payments,
@@ -3841,6 +3846,8 @@ class AdminDataBundle {
 
   final List<Map<String, dynamic>> deliveries;
   final List<Map<String, dynamic>> users;
+  final List<Map<String, dynamic>> usernames;
+  final List<Map<String, dynamic>> usernameMigrationStates;
   final List<Map<String, dynamic>> riders;
   final List<Map<String, dynamic>> adminUsers;
   final List<Map<String, dynamic>> payments;
@@ -3893,7 +3900,6 @@ class AdminDataBundle {
   final List<Map<String, dynamic>> rateLimits;
   final List<Map<String, dynamic>> senderDrafts;
   final List<Map<String, dynamic>> riderPresence;
-
   static AdminDataBundle empty() => const AdminDataBundle(
         deliveries: [],
         users: [],
@@ -3949,6 +3955,8 @@ class AdminDataBundle {
         rateLimits: [],
         senderDrafts: [],
         riderPresence: [],
+        usernames: [],
+        usernameMigrationStates: [],
       );
 }
 
@@ -4154,6 +4162,8 @@ class AdminRepository {
             .limit(120),
       ),
       _read(_db.collection('riderPresence').limit(150)),
+      _read(_db.collection('usernames').limit(200)),
+      _read(_db.collection('usernameMigrationState').limit(200)),
     ]);
     return AdminDataBundle(
       deliveries: results[0],
@@ -4210,6 +4220,8 @@ class AdminRepository {
       rateLimits: results[51],
       senderDrafts: results[52],
       riderPresence: results[53],
+      usernames: results[54],
+      usernameMigrationStates: results[55],
     );
   }
 
@@ -4864,10 +4876,20 @@ class _AdminModuleBody extends StatelessWidget {
           AdminModule.users => Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
+                if (canMigrateUsernames)
+                  _UsernameMigrationControls(
+                    onDryRun: onUsernameMigrationDryRun,
+                    onExecute: onUsernameMigrationExecute,
+                  ),
+                if (canMigrateUsernames) const SizedBox(height: 18),
                 _RecordModule(
                   title: 'Users',
                   subtitle: 'Sender and customer account records.',
-                  records: data.users,
+                  records: _adminUserIdentityRecords(
+                    data.users,
+                    data.usernames,
+                    data.usernameMigrationStates,
+                  ),
                   query: query,
                   fields: const [
                     'id',
@@ -4878,10 +4900,19 @@ class _AdminModuleBody extends StatelessWidget {
                     'status',
                     'accountStatus',
                     'verificationStatus',
+                    'canonicalUsername',
+                    'usernameMigrationStatus',
                   ],
-                  columns: const ['Name', 'Email', 'Status', 'Verification'],
+                  columns: const [
+                    'Name',
+                    'Username',
+                    'Email',
+                    'Status',
+                    'Verification',
+                  ],
                   row: (record) => [
                     '${record['fullName'] ?? record['name'] ?? record['id']}',
+                    '${record['canonicalUsername'] ?? 'Not claimed'}',
                     '${record['email'] ?? 'Not recorded'}',
                     '${record['status'] ?? record['accountStatus'] ?? 'active'}',
                     '${record['verificationStatus'] ?? record['kycStatus'] ?? 'not_required'}',
@@ -19285,6 +19316,106 @@ List<Widget> _irisReferenceImageActions(
   ];
 }
 
+class _CanonicalUsernameView {
+  const _CanonicalUsernameView(this.display, this.status);
+
+  final String display;
+  final String status;
+}
+
+_CanonicalUsernameView _canonicalUsernameFor(
+  String uid,
+  List<Map<String, dynamic>> usernames,
+  List<Map<String, dynamic>> migrationStates,
+) {
+  final registry = usernames.cast<Map<String, dynamic>>().firstWhere(
+        (record) => '${record['uid'] ?? ''}' == uid,
+        orElse: () => const <String, dynamic>{},
+      );
+  final state = migrationStates.cast<Map<String, dynamic>>().firstWhere(
+        (record) => '${record['uid'] ?? record['id'] ?? ''}' == uid,
+        orElse: () => const <String, dynamic>{},
+      );
+  final handle =
+      '${registry['canonicalHandle'] ?? registry['displayHandle'] ?? ''}'
+          .trim();
+  final migrationStatus = '${state['status'] ?? ''}'.trim();
+  if (handle.isNotEmpty && registry['status'] != 'tombstoned') {
+    return _CanonicalUsernameView('@$handle', 'Canonical');
+  }
+  final status = switch (migrationStatus) {
+    'COLLISION_REVIEW_REQUIRED' => 'Conflict / review required',
+    'INVALID_LEGACY_HANDLE' => 'Invalid legacy handle',
+    'MIGRATED' => 'Migration pending',
+    _ => 'Not claimed',
+  };
+  return _CanonicalUsernameView(status, status);
+}
+
+List<Map<String, dynamic>> _adminUserIdentityRecords(
+  List<Map<String, dynamic>> users,
+  List<Map<String, dynamic>> usernames,
+  List<Map<String, dynamic>> migrationStates,
+) {
+  return [
+    for (final user in users)
+      {
+        ...user,
+        'canonicalUsername': _canonicalUsernameFor(
+          _recordId(user),
+          usernames,
+          migrationStates,
+        ).display,
+        'usernameMigrationStatus': _canonicalUsernameFor(
+          _recordId(user),
+          usernames,
+          migrationStates,
+        ).status,
+      },
+  ];
+}
+
+class _UsernameMigrationControls extends StatelessWidget {
+  const _UsernameMigrationControls({
+    required this.onDryRun,
+    required this.onExecute,
+  });
+
+  final Future<void> Function() onDryRun;
+  final Future<void> Function() onExecute;
+
+  @override
+  Widget build(BuildContext context) {
+    return DecoratedBox(
+      decoration: _panelDecoration(),
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Row(
+          children: [
+            const Expanded(
+              child: Text(
+                'Global username migration',
+                style: TextStyle(fontWeight: FontWeight.w800),
+              ),
+            ),
+            OutlinedButton.icon(
+              onPressed: () => unawaited(onDryRun()),
+              icon: const Icon(Icons.fact_check_outlined),
+              label: const Text('Dry Run'),
+            ),
+            const SizedBox(width: 10),
+            FilledButton.icon(
+              onPressed: () => unawaited(onExecute()),
+              icon: const Icon(Icons.lock_rounded),
+              label: const Text('Execute Safe Migration'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
 class _AccountProfileDrawer extends StatelessWidget {
   const _AccountProfileDrawer({
     required this.account,
@@ -19295,6 +19426,8 @@ class _AccountProfileDrawer extends StatelessWidget {
     required this.giftOrders,
     required this.businessAccounts,
     required this.users,
+    required this.usernames,
+    required this.usernameMigrationStates,
     required this.onClose,
     required this.onSetSenderStatus,
     required this.onSetBusinessStatus,
@@ -19309,6 +19442,8 @@ class _AccountProfileDrawer extends StatelessWidget {
   final List<Map<String, dynamic>> giftOrders;
   final List<Map<String, dynamic>> businessAccounts;
   final List<Map<String, dynamic>> users;
+  final List<Map<String, dynamic>> usernames;
+  final List<Map<String, dynamic>> usernameMigrationStates;
   final VoidCallback onClose;
   final Future<void> Function(String) onSetSenderStatus;
   final Future<void> Function(String) onSetBusinessStatus;
@@ -19317,6 +19452,11 @@ class _AccountProfileDrawer extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final accountId = _recordId(account);
+    final identity = _canonicalUsernameFor(
+      accountId,
+      usernames,
+      usernameMigrationStates,
+    );
     final relatedDeliveries = deliveries
         .where((item) => _recordReferencesAccount(item, accountId, account))
         .toList();
@@ -19384,6 +19524,11 @@ class _AccountProfileDrawer extends StatelessWidget {
               title: 'Profile',
               rows: [
                 ('ID', accountId),
+                (
+                  'Name',
+                  '${account['fullName'] ?? account['name'] ?? 'Not recorded'}'
+                ),
+                ('Username', identity.display),
                 ('Email', '${account['email'] ?? 'Not recorded'}'),
                 (
                   'Phone',
