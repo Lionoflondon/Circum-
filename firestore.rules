@@ -348,7 +348,8 @@ service cloud.firestore {
         'roles',
         'adminRole',
         'isAdmin',
-        'admin'
+        'admin',
+        'username'
       ];
     }
 
