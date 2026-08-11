@@ -44,6 +44,9 @@ test("financial and lifecycle mutation callables require App Check", () => {
     ["delivery-tracking.js", /exports\.updateDeliveryTrackingStatus\s*=\s*functions\.runWith\(\{enforceAppCheck: true\}\)\.https\.onCall/],
     ["delivery-tracking.js", /exports\.completeDelivery = functions\.runWith\(\{enforceAppCheck: true\}\)\.https\.onCall/],
     ["delivery-tracking.js", /exports\.updateDeliveryLiveLocation = functions\.runWith\(\{enforceAppCheck: true\}\)\.https\.onCall/],
+    ["rider-earnings-summary.js", /const callableRuntime = functions\.runWith\(\{enforceAppCheck: true\}\)/],
+    ["rider-connect.js", /const firstPartyCallableRuntime = functions\.runWith\(\{enforceAppCheck: true\}\)/],
+    ["ratings-tipping.js", /functions\.runWith\(\{enforceAppCheck: true\}\)\.https\.onCall/],
     ["admin-operations-authority.js", /exports\.adminUpdateIrisCandidateWorkflow = functions\.runWith\(\{enforceAppCheck: true\}\)\.https\.onCall/],
   ];
   for (const [file, pattern] of expectations) {

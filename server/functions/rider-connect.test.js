@@ -130,6 +130,9 @@ test("Rider payout transfer uses Stripe idempotency", () => {
   assert.match(source, /existingTransferId/);
   assert.match(source, /\["processing", "scheduled", "paid"\]\.includes\(existingStatus\)/);
   assert.match(source, /idempotent: true/);
+  assert.match(source, /type: "payout_reserved"/);
+  assert.match(source, /payout_failed_release_/);
+  assert.match(source, /enforceAppCheck: true/);
 });
 
 test("Rider payout readiness is backend authoritative", () => {

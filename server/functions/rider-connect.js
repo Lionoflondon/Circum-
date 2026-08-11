@@ -10,7 +10,8 @@ const riderStripeReturnUrl = `${appBaseUrl}/rider/stripe/return`;
 const riderStripeRefreshUrl = `${appBaseUrl}/rider/stripe/refresh`;
 
 const rawBankFields = ["bankName", "sortCode", "accountNumber", "bankAccountNumber"];
-const stripeSecretRuntime = functions.runWith({secrets: ["STRIPE_SECRET_KEY"]});
+const firstPartyCallableRuntime = functions.runWith({enforceAppCheck: true});
+const stripeSecretRuntime = functions.runWith({secrets: ["STRIPE_SECRET_KEY"], enforceAppCheck: true});
 const stripeWebhookRuntime = functions.runWith({secrets: ["STRIPE_SECRET_KEY", "STRIPE_WEBHOOK_SECRET"]});
 
 function text(value) {
@@ -809,6 +810,18 @@ function createRiderTransferOrPayout(stripeOrFactory) {
           pendingWithdrawal: FieldValue.increment(-reservation.breakdown.riderGrossShare),
           updatedAt: FieldValue.serverTimestamp(),
         }, {merge: true});
+        transaction.set(db.collection("riderWalletTransactions")
+            .doc(`payout_failed_release_${reservation.requestId}`), {
+          id: `payout_failed_release_${reservation.requestId}`,
+          idempotencyKey: `payout_failed_release_${reservation.requestId}`,
+          riderId,
+          withdrawalRequestId: reservation.requestId,
+          type: "payout_failed_release",
+          amount: reservation.breakdown.riderGrossShare,
+          status: "completed",
+          source: "stripe_transfer_failure",
+          createdAt: FieldValue.serverTimestamp(),
+        }, {merge: false});
       });
       throw new functions.https.HttpsError("internal", "Stripe transfer failed. Funds were restored for retry.");
     }
@@ -839,7 +852,8 @@ function createRiderTransferOrPayout(stripeOrFactory) {
         riderId,
         deliveryId: reservation.deliveryId || null,
         withdrawalRequestId: reservation.requestId,
-        type: "withdrawal",
+        type: "payout_reserved",
+        idempotencyKey: `payout_reserved_${reservation.requestId}`,
         amount: -reservation.breakdown.riderGrossShare,
         grossDeliveryEarning: reservation.breakdown.riderGrossShare,
         stripePaymentFee: reservation.breakdown.stripeFeeDeductedFromRider,
@@ -880,7 +894,7 @@ function createRiderTransferOrPayout(stripeOrFactory) {
 }
 
 function requestRiderWithdrawal() {
-  return functions.https.onCall(async (data, context) => {
+  return firstPartyCallableRuntime.https.onCall(async (data, context) => {
     const riderId = text(context.auth && context.auth.uid);
     await assertActor(context, riderId);
     if (hasRawBankFields(data)) {
@@ -1224,6 +1238,20 @@ function handleStripeConnectWebhook(stripeOrFactory) {
                 availableBalance: releaseBalance ? FieldValue.increment(amount) : FieldValue.increment(0),
                 updatedAt: FieldValue.serverTimestamp(),
               }, {merge: true});
+              if (releaseBalance && reserved) {
+                transaction.set(db.collection("riderWalletTransactions")
+                    .doc(`payout_failed_release_${doc.id}`), {
+                  id: `payout_failed_release_${doc.id}`,
+                  idempotencyKey: `payout_failed_release_${doc.id}`,
+                  riderId,
+                  withdrawalRequestId: doc.id,
+                  type: "payout_failed_release",
+                  amount,
+                  status: "completed",
+                  source: `stripe_${status}`,
+                  createdAt: FieldValue.serverTimestamp(),
+                }, {merge: false});
+              }
             }
           });
           return {status, matched};
@@ -1253,6 +1281,20 @@ function handleStripeConnectWebhook(stripeOrFactory) {
                 pendingWithdrawal: reserved ? FieldValue.increment(-amount) : FieldValue.increment(0),
                 updatedAt: FieldValue.serverTimestamp(),
               }, {merge: true});
+              if (reserved) {
+                transaction.set(db.collection("riderWalletTransactions")
+                    .doc(`payout_failed_release_${requestId}`), {
+                  id: `payout_failed_release_${requestId}`,
+                  idempotencyKey: `payout_failed_release_${requestId}`,
+                  riderId,
+                  withdrawalRequestId: requestId,
+                  type: "payout_failed_release",
+                  amount,
+                  status: "completed",
+                  source: "stripe_transfer_failed_webhook",
+                  createdAt: FieldValue.serverTimestamp(),
+                }, {merge: false});
+              }
             }
             return {requestId, active, status: event.type === "transfer.failed" ? "failed" : "processing"};
           });

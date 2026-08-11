@@ -226,7 +226,7 @@ async function finalizeTip(db, tipRef, tip, stripeIntentId = null) {
 }
 
 function submitTip(stripe) {
-  return functions.https.onCall(async (data, context) => {
+  return functions.runWith({enforceAppCheck: true}).https.onCall(async (data, context) => {
     const sender = requireAuth(context);
     const deliveryId = text(data && (data.deliveryId || data.requestId));
     if (!deliveryId) throw new functions.https.HttpsError("invalid-argument", "Delivery is required.");

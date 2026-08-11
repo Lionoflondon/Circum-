@@ -2,11 +2,12 @@
 
 /* eslint-disable max-len, require-jsdoc */
 const functions = require("firebase-functions/v1");
-const {getFirestore, FieldValue} = require("firebase-admin/firestore");
+const {getFirestore, FieldValue, FieldPath} = require("firebase-admin/firestore");
 
 const ACTIVE_PAYOUTS = new Set(["requested", "processing"]);
-const LEDGER_TYPES = new Set(["delivery_earning", "tip", "waiting_fee", "no_show_fee", "adjustment_credit", "adjustment_debit", "payout_reserved", "payout_completed", "payout_failed_release", "refund", "reversal"]);
+const LEDGER_TYPES = new Set(["delivery_earning", "road_reimbursement", "tip", "waiting_fee", "no_show_fee", "adjustment_credit", "adjustment_debit", "payout_reserved", "payout_completed", "payout_failed_release", "refund", "reversal"]);
 const RECENT_ACTIVITY_LIMIT = 50;
+const callableRuntime = functions.runWith({enforceAppCheck: true});
 const number = (value) => Number.isFinite(Number(value)) ? Number(value) : 0;
 const text = (value) => `${value || ""}`.trim().toLowerCase();
 const money = (value) => Math.round(number(value) * 100) / 100;
@@ -22,7 +23,7 @@ function connectReadiness(profile = {}) {
 }
 
 function reconcileLedger(rows = [], wallet = {}, payouts = []) {
-  const totals = {delivery_earning: 0, tip: 0, waiting_fee: 0, no_show_fee: 0, adjustment_credit: 0, adjustment_debit: 0, payout_reserved: 0, payout_completed: 0, payout_failed_release: 0, refund: 0, reversal: 0};
+  const totals = {delivery_earning: 0, road_reimbursement: 0, tip: 0, waiting_fee: 0, no_show_fee: 0, adjustment_credit: 0, adjustment_debit: 0, payout_reserved: 0, payout_completed: 0, payout_failed_release: 0, refund: 0, reversal: 0};
   const seen = new Set();
   const production = [];
   const quarantined = [];
@@ -39,10 +40,17 @@ function reconcileLedger(rows = [], wallet = {}, payouts = []) {
     if (!LEDGER_TYPES.has(type)) {
       quarantined.push({...row, id, classification: "unclassified"}); continue;
     }
-    totals[type] = money(totals[type] + Math.abs(number(row.amount)));
+    const amount = Math.abs(number(row.amount));
+    if (type === "delivery_earning" && number(row.roadReimbursement) > 0) {
+      const road = Math.min(amount, Math.abs(number(row.roadReimbursement)));
+      totals.delivery_earning = money(totals.delivery_earning + amount - road);
+      totals.road_reimbursement = money(totals.road_reimbursement + road);
+    } else {
+      totals[type] = money(totals[type] + amount);
+    }
     production.push({...row, id, type});
   }
-  const credits = totals.delivery_earning + totals.tip + totals.waiting_fee + totals.no_show_fee + totals.adjustment_credit + totals.payout_failed_release;
+  const credits = totals.delivery_earning + totals.road_reimbursement + totals.tip + totals.waiting_fee + totals.no_show_fee + totals.adjustment_credit + totals.payout_failed_release;
   const debits = totals.adjustment_debit + totals.payout_reserved + totals.refund + totals.reversal;
   const calculatedAvailable = money(credits - debits);
   const storedAvailable = money(wallet.availableBalance || wallet.availableEarnings || wallet.accountBalance);
@@ -56,8 +64,9 @@ function materializedTotals(wallet = {}) {
   const adjustments = money(wallet.adjustmentsTotal || wallet.adjustmentTotal);
   return {
     delivery_earning: money(wallet.deliveryEarningsTotal || wallet.deliveryEarningTotal || wallet.deliveryTotal),
+    road_reimbursement: money(wallet.roadChargeReimbursementsTotal || wallet.roadReimbursementsTotal),
     tip: money(wallet.tipsTotal || wallet.tipTotal || wallet.tipsReceived),
-    waiting_fee: money(wallet.waitingFeesTotal || wallet.waitingNoShowTotal || wallet.waitingTotal),
+    waiting_fee: money(wallet.waitingFeesTotal || wallet.waitingTotal),
     no_show_fee: money(wallet.noShowFeesTotal || wallet.noShowTotal),
     adjustment_credit: adjustments > 0 ? adjustments : 0,
     adjustment_debit: adjustments < 0 ? Math.abs(adjustments) : 0,
@@ -162,7 +171,7 @@ async function reconcileRiderEarnings({db, riderId, actorId = "system", reason =
 }
 
 function getRiderEarningsSummary() {
-  return functions.https.onCall(async (data, context) => {
+  return callableRuntime.https.onCall(async (data, context) => {
     if (!context.auth) throw new functions.https.HttpsError("unauthenticated", "Rider must be signed in.");
     const uid = context.auth.uid;
     const db = getFirestore();
@@ -186,7 +195,7 @@ function getRiderEarningsSummary() {
 }
 
 function adminReconcileRiderEarnings() {
-  return functions.https.onCall(async (data, context) => {
+  return callableRuntime.https.onCall(async (data, context) => {
     if (!context.auth || !isFinanceAdmin(context)) {
       throw new functions.https.HttpsError("permission-denied", "Finance administrator access is required.");
     }
@@ -214,7 +223,15 @@ function adminReconcileRiderEarnings() {
 
 const scheduledRiderEarningsReconciliation = functions.pubsub.schedule("every 24 hours").onRun(async () => {
   const db = getFirestore();
-  const snapshot = await db.collection("riderEarnings").limit(25).get();
+  const cursorRef = db.collection("systemJobs").doc("riderEarningsReconciliation");
+  const cursorDoc = await cursorRef.get();
+  const cursor = `${cursorDoc.data() && cursorDoc.data().lastRiderId || ""}`;
+  let query = db.collection("riderEarnings").orderBy(FieldPath.documentId()).limit(25);
+  if (cursor) query = query.startAfter(cursor);
+  let snapshot = await query.get();
+  if (snapshot.empty && cursor) {
+    snapshot = await db.collection("riderEarnings").orderBy(FieldPath.documentId()).limit(25).get();
+  }
   let reconciled = 0;
   let reviewRequired = 0;
   for (const doc of snapshot.docs) {
@@ -228,6 +245,11 @@ const scheduledRiderEarningsReconciliation = functions.pubsub.schedule("every 24
     if (result.reconciled) reconciled += 1;
     else reviewRequired += 1;
   }
+  await cursorRef.set({
+    lastRiderId: snapshot.empty ? null : snapshot.docs[snapshot.docs.length - 1].id,
+    processed: snapshot.size,
+    updatedAt: FieldValue.serverTimestamp(),
+  }, {merge: true});
   return {scanned: snapshot.size, reconciled, reviewRequired};
 });
 

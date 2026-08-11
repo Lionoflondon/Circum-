@@ -644,12 +644,15 @@ async function updateDeliveryTrackingStatusHandler(data, context, db = getFirest
       if (earningRef && existingEarning && !existingEarning.exists) {
         transaction.set(earningRef, {
           transactionId: found.id,
+          idempotencyKey: `delivery_earning_${found.id}`,
           deliveryId: found.id,
           riderId,
           type: "delivery_earning",
           amount: settlement.amount + finalRoadSettlement.reimbursement,
           baseAmount: settlement.amount,
           roadReimbursement: finalRoadSettlement.reimbursement,
+          currency: "GBP",
+          source: "delivery_completion",
           trustPoints: settlement.trustPoints,
           status: "completed",
           createdAt: FieldValue.serverTimestamp(),

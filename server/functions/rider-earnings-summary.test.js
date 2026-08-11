@@ -17,8 +17,12 @@ test("readiness remains separate from withdrawal state", () => {
   assert.equal(connectReadiness({stripeConnectStatus: "pending"}), "pending_verification");
 });
 test("ledger categories reconcile and duplicate idempotency is counted once", () => {
-  const rows = [{type: "delivery_earning", amount: 10, idempotencyKey: "a"}, {type: "delivery_earning", amount: 10, idempotencyKey: "a"}, {type: "tip", amount: 2}, {type: "payout_reserved", amount: 3}, {type: "payout_failed_release", amount: 3}];
-  const value = reconcileLedger(rows, {availableBalance: 12}, []); assert.equal(value.calculatedAvailable, 12); assert.equal(value.reconciled, true);
+  const rows = [{type: "delivery_earning", amount: 11, roadReimbursement: 1, idempotencyKey: "a"}, {type: "delivery_earning", amount: 11, roadReimbursement: 1, idempotencyKey: "a"}, {type: "tip", amount: 2}, {type: "payout_reserved", amount: 3}, {type: "payout_failed_release", amount: 3}];
+  const value = reconcileLedger(rows, {availableBalance: 13}, []);
+  assert.equal(value.totals.delivery_earning, 10);
+  assert.equal(value.totals.road_reimbursement, 1);
+  assert.equal(value.calculatedAvailable, 13);
+  assert.equal(value.reconciled, true);
 });
 test("fixtures are quarantined without deleting ledger money", () => {
   const value=reconcileLedger([{type: "delivery_earning", amount: 50, isTest: true}], {}, []); assert.equal(value.production.length, 0); assert.equal(value.quarantined.length, 1);
@@ -38,7 +42,7 @@ test("materialized summary preserves wallet totals without requiring historical 
       pendingBalance: 7,
       deliveryEarningsTotal: 100,
       tipsTotal: 20,
-      waitingNoShowTotal: 5,
+      noShowFeesTotal: 5,
       completedDeliveries: 4,
     },
     payouts: [{status: "processing", amount: 12}],
@@ -52,7 +56,8 @@ test("materialized summary preserves wallet totals without requiring historical 
   assert.equal(value.reconciled, true);
   assert.equal(value.totals.delivery_earning, 100);
   assert.equal(value.totals.tip, 20);
-  assert.equal(value.totals.waiting_fee, 5);
+  assert.equal(value.totals.waiting_fee, 0);
+  assert.equal(value.totals.no_show_fee, 5);
   assert.equal(value.activePayout.status, "processing");
   assert.equal(value.activityCount, 2);
 });
@@ -62,6 +67,9 @@ test("Rider earnings reconciliation is audited and does not mutate balances", ()
   const index = fs.readFileSync("index.js", "utf8");
   assert.match(source, /function adminReconcileRiderEarnings\(\)/);
   assert.match(source, /const scheduledRiderEarningsReconciliation = functions\.pubsub\.schedule\("every 24 hours"\)/);
+  assert.match(source, /enforceAppCheck: true/);
+  assert.match(source, /orderBy\(FieldPath\.documentId\(\)\)/);
+  assert.match(source, /lastRiderId/);
   assert.match(source, /collection\("riderEarningsReconciliations"\)\.doc\(\)/);
   assert.match(source, /reconciliationRequired: !result\.reconciled/);
   assert.match(source, /lastReconciliationId: recordRef\.id/);
