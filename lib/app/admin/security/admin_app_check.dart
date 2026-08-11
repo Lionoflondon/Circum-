@@ -1,5 +1,4 @@
 import 'package:firebase_app_check/firebase_app_check.dart';
-import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/foundation.dart';
 
 const circumWebRecaptchaEnterpriseSiteKey =
@@ -57,11 +56,6 @@ Future<CircumAppCheckStartup> initializeCircumAppCheck({
   bool debug = kDebugMode,
   String webSiteKey = circumWebRecaptchaEnterpriseSiteKey,
 }) async {
-  debugPrint(
-    'Admin App Check runtime: siteKeyLength=${webSiteKey.trim().length} '
-    'firebaseApp=${Firebase.apps.isEmpty ? 'uninitialized' : Firebase.apps.first.name} '
-    'origin=${Uri.base.origin} provider=reCAPTCHA Enterprise',
-  );
   final webProvider = circumWebAppCheckProvider(
     isWeb: isWeb,
     siteKey: webSiteKey,
@@ -80,11 +74,7 @@ Future<CircumAppCheckStartup> initializeCircumAppCheck({
       webProvider: webProvider,
     );
     return const CircumAppCheckStartup.enabled();
-  } catch (error) {
-    final code = error is FirebaseException ? error.code : 'unclassified';
-    debugPrint(
-      'Admin App Check activation failure: type=${error.runtimeType} code=$code',
-    );
+  } catch (_) {
     return const CircumAppCheckStartup.blocked(
       'Circum security verification could not start. Please try again.',
     );
