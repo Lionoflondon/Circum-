@@ -386,8 +386,6 @@ service cloud.firestore {
         'fullName',
         'firstName',
         'lastName',
-        'handle',
-        'username',
         'dateOfBirth',
         'gender',
         'homeAddress',
@@ -1019,6 +1017,11 @@ service cloud.firestore {
             !hasUnsafeSelfUserTypeUpdate()
           )));
       allow delete: if hasRole('super_admin');
+    }
+
+    match /usernames/{normalizedHandle} {
+      allow read: if false;
+      allow create, update, delete: if false;
     }
 
     match /senderTrustEvents/{eventId} {
