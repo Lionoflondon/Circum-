@@ -26,22 +26,20 @@ Future<void> _startAdmin() async {
     );
     return;
   }
-  runApp(const AdminRoot());
-  WidgetsBinding.instance.addPostFrameCallback((_) {
-    unawaited(_activateAppCheckAfterStartup());
-  });
-}
-
-Future<void> _activateAppCheckAfterStartup() async {
   try {
     final appCheckStartup = await initializeCircumAppCheck();
-    if (appCheckStartup.blockStartup && kDebugMode) {
-      debugPrint('Admin App Check warning: ${appCheckStartup.message}');
+    if (appCheckStartup.blockStartup) {
+      runApp(_AdminStartupBlocked(message: appCheckStartup.message));
+      return;
     }
+    runApp(const AdminRoot());
   } catch (error) {
-    if (kDebugMode) {
-      debugPrint('Admin App Check warning: $error');
-    }
+    runApp(
+      const _AdminStartupBlocked(
+        message:
+            'Circum security verification could not start. Please try again.',
+      ),
+    );
   }
 }
 

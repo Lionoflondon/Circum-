@@ -4,6 +4,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:cloud_functions/cloud_functions.dart';
 import 'package:circum/app/admin/delivery/proof_of_delivery.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:firebase_app_check/firebase_app_check.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -59,6 +60,9 @@ class _AdminPhaseOneShellState extends State<AdminPhaseOneShell> {
   final _auth = FirebaseAuth.instance;
   final _db = FirebaseFirestore.instance;
   final _functions = FirebaseFunctions.instance;
+  final _usernameFunctions = FirebaseFunctions.instanceFor(
+    region: 'us-central1',
+  );
 
   AdminModule _module = AdminModule.dashboard;
   User? _user;
@@ -3287,7 +3291,16 @@ class _AdminPhaseOneShellState extends State<AdminPhaseOneShell> {
       return;
     }
     try {
-      final result = await _functions
+      final user = _auth.currentUser;
+      if (user == null) {
+        throw FirebaseFunctionsException(
+          code: 'unauthenticated',
+          message: 'Sign in again to run the username migration.',
+        );
+      }
+      await user.getIdToken(true);
+      await FirebaseAppCheck.instance.getToken(true);
+      final result = await _usernameFunctions
           .httpsCallable('migrateCircumUsernames')
           .call({'dryRun': dryRun, 'pageSize': 50});
       final data = Map<String, dynamic>.from(result.data as Map);
@@ -3315,8 +3328,25 @@ class _AdminPhaseOneShellState extends State<AdminPhaseOneShell> {
             : 'Safe username migration completed.',
       );
     } on FirebaseFunctionsException catch (error) {
-      setState(() => _message = _functionsMessage(error));
+      setState(() => _message = _usernameMigrationMessage(error));
+    } on FirebaseException {
+      setState(
+        () => _message = 'Security verification is not ready. Please retry.',
+      );
     }
+  }
+
+  String _usernameMigrationMessage(FirebaseFunctionsException error) {
+    return switch (error.code) {
+      'unauthenticated' => 'Sign in again to run the username migration.',
+      'failed-precondition' =>
+        'Security verification is not ready. Please retry.',
+      'permission-denied' => 'Your Admin role cannot run username migration.',
+      'unavailable' ||
+      'deadline-exceeded' =>
+        'Username migration is temporarily unavailable. Please retry.',
+      _ => 'Username migration could not be completed. Please retry.',
+    };
   }
 
   String _usernameMigrationSummary(Map<String, dynamic> data) {
