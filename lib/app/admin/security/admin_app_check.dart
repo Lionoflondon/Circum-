@@ -80,7 +80,11 @@ Future<CircumAppCheckStartup> initializeCircumAppCheck({
       webProvider: webProvider,
     );
     return const CircumAppCheckStartup.enabled();
-  } catch (_) {
+  } catch (error) {
+    final code = error is FirebaseException ? error.code : 'unclassified';
+    debugPrint(
+      'Admin App Check activation failure: type=${error.runtimeType} code=$code',
+    );
     return const CircumAppCheckStartup.blocked(
       'Circum security verification could not start. Please try again.',
     );
