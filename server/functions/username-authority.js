@@ -65,9 +65,8 @@ exports.claimCircumUsername = functions.runWith({enforceAppCheck: true}).https.o
       return;
     }
     const previous = current && String(current).trim().replace(/^@+/, "").toLowerCase();
-    const previousRef = previous && previous !== normalized
-        ? db.collection("usernames").doc(previous)
-        : null;
+    const previousRef = previous && previous !== normalized ?
+      db.collection("usernames").doc(previous) : null;
     const previousSnap = previousRef ? await transaction.get(previousRef) : null;
     if (previousSnap && previousSnap.exists && previousSnap.data().uid !== uid) {
       throw new functions.https.HttpsError("failed-precondition", "The current username is under review.");
