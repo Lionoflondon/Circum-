@@ -32,7 +32,10 @@ function requireOwner(context) {
 exports.claimCircumUsername = functions.runWith({enforceAppCheck: true}).https.onCall(async (data, context) => {
   const uid = requireOwner(context);
   const {normalized, display} = normalizeUsername(data && data.username);
-  const db = getFirestore();
+  return claimUsernameForUid({db: getFirestore(), uid, normalized, display});
+});
+
+async function claimUsernameForUid({db, uid, normalized, display}) {
   const registryRef = db.collection("usernames").doc(normalized);
   const userRef = db.collection("users").doc(uid);
   const riderRef = db.collection("riderProfiles").doc(uid);
@@ -104,6 +107,7 @@ exports.claimCircumUsername = functions.runWith({enforceAppCheck: true}).https.o
     if (riderSnap.exists) transaction.set(riderLegacyRef, {username: normalized, updatedAt: FieldValue.serverTimestamp()}, {merge: true});
   });
   return {ok: true, username: normalized, handle: `@${normalized}`};
-});
+}
 
 exports._normalizeUsername = normalizeUsername;
+exports._claimUsernameForUid = claimUsernameForUid;

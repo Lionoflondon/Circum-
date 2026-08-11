@@ -75,6 +75,7 @@ const senderFinance = require("./sender-finance");
 const senderSavedAddresses = require("./sender-saved-addresses");
 const senderAccount = require("./sender-account");
 const usernameAuthority = require("./username-authority");
+const usernameMigration = require("./username-migration");
 const riderAccount = require("./rider-account");
 const deliveryCleanup = require("./delivery-cleanup");
 const staleDelivery = require("./stale-delivery");
@@ -409,6 +410,7 @@ exports.deleteSenderSavedAddress =
   senderSavedAddresses.deleteSenderSavedAddress;
 exports.updateSenderProfile = senderAccount.updateSenderProfile;
 exports.claimCircumUsername = usernameAuthority.claimCircumUsername;
+exports.migrateCircumUsernames = usernameMigration.migrateCircumUsernames;
 exports.updateSenderProfilePhoto = senderAccount.updateSenderProfilePhoto;
 exports.updateSenderPushToken = senderAccount.updateSenderPushToken;
 exports.updateSenderNotificationState =

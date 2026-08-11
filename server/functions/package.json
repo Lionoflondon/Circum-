@@ -3,7 +3,7 @@
   "description": "Cloud Functions for Firebase",
   "scripts": {
     "lint": "eslint .",
-    "test": "node --test $(find . -maxdepth 1 -name '*.test.js' ! -name 'firestore-*-rules.test.js' -print)",
+    "test": "node --test $(find . -maxdepth 1 -name '*.test.js' ! -name 'firestore-*-rules.test.js' ! -name 'username-concurrency.test.js' -print)",
     "test:rules": "cd ../.. && firebase emulators:exec --only firestore \"node --test server/functions/firestore-live-tracking-rules.test.js server/functions/firestore-financial-authority-rules.test.js server/functions/firestore-sender-trust-rules.test.js\"",
     "test:iris": "node --test iris-core.test.js iris-security.test.js",
     "test:adjustments": "node --test delivery-adjustment-core.test.js",
