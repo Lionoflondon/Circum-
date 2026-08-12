@@ -3136,7 +3136,8 @@ class RiderCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final rider = AssignedRiderTrustView.fromDelivery(engine.activeDeliveryData);
+    final rider =
+        AssignedRiderTrustView.fromDelivery(engine.activeDeliveryData);
     final rankColor = _senderRankColor(rider.rank);
     return Container(
       padding: const EdgeInsets.all(12),
@@ -3228,7 +3229,8 @@ class RiderCard extends StatelessWidget {
               ETABadge(value: rider.etaDistanceLabel),
             ],
           ),
-          if (rider.experienceLabel.isNotEmpty || rider.qualifications.isNotEmpty) ...[
+          if (rider.experienceLabel.isNotEmpty ||
+              rider.qualifications.isNotEmpty) ...[
             const SizedBox(height: 8),
             Align(
               alignment: Alignment.centerLeft,
@@ -3240,7 +3242,8 @@ class RiderCard extends StatelessWidget {
                 ].join(' · '),
                 maxLines: 2,
                 overflow: TextOverflow.ellipsis,
-                style: const TextStyle(color: _TrackingTokens.muted, fontSize: 10.5),
+                style: const TextStyle(
+                    color: _TrackingTokens.muted, fontSize: 10.5),
               ),
             ),
           ],
@@ -3289,58 +3292,88 @@ class AssignedRiderTrustView {
     String text(List<Object?> values) {
       for (final value in values) {
         final candidate = '${value ?? ''}'.trim();
-        if (candidate.isNotEmpty && candidate.toLowerCase() != 'null') return candidate;
+        if (candidate.isNotEmpty && candidate.toLowerCase() != 'null')
+          return candidate;
       }
       return '';
     }
+
     final displayName = text([
-      profile['displayName'], delivery['riderName'], delivery['driverName'],
+      profile['displayName'],
+      delivery['riderName'],
+      delivery['driverName'],
       delivery['courierName'],
     ]);
     final rank = _canonicalSenderRank(text([
-      profile['rank'], delivery['riderRank'], delivery['rank'],
+      profile['rank'],
+      delivery['riderRank'],
+      delivery['rank'],
     ]));
     final makeModel = [vehicle['manufacturer'], vehicle['model']]
         .map((value) => '${value ?? ''}'.trim())
         .where((value) => value.isNotEmpty)
         .join(' ');
     final vehicleLabel = [
-      text([vehicle['colour']]), makeModel,
+      text([vehicle['colour']]),
+      makeModel,
       text([vehicle['type'], delivery['driverVehicle']]),
       text([vehicle['registration'], delivery['driverPlateNumber']]),
     ].where((value) => value.isNotEmpty).join(' · ');
     final eta = text([
-      delivery['riderEtaText'], delivery['etaText'], delivery['liveEtaText'],
+      delivery['riderEtaText'],
+      delivery['etaText'],
+      delivery['liveEtaText'],
     ]);
     final distance = text([
-      delivery['riderDistanceText'], delivery['distanceToRiderText'],
+      delivery['riderDistanceText'],
+      delivery['distanceToRiderText'],
       delivery['liveDistanceText'],
     ]);
-    final qualifications = (profile['qualifications'] ?? delivery['riderQualifications']);
+    final qualifications =
+        (profile['qualifications'] ?? delivery['riderQualifications']);
     return AssignedRiderTrustView(
-      riderId: text([profile['riderId'], delivery['assignedRiderId'], delivery['riderId']]),
+      riderId: text([
+        profile['riderId'],
+        delivery['assignedRiderId'],
+        delivery['riderId']
+      ]),
       displayName: displayName.isEmpty ? 'Your Circum Rider' : displayName,
-      username: text([profile['username'], delivery['riderUsername']]).replaceFirst(RegExp(r'^@+'), ''),
-      photoUrl: _safeRiderPhotoUrl(text([profile['photoUrl'], delivery['riderPhotoUrl'], delivery['photoURL']])),
+      username: text([profile['username'], delivery['riderUsername']])
+          .replaceFirst(RegExp(r'^@+'), ''),
+      photoUrl: _safeRiderPhotoUrl(text([
+        profile['photoUrl'],
+        delivery['riderPhotoUrl'],
+        delivery['photoURL']
+      ])),
       photoVersion: profile['photoVersion'] ?? delivery['riderPhotoVersion'],
       rank: rank,
-      rankAssigned: profile['rankAssigned'] == true || delivery['riderRankAssigned'] == true,
-      verified: profile['verified'] == true || delivery['riderVerified'] == true,
-      completedDeliveries: _nonNegativeInt(profile['completedDeliveries'] ?? delivery['riderCompletedDeliveries']),
+      rankAssigned: profile['rankAssigned'] == true ||
+          delivery['riderRankAssigned'] == true,
+      verified:
+          profile['verified'] == true || delivery['riderVerified'] == true,
+      completedDeliveries: _nonNegativeInt(profile['completedDeliveries'] ??
+          delivery['riderCompletedDeliveries']),
       rating: _safeRating(profile['rating'] ?? delivery['riderRating']),
-      vehicleLabel: vehicleLabel.isEmpty ? 'Vehicle details updating' : vehicleLabel,
-      etaDistanceLabel: [eta, distance].where((value) => value.isNotEmpty).join(' · ').isEmpty
-          ? 'Updating ETA'
-          : [eta, distance].where((value) => value.isNotEmpty).join(' · '),
+      vehicleLabel:
+          vehicleLabel.isEmpty ? 'Vehicle details updating' : vehicleLabel,
+      etaDistanceLabel:
+          [eta, distance].where((value) => value.isNotEmpty).join(' · ').isEmpty
+              ? 'Updating ETA'
+              : [eta, distance].where((value) => value.isNotEmpty).join(' · '),
       qualifications: qualifications is List
-          ? qualifications.map((value) => '$value'.trim()).where((value) => value.isNotEmpty).take(3).toList()
+          ? qualifications
+              .map((value) => '$value'.trim())
+              .where((value) => value.isNotEmpty)
+              .take(3)
+              .toList()
           : const [],
     );
   }
 
   String get experienceLabel {
     final parts = <String>[];
-    if (completedDeliveries != null) parts.add('$completedDeliveries completed');
+    if (completedDeliveries != null)
+      parts.add('$completedDeliveries completed');
     if (rating != null) parts.add('${rating!.toStringAsFixed(1)} rating');
     return parts.join(' · ');
   }
@@ -3355,14 +3388,16 @@ class _AssignedRiderAvatar extends StatelessWidget {
     final fallback = Center(
       child: Text(
         rider.displayName.isEmpty ? 'C' : rider.displayName[0].toUpperCase(),
-        style: const TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.w800),
+        style: const TextStyle(
+            color: Colors.white, fontSize: 18, fontWeight: FontWeight.w800),
       ),
     );
     return Semantics(
       image: true,
       label: '${rider.displayName} profile photo',
       child: CircleAvatar(
-        key: ValueKey('${rider.riderId}:${rider.photoVersion}:${rider.photoUrl}'),
+        key: ValueKey(
+            '${rider.riderId}:${rider.photoVersion}:${rider.photoUrl}'),
         radius: 25,
         backgroundColor: const Color(0xFF13233F),
         child: rider.photoUrl.isEmpty
@@ -3396,8 +3431,13 @@ class _RiderTrustPill extends StatelessWidget {
           border: Border.all(color: color.withValues(alpha: .30)),
         ),
         child: Row(mainAxisSize: MainAxisSize.min, children: [
-          if (icon != null) ...[Icon(icon, size: 11, color: color), const SizedBox(width: 4)],
-          Text(label, style: TextStyle(color: color, fontSize: 10.5, fontWeight: FontWeight.w800)),
+          if (icon != null) ...[
+            Icon(icon, size: 11, color: color),
+            const SizedBox(width: 4)
+          ],
+          Text(label,
+              style: TextStyle(
+                  color: color, fontSize: 10.5, fontWeight: FontWeight.w800)),
         ]),
       );
 }
@@ -4005,30 +4045,71 @@ class _SearchingOrbState extends State<_SearchingOrb>
       animation: _controller,
       builder: (context, _) {
         final pulse = math.sin(_controller.value * math.pi);
-        return Container(
-          width: 34,
-          height: 34,
-          decoration: BoxDecoration(
-            shape: BoxShape.circle,
-            color: const Color(0xFF3B82F6).withValues(alpha: .13),
-            border: Border.all(
-              color: const Color(
-                0xFF3B82F6,
-              ).withValues(alpha: .25 + pulse * .20),
-            ),
-            boxShadow: [
-              BoxShadow(
-                color: const Color(
-                  0xFF3B82F6,
-                ).withValues(alpha: .14 + pulse * .12),
-                blurRadius: 16 + pulse * 10,
+        final orbitAngle = _controller.value * math.pi * 2;
+        const orbitRadius = 17.0;
+        const green = Color(0xFF34D399);
+        return SizedBox(
+          width: 42,
+          height: 42,
+          child: Stack(
+            alignment: Alignment.center,
+            clipBehavior: Clip.none,
+            children: [
+              Container(
+                width: 38,
+                height: 38,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  border: Border.all(
+                    color: green.withValues(alpha: .22 + pulse * .18),
+                  ),
+                ),
+              ),
+              Transform.translate(
+                offset: Offset(
+                  math.cos(orbitAngle) * orbitRadius,
+                  math.sin(orbitAngle) * orbitRadius,
+                ),
+                child: Container(
+                  width: 7,
+                  height: 7,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: green,
+                    boxShadow: [
+                      BoxShadow(
+                        color: green.withValues(alpha: .55),
+                        blurRadius: 8,
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              Container(
+                width: 34,
+                height: 34,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: const Color(0xFF3B82F6).withValues(alpha: .13),
+                  border: Border.all(
+                    color: const Color(
+                      0xFF3B82F6,
+                    ).withValues(alpha: .25 + pulse * .20),
+                  ),
+                  boxShadow: [
+                    BoxShadow(
+                      color: green.withValues(alpha: .10 + pulse * .10),
+                      blurRadius: 16 + pulse * 10,
+                    ),
+                  ],
+                ),
+                child: const Icon(
+                  Icons.radar_rounded,
+                  color: Color(0xFF60A5FA),
+                  size: 18,
+                ),
               ),
             ],
-          ),
-          child: const Icon(
-            Icons.radar_rounded,
-            color: Color(0xFF60A5FA),
-            size: 18,
           ),
         );
       },
