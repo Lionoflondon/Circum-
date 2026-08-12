@@ -5,6 +5,21 @@ import 'package:flutter_test/flutter_test.dart';
 
 void main() {
   group('IrisWeightEstimator', () {
+    test('packaging adjectives cannot identify an item by themselves', () {
+      expect(IrisItemRepository.match('boxed'), isNull);
+      expect(IrisItemRepository.match('fragile'), isNull);
+      expect(IrisItemRepository.match('large'), isNull);
+      expect(IrisItemRepository.match('urgent return'), isNull);
+    });
+
+    test('generic luggage uses a reviewable typical range, not airline limit', () {
+      final suitcase = IrisItemRepository.match('suitcase')!;
+      expect(suitcase.itemName, 'Suitcase');
+      expect(suitcase.estimatedWeightKg, 8);
+      expect(suitcase.minimumWeightKg, 1);
+      expect(suitcase.maximumWeightKg, 32);
+      expect(suitcase.requiresIRISReview, isTrue);
+    });
     test('repository contains the core catalogue and curated expansions', () {
       expect(IrisItemRepository.items.length,
           IrisItemRepository.expectedItemCount);
