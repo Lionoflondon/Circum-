@@ -43,6 +43,19 @@ function distanceKm(a, b) {
 }
 
 function accountEligibilityDecision(profile = {}) {
+  if (profile.suspended === true || profile.isSuspended === true || profile.isFrozen === true || profile.isClosed === true) {
+    return {eligible: false, reason: "account_blocked"};
+  }
+  if ([profile.accountStatus, profile.riderStatus, profile.driverStatus].some((status) => BLOCKED_ACCOUNT_STATUSES.has(lower(status)))) {
+    return {eligible: false, reason: "account_blocked"};
+  }
+  // A founder test waiver is an explicit, audited operational designation.
+  // It may waive incomplete onboarding fields for live E2E, but never an
+  // account suspension/freeze/closure or any presence, GPS, vehicle, service,
+  // distance, or offer-integrity requirement evaluated after this gate.
+  if (riderPresenceCore.founderDispatchOverride(profile)) {
+    return {eligible: true, reason: "founder_test_waiver"};
+  }
   if (profile.dispatchEligible !== true) return {eligible: false, reason: "dispatch_not_eligible"};
   if (lower(profile.approvalStatus) !== "approved") return {eligible: false, reason: "approval_not_approved"};
   if (!new Set(["approved", "verified"]).has(lower(profile.verificationStatus))) {
@@ -51,12 +64,6 @@ function accountEligibilityDecision(profile = {}) {
   if (lower(profile.onboardingStatus) !== "approved") return {eligible: false, reason: "onboarding_not_approved"};
   if (profile.documentsVerified !== true) return {eligible: false, reason: "documents_not_verified"};
   if (profile.vehicleVerified !== true) return {eligible: false, reason: "vehicle_not_verified"};
-  if (profile.suspended === true || profile.isSuspended === true || profile.isFrozen === true || profile.isClosed === true) {
-    return {eligible: false, reason: "account_blocked"};
-  }
-  if ([profile.accountStatus, profile.riderStatus, profile.driverStatus].some((status) => BLOCKED_ACCOUNT_STATUSES.has(lower(status)))) {
-    return {eligible: false, reason: "account_blocked"};
-  }
   return {eligible: true, reason: "eligible"};
 }
 

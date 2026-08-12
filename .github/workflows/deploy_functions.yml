@@ -22,5 +22,5 @@ jobs:
         with:
           credentials_json: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_CIRCUM_2797C }}
       - run: npm install -g firebase-tools
-      - run: firebase deploy --only "$(node scripts/scoped_functions_deploy_list.js --only createSenderPaidDelivery,finalizeSenderWebCheckout)" --project circum-2797c
+      - run: firebase deploy --only "$(node scripts/scoped_functions_deploy_list.js --only acceptRideRequests,getAvaliableRequests,getAvailableRequests)" --project circum-2797c
       - run: node scripts/verify_functions_runtime_context.js circum-2797c

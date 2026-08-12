@@ -87,6 +87,36 @@ test("eligible Rider passes the shared dispatch predicate", () => {
   assert.equal(result.intelligence.advisoryOnly, true);
 });
 
+test("audited founder test waiver bypasses onboarding only", () => {
+  const founder = {
+    ...profile,
+    dispatchEligible: false,
+    approvalStatus: "submitted",
+    verificationStatus: "pending",
+    onboardingStatus: "submitted",
+    documentsVerified: false,
+    vehicleVerified: false,
+    founderTestAccount: {
+      active: true,
+      accountType: "internal_tester",
+      waivers: ["dispatch_eligibility"],
+    },
+  };
+
+  assert.equal(accountEligibilityDecision(founder).reason, "founder_test_waiver");
+  assert.equal(dispatchEligibilityDecision({
+    riderId: "rider-1", profile: founder, presence, delivery, now,
+  }).eligible, true);
+  assert.equal(accountEligibilityDecision({...founder, isSuspended: true}).reason, "account_blocked");
+  assert.equal(dispatchEligibilityDecision({
+    riderId: "rider-1",
+    profile: founder,
+    presence: {...presence, isOnline: false},
+    delivery,
+    now,
+  }).reason, "offline");
+});
+
 test("Rider projection exposes authoritative route geometry and earnings components", () => {
   const projected = riderAssignedJobProjection("delivery-1", {
     ...delivery,
