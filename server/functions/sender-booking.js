@@ -1774,13 +1774,12 @@ async function createPaidDeliveryFromSession(stripe, sender, data) {
   const quote = quoteSnap.data();
   let canonicalAddresses;
   try {
-    canonicalAddresses = await resolveCanonicalAddressPair(data || {});
+    canonicalAddresses = canonicalAddressPair({
+      pickupAddressCanonical: quote.pickupAddressCanonical,
+      dropoffAddressCanonical: quote.dropoffAddressCanonical,
+    });
   } catch (error) {
-    throw new functions.https.HttpsError("failed-precondition", "The paid delivery requires the verified booking addresses.");
-  }
-  if (!sameCanonicalAddress(canonicalAddresses.pickup, quote.pickupAddressCanonical) ||
-      !sameCanonicalAddress(canonicalAddresses.dropoff, quote.dropoffAddressCanonical)) {
-    throw new functions.https.HttpsError("failed-precondition", "The paid delivery addresses do not match the paid quote.");
+    throw new functions.https.HttpsError("failed-precondition", "The paid quote is missing verified booking addresses.");
   }
   const draftId = text(data.draftId);
   const idempotencyKey = text(data.idempotencyKey) ||
