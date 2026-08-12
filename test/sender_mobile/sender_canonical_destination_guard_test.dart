@@ -118,6 +118,19 @@ void main() {
     }
   });
 
+  test('release cannot drop Business or Roth purchase capability', () {
+    final home = read('lib/app/sender_mobile/sender_mobile_home.dart');
+    final routing = read('lib/web_platform_routing.dart');
+    final wallet = read('lib/app/sender_mobile/sender_wallet.dart');
+
+    expect(home, contains("import '../business/business_access_view.dart';"));
+    expect(home, contains('BusinessAccessView'));
+    expect(routing, contains("canonicalPath: '/send/business'"));
+    expect(wallet, contains("title: 'Buy Roth'"));
+    expect(wallet, contains("httpsCallable('createWalletTopUp')"));
+    expect(wallet, contains("checkoutUrl.scheme != 'https'"));
+  });
+
   test('Sender web deep link opens the canonical Gifts flow', () {
     final preview = read('lib/app/sender_mobile/sender_mobile_preview.dart');
     final home = read('lib/app/sender_mobile/sender_mobile_home.dart');
@@ -306,7 +319,8 @@ void main() {
     expect(quotePreflight, contains('clearSenderCreatedRequest: true'));
   });
 
-  test('Sender restores canonical route before one automatic quote request', () {
+  test('Sender restores canonical route before one automatic quote request',
+      () {
     final canvas = read('lib/app/sender_mobile/sender_booking_canvas.dart');
     final requestStart = canvas.indexOf('void _requestBackendQuote');
     final parcelChangeStart =
