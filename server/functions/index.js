@@ -481,6 +481,7 @@ exports.deleteSenderSavedAddress =
   senderSavedAddresses.deleteSenderSavedAddress;
 exports.updateSenderProfile = senderAccount.updateSenderProfile;
 exports.claimSenderUsername = usernameAuthority.claimSenderUsername;
+exports.claimCircumUsername = usernameAuthority.claimCircumUsername;
 exports.updateSenderProfilePhoto = senderAccount.updateSenderProfilePhoto;
 exports.updateSenderPushToken = senderAccount.updateSenderPushToken;
 exports.updateSenderNotificationState =

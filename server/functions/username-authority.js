@@ -38,10 +38,15 @@ async function claimUsername(data, context, dependencies = {}) {
   const db = dependencies.db || getFirestore();
   const uid = context.auth.uid;
   const userRef = db.collection("users").doc(uid);
+  const riderRef = db.collection("riders").doc(uid);
+  const riderProfileRef = db.collection("riderProfiles").doc(uid);
   const targetRef = db.collection("usernames").doc(decision.username);
   await db.runTransaction(async (transaction) => {
-    const [userSnapshot, targetSnapshot] = await Promise.all([
-      transaction.get(userRef), transaction.get(targetRef),
+    const [userSnapshot, targetSnapshot, riderSnapshot, riderProfileSnapshot] = await Promise.all([
+      transaction.get(userRef),
+      transaction.get(targetRef),
+      transaction.get(riderRef),
+      transaction.get(riderProfileRef),
     ]);
     const user = userSnapshot.exists ? userSnapshot.data() || {} : {};
     const previous = normalizeUsername(user.username);
@@ -72,6 +77,18 @@ async function claimUsername(data, context, dependencies = {}) {
       usernameUpdatedAt: FieldValue.serverTimestamp(),
       updatedAt: FieldValue.serverTimestamp(),
     }, {merge: true});
+    const riderUsernamePatch = {
+      username: decision.username,
+      canonicalUsername: decision.username,
+      usernameUpdatedAt: FieldValue.serverTimestamp(),
+      updatedAt: FieldValue.serverTimestamp(),
+    };
+    if (riderSnapshot.exists) {
+      transaction.set(riderRef, riderUsernamePatch, {merge: true});
+    }
+    if (riderProfileSnapshot.exists) {
+      transaction.set(riderProfileRef, riderUsernamePatch, {merge: true});
+    }
     transaction.set(db.collection("senderProfileEvents").doc(), {
       uid,
       action: previous ? "sender_username_changed" : "sender_username_claimed",
@@ -86,5 +103,6 @@ async function claimUsername(data, context, dependencies = {}) {
 
 module.exports = {
   claimSenderUsername: functions.runWith({enforceAppCheck: true}).https.onCall(claimUsername),
+  claimCircumUsername: functions.runWith({enforceAppCheck: true}).https.onCall(claimUsername),
   _test: {normalizeUsername, validateUsername, claimUsername},
 };

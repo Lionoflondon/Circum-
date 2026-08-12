@@ -21,6 +21,8 @@ test("username claim is one Firestore transaction and retains previous handles",
   assert.match(source, /targetSnapshot\.exists && targetSnapshot\.data\(\)\.uid !== uid/);
   assert.match(source, /status: "retained"/);
   assert.match(source, /enforceAppCheck: true/);
+  assert.match(source, /claimCircumUsername/);
+  assert.match(source, /riderProfiles/);
 });
 
 test("general profile mutation cannot establish username authority", () => {
@@ -91,4 +93,18 @@ test("changing a handle retains the old canonical name", async () => {
   assert.equal(store.records.get("usernames/first_name").status, "retained");
   assert.equal(store.records.get("usernames/second_name").uid, "user-a");
   assert.equal(store.records.get("users/user-a").username, "second_name");
+});
+
+test("a Rider username claim projects the canonical handle to Rider profiles", async () => {
+  const store = fakeFirestore({
+    "riders/rider-a": {approvalStatus: "approved"},
+    "riderProfiles/rider-a": {name: "Ayo Jason"},
+  });
+  await authority.claimUsername(
+      {username: "Ayo_Jason"},
+      {auth: {uid: "rider-a"}},
+      {db: store.db},
+  );
+  assert.equal(store.records.get("riders/rider-a").username, "ayo_jason");
+  assert.equal(store.records.get("riderProfiles/rider-a").canonicalUsername, "ayo_jason");
 });
