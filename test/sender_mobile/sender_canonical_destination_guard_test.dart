@@ -306,6 +306,27 @@ void main() {
     expect(quotePreflight, contains('clearSenderCreatedRequest: true'));
   });
 
+  test('Sender restores canonical route before one automatic quote request', () {
+    final canvas = read('lib/app/sender_mobile/sender_booking_canvas.dart');
+    final requestStart = canvas.indexOf('void _requestBackendQuote');
+    final parcelChangeStart =
+        canvas.indexOf('void _onParcelChanged', requestStart);
+    expect(requestStart, isNonNegative);
+    expect(parcelChangeStart, greaterThan(requestStart));
+    final request = canvas.substring(requestStart, parcelChangeStart);
+
+    expect(request, contains('engine.pickupCoordinate == null'));
+    expect(request, contains('engine.desinationCoordinate == null'));
+    expect(request, contains('_restoreRouteFromDraftIfReady(draft);'));
+    expect(request, contains('if (_lastBackendQuoteKey == quoteKey)'));
+    expect(
+      request,
+      isNot(contains(
+        '_lastBackendQuoteKey == quoteKey && engine.senderQuoteError.isEmpty',
+      )),
+    );
+  });
+
   test('Sender parcel edits and photo removal clear stale IRIS state', () {
     final canvas = read('lib/app/sender_mobile/sender_booking_canvas.dart');
     final bloc = read('lib/app/send_package/bloc/send_package_bloc.dart');

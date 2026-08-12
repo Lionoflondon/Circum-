@@ -839,8 +839,12 @@ class _SenderBookingCanvasState extends State<SenderBookingCanvas> {
   }
 
   void _requestBackendQuote(SenderBookingDraft draft) {
-    _restoreRouteFromDraftIfReady(draft);
     final engine = context.read<SendPackageBloc>().state;
+    if (engine.pickupCoordinate == null ||
+        engine.desinationCoordinate == null) {
+      _restoreRouteFromDraftIfReady(draft);
+      return;
+    }
     final routeReady = _routeReadyForQuote(engine, draft);
     if (!routeReady) {
       return;
@@ -863,7 +867,7 @@ class _SenderBookingCanvasState extends State<SenderBookingCanvas> {
       draft.scheduledJourneyAt,
       business?.businessId ?? '',
     ].join('|');
-    if (_lastBackendQuoteKey == quoteKey && engine.senderQuoteError.isEmpty) {
+    if (_lastBackendQuoteKey == quoteKey) {
       return;
     }
     _lastBackendQuoteKey = quoteKey;
