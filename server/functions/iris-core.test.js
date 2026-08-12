@@ -1071,7 +1071,7 @@ test("rider rank never hides jobs and only changes backup priority", () => {
   assert.equal(riderDispatchPriority({rank: "sentinel"}, {createdAt: "2026-06-14T11:55:00Z"}, now), 1);
 });
 
-test("Founder designation does not waive normal dispatch eligibility", () => {
+test("Founder dispatch waiver is explicit and onboarding-only waivers are insufficient", () => {
   const pending = {
     approvalStatus: "submitted",
     verificationStatus: "verification_pending",
@@ -1101,8 +1101,8 @@ test("Founder designation does not waive normal dispatch eligibility", () => {
       waivers: ["dispatch_eligibility"],
     },
   };
-  assert.equal(riderCanViewDispatch(waivesDispatch, {}), false);
-  assert.equal(riderDispatchEligibilityReason(waivesDispatch), "dispatch_not_eligible");
+  assert.equal(riderCanViewDispatch(waivesDispatch, {}), true);
+  assert.equal(riderDispatchEligibilityReason(waivesDispatch), "founder_test_waiver");
 
   const inactiveDesignation = {
     ...pending,

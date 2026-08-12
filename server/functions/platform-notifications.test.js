@@ -144,7 +144,7 @@ test("dispatch candidate decision rejects offline presence even when profile is 
   assert.equal(decision.reason, "offline");
 });
 
-test("dispatch candidate decision does not let founder designation bypass approval", () => {
+test("founder dispatch waiver still requires a canonical pickup location", () => {
   const now = Date.now();
   const decision = _private.dispatchCandidateDecision({
     id: "founder-rider",
@@ -174,7 +174,7 @@ test("dispatch candidate decision does not let founder designation bypass approv
     },
   }, {vehicleType: "bike"}, now);
   assert.equal(decision.eligible, false);
-  assert.equal(decision.reason, "dispatch_not_eligible");
+  assert.equal(decision.reason, "pickup_location_missing");
 });
 
 test("delivery status system messages carry a deterministic retry identity", () => {
