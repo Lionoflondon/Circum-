@@ -651,6 +651,8 @@ test("specialist live animals and human remains require referral, not normal che
   for (const [description, referralType] of [
     ["snake", "pet_transport"],
     ["goat", "pet_transport"],
+    ["pet rabbit", "pet_transport"],
+    ["bunny in carrier", "pet_transport"],
     ["live fish", "pet_transport"],
     ["insects", "pet_transport"],
     ["perro", "pet_transport"],
@@ -665,6 +667,10 @@ test("specialist live animals and human remains require referral, not normal che
     assert.equal(result.serviceability.status, "manual_review", description);
     assert.equal(result.internal.pricingModifiers.normalCheckoutEligible, false, description);
     assert.equal(result.internal.riderMatching.vehicleRequired, "van", description);
+  }
+
+  for (const description of ["rabbit food", "rabbit toy", "bunny food", "bunny toy"]) {
+    assert.equal(classifyIris({description}).compliance.status, "allowed", description);
   }
 });
 
@@ -1392,7 +1398,7 @@ test("72,000 London scenarios preserve honest display matching and IRIS invarian
     {kind: "unknown", items: ["bespoke ceramic widget", "unlabelled market purchase", "custom theatre prop", "unknown boxed item"]},
     {kind: "known", items: ["office chair", "moving box", "gaming PC", "camera kit", "catering trays", "power tool case"]},
     {kind: "prohibited", items: ["firearm", "explosive materials", "hazardous chemical"]},
-    {kind: "referral", items: ["dog", "cat in carrier"]},
+    {kind: "referral", items: ["dog", "cat in carrier", "pet rabbit", "bunny in carrier"]},
     {kind: "multi_item", items: ["two laptops and three monitors", "office chair and moving box", "camera kit and studio lighting"]},
   ];
   const areas = ["Camden", "Westminster", "Hackney", "Greenwich", "Croydon", "Ealing", "Islington", "Southwark", "Tower Hamlets", "Haringey", "Lambeth", "Wandsworth"];

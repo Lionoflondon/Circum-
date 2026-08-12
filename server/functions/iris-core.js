@@ -1974,13 +1974,13 @@ function complianceFor(text, rawText = text) {
   if (containsLiveAnimalEmoji(rawText) && !includesAny(text, ["dog food", "cat food", "pet food", "food", "lead", "collar", "toy"])) {
     return {status: "referral_required", reasonCodes: ["specialist_transport_required"], referralType: "pet_transport", customerMessage: "This request needs a specialist referral rather than normal rider dispatch."};
   }
-  const petTermDetected = hasSafetyTerm(safetyScan, ["dog", "cat", "puppy", "puppies", "kitten", "kittens"]);
+  const petTermDetected = hasSafetyTerm(safetyScan, ["dog", "cat", "puppy", "puppies", "kitten", "kittens", "rabbit", "rabbits", "bunny", "bunnies"]);
   if (hasSafetyTerm(safetyScan, specialistTerms) || hasSafetyPhrase(safetyScan, specialistPhrases) ||
     includesAny(text, ["live animal", "livestock", "pet transport", "dog transport", "cat transport", "animal transport", "veterinary transport", "funeral", "deceased", "body transport", "human remains", "car transport", "vehicle transport", "motorbike transport", "industrial machinery", "specialist freight", "piano", "pianos"]) ||
     petTermDetected &&
-    !includesAny(text, ["dog food", "cat food", "cat litter", "dog lead", "cat lead", "dog collar", "cat collar", "dog toy", "cat toy", "puppy food", "kitten food", "puppy toy", "kitten toy"])) {
+    !includesAny(text, ["dog food", "cat food", "cat litter", "dog lead", "cat lead", "dog collar", "cat collar", "dog toy", "cat toy", "puppy food", "kitten food", "puppy toy", "kitten toy", "rabbit food", "rabbit toy", "bunny food", "bunny toy"])) {
     let referralType = "specialist_freight";
-    if (hasSafetyTerm(safetyScan, ["snake", "goat", "insect", "insects", "perro", "dog", "cat", "puppy", "puppies", "kitten", "kittens"]) || includesAny(text, ["pet", "dog", "cat", "puppy", "puppies", "kitten", "kittens", "live animal", "livestock", "live fish", "animal transport", "veterinary transport"])) referralType = "pet_transport";
+    if (hasSafetyTerm(safetyScan, ["snake", "goat", "insect", "insects", "perro", "dog", "cat", "puppy", "puppies", "kitten", "kittens", "rabbit", "rabbits", "bunny", "bunnies"]) || includesAny(text, ["pet", "dog", "cat", "puppy", "puppies", "kitten", "kittens", "rabbit", "rabbits", "bunny", "bunnies", "live animal", "livestock", "live fish", "animal transport", "veterinary transport"])) referralType = "pet_transport";
     if (includesAny(text, ["funeral", "deceased", "body transport", "human remains"])) referralType = "funeral_transport";
     if (includesAny(text, ["car transport", "vehicle transport", "motorbike transport"])) referralType = "vehicle_transport";
     return {status: "referral_required", reasonCodes: ["specialist_transport_required"], referralType, customerMessage: "This request needs a specialist referral rather than normal rider dispatch."};
