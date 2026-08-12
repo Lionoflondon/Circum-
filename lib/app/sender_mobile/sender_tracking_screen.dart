@@ -2003,16 +2003,9 @@ class _TrackingPanelContent extends StatelessWidget {
           switchOutCurve: Curves.easeOut,
           transitionBuilder: (child, animation) =>
               FadeTransition(opacity: animation, child: child),
-          child: Text(
+          child: SenderCinematicHeading(
             content.title,
             key: ValueKey(content.title),
-            style: const TextStyle(
-              color: Colors.white,
-              fontFamily: 'DM Serif Display',
-              fontSize: 24,
-              height: 1.15,
-              fontWeight: FontWeight.w400,
-            ),
           ),
         ),
         const SizedBox(height: 6),
@@ -4022,7 +4015,11 @@ class _DeliveryReceiptView extends StatelessWidget {
       backgroundColor: const Color(0xFF07090F),
       appBar: AppBar(
         backgroundColor: Colors.transparent,
-        title: const Text('Delivery receipt'),
+        title: const SenderCinematicHeading(
+          'Delivery receipt',
+          fontSize: 18,
+          maxLines: 1,
+        ),
       ),
       body: ListView(
         padding: const EdgeInsets.all(20),

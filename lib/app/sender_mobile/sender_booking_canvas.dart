@@ -23,6 +23,7 @@ import '../send_package/models/place_coordinates.m.dart';
 import '../send_package/repo/place_api.dart';
 import 'sender_accessibility.dart';
 import 'sender_booking_state.dart';
+import 'design_system/sender_design_system.dart';
 import 'sender_finance.dart';
 import 'sender_saved_addresses.dart';
 import 'sender_tracking_screen.dart';
@@ -1423,15 +1424,18 @@ class _BookingPanel extends StatelessWidget {
                     ),
                   ),
                 ),
-                Text(
-                  senderStepTitle(draft.step),
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 24,
-                    height: 1.08,
-                    fontWeight: FontWeight.w900,
+                if (draft.step == SenderBookingStep.payment)
+                  SenderCinematicHeading(senderStepTitle(draft.step))
+                else
+                  Text(
+                    senderStepTitle(draft.step),
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 24,
+                      height: 1.08,
+                      fontWeight: FontWeight.w900,
+                    ),
                   ),
-                ),
                 const SizedBox(height: 14),
                 content,
               ],
@@ -3733,15 +3737,11 @@ class _ReviewTopBar extends StatelessWidget {
             onTap: onBack,
           ),
           const Expanded(
-            child: Text(
+            child: SenderCinematicHeading(
               'Review your delivery',
+              fontSize: 18,
               textAlign: TextAlign.center,
-              style: TextStyle(
-                color: Colors.white,
-                fontSize: 18,
-                fontWeight: FontWeight.w800,
-                letterSpacing: .1,
-              ),
+              maxLines: 1,
             ),
           ),
           _BookingCancelPill(onTap: onCancel),
