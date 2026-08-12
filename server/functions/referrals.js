@@ -353,11 +353,10 @@ exports.getReferralDashboard = functions.runWith({enforceAppCheck: true}).https.
   };
 });
 
-function becameCompleted(before, after) {
+function becameCompleted(before, after, completedStatuses = ["completed", "delivered"]) {
   const was = `${before.status || before.giftStatus || ""}`.toLowerCase();
   const now = `${after.status || after.giftStatus || ""}`.toLowerCase();
-  return !["completed", "delivered", "active"].includes(was) &&
-    ["completed", "delivered", "active"].includes(now);
+  return !completedStatuses.includes(was) && completedStatuses.includes(now);
 }
 
 exports.activateReferralOnDeliveryCompleted = functions.firestore
@@ -365,7 +364,7 @@ exports.activateReferralOnDeliveryCompleted = functions.firestore
     .onUpdate(async (change, context) => {
       const before = change.before.data() || {};
       const after = change.after.data() || {};
-      if (!becameCompleted(before, after)) return null;
+      if (!becameCompleted(before, after, ["completed", "delivered"])) return null;
       const payment = `${after.paymentStatus || ""}`.toLowerCase();
       if (!["paid", "succeeded", "success"].includes(payment)) return null;
       const deliveryId = context.params.deliveryId;
@@ -383,7 +382,7 @@ exports.activateReferralOnGiftCompleted = functions.firestore
     .onUpdate(async (change, context) => {
       const before = change.before.data() || {};
       const after = change.after.data() || {};
-      if (!becameCompleted(before, after)) return null;
+      if (!becameCompleted(before, after, ["completed", "delivered"])) return null;
       if (`${after.paymentStatus || ""}`.toLowerCase() !== "paid") return null;
       const senderId = `${after.senderId || ""}`;
       if (!senderId) return null;
@@ -400,7 +399,7 @@ exports.activateReferralOnHealthPlusCompleted = functions.firestore
     .onUpdate(async (change, context) => {
       const before = change.before.data() || {};
       const after = change.after.data() || {};
-      if (!becameCompleted(before, after)) return null;
+      if (!becameCompleted(before, after, ["completed", "delivered"])) return null;
       if (!["paid", "succeeded", "success"].includes(`${after.paymentStatus || ""}`.toLowerCase())) return null;
       const userId = `${after.senderId || after.userId || after.profileId || ""}`;
       if (!userId) return null;
@@ -411,3 +410,5 @@ exports.activateReferralOnHealthPlusCompleted = functions.firestore
         userEmail: after.email,
       });
     });
+
+exports._private = {becameCompleted};
