@@ -1385,6 +1385,65 @@ test("common London courier items always receive practical packaged weights", ()
   }
 });
 
+test("72,000 London scenarios preserve honest display matching and IRIS invariants", () => {
+  const scenarios = [
+    {kind: "screen", items: ["32 inch display", "OLED display", "electronic display", "LED display"]},
+    {kind: "retail_display", items: ["handmade shop display", "retail window display", "market stall display", "bespoke product display"]},
+    {kind: "unknown", items: ["bespoke ceramic widget", "unlabelled market purchase", "custom theatre prop", "unknown boxed item"]},
+    {kind: "known", items: ["office chair", "moving box", "gaming PC", "camera kit", "catering trays", "power tool case"]},
+    {kind: "prohibited", items: ["firearm", "explosive materials", "hazardous chemical"]},
+    {kind: "referral", items: ["dog", "cat in carrier"]},
+    {kind: "multi_item", items: ["two laptops and three monitors", "office chair and moving box", "camera kit and studio lighting"]},
+  ];
+  const areas = ["Camden", "Westminster", "Hackney", "Greenwich", "Croydon", "Ealing", "Islington", "Southwark", "Tower Hamlets", "Haringey", "Lambeth", "Wandsworth"];
+  const packaging = ["", "boxed ", "carefully packed ", "sealed "];
+  const speeds = ["Economy", "Standard", "Express"];
+  const vehicles = ["motorbike", "car", "van"];
+  const counts = {screen: 0, retail_display: 0, unknown: 0, known: 0, prohibited: 0, referral: 0, multi_item: 0};
+
+  for (let index = 0; index < 72000; index += 1) {
+    const scenario = scenarios[index % scenarios.length];
+    const item = scenario.items[Math.floor(index / scenarios.length) % scenario.items.length];
+    const description = `${packaging[index % packaging.length]}${item} for delivery in ${areas[index % areas.length]}`;
+    const input = {
+      description,
+      distanceMiles: Number((((index * 17) % 320) / 10 + 0.1).toFixed(1)),
+      speed: speeds[index % speeds.length],
+      vehicleType: vehicles[index % vehicles.length],
+    };
+    const result = classifyIris(input);
+    const weightKg = result.recommendation.estimatedWeightKg;
+
+    counts[scenario.kind] += 1;
+    assert.ok(Number.isFinite(weightKg) && weightKg > 0, description);
+    assert.ok(Number.isFinite(result.recommendation.estimatedPrice) && result.recommendation.estimatedPrice >= 0, description);
+    assert.ok(["LOW", "MEDIUM", "HIGH"].includes(result.recommendation.confidenceBand), description);
+    assert.ok(["any", "van"].includes(result.internal.riderMatching.vehicleRequired), description);
+    assert.equal(result.recommendation.weightBand.id, weightBandFor(weightKg).id, description);
+
+    if (scenario.kind === "screen") {
+      assert.equal(result.recommendation.category, "Electronics", description);
+      assert.equal(result.recommendation.confidenceBand, "HIGH", description);
+    } else if (scenario.kind === "retail_display" || scenario.kind === "unknown") {
+      assert.notEqual(result.recommendation.category, "Electronics", description);
+      assert.equal(result.recommendation.confidenceBand, "LOW", description);
+    } else if (scenario.kind === "prohibited") {
+      assert.equal(result.compliance.status, "prohibited", description);
+      assert.equal(result.internal.pricingModifiers.normalCheckoutEligible, false, description);
+    } else if (scenario.kind === "referral") {
+      assert.equal(result.compliance.status, "referral_required", description);
+      assert.equal(result.internal.pricingModifiers.normalCheckoutEligible, false, description);
+    }
+
+    if (index % 250 === 0) {
+      assert.deepEqual(classifyIris(input), result, `non-deterministic: ${description}`);
+    }
+  }
+
+  assert.equal(Object.values(counts).reduce((total, count) => total + count, 0), 72000);
+  for (const count of Object.values(counts)) assert.ok(count > 10000);
+});
+
 test("unknown ordinary London items stay weighted but require confidence resolution", () => {
   const result = classifyIris({description: "a bespoke household object for delivery across London"});
   assert.ok(Number.isFinite(result.recommendation.estimatedWeightKg));

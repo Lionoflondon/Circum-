@@ -713,7 +713,7 @@ const OBJECT_MAPPINGS = Object.freeze([
   },
   {
     id: "electronics",
-    patterns: [/\belectronics\b/, /\btablets?\b/, /\bcameras?\b/, /\bconsoles?\b/, /\bmonitors?\b/, /\bdisplay\b/, /\bdesktop pc\b/, /\bdesktop computer\b/, /\bprojector\b/, /\bps5\b/, /\bplaystation(?:\s+\d+)?\b/, /\bxbox(?:\s+series\s+[xs])?\b/, /\bnintendo switch(?:\s+\d+)?\b/],
+    patterns: [/\belectronics\b/, /\btablets?\b/, /\bcameras?\b/, /\bconsoles?\b/, /\bmonitors?\b/, /\b(?:electronic|lcd|led|oled|screen) displays?\b/, /\b\d{2,3}\s*(?:inch|in)\s+displays?\b/, /\bdesktop pc\b/, /\bdesktop computer\b/, /\bprojector\b/, /\bps5\b/, /\bplaystation(?:\s+\d+)?\b/, /\bxbox(?:\s+series\s+[xs])?\b/, /\bnintendo switch(?:\s+\d+)?\b/],
     category: "Electronics",
     weightKg: 2,
     handlingFlags: ["Fragile", "High Value"],
