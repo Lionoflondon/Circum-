@@ -6,11 +6,11 @@ import 'package:flutter_test/flutter_test.dart';
 
 void main() {
   test('rating titles follow the five canonical levels', () {
-    expect(deliveryRatingTitle(5), 'Outstanding Delivery');
-    expect(deliveryRatingTitle(4), 'Great Delivery');
-    expect(deliveryRatingTitle(3), 'Good Delivery');
-    expect(deliveryRatingTitle(2), 'Needs Improvement');
-    expect(deliveryRatingTitle(1), 'Poor Experience');
+    expect(deliveryRatingTitle(5), 'Excellent');
+    expect(deliveryRatingTitle(4), 'Good');
+    expect(deliveryRatingTitle(3), 'Okay');
+    expect(deliveryRatingTitle(2), 'Poor');
+    expect(deliveryRatingTitle(1), 'Very poor');
   });
 
   test('Apple Pay and Google Pay are platform-specific', () {
@@ -25,9 +25,12 @@ void main() {
     expect(ratingFeedbackChoices, [
       'Friendly',
       'Professional',
-      'Fast',
-      'Excellent Communication',
+      'Great communication',
       'Careful Handling',
+      'On time',
+      'Fast delivery',
+      'Followed instructions',
+      'Excellent service',
     ]);
   });
 
@@ -36,11 +39,31 @@ void main() {
         File('lib/app/send_package/view/ratings.dart').readAsStringSync();
     expect(source, contains("httpsCallable('submitDeliveryRating')"));
     expect(source, contains("httpsCallable('submitDeliveryTip')"));
+    expect(source, contains("httpsCallable('getDeliveryAppreciation')"));
     expect(source, contains('Stripe.instance.presentPaymentSheet()'));
     expect(source, contains('Submit Appreciation'));
-    expect(source, contains('100% of your tip goes directly to your Circum Rider.'));
+    expect(source,
+        contains('100% of your tip goes directly to your Circum Rider.'));
     expect(source, isNot(contains("collection('driverRatings').doc")));
     expect(source, isNot(contains("collection('deliveryTips').doc")));
+    expect(source, isNot(contains("collection('deliveryRequests')")));
+    expect(source, contains("(200, 'Thanks')"));
+    expect(source, contains("(300, 'Nice Work')"));
+  });
+
+  test(
+      'canonical completion, tracking, receipt and Activity expose appreciation',
+      () {
+    final tracking = File('lib/app/sender_mobile/sender_tracking_screen.dart')
+        .readAsStringSync();
+    final activity =
+        File('lib/app/sender_mobile/sender_activity.dart').readAsStringSync();
+    expect(tracking, contains('next == SenderTrackingState.delivered'));
+    expect(tracking, contains('_openAppreciation()'));
+    expect(tracking, contains('Rate and tip your Rider'));
+    expect(tracking, contains('class _DeliveryReceiptView'));
+    expect(activity, contains('class ActivityReceiptView'));
+    expect(activity, contains('Rate and tip your Rider'));
   });
 
   test('retired RateRider direct history write is absent', () {

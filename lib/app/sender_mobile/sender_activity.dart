@@ -10,6 +10,7 @@ import 'package:intl/intl.dart';
 import '../delivery/proof_of_delivery.dart';
 import '../send_package/bloc/send_package_bloc.dart';
 import '../send_package/view/ride_chats.dart';
+import '../send_package/view/ratings.dart';
 import 'design_system/sender_design_system.dart';
 import 'sender_booking_canvas.dart';
 import 'sender_accessibility.dart';
@@ -1964,6 +1965,32 @@ class ActivityReceiptView extends StatelessWidget {
                   if (item.irisVerified)
                     const _Detail('Classification', 'IRIS Verified'),
                 ],
+              ),
+            ),
+            const SizedBox(height: 14),
+            SizedBox(
+              height: 52,
+              child: FilledButton.icon(
+                onPressed: () => Navigator.of(context).push(
+                  MaterialPageRoute<void>(
+                    builder: (_) => RatingsView(
+                      deliveryId: item.id,
+                      initialDelivery: {
+                        'requestId': item.id,
+                        'pickupAddress': item.pickup,
+                        'dropoffAddress': item.destination,
+                        'riderName': item.rider,
+                        'riderPhotoUrl': item.riderPhotoUrl,
+                        'riderRank': item.riderRank,
+                        'riderAverageRating': item.riderRating,
+                        'finalTotal': item.amount,
+                        'vanguardEnabled': item.vanguardProtected,
+                      },
+                    ),
+                  ),
+                ),
+                icon: const Icon(Icons.star_rounded),
+                label: const Text('Rate and tip your Rider'),
               ),
             ),
           ],

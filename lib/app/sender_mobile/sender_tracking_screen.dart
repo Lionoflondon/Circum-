@@ -16,6 +16,7 @@ import '../../helper/platform_view_visibility.dart';
 import '../send_package/bloc/send_package_bloc.dart';
 import '../send_package/models/place_coordinates.m.dart';
 import '../send_package/view/ride_chats.dart';
+import '../send_package/view/ratings.dart';
 import 'design_system/sender_design_system.dart';
 import 'sender_accessibility.dart';
 
@@ -910,6 +911,7 @@ class _SenderMobileTrackingScreenState extends State<SenderMobileTrackingScreen>
   late final DraggableScrollableController _sheetController;
   late SenderTrackingState _lastState;
   bool _motionReduced = false;
+  bool _completionPromptShown = false;
 
   @override
   void initState() {
@@ -955,6 +957,10 @@ class _SenderMobileTrackingScreenState extends State<SenderMobileTrackingScreen>
       if (!mounted) return;
       _adaptSheetToState(next);
       _announceState(next);
+      if (next == SenderTrackingState.delivered && !_completionPromptShown) {
+        _completionPromptShown = true;
+        _openAppreciation();
+      }
     });
   }
 
@@ -1094,6 +1100,7 @@ class _SenderMobileTrackingScreenState extends State<SenderMobileTrackingScreen>
               mapMode: mapMode,
               onOpenMessage: _openDeliveryChat,
               onOpenSupport: _openSupportChat,
+              onOpenAppreciation: _openAppreciation,
               onViewReceipt: _openReceipt,
               onCancelDelivery: () => _confirmCancelDelivery(state),
             ),
@@ -1137,9 +1144,24 @@ class _SenderMobileTrackingScreenState extends State<SenderMobileTrackingScreen>
     );
     Navigator.of(context).push(
       MaterialPageRoute<void>(
-        builder: (_) => _DeliveryReceiptView(receipt: receipt),
+        builder: (_) => _DeliveryReceiptView(
+          receipt: receipt,
+          deliveryId: senderActiveDeliveryIdFor(widget.engine),
+          delivery: widget.engine.activeDeliveryData,
+        ),
       ),
     );
+  }
+
+  void _openAppreciation() {
+    final deliveryId = senderActiveDeliveryIdFor(widget.engine);
+    if (deliveryId.isEmpty) return;
+    Navigator.of(context).push(MaterialPageRoute<void>(
+      builder: (_) => RatingsView(
+        deliveryId: deliveryId,
+        initialDelivery: widget.engine.activeDeliveryData,
+      ),
+    ));
   }
 
   Future<void> _confirmCancelDelivery(SenderTrackingState state) async {
@@ -1974,6 +1996,7 @@ class _TrackingPanelContent extends StatelessWidget {
   final SenderDeliveryMapMode mapMode;
   final VoidCallback onOpenMessage;
   final VoidCallback onOpenSupport;
+  final VoidCallback onOpenAppreciation;
   final VoidCallback onViewReceipt;
   final VoidCallback onCancelDelivery;
 
@@ -1984,6 +2007,7 @@ class _TrackingPanelContent extends StatelessWidget {
     required this.mapMode,
     required this.onOpenMessage,
     required this.onOpenSupport,
+    required this.onOpenAppreciation,
     required this.onViewReceipt,
     required this.onCancelDelivery,
   });
@@ -2123,6 +2147,16 @@ class _TrackingPanelContent extends StatelessWidget {
             proof: proofOfDeliveryFromRecord(
               engine.activeDeliveryData,
               fallbackReference: senderActiveDeliveryIdFor(engine),
+            ),
+          ),
+          const SizedBox(height: 12),
+          SizedBox(
+            width: double.infinity,
+            height: 50,
+            child: FilledButton.icon(
+              onPressed: onOpenAppreciation,
+              icon: const Icon(Icons.star_rounded),
+              label: const Text('Rate and tip your Rider'),
             ),
           ),
         ],
@@ -3977,8 +4011,14 @@ class _MatchAssuranceGrid extends StatelessWidget {
 
 class _DeliveryReceiptView extends StatelessWidget {
   final DeliveryReceiptDetails receipt;
+  final String deliveryId;
+  final Map<String, dynamic> delivery;
 
-  const _DeliveryReceiptView({required this.receipt});
+  const _DeliveryReceiptView({
+    required this.receipt,
+    required this.deliveryId,
+    required this.delivery,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -4053,6 +4093,22 @@ class _DeliveryReceiptView extends StatelessWidget {
                 row('Payment', receipt.paymentStatus),
                 row('Method', receipt.paymentMethod),
               ],
+            ),
+          ),
+          const SizedBox(height: 14),
+          SizedBox(
+            height: 52,
+            child: FilledButton.icon(
+              onPressed: () => Navigator.of(context).push(
+                MaterialPageRoute<void>(
+                  builder: (_) => RatingsView(
+                    deliveryId: deliveryId,
+                    initialDelivery: delivery,
+                  ),
+                ),
+              ),
+              icon: const Icon(Icons.star_rounded),
+              label: const Text('Rate and tip your Rider'),
             ),
           ),
         ],

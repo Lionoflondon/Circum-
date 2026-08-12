@@ -1,23 +1,27 @@
-import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:cloud_functions/cloud_functions.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_stripe/flutter_stripe.dart';
 
+import 'ride_chats.dart';
+
 const ratingFeedbackChoices = <String>[
   'Friendly',
   'Professional',
-  'Fast',
-  'Excellent Communication',
+  'Great communication',
   'Careful Handling',
+  'On time',
+  'Fast delivery',
+  'Followed instructions',
+  'Excellent service',
 ];
 
 String deliveryRatingTitle(int stars) => switch (stars) {
-      5 => 'Outstanding Delivery',
-      4 => 'Great Delivery',
-      3 => 'Good Delivery',
-      2 => 'Needs Improvement',
-      1 => 'Poor Experience',
+      5 => 'Excellent',
+      4 => 'Good',
+      3 => 'Okay',
+      2 => 'Poor',
+      1 => 'Very poor',
       _ => 'Rate your delivery',
     };
 
@@ -46,6 +50,13 @@ class DeliveryAppreciationService {
       'feedback': feedback,
       'feedbackTags': feedbackTags,
     });
+    return Map<String, dynamic>.from(result.data as Map);
+  }
+
+  Future<Map<String, dynamic>> getAppreciation(String deliveryId) async {
+    final result = await _functions
+        .httpsCallable('getDeliveryAppreciation')
+        .call({'deliveryId': deliveryId});
     return Map<String, dynamic>.from(result.data as Map);
   }
 
@@ -96,9 +107,12 @@ class _RatingsViewState extends State<RatingsView> {
   final _customTip = TextEditingController();
   var _stars = 0;
   var _tipPence = 0;
+  var _customTipActive = false;
   var _paymentMethod = 'roth';
   var _submitting = false;
   var _complete = false;
+  var _ratingSubmitted = false;
+  var _tipSubmitted = false;
   String? _error;
   final _tags = <String>{};
 
@@ -106,6 +120,23 @@ class _RatingsViewState extends State<RatingsView> {
   void initState() {
     super.initState();
     _service = widget.service ?? DeliveryAppreciationService();
+    _restoreAppreciation();
+  }
+
+  Future<void> _restoreAppreciation() async {
+    try {
+      final state = await _service.getAppreciation(widget.deliveryId);
+      if (!mounted) return;
+      final rating = state['rating'];
+      final tip = state['tip'];
+      setState(() {
+        _ratingSubmitted = rating is Map;
+        _tipSubmitted = tip is Map && tip['status'] == 'succeeded';
+        if (rating is Map) _stars = (rating['stars'] as num?)?.toInt() ?? 0;
+      });
+    } catch (_) {
+      // The form remains usable; submission callables remain authoritative.
+    }
   }
 
   @override
@@ -121,241 +152,305 @@ class _RatingsViewState extends State<RatingsView> {
     return Scaffold(
       backgroundColor: _bg,
       body: SafeArea(
-        child: StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
-          stream: FirebaseFirestore.instance
-              .collection('deliveryRequests')
-              .doc(widget.deliveryId)
-              .snapshots(),
-          builder: (context, snapshot) {
-            final delivery = <String, dynamic>{
-              ...widget.initialDelivery,
-              ...?snapshot.data?.data(),
-            };
-            return CustomScrollView(
-              slivers: [
-                SliverAppBar(
-                  pinned: true,
-                  backgroundColor: _bg.withValues(alpha: .94),
-                  foregroundColor: Colors.white,
-                  title: const Text('Delivery complete'),
-                ),
-                SliverPadding(
-                  padding: const EdgeInsets.fromLTRB(18, 12, 18, 30),
-                  sliver: SliverList.list(children: [
-                    _successHeader(delivery),
-                    const SizedBox(height: 18),
-                    _deliverySummary(delivery),
-                    const SizedBox(height: 24),
-                    _rating(),
+        child: CustomScrollView(
+          slivers: [
+            SliverAppBar(
+              pinned: true,
+              backgroundColor: _bg.withValues(alpha: .94),
+              foregroundColor: Colors.white,
+              title: const Text('Delivery complete'),
+            ),
+            SliverPadding(
+              padding: const EdgeInsets.fromLTRB(18, 12, 18, 30),
+              sliver: SliverList.list(
+                children: [
+                  _successHeader(widget.initialDelivery),
+                  const SizedBox(height: 18),
+                  _deliverySummary(widget.initialDelivery),
+                  const SizedBox(height: 24),
+                  _ratingSubmitted ? _submittedRating() : _rating(),
+                  const SizedBox(height: 22),
+                  if (!_ratingSubmitted) _feedbackPanel(),
+                  const SizedBox(height: 22),
+                  if (!_tipSubmitted) _tipPanel(),
+                  if (!_tipSubmitted && _tipPence > 0) ...[
                     const SizedBox(height: 22),
-                    _feedbackPanel(),
-                    const SizedBox(height: 22),
-                    _tipPanel(),
-                    if (_tipPence > 0) ...[
-                      const SizedBox(height: 22),
-                      _paymentPanel(),
-                    ],
-                    if (_error != null) ...[
-                      const SizedBox(height: 14),
-                      Text(_error!,
-                          style: const TextStyle(color: Color(0xFFF87171))),
-                    ],
-                    const SizedBox(height: 22),
-                    SizedBox(
-                      height: 54,
-                      child: FilledButton(
-                        onPressed: _stars == 0 || _submitting ? null : _submit,
-                        style: FilledButton.styleFrom(
-                          backgroundColor: _blue,
-                          disabledBackgroundColor: _panel2,
-                          shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(14)),
-                        ),
-                        child: AnimatedSwitcher(
-                          duration: const Duration(milliseconds: 280),
-                          child: _submitting
-                              ? const SizedBox.square(
-                                  key: ValueKey('loading'),
-                                  dimension: 22,
-                                  child: CircularProgressIndicator(
-                                      strokeWidth: 2.2, color: Colors.white),
-                                )
-                              : const Text(
-                                  'Submit Appreciation',
-                                  key: ValueKey('label'),
-                                  style: TextStyle(
-                                      fontWeight: FontWeight.w700,
-                                      fontSize: 15),
-                                ),
+                    _paymentPanel(),
+                  ],
+                  if (_error != null) ...[
+                    const SizedBox(height: 14),
+                    Text(
+                      _error!,
+                      style: const TextStyle(color: Color(0xFFF87171)),
+                    ),
+                  ],
+                  const SizedBox(height: 22),
+                  SizedBox(
+                    height: 54,
+                    child: FilledButton(
+                      onPressed: ((_stars == 0 || _ratingSubmitted) &&
+                                  (_tipPence == 0 || _tipSubmitted)) ||
+                              _submitting
+                          ? null
+                          : _submit,
+                      style: FilledButton.styleFrom(
+                        backgroundColor: _blue,
+                        disabledBackgroundColor: _panel2,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(14),
                         ),
                       ),
+                      child: AnimatedSwitcher(
+                        duration: const Duration(milliseconds: 280),
+                        child: _submitting
+                            ? const SizedBox.square(
+                                key: ValueKey('loading'),
+                                dimension: 22,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2.2,
+                                  color: Colors.white,
+                                ),
+                              )
+                            : const Text(
+                                'Submit Appreciation',
+                                key: ValueKey('label'),
+                                style: TextStyle(
+                                  fontWeight: FontWeight.w700,
+                                  fontSize: 15,
+                                ),
+                              ),
+                      ),
                     ),
-                  ]),
-                ),
-              ],
-            );
-          },
+                  ),
+                ],
+              ),
+            ),
+          ],
         ),
       ),
     );
   }
 
   Widget _successHeader(Map<String, dynamic> data) {
-    final duration = _text(data['deliveryDurationLabel'] ??
-        data['durationLabel'] ??
-        data['duration']);
-    return Column(children: [
-      TweenAnimationBuilder<double>(
-        duration: const Duration(milliseconds: 320),
-        tween: Tween(begin: .7, end: 1),
-        curve: Curves.easeOutBack,
-        builder: (_, value, child) =>
-            Transform.scale(scale: value, child: child),
-        child: Container(
-          width: 58,
-          height: 58,
-          decoration: BoxDecoration(
-              color: _green.withValues(alpha: .12), shape: BoxShape.circle),
-          child: const Icon(Icons.check_rounded, color: _green, size: 30),
+    final duration = _text(
+      data['deliveryDurationLabel'] ??
+          data['durationLabel'] ??
+          data['duration'],
+    );
+    return Column(
+      children: [
+        TweenAnimationBuilder<double>(
+          duration: const Duration(milliseconds: 320),
+          tween: Tween(begin: .7, end: 1),
+          curve: Curves.easeOutBack,
+          builder: (_, value, child) =>
+              Transform.scale(scale: value, child: child),
+          child: Container(
+            width: 58,
+            height: 58,
+            decoration: BoxDecoration(
+              color: _green.withValues(alpha: .12),
+              shape: BoxShape.circle,
+            ),
+            child: const Icon(Icons.check_rounded, color: _green, size: 30),
+          ),
         ),
-      ),
-      const SizedBox(height: 12),
-      const Text('Delivery complete',
+        const SizedBox(height: 12),
+        const Text(
+          'Delivery complete',
           style: TextStyle(
-              color: Colors.white, fontSize: 24, fontWeight: FontWeight.w700)),
-      if (duration.isNotEmpty) ...[
-        const SizedBox(height: 5),
-        Text('Delivered in $duration',
-            style: TextStyle(color: Colors.white.withValues(alpha: .58))),
+            color: Colors.white,
+            fontSize: 24,
+            fontWeight: FontWeight.w700,
+          ),
+        ),
+        if (duration.isNotEmpty) ...[
+          const SizedBox(height: 5),
+          Text(
+            'Delivered in $duration',
+            style: TextStyle(color: Colors.white.withValues(alpha: .58)),
+          ),
+        ],
       ],
-    ]);
+    );
   }
 
   Widget _deliverySummary(Map<String, dynamic> data) {
     final rider = _map(data['riderSnapshot'] ?? data['activeVehicleSnapshot']);
     final name = _text(
-        data['riderName'] ??
-            data['driverName'] ??
-            rider['riderName'] ??
-            data['courierName'],
-        fallback: 'Your Circum Rider');
-    final photo =
-        _text(data['riderPhotoUrl'] ?? data['photoURL'] ?? rider['photoUrl']);
+      data['riderName'] ??
+          data['driverName'] ??
+          rider['riderName'] ??
+          data['courierName'],
+      fallback: 'Your Circum Rider',
+    );
+    final photo = _text(
+      data['riderPhotoUrl'] ?? data['photoURL'] ?? rider['photoUrl'],
+    );
     final vehicle = _text(
-        rider['vehicleType'] ?? data['driverVehicle'] ?? data['typeOfVehicle'],
-        fallback: 'Verified Circum Rider');
-    final registration = _text(rider['registration'] ??
-        data['driverPlateNumber'] ??
-        data['plateNumber']);
+      rider['vehicleType'] ?? data['driverVehicle'] ?? data['typeOfVehicle'],
+      fallback: 'Verified Circum Rider',
+    );
+    final registration = _text(
+      rider['registration'] ?? data['driverPlateNumber'] ?? data['plateNumber'],
+    );
     final rank = _text(data['riderRank'] ?? rider['rank']);
     final rating = data['riderAverageRating'] ??
         data['riderRating'] ??
         rider['averageRating'];
-    final pickup =
-        _address(data['pickup'] ?? data['pickupData'] ?? data['pickupAddress']);
+    final pickup = _address(
+      data['pickup'] ?? data['pickupData'] ?? data['pickupAddress'],
+    );
     final destination = _address(
-        data['dropoff'] ?? data['dropoffData'] ?? data['dropoffAddress']);
+      data['dropoff'] ?? data['dropoffData'] ?? data['dropoffAddress'],
+    );
     return _glass(
-      child: Column(children: [
-        Row(children: [
-          _avatar(photo, name),
-          const SizedBox(width: 12),
-          Expanded(
-              child: Column(
+      child: Column(
+        children: [
+          Row(
+            children: [
+              _avatar(photo, name),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                Text(name,
-                    style: const TextStyle(
+                    Text(
+                      name,
+                      style: const TextStyle(
                         color: Colors.white,
                         fontWeight: FontWeight.w700,
-                        fontSize: 16)),
-                const SizedBox(height: 4),
-                Text(
-                    [vehicle, registration]
-                        .where((e) => e.isNotEmpty)
-                        .join(' · '),
-                    style: TextStyle(
+                        fontSize: 16,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      [
+                        vehicle,
+                        registration,
+                      ].where((e) => e.isNotEmpty).join(' · '),
+                      style: TextStyle(
                         color: Colors.white.withValues(alpha: .62),
-                        fontSize: 12.5)),
-                if (rank.isNotEmpty)
-                  Text(rank,
-                      style: const TextStyle(
+                        fontSize: 12.5,
+                      ),
+                    ),
+                    if (rank.isNotEmpty)
+                      Text(
+                        rank,
+                        style: const TextStyle(
                           color: _blue,
                           fontSize: 12,
-                          fontWeight: FontWeight.w600)),
-              ])),
-          if (rating is num)
-            Text('★ ${rating.toStringAsFixed(1)}',
-                style: const TextStyle(
-                    color: _amber, fontWeight: FontWeight.w700)),
-        ]),
-        const SizedBox(height: 14),
-        Divider(color: Colors.white.withValues(alpha: .08), height: 1),
-        const SizedBox(height: 14),
-        _routeRow(Icons.radio_button_checked_rounded, 'Pickup', pickup),
-        const SizedBox(height: 10),
-        _routeRow(Icons.location_on_rounded, 'Destination', destination),
-        const SizedBox(height: 14),
-        Wrap(spacing: 8, runSpacing: 8, children: [
-          _metric(
-              'Distance',
-              _text(
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                  ],
+                ),
+              ),
+              if (rating is num)
+                Text(
+                  '★ ${rating.toStringAsFixed(1)}',
+                  style: const TextStyle(
+                    color: _amber,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+            ],
+          ),
+          const SizedBox(height: 14),
+          Divider(color: Colors.white.withValues(alpha: .08), height: 1),
+          const SizedBox(height: 14),
+          _routeRow(Icons.radio_button_checked_rounded, 'Pickup', pickup),
+          const SizedBox(height: 10),
+          _routeRow(Icons.location_on_rounded, 'Destination', destination),
+          const SizedBox(height: 14),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              _metric(
+                'Distance',
+                _text(
                   data['distanceLabel'] ??
                       data['deliveryDistance'] ??
                       data['distance'],
-                  fallback: '—')),
-          _metric(
-              'Duration',
-              _text(data['deliveryDurationLabel'] ?? data['duration'],
-                  fallback: '—')),
-          _metric(
-              'Delivery fee',
-              _money(
-                  data['finalTotal'] ?? data['price'] ?? data['deliveryFee'])),
-          _metric(
-              'Roth earned', _money(data['rothAwarded'] ?? data['rothEarned'])),
-        ]),
-        const SizedBox(height: 12),
-        Row(children: [
-          Expanded(
-              child: Text(
+                  fallback: '—',
+                ),
+              ),
+              _metric(
+                'Duration',
+                _text(
+                  data['deliveryDurationLabel'] ?? data['duration'],
+                  fallback: '—',
+                ),
+              ),
+              _metric(
+                'Delivery fee',
+                _money(
+                  data['finalTotal'] ?? data['price'] ?? data['deliveryFee'],
+                ),
+              ),
+              _metric(
+                'Roth earned',
+                _money(data['rothAwarded'] ?? data['rothEarned']),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          Row(
+            children: [
+              Expanded(
+                child: Text(
                   'IRIS · ${_text(data['irisCategory'] ?? _map(data['iris'])['category'], fallback: 'Delivery verified')}',
                   style: TextStyle(
-                      color: Colors.white.withValues(alpha: .6),
-                      fontSize: 12))),
-          if (data['vanguardEnabled'] == true || data['isVanguard'] == true)
-            _badge('Vanguard', _green),
-        ]),
-        const SizedBox(height: 8),
-        Align(
+                    color: Colors.white.withValues(alpha: .6),
+                    fontSize: 12,
+                  ),
+                ),
+              ),
+              if (data['vanguardEnabled'] == true || data['isVanguard'] == true)
+                _badge('Vanguard', _green),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Align(
             alignment: Alignment.centerLeft,
             child: Text(
-                'Ref ${_text(data['reference'] ?? data['requestId'], fallback: widget.deliveryId)}',
-                style: TextStyle(
-                    color: Colors.white.withValues(alpha: .42),
-                    fontFamily: 'monospace',
-                    fontSize: 11))),
-      ]),
+              'Ref ${_text(data['reference'] ?? data['requestId'], fallback: widget.deliveryId)}',
+              style: TextStyle(
+                color: Colors.white.withValues(alpha: .42),
+                fontFamily: 'monospace',
+                fontSize: 11,
+              ),
+            ),
+          ),
+        ],
+      ),
     );
   }
 
-  Widget _rating() => Column(children: [
-        Text(deliveryRatingTitle(_stars),
+  Widget _rating() => Column(
+        children: [
+          Text(
+            deliveryRatingTitle(_stars),
             style: const TextStyle(
-                color: Colors.white,
-                fontSize: 18,
-                fontWeight: FontWeight.w700)),
-        const SizedBox(height: 6),
-        Text('How was your Circum Rider?',
-            style: TextStyle(color: Colors.white.withValues(alpha: .55))),
-        const SizedBox(height: 14),
-        Row(
+              color: Colors.white,
+              fontSize: 18,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+          const SizedBox(height: 6),
+          Text(
+            'How was your Circum Rider?',
+            style: TextStyle(color: Colors.white.withValues(alpha: .55)),
+          ),
+          const SizedBox(height: 14),
+          Row(
             mainAxisAlignment: MainAxisAlignment.center,
             children: List.generate(5, (index) {
               final selected = index < _stars;
               return Semantics(
                 button: true,
-                label: '${index + 1} star',
+                label: '${index + 1} out of 5 stars',
                 child: IconButton(
                   onPressed: () => setState(() => _stars = index + 1),
                   iconSize: 38,
@@ -364,27 +459,65 @@ class _RatingsViewState extends State<RatingsView> {
                     scale: selected ? 1.08 : 1,
                     duration: const Duration(milliseconds: 260),
                     child: Icon(
-                        selected
-                            ? Icons.star_rounded
-                            : Icons.star_border_rounded,
-                        color: selected
-                            ? _amber
-                            : Colors.white.withValues(alpha: .28)),
+                      selected ? Icons.star_rounded : Icons.star_border_rounded,
+                      color: selected
+                          ? _amber
+                          : Colors.white.withValues(alpha: .28),
+                    ),
                   ),
                 ),
               );
-            })),
-      ]);
+            }),
+          ),
+          if (_stars > 0 && _stars <= 2) ...[
+            const SizedBox(height: 10),
+            TextButton.icon(
+              onPressed: () => Navigator.of(context).push(
+                MaterialPageRoute<void>(
+                  builder: (_) => const RideChatPageView(
+                    title: 'Circum Support',
+                    supportConversation: true,
+                  ),
+                ),
+              ),
+              icon: const Icon(Icons.lock_outline_rounded),
+              label: const Text('Report a problem privately to CIRCUM support'),
+            ),
+          ],
+        ],
+      );
 
-  Widget _feedbackPanel() =>
-      Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        const Text('Optional feedback',
+  Widget _submittedRating() => Semantics(
+        label: 'Submitted rating: $_stars out of 5 stars',
+        child: _glass(
+          child: Row(
+            children: [
+              const Icon(Icons.check_circle_rounded, color: _green),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  'Rating submitted · $_stars out of 5',
+                  style: const TextStyle(color: Colors.white),
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+
+  Widget _feedbackPanel() => Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            'Optional feedback',
             style: TextStyle(
-                color: Colors.white,
-                fontWeight: FontWeight.w700,
-                fontSize: 15)),
-        const SizedBox(height: 11),
-        Wrap(
+              color: Colors.white,
+              fontWeight: FontWeight.w700,
+              fontSize: 15,
+            ),
+          ),
+          const SizedBox(height: 11),
+          Wrap(
             spacing: 8,
             runSpacing: 8,
             children: ratingFeedbackChoices.map((choice) {
@@ -393,119 +526,155 @@ class _RatingsViewState extends State<RatingsView> {
                 selected: selected,
                 onSelected: (value) => setState(() {
                   value ? _tags.add(choice) : _tags.remove(choice);
-                  _feedback.text = _tags.join('. ');
-                  _feedback.selection =
-                      TextSelection.collapsed(offset: _feedback.text.length);
                 }),
                 label: Text(choice),
                 backgroundColor: _panel2,
                 selectedColor: _blue.withValues(alpha: .22),
                 checkmarkColor: _blue,
                 side: BorderSide(
-                    color: selected
-                        ? _blue.withValues(alpha: .6)
-                        : Colors.white.withValues(alpha: .08)),
+                  color: selected
+                      ? _blue.withValues(alpha: .6)
+                      : Colors.white.withValues(alpha: .08),
+                ),
                 labelStyle: TextStyle(
-                    color: selected
-                        ? Colors.white
-                        : Colors.white.withValues(alpha: .66)),
+                  color: selected
+                      ? Colors.white
+                      : Colors.white.withValues(alpha: .66),
+                ),
               );
-            }).toList()),
-        const SizedBox(height: 12),
-        TextField(
-          controller: _feedback,
-          maxLength: 500,
-          maxLines: 3,
-          style: const TextStyle(color: Colors.white),
-          decoration: _input('Add feedback (optional)'),
-        ),
-      ]);
+            }).toList(),
+          ),
+          const SizedBox(height: 12),
+          TextField(
+            controller: _feedback,
+            maxLength: 500,
+            maxLines: 3,
+            style: const TextStyle(color: Colors.white),
+            decoration: _input('Add feedback (optional)'),
+          ),
+        ],
+      );
 
-  Widget _tipPanel() =>
-      Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        const Text('Leave a tip',
+  Widget _tipPanel() => Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            'Leave a tip',
             style: TextStyle(
-                color: Colors.white,
-                fontWeight: FontWeight.w700,
-                fontSize: 15)),
-        const SizedBox(height: 4),
-        Text('100% of your tip goes directly to your Circum Rider.',
+              color: Colors.white,
+              fontWeight: FontWeight.w700,
+              fontSize: 15,
+            ),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            '100% of your tip goes directly to your Circum Rider.',
             style: TextStyle(
-                color: Colors.white.withValues(alpha: .55), fontSize: 12.5)),
-        const SizedBox(height: 12),
-        GridView.count(
-          shrinkWrap: true,
-          physics: const NeverScrollableScrollPhysics(),
-          crossAxisCount: 4,
-          mainAxisSpacing: 8,
-          crossAxisSpacing: 8,
-          childAspectRatio: .92,
-          children: const [
-            (100, 'Thanks'),
-            (200, 'Nice Work'),
-            (500, 'Excellent'),
-            (1000, 'Exceptional')
-          ].map((item) {
-            final selected = _tipPence == item.$1;
-            return InkWell(
-              onTap: () => setState(() {
-                _tipPence = item.$1;
-                _customTip.clear();
-              }),
-              borderRadius: BorderRadius.circular(12),
-              child: AnimatedContainer(
-                duration: const Duration(milliseconds: 280),
-                decoration: BoxDecoration(
-                  color: selected ? _blue : _panel2,
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(
+              color: Colors.white.withValues(alpha: .55),
+              fontSize: 12.5,
+            ),
+          ),
+          const SizedBox(height: 12),
+          GridView.count(
+            shrinkWrap: true,
+            physics: const NeverScrollableScrollPhysics(),
+            crossAxisCount: 4,
+            mainAxisSpacing: 8,
+            crossAxisSpacing: 8,
+            childAspectRatio: .92,
+            children: const [
+              (200, 'Thanks'),
+              (300, 'Nice Work'),
+              (500, 'Excellent'),
+              (1000, 'Exceptional'),
+            ].map((item) {
+              final selected = _tipPence == item.$1;
+              return InkWell(
+                onTap: () => setState(() {
+                  _tipPence = item.$1;
+                  _customTipActive = false;
+                  _customTip.clear();
+                }),
+                borderRadius: BorderRadius.circular(12),
+                child: AnimatedContainer(
+                  duration: const Duration(milliseconds: 280),
+                  decoration: BoxDecoration(
+                    color: selected ? _blue : _panel2,
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(
                       color: selected
                           ? _blue
-                          : Colors.white.withValues(alpha: .09)),
-                ),
-                child: Column(
+                          : Colors.white.withValues(alpha: .09),
+                    ),
+                  ),
+                  child: Column(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      Text('£${item.$1 ~/ 100}',
-                          style: const TextStyle(
-                              color: Colors.white,
-                              fontWeight: FontWeight.w800,
-                              fontSize: 17,
-                              fontFamily: 'monospace')),
+                      Text(
+                        '£${item.$1 ~/ 100}',
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontWeight: FontWeight.w800,
+                          fontSize: 17,
+                          fontFamily: 'monospace',
+                        ),
+                      ),
                       const SizedBox(height: 5),
-                      Text(item.$2,
-                          textAlign: TextAlign.center,
-                          style: TextStyle(
-                              color: Colors.white.withValues(alpha: .66),
-                              fontSize: 10.5)),
-                    ]),
+                      Text(
+                        item.$2,
+                        textAlign: TextAlign.center,
+                        style: TextStyle(
+                          color: Colors.white.withValues(alpha: .66),
+                          fontSize: 10.5,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              );
+            }).toList(),
+          ),
+          const SizedBox(height: 10),
+          ChoiceChip(
+            selected: _customTipActive,
+            onSelected: (_) => setState(() => _customTipActive = true),
+            avatar: const Icon(Icons.edit_rounded, size: 18),
+            label: const Text('Custom tip'),
+          ),
+          const SizedBox(height: 10),
+          Row(
+            children: [
+              Expanded(
+                child: TextField(
+                  controller: _customTip,
+                  keyboardType: const TextInputType.numberWithOptions(
+                    decimal: true,
+                  ),
+                  style: const TextStyle(color: Colors.white),
+                  decoration: _input('Custom amount'),
+                  onTap: () => setState(() => _customTipActive = true),
+                  onChanged: (value) {
+                    final amount = double.tryParse(value);
+                    setState(() {
+                      _customTipActive = true;
+                      _tipPence = amount == null ? 0 : (amount * 100).round();
+                    });
+                  },
+                ),
               ),
-            );
-          }).toList(),
-        ),
-        const SizedBox(height: 10),
-        Row(children: [
-          Expanded(
-              child: TextField(
-            controller: _customTip,
-            keyboardType: const TextInputType.numberWithOptions(decimal: true),
-            style: const TextStyle(color: Colors.white),
-            decoration: _input('Custom amount'),
-            onChanged: (value) {
-              final amount = double.tryParse(value);
-              setState(() =>
-                  _tipPence = amount == null ? 0 : (amount * 100).round());
-            },
-          )),
-          const SizedBox(width: 10),
-          TextButton(
-              onPressed: () => setState(() {
-                    _tipPence = 0;
-                    _customTip.clear();
-                  }),
-              child: const Text('No tip')),
-        ]),
-      ]);
+              const SizedBox(width: 10),
+              TextButton(
+                onPressed: () => setState(() {
+                  _tipPence = 0;
+                  _customTipActive = false;
+                  _customTip.clear();
+                }),
+                child: const Text('No tip'),
+              ),
+            ],
+          ),
+        ],
+      );
 
   Widget _paymentPanel() {
     final options = <(String, String, IconData)>[
@@ -515,44 +684,58 @@ class _RatingsViewState extends State<RatingsView> {
       ('google_pay', 'Google Pay', Icons.phone_android_rounded),
     ].where((item) => ratingMethodVisible(item.$1, defaultTargetPlatform));
     return _glass(
-      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        const Text('Payment method',
-            style: TextStyle(color: Colors.white, fontWeight: FontWeight.w700)),
-        const SizedBox(height: 10),
-        ...options.map((item) {
-          final selected = _paymentMethod == item.$1;
-          return InkWell(
-            onTap: () => setState(() => _paymentMethod = item.$1),
-            borderRadius: BorderRadius.circular(12),
-            child: AnimatedContainer(
-              duration: const Duration(milliseconds: 280),
-              margin: const EdgeInsets.only(bottom: 7),
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 13),
-              decoration: BoxDecoration(
-                color: selected ? _blue.withValues(alpha: .16) : _panel,
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(
-                  color: selected ? _blue : Colors.white.withValues(alpha: .08),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            'Payment method',
+            style: TextStyle(color: Colors.white, fontWeight: FontWeight.w700),
+          ),
+          const SizedBox(height: 10),
+          ...options.map((item) {
+            final selected = _paymentMethod == item.$1;
+            return InkWell(
+              onTap: () => setState(() => _paymentMethod = item.$1),
+              borderRadius: BorderRadius.circular(12),
+              child: AnimatedContainer(
+                duration: const Duration(milliseconds: 280),
+                margin: const EdgeInsets.only(bottom: 7),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 12,
+                  vertical: 13,
+                ),
+                decoration: BoxDecoration(
+                  color: selected ? _blue.withValues(alpha: .16) : _panel,
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(
+                    color:
+                        selected ? _blue : Colors.white.withValues(alpha: .08),
+                  ),
+                ),
+                child: Row(
+                  children: [
+                    Icon(item.$3, color: _blue),
+                    const SizedBox(width: 11),
+                    Expanded(
+                      child: Text(
+                        item.$2,
+                        style: const TextStyle(color: Colors.white),
+                      ),
+                    ),
+                    Icon(
+                      selected
+                          ? Icons.radio_button_checked_rounded
+                          : Icons.radio_button_off_rounded,
+                      color:
+                          selected ? _blue : Colors.white.withValues(alpha: .3),
+                    ),
+                  ],
                 ),
               ),
-              child: Row(children: [
-                Icon(item.$3, color: _blue),
-                const SizedBox(width: 11),
-                Expanded(
-                  child: Text(item.$2,
-                      style: const TextStyle(color: Colors.white)),
-                ),
-                Icon(
-                  selected
-                      ? Icons.radio_button_checked_rounded
-                      : Icons.radio_button_off_rounded,
-                  color: selected ? _blue : Colors.white.withValues(alpha: .3),
-                ),
-              ]),
-            ),
-          );
-        }),
-      ]),
+            );
+          }),
+        ],
+      ),
     );
   }
 
@@ -563,16 +746,18 @@ class _RatingsViewState extends State<RatingsView> {
     });
     try {
       try {
-        await _service.submitRating(
-          deliveryId: widget.deliveryId,
-          stars: _stars,
-          feedback: _feedback.text.trim(),
-          feedbackTags: _tags.toList(),
-        );
+        if (!_ratingSubmitted && _stars > 0) {
+          await _service.submitRating(
+            deliveryId: widget.deliveryId,
+            stars: _stars,
+            feedback: _feedback.text.trim(),
+            feedbackTags: _tags.toList(),
+          );
+        }
       } on FirebaseFunctionsException catch (error) {
         if (error.code != 'already-exists') rethrow;
       }
-      if (_tipPence > 0) {
+      if (!_tipSubmitted && _tipPence > 0) {
         if (_tipPence < 100 || _tipPence > 10000) {
           throw StateError('Choose a tip between £1 and £100.');
         }
@@ -595,7 +780,9 @@ class _RatingsViewState extends State<RatingsView> {
               googlePay:
                   !kIsWeb && defaultTargetPlatform == TargetPlatform.android
                       ? const PaymentSheetGooglePay(
-                          merchantCountryCode: 'GB', testEnv: false)
+                          merchantCountryCode: 'GB',
+                          testEnv: false,
+                        )
                       : null,
               style: ThemeMode.dark,
             ),
@@ -610,7 +797,8 @@ class _RatingsViewState extends State<RatingsView> {
         }
         if (result['status'] != 'succeeded') {
           throw StateError(
-              'Your tip is still processing. You can safely try again.');
+            'Your tip is still processing. You can safely try again.',
+          );
         }
       }
       if (!mounted) {
@@ -619,19 +807,25 @@ class _RatingsViewState extends State<RatingsView> {
       setState(() => _complete = true);
     } on FirebaseFunctionsException catch (error) {
       if (mounted) {
-        setState(() => _error =
-            error.message ?? 'Something went wrong. Please try again.');
+        setState(
+          () => _error =
+              error.message ?? 'Something went wrong. Please try again.',
+        );
       }
     } on StripeException catch (error) {
       if (mounted) {
-        setState(() => _error =
-            error.error.localizedMessage ?? 'Payment was not completed.');
+        setState(
+          () => _error =
+              error.error.localizedMessage ?? 'Payment was not completed.',
+        );
       }
     } catch (error) {
       if (mounted) {
-        setState(() => _error = error is StateError
-            ? error.message
-            : 'Something went wrong. Please try again.');
+        setState(
+          () => _error = error is StateError
+              ? error.message
+              : 'Something went wrong. Please try again.',
+        );
       }
     } finally {
       if (mounted) setState(() => _submitting = false);
@@ -644,47 +838,65 @@ class _RatingsViewState extends State<RatingsView> {
           child: Center(
             child: Padding(
               padding: const EdgeInsets.all(28),
-              child: Column(mainAxisSize: MainAxisSize.min, children: [
-                TweenAnimationBuilder<double>(
-                  duration: const Duration(milliseconds: 350),
-                  tween: Tween(begin: .5, end: 1),
-                  curve: Curves.easeOutBack,
-                  builder: (_, value, child) =>
-                      Transform.scale(scale: value, child: child),
-                  child: Container(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  TweenAnimationBuilder<double>(
+                    duration: const Duration(milliseconds: 350),
+                    tween: Tween(begin: .5, end: 1),
+                    curve: Curves.easeOutBack,
+                    builder: (_, value, child) =>
+                        Transform.scale(scale: value, child: child),
+                    child: Container(
                       width: 76,
                       height: 76,
                       decoration: BoxDecoration(
-                          shape: BoxShape.circle,
-                          color: _green.withValues(alpha: .14)),
-                      child: const Icon(Icons.favorite_rounded,
-                          color: _green, size: 38)),
-                ),
-                const SizedBox(height: 24),
-                const Text('Thank you.',
+                        shape: BoxShape.circle,
+                        color: _green.withValues(alpha: .14),
+                      ),
+                      child: const Icon(
+                        Icons.favorite_rounded,
+                        color: _green,
+                        size: 38,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 24),
+                  const Text(
+                    'Thank you.',
                     style: TextStyle(
-                        color: Colors.white,
-                        fontSize: 30,
-                        fontWeight: FontWeight.w700)),
-                const SizedBox(height: 9),
-                Text('Your Circum Rider has received your appreciation.',
+                      color: Colors.white,
+                      fontSize: 30,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                  const SizedBox(height: 9),
+                  Text(
+                    'Your Circum Rider has received your appreciation.',
                     textAlign: TextAlign.center,
                     style: TextStyle(
-                        color: Colors.white.withValues(alpha: .62),
-                        fontSize: 15)),
-                const SizedBox(height: 30),
-                SizedBox(
+                      color: Colors.white.withValues(alpha: .62),
+                      fontSize: 15,
+                    ),
+                  ),
+                  const SizedBox(height: 30),
+                  SizedBox(
                     width: double.infinity,
                     height: 52,
                     child: FilledButton(
-                        onPressed: () => Navigator.of(context)
-                            .popUntil((route) => route.isFirst),
-                        style: FilledButton.styleFrom(
-                            backgroundColor: _blue,
-                            shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(14))),
-                        child: const Text('Return Home'))),
-              ]),
+                      onPressed: () => Navigator.of(context)
+                          .popUntil((route) => route.isFirst),
+                      style: FilledButton.styleFrom(
+                        backgroundColor: _blue,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(14),
+                        ),
+                      ),
+                      child: const Text('Return Home'),
+                    ),
+                  ),
+                ],
+              ),
             ),
           ),
         ),
@@ -698,9 +910,10 @@ class _RatingsViewState extends State<RatingsView> {
           border: Border.all(color: Colors.white.withValues(alpha: .08)),
           boxShadow: [
             BoxShadow(
-                color: Colors.black.withValues(alpha: .22),
-                blurRadius: 24,
-                offset: const Offset(0, 12))
+              color: Colors.black.withValues(alpha: .22),
+              blurRadius: 24,
+              offset: const Offset(0, 12),
+            ),
           ],
         ),
         child: child,
@@ -719,60 +932,91 @@ class _RatingsViewState extends State<RatingsView> {
                     .join()
                     .toUpperCase(),
                 style:
-                    const TextStyle(color: _blue, fontWeight: FontWeight.w800))
+                    const TextStyle(color: _blue, fontWeight: FontWeight.w800),
+              )
             : null,
       );
 
-  Widget _routeRow(IconData icon, String label, String value) => Row(children: [
-        Icon(icon, color: label == 'Pickup' ? _blue : _green, size: 18),
-        const SizedBox(width: 10),
-        Expanded(
-            child:
-                Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Text(label.toUpperCase(),
-              style: TextStyle(
-                  color: Colors.white.withValues(alpha: .38),
-                  fontSize: 10,
-                  fontWeight: FontWeight.w700)),
-          const SizedBox(height: 2),
-          Text(value.isEmpty ? 'Address unavailable' : value,
-              maxLines: 2,
-              overflow: TextOverflow.ellipsis,
-              style: TextStyle(
-                  color: Colors.white.withValues(alpha: .82), fontSize: 13)),
-        ])),
-      ]);
+  Widget _routeRow(IconData icon, String label, String value) => Row(
+        children: [
+          Icon(icon, color: label == 'Pickup' ? _blue : _green, size: 18),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  label.toUpperCase(),
+                  style: TextStyle(
+                    color: Colors.white.withValues(alpha: .38),
+                    fontSize: 10,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  value.isEmpty ? 'Address unavailable' : value,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    color: Colors.white.withValues(alpha: .82),
+                    fontSize: 13,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      );
 
   Widget _metric(String label, String value) => Container(
         width: 142,
         padding: const EdgeInsets.all(11),
         decoration: BoxDecoration(
-            color: _panel, borderRadius: BorderRadius.circular(11)),
-        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Text(label.toUpperCase(),
+          color: _panel,
+          borderRadius: BorderRadius.circular(11),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              label.toUpperCase(),
               style: TextStyle(
-                  color: Colors.white.withValues(alpha: .35),
-                  fontSize: 9.5,
-                  fontWeight: FontWeight.w700)),
-          const SizedBox(height: 4),
-          Text(value,
+                color: Colors.white.withValues(alpha: .35),
+                fontSize: 9.5,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+            const SizedBox(height: 4),
+            Text(
+              value,
               style: const TextStyle(
-                  color: Colors.white,
-                  fontSize: 13,
-                  fontWeight: FontWeight.w700,
-                  fontFamily: 'monospace')),
-        ]),
+                color: Colors.white,
+                fontSize: 13,
+                fontWeight: FontWeight.w700,
+                fontFamily: 'monospace',
+              ),
+            ),
+          ],
+        ),
       );
 
   Widget _badge(String label, Color color) => Container(
-      padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
-      decoration: BoxDecoration(
+        padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
+        decoration: BoxDecoration(
           color: color.withValues(alpha: .12),
           borderRadius: BorderRadius.circular(20),
-          border: Border.all(color: color.withValues(alpha: .28))),
-      child: Text(label,
+          border: Border.all(color: color.withValues(alpha: .28)),
+        ),
+        child: Text(
+          label,
           style: TextStyle(
-              color: color, fontWeight: FontWeight.w700, fontSize: 10.5)));
+            color: color,
+            fontWeight: FontWeight.w700,
+            fontSize: 10.5,
+          ),
+        ),
+      );
 
   InputDecoration _input(String hint) => InputDecoration(
         hintText: hint,
@@ -781,14 +1025,17 @@ class _RatingsViewState extends State<RatingsView> {
         fillColor: _panel,
         counterStyle: TextStyle(color: Colors.white.withValues(alpha: .35)),
         border: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(12),
-            borderSide: BorderSide(color: Colors.white.withValues(alpha: .08))),
+          borderRadius: BorderRadius.circular(12),
+          borderSide: BorderSide(color: Colors.white.withValues(alpha: .08)),
+        ),
         enabledBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(12),
-            borderSide: BorderSide(color: Colors.white.withValues(alpha: .08))),
+          borderRadius: BorderRadius.circular(12),
+          borderSide: BorderSide(color: Colors.white.withValues(alpha: .08)),
+        ),
         focusedBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(12),
-            borderSide: const BorderSide(color: _blue)),
+          borderRadius: BorderRadius.circular(12),
+          borderSide: const BorderSide(color: _blue),
+        ),
       );
 
   static Map<String, dynamic> _map(Object? value) =>
@@ -800,9 +1047,9 @@ class _RatingsViewState extends State<RatingsView> {
 
   static String _address(Object? value) {
     if (value is Map) {
-      return _text(value['address'] ??
-          value['formattedAddress'] ??
-          value['description']);
+      return _text(
+        value['address'] ?? value['formattedAddress'] ?? value['description'],
+      );
     }
     return _text(value);
   }
