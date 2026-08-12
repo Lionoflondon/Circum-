@@ -9,6 +9,7 @@ import 'package:flutter_stripe/flutter_stripe.dart';
 import 'package:intl/intl.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../business/business_view.dart';
 import '../send_package/view/ride_chats.dart';
@@ -195,6 +196,10 @@ abstract class SenderWalletRepository
   Stream<SenderWalletData> watch();
   Future<SenderWalletPage> transactions({String? pageToken});
   Future<void> completeOnboarding();
+  Future<Uri> createTopUp({
+    required double amount,
+    required String returnUrl,
+  });
   Future<void> requestDebit({
     required double amount,
     required String relatedEntityId,
@@ -359,6 +364,23 @@ class FirebaseSenderWalletRepository implements SenderWalletRepository {
   @override
   Future<void> completeOnboarding() async {
     await functions.httpsCallable('completeSenderWalletOnboarding').call();
+  }
+
+  @override
+  Future<Uri> createTopUp({
+    required double amount,
+    required String returnUrl,
+  }) async {
+    final result = await functions.httpsCallable('createWalletTopUp').call({
+      'amount': amount,
+      'returnUrl': returnUrl,
+    });
+    final data = Map<String, dynamic>.from(result.data as Map);
+    final checkoutUrl = Uri.tryParse('${data['checkoutUrl'] ?? ''}');
+    if (checkoutUrl == null || checkoutUrl.scheme != 'https') {
+      throw StateError('Secure Roth checkout is unavailable.');
+    }
+    return checkoutUrl;
   }
 
   @override
@@ -746,6 +768,74 @@ class _SenderWalletViewState extends State<SenderWalletView> {
     }
   }
 
+  Future<void> _buyRoth() async {
+    final controller = TextEditingController();
+    final amount = await showDialog<double>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Buy Roth'),
+        content: TextField(
+          controller: controller,
+          autofocus: true,
+          keyboardType: const TextInputType.numberWithOptions(decimal: true),
+          decoration: const InputDecoration(
+            labelText: 'Amount',
+            prefixText: '£',
+            helperText: 'Minimum £1. You receive the same amount in Roth.',
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () {
+              final value = double.tryParse(controller.text.trim());
+              Navigator.pop(context, value);
+            },
+            child: const Text('Continue'),
+          ),
+        ],
+      ),
+    );
+    controller.dispose();
+    if (amount == null) return;
+    if (!amount.isFinite || amount < 1) {
+      if (mounted) _notice(context, 'Enter an amount of at least £1.');
+      return;
+    }
+    setState(() => _paymentActionLoading = true);
+    try {
+      final base = Uri.base.removeFragment();
+      final returnUrl = base.replace(
+        path: kIsWeb ? '/send' : base.path,
+        queryParameters: {
+          ...base.queryParameters,
+          'app': 'sender',
+          'tab': '3',
+        },
+      ).toString();
+      final checkoutUrl = await _repository.createTopUp(
+        amount: amount,
+        returnUrl: returnUrl,
+      );
+      final opened = await launchUrl(
+        checkoutUrl,
+        mode: kIsWeb
+            ? LaunchMode.platformDefault
+            : LaunchMode.externalApplication,
+        webOnlyWindowName: kIsWeb ? '_self' : null,
+      );
+      if (!opened)
+        throw StateError('Secure Roth checkout could not be opened.');
+    } catch (error) {
+      if (mounted) _notice(context, _walletSafeError('$error'));
+    } finally {
+      if (mounted) setState(() => _paymentActionLoading = false);
+    }
+  }
+
   @override
   void dispose() {
     _subscription?.cancel();
@@ -869,6 +959,7 @@ class _SenderWalletViewState extends State<SenderWalletView> {
             ),
             const SizedBox(height: 20),
             _WalletActionGrid(
+              onBuyRoth: _buyRoth,
               onRedeem: _redeemRothCard,
               onAddCard: _addPaymentMethod,
               onManagePayments: _openManagePayments,
@@ -2444,11 +2535,13 @@ class _AvailableRothCard extends StatelessWidget {
 }
 
 class _WalletActionGrid extends StatelessWidget {
+  final VoidCallback onBuyRoth;
   final VoidCallback onRedeem;
   final VoidCallback onAddCard;
   final VoidCallback onManagePayments;
 
   const _WalletActionGrid({
+    required this.onBuyRoth,
     required this.onRedeem,
     required this.onAddCard,
     required this.onManagePayments,
@@ -2463,6 +2556,13 @@ class _WalletActionGrid extends StatelessWidget {
         const SizedBox(height: 10),
         Column(
           children: [
+            _WalletActionCard(
+              icon: Icons.add_circle_outline_rounded,
+              title: 'Buy Roth',
+              detail: 'Add Roth securely with Stripe.',
+              onTap: onBuyRoth,
+            ),
+            const SizedBox(height: 12),
             _WalletActionCard(
               icon: Icons.credit_card_outlined,
               title: 'Redeem Roth',
