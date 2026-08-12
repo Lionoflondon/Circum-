@@ -95,6 +95,10 @@ void main() {
       SenderTrackingState.cancelled,
     );
     expect(
+      senderTrackingStateForBackendStatus('cancelled_by_sender'),
+      SenderTrackingState.cancelled,
+    );
+    expect(
       senderTrackingStateForBackendStatus('issue_reported'),
       SenderTrackingState.issue,
     );
@@ -384,8 +388,7 @@ void main() {
     final absent = SenderTrackingMapAdapter.snapshotFor(
       SendPackageState(
         pickupCoordinate: PlaceCoordinate(lat: 51.5045, lng: -0.0865),
-        desinationCoordinate:
-            PlaceCoordinate(lat: 51.4820203, lng: -0.1444907),
+        desinationCoordinate: PlaceCoordinate(lat: 51.4820203, lng: -0.1444907),
       ),
       content: senderTrackingContentFor(SenderTrackingState.delivered),
       stateDelivered: true,
@@ -393,8 +396,7 @@ void main() {
     final present = SenderTrackingMapAdapter.snapshotFor(
       SendPackageState(
         pickupCoordinate: PlaceCoordinate(lat: 51.5045, lng: -0.0865),
-        desinationCoordinate:
-            PlaceCoordinate(lat: 51.4820203, lng: -0.1444907),
+        desinationCoordinate: PlaceCoordinate(lat: 51.4820203, lng: -0.1444907),
         polylineCoordinates: const [
           LatLng(51.5045, -0.0865),
           LatLng(51.495, -0.12),
@@ -428,7 +430,8 @@ void main() {
     expect(source, isNot(contains("PolylineId('remaining_route')")));
   });
 
-  test('assigned Rider trust view projects photo, rank, vehicle and experience', () {
+  test('assigned Rider trust view projects photo, rank, vehicle and experience',
+      () {
     final rider = AssignedRiderTrustView.fromDelivery({
       'assignedRiderId': 'rider-1',
       'assignedRiderProfile': {
@@ -465,7 +468,8 @@ void main() {
     expect(rider.qualifications, ['Vanguard']);
   });
 
-  test('assigned Rider trust view fails safely for missing or invalid fields', () {
+  test('assigned Rider trust view fails safely for missing or invalid fields',
+      () {
     final rider = AssignedRiderTrustView.fromDelivery({
       'assignedRiderId': 'rider-2',
       'riderName': 'Circum Rider',
@@ -480,9 +484,11 @@ void main() {
     expect(rider.etaDistanceLabel, 'Updating ETA');
   });
 
-  testWidgets('Rider card drops old identity on reassignment and closes contact terminally',
+  testWidgets(
+      'Rider card drops old identity on reassignment and closes contact terminally',
       (tester) async {
-    SendPackageState stateFor(String id, String name, {bool assigned = false}) =>
+    SendPackageState stateFor(String id, String name,
+            {bool assigned = false}) =>
         SendPackageState(activeDeliveryData: {
           'assignedRiderId': id,
           'assignedRiderProfile': {
@@ -562,7 +568,7 @@ void main() {
     expect(googleMapStart, greaterThan(layerStart));
     expect(radarStart, greaterThan(googleMapStart));
     expect(source.substring(layerStart, radarStart),
-        contains('if (googleMapSnapshot != null)'));
+        contains('if (googleMapSnapshot != null && !kIsWeb)'));
   });
 
   test('Sender tracking action sheet intercepts platform-view hit testing', () {
