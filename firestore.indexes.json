@@ -117,6 +117,18 @@
       "density": "SPARSE_ALL"
     },
     {
+      "collectionGroup": "deliveryRequests",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {"fieldPath": "businessId", "order": "ASCENDING"},
+        {"fieldPath": "createdAt", "order": "ASCENDING"},
+        {"fieldPath": "durationMinutes", "order": "ASCENDING"},
+        {"fieldPath": "paidAmount", "order": "ASCENDING"},
+        {"fieldPath": "__name__", "order": "ASCENDING"}
+      ],
+      "density": "SPARSE_ALL"
+    },
+    {
       "collectionGroup": "businessInvoices",
       "queryScope": "COLLECTION",
       "fields": [
