@@ -1,6 +1,27 @@
 {
   "indexes": [
     {
+      "collectionGroup": "driverRatings",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {"fieldPath": "driverId", "order": "ASCENDING"},
+        {"fieldPath": "createdAt", "order": "DESCENDING"},
+        {"fieldPath": "__name__", "order": "DESCENDING"}
+      ],
+      "density": "SPARSE_ALL"
+    },
+    {
+      "collectionGroup": "walletTransactions",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {"fieldPath": "riderId", "order": "ASCENDING"},
+        {"fieldPath": "category", "order": "ASCENDING"},
+        {"fieldPath": "createdAt", "order": "DESCENDING"},
+        {"fieldPath": "__name__", "order": "DESCENDING"}
+      ],
+      "density": "SPARSE_ALL"
+    },
+    {
       "collectionGroup": "noShowSettlements",
       "queryScope": "COLLECTION",
       "fields": [

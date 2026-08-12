@@ -35,9 +35,16 @@ test("tip methods and pence limits are canonical", () => {
 
 test("rating distribution and tip averages update without client math", () => {
   assert.deepEqual(core.nextRatingStats({averageRating: 4, totalRatings: 2, fiveStarCount: 1}, 5), {
-    averageRating: 4.33, rating: 4.33, totalRatings: 3, fiveStarCount: 2,
+    averageRating: 4.33, rating: 4.33, ratingTotal: 13, totalRatings: 3, fiveStarCount: 2,
   });
   assert.deepEqual(core.nextTipStats({tipTotal: 5, tipCount: 1}, 3), {
     tipTotal: 8, tipsTotal: 8, tipCount: 2, averageTip: 4,
   });
+});
+
+test("canonical compliments are bounded and private text remains optional", () => {
+  assert.deepEqual(core.normalizeRatingInput({stars: 4, feedbackTags: ["On time", "Great communication"]}), {
+    stars: 4, feedback: "", feedbackTags: ["On time", "Great communication"],
+  });
+  assert.throws(() => core.normalizeRatingInput({stars: 5, feedbackTags: ["Invented claim"]}), /invalid-feedback-tag/);
 });

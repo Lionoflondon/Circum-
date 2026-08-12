@@ -186,6 +186,10 @@ exports.settleScheduledRoadChargeCashRefund =
   scheduledRoadChargeRefunds.settleScheduledRoadChargeCashRefund;
 exports.submitDeliveryRating = ratingsTipping.submitDeliveryRating;
 exports.submitDeliveryTip = ratingsTipping.submitDeliveryTip(stripe);
+exports.getDeliveryAppreciation = ratingsTipping.getDeliveryAppreciation;
+exports.getRiderAppreciation = ratingsTipping.getRiderAppreciation;
+exports.reconcileDeliveryTips = ratingsTipping.reconcileDeliveryTips(stripe);
+exports.reverseRothDeliveryTip = ratingsTipping.reverseRothDeliveryTip;
 
 exports.getRiderEarningsSummary =
   riderEarningsSummary.getRiderEarningsSummary();
@@ -555,11 +559,32 @@ exports.StripeWebhook = functions
       console.log(`Event: ${event.type}`);
 
       if (event.type === "charge.refunded") {
+        const tipRefund = await ratingsTipping.processStripeTipReversal(
+            stripe,
+            event.data.object,
+            event.id,
+            "refunded",
+        );
+        if (tipRefund && tipRefund.handled) {
+          return res.send({success: true, tip: tipRefund});
+        }
         const refundResult = await stripeRefunds.syncChargeRefund({
           db: getFirestore(),
           event,
         });
         return res.send({success: true, refund: refundResult});
+      }
+
+      if (event.type === "charge.dispute.created") {
+        const tipDispute = await ratingsTipping.processStripeTipReversal(
+            stripe,
+            event.data.object,
+            event.id,
+            "disputed",
+        );
+        if (tipDispute && tipDispute.handled) {
+          return res.send({success: true, tip: tipDispute});
+        }
       }
 
       if (

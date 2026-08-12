@@ -246,7 +246,9 @@ function settlementValues(delivery = {}) {
       0,
   );
   const breakdown = delivery.riderEarningBreakdown || {};
-  const tip = Number(breakdown.tip || delivery.riderTip || delivery.tipAmount || 0);
+  // Post-delivery tips are settled only by ratings-tipping.finalizeTip.
+  // Legacy aliases remain display-only and must never mint Rider earnings.
+  const tip = 0;
   const waiting = Number(breakdown.waiting || delivery.riderWaitingEarning || delivery.noShowEarning || 0);
   const adjustment = Number(breakdown.adjustment || delivery.riderAdjustment || 0);
   const amount = Number.isFinite(base) ? base : 0;
@@ -684,7 +686,6 @@ async function updateDeliveryTrackingStatusHandler(data, context, db = getFirest
           availableBalance: FieldValue.increment(settlement.amount + finalRoadSettlement.reimbursement),
           deliveryEarningsTotal: FieldValue.increment(settlement.deliveryAmount),
           roadChargeReimbursementsTotal: FieldValue.increment(finalRoadSettlement.reimbursement),
-          tipsTotal: FieldValue.increment(settlement.tip),
           waitingNoShowTotal: FieldValue.increment(settlement.waiting),
           adjustmentsTotal: FieldValue.increment(settlement.adjustment),
           lifetimeEarnings: FieldValue.increment(settlement.amount + finalRoadSettlement.reimbursement),

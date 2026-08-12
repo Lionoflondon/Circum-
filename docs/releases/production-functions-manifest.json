@@ -6,10 +6,10 @@
   "releaseShaSemantics": "SELF means the Git commit containing this manifest; the immutable SHA is recorded in the release report and deployment provenance.",
   "entryPoint": "server/functions/index.js",
   "inventory": {
-    "productionFunctions": 293,
-    "applicationFunctions": 287,
+    "productionFunctions": 297,
+    "applicationFunctions": 291,
     "extensionFunctions": 6,
-    "sourceExports": 287
+    "sourceExports": 291
   },
   "applicationFunctions": [
     {
@@ -1476,6 +1476,17 @@
       "releaseSha": "SELF"
     },
     {
+      "name": "getDeliveryAppreciation",
+      "source": "server/functions/ratings-tipping.js#getDeliveryAppreciation",
+      "runtime": "nodejs22",
+      "region": "us-central1",
+      "trigger": {
+        "type": "callable"
+      },
+      "state": "ACTIVE",
+      "releaseSha": "SELF"
+    },
+    {
       "name": "getGiftStoryActionState",
       "source": "server/functions/gift-story-automation.js#getGiftStoryActionState",
       "runtime": "nodejs22",
@@ -1543,6 +1554,17 @@
         "type": "callable"
       },
       "productionSourceHash": "1019a97b5722c7c40c476d7d2c4b5068fad3518f",
+      "state": "ACTIVE",
+      "releaseSha": "SELF"
+    },
+    {
+      "name": "getRiderAppreciation",
+      "source": "server/functions/ratings-tipping.js#getRiderAppreciation",
+      "runtime": "nodejs22",
+      "region": "us-central1",
+      "trigger": {
+        "type": "callable"
+      },
       "state": "ACTIVE",
       "releaseSha": "SELF"
     },
@@ -2473,6 +2495,19 @@
       "releaseSha": "SELF"
     },
     {
+      "name": "reconcileDeliveryTips",
+      "source": "server/functions/ratings-tipping.js#reconcileDeliveryTips",
+      "runtime": "nodejs22",
+      "region": "us-central1",
+      "trigger": {
+        "type": "schedule",
+        "schedule": "every 15 minutes",
+        "timeZone": null
+      },
+      "state": "ACTIVE",
+      "releaseSha": "SELF"
+    },
+    {
       "name": "reconcileStaleDeliveryLocks",
       "source": "server/functions/stale-delivery.js#reconcileStaleDeliveryLocks",
       "runtime": "nodejs22",
@@ -2941,6 +2976,17 @@
         "type": "callable"
       },
       "productionSourceHash": "470c1dc565cbba354f8ffddcd67f5c932b37c8cb",
+      "state": "ACTIVE",
+      "releaseSha": "SELF"
+    },
+    {
+      "name": "reverseRothDeliveryTip",
+      "source": "server/functions/ratings-tipping.js#reverseRothDeliveryTip",
+      "runtime": "nodejs22",
+      "region": "us-central1",
+      "trigger": {
+        "type": "callable"
+      },
       "state": "ACTIVE",
       "releaseSha": "SELF"
     },

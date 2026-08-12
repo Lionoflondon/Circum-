@@ -6,9 +6,12 @@ const PAYMENT_METHODS = new Set(["roth", "saved_card", "card", "apple_pay", "goo
 const FEEDBACK_TAGS = new Set([
   "Friendly",
   "Professional",
-  "Fast",
-  "Excellent Communication",
+  "Great communication",
   "Careful Handling",
+  "On time",
+  "Fast delivery",
+  "Followed instructions",
+  "Excellent service",
 ]);
 const RATING_WINDOW_MS = 30 * 24 * 60 * 60 * 1000;
 const MAX_FEEDBACK_LENGTH = 500;
@@ -68,13 +71,16 @@ function normalizeTipInput(input = {}) {
 
 function nextRatingStats(current = {}, stars) {
   const totalRatings = Number(current.totalRatings || 0);
-  const previousAverage = Number(current.averageRating || current.rating || 0);
+  const ratingTotal = Number.isInteger(Number(current.ratingTotal)) ?
+    Number(current.ratingTotal) : Math.round(Number(current.averageRating || current.rating || 0) * totalRatings);
   const nextTotal = totalRatings + 1;
-  const averageRating = Math.round((((previousAverage * totalRatings) + stars) / nextTotal) * 100) / 100;
+  const nextRatingTotal = ratingTotal + stars;
+  const averageRating = Math.round((nextRatingTotal / nextTotal) * 100) / 100;
   const names = [null, "oneStarCount", "twoStarCount", "threeStarCount", "fourStarCount", "fiveStarCount"];
   return {
     averageRating,
     rating: averageRating,
+    ratingTotal: nextRatingTotal,
     totalRatings: nextTotal,
     [names[stars]]: Number(current[names[stars]] || 0) + 1,
   };

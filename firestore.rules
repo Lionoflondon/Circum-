@@ -831,11 +831,8 @@ service cloud.firestore {
     }
 
     match /driverRatings/{ratingId} {
-      allow read: if isAdmin() ||
-        (signedIn() && resource.data.customerId == request.auth.uid) ||
-        (signedIn() && resource.data.driverId == request.auth.uid);
-      allow create: if signedIn() &&
-        request.resource.data.customerId == request.auth.uid;
+      allow read: if isAdmin();
+      allow create: if false;
       allow update: if isAdmin() &&
         !request.resource.data.diff(resource.data).changedKeys().hasAny(['starRating']);
       allow delete: if false;
@@ -1122,9 +1119,21 @@ service cloud.firestore {
     match /riderWalletTransactions/{transactionId} {
       allow read: if isAdmin() ||
         (signedIn() && resource.data.riderId == request.auth.uid);
-      allow create: if isAdmin();
-      allow update: if isAdmin();
-      allow delete: if hasRole('super_admin');
+      allow create, update, delete: if false;
+    }
+
+    match /deliveryTips/{tipId} {
+      allow read, create, update, delete: if false;
+    }
+
+    match /ratingReports/{reportId} {
+      allow read: if isAdmin();
+      allow create, update, delete: if false;
+    }
+
+    match /tipReconciliations/{recordId} {
+      allow read: if isFinanceAdmin();
+      allow create, update, delete: if false;
     }
 
     match /payoutRequests/{requestId} {

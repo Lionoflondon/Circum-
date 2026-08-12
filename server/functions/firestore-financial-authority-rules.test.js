@@ -116,7 +116,7 @@ test("rider earnings, wallet ledger, payout requests, and bank data are not clie
   );
   assert.match(
       rules,
-      /match \/riderWalletTransactions\/\{transactionId\}[\s\S]*allow create: if isAdmin\(\);/,
+      /match \/riderWalletTransactions\/\{transactionId\}[\s\S]*allow create, update, delete: if false;/,
   );
   assert.match(
       rules,
@@ -130,6 +130,13 @@ test("rider earnings, wallet ledger, payout requests, and bank data are not clie
       rules,
       /match \/riderEarningsReconciliations\/\{reconciliationId\}[\s\S]*allow read: if isFinanceAdmin\(\);[\s\S]*allow write: if false;/,
   );
+});
+
+test("ratings, tips, and reconciliation are backend-authored", () => {
+  for (const collection of ["driverRatings", "deliveryTips", "ratingReports"]) {
+    assert.match(rules, new RegExp(`match /${collection}/\\{[^}]+\\} \\{[\\s\\S]*allow create[^;]*if false;`));
+  }
+  assert.match(rules, /match \/tipReconciliations\/\{recordId\}[\s\S]*allow read: if isFinanceAdmin\(\);[\s\S]*allow create, update, delete: if false;/);
 });
 
 test("no-show settlement, Rider credit, and platform effect are server-authored", () => {
