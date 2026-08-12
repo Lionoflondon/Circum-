@@ -70,6 +70,13 @@ class _FakeWalletRepository implements SenderWalletRepository {
   Future<void> completeOnboarding() async {}
 
   @override
+  Future<Uri> createTopUp({
+    required double amount,
+    required String returnUrl,
+  }) async =>
+      Uri.parse('https://checkout.stripe.com/c/pay/test');
+
+  @override
   Future<SenderSetupIntentData> createSetupIntent() async =>
       const SenderSetupIntentData(
         customerId: 'cus_test',
@@ -87,7 +94,6 @@ class _FakeWalletRepository implements SenderWalletRepository {
   Future<SenderPaymentProfile> paymentMethods() async =>
       SenderPaymentProfile.empty();
 
-  @override
   @override
   Future<void> saveCheckoutPreference(
       SenderCheckoutPreference preference) async {}
