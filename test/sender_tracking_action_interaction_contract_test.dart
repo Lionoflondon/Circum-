@@ -12,7 +12,8 @@ void main() {
 
     expect(map, contains('return IgnorePointer('));
     expect(map, contains("ValueKey('sender-live-google-map')"));
-    expect(source, contains('child: const SizedBox.expand()'));
+    expect(source, contains('googleMapSnapshot != null && !kIsWeb'));
+    expect(source, contains('googleMapSnapshot == null || kIsWeb ? 1 : .26'));
     expect(source, contains("label: canCancel"));
     expect(source, contains('onTap: canCancel ? onCancelDelivery'));
   });

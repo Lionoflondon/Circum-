@@ -4,6 +4,7 @@ import 'dart:ui';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:cloud_functions/cloud_functions.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
@@ -1325,7 +1326,7 @@ class SenderTrackingMapLayer extends StatelessWidget {
         );
         return Stack(
           children: [
-            if (googleMapSnapshot != null)
+            if (googleMapSnapshot != null && !kIsWeb)
               SenderGoogleTrackingMap(
                 snapshot: googleMapSnapshot,
                 content: content,
@@ -1333,14 +1334,8 @@ class SenderTrackingMapLayer extends StatelessWidget {
                 headingDegrees: headingDegrees,
                 delivered: delivered,
               ),
-            if (googleMapSnapshot != null)
-              Positioned.fill(
-                child: PointerInterceptor(
-                  child: const SizedBox.expand(),
-                ),
-              ),
             AnimatedOpacity(
-              opacity: googleMapSnapshot == null ? 1 : .26,
+              opacity: googleMapSnapshot == null || kIsWeb ? 1 : .26,
               duration: const Duration(milliseconds: 320),
               curve: Curves.easeOut,
               child: Transform.translate(
