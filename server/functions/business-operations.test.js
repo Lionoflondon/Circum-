@@ -5,6 +5,7 @@ const assert = require("node:assert/strict");
 const fs = require("node:fs");
 const {businessAuthority} = require("./business-authority");
 const {sanitizeDelivery, sanitizeInvoice, csvCell} = require("./business-operations")._private;
+const source = fs.readFileSync("business-operations.js", "utf8");
 
 function doc(id, data) {
   return {id, data: () => data};
@@ -112,4 +113,10 @@ test("Business account discovery uses a role-aware callable", () => {
   assert.match(source, /httpsCallable\('listBusinessAccessRequests'\)/);
   assert.doesNotMatch(source, /collection\('businessAccounts'\)/);
   assert.doesNotMatch(source, /collection\('businessJoinRequests'\)/);
+});
+
+test("Business workspace remains available when reporting aggregation fails", () => {
+  assert.match(source, /try \{\s*response\.summary = await reportSummary\(db, businessId\);/s);
+  assert.match(source, /response\.reportingStatus = "temporarily_unavailable";/);
+  assert.match(source, /response\.summary = null;/);
 });

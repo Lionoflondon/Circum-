@@ -196,7 +196,19 @@ exports.getBusinessOperationsWorkspace = functions.runWith({enforceAppCheck: tru
           createdAtMillis: millis(doc.data().createdAt),
         }));
       }
-      if (authority.reportingAuthorized) response.summary = await reportSummary(db, businessId);
+      if (authority.reportingAuthorized) {
+        try {
+          response.summary = await reportSummary(db, businessId);
+          response.reportingStatus = "available";
+        } catch (error) {
+          console.error("Business reporting summary unavailable", {
+            businessId,
+            code: error && error.code || "unknown",
+          });
+          response.summary = null;
+          response.reportingStatus = "temporarily_unavailable";
+        }
+      }
       if (mayViewInvoices) {
         const {query, pageSize} = invoicePageQuery(db, businessId, data || {});
         const snapshot = await query.get();
