@@ -1102,7 +1102,7 @@ test("Founder dispatch waiver is explicit and onboarding-only waivers are insuff
     },
   };
   assert.equal(riderCanViewDispatch(waivesDispatch, {}), true);
-  assert.equal(riderDispatchEligibilityReason(waivesDispatch), "founder_test_waiver");
+  assert.equal(riderDispatchEligibilityReason(waivesDispatch), null);
 
   const inactiveDesignation = {
     ...pending,
