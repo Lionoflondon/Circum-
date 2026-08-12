@@ -10,6 +10,7 @@ const businessPaymentsSource = fs.readFileSync("business-payments.js", "utf8");
 const adminSource = fs.readFileSync("../../lib/app/admin/admin_phase1_shell.dart", "utf8");
 
 test("individual Roth purchases are finalized from verified Stripe amount only", () => {
+  assert.match(rothLedgerSource, /exports\.createWalletTopUp = \(stripe\) => functions\.runWith\(\{enforceAppCheck: true\}\)\.https\.onCall/);
   assert.match(rothLedgerSource, /verifiedStripeRothPurchase\(sessionData,\s*\{[\s\S]*?ownerId: metadata\.userId \|\| metadata\.uid/);
   assert.match(rothLedgerSource, /const amount = purchase\.rothIssued;/);
   assert.doesNotMatch(rothLedgerSource, /metadata\.amountGbp \|\| Number\(sessionData\.amount_total/);

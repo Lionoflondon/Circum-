@@ -504,7 +504,7 @@ exports.requestSenderWalletRefund = functions.https.onCall(async (data, context)
   });
 });
 
-exports.createWalletTopUp = (stripe) => functions.https.onCall(async (data, context) => {
+exports.createWalletTopUp = (stripe) => functions.runWith({enforceAppCheck: true}).https.onCall(async (data, context) => {
   if (!context.auth) {
     throw new functions.https.HttpsError("unauthenticated", "Sign in to top up Roth.");
   }
