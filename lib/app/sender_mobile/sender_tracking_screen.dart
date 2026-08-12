@@ -1699,32 +1699,37 @@ class _SenderGoogleTrackingMapState extends State<SenderGoogleTrackingMap> {
       opacity: opacity,
       attached: _ready,
     );
-    return AnimatedOpacity(
-      opacity: opacity,
-      duration: const Duration(milliseconds: 360),
-      curve: Curves.easeOutCubic,
-      child: GoogleMap(
-        key: const ValueKey('sender-live-google-map'),
-        initialCameraPosition: CameraPosition(
-          target: snapshot.rider ?? snapshot.pickup,
-          zoom: snapshot.rider == null ? 13.2 : 14.4,
+    return IgnorePointer(
+      // The tracking map is a visual background. On web, an interactive
+      // platform view can otherwise swallow taps intended for the lifecycle
+      // sheet rendered above it (message, cancellation and support actions).
+      child: AnimatedOpacity(
+        opacity: opacity,
+        duration: const Duration(milliseconds: 360),
+        curve: Curves.easeOutCubic,
+        child: GoogleMap(
+          key: const ValueKey('sender-live-google-map'),
+          initialCameraPosition: CameraPosition(
+            target: snapshot.rider ?? snapshot.pickup,
+            zoom: snapshot.rider == null ? 13.2 : 14.4,
+          ),
+          onMapCreated: (controller) {
+            _controller = controller;
+            setState(() => _ready = true);
+            WidgetsBinding.instance.addPostFrameCallback((_) => _moveCamera());
+          },
+          markers: _markers(snapshot),
+          polylines: _polylines(snapshot),
+          zoomControlsEnabled: false,
+          myLocationButtonEnabled: false,
+          mapToolbarEnabled: false,
+          compassEnabled: false,
+          rotateGesturesEnabled: true,
+          tiltGesturesEnabled: false,
+          trafficEnabled: false,
+          buildingsEnabled: false,
+          style: _senderTrackingGoogleMapStyle,
         ),
-        onMapCreated: (controller) {
-          _controller = controller;
-          setState(() => _ready = true);
-          WidgetsBinding.instance.addPostFrameCallback((_) => _moveCamera());
-        },
-        markers: _markers(snapshot),
-        polylines: _polylines(snapshot),
-        zoomControlsEnabled: false,
-        myLocationButtonEnabled: false,
-        mapToolbarEnabled: false,
-        compassEnabled: false,
-        rotateGesturesEnabled: true,
-        tiltGesturesEnabled: false,
-        trafficEnabled: false,
-        buildingsEnabled: false,
-        style: _senderTrackingGoogleMapStyle,
       ),
     );
   }
