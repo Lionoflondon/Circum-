@@ -1333,6 +1333,12 @@ class SenderTrackingMapLayer extends StatelessWidget {
                 headingDegrees: headingDegrees,
                 delivered: delivered,
               ),
+            if (googleMapSnapshot != null)
+              Positioned.fill(
+                child: PointerInterceptor(
+                  child: const SizedBox.expand(),
+                ),
+              ),
             AnimatedOpacity(
               opacity: googleMapSnapshot == null ? 1 : .26,
               duration: const Duration(milliseconds: 320),
