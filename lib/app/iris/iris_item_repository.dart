@@ -87,7 +87,7 @@ class IrisItemRepository {
     itemName: 'Suitcase',
     aliases: ['suitcase', 'luggage', 'travel bag'],
     category: 'Luggage',
-    estimatedWeightKg: 8,
+    estimatedWeightKg: 23,
     minimumWeightKg: 1,
     maximumWeightKg: 32,
     weightClass: 'Heavy',
@@ -95,7 +95,7 @@ class IrisItemRepository {
     fragile: false,
     highValue: false,
     requiresVanguard: false,
-    requiresIRISReview: true,
+    requiresIRISReview: false,
     deliveryNotes:
         'Heavy item - rider must confirm they can lift safely. Recommended vehicle: Car.',
     confidenceBaseline: 0.82,
@@ -26152,7 +26152,6 @@ class IrisItemRepository {
       ];
       for (final term in terms) {
         if (term.length < 3) continue;
-        if (_ambiguousPackagingTerms.contains(term)) continue;
         final score = _termScore(text, term) +
             (item.confidenceBoostTerms.any(text.contains) ? 20 : 0);
         if (score > bestScore) {
@@ -26176,14 +26175,6 @@ class IrisItemRepository {
     }());
     return best;
   }
-
-  static const Set<String> _ambiguousPackagingTerms = {
-    'boxed', 'fragile', 'small', 'medium', 'large', 'sealed', 'return',
-    'premium', 'bundle', 'replacement', 'urgent', 'wrapped', 'oversized',
-    'with charger', 'sealed retail box', 'used', 'with accessories',
-    'protective case', 'gift wrapped', 'padded box', 'repair return',
-    'trade-in',
-  };
 
   static bool _categoryMatches(
     IrisRepositoryItem item,
