@@ -1360,6 +1360,39 @@ test("realistic weak catalogue items classify into operationally useful families
   }
 });
 
+test("common London courier items always receive practical packaged weights", () => {
+  const fixtures = [
+    ["flat keys for the new tenant", "house_keys", 0.1, "Personal Items & Luggage"],
+    ["two moving boxes of household items", "moving_box", 30, "Furniture & Home"],
+    ["office chair from Shoreditch", "office_chair", 15, "Furniture & Home"],
+    ["flat-pack furniture", "flat_pack_furniture", 25, "Furniture & Home"],
+    ["full-length mirror", "mirror", 12, "Fragile & Valuable"],
+    ["espresso machine", "coffee_machine", 8, "Furniture & Home"],
+    ["gaming PC", "desktop_computer", 14, "Electronics"],
+    ["camera kit", "camera_kit", 6, "Fragile & Valuable"],
+    ["guitar in case", "guitar", 7, "Fragile & Valuable"],
+    ["catering trays", "catering_tray", 5, "Food & Consumables"],
+    ["conference packs", "event_materials", 10, "Business & Commercial"],
+    ["power tool case", "power_tool_case", 8, "Tools & Machinery"],
+  ];
+  for (const [description, expectedId, expectedWeight, category] of fixtures) {
+    const result = classifyIris({description});
+    assert.equal(result.recommendation.detectedItems[0].id, expectedId, description);
+    assert.equal(result.recommendation.estimatedWeightKg, expectedWeight, description);
+    assert.equal(result.recommendation.category, category, description);
+    assert.ok(Number.isFinite(result.recommendation.estimatedWeightKg), description);
+    assert.ok(result.recommendation.estimatedWeightKg > 0, description);
+  }
+});
+
+test("unknown ordinary London items stay weighted but require confidence resolution", () => {
+  const result = classifyIris({description: "a bespoke household object for delivery across London"});
+  assert.ok(Number.isFinite(result.recommendation.estimatedWeightKg));
+  assert.ok(result.recommendation.estimatedWeightKg > 0);
+  assert.equal(result.recommendation.confidenceBand, "LOW");
+  assert.ok(result.riskResolution.resolution);
+});
+
 test("laboratory samples use medical handover policy instead of generic other", () => {
   const result = classifyIris({description: "laboratory samples"});
   assert.equal(result.recommendation.category, "Medical & Pharmacy");
