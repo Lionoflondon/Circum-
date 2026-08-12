@@ -2140,25 +2140,6 @@ function approvedCanonicalMatch(description, canonicalKnowledge = []) {
   }) || null;
 }
 
-function verifiedCanonicalWeight(record = {}) {
-  const weightKg = Number(record.packagedWeightKg ?? record.knownWeightKg ?? record.knownWeight);
-  if (!Number.isFinite(weightKg) || weightKg <= 0 || weightKg > 1000) return null;
-  const basis = normalize(record.weightBasis || "");
-  const evidenceStatus = normalize(record.weightEvidenceStatus || record.evidenceStatus || "");
-  if (evidenceStatus !== "verified") return null;
-  if (basis === "verified scale") {
-    const verificationId = `${record.weightVerificationId || ""}`.trim();
-    return verificationId ? {weightKg, basis: "verified_scale", verificationId} : null;
-  }
-  if (basis === "manufacturer packaged") {
-    const modelIdentifier = `${record.modelIdentifier || record.sku || ""}`.trim();
-    const sourceReference = `${record.weightSourceReference || record.sourceUrl || ""}`.trim();
-    return modelIdentifier && sourceReference ?
-      {weightKg, basis: "manufacturer_packaged", modelIdentifier, sourceReference} : null;
-  }
-  return null;
-}
-
 function classifyIris(input = {}) {
   const description = safeText(input.description || input.packageDescription || "");
   const text = normalize(description);
@@ -2177,8 +2158,7 @@ function classifyIris(input = {}) {
     photoEstimatedWeightKg: input.photoEstimatedWeightKg,
   });
   const canonicalMatch = approvedCanonicalMatch(description, input.canonicalKnowledge);
-  const canonicalWeightEvidence = verifiedCanonicalWeight(canonicalMatch || {});
-  const canonicalWeightKg = canonicalWeightEvidence && canonicalWeightEvidence.weightKg;
+  const canonicalWeightKg = Number(canonicalMatch && canonicalMatch.knownWeight);
   const estimatedWeightKg = Number.isFinite(canonicalWeightKg) && canonicalWeightKg > 0 ?
     Math.max(weightAuthority.authoritativeWeightKg, canonicalWeightKg) : weightAuthority.authoritativeWeightKg;
   const baseCategory = canonicalMatch && canonicalMatch.category || classifyCategory(text, shipmentSummary);
@@ -2329,7 +2309,6 @@ function classifyIris(input = {}) {
       accessIntelligence: access,
       learningMatchedExamples: authoritativeRecommendation.learningMatchedExamples || 0,
       canonicalKnowledgeMatch: canonicalMatch ? canonicalMatch.canonicalId || canonicalMatch.id || null : null,
-      canonicalWeightEvidence: canonicalWeightEvidence || null,
       inferencePath: canonicalMatch ? "canonical_fast_path" : "deterministic_analysis",
       confidenceCalibration: confidence,
     },
@@ -2565,7 +2544,6 @@ module.exports = {
   riderDispatchEligibilityReason,
   riderDispatchPriority,
   deliveryProtocolState,
-  verifiedCanonicalWeight,
   normalizeVehicleClass: vehicleDispatch.normalizeVehicleClass,
   normalizeRiderVehicle: vehicleDispatch.normalizeRiderVehicle,
   pickRequiredVehicle: vehicleDispatch.pickRequiredVehicle,
