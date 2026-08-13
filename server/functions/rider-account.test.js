@@ -54,6 +54,11 @@ test("Rider self-service authority validates auth ownership documents and audit"
   assert.match(source, /approvalStatus:\s*existing\.approvalStatus \|\| "pending"/);
   assert.match(source, /Delivery is not assigned to this Rider/);
   assert.match(source, /runTransaction/);
+  assert.match(source, /replacesDocumentId/);
+  assert.match(source, /supersedesDocumentId/);
+  assert.match(source, /status:\s*"superseded"/);
+  assert.match(source, /access:\s*"admin_review_only"/);
+  assert.doesNotMatch(source, /verificationDocuments:[\s\S]{0,500}fileUrl:\s*signedUrl/);
 });
 
 test("Rider Application Centre authority requires App Check", () => {

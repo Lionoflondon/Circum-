@@ -70,6 +70,14 @@ function cleanDocumentType(value) {
   return normalized;
 }
 
+function cleanDocumentId(value) {
+  const id = text(value, 160);
+  if (id && !/^[A-Za-z0-9_-]+$/.test(id)) {
+    throw new functions.https.HttpsError("invalid-argument", "Invalid replacement document.");
+  }
+  return id || null;
+}
+
 function cleanApplicationSection(value) {
   const normalized = lower(value, 80).replace(/[^a-z0-9]+/g, "_").replace(/^_+|_+$/g, "");
   if (!ALLOWED_APPLICATION_SECTIONS.has(normalized)) {
@@ -586,6 +594,7 @@ exports.updateRiderApplicationSection = functions.https.onCall(async (data, cont
 exports.submitRiderDocument = functions.https.onCall(async (data, context) => {
   const rider = requireRider(context);
   const documentType = cleanDocumentType(data.documentType || data.type);
+  const replacesDocumentId = cleanDocumentId(data.replacesDocumentId || data.supersedesDocumentId);
   const contentType = text(data.contentType, 120).toLowerCase();
   if (!ALLOWED_CONTENT_TYPES.has(contentType)) {
     throw new functions.https.HttpsError("invalid-argument", "Unsupported document file type.");
@@ -620,9 +629,33 @@ exports.submitRiderDocument = functions.https.onCall(async (data, context) => {
     action: "read",
     expires: Date.now() + 1000 * 60 * 60 * 24 * 7,
   });
+  const signedUrlExpiresAt = new Date(Date.now() + 1000 * 60 * 60 * 24 * 7).toISOString();
 
   const now = FieldValue.serverTimestamp();
+  let replacementVersion = 1;
   await db.runTransaction(async (transaction) => {
+    let previous = null;
+    if (replacesDocumentId) {
+      const previousRef = db.collection("riderDocuments").doc(replacesDocumentId);
+      const previousSnap = await transaction.get(previousRef);
+      if (!previousSnap.exists) {
+        throw new functions.https.HttpsError("not-found", "The document being replaced was not found.");
+      }
+      previous = {ref: previousRef, data: previousSnap.data() || {}};
+      if (text(previous.data.riderId) !== rider.uid || text(previous.data.type) !== documentType) {
+        throw new functions.https.HttpsError("permission-denied", "The document being replaced is not yours.");
+      }
+      if (text(previous.data.status) === "superseded") {
+        throw new functions.https.HttpsError("failed-precondition", "That document has already been replaced.");
+      }
+      transaction.set(previous.ref, {
+        status: "superseded",
+        supersededAt: now,
+        supersededByDocumentId: documentRef.id,
+        updatedAt: now,
+      }, {merge: true});
+    }
+    replacementVersion = previous ? Number(previous.data.replacementVersion || 1) + 1 : 1;
     transaction.set(documentRef, {
       documentId: documentRef.id,
       riderId: rider.uid,
@@ -633,6 +666,12 @@ exports.submitRiderDocument = functions.https.onCall(async (data, context) => {
       storagePath,
       downloadUrl: signedUrl,
       fileUrl: signedUrl,
+      signedUrlExpiresAt,
+      access: "admin_review_only",
+      ...(replacesDocumentId ? {
+        supersedesDocumentId: replacesDocumentId,
+        replacementVersion,
+      } : {}),
       contentType,
       sizeBytes: bytes.length,
       uploadedAt: now,
@@ -647,10 +686,13 @@ exports.submitRiderDocument = functions.https.onCall(async (data, context) => {
       verificationDocuments: {
         [documentType]: {
           type: documentType,
-          fileUrl: signedUrl,
           storagePath,
           uploadedAt: new Date().toISOString(),
           status: "pending",
+          ...(replacesDocumentId ? {
+            supersedesDocumentId: replacesDocumentId,
+            replacementVersion,
+          } : {}),
         },
       },
       lastDocumentUploadedAt: now,
@@ -663,5 +705,10 @@ exports.submitRiderDocument = functions.https.onCall(async (data, context) => {
     }));
   });
 
-  return {ok: true, documentId: documentRef.id, storagePath, downloadUrl: signedUrl};
+  return {
+    ok: true,
+    documentId: documentRef.id,
+    storagePath,
+    replacementVersion,
+  };
 });
