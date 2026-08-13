@@ -140,10 +140,10 @@ void main() {
       contains('--dart-define=CIRCUM_WEB_RECAPTCHA_ENTERPRISE_SITE_KEY='),
     );
 
-    expect(adminBuild, contains('CIRCUM_WEB_RECAPTCHA_ENTERPRISE_SITE_KEY'));
+    expect(adminBuild, contains('ADMIN_WEB_RECAPTCHA_ENTERPRISE_SITE_KEY'));
     expect(
       adminBuild,
-      contains('--dart-define=CIRCUM_WEB_RECAPTCHA_ENTERPRISE_SITE_KEY='),
+      contains('--dart-define=ADMIN_WEB_RECAPTCHA_ENTERPRISE_SITE_KEY='),
     );
 
     for (final source in [publicBuild, senderBuild, adminBuild]) {
