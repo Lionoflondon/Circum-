@@ -68,13 +68,17 @@ void main() {
       isNull,
     );
     expect(
-      website.circumWebAppCheckProvider(isWeb: false, siteKey: ''),
+      website.circumWebAppCheckProvider(''),
       isNull,
     );
     expect(
-      admin.circumWebAppCheckProvider(isWeb: true, siteKey: 'site-key'),
+      admin.circumWebAppCheckProvider('site-key'),
       isA<ReCaptchaEnterpriseProvider>(),
     );
+    for (final webOnlySource in [websiteAppCheckSource, adminAppCheckSource]) {
+      expect(webOnlySource, isNot(contains('AndroidProvider')));
+      expect(webOnlySource, isNot(contains('AppleProvider')));
+    }
   });
 
   test('Circum production entrypoints initialize App Check after Firebase', () {

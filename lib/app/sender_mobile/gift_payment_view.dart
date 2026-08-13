@@ -294,6 +294,7 @@ class _GiftPaymentViewState extends State<GiftPaymentView> {
           .call({
         'giftDraftId': draftRef.id,
         'source': 'sender_mobile',
+        'returnOwner': 'sender_app',
         'applyRoth': _applyRoth && _rothBalance > 0,
       });
       final paymentData = Map<String, dynamic>.from(payment.data as Map);

@@ -1,0 +1,28 @@
+name: Platform isolation guard
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+      - "release/**"
+      - "fix/**"
+  workflow_dispatch:
+
+jobs:
+  platform-isolation-guard:
+    name: Mandatory platform isolation guard
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Platform isolation regression tests
+        run: node --test test/backend_platform_isolation_guard_test.js
+      - name: Absolute ownership and runtime boundary guard
+        run: node scripts/check_platform_isolation.js

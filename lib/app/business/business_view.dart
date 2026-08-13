@@ -1,4 +1,5 @@
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -70,6 +71,26 @@ class _BusinessViewState extends State<BusinessView> {
     _repository = widget.repository ?? FirebaseBusinessRepository();
     _paymentRepository = widget.paymentProfileRepository ??
         FirebaseSenderPaymentProfileRepository();
+    final returnParameters = Uri.base.queryParameters;
+    if (returnParameters['section'] == 'invoicing') {
+      _section = BusinessSection.invoices;
+    }
+    final returnMessage = switch (returnParameters) {
+      {'paymentStatus': 'payment-success'} =>
+        'Invoice payment returned securely. Circum is confirming it.',
+      {'paymentStatus': 'payment-cancelled'} =>
+        'Invoice payment was cancelled. No new charge was made.',
+      {'roth_purchase': 'success'} =>
+        'Roth purchase returned securely. Circum is confirming it.',
+      {'roth_purchase': 'cancelled'} =>
+        'Roth purchase was cancelled. No new charge was made.',
+      _ => null,
+    };
+    if (returnMessage != null) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) _showMessage(returnMessage);
+      });
+    }
     _load();
   }
 
@@ -1459,7 +1480,13 @@ class _BusinessViewState extends State<BusinessView> {
       }
       final uri = result.checkoutUrl;
       if (uri == null ||
-          !await launchUrl(uri, mode: LaunchMode.externalApplication)) {
+          !await launchUrl(
+            uri,
+            mode: kIsWeb
+                ? LaunchMode.platformDefault
+                : LaunchMode.externalApplication,
+            webOnlyWindowName: kIsWeb ? '_self' : null,
+          )) {
         throw StateError('Secure payment could not open.');
       }
     } catch (error) {

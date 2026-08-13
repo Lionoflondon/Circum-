@@ -86,12 +86,14 @@ test("canonical payment authority calculates and records authoritative pricing",
   assert.match(senderBookingSource, /const idempotencyKey = `sender_booking_\$\{quoteId\}`/);
 });
 
-test("Sender web Checkout forces a fresh Stripe session on retry", () => {
+test("Sender web Checkout reuses one owner-bound Stripe session on retry", () => {
   assert.match(senderBookingSource, /payment_method_types: \["card"\]/);
   assert.match(senderBookingSource, /checkoutKey: requestedSessionKey/);
-  assert.match(senderBookingSource, /checkoutAttempt/);
-  assert.match(senderBookingSource, /web_checkout_retry_forces_fresh_session/);
-  assert.match(senderBookingSource, /stripe\.checkout\.sessions\.create\(/);
+  assert.match(senderBookingSource, /checkoutClaim\(current/);
+  assert.match(senderBookingSource, /createStripeCheckoutOnce\(\{/);
+  assert.match(senderBookingSource, /webCheckoutClaim\.kind === "reuse"/);
+  assert.doesNotMatch(senderBookingSource, /web_checkout_retry_forces_fresh_session/);
+  assert.doesNotMatch(senderBookingSource, /checkoutAttempt/);
   assert.doesNotMatch(senderBookingSource, /stripe\.checkout\.sessions\.retrieve\(existingSession\.checkoutSessionId\)/);
 });
 

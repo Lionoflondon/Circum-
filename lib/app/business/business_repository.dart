@@ -348,6 +348,7 @@ class FirebaseBusinessRepository implements BusinessRepository {
       'paymentAmount': invoice.balanceDue,
       'useRoth': useRoth,
       'paymentMethod': paymentMethod,
+      'returnOwner': 'sender_app',
       'returnUrl':
           'https://circum-app-2797c.web.app/?app=business&section=invoicing',
     });

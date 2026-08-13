@@ -14,8 +14,7 @@ import '../../env/env.dart';
 import '../security/circum_app_check.dart';
 import '../send_package/bloc/send_package_bloc.dart';
 import 'design_system/sender_design_system.dart';
-import 'gift_mode_view.dart';
-import 'gift_story_view.dart';
+import 'sender_stripe_return_routing.dart';
 import 'sender_accessibility.dart';
 import 'sender_mobile_home.dart';
 import 'sender_startup_diagnostics.dart';
@@ -279,16 +278,7 @@ class SenderMobilePreviewApp extends StatelessWidget {
 }
 
 String? _initialSenderRouteName(Uri uri) {
-  final fragment = uri.fragment.trim();
-  if (fragment == GiftModeView.routeName ||
-      fragment == '#${GiftModeView.routeName}') {
-    return GiftModeView.routeName;
-  }
-  if (fragment == GiftStoryView.routeName ||
-      fragment == '#${GiftStoryView.routeName}') {
-    return GiftStoryView.routeName;
-  }
-  return null;
+  return resolveSenderInitialRouteName(uri);
 }
 
 class _PreviewSenderAccessibilityRepository

@@ -12,7 +12,54 @@ const argv = process.argv.slice(2);
 const argSet = new Set(argv);
 const shouldDeploy = argSet.has("--deploy");
 const full = argSet.has("--full");
+const functionsScopeOptions = argv.filter((arg) => arg.startsWith("--functions="));
+if (argv.includes("--functions") || functionsScopeOptions.length > 1) {
+  console.error("Use exactly one --functions=name1,name2 option.");
+  process.exit(64);
+}
+const requestedFunctions = functionsScopeOptions.length === 1 ?
+  functionsScopeOptions[0].slice("--functions=".length) : null;
 const mode = argv.find((arg) => !arg.startsWith("--")) || "changed";
+const maxFunctionsPerDeploy = 10;
+
+function resolveFunctionsDeployScope(requested) {
+  if (requested === null) return null;
+  const names = requested.split(",").map((name) => name.trim()).filter(Boolean);
+  if (names.length === 0) {
+    throw new Error("--functions requires at least one exported Function name.");
+  }
+  const unique = [...new Set(names)];
+  if (unique.length !== names.length) {
+    throw new Error("--functions must not contain duplicate Function names.");
+  }
+  if (unique.length > maxFunctionsPerDeploy) {
+    throw new Error(
+        `--functions is limited to ${maxFunctionsPerDeploy} names per narrow deployment.`,
+    );
+  }
+  const result = cp.spawnSync(
+      process.execPath,
+      [path.join(root, "scripts/scoped_functions_deploy_list.js"), "--only", unique.join(",")],
+      {cwd: root, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"]},
+  );
+  if (result.status !== 0) {
+    throw new Error((result.stderr || result.stdout || "Invalid Functions scope.").trim());
+  }
+  const scope = result.stdout.trim();
+  if (!scope || scope.split(",").length !== unique.length ||
+      scope.split(",").some((entry) => !/^functions:[A-Za-z0-9_]+$/.test(entry))) {
+    throw new Error("Functions scope resolver returned an invalid deployment target.");
+  }
+  return scope;
+}
+
+let functionsDeployScope = null;
+try {
+  functionsDeployScope = resolveFunctionsDeployScope(requestedFunctions);
+} catch (error) {
+  console.error(`Functions deployment blocked: ${error.message}`);
+  process.exit(64);
+}
 
 function run(command, options = {}) {
   const startedAt = Date.now();
@@ -193,7 +240,10 @@ const targets = [
     name: "Cloud Functions",
     lanes: ["functions", "release-tooling", "ci"],
     tests: full ? ["cd server/functions && npm test"] : [],
-    deploy: "firebase deploy --only \"$(node scripts/scoped_functions_deploy_list.js)\" --project circum-2797c",
+    requiresFunctionsScope: true,
+    deploy: functionsDeployScope ?
+      `firebase deploy --only "${functionsDeployScope}" --project circum-2797c` :
+      null,
   },
   {
     key: "rules",
@@ -264,7 +314,7 @@ function selectedTargets(filesByLane) {
   if (!selected) {
     console.error("Usage: node scripts/release_orchestrator.js " +
       "[changed|sender|website|admin|functions|rules|storage|indexes|all] " +
-      "[--full] [--deploy] [--self-test]");
+      "[--full] [--deploy] [--functions=name1,name2] [--self-test]");
     process.exit(64);
   }
   return [selected];
@@ -331,7 +381,12 @@ function validate(target, files, allFilesByLane) {
     build.ok ? pass("build") : fail("build", build.output);
   }
 
-  if (target.deployable === false || !target.deploy) {
+  if (target.requiresFunctionsScope && !functionsDeployScope) {
+    fail(
+        "deploy command",
+        `Explicit --functions=name1,name2 scope required (maximum ${maxFunctionsPerDeploy}).`,
+    );
+  } else if (target.deployable === false || !target.deploy) {
     fail("deploy command", target.manualReason || "No deploy command configured");
   }
 
@@ -426,6 +481,14 @@ for (const file of files) {
 }
 
 const selected = selectedTargets(filesByLane);
+if (shouldDeploy && selected.some((target) => target.requiresFunctionsScope) &&
+    !functionsDeployScope) {
+  console.error(
+      "Functions deployment blocked before any target was deployed: " +
+      "explicit --functions=name1,name2 scope is required.",
+  );
+  process.exit(64);
+}
 const results = selected.map((target) => {
   const filesForTarget = candidateFiles(target, filesByLane);
   const checks = validate(target, filesForTarget, filesByLane);

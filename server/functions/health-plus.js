@@ -35,6 +35,18 @@ const rothLedger = require("./roth-ledger");
 const vanguardProtocol = require("./vanguard-protocol-core");
 const {getAuthoritativeRouteFacts, coordinate} = require("./route-authority");
 const {evaluateRoadChargePolicy} = require("./road-charge-policy");
+const {
+  RETURN_FLOWS,
+  resolveReturnOwner,
+  stripeReturnUrls,
+} = require("./stripe-return-ownership");
+const {
+  CheckoutClaimError,
+  checkoutClaim,
+  checkoutFingerprint,
+  checkoutLogicalKey,
+  createStripeCheckoutOnce,
+} = require("./checkout-idempotency-core");
 
 function allowCors(res) {
   res.set("Access-Control-Allow-Origin", "*");
@@ -668,14 +680,14 @@ exports.createHealthPlusCheckoutSession = functions.https.onRequest(async (req, 
       profileId,
       email,
       priceBreakdown,
-      successUrl,
-      cancelUrl,
+      returnOwner,
       useRoth,
     } = req.body;
 
     if (!bookingId || !profileId) {
       return res.status(400).send({error: "bookingId and profileId are required"});
     }
+    const requestedReturnOwner = resolveReturnOwner(returnOwner);
 
     const db = getFirestore();
     const bookingRef = db.collection("prescriptionPickups").doc(bookingId);
@@ -704,16 +716,6 @@ exports.createHealthPlusCheckoutSession = functions.https.onRequest(async (req, 
     if (["paid", "succeeded", "checkout_completed"].includes(`${existingPayment.status || ""}`)) {
       throw new functions.https.HttpsError("failed-precondition", "This Health+ booking has already been paid.");
     }
-    if (existingPayment.checkoutSessionId && existingPayment.checkoutUrl) {
-      return res.send({
-        checkoutUrl: existingPayment.checkoutUrl,
-        sessionId: existingPayment.checkoutSessionId,
-        amountPence: existingPayment.amountPence,
-        recurring: existingPayment.recurring === true,
-        idempotent: true,
-      });
-    }
-
     let authoritative;
     try {
       authoritative = calculateAuthoritativeHealthPlusPricing(
@@ -750,6 +752,52 @@ exports.createHealthPlusCheckoutSession = functions.https.onRequest(async (req, 
     const cardAmount = split.remainingGbp;
 
     if (!recurring && !split.stripeRequired) {
+      const rothRequestFingerprint = checkoutFingerprint({
+        bookingId,
+        profileId,
+        senderId: sender.uid,
+        amountPence,
+        rothAmountPence: Math.round(rothAmount * 100),
+        paymentChannel: "roth",
+      });
+      await db.runTransaction(async (transaction) => {
+        const currentSnap = await transaction.get(paymentRef);
+        const current = currentSnap.exists ? currentSnap.data() || {} : {};
+        if (currentSnap.exists &&
+            `${current.senderId || current.userId || ""}` !== sender.uid) {
+          throw new functions.https.HttpsError(
+              "permission-denied",
+              "Health+ checkout ownership mismatch.",
+          );
+        }
+        if (current.checkoutSessionId || current.checkoutLogicalKey ||
+            current.paymentChannel === "stripe_checkout") {
+          throw new functions.https.HttpsError(
+              "failed-precondition",
+              "This Health+ booking already has a card checkout in progress. Resume it before using Roth.",
+          );
+        }
+        if (current.paymentChannel === "roth" &&
+            current.paymentRequestFingerprint &&
+            current.paymentRequestFingerprint !== rothRequestFingerprint) {
+          throw new functions.https.HttpsError(
+              "failed-precondition",
+              "This Health+ booking already has a Roth payment in progress with different details.",
+          );
+        }
+        transaction.set(paymentRef, {
+          bookingId,
+          profileId,
+          senderId: sender.uid,
+          userId: sender.uid,
+          paymentChannel: "roth",
+          paymentRequestFingerprint: rothRequestFingerprint,
+          status: "roth_processing",
+          paymentStatus: "roth_processing",
+          createdAt: current.createdAt || Date.now(),
+          updatedAt: Date.now(),
+        }, {merge: true});
+      });
       await rothLedger.applyWalletDebit({
         userId: sender.uid,
         userEmail: sender.email,
@@ -786,6 +834,80 @@ exports.createHealthPlusCheckoutSession = functions.https.onRequest(async (req, 
       });
     }
 
+    const returnUrls = stripeReturnUrls(RETURN_FLOWS.HEALTH_PLUS, {
+      returnOwner: requestedReturnOwner,
+      bookingId,
+    });
+    const checkoutEmail = email || sender.email || profile.email || booking.email || "";
+    const checkoutLogicalIdentity = checkoutLogicalKey("health_plus", {bookingId});
+    const checkoutRequestFingerprint = checkoutFingerprint({
+      bookingId,
+      profileId,
+      senderId: sender.uid,
+      amountPence,
+      cardAmountPence: Math.round(cardAmount * 100),
+      rothAmountPence: Math.round(rothAmount * 100),
+      recurring,
+      frequency: authoritative.frequency,
+      checkoutEmail,
+      successUrl: returnUrls.successUrl,
+      cancelUrl: returnUrls.cancelUrl,
+    });
+    let claim;
+    try {
+      claim = await db.runTransaction(async (transaction) => {
+        const currentSnap = await transaction.get(paymentRef);
+        const current = currentSnap.exists ? currentSnap.data() || {} : {};
+        if (currentSnap.exists &&
+            `${current.senderId || current.userId || ""}` !== sender.uid) {
+          throw new functions.https.HttpsError(
+              "permission-denied",
+              "Health+ checkout ownership mismatch.",
+          );
+        }
+        if (current.paymentChannel === "roth") {
+          throw new functions.https.HttpsError(
+              "failed-precondition",
+              "This Health+ booking already has a Roth payment in progress. Complete it before starting card checkout.",
+          );
+        }
+        const result = checkoutClaim(current, {
+          logicalKey: checkoutLogicalIdentity,
+          requestFingerprint: checkoutRequestFingerprint,
+          returnOwner: requestedReturnOwner,
+        });
+        if (result.kind === "claim") {
+          transaction.set(paymentRef, {
+            bookingId,
+            profileId,
+            senderId: sender.uid,
+            userId: sender.uid,
+            ...result.claim,
+            paymentChannel: "stripe_checkout",
+            status: "checkout_creating",
+            paymentStatus: "checkout_creating",
+            updatedAt: Date.now(),
+            createdAt: current.createdAt || Date.now(),
+          }, {merge: true});
+        }
+        return result;
+      });
+    } catch (error) {
+      if (error instanceof CheckoutClaimError) {
+        throw new functions.https.HttpsError("failed-precondition", error.message, {reason: error.reason});
+      }
+      throw error;
+    }
+    if (claim.kind === "reuse") {
+      return res.send({
+        checkoutUrl: claim.checkoutUrl,
+        sessionId: claim.sessionId,
+        amountPence: existingPayment.amountPence || amountPence,
+        recurring: existingPayment.recurring === true || recurring,
+        idempotent: true,
+      });
+    }
+
     let discounts = null;
     if (recurring && rothAmount > 0) {
       const coupon = await stripe.coupons.create({
@@ -809,11 +931,11 @@ exports.createHealthPlusCheckoutSession = functions.https.onRequest(async (req, 
     const params = buildHealthPlusCheckoutParams({
       bookingId,
       profileId,
-      email: email || sender.email || profile.email || booking.email,
+      email: checkoutEmail,
       amountPence: recurring ? amountPence : Math.round(cardAmount * 100),
       recurring,
-      successUrl: successUrl || "https://circum-app-2797c.web.app/?app=sender&health=success",
-      cancelUrl: cancelUrl || "https://circum-app-2797c.web.app/?app=sender&health=cancelled",
+      successUrl: returnUrls.successUrl,
+      cancelUrl: returnUrls.cancelUrl,
       discounts,
       metadata: {
         userId: sender.uid,
@@ -827,7 +949,22 @@ exports.createHealthPlusCheckoutSession = functions.https.onRequest(async (req, 
     });
     params.client_reference_id = sender.uid;
 
-    const session = await stripe.checkout.sessions.create(params);
+    let session;
+    try {
+      session = await createStripeCheckoutOnce({
+        stripe,
+        logicalKey: checkoutLogicalIdentity,
+        params,
+      });
+    } catch (error) {
+      if (`${error && error.code || ""}`.includes("idempotency")) {
+        throw new functions.https.HttpsError(
+            "failed-precondition",
+            "This Health+ checkout is already being created with different payment details.",
+        );
+      }
+      throw error;
+    }
     await paymentRef.set({
       bookingId,
       profileId,
@@ -845,6 +982,10 @@ exports.createHealthPlusCheckoutSession = functions.https.onRequest(async (req, 
       paymentStatus: "pending_verification",
       method: rothAmount > 0 ? "roth_card" : "card",
       paymentMethod: rothAmount > 0 ? "roth_card" : "card",
+      paymentChannel: "stripe_checkout",
+      returnOwner: requestedReturnOwner,
+      checkoutLogicalKey: checkoutLogicalIdentity,
+      checkoutRequestFingerprint,
       checkoutSessionId: session.id,
       checkoutUrl: session.url,
       authoritativePricing: authoritative,
@@ -919,6 +1060,9 @@ exports.handleHealthPlusCheckoutSession = async (sessionData, eventId = null) =>
   }
   const payment = paymentSnap.data() || {};
   if (payment.status === "paid" || payment.paymentStatus === "paid") return;
+  if (payment.checkoutSessionId !== sessionData.id) {
+    throw new Error("Health+ checkout session ownership mismatch.");
+  }
   const rothAmount = money(payment.rothAmount);
   const verifiedPayment = verifiedStripePaidGbpSession(sessionData, {
     ownerId: senderId,

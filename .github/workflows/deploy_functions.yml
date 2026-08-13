@@ -2,6 +2,11 @@ name: Deploy Functions
 
 on:
   workflow_dispatch:
+    inputs:
+      functions:
+        description: 'Required comma-separated Firebase Function names for an isolated deploy'
+        required: true
+        type: string
 
 jobs:
   deploy-functions:
@@ -16,6 +21,7 @@ jobs:
           node-version: 20
       - run: node scripts/deploy_guard.self_test.js
       - run: node scripts/deploy_guard.js --target=backend --base HEAD
+      - run: node --test scripts/scoped_functions_deploy_list.test.js
       - run: npm --prefix server/functions ci
       - run: npm --prefix server/functions test
       - uses: google-github-actions/auth@v2
@@ -25,4 +31,11 @@ jobs:
       - run: printf "GOOGLE_PLACES_API_KEY=%s\n" "$GOOGLE_PLACES_API_KEY" > server/functions/.env
         env:
           GOOGLE_PLACES_API_KEY: ${{ secrets.GOOGLE_PLACES_API_KEY }}
-      - run: firebase deploy --only "$(node scripts/scoped_functions_deploy_list.js)" --project circum-2797c
+      - name: Resolve deployment scope
+        id: scope
+        env:
+          REQUESTED_FUNCTIONS: ${{ inputs.functions }}
+        run: |
+          node scripts/scoped_functions_deploy_list.js --only "$REQUESTED_FUNCTIONS" > /tmp/functions-scope.txt
+          printf 'scope=%s\n' "$(cat /tmp/functions-scope.txt)" >> "$GITHUB_OUTPUT"
+      - run: firebase deploy --only "${{ steps.scope.outputs.scope }}" --project circum-2797c

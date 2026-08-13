@@ -6,6 +6,14 @@ const giftVoiceMedia = require("./gift-voice-media");
 const vanguardProtocol = require("./vanguard-protocol-core");
 const {createGiftBudgetAuthority} = require("./gift-budget-authority");
 const {giftReturnUrls} = require("./gifts-payment-core");
+const {resolveReturnOwner} = require("./stripe-return-ownership");
+const {
+  CheckoutClaimError,
+  checkoutClaim,
+  checkoutFingerprint,
+  checkoutLogicalKey,
+  createStripeCheckoutOnce,
+} = require("./checkout-idempotency-core");
 
 function requireAuth(context) {
   if (!context.auth) {
@@ -52,8 +60,14 @@ async function createCampaignPaymentDraft({data, context}) {
   if (gross < 50) {
     throw new functions.https.HttpsError("failed-precondition", "Campaign gift budget is below the minimum.");
   }
-  const participantRef = db.collection("giftCampaignParticipants").doc();
-  const draftRef = db.collection("giftPaymentDrafts").doc();
+  const campaignCheckoutKey = checkoutLogicalKey("gift_campaign", {
+    campaignId,
+    senderId: context.auth.uid,
+  });
+  const participantRef = db.collection("giftCampaignParticipants")
+      .doc(`participant_${campaignCheckoutKey}`);
+  const draftRef = db.collection("giftPaymentDrafts")
+      .doc(`draft_${campaignCheckoutKey}`);
   const senderEmail = text(context.auth.token && context.auth.token.email);
   const now = FieldValue.serverTimestamp();
   const participant = {
@@ -87,6 +101,27 @@ async function createCampaignPaymentDraft({data, context}) {
     returnOrigin: text(data.returnOrigin),
   };
   await db.runTransaction(async (transaction) => {
+    const [existingParticipant, existingDraft] = await Promise.all([
+      transaction.get(participantRef),
+      transaction.get(draftRef),
+    ]);
+    if (existingParticipant.exists || existingDraft.exists) {
+      const restoredParticipant = existingParticipant.data() || {};
+      const restoredDraft = existingDraft.data() || {};
+      if (!existingParticipant.exists || !existingDraft.exists ||
+          text(restoredParticipant.userId || restoredParticipant.senderId) !== context.auth.uid ||
+          text(restoredParticipant.campaignId) !== campaignId ||
+          text(restoredParticipant.paymentDraftId) !== draftRef.id ||
+          text(restoredDraft.senderId) !== context.auth.uid ||
+          text(restoredDraft.campaignId) !== campaignId ||
+          text(restoredDraft.campaignParticipantId) !== participantRef.id) {
+        throw new functions.https.HttpsError(
+            "failed-precondition",
+            "Campaign payment state could not be safely restored.",
+        );
+      }
+      return;
+    }
     transaction.set(participantRef, participant, {merge: false});
     transaction.set(draftRef, draft, {merge: false});
     transaction.set(db.collection("giftCampaignParticipantEvents").doc(), {
@@ -140,6 +175,7 @@ async function createStandardPaymentDraft({data, context}) {
       if (existingData.senderId !== context.auth.uid || existingData.paymentStatus === "paid") {
         throw new functions.https.HttpsError("failed-precondition", "Gift payment cannot be started.");
       }
+      return;
     }
     transaction.set(draftRef, draft, {merge: false});
     transaction.set(db.collection("giftPaymentEvents").doc(), {
@@ -168,25 +204,94 @@ exports.createGiftPayment = (stripe) => functions.https.onCall(async (data, cont
       data.giftDraftId ||
       "",
   );
-  const ref = getFirestore().collection("giftPaymentDrafts").doc(giftDraftId);
+  const db = getFirestore();
+  const ref = db.collection("giftPaymentDrafts").doc(giftDraftId);
   const snap = await ref.get();
   if (!snap.exists || snap.data().senderId !== context.auth.uid) {
     throw new functions.https.HttpsError("not-found", "Gift draft not found.");
   }
   const gift = snap.data();
+  const campaignParticipantId = text(
+      (campaignDraft && campaignDraft.participantId) ||
+      gift.campaignParticipantId ||
+      data.campaignParticipantId,
+  );
+  if (campaignParticipantId) {
+    const participantSnap = await db
+        .collection("giftCampaignParticipants")
+        .doc(campaignParticipantId)
+        .get();
+    const participant = participantSnap.exists ? participantSnap.data() || {} : {};
+    if (!participantSnap.exists ||
+        (text(participant.userId || participant.senderId) !== context.auth.uid) ||
+        text(participant.paymentDraftId) !== giftDraftId) {
+      throw new functions.https.HttpsError(
+          "failed-precondition",
+          "Campaign payment state could not be restored.",
+      );
+    }
+  }
   const gross = Number(gift.grossGiftBudget || gift.grossBudget || 0);
   if (gross < 50 || gift.paymentStatus === "paid") {
     throw new functions.https.HttpsError("failed-precondition", "Gift payment cannot be started.");
   }
-  const config = functions.config().gifts || {};
+  const requestedReturnOwner = resolveReturnOwner(data.returnOwner);
   const {successUrl, cancelUrl} = giftReturnUrls({
     giftDraftId,
-    source: data.source,
-    config,
+    returnOwner: requestedReturnOwner,
   });
+  const checkoutLogicalIdentity = checkoutLogicalKey("gift", {giftDraftId});
+  const checkoutRequestFingerprint = checkoutFingerprint({
+    giftDraftId,
+    senderId: context.auth.uid,
+    grossAmountPence: Math.round(gross * 100),
+    campaignParticipantId,
+    successUrl,
+    cancelUrl,
+  });
+  let claim;
+  try {
+    claim = await db.runTransaction(async (transaction) => {
+      const currentSnap = await transaction.get(ref);
+      if (!currentSnap.exists || currentSnap.data().senderId !== context.auth.uid) {
+        throw new functions.https.HttpsError("not-found", "Gift draft not found.");
+      }
+      const current = currentSnap.data() || {};
+      const result = checkoutClaim(current, {
+        logicalKey: checkoutLogicalIdentity,
+        requestFingerprint: checkoutRequestFingerprint,
+        returnOwner: requestedReturnOwner,
+      });
+      if (result.kind === "claim") {
+        transaction.set(ref, {
+          ...result.claim,
+          paymentStatus: "checkout_creating",
+          updatedAt: FieldValue.serverTimestamp(),
+        }, {merge: true});
+      }
+      return result;
+    });
+  } catch (error) {
+    if (error instanceof CheckoutClaimError) {
+      throw new functions.https.HttpsError("failed-precondition", error.message, {reason: error.reason});
+    }
+    throw error;
+  }
+  if (claim.kind === "reuse") {
+    return {
+      url: claim.checkoutUrl,
+      sessionId: claim.sessionId,
+      giftDraftId,
+      campaignParticipantId: campaignParticipantId || null,
+      idempotent: true,
+    };
+  }
   let session;
   try {
-    session = await stripe.checkout.sessions.create({
+    session = await createStripeCheckoutOnce({
+      stripe,
+      logicalKey: checkoutLogicalIdentity,
+      params: {
       mode: "payment",
       customer_email: gift.senderEmail,
       line_items: [{
@@ -202,21 +307,40 @@ exports.createGiftPayment = (stripe) => functions.https.onCall(async (data, cont
       }],
       success_url: successUrl,
       cancel_url: cancelUrl,
-      metadata: {giftDraftId, senderId: context.auth.uid, type: "gift_experience"},
+        metadata: {
+          giftDraftId,
+          senderId: context.auth.uid,
+          type: "gift_experience",
+          returnOwner: requestedReturnOwner,
+          checkoutLogicalKey: checkoutLogicalIdentity,
+        },
+      },
     });
   } catch (error) {
     console.error("createGiftPayment Stripe Checkout error", error);
+    if (`${error && error.code || ""}`.includes("idempotency")) {
+      throw new functions.https.HttpsError(
+          "failed-precondition",
+          "This gift checkout is already being created with different payment details.",
+      );
+    }
     throw new functions.https.HttpsError("internal", "Could not start Stripe Checkout. Please try again.");
   }
   await ref.update({
     paymentStatus: "payment_pending",
+    returnOwner: requestedReturnOwner,
+    checkoutLogicalKey: checkoutLogicalIdentity,
+    checkoutRequestFingerprint,
     stripeCheckoutSessionId: session.id,
+    checkoutUrl: session.url,
     updatedAt: FieldValue.serverTimestamp(),
   });
-  if (campaignDraft && campaignDraft.participantId) {
-    await getFirestore().collection("giftCampaignParticipants").doc(campaignDraft.participantId).set({
+  if (campaignParticipantId) {
+    await db.collection("giftCampaignParticipants").doc(campaignParticipantId).set({
       paymentStatus: "checkout_pending",
+      returnOwner: requestedReturnOwner,
       stripeCheckoutSessionId: session.id,
+      checkoutUrl: session.url,
       paymentDraftId: giftDraftId,
       updatedAt: FieldValue.serverTimestamp(),
     }, {merge: true});
@@ -225,7 +349,7 @@ exports.createGiftPayment = (stripe) => functions.https.onCall(async (data, cont
     url: session.url,
     sessionId: session.id,
     giftDraftId,
-    campaignParticipantId: campaignDraft ? campaignDraft.participantId : data.campaignParticipantId,
+    campaignParticipantId: campaignParticipantId || null,
   };
 });
 

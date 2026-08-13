@@ -1,0 +1,522 @@
+{
+  "version": 1,
+  "authority": {
+    "deployManifest": "deploy-manifest.json",
+    "absoluteOwnershipGuard": "scripts/absolute_product_ownership.js",
+    "policy": "This manifest adds runtime and platform boundaries to the absolute file ownership and deploy target authority in deploy-manifest.json."
+  },
+  "products": {
+    "website": {
+      "deployProduct": "website",
+      "expectedDeploy": {
+        "identity": "circum-public-web",
+        "surface": "website",
+        "hostingTarget": "public",
+        "buildDirectory": "build/public_web",
+        "entrypoints": [
+          "lib/main_public_web.dart"
+        ]
+      },
+      "surfaces": {
+        "web": {
+          "runtime": "web",
+          "entrypoint": "lib/main_public_web.dart",
+          "requiredReachableFiles": [
+            "lib/website/shared/circum_website_app.dart",
+            "lib/website/shared/firebase/website_firebase_options.dart",
+            "lib/website/shared/security/circum_website_app_check.dart"
+          ],
+          "forbiddenReachablePrefixes": [
+            "lib/main.dart",
+            "lib/app.dart",
+            "lib/messaging.dart",
+            "lib/app/",
+            "lib/firebase_options.dart"
+          ],
+          "requiredEntrypointTokens": [
+            "Firebase.initializeApp(options: DefaultFirebaseOptions.web)",
+            "initializeCircumAppCheck",
+            "CircumWebsiteApp"
+          ],
+          "forbiddenEntrypointTokens": [
+            "SenderMobilePreviewApp",
+            "AdminRoot",
+            "AndroidProvider",
+            "AppleProvider",
+            "package:circum/main.dart"
+          ]
+        }
+      },
+      "appCheck": {
+        "module": "lib/website/shared/security/circum_website_app_check.dart",
+        "runtime": "web",
+        "siteKey": "PUBLIC_WEB_RECAPTCHA_ENTERPRISE_SITE_KEY",
+        "forbiddenSiteKeys": [
+          "CIRCUM_WEB_RECAPTCHA_ENTERPRISE_SITE_KEY",
+          "ADMIN_WEB_RECAPTCHA_ENTERPRISE_SITE_KEY",
+          "RIDER_WEB_RECAPTCHA_ENTERPRISE_SITE_KEY"
+        ]
+      },
+      "stripeReturnOwner": "website",
+      "stripeReturnHost": "circumuk.com"
+    },
+    "sender_app": {
+      "deployProduct": "sender-app",
+      "expectedDeploy": {
+        "identity": "circum-sender-web",
+        "surface": "sender-web",
+        "hostingTarget": "app",
+        "buildDirectory": "build/sender_app_web",
+        "entrypoints": [
+          "lib/main.dart",
+          "lib/app/sender_mobile/sender_mobile_preview.dart"
+        ]
+      },
+      "surfaces": {
+        "mobile": {
+          "runtime": "mobile",
+          "entrypoint": "lib/main.dart",
+          "requiredReachableFiles": [
+            "lib/app.dart",
+            "lib/app/security/circum_app_check.dart"
+          ],
+          "forbiddenReachablePrefixes": [
+            "lib/main_public_web.dart",
+            "lib/main_admin_web.dart",
+            "lib/website/",
+            "lib/app/admin/",
+            "lib/app/rider_marketplace/",
+            "lib/app/rider_profiles/"
+          ],
+          "requiredEntrypointTokens": [
+            "Firebase.initializeApp()",
+            "initializeCircumAppCheck",
+            "runApp(const App())"
+          ],
+          "forbiddenEntrypointTokens": [
+            "DefaultFirebaseOptions.web",
+            "ReCaptchaEnterpriseProvider",
+            "PUBLIC_WEB_RECAPTCHA_ENTERPRISE_SITE_KEY",
+            "RIDER_WEB_RECAPTCHA_ENTERPRISE_SITE_KEY",
+            "CircumWebsiteApp",
+            "AdminRoot"
+          ]
+        },
+        "hosted_web": {
+          "runtime": "web",
+          "entrypoint": "lib/app/sender_mobile/sender_mobile_preview.dart",
+          "requiredReachableFiles": [
+            "lib/app/sender_mobile/sender_mobile_home.dart",
+            "lib/app/security/circum_app_check.dart",
+            "lib/firebase_options.dart"
+          ],
+          "forbiddenReachablePrefixes": [
+            "lib/main.dart",
+            "lib/app.dart",
+            "lib/messaging.dart",
+            "lib/main_public_web.dart",
+            "lib/main_admin_web.dart",
+            "lib/website/",
+            "lib/app/admin/",
+            "lib/app/rider_marketplace/",
+            "lib/app/rider_profiles/"
+          ],
+          "requiredEntrypointTokens": [
+            "Firebase.initializeApp(options: DefaultFirebaseOptions.web)",
+            "initializeCircumAppCheck",
+            "SenderMobilePreviewApp"
+          ],
+          "forbiddenEntrypointTokens": [
+            "CircumWebsiteApp",
+            "AdminRoot",
+            "AndroidProvider",
+            "AppleProvider",
+            "package:circum/main.dart"
+          ]
+        }
+      },
+      "appCheck": {
+        "module": "lib/app/security/circum_app_check.dart",
+        "runtime": "platform_selected",
+        "siteKey": "CIRCUM_WEB_RECAPTCHA_ENTERPRISE_SITE_KEY",
+        "forbiddenSiteKeys": [
+          "PUBLIC_WEB_RECAPTCHA_ENTERPRISE_SITE_KEY",
+          "ADMIN_WEB_RECAPTCHA_ENTERPRISE_SITE_KEY",
+          "RIDER_WEB_RECAPTCHA_ENTERPRISE_SITE_KEY"
+        ],
+        "requiredMobileTokens": [
+          "AndroidProvider.playIntegrity",
+          "AppleProvider.appAttestWithDeviceCheckFallback"
+        ],
+        "requiredWebGateTokens": [
+          "if (!isWeb) return null",
+          "ReCaptchaEnterpriseProvider",
+          "webProvider: webProvider"
+        ]
+      },
+      "stripeReturnOwner": "sender_app",
+      "stripeReturnHost": "circum-app-2797c.web.app"
+    },
+    "admin": {
+      "deployProduct": "admin",
+      "expectedDeploy": {
+        "identity": "circum-admin-web",
+        "surface": "admin",
+        "hostingTarget": "admin",
+        "buildDirectory": "build/web_admin",
+        "entrypoints": [
+          "lib/main_admin_web.dart"
+        ]
+      },
+      "surfaces": {
+        "web": {
+          "runtime": "web",
+          "entrypoint": "lib/main_admin_web.dart",
+          "requiredReachableFiles": [
+            "lib/app/admin/admin_root.dart",
+            "lib/app/admin/firebase/admin_firebase_options.dart",
+            "lib/app/admin/security/admin_app_check.dart"
+          ],
+          "forbiddenReachablePrefixes": [
+            "lib/main.dart",
+            "lib/app.dart",
+            "lib/messaging.dart",
+            "lib/main_public_web.dart",
+            "lib/website/",
+            "lib/app/sender_mobile/",
+            "lib/app/security/",
+            "lib/firebase_options.dart",
+            "lib/app/rider_marketplace/",
+            "lib/app/rider_profiles/"
+          ],
+          "requiredEntrypointTokens": [
+            "Firebase.initializeApp(options: DefaultFirebaseOptions.web)",
+            "initializeCircumAppCheck",
+            "AdminRoot"
+          ],
+          "forbiddenEntrypointTokens": [
+            "CircumWebsiteApp",
+            "SenderMobilePreviewApp",
+            "AndroidProvider",
+            "AppleProvider",
+            "package:circum/main.dart"
+          ]
+        }
+      },
+      "appCheck": {
+        "module": "lib/app/admin/security/admin_app_check.dart",
+        "runtime": "web",
+        "siteKey": "ADMIN_WEB_RECAPTCHA_ENTERPRISE_SITE_KEY",
+        "forbiddenSiteKeys": [
+          "PUBLIC_WEB_RECAPTCHA_ENTERPRISE_SITE_KEY",
+          "CIRCUM_WEB_RECAPTCHA_ENTERPRISE_SITE_KEY",
+          "RIDER_WEB_RECAPTCHA_ENTERPRISE_SITE_KEY"
+        ]
+      }
+    },
+    "backend": {
+      "deployProduct": "backend",
+      "expectedDeploy": {
+        "identity": "circum-backend",
+        "surface": "backend",
+        "hostingTarget": "not-hosting",
+        "buildDirectory": "server/functions",
+        "entrypoints": [
+          "server/functions/index.js"
+        ]
+      },
+      "stripeAuthority": "server/functions/stripe-return-ownership.js"
+    },
+    "rider_app": {
+      "deployProduct": "rider-app",
+      "ownership": "external:Circum-Rider",
+      "expectedDeploy": {
+        "identity": "circum-rider-mobile",
+        "surface": "rider-mobile",
+        "hostingTarget": "external:Circum-Rider",
+        "buildDirectory": "external:Circum-Rider",
+        "entrypoints": []
+      },
+      "localCompatibilityPrefixes": [
+        "lib/app/rider_marketplace/",
+        "lib/app/rider_profiles/"
+      ],
+      "stripeReturnHost": "circum-rider-2797c.web.app",
+      "stripeReturnModule": "server/functions/rider-connect.js"
+    }
+  },
+  "sharedPureCode": {
+    "deriveFilesFromDeployManifest": [
+      "sharedFiles",
+      "allowedDependencyIntersections.files"
+    ],
+    "forbiddenTokens": [
+      "Future<void> main(",
+      "void main(",
+      "runApp(",
+      "Firebase.initializeApp",
+      "FirebaseAppCheck",
+      "initializeCircumAppCheck",
+      "ReCaptchaEnterpriseProvider",
+      "AndroidProvider",
+      "AppleProvider",
+      "returnOwner",
+      "circumuk.com",
+      "web.app",
+      "CircumWebsiteApp",
+      "SenderMobilePreviewApp",
+      "AdminRoot"
+    ]
+  },
+  "stripeReturnOwnership": {
+    "authorityModule": "server/functions/stripe-return-ownership.js",
+    "allowedOwners": {
+      "sender_app": "https://circum-app-2797c.web.app/",
+      "website": "https://circumuk.com/"
+    },
+    "requiredFlows": [
+      "BUSINESS_INVOICE",
+      "BUSINESS_ROTH",
+      "GIFT",
+      "HEALTH_PLUS",
+      "SENDER_DELIVERY",
+      "WALLET_TOP_UP"
+    ],
+    "backendCallers": [
+      "server/functions/business-payments.js",
+      "server/functions/gifts-payment-core.js",
+      "server/functions/gifts-payment.js",
+      "server/functions/health-plus.js",
+      "server/functions/roth-ledger.js",
+      "server/functions/sender-booking.js"
+    ],
+    "clientFlowMatrix": {
+      "BUSINESS_INVOICE": {
+        "discoveryTokens": [
+          "httpsCallable('createBusinessInvoiceCheckout')"
+        ],
+        "discoveryFiles": [
+          "lib/app/business/business_repository.dart",
+          "lib/website/shared/circum_website_app.dart"
+        ],
+        "callers": [
+          {
+            "file": "lib/app/business/business_repository.dart",
+            "owner": "sender_app",
+            "callToken": "httpsCallable('createBusinessInvoiceCheckout')",
+            "ownerToken": "'returnOwner': 'sender_app'",
+            "compatibilityTokens": [
+              "'returnUrl': 'https://circum-app-2797c.web.app/?app=business&section=invoicing'"
+            ]
+          },
+          {
+            "file": "lib/website/shared/circum_website_app.dart",
+            "owner": "website",
+            "callToken": "httpsCallable('createBusinessInvoiceCheckout')",
+            "ownerToken": "'returnOwner': 'website'",
+            "compatibilityTokens": [
+              "'returnUrl': 'https://circumuk.com/send/business?section=invoicing'"
+            ]
+          }
+        ]
+      },
+      "BUSINESS_ROTH": {
+        "discoveryTokens": [
+          "httpsCallable('createBusinessRothCheckout')"
+        ],
+        "discoveryFiles": [
+          "lib/website/shared/circum_website_app.dart"
+        ],
+        "callers": [
+          {
+            "file": "lib/website/shared/circum_website_app.dart",
+            "owner": "website",
+            "callToken": "httpsCallable('createBusinessRothCheckout')",
+            "ownerToken": "'returnOwner': 'website'",
+            "compatibilityTokens": [
+              "'returnUrl': 'https://circumuk.com/send/business?section=invoicing'"
+            ]
+          }
+        ]
+      },
+      "GIFT": {
+        "discoveryTokens": [
+          "httpsCallable(senderGiftPaymentCallableName)",
+          "httpsCallable('createGiftPayment')"
+        ],
+        "discoveryFiles": [
+          "lib/app/sender_mobile/gift_payment_view.dart",
+          "lib/app/sender_mobile/gift_campaign_view.dart",
+          "lib/website/shared/circum_website_app.dart"
+        ],
+        "callers": [
+          {
+            "file": "lib/app/sender_mobile/gift_payment_view.dart",
+            "owner": "sender_app",
+            "callToken": "httpsCallable(senderGiftPaymentCallableName)",
+            "ownerToken": "'returnOwner': 'sender_app'",
+            "compatibilityTokens": [
+              "'source': 'sender_mobile'"
+            ]
+          },
+          {
+            "file": "lib/app/sender_mobile/gift_campaign_view.dart",
+            "owner": "sender_app",
+            "callToken": "httpsCallable(senderGiftPaymentCallableName)",
+            "ownerToken": "'returnOwner': 'sender_app'",
+            "compatibilityTokens": [
+              "'source': senderGiftCampaignPaymentSource"
+            ],
+            "fixedCompatibilityTokens": [
+              "const senderGiftCampaignPaymentSource = 'sender_mobile_campaign';"
+            ]
+          },
+          {
+            "file": "lib/website/shared/circum_website_app.dart",
+            "owner": "website",
+            "callToken": "httpsCallable('createGiftPayment')",
+            "ownerToken": "'returnOwner': 'website'",
+            "compatibilityTokens": [
+              "'source': 'website'"
+            ]
+          }
+        ]
+      },
+      "HEALTH_PLUS": {
+        "discoveryTokens": [
+          "cloudfunctions.net/createHealthPlusCheckoutSession"
+        ],
+        "discoveryFiles": [
+          "lib/app/health_plus/view/health_plus.dart",
+          "lib/website/shared/circum_website_app.dart"
+        ],
+        "callers": [
+          {
+            "file": "lib/app/health_plus/view/health_plus.dart",
+            "owner": "sender_app",
+            "callToken": "cloudfunctions.net/createHealthPlusCheckoutSession",
+            "ownerToken": "'returnOwner': 'sender_app'",
+            "compatibilityTokens": [
+              "'successUrl': 'https://circum-app-2797c.web.app/?app=health&health=success'",
+              "'cancelUrl': 'https://circum-app-2797c.web.app/?app=health&health=cancelled'"
+            ]
+          },
+          {
+            "file": "lib/website/shared/circum_website_app.dart",
+            "owner": "website",
+            "callToken": "cloudfunctions.net/createHealthPlusCheckoutSession",
+            "ownerToken": "'returnOwner': 'website'",
+            "compatibilityTokens": [
+              "'successUrl': 'https://circumuk.com/send/health?health=success'",
+              "'cancelUrl': 'https://circumuk.com/send/health?health=cancelled'"
+            ]
+          }
+        ]
+      },
+      "SENDER_DELIVERY": {
+        "discoveryTokens": [
+          "httpsCallable('createSenderPaymentSession')",
+          "_callableMap('createSenderPaymentSession'"
+        ],
+        "discoveryFiles": [
+          "lib/app/account/bloc/account_bloc.dart",
+          "lib/app/send_package/bloc/send_package_bloc.dart",
+          "lib/website/shared/circum_website_app.dart"
+        ],
+        "callers": [
+          {
+            "file": "lib/app/sender_mobile/sender_booking_canvas.dart",
+            "owner": "sender_app",
+            "callToken": "StartSenderPaymentSession(",
+            "ownerToken": "returnOwner: kIsWeb ? 'sender_app' : ''",
+            "compatibilityBridge": {
+              "file": "lib/app/send_package/bloc/send_package_bloc.dart",
+              "callToken": "_callableMap('createSenderPaymentSession'",
+              "tokens": [
+                "if (event.returnOwner == 'sender_app')",
+                "'returnUrl': 'https://circum-app-2797c.web.app/send?app=sender&tab=1'"
+              ]
+            }
+          },
+          {
+            "file": "lib/website/shared/circum_website_app.dart",
+            "owner": "website",
+            "callToken": "httpsCallable('createSenderPaymentSession')",
+            "ownerToken": "'returnOwner': 'website'",
+            "compatibilityTokens": [
+              "'returnUrl': 'https://circumuk.com/send'"
+            ]
+          }
+        ]
+      },
+      "WALLET_TOP_UP": {
+        "discoveryTokens": [
+          "httpsCallable('createWalletTopUp')"
+        ],
+        "discoveryFiles": [],
+        "callers": []
+      }
+    },
+    "legacyClientUrlSignals": [
+      {
+        "file": "lib/app/business/business_repository.dart",
+        "key": "returnUrl",
+        "token": "'returnUrl': 'https://circum-app-2797c.web.app/?app=business&section=invoicing'",
+        "count": 1
+      },
+      {
+        "file": "lib/app/health_plus/view/health_plus.dart",
+        "key": "successUrl",
+        "token": "'successUrl': 'https://circum-app-2797c.web.app/?app=health&health=success'",
+        "count": 1
+      },
+      {
+        "file": "lib/app/health_plus/view/health_plus.dart",
+        "key": "cancelUrl",
+        "token": "'cancelUrl': 'https://circum-app-2797c.web.app/?app=health&health=cancelled'",
+        "count": 1
+      },
+      {
+        "file": "lib/app/send_package/bloc/send_package_bloc.dart",
+        "key": "returnUrl",
+        "token": "'returnUrl': 'https://circum-app-2797c.web.app/send?app=sender&tab=1'",
+        "count": 1
+      },
+      {
+        "file": "lib/website/shared/circum_website_app.dart",
+        "key": "returnUrl",
+        "token": "'returnUrl': 'https://circumuk.com/send/business?section=invoicing'",
+        "count": 2
+      },
+      {
+        "file": "lib/website/shared/circum_website_app.dart",
+        "key": "returnUrl",
+        "token": "'returnUrl': 'https://circumuk.com/send'",
+        "count": 1
+      },
+      {
+        "file": "lib/website/shared/circum_website_app.dart",
+        "key": "successUrl",
+        "token": "'successUrl': 'https://circumuk.com/send/health?health=success'",
+        "count": 1
+      },
+      {
+        "file": "lib/website/shared/circum_website_app.dart",
+        "key": "cancelUrl",
+        "token": "'cancelUrl': 'https://circumuk.com/send/health?health=cancelled'",
+        "count": 1
+      }
+    ],
+    "senderReturnRouter": "lib/app/sender_mobile/sender_stripe_return_routing.dart",
+    "forbiddenAuthorityTokens": [
+      "data.returnUrl",
+      "data.successUrl",
+      "data.cancelUrl",
+      "req.body.returnUrl",
+      "req.body.successUrl",
+      "req.body.cancelUrl",
+      "process.env",
+      "functions.config()"
+    ]
+  }
+}

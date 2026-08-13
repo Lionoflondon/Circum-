@@ -118,6 +118,19 @@ void main() {
       expect(rider.legacyRedirectPath, '/rider');
     });
 
+    test('legacy redirects preserve Stripe return state but remove app switch',
+        () {
+      final parameters = circumLegacyRedirectParameters(Uri.parse(
+        'https://circumuk.com/?app=gifts&gift_payment=success&giftDraftId=draft_1&session_id=cs_test_1',
+      ));
+
+      expect(parameters, {
+        'gift_payment': 'success',
+        'giftDraftId': 'draft_1',
+        'session_id': 'cs_test_1',
+      });
+    });
+
     test('admin hosting remains compile-time isolated', () {
       final route = resolveCircumWebRoute(
         Uri.parse('https://circum-admin-2797c.web.app/send'),
@@ -179,6 +192,10 @@ void main() {
       expect(source, contains("_WebAppMode.rider => '/rider'"));
       expect(source, contains("_SenderStep.healthPlus => '/send/health'"));
       expect(source, contains("_SenderStep.business => '/send/business'"));
+      expect(source, contains('circumLegacyRedirectParameters(Uri.base)'));
+      expect(source, contains("parameters['section'] == 'wallet'"));
+      expect(source, contains('_restoreWebsiteHealthPlusReturn(user.uid)'));
+      expect(source, contains("section == 'invoicing'"));
       expect(source, contains("fragment: ''"));
       expect(source, isNot(contains("label: 'Business delivery'")));
       expect(source, isNot(contains("label: 'Vanguard protection'")));
@@ -220,7 +237,9 @@ void main() {
       expect(source, contains('Business sections'));
     });
 
-    test('Sender delivery payload leaves Rider offer display aliases to backend', () {
+    test(
+        'Sender delivery payload leaves Rider offer display aliases to backend',
+        () {
       final source =
           File('lib/website/shared/circum_website_app.dart').readAsStringSync();
       expect(source, isNot(contains("'riderEarning': driverPayout")));

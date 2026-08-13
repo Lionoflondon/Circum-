@@ -17,6 +17,7 @@ import 'sender_accessibility.dart';
 import 'sender_finance.dart';
 import 'sender_page_shell.dart';
 import 'sender_profile_authority.dart';
+import 'sender_stripe_return_routing.dart';
 
 class SenderWalletData {
   final double balance;
@@ -398,11 +399,13 @@ class _SenderWalletViewState extends State<SenderWalletView> {
   bool _showingCachedWallet = false;
   bool _paymentActionLoading = false;
   int _loadGeneration = 0;
+  late final String? _stripeReturnMessage;
 
   @override
   void initState() {
     super.initState();
     _repository = widget.repository ?? FirebaseSenderWalletRepository();
+    _stripeReturnMessage = senderWalletStripeReturnMessage(Uri.base);
     unawaited(_loadCachedSnapshot());
     _load();
   }
@@ -783,6 +786,13 @@ class _SenderWalletViewState extends State<SenderWalletView> {
               const _WalletSkeletonCard(height: 170),
               const SizedBox(height: 20),
               const _WalletSkeletonCard(height: 120),
+              if (_stripeReturnMessage != null) ...[
+                const SizedBox(height: 14),
+                _WalletInlineStatus(
+                  icon: Icons.info_outline_rounded,
+                  message: _stripeReturnMessage,
+                ),
+              ],
               if (_error != null) ...[
                 const SizedBox(height: 14),
                 _WalletInlineStatus(
@@ -824,6 +834,13 @@ class _SenderWalletViewState extends State<SenderWalletView> {
               ),
             ),
             const SizedBox(height: 26),
+            if (_stripeReturnMessage != null) ...[
+              _WalletInlineStatus(
+                icon: Icons.info_outline_rounded,
+                message: _stripeReturnMessage,
+              ),
+              const SizedBox(height: 14),
+            ],
             if (_refreshing || _showingCachedWallet || _error != null) ...[
               _WalletInlineStatus(
                 icon: _error == null

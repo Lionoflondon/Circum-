@@ -1,4 +1,9 @@
 /* eslint-disable require-jsdoc */
+const {
+  RETURN_FLOWS,
+  stripeReturnUrls,
+} = require("./stripe-return-ownership");
+
 function selectedGiftBudgetGbp(gift) {
   return Number(
     gift.selectedBudgetGbp ||
@@ -9,19 +14,11 @@ function selectedGiftBudgetGbp(gift) {
   );
 }
 
-function giftReturnUrls({giftDraftId, source, origin, config = {}}) {
-  if (["sender_mobile", "sender_mobile_campaign"].includes(source)) {
-    const base = "https://circum-app-2797c.web.app";
-    return {
-      successUrl: `${base}/#/sender-mobile/gifts/confirmation?giftDraftId=${giftDraftId}&payment=success&session_id={CHECKOUT_SESSION_ID}`,
-      cancelUrl: `${base}/#/sender-mobile/gifts/payment?giftDraftId=${giftDraftId}&payment=cancelled`,
-    };
-  }
-  const baseUrl = "https://circumuk.com/?app=gifts";
-  return {
-    successUrl: config.success_url || `${baseUrl}&gift_payment=success&giftDraftId=${giftDraftId}&session_id={CHECKOUT_SESSION_ID}`,
-    cancelUrl: config.cancel_url || `${baseUrl}&gift_payment=cancelled&giftDraftId=${giftDraftId}`,
-  };
+function giftReturnUrls({giftDraftId, returnOwner}) {
+  return stripeReturnUrls(RETURN_FLOWS.GIFT, {
+    returnOwner,
+    giftDraftId,
+  });
 }
 
 function giftPaymentMethodFromSplit(split = {}) {

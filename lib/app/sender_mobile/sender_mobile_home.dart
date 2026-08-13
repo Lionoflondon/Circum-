@@ -18,7 +18,9 @@ import '../send_package/view/ride_chats.dart';
 import 'design_system/sender_design_system.dart';
 import 'gift_journey_draft.dart';
 import 'gift_mode_view.dart';
+import 'gift_payment_return_view.dart';
 import 'gift_story_view.dart';
+import 'sender_stripe_return_routing.dart';
 import 'sender_accessibility.dart';
 import 'sender_activity.dart';
 import 'sender_booking_canvas.dart';
@@ -98,6 +100,7 @@ class _SenderMobileHomeState extends State<SenderMobileHome> {
   var _authRestoring = false;
   SendPackageBloc? _standaloneSendPackageBloc;
   StreamSubscription<User?>? _authSubscription;
+  var _initialRouteOpened = false;
 
   @override
   void initState() {
@@ -180,8 +183,10 @@ class _SenderMobileHomeState extends State<SenderMobileHome> {
           mode: _authMode,
           previewAuthEnabled: widget.previewAuthEnabled,
           onBack: () => setState(() => _entry = _SenderEntryScreen.landing),
-          onAuthenticated: () =>
-              setState(() => _entry = _SenderEntryScreen.app),
+          onAuthenticated: () {
+            setState(() => _entry = _SenderEntryScreen.app);
+            _openInitialSenderRoute();
+          },
           onModeChanged: (mode) => setState(() => _authMode = mode),
         );
       case _SenderEntryScreen.app:
@@ -252,10 +257,14 @@ class _SenderMobileHomeState extends State<SenderMobileHome> {
   }
 
   void _openInitialSenderRoute() {
+    if (_initialRouteOpened) return;
     final routeName = widget.initialRouteName?.trim();
     if (routeName == null || routeName.isEmpty) return;
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted || _entry != _SenderEntryScreen.app) return;
+      if (!mounted || _entry != _SenderEntryScreen.app || _initialRouteOpened) {
+        return;
+      }
+      _initialRouteOpened = true;
       switch (routeName) {
         case GiftModeView.routeName:
           Navigator.of(context).push(
@@ -264,6 +273,35 @@ class _SenderMobileHomeState extends State<SenderMobileHome> {
               settings: const RouteSettings(name: GiftModeView.routeName),
             ),
           );
+          break;
+        case GiftPaymentReturnView.routeName:
+          Navigator.of(context).push(
+            MaterialPageRoute<void>(
+              builder: (_) => const GiftPaymentReturnView(),
+              settings:
+                  const RouteSettings(name: GiftPaymentReturnView.routeName),
+            ),
+          );
+          break;
+        case senderHealthReturnRouteName:
+          Navigator.of(context).push(
+            MaterialPageRoute<void>(
+              builder: (_) => const HealthPlusView(),
+              settings: const RouteSettings(name: senderHealthReturnRouteName),
+            ),
+          );
+          break;
+        case senderBusinessReturnRouteName:
+          Navigator.of(context).push(
+            MaterialPageRoute<void>(
+              builder: (_) => const BusinessAccessView(),
+              settings:
+                  const RouteSettings(name: senderBusinessReturnRouteName),
+            ),
+          );
+          break;
+        case senderWalletReturnRouteName:
+          _selectTab(3);
           break;
         case GiftStoryView.routeName:
           Navigator.of(context).push(
@@ -325,6 +363,7 @@ class _SenderMobileHomeState extends State<SenderMobileHome> {
               ? _SenderEntryScreen.landing
               : _SenderEntryScreen.app;
         });
+        if (user != null) _openInitialSenderRoute();
       }, onError: (Object error, StackTrace stackTrace) {
         _reportUnexpectedAuthRestoreError(
           error,

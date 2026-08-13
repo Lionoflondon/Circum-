@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:cloud_functions/cloud_functions.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/foundation.dart';
@@ -11,6 +12,7 @@ import 'package:url_launcher/url_launcher.dart';
 import '../../send_package/models/suggestions.m.dart';
 import '../../send_package/repo/place_api.dart';
 import '../../platform/address_engine.dart';
+import '../health_plus_return_state.dart';
 import '../health_plus_pricing.dart';
 import '../models/pickup_status.dart';
 import '../models/recurring_pickup_schedule.dart';
@@ -125,7 +127,114 @@ class _HealthPlusViewState extends State<HealthPlusView> {
     _fullName.text = user?.displayName ?? '';
     _email.text = user?.email ?? '';
     _phone.text = user?.phoneNumber ?? '';
+    final returnState = Uri.base.queryParameters['health']?.trim() ?? '';
+    final returnMessage = healthPlusStripeReturnMessage(
+      returnState: returnState,
+    );
+    if (returnMessage != null) {
+      _message = returnMessage;
+      _step = _HealthStep.status;
+      unawaited(_restoreHealthPlusReturnState(returnState));
+    }
     _loadRothBalance();
+  }
+
+  Future<void> _restoreHealthPlusReturnState(String returnState) async {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) return;
+    try {
+      final firestore = FirebaseFirestore.instance;
+      DocumentSnapshot<Map<String, dynamic>>? pickupDoc;
+      final returnedBookingId =
+          Uri.base.queryParameters['bookingId']?.trim() ?? '';
+      if (returnedBookingId.isNotEmpty) {
+        try {
+          final returned = await firestore
+              .collection('prescriptionPickups')
+              .doc(returnedBookingId)
+              .get();
+          final data = returned.data();
+          if (returned.exists &&
+              data != null &&
+              (data['senderId'] == user.uid || data['userId'] == user.uid)) {
+            pickupDoc = returned;
+          }
+        } catch (error) {
+          debugPrint('Health+ exact return restore unavailable: $error');
+        }
+      }
+      if (pickupDoc == null) {
+        final pickupsCollection = firestore.collection('prescriptionPickups');
+        final snapshots = await Future.wait([
+          pickupsCollection
+              .where('senderId', isEqualTo: user.uid)
+              .limit(100)
+              .get(),
+          pickupsCollection
+              .where('userId', isEqualTo: user.uid)
+              .limit(100)
+              .get(),
+        ]);
+        final pickupsById =
+            <String, QueryDocumentSnapshot<Map<String, dynamic>>>{};
+        for (final snapshot in snapshots) {
+          for (final doc in snapshot.docs) {
+            pickupsById[doc.id] = doc;
+          }
+        }
+        if (pickupsById.isEmpty) return;
+        final pickups = pickupsById.values.toList(growable: false)
+          ..sort((a, b) => _healthRecordTimestamp(b.data())
+              .compareTo(_healthRecordTimestamp(a.data())));
+        pickupDoc = pickups.first;
+      }
+      final restoredPickup = pickupDoc;
+      final paymentDoc = await FirebaseFirestore.instance
+          .collection('healthPlusPayments')
+          .doc(restoredPickup.id)
+          .get();
+      if (!mounted) return;
+      final pickup = <String, dynamic>{
+        'id': restoredPickup.id,
+        ...?restoredPickup.data(),
+      };
+      final payment = paymentDoc.data();
+      final paymentStatus =
+          '${payment?['paymentStatus'] ?? payment?['status'] ?? pickup['paymentStatus'] ?? ''}';
+      final scheduleId = '${pickup['scheduleId'] ?? ''}'.trim();
+      final checkoutUrl = '${payment?['checkoutUrl'] ?? ''}'.trim();
+      final canRetryCheckout =
+          returnState.trim().toLowerCase() == 'cancelled' &&
+              checkoutUrl.isNotEmpty;
+      setState(() {
+        _latestPickup = pickup;
+        _scheduleId = scheduleId.isEmpty ? null : scheduleId;
+        _checkoutUrl = canRetryCheckout ? checkoutUrl : null;
+        _payments
+          ..clear()
+          ..add({
+            'pickupId': restoredPickup.id,
+            'amount': payment?['amount'] ?? pickup['price'] ?? 0,
+            'status': paymentStatus.isEmpty ? 'pending' : paymentStatus,
+            'rothApplied': payment?['rothAmount'],
+            'cardAmount': payment?['cardAmount'],
+          });
+        _message = healthPlusStripeReturnMessage(
+          returnState: returnState,
+          paymentStatus: paymentStatus,
+        );
+      });
+    } catch (error) {
+      debugPrint('Health+ return restore unavailable: $error');
+    }
+  }
+
+  int _healthRecordTimestamp(Map<String, dynamic> record) {
+    final value = record['updatedAt'] ?? record['createdAt'];
+    if (value is Timestamp) return value.millisecondsSinceEpoch;
+    if (value is DateTime) return value.millisecondsSinceEpoch;
+    if (value is num) return value.toInt();
+    return DateTime.tryParse('$value')?.millisecondsSinceEpoch ?? 0;
   }
 
   @override
@@ -361,6 +470,7 @@ class _HealthPlusViewState extends State<HealthPlusView> {
           'useRoth': _useRoth,
           'subscriptionPlan': _plan,
           'priceBreakdown': quote.toJson(),
+          'returnOwner': 'sender_app',
           'successUrl':
               'https://circum-app-2797c.web.app/?app=health&health=success',
           'cancelUrl':

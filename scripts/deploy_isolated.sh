@@ -99,21 +99,16 @@ case "$SURFACE" in
     BUILD_SCRIPT="scripts/build_admin_web.sh"
     HOSTING_TARGET="hosting:admin"
     OUTPUT_DIR="build/web_admin"
-    ENTRYPOINT="lib/main.dart"
+    ENTRYPOINT="lib/main_admin_web.dart"
     EXPECTED_IDENTITY="circum-admin-web"
     ALLOWED_PREFIXES=(
-      "lib/main.dart"
-      "lib/app/security/"
-      "lib/website/shared/circum_website_app.dart"
-      "test/security/"
-      "test/web_platform_routing_test.dart"
-      "scripts/"
-      "docs/"
-      "README.md"
-      "pubspec.yaml"
-      "pubspec.lock"
+      "lib/main_admin_web.dart"
+      "lib/app/admin/"
+      "test/admin_"
+      "scripts/build_admin_web.sh"
+      "scripts/deploy_admin_web.sh"
     )
-    FORBIDDEN_IMPORT_REGEX="main_sender_web|main_public_web|main_rider_web"
+    FORBIDDEN_IMPORT_REGEX="package:circum/main.dart|main_sender_web|main_public_web|main_rider_web|app/security/|app/sender_mobile/|website/"
     ;;
   *)
     fail "unknown surface '$SURFACE'. Expected website or admin."

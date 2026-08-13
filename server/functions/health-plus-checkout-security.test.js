@@ -5,6 +5,10 @@ const path = require("node:path");
 const test = require("node:test");
 
 const source = fs.readFileSync(path.join(__dirname, "health-plus.js"), "utf8");
+const checkoutIdempotencySource = fs.readFileSync(
+    path.join(__dirname, "checkout-idempotency-core.js"),
+    "utf8",
+);
 const indexSource = fs.readFileSync(path.join(__dirname, "index.js"), "utf8");
 const senderHealthSource = fs.readFileSync(path.join(
     __dirname,
@@ -25,6 +29,16 @@ const websiteSource = fs.readFileSync(path.join(
     "shared",
     "circum_website_app.dart",
 ), "utf8");
+
+function assertNoDirectCollectionWrites(sourceText, collectionName) {
+  const escaped = collectionName.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  assert.doesNotMatch(
+      sourceText,
+      new RegExp(
+          `collection\\(['"]${escaped}['"]\\)(?:(?!;)[\\s\\S])*\\.(?:set|update|add|delete)\\(`,
+      ),
+  );
+}
 
 test("Health+ checkout requires authenticated Sender ownership", () => {
   assert.match(source, /verifySenderRequest\(req\)/);
@@ -47,9 +61,18 @@ test("Health+ checkout fails safely without authoritative pricing data", () => {
 });
 
 test("Health+ checkout is idempotent and blocks paid bookings", () => {
-  assert.match(source, /existingPayment\.checkoutSessionId/);
+  assert.match(source, /checkoutClaim\(current/);
+  assert.match(source, /createStripeCheckoutOnce\(\{/);
   assert.match(source, /idempotent: true/);
   assert.match(source, /has already been paid/);
+});
+
+test("Health+ checkout never reuses a Stripe session across product owners", () => {
+  assert.match(source, /const requestedReturnOwner = resolveReturnOwner\(returnOwner\)/);
+  assert.match(source, /returnOwner: requestedReturnOwner/);
+  assert.match(source, /error instanceof CheckoutClaimError/);
+  assert.match(checkoutIdempotencySource, /checkout belongs to another Circum product/);
+  assert.match(source, /checkoutLogicalKey: checkoutLogicalIdentity/);
 });
 
 test("Health+ receipt stores server-calculated pricing and discrepancies", () => {
@@ -81,6 +104,7 @@ test("Health+ checkout finalizes partial Roth only after Stripe confirms", () =>
   assert.match(source, /verifiedStripePaidGbpSession\(sessionData/);
   assert.match(source, /expectedAmountGBP: payment\.cardAmount/);
   assert.match(source, /const rothAmount = money\(payment\.rothAmount\)/);
+  assert.match(source, /payment\.checkoutSessionId !== sessionData\.id/);
   assert.doesNotMatch(source, /metadata\.cardAmountGbp \|\| Number\(sessionData\.amount_total/);
   assert.doesNotMatch(source, /metadata\.rothAmountGbp \|\| payment\.rothAmount/);
   assert.match(source, /stripeCheckoutSessionId: sessionData\.id/);
@@ -107,9 +131,9 @@ test("Sender Health+ UI does not write authoritative Health+ records directly", 
   assert.match(senderHealthSource, /httpsCallable\('getSenderRothBalance'\)/);
   assert.match(senderHealthSource, /'useRoth': _useRoth/);
   assert.doesNotMatch(senderHealthSource, /collection\('healthPlusProfiles'\)/);
-  assert.doesNotMatch(senderHealthSource, /collection\('prescriptionPickups'\)/);
+  assertNoDirectCollectionWrites(senderHealthSource, "prescriptionPickups");
   assert.doesNotMatch(senderHealthSource, /collection\('recurringPickupSchedules'\)/);
-  assert.doesNotMatch(senderHealthSource, /collection\('healthPlusPayments'\)/);
+  assertNoDirectCollectionWrites(senderHealthSource, "healthPlusPayments");
   assert.doesNotMatch(senderHealthSource, /Admin operations/);
   assert.doesNotMatch(senderHealthSource, /updateHealthPlusPickupStatus/);
 });
@@ -121,9 +145,9 @@ test("Website Health+ UI does not write authoritative Health+ records directly",
   assert.match(websiteSource, /'useRoth': _healthUseRoth/);
   assert.match(websiteSource, /updateHealthPlusPickupStatus/);
   assert.doesNotMatch(websiteSource, /collection\('healthPlusProfiles'\)/);
-  assert.doesNotMatch(websiteSource, /collection\('prescriptionPickups'\)[\s\S]{0,160}\.(?:set|update|add|delete)\(/);
+  assertNoDirectCollectionWrites(websiteSource, "prescriptionPickups");
   assert.doesNotMatch(websiteSource, /collection\('recurringPickupSchedules'\)/);
-  assert.doesNotMatch(websiteSource, /collection\('healthPlusPayments'\)/);
+  assertNoDirectCollectionWrites(websiteSource, "healthPlusPayments");
   assert.doesNotMatch(websiteSource, /collection\('healthPlusNotifications'\)/);
   assert.doesNotMatch(websiteSource, /collection\('healthPlusUsageEvents'\)/);
 });

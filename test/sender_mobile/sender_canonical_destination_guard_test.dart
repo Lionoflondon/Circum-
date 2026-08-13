@@ -127,12 +127,49 @@ void main() {
     expect(
         preview, contains('routes: {Navigator.defaultRouteName: (_) => home}'));
     expect(preview, contains('onGenerateInitialRoutes: (_) => ['));
-    expect(preview, contains('fragment == GiftModeView.routeName'));
+    expect(preview, contains('resolveSenderInitialRouteName(uri)'));
     expect(preview, contains('initialRouteName: initialRouteName'));
     expect(home, contains('final String? initialRouteName;'));
     expect(home, contains('void _openInitialSenderRoute()'));
     expect(home, contains('case GiftModeView.routeName:'));
     expect(home, contains('builder: (_) => const GiftModeView()'));
+    expect(home, contains('case GiftPaymentReturnView.routeName:'));
+    expect(home, contains('case senderHealthReturnRouteName:'));
+    expect(home, contains('case senderBusinessReturnRouteName:'));
+    expect(home, contains('case senderWalletReturnRouteName:'));
+    expect(home, contains('_selectTab(3);'));
+
+    final booking = read('lib/app/sender_mobile/sender_booking_canvas.dart');
+    final cancelledRestore = booking.substring(
+      booking.indexOf('Future<void> _restoreDraftThenApplyCancelledCheckout()'),
+      booking.indexOf(
+          '@override',
+          booking.indexOf(
+              'Future<void> _restoreDraftThenApplyCancelledCheckout()')),
+    );
+    expect(cancelledRestore, contains('await _loadBackendDraft();'));
+    expect(cancelledRestore,
+        contains('_setDraft(senderCancelledCheckoutDraft(_draft));'));
+    expect(
+      cancelledRestore.indexOf('await _loadBackendDraft();'),
+      lessThan(
+          cancelledRestore.indexOf('senderCancelledCheckoutDraft(_draft)')),
+    );
+
+    final wallet = read('lib/app/sender_mobile/sender_wallet.dart');
+    expect(wallet, contains('senderWalletStripeReturnMessage(Uri.base)'));
+    expect(wallet, contains('message: _stripeReturnMessage'));
+
+    final health = read('lib/app/health_plus/view/health_plus.dart');
+    expect(health, contains('_restoreHealthPlusReturnState(returnState)'));
+    expect(health, contains(".collection('prescriptionPickups')"));
+    expect(health, contains(".where('senderId', isEqualTo: user.uid)"));
+    expect(health, contains(".where('userId', isEqualTo: user.uid)"));
+    expect(health, contains('pickupsById[doc.id] = doc;'));
+    expect(health, contains(".collection('healthPlusPayments')"));
+    expect(health, contains("returnState.trim().toLowerCase() == 'cancelled'"));
+    expect(health, contains('_checkoutUrl = canRetryCheckout ?'));
+    expect(health, isNot(contains(".collection('prescriptionPickups').add")));
   });
 
   test('Sender send flow remains the canonical mobile booking canvas', () {

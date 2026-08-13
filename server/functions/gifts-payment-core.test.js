@@ -59,24 +59,22 @@ test("gift checkout persists canonical payment method labels", () => {
 test("sender app gifts checkout returns to the Sender app host", () => {
   const urls = giftReturnUrls({
     giftDraftId: "draft_123",
-    source: "sender_mobile",
-    origin: "https://circum-app-2797c.web.app",
+    returnOwner: "sender_app",
   });
   assert.equal(
     urls.successUrl,
-    "https://circum-app-2797c.web.app/#/sender-mobile/gifts/confirmation?giftDraftId=draft_123&payment=success&session_id={CHECKOUT_SESSION_ID}",
+    "https://circum-app-2797c.web.app/?app=gifts&gift_payment=success&giftDraftId=draft_123&session_id={CHECKOUT_SESSION_ID}",
   );
   assert.equal(
     urls.cancelUrl,
-    "https://circum-app-2797c.web.app/#/sender-mobile/gifts/payment?giftDraftId=draft_123&payment=cancelled",
+    "https://circum-app-2797c.web.app/?app=gifts&gift_payment=cancelled&giftDraftId=draft_123",
   );
 });
 
 test("sender app campaign checkout returns to the Sender app host", () => {
   const urls = giftReturnUrls({
     giftDraftId: "draft_campaign",
-    source: "sender_mobile_campaign",
-    origin: "https://circumuk.com",
+    returnOwner: "sender_app",
   });
   assert.match(urls.successUrl, /^https:\/\/circum-app-2797c\.web\.app\//);
   assert.match(urls.cancelUrl, /^https:\/\/circum-app-2797c\.web\.app\//);
@@ -84,15 +82,59 @@ test("sender app campaign checkout returns to the Sender app host", () => {
   assert.doesNotMatch(urls.cancelUrl, /circumuk\.com/);
 });
 
+test("cancelled campaign checkout retry preserves its participant linkage", () => {
+  const source = require("node:fs").readFileSync(
+      require("node:path").join(__dirname, "gifts-payment.js"),
+      "utf8",
+  );
+  assert.match(source, /gift\.campaignParticipantId/);
+  assert.match(source, /text\(participant\.paymentDraftId\) !== giftDraftId/);
+  assert.match(source, /collection\("giftCampaignParticipants"\)\.doc\(campaignParticipantId\)\.set/);
+  assert.match(source, /campaignParticipantId: campaignParticipantId \|\| null/);
+});
+
+test("gift return URLs ignore caller and runtime URL overrides", () => {
+  const appUrls = giftReturnUrls({
+    giftDraftId: "draft_override",
+    returnOwner: "sender_app",
+    origin: "https://attacker.example",
+    config: {
+      success_url: "https://attacker.example/success",
+      cancel_url: "https://attacker.example/cancel",
+    },
+  });
+  const websiteUrls = giftReturnUrls({
+    giftDraftId: "draft_override",
+    returnOwner: "website",
+    origin: "https://attacker.example",
+    config: {
+      success_url: "https://attacker.example/success",
+      cancel_url: "https://attacker.example/cancel",
+    },
+  });
+
+  for (const url of Object.values(appUrls)) {
+    assert.match(url, /^https:\/\/circum-app-2797c\.web\.app\//);
+    assert.doesNotMatch(url, /attacker\.example/);
+  }
+  for (const url of Object.values(websiteUrls)) {
+    assert.match(url, /^https:\/\/circumuk\.com\//);
+    assert.doesNotMatch(url, /attacker\.example/);
+  }
+});
+
 test("web gifts checkout keeps web gifts return routing", () => {
-  const urls = giftReturnUrls({giftDraftId: "draft_123", source: "web"});
+  const urls = giftReturnUrls({
+    giftDraftId: "draft_123",
+    returnOwner: "website",
+  });
   assert.equal(
     urls.successUrl,
-    "https://circumuk.com/?app=gifts&gift_payment=success&giftDraftId=draft_123&session_id={CHECKOUT_SESSION_ID}",
+    "https://circumuk.com/gifts?gift_payment=success&giftDraftId=draft_123&session_id={CHECKOUT_SESSION_ID}",
   );
   assert.equal(
     urls.cancelUrl,
-    "https://circumuk.com/?app=gifts&gift_payment=cancelled&giftDraftId=draft_123",
+    "https://circumuk.com/gifts?gift_payment=cancelled&giftDraftId=draft_123",
   );
 });
 

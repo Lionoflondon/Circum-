@@ -108,19 +108,35 @@ class _CircumWebsiteAppState extends State<CircumWebsiteApp> {
   Future<void> _redirectLegacyQueryIfNeeded() async {
     final path = _initialRoute.legacyRedirectPath;
     if (path == null || !kIsWeb) return;
-    await _openCanonicalPath(path);
+    await _openCanonicalPath(
+      path,
+      queryParameters: circumLegacyRedirectParameters(Uri.base),
+    );
   }
 
-  Future<void> _openCanonicalPath(String path) async {
-    final target = _canonicalWebUri(path);
+  Future<void> _openCanonicalPath(
+    String path, {
+    Map<String, String> queryParameters = const {},
+  }) async {
+    final target = _canonicalWebUri(
+      path,
+      queryParameters: queryParameters,
+    );
     final opened = await launchUrl(target, webOnlyWindowName: '_self');
     if (!opened) {
       debugPrint('Could not navigate to ${target.path}');
     }
   }
 
-  static Uri _canonicalWebUri(String path) {
-    return Uri.base.replace(path: path, queryParameters: {}, fragment: '');
+  static Uri _canonicalWebUri(
+    String path, {
+    Map<String, String> queryParameters = const {},
+  }) {
+    return Uri.base.replace(
+      path: path,
+      queryParameters: queryParameters,
+      fragment: '',
+    );
   }
 
   Future<void> _openSurface(
@@ -8051,19 +8067,44 @@ class _CustomerPortalState extends State<_CustomerPortal> {
     _receiverPhone.addListener(_handleContactDetailsChanged);
     _collectionContactName.addListener(_handleContactDetailsChanged);
     _collectionContactPhone.addListener(_handleContactDetailsChanged);
-    _applyHealthPlusReturnState();
+    _applyStripeReturnState();
     _restoreSenderSession();
   }
 
-  void _applyHealthPlusReturnState() {
-    if (widget.initialStep != _SenderStep.healthPlus) return;
-    final result = Uri.base.queryParameters['health'];
-    if (result == 'success') {
-      _healthMessage =
-          'Health+ payment confirmed. Your pickup is being updated.';
-    } else if (result == 'cancelled') {
-      _healthMessage =
-          'Health+ payment was cancelled. You can continue checkout when ready.';
+  void _applyStripeReturnState() {
+    final parameters = Uri.base.queryParameters;
+    if (widget.initialStep == _SenderStep.healthPlus) {
+      final result = parameters['health'];
+      if (result == 'success') {
+        _healthMessage =
+            'Health+ payment confirmed. Your pickup is being updated.';
+      } else if (result == 'cancelled') {
+        _healthMessage =
+            'Health+ payment was cancelled. You can continue checkout when ready.';
+      }
+    }
+    if (widget.initialStep == _SenderStep.business) {
+      _businessMessage = switch (parameters) {
+        {'paymentStatus': 'payment-success'} =>
+          'Invoice payment returned securely. Circum is confirming it.',
+        {'paymentStatus': 'payment-cancelled'} =>
+          'Invoice payment was cancelled. No new charge was made.',
+        {'roth_purchase': 'success'} =>
+          'Roth purchase returned securely. Circum is confirming it.',
+        {'roth_purchase': 'cancelled'} =>
+          'Roth purchase was cancelled. No new charge was made.',
+        _ => _businessMessage,
+      };
+    }
+    if (widget.initialStep == _SenderStep.profile &&
+        parameters['section'] == 'wallet') {
+      _senderProfileTab = 3;
+      _senderProfileMessage = switch (parameters['wallet_topup']) {
+        'success' =>
+          'Roth top-up returned securely. Your balance is being refreshed.',
+        'cancelled' => 'Roth top-up was cancelled. No new charge was made.',
+        _ => _senderProfileMessage,
+      };
     }
   }
 
@@ -9110,6 +9151,7 @@ class _CustomerPortalState extends State<_CustomerPortal> {
       await _loadSenderDeliveries(user.uid);
       await _loadBusinessWorkspaces(user.uid);
       await _loadSenderRothBalance();
+      await _restoreWebsiteHealthPlusReturn(user.uid);
       await _handleSenderCheckoutReturn();
     } catch (_) {
       if (!mounted) return;
@@ -9117,6 +9159,84 @@ class _CustomerPortalState extends State<_CustomerPortal> {
         _senderAuthLoading = false;
         _senderProfileMessage = 'We could not load your profile just now.';
       });
+    }
+  }
+
+  Future<void> _restoreWebsiteHealthPlusReturn(String userId) async {
+    final returnState = Uri.base.queryParameters['health'];
+    if (widget.initialStep != _SenderStep.healthPlus ||
+        (returnState != 'success' && returnState != 'cancelled')) {
+      return;
+    }
+    try {
+      final db = FirebaseFirestore.instance;
+      DocumentSnapshot<Map<String, dynamic>>? pickupDoc;
+      final bookingId = Uri.base.queryParameters['bookingId']?.trim() ?? '';
+      if (bookingId.isNotEmpty) {
+        final candidate =
+            await db.collection('prescriptionPickups').doc(bookingId).get();
+        final data = candidate.data();
+        if (candidate.exists &&
+            data != null &&
+            (data['senderId'] == userId || data['userId'] == userId)) {
+          pickupDoc = candidate;
+        }
+      }
+      if (pickupDoc == null) {
+        final bySender = await db
+            .collection('prescriptionPickups')
+            .where('senderId', isEqualTo: userId)
+            .limit(50)
+            .get();
+        final byUser = await db
+            .collection('prescriptionPickups')
+            .where('userId', isEqualTo: userId)
+            .limit(50)
+            .get();
+        final candidates = {
+          for (final doc in [...bySender.docs, ...byUser.docs]) doc.id: doc,
+        }.values.toList(growable: false)
+          ..sort((a, b) => _timestampMillis(
+                b.data()['updatedAt'] ?? b.data()['createdAt'],
+              ).compareTo(_timestampMillis(
+                a.data()['updatedAt'] ?? a.data()['createdAt'],
+              )));
+        if (candidates.isNotEmpty) pickupDoc = candidates.first;
+      }
+      final restored = pickupDoc;
+      if (restored == null) return;
+      final payment =
+          await db.collection('healthPlusPayments').doc(restored.id).get();
+      if (!mounted) return;
+      final pickup = {'id': restored.id, ...?restored.data()};
+      final paymentData = payment.data();
+      final status =
+          '${paymentData?['paymentStatus'] ?? paymentData?['status'] ?? pickup['paymentStatus'] ?? 'pending'}';
+      setState(() {
+        _healthPickups
+          ..clear()
+          ..add(pickup);
+        _healthPayments
+          ..clear()
+          ..add({
+            'pickupId': restored.id,
+            'amount': paymentData?['amount'] ?? pickup['price'] ?? 0,
+            'status': status,
+            'rothApplied': paymentData?['rothAmount'],
+            'cardAmount': paymentData?['cardAmount'],
+          });
+        _healthScheduleId = '${pickup['scheduleId'] ?? ''}'.trim().isEmpty
+            ? null
+            : '${pickup['scheduleId']}';
+        _healthMessage = returnState == 'cancelled'
+            ? 'Health+ payment was cancelled. No new charge was made.'
+            : const {'paid', 'succeeded', 'checkout_completed'}
+                    .contains(status.toLowerCase())
+                ? 'Health+ payment confirmed. Your saved pickup is up to date.'
+                : 'Health+ payment returned securely. Circum is confirming it.';
+      });
+    } catch (error) {
+      debugPrint('Website Health+ return restore unavailable: $error');
     }
   }
 
@@ -10347,7 +10467,8 @@ class _CustomerPortalState extends State<_CustomerPortal> {
         'businessId': businessId,
         'invoiceId': invoiceId,
         'useRoth': useRoth,
-        'returnUrl': 'https://circumuk.com/?app=business',
+        'returnOwner': 'website',
+        'returnUrl': 'https://circumuk.com/send/business?section=invoicing',
       });
       final data = Map<String, dynamic>.from(result.data as Map);
       final url = '${data['checkoutUrl'] ?? ''}';
@@ -10388,7 +10509,8 @@ class _CustomerPortalState extends State<_CustomerPortal> {
           .call({
         'businessId': businessId,
         'amount': amount,
-        'returnUrl': 'https://circumuk.com/?app=business',
+        'returnOwner': 'website',
+        'returnUrl': 'https://circumuk.com/send/business?section=invoicing',
       });
       final data = Map<String, dynamic>.from(result.data as Map);
       final url = '${data['checkoutUrl'] ?? ''}';
@@ -11400,6 +11522,7 @@ class _CustomerPortalState extends State<_CustomerPortal> {
         'checkoutMode': 'web_checkout',
         'requestId': id,
         'idempotencyKey': id,
+        'returnOwner': 'website',
         'returnUrl': 'https://circumuk.com/send',
         'deliveryPayload': deliveryPayload,
       });
@@ -11771,6 +11894,7 @@ class _CustomerPortalState extends State<_CustomerPortal> {
           'prescriptionType': _healthPrescriptionType,
           'useRoth': _healthUseRoth,
           'priceBreakdown': quote.toJson(),
+          'returnOwner': 'website',
           'successUrl': 'https://circumuk.com/send/health?health=success',
           'cancelUrl': 'https://circumuk.com/send/health?health=cancelled',
         }),
@@ -15289,7 +15413,14 @@ class _BusinessSectionTabs extends StatefulWidget {
 }
 
 class _BusinessSectionTabsState extends State<_BusinessSectionTabs> {
-  var _section = _BusinessWebSection.overview;
+  late var _section = _initialSection();
+
+  _BusinessWebSection _initialSection() {
+    final section = Uri.base.queryParameters['section']?.trim().toLowerCase();
+    return section == 'invoicing' || section == 'invoices'
+        ? _BusinessWebSection.invoices
+        : _BusinessWebSection.overview;
+  }
 
   static const _sections = [
     _BusinessWebSection.overview,
@@ -26316,10 +26447,35 @@ class _GiftsRequestPageState extends State<_GiftsRequestPage> {
   Future<void> _handleGiftPaymentReturn() async {
     final result = Uri.base.queryParameters['gift_payment'];
     if (result == 'cancelled') {
+      var restored = '';
+      final giftDraftId = Uri.base.queryParameters['giftDraftId']?.trim() ?? '';
+      final user = FirebaseAuth.instance.currentUser;
+      if (giftDraftId.isNotEmpty && user != null) {
+        try {
+          final snapshot = await FirebaseFirestore.instance
+              .collection('giftPaymentDrafts')
+              .doc(giftDraftId)
+              .get();
+          final data = snapshot.data();
+          if (snapshot.exists && data != null && data['senderId'] == user.uid) {
+            final occasion = '${data['occasion'] ?? 'Gift'}'.trim();
+            final recipient =
+                '${data['recipientName'] ?? 'your recipient'}'.trim();
+            final budget = data['grossGiftBudget'] ??
+                data['grossBudget'] ??
+                data['budget'];
+            restored = budget == null
+                ? ' $occasion for $recipient remains saved.'
+                : ' $occasion for $recipient · £$budget remains saved.';
+          }
+        } catch (error) {
+          debugPrint('Gift cancellation restore unavailable: $error');
+        }
+      }
       if (mounted) {
         setState(
           () => _message =
-              'Payment was cancelled. Your gift has not been submitted.',
+              'Payment was cancelled. Your gift has not been submitted.$restored',
         );
       }
       return;
@@ -26542,7 +26698,12 @@ class _GiftsRequestPageState extends State<_GiftsRequestPage> {
       };
       final payment = await FirebaseFunctions.instance
           .httpsCallable('createGiftPayment')
-          .call({'giftDraftId': giftDraftId, 'giftDraft': giftDraft});
+          .call({
+        'giftDraftId': giftDraftId,
+        'giftDraft': giftDraft,
+        'source': 'website',
+        'returnOwner': 'website',
+      });
       final paymentData = Map<String, dynamic>.from(payment.data as Map);
       final checkoutUrl = Uri.tryParse('${paymentData['url'] ?? ''}');
       if (checkoutUrl == null || checkoutUrl.host.isEmpty) {

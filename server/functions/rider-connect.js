@@ -4,9 +4,7 @@ const {getFirestore, FieldValue} = require("firebase-admin/firestore");
 const {payoutReadiness} = require("./rider-certification-policy");
 
 const safeConfig = functions.config() || {};
-const appBaseUrl = process.env.RIDER_APP_BASE_URL ||
-  (safeConfig.rider && safeConfig.rider.base_url) ||
-  "https://circum-rider-2797c.web.app";
+const appBaseUrl = "https://circum-rider-2797c.web.app";
 const adminBaseUrl = process.env.ADMIN_BASE_URL || (safeConfig.admin && safeConfig.admin.base_url) || "https://admin.circumuk.com";
 const riderStripeReturnUrl = `${appBaseUrl}/rider/stripe/return`;
 const riderStripeRefreshUrl = `${appBaseUrl}/rider/stripe/refresh`;
@@ -275,6 +273,24 @@ async function updateRiderConnectFields(riderId, patch) {
   await batch.commit();
 }
 
+function stripeAccountIdempotencyKey(riderId, stripeMode) {
+  const normalizedMode = stripeMode === "live" ? "live" : "test";
+  return `circum_rider_connect_${riderId}_${normalizedMode}`;
+}
+
+async function createRiderStripeAccount(stripe, riderId, profile, context, mode) {
+  return stripe.accounts.create({
+    type: "express",
+    country: "GB",
+    email: text(profile.email || (context.auth && context.auth.token && context.auth.token.email)) || undefined,
+    business_type: "individual",
+    capabilities: {transfers: {requested: true}},
+    metadata: {riderId, payoutFeePayer: "rider", platform: "circum"},
+  }, {
+    idempotencyKey: stripeAccountIdempotencyKey(riderId, mode),
+  });
+}
+
 function resetStripeFieldsPatch({staleAccountId = "", staleMode = "test"} = {}) {
   return {
     staleStripeAccountId: staleAccountId || FieldValue.delete(),
@@ -346,20 +362,13 @@ function createStripeConnectAccountForRider(stripeOrFactory) {
         };
       }
     }
-    const account = await stripe.accounts.create({
-      type: "express",
-      country: "GB",
-      email: text(profile.email || (data && data.email) || (context.auth && context.auth.token && context.auth.token.email)) || undefined,
-      business_type: "individual",
-      capabilities: {
-        transfers: {requested: true},
-      },
-      metadata: {
+    const account = await createRiderStripeAccount(
+        stripe,
         riderId,
-        payoutFeePayer: "rider",
-        platform: "circum",
-      },
-    });
+        {...profile, email: profile.email || (data && data.email)},
+        context,
+        mode,
+    );
     await updateRiderConnectFields(riderId, connectPatch(account, {
       stripeMode: mode,
       stripeStatus: "onboarding",
@@ -403,14 +412,13 @@ function createStripeOnboardingLink(stripeOrFactory) {
       }
     }
     if (!accountId) {
-      const created = await stripe.accounts.create({
-        type: "express",
-        country: "GB",
-        email: text(profile.email || (context.auth && context.auth.token && context.auth.token.email)) || undefined,
-        business_type: "individual",
-        capabilities: {transfers: {requested: true}},
-        metadata: {riderId, payoutFeePayer: "rider", platform: "circum"},
-      });
+      const created = await createRiderStripeAccount(
+          stripe,
+          riderId,
+          profile,
+          context,
+          mode,
+      );
       accountId = created.id;
       await updateRiderConnectFields(riderId, connectPatch(created, {
         stripeMode: mode,

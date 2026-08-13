@@ -11,6 +11,19 @@ const {requireAdmin} = require("./admin-auth");
 const {calculateWalletCheckout} = require("./wallet-core");
 const communicationEngine = require("./communication-engine");
 const {businessAuthority} = require("./business-authority");
+const {
+  RETURN_FLOWS,
+  resolveReturnOwner,
+  stripeReturnBase,
+  stripeReturnUrls,
+} = require("./stripe-return-ownership");
+const {
+  CheckoutClaimError,
+  checkoutClaim,
+  checkoutFingerprint,
+  checkoutLogicalKey,
+  createStripeCheckoutOnce,
+} = require("./checkout-idempotency-core");
 
 function money(value) {
   const parsed = Number(value || 0);
@@ -472,8 +485,10 @@ exports.createBusinessRothCheckout = (stripe) => functions.https.onCall(async (d
   const account = await requireBusinessMember(businessId, context, {financial: true});
   const db = getFirestore();
   const purchaseRef = db.collection("businessRothPurchases").doc();
-  const baseUrl = `${data.returnUrl || "https://circumuk.com/?app=business&section=invoicing"}`;
-  const separator = baseUrl.includes("?") ? "&" : "?";
+  const returnUrls = stripeReturnUrls(RETURN_FLOWS.BUSINESS_ROTH, {
+    returnOwner: data.returnOwner,
+    purchaseId: purchaseRef.id,
+  });
   const session = await stripe.checkout.sessions.create({
     mode: "payment",
     payment_method_types: ["card"],
@@ -489,8 +504,8 @@ exports.createBusinessRothCheckout = (stripe) => functions.https.onCall(async (d
         },
       },
     }],
-    success_url: `${baseUrl}${separator}roth_purchase=success&purchaseId=${purchaseRef.id}&session_id={CHECKOUT_SESSION_ID}`,
-    cancel_url: `${baseUrl}${separator}roth_purchase=cancelled&purchaseId=${purchaseRef.id}`,
+    success_url: returnUrls.successUrl,
+    cancel_url: returnUrls.cancelUrl,
     metadata: {
       type: "business_roth_purchase",
       businessId,
@@ -554,8 +569,81 @@ exports.createBusinessInvoiceCheckout = (stripe) => functions.https.onCall(async
   const rothAmount = split.walletContributionGbp;
   const cardAmount = split.remainingGbp;
   const requestedMethod = ["apple_pay", "google_pay", "saved_card", "card"].includes(`${data.paymentMethod || ""}`) ? `${data.paymentMethod}` : "card";
+  const checkoutLogicalIdentity = checkoutLogicalKey("business_invoice", {
+    businessId,
+    invoiceId,
+    invoiceBalancePence: Math.round(balanceDue * 100),
+    invoicePaidPence: Math.round(money(invoice.amountPaid) * 100),
+  });
+  const paymentRef = db.collection("businessInvoicePayments")
+      .doc(`invoice_${checkoutLogicalIdentity}`);
+  const legacyPayments = await db.collection("businessInvoicePayments")
+      .where("invoiceId", "==", invoiceId)
+      .limit(20)
+      .get();
+  const unresolvedLegacy = legacyPayments.docs.find((doc) => {
+    if (doc.id === paymentRef.id) return false;
+    const payment = doc.data() || {};
+    const status = `${payment.paymentStatus || payment.status || ""}`.toLowerCase();
+    return payment.businessId === businessId &&
+      Boolean(payment.checkoutSessionId || payment.stripeSessionId) &&
+      !["paid", "succeeded", "failed", "expired", "cancelled"].includes(status);
+  });
+  if (unresolvedLegacy) {
+    throw new functions.https.HttpsError(
+        "failed-precondition",
+        "This invoice already has an unresolved checkout. Complete or expire it before starting another.",
+    );
+  }
   if (cardAmount <= 0) {
-    const paymentId = `roth_${invoiceId}_${Math.round(paymentAmount * 100)}`;
+    const paymentId = paymentRef.id;
+    const rothRequestFingerprint = checkoutFingerprint({
+      businessId,
+      invoiceId,
+      initiatedBy: context.auth.uid,
+      invoiceBalancePence: Math.round(balanceDue * 100),
+      paymentAmountPence: Math.round(paymentAmount * 100),
+      rothAmountPence: Math.round(rothAmount * 100),
+      paymentChannel: "roth",
+    });
+    await db.runTransaction(async (transaction) => {
+      const currentSnap = await transaction.get(paymentRef);
+      const current = currentSnap.exists ? currentSnap.data() || {} : {};
+      if (currentSnap.exists &&
+          (current.businessId !== businessId || current.invoiceId !== invoiceId)) {
+        throw new functions.https.HttpsError(
+            "failed-precondition",
+            "Business invoice checkout ownership mismatch.",
+        );
+      }
+      if (current.checkoutSessionId || current.stripeSessionId ||
+          current.checkoutLogicalKey || current.paymentChannel === "stripe_checkout") {
+        throw new functions.https.HttpsError(
+            "failed-precondition",
+            "This invoice already has a card checkout in progress. Resume it before using Roth.",
+        );
+      }
+      if (current.paymentChannel === "roth" &&
+          current.paymentRequestFingerprint &&
+          current.paymentRequestFingerprint !== rothRequestFingerprint) {
+        throw new functions.https.HttpsError(
+            "failed-precondition",
+            "This invoice already has a Roth payment in progress with different payment details.",
+        );
+      }
+      transaction.set(paymentRef, {
+        paymentId,
+        businessId,
+        invoiceId,
+        paymentChannel: "roth",
+        paymentRequestFingerprint: rothRequestFingerprint,
+        status: "roth_processing",
+        paymentStatus: "roth_processing",
+        createdByUserId: context.auth.uid,
+        createdAt: current.createdAt || FieldValue.serverTimestamp(),
+        updatedAt: FieldValue.serverTimestamp(),
+      }, {merge: true});
+    });
     const result = await payBusinessInvoiceAtomically({
       businessId,
       invoiceId,
@@ -567,11 +655,90 @@ exports.createBusinessInvoiceCheckout = (stripe) => functions.https.onCall(async
     });
     return {paid: true, method: "roth", paymentAmount, totalInvoice: balanceDue, rothApplied: rothAmount, cardAmount: 0, duplicate: result.duplicate === true};
   }
-  const paymentRef = db.collection("businessInvoicePayments").doc();
-  const baseUrl = `${data.returnUrl || "https://circumuk.com/?app=business&section=invoicing"}`;
-  const separator = baseUrl.includes("?") ? "&" : "?";
+  const requestedReturnOwner = resolveReturnOwner(data.returnOwner);
+  const baseUrl = stripeReturnBase(
+      RETURN_FLOWS.BUSINESS_INVOICE,
+      requestedReturnOwner,
+  );
   const bookingId = `${invoice.bookingId || invoice.deliveryId || invoice.requestId || ""}`;
-  const session = await stripe.checkout.sessions.create({
+  const returnUrls = stripeReturnUrls(RETURN_FLOWS.BUSINESS_INVOICE, {
+    returnOwner: requestedReturnOwner,
+    invoiceId,
+    businessId,
+    paymentId: paymentRef.id,
+  });
+  const checkoutRequestFingerprint = checkoutFingerprint({
+    businessId,
+    invoiceId,
+    initiatedBy: context.auth.uid,
+    invoiceBalancePence: Math.round(balanceDue * 100),
+    paymentAmountPence: Math.round(paymentAmount * 100),
+    cardAmountPence: Math.round(cardAmount * 100),
+    rothAmountPence: Math.round(rothAmount * 100),
+    requestedMethod,
+    successUrl: returnUrls.successUrl,
+    cancelUrl: returnUrls.cancelUrl,
+  });
+  let claim;
+  try {
+    claim = await db.runTransaction(async (transaction) => {
+      const currentSnap = await transaction.get(paymentRef);
+      const current = currentSnap.exists ? currentSnap.data() || {} : {};
+      if (currentSnap.exists &&
+          (current.businessId !== businessId || current.invoiceId !== invoiceId)) {
+        throw new functions.https.HttpsError(
+            "failed-precondition",
+            "Business invoice checkout ownership mismatch.",
+        );
+      }
+      if (current.paymentChannel === "roth") {
+        throw new functions.https.HttpsError(
+            "failed-precondition",
+            "This invoice already has a Roth payment in progress. Complete it before starting card checkout.",
+        );
+      }
+      const result = checkoutClaim(current, {
+        logicalKey: checkoutLogicalIdentity,
+        requestFingerprint: checkoutRequestFingerprint,
+        returnOwner: requestedReturnOwner,
+      });
+      if (result.kind === "claim") {
+        transaction.set(paymentRef, {
+          paymentId: paymentRef.id,
+          businessId,
+          invoiceId,
+          ...result.claim,
+          paymentChannel: "stripe_checkout",
+          status: "checkout_creating",
+          paymentStatus: "checkout_creating",
+          createdAt: current.createdAt || FieldValue.serverTimestamp(),
+          updatedAt: FieldValue.serverTimestamp(),
+          createdByUserId: context.auth.uid,
+        }, {merge: true});
+      }
+      return {...result, existing: current};
+    });
+  } catch (error) {
+    if (error instanceof CheckoutClaimError) {
+      throw new functions.https.HttpsError("failed-precondition", error.message, {reason: error.reason});
+    }
+    throw error;
+  }
+  if (claim.kind === "reuse") {
+    return {
+      checkoutUrl: claim.checkoutUrl,
+      sessionId: claim.sessionId,
+      paymentId: paymentRef.id,
+      paid: false,
+      method: claim.existing.method || (rothAmount > 0 ? `roth_${requestedMethod}` : requestedMethod),
+      paymentAmount: claim.existing.paymentAmount || paymentAmount,
+      totalInvoice: claim.existing.totalInvoice || balanceDue,
+      rothApplied: claim.existing.rothAmount || rothAmount,
+      cardAmount: claim.existing.cardAmount || cardAmount,
+      idempotent: true,
+    };
+  }
+  const checkoutParams = {
     mode: "payment",
     payment_method_types: ["card"],
     client_reference_id: businessId,
@@ -586,8 +753,8 @@ exports.createBusinessInvoiceCheckout = (stripe) => functions.https.onCall(async
         },
       },
     }],
-    success_url: `${baseUrl}${separator}paymentStatus=payment-success&invoiceId=${invoiceId}&businessId=${businessId}&paymentId=${paymentRef.id}&checkoutSessionId={CHECKOUT_SESSION_ID}`,
-    cancel_url: `${baseUrl}${separator}paymentStatus=payment-cancelled&invoiceId=${invoiceId}&businessId=${businessId}&paymentId=${paymentRef.id}`,
+    success_url: returnUrls.successUrl,
+    cancel_url: returnUrls.cancelUrl,
     metadata: {
       type: "business_invoice_payment",
       businessId,
@@ -599,10 +766,28 @@ exports.createBusinessInvoiceCheckout = (stripe) => functions.https.onCall(async
       paymentAmountGbp: `${paymentAmount}`,
       requestedPaymentMethod: requestedMethod,
       returnUrl: baseUrl,
+      returnOwner: requestedReturnOwner,
+      checkoutLogicalKey: checkoutLogicalIdentity,
       paymentStatus: "pending_verification",
       createdByUserId: context.auth.uid,
     },
-  });
+  };
+  let session;
+  try {
+    session = await createStripeCheckoutOnce({
+      stripe,
+      logicalKey: checkoutLogicalIdentity,
+      params: checkoutParams,
+    });
+  } catch (error) {
+    if (`${error && error.code || ""}`.includes("idempotency")) {
+      throw new functions.https.HttpsError(
+          "failed-precondition",
+          "This invoice checkout is already being created with different payment details.",
+      );
+    }
+    throw error;
+  }
   await paymentRef.set({
     paymentId: paymentRef.id,
     businessId,
@@ -620,9 +805,14 @@ exports.createBusinessInvoiceCheckout = (stripe) => functions.https.onCall(async
     checkoutSessionId: session.id,
     paymentIntentId: session.payment_intent || null,
     returnUrl: baseUrl,
+    returnOwner: requestedReturnOwner,
+    checkoutLogicalKey: checkoutLogicalIdentity,
+    checkoutRequestFingerprint,
+    checkoutUrl: session.url,
     createdAt: FieldValue.serverTimestamp(),
+    updatedAt: FieldValue.serverTimestamp(),
     createdByUserId: context.auth.uid,
-  });
+  }, {merge: true});
   return {checkoutUrl: session.url, sessionId: session.id, paymentId: paymentRef.id, paid: false, method: rothAmount > 0 ? `roth_${requestedMethod}` : requestedMethod, paymentAmount, totalInvoice: balanceDue, rothApplied: rothAmount, cardAmount};
 });
 
@@ -744,6 +934,9 @@ exports.handleBusinessCheckoutSession = async (sessionData, eventId = null) => {
     }
     const payment = paymentSnap.data() || {};
     if (payment.status === "paid") return;
+    if (`${payment.checkoutSessionId || payment.stripeSessionId || ""}` !== `${sessionData.id || ""}`) {
+      throw new Error("Business invoice checkout session ownership mismatch.");
+    }
     const rothAmount = money(payment.rothAmount);
     const verifiedPayment = verifiedStripePaidGbpSession(sessionData, {
       ownerId: businessId,

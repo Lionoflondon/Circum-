@@ -1060,7 +1060,9 @@ class SendPackageBloc extends Bloc<SendPackageEvent, SendPackageState> {
         'fallbackMethod': event.fallbackMethod,
         'paymentMethodId': event.paymentMethodId,
         if (event.checkoutMode.isNotEmpty) 'checkoutMode': event.checkoutMode,
-        if (event.returnUrl.isNotEmpty) 'returnUrl': event.returnUrl,
+        if (event.returnOwner.isNotEmpty) 'returnOwner': event.returnOwner,
+        if (event.returnOwner == 'sender_app')
+          'returnUrl': 'https://circum-app-2797c.web.app/send?app=sender&tab=1',
         if (event.draftId.isNotEmpty) 'draftId': event.draftId,
         if (event.idempotencyKey.isNotEmpty)
           'idempotencyKey': event.idempotencyKey,

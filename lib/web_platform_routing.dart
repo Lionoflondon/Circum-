@@ -30,6 +30,12 @@ String normalizeCircumWebPath(String rawPath) {
   return path;
 }
 
+Map<String, String> circumLegacyRedirectParameters(Uri uri) {
+  final parameters = <String, String>{...uri.queryParameters};
+  parameters.remove('app');
+  return parameters;
+}
+
 String _effectiveCircumWebPath(Uri uri) {
   final fragment = uri.fragment.trim();
   if (fragment.startsWith('/')) {

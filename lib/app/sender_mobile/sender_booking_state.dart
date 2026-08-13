@@ -589,6 +589,15 @@ class SenderBookingDraft {
   }
 }
 
+SenderBookingDraft senderCancelledCheckoutDraft(SenderBookingDraft restored) {
+  return restored.copyWith(
+    step: SenderBookingStep.payment,
+    paymentStatus: SenderPaymentStatus.failed,
+    bookingConfirmed: false,
+    cardConfirmationStarted: false,
+  );
+}
+
 Map<String, dynamic> _draftMap(Object? value) =>
     value is Map ? Map<String, dynamic>.from(value) : <String, dynamic>{};
 

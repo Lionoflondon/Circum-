@@ -12,6 +12,19 @@ const {verifiedPhotoAnalysis} = require("./iris-photo-analysis");
 const {dispatchDeliveryRequest} = require("./send-package");
 const {getAuthoritativeRouteFacts, coordinate} = require("./route-authority");
 const {evaluateRoadChargePolicy} = require("./road-charge-policy");
+const {
+  RETURN_FLOWS,
+  resolveReturnOwner,
+  stripeReturnBase,
+  stripeReturnUrls,
+} = require("./stripe-return-ownership");
+const {
+  CheckoutClaimError,
+  checkoutClaim,
+  checkoutFingerprint,
+  checkoutLogicalKey,
+  createStripeCheckoutOnce,
+} = require("./checkout-idempotency-core");
 
 const BASE_FARE_GBP = 5;
 const ADDITIONAL_FARE_PER_MILE_GBP = 1.5;
@@ -1028,6 +1041,42 @@ exports.createSenderPaymentSession = (stripe) => functions.https.onCall(async (d
     checkoutMode: webCheckout ? "web_checkout" : "payment_intent",
   }));
   const sessionRef = db.collection("senderPaymentSessions").doc(quoteId);
+  const webReturnOwner = webCheckout && split.stripeRequired ?
+    resolveReturnOwner(data.returnOwner) :
+    "";
+  const webRequestId = webCheckout ?
+    text(data.requestId) || `sender_${stableId(`${sender.uid}:${quoteId}:${sessionRef.id}`)}` :
+    "";
+  const webDraftId = webCheckout ? text(data.draftId) : "";
+  const webCheckoutLogicalIdentity = webCheckout && split.stripeRequired ? checkoutLogicalKey("sender_delivery", {
+    quoteId,
+    senderId: sender.uid,
+  }) : "";
+  const webCheckoutRequestFingerprint = webCheckout && split.stripeRequired ? checkoutFingerprint({
+    quoteId,
+    senderId: sender.uid,
+    requestId: webRequestId,
+    draftId: webDraftId,
+    totalPence: minorUnits(total, "gbp"),
+    paymentSessionKey: requestedSessionKey,
+    deliveryPayload,
+  }) : "";
+  if (webCheckout &&
+      (!deliveryPayload.pickup || !deliveryPayload.dropoff ||
+       !deliveryPayload.parcel || !deliveryPayload.recipient)) {
+    throw new functions.https.HttpsError(
+        "invalid-argument",
+        "Delivery details are required before web checkout.",
+    );
+  }
+  if (!split.stripeRequired &&
+      (!deliveryPayload.pickup || !deliveryPayload.dropoff ||
+       !deliveryPayload.parcel || !deliveryPayload.recipient)) {
+    throw new functions.https.HttpsError(
+        "invalid-argument",
+        "Delivery details are required before Roth payment.",
+    );
+  }
   const existingSessionSnap = await sessionRef.get();
   if (existingSessionSnap.exists) {
     const existingSession = existingSessionSnap.data() || {};
@@ -1052,14 +1101,31 @@ exports.createSenderPaymentSession = (stripe) => functions.https.onCall(async (d
     }
     const sameRequestedSession = existingSession.checkoutKey === requestedSessionKey ||
       existingSession.paymentSessionKey === requestedSessionKey;
-    if (webCheckout && existingSession.checkoutSessionId) {
-      logSenderPaymentStage("web_checkout_retry_forces_fresh_session", {
-        userId: sender.uid,
-        quoteId,
-        paymentSessionId: sessionRef.id,
-        previousCheckoutSessionId: existingSession.checkoutSessionId,
-        previousStatus: text(existingSession.paymentStatus || existingSession.status),
-      });
+    if (webCheckout && split.stripeRequired &&
+        (existingSession.stripePaymentIntentId || existingSession.clientSecret ||
+         existingSession.paymentCreationClaimKey)) {
+      throw new functions.https.HttpsError(
+          "failed-precondition",
+          "This quote already has an in-app payment in progress. Resume that payment before starting web checkout.",
+      );
+    }
+    if (!webCheckout && split.stripeRequired &&
+        (existingSession.checkoutSessionId || existingSession.checkoutLogicalKey ||
+         existingSession.checkoutMode === "web_checkout")) {
+      throw new functions.https.HttpsError(
+          "failed-precondition",
+          "This quote already has a web checkout in progress. Resume that checkout before starting in-app payment.",
+      );
+    }
+    if (!split.stripeRequired &&
+        (existingSession.checkoutSessionId || existingSession.checkoutLogicalKey ||
+         existingSession.stripePaymentIntentId || existingSession.clientSecret ||
+         existingSession.paymentCreationClaimKey ||
+         ["stripe_checkout", "payment_intent"].includes(existingSession.paymentChannel))) {
+      throw new functions.https.HttpsError(
+          "failed-precondition",
+          "This quote already has a card payment in progress. Resume it before using Roth.",
+      );
     }
     if (!webCheckout && sameRequestedSession && existingSession.clientSecret && existingSession.stripeCustomerId) {
       const existingEphemeralKey = await stripe.ephemeralKeys.create(
@@ -1086,6 +1152,193 @@ exports.createSenderPaymentSession = (stripe) => functions.https.onCall(async (d
         idempotent: true,
       };
     }
+  }
+  let webCheckoutClaim = null;
+  if (webCheckout && split.stripeRequired) {
+    try {
+      webCheckoutClaim = await db.runTransaction(async (transaction) => {
+        const currentSnap = await transaction.get(sessionRef);
+        const current = currentSnap.exists ? currentSnap.data() || {} : {};
+        if (currentSnap.exists &&
+            (current.userId !== sender.uid || current.quoteId !== quoteId)) {
+          throw new functions.https.HttpsError(
+              "permission-denied",
+              "Payment session ownership mismatch.",
+          );
+        }
+        if (current.stripePaymentIntentId || current.clientSecret ||
+            current.paymentCreationClaimKey ||
+            ["payment_intent", "roth"].includes(current.paymentChannel)) {
+          throw new functions.https.HttpsError(
+              "failed-precondition",
+              "This quote already has an in-app payment in progress. Resume that payment before starting web checkout.",
+          );
+        }
+        const result = checkoutClaim(current, {
+          logicalKey: webCheckoutLogicalIdentity,
+          requestFingerprint: webCheckoutRequestFingerprint,
+          returnOwner: webReturnOwner,
+        });
+        if (result.kind === "claim") {
+          transaction.set(sessionRef, {
+            paymentSessionId: sessionRef.id,
+            quoteId,
+            userId: sender.uid,
+            userEmail: sender.email,
+            ...result.claim,
+            status: "checkout_creating",
+            paymentStatus: "checkout_creating",
+            checkoutMode: "web_checkout",
+            checkoutKey: requestedSessionKey,
+            requestId: webRequestId,
+            draftId: webDraftId || null,
+            deliveryPayload,
+            createdAt: current.createdAt || FieldValue.serverTimestamp(),
+            updatedAt: FieldValue.serverTimestamp(),
+          }, {merge: true});
+        }
+        return {...result, existing: current};
+      });
+    } catch (error) {
+      if (error instanceof CheckoutClaimError) {
+        throw new functions.https.HttpsError("failed-precondition", error.message, {reason: error.reason});
+      }
+      throw error;
+    }
+    if (webCheckoutClaim.kind === "reuse") {
+      const existing = webCheckoutClaim.existing;
+      return {
+        paymentSessionId: sessionRef.id,
+        quoteId,
+        userId: sender.uid,
+        amountDue: total,
+        rothEnabled: existing.rothEnabled === true,
+        rothAppliedAmount: money(existing.rothAppliedAmount || split.walletContributionGbp),
+        remainingAmount: money(existing.remainingAmount || split.remainingGbp),
+        currency: "GBP",
+        status: text(existing.status || existing.paymentStatus || "checkout_created"),
+        paymentStatus: text(existing.paymentStatus || existing.status || "checkout_created"),
+        paymentMethod: text(existing.paymentMethod || requestedFallback),
+        checkoutMode: "web_checkout",
+        checkoutUrl: webCheckoutClaim.checkoutUrl,
+        checkoutSessionId: webCheckoutClaim.sessionId,
+        requestId: existing.requestId || webRequestId,
+        idempotencyKey: existing.idempotencyKey || webCheckoutLogicalIdentity,
+        idempotent: true,
+      };
+    }
+  }
+  if (!webCheckout && split.stripeRequired) {
+    const paymentLogicalKey = checkoutLogicalKey("sender_delivery", {
+      quoteId,
+      senderId: sender.uid,
+    });
+    const paymentRequestFingerprint = checkoutFingerprint({
+      quoteId,
+      senderId: sender.uid,
+      totalPence: minorUnits(total, "gbp"),
+      paymentSessionKey: requestedSessionKey,
+    });
+    await db.runTransaction(async (transaction) => {
+      const currentSnap = await transaction.get(sessionRef);
+      const current = currentSnap.exists ? currentSnap.data() || {} : {};
+      if (currentSnap.exists &&
+          (current.userId !== sender.uid || current.quoteId !== quoteId)) {
+        throw new functions.https.HttpsError(
+            "permission-denied",
+            "Payment session ownership mismatch.",
+        );
+      }
+      if (current.checkoutSessionId || current.checkoutLogicalKey ||
+          current.checkoutMode === "web_checkout") {
+        throw new functions.https.HttpsError(
+            "failed-precondition",
+            "This quote already has a web checkout in progress. Resume that checkout before starting in-app payment.",
+        );
+      }
+      const storedLogicalKey = text(current.paymentCreationClaimKey);
+      const storedFingerprint = text(current.paymentRequestFingerprint);
+      if ((storedLogicalKey && storedLogicalKey !== paymentLogicalKey) ||
+          (storedFingerprint && storedFingerprint !== paymentRequestFingerprint) ||
+          (current.paymentChannel && current.paymentChannel !== "payment_intent")) {
+        throw new functions.https.HttpsError(
+            "failed-precondition",
+            "This quote already has a payment in progress with different payment details.",
+        );
+      }
+      transaction.set(sessionRef, {
+        paymentSessionId: sessionRef.id,
+        quoteId,
+        userId: sender.uid,
+        userEmail: sender.email,
+        paymentCreationClaimKey: paymentLogicalKey,
+        paymentRequestFingerprint,
+        paymentChannel: "payment_intent",
+        paymentSessionKey: requestedSessionKey,
+        status: "payment_creating",
+        paymentStatus: "payment_creating",
+        createdAt: current.createdAt || FieldValue.serverTimestamp(),
+        updatedAt: FieldValue.serverTimestamp(),
+      }, {merge: true});
+    });
+  }
+  if (!split.stripeRequired) {
+    const rothRequestId = text(data.requestId) ||
+      `sender_${stableId(`${sender.uid}:${quoteId}:${sessionRef.id}`)}`;
+    const rothDraftId = text(data.draftId);
+    const rothRequestFingerprint = checkoutFingerprint({
+      quoteId,
+      senderId: sender.uid,
+      requestId: rothRequestId,
+      draftId: rothDraftId,
+      totalPence: minorUnits(total, "gbp"),
+      rothAmountPence: minorUnits(split.walletContributionGbp, "gbp"),
+      deliveryPayload,
+      paymentChannel: "roth",
+    });
+    await db.runTransaction(async (transaction) => {
+      const currentSnap = await transaction.get(sessionRef);
+      const current = currentSnap.exists ? currentSnap.data() || {} : {};
+      if (currentSnap.exists &&
+          (current.userId !== sender.uid || current.quoteId !== quoteId)) {
+        throw new functions.https.HttpsError(
+            "permission-denied",
+            "Payment session ownership mismatch.",
+        );
+      }
+      if (current.checkoutSessionId || current.checkoutLogicalKey ||
+          current.stripePaymentIntentId || current.clientSecret ||
+          current.paymentCreationClaimKey ||
+          ["stripe_checkout", "payment_intent"].includes(current.paymentChannel)) {
+        throw new functions.https.HttpsError(
+            "failed-precondition",
+            "This quote already has a card payment in progress. Resume it before using Roth.",
+        );
+      }
+      if (current.paymentChannel === "roth" &&
+          current.paymentRequestFingerprint &&
+          current.paymentRequestFingerprint !== rothRequestFingerprint) {
+        throw new functions.https.HttpsError(
+            "failed-precondition",
+            "This quote already has a Roth payment in progress with different delivery details.",
+        );
+      }
+      transaction.set(sessionRef, {
+        paymentSessionId: sessionRef.id,
+        quoteId,
+        userId: sender.uid,
+        userEmail: sender.email,
+        paymentChannel: "roth",
+        paymentRequestFingerprint: rothRequestFingerprint,
+        requestId: rothRequestId,
+        draftId: rothDraftId || null,
+        deliveryPayload,
+        status: "payment_creating",
+        paymentStatus: "payment_creating",
+        createdAt: current.createdAt || FieldValue.serverTimestamp(),
+        updatedAt: FieldValue.serverTimestamp(),
+      }, {merge: true});
+    });
   }
   const sessionBase = {
     paymentSessionId: sessionRef.id,
@@ -1114,13 +1367,11 @@ exports.createSenderPaymentSession = (stripe) => functions.https.onCall(async (d
     updatedAt: FieldValue.serverTimestamp(),
   };
   if (!split.stripeRequired) {
-    if (!deliveryPayload.pickup || !deliveryPayload.dropoff || !deliveryPayload.parcel || !deliveryPayload.recipient) {
-      throw new functions.https.HttpsError("invalid-argument", "Delivery details are required before Roth payment.");
-    }
     const requestId = text(data.requestId) || `sender_${stableId(`${sender.uid}:${quoteId}:${sessionRef.id}`)}`;
     const draftId = text(data.draftId);
-    const idempotencyKey = text(data.idempotencyKey) ||
-      stableId(`${sender.uid}:${draftId || "roth"}:${quoteId}:${sessionRef.id}:${requestedSessionKey}`);
+    const idempotencyKey = stableId(
+        `${sender.uid}:${draftId || "roth"}:${quoteId}:${sessionRef.id}:${requestedSessionKey}`,
+    );
     logSenderPaymentStage("roth_only_session_authorized", {
       userId: sender.uid,
       quoteId,
@@ -1134,6 +1385,7 @@ exports.createSenderPaymentSession = (stripe) => functions.https.onCall(async (d
       status: "payment_processing",
       paymentStatus: "payment_processing",
       paymentMethod: "roth",
+      paymentChannel: "roth",
       rothDebitStatus: "pending_delivery_creation",
       checkoutMode: webCheckout ? "web_checkout" : "payment_intent",
       requestId,
@@ -1228,20 +1480,23 @@ exports.createSenderPaymentSession = (stripe) => functions.https.onCall(async (d
     throw new functions.https.HttpsError("failed-precondition", "Saved payment method is unavailable.");
   }
   if (webCheckout) {
-    if (!deliveryPayload.pickup || !deliveryPayload.dropoff || !deliveryPayload.parcel || !deliveryPayload.recipient) {
-      throw new functions.https.HttpsError("invalid-argument", "Delivery details are required before web checkout.");
-    }
-    const requestId = text(data.requestId) || `sender_${stableId(`${sender.uid}:${quoteId}:${sessionRef.id}`)}`;
-    const draftId = text(data.draftId);
-    const checkoutAttempt = existingSessionSnap.exists ?
-      Number(existingSessionSnap.data().checkoutAttempt || 0) + 1 :
-      1;
-    const idempotencyKey = stableId(`${sender.uid}:${draftId || "web"}:${quoteId}:${sessionRef.id}:${requestedSessionKey}:${checkoutAttempt}`);
-    const baseUrl = text(data.returnUrl) || "https://circumuk.com/send";
-    const separator = baseUrl.includes("?") ? "&" : "?";
+    const requestId = webRequestId;
+    const draftId = webDraftId;
+    const idempotencyKey = webCheckoutLogicalIdentity;
+    const baseUrl = stripeReturnBase(
+        RETURN_FLOWS.SENDER_DELIVERY,
+        webReturnOwner,
+    );
+    const returnUrls = stripeReturnUrls(RETURN_FLOWS.SENDER_DELIVERY, {
+      returnOwner: webReturnOwner,
+      paymentSessionId: sessionRef.id,
+    });
     let checkoutSession;
     try {
-      checkoutSession = await stripe.checkout.sessions.create({
+      checkoutSession = await createStripeCheckoutOnce({
+        stripe,
+        logicalKey: webCheckoutLogicalIdentity,
+        params: {
         mode: "payment",
         payment_method_types: ["card"],
         client_reference_id: sender.uid,
@@ -1257,8 +1512,8 @@ exports.createSenderPaymentSession = (stripe) => functions.https.onCall(async (d
             },
           },
         }],
-        success_url: `${baseUrl}${separator}sender_payment=success&paymentSessionId=${sessionRef.id}&checkoutSessionId={CHECKOUT_SESSION_ID}`,
-        cancel_url: `${baseUrl}${separator}sender_payment=cancelled&paymentSessionId=${sessionRef.id}`,
+        success_url: returnUrls.successUrl,
+        cancel_url: returnUrls.cancelUrl,
         payment_intent_data: {
           setup_future_usage: "off_session",
           metadata: {
@@ -1287,8 +1542,11 @@ exports.createSenderPaymentSession = (stripe) => functions.https.onCall(async (d
           remainingAmount: `${split.remainingGbp}`,
           orderTotalGbp: `${split.orderTotalGbp}`,
           returnUrl: baseUrl,
+          returnOwner: webReturnOwner,
+          checkoutLogicalKey: webCheckoutLogicalIdentity,
         },
-      }, {idempotencyKey: `sender_checkout_${idempotencyKey}`});
+        },
+      });
     } catch (error) {
       throw new functions.https.HttpsError(
           "failed-precondition",
@@ -1303,7 +1561,7 @@ exports.createSenderPaymentSession = (stripe) => functions.https.onCall(async (d
       paymentMethod: requestedFallback,
       checkoutMode: "web_checkout",
       checkoutKey: requestedSessionKey,
-      checkoutAttempt,
+      ...webCheckoutClaim.claim,
       checkoutUrl: checkoutSession.url,
       checkoutSessionId: checkoutSession.id,
       stripeCustomerId: customerId,

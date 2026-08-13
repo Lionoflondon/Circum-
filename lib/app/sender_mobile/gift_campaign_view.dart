@@ -1042,6 +1042,7 @@ class _GiftCampaignViewState extends State<GiftCampaignView> {
           .httpsCallable(senderGiftPaymentCallableName)
           .call({
         'source': senderGiftCampaignPaymentSource,
+        'returnOwner': 'sender_app',
         'campaignParticipant': participant,
         'applyRoth': _wantsRoth,
         'paymentMethod': _verifiedPaymentMethod,

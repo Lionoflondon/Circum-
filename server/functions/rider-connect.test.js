@@ -132,6 +132,14 @@ test("Rider payout transfer uses Stripe idempotency", () => {
   assert.match(source, /idempotent: true/);
 });
 
+test("Rider Stripe account creation is idempotent across concurrent setup calls", () => {
+  const source = fs.readFileSync("rider-connect.js", "utf8");
+  assert.match(source, /function stripeAccountIdempotencyKey\(riderId, stripeMode\)/);
+  assert.match(source, /circum_rider_connect_\$\{riderId\}_\$\{normalizedMode\}/);
+  assert.match(source, /stripe\.accounts\.create\([\s\S]*idempotencyKey: stripeAccountIdempotencyKey\(riderId, mode\)/);
+  assert.equal((source.match(/stripe\.accounts\.create\(/g) || []).length, 1);
+});
+
 test("Rider payout readiness is backend authoritative", () => {
   const source = fs.readFileSync("rider-connect.js", "utf8");
   const index = fs.readFileSync("index.js", "utf8");

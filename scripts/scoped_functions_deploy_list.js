@@ -24,6 +24,26 @@ if (unique.length === 0) {
   process.exit(1);
 }
 
+const onlyIndex = process.argv.indexOf("--only");
+const onlyArg = process.argv.find((arg) => arg.startsWith("--only="));
+const hasOnlyOption = onlyArg !== undefined || onlyIndex !== -1;
+const requestedText = onlyArg ? onlyArg.slice("--only=".length) :
+  (onlyIndex === -1 ? "" : process.argv[onlyIndex + 1] || "");
+const requested = requestedText.split(",").map((name) => name.trim()).filter(Boolean);
+if (hasOnlyOption && requested.length === 0) {
+  console.error("--only requires at least one exported function name.");
+  process.exit(1);
+}
+if (hasOnlyOption) {
+  const unknown = requested.filter((name) => !unique.includes(name));
+  if (unknown.length > 0) {
+    console.error(`Unknown function exports: ${unknown.join(", ")}`);
+    process.exit(1);
+  }
+  console.log([...new Set(requested)].map((name) => `functions:${name}`).join(","));
+  process.exit(0);
+}
+
 if (process.argv.includes("--count")) {
   console.log(unique.length);
 } else if (process.argv.includes("--names")) {

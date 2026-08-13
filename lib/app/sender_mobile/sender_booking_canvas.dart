@@ -85,6 +85,7 @@ class _SenderBookingCanvasState extends State<SenderBookingCanvas> {
   String? _irisPhotoAnalysisId;
   double? _photoEstimatedWeightKg;
   bool _resettingBooking = false;
+  bool _cancelledStripeCheckoutReturn = false;
 
   @override
   void initState() {
@@ -98,7 +99,11 @@ class _SenderBookingCanvasState extends State<SenderBookingCanvas> {
       bloc.add(CheckForPushToken());
       bloc.add(CheckForActiveRequest());
       if (!_handleStripeCheckoutReturn(bloc)) {
-        _loadBackendDraft();
+        if (_cancelledStripeCheckoutReturn) {
+          unawaited(_restoreDraftThenApplyCancelledCheckout());
+        } else {
+          unawaited(_loadBackendDraft());
+        }
       }
     } catch (error, stackTrace) {
       if (kDebugMode) {
@@ -116,12 +121,7 @@ class _SenderBookingCanvasState extends State<SenderBookingCanvas> {
     final params = Uri.base.queryParameters;
     final result = (params['sender_payment'] ?? '').trim().toLowerCase();
     if (result == 'cancelled') {
-      _draft = _draft.copyWith(
-        step: SenderBookingStep.payment,
-        paymentStatus: SenderPaymentStatus.failed,
-        cardConfirmationStarted: false,
-      );
-      _syncStatus = 'Payment cancelled';
+      _cancelledStripeCheckoutReturn = true;
       return false;
     }
     if (result != 'success') return false;
@@ -152,6 +152,14 @@ class _SenderBookingCanvasState extends State<SenderBookingCanvas> {
       ),
     );
     return true;
+  }
+
+  Future<void> _restoreDraftThenApplyCancelledCheckout() async {
+    await _loadBackendDraft();
+    if (!mounted) return;
+    _cancelledStripeCheckoutReturn = false;
+    _setDraft(senderCancelledCheckoutDraft(_draft));
+    setState(() => _syncStatus = 'Payment cancelled');
   }
 
   @override
@@ -5056,7 +5064,7 @@ class _PaymentPanelState extends State<_PaymentPanel> {
                     : _stripeFallbackMethodValue(split.fallbackMethod!),
             paymentMethodId: draft.selectedPaymentMethodId,
             checkoutMode: kIsWeb ? 'web_checkout' : '',
-            returnUrl: kIsWeb ? _senderAppCheckoutReturnUrl() : '',
+            returnOwner: kIsWeb ? 'sender_app' : '',
             draftId: draftId ?? '',
             idempotencyKey:
                 'sender-${senderUid ?? 'anonymous'}-${draftId ?? 'draft'}-${engine.senderQuoteId ?? 'quote'}',
@@ -5086,18 +5094,6 @@ class _PaymentPanelState extends State<_PaymentPanel> {
       case SenderFallbackPaymentMethod.googlePay:
         return 'google_pay';
     }
-  }
-
-  String _senderAppCheckoutReturnUrl() {
-    final base = Uri.parse('https://circum-app-2797c.web.app');
-    return base.replace(
-      path: '/send',
-      queryParameters: {
-        ...base.queryParameters,
-        'app': 'sender',
-        'tab': '1',
-      },
-    ).toString();
   }
 
   Future<void> _confirmCardPayment(

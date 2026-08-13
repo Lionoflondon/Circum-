@@ -24,6 +24,7 @@ const {
 } = require("./wallet-core");
 const communicationEngine = require("./communication-engine");
 const senderTrust = require("./sender-trust");
+const {RETURN_FLOWS, stripeReturnUrls} = require("./stripe-return-ownership");
 
 function hasAdminRole(context) {
   const token = context.auth && context.auth.token || {};
@@ -517,8 +518,9 @@ exports.createWalletTopUp = (stripe) => functions.https.onCall(async (data, cont
     email: context.auth.token.email,
     authUid: context.auth.uid,
   });
-  const baseUrl = `${data.returnUrl || "https://circumuk.com/?app=sender&section=wallet"}`;
-  const separator = baseUrl.includes("?") ? "&" : "?";
+  const returnUrls = stripeReturnUrls(RETURN_FLOWS.WALLET_TOP_UP, {
+    returnOwner: data.returnOwner,
+  });
   const session = await stripe.checkout.sessions.create({
     mode: "payment",
     payment_method_types: ["card"],
@@ -534,8 +536,8 @@ exports.createWalletTopUp = (stripe) => functions.https.onCall(async (data, cont
         },
       },
     }],
-    success_url: `${baseUrl}${separator}wallet_topup=success&session_id={CHECKOUT_SESSION_ID}`,
-    cancel_url: `${baseUrl}${separator}wallet_topup=cancelled`,
+    success_url: returnUrls.successUrl,
+    cancel_url: returnUrls.cancelUrl,
     metadata: {
       type: "wallet_top_up",
       userId: identity.walletId,

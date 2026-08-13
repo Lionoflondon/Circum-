@@ -3,7 +3,7 @@ const test = require("node:test");
 const assert = require("node:assert/strict");
 const fs = require("node:fs");
 const path = require("node:path");
-const {assertFails, assertSucceeds, initializeTestEnvironment} = require("@firebase/rules-unit-testing");
+const {assertFails, initializeTestEnvironment} = require("@firebase/rules-unit-testing");
 const {deleteDoc, doc, setDoc, updateDoc} = require("firebase/firestore");
 
 const rules = fs.readFileSync(path.join(__dirname, "..", "..", "firestore.rules"), "utf8");

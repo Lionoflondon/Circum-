@@ -153,7 +153,7 @@ class StartSenderPaymentSession extends SendPackageEvent {
   final String fallbackMethod;
   final String paymentMethodId;
   final String checkoutMode;
-  final String returnUrl;
+  final String returnOwner;
   final String draftId;
   final String idempotencyKey;
   final Map<String, dynamic> deliveryPayload;
@@ -163,7 +163,7 @@ class StartSenderPaymentSession extends SendPackageEvent {
     required this.fallbackMethod,
     this.paymentMethodId = '',
     this.checkoutMode = '',
-    this.returnUrl = '',
+    this.returnOwner = '',
     this.draftId = '',
     this.idempotencyKey = '',
     this.deliveryPayload = const {},
