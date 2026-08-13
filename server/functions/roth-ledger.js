@@ -176,6 +176,104 @@ async function initialiseSenderWalletRecord(context) {
   return result;
 }
 
+async function initialiseRiderWalletRecord(context, {markOnboarding = false} = {}) {
+  if (!context.auth) {
+    throw new functions.https.HttpsError("unauthenticated", "Sign in to access your Roth Wallet.");
+  }
+  const identity = await resolveWalletIdentity({
+    userId: context.auth.uid,
+    email: context.auth.token.email,
+    authUid: context.auth.uid,
+  });
+  const db = getFirestore();
+  const riderRef = db.collection("riders").doc(context.auth.uid);
+  const walletRef = db.collection("wallets").doc(identity.walletId);
+  const projectionRef = db.collection("riderRothWallets").doc(context.auth.uid);
+  const auditRef = db.collection("riderOnboardingEvents").doc(`roth_wallet_${context.auth.uid}`);
+  let result;
+  await db.runTransaction(async (transaction) => {
+    const [riderSnap, walletSnap, projectionSnap, auditSnap] = await Promise.all([
+      transaction.get(riderRef),
+      transaction.get(walletRef),
+      transaction.get(projectionRef),
+      markOnboarding ? transaction.get(auditRef) : Promise.resolve(null),
+    ]);
+    if (!riderSnap.exists) {
+      throw new functions.https.HttpsError("permission-denied", "Rider wallet access denied.");
+    }
+    const wallet = walletSnap.exists ? walletSnap.data() : {};
+    const projection = projectionSnap.exists ? projectionSnap.data() : {};
+    const balance = roundWalletMoney(walletSnap.exists ?
+      (wallet.balance == null ? wallet.rothCredit || 0 : wallet.balance) : 0);
+    if (balance < 0) {
+      throw new functions.https.HttpsError("failed-precondition", "Roth Wallet balance requires review.");
+    }
+    const frozen = wallet.isFrozen === true || projection.status === "frozen";
+    const now = FieldValue.serverTimestamp();
+    transaction.set(walletRef, {
+      userId: identity.walletId,
+      uid: context.auth.uid,
+      userEmail: identity.userEmail,
+      normalizedEmail: identity.userEmail,
+      authority: "canonical_ledger_balance",
+      balance,
+      rothCredit: balance,
+      currency: wallet.currency || "GBP",
+      isFrozen: frozen,
+      pendingEarnings: roundWalletMoney(wallet.pendingEarnings || 0),
+      availableEarnings: roundWalletMoney(wallet.availableEarnings || 0),
+      createdAt: wallet.createdAt || now,
+      updatedAt: now,
+    }, {merge: true});
+    transaction.set(projectionRef, {
+      riderId: context.auth.uid,
+      balance,
+      available: balance,
+      pending: 0,
+      currency: "ROTH",
+      status: frozen ? "frozen" : "active",
+      authority: "projection",
+      projectionOf: `wallets/${identity.walletId}`,
+      version: Math.max(1, Number(projection.version || 0) + 1),
+      createdAt: projection.createdAt || now,
+      updatedAt: now,
+    }, {merge: true});
+    if (markOnboarding) {
+      const onboardingStatus = projectionSnap.exists ? "connected" : "wallet_created";
+      transaction.set(riderRef, {
+        rothOnboardingComplete: true,
+        rothOnboardingStatus: onboardingStatus,
+        rothWalletId: projectionRef.id,
+        rothWalletConnectedAt: now,
+        updatedAt: now,
+      }, {merge: true});
+      transaction.set(auditRef, {
+        type: projectionSnap.exists ? "roth_wallet_connected" : "roth_wallet_created",
+        riderId: context.auth.uid,
+        actorType: "rider",
+        actorId: context.auth.uid,
+        actorEmail: context.auth.token.email || null,
+        source: "cloud-functions",
+        walletId: projectionRef.id,
+        statusAfterEvent: onboardingStatus,
+        createdAt: auditSnap && auditSnap.exists ? auditSnap.data().createdAt : now,
+        updatedAt: now,
+      }, {merge: true});
+    }
+    result = {
+      ok: true,
+      walletCreated: !projectionSnap.exists,
+      walletExisted: projectionSnap.exists,
+      balance,
+      currency: "ROTH",
+      status: frozen ? "frozen" : "active",
+    };
+  });
+  return result;
+}
+
+exports.initialiseRiderWalletRecord = initialiseRiderWalletRecord;
+
 function walletTargetsFor(value) {
   const target = `${value || ""}`.trim().toLowerCase();
   if (target === "sender") return ["sender"];
@@ -473,10 +571,11 @@ exports.getSenderWallet = functions.runWith({enforceAppCheck: true}).https.onCal
   return initialiseSenderWalletRecord(context);
 });
 
-exports.getSenderWalletTransactions = functions.runWith({enforceAppCheck: true}).https.onCall(async (data, context) => {
-  const identity = await requireSenderIdentity(context);
+async function walletTransactionsPage({identity, uid, data, walletType}) {
   const db = getFirestore();
-  const pageSize = Math.min(50, Math.max(1, Number(data && data.pageSize || 20)));
+  const requestedPageSize = Number(data && data.pageSize || 20);
+  const pageSize = Number.isFinite(requestedPageSize) ?
+    Math.min(50, Math.max(1, Math.floor(requestedPageSize))) : 20;
   const pageToken = `${data && data.pageToken || ""}`.trim();
   const legacyPage = pageToken.startsWith("legacy:");
   const cursorId = legacyPage ? pageToken.slice("legacy:".length) : pageToken;
@@ -494,13 +593,13 @@ exports.getSenderWalletTransactions = functions.runWith({enforceAppCheck: true})
   }
   const walletSnap = legacyPage ? {empty: true, docs: []} : await query.get();
   let legacyQuery = db.collection("walletTransactions")
-      .where("uid", "==", context.auth.uid)
+      .where("uid", "==", uid)
       .orderBy("createdAt", "desc")
       .orderBy("__name__", "desc")
       .limit(pageSize + 1);
   if (legacyPage) {
     const cursor = await db.collection("walletTransactions").doc(cursorId).get();
-    if (!cursor.exists || cursor.data().uid !== context.auth.uid) {
+    if (!cursor.exists || cursor.data().uid !== uid) {
       throw new functions.https.HttpsError("invalid-argument", "Wallet history cursor is invalid.");
     }
     legacyQuery = legacyQuery.startAfter(cursor);
@@ -518,10 +617,35 @@ exports.getSenderWalletTransactions = functions.runWith({enforceAppCheck: true})
   });
   const page = records.slice(0, pageSize);
   return {
-    transactions: page.map(({createdAtMillis, ...record}) => record),
+    transactions: page.map(({createdAtMillis, ...record}) => ({...record, walletType})),
     nextPageToken: records.length > pageSize ? (walletSnap.docs.length > 0 ?
       walletSnap.docs[pageSize - 1].id : `legacy:${legacyUidSnap.docs[pageSize - 1].id}`) : null,
   };
+}
+
+exports.getSenderWalletTransactions = functions.runWith({enforceAppCheck: true}).https.onCall(async (data, context) => {
+  const identity = await requireSenderIdentity(context);
+  return walletTransactionsPage({identity, uid: context.auth.uid, data, walletType: "sender"});
+});
+
+exports.getRiderRothWallet = functions.runWith({enforceAppCheck: true}).https.onCall(async (_data, context) => {
+  return initialiseRiderWalletRecord(context);
+});
+
+exports.getRiderRothTransactions = functions.runWith({enforceAppCheck: true}).https.onCall(async (data, context) => {
+  const wallet = await initialiseRiderWalletRecord(context);
+  const identity = await resolveWalletIdentity({
+    userId: context.auth.uid,
+    email: context.auth.token.email,
+    authUid: context.auth.uid,
+  });
+  const page = await walletTransactionsPage({
+    identity,
+    uid: context.auth.uid,
+    data,
+    walletType: "rider",
+  });
+  return {...page, balance: wallet.balance, currency: wallet.currency, status: wallet.status};
 });
 
 exports.completeSenderWalletOnboarding = functions.runWith({enforceAppCheck: true}).https.onCall(async (_data, context) => {

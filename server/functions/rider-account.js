@@ -5,6 +5,7 @@ const {appendOperationalEvent} = require("./delivery-operational-events");
 const {getStorage} = require("firebase-admin/storage");
 const {canonicalDocumentId, DOCUMENT_MATRIX} = require("./rider-certification-policy");
 const communicationEngine = require("./communication-engine");
+const rothLedger = require("./roth-ledger");
 
 const ALLOWED_DOCUMENT_TYPES = new Set(Object.values(DOCUMENT_MATRIX).flat());
 const ALLOWED_CONTENT_TYPES = new Set([
@@ -372,52 +373,9 @@ exports.ensureRiderRothWallet = functions.runWith({enforceAppCheck: true}).https
   if (requestedRiderId && requestedRiderId !== rider.uid) {
     throw new functions.https.HttpsError("permission-denied", "Rider wallet access denied.");
   }
-  const db = getFirestore();
-  const riderRef = db.collection("riders").doc(rider.uid);
-  const walletRef = db.collection("riderRothWallets").doc(rider.uid);
-  const result = await db.runTransaction(async (transaction) => {
-    const wallet = await transaction.get(walletRef);
-    const now = FieldValue.serverTimestamp();
-    if (wallet.exists) {
-      transaction.set(riderRef, {
-        rothOnboardingComplete: true,
-        rothOnboardingStatus: "connected",
-        rothWalletId: walletRef.id,
-        rothWalletConnectedAt: now,
-        updatedAt: now,
-      }, {merge: true});
-      transaction.set(db.collection("riderOnboardingEvents").doc(), audit("roth_wallet_connected", rider, {
-        walletId: walletRef.id,
-        statusAfterEvent: "connected",
-      }));
-      return {walletCreated: false, walletExisted: true};
-    }
-    transaction.set(walletRef, {
-      riderId: rider.uid,
-      email: rider.email || text(data.email, 180) || null,
-      currency: "ROTH",
-      balance: 0,
-      available: 0,
-      pending: 0,
-      status: "active",
-      createdAt: now,
-      updatedAt: now,
-      source: "ensureRiderRothWallet",
-    });
-    transaction.set(riderRef, {
-      rothOnboardingComplete: true,
-      rothOnboardingStatus: "wallet_created",
-      rothWalletId: walletRef.id,
-      rothWalletConnectedAt: now,
-      updatedAt: now,
-    }, {merge: true});
-    transaction.set(db.collection("riderOnboardingEvents").doc(), audit("roth_wallet_created", rider, {
-      walletId: walletRef.id,
-      statusAfterEvent: "wallet_created",
-    }));
-    return {walletCreated: true, walletExisted: false};
+  return rothLedger.initialiseRiderWalletRecord(context, {
+    markOnboarding: true,
   });
-  return {ok: true, ...result};
 });
 
 exports.createWeightAdjustedNotification = functions.https.onCall(async (data, context) => {

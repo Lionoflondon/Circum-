@@ -246,6 +246,8 @@ exports.applyCheckoutRoth = rothLedger.applyCheckoutRoth;
 exports.initialiseSenderWallet = rothLedger.initialiseSenderWallet;
 exports.getSenderWallet = rothLedger.getSenderWallet;
 exports.getSenderWalletTransactions = rothLedger.getSenderWalletTransactions;
+exports.getRiderRothWallet = rothLedger.getRiderRothWallet;
+exports.getRiderRothTransactions = rothLedger.getRiderRothTransactions;
 exports.completeSenderWalletOnboarding =
   rothLedger.completeSenderWalletOnboarding;
 exports.requestSenderWalletDebit = rothLedger.requestSenderWalletDebit;
