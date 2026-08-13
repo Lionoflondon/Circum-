@@ -11,11 +11,17 @@ const index = fs.readFileSync(path.join(__dirname, "index.js"), "utf8");
 test("Gift finalization verifies authoritative Stripe session state", () => {
   assert.match(source, /session\.payment_status !== "paid"/);
   assert.match(source, /session\.currency !== "gbp"/);
-  assert.match(source, /Number\(session\.amount_total \|\| 0\) !== expectedAmount/);
+  assert.match(source, /Number\(session\.amount_total \|\| 0\) !== expectedStripeAmount/);
   assert.match(source, /session\.id !== gift\.stripeCheckoutSessionId/);
   assert.match(source, /gift\.senderId !== actorUid/);
   assert.match(source, /budgetPenceFromGbp/);
   assert.match(source, /expectedAmount < 5000/);
+});
+
+test("Gift Roth routing never creates Stripe for full coverage", () => {
+  assert.match(source, /if \(!split\.stripeRequired\)[\s\S]*?return finalizeGiftRothOnly/);
+  assert.match(source, /walletPaidInFull: true/);
+  assert.match(source, /unit_amount: split\.stripeAmountMinor/);
 });
 
 test("Gift finalization verifies voice-note storage before attaching to Gift request", () => {

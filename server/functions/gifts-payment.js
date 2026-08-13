@@ -6,6 +6,7 @@ const giftVoiceMedia = require("./gift-voice-media");
 const vanguardProtocol = require("./vanguard-protocol-core");
 const {budgetPenceFromGbp, createGiftBudgetAuthority} = require("./gift-budget-authority");
 const {resolveCanonicalAddress} = require("./canonical-address-authority");
+const {calculateWalletCheckout, normalizeEmail, roundMoney} = require("./wallet-core");
 
 function requireAuth(context) {
   if (!context.auth) {
@@ -38,6 +39,87 @@ function giftVanguardFields() {
     requiresVanguard: true,
     vanguardRequiredReason: "Vanguard is required for Gifts deliveries.",
   };
+}
+
+async function finalizeGiftRothOnly({giftDraftId, gift, verifiedVoiceNote}) {
+  const db = getFirestore();
+  const walletId = normalizeEmail(gift.senderEmail) || gift.senderId;
+  const walletRef = db.collection("wallets").doc(walletId);
+  const walletTransactionRef = db.collection("walletTransactions").doc(`gift_roth_${giftDraftId}`);
+  const draftRef = db.collection("giftPaymentDrafts").doc(giftDraftId);
+  const giftRef = db.collection("giftRequests").doc(giftDraftId);
+  const gross = roundMoney(gift.grossGiftBudget || gift.grossBudget || 0);
+  const expectedAmount = budgetPenceFromGbp(gross);
+  const budgetAuthority = createGiftBudgetAuthority(expectedAmount);
+  return db.runTransaction(async (transaction) => {
+    const [walletSnap, existingTransaction, existingGift] = await Promise.all([
+      transaction.get(walletRef),
+      transaction.get(walletTransactionRef),
+      transaction.get(giftRef),
+    ]);
+    if (existingGift.exists && existingGift.data().paymentStatus === "paid") {
+      return {paymentStatus: "paid", giftStatus: "submitted_for_review", giftRequestId: giftDraftId, walletPaidInFull: true};
+    }
+    if (existingTransaction.exists) {
+      throw new functions.https.HttpsError("failed-precondition", "Gift payment is already being processed.");
+    }
+    const wallet = walletSnap.exists ? walletSnap.data() || {} : {};
+    if (wallet.isFrozen === true) throw new functions.https.HttpsError("failed-precondition", "Roth is unavailable for this payment.");
+    const before = roundMoney(wallet.balance == null ? wallet.rothCredit : wallet.balance);
+    if (before < gross) throw new functions.https.HttpsError("failed-precondition", "Roth balance changed. Please review payment again.");
+    const now = FieldValue.serverTimestamp();
+    transaction.set(walletRef, {
+      balance: roundMoney(before - gross),
+      rothCredit: roundMoney(before - gross),
+      updatedAt: now,
+    }, {merge: true});
+    transaction.set(walletTransactionRef, {
+      id: walletTransactionRef.id,
+      userId: walletId,
+      uid: gift.senderId,
+      walletId,
+      type: "gift_payment",
+      amount: -gross,
+      direction: "debit",
+      balanceType: "rothCredit",
+      balanceBefore: before,
+      balanceAfter: roundMoney(before - gross),
+      referenceId: giftDraftId,
+      relatedEntityId: giftDraftId,
+      idempotencyKey: walletTransactionRef.id,
+      createdBy: "system",
+      status: "completed",
+      paymentProvider: "roth_internal",
+      createdAt: now,
+    }, {merge: false});
+    transaction.set(giftRef, {
+      ...gift,
+      ...(verifiedVoiceNote ? {voiceNote: verifiedVoiceNote} : {}),
+      paymentStatus: "paid",
+      giftStatus: "submitted_for_review",
+      status: "submitted_for_review",
+      ...giftVanguardFields(),
+      paymentMethod: "roth",
+      walletContributionGbp: gross,
+      remainingStripeAmountGbp: 0,
+      rothApplied: gross,
+      cardAmount: 0,
+      paidAt: now,
+      createdAt: gift.createdAt || now,
+      updatedAt: now,
+      giftBudgetAuthority: budgetAuthority,
+    });
+    transaction.set(db.collection("giftPaymentEvents").doc(`roth_${giftDraftId}`), {
+      giftDraftId,
+      paymentStatus: "paid",
+      paymentMethod: "roth",
+      walletContributionGbp: gross,
+      source: "roth_internal",
+      createdAt: now,
+    }, {merge: false});
+    transaction.delete(draftRef);
+    return {paymentStatus: "paid", giftStatus: "submitted_for_review", giftRequestId: giftDraftId, walletPaidInFull: true};
+  });
 }
 
 async function createCampaignPaymentDraft({data, context}) {
@@ -204,6 +286,19 @@ exports.createGiftPayment = (stripe) => functions.runWith({
   if (!Number.isFinite(gross) || gross < 50 || budgetPence < 5000 || gift.paymentStatus === "paid") {
     throw new functions.https.HttpsError("failed-precondition", "Gift payment cannot be started.");
   }
+  const rothRequested = data.applyRoth === true;
+  const walletSnap = rothRequested ? await getFirestore().collection("wallets").doc(normalizeEmail(gift.senderEmail) || context.auth.uid).get() : null;
+  const wallet = walletSnap && walletSnap.exists ? walletSnap.data() || {} : {};
+  const walletBalance = wallet.isFrozen === true ? 0 : roundMoney(wallet.balance == null ? wallet.rothCredit : wallet.balance);
+  const split = calculateWalletCheckout({orderTotalGbp: gross, walletBalanceGbp: walletBalance, selectedCurrency: "gbp"});
+  if (!split.stripeRequired) {
+    const verifiedVoiceNote = await giftVoiceMedia.verifyGiftVoiceStorageObject({
+      bucket: getStorage().bucket(),
+      voiceNote: gift.voiceNote,
+      senderId: gift.senderId,
+    });
+    return finalizeGiftRothOnly({giftDraftId, gift, verifiedVoiceNote});
+  }
   const config = functions.config().gifts || {};
   const baseUrl = "https://circumuk.com/?app=gifts";
   const successUrl = config.success_url || `${baseUrl}&gift_payment=success&giftDraftId=${giftDraftId}&session_id={CHECKOUT_SESSION_ID}`;
@@ -217,7 +312,7 @@ exports.createGiftPayment = (stripe) => functions.runWith({
         quantity: 1,
         price_data: {
           currency: "gbp",
-          unit_amount: budgetPence,
+          unit_amount: split.stripeAmountMinor,
           product_data: {
             name: "Gifts by Circum experience",
             description: `${gift.occasion || "Curated"} gift experience for ${gift.recipientName || "recipient"}`,
@@ -226,7 +321,13 @@ exports.createGiftPayment = (stripe) => functions.runWith({
       }],
       success_url: successUrl,
       cancel_url: cancelUrl,
-      metadata: {giftDraftId, senderId: context.auth.uid, type: "gift_experience"},
+    metadata: {
+      giftDraftId,
+      senderId: context.auth.uid,
+      type: "gift_experience",
+      walletContributionGbp: `${split.walletContributionGbp}`,
+      remainingStripeAmountGbp: `${split.remainingGbp}`,
+    },
     });
   } catch (error) {
     console.error("createGiftPayment Stripe Checkout error", error);
@@ -234,6 +335,11 @@ exports.createGiftPayment = (stripe) => functions.runWith({
   }
   await ref.update({
     paymentStatus: "payment_pending",
+    paymentMethod: split.walletContributionGbp > 0 ? "roth_card" : "card",
+    walletContributionGbp: split.walletContributionGbp,
+    remainingStripeAmountGbp: split.remainingGbp,
+    rothApplied: split.walletContributionGbp,
+    cardAmount: split.remainingGbp,
     stripeCheckoutSessionId: session.id,
     updatedAt: FieldValue.serverTimestamp(),
   });
@@ -305,8 +411,43 @@ async function finalizeGiftPaymentSession({
     if (!Number.isFinite(gross) || expectedAmount < 5000) {
       throw new functions.https.HttpsError("failed-precondition", "Gift budget is invalid.");
     }
-    if (session.currency !== "gbp" || Number(session.amount_total || 0) !== expectedAmount) {
+    const rothApplied = roundMoney(gift.rothApplied || gift.walletContributionGbp || 0);
+    const expectedStripeAmount = budgetPenceFromGbp(roundMoney(gift.remainingStripeAmountGbp || gross));
+    if (session.currency !== "gbp" || Number(session.amount_total || 0) !== expectedStripeAmount) {
       throw new functions.https.HttpsError("failed-precondition", "Gift payment amount does not match the order.");
+    }
+    const walletRef = rothApplied > 0 ? db.collection("wallets").doc(normalizeEmail(gift.senderEmail) || gift.senderId) : null;
+    const walletTransactionRef = rothApplied > 0 ? db.collection("walletTransactions").doc(`gift_roth_${giftDraftId}`) : null;
+    const walletSnap = walletRef ? await transaction.get(walletRef) : null;
+    const walletTransactionSnap = walletTransactionRef ? await transaction.get(walletTransactionRef) : null;
+    if (rothApplied > 0 && !walletTransactionSnap.exists) {
+      const wallet = walletSnap && walletSnap.exists ? walletSnap.data() || {} : {};
+      const before = roundMoney(wallet.balance == null ? wallet.rothCredit : wallet.balance);
+      if (wallet.isFrozen === true || before < rothApplied) {
+        throw new functions.https.HttpsError("failed-precondition", "Roth balance changed. Please review payment again.");
+      }
+      const after = roundMoney(before - rothApplied);
+      const now = FieldValue.serverTimestamp();
+      transaction.set(walletRef, {balance: after, rothCredit: after, updatedAt: now}, {merge: true});
+      transaction.set(walletTransactionRef, {
+        id: walletTransactionRef.id,
+        userId: normalizeEmail(gift.senderEmail) || gift.senderId,
+        uid: gift.senderId,
+        walletId: normalizeEmail(gift.senderEmail) || gift.senderId,
+        type: "gift_payment",
+        amount: -rothApplied,
+        direction: "debit",
+        balanceType: "rothCredit",
+        balanceBefore: before,
+        balanceAfter: after,
+        referenceId: giftDraftId,
+        relatedEntityId: giftDraftId,
+        idempotencyKey: walletTransactionRef.id,
+        createdBy: "system",
+        status: "completed",
+        paymentProvider: "roth_internal",
+        createdAt: now,
+      }, {merge: false});
     }
     const budgetAuthority = createGiftBudgetAuthority(expectedAmount);
     transaction.set(giftRef, {
@@ -319,6 +460,11 @@ async function finalizeGiftPaymentSession({
       stripeCheckoutSessionId: session.id,
       stripePaymentIntentId: session.payment_intent,
       stripePaymentEventId: eventId,
+      paymentMethod: rothApplied > 0 ? "roth_card" : "card",
+      walletContributionGbp: rothApplied,
+      remainingStripeAmountGbp: roundMoney(gift.remainingStripeAmountGbp || gross),
+      rothApplied,
+      cardAmount: roundMoney(gift.remainingStripeAmountGbp || gross),
       paidAt: FieldValue.serverTimestamp(),
       createdAt: gift.createdAt || FieldValue.serverTimestamp(),
       updatedAt: FieldValue.serverTimestamp(),

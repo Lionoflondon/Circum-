@@ -270,11 +270,11 @@ class _GiftPaymentViewState extends State<GiftPaymentView> {
       ));
       payload.addAll({
         'applyRoth': _applyRoth && _rothBalance > 0,
-        'paymentMethod': 'card',
-        'rothApplied': 0,
-        'cardAmount': widget.draft.budget,
-        'walletContributionGbp': 0,
-        'remainingStripeAmountGbp': widget.draft.budget,
+        'paymentMethod': _verifiedPaymentMethod,
+        'rothApplied': _rothApplied,
+        'cardAmount': _remainingCardAmount,
+        'walletContributionGbp': _rothApplied,
+        'remainingStripeAmountGbp': _remainingCardAmount,
         'grossGiftBudget': widget.draft.budget,
         'paymentStatus': 'payment_pending',
       });
