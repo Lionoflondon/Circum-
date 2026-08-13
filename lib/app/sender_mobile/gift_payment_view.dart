@@ -295,7 +295,6 @@ class _GiftPaymentViewState extends State<GiftPaymentView> {
         'giftDraftId': draftRef.id,
         'source': 'sender_mobile',
         'applyRoth': _applyRoth && _rothBalance > 0,
-        'returnOrigin': Uri.base.origin,
       });
       final paymentData = Map<String, dynamic>.from(payment.data as Map);
       if (paymentData['walletPaidInFull'] == true) {

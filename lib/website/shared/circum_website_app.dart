@@ -11400,7 +11400,7 @@ class _CustomerPortalState extends State<_CustomerPortal> {
         'checkoutMode': 'web_checkout',
         'requestId': id,
         'idempotencyKey': id,
-        'returnUrl': 'https://circum-2797c.web.app/send',
+        'returnUrl': 'https://circumuk.com/send',
         'deliveryPayload': deliveryPayload,
       });
       final session = Map<String, dynamic>.from(sessionResult.data as Map);
@@ -11771,10 +11771,8 @@ class _CustomerPortalState extends State<_CustomerPortal> {
           'prescriptionType': _healthPrescriptionType,
           'useRoth': _healthUseRoth,
           'priceBreakdown': quote.toJson(),
-          'successUrl':
-              'https://circum-2797c.web.app/send/health?health=success',
-          'cancelUrl':
-              'https://circum-2797c.web.app/send/health?health=cancelled',
+          'successUrl': 'https://circumuk.com/send/health?health=success',
+          'cancelUrl': 'https://circumuk.com/send/health?health=cancelled',
         }),
       );
       if (response.statusCode < 200 || response.statusCode >= 300) {

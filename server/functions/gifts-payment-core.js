@@ -10,8 +10,8 @@ function selectedGiftBudgetGbp(gift) {
 }
 
 function giftReturnUrls({giftDraftId, source, origin, config = {}}) {
-  if (source === "sender_mobile") {
-    const base = `${origin || "https://circum-app-2797c.web.app"}`.replace(/\/+$/, "");
+  if (["sender_mobile", "sender_mobile_campaign"].includes(source)) {
+    const base = "https://circum-app-2797c.web.app";
     return {
       successUrl: `${base}/#/sender-mobile/gifts/confirmation?giftDraftId=${giftDraftId}&payment=success&session_id={CHECKOUT_SESSION_ID}`,
       cancelUrl: `${base}/#/sender-mobile/gifts/payment?giftDraftId=${giftDraftId}&payment=cancelled`,

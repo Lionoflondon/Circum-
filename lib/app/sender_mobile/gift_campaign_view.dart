@@ -1046,7 +1046,6 @@ class _GiftCampaignViewState extends State<GiftCampaignView> {
         'applyRoth': _wantsRoth,
         'paymentMethod': _verifiedPaymentMethod,
         'grossGiftBudget': _budget,
-        'returnOrigin': Uri.base.origin,
       });
       final data = Map<String, dynamic>.from(payment.data as Map);
       _participantId = '${data['campaignParticipantId'] ?? ''}'.trim().isEmpty

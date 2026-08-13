@@ -5089,7 +5089,7 @@ class _PaymentPanelState extends State<_PaymentPanel> {
   }
 
   String _senderAppCheckoutReturnUrl() {
-    final base = Uri.base.removeFragment();
+    final base = Uri.parse('https://circum-app-2797c.web.app');
     return base.replace(
       path: '/send',
       queryParameters: {

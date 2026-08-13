@@ -348,6 +348,8 @@ class FirebaseBusinessRepository implements BusinessRepository {
       'paymentAmount': invoice.balanceDue,
       'useRoth': useRoth,
       'paymentMethod': paymentMethod,
+      'returnUrl':
+          'https://circum-app-2797c.web.app/?app=business&section=invoicing',
     });
     final data = Map<String, dynamic>.from(result.data as Map);
     final uri = Uri.tryParse('${data['url'] ?? data['checkoutUrl'] ?? ''}');

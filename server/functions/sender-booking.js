@@ -1237,7 +1237,7 @@ exports.createSenderPaymentSession = (stripe) => functions.https.onCall(async (d
       Number(existingSessionSnap.data().checkoutAttempt || 0) + 1 :
       1;
     const idempotencyKey = stableId(`${sender.uid}:${draftId || "web"}:${quoteId}:${sessionRef.id}:${requestedSessionKey}:${checkoutAttempt}`);
-    const baseUrl = text(data.returnUrl) || "https://circum-2797c.web.app/send";
+    const baseUrl = text(data.returnUrl) || "https://circumuk.com/send";
     const separator = baseUrl.includes("?") ? "&" : "?";
     let checkoutSession;
     try {

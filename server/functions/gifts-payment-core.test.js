@@ -56,7 +56,7 @@ test("gift checkout persists canonical payment method labels", () => {
   }), "roth");
 });
 
-test("sender mobile gifts checkout returns to sender mobile hash routes", () => {
+test("sender app gifts checkout returns to the Sender app host", () => {
   const urls = giftReturnUrls({
     giftDraftId: "draft_123",
     source: "sender_mobile",
@@ -70,6 +70,18 @@ test("sender mobile gifts checkout returns to sender mobile hash routes", () => 
     urls.cancelUrl,
     "https://circum-app-2797c.web.app/#/sender-mobile/gifts/payment?giftDraftId=draft_123&payment=cancelled",
   );
+});
+
+test("sender app campaign checkout returns to the Sender app host", () => {
+  const urls = giftReturnUrls({
+    giftDraftId: "draft_campaign",
+    source: "sender_mobile_campaign",
+    origin: "https://circumuk.com",
+  });
+  assert.match(urls.successUrl, /^https:\/\/circum-app-2797c\.web\.app\//);
+  assert.match(urls.cancelUrl, /^https:\/\/circum-app-2797c\.web\.app\//);
+  assert.doesNotMatch(urls.successUrl, /circumuk\.com/);
+  assert.doesNotMatch(urls.cancelUrl, /circumuk\.com/);
 });
 
 test("web gifts checkout keeps web gifts return routing", () => {
