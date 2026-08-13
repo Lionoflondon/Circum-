@@ -6,6 +6,8 @@ class AddressEngine {
     'formattedAddress',
     'addressLine1',
     'addressLine2',
+    'buildingNumber',
+    'street',
     'buildingName',
     'apartment',
     'floor',
@@ -23,11 +25,7 @@ class AddressEngine {
     'updatedAt',
   ];
 
-  static const compatibilityFields = [
-    'countyState',
-    'lat',
-    'lng',
-  ];
+  static const compatibilityFields = ['countyState', 'lat', 'lng'];
 
   static const allSerializableFields = [
     ...canonicalFields,
@@ -85,13 +83,8 @@ class AddressEngine {
       raw['streetNumber'],
       raw['buildingNumber'],
       raw['premise'],
-      raw['subBuildingName'],
     ]);
-    final route = firstPart([
-      raw['route'],
-      raw['street'],
-      raw['thoroughfare'],
-    ]);
+    final route = firstPart([raw['route'], raw['street'], raw['thoroughfare']]);
     final line1FromParts = joinParts([streetNumber, route], separator: ' ');
     final manualParts = (manualAddress ?? suggestion?.description ?? '')
         .split(',')
@@ -116,10 +109,7 @@ class AddressEngine {
       raw['suite'],
       raw['subpremise'],
     ]);
-    final floor = firstPart([
-      raw['floor'],
-      raw['level'],
-    ]);
+    final floor = firstPart([raw['floor'], raw['level']]);
     final entranceInstructions = firstPart([
       raw['entranceInstructions'],
       raw['deliveryInstructions'],
@@ -146,8 +136,8 @@ class AddressEngine {
       manualParts.length >= 3
           ? manualParts[manualParts.length - 3]
           : manualParts.length >= 2
-              ? manualParts[manualParts.length - 2]
-              : null,
+          ? manualParts[manualParts.length - 2]
+          : null,
     ]);
     final county = firstPart([
       raw['county'],
@@ -174,20 +164,20 @@ class AddressEngine {
       postcode,
       country,
     ]);
-    final lat =
-        toDouble(latitude ?? raw['latitude'] ?? raw['lat'] ?? suggestion?.lat);
+    final lat = toDouble(
+      latitude ?? raw['latitude'] ?? raw['lat'] ?? suggestion?.lat,
+    );
     final lng = toDouble(
-        longitude ?? raw['longitude'] ?? raw['lng'] ?? suggestion?.lng);
+      longitude ?? raw['longitude'] ?? raw['lng'] ?? suggestion?.lng,
+    );
 
     return {
-      'addressId': firstPart([
-        addressId,
-        raw['addressId'],
-        raw['id'],
-      ]),
+      'addressId': firstPart([addressId, raw['addressId'], raw['id']]),
       'formattedAddress': formattedAddress,
       'addressLine1': addressLine1,
       'addressLine2': addressLine2,
+      'buildingNumber': streetNumber,
+      'street': route,
       'buildingName': buildingName,
       'apartment': apartment,
       'floor': floor,

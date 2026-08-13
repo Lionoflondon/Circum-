@@ -1,5 +1,7 @@
+import 'package:circum/app/platform/address_engine.dart';
 import 'package:circum/app/sender_mobile/sender_booking_canvas.dart';
 import 'package:circum/app/sender_mobile/sender_booking_state.dart';
+import 'package:circum/app/send_package/models/suggestions.m.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 
@@ -33,6 +35,34 @@ void main() {
       expect(dropoff.canContinue, isTrue);
     });
 
+    test('resolved numbered premise keeps house and flat detail', () {
+      final resolved = AddressEngine.cleanSuggestion(
+        Suggestion(
+          placeId: 'premise_29',
+          description: 'Flat 4, 29 St Fillans Road, London, SE6 1DQ, UK',
+          mainText: 'Flat 4, 29 St Fillans Road',
+          subText: 'London SE6 1DQ',
+          lat: 51.4401,
+          lng: -0.0258,
+          components: const {
+            'addressLine1': '29 St Fillans Road',
+            'buildingNumber': '29',
+            'street': 'St Fillans Road',
+            'apartment': 'Flat 4',
+            'city': 'London',
+            'postcode': 'SE6 1DQ',
+            'country': 'United Kingdom',
+          },
+        ),
+      );
+
+      expect(resolved.description, contains('29 St Fillans Road'));
+      expect(resolved.components['addressLine1'], '29 St Fillans Road');
+      expect(resolved.components['buildingNumber'], '29');
+      expect(resolved.components['street'], 'St Fillans Road');
+      expect(resolved.components['apartment'], 'Flat 4');
+    });
+
     test('zero, NaN, infinite, and outside-UK coordinates are blocked', () {
       expect(isSenderValidUkCoordinate(0, 0), isFalse);
       expect(isSenderValidUkCoordinate(double.nan, -0.1), isFalse);
@@ -51,7 +81,10 @@ void main() {
         LatLng(51.3737, -0.1004),
       ];
 
-      expect(senderBookingPolylineMatchesRoute(points, pickup, dropoff), isTrue);
+      expect(
+        senderBookingPolylineMatchesRoute(points, pickup, dropoff),
+        isTrue,
+      );
     });
 
     test('rejects stale north London polyline for Croydon booking', () {
