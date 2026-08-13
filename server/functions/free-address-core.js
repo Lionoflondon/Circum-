@@ -73,6 +73,14 @@ function samePremise(expected, actual) {
   return normalize(expected) && normalize(expected) === normalize(actual);
 }
 
+function addressPrecision({unit = "", buildingNumber = "", street = "", postcode = ""} = {}) {
+  if (text(unit) && text(buildingNumber)) return "unit";
+  if (text(buildingNumber)) return "premise";
+  if (text(street) && text(postcode)) return "street";
+  if (text(postcode)) return "postcode";
+  return "locality";
+}
+
 function mapAddress(result) {
   const address = result.address || {};
   const road = text(address.road || address.pedestrian || address.footway || address.path);
@@ -97,6 +105,11 @@ function mapAddress(result) {
       addressLine1: [houseNumber, road].map(text).filter(Boolean).join(" "),
       buildingNumber: houseNumber,
       street: road,
+      resolutionPrecision: addressPrecision({
+        buildingNumber: houseNumber,
+        street: road,
+        postcode,
+      }),
       city,
       county,
       postcode,
@@ -108,6 +121,8 @@ function mapAddress(result) {
 function mapGooglePrediction(prediction, sourceInput = "") {
   const structured = prediction.structured_formatting || {};
   const hint = premiseHint(text(prediction.description) || sourceInput);
+  const mainText = text(structured.main_text);
+  const mainHint = premiseHint(mainText);
   return {
     displayAddress: text(prediction.description),
     lat: null,
@@ -118,8 +133,13 @@ function mapGooglePrediction(prediction, sourceInput = "") {
     placeId: text(prediction.place_id),
     sourceInput: sanitizeQuery(sourceInput),
     components: cleanComponents({
-      addressLine1: text(structured.main_text),
+      addressLine1: mainText,
+      buildingNumber: mainHint.houseNumber,
       apartment: hint.unit,
+      resolutionPrecision: addressPrecision({
+        unit: hint.unit,
+        buildingNumber: mainHint.houseNumber,
+      }),
       country: "United Kingdom",
     }),
   };
@@ -163,6 +183,12 @@ function mapGooglePlaceDetails(result) {
       street: route,
       buildingNumber: streetNumber,
       apartment: hint.unit,
+      resolutionPrecision: addressPrecision({
+        unit: hint.unit,
+        buildingNumber: streetNumber,
+        street: route,
+        postcode,
+      }),
       city,
       county,
       postcode,
@@ -207,6 +233,12 @@ function mapGoogleGeocodeResult(result, sourceInput = "") {
       street: route,
       buildingNumber: streetNumber,
       apartment: hint.unit,
+      resolutionPrecision: addressPrecision({
+        unit: hint.unit,
+        buildingNumber: streetNumber,
+        street: route,
+        postcode,
+      }),
       city,
       county,
       postcode,
@@ -368,6 +400,7 @@ module.exports = {
   googlePlaceDetailsUrl,
   googleGeocodeAddressUrl,
   nominatimSearchUrl,
+  addressPrecision,
   premiseHint,
   resolveUkAddressPlace,
   sanitizeQuery,

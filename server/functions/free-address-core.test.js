@@ -3,6 +3,7 @@ const test = require("node:test");
 const assert = require("node:assert/strict");
 const fs = require("node:fs");
 const {
+  addressPrecision,
   googleGeocodeAddressUrl,
   googlePlaceDetailsUrl,
   googlePlacesAutocompleteUrl,
@@ -20,6 +21,14 @@ test("address callables use backend Places secret and static egress", () => {
   assert.match(source, /defineSecret\("GOOGLE_PLACES_API_KEY"\)/);
   assert.match(source, /searchFreeUkAddresses = functions\.runWith\(\{[\s\S]*?secrets: \[googlePlacesApiKeySecret\][\s\S]*?vpcConnector: "circum-fn-conn-v2"[\s\S]*?vpcConnectorEgressSettings: "ALL_TRAFFIC"[\s\S]*?\}\)\.https\.onCall/);
   assert.match(source, /resolveUkAddressPlace = functions\.runWith\(\{[\s\S]*?secrets: \[googlePlacesApiKeySecret\][\s\S]*?vpcConnector: "circum-fn-conn-v2"[\s\S]*?vpcConnectorEgressSettings: "ALL_TRAFFIC"[\s\S]*?\}\)\.https\.onCall/);
+});
+
+test("classifies canonical address precision explicitly", () => {
+  assert.equal(addressPrecision({unit: "Flat 4", buildingNumber: "29"}), "unit");
+  assert.equal(addressPrecision({buildingNumber: "29"}), "premise");
+  assert.equal(addressPrecision({street: "St Fillans Road", postcode: "SE6 1DQ"}), "street");
+  assert.equal(addressPrecision({postcode: "SE6 1DQ"}), "postcode");
+  assert.equal(addressPrecision({}), "locality");
 });
 
 test("sanitizes address queries", () => {
@@ -158,6 +167,7 @@ test("numbered Google searches prefer authoritative premise geocode results", as
   assert.equal(result.results[0].displayAddress, "29 St Fillans Road, London, Greater London, SE6 1DQ, United Kingdom");
   assert.equal(result.results[0].components.buildingNumber, "29");
   assert.equal(result.results[0].components.addressLine1, "29 St Fillans Road");
+  assert.equal(result.results[0].components.resolutionPrecision, "premise");
   assert.equal(result.results[1].placeId, "street-level");
   assert.equal(seenUrls.some((url) => url.includes("/geocode/json")), true);
 });
@@ -193,6 +203,7 @@ test("flat details are preserved only after the building premise is verified", a
   assert.equal(result.results[0].displayAddress, "Flat 4, 29 St Fillans Road, London, SE6 1DQ, United Kingdom");
   assert.equal(result.results[0].components.apartment, "Flat 4");
   assert.equal(result.results[0].components.buildingNumber, "29");
+  assert.equal(result.results[0].components.resolutionPrecision, "unit");
 });
 
 test("invalid numbered queries do not fabricate a premise", async () => {
@@ -263,6 +274,7 @@ test("resolves a selected Google place into coordinates and address components",
   assert.equal(result.lng, -0.0258);
   assert.equal(result.components.addressLine1, "29 St Fillans Road");
   assert.equal(result.components.postcode, "SE6 1DQ");
+  assert.equal(result.components.resolutionPrecision, "premise");
 });
 
 test("resolves Google flat display into structured apartment metadata", async () => {
@@ -300,6 +312,7 @@ test("resolves Google flat display into structured apartment metadata", async ()
   assert.equal(result.components.apartment, "Flat 4");
   assert.equal(result.components.buildingNumber, "29");
   assert.equal(result.components.addressLine1, "29 Saint Fillans Road");
+  assert.equal(result.components.resolutionPrecision, "unit");
 });
 
 test("maps free address search results into Circum address suggestions", async () => {
@@ -336,6 +349,7 @@ test("maps free address search results into Circum address suggestions", async (
   assert.equal(result.results.length, 1);
   assert.equal(result.results[0].provider, "openstreetmap_nominatim");
   assert.equal(result.results[0].components.postcode, "W1G 9QU");
+  assert.equal(result.results[0].components.resolutionPrecision, "street");
   assert.equal(result.results[0].lat, 51.5181037);
 });
 
