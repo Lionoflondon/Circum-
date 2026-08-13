@@ -2,6 +2,7 @@
 const functions = require("firebase-functions/v1");
 const {getFirestore, FieldValue} = require("firebase-admin/firestore");
 const core = require("./stale-delivery-core");
+const {requireAppCheck} = require("./callable-guard");
 
 function text(value) {
   return `${value || ""}`.trim();
@@ -78,6 +79,7 @@ async function referencedPresenceDocs(db) {
 }
 
 exports.resolveStaleDeliveryLock = functions.https.onCall(async (data, context) => {
+  requireAppCheck(context);
   const actorUid = requireAdmin(context);
   const deliveryId = text(data && data.deliveryId);
   const reason = text(data && data.reason);

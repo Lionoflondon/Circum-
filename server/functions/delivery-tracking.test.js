@@ -251,3 +251,23 @@ test("trust award patch writes backend-owned rank unless manually overridden", (
   assert.equal(Object.prototype.hasOwnProperty.call(overridePatch, "riderRank"), false);
   assert.equal(Object.prototype.hasOwnProperty.call(overridePatch, "rank"), false);
 });
+
+test("tracking transitions produce deterministic Activity/Admin event records", () => {
+  assert.equal(
+      deliveryTracking.trackingEventId("delivery-1", "arrived_at_pickup"),
+      "delivery-1_arrived_at_pickup",
+  );
+  const event = deliveryTracking.trackingEventRecord({
+    deliveryId: "delivery-1",
+    requestId: "request-1",
+    riderId: "rider-1",
+    action: "arrived_at_pickup",
+    previousStatus: "navigating_to_pickup",
+    nextStatus: "arrived_at_pickup",
+  });
+  assert.equal(event.deliveryId, "delivery-1");
+  assert.equal(event.requestId, "request-1");
+  assert.equal(event.actorId, "rider-1");
+  assert.equal(event.eventType, "delivery_arrived_at_pickup");
+  assert.equal(event.source, "updateDeliveryTrackingStatus");
+});

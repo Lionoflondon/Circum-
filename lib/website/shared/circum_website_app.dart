@@ -4676,7 +4676,7 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
     if (reason == null) return;
     setState(() => _jobMessage = 'Recalculating this booking...');
     try {
-      await FirebaseFunctions.instance
+      await FirebaseFunctions.instanceFor(region: 'us-central1')
           .httpsCallable('reportLoadDiscrepancy')
           .call(reason);
       if (!mounted) return;

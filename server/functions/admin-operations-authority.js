@@ -1,6 +1,7 @@
 /* eslint-disable max-len, require-jsdoc */
 const functions = require("firebase-functions/v1");
 const {getFirestore, FieldValue, Timestamp} = require("firebase-admin/firestore");
+const {requireAppCheck} = require("./callable-guard");
 
 const ADMIN_ROLES = new Set([
   "admin",
@@ -533,6 +534,7 @@ exports.adminResolveAccess = functions.https.onCall(async (data, context) => {
 });
 
 exports.adminRecordAuditEntry = functions.https.onCall(async (data, context) => {
+  requireAppCheck(context);
   const actor = await resolveActor(context);
   const db = getFirestore();
   const auditId = await writeAudit(db, actor, data || {}, data.oldValue || {}, data.newValue || {});
@@ -572,6 +574,7 @@ exports.adminSaveAdminUser = functions.https.onCall(async (data, context) => {
 });
 
 exports.adminDuplicateDelivery = functions.https.onCall(async (data, context) => {
+  requireAppCheck(context);
   const actor = await resolveActor(context);
   requireOperations(actor);
   const id = clean(data.deliveryId);
@@ -589,6 +592,7 @@ exports.adminDuplicateDelivery = functions.https.onCall(async (data, context) =>
 });
 
 exports.adminUpdateDeliveryOperation = functions.https.onCall(async (data, context) => {
+  requireAppCheck(context);
   const actor = await resolveActor(context);
   requireOperations(actor);
   const id = clean(data.deliveryId);
@@ -611,6 +615,7 @@ exports.adminUpdateDeliveryOperation = functions.https.onCall(async (data, conte
 });
 
 exports.adminArchiveDelivery = functions.https.onCall(async (data, context) => {
+  requireAppCheck(context);
   const actor = await resolveActor(context);
   requireOperations(actor);
   const id = clean(data.deliveryId);

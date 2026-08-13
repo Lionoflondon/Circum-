@@ -73,3 +73,14 @@ test("Roth wallet mutation callables require App Check", () => {
     "redeemGiftCard",
   ].forEach((name) => assertCallableRequiresAppCheck("roth-ledger.js", name));
 });
+
+test("Admin delivery intervention callables require App Check", () => {
+  assertCallableRequiresAppCheck("admin-governance.js", "adminGovernanceAction");
+  [
+    "adminRecordAuditEntry",
+    "adminDuplicateDelivery",
+    "adminUpdateDeliveryOperation",
+    "adminArchiveDelivery",
+  ].forEach((name) => assertCallableRequiresAppCheck("admin-operations-authority.js", name));
+  assertCallableRequiresAppCheck("stale-delivery.js", "resolveStaleDeliveryLock");
+});

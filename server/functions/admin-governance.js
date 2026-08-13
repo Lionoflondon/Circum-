@@ -2,6 +2,7 @@
 const functions = require("firebase-functions/v1");
 const {getFirestore, FieldValue} = require("firebase-admin/firestore");
 const {requireAdmin} = require("./admin-auth");
+const {requireAppCheck} = require("./callable-guard");
 
 const ACTIONS = new Set([
   "reset_address_rate_limit",
@@ -661,6 +662,7 @@ function requestMeta(context, data = {}) {
 }
 
 exports.adminGovernanceAction = functions.https.onCall(async (data, context) => {
+  requireAppCheck(context);
   const actor = assertSuperAdmin(context);
   const action = lower(data && data.action);
   const reason = requireReason(data);

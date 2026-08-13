@@ -328,6 +328,27 @@ function patchForTransition({action, nextStatus, riderId}) {
   return patch;
 }
 
+function trackingEventId(deliveryId, nextStatus) {
+  return `${deliveryId}_${normalized(nextStatus)}`;
+}
+
+function trackingEventRecord({deliveryId, requestId, riderId, action, previousStatus, nextStatus}) {
+  return {
+    deliveryId,
+    requestId,
+    riderId,
+    action,
+    previousStatus,
+    status: nextStatus,
+    nextStatus,
+    eventType: `delivery_${normalized(nextStatus)}`,
+    source: "updateDeliveryTrackingStatus",
+    actorType: "rider",
+    actorId: riderId,
+    createdAt: FieldValue.serverTimestamp(),
+  };
+}
+
 exports.updateDeliveryTrackingStatus = functions.https.onCall(async (data, context) => {
   requireAppCheck(context);
   if (!context.auth) {
@@ -448,7 +469,24 @@ exports.updateDeliveryTrackingStatus = functions.https.onCall(async (data, conte
     const riderProfileRef = settlementValues(delivery).trustPoints > 0 ?
       db.collection("riderProfiles").doc(riderId) : null;
     const riderProfileSnapshot = riderProfileRef ? await transaction.get(riderProfileRef) : null;
+    const delivered = nextStatus === "delivered";
+    const riderPresenceRef = delivered ? db.collection("riderPresence").doc(riderId) : null;
+    const riderPresenceSnapshot = riderPresenceRef ? await transaction.get(riderPresenceRef) : null;
+    const eventId = trackingEventId(found.id, nextStatus);
+    const eventRecord = trackingEventRecord({
+      deliveryId: found.id,
+      requestId: delivery.requestId || found.id,
+      riderId,
+      action,
+      previousStatus: currentStatus,
+      nextStatus,
+    });
     transaction.set(found.ref, patch, {merge: true});
+    transaction.set(db.collection("deliveryTrackingEvents").doc(eventId), eventRecord, {merge: true});
+    transaction.set(db.collection("deliveryTimeline").doc(eventId), {
+      ...eventRecord,
+      type: eventRecord.eventType,
+    }, {merge: true});
     if (nextStatus === "delivered") {
       const settlement = settlementValues(delivery);
       if (earningRef && existingEarning && !existingEarning.exists) {
@@ -488,6 +526,30 @@ exports.updateDeliveryTrackingStatus = functions.https.onCall(async (data, conte
           updatedAt: FieldValue.serverTimestamp(),
         }, {merge: true});
       }
+    }
+    if (delivered) {
+      transaction.set(db.collection("activeDeliveries").doc(found.id), {
+        deliveryId: found.id,
+        requestId: delivery.requestId || found.id,
+        riderId,
+        status: "delivered",
+        trackingStatus: "stopped",
+        freshness: "stopped",
+        stoppedAt: FieldValue.serverTimestamp(),
+        stoppedReason: "delivery_completed",
+        updatedAt: FieldValue.serverTimestamp(),
+      }, {merge: true});
+      const presence = riderPresenceSnapshot && riderPresenceSnapshot.exists ?
+        riderPresenceSnapshot.data() || {} : {};
+      transaction.set(riderPresenceRef, {
+        activeDeliveryId: FieldValue.delete(),
+        currentDeliveryId: FieldValue.delete(),
+        busy: false,
+        availabilityStatus: presence.isOnline === true ? "available" : "offline",
+        dispatchEligible: presence.isOnline === true && presence.dispatchBlocked !== true,
+        source: "deliveryCompletion",
+        updatedAt: FieldValue.serverTimestamp(),
+      }, {merge: true});
     }
     if (activeRef && shouldWriteLocation) {
       transaction.set(
@@ -648,4 +710,6 @@ exports._private = {
   canonicalRiderRankForTrust,
   hasManualRankOverride,
   riderTrustRankPatch,
+  trackingEventId,
+  trackingEventRecord,
 };
