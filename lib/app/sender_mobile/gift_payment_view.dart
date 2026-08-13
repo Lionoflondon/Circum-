@@ -260,9 +260,6 @@ class _GiftPaymentViewState extends State<GiftPaymentView> {
       _message = null;
     });
     try {
-      final draftRef = FirebaseFirestore.instance
-          .collection(senderGiftPaymentDraftCollectionName)
-          .doc();
       final payload = Map<String, Object?>.from(widget.draft.adminReviewPayload(
         senderId: user.uid,
         senderEmail: user.email ?? '',
@@ -276,7 +273,6 @@ class _GiftPaymentViewState extends State<GiftPaymentView> {
         'walletContributionGbp': _rothApplied,
         'remainingStripeAmountGbp': _remainingCardAmount,
         'grossGiftBudget': widget.draft.budget,
-        'paymentStatus': 'payment_pending',
       });
       final parsedDeliveryDate = DateTime.tryParse(
         widget.draft.deliveryDate ?? '',
@@ -284,15 +280,10 @@ class _GiftPaymentViewState extends State<GiftPaymentView> {
       if (parsedDeliveryDate != null) {
         payload['deliveryDate'] = Timestamp.fromDate(parsedDeliveryDate);
       }
-      await draftRef.set({
-        ...payload,
-        'createdAt': FieldValue.serverTimestamp(),
-        'updatedAt': FieldValue.serverTimestamp(),
-      });
       final payment = await FirebaseFunctions.instance
           .httpsCallable(senderGiftPaymentCallableName)
           .call({
-        'giftDraftId': draftRef.id,
+        'giftDraft': payload,
         'source': 'sender_mobile',
         'applyRoth': _applyRoth && _rothBalance > 0,
         'returnOrigin': Uri.base.origin,
