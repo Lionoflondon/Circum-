@@ -18,6 +18,7 @@ import '../business/business_journey_context.dart';
 import '../../helper/bitmap_descriptor_helper.dart';
 import '../send_package/bloc/send_package_bloc.dart';
 import '../send_package/models/place_coordinates.m.dart';
+import '../send_package/repo/place_api.dart';
 import 'sender_accessibility.dart';
 import 'sender_booking_state.dart';
 import 'sender_finance.dart';
@@ -191,8 +192,7 @@ class _SenderBookingCanvasState extends State<SenderBookingCanvas> {
         'not-found' ||
         'deadline-exceeded' ||
         'unavailable' ||
-        'permission-denied' =>
-          true,
+        'permission-denied' => true,
         _ => false,
       };
     }
@@ -206,8 +206,7 @@ class _SenderBookingCanvasState extends State<SenderBookingCanvas> {
       'deadline-exceeded' ||
       'unavailable' ||
       'aborted' ||
-      'failed-precondition' =>
-        true,
+      'failed-precondition' => true,
       _ => false,
     };
   }
@@ -328,13 +327,14 @@ class _SenderBookingCanvasState extends State<SenderBookingCanvas> {
   }
 
   SenderBookingDraft _safeRestoredDraft(SenderBookingDraft restored) {
-    final routeReady = restored.pickupLat != null &&
+    final routeReady =
+        restored.pickupLat != null &&
         restored.pickupLng != null &&
         restored.dropoffLat != null &&
         restored.dropoffLng != null;
     final routeDependentStep =
         SenderBookingStep.values.indexOf(restored.step) >=
-            SenderBookingStep.values.indexOf(SenderBookingStep.parcel);
+        SenderBookingStep.values.indexOf(SenderBookingStep.parcel);
     if (routeDependentStep && !routeReady) {
       final hasPickupCoordinate =
           restored.pickupLat != null && restored.pickupLng != null;
@@ -366,17 +366,17 @@ class _SenderBookingCanvasState extends State<SenderBookingCanvas> {
         restored.dropoffLat != null &&
         restored.dropoffLng != null) {
       context.read<SendPackageBloc>().add(
-            RestoreSenderRoute(
-              pickupAddress: restored.pickupAddress,
-              pickupPlaceId: restored.pickupPlaceId,
-              pickupLat: restored.pickupLat!,
-              pickupLng: restored.pickupLng!,
-              dropoffAddress: restored.dropoffAddress,
-              dropoffPlaceId: restored.dropoffPlaceId,
-              dropoffLat: restored.dropoffLat!,
-              dropoffLng: restored.dropoffLng!,
-            ),
-          );
+        RestoreSenderRoute(
+          pickupAddress: restored.pickupAddress,
+          pickupPlaceId: restored.pickupPlaceId,
+          pickupLat: restored.pickupLat!,
+          pickupLng: restored.pickupLng!,
+          dropoffAddress: restored.dropoffAddress,
+          dropoffPlaceId: restored.dropoffPlaceId,
+          dropoffLat: restored.dropoffLat!,
+          dropoffLng: restored.dropoffLng!,
+        ),
+      );
     }
   }
 
@@ -661,12 +661,20 @@ class _SenderBookingCanvasState extends State<SenderBookingCanvas> {
   void _advance() {
     if (_draft.step == SenderBookingStep.payment) return;
     if (_draft.step == SenderBookingStep.pickup &&
-        _draft.pickupPlaceId.isEmpty) {
+        !isSenderCanonicalAddressResolved(
+          _draft.pickupAddress,
+          _draft.pickupLat,
+          _draft.pickupLng,
+        )) {
       _resolveTypedAddressAndAdvance(pickup: true);
       return;
     }
     if (_draft.step == SenderBookingStep.dropoff &&
-        _draft.dropoffPlaceId.isEmpty) {
+        !isSenderCanonicalAddressResolved(
+          _draft.dropoffAddress,
+          _draft.dropoffLat,
+          _draft.dropoffLng,
+        )) {
       _resolveTypedAddressAndAdvance(pickup: false);
       return;
     }
@@ -685,15 +693,15 @@ class _SenderBookingCanvasState extends State<SenderBookingCanvas> {
       if (engine.isIrisResolving) return;
       if (!irisReady) {
         context.read<SendPackageBloc>().add(
-              RequestCanonicalIrisEstimate(
-                itemName: _item.text,
-                quantity: senderQuantityFromItemName(_item.text),
-                description: _description.text,
-                declaredWeightText: _weight.text,
-                fragile: false,
-                highValue: false,
-              ),
-            );
+          RequestCanonicalIrisEstimate(
+            itemName: _item.text,
+            quantity: senderQuantityFromItemName(_item.text),
+            description: _description.text,
+            declaredWeightText: _weight.text,
+            fragile: false,
+            highValue: false,
+          ),
+        );
         return;
       }
       _setDraft(_draft.copyWith(step: SenderBookingStep.options));
@@ -702,15 +710,15 @@ class _SenderBookingCanvasState extends State<SenderBookingCanvas> {
     }
     if (_draft.step == SenderBookingStep.iris) {
       context.read<SendPackageBloc>().add(
-            RequestCanonicalIrisEstimate(
-              itemName: _item.text,
-              quantity: senderQuantityFromItemName(_item.text),
-              description: _description.text,
-              declaredWeightText: _weight.text,
-              fragile: false,
-              highValue: false,
-            ),
-          );
+        RequestCanonicalIrisEstimate(
+          itemName: _item.text,
+          quantity: senderQuantityFromItemName(_item.text),
+          description: _description.text,
+          declaredWeightText: _weight.text,
+          fragile: false,
+          highValue: false,
+        ),
+      );
     }
     if (_draft.step == SenderBookingStep.iris ||
         _draft.step == SenderBookingStep.options ||
@@ -723,43 +731,116 @@ class _SenderBookingCanvasState extends State<SenderBookingCanvas> {
     _setDraft(_draft.next());
   }
 
-  void _resolveTypedAddressAndAdvance({required bool pickup}) {
-    final engine = context.read<SendPackageBloc>().state;
-    if (engine.suggestions.isEmpty) {
-      setState(() => _addressResolutionMessage =
-          'Choose a verified address suggestion before continuing.');
+  Future<void> _resolveTypedAddressAndAdvance({required bool pickup}) async {
+    final controller = pickup ? _pickup : _dropoff;
+    final typed = controller.text.trim();
+    if (typed.isEmpty) {
+      setState(() {
+        _addressResolutionMessage = 'Enter a full UK address and postcode.';
+      });
       return;
     }
-    final suggestion = engine.suggestions.first;
-    final locale = Localizations.localeOf(context).languageCode;
-    if (pickup) {
-      context.read<SendPackageBloc>().add(SetPickupAddress(
-            val: suggestion.description,
-            pickupLocationSubAddress: suggestion.subText,
-            placeId: suggestion.placeId,
+    setState(() {
+      _addressResolving = true;
+      _addressResolutionMessage = 'Checking address...';
+    });
+    try {
+      final locale = Localizations.localeOf(context).languageCode;
+      final engine = context.read<SendPackageBloc>().state;
+      final provider = PlaceApiProvider(
+        'sender-manual-${DateTime.now().microsecondsSinceEpoch}',
+      );
+      var suggestions = List<dynamic>.from(engine.suggestions);
+      if (suggestions.isEmpty ||
+          !_suggestionsMatchTypedAddress(typed, suggestions)) {
+        suggestions = await provider.fetchSuggestions(typed, locale);
+      }
+      final suggestion = _bestSenderAddressSuggestion(typed, suggestions);
+      if (suggestion == null) {
+        if (!mounted) return;
+        setState(() {
+          _addressResolutionMessage =
+              'We could not verify that address. Try a full address with postcode.';
+        });
+        return;
+      }
+      final resolved = await provider.fetchResolvedPlace(
+        '${suggestion.placeId}',
+        locale,
+      );
+      final latitude = _nullableDouble(resolved.lat);
+      final longitude = _nullableDouble(resolved.lng);
+      if (!isSenderValidUkCoordinate(latitude, longitude)) {
+        if (!mounted) return;
+        setState(() {
+          _addressResolutionMessage =
+              'Choose a valid UK address before continuing.';
+        });
+        return;
+      }
+      if (!mounted) return;
+      final description = resolved.description.trim().isNotEmpty
+          ? resolved.description.trim()
+          : '${suggestion.description}'.trim();
+      final subText = resolved.subText.trim().isNotEmpty
+          ? resolved.subText.trim()
+          : '${suggestion.subText}'.trim();
+      final placeId = resolved.placeId.trim().isNotEmpty
+          ? resolved.placeId.trim()
+          : '${suggestion.placeId}'.trim();
+      if (pickup) {
+        context.read<SendPackageBloc>().add(
+          SetPickupAddress(
+            val: description,
+            pickupLocationSubAddress: subText,
+            placeId: placeId,
             lang: locale,
-          ));
-      _pickup.text = suggestion.description;
-      _setDraft(_draft.copyWith(
-        pickupAddress: suggestion.description,
-        pickupPlaceId: suggestion.placeId,
-        pickupLat: suggestion.lat,
-        pickupLng: suggestion.lng,
-      ).next());
-    } else {
-      context.read<SendPackageBloc>().add(SetDeliveryAddress(
-            val: suggestion.description,
-            destinationLocationSubAddress: suggestion.subText,
-            placeId: suggestion.placeId,
+          ),
+        );
+        _pickup.text = description;
+        _setDraft(
+          _draft
+              .copyWith(
+                pickupAddress: description,
+                pickupPlaceId: placeId,
+                pickupLat: latitude,
+                pickupLng: longitude,
+              )
+              .next(),
+        );
+      } else {
+        context.read<SendPackageBloc>().add(
+          SetDeliveryAddress(
+            val: description,
+            destinationLocationSubAddress: subText,
+            placeId: placeId,
             lang: locale,
-          ));
-      _dropoff.text = suggestion.description;
-      _setDraft(_draft.copyWith(
-        dropoffAddress: suggestion.description,
-        dropoffPlaceId: suggestion.placeId,
-        dropoffLat: suggestion.lat,
-        dropoffLng: suggestion.lng,
-      ).next());
+          ),
+        );
+        _dropoff.text = description;
+        _setDraft(
+          _draft
+              .copyWith(
+                dropoffAddress: description,
+                dropoffPlaceId: placeId,
+                dropoffLat: latitude,
+                dropoffLng: longitude,
+              )
+              .next(),
+        );
+      }
+      setState(() {
+        _addressResolutionMessage = null;
+      });
+    } catch (_) {
+      if (!mounted) return;
+      setState(() {
+        _addressResolutionMessage = 'Address check failed. Please try again.';
+      });
+    } finally {
+      if (mounted) {
+        setState(() => _addressResolving = false);
+      }
     }
   }
 
@@ -771,7 +852,7 @@ class _SenderBookingCanvasState extends State<SenderBookingCanvas> {
     final iris = engine.canonicalIrisResult;
     final requiresVanguard =
         _irisRequiresIncludedVanguard(iris, business: business) ||
-            draft.vanguard;
+        draft.vanguard;
     final selectedVehicle = _selectedVehicleFor(draft, iris);
     final quoteKey = [
       (engine.distance ?? -1).toStringAsFixed(3),
@@ -791,19 +872,19 @@ class _SenderBookingCanvasState extends State<SenderBookingCanvas> {
     }
     _lastBackendQuoteKey = quoteKey;
     context.read<SendPackageBloc>().add(
-          RequestSenderBookingQuote(
-            selectedSpeed: draft.selectedOption,
-            vanguardProtocolEnabled: requiresVanguard,
-            itemName: draft.itemName,
-            description: draft.itemDescription,
-            weightKg: _manualWeightKg(_weight.text) ?? 0,
-            fragile: _irisHasHandling(iris, 'fragile'),
-            highValue: _irisHasHandling(iris, 'high value'),
-            selectedVehicle: selectedVehicle,
-            irisPhotoAnalysisId: _irisPhotoAnalysisId ?? '',
-            businessContext: business?.toMap(),
-          ),
-        );
+      RequestSenderBookingQuote(
+        selectedSpeed: draft.selectedOption,
+        vanguardProtocolEnabled: requiresVanguard,
+        itemName: draft.itemName,
+        description: draft.itemDescription,
+        weightKg: _manualWeightKg(_weight.text) ?? 0,
+        fragile: _irisHasHandling(iris, 'fragile'),
+        highValue: _irisHasHandling(iris, 'high value'),
+        selectedVehicle: selectedVehicle,
+        irisPhotoAnalysisId: _irisPhotoAnalysisId ?? '',
+        businessContext: business?.toMap(),
+      ),
+    );
   }
 
   void _onParcelChanged() {
@@ -855,12 +936,13 @@ class _SenderBookingCanvasState extends State<SenderBookingCanvas> {
       final result = await FirebaseFunctions.instance
           .httpsCallable('analyseParcelPhotoForIris')
           .call({
-        'imageBase64': base64Encode(bytes),
-        'contentType': picked.mimeType ?? 'image/jpeg',
-        'fileName': picked.name,
-        'description': details,
-        'declaredWeightText': _weight.text,
-      }).timeout(const Duration(seconds: 20));
+            'imageBase64': base64Encode(bytes),
+            'contentType': picked.mimeType ?? 'image/jpeg',
+            'fileName': picked.name,
+            'description': details,
+            'declaredWeightText': _weight.text,
+          })
+          .timeout(const Duration(seconds: 20));
       final data = result.data is Map
           ? Map<String, dynamic>.from(result.data as Map)
           : <String, dynamic>{};
@@ -870,9 +952,8 @@ class _SenderBookingCanvasState extends State<SenderBookingCanvas> {
         _parcelPhoto = picked;
         _irisPhotoAnalysisId = '${data['analysisId'] ?? ''}'.trim();
         _photoEstimatedWeightKg = estimate;
-        _parcelPhotoMessage = estimate == null
-            ? 'Photo added. IRIS will use your item details.'
-            : 'Photo reviewed. Visual estimate ${estimate.toStringAsFixed(2)} kg.';
+        _parcelPhotoMessage =
+            'Photo reviewed. IRIS will compare it with your item details.';
       });
     } on FirebaseFunctionsException catch (error) {
       if (!mounted) return;
@@ -914,15 +995,15 @@ class _SenderBookingCanvasState extends State<SenderBookingCanvas> {
       return;
     }
     context.read<SendPackageBloc>().add(
-          RestoreSenderRoute(
-            pickupAddress: draft.pickupAddress,
-            pickupLat: draft.pickupLat!,
-            pickupLng: draft.pickupLng!,
-            dropoffAddress: draft.dropoffAddress,
-            dropoffLat: draft.dropoffLat!,
-            dropoffLng: draft.dropoffLng!,
-          ),
-        );
+      RestoreSenderRoute(
+        pickupAddress: draft.pickupAddress,
+        pickupLat: draft.pickupLat!,
+        pickupLng: draft.pickupLng!,
+        dropoffAddress: draft.dropoffAddress,
+        dropoffLat: draft.dropoffLat!,
+        dropoffLng: draft.dropoffLng!,
+      ),
+    );
   }
 
   void _back() {
@@ -1003,7 +1084,8 @@ class _SenderBookingCanvasState extends State<SenderBookingCanvas> {
               _SenderMobileMap(
                 active: true,
                 engine: engine,
-                showDestination: engine.desinationCoordinate != null ||
+                showDestination:
+                    engine.desinationCoordinate != null ||
                     _dropoff.text.trim().isNotEmpty,
                 showVanguardShield: _draft.vanguard,
                 distanceKm: engine.distance,
@@ -1354,13 +1436,13 @@ class _BookingPanel extends StatelessWidget {
                 ? (suggestion.lng as num).toDouble()
                 : null;
             context.read<SendPackageBloc>().add(
-                  SetPickupAddress(
-                    val: suggestion.description,
-                    pickupLocationSubAddress: suggestion.subText,
-                    placeId: suggestion.placeId,
-                    lang: Localizations.localeOf(context).languageCode,
-                  ),
-                );
+              SetPickupAddress(
+                val: suggestion.description,
+                pickupLocationSubAddress: suggestion.subText,
+                placeId: suggestion.placeId,
+                lang: Localizations.localeOf(context).languageCode,
+              ),
+            );
             pickup.text = suggestion.description;
             onDraft(
               draft.copyWith(
@@ -1405,13 +1487,13 @@ class _BookingPanel extends StatelessWidget {
                 ? (suggestion.lng as num).toDouble()
                 : null;
             context.read<SendPackageBloc>().add(
-                  SetDeliveryAddress(
-                    val: suggestion.description,
-                    destinationLocationSubAddress: suggestion.subText,
-                    placeId: suggestion.placeId,
-                    lang: Localizations.localeOf(context).languageCode,
-                  ),
-                );
+              SetDeliveryAddress(
+                val: suggestion.description,
+                destinationLocationSubAddress: suggestion.subText,
+                placeId: suggestion.placeId,
+                lang: Localizations.localeOf(context).languageCode,
+              ),
+            );
             dropoff.text = suggestion.description;
             onDraft(
               draft.copyWith(
@@ -1456,11 +1538,12 @@ class _BookingPanel extends StatelessWidget {
           item: item,
           description: description,
           weight: weight,
-          iris: _irisMatchesParcel(
-            engine.canonicalIrisResult,
-            item.text,
-            description.text,
-          )
+          iris:
+              _irisMatchesParcel(
+                engine.canonicalIrisResult,
+                item.text,
+                description.text,
+              )
               ? engine.canonicalIrisResult
               : null,
           isIrisResolving: engine.isIrisResolving,
@@ -1506,11 +1589,11 @@ class _BookingPanel extends StatelessWidget {
       return;
     }
     context.read<SendPackageBloc>().add(
-          SearchAPlaceEvent(
-            query: value,
-            lang: Localizations.localeOf(context).languageCode,
-          ),
-        );
+      SearchAPlaceEvent(
+        query: value,
+        lang: Localizations.localeOf(context).languageCode,
+      ),
+    );
   }
 }
 
@@ -1602,7 +1685,7 @@ class _AddressPanel extends StatelessWidget {
               backgroundColor: Colors.transparent,
             ),
           ),
-        if (resolutionMessage != null ||
+        if ((resolutionMessage != null && !canContinue) ||
             (errorText.isNotEmpty && !typedAddressCanContinue))
           Padding(
             padding: const EdgeInsets.only(bottom: 8),
@@ -1622,7 +1705,7 @@ class _AddressPanel extends StatelessWidget {
               child: Text(
                 suggestions.isEmpty
                     ? 'Type the full address and postcode, then continue.'
-                    : 'Choose a suggestion, or keep your typed address and continue.',
+                    : 'Choose a suggestion, or continue to verify the full typed address.',
                 style: const TextStyle(
                   color: Color(0xFFD6E4FF),
                   height: 1.35,
@@ -1656,6 +1739,53 @@ class _AddressPanel extends StatelessWidget {
       ],
     );
   }
+}
+
+bool _suggestionsMatchTypedAddress(String typed, List<dynamic> suggestions) {
+  final normalized = _normalizeSenderAddressForMatch(typed);
+  if (normalized.isEmpty) return false;
+  return suggestions.any((suggestion) {
+    final description = _normalizeSenderAddressForMatch(
+      '${suggestion.description}',
+    );
+    final main = _normalizeSenderAddressForMatch('${suggestion.mainText}');
+    return description.contains(normalized) ||
+        normalized.contains(description) ||
+        main.contains(normalized) ||
+        normalized.contains(main);
+  });
+}
+
+dynamic _bestSenderAddressSuggestion(String typed, List<dynamic> suggestions) {
+  if (suggestions.isEmpty) return null;
+  final normalized = _normalizeSenderAddressForMatch(typed);
+  for (final suggestion in suggestions) {
+    final description = _normalizeSenderAddressForMatch(
+      '${suggestion.description}',
+    );
+    if (description == normalized) return suggestion;
+  }
+  for (final suggestion in suggestions) {
+    final description = _normalizeSenderAddressForMatch(
+      '${suggestion.description}',
+    );
+    final main = _normalizeSenderAddressForMatch('${suggestion.mainText}');
+    if (description.contains(normalized) ||
+        normalized.contains(description) ||
+        main.contains(normalized) ||
+        normalized.contains(main)) {
+      return suggestion;
+    }
+  }
+  return suggestions.first;
+}
+
+String _normalizeSenderAddressForMatch(String value) {
+  return value
+      .toLowerCase()
+      .replaceAll(RegExp(r'[^a-z0-9]+'), ' ')
+      .replaceAll(RegExp(r'\s+'), ' ')
+      .trim();
 }
 
 class _RecipientPanel extends StatelessWidget {
@@ -1733,7 +1863,8 @@ class _DeliveryTimePanel extends StatelessWidget {
   Widget build(BuildContext context) {
     final scheduled =
         draft.deliveryTimingType == SenderDeliveryTimingType.scheduled;
-    final pastDate = scheduled &&
+    final pastDate =
+        scheduled &&
         scheduledDate.text.trim().isNotEmpty &&
         !isSenderScheduledDateValid(scheduledDate.text);
     final custom = scheduled && draft.scheduledWindow == 'Custom';
@@ -1814,7 +1945,8 @@ class _DeliveryTimePanel extends StatelessWidget {
                     controller: customWindowStart,
                     hint: 'Start HH:MM',
                     keyboardType: TextInputType.datetime,
-                    errorText: customWindowStart.text.trim().isNotEmpty &&
+                    errorText:
+                        customWindowStart.text.trim().isNotEmpty &&
                             !RegExp(
                               r'^\d{2}:\d{2}$',
                             ).hasMatch(customWindowStart.text.trim())
@@ -1830,7 +1962,8 @@ class _DeliveryTimePanel extends StatelessWidget {
                     controller: customWindowEnd,
                     hint: 'End HH:MM',
                     keyboardType: TextInputType.datetime,
-                    errorText: customWindowEnd.text.trim().isNotEmpty &&
+                    errorText:
+                        customWindowEnd.text.trim().isNotEmpty &&
                             !isSenderCustomWindowValid(
                               customWindowStart.text,
                               customWindowEnd.text,
@@ -2115,8 +2248,8 @@ class _IrisInputCard extends StatelessWidget {
             label: isIrisResolving
                 ? 'Checking weight...'
                 : !hasWeight
-                    ? 'Check weight with IRIS'
-                    : 'Choose Delivery Options',
+                ? 'Check weight with IRIS'
+                : 'Choose Delivery Options',
             enabled: canContinue && !isIrisResolving,
             onTap: onContinue,
           ),
@@ -2142,8 +2275,8 @@ class _IrisInputHeader extends StatelessWidget {
     final status = isResolving
         ? 'IRIS is reading your description'
         : hasResult
-            ? 'IRIS has an estimate'
-            : 'IRIS is ready when you are';
+        ? 'IRIS has an estimate'
+        : 'IRIS is ready when you are';
     return Row(
       children: [
         _IrisPresenceOrb(active: isResolving),
@@ -2270,12 +2403,12 @@ class _ParcelPhotoAction extends StatelessWidget {
                       ),
                     )
                   : attached
-                      ? const Icon(
-                          Icons.check_circle_rounded,
-                          color: Color(0xFF86EFAC),
-                          size: 23,
-                        )
-                      : const _TinyCameraGlyph(),
+                  ? const Icon(
+                      Icons.check_circle_rounded,
+                      color: Color(0xFF86EFAC),
+                      size: 23,
+                    )
+                  : const _TinyCameraGlyph(),
             ),
           ),
         ),
@@ -2359,8 +2492,7 @@ class _ParcelPhotoStatus extends StatelessWidget {
         'Photo added.'
       else
         'Optional photo helps IRIS confirm handling.',
-      if (estimatedWeightKg != null)
-        'Visual estimate ${estimatedWeightKg!.toStringAsFixed(2)} kg.',
+      if (estimatedWeightKg != null) 'Visual signal captured for IRIS.',
     ];
     return Padding(
       padding: const EdgeInsets.only(top: 7),
@@ -2699,15 +2831,15 @@ class _IrisPanel extends StatelessWidget {
             label: 'Retry',
             enabled: true,
             onTap: () => context.read<SendPackageBloc>().add(
-                  RequestCanonicalIrisEstimate(
-                    itemName: draft.itemName,
-                    quantity: senderQuantityFromItemName(draft.itemName),
-                    description: draft.itemDescription,
-                    declaredWeightText: draft.weightLabel,
-                    fragile: false,
-                    highValue: false,
-                  ),
-                ),
+              RequestCanonicalIrisEstimate(
+                itemName: draft.itemName,
+                quantity: senderQuantityFromItemName(draft.itemName),
+                description: draft.itemDescription,
+                declaredWeightText: draft.weightLabel,
+                fragile: false,
+                highValue: false,
+              ),
+            ),
           ),
         ] else ...[
           if (iris != null) const _IrisSuccessPulse(),
@@ -2798,9 +2930,9 @@ class _IrisAnalysisProgressState extends State<_IrisAnalysisProgress>
       animation: _controller,
       builder: (context, _) {
         final index = (_controller.value * _stages.length).floor().clamp(
-              0,
-              _stages.length - 1,
-            );
+          0,
+          _stages.length - 1,
+        );
         return Column(
           children: [
             ClipRRect(
@@ -3036,10 +3168,10 @@ List<String> _customerIrisReasons(dynamic iris, SenderBookingDraft draft) {
 }
 
 bool _routeReadyForQuote(SendPackageState engine) {
-  return engine.pickupPlaceId?.isNotEmpty == true &&
-      engine.destinationPlaceId?.isNotEmpty == true &&
-      engine.pickupCoordinate != null &&
-      engine.desinationCoordinate != null;
+  final pickup = engine.pickupCoordinate;
+  final dropoff = engine.desinationCoordinate;
+  return isSenderValidUkCoordinate(pickup?.lat, pickup?.lng) &&
+      isSenderValidUkCoordinate(dropoff?.lat, dropoff?.lng);
 }
 
 class _OptionsPanel extends StatelessWidget {
@@ -3143,8 +3275,10 @@ class _OptionsPanel extends StatelessWidget {
                 _QuoteUnavailable(onRetry: () => _requestQuote(context, draft))
               else if (!routeReady)
                 const _RouteQuotePending()
-              else if (engine.isSenderQuoteLoading || quoteTotal == null)
+              else if (engine.isSenderQuoteLoading)
                 const _QuoteSkeleton()
+              else if (quoteTotal == null)
+                _QuoteUnavailable(onRetry: () => _requestQuote(context, draft))
               else
                 _BackendPricingBreakdown(engine: engine),
             ],
@@ -3171,17 +3305,17 @@ class _OptionsPanel extends StatelessWidget {
       business: business,
     );
     context.read<SendPackageBloc>().add(
-          RequestSenderBookingQuote(
-            selectedSpeed: draft.selectedOption,
-            vanguardProtocolEnabled: includedVanguard || draft.vanguard,
-            itemName: draft.itemName,
-            description: draft.itemDescription,
-            weightKg: _manualWeightKg(draft.weightLabel) ?? 0,
-            fragile: _irisHasHandling(iris, 'fragile'),
-            highValue: _irisHasHandling(iris, 'high value'),
-            selectedVehicle: _selectedVehicleFor(draft, iris),
-          ),
-        );
+      RequestSenderBookingQuote(
+        selectedSpeed: draft.selectedOption,
+        vanguardProtocolEnabled: includedVanguard || draft.vanguard,
+        itemName: draft.itemName,
+        description: draft.itemDescription,
+        weightKg: _manualWeightKg(draft.weightLabel) ?? 0,
+        fragile: _irisHasHandling(iris, 'fragile'),
+        highValue: _irisHasHandling(iris, 'high value'),
+        selectedVehicle: _selectedVehicleFor(draft, iris),
+      ),
+    );
   }
 }
 
@@ -3218,8 +3352,9 @@ class _DeliverySpeedSelector extends StatelessWidget {
       children: values.map((speed) {
         final option = _speedQuoteOption(options, speed);
         final active = speed == selected;
-        final price =
-            option == null ? 'Pending' : _speedQuoteStandalonePrice(option);
+        final price = option == null
+            ? 'Pending'
+            : _speedQuoteStandalonePrice(option);
         return Expanded(
           child: Padding(
             padding: EdgeInsets.only(right: speed == values.last ? 0 : 8),
@@ -3274,8 +3409,9 @@ class _DeliverySpeedSelector extends StatelessWidget {
                                   maxLines: 1,
                                   overflow: TextOverflow.ellipsis,
                                   style: TextStyle(
-                                    color:
-                                        active ? Colors.white : _Tokens.muted,
+                                    color: active
+                                        ? Colors.white
+                                        : _Tokens.muted,
                                     fontSize: 12,
                                     fontWeight: FontWeight.w900,
                                   ),
@@ -3386,7 +3522,8 @@ Map<String, dynamic>? _speedQuoteOption(
 
 String _speedQuoteStandalonePrice(Map<String, dynamic>? option) {
   if (option == null) return 'Pending';
-  final value = option['speedAdjustment'] ??
+  final value =
+      option['speedAdjustment'] ??
       option['speedSurcharge'] ??
       option['deliverySpeedFee'] ??
       option['serviceFee'];
@@ -3441,7 +3578,8 @@ class _SenderReviewDeliveryScreenState
             child: _SenderMobileMap(
               active: true,
               engine: widget.engine,
-              showDestination: widget.engine.desinationCoordinate != null ||
+              showDestination:
+                  widget.engine.desinationCoordinate != null ||
                   widget.draft.dropoffAddress.trim().isNotEmpty,
               showVanguardShield: widget.draft.vanguard,
               distanceKm: widget.engine.distance,
@@ -3518,7 +3656,9 @@ class _SenderReviewDeliveryScreenState
                                     : null,
                               ),
                               if (widget
-                                  .engine.irisWeightReviewMessage.isNotEmpty)
+                                  .engine
+                                  .irisWeightReviewMessage
+                                  .isNotEmpty)
                                 Padding(
                                   padding: const EdgeInsets.only(top: 10),
                                   child: _InfoNote(
@@ -3676,7 +3816,8 @@ class _ReviewRoutePanelState extends State<_ReviewRoutePanel>
 
   @override
   Widget build(BuildContext context) {
-    final routeConfirmed = widget.engine.polylineCoordinates.isNotEmpty ||
+    final routeConfirmed =
+        widget.engine.polylineCoordinates.isNotEmpty ||
         widget.engine.polylines.isNotEmpty ||
         widget.engine.distance != null;
     final pickup = _reviewRouteLabel(
@@ -3940,8 +4081,8 @@ class _ReviewEtaChip extends StatelessWidget {
   Widget build(BuildContext context) {
     final routeLabel = routeConfirmed
         ? distanceKm == null
-            ? 'Route confirmed'
-            : '${_formatSenderMilesFromKm(distanceKm!)} · $speed'
+              ? 'Route confirmed'
+              : '${_formatSenderMilesFromKm(distanceKm!)} · $speed'
         : 'Route calculating · $speed';
     return ClipRRect(
       borderRadius: BorderRadius.circular(14),
@@ -4301,8 +4442,8 @@ class _ReviewBottomBar extends StatelessWidget {
                               error.isNotEmpty
                                   ? 'Quote needed'
                                   : total == null
-                                      ? 'Pending'
-                                      : _formatQuoteAmount(total!),
+                                  ? 'Pending'
+                                  : _formatQuoteAmount(total!),
                               key: ValueKey('$total$error$loading'),
                               style: const TextStyle(
                                 color: Colors.white,
@@ -4408,9 +4549,9 @@ String _reviewIrisEstimate(SendPackageState engine, SenderBookingDraft draft) {
   final weight = engine.parcelWeightKg > 0
       ? '${engine.parcelWeightKg.toStringAsFixed(2)} kg'
       : result?.totalWeightLabel ??
-          (draft.weightLabel.trim().isEmpty
-              ? 'Unavailable'
-              : draft.weightLabel.trim());
+            (draft.weightLabel.trim().isEmpty
+                ? 'Unavailable'
+                : draft.weightLabel.trim());
   final vehicle = draft.selectedVehicle.trim().isNotEmpty
       ? draft.selectedVehicle.trim()
       : _minimumVehicleLabel(result?.recommendedVehicle ?? draft.irisVehicle);
@@ -4460,20 +4601,23 @@ class _PaymentPanelState extends State<_PaymentPanel> {
   }
 
   Future<SenderPaymentMethodsData> _loadPaymentMethods() {
-    return FirebaseSenderPaymentProfileRepository().paymentMethods().timeout(
-      const Duration(seconds: 6),
-      onTimeout: () {
-        debugPrint(
-          'Sender payment methods timed out; falling back to card checkout.',
-        );
-        return SenderPaymentProfile.empty();
-      },
-    ).catchError((error) {
-      debugPrint(
-        'Sender payment methods unavailable; falling back to card checkout: $error',
-      );
-      return SenderPaymentProfile.empty();
-    });
+    return FirebaseSenderPaymentProfileRepository()
+        .paymentMethods()
+        .timeout(
+          const Duration(seconds: 6),
+          onTimeout: () {
+            debugPrint(
+              'Sender payment methods timed out; falling back to card checkout.',
+            );
+            return SenderPaymentProfile.empty();
+          },
+        )
+        .catchError((error) {
+          debugPrint(
+            'Sender payment methods unavailable; falling back to card checkout: $error',
+          );
+          return SenderPaymentProfile.empty();
+        });
   }
 
   @override
@@ -4847,30 +4991,32 @@ class _PaymentPanelState extends State<_PaymentPanel> {
           title: 'Apple Pay${option.isDefault ? ' · Default' : ''}',
           subtitle: 'Fast checkout on supported iOS devices.',
           icon: Icons.apple_rounded,
-          selected: draft.selectedPaymentMethod ==
+          selected:
+              draft.selectedPaymentMethod ==
               SenderFallbackPaymentMethod.applePay,
           onTap: total == null
               ? null
               : () => _selectMethod(
-                    total,
-                    availableRoth,
-                    SenderFallbackPaymentMethod.applePay,
-                  ),
+                  total,
+                  availableRoth,
+                  SenderFallbackPaymentMethod.applePay,
+                ),
         );
       case SenderPaymentProfileOptionType.googlePay:
         return _PaymentMethodTile(
           title: 'Google Pay${option.isDefault ? ' · Default' : ''}',
           subtitle: 'Fast checkout on supported Android devices.',
           icon: Icons.android_rounded,
-          selected: draft.selectedPaymentMethod ==
+          selected:
+              draft.selectedPaymentMethod ==
               SenderFallbackPaymentMethod.googlePay,
           onTap: total == null
               ? null
               : () => _selectMethod(
-                    total,
-                    availableRoth,
-                    SenderFallbackPaymentMethod.googlePay,
-                  ),
+                  total,
+                  availableRoth,
+                  SenderFallbackPaymentMethod.googlePay,
+                ),
         );
       case SenderPaymentProfileOptionType.savedCard:
         final method = option.method;
@@ -4883,12 +5029,12 @@ class _PaymentPanelState extends State<_PaymentPanel> {
           onTap: total == null
               ? null
               : () => _selectMethod(
-                    total,
-                    availableRoth,
-                    SenderFallbackPaymentMethod.card,
-                    paymentMethodId: method.id,
-                    paymentMethodLabel: method.title,
-                  ),
+                  total,
+                  availableRoth,
+                  SenderFallbackPaymentMethod.card,
+                  paymentMethodId: method.id,
+                  paymentMethodLabel: method.title,
+                ),
         );
       case SenderPaymentProfileOptionType.addPaymentMethod:
         return _PaymentMethodTile(
@@ -4899,14 +5045,14 @@ class _PaymentPanelState extends State<_PaymentPanel> {
           icon: Icons.add_card_outlined,
           selected:
               draft.selectedPaymentMethod == SenderFallbackPaymentMethod.card &&
-                  draft.selectedPaymentMethodId.isEmpty,
+              draft.selectedPaymentMethodId.isEmpty,
           onTap: total == null
               ? null
               : () => _selectMethod(
-                    total,
-                    availableRoth,
-                    SenderFallbackPaymentMethod.card,
-                  ),
+                  total,
+                  availableRoth,
+                  SenderFallbackPaymentMethod.card,
+                ),
         );
     }
   }
@@ -4920,8 +5066,8 @@ class _PaymentPanelState extends State<_PaymentPanel> {
     final method = split.fullyCoveredByRoth
         ? 'Roth'
         : draft.selectedPaymentMethodLabel.isNotEmpty
-            ? draft.selectedPaymentMethodLabel
-            : senderPaymentMethodLabel(split.fallbackMethod!);
+        ? draft.selectedPaymentMethodLabel
+        : senderPaymentMethodLabel(split.fallbackMethod!);
     final confirmed = await confirmSenderPaymentIfRequired(
       context,
       paymentMethod: method,
@@ -4940,22 +5086,22 @@ class _PaymentPanelState extends State<_PaymentPanel> {
       ),
     );
     context.read<SendPackageBloc>().add(
-          StartSenderPaymentSession(
-            rothEnabled: split.rothEnabled,
-            fallbackMethod: split.fallbackMethod == null
-                ? 'roth'
-                : draft.selectedPaymentMethodLabel.isNotEmpty
-                    ? 'saved_card'
-                    : _stripeFallbackMethodValue(split.fallbackMethod!),
-            paymentMethodId: draft.selectedPaymentMethodId,
-            checkoutMode: kIsWeb ? 'web_checkout' : '',
-            returnUrl: kIsWeb ? _senderAppCheckoutReturnUrl() : '',
-            draftId: draftId ?? '',
-            idempotencyKey:
-                'sender-${senderUid ?? 'anonymous'}-${draftId ?? 'draft'}-${engine.senderQuoteId ?? 'quote'}',
-            deliveryPayload: kIsWeb ? _bookingPayload(engine) : const {},
-          ),
-        );
+      StartSenderPaymentSession(
+        rothEnabled: split.rothEnabled,
+        fallbackMethod: split.fallbackMethod == null
+            ? 'roth'
+            : draft.selectedPaymentMethodLabel.isNotEmpty
+            ? 'saved_card'
+            : _stripeFallbackMethodValue(split.fallbackMethod!),
+        paymentMethodId: draft.selectedPaymentMethodId,
+        checkoutMode: kIsWeb ? 'web_checkout' : '',
+        returnUrl: kIsWeb ? _senderAppCheckoutReturnUrl() : '',
+        draftId: draftId ?? '',
+        idempotencyKey:
+            'sender-${senderUid ?? 'anonymous'}-${draftId ?? 'draft'}-${engine.senderQuoteId ?? 'quote'}',
+        deliveryPayload: kIsWeb ? _bookingPayload(engine) : const {},
+      ),
+    );
   }
 
   Future<void> _openStripeCheckout(BuildContext context, String url) async {
@@ -4983,8 +5129,9 @@ class _PaymentPanelState extends State<_PaymentPanel> {
 
   String _senderAppCheckoutReturnUrl() {
     final base = Uri.base.removeFragment();
-    return base.replace(
-        queryParameters: {...base.queryParameters, 'app': 'sender'}).toString();
+    return base
+        .replace(queryParameters: {...base.queryParameters, 'app': 'sender'})
+        .toString();
   }
 
   Future<void> _confirmCardPayment(
@@ -5031,69 +5178,69 @@ class _PaymentPanelState extends State<_PaymentPanel> {
 
   void _createPaidDelivery(BuildContext context, SendPackageState engine) {
     context.read<SendPackageBloc>().add(
-          CreatePaidSenderDelivery(bookingPayload: _bookingPayload(engine)),
-        );
+      CreatePaidSenderDelivery(bookingPayload: _bookingPayload(engine)),
+    );
   }
 
   Map<String, dynamic> _bookingPayload(SendPackageState engine) => {
-        'draftId': draftId,
-        'idempotencyKey':
-            'sender-${senderUid ?? 'anonymous'}-${draftId ?? 'draft'}-${engine.senderPaymentSessionId ?? 'session'}',
-        'pickup': {
-          'placeId': engine.pickupPlaceId,
-          'address': engine.pickupLocation ?? draft.pickupAddress,
-          'subAddress': engine.pickupLocationSubAddress ?? '',
-          'locality': engine.pickupLocality ?? '',
-          'coordinates': {
-            'lat': engine.pickupCoordinate?.lat ?? 0,
-            'lng': engine.pickupCoordinate?.lng ?? 0,
-          },
-        },
-        'dropoff': {
-          'placeId': engine.destinationPlaceId,
-          'address': engine.destinationLocation ?? draft.dropoffAddress,
-          'subAddress': engine.destinationLocationSubAddress ?? '',
-          'locality': engine.destinationLocality ?? '',
-          'coordinates': {
-            'lat': engine.desinationCoordinate?.lat ?? 0,
-            'lng': engine.desinationCoordinate?.lng ?? 0,
-          },
-        },
-        'recipient': {
-          'name': draft.receiverName,
-          'phone': draft.receiverPhone,
-          'deliveryNotes': draft.deliveryNotes,
-        },
-        'deliveryTime': {
-          'type': draft.deliveryTimingType == SenderDeliveryTimingType.now
-              ? 'now'
-              : 'scheduled',
-          'scheduledDate': draft.scheduledDate,
-          'scheduledWindow': draft.scheduledWindow,
-          'customWindowStart': draft.customWindowStart,
-          'customWindowEnd': draft.customWindowEnd,
-          'summary': draft.deliveryTimeSummary,
-        },
-        'parcel': {
-          'itemName': draft.itemName,
-          'description': draft.itemDescription,
-          'weightLabel': draft.weightLabel,
-          'weightKg': engine.parcelWeightKg,
-          'fragile': draft.fragile,
-          'highValue': draft.highValue,
-        },
-        'iris': {
-          'itemName': engine.canonicalIrisResult?.itemName,
-          'quantity': engine.canonicalIrisResult?.quantity,
-          'totalWeightKg': engine.canonicalIrisResult?.totalWeightKg,
-          'recommendedVehicle': engine.canonicalIrisResult?.recommendedVehicle,
-          'confidence': engine.canonicalIrisResult?.confidenceLabel,
-          'category': engine.canonicalIrisResult?.category,
-          'vanguardRequired': engine.canonicalIrisResult?.vanguardRequired,
-          'vanguardRequiredReason':
-              engine.canonicalIrisResult?.vanguardRequiredReason,
-        },
-      };
+    'draftId': draftId,
+    'idempotencyKey':
+        'sender-${senderUid ?? 'anonymous'}-${draftId ?? 'draft'}-${engine.senderPaymentSessionId ?? 'session'}',
+    'pickup': {
+      'placeId': engine.pickupPlaceId,
+      'address': engine.pickupLocation ?? draft.pickupAddress,
+      'subAddress': engine.pickupLocationSubAddress ?? '',
+      'locality': engine.pickupLocality ?? '',
+      'coordinates': {
+        'lat': engine.pickupCoordinate?.lat ?? 0,
+        'lng': engine.pickupCoordinate?.lng ?? 0,
+      },
+    },
+    'dropoff': {
+      'placeId': engine.destinationPlaceId,
+      'address': engine.destinationLocation ?? draft.dropoffAddress,
+      'subAddress': engine.destinationLocationSubAddress ?? '',
+      'locality': engine.destinationLocality ?? '',
+      'coordinates': {
+        'lat': engine.desinationCoordinate?.lat ?? 0,
+        'lng': engine.desinationCoordinate?.lng ?? 0,
+      },
+    },
+    'recipient': {
+      'name': draft.receiverName,
+      'phone': draft.receiverPhone,
+      'deliveryNotes': draft.deliveryNotes,
+    },
+    'deliveryTime': {
+      'type': draft.deliveryTimingType == SenderDeliveryTimingType.now
+          ? 'now'
+          : 'scheduled',
+      'scheduledDate': draft.scheduledDate,
+      'scheduledWindow': draft.scheduledWindow,
+      'customWindowStart': draft.customWindowStart,
+      'customWindowEnd': draft.customWindowEnd,
+      'summary': draft.deliveryTimeSummary,
+    },
+    'parcel': {
+      'itemName': draft.itemName,
+      'description': draft.itemDescription,
+      'weightLabel': draft.weightLabel,
+      'weightKg': engine.parcelWeightKg,
+      'fragile': draft.fragile,
+      'highValue': draft.highValue,
+    },
+    'iris': {
+      'itemName': engine.canonicalIrisResult?.itemName,
+      'quantity': engine.canonicalIrisResult?.quantity,
+      'totalWeightKg': engine.canonicalIrisResult?.totalWeightKg,
+      'recommendedVehicle': engine.canonicalIrisResult?.recommendedVehicle,
+      'confidence': engine.canonicalIrisResult?.confidenceLabel,
+      'category': engine.canonicalIrisResult?.category,
+      'vanguardRequired': engine.canonicalIrisResult?.vanguardRequired,
+      'vanguardRequiredReason':
+          engine.canonicalIrisResult?.vanguardRequiredReason,
+    },
+  };
 }
 
 class _RadioGlassTile extends StatelessWidget {
@@ -6377,7 +6524,7 @@ class _SenderMobileMapState extends State<_SenderMobileMap>
   Widget build(BuildContext context) {
     final highContrast =
         SenderAccessibilityScope.maybeOf(context)?.settings.highContrast ??
-            false;
+        false;
     final engine = widget.engine;
     final pickup = _latLng(engine?.pickupCoordinate);
     final dropoff = _latLng(engine?.desinationCoordinate);
@@ -6403,7 +6550,7 @@ class _SenderMobileMapState extends State<_SenderMobileMap>
                     );
                   },
                   markers: _markers(pickupForMap, dropoff),
-                  polylines: _polylines(),
+                  polylines: _polylines(pickupForMap, dropoff),
                   zoomControlsEnabled: false,
                   myLocationButtonEnabled: false,
                   mapToolbarEnabled: false,
@@ -6475,10 +6622,6 @@ class _SenderMobileMapState extends State<_SenderMobileMap>
   }
 
   Set<Marker> _markers(LatLng pickup, LatLng? dropoff) {
-    final engine = widget.engine;
-    if (engine != null && engine.markers.isNotEmpty) {
-      return engine.markers.values.toSet();
-    }
     final pickupIcon = _pickupIcon;
     final dropoffIcon = _dropoffIcon;
     if (pickupIcon == null || (dropoff != null && dropoffIcon == null)) {
@@ -6502,14 +6645,14 @@ class _SenderMobileMapState extends State<_SenderMobileMap>
   Future<void> _loadCircumMarkerIcons() async {
     final pickupIcon =
         await BitmapDescriptorHelper.getBitmapDescriptorFromSvgAsset(
-      'assets/svg/source_marker.svg',
-      const Size(27, 43),
-    );
+          'assets/svg/source_marker.svg',
+          const Size(27, 43),
+        );
     final dropoffIcon =
         await BitmapDescriptorHelper.getBitmapDescriptorFromSvgAsset(
-      'assets/svg/destination_marker.svg',
-      const Size(27, 43),
-    );
+          'assets/svg/destination_marker.svg',
+          const Size(27, 43),
+        );
     if (!mounted) return;
     setState(() {
       _pickupIcon = pickupIcon;
@@ -6517,10 +6660,18 @@ class _SenderMobileMapState extends State<_SenderMobileMap>
     });
   }
 
-  Set<Polyline> _polylines() {
+  Set<Polyline> _polylines(LatLng pickup, LatLng? dropoff) {
+    if (dropoff == null) return const {};
     final engine = widget.engine;
     if (engine == null || engine.polylines.isEmpty) return const {};
     return engine.polylines
+        .where(
+          (polyline) => senderBookingPolylineMatchesRoute(
+            polyline.points,
+            pickup,
+            dropoff,
+          ),
+        )
         .map(
           (polyline) =>
               polyline.copyWith(colorParam: _Tokens.lightBlue, widthParam: 4),
@@ -6569,6 +6720,23 @@ class _SenderMobileMapState extends State<_SenderMobileMap>
 
 @visibleForTesting
 bool senderBookingMapShouldUseGoogle(LatLng? pickup) => pickup != null;
+
+@visibleForTesting
+bool senderBookingPolylineMatchesRoute(
+  List<LatLng> points,
+  LatLng pickup,
+  LatLng dropoff,
+) {
+  if (points.isEmpty) return false;
+  final nearPickup = points.any((point) => _senderLatLngNear(point, pickup));
+  final nearDropoff = points.any((point) => _senderLatLngNear(point, dropoff));
+  return nearPickup && nearDropoff;
+}
+
+bool _senderLatLngNear(LatLng a, LatLng b) {
+  return (a.latitude - b.latitude).abs() <= .06 &&
+      (a.longitude - b.longitude).abs() <= .08;
+}
 
 const _senderMapStyle = '''
 [

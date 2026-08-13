@@ -54,7 +54,9 @@ List<DateTime> senderScheduleDateOptions({DateTime? now, int days = 7}) {
   final base = now ?? DateTime.now();
   final today = DateTime(base.year, base.month, base.day);
   return List<DateTime>.generate(
-      days, (index) => today.add(Duration(days: index)));
+    days,
+    (index) => today.add(Duration(days: index)),
+  );
 }
 
 String senderScheduleDateValue(DateTime date) {
@@ -173,8 +175,9 @@ class SenderPaymentSplit {
     SenderFallbackPaymentMethod? fallbackMethod,
   }) {
     final maxRothAmount = availableRothCredits * senderRothPoundValue;
-    final rothAppliedAmount =
-        rothEnabled ? maxRothAmount.clamp(0, totalDue).toDouble() : 0.0;
+    final rothAppliedAmount = rothEnabled
+        ? maxRothAmount.clamp(0, totalDue).toDouble()
+        : 0.0;
     final rothAppliedCredits = rothAppliedAmount / senderRothPoundValue;
     final remaining = (totalDue - rothAppliedAmount).clamp(0, totalDue);
     return SenderPaymentSplit(
@@ -285,9 +288,17 @@ class SenderBookingDraft {
   bool get canContinue {
     switch (step) {
       case SenderBookingStep.pickup:
-        return isSenderTypedAddressSpecific(pickupAddress);
+        return isSenderCanonicalAddressResolved(
+          pickupAddress,
+          pickupLat,
+          pickupLng,
+        );
       case SenderBookingStep.dropoff:
-        return isSenderTypedAddressSpecific(dropoffAddress);
+        return isSenderCanonicalAddressResolved(
+          dropoffAddress,
+          dropoffLat,
+          dropoffLng,
+        );
       case SenderBookingStep.recipient:
         return receiverName.trim().isNotEmpty &&
             receiverPhone.trim().isNotEmpty;
@@ -466,69 +477,58 @@ class SenderBookingDraft {
   }
 
   Map<String, dynamic> toBackendDraftPayload() => {
-        'version': 1,
-        'step': step.name,
-        'status': 'draft',
-        'completed': false,
-        'pickup': {
-          'address': pickupAddress,
-          'placeId': pickupPlaceId,
-          if (pickupLat != null && pickupLng != null)
-            'coordinate': {
-              'lat': pickupLat,
-              'lng': pickupLng,
-            },
-        },
-        'dropoff': {
-          'address': dropoffAddress,
-          'placeId': dropoffPlaceId,
-          if (dropoffLat != null && dropoffLng != null)
-            'coordinate': {
-              'lat': dropoffLat,
-              'lng': dropoffLng,
-            },
-        },
-        'recipient': {
-          'name': receiverName,
-          'phone': receiverPhone,
-          'deliveryNotes': deliveryNotes,
-        },
-        'deliveryTime': {
-          'type': deliveryTimingType == SenderDeliveryTimingType.now
-              ? 'now'
-              : 'scheduled',
-          'scheduledDate': scheduledDate,
-          'scheduledWindow': scheduledWindow,
-          'customWindowStart': customWindowStart,
-          'customWindowEnd': customWindowEnd,
-          'summary': deliveryTimeSummary,
-        },
-        'parcel': {
-          'itemName': itemName,
-          'description': itemDescription,
-          'weightLabel': weightLabel,
-          'fragile': fragile,
-          'highValue': highValue,
-        },
-        'iris': {
-          'confidence': irisConfidence,
-          'recommendedVehicle': irisVehicle,
-          'selectedVehicle': selectedVehicle,
-        },
-        'deliveryOptions': {
-          'selectedOption': selectedOption,
-          'vanguard': vanguard,
-        },
-        'review': {
-          'amountDue': amountDue,
-        },
-        'paymentMethod': {
-          'type': selectedPaymentMethod?.name ?? '',
-          'paymentMethodId': selectedPaymentMethodId,
-          'label': selectedPaymentMethodLabel,
-          'rothEnabled': rothEnabled,
-        },
-      };
+    'version': 1,
+    'step': step.name,
+    'status': 'draft',
+    'completed': false,
+    'pickup': {
+      'address': pickupAddress,
+      'placeId': pickupPlaceId,
+      if (pickupLat != null && pickupLng != null)
+        'coordinate': {'lat': pickupLat, 'lng': pickupLng},
+    },
+    'dropoff': {
+      'address': dropoffAddress,
+      'placeId': dropoffPlaceId,
+      if (dropoffLat != null && dropoffLng != null)
+        'coordinate': {'lat': dropoffLat, 'lng': dropoffLng},
+    },
+    'recipient': {
+      'name': receiverName,
+      'phone': receiverPhone,
+      'deliveryNotes': deliveryNotes,
+    },
+    'deliveryTime': {
+      'type': deliveryTimingType == SenderDeliveryTimingType.now
+          ? 'now'
+          : 'scheduled',
+      'scheduledDate': scheduledDate,
+      'scheduledWindow': scheduledWindow,
+      'customWindowStart': customWindowStart,
+      'customWindowEnd': customWindowEnd,
+      'summary': deliveryTimeSummary,
+    },
+    'parcel': {
+      'itemName': itemName,
+      'description': itemDescription,
+      'weightLabel': weightLabel,
+      'fragile': fragile,
+      'highValue': highValue,
+    },
+    'iris': {
+      'confidence': irisConfidence,
+      'recommendedVehicle': irisVehicle,
+      'selectedVehicle': selectedVehicle,
+    },
+    'deliveryOptions': {'selectedOption': selectedOption, 'vanguard': vanguard},
+    'review': {'amountDue': amountDue},
+    'paymentMethod': {
+      'type': selectedPaymentMethod?.name ?? '',
+      'paymentMethodId': selectedPaymentMethodId,
+      'label': selectedPaymentMethodLabel,
+      'rothEnabled': rothEnabled,
+    },
+  };
 
   factory SenderBookingDraft.fromBackendDraft(Map<String, dynamic> data) {
     final pickup = _draftMap(data['pickup']);
@@ -555,7 +555,8 @@ class SenderBookingDraft {
     final fallback = matchingMethods.isEmpty ? null : matchingMethods.first;
 
     return SenderBookingDraft(
-      step: restoredStep == SenderBookingStep.findingRider ||
+      step:
+          restoredStep == SenderBookingStep.findingRider ||
               restoredStep == SenderBookingStep.liveTracking
           ? SenderBookingStep.pickup
           : restoredStep,
@@ -609,6 +610,24 @@ bool isSenderTypedAddressSpecific(String value) {
   final hasSeparator =
       text.contains(',') || text.split(RegExp(r'\s+')).length >= 3;
   return hasDigit && hasSeparator;
+}
+
+bool isSenderCanonicalAddressResolved(
+  String value,
+  double? latitude,
+  double? longitude,
+) {
+  return isSenderTypedAddressSpecific(value) &&
+      isSenderValidUkCoordinate(latitude, longitude);
+}
+
+bool isSenderValidUkCoordinate(double? latitude, double? longitude) {
+  final lat = latitude;
+  final lng = longitude;
+  if (lat == null || lng == null) return false;
+  if (!lat.isFinite || !lng.isFinite) return false;
+  if (lat == 0 || lng == 0) return false;
+  return lat >= 49.8 && lat <= 61.1 && lng >= -8.7 && lng <= 2.3;
 }
 
 String senderStepTitle(SenderBookingStep step) {

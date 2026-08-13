@@ -50,6 +50,32 @@ test("furniture and heavy goods classify with van/two-person handling", () => {
   assert.ok(sofa.recommendation.handlingFlags.includes("Van Required"));
 });
 
+test("piano cannot canonicalize as a 2kg small standard parcel", () => {
+  const piano = classifyIris({
+    description: "piano",
+    photoEstimatedWeightKg: 2,
+    distanceMiles: 6,
+  });
+
+  assert.equal(piano.recommendation.category, "Furniture & Home");
+  assert.notEqual(piano.recommendation.estimatedWeightKg, 2);
+  assert.notEqual(piano.recommendation.weightBand.label, "Small Parcel");
+  assert.ok(piano.recommendation.handlingFlags.includes("Van Required"));
+  assert.ok(piano.recommendation.handlingFlags.includes("Two Person Lift"));
+  assert.ok(piano.recommendation.handlingFlags.includes("Awkward Shape"));
+});
+
+test("volume-heavy shoe scenario can still require a van without verified weight", () => {
+  const shoes = classifyIris({
+    description: "50 boxes of shoes",
+    distanceMiles: 5,
+  });
+
+  assert.equal(shoes.compliance.status, "allowed");
+  assert.equal(shoes.internal.riderMatching.vehicleRequired, "van");
+  assert.ok(shoes.recommendation.estimatedWeightKg >= 35);
+});
+
 test("unsupported referrals and prohibited items do not dispatch normally", () => {
   const pet = classifyIris({description: "pet transport for my dog"});
   assert.equal(pet.compliance.status, "referral_required");

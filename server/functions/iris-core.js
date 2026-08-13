@@ -120,6 +120,14 @@ const OBJECT_MAPPINGS = Object.freeze([
     vehicleRequired: "any",
   },
   {
+    id: "piano",
+    patterns: [/\bupright pianos?\b/, /\bgrand pianos?\b/, /\bpianos?\b/],
+    category: "Furniture & Home",
+    weightKg: 90,
+    handlingFlags: ["Fragile", "Bulky", "Awkward Shape", "Van Required", "Two Person Lift"],
+    vehicleRequired: "van",
+  },
+  {
     id: "dresser_cabinet",
     patterns: [/\bdresser cabinet\b/, /\bdresser\b/, /\bdrawer cabinet\b/],
     category: "Furniture & Home",
@@ -1468,7 +1476,7 @@ function classifyCategory(text, shipmentSummary = null) {
   if (includesAny(text, ["clothes", "dress", "shoes", "fashion", "jacket", "shirt"])) return "Clothing & Fashion";
   if (includesAny(text, ["suitcase", "luggage", "keys", "wallet", "personal"])) return "Personal Items & Luggage";
   if (includesAny(text, ["food", "groceries", "meal", "cake", "drink", "consumable"])) return "Food & Consumables";
-  if (includesAny(text, ["sofa", "chair", "table", "wardrobe", "mattress", "furniture", "fridge", "washing machine"])) return "Furniture & Home";
+  if (includesAny(text, ["sofa", "chair", "table", "wardrobe", "mattress", "furniture", "fridge", "washing machine", "piano"])) return "Furniture & Home";
   if (includesAny(text, ["tool", "drill", "machinery", "machine", "engine"])) return "Tools & Machinery";
   if (includesAny(text, ["prescription", "medicine", "medication", "pharmacy", "medical", "pathology", "diagnostic sample", "urine sample", "tissue sample", "swab sample", "hospital", "clinic", "gp referral", "x-ray", "xray", "mri"])) return "Medical & Pharmacy";
   if (includesAny(text, ["stock", "invoice", "business", "commercial", "office equipment"])) return "Business & Commercial";
@@ -1486,12 +1494,12 @@ function handlingFlagsFor(text, category, weightKg, shipmentSummary = null) {
   if (includesAny(text, ["upright", "keep upright", "tv", "fridge", "glass cabinet", "display cabinet", "glass table"])) flags.add("Keep Upright");
   if (category === "Fragile & Valuable" || includesAny(text, ["iphone", "laptop", "jewellery", "jewelry", "watch", "valuable", "expensive", "designer", "luxury"])) flags.add("High Value");
   if (includesAny(text, ["cold", "frozen", "temperature", "medicine", "insulin", "vaccine", "blood sample", "pathology", "diagnostic sample", "urine sample", "tissue sample", "swab sample", "specimen"])) flags.add("Temperature Sensitive");
-  if (weightKg > 10 || includesAny(text, ["large", "65 inch", "65-inch", "sofa", "wardrobe", "mattress", "pallet"])) flags.add("Bulky");
-  if (includesAny(text, ["awkward", "odd shape", "long", "ladder"])) flags.add("Awkward Shape");
+  if (weightKg > 10 || includesAny(text, ["large", "65 inch", "65-inch", "sofa", "wardrobe", "mattress", "pallet", "piano"])) flags.add("Bulky");
+  if (includesAny(text, ["awkward", "odd shape", "long", "ladder", "piano"])) flags.add("Awkward Shape");
   if (weightKg >= deliveryPolicy.vehiclePolicy.vanRequiredMinKg ||
       !compactPrinterLoad && flags.has("Bulky") ||
-      includesAny(text, ["van", "sofa", "wardrobe", "mattress", "65 inch", "65-inch"])) flags.add("Van Required");
-  if (weightKg >= deliveryPolicy.vehiclePolicy.vanRequiredMinKg || includesAny(text, ["two person", "2 person", "sofa", "wardrobe", "65 inch", "65-inch"])) flags.add("Two Person Lift");
+      includesAny(text, ["van", "sofa", "wardrobe", "mattress", "65 inch", "65-inch", "piano"])) flags.add("Van Required");
+  if (weightKg >= deliveryPolicy.vehiclePolicy.vanRequiredMinKg || includesAny(text, ["two person", "2 person", "sofa", "wardrobe", "65 inch", "65-inch", "piano"])) flags.add("Two Person Lift");
   return Array.from(flags);
 }
 
