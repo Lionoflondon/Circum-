@@ -33,6 +33,10 @@ const {calculateWalletCheckout} = require("./wallet-core");
 const {verifiedStripePaidGbpSession} = require("./roth-ledger-core");
 const rothLedger = require("./roth-ledger");
 const vanguardProtocol = require("./vanguard-protocol-core");
+const {
+  normalizeSenderAppReturnBase,
+  senderAppCancelUrl,
+} = require("./app-stripe-return-guard");
 
 function allowCors(res) {
   res.set("Access-Control-Allow-Origin", "*");
@@ -636,7 +640,6 @@ exports.createHealthPlusCheckoutSession = functions.https.onRequest(async (req, 
       email,
       priceBreakdown,
       successUrl,
-      cancelUrl,
       useRoth,
     } = req.body;
 
@@ -779,8 +782,11 @@ exports.createHealthPlusCheckoutSession = functions.https.onRequest(async (req, 
       email: email || sender.email || profile.email || booking.email,
       amountPence: recurring ? amountPence : Math.round(cardAmount * 100),
       recurring,
-      successUrl: successUrl || "https://circum-app-2797c.web.app/?app=sender&health=success",
-      cancelUrl: cancelUrl || "https://circum-app-2797c.web.app/?app=sender&health=cancelled",
+      successUrl: normalizeSenderAppReturnBase(
+          successUrl,
+          "/#/sender-mobile/health?health=success",
+      ),
+      cancelUrl: senderAppCancelUrl(null, {health: "cancelled"}),
       discounts,
       metadata: {
         userId: sender.uid,

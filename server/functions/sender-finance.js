@@ -4,6 +4,10 @@
 const functions = require("firebase-functions/v1");
 const {getFirestore, FieldValue} = require("firebase-admin/firestore");
 const {requireAppCheck} = require("./callable-guard");
+const {
+  normalizeOrigin,
+  senderAppCancelUrl,
+} = require("./app-stripe-return-guard");
 
 function requireSender(context) {
   if (!context.auth) {
@@ -113,12 +117,9 @@ exports.createSenderSetupCheckoutSession = (stripe) => functions.https.onCall(as
   requireAppCheck(context);
   const sender = requireSender(context);
   const customerId = await ensureStripeCustomer({stripe, sender});
-  const origin = `${data && data.origin || "https://circum-app-2797c.web.app"}`.replace(/\/+$/, "");
-  if (!/^https:\/\/(circum-app-2797c\.web\.app|circum-2797c\.web\.app|localhost(?::\d+)?|127\.0\.0\.1(?::\d+)?)$/u.test(origin)) {
-    throw new functions.https.HttpsError("invalid-argument", "Unsupported Sender Wallet return origin.");
-  }
+  const origin = normalizeOrigin(data && data.origin);
   const successUrl = `${origin}/#/sender-mobile/wallet?card_setup=success&setup_session_id={CHECKOUT_SESSION_ID}`;
-  const cancelUrl = `${origin}/#/sender-mobile/wallet?card_setup=cancelled`;
+  const cancelUrl = senderAppCancelUrl(null, {card_setup: "cancelled"});
   const session = await stripe.checkout.sessions.create({
     mode: "setup",
     customer: customerId,

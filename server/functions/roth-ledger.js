@@ -25,6 +25,7 @@ const {
 const communicationEngine = require("./communication-engine");
 const senderTrust = require("./sender-trust");
 const {requireAppCheck} = require("./callable-guard");
+const {senderAppCheckoutUrls} = require("./app-stripe-return-guard");
 
 function hasAdminRole(context) {
   const token = context.auth && context.auth.token || {};
@@ -525,8 +526,15 @@ exports.createWalletTopUp = (stripe) => functions.https.onCall(async (data, cont
     email: context.auth.token.email,
     authUid: context.auth.uid,
   });
-  const baseUrl = `${data.returnUrl || "https://circumuk.com/?app=sender&section=wallet"}`;
-  const separator = baseUrl.includes("?") ? "&" : "?";
+  const returnUrls = senderAppCheckoutUrls({
+    returnUrl: data.returnUrl,
+    successPath: "/#/sender-mobile/wallet",
+    successParams: {
+      wallet_topup: "success",
+      session_id: "{CHECKOUT_SESSION_ID}",
+    },
+    cancelParams: {wallet_topup: "cancelled"},
+  });
   const session = await stripe.checkout.sessions.create({
     mode: "payment",
     payment_method_types: ["card"],
@@ -542,8 +550,8 @@ exports.createWalletTopUp = (stripe) => functions.https.onCall(async (data, cont
         },
       },
     }],
-    success_url: `${baseUrl}${separator}wallet_topup=success&session_id={CHECKOUT_SESSION_ID}`,
-    cancel_url: `${baseUrl}${separator}wallet_topup=cancelled`,
+    success_url: returnUrls.successUrl,
+    cancel_url: returnUrls.cancelUrl,
     metadata: {
       type: "wallet_top_up",
       userId: identity.walletId,

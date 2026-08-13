@@ -68,7 +68,19 @@ test("sender mobile gifts checkout returns to sender mobile hash routes", () => 
   );
   assert.equal(
     urls.cancelUrl,
-    "https://circum-app-2797c.web.app/#/sender-mobile/gifts/payment?giftDraftId=draft_123&payment=cancelled",
+    "https://circum-app-2797c.web.app/#/sender-mobile?gift_payment=cancelled&giftDraftId=draft_123",
+  );
+});
+
+test("sender mobile gifts cancellation ignores public-web origins", () => {
+  const urls = giftReturnUrls({
+    giftDraftId: "draft_123",
+    source: "sender_mobile",
+    origin: "https://circumuk.com",
+  });
+  assert.equal(
+    urls.cancelUrl,
+    "https://circum-app-2797c.web.app/#/sender-mobile?gift_payment=cancelled&giftDraftId=draft_123",
   );
 });
 

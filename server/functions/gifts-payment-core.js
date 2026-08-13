@@ -1,4 +1,9 @@
 /* eslint-disable require-jsdoc */
+const {
+  normalizeOrigin,
+  senderAppCancelUrl,
+} = require("./app-stripe-return-guard");
+
 function selectedGiftBudgetGbp(gift) {
   return Number(
     gift.selectedBudgetGbp ||
@@ -11,10 +16,13 @@ function selectedGiftBudgetGbp(gift) {
 
 function giftReturnUrls({giftDraftId, source, origin, config = {}}) {
   if (source === "sender_mobile") {
-    const base = `${origin || "https://circum-app-2797c.web.app"}`.replace(/\/+$/, "");
+    const base = normalizeOrigin(origin);
     return {
       successUrl: `${base}/#/sender-mobile/gifts/confirmation?giftDraftId=${giftDraftId}&payment=success&session_id={CHECKOUT_SESSION_ID}`,
-      cancelUrl: `${base}/#/sender-mobile/gifts/payment?giftDraftId=${giftDraftId}&payment=cancelled`,
+      cancelUrl: senderAppCancelUrl(null, {
+        gift_payment: "cancelled",
+        giftDraftId,
+      }),
     };
   }
   const baseUrl = "https://circumuk.com/?app=gifts";

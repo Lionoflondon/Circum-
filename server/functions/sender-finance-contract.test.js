@@ -15,7 +15,7 @@ test("Sender saved-card management uses Stripe Setup mode and Sender Wallet retu
   assert.match(finance, /mode:\s*"setup"/);
   assert.match(finance, /payment_method_types:\s*\["card"\]/);
   assert.match(finance, /#\/sender-mobile\/wallet\?card_setup=success/);
-  assert.match(finance, /#\/sender-mobile\/wallet\?card_setup=cancelled/);
+  assert.match(finance, /senderAppCancelUrl\(null,\s*\{card_setup:\s*"cancelled"\}/);
   assert.doesNotMatch(finance, /#\/send\/business|BusinessView|business_wallet/u);
   assert.match(index, /exports\.createSenderSetupCheckoutSession/);
 });

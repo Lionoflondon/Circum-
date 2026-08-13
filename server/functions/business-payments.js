@@ -10,6 +10,7 @@ const {
 const {requireAdmin} = require("./admin-auth");
 const {calculateWalletCheckout} = require("./wallet-core");
 const communicationEngine = require("./communication-engine");
+const {senderAppCheckoutUrls} = require("./app-stripe-return-guard");
 
 function money(value) {
   const parsed = Number(value || 0);
@@ -474,8 +475,19 @@ exports.createBusinessRothCheckout = (stripe) => functions.https.onCall(async (d
   const account = await requireBusinessMember(businessId, context);
   const db = getFirestore();
   const purchaseRef = db.collection("businessRothPurchases").doc();
-  const baseUrl = `${data.returnUrl || "https://circumuk.com/?app=business&section=invoicing"}`;
-  const separator = baseUrl.includes("?") ? "&" : "?";
+  const returnUrls = senderAppCheckoutUrls({
+    returnUrl: data.returnUrl,
+    successPath: "/#/sender-mobile/business",
+    successParams: {
+      roth_purchase: "success",
+      purchaseId: purchaseRef.id,
+      session_id: "{CHECKOUT_SESSION_ID}",
+    },
+    cancelParams: {
+      roth_purchase: "cancelled",
+      purchaseId: purchaseRef.id,
+    },
+  });
   const session = await stripe.checkout.sessions.create({
     mode: "payment",
     payment_method_types: ["card"],
@@ -491,8 +503,8 @@ exports.createBusinessRothCheckout = (stripe) => functions.https.onCall(async (d
         },
       },
     }],
-    success_url: `${baseUrl}${separator}roth_purchase=success&purchaseId=${purchaseRef.id}&session_id={CHECKOUT_SESSION_ID}`,
-    cancel_url: `${baseUrl}${separator}roth_purchase=cancelled&purchaseId=${purchaseRef.id}`,
+    success_url: returnUrls.successUrl,
+    cancel_url: returnUrls.cancelUrl,
     metadata: {
       type: "business_roth_purchase",
       businessId,
@@ -570,8 +582,23 @@ exports.createBusinessInvoiceCheckout = (stripe) => functions.https.onCall(async
     return {paid: true, method: "roth", paymentAmount, totalInvoice: balanceDue, rothApplied: rothAmount, cardAmount: 0, duplicate: result.duplicate === true};
   }
   const paymentRef = db.collection("businessInvoicePayments").doc();
-  const baseUrl = `${data.returnUrl || "https://circumuk.com/?app=business&section=invoicing"}`;
-  const separator = baseUrl.includes("?") ? "&" : "?";
+  const returnUrls = senderAppCheckoutUrls({
+    returnUrl: data.returnUrl,
+    successPath: "/#/sender-mobile/business",
+    successParams: {
+      paymentStatus: "payment-success",
+      invoiceId,
+      businessId,
+      paymentId: paymentRef.id,
+      checkoutSessionId: "{CHECKOUT_SESSION_ID}",
+    },
+    cancelParams: {
+      paymentStatus: "payment-cancelled",
+      invoiceId,
+      businessId,
+      paymentId: paymentRef.id,
+    },
+  });
   const bookingId = `${invoice.bookingId || invoice.deliveryId || invoice.requestId || ""}`;
   const session = await stripe.checkout.sessions.create({
     mode: "payment",
@@ -588,8 +615,8 @@ exports.createBusinessInvoiceCheckout = (stripe) => functions.https.onCall(async
         },
       },
     }],
-    success_url: `${baseUrl}${separator}paymentStatus=payment-success&invoiceId=${invoiceId}&businessId=${businessId}&paymentId=${paymentRef.id}&checkoutSessionId={CHECKOUT_SESSION_ID}`,
-    cancel_url: `${baseUrl}${separator}paymentStatus=payment-cancelled&invoiceId=${invoiceId}&businessId=${businessId}&paymentId=${paymentRef.id}`,
+    success_url: returnUrls.successUrl,
+    cancel_url: returnUrls.cancelUrl,
     metadata: {
       type: "business_invoice_payment",
       businessId,
@@ -600,7 +627,7 @@ exports.createBusinessInvoiceCheckout = (stripe) => functions.https.onCall(async
       rothAmountGbp: `${rothAmount}`,
       paymentAmountGbp: `${paymentAmount}`,
       requestedPaymentMethod: requestedMethod,
-      returnUrl: baseUrl,
+      returnUrl: returnUrls.successBase,
       paymentStatus: "pending_verification",
       createdByUserId: context.auth.uid,
     },
@@ -621,7 +648,7 @@ exports.createBusinessInvoiceCheckout = (stripe) => functions.https.onCall(async
     stripeSessionId: session.id,
     checkoutSessionId: session.id,
     paymentIntentId: session.payment_intent || null,
-    returnUrl: baseUrl,
+    returnUrl: returnUrls.successBase,
     createdAt: FieldValue.serverTimestamp(),
     createdByUserId: context.auth.uid,
   });

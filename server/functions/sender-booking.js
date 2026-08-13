@@ -11,6 +11,7 @@ const {classifyIris} = require("./iris-core");
 const {verifiedPhotoAnalysis} = require("./iris-photo-analysis");
 const {dispatchDeliveryRequest} = require("./send-package");
 const {requireAppCheck} = require("./callable-guard");
+const {senderAppCheckoutUrls} = require("./app-stripe-return-guard");
 
 const BASE_FARE_GBP = 5;
 const ADDITIONAL_FARE_PER_MILE_GBP = 1.5;
@@ -1187,8 +1188,19 @@ exports.createSenderPaymentSession = (stripe) => functions.https.onCall(async (d
       Number(existingSessionSnap.data().checkoutAttempt || 0) + 1 :
       1;
     const idempotencyKey = stableId(`${sender.uid}:${draftId || "web"}:${quoteId}:${sessionRef.id}:${requestedSessionKey}:${checkoutAttempt}`);
-    const baseUrl = text(data.returnUrl) || "https://circum-2797c.web.app/send";
-    const separator = baseUrl.includes("?") ? "&" : "?";
+    const returnUrls = senderAppCheckoutUrls({
+      returnUrl: data.returnUrl,
+      successPath: "/#/sender-mobile/send",
+      successParams: {
+        sender_payment: "success",
+        paymentSessionId: sessionRef.id,
+        checkoutSessionId: "{CHECKOUT_SESSION_ID}",
+      },
+      cancelParams: {
+        sender_payment: "cancelled",
+        paymentSessionId: sessionRef.id,
+      },
+    });
     let checkoutSession;
     try {
       checkoutSession = await stripe.checkout.sessions.create({
@@ -1207,8 +1219,8 @@ exports.createSenderPaymentSession = (stripe) => functions.https.onCall(async (d
             },
           },
         }],
-        success_url: `${baseUrl}${separator}sender_payment=success&paymentSessionId=${sessionRef.id}&checkoutSessionId={CHECKOUT_SESSION_ID}`,
-        cancel_url: `${baseUrl}${separator}sender_payment=cancelled&paymentSessionId=${sessionRef.id}`,
+        success_url: returnUrls.successUrl,
+        cancel_url: returnUrls.cancelUrl,
         payment_intent_data: {
           setup_future_usage: "off_session",
           metadata: {
@@ -1236,7 +1248,7 @@ exports.createSenderPaymentSession = (stripe) => functions.https.onCall(async (d
           rothAppliedAmount: `${split.walletContributionGbp}`,
           remainingAmount: `${split.remainingGbp}`,
           orderTotalGbp: `${split.orderTotalGbp}`,
-          returnUrl: baseUrl,
+          returnUrl: returnUrls.successBase,
         },
       }, {idempotencyKey: `sender_checkout_${idempotencyKey}`});
     } catch (error) {
