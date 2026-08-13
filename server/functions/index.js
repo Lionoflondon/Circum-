@@ -311,6 +311,7 @@ exports.redactLegacyPayoutBankFields =
 exports.syncSenderTrustBaseline = senderTrust.syncSenderTrustBaseline;
 exports.adminUpdateSenderTrust = senderTrust.adminUpdateSenderTrust;
 exports.ensureReferralCode = referrals.ensureReferralCode;
+exports.getReferralDashboard = referrals.getReferralDashboard;
 exports.attachReferralCode = referrals.attachReferralCode;
 exports.activateReferral = referrals.activateReferral;
 exports.activateReferralOnDeliveryCompleted =
@@ -380,6 +381,8 @@ exports.cleanupExpiredSenderDrafts = senderBooking.cleanupExpiredSenderDrafts;
 exports.listSenderPaymentMethods =
   senderFinance.listSenderPaymentMethods(stripe);
 exports.createSenderSetupIntent = senderFinance.createSenderSetupIntent(stripe);
+exports.createSenderSetupCheckoutSession =
+  senderFinance.createSenderSetupCheckoutSession(stripe);
 exports.detachSenderPaymentMethod =
   senderFinance.detachSenderPaymentMethod(stripe);
 exports.setDefaultSenderPaymentMethod =

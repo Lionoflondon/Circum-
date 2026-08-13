@@ -4,6 +4,7 @@
 const functions = require("firebase-functions/v1");
 const {getFirestore, FieldValue} = require("firebase-admin/firestore");
 const {getAuth} = require("firebase-admin/auth");
+const {requireAppCheck} = require("./callable-guard");
 const rothLedger = require("./roth-ledger");
 const {BALANCE_TYPES, TRANSACTION_TYPES} = require("./roth-ledger-core");
 const {
@@ -41,10 +42,8 @@ function codeFromUser(user) {
   return `${source || "CIRCUM"}${user.uid.slice(0, 4).toUpperCase()}`.slice(0, 12);
 }
 
-exports.ensureReferralCode = functions.https.onCall(async (data, context) => {
-  requireAuth(context);
+async function ensureReferralCodeForUid(uid) {
   const db = getFirestore();
-  const uid = context.auth.uid;
   const userRef = db.collection("users").doc(uid);
   const snap = await userRef.get();
   const existing = normalizeCode(snap.data() && snap.data().referralCode);
@@ -77,9 +76,67 @@ exports.ensureReferralCode = functions.https.onCall(async (data, context) => {
     }
   }
   throw new functions.https.HttpsError("already-exists", "Could not create a unique referral code.");
+}
+
+exports.ensureReferralCode = functions.https.onCall(async (data, context) => {
+  requireAppCheck(context);
+  requireAuth(context);
+  return ensureReferralCodeForUid(context.auth.uid);
+});
+
+exports.getReferralDashboard = functions.https.onCall(async (data, context) => {
+  requireAppCheck(context);
+  requireAuth(context);
+  const db = getFirestore();
+  const uid = context.auth.uid;
+  const codeResult = await ensureReferralCodeForUid(uid);
+  const referralsSnap = await db.collection("referrals")
+      .where("referrerUserId", "==", uid)
+      .limit(100)
+      .get();
+  let pending = 0;
+  let qualified = 0;
+  let rothEarned = 0;
+  const referrals = referralsSnap.docs.map((doc) => {
+    const row = doc.data() || {};
+    const status = `${row.status || row.rewardStatus || ""}`.toUpperCase();
+    const rewardAmount = Number(row.rewardAmount || DEFAULT_REWARD || 0);
+    const awarded = status === REFERRAL_STATUSES.rothAwarded || status === "REWARDED" || status === "ROTH_AWARDED";
+    if (awarded) {
+      qualified += 1;
+      rothEarned += rewardAmount;
+    } else {
+      pending += 1;
+    }
+    return {
+      referralId: doc.id,
+      status: row.status || row.rewardStatus || REFERRAL_STATUSES.invited,
+      rewardStatus: row.rewardStatus || row.status || REFERRAL_STATUSES.invited,
+      rewardAmount,
+      rewardCurrency: row.rewardCurrency || "ROTH",
+      createdAt: row.createdAt || null,
+      updatedAt: row.updatedAt || null,
+      signedUpAt: row.signedUpAt || null,
+      rewardedAt: row.rewardedAt || row.rewardIssuedAt || null,
+    };
+  });
+  return {
+    referralCode: codeResult.referralCode,
+    referralLink: codeResult.referralLink,
+    referrals,
+    stats: {
+      invited: referrals.length,
+      pending,
+      qualified,
+      rothEarned,
+      rewardAmount: DEFAULT_REWARD,
+      rewardCurrency: "ROTH",
+    },
+  };
 });
 
 exports.attachReferralCode = functions.https.onCall(async (data, context) => {
+  requireAppCheck(context);
   requireAuth(context);
   const code = normalizeCode(data.referralCode);
   if (!code) throw new functions.https.HttpsError("invalid-argument", "Referral code is required.");
@@ -136,6 +193,7 @@ exports.attachReferralCode = functions.https.onCall(async (data, context) => {
 });
 
 exports.activateReferral = functions.https.onCall(async (data, context) => {
+  requireAppCheck(context);
   requireAuth(context);
   const referredUserId = `${data.referredUserId || context.auth.uid}`.trim();
   if (referredUserId !== context.auth.uid && !context.auth.token.admin) {

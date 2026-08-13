@@ -3,6 +3,7 @@
 
 const functions = require("firebase-functions/v1");
 const {getFirestore, FieldValue} = require("firebase-admin/firestore");
+const {requireAppCheck} = require("./callable-guard");
 
 function requireSender(context) {
   if (!context.auth) {
@@ -13,6 +14,13 @@ function requireSender(context) {
     email: context.auth.token.email || "",
     name: context.auth.token.name || "",
   };
+}
+
+function stripeCustomerId(value) {
+  if (!value) return "";
+  if (typeof value === "string") return value;
+  if (typeof value === "object" && value.id) return `${value.id}`;
+  return `${value}`;
 }
 
 async function ensureStripeCustomer({stripe, sender}) {
@@ -50,6 +58,7 @@ function paymentMethodView(paymentMethod, defaultPaymentMethodId) {
 }
 
 exports.listSenderPaymentMethods = (stripe) => functions.https.onCall(async (_, context) => {
+  requireAppCheck(context);
   const sender = requireSender(context);
   const customerId = await ensureStripeCustomer({stripe, sender});
   const customer = await stripe.customers.retrieve(customerId);
@@ -70,7 +79,9 @@ exports.listSenderPaymentMethods = (stripe) => functions.https.onCall(async (_, 
     customerId,
     defaultPaymentMethodId,
     preference,
-    paymentMethods: methods.data.map((item) => paymentMethodView(item, defaultPaymentMethodId)),
+    paymentMethods: Array.from(
+        new Map(methods.data.map((item) => [item.id, paymentMethodView(item, defaultPaymentMethodId)])).values(),
+    ),
     walletCompatible: true,
     applePaySupported: true,
     googlePaySupported: true,
@@ -78,6 +89,7 @@ exports.listSenderPaymentMethods = (stripe) => functions.https.onCall(async (_, 
 });
 
 exports.createSenderSetupIntent = (stripe) => functions.https.onCall(async (_, context) => {
+  requireAppCheck(context);
   const sender = requireSender(context);
   const customerId = await ensureStripeCustomer({stripe, sender});
   const ephemeralKey = await stripe.ephemeralKeys.create(
@@ -97,7 +109,39 @@ exports.createSenderSetupIntent = (stripe) => functions.https.onCall(async (_, c
   };
 });
 
+exports.createSenderSetupCheckoutSession = (stripe) => functions.https.onCall(async (data, context) => {
+  requireAppCheck(context);
+  const sender = requireSender(context);
+  const customerId = await ensureStripeCustomer({stripe, sender});
+  const origin = `${data && data.origin || "https://circum-app-2797c.web.app"}`.replace(/\/+$/, "");
+  if (!/^https:\/\/(circum-app-2797c\.web\.app|circum-2797c\.web\.app|localhost(?::\d+)?|127\.0\.0\.1(?::\d+)?)$/u.test(origin)) {
+    throw new functions.https.HttpsError("invalid-argument", "Unsupported Sender Wallet return origin.");
+  }
+  const successUrl = `${origin}/#/sender-mobile/wallet?card_setup=success&setup_session_id={CHECKOUT_SESSION_ID}`;
+  const cancelUrl = `${origin}/#/sender-mobile/wallet?card_setup=cancelled`;
+  const session = await stripe.checkout.sessions.create({
+    mode: "setup",
+    customer: customerId,
+    payment_method_types: ["card"],
+    success_url: successUrl,
+    cancel_url: cancelUrl,
+    client_reference_id: sender.uid,
+    metadata: {
+      userId: sender.uid,
+      source: "sender_mobile_wallet",
+      type: "sender_card_setup",
+    },
+  });
+  await getFirestore().collection("users").doc(sender.uid).collection("financeAudit").doc(`setup_${session.id}`).set({
+    action: "payment_method_setup_started",
+    checkoutSessionId: session.id,
+    createdAt: FieldValue.serverTimestamp(),
+  }, {merge: true});
+  return {sessionId: session.id, url: session.url};
+});
+
 exports.detachSenderPaymentMethod = (stripe) => functions.https.onCall(async (data, context) => {
+  requireAppCheck(context);
   const sender = requireSender(context);
   const paymentMethodId = `${data && data.paymentMethodId || ""}`.trim();
   if (!paymentMethodId) {
@@ -105,7 +149,11 @@ exports.detachSenderPaymentMethod = (stripe) => functions.https.onCall(async (da
   }
   const customerId = await ensureStripeCustomer({stripe, sender});
   const method = await stripe.paymentMethods.retrieve(paymentMethodId);
-  if (method.customer !== customerId) {
+  const ownerCustomerId = stripeCustomerId(method.customer);
+  if (!ownerCustomerId) {
+    return {ok: true, alreadyDetached: true};
+  }
+  if (ownerCustomerId !== customerId) {
     throw new functions.https.HttpsError("permission-denied", "Payment method does not belong to this Sender.");
   }
   await stripe.paymentMethods.detach(paymentMethodId);
@@ -118,6 +166,7 @@ exports.detachSenderPaymentMethod = (stripe) => functions.https.onCall(async (da
 });
 
 exports.setDefaultSenderPaymentMethod = (stripe) => functions.https.onCall(async (data, context) => {
+  requireAppCheck(context);
   const sender = requireSender(context);
   const paymentMethodId = `${data && data.paymentMethodId || ""}`.trim();
   if (!paymentMethodId) {
@@ -125,7 +174,7 @@ exports.setDefaultSenderPaymentMethod = (stripe) => functions.https.onCall(async
   }
   const customerId = await ensureStripeCustomer({stripe, sender});
   const method = await stripe.paymentMethods.retrieve(paymentMethodId);
-  if (method.customer !== customerId) {
+  if (stripeCustomerId(method.customer) !== customerId) {
     throw new functions.https.HttpsError("permission-denied", "Payment method does not belong to this Sender.");
   }
   await stripe.customers.update(customerId, {
@@ -139,6 +188,7 @@ exports.setDefaultSenderPaymentMethod = (stripe) => functions.https.onCall(async
 });
 
 exports.saveSenderCheckoutPreference = functions.https.onCall(async (data, context) => {
+  requireAppCheck(context);
   const sender = requireSender(context);
   const preference = `${data && data.preference || ""}`.trim();
   const allowed = new Set([

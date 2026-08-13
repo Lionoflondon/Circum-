@@ -78,6 +78,23 @@ test("Roth wallet mutation callables require App Check", () => {
   ].forEach((name) => assertCallableRequiresAppCheck("roth-ledger.js", name));
 });
 
+test("Sender saved-card and referral callables require App Check", () => {
+  [
+    "listSenderPaymentMethods",
+    "createSenderSetupIntent",
+    "createSenderSetupCheckoutSession",
+    "detachSenderPaymentMethod",
+    "setDefaultSenderPaymentMethod",
+    "saveSenderCheckoutPreference",
+  ].forEach((name) => assertCallableRequiresAppCheck("sender-finance.js", name));
+  [
+    "ensureReferralCode",
+    "getReferralDashboard",
+    "attachReferralCode",
+    "activateReferral",
+  ].forEach((name) => assertCallableRequiresAppCheck("referrals.js", name));
+});
+
 test("Admin delivery intervention callables require App Check", () => {
   assertCallableRequiresAppCheck("admin-governance.js", "adminGovernanceAction");
   [

@@ -362,6 +362,7 @@ void main() {
 
   test('Sender wallet actions stay inside Sender wallet destinations', () {
     final source = read('lib/app/sender_mobile/sender_wallet.dart');
+    final finance = read('lib/app/sender_mobile/sender_finance.dart');
 
     for (final destination in const [
       '_ManagePaymentsScreen',
@@ -375,6 +376,10 @@ void main() {
     }
 
     for (final forbidden in const [
+      '../business/business_view.dart',
+      'BusinessView',
+      'BusinessPaymentProfileCard',
+      "collection('businessAccounts')",
       'BusinessWallet',
       'AdminWallet',
       'LegacyFinance',
@@ -384,6 +389,22 @@ void main() {
     ]) {
       expect(source, isNot(contains(forbidden)));
     }
+
+    expect(source, contains("httpsCallable('createSenderSetupIntent')"));
+    expect(
+      source,
+      contains("httpsCallable('createSenderSetupCheckoutSession')"),
+    );
+    expect(source, contains("httpsCallable('detachSenderPaymentMethod')"));
+    expect(source, contains("httpsCallable('setDefaultSenderPaymentMethod')"));
+    expect(source, contains("httpsCallable('getReferralDashboard')"));
+    expect(source, isNot(contains("httpsCallable('ensureReferralCode')")));
+    expect(
+      source,
+      isNot(contains(".collection('referrals')")),
+    );
+    expect(finance, contains('seenIds.add(method.id)'));
+    expect(finance, isNot(contains(r'brand}:${method.last4}')));
   });
 
   test('Sender profile actions resolve to canonical Sender destinations', () {

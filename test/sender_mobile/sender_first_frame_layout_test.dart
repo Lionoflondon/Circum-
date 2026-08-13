@@ -78,6 +78,13 @@ class _FakeWalletRepository implements SenderWalletRepository {
       );
 
   @override
+  Future<SenderSetupCheckoutSessionData> createSetupCheckoutSession() async =>
+      const SenderSetupCheckoutSessionData(
+        sessionId: 'cs_setup_test',
+        url: 'https://checkout.stripe.com/c/pay/cs_setup_test',
+      );
+
+  @override
   Future<void> detachPaymentMethod(String paymentMethodId) async {}
 
   @override

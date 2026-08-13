@@ -174,12 +174,16 @@ class SenderPaymentProfile {
       );
 
   factory SenderPaymentProfile.fromMap(Map<String, dynamic> map) {
+    final methods = <SenderPaymentMethod>[];
+    final seenIds = <String>{};
+    for (final item in map['paymentMethods'] as List? ?? const []) {
+      final method =
+          SenderPaymentMethod.fromMap(Map<String, dynamic>.from(item as Map));
+      if (method.id.isEmpty || !seenIds.add(method.id)) continue;
+      methods.add(method);
+    }
     return SenderPaymentProfile(
-      methods: (map['paymentMethods'] as List? ?? const [])
-          .map((item) => SenderPaymentMethod.fromMap(
-              Map<String, dynamic>.from(item as Map)))
-          .where((item) => item.id.isNotEmpty)
-          .toList(growable: false),
+      methods: List.unmodifiable(methods),
       preference:
           senderCheckoutPreferenceFromValue('${map['preference'] ?? ''}'),
       defaultPaymentMethodId: map['defaultPaymentMethodId'] as String?,
@@ -229,10 +233,8 @@ List<SenderPaymentProfileOption> senderOrderedPaymentOptions(
   final seenSavedCards = <String>{};
   final saved = <SenderPaymentProfileOption>[];
   for (final method in profile.methods) {
-    final key = method.id.trim().isNotEmpty
-        ? method.id.trim()
-        : '${method.brand}:${method.last4}:${method.expMonth}:${method.expYear}';
-    if (!seenSavedCards.add(key)) continue;
+    final key = method.id.trim();
+    if (key.isEmpty || !seenSavedCards.add(key)) continue;
     saved.add(SenderPaymentProfileOption(
       SenderPaymentProfileOptionType.savedCard,
       method: method,
@@ -290,9 +292,27 @@ class SenderSetupIntentData {
   }
 }
 
+class SenderSetupCheckoutSessionData {
+  final String sessionId;
+  final String url;
+
+  const SenderSetupCheckoutSessionData({
+    required this.sessionId,
+    required this.url,
+  });
+
+  factory SenderSetupCheckoutSessionData.fromMap(Map<String, dynamic> map) {
+    return SenderSetupCheckoutSessionData(
+      sessionId: '${map['sessionId'] ?? ''}',
+      url: '${map['url'] ?? ''}',
+    );
+  }
+}
+
 abstract class SenderPaymentProfileRepository {
   Future<SenderPaymentProfile> paymentMethods();
   Future<SenderSetupIntentData> createSetupIntent();
+  Future<SenderSetupCheckoutSessionData> createSetupCheckoutSession();
   Future<void> detachPaymentMethod(String paymentMethodId);
   Future<void> setDefaultPaymentMethod(String paymentMethodId);
   Future<void> saveCheckoutPreference(SenderCheckoutPreference preference);
@@ -318,6 +338,15 @@ class FirebaseSenderPaymentProfileRepository
     final result =
         await functions.httpsCallable('createSenderSetupIntent').call();
     return SenderSetupIntentData.fromMap(
+        Map<String, dynamic>.from(result.data as Map));
+  }
+
+  @override
+  Future<SenderSetupCheckoutSessionData> createSetupCheckoutSession() async {
+    final result = await functions
+        .httpsCallable('createSenderSetupCheckoutSession')
+        .call();
+    return SenderSetupCheckoutSessionData.fromMap(
         Map<String, dynamic>.from(result.data as Map));
   }
 

@@ -9,8 +9,8 @@ import 'package:flutter_stripe/flutter_stripe.dart';
 import 'package:intl/intl.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:url_launcher/url_launcher.dart';
 
-import '../business/business_view.dart';
 import '../send_package/view/ride_chats.dart';
 import 'design_system/sender_design_system.dart';
 import 'sender_accessibility.dart';
@@ -335,6 +335,15 @@ class FirebaseSenderWalletRepository implements SenderWalletRepository {
   }
 
   @override
+  Future<SenderSetupCheckoutSessionData> createSetupCheckoutSession() async {
+    final result = await functions
+        .httpsCallable('createSenderSetupCheckoutSession')
+        .call();
+    return SenderSetupCheckoutSessionData.fromMap(
+        Map<String, dynamic>.from(result.data as Map));
+  }
+
+  @override
   Future<void> detachPaymentMethod(String paymentMethodId) async {
     await functions
         .httpsCallable('detachSenderPaymentMethod')
@@ -565,6 +574,17 @@ class _SenderWalletViewState extends State<SenderWalletView> {
       _error = null;
     });
     try {
+      if (kIsWeb) {
+        final session = await _repository.createSetupCheckoutSession();
+        final opened = await launchUrl(
+          Uri.parse(session.url),
+          webOnlyWindowName: '_self',
+        );
+        if (!opened) {
+          throw StateError('Card setup could not be opened.');
+        }
+        return;
+      }
       final setup = await _repository.createSetupIntent();
       await Stripe.instance.initPaymentSheet(
         paymentSheetParameters: SetupPaymentSheetParameters(
@@ -595,7 +615,7 @@ class _SenderWalletViewState extends State<SenderWalletView> {
             context, error.error.localizedMessage ?? 'Card setup cancelled.');
       }
     } catch (error) {
-      if (mounted) setState(() => _error = '$error');
+      if (mounted) setState(() => _error = _walletSafeError('$error'));
     } finally {
       if (mounted) setState(() => _paymentActionLoading = false);
     }
@@ -636,8 +656,16 @@ class _SenderWalletViewState extends State<SenderWalletView> {
     try {
       await _repository.detachPaymentMethod(method.id);
       await _refreshPaymentMethods();
-    } catch (error) {
-      if (mounted) _notice(context, 'Could not remove payment method.');
+      if (mounted) _notice(context, 'Payment method removed.');
+    } on FirebaseFunctionsException catch (error) {
+      if (mounted) _notice(context, _walletPaymentMethodError(error));
+    } catch (_) {
+      if (mounted) {
+        _notice(
+          context,
+          'Payment method could not be removed. Retry in a moment.',
+        );
+      }
     } finally {
       if (mounted) setState(() => _paymentActionLoading = false);
     }
@@ -979,7 +1007,6 @@ class _ManagePaymentsScreenState extends State<_ManagePaymentsScreen> {
   SenderPaymentProfile? _profile;
   bool _loading = true;
   bool _busy = false;
-  bool _businessAccount = false;
   String? _error;
 
   @override
@@ -995,24 +1022,9 @@ class _ManagePaymentsScreenState extends State<_ManagePaymentsScreen> {
     });
     try {
       final profile = await widget.repository.paymentMethods();
-      var businessAccount = false;
-      try {
-        final user = FirebaseAuth.instance.currentUser;
-        if (user != null) {
-          final owned = await FirebaseFirestore.instance
-              .collection('businessAccounts')
-              .where('createdByUserId', isEqualTo: user.uid)
-              .limit(1)
-              .get();
-          businessAccount = owned.docs.isNotEmpty;
-        }
-      } catch (_) {
-        businessAccount = false;
-      }
       if (!mounted) return;
       setState(() {
         _profile = profile;
-        _businessAccount = businessAccount;
         _loading = false;
       });
     } catch (error) {
@@ -1029,6 +1041,15 @@ class _ManagePaymentsScreenState extends State<_ManagePaymentsScreen> {
     if (_busy) return;
     setState(() => _busy = true);
     try {
+      if (kIsWeb) {
+        final session = await widget.repository.createSetupCheckoutSession();
+        final opened = await launchUrl(
+          Uri.parse(session.url),
+          webOnlyWindowName: '_self',
+        );
+        if (!opened) throw StateError('Card setup could not be opened.');
+        return;
+      }
       final setup = await widget.repository.createSetupIntent();
       await Stripe.instance.initPaymentSheet(
         paymentSheetParameters: SetupPaymentSheetParameters(
@@ -1096,6 +1117,16 @@ class _ManagePaymentsScreenState extends State<_ManagePaymentsScreen> {
     try {
       await widget.repository.detachPaymentMethod(method.id);
       await _load();
+      if (mounted) {
+        _SenderWalletViewState._notice(context, 'Payment method removed.');
+      }
+    } on FirebaseFunctionsException catch (error) {
+      if (mounted) {
+        _SenderWalletViewState._notice(
+          context,
+          _walletPaymentMethodError(error),
+        );
+      }
     } finally {
       if (mounted) setState(() => _busy = false);
     }
@@ -1154,7 +1185,7 @@ class _ManagePaymentsScreenState extends State<_ManagePaymentsScreen> {
                 ? _WalletMessage(
                     icon: Icons.error_outline,
                     title: 'Payments could not load',
-                    body: 'Check your connection and try again.',
+                    body: _walletSafeError(_error!),
                     action: _load,
                   )
                 : ListView(
@@ -1197,15 +1228,6 @@ class _ManagePaymentsScreenState extends State<_ManagePaymentsScreen> {
                         profile: _profile!,
                         wallet: widget.wallet,
                       ),
-                      const SizedBox(height: 18),
-                      _BusinessPaymentProfileCard(
-                        connected: _businessAccount,
-                        onOpenBusiness: () => Navigator.of(context).push(
-                          MaterialPageRoute<void>(
-                            builder: (_) => const BusinessView(),
-                          ),
-                        ),
-                      ),
                     ],
                   ),
       );
@@ -1222,6 +1244,7 @@ class _SenderReferralScreenState extends State<SenderReferralScreen> {
   String _code = '';
   String _link = '';
   List<Map<String, dynamic>> _referrals = const [];
+  double _earnedRoth = 0;
   String? _error;
 
   @override
@@ -1235,22 +1258,26 @@ class _SenderReferralScreenState extends State<SenderReferralScreen> {
       final user = FirebaseAuth.instance.currentUser;
       if (user == null) throw StateError('Sign in to use referrals.');
       final result = await FirebaseFunctions.instance
-          .httpsCallable('ensureReferralCode')
+          .httpsCallable('getReferralDashboard')
           .call();
       final data = Map<String, dynamic>.from(result.data as Map);
-      final referrals = await FirebaseFirestore.instance
-          .collection('referrals')
-          .where('referrerUserId', isEqualTo: user.uid)
-          .limit(100)
-          .get();
+      final stats =
+          Map<String, dynamic>.from(data['stats'] as Map? ?? const {});
       if (!mounted) return;
       setState(() {
         _code = '${data['referralCode'] ?? ''}';
         _link = '${data['referralLink'] ?? ''}';
-        _referrals = referrals.docs.map((doc) => doc.data()).toList();
+        _referrals = (data['referrals'] as List? ?? const [])
+            .whereType<Map>()
+            .map((item) => Map<String, dynamic>.from(item))
+            .toList(growable: false);
+        _earnedRoth = (stats['rothEarned'] as num?)?.toDouble() ?? 0;
+        _error = null;
       });
+    } on FirebaseFunctionsException catch (error) {
+      if (mounted) setState(() => _error = _walletReferralError(error));
     } catch (error) {
-      if (mounted) setState(() => _error = '$error');
+      if (mounted) setState(() => _error = _walletSafeError('$error'));
     }
   }
 
@@ -1271,7 +1298,7 @@ class _SenderReferralScreenState extends State<SenderReferralScreen> {
           ? _WalletMessage(
               icon: Icons.error_outline,
               title: 'Referrals could not load',
-              body: 'Check your connection and try again.',
+              body: _error!,
               action: _load,
             )
           : ListView(
@@ -1336,6 +1363,13 @@ class _SenderReferralScreenState extends State<SenderReferralScreen> {
                       _ReferralMetric('Pending Rewards', '$pending'),
                       const Divider(color: _WalletColors.hairline),
                       _ReferralMetric('Completed Rewards', '$completed'),
+                      const Divider(color: _WalletColors.hairline),
+                      _ReferralMetric(
+                        'Roth Earned',
+                        _earnedRoth.toStringAsFixed(
+                          _earnedRoth % 1 == 0 ? 0 : 2,
+                        ),
+                      ),
                       const Divider(color: _WalletColors.hairline),
                       _ReferralMetric('Referral Status',
                           _referrals.isEmpty ? 'Ready' : 'Active'),
@@ -3004,76 +3038,6 @@ class _PaymentBreakdownArrow extends StatelessWidget {
       );
 }
 
-class _BusinessPaymentProfileCard extends StatelessWidget {
-  final bool connected;
-  final VoidCallback onOpenBusiness;
-
-  const _BusinessPaymentProfileCard({
-    required this.connected,
-    required this.onOpenBusiness,
-  });
-
-  @override
-  Widget build(BuildContext context) => Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const _WalletSectionTitle('Business Payment Profile'),
-          const SizedBox(height: 10),
-          _WalletGlass(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  children: [
-                    Icon(
-                      connected
-                          ? Icons.verified_outlined
-                          : Icons.business_outlined,
-                      color: connected
-                          ? const Color(0xFF34D399)
-                          : _WalletColors.muted,
-                    ),
-                    const SizedBox(width: 10),
-                    Expanded(
-                      child: Text(
-                        connected
-                            ? 'Connected'
-                            : 'No Business payment profile connected.',
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontWeight: FontWeight.w800,
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 10),
-                Text(
-                  connected
-                      ? 'Business Finance uses your approved payment profile during authorised Business checkouts.'
-                      : 'Create or join a Circum Business account to manage authorised Business payments.',
-                  style: const TextStyle(
-                    color: _WalletColors.muted,
-                    height: 1.45,
-                  ),
-                ),
-                const SizedBox(height: 14),
-                TextButton.icon(
-                  onPressed: onOpenBusiness,
-                  icon: Icon(connected
-                      ? Icons.arrow_forward_rounded
-                      : Icons.add_business_outlined),
-                  label: Text(connected
-                      ? 'Manage Business Payments'
-                      : 'Create Business Account'),
-                ),
-              ],
-            ),
-          ),
-        ],
-      );
-}
-
 class _WalletLink extends StatelessWidget {
   final IconData icon;
   final String title;
@@ -3190,6 +3154,42 @@ String _walletSafeError(String error) {
     return 'Sign in again to refresh your wallet.';
   }
   return 'Wallet refresh failed. Your Roth is safe and you can retry.';
+}
+
+String _walletPaymentMethodError(FirebaseFunctionsException error) {
+  switch (error.code) {
+    case 'unauthenticated':
+      return 'Sign in again before managing saved cards.';
+    case 'failed-precondition':
+      return error.message ??
+          'Security verification is required. Retry in a moment.';
+    case 'not-found':
+      return 'That payment method is already removed.';
+    case 'permission-denied':
+      return 'That payment method is not linked to this Sender account.';
+    case 'resource-exhausted':
+      return 'Card changes are being processed. Retry in a moment.';
+    default:
+      return error.message ??
+          'Payment method could not be updated. Retry in a moment.';
+  }
+}
+
+String _walletReferralError(FirebaseFunctionsException error) {
+  switch (error.code) {
+    case 'unauthenticated':
+      return 'Sign in again to load your referral rewards.';
+    case 'failed-precondition':
+      return 'Security verification is required. Retry in a moment.';
+    case 'permission-denied':
+      return 'Referral rewards are not available for this account right now.';
+    case 'unavailable':
+    case 'deadline-exceeded':
+      return 'Referral rewards are temporarily unavailable. Retry in a moment.';
+    default:
+      return error.message ??
+          'Referral rewards could not load. Retry in a moment.';
+  }
 }
 
 String _walletStatusLabel(String value) {
