@@ -39,7 +39,6 @@ import 'pricing/website_delivery_pricing.dart';
 import 'pricing/website_special_handling_engine.dart';
 
 const _companyName = 'Circum';
-const _webQuoteDistanceMiles = 4.8;
 const _webVanguardAddOnPriceGbp = 1.99;
 const _desktopWebBreakpoint = 760.0;
 const _googlePlacesApiKey = String.fromEnvironment('GOOGLE_PLACES_API_KEY');
@@ -3936,11 +3935,12 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
           'evidence': {
             if (verificationPatch?['riderVerifiedWeightKg'] != null)
               'actualWeightKg': verificationPatch!['riderVerifiedWeightKg'],
-            if ((verificationPatch?['riderWeightEvidenceUrls'] as List?)
+            if ((verificationPatch?['riderWeightEvidencePhotoIds'] as List?)
                     ?.isNotEmpty ==
                 true)
-              'photoUrl':
-                  (verificationPatch!['riderWeightEvidenceUrls'] as List).first,
+              'photoId':
+                  (verificationPatch!['riderWeightEvidencePhotoIds'] as List)
+                      .first,
             'conditionConfirmed': true,
             'riderDeclarationAccepted': true,
           },
@@ -4281,93 +4281,28 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
     final optionValue = '${result['option']}';
     final verifiedWeight = result['verifiedWeightKg'] as double;
     final photos = (result['photos'] as List<XFile>? ?? const <XFile>[]);
-    final evidenceUrls = <String>[];
-    final storagePaths = <String>[];
+    final evidencePhotoIds = <String>[];
     for (final photo in photos) {
       final bytes = await photo.readAsBytes();
       final safeName = photo.name.replaceAll(RegExp(r'[^A-Za-z0-9._-]'), '_');
-      final path =
-          'delivery_weight_evidence/$requestId/$riderId/${DateTime.now().millisecondsSinceEpoch}_$safeName';
-      final ref = FirebaseStorage.instance.ref(path);
-      await ref.putData(bytes);
-      storagePaths.add(path);
-      evidenceUrls.add(await ref.getDownloadURL());
-    }
-
-    final customerWeight = _jobCustomerWeight(job);
-    final irisWeight = _jobIrisWeight(job);
-    final finalWeightUsed = DeliveryPricing.finalVerifiedWeightKg(
-      customerWeightKg: customerWeight,
-      irisWeightKg: irisWeight,
-      riderVerifiedWeightKg: verifiedWeight,
-    );
-    final distanceMiles = _jobDistanceMiles(job);
-    final vehicle = DeliveryPricing.recommendedVehicleForWeight(
-      finalWeightUsed,
-    );
-    DeliveryAccess accessValue(Object? value) {
-      return switch ('$value') {
-        'stairs' => DeliveryAccess.stairs,
-        'liftAvailable' => DeliveryAccess.liftAvailable,
-        _ => DeliveryAccess.groundFloor,
-      };
-    }
-
-    final revisedHandling = SpecialHandlingEngine.evaluate(
-      description: '${job['packageDescription'] ?? ''}',
-      itemName: '${job['normalizedItemName'] ?? ''}',
-      pickupAccess: accessValue(job['pickupAccess']),
-      dropoffAccess: accessValue(job['dropoffAccess']),
-    );
-    final revisedQuote = revisedHandling.applyTo(
-      DeliveryPricing.calculate(
-        DeliveryPricingInput(
-          distanceMiles: distanceMiles,
-          weightKg: finalWeightUsed,
-          vehicleType: vehicle,
-        ),
-      ),
-    );
-    final revisedPayout = revisedQuote.totalRiderEarnings;
-    final revisedPlatformRevenue = revisedQuote.totalCircumRevenue;
-    final heavier = finalWeightUsed > currentFinalWeight + 0.01;
-    final summary =
-        (job['driverJobSummary'] as Map?)?.cast<String, dynamic>() ??
-            const <String, dynamic>{};
-
-    if (heavier) {
+      final photoId = const Uuid().v4().replaceAll('-', '');
       await FirebaseFunctions.instanceFor(region: 'us-central1')
-          .httpsCallable('createWeightAdjustedNotification')
-          .call({'requestId': requestId});
+          .httpsCallable('recordDeliveryEvidence')
+          .call({
+        'deliveryId': requestId,
+        'photoId': photoId,
+        'bytesBase64': base64Encode(bytes),
+        'mimeType': 'image/jpeg',
+        'fileSize': bytes.length,
+        'type': 'PHOTO',
+        'device': safeName,
+      });
+      evidencePhotoIds.add(photoId);
     }
 
     return {
       'riderVerifiedWeight': verifiedWeight,
       'riderVerifiedWeightKg': verifiedWeight,
-      'finalVerifiedWeight': finalWeightUsed,
-      'finalWeightUsed': finalWeightUsed,
-      'finalChargeableWeight': finalWeightUsed,
-      'confirmedWeightKg': finalWeightUsed,
-      'confirmedWeightBand': DeliveryPricing.weightBandFor(
-        finalWeightUsed,
-      ).category,
-      'weightCategory': DeliveryPricing.weightBandFor(finalWeightUsed).category,
-      'vehicleType': vehicle,
-      'vehicle': vehicle,
-      'preferredVehicle': vehicle.toLowerCase(),
-      'quote': revisedQuote.total,
-      'price': revisedQuote.total,
-      'fare': revisedQuote.total,
-      'driverPayout': revisedPayout,
-      'riderPayout': revisedPayout,
-      'platformRevenue': revisedPlatformRevenue,
-      'riderBaseShare': revisedQuote.riderBaseShare,
-      'riderLabourShare': revisedQuote.riderLabourShare,
-      'circumBaseShare': revisedQuote.circumBaseShare,
-      'circumLabourShare': revisedQuote.circumLabourShare,
-      'platformShare': DeliveryPricing.platformDeliveryFareShare,
-      'driverShare': DeliveryPricing.riderDeliveryFareShare,
-      'pricingBreakdown': revisedQuote.toJson(),
       'weightReviewRequired': optionValue != 'accurate',
       'weightDisputeStatus':
           optionValue == 'accurate' ? 'verified' : 'admin_review',
@@ -4379,50 +4314,15 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
         'status': optionValue == 'accurate' ? 'verified' : 'admin_review',
       },
       'weightVerification': {
-        'customerWeight': customerWeight,
-        'irisWeight': irisWeight,
         'riderVerifiedWeight': verifiedWeight,
-        'finalWeightUsed': finalWeightUsed,
         'previousFinalWeight': currentFinalWeight,
         'option': optionValue,
         'riderId': riderId,
         'note': result['note'],
-        'supportingImages': evidenceUrls,
-        'storagePaths': storagePaths,
+        'photoIds': evidencePhotoIds,
         'timestamp': FieldValue.serverTimestamp(),
       },
-      'driverJobSummary': {
-        ...summary,
-        'finalWeightUsed': finalWeightUsed,
-        'finalChargeableWeight': finalWeightUsed,
-        'confirmedWeightKg': finalWeightUsed,
-        'confirmedWeightBand': DeliveryPricing.weightBandFor(
-          finalWeightUsed,
-        ).category,
-        'driverPayout': revisedPayout,
-        'riderPayout': revisedPayout,
-        'platformRevenue': revisedPlatformRevenue,
-        'totalFare': revisedQuote.total,
-        'vehicleType': vehicle,
-      },
     };
-  }
-
-  double _jobCustomerWeight(Map<String, dynamic> job) {
-    return _jobNumber(job, [
-      'customerWeight',
-      'customerDeclaredWeight',
-      'senderEnteredWeightKg',
-      'declaredWeightKg',
-    ]);
-  }
-
-  double _jobIrisWeight(Map<String, dynamic> job) {
-    return _jobNumber(job, [
-      'irisWeight',
-      'irisEstimatedWeight',
-      'irisEstimatedWeightKg',
-    ]);
   }
 
   double _jobFinalWeight(Map<String, dynamic> job) {
@@ -4433,26 +4333,6 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
         _numberValue(summary?['finalWeightUsed']) ??
         _numberValue(summary?['confirmedWeightKg']) ??
         0;
-  }
-
-  double _jobDistanceMiles(Map<String, dynamic> job) {
-    final summary = (job['driverJobSummary'] as Map?)?.cast<String, dynamic>();
-    final pricing = (job['pricingBreakdown'] as Map?)?.cast<String, dynamic>();
-    return _numberValue(summary?['estimatedDistanceMiles']) ??
-        _numberValue(job['estimatedDistanceMiles']) ??
-        _numberValue(pricing?['distanceMiles']) ??
-        _webQuoteDistanceMiles;
-  }
-
-  double _jobNumber(Map<String, dynamic> job, List<String> keys) {
-    final summary = (job['driverJobSummary'] as Map?)?.cast<String, dynamic>();
-    for (final key in keys) {
-      final direct = _numberValue(job[key]);
-      if (direct != null) return direct;
-      final nested = _numberValue(summary?[key]);
-      if (nested != null) return nested;
-    }
-    return 0;
   }
 
   double? _numberValue(Object? value) {
