@@ -21,9 +21,6 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 20
-      - run: flutter pub get
-      - run: flutter analyze --no-fatal-warnings --no-fatal-infos
-      - run: flutter test
       - run: node scripts/absolute_product_ownership.js
       - run: node scripts/backend_authority_guard.js
       - run: node scripts/authority_manifest_guard.js
@@ -32,6 +29,9 @@ jobs:
       - run: node scripts/deploy_guard.js --target=website --base HEAD
       - run: node scripts/deploy_guard.js --target=admin --base HEAD
       - run: node scripts/deploy_guard.js --target=backend --base HEAD
+      - run: flutter pub get
+      - run: flutter analyze --no-fatal-warnings --no-fatal-infos
+      - run: flutter test
       - run: node scripts/validate_sender_mobile_artifacts.js
 
   functions:
