@@ -13,7 +13,17 @@ function googlePlacesApiKey() {
     ""}`.trim();
 }
 
-exports.searchFreeUkAddresses = functions.https.onCall(async (data) => {
+function requireFirstParty(context) {
+  if (!context || !context.auth || !context.auth.uid) {
+    throw new functions.https.HttpsError("unauthenticated", "Sign in to search for an address.");
+  }
+  if (!context.app) {
+    throw new functions.https.HttpsError("failed-precondition", "Security verification is required.");
+  }
+}
+
+exports.searchFreeUkAddresses = functions.https.onCall(async (data, context) => {
+  requireFirstParty(context);
   const query = `${data && data.query || ""}`.trim();
   const sessionToken = `${data && data.sessionToken || ""}`.trim();
   if (query.length < 3) {
@@ -34,7 +44,8 @@ exports.searchFreeUkAddresses = functions.https.onCall(async (data) => {
   }
 });
 
-exports.resolveUkAddressPlace = functions.https.onCall(async (data) => {
+exports.resolveUkAddressPlace = functions.https.onCall(async (data, context) => {
+  requireFirstParty(context);
   const placeId = `${data && data.placeId || ""}`.trim();
   const sessionToken = `${data && data.sessionToken || ""}`.trim();
   if (!placeId) {

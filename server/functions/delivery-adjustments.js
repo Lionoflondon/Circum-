@@ -21,6 +21,7 @@ const stripe = new Proxy({}, {
   },
 });
 const iris = require("./iris-core");
+const {quotePayload} = require("./sender-booking")._private;
 const {
   DISCREPANCY_REASONS,
   buildAdjustment,
@@ -53,9 +54,10 @@ async function bookingReference(db, requestId) {
 
 exports.reportLoadDiscrepancy = functions.https.onCall(async (data, context) => {
   if (!context.auth) throw new functions.https.HttpsError("unauthenticated", "Authentication required.");
-  const {requestId, reason, evidencePhotos = [], observedWeightKg, observedDescription, observedVehicleType, riderNotes, dimensions} = data;
+  if (!context.app) throw new functions.https.HttpsError("failed-precondition", "Security verification is required.");
+  const {requestId, reason, evidenceIds = [], observedWeightKg, observedDescription, observedVehicleType, riderNotes, dimensions} = data;
   if (!requestId || !DISCREPANCY_REASONS.includes(reason)) throw new functions.https.HttpsError("invalid-argument", "A booking and supported discrepancy reason are required.");
-  if (!Array.isArray(evidencePhotos) || evidencePhotos.length === 0) throw new functions.https.HttpsError("invalid-argument", "At least one evidence photo is required.");
+  if (!Array.isArray(evidenceIds) || evidenceIds.length === 0 || evidenceIds.length > 4) throw new functions.https.HttpsError("invalid-argument", "Between one and four verified evidence photos are required.");
 
   const db = getFirestore();
   const bookingSnapshot = await bookingReference(db, requestId);
@@ -65,6 +67,15 @@ exports.reportLoadDiscrepancy = functions.https.onCall(async (data, context) => 
   const riderId = context.auth.uid;
   if (![booking.riderId, booking.driverId, booking.assignedDriverId].includes(riderId)) throw new functions.https.HttpsError("permission-denied", "Only the assigned rider can report this discrepancy.");
   if (booking.status === "awaiting_sender_adjustment") throw new functions.https.HttpsError("failed-precondition", "This booking already has a pending adjustment.");
+  const evidenceSnapshots = await Promise.all(evidenceIds.map((id) => db.collection("deliveryEvidence").doc(`${id}`.trim()).get()));
+  const evidenceValid = evidenceSnapshots.every((snapshot) => {
+    const record = snapshot.exists ? snapshot.data() || {} : {};
+    return record.immutable === true && record.status === "verified" &&
+      `${record.deliveryId || ""}`.trim() === bookingSnapshot.id && `${record.riderId || ""}`.trim() === riderId &&
+      `${record.stage || ""}`.trim() === "discrepancy" && `${record.storagePath || ""}`.trim() &&
+      `${record.generation || ""}`.trim() && `${record.checksumSha256 || ""}`.trim();
+  });
+  if (!evidenceValid) throw new functions.https.HttpsError("failed-precondition", "Discrepancy evidence does not match this Rider and delivery.");
 
   const originalWeightKg = Number(booking.finalWeightUsed || booking.finalChargeableWeight || booking.confirmedWeightKg || booking.weightKg || 0);
   const description = observedDescription || booking.packageDescription || booking.description || "Parcel";
@@ -76,13 +87,22 @@ exports.reportLoadDiscrepancy = functions.https.onCall(async (data, context) => 
     vehicleType: observedVehicleType || booking.vehicleType || booking.vehicle,
   });
   const previousVehicle = `${booking.vehicleType || booking.vehicle || ""}`.toLowerCase();
+  const senderId = booking.senderId || booking.userId;
   const recalculatedVehicle = `${observedVehicleType || (recalculated.recommendation && recalculated.recommendation.vehicleType) || ""}`.toLowerCase();
   const vehicleSuitabilityChanged = Boolean(recalculatedVehicle && recalculatedVehicle !== previousVehicle);
   if (!isMaterialDiscrepancy({reason, originalWeightKg, observedWeightKg, vehicleSuitabilityChanged})) throw new functions.https.HttpsError("failed-precondition", "The reported difference does not meet the material adjustment threshold.");
-  const revisedQuote = Number(recalculated.recommendation && recalculated.recommendation.estimatedPrice || booking.price || booking.quote || 0);
+  const canonicalRequote = quotePayload({
+    selectedSpeed: booking.selectedServiceLevel || booking.serviceLevel,
+    distanceMiles: booking.pricingBreakdown && booking.pricingBreakdown.distanceMiles || booking.distanceMiles || 0,
+    weightKg: recalculated.recommendation && recalculated.recommendation.estimatedWeightKg || observedWeightKg || originalWeightKg,
+    selectedVehicle: recalculatedVehicle || previousVehicle,
+    vanguardProtocolEnabled: booking.requiresVanguard === true,
+    parcel: {highValue: booking.parcel && booking.parcel.highValue === true},
+    iris: {vanguardRequired: booking.requiresVanguard === true},
+  }, senderId);
+  const revisedQuote = Number(canonicalRequote.total);
   const originalQuote = Number(booking.paidAmount || booking.price || booking.quote || 0);
-  const senderId = booking.senderId || booking.userId;
-  const adjustmentRef = db.collection("deliveryAdjustments").doc();
+  const adjustmentRef = db.collection("deliveryAdjustments").doc(`load_${requestRef.id}_${riderId}`);
   const adjustment = buildAdjustment({
     bookingId: requestRef.id,
     bookingRequestId: requestId,
@@ -92,7 +112,7 @@ exports.reportLoadDiscrepancy = functions.https.onCall(async (data, context) => 
     revisedQuote,
     riderReason: reason,
     riderNotes,
-    evidencePhotos,
+    evidenceIds,
     observations: {
       originalWeightKg,
       observedWeightKg: Number(observedWeightKg) || null,
@@ -104,7 +124,15 @@ exports.reportLoadDiscrepancy = functions.https.onCall(async (data, context) => 
   });
 
   await db.runTransaction(async (transaction) => {
-    const latest = await transaction.get(requestRef);
+    const [latest, existingAdjustment] = await Promise.all([
+      transaction.get(requestRef),
+      transaction.get(adjustmentRef),
+    ]);
+    if (existingAdjustment.exists) return;
+    const latestBooking = latest.data() || {};
+    if (![latestBooking.riderId, latestBooking.driverId, latestBooking.assignedDriverId].includes(riderId)) {
+      throw new functions.https.HttpsError("permission-denied", "This delivery is no longer assigned to this Rider.");
+    }
     const latestStatus = latest.data().status;
     if (latestStatus === "awaiting_sender_adjustment" || latestStatus === "awaiting_adjustment_review") throw new functions.https.HttpsError("failed-precondition", "A pending adjustment already exists.");
     if (adjustment.additionalAmount <= 0) {
@@ -118,7 +146,7 @@ exports.reportLoadDiscrepancy = functions.https.onCall(async (data, context) => 
       revisedQuote: adjustment.revisedQuote,
       additionalAmount: adjustment.additionalAmount,
       riderReason: reason,
-      evidencePhotos,
+      evidenceIds,
       adminDecision: "pending",
       senderDecision: "pending",
       reportedAt: Date.now(),

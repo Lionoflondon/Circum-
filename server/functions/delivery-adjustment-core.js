@@ -4,6 +4,12 @@ const DISCREPANCY_REASONS = Object.freeze([
   "dimensions_exceeded",
   "additional_undeclared_items",
   "item_differs_from_booking",
+  "wrong_quantity",
+  "undeclared_fragility",
+  "prohibited_or_restricted_item",
+  "unsafe_lifting_condition",
+  "vehicle_incompatibility",
+  "photo_mismatch",
 ]);
 
 const OFF_PLATFORM_PATTERNS = Object.freeze([
@@ -25,7 +31,9 @@ function isMaterialDiscrepancy({
   vehicleSuitabilityChanged = false,
 }) {
   if (!DISCREPANCY_REASONS.includes(reason)) return false;
-  if (reason === "additional_undeclared_items" || vehicleSuitabilityChanged) {
+  if (["additional_undeclared_items", "wrong_quantity", "undeclared_fragility",
+    "prohibited_or_restricted_item", "unsafe_lifting_condition", "vehicle_incompatibility",
+    "photo_mismatch", "item_differs_from_booking", "dimensions_exceeded"].includes(reason) || vehicleSuitabilityChanged) {
     return true;
   }
   const original = Number(originalWeightKg) || 0;
@@ -56,7 +64,7 @@ function buildAdjustment(input) {
     additionalAmount: additionalAmount(input.originalQuote, input.revisedQuote),
     riderReason: input.riderReason,
     riderNotes: input.riderNotes || "",
-    evidencePhotos: input.evidencePhotos || [],
+    evidenceIds: input.evidenceIds || [],
     observations: input.observations || {},
     senderDecision: "pending",
     status: "awaiting_sender_payment",

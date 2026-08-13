@@ -198,7 +198,7 @@ function evidenceRequirements(delivery, action, evidence = {}) {
       delivery.requiresVanguard === true ||
       delivery.secureHandoverRequired === true;
   if (!required) return {valid: true};
-  if (!text(evidence.photoUrl)) return {valid: false, reason: "A delivery evidence photo is required."};
+  if (!text(evidence.evidenceId)) return {valid: false, reason: "Verified delivery evidence is required."};
   if (pickup && evidence.conditionConfirmed !== true) {
     return {valid: false, reason: "Parcel condition must be confirmed."};
   }
@@ -213,6 +213,22 @@ function evidenceRequirements(delivery, action, evidence = {}) {
     return {valid: false, reason: "Recipient confirmation is required."};
   }
   return {valid: true};
+}
+
+async function verifiedEvidence(transaction, db, {evidenceId, deliveryId, riderId, action}) {
+  const id = text(evidenceId);
+  if (!id) return null;
+  const snapshot = await transaction.get(db.collection("deliveryEvidence").doc(id));
+  if (!snapshot.exists) throw new functions.https.HttpsError("failed-precondition", "Verified delivery evidence was not found.");
+  const record = snapshot.data() || {};
+  const expectedStage = action === "verify_receiver_pin" ? "handover" : "pickup";
+  if (record.immutable !== true || record.status !== "verified" ||
+      text(record.deliveryId) !== deliveryId || text(record.riderId) !== riderId ||
+      text(record.stage) !== expectedStage || !text(record.storagePath) ||
+      !text(record.generation) || !text(record.checksumSha256)) {
+    throw new functions.https.HttpsError("failed-precondition", "Delivery evidence does not match this Rider, delivery and lifecycle stage.");
+  }
+  return {evidenceId: id, stage: expectedStage, contentType: record.contentType, size: record.size};
 }
 
 function settlementValues(delivery = {}) {
@@ -331,6 +347,9 @@ exports.updateDeliveryTrackingStatus = functions.https.onCall(async (data, conte
   if (!context.auth) {
     throw new functions.https.HttpsError("unauthenticated", "Rider must be signed in.");
   }
+  if (!context.app) {
+    throw new functions.https.HttpsError("failed-precondition", "Security verification is required.");
+  }
   const deliveryId = text(data && (data.deliveryId || data.requestId));
   const action = normalized(data && data.action);
   const nextStatus = tracking.statusForRiderAction(action);
@@ -376,6 +395,13 @@ exports.updateDeliveryTrackingStatus = functions.https.onCall(async (data, conte
       throw new functions.https.HttpsError("failed-precondition", evidenceDecision.reason);
     }
 
+    const evidenceRecord = Object.keys(evidence).length > 0 ? await verifiedEvidence(transaction, db, {
+      evidenceId: evidence.evidenceId,
+      deliveryId: found.id,
+      riderId,
+      action,
+    }) : null;
+
 
     const privateRef = db.collection("deliveryRequestsPrivate").doc(found.id);
     const privateSnapshot = await transaction.get(privateRef);
@@ -416,7 +442,12 @@ exports.updateDeliveryTrackingStatus = functions.https.onCall(async (data, conte
     });
     if (Object.keys(evidence).length > 0) {
       patch[action === "verify_receiver_pin" ? "handoverEvidence" : "pickupEvidence"] = {
-        ...evidence,
+        evidenceId: evidenceRecord && evidenceRecord.evidenceId,
+        stage: evidenceRecord && evidenceRecord.stage,
+        conditionConfirmed: evidence.conditionConfirmed === true,
+        riderDeclarationAccepted: evidence.riderDeclarationAccepted === true,
+        recipientConfirmed: evidence.recipientConfirmed === true,
+        recipientName: text(evidence.recipientName),
         recordedAt: FieldValue.serverTimestamp(),
         recordedBy: riderId,
       };

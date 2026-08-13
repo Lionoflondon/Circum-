@@ -41,6 +41,18 @@ function googlePlaceDetailsUrl(placeId, apiKey, sessionToken = "") {
   return `https://maps.googleapis.com/maps/api/place/details/json?${params.toString()}`;
 }
 
+function googleDirectionsUrl(origin, destination, apiKey) {
+  const params = new URLSearchParams({
+    origin: `${origin.lat},${origin.lng}`,
+    destination: `${destination.lat},${destination.lng}`,
+    mode: "driving",
+    units: "imperial",
+    region: "uk",
+    key: text(apiKey),
+  });
+  return `https://maps.googleapis.com/maps/api/directions/json?${params.toString()}`;
+}
+
 function mapAddress(result) {
   const address = result.address || {};
   const road = text(address.road || address.pedestrian || address.footway || address.path);
@@ -213,6 +225,29 @@ async function resolveUkAddressPlace({placeId, fetchImpl = global.fetch, googleP
   return mapped;
 }
 
+async function resolveUkDrivingRoute({origin, destination, fetchImpl = global.fetch, googlePlacesApiKey = ""}) {
+  const usable = (point) => point && Number.isFinite(Number(point.lat)) && Number.isFinite(Number(point.lng));
+  if (!usable(origin) || !usable(destination)) throw new Error("Two verified route endpoints are required.");
+  const apiKey = text(googlePlacesApiKey);
+  if (!apiKey) throw new Error("GOOGLE_PLACES_API_KEY is not configured.");
+  const result = await fetchJsonWithTimeout(googleDirectionsUrl(origin, destination, apiKey), {fetchImpl});
+  if (!result.ok) throw new Error("Google Directions request failed.");
+  const body = result.body || {};
+  const leg = body.routes && body.routes[0] && body.routes[0].legs && body.routes[0].legs[0];
+  const distanceMetres = Number(leg && leg.distance && leg.distance.value);
+  const durationSeconds = Number(leg && leg.duration && leg.duration.value);
+  if (body.status !== "OK" || !Number.isFinite(distanceMetres) || !Number.isFinite(durationSeconds)) {
+    throw new Error(`Google Directions returned ${body.status || "UNKNOWN"}.`);
+  }
+  return {
+    distanceMetres,
+    distanceMiles: Math.round((distanceMetres / 1609.344) * 100) / 100,
+    durationSeconds,
+    durationMinutes: Math.max(1, Math.round(durationSeconds / 60)),
+    provider: "google_directions",
+  };
+}
+
 async function searchFreeUkAddresses({
   query,
   fetchImpl = global.fetch,
@@ -245,8 +280,10 @@ async function searchFreeUkAddresses({
 module.exports = {
   googlePlacesAutocompleteUrl,
   googlePlaceDetailsUrl,
+  googleDirectionsUrl,
   nominatimSearchUrl,
   resolveUkAddressPlace,
+  resolveUkDrivingRoute,
   sanitizeQuery,
   searchFreeUkAddresses,
   searchGoogleUkAddresses,

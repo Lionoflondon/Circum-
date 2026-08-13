@@ -2,6 +2,7 @@
 "use strict";
 
 const functions = require("firebase-functions/v1");
+const {resolveUkAddressPlace, resolveUkDrivingRoute} = require("./free-address-core");
 const crypto = require("crypto");
 const {getFirestore, FieldValue, GeoPoint, Timestamp} = require("firebase-admin/firestore");
 const {calculateWalletCheckout, roundMoney, minorUnits} = require("./wallet-core");
@@ -224,13 +225,23 @@ function sanitizeSenderDraftPayload(raw) {
     step,
     pickup: {
       address: cleanString(pickup.address, 1000),
+      placeId: cleanString(pickup.placeId, 300),
       subAddress: cleanString(pickup.subAddress, 300),
       locality: cleanString(pickup.locality, 200),
+      coordinate: {
+        lat: cleanNumber(cleanMap(pickup.coordinate).lat),
+        lng: cleanNumber(cleanMap(pickup.coordinate).lng),
+      },
     },
     dropoff: {
       address: cleanString(dropoff.address, 1000),
+      placeId: cleanString(dropoff.placeId, 300),
       subAddress: cleanString(dropoff.subAddress, 300),
       locality: cleanString(dropoff.locality, 200),
+      coordinate: {
+        lat: cleanNumber(cleanMap(dropoff.coordinate).lat),
+        lng: cleanNumber(cleanMap(dropoff.coordinate).lng),
+      },
     },
     recipient: {
       name: cleanString(recipient.name, 200),
@@ -301,6 +312,10 @@ function draftExpired(record) {
   if (!record || !record.expiresAt) return false;
   const expiresAt = timestampMillis(record.expiresAt);
   return expiresAt != null && expiresAt <= Date.now();
+}
+
+function quoteExpired(record) {
+  return draftExpired(record);
 }
 
 function draftInactive(record) {
@@ -894,9 +909,60 @@ exports.getSenderRothBalance = functions.https.onCall(async (_, context) => {
   };
 });
 
+function requireFirstParty(context) {
+  if (!context.app) {
+    throw new functions.https.HttpsError("failed-precondition", "Security verification is required.");
+  }
+}
+
+function addressApiKey() {
+  const config = functions.config() || {};
+  return text(process.env.GOOGLE_PLACES_API_KEY || process.env.CIRCUM_GOOGLE_PLACES_API_KEY ||
+    config.google && config.google.places_api_key);
+}
+
+function canonicalAddress(place) {
+  return {
+    placeId: text(place.placeId || place.locationId),
+    formattedAddress: text(place.displayAddress),
+    locality: text(place.components && place.components.city),
+    postcode: text(place.components && place.components.postcode),
+    country: text(place.components && place.components.country),
+    coordinates: {lat: Number(place.lat), lng: Number(place.lng)},
+    provider: text(place.provider),
+    verified: true,
+  };
+}
+
+async function resolveQuoteJourney(data) {
+  const pickupPlaceId = text(data && data.pickupPlaceId);
+  const dropoffPlaceId = text(data && data.dropoffPlaceId);
+  if (!pickupPlaceId || !dropoffPlaceId || pickupPlaceId === dropoffPlaceId) {
+    throw new functions.https.HttpsError("invalid-argument", "Two different selected addresses are required.");
+  }
+  const key = addressApiKey();
+  try {
+    const [pickupPlace, dropoffPlace] = await Promise.all([
+      resolveUkAddressPlace({placeId: pickupPlaceId, googlePlacesApiKey: key}),
+      resolveUkAddressPlace({placeId: dropoffPlaceId, googlePlacesApiKey: key}),
+    ]);
+    const route = await resolveUkDrivingRoute({
+      origin: pickupPlace,
+      destination: dropoffPlace,
+      googlePlacesApiKey: key,
+    });
+    return {pickup: canonicalAddress(pickupPlace), dropoff: canonicalAddress(dropoffPlace), route};
+  } catch (error) {
+    if (error instanceof functions.https.HttpsError) throw error;
+    throw new functions.https.HttpsError("unavailable", "We could not verify this delivery route. Please reselect both addresses.");
+  }
+}
+
 exports.createSenderBookingQuote = functions.https.onCall(async (data, context) => {
   const sender = requireSender(context);
+  requireFirstParty(context);
   const db = getFirestore();
+  const journey = await resolveQuoteJourney(data || {});
   const businessContext = await verifiedBusinessContext(db, sender, data && data.businessContext);
   const parcel = data && data.parcel && typeof data.parcel === "object" ? data.parcel : {};
   const parcelDescription = text(data && (data.description || data.packageDescription) || parcel.description || parcel.itemName || "");
@@ -908,6 +974,8 @@ exports.createSenderBookingQuote = functions.https.onCall(async (data, context) 
   });
   const quote = quotePayload({
     ...(data || {}),
+    distanceMiles: journey.route.distanceMiles,
+    estimatedDurationMinutes: journey.route.durationMinutes,
     ...(businessContext || {}),
   }, sender.uid, serverPhotoAnalysis);
   const clientDisplayQuote = cleanMap(data && data.clientDisplayQuote);
@@ -920,6 +988,9 @@ exports.createSenderBookingQuote = functions.https.onCall(async (data, context) 
     money(clientDisplayAmount - money(quote.total));
   await db.collection("senderBookingQuotes").doc(quote.quoteId).set({
     ...quote,
+    journey,
+    addressAuthority: "backend_verified_place_and_route",
+    expiresAt: Timestamp.fromMillis(Date.now() + 15 * 60 * 1000),
     ...(businessContext || {}),
     clientDisplayQuote: clientDisplayAmount == null ? null : {
       amount: clientDisplayAmount,
@@ -943,6 +1014,7 @@ exports.createSenderBookingQuote = functions.https.onCall(async (data, context) 
 
 exports.createSenderPaymentSession = (stripe) => functions.https.onCall(async (data, context) => {
   const sender = requireSender(context);
+  requireFirstParty(context);
   const quoteId = text(data.quoteId);
   if (!quoteId) {
     throw new functions.https.HttpsError("invalid-argument", "A backend quote is required before payment.");
@@ -953,6 +1025,13 @@ exports.createSenderPaymentSession = (stripe) => functions.https.onCall(async (d
     throw new functions.https.HttpsError("not-found", "Booking quote not found.");
   }
   const quote = quoteSnap.data();
+  if (quoteExpired(quote)) {
+    throw new functions.https.HttpsError("failed-precondition", "This quote has expired. Refresh the delivery price before paying.");
+  }
+  const quotedJourney = quote.journey || {};
+  if (!quotedJourney.pickup || !quotedJourney.dropoff || !quotedJourney.route) {
+    throw new functions.https.HttpsError("failed-precondition", "The paid quote does not contain a verified delivery route.");
+  }
   const total = money(quote.total || quote.finalAmount || quote.amountDue);
   const rothEnabled = data.rothEnabled === true;
   const rothBalance = rothEnabled ? await walletBalanceForSender(sender) : 0;
@@ -1595,6 +1674,10 @@ async function createPaidDeliveryFromSession(stripe, sender, data) {
     });
   }
   const quote = quoteSnap.data();
+  const quotedJourney = quote.journey || {};
+  if (!quotedJourney.pickup || !quotedJourney.dropoff || !quotedJourney.route) {
+    throw new functions.https.HttpsError("failed-precondition", "The paid quote does not contain a verified delivery route.");
+  }
   const draftId = text(data.draftId);
   const idempotencyKey = text(data.idempotencyKey) ||
     stableId(`${sender.uid}:${draftId || "no-draft"}:${quoteId}:${paymentSessionId}`);
@@ -1616,8 +1699,20 @@ async function createPaidDeliveryFromSession(stripe, sender, data) {
     payment.rothDebitStatus !== "completed";
   const walletDebitRef = db.collection("walletTransactions").doc(`wallet_delivery_${paymentSessionId}`);
   const {walletId, walletRef, senderWalletRef} = walletRefsForSender(db, sender);
-  const pickup = data.pickup || {};
-  const dropoff = data.dropoff || {};
+  const pickupInput = data.pickup || {};
+  const dropoffInput = data.dropoff || {};
+  const pickup = {
+    ...quotedJourney.pickup,
+    fullname: pickupInput.fullname,
+    instructions: pickupInput.instructions,
+    subAddress: pickupInput.subAddress,
+  };
+  const dropoff = {
+    ...quotedJourney.dropoff,
+    fullname: dropoffInput.fullname,
+    instructions: dropoffInput.instructions,
+    subAddress: dropoffInput.subAddress,
+  };
   const parcel = data.parcel || {};
   const clientIris = data.iris || {};
   const forcedVanguardRequired = quote.vanguardRequired === true ||
@@ -1742,7 +1837,7 @@ async function createPaidDeliveryFromSession(stripe, sender, data) {
         position: geoData(pickup.coordinates),
         moreInformation: pickup.instructions || "",
         locality: pickup.locality || "",
-        address: pickup.address || "",
+        address: pickup.formattedAddress || "",
         subAddress: pickup.subAddress || "",
       },
       dropoffDetails: {
@@ -1752,13 +1847,13 @@ async function createPaidDeliveryFromSession(stripe, sender, data) {
         position: geoData(dropoff.coordinates),
         moreInformation: dropoff.instructions || data.recipient && data.recipient.deliveryNotes || "",
         locality: dropoff.locality || "",
-        address: dropoff.address || "",
+        address: dropoff.formattedAddress || "",
         subAddress: dropoff.subAddress || "",
       },
       pickupPosition: geoData(pickup.coordinates),
-      pickupAddress: pickup.address || "",
+      pickupAddress: pickup.formattedAddress || "",
       pickupLocality: pickup.locality || "",
-      dropoffAddress: dropoff.address || "",
+      dropoffAddress: dropoff.formattedAddress || "",
       dropoffLocality: dropoff.locality || "",
       receiverName: data.recipient && data.recipient.name || dropoff.fullname || "",
       receiverPhone: "",

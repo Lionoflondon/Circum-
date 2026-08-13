@@ -53,6 +53,7 @@ const giftsPayment = require("./gifts-payment");
 const communicationEngine = require("./communication-engine");
 const deliveryPolicy = require("./delivery-policy");
 const deliveryTracking = require("./delivery-tracking");
+const deliveryEvidence = require("./delivery-evidence");
 const ratingsTipping = require("./ratings-tipping");
 const stripeRefunds = require("./stripe-refunds");
 const riderEarningsSummary = require("./rider-earnings-summary");
@@ -145,6 +146,7 @@ exports.markRiderNoShow = deliveryPolicy.markRiderNoShow;
 exports.cancelDelivery = deliveryPolicy.requestSenderCancellation;
 exports.updateDeliveryTrackingStatus =
   deliveryTracking.updateDeliveryTrackingStatus;
+exports.submitDeliveryEvidence = deliveryEvidence.submitDeliveryEvidence;
 exports.updateDeliveryLiveLocation =
   deliveryTracking.updateDeliveryLiveLocation;
 exports.submitDeliveryRating = ratingsTipping.submitDeliveryRating;

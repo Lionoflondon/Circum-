@@ -11,6 +11,132 @@ const openDispatchStatuses = new Set(["requested", "available", "broadcast", "br
 const paidStatuses = new Set(["", "paid", "succeeded", "payment_confirmed", "confirmed", "roth_paid", "stripe_paid"]);
 const text = (value) => `${value || ""}`.trim();
 
+function finiteNumber(...values) {
+  for (const value of values) {
+    const number = Number(value);
+    if (Number.isFinite(number) && number >= 0) return number;
+  }
+  return null;
+}
+
+function weightBand(weightKg) {
+  if (!Number.isFinite(weightKg)) return "review_required";
+  if (weightKg <= 5) return "0-5 kg";
+  if (weightKg <= 10) return ">5-10 kg";
+  if (weightKg <= 20) return ">10-20 kg";
+  if (weightKg <= 40) return ">20-40 kg";
+  return ">40 kg";
+}
+
+function safeLocality(address = {}, fallback = "") {
+  return text(address.locality || address.city || fallback) || "Location pending";
+}
+
+function riderOfferProjection(deliveryId, delivery = {}, distanceFromRider = 0) {
+  const journey = delivery.pricingBreakdown && delivery.pricingBreakdown.journey || delivery.journey || {};
+  const pickup = journey.pickup || {};
+  const dropoff = journey.dropoff || {};
+  const parcel = delivery.parcel || {};
+  const iris = delivery.iris || delivery.irisDeliveryEstimate || {};
+  const recommendation = iris.recommendation || {};
+  const chargeableWeightKg = finiteNumber(
+      delivery.pricingBreakdown && delivery.pricingBreakdown.weightKg,
+      delivery.finalChargeableWeight,
+      delivery.finalPricingWeightKg,
+  );
+  const ascribedWeightKg = finiteNumber(
+      recommendation.estimatedWeightKg,
+      delivery.irisEstimatedWeight,
+      delivery.irisEstimatedWeightKg,
+  );
+  const declaredWeightKg = finiteNumber(parcel.weightKg, delivery.declaredWeightKg);
+  const quantity = Math.max(1, Math.round(finiteNumber(iris.quantity, parcel.quantity, 1) || 1));
+  const route = journey.route || {};
+  const routeMiles = finiteNumber(route.distanceMiles, delivery.distanceMiles);
+  const routeMinutes = finiteNumber(route.durationMinutes, delivery.estimatedDurationMinutes);
+  const pickupLocality = safeLocality(pickup, delivery.pickupLocality);
+  const dropoffLocality = safeLocality(dropoff, delivery.dropoffLocality);
+  return {
+    projectionVersion: 1,
+    authority: "backend_rider_offer_projection",
+    id: deliveryId,
+    requestId: text(delivery.requestId || deliveryId),
+    pickupLocality,
+    dropoffLocality,
+    directionText: `${pickupLocality} to ${dropoffLocality}`,
+    distanceFromRiderKm: Math.round(Number(distanceFromRider || 0) * 100) / 100,
+    routeDistanceMiles: routeMiles,
+    routeDurationMinutes: routeMinutes,
+    distanceText: routeMiles == null ? null : `${routeMiles.toFixed(1)} mi`,
+    durationText: routeMinutes == null ? null : `${Math.round(routeMinutes)} min`,
+    pickupAccessWarning: text(delivery.pickupDetails && delivery.pickupDetails.moreInformation) ?
+      "Collection access notes available after acceptance" : null,
+    dropoffAccessWarning: text(delivery.dropoffDetails && delivery.dropoffDetails.moreInformation) ?
+      "Drop-off access notes available after acceptance" : null,
+    roadChargeContext: text(delivery.roadChargeContext || delivery.pricingBreakdown && delivery.pricingBreakdown.roadChargeContext),
+    scheduledCollectionTime: delivery.deliveryTime || null,
+    serviceSpeed: text(delivery.selectedServiceLevel || delivery.serviceLevel || delivery.selectedSpeed || "standard"),
+    item: {
+      canonicalItem: text(iris.itemName || delivery.normalizedItemName || parcel.itemName || "Parcel"),
+      category: text(iris.category || recommendation.category),
+      quantity,
+      senderDescription: text(parcel.description || delivery.packageDescription),
+      declaredWeightKg,
+      ascribedWeightKg,
+      chargeableWeightKg,
+      weightBand: weightBand(chargeableWeightKg),
+      sizeClass: text(recommendation.sizeClass || iris.sizeClass || parcel.sizeClass),
+      dimensions: recommendation.dimensions || iris.dimensions || parcel.dimensions || null,
+      fragile: parcel.fragile === true || iris.fragile === true,
+      highValue: parcel.highValue === true || iris.highValue === true,
+      vanguardRequired: delivery.requiresVanguard === true,
+      specialistRequired: delivery.specialistRequired === true || recommendation.specialistRequired === true,
+      requiredVehicle: text(recommendation.vehicleType || delivery.minimumVehicle || delivery.vehicleType),
+      liftWarning: text(recommendation.liftWarning || delivery.liftWarning),
+      multiItem: quantity > 1,
+      photoEvidenceStatus: text(delivery.irisPhotoAnalysisId) ? "verified_analysis" : "not_supplied",
+      confidence: text(iris.confidence || recommendation.confidence),
+      reviewState: text(delivery.irisReviewStatus || "canonical"),
+      pickupConfirmationRequired: delivery.weightVerificationRequired === true || delivery.requiresVerification === true,
+    },
+    riderEarning: finiteNumber(delivery.riderEarning, delivery.riderPayout, delivery.driverPayout) || 0,
+    currency: text(delivery.currency || "GBP").toUpperCase(),
+    warningFlags: {
+      vanguard: delivery.requiresVanguard === true,
+      healthPlus: delivery.isHealthPlus === true,
+      gift: delivery.isGift === true,
+      business: delivery.isBusiness === true || delivery.businessMode === true,
+      heavyDuty: delivery.isHeavyDuty === true,
+      scheduled: Boolean(delivery.scheduledAt || delivery.deliveryTime && delivery.deliveryTime.type === "scheduled"),
+    },
+  };
+}
+
+function riderAssignedProjection(deliveryId, delivery = {}) {
+  const offer = riderOfferProjection(deliveryId, delivery, 0);
+  const pickup = delivery.pickupDetails || {};
+  const dropoff = delivery.dropoffDetails || {};
+  return {
+    ...offer,
+    authority: "backend_rider_assigned_projection",
+    status: text(delivery.status || delivery.deliveryStatus),
+    deliveryStage: text(delivery.deliveryStage || delivery.deliveryStatus || delivery.status),
+    pickupAddress: text(pickup.address || delivery.pickupAddress),
+    dropoffAddress: text(dropoff.address || delivery.dropoffAddress),
+    pickupAccessNotes: text(pickup.moreInformation),
+    dropoffAccessNotes: text(dropoff.moreInformation),
+    contact: {
+      method: "circum_relay",
+      chatId: text(delivery.requestId || deliveryId),
+      phoneAvailable: false,
+      emailAvailable: false,
+    },
+    verificationRequired: delivery.verificationRequired === true || delivery.requiresVerification === true,
+    deliveryPhotoRequired: delivery.deliveryPhotoRequired === true || delivery.proofPhotoRequired === true,
+    pinRequired: delivery.pinRequired === true || delivery.requiresVanguard === true,
+  };
+}
+
 function riderLocality(rider = {}) {
   return text(rider.dispatchLocality || rider.locality || rider.city || rider.town || rider.area);
 }
@@ -117,6 +243,9 @@ const getNearbyRequests = functions.https.onCall(async (data, context) => {
       throw new functions.https.HttpsError("unauthenticated",
           "User must be authenticated to call this function.");
     }
+    if (!context.app) {
+      throw new functions.https.HttpsError("failed-precondition", "Security verification is required.");
+    }
 
     const riderId = context.auth.uid;
 
@@ -218,8 +347,8 @@ const getNearbyRequests = functions.https.onCall(async (data, context) => {
                 const distance = R * c; // Distance in kilometers
 
                 return {
-                  id: doc.id,
-                  ...requestData,
+                  projection: riderOfferProjection(doc.id, requestData, distance),
+                  source: requestData,
                   distanceFromRider: distance,
                 };
               } catch (error) {
@@ -232,11 +361,12 @@ const getNearbyRequests = functions.https.onCall(async (data, context) => {
     // Filter out null values and get 5 closest requests
     const nearestRequests = requestsWithDistances
         .filter((request) => request !== null)
-        .sort((a, b) => riderDispatchPriority(riderData, b) - riderDispatchPriority(riderData, a) ||
-          dispatchPriority(b) - dispatchPriority(a) ||
-          deliveryCreatedMillis(b) - deliveryCreatedMillis(a) ||
+        .sort((a, b) => riderDispatchPriority(riderData, b.source) - riderDispatchPriority(riderData, a.source) ||
+          dispatchPriority(b.source) - dispatchPriority(a.source) ||
+          deliveryCreatedMillis(b.source) - deliveryCreatedMillis(a.source) ||
           a.distanceFromRider - b.distanceFromRider)
-        .slice(0, 5);
+        .slice(0, 5)
+        .map((request) => request.projection);
     console.info("rider_offer_returned", {
       riderId,
       returned: nearestRequests.map((request) => ({
@@ -262,4 +392,4 @@ const getNearbyRequests = functions.https.onCall(async (data, context) => {
 });
 
 module.exports = getNearbyRequests;
-module.exports._private = {candidateRequestDocs, riderLocality, deliveryLocality, hasPickupGeo, isLiveDispatchOffer, offerExclusionReason, REQUEST_SCAN_LIMIT};
+module.exports._private = {candidateRequestDocs, riderLocality, deliveryLocality, hasPickupGeo, isLiveDispatchOffer, offerExclusionReason, riderOfferProjection, riderAssignedProjection, weightBand, REQUEST_SCAN_LIMIT};

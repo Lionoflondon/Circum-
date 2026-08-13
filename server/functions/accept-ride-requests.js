@@ -1,5 +1,6 @@
 /* eslint-disable max-len */
 const functions = require("firebase-functions/v1");
+const {riderAssignedProjection} = require("./get-avaliable-requests")._private;
 const {getFirestore, FieldValue} = require("firebase-admin/firestore");
 const {getMessaging} = require("firebase-admin/messaging");
 const {isDispatchable, riderCanViewDispatch, riderMatchesIris} = require("./iris-core");
@@ -137,6 +138,9 @@ const notifySender = async (deliveryRequest, payload) => {
 const acceptRideRequests = functions.https.onCall(async (data, context) => {
   if (!context.auth) {
     throw new functions.https.HttpsError("unauthenticated", "User must be authenticated to accept a delivery.");
+  }
+  if (!context.app) {
+    throw new functions.https.HttpsError("failed-precondition", "Security verification is required.");
   }
 
   const requestId = cleanText(data && data.requestId);
@@ -276,6 +280,7 @@ const acceptRideRequests = functions.https.onCall(async (data, context) => {
     riderId,
     senderNotified,
     rider: accepted.payload,
+    assignedDelivery: riderAssignedProjection(accepted.id, accepted.deliveryRequest),
   };
 });
 

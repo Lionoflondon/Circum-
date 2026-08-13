@@ -137,7 +137,8 @@ test("Business owners can read their own workspace but cannot write it directly"
   assert.match(rulesSource, /match \/businessMemberships\/\{membershipId\}/);
   assert.match(rulesSource, /match \/businessInvoices\/\{invoiceId\}/);
   assert.match(rulesSource, /match \/businessAuditLogs\/\{logId\}/);
-  assert.match(rulesSource, /canReadBusinessId\(resource\.data\.businessId\) \|\|[\s\S]*?isAvailableRiderJob\(\)/);
+  assert.match(rulesSource, /isAssignedRider\(\) \|\|[\s\S]*?canReadBusinessId\(resource\.data\.businessId\)/);
+  assert.doesNotMatch(rulesSource, /allow read:[^;]*isAvailableRiderJob\(\)/);
 });
 
 test("Business invoice payment supports partial Roth plus remaining card payment", () => {

@@ -907,8 +907,7 @@ service cloud.firestore {
       allow read: if isAdmin() ||
         isOwnDelivery(deliveryId) ||
         isAssignedRider() ||
-        canReadBusinessId(resource.data.businessId) ||
-        isAvailableRiderJob();
+        canReadBusinessId(resource.data.businessId);
       allow create: if isAdmin();
       allow update: if isAdmin() ||
         isOwnDeliveryUpdate() ||
@@ -924,6 +923,10 @@ service cloud.firestore {
     }
 
     match /deliveryRequestsPrivate/{deliveryId} {
+      allow read, write: if false;
+    }
+
+    match /deliveryEvidence/{evidenceId} {
       allow read, write: if false;
     }
 
