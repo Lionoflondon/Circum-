@@ -37,6 +37,9 @@ function requireRider(context) {
   if (!context.auth) {
     throw new functions.https.HttpsError("unauthenticated", "Sign in as a Rider to continue.");
   }
+  if (!context.app) {
+    throw new functions.https.HttpsError("failed-precondition", "Security verification is required.");
+  }
   return {
     uid: context.auth.uid,
     email: context.auth.token.email || null,
@@ -507,6 +510,9 @@ exports.submitRiderApplication = functions.https.onCall(async (data, context) =>
     };
     if (!application.fullName || !application.phoneNumber || !application.vehicleType) {
       throw new functions.https.HttpsError("invalid-argument", "Name, phone and vehicle type are required.");
+    }
+    if (/electric|bicycle|e[_ -]?bike/i.test(application.vehicleType)) {
+      throw new functions.https.HttpsError("invalid-argument", "Choose Motorbike, Car or Van.");
     }
     transaction.set(applicationRef, {
       ...application,

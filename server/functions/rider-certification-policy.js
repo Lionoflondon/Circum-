@@ -27,6 +27,7 @@ const RIDER_APPLICATION_TRANSITIONS = {
 };
 
 const DOCUMENT_MATRIX = {
+  // Retained for historical records; new onboarding must not offer it.
   electric_bike: ["profile_photo", "identity", "insurance", "right_to_work"],
   motorbike: ["driving_licence", "insurance", "registration_v5c", "mot", "right_to_work", "identity"],
   car: ["driving_licence", "insurance", "registration_v5c", "mot", "right_to_work", "identity"],

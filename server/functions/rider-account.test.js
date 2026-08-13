@@ -56,6 +56,14 @@ test("Rider self-service authority validates auth ownership documents and audit"
   assert.match(source, /runTransaction/);
 });
 
+test("Rider Application Centre authority requires App Check", () => {
+  const start = source.indexOf("function requireRider");
+  const end = source.indexOf("\n}\n", start) + 3;
+  const guard = source.slice(start, end);
+  assert.match(guard, /context\.app/);
+  assert.match(guard, /Security verification is required/);
+});
+
 test("Rider account creation initializes backend-owned rank and trust", () => {
   assert.match(source, /riderRank:\s*"agent"/);
   assert.match(source, /trustPoints:\s*0/);
