@@ -1,5 +1,11 @@
 /* eslint-disable max-len, require-jsdoc */
 
+const dns = require("node:dns");
+
+// The backend Places key is restricted to the Functions' static IPv4 egress.
+// Prefer IPv4 so Node fetch does not bypass that policy over an IPv6 route.
+dns.setDefaultResultOrder("ipv4first");
+
 function text(value) {
   return `${value || ""}`.trim();
 }

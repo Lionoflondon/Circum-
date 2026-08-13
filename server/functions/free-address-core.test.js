@@ -1,6 +1,7 @@
 /* eslint-disable max-len */
 const test = require("node:test");
 const assert = require("node:assert/strict");
+const fs = require("node:fs");
 const {
   googleGeocodeAddressUrl,
   googlePlaceDetailsUrl,
@@ -12,6 +13,14 @@ const {
   searchFreeUkAddresses,
   searchGooglePremiseUkAddresses,
 } = require("./free-address-core");
+
+test("address callables use backend Places secret and static egress", () => {
+  const source = fs.readFileSync("free-address-search.js", "utf8");
+
+  assert.match(source, /defineSecret\("GOOGLE_PLACES_API_KEY"\)/);
+  assert.match(source, /searchFreeUkAddresses = functions\.runWith\(\{[\s\S]*?secrets: \[googlePlacesApiKeySecret\][\s\S]*?vpcConnector: "circum-fn-conn-v2"[\s\S]*?vpcConnectorEgressSettings: "ALL_TRAFFIC"[\s\S]*?\}\)\.https\.onCall/);
+  assert.match(source, /resolveUkAddressPlace = functions\.runWith\(\{[\s\S]*?secrets: \[googlePlacesApiKeySecret\][\s\S]*?vpcConnector: "circum-fn-conn-v2"[\s\S]*?vpcConnectorEgressSettings: "ALL_TRAFFIC"[\s\S]*?\}\)\.https\.onCall/);
+});
 
 test("sanitizes address queries", () => {
   assert.equal(sanitizeQuery("  Harley   Street   London  "), "Harley Street London");

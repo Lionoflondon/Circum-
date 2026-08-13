@@ -1,19 +1,22 @@
 /* eslint-disable max-len, require-jsdoc */
 const functions = require("firebase-functions/v1");
+const {defineSecret} = require("firebase-functions/params");
 const {
   resolveUkAddressPlace,
   searchFreeUkAddresses,
 } = require("./free-address-core");
 
+const googlePlacesApiKeySecret = defineSecret("GOOGLE_PLACES_API_KEY");
+
 function googlePlacesApiKey() {
-  const config = functions.config() || {};
-  return `${process.env.GOOGLE_PLACES_API_KEY ||
-    process.env.CIRCUM_GOOGLE_PLACES_API_KEY ||
-    config.google && config.google.places_api_key ||
-    ""}`.trim();
+  return `${process.env.GOOGLE_PLACES_API_KEY || ""}`.trim();
 }
 
-exports.searchFreeUkAddresses = functions.https.onCall(async (data) => {
+exports.searchFreeUkAddresses = functions.runWith({
+  secrets: [googlePlacesApiKeySecret],
+  vpcConnector: "circum-fn-conn-v2",
+  vpcConnectorEgressSettings: "ALL_TRAFFIC",
+}).https.onCall(async (data) => {
   const query = `${data && data.query || ""}`.trim();
   const sessionToken = `${data && data.sessionToken || ""}`.trim();
   if (query.length < 3) {
@@ -34,7 +37,11 @@ exports.searchFreeUkAddresses = functions.https.onCall(async (data) => {
   }
 });
 
-exports.resolveUkAddressPlace = functions.https.onCall(async (data) => {
+exports.resolveUkAddressPlace = functions.runWith({
+  secrets: [googlePlacesApiKeySecret],
+  vpcConnector: "circum-fn-conn-v2",
+  vpcConnectorEgressSettings: "ALL_TRAFFIC",
+}).https.onCall(async (data) => {
   const placeId = `${data && data.placeId || ""}`.trim();
   const sessionToken = `${data && data.sessionToken || ""}`.trim();
   if (!placeId) {
