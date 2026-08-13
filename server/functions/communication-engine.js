@@ -1,7 +1,9 @@
 /* eslint-disable max-len, require-jsdoc */
 const functions = require("firebase-functions/v1");
+const crypto = require("node:crypto");
 const {FieldValue, getFirestore} = require("firebase-admin/firestore");
 const {getMessaging} = require("firebase-admin/messaging");
+const {requireAppCheck} = require("./callable-guard");
 
 const terminalDeliveryStatuses = new Set([
   "delivered", "completed", "cancelled", "canceled", "failed",
@@ -198,6 +200,41 @@ function conversationId(type, participantId, deliveryId = "") {
   return type === "sender_rider" ? clean(deliveryId) : `${type}_${participantId}_${deliveryId || "general"}`;
 }
 
+function stableMessageDocumentId(chatId, data = {}) {
+  const requestId = clean(data.clientRequestId || data.idempotencyKey || data.correlationId || data.messageId);
+  if (!requestId) return "";
+  return `client_${crypto.createHash("sha256").update(`${chatId}:${requestId}`).digest("hex").slice(0, 40)}`;
+}
+
+async function findDelivery(db, deliveryId) {
+  const normalized = clean(deliveryId);
+  if (!normalized) return {id: "", ref: null, data: null};
+  const directRef = db.collection("deliveryRequests").doc(normalized);
+  const direct = await directRef.get();
+  if (direct.exists) return {id: direct.id, ref: directRef, data: direct.data() || {}};
+  const byRequestId = await db.collection("deliveryRequests")
+      .where("requestId", "==", normalized)
+      .limit(1)
+      .get();
+  if (byRequestId.empty) return {id: "", ref: null, data: null};
+  const doc = byRequestId.docs[0];
+  return {id: doc.id, ref: doc.ref, data: doc.data() || {}};
+}
+
+function deliveryParticipantIds(delivery = {}) {
+  return {
+    senderId: clean(delivery.senderId || delivery.userId || delivery.customerId),
+    riderId: clean(delivery.riderId || delivery.driverId || delivery.assignedRiderId || delivery.assignedDriverId),
+  };
+}
+
+function canAccessDeliveryConversation(context, delivery = {}) {
+  if (isAdmin(context)) return true;
+  const uid = context.auth && context.auth.uid;
+  const {senderId, riderId} = deliveryParticipantIds(delivery);
+  return uid && (uid === senderId || uid === riderId);
+}
+
 function supportChatIdFor(ticketId) {
   return `support_${clean(ticketId)}`;
 }
@@ -273,6 +310,7 @@ function canSend(chat, senderId, admin) {
 }
 
 async function sendMessage(data, context) {
+  requireAppCheck(context);
   if (!context.auth) throw new functions.https.HttpsError("unauthenticated", "Sign in to send a message.");
   const senderId = context.auth.uid;
   const chatId = clean(data.chatId || data.requestId || data.bookingId);
@@ -302,11 +340,16 @@ async function sendMessage(data, context) {
   }
 
   const recipientIds = (chat.participants || []).filter((uid) => uid && uid !== senderId);
-  const messageRef = chatRef.collection("messages").doc();
-  const correlationId = clean(data.correlationId) || `${chatId}_${messageRef.id}`;
+  const stableMessageId = stableMessageDocumentId(chatId, data);
+  const messageRef = stableMessageId ?
+    chatRef.collection("messages").doc(stableMessageId) :
+    chatRef.collection("messages").doc();
+  const correlationId = clean(data.correlationId || data.clientRequestId || data.idempotencyKey) || `${chatId}_${messageRef.id}`;
   const senderRole = isAdmin(context) ? "admin" : recipientRoleFor(chat, senderId);
   const senderName = await participantDisplayName(senderId, senderRole, context);
   await db.runTransaction(async (transaction) => {
+    const existingMessage = await transaction.get(messageRef);
+    if (existingMessage.exists) return;
     transaction.set(messageRef, {
       messageId: messageRef.id,
       conversationId: chatId,
@@ -347,7 +390,50 @@ async function sendMessage(data, context) {
   return {ok: true, chatId, messageId: messageRef.id};
 }
 
+async function getOrCreateDeliveryConversation(data, context) {
+  requireAppCheck(context);
+  if (!context.auth) throw new functions.https.HttpsError("unauthenticated", "Sign in to open this conversation.");
+  const requestedDeliveryId = clean(data.deliveryId || data.bookingId || data.requestId || data.chatId);
+  if (!requestedDeliveryId) throw new functions.https.HttpsError("invalid-argument", "A delivery is required.");
+  const db = getFirestore();
+  const delivery = await findDelivery(db, requestedDeliveryId);
+  if (!delivery.data) throw new functions.https.HttpsError("not-found", "Delivery conversation is unavailable.");
+  if (!canAccessDeliveryConversation(context, delivery.data)) {
+    throw new functions.https.HttpsError("permission-denied", "You are not part of this delivery conversation.");
+  }
+  const {senderId, riderId} = deliveryParticipantIds(delivery.data);
+  if (!senderId || !riderId) {
+    throw new functions.https.HttpsError("failed-precondition", "Delivery conversation opens after Rider assignment.");
+  }
+  const status = clean(delivery.data.status || delivery.data.deliveryStatus).toLowerCase();
+  const readOnly = terminalDeliveryStatuses.has(status);
+  const chatId = conversationId("sender_rider", senderId, delivery.id);
+  const chatRef = db.collection("chats").doc(chatId);
+  await db.runTransaction(async (transaction) => {
+    transaction.set(chatRef, {
+      threadId: chatId,
+      conversationType: "sender_rider",
+      type: "sender_rider",
+      deliveryId: delivery.id,
+      bookingId: delivery.id,
+      requestId: clean(delivery.data.requestId || delivery.id),
+      participants: [senderId, riderId],
+      participantRoles: {[senderId]: "sender", [riderId]: "rider"},
+      assignedRiderId: riderId,
+      senderId,
+      status: readOnly ? "closed" : "open",
+      readOnly,
+      closedReason: readOnly ? status : null,
+      source: "communication-engine",
+      updatedAt: FieldValue.serverTimestamp(),
+      createdAt: FieldValue.serverTimestamp(),
+    }, {merge: true});
+  });
+  return {ok: true, chatId, deliveryId: delivery.id, participants: [senderId, riderId], readOnly};
+}
+
 async function setConversationTyping(data, context) {
+  requireAppCheck(context);
   if (!context.auth) throw new functions.https.HttpsError("unauthenticated", "Sign in to update typing.");
   const chatId = clean(data.chatId);
   if (!chatId) throw new functions.https.HttpsError("invalid-argument", "A conversation is required.");
@@ -365,6 +451,7 @@ async function setConversationTyping(data, context) {
 }
 
 async function reportMessage(data, context) {
+  requireAppCheck(context);
   if (!context.auth) throw new functions.https.HttpsError("unauthenticated", "Sign in to report a message.");
   const chatId = clean(data.chatId);
   const messageId = clean(data.messageId);
@@ -537,6 +624,7 @@ async function startAdminConversation(data, context) {
 }
 
 async function getOrCreateSupportConversation(data, context) {
+  requireAppCheck(context);
   if (!context.auth) throw new functions.https.HttpsError("unauthenticated", "Sign in to contact support.");
   const uid = context.auth.uid;
   const topic = clean(data.topic || "support").slice(0, 80) || "support";
@@ -739,6 +827,7 @@ async function updateSupportConversationStatus(data, context) {
 }
 
 async function markConversationRead(data, context) {
+  requireAppCheck(context);
   if (!context.auth) throw new functions.https.HttpsError("unauthenticated", "Sign in to update a conversation.");
   const chatId = clean(data.chatId);
   const db = getFirestore();
@@ -759,6 +848,7 @@ exports.emitNotification = emitNotification;
 exports.destinationFor = destinationFor;
 exports._sendCircumMessageHandler = sendMessage;
 exports.sendCircumMessage = functions.https.onCall(sendMessage);
+exports.getOrCreateDeliveryConversation = functions.https.onCall(getOrCreateDeliveryConversation);
 exports.startAdminConversation = functions.https.onCall(startAdminConversation);
 exports.getOrCreateSupportConversation = functions.https.onCall(getOrCreateSupportConversation);
 exports.submitWebsiteSupportRequest = functions.https.onCall(submitWebsiteSupportRequest);

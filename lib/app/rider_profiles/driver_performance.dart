@@ -44,6 +44,10 @@ class DriverProfile {
   final String verificationStatus;
   final String status;
   final String rank;
+  final bool isFounder;
+  final int? founderNumber;
+  final bool isFoundingRider;
+  final int? foundingRiderNumber;
   final DriverVehicle vehicle;
   final DriverPerformanceMetric performance;
   final List<DriverRating> recentRatings;
@@ -56,6 +60,10 @@ class DriverProfile {
     required this.verificationStatus,
     required this.status,
     this.rank = 'agent',
+    this.isFounder = false,
+    this.founderNumber,
+    this.isFoundingRider = false,
+    this.foundingRiderNumber,
     required this.vehicle,
     required this.performance,
     this.recentRatings = const [],
@@ -68,6 +76,14 @@ class DriverProfile {
     List<DriverRating> recentRatings = const [],
   }) {
     final map = data ?? const <String, dynamic>{};
+    final recognitions =
+        Map<String, dynamic>.from(map['recognitions'] as Map? ?? const {});
+    final founder = Map<String, dynamic>.from(
+      recognitions['founder'] as Map? ?? const {},
+    );
+    final foundingRider = Map<String, dynamic>.from(
+      recognitions['foundingRider'] as Map? ?? const {},
+    );
     return DriverProfile(
       driverId: driverId,
       fullName:
@@ -78,6 +94,12 @@ class DriverProfile {
           _readString(map, ['verificationStatus'], fallback: 'pending'),
       status: _readString(map, ['driverStatus', 'status'], fallback: 'active'),
       rank: _driverRank(map['rank'] ?? map['riderRank']),
+      isFounder: founder['awarded'] == true || map['founderRider'] == true,
+      founderNumber: (founder['number'] as num?)?.toInt(),
+      isFoundingRider:
+          foundingRider['awarded'] == true || map['isFoundingRider'] == true,
+      foundingRiderNumber: (foundingRider['number'] as num?)?.toInt() ??
+          (map['foundingRiderNumber'] as num?)?.toInt(),
       vehicle: DriverVehicle.fromMap({
         ...map,
         if (map['vehicle'] is Map<String, dynamic>)

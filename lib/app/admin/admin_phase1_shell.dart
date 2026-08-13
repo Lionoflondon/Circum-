@@ -20329,6 +20329,7 @@ List<String> _recognitionTypesFor(Map<String, dynamic> record) {
 String _recognitionTypeLabel(String type) {
   return switch (type) {
     'foundingRider' => 'Founding Rider',
+    'founder' => 'Founder',
     'patron' => 'Patron',
     'legend' => 'Legend',
     _ => 'Recognition',
@@ -20341,6 +20342,7 @@ String _recognitionSummary(Map<String, dynamic> record) {
       'Legend #${record['legendNumber'] ?? 'recorded'}',
     if (record['isFoundingRider'] == true)
       'Founding Rider #${record['foundingRiderNumber'] ?? 'recorded'}',
+    if (record['founderRider'] == true) 'Founder',
     if (record['isPatron'] == true)
       'Patron #${record['patronNumber'] ?? 'recorded'}',
   ];

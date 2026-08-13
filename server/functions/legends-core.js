@@ -1,5 +1,44 @@
 /* eslint-disable require-jsdoc, max-len */
-const LEGEND_LIMIT = 1500;
+const LEGEND_LIMIT = 1000;
+
+const RECOGNITION_CONFIG = Object.freeze({
+  legend: {
+    limit: LEGEND_LIMIT,
+    recognitionKey: "legend",
+    rootField: "isLegend",
+    numberField: "legendNumber",
+    awardedAtField: "legendAwardedAt",
+    sourceField: "legendSource",
+    reasonField: "legendReason",
+    revokedAtField: "legendRevokedAt",
+    revokedByField: "legendRevokedBy",
+    revokeReasonField: "legendRevokeReason",
+  },
+  foundingRider: {
+    limit: LEGEND_LIMIT,
+    recognitionKey: "foundingRider",
+    rootField: "isFoundingRider",
+    numberField: "foundingRiderNumber",
+    awardedAtField: "foundingRiderAwardedAt",
+    sourceField: "foundingRiderSource",
+    reasonField: "foundingRiderReason",
+    revokedAtField: "foundingRiderRevokedAt",
+    revokedByField: "foundingRiderRevokedBy",
+    revokeReasonField: "foundingRiderRevokeReason",
+  },
+  patron: {
+    limit: LEGEND_LIMIT,
+    recognitionKey: "patron",
+    rootField: "isPatron",
+    numberField: "patronNumber",
+    awardedAtField: "patronAwardedAt",
+    sourceField: "patronSource",
+    reasonField: "patronReason",
+    revokedAtField: "patronRevokedAt",
+    revokedByField: "patronRevokedBy",
+    revokeReasonField: "patronRevokeReason",
+  },
+});
 
 const normalize = (value) => `${value || ""}`.trim().toLowerCase();
 
@@ -23,4 +62,70 @@ function legendAwardDecision({delivery, user = {}, counter = {}}) {
   return nextLegendNumber(counter.totalAwarded, counter.limit || LEGEND_LIMIT);
 }
 
-module.exports = {LEGEND_LIMIT, isEligibleLegendDelivery, nextLegendNumber, legendAwardDecision};
+function recognitionConfig(type) {
+  const rawType = `${type || ""}`.trim();
+  const config = RECOGNITION_CONFIG[rawType] || RECOGNITION_CONFIG[normalize(rawType)];
+  if (!config) throw new Error(`Unsupported recognition type: ${type}`);
+  return config;
+}
+
+function recognitionAwardDecision({type, subject = {}, counter = {}}) {
+  const config = recognitionConfig(type);
+  const recognitions = subject.recognitions && typeof subject.recognitions === "object" ?
+    subject.recognitions :
+    {};
+  const recognition = recognitions[config.recognitionKey] || {};
+  if (subject[config.rootField] === true || recognition.awarded === true) return null;
+  return nextLegendNumber(counter.totalAwarded, counter.limit || config.limit);
+}
+
+function buildRecognitionPatch({type, number, awardedBy, source, reason, timestampValue}) {
+  const config = recognitionConfig(type);
+  return {
+    [config.rootField]: true,
+    [config.numberField]: number,
+    [config.awardedAtField]: timestampValue,
+    [config.sourceField]: source,
+    [config.reasonField]: reason || null,
+    recognitions: {
+      [config.recognitionKey]: {
+        awarded: true,
+        number,
+        awardedAt: timestampValue,
+        awardedBy,
+        source,
+        reason: reason || null,
+      },
+    },
+  };
+}
+
+function buildRecognitionRevokePatch({type, revokedBy, reason, timestampValue}) {
+  const config = recognitionConfig(type);
+  return {
+    [config.rootField]: false,
+    [config.revokedAtField]: timestampValue,
+    [config.revokedByField]: revokedBy,
+    [config.revokeReasonField]: reason || null,
+    recognitions: {
+      [config.recognitionKey]: {
+        awarded: false,
+        revokedAt: timestampValue,
+        revokedBy,
+        reason: reason || null,
+      },
+    },
+  };
+}
+
+module.exports = {
+  RECOGNITION_CONFIG,
+  LEGEND_LIMIT,
+  isEligibleLegendDelivery,
+  nextLegendNumber,
+  legendAwardDecision,
+  recognitionConfig,
+  recognitionAwardDecision,
+  buildRecognitionPatch,
+  buildRecognitionRevokePatch,
+};

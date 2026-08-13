@@ -22,7 +22,38 @@ function setFounderRiderAccess() {
     const claims = {...(user.customClaims || {})};
     if (enabled) claims.founderRider = true; else delete claims.founderRider;
     await getAuth().setCustomUserClaims(uid, claims);
-    await getFirestore().collection("founderRiderAccessAudit").add({uid, enabled, actorUid: context.auth.uid, reason: `${data && data.reason || "Founder Rider access update"}`, createdAt: FieldValue.serverTimestamp(), mechanism: "firebase_auth_custom_claim"});
+    const db = getFirestore();
+    const now = FieldValue.serverTimestamp();
+    const founderPatch = enabled ? {
+      founderRider: true,
+      founderRecognition: "founder",
+      founderRecognitionUpdatedAt: now,
+      recognitions: {
+        founder: {
+          awarded: true,
+          title: "Founder",
+          source: "canonical_founder_identity",
+          awardedAt: now,
+          awardedBy: context.auth.uid,
+        },
+      },
+    } : {
+      founderRider: false,
+      founderRecognition: FieldValue.delete(),
+      founderRecognitionUpdatedAt: now,
+      recognitions: {
+        founder: {
+          awarded: false,
+          revokedAt: now,
+          revokedBy: context.auth.uid,
+        },
+      },
+    };
+    await Promise.all([
+      db.collection("riderProfiles").doc(uid).set(founderPatch, {merge: true}),
+      db.collection("riders").doc(uid).set(founderPatch, {merge: true}),
+      db.collection("founderRiderAccessAudit").add({uid, enabled, actorUid: context.auth.uid, reason: `${data && data.reason || "Founder Rider access update"}`, createdAt: now, mechanism: "firebase_auth_custom_claim_and_profile_projection"}),
+    ]);
     return {success: true, uid, enabled};
   });
 }

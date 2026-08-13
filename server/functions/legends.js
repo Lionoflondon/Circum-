@@ -208,15 +208,11 @@ exports.awardLegendOnCompletion = functions.firestore.document("deliveryRequests
   });
 });
 
-function statusApproved(value) {
-  return ["approved", "verified", "active"].includes(`${value || ""}`.trim().toLowerCase());
-}
-
 exports.awardFoundingRiderOnApproval = functions.firestore.document("riderProfiles/{riderId}").onWrite(async (change, context) => {
   const before = change.before.exists ? change.before.data() || {} : {};
-  const after = change.after.exists ? change.after.data() || {} : {};
-  const wasApproved = statusApproved(before.accountStatus || before.approvalStatus || before.onboardingStatus || before.verificationStatus);
-  const isApproved = statusApproved(after.accountStatus || after.approvalStatus || after.onboardingStatus || after.verificationStatus);
+  const after = change.after.exists ? change.after.data() || {};
+  const wasApproved = ["approved", "verified"].includes(`${before.applicationStatus || before.status || ""}`.trim().toLowerCase()) || before.dispatchEligible === true;
+  const isApproved = ["approved", "verified"].includes(`${after.applicationStatus || after.status || ""}`.trim().toLowerCase()) || after.dispatchEligible === true;
   if (wasApproved || !isApproved) return null;
   return awardRecognition({
     type: "foundingRider",
@@ -224,16 +220,16 @@ exports.awardFoundingRiderOnApproval = functions.firestore.document("riderProfil
     subjectId: context.params.riderId,
     subjectCollection: "riderProfiles",
     awardedBy: "system",
-    source: "rider_application_accepted",
-    reason: "Rider accepted onto Circum.",
+    source: "first_approved_work_ready_riders",
+    reason: "First 1000 approved CIRCUM Riders.",
   });
 });
 
 exports.awardFoundingRiderOnRiderApproval = functions.firestore.document("riders/{riderId}").onWrite(async (change, context) => {
   const before = change.before.exists ? change.before.data() || {} : {};
-  const after = change.after.exists ? change.after.data() || {} : {};
-  const wasApproved = statusApproved(before.accountStatus || before.approvalStatus || before.onboardingStatus || before.verificationStatus);
-  const isApproved = statusApproved(after.accountStatus || after.approvalStatus || after.onboardingStatus || after.verificationStatus);
+  const after = change.after.exists ? change.after.data() || {};
+  const wasApproved = ["approved", "verified"].includes(`${before.applicationStatus || before.status || ""}`.trim().toLowerCase()) || before.dispatchEligible === true;
+  const isApproved = ["approved", "verified"].includes(`${after.applicationStatus || after.status || ""}`.trim().toLowerCase()) || after.dispatchEligible === true;
   if (wasApproved || !isApproved) return null;
   return awardRecognition({
     type: "foundingRider",
@@ -241,8 +237,8 @@ exports.awardFoundingRiderOnRiderApproval = functions.firestore.document("riders
     subjectId: context.params.riderId,
     subjectCollection: "riders",
     awardedBy: "system",
-    source: "rider_application_accepted",
-    reason: "Rider accepted onto Circum.",
+    source: "first_approved_work_ready_riders",
+    reason: "First 1000 approved CIRCUM Riders.",
   });
 });
 
@@ -313,4 +309,4 @@ exports.revokeRecognition = functions.https.onCall(async (data, context) => {
   });
 });
 
-exports._private = {awardRecognition, revokeRecognition, statusApproved};
+exports._private = {awardRecognition, revokeRecognition};

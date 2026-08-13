@@ -329,12 +329,22 @@ test("Rider cannot self-write admin authority on riderProfiles", async () => {
     "availableBalance",
     "stripeConnectAccountId",
     "admin",
+    "founderRider",
+    "isFoundingRider",
+    "foundingRiderNumber",
   ]) {
     await assertFails(setDoc(doc(riderDb, "riderProfiles", "rider-1"), {
       [field]: field === "roles" ? ["driver_manager"] : "forged",
       updatedAt: serverTimestamp(),
     }, {merge: true}));
   }
+  await assertFails(setDoc(doc(riderDb, "riderProfiles", "rider-1"), {
+    recognitions: {
+      founder: {awarded: true, number: 1},
+      foundingRider: {awarded: true, number: 1},
+    },
+    updatedAt: serverTimestamp(),
+  }, {merge: true}));
   await assertSucceeds(setDoc(doc(riderDb, "riderProfiles", "rider-1"), {
     phone: "+447700900001",
     vehicleType: "bike",

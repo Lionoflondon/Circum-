@@ -87,6 +87,10 @@ test("riderProfiles mirrors riders admin-only authority fields", () => {
     "roles",
     "trustPoints",
     "stripeConnectAccountId",
+    "founderRider",
+    "isFoundingRider",
+    "foundingRiderNumber",
+    "recognitions",
   ]) {
     assert.match(rules, new RegExp(`'${field}'`));
   }
@@ -151,10 +155,24 @@ test("notifications are backend or admin authored only", () => {
       notificationBlock,
       /allow create: if isAdmin\(\);/,
   );
+  assert.match(notificationBlock, /allow read: if isAdmin\(\) \|\|/);
+  assert.match(notificationBlock, /allow update: if isAdmin\(\);/);
   assert.doesNotMatch(
       notificationBlock,
       /allow create: if isAdmin\(\) \|\|\s*\(signedIn\(\)/,
   );
+  assert.doesNotMatch(notificationBlock, /allow read, update: if isAdmin\(\) \|\|/);
+});
+
+test("operational chats are backend or admin authored while participants only read", () => {
+  const match = rules.match(
+      /match \/chats\/\{chatId\} \{[\s\S]*?match \/messages\/\{messageId\}/,
+  );
+  assert.ok(match, "chats rule missing");
+  assert.match(match[0], /allow read: if isAdmin\(\) \|\| isParticipant\(\);/);
+  assert.match(match[0], /allow create, update: if isAdmin\(\);/);
+  assert.doesNotMatch(match[0], /allow create: if isAdmin\(\) \|\| isCreatingAsParticipant\(\)/);
+  assert.doesNotMatch(match[0], /allow read, update: if isAdmin\(\) \|\| isParticipant\(\)/);
 });
 
 test("rider self updates are field allowlisted and cannot alter admin authority", () => {
@@ -171,6 +189,10 @@ test("rider self updates are field allowlisted and cannot alter admin authority"
     "trustPoints",
     "availableBalance",
     "stripeConnectAccountId",
+    "founderRider",
+    "isFoundingRider",
+    "foundingRiderNumber",
+    "recognitions",
   ]) {
     assert.match(rules, new RegExp(`'${field}'`));
   }

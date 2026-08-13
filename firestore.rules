@@ -83,7 +83,8 @@ service cloud.firestore {
         'legendNumber',
         'legendAwardedAt',
         'legendSource',
-        'legendDeliveryId'
+        'legendDeliveryId',
+        'recognitions'
       ]);
     }
 
@@ -317,6 +318,12 @@ service cloud.firestore {
         'payoutPaused',
         'internalAccess',
         'founderRider',
+        'isFoundingRider',
+        'foundingRiderNumber',
+        'foundingRiderAwardedAt',
+        'foundingRiderSource',
+        'foundingRiderReason',
+        'recognitions',
         'isAdmin',
         'admin'
       ];
@@ -693,8 +700,9 @@ service cloud.firestore {
     }
 
     match /notifications/{notificationId} {
-      allow read, update: if isAdmin() ||
+      allow read: if isAdmin() ||
         (signedIn() && resource.data.recipientId == request.auth.uid);
+      allow update: if isAdmin();
       allow create: if isAdmin();
       allow delete: if hasRole('super_admin');
     }
@@ -962,8 +970,8 @@ service cloud.firestore {
     }
 
     match /chats/{chatId} {
-      allow read, update: if isAdmin() || isParticipant();
-      allow create: if isAdmin() || isCreatingAsParticipant();
+      allow read: if isAdmin() || isParticipant();
+      allow create, update: if isAdmin();
       allow delete: if hasRole('super_admin');
 
       match /messages/{messageId} {
@@ -982,7 +990,8 @@ service cloud.firestore {
           'legendNumber',
           'legendAwardedAt',
           'legendSource',
-          'legendDeliveryId'
+          'legendDeliveryId',
+          'recognitions'
         ]) &&
         (isAdmin() || (
           !request.resource.data.keys().hasAny(userAdminOnlyRoleFields()) &&

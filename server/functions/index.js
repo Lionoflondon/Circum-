@@ -159,6 +159,8 @@ exports.adminReconcileRiderEarnings = riderEarningsSummary.adminReconcileRiderEa
 exports.scheduledRiderEarningsReconciliation = riderEarningsSummary.scheduledRiderEarningsReconciliation;
 exports.setFounderRiderAccess = founderRiderAccess.setFounderRiderAccess();
 exports.startAdminConversation = communicationEngine.startAdminConversation;
+exports.getOrCreateDeliveryConversation =
+  communicationEngine.getOrCreateDeliveryConversation;
 exports.getOrCreateSupportConversation =
   communicationEngine.getOrCreateSupportConversation;
 exports.submitWebsiteSupportRequest =

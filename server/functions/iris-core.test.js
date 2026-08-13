@@ -86,6 +86,28 @@ test("unsupported referrals and prohibited items do not dispatch normally", () =
   assert.equal(weapon.serviceability.status, "manual_review");
 });
 
+test("Vanguard protection never bypasses prohibited or referral IRIS policy", () => {
+  for (const description of ["weapon and explosives", "human remains", "pet transport for my dog"]) {
+    const decision = dispatchComplianceDecision({
+      status: "requested",
+      matchingStatus: "available",
+      packageDescription: description,
+      vanguardProtocolEnabled: true,
+      vanguardEnabled: true,
+      iris: {
+        serverAuthored: true,
+        authority: "backend",
+        status: "allowed",
+        compliance: {status: "allowed"},
+        serviceability: {status: "serviceable"},
+      },
+    });
+
+    assert.equal(decision.dispatchable, false, description);
+    assert.ok(["prohibited", "referral_required"].includes(decision.compliance), description);
+  }
+});
+
 test("dispatch recomputes IRIS and rejects create-time forged compliance", () => {
   const forged = {
     status: "requested",

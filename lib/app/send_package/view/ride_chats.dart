@@ -37,6 +37,7 @@ class _RideChatPageViewState extends State<RideChatPageView> {
   String? _supportError;
   bool _sending = false;
   Timer? _typingDebounce;
+  final Map<String, String> _pendingMessageRequestIds = {};
 
   @override
   void initState() {
@@ -55,17 +56,46 @@ class _RideChatPageViewState extends State<RideChatPageView> {
       return;
     }
     if (widget.chatId?.trim().isNotEmpty == true) {
-      final chatId = widget.chatId!.trim();
-      setState(() => _chatId = chatId);
-      unawaited(_loadDeliveryChatTitle(chatId));
+      await _resolveDeliveryConversation(widget.chatId!.trim());
       return;
     }
     final preferences = await SharedPreferences.getInstance();
     if (mounted) {
-      final chatId = preferences.getString('activeRequest');
-      setState(() => _chatId = chatId);
-      if (chatId != null && chatId.trim().isNotEmpty) {
-        unawaited(_loadDeliveryChatTitle(chatId.trim()));
+      final deliveryId = preferences.getString('activeRequest')?.trim();
+      if (deliveryId != null && deliveryId.isNotEmpty) {
+        await _resolveDeliveryConversation(deliveryId);
+      }
+    }
+  }
+
+  Future<void> _resolveDeliveryConversation(String deliveryId) async {
+    try {
+      final result = await FirebaseFunctions.instance
+          .httpsCallable('getOrCreateDeliveryConversation')
+          .call({'deliveryId': deliveryId});
+      final data = result.data is Map
+          ? Map<String, dynamic>.from(result.data as Map)
+          : const <String, dynamic>{};
+      final chatId = '${data['chatId'] ?? deliveryId}'.trim();
+      if (mounted) {
+        setState(() {
+          _chatId = chatId.isEmpty ? deliveryId : chatId;
+          _supportError = null;
+        });
+      }
+      unawaited(_loadDeliveryChatTitle('${data['deliveryId'] ?? deliveryId}'));
+    } on FirebaseFunctionsException catch (error) {
+      if (mounted) {
+        setState(() {
+          _supportError =
+              error.message ?? 'This delivery conversation is unavailable.';
+        });
+      }
+    } catch (_) {
+      if (mounted) {
+        setState(() {
+          _supportError = 'This delivery conversation is unavailable.';
+        });
       }
     }
   }
@@ -159,11 +189,20 @@ class _RideChatPageViewState extends State<RideChatPageView> {
     final chatId = _chatId;
     if (message.isEmpty || chatId == null || readOnly || _sending) return;
     setState(() => _sending = true);
+    final requestId = _pendingMessageRequestIds.putIfAbsent(
+      message,
+      () =>
+          '${FirebaseAuth.instance.currentUser?.uid ?? 'user'}-${DateTime.now().microsecondsSinceEpoch}',
+    );
     try {
-      await FirebaseFunctions.instance
-          .httpsCallable('sendCircumMessage')
-          .call({'chatId': chatId, 'message': message, 'messageType': 'text'});
+      await FirebaseFunctions.instance.httpsCallable('sendCircumMessage').call({
+        'chatId': chatId,
+        'message': message,
+        'messageType': 'text',
+        'clientRequestId': requestId,
+      });
       _input.clear();
+      _pendingMessageRequestIds.remove(message);
       await _setTyping(false);
     } on FirebaseFunctionsException catch (error) {
       if (mounted) {
@@ -194,7 +233,9 @@ class _RideChatPageViewState extends State<RideChatPageView> {
       body: _supportError != null
           ? AppEmptyState(
               icon: Icons.support_agent_outlined,
-              title: 'Support is unavailable',
+              title: widget.supportConversation
+                  ? 'Support is unavailable'
+                  : 'Conversation unavailable',
               body: _supportError!,
               actionLabel: 'Back',
               onAction: () => Navigator.of(context).pop(),

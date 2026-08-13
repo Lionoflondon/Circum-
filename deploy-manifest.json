@@ -205,6 +205,7 @@
         "test/storage_",
         "test/payments_",
         "test/backend_",
+        "test/founder_recognition_contract_test.dart",
         "test/tracking_button_callable_contract_test.dart",
         "test/web_artifact_isolation_test.dart",
         "tools/",

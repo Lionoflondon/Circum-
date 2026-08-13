@@ -2766,8 +2766,10 @@ class _RiderOrderProfileCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final rank = _circumOrderRankForPerformance(performance);
+    final rank = _circumOrderRankForBackendProfile(profile);
     final name = '${profile?['fullName'] ?? profile?['email'] ?? 'Rider'}';
+    final isFounder = _riderProfileHasFounderRecognition(profile);
+    final founderNumber = _riderFounderNumber(profile);
     final rating = performance.averageRating <= 0
         ? 'New'
         : performance.averageRating.toStringAsFixed(2);
@@ -2805,6 +2807,10 @@ class _RiderOrderProfileCard extends StatelessWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
+                    if (isFounder) ...[
+                      _FounderRecognitionBadge(number: founderNumber),
+                      const SizedBox(height: 8),
+                    ],
                     Text(
                       rank.badge,
                       style: TextStyle(
@@ -2850,6 +2856,7 @@ class _RiderOrderProfileCard extends StatelessWidget {
                 label:
                     'Quality ${performance.qualityScore.toStringAsFixed(0)}%',
               ),
+              if (isFounder) const _FounderRecognitionBadge(compact: true),
             ],
           ),
           const SizedBox(height: 10),
@@ -2877,6 +2884,104 @@ class _RiderOrderProfileCard extends StatelessWidget {
           ),
         ],
       ),
+    );
+  }
+}
+
+_CircumOrderRank _circumOrderRankForBackendProfile(
+  Map<String, dynamic>? profile,
+) {
+  final backendRank =
+      '${profile?['rank'] ?? profile?['riderRank'] ?? ''}'.trim().toLowerCase();
+  for (final rank in _circumOrderRanks) {
+    if (rank.label.toLowerCase() == backendRank ||
+        rank.badge.toLowerCase() == backendRank) {
+      return rank;
+    }
+  }
+  return _circumOrderRanks[0];
+}
+
+bool _riderProfileHasFounderRecognition(Map<String, dynamic>? profile) {
+  if (profile == null) return false;
+  final recognitions = Map<String, dynamic>.from(
+    profile['recognitions'] as Map? ?? const {},
+  );
+  final founder = Map<String, dynamic>.from(
+    recognitions['founder'] as Map? ?? const {},
+  );
+  return founder['awarded'] == true || profile['founderRider'] == true;
+}
+
+int? _riderFounderNumber(Map<String, dynamic>? profile) {
+  if (profile == null) return null;
+  final recognitions = Map<String, dynamic>.from(
+    profile['recognitions'] as Map? ?? const {},
+  );
+  final founder = Map<String, dynamic>.from(
+    recognitions['founder'] as Map? ?? const {},
+  );
+  return (founder['number'] as num?)?.toInt();
+}
+
+class _FounderRecognitionBadge extends StatelessWidget {
+  final int? number;
+  final bool compact;
+
+  const _FounderRecognitionBadge({this.number, this.compact = false});
+
+  @override
+  Widget build(BuildContext context) {
+    final reduceMotion = MediaQuery.disableAnimationsOf(context);
+    final label = number == null
+        ? 'FOUNDER'
+        : 'FOUNDER #${number.toString().padLeft(3, '0')}';
+    final child = DecoratedBox(
+      decoration: BoxDecoration(
+        gradient: const LinearGradient(
+          colors: [Color(0xfffff3c4), Color(0xff84e6ff), Color(0xffd9b6ff)],
+        ),
+        borderRadius: BorderRadius.circular(999),
+        boxShadow: [
+          BoxShadow(
+            color: const Color(0xfffff3c4).withValues(alpha: 0.16),
+            blurRadius: compact ? 10 : 16,
+          ),
+        ],
+      ),
+      child: Container(
+        padding: EdgeInsets.symmetric(
+          horizontal: compact ? 9 : 12,
+          vertical: compact ? 4 : 6,
+        ),
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(999),
+          border: Border.all(color: Colors.white.withValues(alpha: 0.32)),
+        ),
+        child: Text(
+          label,
+          style: TextStyle(
+            color: const Color(0xff08111f),
+            fontSize: compact ? 10 : 11,
+            fontWeight: FontWeight.w900,
+            letterSpacing: 1.2,
+          ),
+        ),
+      ),
+    );
+    if (reduceMotion) return child;
+    return TweenAnimationBuilder<double>(
+      tween: Tween(begin: 0, end: 1),
+      duration: const Duration(milliseconds: 720),
+      curve: Curves.easeOutCubic,
+      builder: (context, value, badge) => Opacity(
+        opacity: value,
+        child: Transform.translate(
+          offset: Offset(0, (1 - value) * 8),
+          child: badge,
+        ),
+      ),
+      child: child,
     );
   }
 }
@@ -5046,13 +5151,25 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
     return result;
   }
 
-  void _openRiderChat(Map<String, dynamic> job) {
+  Future<void> _openRiderChat(Map<String, dynamic> job) async {
     final requestId = '${job['requestId'] ?? job['id'] ?? ''}'.trim();
     if (requestId.isEmpty) return;
+    String chatId = requestId;
+    try {
+      final result = await FirebaseFunctions.instanceFor(region: 'us-central1')
+          .httpsCallable('getOrCreateDeliveryConversation')
+          .call({'deliveryId': requestId});
+      final data = Map<String, dynamic>.from(result.data as Map? ?? {});
+      chatId = '${data['chatId'] ?? requestId}'.trim();
+    } catch (_) {
+      if (!mounted) return;
+      setState(() => _jobMessage = 'Could not open this chat.');
+      return;
+    }
     _riderChatSub?.cancel();
     _riderChatSub = FirebaseFirestore.instance
         .collection('chats')
-        .doc(requestId)
+        .doc(chatId)
         .collection('messages')
         .orderBy('createdAt')
         .limit(80)
@@ -5103,12 +5220,27 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
     if (user == null || job == null || text.isEmpty) return;
     final requestId = '${job['requestId'] ?? job['id'] ?? ''}'.trim();
     if (requestId.isEmpty) return;
+    String chatId = requestId;
     _riderChatInput.clear();
     try {
       await _ensureCircumFirebaseReady();
+      final conversation = await FirebaseFunctions.instanceFor(
+        region: 'us-central1',
+      ).httpsCallable('getOrCreateDeliveryConversation').call({
+        'deliveryId': requestId,
+      });
+      final conversationData =
+          Map<String, dynamic>.from(conversation.data as Map? ?? {});
+      chatId = '${conversationData['chatId'] ?? requestId}'.trim();
       await FirebaseFunctions.instanceFor(region: 'us-central1')
           .httpsCallable('sendCircumMessage')
-          .call({'chatId': requestId, 'requestId': requestId, 'message': text});
+          .call({
+        'chatId': chatId,
+        'requestId': requestId,
+        'message': text,
+        'clientRequestId':
+            '${user.uid}-${DateTime.now().microsecondsSinceEpoch}',
+      });
     } catch (_) {
       if (!mounted) return;
       setState(() => _jobMessage = 'Message could not be sent.');

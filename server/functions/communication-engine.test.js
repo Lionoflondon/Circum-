@@ -36,6 +36,7 @@ test("notifications record delivery status, failures, and retries", () => {
 });
 
 test("messages include backend-only diagnostic metadata", () => {
+  assert.match(source, /requireAppCheck\(context\)/);
   assert.match(source, /messageId:\s*messageRef\.id/);
   assert.match(source, /conversationId:\s*chatId/);
   assert.match(source, /recipientIds/);
@@ -46,6 +47,28 @@ test("messages include backend-only diagnostic metadata", () => {
   assert.match(source, /deliveryState:\s*"persisted"/);
   assert.match(source, /retryCount:\s*0/);
   assert.match(source, /notificationId:\s*null/);
+});
+
+test("delivery conversations are backend-created from canonical assignment", () => {
+  assert.match(source, /async function getOrCreateDeliveryConversation/);
+  assert.match(source, /findDelivery\(db, requestedDeliveryId\)/);
+  assert.match(source, /canAccessDeliveryConversation\(context, delivery\.data\)/);
+  assert.match(source, /deliveryParticipantIds\(delivery\.data\)/);
+  assert.match(source, /conversationType:\s*"sender_rider"/);
+  assert.match(source, /participants:\s*\[senderId, riderId\]/);
+  assert.match(source, /participantRoles:\s*\{\[senderId\]: "sender", \[riderId\]: "rider"\}/);
+  assert.match(source, /terminalDeliveryStatuses\.has\(status\)/);
+  assert.match(source, /exports\.getOrCreateDeliveryConversation = functions\.https\.onCall/);
+  assert.match(indexSource, /exports\.getOrCreateDeliveryConversation =\s*\n\s*communicationEngine\.getOrCreateDeliveryConversation/);
+});
+
+test("message sends are idempotent by client request id", () => {
+  assert.match(source, /function stableMessageDocumentId/);
+  assert.match(source, /data\.clientRequestId/);
+  assert.match(source, /crypto\.createHash\("sha256"\)/);
+  assert.match(source, /const stableMessageId = stableMessageDocumentId\(chatId, data\)/);
+  assert.match(source, /const existingMessage = await transaction\.get\(messageRef\)/);
+  assert.match(source, /if \(existingMessage\.exists\) return;/);
 });
 
 test("legacy sendMessage delegates to canonical communication handler", () => {
