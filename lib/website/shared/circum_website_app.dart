@@ -22148,15 +22148,6 @@ class _LiveDeliveryTrackingPanel extends StatelessWidget {
       );
     }
 
-    final destination = statusIndex < 5 ? pickup! : dropoff!;
-    final remainingMiles = _coordinateDistanceMiles(
-          riderLat,
-          riderLng,
-          destination.lat,
-          destination.lng,
-        ) ??
-        0;
-    final etaMinutes = math.max(1, (remainingMiles / 18 * 60).round());
     final mapUrl = _staticLiveMapUrl(
       pickup: pickup!,
       dropoff: dropoff!,
@@ -22213,15 +22204,15 @@ class _LiveDeliveryTrackingPanel extends StatelessWidget {
                 child: _RiderStatTile(
                   colors: colors,
                   label: 'Remaining',
-                  value: '${remainingMiles.toStringAsFixed(1)} mi',
+                  value: 'Live route',
                 ),
               ),
               const SizedBox(width: 10),
               Expanded(
                 child: _RiderStatTile(
                   colors: colors,
-                  label: 'Dynamic ETA',
-                  value: '$etaMinutes min',
+                  label: 'ETA',
+                  value: 'Updating ETA',
                 ),
               ),
             ],

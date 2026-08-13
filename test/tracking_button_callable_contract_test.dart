@@ -102,4 +102,34 @@ void main() {
     expect(
         sharedSource, contains("httpsCallable('getDeliveryEvidenceAccess')"));
   });
+
+  test('ETA displays do not invent operational timing locally', () {
+    final senderSource =
+        File('lib/app/sender_mobile/sender_tracking_screen.dart')
+            .readAsStringSync();
+    final sharedSource =
+        File('lib/website/shared/circum_website_app.dart').readAsStringSync();
+    final adminSource =
+        File('lib/app/admin/admin_phase1_shell.dart').readAsStringSync();
+
+    expect(senderSource, contains('senderCanonicalEtaForBackendData'));
+    expect(senderSource, contains('Updating ETA'));
+    for (final hardcoded in [
+      'Usually under 6 min',
+      "eta: '7 min'",
+      "eta: '4 min'",
+      "eta: '18 min'",
+      "eta: '11 min'",
+      "eta: '< 3 min'",
+    ]) {
+      expect(senderSource, isNot(contains(hardcoded)));
+    }
+
+    expect(sharedSource, isNot(contains('remainingMiles / 18 * 60')));
+    expect(sharedSource, contains("label: 'ETA'"));
+    expect(sharedSource, contains("value: 'Updating ETA'"));
+
+    expect(adminSource, contains('_adminDeliveryEta'));
+    expect(adminSource, isNot(contains("('ETA', delivery['eta']")));
+  });
 }

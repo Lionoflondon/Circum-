@@ -19854,7 +19854,7 @@ class _DeliveryOperationsDrawer extends StatelessWidget {
                 ('Pickup', delivery['pickupAddress'] ?? delivery['pickup']),
                 ('Dropoff', delivery['dropoffAddress'] ?? delivery['dropoff']),
                 ('Stops', delivery['stops'] ?? delivery['stopCount']),
-                ('ETA', delivery['eta'] ?? delivery['estimatedArrival']),
+                ('ETA', _adminDeliveryEta(delivery)),
                 ('Last location', _locationSummary(delivery)),
               ],
             ),
@@ -22029,6 +22029,78 @@ String _locationSummary(Map<String, dynamic> record) {
   final lng = record['longitude'] ?? record['lng'];
   if (lat != null && lng != null) return '$lat, $lng';
   return 'Not recorded';
+}
+
+String _adminDeliveryEta(Map<String, dynamic> delivery) {
+  final status = '${delivery['status'] ?? delivery['deliveryStatus'] ?? ''}'
+      .trim()
+      .toLowerCase()
+      .replaceAll('-', '_')
+      .replaceAll(' ', '_');
+  if ({
+    'arrived_at_pickup',
+    'arrived_at_dropoff',
+    'delivered',
+    'completed',
+    'cancelled',
+    'canceled',
+  }.contains(status)) {
+    return 'No active ETA';
+  }
+  final canonical = _mapValue(delivery, 'canonicalEta');
+  final tracking = _mapValue(delivery, 'trackingEta');
+  final sources = <Map<String, dynamic>>[
+    if (canonical is Map) Map<String, dynamic>.from(canonical),
+    if (tracking is Map) Map<String, dynamic>.from(tracking),
+    delivery,
+  ];
+  for (final source in sources) {
+    for (final key in const [
+      'riderToPickupEta',
+      'deliveryArrivalEta',
+      'dropoffEta',
+      'serviceEta',
+      'dispatchEta',
+    ]) {
+      final value = _etaValue(source[key]);
+      if (value.isNotEmpty) return value;
+    }
+  }
+  if ({
+    'requested',
+    'pending',
+    'broadcast',
+    'broadcasted',
+    'accepted',
+    'rider_assigned',
+    'navigating_to_pickup',
+    'collected',
+    'navigating_to_dropoff',
+    'in_transit',
+    'out_for_delivery',
+  }.contains(status)) {
+    return 'Updating ETA';
+  }
+  return 'Not recorded';
+}
+
+String _etaValue(Object? value) {
+  if (value is Map) {
+    final label =
+        '${value['label'] ?? value['display'] ?? value['text'] ?? ''}'.trim();
+    if (label.isNotEmpty) return label;
+    final minutes = double.tryParse(
+      '${value['minutes'] ?? value['durationMinutes'] ?? value['etaMinutes'] ?? ''}',
+    );
+    if (minutes != null && minutes > 0) return '${minutes.round()} min';
+    final seconds = double.tryParse(
+      '${value['seconds'] ?? value['durationSeconds'] ?? value['etaSeconds'] ?? ''}',
+    );
+    if (seconds != null && seconds > 0) {
+      return '${(seconds / 60).round().clamp(1, 999)} min';
+    }
+  }
+  return '';
 }
 
 String _documentStatus(List<Map<String, dynamic>> docs, String type) {
