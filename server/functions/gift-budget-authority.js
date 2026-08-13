@@ -5,6 +5,12 @@ function pence(value) {
   return Number.isFinite(amount) && amount >= 0 ? Math.round(amount) : 0;
 }
 
+function budgetPenceFromGbp(value) {
+  const amount = Number(value);
+  if (!Number.isFinite(amount) || amount < 0) return 0;
+  return Math.round(amount * 100);
+}
+
 function createGiftBudgetAuthority(submittedBudgetPence) {
   const budgetPence = pence(submittedBudgetPence);
   return {
@@ -31,4 +37,4 @@ function allocateGiftBudget(authority, key, amountPence) {
   return next;
 }
 
-module.exports = {allocateGiftBudget, createGiftBudgetAuthority};
+module.exports = {allocateGiftBudget, budgetPenceFromGbp, createGiftBudgetAuthority};

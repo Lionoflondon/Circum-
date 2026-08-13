@@ -25,6 +25,8 @@ test("Gift procurement remains Admin-owned, App Check protected and budget bound
   assert.match(source, /updateGiftProcurement = functions\.runWith\(\{enforceAppCheck: true\}\)/);
   assert.match(source, /requireAdmin\(context/);
   assert.match(source, /actualPriceMinor > paidBudgetMinor/);
+  assert.match(source, /budgetPenceFromGbp/);
+  assert.match(source, /paidBudgetMinor < 5000/);
   assert.match(source, /purchase cost exceeds the paid Gift budget/i);
   assert.doesNotMatch(source, /riderEarnings|issueRothCredit|selfCredit/);
 });

@@ -14,6 +14,8 @@ test("Gift finalization verifies authoritative Stripe session state", () => {
   assert.match(source, /Number\(session\.amount_total \|\| 0\) !== expectedAmount/);
   assert.match(source, /session\.id !== gift\.stripeCheckoutSessionId/);
   assert.match(source, /gift\.senderId !== actorUid/);
+  assert.match(source, /budgetPenceFromGbp/);
+  assert.match(source, /expectedAmount < 5000/);
 });
 
 test("Gift finalization verifies voice-note storage before attaching to Gift request", () => {

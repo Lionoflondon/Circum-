@@ -4,7 +4,7 @@ const {getFirestore, FieldValue} = require("firebase-admin/firestore");
 const {getStorage} = require("firebase-admin/storage");
 const giftVoiceMedia = require("./gift-voice-media");
 const vanguardProtocol = require("./vanguard-protocol-core");
-const {createGiftBudgetAuthority} = require("./gift-budget-authority");
+const {budgetPenceFromGbp, createGiftBudgetAuthority} = require("./gift-budget-authority");
 const {resolveCanonicalAddress} = require("./canonical-address-authority");
 
 function requireAuth(context) {
@@ -46,11 +46,11 @@ async function createCampaignPaymentDraft({data, context}) {
   const campaignId = text(participantPayload.campaignId);
   const campaignName = text(participantPayload.campaignName);
   const gross = Number(data.grossGiftBudget || participantPayload.grossGiftBudget || participantPayload.budget || 0);
+  if (!Number.isFinite(gross) || gross < 50) {
+    throw new functions.https.HttpsError("failed-precondition", "Campaign gift budget is below the minimum.");
+  }
   if (!campaignId || !campaignName) {
     throw new functions.https.HttpsError("invalid-argument", "Campaign details are required.");
-  }
-  if (gross < 50) {
-    throw new functions.https.HttpsError("failed-precondition", "Campaign gift budget is below the minimum.");
   }
   let deliveryAddressCanonical;
   try {
@@ -120,7 +120,7 @@ async function createStandardPaymentDraft({data, context}) {
     db.collection("giftPaymentDrafts").doc(requestedId) :
     db.collection("giftPaymentDrafts").doc();
   const gross = Number(payload.grossGiftBudget || payload.grossBudget || payload.budget || 0);
-  if (gross < 50) {
+  if (!Number.isFinite(gross) || gross < 50) {
     throw new functions.https.HttpsError("failed-precondition", "Gift payment cannot be started.");
   }
   if (!text(payload.recipientName) || !text(payload.deliveryAddress)) {
@@ -200,7 +200,8 @@ exports.createGiftPayment = (stripe) => functions.runWith({
   }
   const gift = snap.data();
   const gross = Number(gift.grossGiftBudget || gift.grossBudget || 0);
-  if (gross < 50 || gift.paymentStatus === "paid") {
+  const budgetPence = budgetPenceFromGbp(gross);
+  if (!Number.isFinite(gross) || gross < 50 || budgetPence < 5000 || gift.paymentStatus === "paid") {
     throw new functions.https.HttpsError("failed-precondition", "Gift payment cannot be started.");
   }
   const config = functions.config().gifts || {};
@@ -216,7 +217,7 @@ exports.createGiftPayment = (stripe) => functions.runWith({
         quantity: 1,
         price_data: {
           currency: "gbp",
-          unit_amount: Math.round(gross * 100),
+          unit_amount: budgetPence,
           product_data: {
             name: "Gifts by Circum experience",
             description: `${gift.occasion || "Curated"} gift experience for ${gift.recipientName || "recipient"}`,
@@ -300,7 +301,10 @@ async function finalizeGiftPaymentSession({
       throw new functions.https.HttpsError("failed-precondition", "Gift voice note changed during checkout.");
     }
     const gross = Number(gift.grossGiftBudget || gift.grossBudget || 0);
-    const expectedAmount = Math.round(gross * 100);
+    const expectedAmount = budgetPenceFromGbp(gross);
+    if (!Number.isFinite(gross) || expectedAmount < 5000) {
+      throw new functions.https.HttpsError("failed-precondition", "Gift budget is invalid.");
+    }
     if (session.currency !== "gbp" || Number(session.amount_total || 0) !== expectedAmount) {
       throw new functions.https.HttpsError("failed-precondition", "Gift payment amount does not match the order.");
     }

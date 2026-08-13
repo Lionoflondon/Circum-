@@ -6,6 +6,7 @@ const {getStorage} = require("firebase-admin/storage");
 const {requireAdmin} = require("./admin-auth");
 const evidence = require("./delivery-evidence-core");
 const {appendOperationalEvent} = require("./delivery-operational-events");
+const {budgetPenceFromGbp} = require("./gift-budget-authority");
 
 const STATES = new Set([
   "procurement_review", "sourcing", "item_confirmed", "purchased",
@@ -142,7 +143,10 @@ exports.updateGiftProcurement = functions.runWith({enforceAppCheck: true}).https
     assertTransition(current, next, committed);
     const expectedPriceMinor = data.expectedPriceMinor == null ? null : moneyMinor(data.expectedPriceMinor);
     const actualPriceMinor = data.actualPriceMinor == null ? null : moneyMinor(data.actualPriceMinor);
-    const paidBudgetMinor = Math.round(Number(gift.grossGiftBudget || gift.grossBudget || 0) * 100);
+    const paidBudgetMinor = budgetPenceFromGbp(gift.grossGiftBudget || gift.grossBudget || 0);
+    if (paidBudgetMinor < 5000) {
+      throw new functions.https.HttpsError("failed-precondition", "Gift budget is invalid.");
+    }
     if (actualPriceMinor != null && actualPriceMinor > paidBudgetMinor) {
       throw new functions.https.HttpsError("failed-precondition", "Purchase cost exceeds the paid Gift budget.");
     }

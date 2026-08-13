@@ -1,6 +1,13 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
-const {allocateGiftBudget, createGiftBudgetAuthority} = require("./gift-budget-authority");
+const {allocateGiftBudget, budgetPenceFromGbp, createGiftBudgetAuthority} = require("./gift-budget-authority");
+
+test("Gift budget conversion is finite and pence-precise", () => {
+  assert.equal(budgetPenceFromGbp(50), 5000);
+  assert.equal(budgetPenceFromGbp(50.005), 5001);
+  assert.equal(budgetPenceFromGbp(Infinity), 0);
+  assert.equal(budgetPenceFromGbp("not-a-budget"), 0);
+});
 
 test("Gift allocations cannot exceed the submitted budget", () => {
   let ledger = createGiftBudgetAuthority(5000);
