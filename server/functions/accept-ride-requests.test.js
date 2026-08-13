@@ -12,6 +12,7 @@ test("accepted delivery writes every rider assignment alias used by Rider surfac
 
   assert.match(source, /status: "accepted",\s+deliveryStatus: "accepted",\s+deliveryStage: "accepted"/s);
   assert.match(source, /riderId,\s+driverId: riderId,\s+assignedRider: riderId,\s+assignedDriverId: riderId,\s+assignedRiderId: riderId/s);
+  assert.match(source, /collection\("riders"\)\.doc\(riderId\)[\s\S]*activeDelivery: found\.id/);
 });
 
 test("accept rejects stale, assigned, unpaid, or terminal offers with diagnostics", () => {

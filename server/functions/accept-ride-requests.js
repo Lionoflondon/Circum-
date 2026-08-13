@@ -238,6 +238,13 @@ const acceptRideRequests = functions.https.onCall(async (data, context) => {
       updatedAt: FieldValue.serverTimestamp(),
     }, {merge: true});
 
+    // Keep the Rider's active-delivery projection backend-authored. The
+    // client must never write operational assignment state after acceptance.
+    transaction.set(db.collection("riders").doc(riderId), {
+      activeDelivery: found.id,
+      updatedAt: FieldValue.serverTimestamp(),
+    }, {merge: true});
+
     const chatRef = db.collection("chats").doc(found.data.requestId || found.id);
     transaction.set(chatRef, {
       threadId: found.data.requestId || found.id,
