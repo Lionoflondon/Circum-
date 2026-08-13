@@ -1144,6 +1144,10 @@ service cloud.firestore {
       allow delete: if hasRole('super_admin');
     }
 
+    match /riderPayoutLocks/{riderId} {
+      allow read, write: if false;
+    }
+
     match /stripeConnectWebhookEvents/{eventId} {
       allow read, write: if false;
     }

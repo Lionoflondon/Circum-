@@ -303,7 +303,9 @@ exports.syncStripeConnectStatus =
 exports.riderPayoutReadiness = riderConnect.riderPayoutReadiness();
 exports.createRiderTransferOrPayout =
   riderConnect.createRiderTransferOrPayout(stripeConnectClient);
-exports.requestRiderWithdrawal = riderConnect.requestRiderWithdrawal();
+exports.getRiderPayoutQuote = riderConnect.getRiderPayoutQuote();
+exports.requestRiderWithdrawal =
+  riderConnect.requestRiderWithdrawal(stripeConnectClient);
 exports.cancelRiderWithdrawal = riderConnect.cancelRiderWithdrawal();
 exports.adminReviewRiderWithdrawal = riderConnect.adminReviewRiderWithdrawal();
 exports.adminReviewRider = adminRiderAuthority.adminReviewRider;
@@ -374,6 +376,8 @@ exports.resetRiderTestStripeAccount =
   riderConnect.resetRiderTestStripeAccount();
 exports.handleStripeConnectWebhook =
   riderConnect.handleStripeConnectWebhook(stripeConnectClient);
+exports.scheduledRiderPayoutRecovery =
+  riderConnect.scheduledRiderPayoutRecovery(stripeConnectClient);
 exports.scheduledRiderStripeStatusSync =
   riderConnect.scheduledRiderStripeStatusSync(stripeConnectClient);
 exports.redactLegacyPayoutBankFields =

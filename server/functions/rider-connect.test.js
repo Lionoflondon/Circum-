@@ -7,6 +7,8 @@ const {
   resolveRiderPayoutBreakdown,
   stripeStatusFromAccount,
   computeRiderPayoutReadiness,
+  availableRiderCash,
+  isIndeterminateStripeTransferError,
 } = require("./rider-connect");
 const fs = require("node:fs");
 const {
@@ -60,6 +62,57 @@ test("estimates Stripe fee from backend policy values", () => {
   });
 
   assert.equal(fee, 1.7);
+});
+
+test("£2 payout amount is distinct from its processing cost", () => {
+  const breakdown = resolveRiderPayoutBreakdown({riderGrossShare: 2});
+  assert.equal(breakdown.riderGrossShare, 2);
+  assert.equal(breakdown.stripeFeeDeductedFromRider, 0.23);
+  assert.equal(breakdown.riderNetPayout, 1.77);
+});
+
+test("ambiguous Stripe transfer errors retain funds for confirmation", () => {
+  assert.equal(isIndeterminateStripeTransferError({
+    type: "StripeConnectionError",
+    code: "ETIMEDOUT",
+  }), true);
+  assert.equal(isIndeterminateStripeTransferError({
+    type: "StripeAPIError",
+    statusCode: 500,
+  }), true);
+  assert.equal(isIndeterminateStripeTransferError({
+    type: "StripeInvalidRequestError",
+    statusCode: 400,
+  }), false);
+  assert.equal(isIndeterminateStripeTransferError({
+    type: "StripeAuthenticationError",
+    statusCode: 401,
+  }), false);
+});
+
+test("canonical zero cash never falls through to stale legacy balances", () => {
+  assert.equal(availableRiderCash({
+    availableBalance: 0,
+    availableEarnings: 99,
+    accountBalance: 99,
+  }), 0);
+  assert.equal(availableRiderCash({availableEarnings: 12.34}), 12.34);
+});
+
+test("Rider payout quote is read-only, authenticated and App Check protected", () => {
+  const source = fs.readFileSync("rider-connect.js", "utf8");
+  const index = fs.readFileSync("index.js", "utf8");
+  const start = source.indexOf("function getRiderPayoutQuote()");
+  const end = source.indexOf("async function processStripeConnectEventOnce", start);
+  const quote = source.slice(start, end);
+
+  assert.match(quote, /firstPartyCallableRuntime\.https\.onCall/);
+  assert.match(quote, /await assertActor\(context, riderId\)/);
+  assert.match(quote, /resolveRiderPayoutBreakdown\(\{riderGrossShare: amount\}\)/);
+  assert.match(quote, /processingCost: breakdown\.stripeFeeDeductedFromRider/);
+  assert.match(quote, /bankReceives: breakdown\.riderNetPayout/);
+  assert.doesNotMatch(quote, /\.set\(|\.update\(|\.create\(/);
+  assert.match(index, /exports\.getRiderPayoutQuote = riderConnect\.getRiderPayoutQuote\(\);/);
 });
 
 test("maps enabled Express account to payouts_enabled", () => {
@@ -119,7 +172,7 @@ test("Stripe Connect webhook money events are replay-safe", () => {
   assert.match(source, /transaction\.create\(eventRef/);
   assert.match(source, /event\.type === "payout\.created"[\s\S]*event\.type === "payout\.paid"[\s\S]*event\.type === "payout\.failed"[\s\S]*event\.type === "payout\.canceled"[\s\S]*processStripeConnectEventOnce/);
   assert.match(source, /event\.type === "transfer\.created" \|\| event\.type === "transfer\.failed"[\s\S]*processStripeConnectEventOnce/);
-  assert.match(source, /const active = \["processing", "pending", "requested"\]\.includes\(currentStatus\)/);
+  assert.match(source, /const active = isActiveRiderPayoutStatus\(currentStatus\)/);
   assert.match(source, /event\.type === "transfer\.failed" && active && riderId && amount > 0/);
 });
 
@@ -214,15 +267,22 @@ test("Stripe transfer is created only after reservation transaction commits", ()
   assert.match(source, /payoutStatus: "reserved"/);
   assert.match(source, /payoutFailureStage: "stripe_transfer"/);
   assert.match(source, /availableBalance: FieldValue\.increment\(reservation\.breakdown\.riderGrossShare\)/);
+  assert.match(source, /if \(isIndeterminateStripeTransferError\(error\)\)/);
+  assert.match(source, /payoutConfirmationPending: true/);
+  assert.match(source, /Your available cash remains protected/);
 });
 
 test("Rider payout reservations reconcile pending withdrawals exactly once", () => {
   const source = fs.readFileSync("rider-connect.js", "utf8");
   assert.match(source, /const pendingDelta = requestData\.fundsReserved === true \? 0 : breakdown\.riderGrossShare/);
+  assert.match(source, /const availableAfterReservation = roundMoney\(available - pendingDelta\)/);
+  assert.match(source, /availableBalance: availableAfterReservation/);
   assert.match(source, /fundsReserved: true/);
   assert.match(source, /const reserved = payout\.fundsReserved === true/);
   assert.match(source, /pendingWithdrawal: reserved \? FieldValue\.increment\(-amount\) : FieldValue\.increment\(0\)/);
   assert.match(source, /const reserved = requestData\.fundsReserved === true/);
+  assert.match(source, /fundsReserved: status === "scheduled" \? reserved : false/);
+  assert.match(source, /fundsReserved: event\.type === "transfer\.failed" \? false : reserved/);
 });
 
 test("Stripe Connect webhook covers payout cancellation and external account updates", () => {
@@ -231,6 +291,7 @@ test("Stripe Connect webhook covers payout cancellation and external account upd
   assert.match(source, /stripe\.accounts\.retrieve\(accountId\)/);
   assert.match(source, /stripe_external_account_updated/);
   assert.match(source, /event\.type === "payout\.canceled"/);
+  assert.match(source, /const accountId = text\(event\.account \|\| object\.account \|\| object\.destination\)/);
   assert.match(source, /const releaseBalance = status === "failed" \|\| status === "canceled"/);
   assert.match(source, /availableBalance: releaseBalance \? FieldValue\.increment\(amount\) : FieldValue\.increment\(0\)/);
 });

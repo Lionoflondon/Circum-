@@ -230,6 +230,25 @@ test("Rider earnings remain readable by owner but never client writable", async 
   }));
 });
 
+test("Rider payout locks remain server-only", async () => {
+  await testEnv.withSecurityRulesDisabled(async (context) => {
+    await setDoc(doc(context.firestore(), "riderPayoutLocks", "rider-1"), {
+      riderId: "rider-1",
+      activeRequestId: "request-1",
+      active: true,
+      status: "processing",
+    });
+  });
+  const riderDb = testEnv.authenticatedContext("rider-1").firestore();
+  const unrelatedDb = testEnv.authenticatedContext("rider-2").firestore();
+  await assertFails(getDoc(doc(riderDb, "riderPayoutLocks", "rider-1")));
+  await assertFails(getDoc(doc(unrelatedDb, "riderPayoutLocks", "rider-1")));
+  await assertFails(setDoc(doc(riderDb, "riderPayoutLocks", "rider-1"), {
+    active: false,
+    status: "paid",
+  }, {merge: true}));
+});
+
 test("Rider earnings reconciliation audit records are admin readable and never client writable", async () => {
   await testEnv.withSecurityRulesDisabled(async (context) => {
     await setDoc(doc(context.firestore(), "riderEarningsReconciliations", "rec-1"), {

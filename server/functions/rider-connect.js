@@ -10,6 +10,13 @@ const riderStripeReturnUrl = `${appBaseUrl}/rider/stripe/return`;
 const riderStripeRefreshUrl = `${appBaseUrl}/rider/stripe/refresh`;
 
 const rawBankFields = ["bankName", "sortCode", "accountNumber", "bankAccountNumber"];
+const activeRiderPayoutStatuses = new Set([
+  "requested",
+  "pending",
+  "reserved",
+  "processing",
+  "scheduled",
+]);
 const firstPartyCallableRuntime = functions.runWith({enforceAppCheck: true});
 const stripeSecretRuntime = functions.runWith({secrets: ["STRIPE_SECRET_KEY"], enforceAppCheck: true});
 const stripeWebhookRuntime = functions.runWith({secrets: ["STRIPE_SECRET_KEY", "STRIPE_WEBHOOK_SECRET"]});
@@ -42,6 +49,19 @@ function numberValue(value, fallback = 0) {
 
 function roundMoney(value) {
   return Math.round(numberValue(value) * 100) / 100;
+}
+
+function isActiveRiderPayoutStatus(value) {
+  return activeRiderPayoutStatuses.has(text(value).toLowerCase());
+}
+
+function availableRiderCash(wallet = {}) {
+  return roundMoney(
+      wallet.availableBalance ??
+      wallet.availableEarnings ??
+      wallet.accountBalance ??
+      0,
+  );
 }
 
 function payoutFeePolicy() {
@@ -118,6 +138,25 @@ function stripeTransferIdempotencyKey(requestId) {
   return `rider_payout_transfer_${text(requestId)}`;
 }
 
+function isIndeterminateStripeTransferError(error = {}) {
+  const type = text(error.type).toLowerCase();
+  const code = text(error.code).toUpperCase();
+  const status = numberValue(error.statusCode || error.status, 0);
+  if (status >= 500 || status === 429) return true;
+  if (type.includes("connection") || type.includes("apierror") ||
+    type.includes("idempotency")) {
+    return true;
+  }
+  if (["ECONNRESET", "ECONNREFUSED", "EAI_AGAIN", "ENOTFOUND", "ETIMEDOUT"]
+      .includes(code)) {
+    return true;
+  }
+  if (status > 0) return false;
+  return !type.includes("invalidrequest") &&
+    !type.includes("authentication") &&
+    !type.includes("permission");
+}
+
 function hasRawBankFields(data) {
   return rawBankFields.some((field) => {
     const value = text(data && data[field]);
@@ -153,8 +192,7 @@ function riderWithdrawalFailure({
 } = {}) {
   if (!approvedRider) return "approval_required";
   if (!stripeReady || payoutPaused) return "stripe_not_ready";
-  if (["requested", "pending", "approved", "processing"]
-      .includes(text(existingStatus).toLowerCase())) {
+  if (isActiveRiderPayoutStatus(existingStatus)) {
     return "duplicate_pending";
   }
   if (roundMoney(amount) <= 0) return "invalid_amount";
@@ -596,35 +634,68 @@ function resetRiderTestStripeAccount() {
   });
 }
 
-function createRiderTransferOrPayout(stripeOrFactory) {
-  return stripeSecretRuntime.https.onCall(async (data, context) => {
-    const stripe = stripeFrom(stripeOrFactory);
+async function executeRiderTransferOrPayout({
+  stripe,
+  data,
+  actorId,
+  actorType,
+}) {
     const mode = stripeClientMode(stripe);
     const riderId = text(data && data.riderId);
     const amount = Number((data && data.amount) || 0);
     const requestId = text(data && data.requestId);
     const deliveryId = text(data && (data.deliveryId || data.bookingId || data.orderId));
-    await assertActor(context, riderId, {adminOnly: true});
     if (!riderId || amount <= 0) {
       throw new functions.https.HttpsError("invalid-argument", "Rider and amount are required.");
     }
     if (hasRawBankFields(data)) {
-      throw new functions.https.HttpsError("invalid-argument", "Raw bank details are not accepted.");
+      throw new functions.https.HttpsError(
+          "invalid-argument",
+          "Use your verified payout account.",
+      );
     }
     const db = getFirestore();
     const {profile} = await loadRider(riderId);
     const readiness = await computeRiderPayoutReadiness(riderId);
     if (!readiness.ready) {
-      throw new functions.https.HttpsError("failed-precondition", `Rider payout setup is not ready: ${readiness.status}.`);
+      throw new functions.https.HttpsError(
+          "failed-precondition",
+          "Complete your payout account setup before requesting money.",
+      );
+    }
+    if (profile.payoutPaused === true) {
+      throw new functions.https.HttpsError(
+          "failed-precondition",
+          "Payouts are temporarily paused. Please contact support.",
+      );
+    }
+    const minimum = roundMoney(profile.minimumWithdrawalAmount || 1);
+    if (roundMoney(amount) < minimum) {
+      throw new functions.https.HttpsError(
+          "failed-precondition",
+          `Minimum payout is £${minimum.toFixed(2)}.`,
+      );
     }
     const stripeAccountId = text(profile.stripeConnectAccountId || profile.stripeAccountId);
     const walletRef = db.collection("riderEarnings").doc(riderId);
     const requestRef = requestId ? db.collection("payoutRequests").doc(requestId) : db.collection("payoutRequests").doc();
+    const lockRef = db.collection("riderPayoutLocks").doc(riderId);
     const reservation = await db.runTransaction(async (transaction) => {
-      const wallet = await transaction.get(walletRef);
-      const existingRequest = await transaction.get(requestRef);
+      const [wallet, existingRequest, lockDoc] = await Promise.all([
+        transaction.get(walletRef),
+        transaction.get(requestRef),
+        transaction.get(lockRef),
+      ]);
       const walletData = wallet.data() || {};
       const requestData = existingRequest.exists ? existingRequest.data() || {} : {};
+      const lockData = lockDoc.data() || {};
+      if (existingRequest.exists && text(requestData.riderId) &&
+        text(requestData.riderId) !== riderId) {
+        throw new functions.https.HttpsError(
+            "permission-denied",
+            "Payout request does not belong to this rider.",
+        );
+      }
       const payoutInput = {
         ...requestData,
         ...data,
@@ -634,6 +705,14 @@ function createRiderTransferOrPayout(stripeOrFactory) {
       const breakdown = resolveRiderPayoutBreakdown(payoutInput);
       const existingStatus = text(requestData.status || requestData.payoutStatus).toLowerCase();
       const existingTransferId = text(requestData.stripeTransferId);
+      const lockedRequestId = text(lockData.activeRequestId);
+      if (lockData.active === true && lockedRequestId &&
+        lockedRequestId !== requestRef.id) {
+        throw new functions.https.HttpsError(
+            "already-exists",
+            "A payout is already in progress.",
+        );
+      }
       if (existingRequest.exists &&
         existingTransferId &&
         ["processing", "scheduled", "paid"].includes(existingStatus)) {
@@ -646,7 +725,13 @@ function createRiderTransferOrPayout(stripeOrFactory) {
           },
         };
       }
-      if (existingRequest.exists && existingTransferId && existingStatus === "failed") {
+      if (["cancelled", "canceled", "rejected"].includes(existingStatus)) {
+        throw new functions.https.HttpsError(
+            "failed-precondition",
+            "This payout request is closed.",
+        );
+      }
+      if (existingRequest.exists && existingStatus === "failed") {
         throw new functions.https.HttpsError("failed-precondition", "This payout transfer failed and must be retried with a new request.");
       }
       if (breakdown.riderNetPayout <= 0) {
@@ -665,8 +750,15 @@ function createRiderTransferOrPayout(stripeOrFactory) {
           payoutFeePayer: "rider",
           paymentProvider: "stripe_connect_express",
           updatedAt: FieldValue.serverTimestamp(),
-          processedBy: context.auth.uid,
+          processedBy: actorId,
         }, {merge: true});
+        if (text(lockData.activeRequestId) === requestRef.id) {
+          transaction.set(lockRef, {
+            active: false,
+            status: "review_required",
+            updatedAt: FieldValue.serverTimestamp(),
+          }, {merge: true});
+        }
         return {
           blocked: true,
           status: "admin_review_required",
@@ -674,11 +766,12 @@ function createRiderTransferOrPayout(stripeOrFactory) {
           ...breakdown,
         };
       }
-      const available = Number(walletData.availableBalance || 0);
+      const available = availableRiderCash(walletData);
       const pendingDelta = requestData.fundsReserved === true ? 0 : breakdown.riderGrossShare;
       if (pendingDelta > 0 && available < breakdown.riderGrossShare) {
         throw new functions.https.HttpsError("failed-precondition", "Withdrawal exceeds available balance.");
       }
+      const availableAfterReservation = roundMoney(available - pendingDelta);
       const deliveryDocId = deliveryId || text(requestData.deliveryId || requestData.bookingId || requestData.orderId);
       const deliveryRefs = deliveryDocId ? [
         db.collection("deliveryRequests").doc(deliveryDocId),
@@ -715,10 +808,11 @@ function createRiderTransferOrPayout(stripeOrFactory) {
         amount: breakdown.riderGrossShare,
         status: "reserved",
         fundsReserved: true,
+        requestSource: text(data && data.requestSource) || requestData.requestSource || actorType,
         ...payoutPatch,
         createdAt: existingRequest.exists ? requestData.createdAt || FieldValue.serverTimestamp() : FieldValue.serverTimestamp(),
         reservedAt: FieldValue.serverTimestamp(),
-        processedBy: context.auth.uid,
+        processedBy: actorId,
       }, {merge: true});
       deliveryDocs.forEach((doc) => {
         if (!doc.exists) return;
@@ -728,10 +822,29 @@ function createRiderTransferOrPayout(stripeOrFactory) {
         }, {merge: true});
       });
       transaction.set(walletRef, {
-        availableBalance: FieldValue.increment(-breakdown.riderGrossShare),
+        availableBalance: availableAfterReservation,
         pendingWithdrawal: FieldValue.increment(pendingDelta),
         updatedAt: FieldValue.serverTimestamp(),
       }, {merge: true});
+      transaction.set(lockRef, {
+        riderId,
+        activeRequestId: requestRef.id,
+        active: true,
+        status: "reserved",
+        updatedAt: FieldValue.serverTimestamp(),
+      }, {merge: true});
+      if (!existingRequest.exists) {
+        transaction.set(db.collection("riderPayoutAudit")
+            .doc(`withdrawal_requested_${requestRef.id}`), {
+          riderId,
+          payoutRequestId: requestRef.id,
+          action: "withdrawal_requested",
+          amount: breakdown.riderGrossShare,
+          actorId,
+          actorType,
+          createdAt: FieldValue.serverTimestamp(),
+        }, {merge: false});
+      }
       return {
         requestId: requestRef.id,
         riderId,
@@ -752,12 +865,13 @@ function createRiderTransferOrPayout(stripeOrFactory) {
         stripeFeeDeductedFromRider: reservation.stripeFeeDeductedFromRider,
         riderNetPayout: reservation.riderNetPayout,
         feePayer: "rider",
-        actorId: context.auth.uid,
+        actorId,
+        actorType,
         createdAt: FieldValue.serverTimestamp(),
       });
       throw new functions.https.HttpsError(
           "failed-precondition",
-          "Stripe fees exceed the rider share. Admin review is required.",
+          "This payout needs review because processing costs exceed the amount.",
       );
     }
     if (reservation.idempotent) {
@@ -769,7 +883,6 @@ function createRiderTransferOrPayout(stripeOrFactory) {
         feePayer: "rider",
         stripeFeeDeductedFromRider: reservation.metadata && reservation.metadata.stripeFeeDeductedFromRider,
         riderNetPayout: reservation.metadata && reservation.metadata.riderNetPayout,
-        feeChecklist: "Stripe Dashboard -> Connect settings -> set payout/fee payer to connected account/rider where available.",
       };
     }
     let transfer;
@@ -791,9 +904,55 @@ function createRiderTransferOrPayout(stripeOrFactory) {
         idempotencyKey: stripeTransferIdempotencyKey(reservation.requestId),
       });
     } catch (error) {
+      if (isIndeterminateStripeTransferError(error)) {
+        await db.runTransaction(async (transaction) => {
+          const [requestDoc, lockDoc] = await Promise.all([
+            transaction.get(requestRef),
+            transaction.get(lockRef),
+          ]);
+          const requestData = requestDoc.data() || {};
+          const lockData = lockDoc.data() || {};
+          const status = text(requestData.status || requestData.payoutStatus)
+              .toLowerCase();
+          if (status !== "reserved") return;
+          transaction.set(requestRef, {
+            status: "processing",
+            payoutStatus: "processing",
+            payoutConfirmationPending: true,
+            payoutFailureStage: "stripe_confirmation",
+            failureReason: "Payout confirmation is pending.",
+            updatedAt: FieldValue.serverTimestamp(),
+          }, {merge: true});
+          if (text(lockData.activeRequestId) === requestRef.id) {
+            transaction.set(lockRef, {
+              active: true,
+              status: "processing",
+              updatedAt: FieldValue.serverTimestamp(),
+            }, {merge: true});
+          }
+        });
+        await db.collection("riderPayoutAudit")
+            .doc(`stripe_transfer_confirmation_pending_${reservation.requestId}`)
+            .set({
+              riderId,
+              payoutRequestId: reservation.requestId,
+              action: "stripe_transfer_confirmation_pending",
+              actorId,
+              actorType,
+              createdAt: FieldValue.serverTimestamp(),
+            }, {merge: true});
+        throw new functions.https.HttpsError(
+            "unavailable",
+            "We are confirming this payout. Your available cash remains protected.",
+        );
+      }
       await db.runTransaction(async (transaction) => {
-        const requestDoc = await transaction.get(requestRef);
+        const [requestDoc, lockDoc] = await Promise.all([
+          transaction.get(requestRef),
+          transaction.get(lockRef),
+        ]);
         const requestData = requestDoc.data() || {};
+        const lockData = lockDoc.data() || {};
         const status = text(requestData.status || requestData.payoutStatus).toLowerCase();
         if (status !== "reserved") return;
         transaction.set(requestRef, {
@@ -822,12 +981,26 @@ function createRiderTransferOrPayout(stripeOrFactory) {
           source: "stripe_transfer_failure",
           createdAt: FieldValue.serverTimestamp(),
         }, {merge: false});
+        if (text(lockData.activeRequestId) === requestRef.id) {
+          transaction.set(lockRef, {
+            active: false,
+            status: "failed",
+            updatedAt: FieldValue.serverTimestamp(),
+          }, {merge: true});
+        }
       });
-      throw new functions.https.HttpsError("internal", "Stripe transfer failed. Funds were restored for retry.");
+      throw new functions.https.HttpsError(
+          "internal",
+          "We could not send this payout. Your available cash has been restored.",
+      );
     }
     await db.runTransaction(async (transaction) => {
-      const requestDoc = await transaction.get(requestRef);
+      const [requestDoc, lockDoc] = await Promise.all([
+        transaction.get(requestRef),
+        transaction.get(lockRef),
+      ]);
       const requestData = requestDoc.data() || {};
+      const lockData = lockDoc.data() || {};
       const existingTransferId = text(requestData.stripeTransferId);
       if (existingTransferId && existingTransferId !== transfer.id) {
         return;
@@ -836,6 +1009,7 @@ function createRiderTransferOrPayout(stripeOrFactory) {
         payoutStatus: "processing",
         status: "processing",
         stripeTransferId: transfer.id,
+        payoutConfirmationPending: false,
         payoutCreatedAt: FieldValue.serverTimestamp(),
         processedAt: FieldValue.serverTimestamp(),
         updatedAt: FieldValue.serverTimestamp(),
@@ -867,6 +1041,13 @@ function createRiderTransferOrPayout(stripeOrFactory) {
         createdAt: FieldValue.serverTimestamp(),
         updatedAt: FieldValue.serverTimestamp(),
       });
+      if (text(lockData.activeRequestId) === requestRef.id) {
+        transaction.set(lockRef, {
+          active: true,
+          status: "processing",
+          updatedAt: FieldValue.serverTimestamp(),
+        }, {merge: true});
+      }
     });
     if (!transfer.idempotent) {
       await db.collection("riderPayoutAudit").add({
@@ -877,7 +1058,8 @@ function createRiderTransferOrPayout(stripeOrFactory) {
         stripeMode: mode,
         amount,
         feePayer: "rider",
-        actorId: context.auth.uid,
+        actorId,
+        actorType,
         createdAt: FieldValue.serverTimestamp(),
       });
     }
@@ -888,110 +1070,63 @@ function createRiderTransferOrPayout(stripeOrFactory) {
       feePayer: "rider",
       stripeFeeDeductedFromRider: transfer.metadata && transfer.metadata.stripeFeeDeductedFromRider,
       riderNetPayout: transfer.metadata && transfer.metadata.riderNetPayout,
-      feeChecklist: "Stripe Dashboard -> Connect settings -> set payout/fee payer to connected account/rider where available.",
     };
-  });
 }
 
-function requestRiderWithdrawal() {
-  return firstPartyCallableRuntime.https.onCall(async (data, context) => {
+function requestRiderWithdrawal(stripeOrFactory) {
+  return stripeSecretRuntime.https.onCall(async (data, context) => {
     const riderId = text(context.auth && context.auth.uid);
-    await assertActor(context, riderId);
+    const actor = await assertActor(context, riderId);
     if (hasRawBankFields(data)) {
       throw new functions.https.HttpsError(
           "invalid-argument",
-          "Bank details must be managed through Stripe Connect.",
+          "Use your verified payout account.",
       );
     }
     const amount = roundMoney(data && data.amount);
     if (amount <= 0) {
       throw new functions.https.HttpsError(
           "invalid-argument",
-          "Enter a valid withdrawal amount.",
+          "Enter a valid payout amount.",
       );
     }
     const db = getFirestore();
-    const {profile} = await loadRider(riderId);
-    const readiness = await computeRiderPayoutReadiness(riderId);
-    const stripeAccountId = text(
-        profile.stripeConnectAccountId || profile.stripeAccountId,
-    );
-    const requestRef = db.collection("payoutRequests").doc(`active_${riderId}`);
-    const walletRef = db.collection("riderEarnings").doc(riderId);
-    await db.runTransaction(async (transaction) => {
-      const [requestDoc, walletDoc] = await Promise.all([
-        transaction.get(requestRef),
-        transaction.get(walletRef),
-      ]);
-      const existing = requestDoc.data() || {};
-      const existingStatus = text(
-          existing.status || existing.payoutStatus,
-      ).toLowerCase();
-      const wallet = walletDoc.data() || {};
-      const available = roundMoney(
-          wallet.availableBalance || wallet.availableEarnings || wallet.accountBalance,
-      );
-      const minimum = roundMoney(profile.minimumWithdrawalAmount || 1);
-      const failure = riderWithdrawalFailure({
-        amount,
-        available,
-        minimum,
-        existingStatus,
-        approvedRider: readiness.checks.riderApproved === true,
-        stripeReady: readiness.ready === true,
-        payoutPaused: profile.payoutPaused === true,
-      });
-      const failures = {
-        approval_required: ["failed-precondition", "Rider approval is required before withdrawal."],
-        stripe_not_ready: ["failed-precondition", "Complete Stripe payout setup before requesting withdrawal."],
-        duplicate_pending: ["already-exists", "A withdrawal is already pending."],
-        invalid_amount: ["invalid-argument", "Enter a valid withdrawal amount."],
-        below_minimum: ["failed-precondition", `Minimum withdrawal is £${minimum.toFixed(2)}.`],
-        exceeds_available: ["failed-precondition", "Withdrawal exceeds available cash earnings."],
-      };
-      if (failure) {
-        const [code, message] = failures[failure];
-        throw new functions.https.HttpsError(code, message);
-      }
-      transaction.set(requestRef, {
-        requestId: requestRef.id,
+    const requestRef = db.collection("payoutRequests").doc();
+    return executeRiderTransferOrPayout({
+      stripe: stripeFrom(stripeOrFactory),
+      data: {
         riderId,
-        riderEmail: profile.email || null,
+        requestId: requestRef.id,
         amount,
-        status: "requested",
-        payoutStatus: "requested",
-        paymentProvider: "stripe_connect_express",
-        stripeAccountId,
-        payoutFeePayer: "rider",
-        createdAt: FieldValue.serverTimestamp(),
-        updatedAt: FieldValue.serverTimestamp(),
-      }, {merge: false});
+        requestSource: "rider_app",
+      },
+      actorId: actor.uid,
+      actorType: "rider",
     });
-    await db.collection("riderPayoutAudit").add({
-      riderId,
-      payoutRequestId: requestRef.id,
-      action: "withdrawal_requested",
-      amount,
-      actorId: riderId,
-      createdAt: FieldValue.serverTimestamp(),
-    });
-    return {
-      requestId: requestRef.id,
-      amount,
-      status: "requested",
-    };
   });
 }
 
 function cancelRiderWithdrawal() {
-  return functions.https.onCall(async (data, context) => {
+  return firstPartyCallableRuntime.https.onCall(async (data, context) => {
     const riderId = text(context.auth && context.auth.uid);
     await assertActor(context, riderId);
-    const requestId = text(data && data.requestId) || `active_${riderId}`;
     const db = getFirestore();
+    const lockRef = db.collection("riderPayoutLocks").doc(riderId);
+    const lockSnapshot = await lockRef.get();
+    const requestId = text(data && data.requestId) ||
+      text(lockSnapshot.data() && lockSnapshot.data().activeRequestId);
+    if (!requestId) {
+      throw new functions.https.HttpsError(
+          "not-found",
+          "No active withdrawal request was found.",
+      );
+    }
     const requestRef = db.collection("payoutRequests").doc(requestId);
     await db.runTransaction(async (transaction) => {
-      const requestDoc = await transaction.get(requestRef);
+      const [requestDoc, lockDoc] = await Promise.all([
+        transaction.get(requestRef),
+        transaction.get(lockRef),
+      ]);
       if (!requestDoc.exists) {
         throw new functions.https.HttpsError(
             "not-found",
@@ -1019,6 +1154,13 @@ function cancelRiderWithdrawal() {
         cancelledBy: riderId,
         updatedAt: FieldValue.serverTimestamp(),
       }, {merge: true});
+      if (text(lockDoc.data() && lockDoc.data().activeRequestId) === requestId) {
+        transaction.set(lockRef, {
+          active: false,
+          status: "cancelled",
+          updatedAt: FieldValue.serverTimestamp(),
+        }, {merge: true});
+      }
     });
     await db.collection("riderPayoutAudit").add({
       riderId,
@@ -1035,7 +1177,7 @@ function cancelRiderWithdrawal() {
 }
 
 function adminReviewRiderWithdrawal() {
-  return functions.https.onCall(async (data, context) => {
+  return firstPartyCallableRuntime.https.onCall(async (data, context) => {
     const riderId = text(data && data.riderId);
     const requestId = text(data && data.requestId);
     const action = text(data && data.action).toLowerCase();
@@ -1055,8 +1197,12 @@ function adminReviewRiderWithdrawal() {
     }
     const db = getFirestore();
     const requestRef = db.collection("payoutRequests").doc(requestId);
+    const lockRef = db.collection("riderPayoutLocks").doc(riderId);
     const result = await db.runTransaction(async (transaction) => {
-      const requestDoc = await transaction.get(requestRef);
+      const [requestDoc, lockDoc] = await Promise.all([
+        transaction.get(requestRef),
+        transaction.get(lockRef),
+      ]);
       if (!requestDoc.exists) {
         throw new functions.https.HttpsError(
             "not-found",
@@ -1091,6 +1237,13 @@ function adminReviewRiderWithdrawal() {
         reviewReason: reason,
         updatedAt: FieldValue.serverTimestamp(),
       }, {merge: true});
+      if (text(lockDoc.data() && lockDoc.data().activeRequestId) === requestId) {
+        transaction.set(lockRef, {
+          active: false,
+          status: "rejected",
+          updatedAt: FieldValue.serverTimestamp(),
+        }, {merge: true});
+      }
       return {requestId, status: "rejected", idempotent: false};
     });
     if (!result.idempotent) {
@@ -1104,6 +1257,86 @@ function adminReviewRiderWithdrawal() {
       });
     }
     return result;
+  });
+}
+
+function createRiderTransferOrPayout(stripeOrFactory) {
+  return stripeSecretRuntime.https.onCall(async (data, context) => {
+    const riderId = text(data && data.riderId);
+    const actor = await assertActor(context, riderId, {adminOnly: true});
+    return executeRiderTransferOrPayout({
+      stripe: stripeFrom(stripeOrFactory),
+      data,
+      actorId: actor.uid,
+      actorType: "admin",
+    });
+  });
+}
+
+function getRiderPayoutQuote() {
+  return firstPartyCallableRuntime.https.onCall(async (data, context) => {
+    const riderId = text(context.auth && context.auth.uid);
+    await assertActor(context, riderId);
+    const amount = roundMoney(data && data.amount);
+    if (amount <= 0) {
+      throw new functions.https.HttpsError(
+          "invalid-argument",
+          "Enter a valid payout amount.",
+      );
+    }
+    const db = getFirestore();
+    const {profile} = await loadRider(riderId);
+    const readiness = await computeRiderPayoutReadiness(riderId);
+    const [walletDoc, lockDoc] = await Promise.all([
+      db.collection("riderEarnings").doc(riderId).get(),
+      db.collection("riderPayoutLocks").doc(riderId).get(),
+    ]);
+    const wallet = walletDoc.data() || {};
+    const lock = lockDoc.data() || {};
+    let existingStatus = "";
+    const activeRequestId = text(lock.activeRequestId);
+    if (activeRequestId) {
+      const activeRequest = await db.collection("payoutRequests")
+          .doc(activeRequestId).get();
+      const active = activeRequest.data() || {};
+      existingStatus = text(active.status || active.payoutStatus).toLowerCase();
+    }
+    const available = availableRiderCash(wallet);
+    const minimum = roundMoney(profile.minimumWithdrawalAmount || 1);
+    const failure = riderWithdrawalFailure({
+      amount,
+      available,
+      minimum,
+      existingStatus,
+      approvedRider: readiness.checks.riderApproved === true,
+      stripeReady: readiness.ready === true,
+      payoutPaused: profile.payoutPaused === true,
+    });
+    const failures = {
+      approval_required: ["failed-precondition", "Rider approval is required before payout."],
+      stripe_not_ready: ["failed-precondition", "Complete payout setup before requesting money."],
+      duplicate_pending: ["already-exists", "A payout is already in progress."],
+      invalid_amount: ["invalid-argument", "Enter a valid payout amount."],
+      below_minimum: ["failed-precondition", `Minimum payout is £${minimum.toFixed(2)}.`],
+      exceeds_available: ["failed-precondition", "Payout exceeds available cash earnings."],
+    };
+    if (failure) {
+      const [code, message] = failures[failure];
+      throw new functions.https.HttpsError(code, message);
+    }
+    const breakdown = resolveRiderPayoutBreakdown({riderGrossShare: amount});
+    if (breakdown.riderNetPayout <= 0) {
+      throw new functions.https.HttpsError(
+          "failed-precondition",
+          "Choose a larger payout amount so it remains above processing costs.",
+      );
+    }
+    return {
+      currency: "GBP",
+      requestedAmount: breakdown.riderGrossShare,
+      processingCost: breakdown.stripeFeeDeductedFromRider,
+      bankReceives: breakdown.riderNetPayout,
+    };
   });
 }
 
@@ -1201,7 +1434,9 @@ function handleStripeConnectWebhook(stripeOrFactory) {
         event.type === "payout.paid" ||
         event.type === "payout.failed" ||
         event.type === "payout.canceled") {
-        const accountId = text(object.destination || object.account || event.account);
+        // Connect payout objects use destination for the external bank account.
+        // The owning Rider account is carried by the event account context.
+        const accountId = text(event.account || object.account || object.destination);
         const status = event.type === "payout.paid" ? "paid" :
           event.type === "payout.created" ? "scheduled" :
           event.type === "payout.canceled" ? "canceled" :
@@ -1212,8 +1447,16 @@ function handleStripeConnectWebhook(stripeOrFactory) {
               .where("stripeAccountId", "==", accountId)
               .where("status", "in", ["processing", "pending", "requested", "scheduled"])
               .limit(10));
+          const payoutLocks = [];
+          for (const doc of query.docs) {
+            const payout = doc.data() || {};
+            const riderId = text(payout.riderId);
+            payoutLocks.push(riderId ? await transaction.get(
+                db.collection("riderPayoutLocks").doc(riderId),
+            ) : null);
+          }
           let matched = 0;
-          query.docs.forEach((doc) => {
+          query.docs.forEach((doc, index) => {
             const payout = doc.data() || {};
             const riderId = text(payout.riderId);
             const amount = Number(payout.amount || 0);
@@ -1223,6 +1466,8 @@ function handleStripeConnectWebhook(stripeOrFactory) {
               status,
               payoutStatus: status,
               stripePayoutId: object.id,
+              fundsReserved: status === "scheduled" ? reserved : false,
+              payoutConfirmationPending: false,
               failureReason: object.failure_message || object.failure_code || null,
               payoutScheduledAt: status === "scheduled" ? FieldValue.serverTimestamp() : null,
               paidAt: status === "paid" ? FieldValue.serverTimestamp() : null,
@@ -1252,6 +1497,16 @@ function handleStripeConnectWebhook(stripeOrFactory) {
                   createdAt: FieldValue.serverTimestamp(),
                 }, {merge: false});
               }
+              const lockDoc = payoutLocks[index];
+              if (lockDoc &&
+                text(lockDoc.data() && lockDoc.data().activeRequestId) ===
+                  doc.id) {
+                transaction.set(lockDoc.ref, {
+                  active: false,
+                  status,
+                  updatedAt: FieldValue.serverTimestamp(),
+                }, {merge: true});
+              }
             }
           });
           return {status, matched};
@@ -1265,13 +1520,19 @@ function handleStripeConnectWebhook(stripeOrFactory) {
             const request = await transaction.get(requestRef);
             const requestData = request.data() || {};
             const riderId = text(requestData.riderId);
+            const lockRef = riderId ?
+              db.collection("riderPayoutLocks").doc(riderId) : null;
+            const lockDoc = lockRef ? await transaction.get(lockRef) : null;
             const amount = Number(requestData.amount || object.amount / 100 || 0);
             const reserved = requestData.fundsReserved === true;
             const currentStatus = text(requestData.status || requestData.payoutStatus).toLowerCase();
-            const active = ["processing", "pending", "requested"].includes(currentStatus);
+            const active = isActiveRiderPayoutStatus(currentStatus);
             transaction.set(requestRef, {
               status: event.type === "transfer.failed" ? "failed" : "processing",
+              payoutStatus: event.type === "transfer.failed" ? "failed" : "processing",
               stripeTransferId: object.id,
+              fundsReserved: event.type === "transfer.failed" ? false : reserved,
+              payoutConfirmationPending: false,
               failureReason: object.failure_message || object.failure_code || null,
               updatedAt: FieldValue.serverTimestamp(),
             }, {merge: true});
@@ -1295,6 +1556,15 @@ function handleStripeConnectWebhook(stripeOrFactory) {
                   createdAt: FieldValue.serverTimestamp(),
                 }, {merge: false});
               }
+              if (lockDoc &&
+                text(lockDoc.data() && lockDoc.data().activeRequestId) ===
+                  requestId) {
+                transaction.set(lockDoc.ref, {
+                  active: false,
+                  status: "failed",
+                  updatedAt: FieldValue.serverTimestamp(),
+                }, {merge: true});
+              }
             }
             return {requestId, active, status: event.type === "transfer.failed" ? "failed" : "processing"};
           });
@@ -1305,6 +1575,61 @@ function handleStripeConnectWebhook(stripeOrFactory) {
       console.error("Stripe Connect webhook handling failed", error);
       res.status(500).send("Webhook handling failed");
     }
+  });
+}
+
+function scheduledRiderPayoutRecovery(stripeOrFactory) {
+  return stripeSecretRuntime.pubsub.schedule("every 5 minutes").onRun(async () => {
+    const db = getFirestore();
+    const snapshot = await db.collection("payoutRequests")
+        .where("status", "in", ["reserved", "processing"])
+        .limit(25)
+        .get();
+    let recovered = 0;
+    let alreadyStarted = 0;
+    let skippedUnreserved = 0;
+    let pending = 0;
+    for (const doc of snapshot.docs) {
+      const payout = doc.data() || {};
+      if (payout.fundsReserved !== true) {
+        skippedUnreserved += 1;
+        continue;
+      }
+      if (text(payout.stripeTransferId)) {
+        alreadyStarted += 1;
+        continue;
+      }
+      const riderId = text(payout.riderId);
+      const amount = roundMoney(payout.amount || payout.riderGrossShare);
+      if (!riderId || amount <= 0) continue;
+      try {
+        await executeRiderTransferOrPayout({
+          stripe: stripeFrom(stripeOrFactory),
+          data: {
+            riderId,
+            requestId: doc.id,
+            amount,
+            requestSource: payout.requestSource || "payout_recovery",
+          },
+          actorId: "system:rider-payout-recovery",
+          actorType: "system",
+        });
+        recovered += 1;
+      } catch (error) {
+        pending += 1;
+        console.error("Rider payout recovery remains pending", {
+          payoutRequestId: doc.id,
+          code: error && error.code || "unknown",
+        });
+      }
+    }
+    return {
+      scanned: snapshot.size,
+      recovered,
+      alreadyStarted,
+      skippedUnreserved,
+      pending,
+    };
   });
 }
 
@@ -1385,17 +1710,22 @@ module.exports = {
   syncStripeConnectStatus,
   riderPayoutReadiness,
   createRiderTransferOrPayout,
+  getRiderPayoutQuote,
   requestRiderWithdrawal,
   cancelRiderWithdrawal,
   adminReviewRiderWithdrawal,
   resetRiderTestStripeAccount,
   handleStripeConnectWebhook,
+  scheduledRiderPayoutRecovery,
   scheduledRiderStripeStatusSync,
   redactLegacyPayoutBankFields,
   adminBaseUrl,
   estimateStripeFee,
   resolveRiderPayoutBreakdown,
   riderWithdrawalFailure,
+  isActiveRiderPayoutStatus,
+  availableRiderCash,
+  isIndeterminateStripeTransferError,
   stripeStatusFromAccount,
   computeRiderPayoutReadiness,
 };

@@ -124,6 +124,10 @@ test("rider earnings, wallet ledger, payout requests, and bank data are not clie
   );
   assert.match(
       rules,
+      /match \/riderPayoutLocks\/\{riderId\}[\s\S]*allow read, write: if false;/,
+  );
+  assert.match(
+      rules,
       /match \/riderBankAccounts\/\{riderId\}[\s\S]*allow read: if isAdmin\(\);[\s\S]*allow create, update: if isAdmin\(\);/,
   );
   assert.match(
@@ -223,7 +227,10 @@ test("rider self updates are field allowlisted and cannot alter admin authority"
 });
 
 test("Rider withdrawal requests are routed through the backend callable", () => {
-  assert.match(index, /exports\.requestRiderWithdrawal = riderConnect\.requestRiderWithdrawal\(\);/);
+  assert.match(
+      index,
+      /exports\.requestRiderWithdrawal =[\s\S]*riderConnect\.requestRiderWithdrawal\(stripeConnectClient\);/,
+  );
   assert.match(websiteApp, /httpsCallable\('requestRiderWithdrawal'\)/);
   assert.doesNotMatch(websiteApp, /collection\('payoutRequests'\)\.doc\(\)[\s\S]*batch\.set\(requestRef/);
   assert.doesNotMatch(websiteApp, /collection\('riderBankAccounts'\)\.doc\(user\.uid\)/);

@@ -11,10 +11,25 @@ test("positive balance is explicitly unreconciled when categories do not explain
 });
 test("paid historical payout is not active and processing payout is", () => {
   assert.equal(reconcileLedger([], {}, [{status: "paid", amount: 2}]).activePayout, null);
+  assert.equal(reconcileLedger([], {}, [{status: "approved", amount: 2}]).activePayout, null);
+  assert.equal(reconcileLedger([], {}, [{status: "reserved", amount: 2}]).activePayout.status, "reserved");
+  assert.equal(reconcileLedger([], {}, [{status: "scheduled", amount: 2}]).activePayout.status, "scheduled");
   assert.equal(reconcileLedger([], {}, [{status: "processing", amount: 2}]).activePayout.status, "processing");
 });
 test("readiness remains separate from withdrawal state", () => {
   assert.equal(connectReadiness({stripeConnectStatus: "pending"}), "pending_verification");
+});
+
+test("canonical zero cash balance never falls through to a legacy alias", () => {
+  const summary = materializedSummary({
+    wallet: {
+      availableBalance: 0,
+      availableEarnings: 99,
+      accountBalance: 99,
+    },
+  });
+
+  assert.equal(summary.storedAvailable, 0);
 });
 test("ledger categories reconcile and duplicate idempotency is counted once", () => {
   const rows = [{type: "delivery_earning", amount: 11, roadReimbursement: 1, idempotencyKey: "a"}, {type: "delivery_earning", amount: 11, roadReimbursement: 1, idempotencyKey: "a"}, {type: "tip", amount: 2}, {type: "payout_reserved", amount: 3}, {type: "payout_failed_release", amount: 3}];
@@ -40,6 +55,7 @@ test("materialized summary preserves wallet totals without requiring historical 
     wallet: {
       availableBalance: 125,
       pendingBalance: 7,
+      pendingWithdrawal: 12,
       deliveryEarningsTotal: 100,
       tipsTotal: 20,
       noShowFeesTotal: 5,
@@ -52,7 +68,7 @@ test("materialized summary preserves wallet totals without requiring historical 
   assert.equal(value.summaryMode, "materialized");
   assert.equal(value.storedAvailable, 125);
   assert.equal(value.calculatedAvailable, 125);
-  assert.equal(value.pending, 7);
+  assert.equal(value.pending, 12);
   assert.equal(value.reconciled, true);
   assert.equal(value.totals.delivery_earning, 100);
   assert.equal(value.totals.tip, 20);
