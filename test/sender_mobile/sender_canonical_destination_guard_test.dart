@@ -339,7 +339,10 @@ void main() {
     expect(source, contains("httpsCallable('searchFreeUkAddresses')"));
     expect(source, contains("httpsCallable('resolveUkAddressPlace')"));
     expect(source, contains("'sessionToken': '\$sessionToken'"));
-    expect(source, contains(".timeout(const Duration(seconds: 8))"));
+    expect(
+      source,
+      matches(RegExp(r'\.timeout\(\s*const Duration\(seconds: 8\)\)')),
+    );
     expect(source, isNot(contains('maps.googleapis.com')));
   });
 

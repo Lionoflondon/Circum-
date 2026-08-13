@@ -16,11 +16,10 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_polyline_points/flutter_polyline_points.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
-import 'package:geocoding/geocoding.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:uuid/uuid.dart';
 import 'package:geolocator/geolocator.dart';
+import 'package:uuid/uuid.dart';
 
 import '../../../helper/bitmap_descriptor_helper.dart';
 import '../../../helper/calculate_bearing.dart';
@@ -36,8 +35,9 @@ import '../repo/place_api.dart';
 part 'send_package_event.dart';
 part 'send_package_state.dart';
 
-const _googleMapsDirectionsApiKey =
-    String.fromEnvironment('GOOGLE_MAPS_DIRECTIONS_API_KEY');
+const _googleMapsDirectionsApiKey = String.fromEnvironment(
+  'GOOGLE_MAPS_DIRECTIONS_API_KEY',
+);
 
 void _logRecoverableSenderError(
   String context,
@@ -258,7 +258,7 @@ class SendPackageBloc extends Bloc<SendPackageEvent, SendPackageState> {
     SearchAPlaceEvent event,
     Emitter<SendPackageState> emit,
   ) async {
-    const uuid = Uuid();
+    final uuid = const Uuid().v4();
     if (event.query.trim().length < 3) {
       emit(
         state.copyWith(
@@ -332,31 +332,32 @@ class SendPackageBloc extends Bloc<SendPackageEvent, SendPackageState> {
     SetPickupAddress event,
     Emitter<SendPackageState> emit,
   ) async {
-    const uuid = Uuid();
+    final uuid = const Uuid().v4();
 
     emit(
       state.copyWith(
         pickupLocation: event.val,
         pickupLocationSubAddress: event.pickupLocationSubAddress,
-        destinationLocation: '',
-        destinationLocationSubAddress: '',
+        pickupPlaceId: event.placeId,
+        clearSenderQuoteId: true,
+        clearSenderQuoteTotal: true,
       ),
     );
 
     try {
-      PlaceCoordinate coordinate = await PlaceApiProvider(
+      final resolved = await PlaceApiProvider(
         uuid,
-      ).fetchPlaceDetails(event.placeId, event.lang);
-
-      var address = await placemarkFromCoordinates(
-        coordinate.lat,
-        coordinate.lng,
+      ).fetchResolvedPlace(event.placeId, event.lang);
+      final coordinate = PlaceCoordinate(
+        lat: resolved.lat!,
+        lng: resolved.lng!,
       );
 
       emit(
         state.copyWith(
           pickupCoordinate: coordinate,
-          pickupLocality: address[0].locality,
+          pickupLocation: resolved.description,
+          pickupLocality: '${resolved.components['city'] ?? ''}'.trim(),
         ),
       );
       if (state.desinationCoordinate != null) {
@@ -372,11 +373,14 @@ class SendPackageBloc extends Bloc<SendPackageEvent, SendPackageState> {
   }
 
   void _handleSetDeliveryAddress(SetDeliveryAddress event, Emitter emit) async {
-    const uuid = Uuid();
+    final uuid = const Uuid().v4();
     emit(
       state.copyWith(
         destinationLocation: event.val,
         destinationLocationSubAddress: event.destinationLocationSubAddress,
+        destinationPlaceId: event.placeId,
+        clearSenderQuoteId: true,
+        clearSenderQuoteTotal: true,
       ),
     );
 
@@ -390,20 +394,19 @@ class SendPackageBloc extends Bloc<SendPackageEvent, SendPackageState> {
       );
     }
     try {
-      PlaceCoordinate coordinate = await PlaceApiProvider(
+      final resolved = await PlaceApiProvider(
         uuid,
-      ).fetchPlaceDetails(event.placeId, event.lang);
-      // var addresses = await Geocoder.google ( '<---------YOUR APIKEY-------->' ).findAddressesFromCoordinates(coordinates);
-      var address = await placemarkFromCoordinates(
-        coordinate.lat,
-        coordinate.lng,
-        // localeIdentifier: "en_US"
+      ).fetchResolvedPlace(event.placeId, event.lang);
+      final coordinate = PlaceCoordinate(
+        lat: resolved.lat!,
+        lng: resolved.lng!,
       );
 
       emit(
         state.copyWith(
           desinationCoordinate: coordinate,
-          destinationLocality: address[0].locality,
+          destinationLocation: resolved.description,
+          destinationLocality: '${resolved.components['city'] ?? ''}'.trim(),
         ),
       );
       if (state.pickupCoordinate != null) {
@@ -529,6 +532,8 @@ class SendPackageBloc extends Bloc<SendPackageEvent, SendPackageState> {
       state.copyWith(
         pickupLocation: event.pickupAddress,
         destinationLocation: event.dropoffAddress,
+        pickupPlaceId: event.pickupPlaceId,
+        destinationPlaceId: event.dropoffPlaceId,
         pickupCoordinate: PlaceCoordinate(
           lat: event.pickupLat,
           lng: event.pickupLng,
@@ -849,6 +854,8 @@ class SendPackageBloc extends Bloc<SendPackageEvent, SendPackageState> {
     try {
       final distanceKm = state.distance ?? _distanceKmFromRouteCoordinates();
       final data = await _callableMap('createSenderBookingQuote', {
+        'pickupPlaceId': state.pickupPlaceId,
+        'dropoffPlaceId': state.destinationPlaceId,
         if (event.businessContext != null)
           'businessContext': event.businessContext,
         'selectedSpeed': event.selectedSpeed,

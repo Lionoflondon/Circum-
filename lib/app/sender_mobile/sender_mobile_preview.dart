@@ -315,40 +315,17 @@ class _SenderWebStartupLoading extends StatelessWidget {
         backgroundColor: const Color(0xFF07090F),
         body: SafeArea(
           child: Center(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Container(
-                  width: 42,
-                  height: 42,
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    border: Border.all(color: const Color(0xFF60A5FA)),
-                    boxShadow: const [
-                      BoxShadow(
-                        color: Color(0x663B82F6),
-                        blurRadius: 28,
-                      ),
-                    ],
-                  ),
-                  child: const Padding(
-                    padding: EdgeInsets.all(10),
-                    child: CircularProgressIndicator(
-                      strokeWidth: 2,
-                      color: Color(0xFF93C5FD),
-                    ),
-                  ),
+            child: Semantics(
+              liveRegion: true,
+              label: 'Circum is loading',
+              child: const SizedBox(
+                width: 34,
+                height: 34,
+                child: CircularProgressIndicator(
+                  strokeWidth: 3,
+                  color: Color(0xFF60A5FA),
                 ),
-                const SizedBox(height: 18),
-                const Text(
-                  'Starting Circum',
-                  style: TextStyle(
-                    color: Colors.white,
-                    fontSize: 16,
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-              ],
+              ),
             ),
           ),
         ),

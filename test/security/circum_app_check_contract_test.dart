@@ -192,7 +192,8 @@ void main() {
     expect(
       File('lib/app/send_package/bloc/send_package_bloc.dart')
           .readAsStringSync(),
-      contains("String.fromEnvironment('GOOGLE_MAPS_DIRECTIONS_API_KEY')"),
+      matches(RegExp(
+          r"String\.fromEnvironment\(\s*'GOOGLE_MAPS_DIRECTIONS_API_KEY'")),
     );
     expect(
       File('android/app/src/main/AndroidManifest.xml').readAsStringSync(),

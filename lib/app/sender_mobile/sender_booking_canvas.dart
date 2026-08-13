@@ -368,9 +368,11 @@ class _SenderBookingCanvasState extends State<SenderBookingCanvas> {
       context.read<SendPackageBloc>().add(
             RestoreSenderRoute(
               pickupAddress: restored.pickupAddress,
+              pickupPlaceId: restored.pickupPlaceId,
               pickupLat: restored.pickupLat!,
               pickupLng: restored.pickupLng!,
               dropoffAddress: restored.dropoffAddress,
+              dropoffPlaceId: restored.dropoffPlaceId,
               dropoffLat: restored.dropoffLat!,
               dropoffLng: restored.dropoffLng!,
             ),
@@ -411,6 +413,8 @@ class _SenderBookingCanvasState extends State<SenderBookingCanvas> {
         pickupLng: engine.pickupCoordinate?.lng ?? next.pickupLng,
         dropoffLat: engine.desinationCoordinate?.lat ?? next.dropoffLat,
         dropoffLng: engine.desinationCoordinate?.lng ?? next.dropoffLng,
+        pickupPlaceId: engine.pickupPlaceId ?? next.pickupPlaceId,
+        dropoffPlaceId: engine.destinationPlaceId ?? next.dropoffPlaceId,
       );
       final payload = {
         'schemaVersion': 1,
@@ -656,6 +660,16 @@ class _SenderBookingCanvasState extends State<SenderBookingCanvas> {
 
   void _advance() {
     if (_draft.step == SenderBookingStep.payment) return;
+    if (_draft.step == SenderBookingStep.pickup &&
+        _draft.pickupPlaceId.isEmpty) {
+      _resolveTypedAddressAndAdvance(pickup: true);
+      return;
+    }
+    if (_draft.step == SenderBookingStep.dropoff &&
+        _draft.dropoffPlaceId.isEmpty) {
+      _resolveTypedAddressAndAdvance(pickup: false);
+      return;
+    }
     _restoreRouteFromDraftIfReady(_draft);
     if (_draft.step == SenderBookingStep.pickup ||
         _draft.step == SenderBookingStep.dropoff) {
@@ -709,6 +723,46 @@ class _SenderBookingCanvasState extends State<SenderBookingCanvas> {
     _setDraft(_draft.next());
   }
 
+  void _resolveTypedAddressAndAdvance({required bool pickup}) {
+    final engine = context.read<SendPackageBloc>().state;
+    if (engine.suggestions.isEmpty) {
+      setState(() => _addressResolutionMessage =
+          'Choose a verified address suggestion before continuing.');
+      return;
+    }
+    final suggestion = engine.suggestions.first;
+    final locale = Localizations.localeOf(context).languageCode;
+    if (pickup) {
+      context.read<SendPackageBloc>().add(SetPickupAddress(
+            val: suggestion.description,
+            pickupLocationSubAddress: suggestion.subText,
+            placeId: suggestion.placeId,
+            lang: locale,
+          ));
+      _pickup.text = suggestion.description;
+      _setDraft(_draft.copyWith(
+        pickupAddress: suggestion.description,
+        pickupPlaceId: suggestion.placeId,
+        pickupLat: suggestion.lat,
+        pickupLng: suggestion.lng,
+      ).next());
+    } else {
+      context.read<SendPackageBloc>().add(SetDeliveryAddress(
+            val: suggestion.description,
+            destinationLocationSubAddress: suggestion.subText,
+            placeId: suggestion.placeId,
+            lang: locale,
+          ));
+      _dropoff.text = suggestion.description;
+      _setDraft(_draft.copyWith(
+        dropoffAddress: suggestion.description,
+        dropoffPlaceId: suggestion.placeId,
+        dropoffLat: suggestion.lat,
+        dropoffLng: suggestion.lng,
+      ).next());
+    }
+  }
+
   void _requestBackendQuote(SenderBookingDraft draft) {
     _restoreRouteFromDraftIfReady(draft);
     final engine = context.read<SendPackageBloc>().state;
@@ -721,6 +775,8 @@ class _SenderBookingCanvasState extends State<SenderBookingCanvas> {
     final selectedVehicle = _selectedVehicleFor(draft, iris);
     final quoteKey = [
       (engine.distance ?? -1).toStringAsFixed(3),
+      engine.pickupPlaceId ?? '',
+      engine.destinationPlaceId ?? '',
       draft.selectedOption,
       selectedVehicle,
       requiresVanguard,
@@ -1283,7 +1339,11 @@ class _BookingPanel extends StatelessWidget {
             onSearchingPickupChanged(true);
             _search(context, value);
             onDraft(
-              draft.copyWith(pickupAddress: value, clearPickupCoordinate: true),
+              draft.copyWith(
+                pickupAddress: value,
+                pickupPlaceId: '',
+                clearPickupCoordinate: true,
+              ),
             );
           },
           onSuggestion: (suggestion) {
@@ -1305,10 +1365,9 @@ class _BookingPanel extends StatelessWidget {
             onDraft(
               draft.copyWith(
                 pickupAddress: suggestion.description,
+                pickupPlaceId: suggestion.placeId,
                 pickupLat: lat,
                 pickupLng: lng,
-                dropoffAddress: '',
-                clearDropoffCoordinate: true,
               ),
             );
           },
@@ -1333,6 +1392,7 @@ class _BookingPanel extends StatelessWidget {
             onDraft(
               draft.copyWith(
                 dropoffAddress: value,
+                dropoffPlaceId: '',
                 clearDropoffCoordinate: true,
               ),
             );
@@ -1356,6 +1416,7 @@ class _BookingPanel extends StatelessWidget {
             onDraft(
               draft.copyWith(
                 dropoffAddress: suggestion.description,
+                dropoffPlaceId: suggestion.placeId,
                 dropoffLat: lat,
                 dropoffLng: lng,
               ),
@@ -2975,8 +3036,10 @@ List<String> _customerIrisReasons(dynamic iris, SenderBookingDraft draft) {
 }
 
 bool _routeReadyForQuote(SendPackageState engine) {
-  return engine.distance != null ||
-      engine.pickupCoordinate != null && engine.desinationCoordinate != null;
+  return engine.pickupPlaceId?.isNotEmpty == true &&
+      engine.destinationPlaceId?.isNotEmpty == true &&
+      engine.pickupCoordinate != null &&
+      engine.desinationCoordinate != null;
 }
 
 class _OptionsPanel extends StatelessWidget {
@@ -4977,6 +5040,7 @@ class _PaymentPanelState extends State<_PaymentPanel> {
         'idempotencyKey':
             'sender-${senderUid ?? 'anonymous'}-${draftId ?? 'draft'}-${engine.senderPaymentSessionId ?? 'session'}',
         'pickup': {
+          'placeId': engine.pickupPlaceId,
           'address': engine.pickupLocation ?? draft.pickupAddress,
           'subAddress': engine.pickupLocationSubAddress ?? '',
           'locality': engine.pickupLocality ?? '',
@@ -4986,6 +5050,7 @@ class _PaymentPanelState extends State<_PaymentPanel> {
           },
         },
         'dropoff': {
+          'placeId': engine.destinationPlaceId,
           'address': engine.destinationLocation ?? draft.dropoffAddress,
           'subAddress': engine.destinationLocationSubAddress ?? '',
           'locality': engine.destinationLocality ?? '',

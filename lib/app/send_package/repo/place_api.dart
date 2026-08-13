@@ -16,10 +16,8 @@ class PlaceApiProvider {
     if (query.length < 3) return [];
     final response = await FirebaseFunctions.instance
         .httpsCallable('searchFreeUkAddresses')
-        .call({
-      'query': query,
-      'sessionToken': '$sessionToken',
-    }).timeout(const Duration(seconds: 8));
+        .call({'query': query, 'sessionToken': '$sessionToken'}).timeout(
+            const Duration(seconds: 8));
     final data = response.data is Map
         ? Map<String, dynamic>.from(response.data as Map)
         : <String, dynamic>{};
@@ -38,16 +36,19 @@ class PlaceApiProvider {
   }
 
   Future<PlaceCoordinate> fetchPlaceDetails(String placeId, String lang) async {
+    final resolved = await fetchResolvedPlace(placeId, lang);
+    return PlaceCoordinate(lat: resolved.lat!, lng: resolved.lng!);
+  }
+
+  Future<Suggestion> fetchResolvedPlace(String placeId, String lang) async {
     final suggestion = _suggestionCache[placeId];
     if (suggestion?.lat != null && suggestion?.lng != null) {
-      return PlaceCoordinate(lat: suggestion!.lat!, lng: suggestion.lng!);
+      return suggestion!;
     }
     final response = await FirebaseFunctions.instance
         .httpsCallable('resolveUkAddressPlace')
-        .call({
-      'placeId': placeId,
-      'sessionToken': '$sessionToken',
-    }).timeout(const Duration(seconds: 8));
+        .call({'placeId': placeId, 'sessionToken': '$sessionToken'}).timeout(
+            const Duration(seconds: 8));
     final data = response.data is Map
         ? Map<String, dynamic>.from(response.data as Map)
         : <String, dynamic>{};
@@ -55,7 +56,7 @@ class PlaceApiProvider {
     _suggestionCache[resolved.placeId] = resolved;
     _suggestionCache[placeId] = resolved;
     if (resolved.lat != null && resolved.lng != null) {
-      return PlaceCoordinate(lat: resolved.lat!, lng: resolved.lng!);
+      return resolved;
     }
     throw Exception("Couldn't fetch location details");
   }

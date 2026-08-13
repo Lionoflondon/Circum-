@@ -200,9 +200,11 @@ String formatSenderRothCredits(double value) {
 class SenderBookingDraft {
   final SenderBookingStep step;
   final String pickupAddress;
+  final String pickupPlaceId;
   final double? pickupLat;
   final double? pickupLng;
   final String dropoffAddress;
+  final String dropoffPlaceId;
   final double? dropoffLat;
   final double? dropoffLng;
   final String receiverName;
@@ -240,9 +242,11 @@ class SenderBookingDraft {
   const SenderBookingDraft({
     this.step = SenderBookingStep.pickup,
     this.pickupAddress = '',
+    this.pickupPlaceId = '',
     this.pickupLat,
     this.pickupLng,
     this.dropoffAddress = '',
+    this.dropoffPlaceId = '',
     this.dropoffLat,
     this.dropoffLng,
     this.receiverName = '',
@@ -364,10 +368,12 @@ class SenderBookingDraft {
   SenderBookingDraft copyWith({
     SenderBookingStep? step,
     String? pickupAddress,
+    String? pickupPlaceId,
     double? pickupLat,
     double? pickupLng,
     bool clearPickupCoordinate = false,
     String? dropoffAddress,
+    String? dropoffPlaceId,
     double? dropoffLat,
     double? dropoffLng,
     bool clearDropoffCoordinate = false,
@@ -409,9 +415,11 @@ class SenderBookingDraft {
     return SenderBookingDraft(
       step: step ?? this.step,
       pickupAddress: pickupAddress ?? this.pickupAddress,
+      pickupPlaceId: pickupPlaceId ?? this.pickupPlaceId,
       pickupLat: clearPickupCoordinate ? null : pickupLat ?? this.pickupLat,
       pickupLng: clearPickupCoordinate ? null : pickupLng ?? this.pickupLng,
       dropoffAddress: dropoffAddress ?? this.dropoffAddress,
+      dropoffPlaceId: dropoffPlaceId ?? this.dropoffPlaceId,
       dropoffLat: clearDropoffCoordinate ? null : dropoffLat ?? this.dropoffLat,
       dropoffLng: clearDropoffCoordinate ? null : dropoffLng ?? this.dropoffLng,
       receiverName: receiverName ?? this.receiverName,
@@ -464,6 +472,7 @@ class SenderBookingDraft {
         'completed': false,
         'pickup': {
           'address': pickupAddress,
+          'placeId': pickupPlaceId,
           if (pickupLat != null && pickupLng != null)
             'coordinate': {
               'lat': pickupLat,
@@ -472,6 +481,7 @@ class SenderBookingDraft {
         },
         'dropoff': {
           'address': dropoffAddress,
+          'placeId': dropoffPlaceId,
           if (dropoffLat != null && dropoffLng != null)
             'coordinate': {
               'lat': dropoffLat,
@@ -550,9 +560,11 @@ class SenderBookingDraft {
           ? SenderBookingStep.pickup
           : restoredStep,
       pickupAddress: '${pickup['address'] ?? ''}',
+      pickupPlaceId: '${pickup['placeId'] ?? ''}',
       pickupLat: _draftDouble(pickupCoordinate['lat']),
       pickupLng: _draftDouble(pickupCoordinate['lng']),
       dropoffAddress: '${dropoff['address'] ?? ''}',
+      dropoffPlaceId: '${dropoff['placeId'] ?? ''}',
       dropoffLat: _draftDouble(dropoffCoordinate['lat']),
       dropoffLng: _draftDouble(dropoffCoordinate['lng']),
       receiverName: '${recipient['name'] ?? ''}',

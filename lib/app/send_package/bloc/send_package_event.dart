@@ -52,6 +52,8 @@ class RestoreSenderRoute extends SendPackageEvent {
   final String dropoffAddress;
   final double dropoffLat;
   final double dropoffLng;
+  final String pickupPlaceId;
+  final String dropoffPlaceId;
 
   const RestoreSenderRoute({
     required this.pickupAddress,
@@ -60,6 +62,8 @@ class RestoreSenderRoute extends SendPackageEvent {
     required this.dropoffAddress,
     required this.dropoffLat,
     required this.dropoffLng,
+    this.pickupPlaceId = '',
+    this.dropoffPlaceId = '',
   });
 }
 
