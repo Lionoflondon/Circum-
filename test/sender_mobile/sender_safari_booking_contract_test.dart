@@ -61,6 +61,25 @@ void main() {
       expect(resolved.components['buildingNumber'], '29');
       expect(resolved.components['street'], 'St Fillans Road');
       expect(resolved.components['apartment'], 'Flat 4');
+      expect(resolved.components['resolutionPrecision'], 'unit');
+    });
+
+    test('resolution precision distinguishes premise from street fallback', () {
+      expect(
+        AddressEngine.inferResolutionPrecision(
+          buildingNumber: '29',
+          street: 'St Fillans Road',
+          postcode: 'SE6 1DQ',
+        ),
+        'premise',
+      );
+      expect(
+        AddressEngine.inferResolutionPrecision(
+          street: 'St Fillans Road',
+          postcode: 'SE6 1DQ',
+        ),
+        'street',
+      );
     });
 
     test('zero, NaN, infinite, and outside-UK coordinates are blocked', () {

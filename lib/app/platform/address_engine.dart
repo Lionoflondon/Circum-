@@ -21,6 +21,7 @@ class AddressEngine {
     'longitude',
     'verified',
     'source',
+    'resolutionPrecision',
     'createdAt',
     'updatedAt',
   ];
@@ -136,8 +137,8 @@ class AddressEngine {
       manualParts.length >= 3
           ? manualParts[manualParts.length - 3]
           : manualParts.length >= 2
-          ? manualParts[manualParts.length - 2]
-          : null,
+              ? manualParts[manualParts.length - 2]
+              : null,
     ]);
     final county = firstPart([
       raw['county'],
@@ -170,6 +171,15 @@ class AddressEngine {
     final lng = toDouble(
       longitude ?? raw['longitude'] ?? raw['lng'] ?? suggestion?.lng,
     );
+    final resolutionPrecision = firstPart([
+      raw['resolutionPrecision'],
+      inferResolutionPrecision(
+        apartment: apartment,
+        buildingNumber: streetNumber,
+        street: route,
+        postcode: postcode,
+      ),
+    ]);
 
     return {
       'addressId': firstPart([addressId, raw['addressId'], raw['id']]),
@@ -196,6 +206,7 @@ class AddressEngine {
         suggestion != null ? 'autocomplete' : null,
         manualAddress != null ? 'manual' : null,
       ]),
+      'resolutionPrecision': resolutionPrecision,
       'createdAt': firstPart([createdAt, raw['createdAt']]),
       'updatedAt': firstPart([updatedAt, raw['updatedAt']]),
       // Compatibility aliases for older readers while products migrate to the
@@ -225,6 +236,23 @@ class AddressEngine {
         manualAddress: manualAddress,
       ),
     );
+  }
+
+  static String inferResolutionPrecision({
+    Object? apartment,
+    Object? buildingNumber,
+    Object? street,
+    Object? postcode,
+  }) {
+    if (clean(apartment).isNotEmpty && clean(buildingNumber).isNotEmpty) {
+      return 'unit';
+    }
+    if (clean(buildingNumber).isNotEmpty) return 'premise';
+    if (clean(street).isNotEmpty && clean(postcode).isNotEmpty) {
+      return 'street';
+    }
+    if (clean(postcode).isNotEmpty) return 'postcode';
+    return 'locality';
   }
 
   static Suggestion suggestionFromBackend(Map<String, dynamic> map) {

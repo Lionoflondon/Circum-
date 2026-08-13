@@ -224,6 +224,7 @@ void main() {
         expect(normalized['buildingNumber'], '29');
         expect(normalized['street'], 'St Fillans Road');
         expect(normalized['apartment'], 'Flat 4');
+        expect(normalized['resolutionPrecision'], 'unit');
         expect(cleanSuggestion.description, contains('29 St Fillans Road'));
         expect(
           cleanSuggestion.components['addressLine1'],
@@ -232,6 +233,7 @@ void main() {
         expect(cleanSuggestion.components['buildingNumber'], '29');
         expect(cleanSuggestion.components['street'], 'St Fillans Road');
         expect(cleanSuggestion.components['apartment'], 'Flat 4');
+        expect(cleanSuggestion.components['resolutionPrecision'], 'unit');
       },
     );
   });
