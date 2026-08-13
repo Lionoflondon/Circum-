@@ -724,7 +724,7 @@ async function updateDeliveryTrackingStatusHandler(data, context, db = getFirest
 }
 
 exports.updateDeliveryTrackingStatus =
-  functions.https.onCall(updateDeliveryTrackingStatusHandler);
+  functions.runWith({enforceAppCheck: true}).https.onCall(updateDeliveryTrackingStatusHandler);
 
 async function completeDeliveryHandler(data, context, db = getFirestore()) {
   if (!context.auth) {
@@ -752,9 +752,9 @@ async function completeDeliveryHandler(data, context, db = getFirestore()) {
   }, context, db);
 }
 
-exports.completeDelivery = functions.https.onCall(completeDeliveryHandler);
+exports.completeDelivery = functions.runWith({enforceAppCheck: true}).https.onCall(completeDeliveryHandler);
 
-exports.updateDeliveryLiveLocation = functions.https.onCall(async (data, context) => {
+exports.updateDeliveryLiveLocation = functions.runWith({enforceAppCheck: true}).https.onCall(async (data, context) => {
   if (!context.auth) {
     throw new functions.https.HttpsError("unauthenticated", "Rider must be signed in.");
   }

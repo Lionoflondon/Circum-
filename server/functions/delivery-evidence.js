@@ -22,9 +22,26 @@ async function findDelivery(db, deliveryId) {
   return query.empty ? null : query.docs[0];
 }
 
-exports.recordDeliveryEvidence = functions.https.onCall(async (data, context) => {
+exports.recordDeliveryEvidence = functions.runWith({enforceAppCheck: true}).https.onCall(async (data, context) => {
   if (!context.auth) throw new functions.https.HttpsError("unauthenticated", "Rider must be signed in.");
   const input = {...(data || {})};
+  const inlineBytes = text(input.bytesBase64);
+  if (inlineBytes) {
+    const photoId = text(input.photoId);
+    const deliveryId = text(input.deliveryId);
+    if (!photoId || !deliveryId || !/^[A-Za-z0-9_-]{1,100}$/.test(photoId)) {
+      throw new functions.https.HttpsError("invalid-argument", "A canonical evidence identity is required.");
+    }
+    if (text(input.mimeType || "image/jpeg").toLowerCase() !== "image/jpeg") {
+      throw new functions.https.HttpsError("invalid-argument", "Delivery evidence must be a JPEG photo.");
+    }
+    const bytes = Buffer.from(inlineBytes, "base64");
+    if (!bytes.length || bytes.length > 15 * 1024 * 1024) {
+      throw new functions.https.HttpsError("invalid-argument", "Evidence photo file size is invalid.");
+    }
+    input.storagePath = evidence.photoStoragePath(deliveryId, photoId);
+    input.fileSize = bytes.length;
+  }
   const decision = evidence.validatePhotoInput(input);
   if (!decision.valid) throw new functions.https.HttpsError("invalid-argument", decision.reason);
 
@@ -41,6 +58,15 @@ exports.recordDeliveryEvidence = functions.https.onCall(async (data, context) =>
   }
 
   const file = getStorage().bucket().file(decision.storagePath);
+  if (inlineBytes) {
+    const [alreadyExists] = await file.exists();
+    if (!alreadyExists) {
+      await file.save(Buffer.from(inlineBytes, "base64"), {
+        resumable: false,
+        metadata: {contentType: decision.mimeType, metadata: {uploadedBy: context.auth.uid, deliveryId: decision.deliveryId, photoId: decision.photoId}},
+      });
+    }
+  }
   const [exists] = await file.exists();
   if (!exists) throw new functions.https.HttpsError("failed-precondition", "Evidence photo upload was not found.");
   const [metadata] = await file.getMetadata();

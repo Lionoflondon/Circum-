@@ -358,8 +358,6 @@ service cloud.firestore {
         'fullName',
         'firstName',
         'lastName',
-        'handle',
-        'username',
         'dateOfBirth',
         'gender',
         'homeAddress',
@@ -369,8 +367,6 @@ service cloud.firestore {
         'phoneVerifiedAt',
         'locationEnabled',
         'position',
-        'status',
-        'availabilityStatus',
         'fcmToken',
         'photoURL',
         'photoUrl',
@@ -401,7 +397,6 @@ service cloud.firestore {
         'onboardingStatus',
         'applicationSubmittedAt',
         'submittedAt',
-        'activeDelivery',
         'updatedAt'
       ];
     }

@@ -188,7 +188,7 @@ function applicationPatchFromProfile(data, rider, profile) {
   };
 }
 
-exports.updateRiderProfile = functions.https.onCall(async (data, context) => {
+exports.updateRiderProfile = functions.runWith({enforceAppCheck: true}).https.onCall(async (data, context) => {
   const rider = requireRider(context);
   const db = getFirestore();
   const profileRef = db.collection("riderProfiles").doc(rider.uid);
@@ -234,7 +234,7 @@ exports.updateRiderProfile = functions.https.onCall(async (data, context) => {
   return {ok: true, riderId: rider.uid};
 });
 
-exports.requestRiderEmailChange = functions.https.onCall(async (data, context) => {
+exports.requestRiderEmailChange = functions.runWith({enforceAppCheck: true}).https.onCall(async (data, context) => {
   const rider = requireRider(context);
   const pendingEmail = lower(data.pendingEmail || data.email, 180);
   if (!pendingEmail || !pendingEmail.includes("@")) {
@@ -257,7 +257,7 @@ exports.requestRiderEmailChange = functions.https.onCall(async (data, context) =
   return {ok: true, riderId: rider.uid};
 });
 
-exports.updateRiderPushToken = functions.https.onCall(async (data, context) => {
+exports.updateRiderPushToken = functions.runWith({enforceAppCheck: true}).https.onCall(async (data, context) => {
   const rider = requireRider(context);
   const fcmToken = text(data.fcmToken, 4096);
   if (!fcmToken) {
@@ -281,7 +281,7 @@ exports.updateRiderPushToken = functions.https.onCall(async (data, context) => {
   return {ok: true};
 });
 
-exports.updateRiderNotificationState = functions.https.onCall(async (data, context) => {
+exports.updateRiderNotificationState = functions.runWith({enforceAppCheck: true}).https.onCall(async (data, context) => {
   const rider = requireRider(context);
   const action = lower(data.action, 40);
   const ids = normalizeNotificationIds(data.notificationIds || data.notificationId);
@@ -322,7 +322,7 @@ exports.updateRiderNotificationState = functions.https.onCall(async (data, conte
   return {ok: true, notificationIds: ids, action};
 });
 
-exports.recordRiderJobDecision = functions.https.onCall(async (data, context) => {
+exports.recordRiderJobDecision = functions.runWith({enforceAppCheck: true}).https.onCall(async (data, context) => {
   const rider = requireRider(context);
   const requestId = text(data.requestId || data.deliveryId, 180);
   const action = lower(data.action, 40);
@@ -357,7 +357,7 @@ exports.recordRiderJobDecision = functions.https.onCall(async (data, context) =>
   return {ok: true, requestId, action};
 });
 
-exports.ensureRiderRothWallet = functions.https.onCall(async (data, context) => {
+exports.ensureRiderRothWallet = functions.runWith({enforceAppCheck: true}).https.onCall(async (data, context) => {
   const rider = requireRider(context);
   const requestedRiderId = text(data.riderId, 180);
   if (requestedRiderId && requestedRiderId !== rider.uid) {
@@ -411,7 +411,7 @@ exports.ensureRiderRothWallet = functions.https.onCall(async (data, context) => 
   return {ok: true, ...result};
 });
 
-exports.createWeightAdjustedNotification = functions.https.onCall(async (data, context) => {
+exports.createWeightAdjustedNotification = functions.runWith({enforceAppCheck: true}).https.onCall(async (data, context) => {
   const rider = requireRider(context);
   const requestId = text(data.requestId, 180);
   if (!requestId) {
@@ -469,7 +469,7 @@ exports.createWeightAdjustedNotification = functions.https.onCall(async (data, c
   return {ok: true, notificationId};
 });
 
-exports.submitRiderApplication = functions.https.onCall(async (data, context) => {
+exports.submitRiderApplication = functions.runWith({enforceAppCheck: true}).https.onCall(async (data, context) => {
   const rider = requireRider(context);
   if (data.rightToWorkConfirmed !== true || data.sealedPackageConsent !== true) {
     throw new functions.https.HttpsError("failed-precondition", "Rider confirmations are required.");
@@ -571,7 +571,7 @@ exports.submitRiderApplication = functions.https.onCall(async (data, context) =>
   return result;
 });
 
-exports.updateRiderApplicationSection = functions.https.onCall(async (data, context) => {
+exports.updateRiderApplicationSection = functions.runWith({enforceAppCheck: true}).https.onCall(async (data, context) => {
   const rider = requireRider(context);
   const section = cleanApplicationSection(data.section);
   const status = cleanSectionStatus(data.status || "in_progress");
@@ -604,7 +604,7 @@ exports.updateRiderApplicationSection = functions.https.onCall(async (data, cont
   return {ok: true, applicationId: rider.uid, section, status};
 });
 
-exports.submitRiderDocument = functions.https.onCall(async (data, context) => {
+exports.submitRiderDocument = functions.runWith({enforceAppCheck: true}).https.onCall(async (data, context) => {
   const rider = requireRider(context);
   const documentType = cleanDocumentType(data.documentType || data.type);
   const contentType = text(data.contentType, 120).toLowerCase();

@@ -41,7 +41,7 @@ function codeFromUser(user) {
   return `${source || "CIRCUM"}${user.uid.slice(0, 4).toUpperCase()}`.slice(0, 12);
 }
 
-exports.ensureReferralCode = functions.https.onCall(async (data, context) => {
+exports.ensureReferralCode = functions.runWith({enforceAppCheck: true}).https.onCall(async (data, context) => {
   requireAuth(context);
   const db = getFirestore();
   const uid = context.auth.uid;
@@ -79,7 +79,7 @@ exports.ensureReferralCode = functions.https.onCall(async (data, context) => {
   throw new functions.https.HttpsError("already-exists", "Could not create a unique referral code.");
 });
 
-exports.attachReferralCode = functions.https.onCall(async (data, context) => {
+exports.attachReferralCode = functions.runWith({enforceAppCheck: true}).https.onCall(async (data, context) => {
   requireAuth(context);
   const code = normalizeCode(data.referralCode);
   if (!code) throw new functions.https.HttpsError("invalid-argument", "Referral code is required.");
@@ -135,7 +135,7 @@ exports.attachReferralCode = functions.https.onCall(async (data, context) => {
   return {status: REFERRAL_STATUSES.signedUp};
 });
 
-exports.activateReferral = functions.https.onCall(async (data, context) => {
+exports.activateReferral = functions.runWith({enforceAppCheck: true}).https.onCall(async (data, context) => {
   requireAuth(context);
   const referredUserId = `${data.referredUserId || context.auth.uid}`.trim();
   if (referredUserId !== context.auth.uid && !context.auth.token.admin) {
