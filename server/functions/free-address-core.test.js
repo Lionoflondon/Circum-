@@ -265,6 +265,43 @@ test("resolves a selected Google place into coordinates and address components",
   assert.equal(result.components.postcode, "SE6 1DQ");
 });
 
+test("resolves Google flat display into structured apartment metadata", async () => {
+  const fetchImpl = async (url) => {
+    assert.match(url, /maps\.googleapis\.com\/maps\/api\/place\/details\/json/);
+    return {
+      ok: true,
+      async json() {
+        return {
+          status: "OK",
+          result: {
+            place_id: "google-place-flat",
+            formatted_address: "Flat 4, 29 St Fillans Rd, London SE6 1DQ, UK",
+            geometry: {location: {lat: 51.4433135, lng: -0.0092425}},
+            address_components: [
+              {long_name: "29", types: ["street_number"]},
+              {long_name: "Saint Fillans Road", types: ["route"]},
+              {long_name: "London", types: ["postal_town"]},
+              {long_name: "Greater London", types: ["administrative_area_level_2"]},
+              {long_name: "SE6 1DQ", types: ["postal_code"]},
+              {long_name: "United Kingdom", types: ["country"]},
+            ],
+          },
+        };
+      },
+    };
+  };
+
+  const result = await resolveUkAddressPlace({
+    placeId: "google-place-flat",
+    fetchImpl,
+    googlePlacesApiKey: "paid-google-key",
+  });
+
+  assert.equal(result.components.apartment, "Flat 4");
+  assert.equal(result.components.buildingNumber, "29");
+  assert.equal(result.components.addressLine1, "29 Saint Fillans Road");
+});
+
 test("maps free address search results into Circum address suggestions", async () => {
   const fetchImpl = async (url, options) => {
     assert.match(url, /nominatim\.openstreetmap\.org/);

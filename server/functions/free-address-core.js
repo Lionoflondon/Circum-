@@ -107,6 +107,7 @@ function mapAddress(result) {
 
 function mapGooglePrediction(prediction, sourceInput = "") {
   const structured = prediction.structured_formatting || {};
+  const hint = premiseHint(text(prediction.description) || sourceInput);
   return {
     displayAddress: text(prediction.description),
     lat: null,
@@ -118,6 +119,7 @@ function mapGooglePrediction(prediction, sourceInput = "") {
     sourceInput: sanitizeQuery(sourceInput),
     components: cleanComponents({
       addressLine1: text(structured.main_text),
+      apartment: hint.unit,
       country: "United Kingdom",
     }),
   };
@@ -136,6 +138,7 @@ function mapGooglePlaceDetails(result) {
   const location = result.geometry && result.geometry.location || {};
   const lat = Number(location.lat);
   const lng = Number(location.lng);
+  const hint = premiseHint(text(result.formatted_address || result.name));
   const streetNumber = googleAddressComponent(components, "street_number");
   const route = googleAddressComponent(components, "route");
   const addressLine1 = [streetNumber, route].map(text).filter(Boolean).join(" ");
@@ -159,6 +162,7 @@ function mapGooglePlaceDetails(result) {
       addressLine1,
       street: route,
       buildingNumber: streetNumber,
+      apartment: hint.unit,
       city,
       county,
       postcode,
