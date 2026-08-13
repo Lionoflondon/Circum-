@@ -7,6 +7,7 @@ const vanguardProtocol = require("./vanguard-protocol-core");
 const {budgetPenceFromGbp, createGiftBudgetAuthority} = require("./gift-budget-authority");
 const {resolveCanonicalAddress} = require("./canonical-address-authority");
 const {calculateWalletCheckout, normalizeEmail, roundMoney} = require("./wallet-core");
+const {senderWalletProjectionRecord} = require("./roth-ledger-core");
 
 function requireAuth(context) {
   if (!context.auth) {
@@ -45,6 +46,7 @@ async function finalizeGiftRothOnly({giftDraftId, gift, verifiedVoiceNote}) {
   const db = getFirestore();
   const walletId = normalizeEmail(gift.senderEmail) || gift.senderId;
   const walletRef = db.collection("wallets").doc(walletId);
+  const senderWalletRef = db.collection("senderWallets").doc(gift.senderId);
   const walletTransactionRef = db.collection("walletTransactions").doc(`gift_roth_${giftDraftId}`);
   const draftRef = db.collection("giftPaymentDrafts").doc(giftDraftId);
   const giftRef = db.collection("giftRequests").doc(giftDraftId);
@@ -52,10 +54,11 @@ async function finalizeGiftRothOnly({giftDraftId, gift, verifiedVoiceNote}) {
   const expectedAmount = budgetPenceFromGbp(gross);
   const budgetAuthority = createGiftBudgetAuthority(expectedAmount);
   return db.runTransaction(async (transaction) => {
-    const [walletSnap, existingTransaction, existingGift] = await Promise.all([
+    const [walletSnap, existingTransaction, existingGift, senderWalletSnap] = await Promise.all([
       transaction.get(walletRef),
       transaction.get(walletTransactionRef),
       transaction.get(giftRef),
+      transaction.get(senderWalletRef),
     ]);
     if (existingGift.exists && existingGift.data().paymentStatus === "paid") {
       return {paymentStatus: "paid", giftStatus: "submitted_for_review", giftRequestId: giftDraftId, walletPaidInFull: true};
@@ -73,6 +76,15 @@ async function finalizeGiftRothOnly({giftDraftId, gift, verifiedVoiceNote}) {
       rothCredit: roundMoney(before - gross),
       updatedAt: now,
     }, {merge: true});
+    const senderWallet = senderWalletSnap.exists ? senderWalletSnap.data() || {} : {};
+    transaction.set(senderWalletRef, senderWalletProjectionRecord({
+      userId: gift.senderId,
+      balance: roundMoney(before - gross),
+      frozen: wallet.isFrozen === true,
+      version: Number(senderWallet.version || 0) + 1,
+      createdAt: senderWallet.createdAt || wallet.createdAt || now,
+      updatedAt: now,
+    }), {merge: true});
     transaction.set(walletTransactionRef, {
       id: walletTransactionRef.id,
       userId: walletId,
@@ -420,6 +432,8 @@ async function finalizeGiftPaymentSession({
     const walletTransactionRef = rothApplied > 0 ? db.collection("walletTransactions").doc(`gift_roth_${giftDraftId}`) : null;
     const walletSnap = walletRef ? await transaction.get(walletRef) : null;
     const walletTransactionSnap = walletTransactionRef ? await transaction.get(walletTransactionRef) : null;
+    const senderWalletRef = rothApplied > 0 ? db.collection("senderWallets").doc(gift.senderId) : null;
+    const senderWalletSnap = senderWalletRef ? await transaction.get(senderWalletRef) : null;
     if (rothApplied > 0 && !walletTransactionSnap.exists) {
       const wallet = walletSnap && walletSnap.exists ? walletSnap.data() || {} : {};
       const before = roundMoney(wallet.balance == null ? wallet.rothCredit : wallet.balance);
@@ -429,6 +443,15 @@ async function finalizeGiftPaymentSession({
       const after = roundMoney(before - rothApplied);
       const now = FieldValue.serverTimestamp();
       transaction.set(walletRef, {balance: after, rothCredit: after, updatedAt: now}, {merge: true});
+      const senderWallet = senderWalletSnap && senderWalletSnap.exists ? senderWalletSnap.data() || {} : {};
+      transaction.set(senderWalletRef, senderWalletProjectionRecord({
+        userId: gift.senderId,
+        balance: after,
+        frozen: wallet.isFrozen === true,
+        version: Number(senderWallet.version || 0) + 1,
+        createdAt: senderWallet.createdAt || wallet.createdAt || now,
+        updatedAt: now,
+      }), {merge: true});
       transaction.set(walletTransactionRef, {
         id: walletTransactionRef.id,
         userId: normalizeEmail(gift.senderEmail) || gift.senderId,
