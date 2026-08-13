@@ -2,12 +2,7 @@ import '../gifts/gift_system_policy.dart';
 import '../platform/address_engine.dart';
 import '../send_package/models/suggestions.m.dart';
 
-enum SenderGiftMode {
-  someone,
-  myself,
-  anonymous,
-  campaign,
-}
+enum SenderGiftMode { someone, myself, anonymous, campaign }
 
 const senderGiftModeFieldName = 'giftMode';
 const senderGiftAnonymousGiftTypeFieldName = 'anonymousGiftType';
@@ -60,9 +55,11 @@ List<String> senderGiftIrisSignalsForThemes(Iterable<String> themes) {
 
 List<String> senderGiftUnsupportedIrisThemes(Iterable<String> themes) {
   return themes
-      .where((theme) =>
-          theme.trim().isNotEmpty &&
-          !senderGiftIrisSignalMap.containsKey(theme.trim()))
+      .where(
+        (theme) =>
+            theme.trim().isNotEmpty &&
+            !senderGiftIrisSignalMap.containsKey(theme.trim()),
+      )
       .toSet()
       .toList();
 }
@@ -111,10 +108,10 @@ class SenderGiftTheme {
   }
 
   Map<String, Object?> toMap() => {
-        'label': label,
-        'source': source,
-        'knownToIris': knownToIris,
-      };
+    'label': label,
+    'source': source,
+    'knownToIris': knownToIris,
+  };
 }
 
 class SenderGiftVoiceNote {
@@ -151,21 +148,21 @@ class SenderGiftVoiceNote {
   });
 
   Map<String, Object?> toMap() => {
-        'hasVoiceNote': hasVoiceNote,
-        'durationSeconds': durationSeconds,
-        'localUrl': localUrl ?? localPath,
-        'localPath': localPath ?? localUrl,
-        'storagePath': storagePath,
-        'downloadUrl': downloadUrl,
-        'mimeType': mimeType,
-        'createdAt': createdAt.toIso8601String(),
-        'transcript': transcript,
-        'language': language,
-        'uploadStatus': uploadStatus,
-        'retryState': retryState,
-        'version': version,
-        'ownerId': ownerId,
-      };
+    'hasVoiceNote': hasVoiceNote,
+    'durationSeconds': durationSeconds,
+    'localUrl': localUrl ?? localPath,
+    'localPath': localPath ?? localUrl,
+    'storagePath': storagePath,
+    'downloadUrl': downloadUrl,
+    'mimeType': mimeType,
+    'createdAt': createdAt.toIso8601String(),
+    'transcript': transcript,
+    'language': language,
+    'uploadStatus': uploadStatus,
+    'retryState': retryState,
+    'version': version,
+    'ownerId': ownerId,
+  };
 }
 
 class SenderGiftIrisBrief {
@@ -192,16 +189,16 @@ class SenderGiftIrisBrief {
   });
 
   Map<String, Object?> toMap() => {
-        'emotionalDirection': emotionalDirection,
-        'experienceDirection': experienceDirection,
-        'thingsToAvoid': thingsToAvoid,
-        'catalogueCoverage': catalogueCoverage,
-        'confidence': confidence,
-        'personalisationScore': personalisationScore,
-        'allergySafetyNotes': allergySafetyNotes,
-        'recommendedPartnerCategories': recommendedPartnerCategories,
-        'createdAt': createdAt.toIso8601String(),
-      };
+    'emotionalDirection': emotionalDirection,
+    'experienceDirection': experienceDirection,
+    'thingsToAvoid': thingsToAvoid,
+    'catalogueCoverage': catalogueCoverage,
+    'confidence': confidence,
+    'personalisationScore': personalisationScore,
+    'allergySafetyNotes': allergySafetyNotes,
+    'recommendedPartnerCategories': recommendedPartnerCategories,
+    'createdAt': createdAt.toIso8601String(),
+  };
 }
 
 const senderGiftInterestOptions = [
@@ -426,31 +423,31 @@ class GiftJourneyDraft {
       recipientName: mode == SenderGiftMode.myself ? 'Myself' : null,
       senderRevealMode:
           mode == SenderGiftMode.anonymous || mode == SenderGiftMode.campaign
-              ? 'anonymous_forever'
-              : 'reveal_immediately',
+          ? 'anonymous_forever'
+          : 'reveal_immediately',
       selfGiftFrequency: mode == SenderGiftMode.myself ? 'one_off' : null,
     );
   }
 
   String get giftModeValue => switch (mode) {
-        SenderGiftMode.someone => 'gift_someone',
-        SenderGiftMode.myself => 'gift_myself',
-        SenderGiftMode.anonymous => 'anonymous_gift',
-        SenderGiftMode.campaign => 'anonymous_gift',
-      };
+    SenderGiftMode.someone => 'gift_someone',
+    SenderGiftMode.myself => 'gift_myself',
+    SenderGiftMode.anonymous => 'anonymous_gift',
+    SenderGiftMode.campaign => 'anonymous_gift',
+  };
 
   String? get anonymousGiftType => switch (mode) {
-        SenderGiftMode.anonymous => 'direct',
-        SenderGiftMode.campaign => 'campaign',
-        _ => null,
-      };
+    SenderGiftMode.anonymous => 'direct',
+    SenderGiftMode.campaign => 'campaign',
+    _ => null,
+  };
 
   String get modeLabel => switch (mode) {
-        SenderGiftMode.someone => 'Gift someone',
-        SenderGiftMode.myself => 'Gift myself',
-        SenderGiftMode.anonymous => 'Anonymous gift',
-        SenderGiftMode.campaign => 'Campaign',
-      };
+    SenderGiftMode.someone => 'Gift someone',
+    SenderGiftMode.myself => 'Gift myself',
+    SenderGiftMode.anonymous => 'Anonymous gift',
+    SenderGiftMode.campaign => 'Campaign',
+  };
 
   bool get giftStoryUnlocked {
     if (_hasAuditedManualLock) return false;
@@ -485,7 +482,8 @@ class GiftJourneyDraft {
         experienceDirection: irisGiftBrief!.experienceDirection,
         thingsToAvoid: irisGiftBrief!.thingsToAvoid,
         confidence: irisGiftBrief!.confidence,
-        humanReviewRequired: irisGiftBrief!.confidence == 'Needs review' ||
+        humanReviewRequired:
+            irisGiftBrief!.confidence == 'Needs review' ||
             irisGiftBrief!.catalogueCoverage.isEmpty,
       );
     }
@@ -496,7 +494,8 @@ class GiftJourneyDraft {
     final hasOccasion = (occasion ?? '').trim().isNotEmpty;
     final hasNotes = (notes ?? '').trim().isNotEmpty;
     final hasRecipientPreferences = recipientPreferencesContext.isNotEmpty;
-    final confidenceScore = 42 +
+    final confidenceScore =
+        42 +
         (hasRelationship ? 10 : 0) +
         (hasOccasion ? 10 : 0) +
         (hasNotes ? 12 : 0) +
@@ -518,8 +517,8 @@ class GiftJourneyDraft {
       confidence: confidenceScore >= 82
           ? 'High'
           : confidenceScore >= 70
-              ? 'Medium'
-              : 'Needs review',
+          ? 'Medium'
+          : 'Needs review',
       humanReviewRequired: humanReview,
     );
   }
@@ -590,26 +589,28 @@ class GiftJourneyDraft {
         .map((theme) => theme.label)
         .toList();
     final hasNotes = (notes ?? '').trim().isNotEmpty;
-    final hasSafetyNotes = safetySummary !=
+    final hasSafetyNotes =
+        safetySummary !=
         'No allergies, restrictions, or safety notes supplied.';
     final hasMessage = (personalMessage ?? '').trim().isNotEmpty;
     final hasVoice = voiceNote?.hasVoiceNote == true;
     final hasRecipientPreferences = recipientPreferencesContext.isNotEmpty;
-    final score = (52 +
-            ((relationship ?? '').trim().isNotEmpty ? 8 : 0) +
-            ((occasion ?? '').trim().isNotEmpty ? 8 : 0) +
-            (hasNotes ? 12 : 0) +
-            (hasMessage ? 8 : 0) +
-            (hasVoice ? 6 : 0) +
-            (themes.isNotEmpty ? 8 : 0) +
-            (hasRecipientPreferences ? 8 : 0) +
-            (hasSafetyNotes ? 4 : 0))
-        .clamp(0, 96);
+    final score =
+        (52 +
+                ((relationship ?? '').trim().isNotEmpty ? 8 : 0) +
+                ((occasion ?? '').trim().isNotEmpty ? 8 : 0) +
+                (hasNotes ? 12 : 0) +
+                (hasMessage ? 8 : 0) +
+                (hasVoice ? 6 : 0) +
+                (themes.isNotEmpty ? 8 : 0) +
+                (hasRecipientPreferences ? 8 : 0) +
+                (hasSafetyNotes ? 4 : 0))
+            .clamp(0, 96);
     final confidence = score >= 82
         ? 'High'
         : score >= 70
-            ? 'Medium'
-            : 'Needs review';
+        ? 'Medium'
+        : 'Needs review';
     return SenderGiftIrisBrief(
       emotionalDirection:
           'Shape the experience around ${relationship ?? 'the relationship'} and ${occasion ?? 'the moment'}.',
@@ -816,19 +817,23 @@ class GiftJourneyDraft {
       senderGiftAnonymousGiftTypeFieldName: anonymousGiftType,
       senderGiftSenderRevealModeFieldName:
           senderRevealMode ?? 'reveal_immediately',
-      'senderRevealConsent':
-          giftModeValue == 'anonymous_gift' ? 'not_requested' : 'granted',
+      'senderRevealConsent': giftModeValue == 'anonymous_gift'
+          ? 'not_requested'
+          : 'granted',
       'recipientRevealRequestStatus': 'none',
-      senderGiftSelfGiftFrequencyFieldName:
-          mode == SenderGiftMode.myself ? selfGiftFrequency : null,
+      senderGiftSelfGiftFrequencyFieldName: mode == SenderGiftMode.myself
+          ? selfGiftFrequency
+          : null,
       'deliveryAddress': deliveryAddress?.trim() ?? '',
       'deliveryAddressData': deliveryAddressData == null
           ? null
           : {
               'placeId': normalizedAddress['placeId'],
-              'description': normalizedAddress['formattedAddress'] ??
+              'description':
+                  normalizedAddress['formattedAddress'] ??
                   deliveryAddressData!.description,
-              'mainText': normalizedAddress['addressLine1'] ??
+              'mainText':
+                  normalizedAddress['addressLine1'] ??
                   deliveryAddressData!.mainText,
               'subText': AddressEngine.joinParts([
                 normalizedAddress['city'],
@@ -847,6 +852,10 @@ class GiftJourneyDraft {
       'postcode': normalizedAddress['postcode'],
       'country': normalizedAddress['country'],
       'formattedAddress': normalizedAddress['formattedAddress'],
+      'buildingNumber': normalizedAddress['buildingNumber'],
+      'apartment': normalizedAddress['apartment'],
+      'street': normalizedAddress['street'],
+      'resolutionPrecision': normalizedAddress['resolutionPrecision'],
       'placeId': normalizedAddress['placeId'],
       'latitude': normalizedAddress['latitude'],
       'longitude': normalizedAddress['longitude'],

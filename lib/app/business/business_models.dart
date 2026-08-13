@@ -26,9 +26,11 @@ class BusinessAccount {
   final String phone;
   final String billingEmail;
   final String businessAddress;
+  final Map<String, dynamic> businessAddressData;
   final String companyNumber;
   final String companyCode;
   final String defaultPickupAddress;
+  final Map<String, dynamic> defaultPickupAddressData;
   final List<Map<String, dynamic>> teamMembers;
   final List<String> connectedProducts;
   final Map<String, dynamic> notificationPreferences;
@@ -46,9 +48,11 @@ class BusinessAccount {
     required this.phone,
     required this.billingEmail,
     required this.businessAddress,
+    this.businessAddressData = const {},
     required this.companyNumber,
     required this.companyCode,
     required this.defaultPickupAddress,
+    this.defaultPickupAddressData = const {},
     required this.teamMembers,
     required this.connectedProducts,
     required this.notificationPreferences,
@@ -69,6 +73,10 @@ class BusinessAccount {
         .map((item) => '$item'.trim())
         .where((item) => item.isNotEmpty)
         .toList(growable: false);
+    final pickupData = (data['defaultPickupAddressData'] as List? ?? const [])
+        .whereType<Map>()
+        .map((item) => Map<String, dynamic>.from(item))
+        .toList(growable: false);
     return BusinessAccount(
       id: id,
       name: '${data['businessName'] ?? 'Business'}'.trim(),
@@ -81,9 +89,15 @@ class BusinessAccount {
       phone: '${data['phone'] ?? ''}'.trim(),
       billingEmail: '${data['billingEmail'] ?? ''}'.trim(),
       businessAddress: '${data['businessAddress'] ?? ''}'.trim(),
+      businessAddressData: Map<String, dynamic>.from(
+        data['businessAddressData'] as Map? ?? const {},
+      ),
       companyNumber: '${data['companyNumber'] ?? ''}'.trim(),
       companyCode: '${data['companyCode'] ?? ''}'.trim(),
       defaultPickupAddress: pickups.isEmpty ? '' : pickups.first,
+      defaultPickupAddressData: pickupData.isEmpty
+          ? const {}
+          : pickupData.first,
       teamMembers: (data['teamMembers'] as List? ?? const [])
           .whereType<Map>()
           .map((item) => Map<String, dynamic>.from(item))
@@ -123,6 +137,7 @@ class BusinessCreateDraft {
   final String businessEmail;
   final String businessPhone;
   final String businessAddress;
+  final Map<String, dynamic> businessAddressData;
   final String vatNumber;
   final String businessSize;
   final bool acceptTerms;
@@ -133,6 +148,7 @@ class BusinessCreateDraft {
     required this.businessEmail,
     required this.businessPhone,
     required this.businessAddress,
+    this.businessAddressData = const {},
     required this.vatNumber,
     required this.businessSize,
     required this.acceptTerms,

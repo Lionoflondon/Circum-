@@ -32,6 +32,39 @@ function cleanEmail(value) {
   return clean(value).toLowerCase();
 }
 
+function cleanAddressData(value) {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
+  const allowed = [
+    "displayAddress",
+    "formattedAddress",
+    "addressLine1",
+    "addressLine2",
+    "apartment",
+    "unit",
+    "buildingNumber",
+    "street",
+    "city",
+    "locality",
+    "postcode",
+    "country",
+    "placeId",
+    "provider",
+    "resolutionPrecision",
+  ];
+  const cleaned = {};
+  for (const key of allowed) {
+    const textValue = clean(value[key]);
+    if (textValue) cleaned[key] = textValue;
+  }
+  const lat = Number(value.latitude || value.lat);
+  const lng = Number(value.longitude || value.lng);
+  if (Number.isFinite(lat)) cleaned.latitude = lat;
+  if (Number.isFinite(lng)) cleaned.longitude = lng;
+  if (Number.isFinite(lat)) cleaned.lat = lat;
+  if (Number.isFinite(lng)) cleaned.lng = lng;
+  return Object.keys(cleaned).length ? cleaned : null;
+}
+
 function slug(value, fallback = "business") {
   const normalised = clean(value)
       .toLowerCase()
@@ -125,6 +158,7 @@ exports.createBusinessAccount = functions
       );
       const businessPhone = clean(data.businessPhone);
       const businessAddress = clean(data.businessAddress);
+      const businessAddressData = cleanAddressData(data.businessAddressData);
       const vatNumber = clean(data.vatNumber);
       const businessSize = clean(data.businessSize);
       const termsAccepted = data.acceptTerms === true;
@@ -197,6 +231,7 @@ exports.createBusinessAccount = functions
         billingEmail: businessEmail,
         phone: businessPhone,
         businessAddress,
+        ...(businessAddressData ? {businessAddressData} : {}),
         vatNumber,
         businessSize,
         companyCode,
@@ -682,6 +717,10 @@ exports.updateBusinessProfile = functions
         ),
         phone: clean(data.phone || account.phone),
         businessAddress: clean(data.businessAddress || account.businessAddress),
+        businessAddressData:
+          cleanAddressData(data.businessAddressData) ||
+          account.businessAddressData ||
+          null,
         vatNumber: clean(data.vatNumber || account.vatNumber),
         website: clean(data.website || account.website),
         brandColor: clean(data.brandColor || account.brandColor),
@@ -699,6 +738,9 @@ exports.updateBusinessProfile = functions
         defaultPickupAddresses: Array.isArray(data.defaultPickupAddresses) ?
         data.defaultPickupAddresses.map(clean).filter(Boolean).slice(0, 10) :
         account.defaultPickupAddresses || [],
+        defaultPickupAddressData: Array.isArray(data.defaultPickupAddressData) ?
+        data.defaultPickupAddressData.map(cleanAddressData).filter(Boolean).slice(0, 10) :
+        account.defaultPickupAddressData || [],
         updatedAt: FieldValue.serverTimestamp(),
         updatedByUserId: uid,
       };
