@@ -181,6 +181,8 @@ class FirebaseBusinessRepository implements BusinessRepository {
       'businessEmail': draft.businessEmail,
       'businessPhone': draft.businessPhone,
       'businessAddress': draft.businessAddress,
+      if (draft.businessAddressCanonical != null)
+        'businessAddressCanonical': draft.businessAddressCanonical,
       'vatNumber': draft.vatNumber,
       'businessSize': draft.businessSize,
       'acceptTerms': draft.acceptTerms,
@@ -266,6 +268,8 @@ class FirebaseBusinessRepository implements BusinessRepository {
       'phone': account.phone,
       'billingEmail': account.billingEmail.toLowerCase(),
       'businessAddress': account.businessAddress,
+      if (account.businessAddressCanonical != null)
+        'businessAddressCanonical': account.businessAddressCanonical,
       'companyNumber': account.companyNumber,
       'defaultPickupAddresses': [
         if (account.defaultPickupAddress.isNotEmpty)

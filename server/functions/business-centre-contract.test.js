@@ -129,6 +129,13 @@ test("Business signup creates one canonical pending company for Admin review", (
   assert.doesNotMatch(businessAccessSource, /status: "approved"[\s\S]{0,800}joinPolicy: "approval_required"/);
 });
 
+test("Business addresses require the shared verified UK canonical authority", () => {
+  assert.match(businessAccessSource, /resolveCanonicalAddress/);
+  assert.match(businessAccessSource, /data\.businessAddressCanonical/);
+  assert.match(businessAccessSource, /businessAddressCanonical/);
+  assert.match(senderBusinessSource, /businessAddressCanonical/);
+});
+
 test("Business owners can read their own workspace but cannot write it directly", () => {
   assert.match(rulesSource, /function canReadBusinessId\(businessId\)/);
   assert.match(rulesSource, /match \/businessAccounts\/\{businessId\}/);

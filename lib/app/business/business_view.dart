@@ -1513,6 +1513,7 @@ class _BusinessViewState extends State<BusinessView> {
       phone: account.phone,
       billingEmail: account.billingEmail,
       businessAddress: account.businessAddress,
+      businessAddressCanonical: account.businessAddressCanonical,
       companyNumber: account.companyNumber,
       companyCode: account.companyCode,
       defaultPickupAddress: account.defaultPickupAddress,
@@ -1759,6 +1760,8 @@ class _SettingsFormState extends State<_SettingsForm> {
                     phone: phone.text.trim(),
                     billingEmail: billing.text.trim(),
                     businessAddress: address.text.trim(),
+                    businessAddressCanonical:
+                        widget.account.businessAddressCanonical,
                     companyNumber: company.text.trim(),
                     companyCode: widget.account.companyCode,
                     defaultPickupAddress: pickup.text.trim(),

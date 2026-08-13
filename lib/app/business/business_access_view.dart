@@ -8,6 +8,9 @@ import '../sender_mobile/sender_finance.dart';
 import 'business_models.dart';
 import 'business_repository.dart';
 import 'business_view.dart';
+import '../platform/address_engine.dart';
+import '../send_package/models/suggestions.m.dart';
+import '../send_package/repo/place_api.dart';
 
 class BusinessAccessView extends StatefulWidget {
   final BusinessRepository? repository;
@@ -210,11 +213,22 @@ class _CreateBusinessScreenState extends State<_CreateBusinessScreen> {
   final _address = TextEditingController();
   final _vat = TextEditingController();
   final _size = TextEditingController();
+  late final PlaceApiProvider _addressProvider;
+  Suggestion? _addressSuggestion;
+  List<Suggestion> _addressSuggestions = const [];
+  bool _addressSearching = false;
   var _step = 0;
   var _terms = false;
   var _working = false;
   String? _error;
   BusinessCreatedResult? _created;
+
+  @override
+  void initState() {
+    super.initState();
+    _addressProvider =
+        PlaceApiProvider('business-${DateTime.now().microsecondsSinceEpoch}');
+  }
 
   @override
   void dispose() {
@@ -229,6 +243,12 @@ class _CreateBusinessScreenState extends State<_CreateBusinessScreen> {
   }
 
   Future<void> _create() async {
+    final suggestion = _addressSuggestion;
+    if (!AddressEngine.hasResolvedUkCoordinates(suggestion)) {
+      setState(
+          () => _error = 'Select a verified UK address from the suggestions.');
+      return;
+    }
     setState(() {
       _working = true;
       _error = null;
@@ -241,6 +261,8 @@ class _CreateBusinessScreenState extends State<_CreateBusinessScreen> {
           businessEmail: _email.text,
           businessPhone: _phone.text,
           businessAddress: _address.text,
+          businessAddressCanonical:
+              AddressEngine.canonicalAddressPayload(suggestion!),
           vatNumber: _vat.text,
           businessSize: _size.text,
           acceptTerms: _terms,
@@ -297,7 +319,38 @@ class _CreateBusinessScreenState extends State<_CreateBusinessScreen> {
                 onPressed: () => setState(() => _step = 1),
               ),
             ] else ...[
-              _AccessField(label: 'Business Address', controller: _address),
+              _CanonicalBusinessAddressField(
+                controller: _address,
+                suggestions: _addressSuggestions,
+                searching: _addressSearching,
+                selected: _addressSuggestion,
+                onChanged: (value) async {
+                  setState(() {
+                    _addressSuggestion = null;
+                    _addressSearching = value.trim().length >= 3;
+                  });
+                  if (value.trim().length < 3) {
+                    setState(() => _addressSuggestions = const []);
+                    return;
+                  }
+                  try {
+                    final results = await _addressProvider.fetchSuggestions(
+                      value,
+                      'en-GB',
+                    );
+                    if (mounted) setState(() => _addressSuggestions = results);
+                  } catch (_) {
+                    if (mounted) setState(() => _addressSuggestions = const []);
+                  } finally {
+                    if (mounted) setState(() => _addressSearching = false);
+                  }
+                },
+                onSelected: (suggestion) => setState(() {
+                  _addressSuggestion = suggestion;
+                  _address.text = suggestion.description;
+                  _addressSuggestions = const [];
+                }),
+              ),
               _AccessField(label: 'VAT Number (optional)', controller: _vat),
               _AccessField(label: 'Business Size', controller: _size),
               CheckboxListTile(
@@ -312,7 +365,8 @@ class _CreateBusinessScreenState extends State<_CreateBusinessScreen> {
               ],
               AppButton(
                 label: _working ? 'Creating…' : 'Create Business',
-                onPressed: _working ? null : _create,
+                onPressed:
+                    _working || _addressSuggestion == null ? null : _create,
               ),
               const SizedBox(height: 10),
               AppButton(
@@ -535,12 +589,14 @@ class _AccessField extends StatelessWidget {
   final TextEditingController controller;
   final TextInputType? keyboardType;
   final List<TextInputFormatter>? inputFormatters;
+  final ValueChanged<String>? onChanged;
 
   const _AccessField({
     required this.label,
     required this.controller,
     this.keyboardType,
     this.inputFormatters,
+    this.onChanged,
   });
 
   @override
@@ -550,8 +606,58 @@ class _AccessField extends StatelessWidget {
           controller: controller,
           keyboardType: keyboardType,
           inputFormatters: inputFormatters,
+          onChanged: onChanged,
           decoration: InputDecoration(labelText: label),
         ),
+      );
+}
+
+class _CanonicalBusinessAddressField extends StatelessWidget {
+  final TextEditingController controller;
+  final List<Suggestion> suggestions;
+  final Suggestion? selected;
+  final bool searching;
+  final ValueChanged<String> onChanged;
+  final ValueChanged<Suggestion> onSelected;
+
+  const _CanonicalBusinessAddressField({
+    required this.controller,
+    required this.suggestions,
+    required this.selected,
+    required this.searching,
+    required this.onChanged,
+    required this.onSelected,
+  });
+
+  @override
+  Widget build(BuildContext context) => Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _AccessField(
+            label: 'Business Address',
+            controller: controller,
+            onChanged: onChanged,
+          ),
+          if (searching)
+            const Padding(
+              padding: EdgeInsets.only(bottom: 8),
+              child: Text('Finding verified UK addresses…'),
+            ),
+          for (final suggestion in suggestions.take(5))
+            ListTile(
+              dense: true,
+              contentPadding: EdgeInsets.zero,
+              leading: const Icon(Icons.location_on_outlined),
+              title: Text(suggestion.description),
+              subtitle: Text(suggestion.subText),
+              onTap: () => onSelected(suggestion),
+            ),
+          if (controller.text.isNotEmpty && selected == null)
+            const Padding(
+              padding: EdgeInsets.only(bottom: 10),
+              child: Text('Choose a verified address suggestion to continue.'),
+            ),
+        ],
       );
 }
 

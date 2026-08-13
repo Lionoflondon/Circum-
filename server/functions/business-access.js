@@ -2,6 +2,7 @@
 const functions = require("firebase-functions/v1");
 const {getFirestore, FieldValue} = require("firebase-admin/firestore");
 const communicationEngine = require("./communication-engine");
+const {resolveCanonicalAddress} = require("./canonical-address-authority");
 
 const BUSINESS_ROLES = new Set([
   "owner",
@@ -126,6 +127,7 @@ exports.createBusinessAccount = functions
       );
       const businessPhone = clean(data.businessPhone);
       const businessAddress = clean(data.businessAddress);
+      let businessAddressCanonical;
       const vatNumber = clean(data.vatNumber);
       const businessSize = clean(data.businessSize);
       const termsAccepted = data.acceptTerms === true;
@@ -145,6 +147,17 @@ exports.createBusinessAccount = functions
         throw new functions.https.HttpsError(
             "invalid-argument",
             "Business address is required.",
+        );
+      }
+      try {
+        businessAddressCanonical = await resolveCanonicalAddress(
+            data.businessAddressCanonical,
+            "business address",
+        );
+      } catch (error) {
+        throw new functions.https.HttpsError(
+            "invalid-argument",
+            "Select a verified UK business address.",
         );
       }
       if (!termsAccepted) {
@@ -198,6 +211,7 @@ exports.createBusinessAccount = functions
         billingEmail: businessEmail,
         phone: businessPhone,
         businessAddress,
+        businessAddressCanonical,
         vatNumber,
         businessSize,
         companyCode,
@@ -717,6 +731,24 @@ exports.updateBusinessProfile = functions
         updatedAt: FieldValue.serverTimestamp(),
         updatedByUserId: uid,
       };
+      if (Object.prototype.hasOwnProperty.call(data, "businessAddressCanonical")) {
+        try {
+          patch.businessAddressCanonical = await resolveCanonicalAddress(
+              data.businessAddressCanonical,
+              "business address",
+          );
+        } catch (error) {
+          throw new functions.https.HttpsError(
+              "invalid-argument",
+              "Select a verified UK business address.",
+          );
+        }
+      } else if (data.businessAddress && data.businessAddress !== account.businessAddress) {
+        throw new functions.https.HttpsError(
+            "invalid-argument",
+            "Select a verified UK business address.",
+        );
+      }
       if (!patch.businessName) {
         throw new functions.https.HttpsError(
             "invalid-argument",
