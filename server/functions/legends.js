@@ -210,7 +210,7 @@ exports.awardLegendOnCompletion = functions.firestore.document("deliveryRequests
 
 exports.awardFoundingRiderOnApproval = functions.firestore.document("riderProfiles/{riderId}").onWrite(async (change, context) => {
   const before = change.before.exists ? change.before.data() || {} : {};
-  const after = change.after.exists ? change.after.data() || {};
+  const after = change.after.exists ? change.after.data() || {} : {};
   const wasApproved = ["approved", "verified"].includes(`${before.applicationStatus || before.status || ""}`.trim().toLowerCase()) || before.dispatchEligible === true;
   const isApproved = ["approved", "verified"].includes(`${after.applicationStatus || after.status || ""}`.trim().toLowerCase()) || after.dispatchEligible === true;
   if (wasApproved || !isApproved) return null;
@@ -227,7 +227,7 @@ exports.awardFoundingRiderOnApproval = functions.firestore.document("riderProfil
 
 exports.awardFoundingRiderOnRiderApproval = functions.firestore.document("riders/{riderId}").onWrite(async (change, context) => {
   const before = change.before.exists ? change.before.data() || {} : {};
-  const after = change.after.exists ? change.after.data() || {};
+  const after = change.after.exists ? change.after.data() || {} : {};
   const wasApproved = ["approved", "verified"].includes(`${before.applicationStatus || before.status || ""}`.trim().toLowerCase()) || before.dispatchEligible === true;
   const isApproved = ["approved", "verified"].includes(`${after.applicationStatus || after.status || ""}`.trim().toLowerCase()) || after.dispatchEligible === true;
   if (wasApproved || !isApproved) return null;
