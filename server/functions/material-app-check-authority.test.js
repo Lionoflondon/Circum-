@@ -39,6 +39,10 @@ test("Rider dispatch, tracking, lifecycle, and adjudication callables require Ap
     "updateDeliveryLiveLocation",
   ].forEach((name) => assertCallableRequiresAppCheck("delivery-tracking.js", name));
   [
+    "recordDeliveryEvidence",
+    "getDeliveryEvidenceAccess",
+  ].forEach((name) => assertCallableRequiresAppCheck("delivery-evidence.js", name));
+  [
     "requestSenderCancellation",
     "previewSenderCancellation",
     "recordRiderArrival",

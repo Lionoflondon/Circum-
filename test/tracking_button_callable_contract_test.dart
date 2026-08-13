@@ -43,6 +43,8 @@ void main() {
       contains("FirebaseFunctions.instanceFor(region: 'us-central1')"),
     );
     expect(riderSource, contains("httpsCallable('reportLoadDiscrepancy')"));
+    expect(riderSource, contains("httpsCallable('recordDeliveryEvidence')"));
+    expect(lifecycleSource, isNot(contains("'photoUrl'")));
   });
 
   test('Sender tracking controls remain connected to backend actions', () {

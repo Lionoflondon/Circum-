@@ -204,16 +204,52 @@ test("required pickup evidence blocks incomplete verification", () => {
   assert.equal(deliveryTracking.evidenceRequirements(
       {verificationRequired: true},
       "verify_collection_pin",
-      {photoUrl: "secure-ref", conditionConfirmed: true},
+      {photoUrl: "unsafe-url", conditionConfirmed: true},
   ).valid, false);
   assert.equal(deliveryTracking.evidenceRequirements(
       {verificationRequired: true},
       "verify_collection_pin",
       {
-        photoUrl: "secure-ref",
+        evidenceId: "evidence-1",
         conditionConfirmed: true,
         riderDeclarationAccepted: true,
       },
+      {
+        evidenceId: "evidence-1",
+        deliveryId: "delivery-1",
+        riderId: "rider-1",
+        evidenceType: "pickup_proof",
+        lifecycleStage: "pickup",
+        status: "finalized",
+      },
+      {
+        deliveryId: "delivery-1",
+        riderId: "rider-1",
+      },
+  ).valid, true);
+});
+
+test("required handover evidence requires canonical completion proof", () => {
+  assert.equal(deliveryTracking.evidenceRequirements(
+      {deliveryPhotoRequired: true},
+      "verify_receiver_pin",
+      {photoUrl: "https://example.com/proof.jpg", recipientConfirmed: true},
+      null,
+      {deliveryId: "delivery-1", riderId: "rider-1"},
+  ).valid, false);
+  assert.equal(deliveryTracking.evidenceRequirements(
+      {deliveryPhotoRequired: true},
+      "verify_receiver_pin",
+      {evidenceId: "proof-1", recipientConfirmed: true},
+      {
+        evidenceId: "proof-1",
+        deliveryId: "delivery-1",
+        riderId: "rider-1",
+        evidenceType: "completion_proof",
+        lifecycleStage: "completion",
+        status: "finalized",
+      },
+      {deliveryId: "delivery-1", riderId: "rider-1"},
   ).valid, true);
 });
 

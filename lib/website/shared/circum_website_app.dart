@@ -4088,12 +4088,23 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
         setState(() => _jobMessage = 'Verify parcel weight before pickup.');
         return;
       }
+      final completionEvidencePatch = status == 'completed'
+          ? await _collectCompletionEvidence(job, requestId, user.uid)
+          : null;
+      if (status == 'completed' &&
+          _jobCompletionEvidenceRequired(job) &&
+          completionEvidencePatch == null) {
+        if (!mounted) return;
+        setState(() => _jobMessage = 'Add delivery proof before completing.');
+        return;
+      }
       await _advanceAcceptedJobThroughBackend(
         job: job,
         requestId: requestId,
         targetStatus: status,
         vanguardPatch: vanguardPatch,
         verificationPatch: verificationPatch,
+        completionEvidencePatch: completionEvidencePatch,
       );
       if (status == 'completed' || status == 'cancelled') {
         _stopRiderLiveLocationPublishing(status: status);
@@ -4115,6 +4126,7 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
     required String targetStatus,
     Map<String, dynamic>? vanguardPatch,
     Map<String, dynamic>? verificationPatch,
+    Map<String, dynamic>? completionEvidencePatch,
   }) async {
     final currentStatus = _canonicalRiderBackendStatus(
       '${job['status'] ?? 'accepted'}'.trim().toLowerCase().replaceAll(
@@ -4135,13 +4147,14 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
           if (vanguardPatch?['enteredPin'] != null)
             'pin': vanguardPatch!['enteredPin'],
           'evidence': {
+            if (action == 'verify_receiver_pin' &&
+                completionEvidencePatch?['evidenceId'] != null)
+              'evidenceId': completionEvidencePatch!['evidenceId'],
+            if (action == 'verify_collection_pin' &&
+                verificationPatch?['evidenceId'] != null)
+              'evidenceId': verificationPatch!['evidenceId'],
             if (verificationPatch?['riderVerifiedWeightKg'] != null)
               'actualWeightKg': verificationPatch!['riderVerifiedWeightKg'],
-            if ((verificationPatch?['riderWeightEvidenceUrls'] as List?)
-                    ?.isNotEmpty ==
-                true)
-              'photoUrl':
-                  (verificationPatch!['riderWeightEvidenceUrls'] as List).first,
             'conditionConfirmed': true,
             'riderDeclarationAccepted': true,
           },
@@ -4338,6 +4351,121 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
     return protection?['enabled'] == true;
   }
 
+  bool _jobCompletionEvidenceRequired(Map<String, dynamic> job) {
+    return job['deliveryPhotoRequired'] == true ||
+        job['requiresVanguard'] == true ||
+        job['secureHandoverRequired'] == true ||
+        _jobVanguardEnabled(job);
+  }
+
+  Future<Map<String, dynamic>> _recordDeliveryEvidence({
+    required String requestId,
+    required String riderId,
+    required XFile photo,
+    required String evidenceType,
+    required String lifecycleStage,
+  }) async {
+    final bytes = await photo.readAsBytes();
+    final result = await FirebaseFunctions.instanceFor(region: 'us-central1')
+        .httpsCallable('recordDeliveryEvidence')
+        .call({
+      'deliveryId': requestId,
+      'evidenceType': evidenceType,
+      'lifecycleStage': lifecycleStage,
+      'sourceSurface': 'rider_web',
+      'contentType': photo.mimeType ?? 'image/jpeg',
+      'fileBase64': base64Encode(bytes),
+    });
+    return (result.data as Map?)?.cast<String, dynamic>() ??
+        const <String, dynamic>{};
+  }
+
+  Future<Map<String, dynamic>?> _collectCompletionEvidence(
+    Map<String, dynamic> job,
+    String requestId,
+    String riderId,
+  ) async {
+    if (!_jobCompletionEvidenceRequired(job)) return const <String, dynamic>{};
+    XFile? photo;
+    String? errorText;
+    final selected = await showDialog<XFile>(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setDialogState) => AlertDialog(
+          title: const Text('Add delivery proof'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Take or choose a delivery photo before completing this job.',
+                style: TextStyle(color: Theme.of(context).hintColor),
+              ),
+              const SizedBox(height: 12),
+              OutlinedButton.icon(
+                onPressed: () async {
+                  final picked = await ImagePicker().pickImage(
+                    source: ImageSource.camera,
+                    imageQuality: 80,
+                    maxWidth: 1800,
+                  );
+                  if (picked != null) setDialogState(() => photo = picked);
+                },
+                icon: const Icon(Icons.photo_camera),
+                label: Text(photo == null ? 'Take photo' : 'Retake photo'),
+              ),
+              OutlinedButton.icon(
+                onPressed: () async {
+                  final picked = await ImagePicker().pickImage(
+                    source: ImageSource.gallery,
+                    imageQuality: 80,
+                    maxWidth: 1800,
+                  );
+                  if (picked != null) setDialogState(() => photo = picked);
+                },
+                icon: const Icon(Icons.photo_library_outlined),
+                label: const Text('Choose photo'),
+              ),
+              if (photo != null) ...[
+                const SizedBox(height: 8),
+                Text('Selected: ${photo!.name}'),
+              ],
+              if (errorText != null) ...[
+                const SizedBox(height: 8),
+                Text(errorText!, style: const TextStyle(color: Colors.red)),
+              ],
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Cancel'),
+            ),
+            FilledButton(
+              onPressed: () {
+                if (photo == null) {
+                  setDialogState(() => errorText = 'Add a delivery photo.');
+                  return;
+                }
+                Navigator.pop(context, photo);
+              },
+              child: const Text('Use photo'),
+            ),
+          ],
+        ),
+      ),
+    );
+    if (selected == null) return null;
+    return _recordDeliveryEvidence(
+      requestId: requestId,
+      riderId: riderId,
+      photo: selected,
+      evidenceType: 'completion_proof',
+      lifecycleStage: 'completion',
+    );
+  }
+
   Future<Map<String, dynamic>?> _collectWeightVerification(
     Map<String, dynamic> job,
     String requestId,
@@ -4482,17 +4610,16 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
     final optionValue = '${result['option']}';
     final verifiedWeight = result['verifiedWeightKg'] as double;
     final photos = (result['photos'] as List<XFile>? ?? const <XFile>[]);
-    final evidenceUrls = <String>[];
-    final storagePaths = <String>[];
+    String? evidenceId;
     for (final photo in photos) {
-      final bytes = await photo.readAsBytes();
-      final safeName = photo.name.replaceAll(RegExp(r'[^A-Za-z0-9._-]'), '_');
-      final path =
-          'delivery_weight_evidence/$requestId/$riderId/${DateTime.now().millisecondsSinceEpoch}_$safeName';
-      final ref = FirebaseStorage.instance.ref(path);
-      await ref.putData(bytes);
-      storagePaths.add(path);
-      evidenceUrls.add(await ref.getDownloadURL());
+      final evidence = await _recordDeliveryEvidence(
+        requestId: requestId,
+        riderId: riderId,
+        photo: photo,
+        evidenceType: 'pickup_proof',
+        lifecycleStage: 'pickup',
+      );
+      evidenceId ??= '${evidence['evidenceId'] ?? ''}'.trim();
     }
 
     final customerWeight = _jobCustomerWeight(job);
@@ -4588,8 +4715,8 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
         'option': optionValue,
         'riderId': riderId,
         'note': result['note'],
-        'supportingImages': evidenceUrls,
-        'storagePaths': storagePaths,
+        if (evidenceId != null && evidenceId.isNotEmpty)
+          'evidenceId': evidenceId,
         'timestamp': FieldValue.serverTimestamp(),
       },
       'driverJobSummary': {
@@ -4606,6 +4733,8 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
         'totalFare': revisedQuote.total,
         'vehicleType': vehicle,
       },
+      if (evidenceId != null && evidenceId.isNotEmpty)
+        'evidenceId': evidenceId,
     };
   }
 

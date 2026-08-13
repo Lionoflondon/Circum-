@@ -187,7 +187,27 @@ function pinAttemptField(action) {
     "deliveryPinAttemptCount" : "collectionPinAttemptCount";
 }
 
-function evidenceRequirements(delivery, action, evidence = {}) {
+function canonicalEvidenceMatches({deliveryId, riderId, action, evidence = {}, canonicalEvidence = null}) {
+  const evidenceId = text(evidence.evidenceId);
+  if (!evidenceId || !canonicalEvidence) return false;
+  if (text(canonicalEvidence.evidenceId) && text(canonicalEvidence.evidenceId) !== evidenceId) return false;
+  if (text(canonicalEvidence.deliveryId) !== text(deliveryId)) return false;
+  if (text(canonicalEvidence.riderId) !== text(riderId)) return false;
+  if (text(canonicalEvidence.status) !== "finalized") return false;
+  const type = normalized(canonicalEvidence.evidenceType);
+  const stage = normalized(canonicalEvidence.lifecycleStage);
+  if (action === "verify_receiver_pin") {
+    return type === "completion_proof" &&
+      ["completion", "dropoff", "drop_off", "handover", "arrived_at_dropoff"].includes(stage);
+  }
+  if (action === "verify_collection_pin") {
+    return type === "pickup_proof" &&
+      ["pickup", "collection", "pickup_verification", "arrived_at_pickup"].includes(stage);
+  }
+  return false;
+}
+
+function evidenceRequirements(delivery, action, evidence = {}, canonicalEvidence = null, context = {}) {
   const pickup = action === "verify_collection_pin";
   const handover = action === "verify_receiver_pin";
   if (!pickup && !handover) return {valid: true};
@@ -195,11 +215,17 @@ function evidenceRequirements(delivery, action, evidence = {}) {
     delivery.verificationRequired === true ||
       delivery.requiresVerification === true ||
       delivery.requiresVanguard === true :
-    delivery.deliveryPhotoRequired === true ||
+      delivery.deliveryPhotoRequired === true ||
       delivery.requiresVanguard === true ||
       delivery.secureHandoverRequired === true;
   if (!required) return {valid: true};
-  if (!text(evidence.photoUrl)) return {valid: false, reason: "A delivery evidence photo is required."};
+  if (!canonicalEvidenceMatches({
+    deliveryId: context.deliveryId,
+    riderId: context.riderId,
+    action,
+    evidence,
+    canonicalEvidence,
+  })) return {valid: false, reason: "A canonical delivery evidence photo is required."};
   if (pickup && evidence.conditionConfirmed !== true) {
     return {valid: false, reason: "Parcel condition must be confirmed."};
   }
@@ -394,7 +420,19 @@ exports.updateDeliveryTrackingStatus = functions.https.onCall(async (data, conte
     }
 
     const evidence = data && data.evidence && typeof data.evidence === "object" ? data.evidence : {};
-    const evidenceDecision = evidenceRequirements(delivery, action, evidence);
+    const evidenceId = text(evidence.evidenceId);
+    let canonicalEvidence = null;
+    if (evidenceId) {
+      const evidenceSnapshot = await transaction.get(db.collection("deliveryEvidence").doc(evidenceId));
+      canonicalEvidence = evidenceSnapshot.exists ? {
+        evidenceId: evidenceSnapshot.id,
+        ...(evidenceSnapshot.data() || {}),
+      } : null;
+    }
+    const evidenceDecision = evidenceRequirements(delivery, action, evidence, canonicalEvidence, {
+      deliveryId: found.id,
+      riderId,
+    });
     if (!evidenceDecision.valid) {
       throw new functions.https.HttpsError("failed-precondition", evidenceDecision.reason);
     }
@@ -439,10 +477,29 @@ exports.updateDeliveryTrackingStatus = functions.https.onCall(async (data, conte
     });
     if (Object.keys(evidence).length > 0) {
       patch[action === "verify_receiver_pin" ? "handoverEvidence" : "pickupEvidence"] = {
-        ...evidence,
+        ...(text(evidence.evidenceId) ? {evidenceId: text(evidence.evidenceId)} : {}),
+        ...(Number(evidence.actualWeightKg) > 0 ? {actualWeightKg: Number(evidence.actualWeightKg)} : {}),
+        ...(evidence.conditionConfirmed === true ? {conditionConfirmed: true} : {}),
+        ...(evidence.riderDeclarationAccepted === true ? {riderDeclarationAccepted: true} : {}),
+        ...(text(evidence.recipientName) ? {recipientName: text(evidence.recipientName, 120)} : {}),
+        ...(evidence.recipientConfirmed === true ? {recipientConfirmed: true} : {}),
+        ...(canonicalEvidence ? {
+          evidenceId,
+          evidenceType: canonicalEvidence.evidenceType,
+          lifecycleStage: canonicalEvidence.lifecycleStage,
+          storagePath: canonicalEvidence.storagePath,
+          visibility: canonicalEvidence.visibility,
+          status: canonicalEvidence.status,
+        } : {}),
         recordedAt: FieldValue.serverTimestamp(),
         recordedBy: riderId,
       };
+      if (canonicalEvidence && action === "verify_receiver_pin") {
+        patch.completionEvidenceId = evidenceId;
+      }
+      if (canonicalEvidence && action === "verify_collection_pin") {
+        patch.pickupEvidenceId = evidenceId;
+      }
     }
     if (action === "report_issue") {
       const issue = data && data.issue && typeof data.issue === "object" ? data.issue : {};
@@ -710,6 +767,7 @@ exports._private = {
   canonicalRiderRankForTrust,
   hasManualRankOverride,
   riderTrustRankPatch,
+  canonicalEvidenceMatches,
   trackingEventId,
   trackingEventRecord,
 };
