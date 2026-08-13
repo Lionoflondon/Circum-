@@ -52,12 +52,50 @@ class PlaceApiProvider {
     final data = response.data is Map
         ? Map<String, dynamic>.from(response.data as Map)
         : <String, dynamic>{};
-    final resolved = AddressEngine.suggestionFromBackend(data);
+    final resolved = _preserveCachedUnitMetadata(
+      AddressEngine.suggestionFromBackend(data),
+      suggestion,
+    );
     _suggestionCache[resolved.placeId] = resolved;
     _suggestionCache[placeId] = resolved;
     if (resolved.lat != null && resolved.lng != null) {
       return resolved;
     }
     throw Exception("Couldn't fetch location details");
+  }
+
+  Suggestion _preserveCachedUnitMetadata(
+    Suggestion resolved,
+    Suggestion? cached,
+  ) {
+    if (cached == null) return resolved;
+    final cachedApartment = AddressEngine.clean(cached.components['apartment']);
+    if (cachedApartment.isEmpty) return resolved;
+
+    final cachedBuilding =
+        AddressEngine.clean(cached.components['buildingNumber']);
+    final resolvedBuilding =
+        AddressEngine.clean(resolved.components['buildingNumber']);
+    if (cachedBuilding.isNotEmpty &&
+        resolvedBuilding.isNotEmpty &&
+        cachedBuilding.toLowerCase() != resolvedBuilding.toLowerCase()) {
+      return resolved;
+    }
+
+    final mergedComponents = <String, dynamic>{
+      ...cached.components,
+      ...resolved.components,
+      'apartment': cachedApartment,
+    };
+    final merged = Suggestion(
+      placeId: resolved.placeId,
+      description: resolved.description,
+      mainText: resolved.mainText,
+      subText: resolved.subText,
+      lat: resolved.lat,
+      lng: resolved.lng,
+      components: mergedComponents,
+    );
+    return AddressEngine.cleanSuggestion(merged);
   }
 }

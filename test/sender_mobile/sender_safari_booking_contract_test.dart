@@ -2,6 +2,8 @@ import 'package:circum/app/platform/address_engine.dart';
 import 'package:circum/app/sender_mobile/sender_booking_canvas.dart';
 import 'package:circum/app/sender_mobile/sender_booking_state.dart';
 import 'package:circum/app/send_package/models/suggestions.m.dart';
+import 'dart:io';
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 
@@ -62,6 +64,87 @@ void main() {
       expect(resolved.components['street'], 'St Fillans Road');
       expect(resolved.components['apartment'], 'Flat 4');
       expect(resolved.components['resolutionPrecision'], 'unit');
+    });
+
+    test('Flat 190 Edridge Road keeps unit and building without duplication',
+        () {
+      final resolved = AddressEngine.cleanSuggestion(
+        Suggestion(
+          placeId: 'google-edridge-4',
+          description: 'Flat 190, 4 Edridge Road, Croydon, CR0 1GD, UK',
+          mainText: '4 Edridge Road',
+          subText: 'Croydon CR0 1GD',
+          lat: 51.3728,
+          lng: -0.1007,
+          components: const {
+            'addressLine1': '4 Edridge Road',
+            'buildingNumber': '4',
+            'street': 'Edridge Road',
+            'apartment': 'Flat 190',
+            'city': 'Croydon',
+            'postcode': 'CR0 1GD',
+            'country': 'United Kingdom',
+            'resolutionPrecision': 'unit',
+          },
+        ),
+      );
+
+      expect(resolved.description, startsWith('Flat 190, 4 Edridge Road'));
+      expect(RegExp('Flat 190').allMatches(resolved.description), hasLength(1));
+      expect(resolved.components['apartment'], 'Flat 190');
+      expect(resolved.components['buildingNumber'], '4');
+      expect(resolved.components['street'], 'Edridge Road');
+      expect(resolved.components['postcode'], 'CR0 1GD');
+      expect(resolved.components['resolutionPrecision'], 'unit');
+    });
+
+    test('building-only Edridge Road does not fabricate a flat', () {
+      final resolved = AddressEngine.cleanSuggestion(
+        Suggestion(
+          placeId: 'google-edridge-4',
+          description: '4 Edridge Road, Croydon, CR0 1GD, UK',
+          mainText: '4 Edridge Road',
+          subText: 'Croydon CR0 1GD',
+          lat: 51.3728,
+          lng: -0.1007,
+          components: const {
+            'addressLine1': '4 Edridge Road',
+            'buildingNumber': '4',
+            'street': 'Edridge Road',
+            'city': 'Croydon',
+            'postcode': 'CR0 1GD',
+            'country': 'United Kingdom',
+          },
+        ),
+      );
+
+      expect(resolved.description, startsWith('4 Edridge Road'));
+      expect(resolved.components['apartment'], isNull);
+      expect(resolved.components['buildingNumber'], '4');
+      expect(resolved.components['resolutionPrecision'], 'premise');
+    });
+
+    test(
+        'Place API preserves cached unit only through matching building details',
+        () {
+      final source =
+          File('lib/app/send_package/repo/place_api.dart').readAsStringSync();
+
+      expect(source, contains('_preserveCachedUnitMetadata'));
+      expect(source, contains('cachedBuilding'));
+      expect(source, contains('resolvedBuilding'));
+      expect(source, contains('cachedBuilding.toLowerCase() !='));
+      expect(source, contains('AddressEngine.cleanSuggestion(merged)'));
+    });
+
+    test('stale address search responses cannot overwrite newer query state',
+        () {
+      final source = File('lib/app/send_package/bloc/send_package_bloc.dart')
+          .readAsStringSync();
+
+      expect(source, contains('_addressSearchGeneration'));
+      expect(source, contains('final generation = ++_addressSearchGeneration'));
+      expect(source, contains('generation != _addressSearchGeneration'));
     });
 
     test('resolution precision distinguishes premise from street fallback', () {

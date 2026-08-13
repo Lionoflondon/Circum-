@@ -157,14 +157,24 @@ class AddressEngine {
       raw['country'],
       manualParts.isNotEmpty ? manualParts.last : null,
     ]);
-    final formattedAddress = joinParts([
-      addressLine1,
-      addressLine2,
-      city,
-      county,
-      postcode,
-      country,
-    ]);
+    final formattedAddress = apartment.isNotEmpty
+        ? joinParts([
+            apartment,
+            addressLine1,
+            if (addressLine2 != apartment) addressLine2,
+            city,
+            county,
+            postcode,
+            country,
+          ])
+        : joinParts([
+            addressLine1,
+            addressLine2,
+            city,
+            county,
+            postcode,
+            country,
+          ]);
     final lat = toDouble(
       latitude ?? raw['latitude'] ?? raw['lat'] ?? suggestion?.lat,
     );

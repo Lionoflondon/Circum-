@@ -87,6 +87,7 @@ class SendPackageBloc extends Bloc<SendPackageEvent, SendPackageState> {
   StreamSubscription<DocumentSnapshot<Map<String, dynamic>>>?
   _activeDeliveryLiveLocationSubscription;
   String? _activeDeliveryLiveLocationId;
+  int _addressSearchGeneration = 0;
   SendPackageBloc() : super(SendPackageState()) {
     on<CheckForPushToken>(_handleCheckForPushToken);
     on<SearchAPlaceEvent>(_handleSearchAPlaceEvent);
@@ -264,6 +265,7 @@ class SendPackageBloc extends Bloc<SendPackageEvent, SendPackageState> {
     Emitter<SendPackageState> emit,
   ) async {
     final uuid = const Uuid().v4();
+    final generation = ++_addressSearchGeneration;
     if (event.query.trim().length < 3) {
       emit(
         state.copyWith(
@@ -279,6 +281,7 @@ class SendPackageBloc extends Bloc<SendPackageEvent, SendPackageState> {
       List<Suggestion> suggestions = await PlaceApiProvider(
         uuid,
       ).fetchSuggestions(event.query, event.lang);
+      if (generation != _addressSearchGeneration) return;
 
       emit(
         state.copyWith(
@@ -290,6 +293,7 @@ class SendPackageBloc extends Bloc<SendPackageEvent, SendPackageState> {
         ),
       );
     } catch (e) {
+      if (generation != _addressSearchGeneration) return;
       emit(
         state.copyWith(
           suggestions: [],
@@ -318,6 +322,7 @@ class SendPackageBloc extends Bloc<SendPackageEvent, SendPackageState> {
     ClearSuggestions event,
     Emitter<SendPackageState> emit,
   ) {
+    _addressSearchGeneration++;
     emit(state.copyWith(suggestions: []));
   }
 

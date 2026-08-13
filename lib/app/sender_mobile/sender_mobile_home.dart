@@ -1937,6 +1937,7 @@ class _CanonicalSenderHomeState extends State<_CanonicalSenderHome> {
   String? _ordersError;
   String? _notificationsError;
   Set<String>? _knownNotificationIds;
+  Timer? _greetingRefreshTimer;
 
   @override
   void initState() {
@@ -1944,6 +1945,9 @@ class _CanonicalSenderHomeState extends State<_CanonicalSenderHome> {
     assert(_retiredGuardCopyMarkers.length == 2);
     _repository = widget.repository ?? FirebaseSenderHomeRepository();
     _load();
+    _greetingRefreshTimer = Timer.periodic(const Duration(minutes: 1), (_) {
+      if (mounted) setState(() {});
+    });
   }
 
   void _load() {
@@ -1987,6 +1991,7 @@ class _CanonicalSenderHomeState extends State<_CanonicalSenderHome> {
 
   @override
   void dispose() {
+    _greetingRefreshTimer?.cancel();
     _ordersSubscription?.cancel();
     _notificationsSubscription?.cancel();
     super.dispose();
@@ -3063,10 +3068,7 @@ class _SenderDashboardState extends State<_SenderDashboard> {
   }
 
   String get _greeting {
-    final hour = DateTime.now().hour;
-    if (hour < 12) return 'Good morning';
-    if (hour < 18) return 'Good afternoon';
-    return 'Good evening';
+    return senderGreetingForLocalHour(DateTime.now().hour);
   }
 
   int get _unreadCount =>
@@ -3271,6 +3273,14 @@ class _SenderDashboardState extends State<_SenderDashboard> {
       ],
     );
   }
+}
+
+@visibleForTesting
+String senderGreetingForLocalHour(int hour) {
+  final localHour = hour % 24;
+  if (localHour >= 5 && localHour < 12) return 'Good morning';
+  if (localHour >= 12 && localHour < 17) return 'Good afternoon';
+  return 'Good evening';
 }
 
 class _HomeNotificationBell extends StatefulWidget {
