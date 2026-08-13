@@ -151,6 +151,56 @@ void main() {
     expect(booking, contains("'Started fresh'"));
   });
 
+  test('Sender booking cancellation abandons draft without ghost restore', () {
+    final booking = File('lib/app/sender_mobile/sender_booking_canvas.dart')
+        .readAsStringSync();
+    final reset = booking.substring(
+      booking.indexOf('Future<void> _resetBookingSession'),
+      booking.indexOf('void _advance'),
+    );
+    final discard = booking.substring(
+      booking.indexOf('Future<void> _discardDraftAndExit'),
+      booking.indexOf('Future<void> _confirmCancelBooking'),
+    );
+
+    expect(reset, contains('_draftAbandoned = true'));
+    expect(reset, contains('_bookingSessionGeneration++'));
+    expect(reset, contains('_addressResolutionGeneration++'));
+    expect(reset, contains("await _deleteBackendDraft()"));
+    expect(reset,
+        isNot(contains('_scheduleDraftSave(const SenderBookingDraft())')));
+    expect(discard, contains('_draftAbandoned = true'));
+    expect(discard,
+        isNot(contains('_scheduleDraftSave(const SenderBookingDraft())')));
+  });
+
+  test('Sender booking protects active edits from late restore/address results',
+      () {
+    final booking = File('lib/app/sender_mobile/sender_booking_canvas.dart')
+        .readAsStringSync();
+    final bloc = File('lib/app/send_package/bloc/send_package_bloc.dart')
+        .readAsStringSync();
+
+    expect(booking, contains('_userInteractionGeneration'));
+    expect(booking, contains('_canApplyDraftRestore'));
+    expect(booking, contains('_isCurrentAddressResolution'));
+    expect(booking, contains('_reconcileResolvedAddressFromEngine'));
+    expect(booking, contains('282 Lewisham High Street'));
+    expect(bloc, contains('_addressSelectionGeneration'));
+    expect(bloc, contains('generation != _addressSelectionGeneration'));
+  });
+
+  test('Sender IRIS sheet expands for analysis and keeps CTA reachable', () {
+    final booking = File('lib/app/sender_mobile/sender_booking_canvas.dart')
+        .readAsStringSync();
+
+    expect(booking, contains('needsExpandedContent'));
+    expect(booking, contains('initial: .86'));
+    expect(booking, contains('max: .96'));
+    expect(booking, contains('engine.isIrisResolving'));
+    expect(booking, contains('parcelPhoto != null'));
+  });
+
   test('Sender launch has one web bootstrap before usable app shell', () {
     final index = File('web/index.html').readAsStringSync();
     final home = File('lib/app/sender_mobile/sender_mobile_home.dart')

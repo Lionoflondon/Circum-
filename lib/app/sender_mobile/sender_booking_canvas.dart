@@ -32,6 +32,14 @@ class SenderBookingCanvas extends StatefulWidget {
   State<SenderBookingCanvas> createState() => _SenderBookingCanvasState();
 }
 
+@visibleForTesting
+const senderBookingAddressSessionFixtures = [
+  '29 St Fillans Road SE6 1DQ',
+  'Flat 4, 29 St Fillans Road SE6 1DQ',
+  'Flat 190, 4 Edridge Road CR0 1GD',
+  '282 Lewisham High Street SE13 6JZ',
+];
+
 class _SenderBookingCanvasState extends State<SenderBookingCanvas> {
   static const Duration _localDraftRetention = Duration(minutes: 10);
   static const Duration _backendDraftRestoreTimeout = Duration(seconds: 5);
@@ -69,6 +77,10 @@ class _SenderBookingCanvasState extends State<SenderBookingCanvas> {
   String? _irisPhotoAnalysisId;
   double? _photoEstimatedWeightKg;
   bool _resettingBooking = false;
+  int _userInteractionGeneration = 0;
+  int _bookingSessionGeneration = 0;
+  int _addressResolutionGeneration = 0;
+  bool _draftAbandoned = false;
 
   @override
   void initState() {
@@ -159,6 +171,7 @@ class _SenderBookingCanvasState extends State<SenderBookingCanvas> {
   }
 
   void _setDraft(SenderBookingDraft next) {
+    _draftAbandoned = false;
     setState(() => _draft = next);
     if (!_restoringDraft) _scheduleDraftSave(next);
   }
@@ -237,6 +250,8 @@ class _SenderBookingCanvasState extends State<SenderBookingCanvas> {
   }
 
   Future<void> _loadBackendDraft() async {
+    final restoreGeneration = _userInteractionGeneration;
+    final sessionGeneration = _bookingSessionGeneration;
     setState(() {
       _draftLoading = true;
       _syncStatus = 'Checking draft';
@@ -265,7 +280,9 @@ class _SenderBookingCanvasState extends State<SenderBookingCanvas> {
           final restored = SenderBookingDraft.fromBackendDraft(
             Map<String, dynamic>.from(data['draft'] as Map),
           );
-          _hydrateRestoredDraft(restored);
+          if (_canApplyDraftRestore(restoreGeneration, sessionGeneration)) {
+            _hydrateRestoredDraft(restored);
+          }
         }
       } on TimeoutException catch (error, stackTrace) {
         _reportUnexpectedRestoreFailure(
@@ -275,7 +292,10 @@ class _SenderBookingCanvasState extends State<SenderBookingCanvas> {
         );
         if (mounted) setState(() => _syncStatus = 'Saved offline');
       }
-      await _restoreQueuedLocalDraft().timeout(_localDraftRestoreTimeout);
+      await _restoreQueuedLocalDraft(
+        restoreGeneration: restoreGeneration,
+        sessionGeneration: sessionGeneration,
+      ).timeout(_localDraftRestoreTimeout);
       if (mounted) {
         setState(() {
           _draftLoading = false;
@@ -340,6 +360,13 @@ class _SenderBookingCanvasState extends State<SenderBookingCanvas> {
     }
   }
 
+  bool _canApplyDraftRestore(int restoreGeneration, int sessionGeneration) {
+    return mounted &&
+        !_draftAbandoned &&
+        restoreGeneration == _userInteractionGeneration &&
+        sessionGeneration == _bookingSessionGeneration;
+  }
+
   SenderBookingDraft _safeRestoredDraft(SenderBookingDraft restored) {
     final routeReady = restored.pickupLat != null &&
         restored.pickupLng != null &&
@@ -402,7 +429,7 @@ class _SenderBookingCanvasState extends State<SenderBookingCanvas> {
   }
 
   void _queueDraftSave(SenderBookingDraft next) {
-    if (_suppressDraftSave) return;
+    if (_suppressDraftSave || _draftAbandoned) return;
     final generation = ++_saveGeneration;
     _saveChain = _saveChain.then((_) => _saveDraft(next, generation));
   }
@@ -510,7 +537,10 @@ class _SenderBookingCanvasState extends State<SenderBookingCanvas> {
     await prefs.remove(key);
   }
 
-  Future<void> _restoreQueuedLocalDraft() async {
+  Future<void> _restoreQueuedLocalDraft({
+    int? restoreGeneration,
+    int? sessionGeneration,
+  }) async {
     final key = _localDraftKey;
     if (key == null) return;
     final prefs = await SharedPreferences.getInstance();
@@ -559,6 +589,11 @@ class _SenderBookingCanvasState extends State<SenderBookingCanvas> {
       }
       return;
     }
+    if (restoreGeneration != null &&
+        sessionGeneration != null &&
+        !_canApplyDraftRestore(restoreGeneration, sessionGeneration)) {
+      return;
+    }
     _hydrateRestoredDraft(restored);
     if (mounted) setState(() => _syncStatus = 'Sync needed');
     _queueDraftSave(restored);
@@ -599,6 +634,9 @@ class _SenderBookingCanvasState extends State<SenderBookingCanvas> {
 
   Future<void> _discardDraftAndExit() async {
     _suppressDraftSave = true;
+    _draftAbandoned = true;
+    _bookingSessionGeneration++;
+    _userInteractionGeneration++;
     _draftSaveDebounce?.cancel();
     if (!mounted) return;
     _hydrateDraft(const SenderBookingDraft());
@@ -606,7 +644,6 @@ class _SenderBookingCanvasState extends State<SenderBookingCanvas> {
     final popped = await Navigator.of(context).maybePop();
     if (!popped && mounted) {
       _suppressDraftSave = false;
-      _scheduleDraftSave(const SenderBookingDraft());
     }
   }
 
@@ -631,6 +668,10 @@ class _SenderBookingCanvasState extends State<SenderBookingCanvas> {
     if (_resettingBooking) return;
     _resettingBooking = true;
     _suppressDraftSave = true;
+    _draftAbandoned = true;
+    _bookingSessionGeneration++;
+    _userInteractionGeneration++;
+    _addressResolutionGeneration++;
     _draftSaveDebounce?.cancel();
     context.read<SendPackageBloc>().add(const ResetSenderBookingSession());
     await _deleteBackendDraft();
@@ -668,7 +709,7 @@ class _SenderBookingCanvasState extends State<SenderBookingCanvas> {
     });
     _suppressDraftSave = false;
     _resettingBooking = false;
-    _scheduleDraftSave(const SenderBookingDraft());
+    await Navigator.of(context).maybePop();
   }
 
   void _advance() {
@@ -745,6 +786,8 @@ class _SenderBookingCanvasState extends State<SenderBookingCanvas> {
   }
 
   Future<void> _resolveTypedAddressAndAdvance({required bool pickup}) async {
+    final requestGeneration = ++_addressResolutionGeneration;
+    final sessionGeneration = _bookingSessionGeneration;
     final controller = pickup ? _pickup : _dropoff;
     final typed = controller.text.trim();
     if (typed.isEmpty) {
@@ -781,6 +824,9 @@ class _SenderBookingCanvasState extends State<SenderBookingCanvas> {
         '${suggestion.placeId}',
         locale,
       );
+      if (!_isCurrentAddressResolution(requestGeneration, sessionGeneration)) {
+        return;
+      }
       final latitude = _nullableDouble(resolved.lat);
       final longitude = _nullableDouble(resolved.lng);
       if (!isSenderValidUkCoordinate(latitude, longitude)) {
@@ -855,6 +901,21 @@ class _SenderBookingCanvasState extends State<SenderBookingCanvas> {
         setState(() => _addressResolving = false);
       }
     }
+  }
+
+  bool _isCurrentAddressResolution(
+    int requestGeneration,
+    int sessionGeneration,
+  ) {
+    return mounted &&
+        !_draftAbandoned &&
+        requestGeneration == _addressResolutionGeneration &&
+        sessionGeneration == _bookingSessionGeneration;
+  }
+
+  void _markUserEditedBooking() {
+    _draftAbandoned = false;
+    _userInteractionGeneration++;
   }
 
   void _requestBackendQuote(SenderBookingDraft draft) {
@@ -1046,6 +1107,7 @@ class _SenderBookingCanvasState extends State<SenderBookingCanvas> {
     return BlocBuilder<SendPackageBloc, SendPackageState>(
       builder: (context, engine) {
         final operationalStep = _stepForEngine(engine);
+        _reconcileResolvedAddressFromEngine(engine);
         if (operationalStep != null && operationalStep != _draft.step) {
           WidgetsBinding.instance.addPostFrameCallback((_) {
             if (!mounted) return;
@@ -1125,12 +1187,23 @@ class _SenderBookingCanvasState extends State<SenderBookingCanvas> {
                         parcelPhotoMessage: _parcelPhotoMessage,
                         photoEstimatedWeightKg: _photoEstimatedWeightKg,
                         searchingPickup: _searchingPickup,
-                        onSearchingPickupChanged: (value) =>
-                            setState(() => _searchingPickup = value),
-                        onParcelChanged: _onParcelChanged,
-                        onPhotoTap: _pickParcelPhoto,
+                        onSearchingPickupChanged: (value) => setState(() {
+                          _markUserEditedBooking();
+                          _searchingPickup = value;
+                        }),
+                        onParcelChanged: () {
+                          _markUserEditedBooking();
+                          _onParcelChanged();
+                        },
+                        onPhotoTap: () {
+                          _markUserEditedBooking();
+                          _pickParcelPhoto();
+                        },
                         onPhotoRemove: _removeParcelPhoto,
-                        onDraft: _setDraft,
+                        onDraft: (next) {
+                          _markUserEditedBooking();
+                          _setDraft(next);
+                        },
                         onContinue: _advance,
                         addressResolutionMessage: _addressResolutionMessage,
                         addressResolving: _addressResolving,
@@ -1158,6 +1231,58 @@ class _SenderBookingCanvasState extends State<SenderBookingCanvas> {
       case DeliveryStatus.inital:
       case DeliveryStatus.addressesSelected:
         return null;
+    }
+  }
+
+  void _reconcileResolvedAddressFromEngine(SendPackageState engine) {
+    final pickupLat = engine.pickupCoordinate?.lat;
+    final pickupLng = engine.pickupCoordinate?.lng;
+    final pickupAddress = (engine.pickupLocation ?? '').trim();
+    final pickupPlaceId = (engine.pickupPlaceId ?? '').trim();
+    if (_draft.step == SenderBookingStep.pickup &&
+        pickupAddress.isNotEmpty &&
+        isSenderValidUkCoordinate(pickupLat, pickupLng) &&
+        (_draft.pickupAddress != pickupAddress ||
+            _draft.pickupLat != pickupLat ||
+            _draft.pickupLng != pickupLng)) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted || _draftAbandoned) return;
+        _pickup.text = pickupAddress;
+        _setDraft(
+          _draft.copyWith(
+            pickupAddress: pickupAddress,
+            pickupPlaceId: pickupPlaceId,
+            pickupLat: pickupLat,
+            pickupLng: pickupLng,
+          ),
+        );
+        setState(() => _addressResolutionMessage = null);
+      });
+    }
+
+    final dropoffLat = engine.desinationCoordinate?.lat;
+    final dropoffLng = engine.desinationCoordinate?.lng;
+    final dropoffAddress = (engine.destinationLocation ?? '').trim();
+    final dropoffPlaceId = (engine.destinationPlaceId ?? '').trim();
+    if (_draft.step == SenderBookingStep.dropoff &&
+        dropoffAddress.isNotEmpty &&
+        isSenderValidUkCoordinate(dropoffLat, dropoffLng) &&
+        (_draft.dropoffAddress != dropoffAddress ||
+            _draft.dropoffLat != dropoffLat ||
+            _draft.dropoffLng != dropoffLng)) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted || _draftAbandoned) return;
+        _dropoff.text = dropoffAddress;
+        _setDraft(
+          _draft.copyWith(
+            dropoffAddress: dropoffAddress,
+            dropoffPlaceId: dropoffPlaceId,
+            dropoffLat: dropoffLat,
+            dropoffLng: dropoffLng,
+          ),
+        );
+        setState(() => _addressResolutionMessage = null);
+      });
     }
   }
 }
@@ -1298,9 +1423,13 @@ class _TopBar extends StatelessWidget {
 ({double min, double initial, double max}) senderBookingSheetExtents(
   SenderBookingStep step,
   bool keyboardOpen,
+  bool needsExpandedContent,
 ) {
   if (keyboardOpen) {
     return (min: .58, initial: .78, max: .94);
+  }
+  if (needsExpandedContent) {
+    return (min: .50, initial: .86, max: .96);
   }
   return switch (step) {
     SenderBookingStep.pickup || SenderBookingStep.dropoff => (
@@ -1399,9 +1528,26 @@ class _BookingPanel extends StatelessWidget {
   Widget build(BuildContext context) {
     final bottomInset = MediaQuery.paddingOf(context).bottom;
     final keyboardOpen = MediaQuery.viewInsetsOf(context).bottom > 0;
-    final extents = senderBookingSheetExtents(draft.step, keyboardOpen);
+    final needsExpandedContent = draft.step == SenderBookingStep.parcel &&
+            (parcelPhoto != null ||
+                parcelPhotoBusy ||
+                parcelPhotoMessage != null ||
+                engine.isIrisResolving ||
+                _irisMatchesParcel(
+                  engine.canonicalIrisResult,
+                  item.text,
+                  description.text,
+                )) ||
+        draft.step == SenderBookingStep.iris;
+    final extents = senderBookingSheetExtents(
+      draft.step,
+      keyboardOpen,
+      needsExpandedContent,
+    );
     return DraggableScrollableSheet(
-      key: ValueKey('sender-booking-sheet-${draft.step.name}'),
+      key: ValueKey(
+        'sender-booking-sheet-${draft.step.name}-$keyboardOpen-$needsExpandedContent',
+      ),
       expand: false,
       snap: true,
       minChildSize: extents.min,

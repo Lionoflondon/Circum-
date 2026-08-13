@@ -520,14 +520,14 @@ class FirebaseSenderMobileProfileRepository
       );
     }
     final extension = photo.contentType == 'image/png' ? 'png' : 'jpg';
-    final reference = storage.ref(
-      'users/${user.uid}/profile/avatar.$extension',
-    );
+    final path =
+        'users/${user.uid}/profile/avatar_${DateTime.now().millisecondsSinceEpoch}.$extension';
+    final reference = storage.ref(path);
     await reference.putData(
       photo.bytes,
       SettableMetadata(
         contentType: photo.contentType,
-        cacheControl: 'public,max-age=3600',
+        cacheControl: 'private,max-age=60',
         customMetadata: {
           'ownerUid': user.uid,
           'source': 'sender_mobile_profile',
@@ -536,7 +536,9 @@ class FirebaseSenderMobileProfileRepository
     );
     final downloadUrl = await reference.getDownloadURL();
     await functions.httpsCallable('updateSenderProfilePhoto').call({
+      'photoPath': path,
       'photoURL': downloadUrl,
+      'contentType': photo.contentType,
     }).timeout(SenderProfileAuthority.senderAccountEnsureTimeout);
     await user.updatePhotoURL(downloadUrl);
     final current = await load();

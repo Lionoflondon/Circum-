@@ -1,7 +1,9 @@
 /* eslint-disable max-len, require-jsdoc */
 const functions = require("firebase-functions/v1");
 const {getFirestore, FieldValue} = require("firebase-admin/firestore");
+const {getStorage} = require("firebase-admin/storage");
 const crypto = require("crypto");
+const {requireAppCheck} = require("./callable-guard");
 
 function requireSender(context) {
   if (!context.auth) {
@@ -310,16 +312,40 @@ exports.recordIrisLearningOutlier = functions.https.onCall(async (data, context)
 });
 
 exports.updateSenderProfilePhoto = functions.https.onCall(async (data, context) => {
+  requireAppCheck(context);
   const uid = requireSender(context);
+  const photoPath = cleanText(data.photoPath || data.profilePhotoPath, 512);
+  if (!photoPath || !photoPath.match(new RegExp(`^users/${uid}/profile/avatar_[0-9]+\\.(jpg|png)$`))) {
+    throw new functions.https.HttpsError("invalid-argument", "Use the authorized Sender profile photo upload path.");
+  }
   const photoURL = cleanText(data.photoURL, 2048);
-  if (!photoURL) {
-    throw new functions.https.HttpsError("invalid-argument", "Profile photo URL is required.");
+  const encodedPath = encodeURIComponent(photoPath);
+  if (!photoURL || !photoURL.includes(encodedPath)) {
+    throw new functions.https.HttpsError("invalid-argument", "Profile photo URL must match the authorized upload.");
+  }
+  const file = getStorage().bucket().file(photoPath);
+  const [exists] = await file.exists();
+  if (!exists) {
+    throw new functions.https.HttpsError("not-found", "Upload the profile photo before saving it.");
+  }
+  const [metadata] = await file.getMetadata();
+  const contentType = String(metadata.contentType || "");
+  const size = Number(metadata.size || 0);
+  if (!contentType.match(/^image\/(jpeg|jpg|png)$/) || !Number.isFinite(size) || size <= 0 || size > 8 * 1024 * 1024) {
+    throw new functions.https.HttpsError("invalid-argument", "Choose a JPG or PNG profile photo smaller than 8 MB.");
   }
   const db = getFirestore();
   const ref = db.collection("users").doc(uid);
   senderProfileLog("update_profile_photo_begin", {uid, path: ref.path});
   await ref.set({
+    profilePhotoPath: photoPath,
     photoURL,
+    profilePhotoMetadata: {
+      contentType,
+      size,
+      source: "sender_mobile_profile",
+    },
+    profilePhotoUpdatedAt: FieldValue.serverTimestamp(),
     accountType: "sender",
     updatedAt: FieldValue.serverTimestamp(),
   }, {merge: true});
@@ -330,7 +356,7 @@ exports.updateSenderProfilePhoto = functions.https.onCall(async (data, context) 
     createdAt: FieldValue.serverTimestamp(),
   });
   senderProfileLog("update_profile_photo_complete", {uid, path: ref.path});
-  return {ok: true, photoURL};
+  return {ok: true, photoURL, photoPath};
 });
 
 exports.updateSenderPushToken = functions.https.onCall(async (data, context) => {

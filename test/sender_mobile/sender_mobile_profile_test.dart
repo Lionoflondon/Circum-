@@ -322,6 +322,22 @@ void main() {
     );
   });
 
+  test('Sender profile photo uses canonical Storage path association', () {
+    final client = File('lib/app/sender_mobile/sender_mobile_profile.dart')
+        .readAsStringSync();
+    final backend =
+        File('server/functions/sender-account.js').readAsStringSync();
+
+    expect(client, contains("httpsCallable('updateSenderProfilePhoto')"));
+    expect(client, contains("'photoPath': path"));
+    expect(client, contains("'photoURL': downloadUrl"));
+    expect(client, contains("cacheControl: 'private,max-age=60'"));
+    expect(backend, contains('requireAppCheck(context);'));
+    expect(backend, contains('getStorage().bucket().file(photoPath)'));
+    expect(backend, contains('photoURL.includes(encodedPath)'));
+    expect(backend, isNot(contains('Profile photo URL is required.')));
+  });
+
   testWidgets('Sender profile survives 100 open and dispose cycles',
       (tester) async {
     final repository = _FakeProfileRepository(

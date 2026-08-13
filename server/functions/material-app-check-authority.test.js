@@ -95,6 +95,10 @@ test("Sender saved-card and referral callables require App Check", () => {
   ].forEach((name) => assertCallableRequiresAppCheck("referrals.js", name));
 });
 
+test("Sender profile photo association requires App Check", () => {
+  assertCallableRequiresAppCheck("sender-account.js", "updateSenderProfilePhoto");
+});
+
 test("Admin delivery intervention callables require App Check", () => {
   assertCallableRequiresAppCheck("admin-governance.js", "adminGovernanceAction");
   [
