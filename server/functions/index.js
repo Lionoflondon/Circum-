@@ -102,6 +102,7 @@ function allowCors(req, res) {
 exports.sendPackage = sendPackage;
 exports.getAvaliableRequests = getAvaliableRequests;
 exports.getAvailableRequests = getAvaliableRequests;
+exports.getNearbyRequests = getAvaliableRequests;
 exports.acceptRideRequests = acceptRideRequests;
 exports.sendMessage = sendMessage;
 exports.sendCircumMessage = communicationEngine.sendCircumMessage;

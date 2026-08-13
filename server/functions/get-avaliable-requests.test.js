@@ -25,6 +25,11 @@ test("Rider nearby request lookup is bounded and locality-first", () => {
   assert.doesNotMatch(source, /where\("status", "==", "requested"\)[\s\S]{0,120}\.get\(\);[\s\S]{0,120}requestsSnapshot\.docs/);
 });
 
+test("canonical nearby request callable is exported", () => {
+  const index = require("node:fs").readFileSync(require("node:path").join(__dirname, "index.js"), "utf8");
+  assert.match(index, /exports\.getNearbyRequests = getAvaliableRequests/);
+});
+
 test("Rider offer projection is decision-grade and excludes private addresses", () => {
   const projection = riderOfferProjection("delivery-1", {
     requestId: "request-1",
