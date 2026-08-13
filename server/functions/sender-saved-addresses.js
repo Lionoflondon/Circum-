@@ -3,6 +3,7 @@
 
 const functions = require("firebase-functions/v1");
 const {getFirestore, FieldValue} = require("firebase-admin/firestore");
+const {resolveCanonicalAddress} = require("./canonical-address-authority");
 
 const REQUIRED_FIELDS = ["addressLine1", "city", "postcode", "country"];
 const ADDRESS_FIELDS = [
@@ -72,7 +73,7 @@ function legacySavedAddressEntry(docId, data) {
   };
 }
 
-exports.saveSenderSavedAddress = functions.https.onCall(async (data, context) => {
+exports.saveSenderSavedAddress = functions.runWith({enforceAppCheck: true}).https.onCall(async (data, context) => {
   const userId = requireSender(context);
   const db = getFirestore();
   const collection = db.collection("users").doc(userId).collection("savedAddresses");
@@ -86,7 +87,15 @@ exports.saveSenderSavedAddress = functions.https.onCall(async (data, context) =>
   if (label === "other" && !customLabel) {
     throw new functions.https.HttpsError("invalid-argument", "Add a custom label.");
   }
-  const address = canonicalAddress(data);
+  let address;
+  try {
+    address = await resolveCanonicalAddress(data && data.address, "saved address");
+  } catch (error) {
+    throw new functions.https.HttpsError(
+        "failed-precondition",
+        "Choose a verified UK address from search results.",
+    );
+  }
   const defaultPickup = data && data.isDefaultPickup === true;
   const defaultDropoff = data && data.isDefaultDropoff === true;
   let saved;
@@ -135,7 +144,7 @@ exports.saveSenderSavedAddress = functions.https.onCall(async (data, context) =>
   return {addressId: reference.id, version: saved.version};
 });
 
-exports.deleteSenderSavedAddress = functions.https.onCall(async (data, context) => {
+exports.deleteSenderSavedAddress = functions.runWith({enforceAppCheck: true}).https.onCall(async (data, context) => {
   const userId = requireSender(context);
   const addressId = clean(data && data.addressId);
   if (!addressId) throw new functions.https.HttpsError("invalid-argument", "Address id is required.");
