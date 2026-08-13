@@ -10,10 +10,34 @@ const ALLOWED_STAGES = new Set(["pickup", "handover", "discrepancy"]);
 const ALLOWED_TYPES = new Set(["image/jpeg", "image/png", "image/webp"]);
 const MAX_BYTES = 8 * 1024 * 1024;
 const text = (value) => `${value || ""}`.trim();
+const EVIDENCE_ACCESS_TTL_MINUTES = 10;
 
 function requireFirstParty(context) {
   if (!context.auth) throw new functions.https.HttpsError("unauthenticated", "Rider must be signed in.");
   if (!context.app) throw new functions.https.HttpsError("failed-precondition", "Security verification is required.");
+}
+
+function hasAdminClaim(token = {}) {
+  const role = text(token.adminRole || token.role).toLowerCase();
+  const roles = Array.isArray(token.roles) ? token.roles.map((item) => text(item).toLowerCase()) : [];
+  return token.admin === true ||
+    token.superAdmin === true ||
+    ["super_admin", "operations_admin", "support_agent", "driver_manager"].includes(role) ||
+    roles.some((item) => ["super_admin", "operations_admin", "support_agent", "driver_manager"].includes(item));
+}
+
+function evidenceAudienceAllowed({evidence = {}, delivery = {}, uid = "", token = {}}) {
+  if (!uid) return false;
+  if (hasAdminClaim(token)) return true;
+  if (text(evidence.riderId) === uid) return true;
+  const senderId = text(delivery.senderId || delivery.userId || delivery.customerId);
+  const stage = text(evidence.stage).toLowerCase();
+  const purpose = text(evidence.purpose).toLowerCase();
+  const senderVisible = stage === "handover" ||
+    purpose === "delivery_handover" ||
+    evidence.senderVisible === true ||
+    evidence.visibility === "sender";
+  return senderVisible && senderId === uid;
 }
 
 function decodeImage(data) {
@@ -93,4 +117,50 @@ exports.submitDeliveryEvidence = functions.https.onCall(async (data, context) =>
   return {evidenceId, stage, status: "verified", idempotent: false};
 });
 
-module.exports._private = {decodeImage, ALLOWED_STAGES, ALLOWED_TYPES, MAX_BYTES};
+exports.getDeliveryEvidenceAccess = functions.https.onCall(async (data, context) => {
+  requireFirstParty(context);
+  const evidenceId = text(data && data.evidenceId);
+  if (!evidenceId) throw new functions.https.HttpsError("invalid-argument", "Evidence reference is required.");
+  const db = getFirestore();
+  const evidenceSnapshot = await db.collection("deliveryEvidence").doc(evidenceId).get();
+  if (!evidenceSnapshot.exists) throw new functions.https.HttpsError("not-found", "Delivery evidence was not found.");
+  const evidence = evidenceSnapshot.data() || {};
+  if (evidence.immutable !== true || evidence.status !== "verified" || !text(evidence.storagePath)) {
+    throw new functions.https.HttpsError("failed-precondition", "Delivery evidence is not available.");
+  }
+  const deliveryId = text(evidence.deliveryId);
+  const deliverySnapshot = deliveryId ? await db.collection("deliveryRequests").doc(deliveryId).get() : null;
+  const delivery = deliverySnapshot && deliverySnapshot.exists ? deliverySnapshot.data() || {} : {};
+  if (!evidenceAudienceAllowed({
+    evidence,
+    delivery,
+    uid: context.auth.uid,
+    token: context.auth.token || {},
+  })) {
+    throw new functions.https.HttpsError("permission-denied", "You cannot view this delivery evidence.");
+  }
+  const file = getStorage().bucket().file(text(evidence.storagePath));
+  const expires = Date.now() + EVIDENCE_ACCESS_TTL_MINUTES * 60 * 1000;
+  const [url] = await file.getSignedUrl({
+    action: "read",
+    expires,
+  });
+  return {
+    evidenceId,
+    deliveryId,
+    stage: text(evidence.stage),
+    contentType: text(evidence.contentType),
+    url,
+    expiresAt: expires,
+  };
+});
+
+module.exports._private = {
+  decodeImage,
+  ALLOWED_STAGES,
+  ALLOWED_TYPES,
+  MAX_BYTES,
+  hasAdminClaim,
+  evidenceAudienceAllowed,
+  EVIDENCE_ACCESS_TTL_MINUTES,
+};

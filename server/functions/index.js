@@ -148,6 +148,7 @@ exports.cancelDelivery = deliveryPolicy.requestSenderCancellation;
 exports.updateDeliveryTrackingStatus =
   deliveryTracking.updateDeliveryTrackingStatus;
 exports.submitDeliveryEvidence = deliveryEvidence.submitDeliveryEvidence;
+exports.getDeliveryEvidenceAccess = deliveryEvidence.getDeliveryEvidenceAccess;
 exports.updateDeliveryLiveLocation =
   deliveryTracking.updateDeliveryLiveLocation;
 exports.submitDeliveryRating = ratingsTipping.submitDeliveryRating;
