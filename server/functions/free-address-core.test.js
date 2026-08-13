@@ -2,12 +2,15 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
 const {
+  googleGeocodeAddressUrl,
   googlePlaceDetailsUrl,
   googlePlacesAutocompleteUrl,
   nominatimSearchUrl,
+  premiseHint,
   resolveUkAddressPlace,
   sanitizeQuery,
   searchFreeUkAddresses,
+  searchGooglePremiseUkAddresses,
 } = require("./free-address-core");
 
 test("sanitizes address queries", () => {
@@ -31,11 +34,38 @@ test("builds a paid Google Places UK autocomplete URL", () => {
   assert.match(url, /key=test-key/);
 });
 
+test("extracts premise and flat details without stripping house numbers", () => {
+  assert.deepEqual(premiseHint("29 St Fillans Road SE6 1DQ"), {
+    unit: "",
+    houseNumber: "29",
+  });
+  assert.deepEqual(premiseHint("29, ST FILLANS ROAD SE6 1DQ"), {
+    unit: "",
+    houseNumber: "29",
+  });
+  assert.deepEqual(premiseHint("Flat 4, 29 St Fillans Road SE6 1DQ"), {
+    unit: "Flat 4",
+    houseNumber: "29",
+  });
+  assert.deepEqual(premiseHint("St Fillans Road SE6 1DQ"), {
+    unit: "",
+    houseNumber: "",
+  });
+});
+
 test("uses Google Places autocomplete when a paid key is configured", async () => {
   const seenUrls = [];
   const fetchImpl = async (url, options) => {
     seenUrls.push(url);
     assert.equal(options.signal instanceof AbortSignal, true);
+    if (url.includes("/geocode/")) {
+      return {
+        ok: true,
+        async json() {
+          return {status: "ZERO_RESULTS", results: []};
+        },
+      };
+    }
     assert.match(url, /maps\.googleapis\.com\/maps\/api\/place\/autocomplete\/json/);
     return {
       ok: true,
@@ -62,7 +92,128 @@ test("uses Google Places autocomplete when a paid key is configured", async () =
   assert.equal(result.results[0].provider, "google_places");
   assert.equal(result.results[0].placeId, "google-place-1");
   assert.equal(result.results[0].lat, null);
-  assert.equal(seenUrls.length, 1);
+  assert.equal(seenUrls.length, 2);
+  assert.match(seenUrls[0], /maps\.googleapis\.com\/maps\/api\/place\/autocomplete\/json/);
+  assert.match(seenUrls[1], /maps\.googleapis\.com\/maps\/api\/geocode\/json/);
+});
+
+test("numbered Google searches prefer authoritative premise geocode results", async () => {
+  const seenUrls = [];
+  const fetchImpl = async (url) => {
+    seenUrls.push(url);
+    if (url.includes("/place/autocomplete/")) {
+      return {
+        ok: true,
+        async json() {
+          return {
+            status: "OK",
+            predictions: [{
+              place_id: "street-level",
+              description: "St Fillans Road, Greater London, England, SE6 1DQ, UK",
+              structured_formatting: {main_text: "St Fillans Road"},
+            }],
+          };
+        },
+      };
+    }
+    assert.match(url, /maps\.googleapis\.com\/maps\/api\/geocode\/json/);
+    return {
+      ok: true,
+      async json() {
+        return {
+          status: "OK",
+          results: [{
+            place_id: "premise-29",
+            formatted_address: "29 St Fillans Road, London SE6 1DQ, UK",
+            geometry: {location: {lat: 51.4401, lng: -0.0258}},
+            address_components: [
+              {long_name: "29", types: ["street_number"]},
+              {long_name: "St Fillans Road", types: ["route"]},
+              {long_name: "London", types: ["postal_town"]},
+              {long_name: "Greater London", types: ["administrative_area_level_2"]},
+              {long_name: "SE6 1DQ", types: ["postal_code"]},
+              {long_name: "United Kingdom", types: ["country"]},
+            ],
+          }],
+        };
+      },
+    };
+  };
+  const result = await searchFreeUkAddresses({
+    query: "29 St Fillans Road SE6 1DQ",
+    fetchImpl,
+    googlePlacesApiKey: "paid-google-key",
+  });
+  assert.equal(result.status, "OK");
+  assert.equal(result.results[0].placeId, "premise-29");
+  assert.equal(result.results[0].displayAddress, "29 St Fillans Road, London, Greater London, SE6 1DQ, United Kingdom");
+  assert.equal(result.results[0].components.buildingNumber, "29");
+  assert.equal(result.results[0].components.addressLine1, "29 St Fillans Road");
+  assert.equal(result.results[1].placeId, "street-level");
+  assert.equal(seenUrls.some((url) => url.includes("/geocode/json")), true);
+});
+
+test("flat details are preserved only after the building premise is verified", async () => {
+  assert.match(googleGeocodeAddressUrl("Flat 4, 29 St Fillans Road SE6 1DQ", "test-key"), /geocode\/json/);
+  const fetchImpl = async () => ({
+    ok: true,
+    async json() {
+      return {
+        status: "OK",
+        results: [{
+          place_id: "premise-29",
+          formatted_address: "29 St Fillans Road, London SE6 1DQ, UK",
+          geometry: {location: {lat: 51.4401, lng: -0.0258}},
+          address_components: [
+            {long_name: "29", types: ["street_number"]},
+            {long_name: "St Fillans Road", types: ["route"]},
+            {long_name: "London", types: ["postal_town"]},
+            {long_name: "SE6 1DQ", types: ["postal_code"]},
+            {long_name: "United Kingdom", types: ["country"]},
+          ],
+        }],
+      };
+    },
+  });
+  const result = await searchGooglePremiseUkAddresses({
+    query: "Flat 4, 29 St Fillans Road SE6 1DQ",
+    fetchImpl,
+    googlePlacesApiKey: "paid-google-key",
+  });
+  assert.equal(result.status, "OK");
+  assert.equal(result.results[0].displayAddress, "Flat 4, 29 St Fillans Road, London, SE6 1DQ, United Kingdom");
+  assert.equal(result.results[0].components.apartment, "Flat 4");
+  assert.equal(result.results[0].components.buildingNumber, "29");
+});
+
+test("invalid numbered queries do not fabricate a premise", async () => {
+  const fetchImpl = async () => ({
+    ok: true,
+    async json() {
+      return {
+        status: "OK",
+        results: [{
+          place_id: "different-premise",
+          formatted_address: "31 St Fillans Road, London SE6 1DQ, UK",
+          geometry: {location: {lat: 51.4401, lng: -0.0258}},
+          address_components: [
+            {long_name: "31", types: ["street_number"]},
+            {long_name: "St Fillans Road", types: ["route"]},
+            {long_name: "London", types: ["postal_town"]},
+            {long_name: "SE6 1DQ", types: ["postal_code"]},
+            {long_name: "United Kingdom", types: ["country"]},
+          ],
+        }],
+      };
+    },
+  });
+  const result = await searchGooglePremiseUkAddresses({
+    query: "999 St Fillans Road SE6 1DQ",
+    fetchImpl,
+    googlePlacesApiKey: "paid-google-key",
+  });
+  assert.equal(result.status, "ZERO_RESULTS");
+  assert.deepEqual(result.results, []);
 });
 
 test("resolves a selected Google place into coordinates and address components", async () => {
