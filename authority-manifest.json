@@ -1,0 +1,323 @@
+{
+  "version": 1,
+  "principle": "User intent goes through Auth, App Check where client-callable, backend validation, canonical mutation/result, canonical event/projection, then client rendering. Clients may own presentation and temporary form state only.",
+  "allowedClientAuthority": [
+    "rendering",
+    "animation",
+    "temporary form state",
+    "keyboard and focus",
+    "map camera presentation",
+    "local accessibility state",
+    "non-authoritative previews",
+    "safe optimistic loading reconciled from backend"
+  ],
+  "domains": [
+    {
+      "domain": "Identity",
+      "backendOwner": "server/functions/rider-account.js, server/functions/sender-account.js, server/functions/business-payments.js",
+      "clientConsumers": ["Sender", "Rider", "Business", "Admin", "Website"],
+      "requiredCallables": ["ensureSenderAccount", "submitRiderApplication", "updateRiderApplicationSection", "createBusinessAccount", "closeCircumAccount"],
+      "requiredSecurity": ["Auth", "AppCheck", "FirestoreRules"],
+      "requiredTests": ["sender-account-authority.test.js", "admin-rider-authority.test.js", "firestore-financial-authority-rules.test.js"],
+      "clientAuthorityRemaining": "NONE",
+      "status": "canonical"
+    },
+    {
+      "domain": "Recognition",
+      "backendOwner": "server/functions/legends.js, server/functions/founder-rider-access.js",
+      "clientConsumers": ["Sender", "Rider", "Business", "Admin"],
+      "requiredCallables": ["grantRecognition", "revokeRecognition", "setFounderRiderAccess"],
+      "requiredExports": ["awardLegendOnCompletion", "awardFoundingRiderOnApproval", "awardFoundingRiderOnRiderApproval", "awardPatronOnBusinessInvoicePaid"],
+      "requiredSecurity": ["Auth", "AppCheck", "FirestoreRules"],
+      "requiredTests": ["legends-core.test.js", "founder-rider-access.test.js", "founder_recognition_contract_test.dart", "firestore-financial-authority-rules.test.js"],
+      "clientAuthorityRemaining": "NONE",
+      "status": "canonical"
+    },
+    {
+      "domain": "Address",
+      "backendOwner": "server/functions/free-address-search.js, server/functions/free-address-core.js, server/functions/sender-booking.js",
+      "clientConsumers": ["Sender", "Business", "Gifts", "Health+", "Website"],
+      "requiredCallables": ["searchFreeUkAddresses", "resolveUkAddressPlace", "saveSenderSavedAddress", "deleteSenderSavedAddress"],
+      "requiredSecurity": ["Auth", "AppCheck", "ProviderFallbackNoDowngrade"],
+      "requiredTests": ["cross-product-address-authority.test.js", "cross_product_address_authority_test.dart"],
+      "clientAuthorityRemaining": "NONE",
+      "status": "canonical"
+    },
+    {
+      "domain": "Route",
+      "backendOwner": "server/functions/sender-booking.js",
+      "clientConsumers": ["Sender", "Rider", "Business", "Gifts", "Health+", "Admin"],
+      "requiredCallables": ["createSenderBookingQuote"],
+      "requiredSecurity": ["Auth", "AppCheck"],
+      "requiredTests": ["core-payment-amount-security.test.js", "sender-tracking-state-core.test.js"],
+      "clientAuthorityRemaining": "NONE",
+      "status": "canonical"
+    },
+    {
+      "domain": "ETA",
+      "backendOwner": "server/functions/sender-tracking-state-core.js, server/functions/delivery-tracking.js",
+      "clientConsumers": ["Sender", "Rider", "Admin"],
+      "requiredCallables": ["updateDeliveryLiveLocation", "updateDeliveryTrackingStatus"],
+      "requiredSecurity": ["Auth", "AppCheck", "LifecycleAwareFreshness"],
+      "requiredTests": ["sender-tracking-state-core.test.js", "delivery-tracking.test.js", "sender_mobile/sender_tracking_state_web_test.dart"],
+      "clientAuthorityRemaining": "NONE",
+      "status": "canonical"
+    },
+    {
+      "domain": "IRIS",
+      "backendOwner": "server/functions/iris.js, server/functions/iris-core.js, server/functions/iris-photo-analysis.js",
+      "clientConsumers": ["Sender", "Rider", "Business", "Gifts", "Health+", "Admin"],
+      "requiredCallables": ["analyseIris", "analyseParcelPhotoForIris", "adjudicateIris", "confirmRiderIrisAssessment"],
+      "requiredSecurity": ["Auth", "AppCheck", "PlausibilityAdjudication"],
+      "requiredTests": ["iris-core.test.js", "iris-photo-analysis.test.js", "iris-security.test.js", "iris-production-core.test.js", "iris_weight_estimator_test.dart"],
+      "clientAuthorityRemaining": "NONE",
+      "status": "canonical"
+    },
+    {
+      "domain": "Vanguard",
+      "backendOwner": "server/functions/vanguard-protocol-core.js, server/functions/delivery-tracking.js",
+      "clientConsumers": ["Sender", "Rider", "Admin"],
+      "requiredCallables": ["recordDeliveryEvidence", "updateDeliveryTrackingStatus", "recordArrivalZoneCheck"],
+      "requiredSecurity": ["Auth", "AppCheck", "PrivatePinStorage", "FirestoreRules"],
+      "requiredTests": ["vanguard-protocol-core.test.js", "vanguard-pin-private-contract.test.js", "vanguard_protection_test.dart"],
+      "clientAuthorityRemaining": "NONE",
+      "status": "canonical"
+    },
+    {
+      "domain": "Quote",
+      "backendOwner": "server/functions/sender-booking.js",
+      "clientConsumers": ["Sender", "Business", "Gifts", "Health+"],
+      "requiredCallables": ["createSenderBookingQuote", "createBusinessInvoiceCheckout", "createGiftPayment", "createHealthPlusCheckoutSession"],
+      "requiredSecurity": ["Auth", "AppCheck", "ServerAmount"],
+      "requiredTests": ["core-payment-amount-security.test.js", "gifts-payment-core.test.js", "business-centre-contract.test.js", "health-plus-checkout-security.test.js"],
+      "clientAuthorityRemaining": "NONE",
+      "status": "canonical"
+    },
+    {
+      "domain": "Roth",
+      "backendOwner": "server/functions/roth-ledger.js, server/functions/roth-ledger-core.js",
+      "clientConsumers": ["Sender", "Business", "Gifts", "Health+", "Admin"],
+      "requiredCallables": ["getSenderRothBalance", "applyCheckoutRoth", "issueRothToWallets", "issueRothCredit", "debitRothCredit", "requestSenderWalletDebit", "requestSenderWalletRefund"],
+      "requiredSecurity": ["Auth", "AppCheck", "LedgerOnly", "Idempotency"],
+      "requiredTests": ["roth-ledger-core.test.js", "roth-financial-invariants.test.js", "automatic-roth-purchase.test.js"],
+      "clientAuthorityRemaining": "NONE",
+      "status": "canonical"
+    },
+    {
+      "domain": "Payment",
+      "backendOwner": "server/functions/sender-booking.js, server/functions/gifts-payment.js, server/functions/business-payments.js",
+      "clientConsumers": ["Sender", "Business", "Gifts", "Health+"],
+      "requiredCallables": ["createSenderPaymentSession", "createSenderPaidDelivery", "finalizeSenderWebCheckout", "createGiftPayment", "finalizeGiftPayment", "createBusinessInvoiceCheckout", "createHealthPlusBooking"],
+      "requiredExports": ["StripeWebhook", "handleStripeConnectWebhook"],
+      "requiredSecurity": ["Auth", "AppCheck", "StripeWebhookSignature", "Idempotency"],
+      "requiredTests": ["core-payment-amount-security.test.js", "gifts-payment-finalization-contract.test.js", "payments-cancellation-contract.test.js"],
+      "clientAuthorityRemaining": "NONE",
+      "status": "canonical"
+    },
+    {
+      "domain": "Delivery creation",
+      "backendOwner": "server/functions/sender-booking.js",
+      "clientConsumers": ["Sender", "Business", "Gifts", "Health+"],
+      "requiredCallables": ["createSenderPaidDelivery", "createHealthPlusBooking", "createGiftPayment"],
+      "requiredSecurity": ["Auth", "AppCheck", "PaymentPrecondition", "Idempotency"],
+      "requiredTests": ["core-payment-amount-security.test.js", "gifts-payment-finalization-contract.test.js"],
+      "clientAuthorityRemaining": "NONE",
+      "status": "canonical"
+    },
+    {
+      "domain": "Dispatch",
+      "backendOwner": "server/functions/get-avaliable-requests.js, server/functions/accept-ride-requests.js",
+      "clientConsumers": ["Rider", "Sender", "Admin"],
+      "requiredCallables": ["getAvailableRequests", "getAvaliableRequests", "acceptRideRequests"],
+      "requiredSecurity": ["Auth", "AppCheck", "AtomicAssignment", "VehicleEligibility"],
+      "requiredTests": ["iris-core.test.js", "delivery-tracking.test.js", "tracking_button_callable_contract_test.dart"],
+      "clientAuthorityRemaining": "NONE",
+      "status": "canonical"
+    },
+    {
+      "domain": "Tracking",
+      "backendOwner": "server/functions/delivery-tracking.js, server/functions/sender-tracking-state-core.js",
+      "clientConsumers": ["Sender", "Rider", "Admin"],
+      "requiredCallables": ["updateDeliveryLiveLocation", "updateDeliveryTrackingStatus"],
+      "requiredSecurity": ["Auth", "AppCheck", "AssignedRiderOnly", "FirestoreRules"],
+      "requiredTests": ["delivery-tracking.test.js", "firestore-live-tracking-rules.test.js", "sender-tracking-state-core.test.js"],
+      "clientAuthorityRemaining": "NONE",
+      "status": "canonical"
+    },
+    {
+      "domain": "Lifecycle",
+      "backendOwner": "server/functions/delivery-tracking.js, server/functions/delivery-policy.js",
+      "clientConsumers": ["Sender", "Rider", "Admin", "Activity"],
+      "requiredCallables": ["updateDeliveryTrackingStatus", "requestSenderCancellation", "previewSenderCancellation"],
+      "requiredSecurity": ["Auth", "AppCheck", "StateMachine", "Idempotency"],
+      "requiredTests": ["delivery-tracking.test.js", "sender-tracking-state-core.test.js", "tracking_button_callable_contract_test.dart"],
+      "clientAuthorityRemaining": "NONE",
+      "status": "canonical"
+    },
+    {
+      "domain": "Adjudication",
+      "backendOwner": "server/functions/delivery-adjustments.js",
+      "clientConsumers": ["Sender", "Rider", "Admin"],
+      "requiredCallables": ["reportLoadDiscrepancy", "reviewDeliveryAdjustment", "cancelAdjustedCollection", "createDeliveryAdjustmentPayment", "finalizeDeliveryAdjustmentPayment"],
+      "requiredSecurity": ["Auth", "AppCheck", "BackendRepricingOnly", "EvidenceRequired"],
+      "requiredTests": ["iris-adjudication-auth.test.js", "delivery-tracking.test.js"],
+      "clientAuthorityRemaining": "NONE",
+      "status": "canonical"
+    },
+    {
+      "domain": "Evidence",
+      "backendOwner": "server/functions/delivery-evidence.js",
+      "clientConsumers": ["Sender", "Rider", "Admin"],
+      "requiredCallables": ["recordDeliveryEvidence", "getDeliveryEvidenceAccess"],
+      "requiredSecurity": ["Auth", "AppCheck", "BackendDerivedStoragePath", "ShortLivedAccess", "StorageRules"],
+      "requiredTests": ["delivery-evidence.test.js", "tracking_button_callable_contract_test.dart"],
+      "clientAuthorityRemaining": "NONE",
+      "status": "canonical"
+    },
+    {
+      "domain": "Completion",
+      "backendOwner": "server/functions/delivery-tracking.js",
+      "clientConsumers": ["Sender", "Rider", "Admin", "Activity"],
+      "requiredCallables": ["updateDeliveryTrackingStatus", "recordDeliveryEvidence"],
+      "requiredSecurity": ["Auth", "AppCheck", "EvidenceId", "ExactlyOnceSettlement"],
+      "requiredTests": ["delivery-tracking.test.js", "delivery-evidence.test.js"],
+      "clientAuthorityRemaining": "NONE",
+      "status": "canonical"
+    },
+    {
+      "domain": "Earnings",
+      "backendOwner": "server/functions/delivery-tracking.js, server/functions/rider-connect.js",
+      "clientConsumers": ["Rider", "Admin"],
+      "requiredCallables": ["getRiderEarningsSummary", "adminReconcileRiderEarnings", "requestRiderWithdrawal", "adminReviewRiderWithdrawal", "createRiderTransferOrPayout"],
+      "requiredSecurity": ["Auth", "AppCheck", "LedgerOnly", "Idempotency"],
+      "requiredTests": ["delivery-tracking.test.js", "firestore-financial-authority-rules.test.js"],
+      "clientAuthorityRemaining": "NONE",
+      "status": "canonical"
+    },
+    {
+      "domain": "TP/rank",
+      "backendOwner": "server/functions/delivery-tracking.js",
+      "clientConsumers": ["Rider", "Sender", "Admin"],
+      "requiredCallables": ["updateDeliveryTrackingStatus", "adminReviewRider"],
+      "requiredSecurity": ["Auth", "AppCheck", "BackendRankThresholds", "FirestoreRules"],
+      "requiredTests": ["delivery-tracking.test.js", "admin-rider-authority.test.js", "founder_recognition_contract_test.dart"],
+      "clientAuthorityRemaining": "NONE",
+      "status": "canonical"
+    },
+    {
+      "domain": "Business",
+      "backendOwner": "server/functions/business-payments.js",
+      "clientConsumers": ["Business", "Admin"],
+      "requiredCallables": ["createBusinessAccount", "adminCreateBusinessInvoice", "createBusinessInvoiceCheckout", "createBusinessRothCheckout", "updateBusinessProfile", "inviteBusinessMember", "updateBusinessMemberRole", "updateBusinessMemberStatus", "removeBusinessMember"],
+      "requiredSecurity": ["Auth", "AppCheck", "RoleAuthorization", "InvoiceIdempotency"],
+      "requiredTests": ["admin-operations-authority-contract.test.js", "firestore-financial-authority-rules.test.js"],
+      "clientAuthorityRemaining": "NONE",
+      "status": "canonical"
+    },
+    {
+      "domain": "Gifts",
+      "backendOwner": "server/functions/gifts-payment.js, server/functions/gifts-payment-core.js",
+      "clientConsumers": ["Gifts", "Admin"],
+      "requiredCallables": ["createGiftPayment", "finalizeGiftPayment", "adminUpdateGiftWorkflow", "adminSaveGiftRequestEditor"],
+      "requiredExports": ["activateReferralOnGiftCompleted", "onGiftDeliveryCompleted"],
+      "requiredSecurity": ["Auth", "AppCheck", "BudgetHardCap", "PaymentIdempotency"],
+      "requiredTests": ["gifts-payment-core.test.js", "gifts-payment-finalization-contract.test.js"],
+      "clientAuthorityRemaining": "NONE",
+      "status": "canonical"
+    },
+    {
+      "domain": "Health+",
+      "backendOwner": "server/functions/health-plus.js",
+      "clientConsumers": ["Health+", "Admin"],
+      "requiredCallables": ["createHealthPlusCheckoutSession", "createHealthPlusBooking", "updateSenderHealthPlusBooking", "updateHealthPlusPickupStatus", "adminUpdateHealthPlusPickup", "adminUpdateHealthPlusSchedule", "adminUpdateHealthPlusProfile"],
+      "requiredExports": ["processHealthPlusReminders", "resetHealthPlusMonthlyUsage", "generateHealthPlusRecurringBookings"],
+      "requiredSecurity": ["Auth", "AppCheck", "CustodyLifecycle", "MinimumNecessaryEvidence"],
+      "requiredTests": ["material-app-check-authority.test.js", "firestore-financial-authority-rules.test.js"],
+      "clientAuthorityRemaining": "NONE",
+      "status": "canonical"
+    },
+    {
+      "domain": "Chats",
+      "backendOwner": "server/functions/communication-engine.js",
+      "clientConsumers": ["Sender", "Rider", "Admin", "Support"],
+      "requiredCallables": ["getOrCreateDeliveryConversation", "getOrCreateSupportConversation", "sendCircumMessage", "markConversationRead", "setConversationTyping", "reportCircumMessage"],
+      "requiredExports": ["onChatMessageCreated", "onSupportTicketCreated"],
+      "requiredSecurity": ["Auth", "AppCheck", "ParticipantAuthorization", "IdempotentMessageId"],
+      "requiredTests": ["communication-engine.test.js", "firestore-financial-authority-rules.test.js"],
+      "clientAuthorityRemaining": "NONE",
+      "status": "canonical"
+    },
+    {
+      "domain": "Notifications",
+      "backendOwner": "server/functions/platform-notifications.js",
+      "clientConsumers": ["Sender", "Rider", "Admin", "Business", "Gifts", "Health+"],
+      "requiredCallables": ["sendCircumAnnouncement", "retryNotificationDelivery", "updateSenderNotificationState", "updateRiderNotificationState"],
+      "requiredExports": ["onChatMessageCreated", "onSupportTicketCreated", "onDeliveryCreated", "onDeliveryUpdated"],
+      "requiredSecurity": ["Auth", "AppCheck", "RecipientPolicy", "Idempotency"],
+      "requiredTests": ["platform-notifications.test.js", "sender_mobile/sender_notification_routing_test.dart", "sender_mobile/sender_notifications_query_contract_test.dart"],
+      "clientAuthorityRemaining": "NONE",
+      "status": "canonical"
+    },
+    {
+      "domain": "Support",
+      "backendOwner": "server/functions/communication-engine.js, server/functions/admin-governance.js",
+      "clientConsumers": ["Sender", "Rider", "Business", "Gifts", "Health+", "Admin", "Website"],
+      "requiredCallables": ["getOrCreateSupportConversation", "submitWebsiteSupportRequest", "updateSupportConversationStatus", "adminGovernanceAction"],
+      "requiredSecurity": ["AuthOrPublicWebsitePolicy", "AppCheckWhereClientApp", "AuditLog"],
+      "requiredTests": ["communication-engine.test.js", "tracking_button_callable_contract_test.dart"],
+      "clientAuthorityRemaining": "NONE",
+      "status": "canonical"
+    },
+    {
+      "domain": "Activity",
+      "backendOwner": "server/functions/delivery-tracking.js, server/functions/platform-notifications.js",
+      "clientConsumers": ["Sender", "Rider", "Admin"],
+      "requiredCallables": ["getDeliveryEvidenceAccess"],
+      "requiredExports": ["onDeliveryCreated", "onDeliveryUpdated", "onMovementTimelineWrite"],
+      "requiredSecurity": ["Auth", "FirestoreRules", "EvidenceVisibilityPolicy"],
+      "requiredTests": ["sender_mobile/sender_activity_performance_contract_test.dart", "sender-tracking-state-core.test.js"],
+      "clientAuthorityRemaining": "NONE",
+      "status": "canonical"
+    },
+    {
+      "domain": "Receipts",
+      "backendOwner": "server/functions/sender-booking.js, server/functions/business-payments.js, server/functions/gifts-payment.js",
+      "clientConsumers": ["Sender", "Business", "Gifts", "Health+", "Admin"],
+      "requiredCallables": ["createSenderPaidDelivery", "createBusinessInvoiceCheckout", "finalizeGiftPayment"],
+      "requiredSecurity": ["Auth", "CanonicalPaymentRecord"],
+      "requiredTests": ["core-payment-amount-security.test.js", "gifts-payment-finalization-contract.test.js"],
+      "clientAuthorityRemaining": "NONE",
+      "status": "canonical"
+    },
+    {
+      "domain": "Cancellation",
+      "backendOwner": "server/functions/delivery-policy.js",
+      "clientConsumers": ["Sender", "Rider", "Admin"],
+      "requiredCallables": ["requestSenderCancellation", "previewSenderCancellation", "cancelDelivery", "adminUpdateDeliveryOperation"],
+      "requiredSecurity": ["Auth", "AppCheck", "TerminalState", "OfferInvalidation"],
+      "requiredTests": ["stale-delivery-authority.test.js", "sender-tracking-state-core.test.js"],
+      "clientAuthorityRemaining": "NONE",
+      "status": "canonical"
+    },
+    {
+      "domain": "Refunds",
+      "backendOwner": "server/functions/roth-ledger.js, server/functions/admin-operations-authority.js",
+      "clientConsumers": ["Sender", "Business", "Gifts", "Health+", "Admin"],
+      "requiredCallables": ["requestSenderWalletRefund", "adminUpdateFinanceWorkflow", "adminGovernanceAction"],
+      "requiredSecurity": ["Auth", "AppCheck", "LedgerOnly", "Idempotency"],
+      "requiredTests": ["roth-ledger-core.test.js", "admin-operations-authority-contract.test.js"],
+      "clientAuthorityRemaining": "NONE",
+      "status": "canonical"
+    },
+    {
+      "domain": "Admin",
+      "backendOwner": "server/functions/admin-operations-authority.js, server/functions/admin-rider-authority.js, server/functions/admin-governance.js",
+      "clientConsumers": ["Admin"],
+      "requiredCallables": ["adminGovernanceAction", "adminRecordAuditEntry", "adminReviewRider", "adminUpdateDeliveryOperation", "adminArchiveDelivery", "adminUpdateBusinessOperation", "adminUpdateGiftWorkflow", "adminUpdateHealthPlusPickup", "adminUpdateIrisReview"],
+      "requiredSecurity": ["Auth", "AppCheck", "AdminRole", "AuditLog"],
+      "requiredTests": ["admin-operations-authority-contract.test.js", "admin-rider-authority.test.js", "admin_operations_test.dart"],
+      "clientAuthorityRemaining": "NONE",
+      "status": "canonical"
+    }
+  ]
+}
