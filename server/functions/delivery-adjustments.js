@@ -4,6 +4,7 @@ const {getFirestore} = require("firebase-admin/firestore");
 const {getMessaging} = require("firebase-admin/messaging");
 const stripeConfig = functions.config().stripe || {};
 const {resolveStripeRuntimeConfig} = require("./stripe-config");
+const {requireAppCheck} = require("./callable-guard");
 let cachedStripe = null;
 
 function getStripeClient() {
@@ -52,6 +53,7 @@ async function bookingReference(db, requestId) {
 }
 
 exports.reportLoadDiscrepancy = functions.https.onCall(async (data, context) => {
+  requireAppCheck(context);
   if (!context.auth) throw new functions.https.HttpsError("unauthenticated", "Authentication required.");
   const {requestId, reason, evidencePhotos = [], observedWeightKg, observedDescription, observedVehicleType, riderNotes, dimensions} = data;
   if (!requestId || !DISCREPANCY_REASONS.includes(reason)) throw new functions.https.HttpsError("invalid-argument", "A booking and supported discrepancy reason are required.");
@@ -144,6 +146,7 @@ exports.reportLoadDiscrepancy = functions.https.onCall(async (data, context) => 
 });
 
 exports.reviewDeliveryAdjustment = functions.https.onCall(async (data, context) => {
+  requireAppCheck(context);
   if (!context.auth) throw new functions.https.HttpsError("unauthenticated", "Authentication required.");
   const token = context.auth.token || {};
   const role = `${token.role || token.adminRole || ""}`.toLowerCase();
@@ -213,6 +216,7 @@ exports.reviewDeliveryAdjustment = functions.https.onCall(async (data, context) 
 });
 
 exports.cancelAdjustedCollection = functions.https.onCall(async (data, context) => {
+  requireAppCheck(context);
   if (!context.auth) throw new functions.https.HttpsError("unauthenticated", "Authentication required.");
   const db = getFirestore();
   const adjustmentRef = db.collection("deliveryAdjustments").doc(data.adjustmentId);
@@ -228,6 +232,7 @@ exports.cancelAdjustedCollection = functions.https.onCall(async (data, context) 
 });
 
 exports.createDeliveryAdjustmentPayment = functions.https.onCall(async (data, context) => {
+  requireAppCheck(context);
   if (!context.auth) throw new functions.https.HttpsError("unauthenticated", "Authentication required.");
   const db = getFirestore();
   const adjustmentRef = db.collection("deliveryAdjustments").doc(data.adjustmentId);
@@ -247,6 +252,7 @@ exports.createDeliveryAdjustmentPayment = functions.https.onCall(async (data, co
 });
 
 exports.finalizeDeliveryAdjustmentPayment = functions.https.onCall(async (data, context) => {
+  requireAppCheck(context);
   if (!context.auth) throw new functions.https.HttpsError("unauthenticated", "Authentication required.");
   const db = getFirestore();
   const adjustmentRef = db.collection("deliveryAdjustments").doc(data.adjustmentId);

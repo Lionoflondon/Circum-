@@ -4,6 +4,7 @@ const {getFirestore, FieldValue} = require("firebase-admin/firestore");
 const {getMessaging} = require("firebase-admin/messaging");
 const {isDispatchable, riderCanViewDispatch, riderMatchesIris} = require("./iris-core");
 const {riderVehicleMatchesRequest} = require("./vehicle-dispatch");
+const {requireAppCheck} = require("./callable-guard");
 
 const cleanText = (value, fallback = "") => {
   if (value === undefined || value === null) return fallback;
@@ -135,6 +136,7 @@ const notifySender = async (deliveryRequest, payload) => {
 };
 
 const acceptRideRequests = functions.https.onCall(async (data, context) => {
+  requireAppCheck(context);
   if (!context.auth) {
     throw new functions.https.HttpsError("unauthenticated", "User must be authenticated to accept a delivery.");
   }

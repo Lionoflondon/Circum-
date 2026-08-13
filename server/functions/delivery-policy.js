@@ -3,6 +3,7 @@ const functions = require("firebase-functions/v1");
 const {getFirestore, FieldValue} = require("firebase-admin/firestore");
 const core = require("./delivery-policy-core");
 const communicationEngine = require("./communication-engine");
+const {requireAppCheck} = require("./callable-guard");
 
 function requireAuth(context) {
   if (!context.auth || !context.auth.uid) {
@@ -58,6 +59,7 @@ function policyPatch({state, event, evidenceId, extra = {}}) {
 }
 
 exports.requestSenderCancellation = functions.https.onCall(async (data, context) => {
+  requireAppCheck(context);
   const uid = requireAuth(context);
   const deliveryId = text(data.deliveryId || data.requestId);
   const cancellationReason = text(data.reason || data.cancellationReason) || "Sender requested cancellation";
@@ -168,6 +170,7 @@ exports.requestSenderCancellation = functions.https.onCall(async (data, context)
 });
 
 exports.previewSenderCancellation = functions.https.onCall(async (data, context) => {
+  requireAppCheck(context);
   const uid = requireAuth(context);
   const deliveryId = text(data.deliveryId || data.requestId);
   if (!deliveryId) throw new functions.https.HttpsError("invalid-argument", "deliveryId is required.");
@@ -207,6 +210,7 @@ exports.previewSenderCancellation = functions.https.onCall(async (data, context)
 });
 
 exports.recordRiderArrival = functions.https.onCall(async (data, context) => {
+  requireAppCheck(context);
   const uid = requireAuth(context);
   const deliveryId = text(data.deliveryId);
   if (!deliveryId) throw new functions.https.HttpsError("invalid-argument", "deliveryId is required.");
@@ -267,6 +271,7 @@ exports.recordRiderArrival = functions.https.onCall(async (data, context) => {
 });
 
 exports.recordArrivalZoneCheck = functions.https.onCall(async (data, context) => {
+  requireAppCheck(context);
   const uid = requireAuth(context);
   const deliveryId = text(data.deliveryId);
   if (!deliveryId) throw new functions.https.HttpsError("invalid-argument", "deliveryId is required.");
@@ -307,6 +312,7 @@ exports.recordArrivalZoneCheck = functions.https.onCall(async (data, context) =>
 });
 
 exports.recordCustomerArrivalResponse = functions.https.onCall(async (data, context) => {
+  requireAppCheck(context);
   const uid = requireAuth(context);
   const deliveryId = text(data.deliveryId);
   if (!deliveryId) throw new functions.https.HttpsError("invalid-argument", "deliveryId is required.");
@@ -328,6 +334,7 @@ exports.recordCustomerArrivalResponse = functions.https.onCall(async (data, cont
 });
 
 exports.reportWaitingContext = functions.https.onCall(async (data, context) => {
+  requireAppCheck(context);
   const uid = requireAuth(context);
   const deliveryId = text(data.deliveryId);
   const waitingType = text(data.type);
@@ -364,6 +371,7 @@ exports.reportWaitingContext = functions.https.onCall(async (data, context) => {
 });
 
 exports.markRiderNoShow = functions.https.onCall(async (data, context) => {
+  requireAppCheck(context);
   const uid = requireAuth(context);
   const deliveryId = text(data.deliveryId);
   const idempotencyKey = text(data.idempotencyKey || `${deliveryId}:no_show:${uid}`);

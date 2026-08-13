@@ -10,6 +10,7 @@ const vanguardProtocol = require("./vanguard-protocol-core");
 const {classifyIris} = require("./iris-core");
 const {verifiedPhotoAnalysis} = require("./iris-photo-analysis");
 const {dispatchDeliveryRequest} = require("./send-package");
+const {requireAppCheck} = require("./callable-guard");
 
 const BASE_FARE_GBP = 5;
 const ADDITIONAL_FARE_PER_MILE_GBP = 1.5;
@@ -895,6 +896,7 @@ exports.getSenderRothBalance = functions.https.onCall(async (_, context) => {
 });
 
 exports.createSenderBookingQuote = functions.https.onCall(async (data, context) => {
+  requireAppCheck(context);
   const sender = requireSender(context);
   const db = getFirestore();
   const businessContext = await verifiedBusinessContext(db, sender, data && data.businessContext);
@@ -942,6 +944,7 @@ exports.createSenderBookingQuote = functions.https.onCall(async (data, context) 
 });
 
 exports.createSenderPaymentSession = (stripe) => functions.https.onCall(async (data, context) => {
+  requireAppCheck(context);
   const sender = requireSender(context);
   const quoteId = text(data.quoteId);
   if (!quoteId) {
@@ -1970,6 +1973,7 @@ async function createPaidDeliveryFromSession(stripe, sender, data) {
 }
 
 exports.createSenderPaidDelivery = (stripe) => functions.https.onCall(async (data, context) => {
+  requireAppCheck(context);
   try {
     return await createPaidDeliveryFromSession(stripe, requireSender(context), data || {});
   } catch (error) {
@@ -2043,6 +2047,7 @@ async function finalizeSenderCheckoutSession(stripe, sessionData, eventId = "") 
 }
 
 exports.finalizeSenderWebCheckout = (stripe) => functions.https.onCall(async (data, context) => {
+  requireAppCheck(context);
   const sender = requireSender(context);
   const sessionId = text(data.checkoutSessionId || data.sessionId);
   const paymentSessionId = text(data.paymentSessionId);

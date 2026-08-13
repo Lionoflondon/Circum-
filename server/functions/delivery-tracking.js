@@ -4,6 +4,7 @@
 const functions = require("firebase-functions/v1");
 const {getFirestore, FieldValue, GeoPoint} = require("firebase-admin/firestore");
 const tracking = require("./sender-tracking-state-core");
+const {requireAppCheck} = require("./callable-guard");
 
 function text(value) {
   return `${value || ""}`.trim();
@@ -328,6 +329,7 @@ function patchForTransition({action, nextStatus, riderId}) {
 }
 
 exports.updateDeliveryTrackingStatus = functions.https.onCall(async (data, context) => {
+  requireAppCheck(context);
   if (!context.auth) {
     throw new functions.https.HttpsError("unauthenticated", "Rider must be signed in.");
   }
@@ -518,6 +520,7 @@ exports.updateDeliveryTrackingStatus = functions.https.onCall(async (data, conte
 });
 
 exports.updateDeliveryLiveLocation = functions.https.onCall(async (data, context) => {
+  requireAppCheck(context);
   if (!context.auth) {
     throw new functions.https.HttpsError("unauthenticated", "Rider must be signed in.");
   }
