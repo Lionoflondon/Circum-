@@ -237,6 +237,16 @@ class AddressEngine {
     );
   }
 
+  static bool hasResolvedUkCoordinates(Suggestion? suggestion) {
+    final lat = suggestion?.lat;
+    final lng = suggestion?.lng;
+    if (lat == null || lng == null || !lat.isFinite || !lng.isFinite) {
+      return false;
+    }
+    if (lat == 0 || lng == 0) return false;
+    return lat >= 49.8 && lat <= 60.9 && lng >= -8.7 && lng <= 1.9;
+  }
+
   static Suggestion suggestionFromBackend(Map<String, dynamic> map) {
     final components = map['components'] is Map
         ? Map<String, dynamic>.from(map['components'] as Map)

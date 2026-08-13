@@ -47,10 +47,7 @@ class _GiftDeliveryViewState extends State<GiftDeliveryView> {
   bool _flexibleDelivery = false;
 
   bool get _canContinue =>
-      AddressEngine.hasRequiredFields(
-        suggestion: _selectedAddressSuggestion,
-        manualAddress: _deliveryAddressController.text,
-      ) &&
+      AddressEngine.hasResolvedUkCoordinates(_selectedAddressSuggestion) &&
       _deliveryDate != null &&
       (_flexibleDelivery || _deliveryTimeWindow != null);
 
