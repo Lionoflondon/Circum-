@@ -35,14 +35,7 @@ test("deliveryRequests reserves payment and lifecycle fields for backend/admin a
       rules,
       /function isOwnDeliveryUpdate\(\)[\s\S]*affectedKeys\(\)\.hasAny\(protectedDeliveryFields\(\)\)/,
   );
-  assert.match(
-      rules,
-      /function isSafeDeliveryCreate\(\)[\s\S]*keys\(\)\.hasAny\(protectedFinancialCreateFields\(\)\)/,
-  );
-  assert.match(
-      rules,
-      /function isSafeDeliveryCreate\(\)[\s\S]*publicDeliveryHasNoDirectContact\(request\.resource\.data\)/,
-  );
+  assert.match(rules, /match \/deliveryRequests\/\{deliveryId\}[\s\S]*allow create: if isAdmin\(\);/);
   assert.match(
       rules,
       /function isOwnDeliveryUpdate\(\)[\s\S]*publicDeliveryHasNoDirectContact\(request\.resource\.data\)/,

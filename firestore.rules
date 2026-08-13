@@ -110,14 +110,6 @@ service cloud.firestore {
       );
     }
 
-    function isAvailableRiderJob() {
-      return isRiderAccount() && (
-        resource.data.status == 'requested' ||
-        resource.data.dispatchStatus == 'requested' ||
-        resource.data.matchingStatus == 'available'
-      );
-    }
-
     function isCreatingOwnDelivery() {
       return signedIn() && (
         request.resource.data.senderId == request.auth.uid ||
@@ -182,57 +174,6 @@ service cloud.firestore {
       ];
     }
 
-    function protectedFinancialCreateFields() {
-      return [
-        'status',
-        'deliveryStatus',
-        'deliveryStage',
-        'paymentStatus',
-        'paidAmount',
-        'amountPaid',
-        'pricePaid',
-        'paymentIntentId',
-        'stripePaymentIntentId',
-        'stripeCheckoutSessionId',
-        'stripeSessionId',
-        'paymentSessionId',
-        'paymentCompletedAt',
-        'paidAt',
-        'refundStatus',
-        'refundAmount',
-        'refundReviewStatus',
-        'cancellationFee',
-        'cancellationCharge',
-        'cancellationChargeStatus',
-        'riderEarnings',
-        'driverPayout',
-        'payoutStatus',
-        'ledgerRef',
-        'ledgerReferences',
-        'trustScore',
-        'trustAwards',
-        'rank',
-        'riderRank',
-        'completionState',
-        'completedAt',
-        'pinVerified',
-        'collectionPinVerified',
-        'deliveryPinVerified',
-        'arrivalState',
-        'noShowState',
-        'adminInvestigation',
-        'adminReview',
-        'serverAudit',
-        'auditTrail',
-        'quotedPrice',
-        'authoritativeQuote',
-        'pricingSnapshot',
-        'priceBreakdown',
-        'paymentRecordId',
-        'stripeCustomerId'
-      ];
-    }
-
     function directContactFields() {
       return [
         'phone',
@@ -260,13 +201,6 @@ service cloud.firestore {
         (!data.keys().hasAny(['recipient']) ||
           !(data.recipient is map) ||
           !data.recipient.keys().hasAny(directContactFields()));
-    }
-
-    function isSafeDeliveryCreate() {
-      return isCreatingOwnDelivery() &&
-        !request.resource.data.keys().hasAny(['iris']) &&
-        publicDeliveryHasNoDirectContact(request.resource.data) &&
-        !request.resource.data.keys().hasAny(protectedFinancialCreateFields());
     }
 
     function isOwnDeliveryUpdate() {

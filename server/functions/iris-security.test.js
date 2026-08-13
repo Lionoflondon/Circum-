@@ -24,7 +24,7 @@ test("Firestore rules prevent senders from mutating public Iris", () => {
 });
 
 test("Firestore rules reject create-time Iris injection from clients", () => {
-  assert.match(rules, /function isSafeDeliveryCreate\(\)[\s\S]*!request\.resource\.data\.keys\(\)\.hasAny\(\['iris'\]\)/);
+  assert.match(rules, /match \/deliveryRequests\/\{deliveryId\}[\s\S]*allow create: if isAdmin\(\);/);
   assert.match(rules, /match \/webSenderRequests\/\{requestId\}[\s\S]*allow create: if isAdmin\(\) \|\| \(\s*isCreatingOwnDelivery\(\) &&\s*!request\.resource\.data\.keys\(\)\.hasAny\(\['iris'\]\)\s*\);/);
 });
 
