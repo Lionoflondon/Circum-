@@ -28,6 +28,12 @@ const {
   isMaterialDiscrepancy,
 } = require("./delivery-adjustment-core");
 
+function requireAppCheck(context) {
+  if (!context.app) {
+    throw new functions.https.HttpsError("failed-precondition", "Security verification is required.");
+  }
+}
+
 async function notifyUser(userId, title, body, data) {
   if (!userId) return;
   for (const collection of ["users", "riders"]) {
@@ -173,6 +179,7 @@ exports.reportLoadDiscrepancy = functions.https.onCall(async (data, context) => 
 
 exports.reviewDeliveryAdjustment = functions.https.onCall(async (data, context) => {
   if (!context.auth) throw new functions.https.HttpsError("unauthenticated", "Authentication required.");
+  requireAppCheck(context);
   const token = context.auth.token || {};
   const role = `${token.role || token.adminRole || ""}`.toLowerCase();
   const roles = Array.isArray(token.roles) ? token.roles.map((item) => `${item}`.toLowerCase()) : [];
@@ -242,6 +249,7 @@ exports.reviewDeliveryAdjustment = functions.https.onCall(async (data, context) 
 
 exports.cancelAdjustedCollection = functions.https.onCall(async (data, context) => {
   if (!context.auth) throw new functions.https.HttpsError("unauthenticated", "Authentication required.");
+  requireAppCheck(context);
   const db = getFirestore();
   const adjustmentRef = db.collection("deliveryAdjustments").doc(data.adjustmentId);
   const adjustment = await adjustmentRef.get();
@@ -257,6 +265,7 @@ exports.cancelAdjustedCollection = functions.https.onCall(async (data, context) 
 
 exports.createDeliveryAdjustmentPayment = functions.https.onCall(async (data, context) => {
   if (!context.auth) throw new functions.https.HttpsError("unauthenticated", "Authentication required.");
+  requireAppCheck(context);
   const db = getFirestore();
   const adjustmentRef = db.collection("deliveryAdjustments").doc(data.adjustmentId);
   const adjustment = await adjustmentRef.get();
@@ -276,6 +285,7 @@ exports.createDeliveryAdjustmentPayment = functions.https.onCall(async (data, co
 
 exports.finalizeDeliveryAdjustmentPayment = functions.https.onCall(async (data, context) => {
   if (!context.auth) throw new functions.https.HttpsError("unauthenticated", "Authentication required.");
+  requireAppCheck(context);
   const db = getFirestore();
   const adjustmentRef = db.collection("deliveryAdjustments").doc(data.adjustmentId);
   const adjustment = await adjustmentRef.get();

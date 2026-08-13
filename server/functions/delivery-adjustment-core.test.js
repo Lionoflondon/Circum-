@@ -45,6 +45,23 @@ test("delivery adjustment callable requires Admin review before sender payment",
   assert.match(source, /request_more_evidence/);
 });
 
+test("all adjudication and adjustment mutation callables require App Check", () => {
+  const source = fs.readFileSync(path.join(__dirname, "delivery-adjustments.js"), "utf8");
+  for (const callable of [
+    "reportLoadDiscrepancy",
+    "reviewDeliveryAdjustment",
+    "cancelAdjustedCollection",
+    "createDeliveryAdjustmentPayment",
+    "finalizeDeliveryAdjustmentPayment",
+  ]) {
+    const start = source.indexOf(`exports.${callable}`);
+    assert.notEqual(start, -1, `${callable} must exist`);
+    const next = source.indexOf("exports.", start + 1);
+    const block = source.slice(start, next === -1 ? undefined : next);
+    assert.match(block, /context\.app|requireAppCheck\(context\)/, `${callable} must enforce App Check`);
+  }
+});
+
 test("Admin review UX exposes production review controls and audit fields", () => {
   const adminSource = fs.readFileSync(
       path.join(__dirname, "..", "..", "lib", "app", "admin", "admin_root.dart"),
