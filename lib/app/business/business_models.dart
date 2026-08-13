@@ -447,6 +447,37 @@ class BusinessDeliveryTimelineEvent {
       );
 }
 
+class BusinessProofOfDelivery {
+  final bool available;
+  final String deliveryId;
+  final String evidenceId;
+  final String url;
+  final DateTime? capturedAt;
+  final DateTime? deliveredAt;
+  final String reason;
+
+  const BusinessProofOfDelivery({
+    required this.available,
+    required this.deliveryId,
+    required this.evidenceId,
+    required this.url,
+    this.capturedAt,
+    this.deliveredAt,
+    this.reason = '',
+  });
+
+  factory BusinessProofOfDelivery.fromMap(Map<String, dynamic> data) =>
+      BusinessProofOfDelivery(
+        available: data['available'] == true,
+        deliveryId: '${data['deliveryId'] ?? ''}',
+        evidenceId: '${data['evidenceId'] ?? ''}',
+        url: '${data['url'] ?? ''}',
+        capturedAt: _date(data['capturedAtMillis']),
+        deliveredAt: _date(data['deliveredAtMillis']),
+        reason: '${data['reason'] ?? ''}',
+      );
+}
+
 class BusinessWalletSummary {
   final double rothBalance;
   final double lifetimeOffset;

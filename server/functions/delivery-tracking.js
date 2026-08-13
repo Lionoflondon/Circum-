@@ -417,8 +417,10 @@ async function updateDeliveryTrackingStatusHandler(data, context, db = getFirest
     const privateRef = db.collection("deliveryRequestsPrivate").doc(found.id);
     const privateSnapshot = await transaction.get(privateRef);
     const privateDelivery = privateSnapshot.exists ? privateSnapshot.data() || {} : {};
-    const evidenceRecordRef = db.collection("deliveryEvidence").doc(found.id);
-    const evidenceRecordSnapshot = await transaction.get(evidenceRecordRef);
+      const evidenceRecordRef = db.collection("deliveryEvidence").doc(found.id);
+      const evidenceRecordSnapshot = await transaction.get(evidenceRecordRef);
+      const handoverPhotosSnapshot = nextStatus === "delivered" ?
+        await transaction.get(evidenceRecordRef.collection("photos").where("purpose", "==", "HANDOVER")) : null;
     if (action === "verify_collection_pin" && evidenceDecision.valid &&
         (delivery.verificationRequired === true || delivery.requiresVerification === true ||
          delivery.requiresVanguard === true)) {
@@ -441,9 +443,11 @@ async function updateDeliveryTrackingStatusHandler(data, context, db = getFirest
       delete evidence.photoUrl;
     }
     if (nextStatus === "delivered") {
-      const completionDecision = completionEvidenceDecision(
-          evidenceRecordSnapshot.exists ? evidenceRecordSnapshot.data() || {} : {},
-      );
+      const completionDecision = completionEvidenceDecision(evidenceRecordSnapshot.exists ? {
+        ...(evidenceRecordSnapshot.data() || {}),
+        verifiedHandoverPhotoCount: handoverPhotosSnapshot ? handoverPhotosSnapshot.docs
+            .filter((photo) => evidenceCore.isVerifiedPhotoRecord(photo.data() || {})).length : 0,
+      } : {});
       if (!completionDecision.allowed) {
         throw new functions.https.HttpsError("failed-precondition", completionDecision.reason);
       }
@@ -553,6 +557,7 @@ async function updateDeliveryTrackingStatusHandler(data, context, db = getFirest
       patch.evidenceSummary = {
         recordPath: `deliveryEvidence/${found.id}`,
         verifiedPhotoCount: Number(evidenceRecordSnapshot.data()?.verifiedPhotoCount || 0),
+        verifiedHandoverPhotoCount: Number(evidenceRecordSnapshot.data()?.verifiedHandoverPhotoCount || 0),
         latestPhotoPath: evidenceRecordSnapshot.data()?.latestPhotoPath || null,
         latestThumbnailPath: evidenceRecordSnapshot.data()?.latestThumbnailPath || null,
         latestCapturedAt: evidenceRecordSnapshot.data()?.latestCapturedAt || null,

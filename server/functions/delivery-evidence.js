@@ -5,6 +5,7 @@ const functions = require("firebase-functions/v1");
 const {getFirestore, FieldValue} = require("firebase-admin/firestore");
 const {getStorage} = require("firebase-admin/storage");
 const evidence = require("./delivery-evidence-core");
+const {resolveBusinessAuthority, hasBusinessPermission} = require("./business-authority");
 
 function text(value) {
   return `${value || ""}`.trim();
@@ -30,6 +31,60 @@ async function findDelivery(db, deliveryId) {
   const query = await db.collection("deliveryRequests").where("requestId", "==", deliveryId).limit(1).get();
   return query.empty ? null : query.docs[0];
 }
+
+async function businessDeliveryAuthority(db, delivery, uid, email) {
+  const businessId = text(delivery.businessId || delivery.businessAccountId);
+  if (!businessId) return null;
+  const accountSnapshot = await db.collection("businessAccounts").doc(businessId).get();
+  if (!accountSnapshot.exists) return null;
+  const authority = await resolveBusinessAuthority(db, accountSnapshot.data() || {}, businessId, {uid, email});
+  const allowed = hasBusinessPermission(authority, "deliveries.evidence", [
+    "owner", "admin", "manager", "operations", "dispatcher", "member",
+  ]);
+  return allowed ? {businessId, authority} : null;
+}
+
+exports.getBusinessDeliveryEvidenceAccess = functions.runWith({enforceAppCheck: true})
+    .region("us-central1").https.onCall(async (data, context) => {
+      if (!context.auth) throw new functions.https.HttpsError("unauthenticated", "Sign in to view proof of delivery.");
+      const deliveryId = text(data && data.deliveryId);
+      if (!deliveryId) throw new functions.https.HttpsError("invalid-argument", "Delivery is required.");
+      const db = getFirestore();
+      const deliverySnapshot = await findDelivery(db, deliveryId);
+      if (!deliverySnapshot) throw new functions.https.HttpsError("not-found", "Delivery not found.");
+      const delivery = deliverySnapshot.data() || {};
+      if (!(await businessDeliveryAuthority(db, delivery, context.auth.uid, context.auth.token?.email))) {
+        throw new functions.https.HttpsError("permission-denied", "Business proof access is not permitted.");
+      }
+      const status = text(delivery.status || delivery.deliveryStatus || delivery.deliveryStage).toLowerCase();
+      if (!["delivered", "completed"].includes(status)) {
+        throw new functions.https.HttpsError("failed-precondition", "Proof of delivery is available after completion.");
+      }
+      const recordSnapshot = await db.collection("deliveryEvidence").doc(deliverySnapshot.id).get();
+      const record = recordSnapshot.exists ? recordSnapshot.data() || {} : {};
+      const photosSnapshot = await db.collection("deliveryEvidence").doc(deliverySnapshot.id)
+          .collection("photos").where("purpose", "==", "HANDOVER").limit(20).get();
+      const photo = photosSnapshot.docs
+          .map((doc) => ({id: doc.id, ...doc.data()}))
+          .filter((item) => evidence.isVerifiedPhotoRecord(item) && text(item.storagePath))
+          .sort((a, b) => `${b.uploadedAt || ""}`.localeCompare(`${a.uploadedAt || ""}`))[0];
+      if (!photo) return {available: false, deliveryId: deliverySnapshot.id, reason: "Proof of delivery is unavailable."};
+      const file = getStorage().bucket().file(photo.storagePath);
+      const [exists] = await file.exists();
+      if (!exists) return {available: false, deliveryId: deliverySnapshot.id, reason: "Proof of delivery is unavailable."};
+      const [url] = await file.getSignedUrl({version: "v4", action: "read", expires: Date.now() + 10 * 60 * 1000});
+      return {
+        available: true,
+        deliveryId: deliverySnapshot.id,
+        evidenceId: photo.id,
+        evidenceType: "completion",
+        lifecycleStage: "delivered",
+        url,
+        capturedAtMillis: photo.capturedAt && typeof photo.capturedAt.toMillis === "function" ? photo.capturedAt.toMillis() : null,
+        deliveredAtMillis: delivery.deliveredAt && typeof delivery.deliveredAt.toMillis === "function" ? delivery.deliveredAt.toMillis() : null,
+        verifiedPhotoCount: Number(record.verifiedPhotoCount || 0),
+      };
+    });
 
 exports.recordDeliveryEvidence = functions.runWith({enforceAppCheck: true}).https.onCall(async (data, context) => {
   if (!context.auth) throw new functions.https.HttpsError("unauthenticated", "Rider must be signed in.");
@@ -73,6 +128,7 @@ exports.recordDeliveryEvidence = functions.runWith({enforceAppCheck: true}).http
   const uploadedEventRef = recordRef.collection("events").doc(`${decision.photoId}_uploaded`);
   const photo = evidence.evidenceSummary({
     ...input,
+    evidenceId: decision.photoId,
     fileSize: actualSize,
     mimeType: actualMime,
     checksum: text(input.checksum) || text(metadata.md5Hash),
@@ -99,6 +155,7 @@ exports.recordDeliveryEvidence = functions.runWith({enforceAppCheck: true}).http
     transaction.set(recordRef, {
       deliveryId: deliverySnapshot.id,
       verifiedPhotoCount: FieldValue.increment(1),
+      ...(purpose === "HANDOVER" ? {verifiedHandoverPhotoCount: FieldValue.increment(1)} : {}),
       latestPhotoPath: decision.storagePath,
       latestThumbnailPath: photo.thumbnailPath,
       latestCapturedAt: photo.capturedAt,
@@ -128,6 +185,7 @@ exports.recordDeliveryEvidence = functions.runWith({enforceAppCheck: true}).http
     success: true,
     deliveryId: deliverySnapshot.id,
     photoId: decision.photoId,
+    evidenceId: decision.photoId,
     storagePath: decision.storagePath,
     verified: true,
   };

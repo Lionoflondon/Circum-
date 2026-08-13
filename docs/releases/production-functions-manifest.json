@@ -6,10 +6,10 @@
   "releaseShaSemantics": "SELF means the Git commit containing this manifest; the immutable SHA is recorded in the release report and deployment provenance.",
   "entryPoint": "server/functions/index.js",
   "inventory": {
-    "productionFunctions": 301,
-    "applicationFunctions": 295,
+    "productionFunctions": 302,
+    "applicationFunctions": 296,
     "extensionFunctions": 6,
-    "sourceExports": 295
+    "sourceExports": 296
   },
   "applicationFunctions": [
     {
@@ -1428,6 +1428,17 @@
         "type": "callable"
       },
       "productionSourceHash": "470c1dc565cbba354f8ffddcd67f5c932b37c8cb",
+      "state": "ACTIVE",
+      "releaseSha": "SELF"
+    },
+    {
+      "name": "getBusinessDeliveryEvidenceAccess",
+      "source": "server/functions/delivery-evidence.js#getBusinessDeliveryEvidenceAccess",
+      "runtime": "nodejs22",
+      "region": "us-central1",
+      "trigger": {
+        "type": "callable"
+      },
       "state": "ACTIVE",
       "releaseSha": "SELF"
     },

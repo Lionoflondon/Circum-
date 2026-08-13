@@ -38,7 +38,8 @@ test("photo metadata must match the canonical immutable path", () => {
 
 test("completion is blocked until a verified photo exists", () => {
   assert.equal(core.completionEvidenceDecision({}).allowed, false);
-  assert.equal(core.completionEvidenceDecision({photoCount: 1}).allowed, true);
+  assert.equal(core.completionEvidenceDecision({verifiedPhotoCount: 1}).allowed, false);
+  assert.equal(core.completionEvidenceDecision({verifiedHandoverPhotoCount: 1}).allowed, true);
 });
 
 test("thumbnail-only photo records are not treated as verified evidence", () => {

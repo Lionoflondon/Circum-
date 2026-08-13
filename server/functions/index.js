@@ -180,6 +180,7 @@ exports.updateDeliveryLiveLocation =
 exports.onDeliveryCompletedEvent =
   deliveryCompletedEvent.onDeliveryCompletedEvent;
 exports.recordDeliveryEvidence = deliveryEvidence.recordDeliveryEvidence;
+exports.getBusinessDeliveryEvidenceAccess = deliveryEvidence.getBusinessDeliveryEvidenceAccess;
 exports.onDeliveryEvidencePhotoFinalized =
   deliveryEvidenceMedia.onDeliveryEvidencePhotoFinalized;
 exports.settleScheduledRoadChargeCashRefund =

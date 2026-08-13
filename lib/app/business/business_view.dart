@@ -1192,6 +1192,16 @@ class _BusinessViewState extends State<BusinessView> {
               const SizedBox(height: 4),
               Text(delivery.id, style: const TextStyle(color: _muted)),
               const SizedBox(height: 16),
+              if (delivery.isCompleted)
+                OutlinedButton.icon(
+                  onPressed: () async {
+                    Navigator.of(context).pop();
+                    await _openProofOfDelivery(delivery);
+                  },
+                  icon: const Icon(Icons.verified_outlined),
+                  label: const Text('View proof of delivery'),
+                ),
+              if (delivery.isCompleted) const SizedBox(height: 12),
               if (events.isEmpty)
                 const _EmptyState(
                   icon: Icons.timeline_rounded,
@@ -1216,6 +1226,29 @@ class _BusinessViewState extends State<BusinessView> {
       );
     } catch (_) {
       if (mounted) _showMessage('Timeline is unavailable right now.');
+    } finally {
+      if (mounted) setState(() => _working = false);
+    }
+  }
+
+  Future<void> _openProofOfDelivery(BusinessDelivery delivery) async {
+    final account = _account;
+    if (account == null) return;
+    setState(() => _working = true);
+    try {
+      final proof = await _repository.loadProofOfDelivery(
+        account: account,
+        deliveryId: delivery.id,
+      );
+      if (!mounted) return;
+      if (!proof.available || proof.url.isEmpty) {
+        _showMessage(proof.reason.isEmpty ? 'Proof of delivery is unavailable.' : proof.reason);
+        return;
+      }
+      final opened = await launchUrl(Uri.parse(proof.url), mode: LaunchMode.externalApplication);
+      if (!opened && mounted) _showMessage('Proof of delivery could not be opened.');
+    } catch (_) {
+      if (mounted) _showMessage('Proof of delivery is unavailable. Please try again.');
     } finally {
       if (mounted) setState(() => _working = false);
     }

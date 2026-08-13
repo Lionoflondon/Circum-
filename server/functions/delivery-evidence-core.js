@@ -44,7 +44,7 @@ function validatePhotoInput(input = {}) {
 }
 
 function completionEvidenceDecision(evidence = {}) {
-  const count = Number(evidence.verifiedPhotoCount || evidence.photoCount || 0);
+  const count = Number(evidence.verifiedHandoverPhotoCount || 0);
   if (!Number.isInteger(count) || count < 1) {
     return {allowed: false, reason: "A verified delivery evidence photo is required before completion."};
   }
@@ -85,6 +85,7 @@ function transitionEvidenceDecision(photo = {}, expected = {}) {
 
 function evidenceSummary(photo, uploaderId) {
   return {
+    evidenceId: text(photo.evidenceId || photo.photoId),
     type: PHOTO,
     storagePath: photo.storagePath,
     thumbnailPath: photo.thumbnailPath || null,

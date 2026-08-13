@@ -12,6 +12,10 @@ abstract class BusinessRepository {
     required BusinessAccount account,
     required String deliveryId,
   });
+  Future<BusinessProofOfDelivery> loadProofOfDelivery({
+    required BusinessAccount account,
+    required String deliveryId,
+  });
   Future<BusinessDeliveryPage> loadDeliveryPage({
     required BusinessAccount account,
     required Map<String, dynamic> cursor,
@@ -220,6 +224,19 @@ class FirebaseBusinessRepository implements BusinessRepository {
           ),
         )
         .toList(growable: false);
+  }
+
+  @override
+  Future<BusinessProofOfDelivery> loadProofOfDelivery({
+    required BusinessAccount account,
+    required String deliveryId,
+  }) async {
+    final callable = await functions
+        .httpsCallable('getBusinessDeliveryEvidenceAccess')
+        .call({'businessId': account.id, 'deliveryId': deliveryId});
+    return BusinessProofOfDelivery.fromMap(
+      Map<String, dynamic>.from(callable.data as Map),
+    );
   }
 
   @override
