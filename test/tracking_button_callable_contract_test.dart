@@ -51,6 +51,8 @@ void main() {
     final senderSource =
         File('lib/app/sender_mobile/sender_tracking_screen.dart')
             .readAsStringSync();
+    final senderActivitySource =
+        File('lib/app/sender_mobile/sender_activity.dart').readAsStringSync();
     final sendPackageSource =
         File('lib/app/send_package/bloc/send_package_bloc.dart')
             .readAsStringSync();
@@ -59,6 +61,9 @@ void main() {
 
     expect(senderSource, contains('senderTrackingStateForBackendData'));
     expect(senderSource, contains('proofOfDeliveryFromRecord'));
+    expect(senderActivitySource, contains('trackingTimeline'));
+    expect(
+        senderSource, contains("httpsCallable('getDeliveryEvidenceAccess')"));
     expect(senderSource, contains("requestSenderCancellation"));
     expect(sendPackageSource,
         contains("httpsCallable('requestSenderCancellation')"));
@@ -81,7 +86,20 @@ void main() {
     expect(
         adminRootSource, contains("httpsCallable('reviewDeliveryAdjustment')"));
     expect(adminSource, contains("httpsCallable('adminRecordAuditEntry')"));
+    expect(adminSource, contains("httpsCallable('getDeliveryEvidenceAccess')"));
+    expect(adminSource, contains('trackingTimeline'));
     expect(adminSource,
         isNot(contains("collection('deliveryRequests').doc(id).set")));
+  });
+
+  test('Shared hosted proof panel resolves canonical evidence through backend',
+      () {
+    final sharedSource =
+        File('lib/website/shared/circum_website_app.dart').readAsStringSync();
+
+    expect(sharedSource, contains('proofOfDeliveryFromRecord'));
+    expect(sharedSource, contains("httpsCallable('recordDeliveryEvidence')"));
+    expect(
+        sharedSource, contains("httpsCallable('getDeliveryEvidenceAccess')"));
   });
 }

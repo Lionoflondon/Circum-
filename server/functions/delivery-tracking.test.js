@@ -253,6 +253,43 @@ test("required handover evidence requires canonical completion proof", () => {
   ).valid, true);
 });
 
+test("canonical proof summary exposes evidence id without a client URL", () => {
+  const summary = deliveryTracking.canonicalProofSummary({
+    evidenceId: "proof-1",
+    evidenceType: "completion_proof",
+    lifecycleStage: "completion",
+    storagePath: "deliveryEvidence/delivery-1/rider-1/proof-1.jpg",
+    visibility: "rider_sender_admin",
+    status: "finalized",
+    sourceSurface: "rider_web",
+  }, "rider-1");
+
+  assert.equal(summary.evidenceId, "proof-1");
+  assert.equal(summary.storagePath, "deliveryEvidence/delivery-1/rider-1/proof-1.jpg");
+  assert.equal(summary.visibility, "rider_sender_admin");
+  assert.equal(summary.recordedBy, "rider-1");
+  assert.equal(Object.prototype.hasOwnProperty.call(summary, "photoUrl"), false);
+});
+
+test("delivery timeline summary is safe for Activity and Admin history", () => {
+  const event = deliveryTracking.trackingEventRecord({
+    deliveryId: "delivery-1",
+    requestId: "REQ-1",
+    riderId: "rider-1",
+    action: "verify_receiver_pin",
+    previousStatus: "arrived_at_dropoff",
+    nextStatus: "delivered",
+  });
+  const summary = deliveryTracking.deliveryTimelineSummary(event);
+
+  assert.equal(summary.eventType, "delivery_delivered");
+  assert.equal(summary.status, "delivered");
+  assert.equal(summary.actorType, "rider");
+  assert.equal(summary.actorId, "rider-1");
+  assert.equal(Object.prototype.hasOwnProperty.call(summary, "pin"), false);
+  assert.equal(Object.prototype.hasOwnProperty.call(summary, "photoUrl"), false);
+});
+
 test("settlement values reuse canonical earnings and highest trust category", () => {
   assert.deepEqual(deliveryTracking.settlementValues({
     riderEarning: 12.345,

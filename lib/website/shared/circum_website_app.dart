@@ -4733,8 +4733,7 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
         'totalFare': revisedQuote.total,
         'vehicleType': vehicle,
       },
-      if (evidenceId != null && evidenceId.isNotEmpty)
-        'evidenceId': evidenceId,
+      if (evidenceId != null && evidenceId.isNotEmpty) 'evidenceId': evidenceId,
     };
   }
 
@@ -17706,6 +17705,17 @@ class _SenderProofOfDeliveryPanel extends StatelessWidget {
                 label: const Text('View full proof'),
               ),
               const SizedBox(height: 10),
+            ] else if (proof.requiresAccessToken) ...[
+              OutlinedButton.icon(
+                onPressed: () => _openCanonicalWebsiteProof(
+                  context,
+                  proof,
+                  colors,
+                ),
+                icon: const Icon(Icons.open_in_full_rounded),
+                label: const Text('View full proof'),
+              ),
+              const SizedBox(height: 10),
             ],
             for (final row in proof.visibleRows)
               Padding(
@@ -17729,6 +17739,56 @@ class _SenderProofOfDeliveryPanel extends StatelessWidget {
           ],
         ],
       ),
+    );
+  }
+}
+
+Future<void> _openCanonicalWebsiteProof(
+  BuildContext context,
+  ProofOfDeliveryDetails proof,
+  _CircumColors colors,
+) async {
+  final messenger = ScaffoldMessenger.maybeOf(context);
+  try {
+    final result = await FirebaseFunctions.instanceFor(region: 'us-central1')
+        .httpsCallable('getDeliveryEvidenceAccess')
+        .call(<String, dynamic>{'evidenceId': proof.evidenceId});
+    final data = result.data;
+    final url = data is Map ? '${data['url'] ?? ''}'.trim() : '';
+    if (url.isEmpty) {
+      messenger?.showSnackBar(
+        const SnackBar(content: Text('Proof is not available yet.')),
+      );
+      return;
+    }
+    if (!context.mounted) return;
+    await showDialog<void>(
+      context: context,
+      builder: (_) => Dialog(
+        backgroundColor: colors.appBackground,
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(18),
+          child: Image.network(
+            url,
+            fit: BoxFit.contain,
+            errorBuilder: (_, __, ___) => Padding(
+              padding: const EdgeInsets.all(24),
+              child: Text(
+                'Proof photo could not be loaded.',
+                style: TextStyle(color: colors.text),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  } on FirebaseFunctionsException catch (error) {
+    messenger?.showSnackBar(
+      SnackBar(content: Text(error.message ?? 'Proof access was denied.')),
+    );
+  } catch (_) {
+    messenger?.showSnackBar(
+      const SnackBar(content: Text('Proof could not be opened.')),
     );
   }
 }

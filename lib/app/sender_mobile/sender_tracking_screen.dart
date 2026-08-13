@@ -2148,6 +2148,13 @@ class _ProofOfDeliverySection extends StatelessWidget {
                 label: const Text('View full proof'),
               ),
               const SizedBox(height: 10),
+            ] else if (proof.requiresAccessToken) ...[
+              OutlinedButton.icon(
+                onPressed: () => _openCanonicalProof(context, proof),
+                icon: const Icon(Icons.open_in_full_rounded, size: 16),
+                label: const Text('View full proof'),
+              ),
+              const SizedBox(height: 10),
             ],
             for (final row in rows)
               Padding(
@@ -2182,6 +2189,59 @@ class _ProofOfDeliverySection extends StatelessWidget {
           ],
         ],
       ),
+    );
+  }
+}
+
+Future<void> _openCanonicalProof(
+  BuildContext context,
+  ProofOfDeliveryDetails proof,
+) async {
+  final messenger = ScaffoldMessenger.maybeOf(context);
+  try {
+    final result = await FirebaseFunctions.instanceFor(region: 'us-central1')
+        .httpsCallable('getDeliveryEvidenceAccess')
+        .call(<String, dynamic>{'evidenceId': proof.evidenceId});
+    final data = result.data;
+    final url = data is Map ? '${data['url'] ?? ''}'.trim() : '';
+    if (url.isEmpty) {
+      messenger?.showSnackBar(
+        const SnackBar(content: Text('Proof is not available yet.')),
+      );
+      return;
+    }
+    if (!context.mounted) return;
+    await showDialog<void>(
+      context: context,
+      builder: (_) => Dialog(
+        backgroundColor: const Color(0xFF07111F),
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(18),
+          child: Image.network(
+            url,
+            fit: BoxFit.contain,
+            errorBuilder: (_, __, ___) => const Padding(
+              padding: EdgeInsets.all(24),
+              child: Text(
+                'Proof photo could not be loaded.',
+                style: TextStyle(color: Colors.white),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  } on FirebaseFunctionsException catch (error) {
+    messenger?.showSnackBar(
+      SnackBar(
+        content: Text(
+          _firebaseFunctionMessage(error, 'Proof access was denied.'),
+        ),
+      ),
+    );
+  } catch (_) {
+    messenger?.showSnackBar(
+      const SnackBar(content: Text('Proof could not be opened.')),
     );
   }
 }

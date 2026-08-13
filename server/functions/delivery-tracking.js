@@ -375,6 +375,36 @@ function trackingEventRecord({deliveryId, requestId, riderId, action, previousSt
   };
 }
 
+function canonicalProofSummary(canonicalEvidence, riderId) {
+  if (!canonicalEvidence) return null;
+  return {
+    evidenceId: text(canonicalEvidence.evidenceId),
+    evidenceType: text(canonicalEvidence.evidenceType),
+    lifecycleStage: text(canonicalEvidence.lifecycleStage),
+    storagePath: text(canonicalEvidence.storagePath),
+    visibility: text(canonicalEvidence.visibility),
+    status: text(canonicalEvidence.status || "finalized"),
+    recordedBy: riderId,
+    recordedAt: FieldValue.serverTimestamp(),
+    sourceSurface: text(canonicalEvidence.sourceSurface),
+  };
+}
+
+function deliveryTimelineSummary(eventRecord) {
+  return {
+    eventId: text(eventRecord.eventId),
+    eventType: text(eventRecord.eventType),
+    action: text(eventRecord.action),
+    previousStatus: text(eventRecord.previousStatus),
+    status: text(eventRecord.status || eventRecord.nextStatus),
+    nextStatus: text(eventRecord.nextStatus || eventRecord.status),
+    actorType: text(eventRecord.actorType),
+    actorId: text(eventRecord.actorId),
+    source: text(eventRecord.source),
+    createdAt: FieldValue.serverTimestamp(),
+  };
+}
+
 exports.updateDeliveryTrackingStatus = functions.https.onCall(async (data, context) => {
   requireAppCheck(context);
   if (!context.auth) {
@@ -496,6 +526,15 @@ exports.updateDeliveryTrackingStatus = functions.https.onCall(async (data, conte
       };
       if (canonicalEvidence && action === "verify_receiver_pin") {
         patch.completionEvidenceId = evidenceId;
+        const proofSummary = canonicalProofSummary(canonicalEvidence, riderId);
+        patch.proofOfDelivery = proofSummary;
+        patch.deliveryProof = proofSummary;
+        patch.deliveryEvidence = {
+          completionEvidenceId: evidenceId,
+          completionProof: proofSummary,
+          status: "available",
+          updatedAt: FieldValue.serverTimestamp(),
+        };
       }
       if (canonicalEvidence && action === "verify_collection_pin") {
         patch.pickupEvidenceId = evidenceId;
@@ -538,6 +577,11 @@ exports.updateDeliveryTrackingStatus = functions.https.onCall(async (data, conte
       previousStatus: currentStatus,
       nextStatus,
     });
+    const timelineSummary = deliveryTimelineSummary(eventRecord);
+    patch.trackingTimeline = {
+      [normalized(nextStatus)]: timelineSummary,
+    };
+    patch.latestTrackingEvent = timelineSummary;
     transaction.set(found.ref, patch, {merge: true});
     transaction.set(db.collection("deliveryTrackingEvents").doc(eventId), eventRecord, {merge: true});
     transaction.set(db.collection("deliveryTimeline").doc(eventId), {
@@ -768,6 +812,8 @@ exports._private = {
   hasManualRankOverride,
   riderTrustRankPatch,
   canonicalEvidenceMatches,
+  canonicalProofSummary,
+  deliveryTimelineSummary,
   trackingEventId,
   trackingEventRecord,
 };

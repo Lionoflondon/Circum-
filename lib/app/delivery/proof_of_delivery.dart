@@ -1,6 +1,10 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 
 class ProofOfDeliveryDetails {
+  final String evidenceId;
+  final String storagePath;
+  final String evidenceStatus;
+  final String evidenceVisibility;
   final String photoUrl;
   final String deliveredAt;
   final String riderName;
@@ -16,6 +20,10 @@ class ProofOfDeliveryDetails {
   final bool vanguard;
 
   const ProofOfDeliveryDetails({
+    required this.evidenceId,
+    required this.storagePath,
+    required this.evidenceStatus,
+    required this.evidenceVisibility,
     required this.photoUrl,
     required this.deliveredAt,
     required this.riderName,
@@ -31,9 +39,15 @@ class ProofOfDeliveryDetails {
     required this.vanguard,
   });
 
+  bool get hasCanonicalEvidence => evidenceId.trim().isNotEmpty;
+
+  bool get requiresAccessToken =>
+      hasCanonicalEvidence && photoUrl.trim().isEmpty;
+
   bool get hasPhoto => photoUrl.trim().isNotEmpty;
 
   bool get hasAnyProof =>
+      hasCanonicalEvidence ||
       hasPhoto ||
       deliveredAt.trim().isNotEmpty ||
       receiverConfirmationMethod.trim().isNotEmpty ||
@@ -44,6 +58,7 @@ class ProofOfDeliveryDetails {
 
   String get statusLabel {
     if (underReview) return 'Under review';
+    if (hasCanonicalEvidence) return 'Proof available';
     return hasAnyProof ? 'Proof available' : 'Proof missing';
   }
 
@@ -65,6 +80,7 @@ class ProofOfDeliveryDetails {
       if (finalAddress.trim().isNotEmpty) ('Final address', finalAddress),
       if (deliveryReference.trim().isNotEmpty)
         ('Delivery reference', deliveryReference),
+      if (hasCanonicalEvidence) ('Evidence reference', evidenceId),
     ];
     if (vanguard) {
       rows.insertAll(0, [
@@ -89,10 +105,18 @@ ProofOfDeliveryDetails proofOfDeliveryFromRecord(
   final proof = _firstMap(record, const [
     'proofOfDelivery',
     'deliveryProof',
+    'completionProof',
     'proof',
     'completionProof',
     'deliveryConfirmation',
   ]);
+  final deliveryEvidence = _firstMap(record, const ['deliveryEvidence']);
+  final completionProof = _firstMap(deliveryEvidence, const [
+    'completionProof',
+    'proofOfDelivery',
+    'deliveryProof',
+  ]);
+  final canonicalProof = completionProof.isNotEmpty ? completionProof : proof;
   final vanguard = _isTruthy(record['vanguardEnabled']) ||
       _isTruthy(record['vanguardProtected']) ||
       _isTruthy(record['vanguardProtection']) ||
@@ -137,7 +161,21 @@ ProofOfDeliveryDetails proofOfDeliveryFromRecord(
     'id',
   ]);
   return ProofOfDeliveryDetails(
-    photoUrl: _proofPhotoUrl(record, proof),
+    evidenceId: _proofEvidenceId(record, canonicalProof, deliveryEvidence),
+    storagePath: _firstString(record, canonicalProof, const [
+      'storagePath',
+      'storageRef',
+      'storageReference',
+    ]),
+    evidenceStatus: _firstString(record, canonicalProof, const [
+      'status',
+      'evidenceStatus',
+    ]),
+    evidenceVisibility: _firstString(record, canonicalProof, const [
+      'visibility',
+      'evidenceVisibility',
+    ]),
+    photoUrl: _proofPhotoUrl(record, canonicalProof),
     deliveredAt: _formatDate(_firstValue(record, proof, const [
       'deliveredAt',
       'completedAt',
@@ -183,6 +221,40 @@ ProofOfDeliveryDetails proofOfDeliveryFromRecord(
     underReview: _isUnderReview(record, proof),
     vanguard: vanguard,
   );
+}
+
+String _proofEvidenceId(
+  Map<String, dynamic> record,
+  Map<String, dynamic> proof,
+  Map<String, dynamic> deliveryEvidence,
+) {
+  final proofScoped = _firstString(
+    const <String, dynamic>{},
+    proof,
+    const [
+      'evidenceId',
+      'completionEvidenceId',
+      'proofEvidenceId',
+      'deliveryEvidenceId',
+    ],
+  );
+  if (proofScoped.isNotEmpty) return proofScoped;
+  final deliveryScoped = _firstString(
+    const <String, dynamic>{},
+    deliveryEvidence,
+    const [
+      'completionEvidenceId',
+      'evidenceId',
+      'proofEvidenceId',
+    ],
+  );
+  if (deliveryScoped.isNotEmpty) return deliveryScoped;
+  return _firstString(record, const <String, dynamic>{}, const [
+    'completionEvidenceId',
+    'proofEvidenceId',
+    'deliveryEvidenceId',
+    'evidenceId',
+  ]);
 }
 
 String _proofPhotoUrl(Map<String, dynamic> record, Map<String, dynamic> proof) {

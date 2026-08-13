@@ -45,6 +45,7 @@ class SenderActivityItem {
   final DateTime? riderMemberSince;
   final List<String> riderAchievements;
   final ProofOfDeliveryDetails? proofOfDelivery;
+  final List<(String, String)> lifecycleEvents;
 
   const SenderActivityItem({
     required this.id,
@@ -74,6 +75,7 @@ class SenderActivityItem {
     this.riderMemberSince,
     this.riderAchievements = const [],
     this.proofOfDelivery,
+    this.lifecycleEvents = const [],
   });
 
   SenderActivityItem copyWith({bool? repeatRider}) => SenderActivityItem(
@@ -104,6 +106,7 @@ class SenderActivityItem {
         riderMemberSince: riderMemberSince,
         riderAchievements: riderAchievements,
         proofOfDelivery: proofOfDelivery,
+        lifecycleEvents: lifecycleEvents,
       );
 }
 
@@ -432,6 +435,7 @@ class FirebaseSenderActivityRepository implements SenderActivityRepository {
         profile['recentAchievements'] ?? profile['achievements'],
       ),
       proofOfDelivery: proofOfDeliveryFromRecord(data, fallbackReference: id),
+      lifecycleEvents: _deliveryTimelineRows(data),
     );
   }
 
@@ -2035,6 +2039,12 @@ class _ActivityDetail extends StatelessWidget {
                 for (final row in item.proofOfDelivery!.visibleRows)
                   _Detail(row.$1, row.$2),
             ],
+            if (item.lifecycleEvents.isNotEmpty) ...[
+              const SizedBox(height: 8),
+              const _Detail('Lifecycle timeline', ''),
+              for (final event in item.lifecycleEvents)
+                _Detail(event.$1, event.$2),
+            ],
             _Detail(
                 'Date',
                 item.occurredAt == null
@@ -2234,19 +2244,33 @@ class _Detail extends StatelessWidget {
   final String value;
   const _Detail(this.label, this.value);
   @override
-  Widget build(BuildContext context) => Padding(
-      padding: const EdgeInsets.symmetric(vertical: 9),
-      child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        SizedBox(
-            width: 100,
-            child: Text(label,
-                style: const TextStyle(color: _ActivityColors.muted))),
-        Expanded(
-            child: Text(value,
-                textAlign: TextAlign.right,
-                style: const TextStyle(
-                    color: Colors.white, fontWeight: FontWeight.w700)))
-      ]));
+  Widget build(BuildContext context) {
+    if (value.trim().isEmpty) {
+      return Padding(
+        padding: const EdgeInsets.only(top: 14, bottom: 4),
+        child: Text(
+          label,
+          style: const TextStyle(
+            color: _ActivityColors.muted,
+            fontWeight: FontWeight.w800,
+          ),
+        ),
+      );
+    }
+    return Padding(
+        padding: const EdgeInsets.symmetric(vertical: 9),
+        child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          SizedBox(
+              width: 100,
+              child: Text(label,
+                  style: const TextStyle(color: _ActivityColors.muted))),
+          Expanded(
+              child: Text(value,
+                  textAlign: TextAlign.right,
+                  style: const TextStyle(
+                      color: Colors.white, fontWeight: FontWeight.w700)))
+        ]));
+  }
 }
 
 class _ActivityGlass extends StatelessWidget {
@@ -2295,6 +2319,61 @@ String _riderId(Map<String, dynamic> data) {
     assigned['uid'],
     assigned['id'],
   ]);
+}
+
+List<(String, String)> _deliveryTimelineRows(Map<String, dynamic> data) {
+  final raw = data['trackingTimeline'] ??
+      data['deliveryTimeline'] ??
+      data['lifecycleTimeline'] ??
+      data['timeline'];
+  final events = <Map<String, dynamic>>[];
+  if (raw is Map) {
+    for (final value in raw.values) {
+      if (value is Map) events.add(Map<String, dynamic>.from(value));
+    }
+  } else if (raw is List) {
+    for (final value in raw) {
+      if (value is Map) events.add(Map<String, dynamic>.from(value));
+    }
+  }
+  events.sort((a, b) {
+    final aDate = _date(a['createdAt'] ?? a['timestamp']);
+    final bDate = _date(b['createdAt'] ?? b['timestamp']);
+    if (aDate == null && bDate == null) return 0;
+    if (aDate == null) return 1;
+    if (bDate == null) return -1;
+    return aDate.compareTo(bDate);
+  });
+  return [
+    for (final event in events.take(8))
+      (
+        _timelineStatusLabel(_first([
+          event['status'],
+          event['nextStatus'],
+          event['eventType'],
+          event['type'],
+        ])),
+        _date(event['createdAt'] ?? event['timestamp']) == null
+            ? 'Recorded'
+            : DateFormat('d MMM yyyy, HH:mm')
+                .format(_date(event['createdAt'] ?? event['timestamp'])!)
+      ),
+  ];
+}
+
+String _timelineStatusLabel(String value) {
+  final normalized = value
+      .replaceAll('delivery_', '')
+      .replaceAll('_', ' ')
+      .replaceAll('-', ' ')
+      .trim()
+      .toLowerCase();
+  if (normalized.isEmpty) return 'Tracking update';
+  return normalized
+      .split(RegExp(r'\s+'))
+      .map((word) =>
+          word.isEmpty ? word : '${word[0].toUpperCase()}${word.substring(1)}')
+      .join(' ');
 }
 
 String _riderFirstName(String value) {

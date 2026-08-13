@@ -39,6 +39,48 @@ void main() {
       expect(proof.pinVerificationResult, 'Verified');
     });
 
+    test('canonical evidence id is proof without trusting a public URL', () {
+      final proof = proofOfDeliveryFromRecord({
+        'requestId': 'DEL-104',
+        'completedAt': '2026-07-22T14:30:00Z',
+        'deliveryEvidence': {
+          'completionEvidenceId': 'evidence-104',
+          'completionProof': {
+            'evidenceId': 'evidence-104',
+            'evidenceType': 'completion_proof',
+            'lifecycleStage': 'completion',
+            'storagePath': 'deliveryEvidence/DEL-104/rider-1/evidence-104.jpg',
+            'visibility': 'rider_sender_admin',
+            'status': 'finalized',
+          },
+        },
+      });
+
+      expect(proof.hasAnyProof, isTrue);
+      expect(proof.hasPhoto, isFalse);
+      expect(proof.hasCanonicalEvidence, isTrue);
+      expect(proof.requiresAccessToken, isTrue);
+      expect(proof.evidenceId, 'evidence-104');
+      expect(proof.statusLabel, 'Proof available');
+      expect(
+          proof.visibleRows, contains(('Evidence reference', 'evidence-104')));
+    });
+
+    test('root completion evidence id is also treated as canonical proof', () {
+      final proof = proofOfDeliveryFromRecord({
+        'requestId': 'DEL-105',
+        'completionEvidenceId': 'evidence-105',
+        'proofOfDelivery': {
+          'evidenceType': 'completion_proof',
+          'status': 'finalized',
+        },
+      });
+
+      expect(proof.hasCanonicalEvidence, isTrue);
+      expect(proof.evidenceId, 'evidence-105');
+      expect(proof.statusLabel, 'Proof available');
+    });
+
     test('delivery with no evidence is proof missing', () {
       final proof = proofOfDeliveryFromRecord({'requestId': 'DEL-102'});
 

@@ -10018,6 +10018,13 @@ class _AdminProofOfDeliveryPanel extends StatelessWidget {
                 ),
               ),
               const SizedBox(height: 12),
+            ] else if (proof.requiresAccessToken) ...[
+              OutlinedButton.icon(
+                onPressed: () => _openCanonicalAdminProof(context, proof),
+                icon: const Icon(Icons.open_in_full_rounded, size: 16),
+                label: const Text('Open canonical proof'),
+              ),
+              const SizedBox(height: 12),
             ],
             if (proof.vanguardIncomplete) ...[
               const Text(
@@ -10074,6 +10081,52 @@ class _AdminProofOfDeliveryPanel extends StatelessWidget {
   }
 }
 
+Future<void> _openCanonicalAdminProof(
+  BuildContext context,
+  ProofOfDeliveryDetails proof,
+) async {
+  final messenger = ScaffoldMessenger.maybeOf(context);
+  try {
+    final result = await FirebaseFunctions.instanceFor(region: 'us-central1')
+        .httpsCallable('getDeliveryEvidenceAccess')
+        .call(<String, dynamic>{'evidenceId': proof.evidenceId});
+    final data = result.data;
+    final url = data is Map ? '${data['url'] ?? ''}'.trim() : '';
+    if (url.isEmpty) {
+      messenger?.showSnackBar(
+        const SnackBar(content: Text('Canonical proof is not available yet.')),
+      );
+      return;
+    }
+    if (!context.mounted) return;
+    await showDialog<void>(
+      context: context,
+      builder: (_) => Dialog(
+        backgroundColor: const Color(0xFF07111F),
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(18),
+          child: Image.network(
+            url,
+            fit: BoxFit.contain,
+            errorBuilder: (_, __, ___) => const Padding(
+              padding: EdgeInsets.all(24),
+              child: Text('Canonical proof could not be loaded.'),
+            ),
+          ),
+        ),
+      ),
+    );
+  } on FirebaseFunctionsException catch (error) {
+    messenger?.showSnackBar(
+      SnackBar(content: Text(error.message ?? 'Proof access was denied.')),
+    );
+  } catch (_) {
+    messenger?.showSnackBar(
+      const SnackBar(content: Text('Canonical proof could not be opened.')),
+    );
+  }
+}
+
 class _DeliveryTimeline extends StatelessWidget {
   const _DeliveryTimeline({required this.record});
 
@@ -10081,6 +10134,7 @@ class _DeliveryTimeline extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final canonicalRows = _canonicalDeliveryTimelineRows(record);
     const steps = [
       ('Booking', Icons.add_circle_rounded),
       ('Accepted', Icons.verified_rounded),
@@ -10101,30 +10155,133 @@ class _DeliveryTimeline extends StatelessWidget {
             style: TextStyle(fontSize: 17, fontWeight: FontWeight.w900),
           ),
           const SizedBox(height: 14),
-          for (final step in steps)
-            Padding(
-              padding: const EdgeInsets.only(bottom: 12),
-              child: Row(
-                children: [
-                  Icon(
-                    step.$2,
-                    color: status.contains(step.$1.toLowerCase())
-                        ? const Color(0xFF34D399)
-                        : const Color(0xFF7DD3FC),
-                    size: 20,
-                  ),
-                  const SizedBox(width: 12),
-                  Text(
-                    step.$1,
-                    style: const TextStyle(fontWeight: FontWeight.w800),
-                  ),
-                ],
+          if (canonicalRows.isNotEmpty)
+            for (final row in canonicalRows)
+              Padding(
+                padding: const EdgeInsets.only(bottom: 12),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Icon(
+                      Icons.history_rounded,
+                      color: Color(0xFF34D399),
+                      size: 20,
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Text(
+                        '${row.$1} • ${row.$2}',
+                        style: const TextStyle(fontWeight: FontWeight.w800),
+                      ),
+                    ),
+                  ],
+                ),
+              )
+          else
+            for (final step in steps)
+              Padding(
+                padding: const EdgeInsets.only(bottom: 12),
+                child: Row(
+                  children: [
+                    Icon(
+                      step.$2,
+                      color: status.contains(step.$1.toLowerCase())
+                          ? const Color(0xFF34D399)
+                          : const Color(0xFF7DD3FC),
+                      size: 20,
+                    ),
+                    const SizedBox(width: 12),
+                    Text(
+                      step.$1,
+                      style: const TextStyle(fontWeight: FontWeight.w800),
+                    ),
+                  ],
+                ),
               ),
-            ),
         ],
       ),
     );
   }
+}
+
+List<(String, String)> _canonicalDeliveryTimelineRows(
+  Map<String, dynamic> record,
+) {
+  final raw = record['trackingTimeline'] ??
+      record['deliveryTimeline'] ??
+      record['lifecycleTimeline'] ??
+      record['timeline'];
+  final events = <Map<String, dynamic>>[];
+  if (raw is Map) {
+    for (final value in raw.values) {
+      if (value is Map) events.add(Map<String, dynamic>.from(value));
+    }
+  } else if (raw is List) {
+    for (final value in raw) {
+      if (value is Map) events.add(Map<String, dynamic>.from(value));
+    }
+  }
+  events.sort((a, b) {
+    final aDate = _adminTimelineDate(a['createdAt'] ?? a['timestamp']);
+    final bDate = _adminTimelineDate(b['createdAt'] ?? b['timestamp']);
+    if (aDate == null && bDate == null) return 0;
+    if (aDate == null) return 1;
+    if (bDate == null) return -1;
+    return aDate.compareTo(bDate);
+  });
+  return [
+    for (final event in events.take(10))
+      (
+        _adminTimelineStatusLabel([
+          event['status'],
+          event['nextStatus'],
+          event['eventType'],
+          event['type'],
+        ]),
+        _adminTimelineDateLabel(event['createdAt'] ?? event['timestamp'])
+      ),
+  ];
+}
+
+String _adminTimelineStatusLabel(List<Object?> values) {
+  var value = '';
+  for (final candidate in values) {
+    final text = '${candidate ?? ''}'.trim();
+    if (text.isNotEmpty && text != 'null') {
+      value = text;
+      break;
+    }
+  }
+  final normalized = value
+      .replaceAll('delivery_', '')
+      .replaceAll('_', ' ')
+      .replaceAll('-', ' ')
+      .trim()
+      .toLowerCase();
+  if (normalized.isEmpty) return 'Tracking update';
+  return normalized
+      .split(RegExp(r'\s+'))
+      .map((word) =>
+          word.isEmpty ? word : '${word[0].toUpperCase()}${word.substring(1)}')
+      .join(' ');
+}
+
+String _adminTimelineDateLabel(Object? value) {
+  final date = _adminTimelineDate(value);
+  if (date == null) return 'Recorded';
+  final day = date.day.toString().padLeft(2, '0');
+  final month = date.month.toString().padLeft(2, '0');
+  final hour = date.hour.toString().padLeft(2, '0');
+  final minute = date.minute.toString().padLeft(2, '0');
+  return '$day/$month/${date.year} $hour:$minute';
+}
+
+DateTime? _adminTimelineDate(Object? value) {
+  if (value is Timestamp) return value.toDate();
+  if (value is DateTime) return value;
+  if (value is int) return DateTime.fromMillisecondsSinceEpoch(value);
+  if (value is String) return DateTime.tryParse(value);
+  return null;
 }
 
 class _DeliveryArchiveBrowser extends StatelessWidget {
