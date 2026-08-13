@@ -173,6 +173,104 @@ void main() {
     );
   });
 
+  test('Sender mobile does not ship hard-coded operational ETAs', () {
+    for (final stage in [
+      SenderTrackingState.findingRider,
+      SenderTrackingState.riderAssigned,
+      SenderTrackingState.riderEnRouteToPickup,
+      SenderTrackingState.pickupComplete,
+      SenderTrackingState.inTransit,
+      SenderTrackingState.riderArrivingAtDropoff,
+      SenderTrackingState.delivered,
+    ]) {
+      expect(senderTrackingContentFor(stage).eta, isEmpty);
+    }
+  });
+
+  test('Sender ETA comes from backend authority with updating fallback', () {
+    expect(
+      senderCanonicalEtaForBackendData(
+        const {},
+        SenderTrackingState.riderAssigned,
+      ),
+      'Updating ETA',
+    );
+    expect(
+      senderCanonicalEtaForBackendData(
+        const {
+          'canonicalEta': {
+            'riderToPickupEta': {'minutes': 7},
+          },
+        },
+        SenderTrackingState.riderAssigned,
+      ),
+      '7 min',
+    );
+    expect(
+      senderCanonicalEtaForBackendData(
+        const {
+          'trackingEta': {
+            'deliveryArrivalEta': {'seconds': 660},
+          },
+        },
+        SenderTrackingState.inTransit,
+      ),
+      '11 min',
+    );
+    expect(
+      senderCanonicalEtaForBackendData(
+        const {
+          'canonicalEta': {
+            'riderToPickupEta': {'minutes': 3},
+          },
+        },
+        SenderTrackingState.riderArrivedAtPickup,
+      ),
+      isEmpty,
+    );
+    expect(
+      senderCanonicalEtaForBackendData(
+        const {
+          'canonicalEta': {
+            'deliveryArrivalEta': {'minutes': 2},
+          },
+        },
+        SenderTrackingState.riderArrivingAtDropoff,
+      ),
+      isEmpty,
+    );
+    expect(
+      senderCanonicalEtaForBackendData(
+        const {
+          'canonicalEta': {
+            'deliveryArrivalEta': {'minutes': 2},
+          },
+        },
+        SenderTrackingState.delivered,
+      ),
+      isEmpty,
+    );
+  });
+
+  test('Sender ETA treats stale backend values as updating', () {
+    final now = DateTime.utc(2026, 8, 13, 12);
+    expect(
+      senderCanonicalEtaForBackendData(
+        {
+          'canonicalEta': {
+            'riderToPickupEta': {
+              'minutes': 5,
+              'calculatedAt': now.subtract(const Duration(minutes: 11)),
+            },
+          },
+        },
+        SenderTrackingState.riderEnRouteToPickup,
+        now: now,
+      ),
+      'Updating ETA',
+    );
+  });
+
   test('Sender Web exposes every delivery adjustment review state', () {
     final source =
         File('lib/website/shared/circum_website_app.dart').readAsStringSync();

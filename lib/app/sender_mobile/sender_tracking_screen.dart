@@ -89,6 +89,7 @@ class SenderTrackingContent {
     bool? showReceiverPin,
     bool? showRiderCard,
     bool? showVanguard,
+    String? eta,
   }) {
     return SenderTrackingContent(
       title: title,
@@ -110,7 +111,7 @@ class SenderTrackingContent {
       quietVanguard: quietVanguard,
       issueVanguard: issueVanguard,
       deliveredVerified: deliveredVerified,
-      eta: eta,
+      eta: eta ?? this.eta,
     );
   }
 }
@@ -410,7 +411,6 @@ SenderTrackingContent senderTrackingContentFor(
         showAnonymousRiders: true,
         showVanguard: true,
         riderPosition: Offset(.34, .44),
-        eta: 'Usually under 6 min',
       );
     case SenderTrackingState.riderAssigned:
       return const SenderTrackingContent(
@@ -427,7 +427,6 @@ SenderTrackingContent senderTrackingContentFor(
         showReceiverPin: false,
         showVanguard: true,
         riderPosition: Offset(.40, .46),
-        eta: '7 min',
       );
     case SenderTrackingState.riderEnRouteToPickup:
       return const SenderTrackingContent(
@@ -444,7 +443,6 @@ SenderTrackingContent senderTrackingContentFor(
         showReceiverPin: false,
         showVanguard: true,
         riderPosition: Offset(.32, .40),
-        eta: '4 min',
       );
     case SenderTrackingState.riderArrivedAtPickup:
       return const SenderTrackingContent(
@@ -461,7 +459,6 @@ SenderTrackingContent senderTrackingContentFor(
         showReceiverPin: false,
         showVanguard: true,
         riderPosition: Offset(.20, .32),
-        eta: 'Arrived',
       );
     case SenderTrackingState.pickupComplete:
       return const SenderTrackingContent(
@@ -478,7 +475,6 @@ SenderTrackingContent senderTrackingContentFor(
         showReceiverPin: true,
         showVanguard: true,
         riderPosition: Offset(.24, .34),
-        eta: '18 min',
       );
     case SenderTrackingState.inTransit:
       return const SenderTrackingContent(
@@ -495,7 +491,6 @@ SenderTrackingContent senderTrackingContentFor(
         showReceiverPin: true,
         showVanguard: true,
         riderPosition: Offset(.46, .50),
-        eta: '11 min',
       );
     case SenderTrackingState.riderArrivingAtDropoff:
       return const SenderTrackingContent(
@@ -512,7 +507,6 @@ SenderTrackingContent senderTrackingContentFor(
         showReceiverPin: true,
         showVanguard: true,
         riderPosition: Offset(.68, .62),
-        eta: '< 3 min',
       );
     case SenderTrackingState.adjustmentUnderReview:
       return const SenderTrackingContent(
@@ -527,7 +521,6 @@ SenderTrackingContent senderTrackingContentFor(
         showRiderCard: true,
         showVanguard: true,
         riderPosition: Offset(.22, .34),
-        eta: 'Paused',
       );
     case SenderTrackingState.adjustmentMoreEvidence:
       return const SenderTrackingContent(
@@ -543,7 +536,6 @@ SenderTrackingContent senderTrackingContentFor(
         showVanguard: true,
         issueVanguard: true,
         riderPosition: Offset(.22, .34),
-        eta: 'Review pending',
       );
     case SenderTrackingState.adjustmentApproved:
       return const SenderTrackingContent(
@@ -558,7 +550,6 @@ SenderTrackingContent senderTrackingContentFor(
         showRiderCard: true,
         showVanguard: true,
         riderPosition: Offset(.22, .34),
-        eta: 'Paused',
       );
     case SenderTrackingState.adjustmentRejected:
       return const SenderTrackingContent(
@@ -573,7 +564,6 @@ SenderTrackingContent senderTrackingContentFor(
         showRiderCard: true,
         showVanguard: true,
         riderPosition: Offset(.32, .40),
-        eta: 'Resuming',
       );
     case SenderTrackingState.delivered:
       return SenderTrackingContent(
@@ -820,6 +810,193 @@ String _durationLabel(int seconds) {
   return '${minutes.toString().padLeft(2, '0')}:${remainder.toString().padLeft(2, '0')}';
 }
 
+String senderCanonicalEtaForBackendData(
+  Map<String, dynamic> data,
+  SenderTrackingState state, {
+  DateTime? now,
+}) {
+  final candidate = _canonicalEtaCandidateForState(data, state);
+  if (candidate != null &&
+      !_etaCandidateIsStale(candidate, now ?? DateTime.now())) {
+    return candidate.label;
+  }
+  return _senderEtaFallbackForState(state);
+}
+
+String _senderEtaFallbackForState(SenderTrackingState state) {
+  return switch (state) {
+    SenderTrackingState.findingRider ||
+    SenderTrackingState.riderAssigned ||
+    SenderTrackingState.riderEnRouteToPickup ||
+    SenderTrackingState.pickupComplete ||
+    SenderTrackingState.inTransit =>
+      'Updating ETA',
+    _ => '',
+  };
+}
+
+({String label, DateTime? calculatedAt})? _canonicalEtaCandidateForState(
+  Map<String, dynamic> data,
+  SenderTrackingState state,
+) {
+  final eta = _mapFrom(data['canonicalEta'] ?? data['etaAuthority']);
+  final trackingEta = _mapFrom(data['trackingEta'] ?? data['liveEta']);
+  final route = _mapFrom(data['route'] ?? data['routeFacts']);
+  final quote = _mapFrom(data['quote'] ?? data['canonicalQuote']);
+
+  switch (state) {
+    case SenderTrackingState.findingRider:
+      return _etaFromSources(
+          data,
+          [
+            'dispatchEta',
+            'matchingEta',
+            'serviceEta',
+            'preAssignmentEta',
+          ],
+          eta,
+          trackingEta,
+          route,
+          quote);
+    case SenderTrackingState.riderAssigned:
+    case SenderTrackingState.riderEnRouteToPickup:
+      return _etaFromSources(
+          data,
+          [
+            'riderToPickupEta',
+            'pickupEta',
+            'toPickupEta',
+          ],
+          eta,
+          trackingEta,
+          route,
+          quote);
+    case SenderTrackingState.pickupComplete:
+    case SenderTrackingState.inTransit:
+      return _etaFromSources(
+          data,
+          [
+            'deliveryArrivalEta',
+            'dropoffEta',
+            'toDropoffEta',
+            'arrivalEta',
+          ],
+          eta,
+          trackingEta,
+          route,
+          quote);
+    case SenderTrackingState.riderArrivedAtPickup:
+    case SenderTrackingState.riderArrivingAtDropoff:
+    case SenderTrackingState.delivered:
+    case SenderTrackingState.cancelled:
+    case SenderTrackingState.adjustmentUnderReview:
+    case SenderTrackingState.adjustmentMoreEvidence:
+    case SenderTrackingState.adjustmentApproved:
+    case SenderTrackingState.adjustmentRejected:
+    case SenderTrackingState.issue:
+    case SenderTrackingState.noActiveDelivery:
+    case SenderTrackingState.loading:
+    case SenderTrackingState.error:
+      return null;
+  }
+}
+
+({String label, DateTime? calculatedAt})? _etaFromSources(
+  Map<String, dynamic> root,
+  List<String> semanticKeys,
+  Map<String, dynamic> eta,
+  Map<String, dynamic> trackingEta,
+  Map<String, dynamic> route,
+  Map<String, dynamic> quote,
+) {
+  for (final source in [eta, trackingEta, root, route, quote]) {
+    for (final key in semanticKeys) {
+      final candidate = _etaCandidateFromValue(source[key]);
+      if (candidate != null) return candidate;
+      final seconds = _numberFrom(source['${key}Seconds']);
+      if (seconds != null && seconds > 0) {
+        return (
+          label: _etaMinutesLabel(seconds / 60),
+          calculatedAt: _etaCalculatedAt(source),
+        );
+      }
+      final minutes = _numberFrom(source['${key}Minutes']);
+      if (minutes != null && minutes > 0) {
+        return (
+          label: _etaMinutesLabel(minutes),
+          calculatedAt: _etaCalculatedAt(source),
+        );
+      }
+    }
+  }
+  return null;
+}
+
+({String label, DateTime? calculatedAt})? _etaCandidateFromValue(
+  Object? value,
+) {
+  if (value == null) return null;
+  if (value is num) {
+    if (value <= 0) return null;
+    return (label: _etaMinutesLabel(value.toDouble()), calculatedAt: null);
+  }
+  if (value is String) {
+    final trimmed = value.trim();
+    if (trimmed.isEmpty) return null;
+    final numeric = double.tryParse(trimmed);
+    if (numeric != null && numeric > 0) {
+      return (label: _etaMinutesLabel(numeric), calculatedAt: null);
+    }
+    return (label: trimmed, calculatedAt: null);
+  }
+  final map = _mapFrom(value);
+  if (map.isEmpty) return null;
+  final label = '${map['label'] ?? map['display'] ?? map['text'] ?? ''}'.trim();
+  if (label.isNotEmpty) {
+    return (label: label, calculatedAt: _etaCalculatedAt(map));
+  }
+  final seconds = _numberFrom(
+      map['seconds'] ?? map['durationSeconds'] ?? map['etaSeconds']);
+  if (seconds != null && seconds > 0) {
+    return (
+      label: _etaMinutesLabel(seconds / 60),
+      calculatedAt: _etaCalculatedAt(map),
+    );
+  }
+  final minutes = _numberFrom(
+      map['minutes'] ?? map['durationMinutes'] ?? map['etaMinutes']);
+  if (minutes != null && minutes > 0) {
+    return (
+      label: _etaMinutesLabel(minutes),
+      calculatedAt: _etaCalculatedAt(map),
+    );
+  }
+  return null;
+}
+
+String _etaMinutesLabel(double minutes) {
+  final rounded = math.max(1, minutes.round());
+  return rounded == 1 ? '1 min' : '$rounded min';
+}
+
+DateTime? _etaCalculatedAt(Map<String, dynamic> data) {
+  return _dateTimeFromBackend(
+    data['calculatedAt'] ??
+        data['updatedAt'] ??
+        data['basedOnLocationAt'] ??
+        data['locationUpdatedAt'],
+  );
+}
+
+bool _etaCandidateIsStale(
+  ({String label, DateTime? calculatedAt}) candidate,
+  DateTime now,
+) {
+  final calculatedAt = candidate.calculatedAt;
+  if (calculatedAt == null) return false;
+  return now.difference(calculatedAt).inMinutes > 10;
+}
+
 String _moneyText(double amount, String currency) {
   if (currency.trim().toUpperCase() == 'GBP') {
     return '£${amount.toStringAsFixed(2)}';
@@ -1013,6 +1190,11 @@ class _SenderMobileTrackingScreenState extends State<SenderMobileTrackingScreen>
     final content = senderTrackingContentFor(
       state,
       deliveryVerified: widget.deliveryVerified,
+    ).copyWith(
+      eta: senderCanonicalEtaForBackendData(
+        widget.engine.activeDeliveryData,
+        state,
+      ),
     );
     final mapMode = senderDeliveryMapModeFor(
       paymentStatus: widget.engine.senderPaymentStatus,
