@@ -62,10 +62,10 @@ function premiseHint(query) {
   const unit = clean.match(/\b(?:flat|apartment|apt|unit|suite)\s+[a-z0-9-]+\b/i);
   const withoutUnit = unit ? clean.replace(unit[0], " ") : clean;
   const house = withoutUnit.toLowerCase().match(/(?:^|[,\s])(\d+[a-z]?)(?=[,\s]+[a-z])/);
-  return {
+  return withResolutionPrecision({
     unit: text(unit && unit[0]),
     houseNumber: text(house && house[1]),
-  };
+  });
 }
 
 function samePremise(expected, actual) {
@@ -93,7 +93,7 @@ function mapAddress(result) {
     text(result.display_name);
   const lat = Number(result.lat);
   const lng = Number(result.lon);
-  return {
+  return withResolutionPrecision({
     displayAddress,
     lat,
     lng,
@@ -115,7 +115,7 @@ function mapAddress(result) {
       postcode,
       country: text(address.country || "United Kingdom"),
     },
-  };
+  });
 }
 
 function mapGooglePrediction(prediction, sourceInput = "") {
@@ -123,7 +123,7 @@ function mapGooglePrediction(prediction, sourceInput = "") {
   const hint = premiseHint(text(prediction.description) || sourceInput);
   const mainText = text(structured.main_text);
   const mainHint = premiseHint(mainText);
-  return {
+  return withResolutionPrecision({
     displayAddress: text(prediction.description),
     lat: null,
     lng: null,
@@ -142,7 +142,7 @@ function mapGooglePrediction(prediction, sourceInput = "") {
       }),
       country: "United Kingdom",
     }),
-  };
+  });
 }
 
 function googleAddressComponent(components, type) {
@@ -170,7 +170,7 @@ function mapGooglePlaceDetails(result) {
       googleAddressComponent(components, "administrative_area_level_2") ||
       googleAddressComponent(components, "administrative_area_level_1"));
   const postcode = text(googleAddressComponent(components, "postal_code")).toUpperCase();
-  return {
+  return withResolutionPrecision({
     displayAddress: text(result.formatted_address || result.name),
     lat,
     lng,
@@ -194,7 +194,7 @@ function mapGooglePlaceDetails(result) {
       postcode,
       country: googleAddressComponent(components, "country") || "United Kingdom",
     }),
-  };
+  });
 }
 
 function mapGoogleGeocodeResult(result, sourceInput = "") {
@@ -219,7 +219,7 @@ function mapGoogleGeocodeResult(result, sourceInput = "") {
       .map(text)
       .filter(Boolean)
       .join(", ");
-  return {
+  return withResolutionPrecision({
     displayAddress: displayAddress || text(result.formatted_address),
     lat,
     lng,
@@ -244,7 +244,7 @@ function mapGoogleGeocodeResult(result, sourceInput = "") {
       postcode,
       country: googleAddressComponent(components, "country") || "United Kingdom",
     }),
-  };
+  });
 }
 
 function cleanComponents(components) {
@@ -253,6 +253,16 @@ function cleanComponents(components) {
     if (text(value)) cleaned[key] = text(value);
   }
   return cleaned;
+}
+
+function withResolutionPrecision(address) {
+  const precision = text(address && address.resolutionPrecision) ||
+    text(address && address.components && address.components.resolutionPrecision);
+  if (!precision) return address;
+  return {
+    ...address,
+    resolutionPrecision: precision,
+  };
 }
 
 async function fetchJsonWithTimeout(url, {fetchImpl = global.fetch, headers = {}, timeoutMs = 6000} = {}) {

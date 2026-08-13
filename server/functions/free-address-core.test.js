@@ -167,6 +167,7 @@ test("numbered Google searches prefer authoritative premise geocode results", as
   assert.equal(result.results[0].displayAddress, "29 St Fillans Road, London, Greater London, SE6 1DQ, United Kingdom");
   assert.equal(result.results[0].components.buildingNumber, "29");
   assert.equal(result.results[0].components.addressLine1, "29 St Fillans Road");
+  assert.equal(result.results[0].resolutionPrecision, "premise");
   assert.equal(result.results[0].components.resolutionPrecision, "premise");
   assert.equal(result.results[1].placeId, "street-level");
   assert.equal(seenUrls.some((url) => url.includes("/geocode/json")), true);
@@ -203,6 +204,7 @@ test("flat details are preserved only after the building premise is verified", a
   assert.equal(result.results[0].displayAddress, "Flat 4, 29 St Fillans Road, London, SE6 1DQ, United Kingdom");
   assert.equal(result.results[0].components.apartment, "Flat 4");
   assert.equal(result.results[0].components.buildingNumber, "29");
+  assert.equal(result.results[0].resolutionPrecision, "unit");
   assert.equal(result.results[0].components.resolutionPrecision, "unit");
 });
 
@@ -274,6 +276,7 @@ test("resolves a selected Google place into coordinates and address components",
   assert.equal(result.lng, -0.0258);
   assert.equal(result.components.addressLine1, "29 St Fillans Road");
   assert.equal(result.components.postcode, "SE6 1DQ");
+  assert.equal(result.resolutionPrecision, "premise");
   assert.equal(result.components.resolutionPrecision, "premise");
 });
 
@@ -312,6 +315,7 @@ test("resolves Google flat display into structured apartment metadata", async ()
   assert.equal(result.components.apartment, "Flat 4");
   assert.equal(result.components.buildingNumber, "29");
   assert.equal(result.components.addressLine1, "29 Saint Fillans Road");
+  assert.equal(result.resolutionPrecision, "unit");
   assert.equal(result.components.resolutionPrecision, "unit");
 });
 
@@ -349,6 +353,7 @@ test("maps free address search results into Circum address suggestions", async (
   assert.equal(result.results.length, 1);
   assert.equal(result.results[0].provider, "openstreetmap_nominatim");
   assert.equal(result.results[0].components.postcode, "W1G 9QU");
+  assert.equal(result.results[0].resolutionPrecision, "street");
   assert.equal(result.results[0].components.resolutionPrecision, "street");
   assert.equal(result.results[0].lat, 51.5181037);
 });
