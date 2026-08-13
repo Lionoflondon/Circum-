@@ -31,6 +31,16 @@ test("accept rejects stale, assigned, unpaid, or terminal offers with diagnostic
   assert.match(source, /rider_offer_accept_success/);
 });
 
+test("acceptance requires canonical healthy Rider presence", () => {
+  const source = fs.readFileSync(
+      path.join(__dirname, "accept-ride-requests.js"),
+      "utf8",
+  );
+  assert.match(source, /rider-presence-core/);
+  assert.match(source, /canReceiveDispatch\(\{profile: rider, presence\}\)/);
+  assert.match(source, /Go online and remain available before accepting deliveries/);
+});
+
 test("accepted rider payload never exposes personal phone numbers to sender surfaces", () => {
   const source = fs.readFileSync(
       path.join(__dirname, "accept-ride-requests.js"),

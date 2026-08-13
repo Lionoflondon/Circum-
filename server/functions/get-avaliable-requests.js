@@ -2,6 +2,7 @@
 const functions = require("firebase-functions/v1");
 const {getFirestore} = require("firebase-admin/firestore");
 const {dispatchPriority, isDispatchable, riderCanViewDispatch, riderDispatchPriority, riderMatchesIris} = require("./iris-core");
+const presenceCore = require("./rider-presence-core");
 
 const REQUEST_SCAN_LIMIT = 100;
 const openStatuses = new Set(["requested", "pending", "broadcast", "broadcasted", "awaiting_rider", "finding_rider"]);
@@ -256,10 +257,16 @@ const getNearbyRequests = functions.https.onCall(async (data, context) => {
     }
 
     const riderProfileDoc = await getFirestore().collection("riderProfiles").doc(riderId).get();
+    const presenceDoc = await getFirestore().collection("riderPresence").doc(riderId).get();
     const riderData = {
       ...(riderProfileDoc.exists ? riderProfileDoc.data() : {}),
       ...riderDoc.data(),
     };
+    const presence = presenceDoc.exists ? presenceDoc.data() : {};
+    const founderRider = context.auth.token && context.auth.token.founderRider === true;
+    if (!founderRider && !presenceCore.canReceiveDispatch({profile: riderData, presence})) {
+      return {riderId, riderPosition: null, nearestRequests: [], reason: "presence_not_ready"};
+    }
     if (!riderData.position || !riderData.position.geopoint ||
         !Number.isFinite(Number(riderData.position.geopoint.latitude)) ||
         !Number.isFinite(Number(riderData.position.geopoint.longitude))) {
