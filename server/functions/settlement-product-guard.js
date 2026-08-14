@@ -16,4 +16,31 @@ function standardSettlementAllowed(delivery = {}) {
   return ["standard", "business"].includes(settlementProduct(delivery));
 }
 
-module.exports = {settlementProduct, standardSettlementAllowed};
+function canonicalRiderPayout(delivery = {}) {
+  const candidates = [
+    delivery.riderEarning,
+    delivery.riderPayout,
+    delivery.driverPayout,
+    delivery.estimatedEarnings,
+  ];
+  for (const candidate of candidates) {
+    const amount = Number(candidate);
+    if (Number.isFinite(amount) && amount > 0) return amount;
+  }
+  return null;
+}
+
+function lifecycleSettlementAllowed(delivery = {}) {
+  const product = settlementProduct(delivery);
+  if (["standard", "business"].includes(product)) return true;
+  if (!["gifts", "health_plus"].includes(product)) return false;
+  return `${delivery.riderSettlementAuthority || ""}`.startsWith("canonical") &&
+    canonicalRiderPayout(delivery) !== null;
+}
+
+module.exports = {
+  canonicalRiderPayout,
+  lifecycleSettlementAllowed,
+  settlementProduct,
+  standardSettlementAllowed,
+};

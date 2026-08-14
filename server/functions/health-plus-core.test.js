@@ -29,10 +29,11 @@ test("Health+ pricing ignores client breakdown values", () => {
   });
   assert.equal(pricing.amountPence, 1820);
   assert.equal(pricing.distanceFarePence, 1200);
+  assert.equal(pricing.weightSurchargePence, 0);
   assert.equal(pricing.priorityFeePence, 0);
 });
 
-test("Health+ one-off pricing applies standard Health+ policy", () => {
+test("Health+ one-off pricing applies Health+ policy without weight economics", () => {
   const pricing = calculateAuthoritativeHealthPlusPricing({
     distanceMiles: 4.8,
     medicationWeightKg: 12,
@@ -41,10 +42,28 @@ test("Health+ one-off pricing applies standard Health+ policy", () => {
   });
   assert.equal(pricing.baseFarePence, 500);
   assert.equal(pricing.distanceFarePence, 720);
-  assert.equal(pricing.weightSurchargePence, 700);
+  assert.equal(pricing.weightSurchargePence, 0);
+  assert.equal(pricing.weightContributionPence, 0);
   assert.equal(pricing.familySupportFeePence, 0);
   assert.equal(pricing.recurringDiscountPence, 0);
-  assert.equal(pricing.amountPence, 2040);
+  assert.equal(pricing.amountPence, 1340);
+});
+
+test("Health+ unknown or changing medication weight does not change customer charge", () => {
+  const unknown = calculateAuthoritativeHealthPlusPricing({
+    distanceMiles: 4.8,
+    subscriptionPlan: "family",
+    frequency: "one_off",
+  });
+  const heavy = calculateAuthoritativeHealthPlusPricing({
+    distanceMiles: 4.8,
+    medicationWeightKg: 20,
+    subscriptionPlan: "family",
+    frequency: "one_off",
+  });
+  assert.equal(unknown.amountPence, heavy.amountPence);
+  assert.equal(unknown.weightSurchargePence, 0);
+  assert.equal(heavy.weightSurchargePence, 0);
 });
 
 test("Health+ subscriptions use the locked monthly plan prices", () => {
@@ -77,7 +96,7 @@ test("missing authoritative Health+ pricing inputs fail safely", () => {
         subscriptionPlan: "priority",
         frequency: "one_off",
       }),
-      /route distance and medication weight are required/,
+      /route distance is required/,
   );
 });
 

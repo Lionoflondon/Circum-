@@ -35,7 +35,7 @@ function positiveNumber(value) {
 
 function validateMedicationWeightKg(value) {
   const weight = Number(value);
-  if (!Number.isFinite(weight) || weight <= 0 || weight > MAX_VALIDATED_MEDICATION_WEIGHT_KG) {
+  if (!Number.isFinite(weight) || weight < 0 || weight > MAX_VALIDATED_MEDICATION_WEIGHT_KG) {
     const error = new Error("Health+ route distance and medication weight are required; weight must be a finite positive value within supported limits.");
     error.code = "invalid-medication-weight";
     throw error;
@@ -160,10 +160,11 @@ function calculateHealthPlusAmountPence(input = {}) {
 function calculateAuthoritativeHealthPlusPricing(input = {}) {
   const routeFacts = input.routeFacts && typeof input.routeFacts === "object" ? input.routeFacts : null;
   const distanceMiles = positiveNumber(routeFacts && routeFacts.distanceMiles || input.distanceMiles);
-  const medicationWeightKg = validateMedicationWeightKg(input.medicationWeightKg);
+  const medicationWeightKg = input.medicationWeightKg == null || input.medicationWeightKg === "" ?
+    0 : validateMedicationWeightKg(input.medicationWeightKg);
   if (distanceMiles == null) {
     const error = new Error(
-        "Health+ route distance and medication weight are required " +
+        "Health+ route distance is required " +
         "for pricing.",
     );
     error.code = "missing-pricing-inputs";
@@ -173,10 +174,10 @@ function calculateAuthoritativeHealthPlusPricing(input = {}) {
   const recurring = input.recurring === true || frequency !== "one_off";
   const plan = normalizePlan(input.subscriptionPlan || input.healthPlusPlan);
   const planContract = healthPlusPlanContract(plan);
-  const weightBand = weightBandFor(medicationWeightKg);
+  const weightBand = weightBandFor(0);
   const baseFarePence = DELIVERY_BASE_FARE_PENCE;
   const distanceFarePence = calculateDistanceFarePence(distanceMiles);
-  const weightSurchargePence = weightBand.surchargePence;
+  const weightSurchargePence = 0;
   const serviceFeePence = HEALTH_PLUS_SERVICE_FEE_PENCE;
   const priorityFeePence = 0;
   const familySupportFeePence = 0;
@@ -199,6 +200,7 @@ function calculateAuthoritativeHealthPlusPricing(input = {}) {
     baseFarePence,
     distanceFarePence,
     weightSurchargePence,
+    weightContributionPence: 0,
     serviceFeePence,
     roadChargePence,
     roadCharges: input.roadCharges || null,

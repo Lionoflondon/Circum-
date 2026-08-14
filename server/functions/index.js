@@ -66,6 +66,7 @@ const riderConnect = require("./rider-connect");
 const senderTrust = require("./sender-trust");
 const referrals = require("./referrals");
 const movementLedger = require("./movement-ledger");
+const scheduledDelivery = require("./scheduled-delivery");
 const movementTimeline = require("./movement-timeline");
 const giftStoryAutomation = require("./gift-story-automation");
 const riderPresence = require("./rider-presence");
@@ -334,6 +335,7 @@ exports.syncSenderTrustBaseline = senderTrust.syncSenderTrustBaseline;
 exports.adminUpdateSenderTrust = senderTrust.adminUpdateSenderTrust;
 exports.ensureReferralCode = referrals.ensureReferralCode;
 exports.attachReferralCode = referrals.attachReferralCode;
+exports.getReferralDashboard = referrals.getReferralDashboard;
 exports.activateReferral = referrals.activateReferral;
 exports.activateReferralOnDeliveryCompleted =
   referrals.activateReferralOnDeliveryCompleted;
@@ -345,6 +347,13 @@ exports.onGiftMovementWrite = movementLedger.onGiftMovementWrite;
 exports.onHealthMovementWrite = movementLedger.onHealthMovementWrite;
 exports.onHealthPaymentMovementWrite =
   movementLedger.onHealthPaymentMovementWrite;
+exports.onMovementDeliveryWrite = movementLedger.onMovementDeliveryWrite;
+exports.getRiderScheduledJobs = scheduledDelivery.getRiderScheduledJobs;
+exports.adminScheduleGiftDelivery = scheduledDelivery.adminScheduleGiftDelivery;
+exports.adminScheduleHealthPlusDelivery =
+  scheduledDelivery.adminScheduleHealthPlusDelivery;
+exports.activateDueScheduledDeliveries =
+  scheduledDelivery.activateDueScheduledDeliveries;
 exports.onMovementTimelineWrite = movementTimeline.onMovementTimelineWrite;
 exports.onDeliveryLiveLocationWrite =
   movementTimeline.onDeliveryLiveLocationWrite;

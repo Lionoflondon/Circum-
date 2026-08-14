@@ -154,6 +154,91 @@ test("four concurrent completion calls settle exactly once and clear active stat
   assert.equal((await db.collection("riderEarnings").doc("rider-a").get()).data().completedDeliveries, 1);
 });
 
+test("four concurrent Health+ completions settle canonical logistics once with 6 TP", {skip: !emulator}, async () => {
+  const {db, clear, wrappedTracking} = await lifecycleHarness("health-completion-race");
+  await clear();
+  const deliveryId = "health-completion-race";
+  await seedRider(db, "rider-a");
+  await seedDispatchableDelivery(db, deliveryId, {
+    status: "arrived_at_dropoff",
+    state: "arrived_at_dropoff",
+    deliveryStatus: "arrived_at_dropoff",
+    deliveryStage: "arrived_at_dropoff",
+    riderId: "rider-a",
+    assignedRiderId: "rider-a",
+    serviceType: "HEALTH_PLUS",
+    sourceModule: "health_plus",
+    productType: "health_plus",
+    isHealthPlus: true,
+    requiresVanguard: true,
+    healthPlusPickupId: "pickup-health-race",
+    paymentStatus: "paid",
+    healthPlusCharge: 100,
+    deliveryCharge: 20,
+    logisticsValue: 20,
+    riderSettlementAuthority: "canonical_health_plus_delivery_pricing_v1",
+    riderEarning: 13,
+    platformShare: 7,
+    deliveryPhotoRequired: true,
+  });
+  await db.collection("prescriptionPickups").doc("pickup-health-race").set({
+    status: "arrived_at_dropoff",
+    senderId: "sender-1",
+    riderEarning: 999,
+  });
+  await db.collection("deliveryEvidence").doc("evidence-health-completion-race").set({
+    evidenceId: "evidence-health-completion-race",
+    deliveryId,
+    riderId: "rider-a",
+    stage: "dropoff",
+    storagePath: `deliveryEvidence/${deliveryId}/rider-a/evidence-health-completion-race.jpg`,
+    status: "finalized",
+  });
+  await db.collection("deliveryRequestsPrivate").doc(deliveryId).set({
+    deliveryId,
+    deliveryPin: "123456",
+  });
+  await db.collection("riderPresence").doc("rider-a").set({
+    riderId: "rider-a",
+    isOnline: true,
+    status: "online",
+    busy: true,
+    activeDeliveryId: deliveryId,
+  });
+  await db.collection("activeDeliveries").doc(deliveryId).set({deliveryId, riderId: "rider-a", status: "active"});
+  await db.collection("deliveryLiveLocations").doc(deliveryId).set({deliveryId, riderId: "rider-a"});
+
+  const request = {
+    deliveryId,
+    action: "verify_receiver_pin",
+    pin: "123456",
+    evidence: {evidenceId: "evidence-health-completion-race", recipientConfirmed: true},
+  };
+  const results = await Promise.allSettled(Array.from({length: 4}, () =>
+    wrappedTracking(request, authContext("rider-a"))));
+  assert.equal(results.filter((result) => result.status === "fulfilled").length, 4);
+
+  const delivery = (await db.collection("deliveryRequests").doc(deliveryId).get()).data();
+  assert.equal(delivery.status, "delivered");
+  assert.equal(delivery.trustPointsAwarded, 6);
+  assert.equal((await db.collection("riderEarningTransactions").where("deliveryId", "==", deliveryId).get()).size, 1);
+  assert.equal((await db.collection("riderEarningTransactions").doc(deliveryId).get()).data().baseAmount, 13);
+  const earnings = (await db.collection("riderEarnings").doc("rider-a").get()).data();
+  assert.equal(earnings.completedDeliveries, 1);
+  assert.equal(earnings.deliveryEarningsTotal, 13);
+  assert.equal((await db.collection("riderProfiles").doc("rider-a").get()).data().trustPoints, 6);
+  assert.equal((await db.collection("activeDeliveries").doc(deliveryId).get()).exists, false);
+  assert.equal((await db.collection("deliveryLiveLocations").doc(deliveryId).get()).exists, false);
+  const presence = (await db.collection("riderPresence").doc("rider-a").get()).data();
+  assert.equal(presence.busy, false);
+  assert.equal(presence.activeDeliveryId, undefined);
+
+  const replay = await wrappedTracking(request, authContext("rider-a"));
+  assert.equal(replay.idempotent, true);
+  assert.equal((await db.collection("riderEarningTransactions").where("deliveryId", "==", deliveryId).get()).size, 1);
+  assert.equal((await db.collection("riderEarnings").doc("rider-a").get()).data().completedDeliveries, 1);
+});
+
 test("completion rejects unpaid canonical delivery", {skip: !emulator}, async () => {
   const {db, clear, wrappedTracking} = await lifecycleHarness("completion-payment");
   await clear();

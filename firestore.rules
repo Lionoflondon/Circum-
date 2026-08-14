@@ -151,6 +151,18 @@ service cloud.firestore {
         'status',
         'deliveryStatus',
         'deliveryStage',
+        'dispatchStatus',
+        'matchingStatus',
+        'fulfilmentMode',
+        'fulfilmentStrategy',
+        'scheduledAt',
+        'scheduledWindow',
+        'scheduleActivatedAt',
+        'riderReservationMode',
+        'riderId',
+        'driverId',
+        'assignedRiderId',
+        'assignedDriverId',
         'paymentStatus',
         'paidAmount',
         'amountPaid',
@@ -252,6 +264,57 @@ service cloud.firestore {
         'paymentRecordId',
         'stripeCustomerId'
       ];
+    }
+
+    function protectedHealthPlusFields() {
+      return [
+        'healthPlusCharge',
+        'healthPlusPaymentType',
+        'healthPlusSubscriptionId',
+        'subscriptionEntitlement',
+        'entitlementStatus',
+        'paymentStatus',
+        'paidAt',
+        'amount',
+        'amountPence',
+        'price',
+        'deliveryCharge',
+        'logisticsValue',
+        'riderEarning',
+        'riderPayout',
+        'driverPayout',
+        'platformShare',
+        'riderSettlementAuthority',
+        'healthPlusDeliveryPricing',
+        'trustPoints',
+        'trustPointsAwarded',
+        'assignedRiderId',
+        'assignedDriverId',
+        'riderId',
+        'driverId',
+        'status',
+        'deliveryStatus',
+        'completedAt',
+        'deliveredAt',
+        'evidence',
+        'handoverEvidence',
+        'pickupEvidence'
+      ];
+    }
+
+    function isSafeOwnHealthPlusCreate() {
+      return signedIn() &&
+        (request.resource.data.senderId == request.auth.uid ||
+          request.resource.data.userId == request.auth.uid) &&
+        !request.resource.data.keys().hasAny(protectedHealthPlusFields());
+    }
+
+    function isSafeOwnHealthPlusUpdate() {
+      return signedIn() &&
+        (resource.data.senderId == request.auth.uid ||
+          resource.data.userId == request.auth.uid) &&
+        !request.resource.data.diff(resource.data).affectedKeys()
+          .hasAny(protectedHealthPlusFields());
     }
 
     function directContactFields() {
@@ -1005,6 +1068,10 @@ service cloud.firestore {
           'legendDeliveryId'
         ]) &&
         (isAdmin() || (
+          !request.resource.data.keys().hasAny([
+            'referredBy', 'referralCodeUsed', 'referralProgramStatus',
+            'referralCode', 'referralLink'
+          ]) &&
           !request.resource.data.keys().hasAny(userAdminOnlyRoleFields()) &&
           !hasUnsafeSelfUserRoleCreate() &&
           !hasUnsafeSelfUserTypeCreate()
@@ -1012,12 +1079,26 @@ service cloud.firestore {
       allow update: if hasRole('super_admin') ||
         ((isAdmin() || ownsSenderRecord(userId)) &&
           !changesLegendFields() &&
+          (isAdmin() || !request.resource.data.diff(resource.data).affectedKeys().hasAny([
+            'referredBy', 'referralCodeUsed', 'referralProgramStatus',
+            'referralCode', 'referralLink'
+          ])) &&
           (isAdmin() || (
             !request.resource.data.diff(resource.data).affectedKeys().hasAny(userAdminOnlyRoleFields()) &&
             !hasUnsafeSelfUserRoleUpdate() &&
             !hasUnsafeSelfUserTypeUpdate()
           )));
       allow delete: if hasRole('super_admin');
+    }
+
+    match /referralCodes/{code} {
+      allow read, write: if false;
+    }
+
+    match /referrals/{referredUserId} {
+      allow read: if isAdmin() || (signedIn() &&
+        (request.auth.uid == referredUserId || resource.data.referrerUserId == request.auth.uid));
+      allow create, update, delete: if isAdmin();
     }
 
     match /usernames/{normalizedHandle} {
@@ -1058,14 +1139,13 @@ service cloud.firestore {
     }
 
     match /prescriptionPickups/{pickupId} {
-      allow read, update, delete: if isAdmin() ||
+      allow read, delete: if isAdmin() ||
         canReadBusinessId(resource.data.businessId) ||
         (signedIn() && resource.data.senderId == request.auth.uid) ||
         (signedIn() && resource.data.userId == request.auth.uid) ||
         isAssignedRider();
-      allow create: if isAdmin() ||
-        (signedIn() && request.resource.data.senderId == request.auth.uid) ||
-        (signedIn() && request.resource.data.userId == request.auth.uid);
+      allow update: if isAdmin() || isSafeOwnHealthPlusUpdate();
+      allow create: if isAdmin() || isSafeOwnHealthPlusCreate();
     }
 
     match /healthPlusProfiles/{profileId} {

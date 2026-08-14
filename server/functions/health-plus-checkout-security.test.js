@@ -43,7 +43,7 @@ test("Health+ checkout uses booking data, not submitted amount fields", () => {
 test("Health+ checkout fails safely without authoritative pricing data", () => {
   assert.match(source, /checkout_pricing_failed/);
   assert.match(source, /failed-precondition/);
-  assert.match(source, /requires route distance and medication weight/);
+  assert.match(source, /requires canonical route distance/);
 });
 
 test("Health+ checkout is idempotent and blocks paid bookings", () => {

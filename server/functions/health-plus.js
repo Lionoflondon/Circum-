@@ -368,7 +368,7 @@ exports.createHealthPlusBooking = functions.runWith({secrets: ["GOOGLE_ROUTES_AP
       roadChargeCustomerAmount: roadCharges.customerAmount,
     }));
   } catch (error) {
-    throw new functions.https.HttpsError("failed-precondition", "Health+ booking requires route distance and medication weight before checkout.");
+    throw new functions.https.HttpsError("failed-precondition", "Health+ booking requires canonical route distance before checkout.");
   }
 
   const db = getFirestore();
@@ -740,7 +740,7 @@ exports.createHealthPlusCheckoutSession = functions.https.onRequest(async (req, 
       });
       throw new functions.https.HttpsError(
           "failed-precondition",
-          "Health+ booking requires route distance and medication weight before checkout.",
+          "Health+ booking requires canonical route distance before checkout.",
       );
     }
     const amountPence = authoritative.amountPence;

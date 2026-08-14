@@ -125,6 +125,37 @@ test("rider earnings, wallet ledger, payout requests, and bank data are not clie
   );
 });
 
+test("Health+ financial and completion authority fields are backend/admin protected", () => {
+  assert.match(rules, /function protectedHealthPlusFields\(\)/);
+  assert.match(rules, /function isSafeOwnHealthPlusCreate\(\)/);
+  assert.match(rules, /function isSafeOwnHealthPlusUpdate\(\)/);
+  assert.match(
+      rules,
+      /match \/prescriptionPickups\/\{pickupId\}[\s\S]*allow update: if isAdmin\(\) \|\| isSafeOwnHealthPlusUpdate\(\);/,
+  );
+  for (const field of [
+    "healthPlusCharge",
+    "healthPlusPaymentType",
+    "healthPlusSubscriptionId",
+    "subscriptionEntitlement",
+    "paymentStatus",
+    "deliveryCharge",
+    "logisticsValue",
+    "riderEarning",
+    "platformShare",
+    "riderSettlementAuthority",
+    "healthPlusDeliveryPricing",
+    "trustPoints",
+    "trustPointsAwarded",
+    "assignedRiderId",
+    "status",
+    "completedAt",
+    "handoverEvidence",
+  ]) {
+    assert.match(rules, new RegExp(`'${field}'`));
+  }
+});
+
 test("Stripe Connect webhook replay ledger is server-owned only", () => {
   assert.match(
       rules,

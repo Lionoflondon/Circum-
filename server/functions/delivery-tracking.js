@@ -7,7 +7,7 @@ const {getStorage} = require("firebase-admin/storage");
 const tracking = require("./sender-tracking-state-core");
 const {highestTrustAward} = require("./trust-award");
 const {planRoadChargeSettlement, pence} = require("./road-charge-settlement");
-const {standardSettlementAllowed, settlementProduct} = require("./settlement-product-guard");
+const {lifecycleSettlementAllowed, settlementProduct} = require("./settlement-product-guard");
 const {appendPoint, evaluateActualTraversal} = require("./actual-road-traversal");
 const {roadChargesFor} = require("./road-charge-settlement");
 const {createEntitlement, settleEntitlementToRoth} = require("./scheduled-road-charge-refunds");
@@ -671,10 +671,10 @@ exports.updateDeliveryTrackingStatus = functions.runWith({enforceAppCheck: true}
     if (!transitionDecision.allowed) {
       throw new functions.https.HttpsError("failed-precondition", transitionDecision.message);
     }
-    if (nextStatus === "delivered" && !standardSettlementAllowed(delivery)) {
+    if (nextStatus === "delivered" && !lifecycleSettlementAllowed(delivery)) {
       throw new functions.https.HttpsError(
           "failed-precondition",
-          `Settlement for ${settlementProduct(delivery)} deliveries must use its domain completion authority.`,
+          `Canonical Rider settlement is not ready for this ${settlementProduct(delivery)} delivery.`,
       );
     }
     if (nextStatus === "delivered" && !completionPaymentAllowed(delivery)) {

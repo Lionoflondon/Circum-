@@ -19,6 +19,16 @@ function cleanObject(value) {
   );
 }
 
+function withoutGiftDeliveryAuthority(value) {
+  const clean = cleanObject(value);
+  for (const key of [
+    "deliveryCharge", "riderEarning", "riderPayout", "driverPayout",
+    "platformShare", "riderSettlementAuthority", "giftDeliveryPricing",
+    "authoritativeRouteFacts",
+  ]) delete clean[key];
+  return clean;
+}
+
 function text(value, fallback = "") {
   return String(value || fallback).trim();
 }
@@ -41,7 +51,7 @@ function giftVanguardFields() {
 
 async function createCampaignPaymentDraft({data, context}) {
   const db = getFirestore();
-  const participantPayload = cleanObject(data.campaignParticipant);
+  const participantPayload = withoutGiftDeliveryAuthority(data.campaignParticipant);
   const campaignId = text(participantPayload.campaignId);
   const campaignName = text(participantPayload.campaignName);
   const gross = Number(data.grossGiftBudget || participantPayload.grossGiftBudget || participantPayload.budget || 0);
@@ -103,7 +113,7 @@ async function createCampaignPaymentDraft({data, context}) {
 
 async function createStandardPaymentDraft({data, context}) {
   const db = getFirestore();
-  const payload = cleanObject(data.giftDraft);
+  const payload = withoutGiftDeliveryAuthority(data.giftDraft);
   const requestedId = text(data.giftDraftId || payload.giftDraftId).replace(/[/.#[\]]/g, "_");
   const draftRef = requestedId ?
     db.collection("giftPaymentDrafts").doc(requestedId) :
