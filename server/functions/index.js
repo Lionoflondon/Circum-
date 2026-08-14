@@ -1,4 +1,5 @@
 /* eslint-disable max-len, require-jsdoc */
+// Jesus is Lord.
 const {initializeApp} = require("firebase-admin/app");
 const {getFirestore} = require("firebase-admin/firestore");
 const {getMessaging} = require("firebase-admin/messaging");
