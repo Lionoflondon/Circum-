@@ -1,0 +1,117 @@
+{
+  "schemaVersion": 1,
+  "releaseKind": "firebase-functions",
+  "project": "circum-2797c",
+  "region": "us-central1",
+  "runtime": "nodejs22",
+  "generatedAt": "2026-08-14T01:54:14.766Z",
+  "workflow": {
+    "provider": "local",
+    "runId": null,
+    "runAttempt": null,
+    "workflow": null
+  },
+  "git": {
+    "commitSha": "65852f6acb26f8ce3438906bcb910dfebca4205d",
+    "branch": "detached"
+  },
+  "sourceFingerprint": {
+    "algorithm": "sha256",
+    "scope": "git-tracked server/functions package excluding node_modules",
+    "fileCount": 183,
+    "digest": "3115f6f3376ee35034a8ef9a10d7e1c411c752f2e9115f8798967ce476c0739a"
+  },
+  "durationContractGuard": {
+    "ok": true,
+    "guardedSource": "server/functions/sender-booking.js",
+    "canonicalDurationContract": "routeFacts.durationSeconds",
+    "canonicalDurationPresent": true,
+    "legacyHardcodedDurationPresent": false
+  },
+  "functions": {
+    "createSenderBookingQuote": {
+      "sourceFingerprint": "3115f6f3376ee35034a8ef9a10d7e1c411c752f2e9115f8798967ce476c0739a",
+      "canonicalDurationContract": "routeFacts.durationSeconds",
+      "live": {
+        "name": "createSenderBookingQuote",
+        "state": "ACTIVE",
+        "runtime": "nodejs20",
+        "updateTime": "2026-08-14T01:56:59.544Z",
+        "serviceAccount": "circum-2797c@appspot.gserviceaccount.com",
+        "labels": {
+          "deployment-callable": "true",
+          "deployment-tool": "cli-firebase",
+          "firebase-functions-hash": "f3defa766bd32a1974a851ca285be42552fc0897"
+        },
+        "build": null,
+        "source": null,
+        "uri": "https://us-central1-circum-2797c.cloudfunctions.net/createSenderBookingQuote",
+        "environment": null,
+        "versionId": "66"
+      },
+      "releaseManifestHash": "04b5aafcafbe517c6b1e5d844b93ce6ad03f62c67b217c37455fe15bd68c8de1"
+    },
+    "createSenderPaidDelivery": {
+      "sourceFingerprint": "3115f6f3376ee35034a8ef9a10d7e1c411c752f2e9115f8798967ce476c0739a",
+      "canonicalDurationContract": "routeFacts.durationSeconds",
+      "live": {
+        "name": "createSenderPaidDelivery",
+        "state": "ACTIVE",
+        "runtime": "nodejs20",
+        "updateTime": "2026-08-14T01:56:59Z",
+        "serviceAccount": "circum-2797c@appspot.gserviceaccount.com",
+        "labels": {
+          "deployment-callable": "true",
+          "deployment-tool": "cli-firebase",
+          "firebase-functions-hash": "fbbc6e56565149637621a00ff6e571d5d2c14a8b"
+        },
+        "build": null,
+        "source": null,
+        "uri": "https://us-central1-circum-2797c.cloudfunctions.net/createSenderPaidDelivery",
+        "environment": null,
+        "versionId": "69"
+      },
+      "releaseManifestHash": "04b5aafcafbe517c6b1e5d844b93ce6ad03f62c67b217c37455fe15bd68c8de1"
+    }
+  },
+  "releaseManifestHash": "04b5aafcafbe517c6b1e5d844b93ce6ad03f62c67b217c37455fe15bd68c8de1",
+  "postDeploy": {
+    "capturedAt": "2026-08-14T01:57:22.746Z",
+    "functions": {
+      "createSenderBookingQuote": {
+        "name": "createSenderBookingQuote",
+        "state": "ACTIVE",
+        "runtime": "nodejs20",
+        "updateTime": "2026-08-14T01:56:59.544Z",
+        "serviceAccount": "circum-2797c@appspot.gserviceaccount.com",
+        "labels": {
+          "deployment-callable": "true",
+          "deployment-tool": "cli-firebase",
+          "firebase-functions-hash": "f3defa766bd32a1974a851ca285be42552fc0897"
+        },
+        "build": null,
+        "source": null,
+        "uri": "https://us-central1-circum-2797c.cloudfunctions.net/createSenderBookingQuote",
+        "environment": null,
+        "versionId": "66"
+      },
+      "createSenderPaidDelivery": {
+        "name": "createSenderPaidDelivery",
+        "state": "ACTIVE",
+        "runtime": "nodejs20",
+        "updateTime": "2026-08-14T01:56:59Z",
+        "serviceAccount": "circum-2797c@appspot.gserviceaccount.com",
+        "labels": {
+          "deployment-callable": "true",
+          "deployment-tool": "cli-firebase",
+          "firebase-functions-hash": "fbbc6e56565149637621a00ff6e571d5d2c14a8b"
+        },
+        "build": null,
+        "source": null,
+        "uri": "https://us-central1-circum-2797c.cloudfunctions.net/createSenderPaidDelivery",
+        "environment": null,
+        "versionId": "69"
+      }
+    }
+  }
+}
