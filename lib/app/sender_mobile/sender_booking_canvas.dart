@@ -12,7 +12,6 @@ import 'package:flutter_stripe/flutter_stripe.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:url_launcher/url_launcher.dart';
 import 'package:uuid/uuid.dart';
 
 import '../business/business_journey_context.dart';
@@ -23,6 +22,7 @@ import '../send_package/models/place_coordinates.m.dart';
 import '../send_package/repo/place_api.dart';
 import 'sender_accessibility.dart';
 import 'sender_booking_state.dart';
+import 'sender_external_navigation.dart';
 import 'sender_finance.dart';
 import 'sender_saved_addresses.dart';
 import 'sender_tracking_screen.dart';
@@ -373,8 +373,9 @@ class _SenderBookingCanvasState extends State<SenderBookingCanvas> {
     _receiverPhone.text = restored.receiverPhone;
     _notes.text = restored.deliveryNotes;
     _scheduledDate.text = restored.scheduledDate;
-    _scheduledJourneyTime.text =
-        _londonTimeFromIso(restored.scheduledJourneyAt);
+    _scheduledJourneyTime.text = _londonTimeFromIso(
+      restored.scheduledJourneyAt,
+    );
     _customWindowStart.text = restored.customWindowStart;
     _customWindowEnd.text = restored.customWindowEnd;
     _item.text = restored.itemName;
@@ -736,10 +737,10 @@ class _SenderBookingCanvasState extends State<SenderBookingCanvas> {
   }
 
   Future<bool> _resolveTypedAddressIfNeeded() async {
-    final pickup = _draft.step == SenderBookingStep.pickup;
+    final isPickupStep = _draft.step == SenderBookingStep.pickup;
     final address =
-        (pickup ? _draft.pickupAddress : _draft.dropoffAddress).trim();
-    final hasCoordinates = pickup
+        (isPickupStep ? _draft.pickupAddress : _draft.dropoffAddress).trim();
+    final hasCoordinates = isPickupStep
         ? _draft.pickupLat != null && _draft.pickupLng != null
         : _draft.dropoffLat != null && _draft.dropoffLng != null;
     if (address.isEmpty || hasCoordinates) return true;
@@ -751,64 +752,49 @@ class _SenderBookingCanvasState extends State<SenderBookingCanvas> {
     try {
       final provider = PlaceApiProvider(const Uuid());
       final lang = Localizations.localeOf(context).languageCode;
-      final suggestions = await provider.fetchSuggestions(
-        address,
-        lang,
-      );
+      final resolved = await provider.resolveTypedAddress(address, lang);
       if (!mounted) return false;
-      final normalized = address.toLowerCase().replaceAll(RegExp(r'\s+'), ' ');
-      final match = suggestions.where((suggestion) {
-        final description = suggestion.description
-            .trim()
-            .toLowerCase()
-            .replaceAll(RegExp(r'\s+'), ' ');
-        final main = suggestion.mainText
-            .trim()
-            .toLowerCase()
-            .replaceAll(RegExp(r'\s+'), ' ');
-        return description == normalized || main == normalized;
-      }).firstOrNull;
-      if (match == null) {
-        throw StateError('No exact address match found');
+      final lat = resolved.lat;
+      final lng = resolved.lng;
+      if (lat == null || lng == null) {
+        throw StateError('Resolved address did not include coordinates');
       }
-      final coordinate = await provider.fetchPlaceDetails(
-        match.placeId,
-        lang,
-      );
-      if (!mounted) return false;
-      if (pickup) {
+      if (isPickupStep) {
         context.read<SendPackageBloc>().add(
               SetPickupAddress(
-                val: match.description,
-                pickupLocationSubAddress: match.subText,
-                placeId: match.placeId,
+                val: resolved.description,
+                pickupLocationSubAddress: resolved.subText,
+                placeId: resolved.placeId,
                 lang: lang,
               ),
             );
+        _pickup.text = resolved.description;
         _setDraft(
           _draft.copyWith(
-            pickupAddress: match.description,
-            pickupLat: coordinate.lat,
-            pickupLng: coordinate.lng,
+            pickupAddress: resolved.description,
+            pickupLat: lat,
+            pickupLng: lng,
           ),
         );
       } else {
         context.read<SendPackageBloc>().add(
               SetDeliveryAddress(
-                val: match.description,
-                destinationLocationSubAddress: match.subText,
-                placeId: match.placeId,
+                val: resolved.description,
+                destinationLocationSubAddress: resolved.subText,
+                placeId: resolved.placeId,
                 lang: lang,
               ),
             );
+        _dropoff.text = resolved.description;
         _setDraft(
           _draft.copyWith(
-            dropoffAddress: match.description,
-            dropoffLat: coordinate.lat,
-            dropoffLng: coordinate.lng,
+            dropoffAddress: resolved.description,
+            dropoffLat: lat,
+            dropoffLng: lng,
           ),
         );
       }
+      debugPrint('Typed Sender address resolved via backend.');
       return true;
     } catch (error, stackTrace) {
       debugPrint('Typed Sender address resolution failed: $error');
@@ -816,7 +802,7 @@ class _SenderBookingCanvasState extends State<SenderBookingCanvas> {
       if (mounted) {
         setState(() {
           _addressResolutionMessage =
-              'Please choose a matching address suggestion before continuing.';
+              'We could not verify that address. Add a house or flat number, street, town and postcode, then try again.';
         });
       }
       return false;
@@ -1857,13 +1843,15 @@ class _DeliveryTimePanel extends StatelessWidget {
             selectedDate: draft.scheduledDate,
             onSelected: (value) {
               scheduledDate.text = value;
-              onDraft(draft.copyWith(
-                scheduledDate: value,
-                scheduledJourneyAt: _scheduledJourneyIso(
-                  value,
-                  scheduledJourneyTime.text,
+              onDraft(
+                draft.copyWith(
+                  scheduledDate: value,
+                  scheduledJourneyAt: _scheduledJourneyIso(
+                    value,
+                    scheduledJourneyTime.text,
+                  ),
                 ),
-              ));
+              );
             },
           ),
           if (pastDate) ...[
@@ -1880,12 +1868,14 @@ class _DeliveryTimePanel extends StatelessWidget {
             controller: scheduledJourneyTime,
             hint: 'HH:MM',
             keyboardType: TextInputType.datetime,
-            onChanged: (value) => onDraft(draft.copyWith(
-              scheduledJourneyAt: _scheduledJourneyIso(
-                draft.scheduledDate,
-                value,
+            onChanged: (value) => onDraft(
+              draft.copyWith(
+                scheduledJourneyAt: _scheduledJourneyIso(
+                  draft.scheduledDate,
+                  value,
+                ),
               ),
-            )),
+            ),
           ),
           const SizedBox(height: 12),
           const _SectionLabel('Preferred collection window'),
@@ -3133,10 +3123,7 @@ List<String> _customerIrisReasons(dynamic iris, SenderBookingDraft draft) {
   return reasons.toSet().toList(growable: false);
 }
 
-bool _routeReadyForQuote(
-  SendPackageState engine, [
-  SenderBookingDraft? draft,
-]) {
+bool _routeReadyForQuote(SendPackageState engine, [SenderBookingDraft? draft]) {
   return engine.distance != null ||
       engine.pickupCoordinate != null && engine.desinationCoordinate != null ||
       draft?.pickupLat != null &&
@@ -5071,7 +5058,12 @@ class _PaymentPanelState extends State<_PaymentPanel> {
       onDraft(draft.copyWith(paymentStatus: SenderPaymentStatus.failed));
       return;
     }
-    final opened = await launchUrl(checkoutUrl, webOnlyWindowName: '_self');
+    final opened = await SenderExternalNavigation.open(
+      context,
+      checkoutUrl,
+      destination: SenderExternalDestination.approvedStripePayment,
+      webOnlyWindowName: '_self',
+    );
     if (!opened && context.mounted) {
       onDraft(draft.copyWith(paymentStatus: SenderPaymentStatus.failed));
     }

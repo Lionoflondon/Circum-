@@ -5,7 +5,6 @@ import 'package:cloud_functions/cloud_functions.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
-import 'package:url_launcher/url_launcher.dart';
 
 import '../gifts/gift_system_policy.dart';
 import '../gifts/gifts_social_policy.dart';
@@ -13,6 +12,7 @@ import 'design_system/sender_design_system.dart';
 import 'gift_journey_draft.dart';
 import 'gift_relationship_view.dart';
 import 'gift_story_view.dart';
+import 'sender_external_navigation.dart';
 
 const senderGiftCampaignParticipantsCollectionName = 'giftCampaignParticipants';
 const senderGiftCampaignMatchesCollectionName = 'giftCampaignMatches';
@@ -85,8 +85,9 @@ class _GiftCampaignViewState extends State<GiftCampaignView> {
   String? _message;
 
   bool get _hasAboutSignal {
-    final hasSelectedSignal =
-        _selected.values.any((values) => values.isNotEmpty);
+    final hasSelectedSignal = _selected.values.any(
+      (values) => values.isNotEmpty,
+    );
     final hasCustomSignal = _customInspirationController.text.trim().isNotEmpty;
     return _displayNameController.text.trim().isNotEmpty &&
         (hasSelectedSignal || hasCustomSignal);
@@ -247,8 +248,9 @@ class _GiftCampaignViewState extends State<GiftCampaignView> {
           '${data['giftStoryAdminUserId'] ?? data['adminUserId'] ?? ''}',
       giftStoryAdminOverrideReason:
           '${data['giftStoryAdminOverrideReason'] ?? data['overrideReason'] ?? ''}',
-      giftStoryAdminOverrideAt:
-          _stringValue(data['giftStoryAdminOverrideAt'] ?? data['overrideAt']),
+      giftStoryAdminOverrideAt: _stringValue(
+        data['giftStoryAdminOverrideAt'] ?? data['overrideAt'],
+      ),
       giftStoryPreviousStatus:
           '${data['giftStoryPreviousStatus'] ?? data['previousStoryStatus'] ?? ''}',
       giftStoryOverrideType:
@@ -697,9 +699,7 @@ class _GiftCampaignViewState extends State<GiftCampaignView> {
         _CampaignGlassCard(title: 'Privacy mode', body: _senderRevealModeLabel),
         const SizedBox(height: 12),
         _CampaignGlassCard(
-          title: 'Budget',
-          body: '£${_budget.toStringAsFixed(0)}',
-        ),
+            title: 'Budget', body: '£${_budget.toStringAsFixed(0)}'),
         const SizedBox(height: 12),
         const _CampaignGlassCard(
           title: 'No recipient yet',
@@ -801,10 +801,7 @@ class _GiftCampaignViewState extends State<GiftCampaignView> {
         ),
       ),
       SizedBox(height: 12),
-      _CampaignGlassCard(
-        title: 'Privacy and safety',
-        body: copy.privacyNote,
-      ),
+      _CampaignGlassCard(title: 'Privacy and safety', body: copy.privacyNote),
       if (timestamp != null) ...[
         const SizedBox(height: 12),
         _CampaignGlassCard(title: 'Last updated', body: timestamp),
@@ -1061,7 +1058,13 @@ class _GiftCampaignViewState extends State<GiftCampaignView> {
         if (checkoutUrl == null || checkoutUrl.host.isEmpty) {
           throw StateError('Secure checkout could not be opened.');
         }
-        final opened = await launchUrl(checkoutUrl, webOnlyWindowName: '_self');
+        if (!mounted) return;
+        final opened = await SenderExternalNavigation.open(
+          context,
+          checkoutUrl,
+          destination: SenderExternalDestination.approvedStripePayment,
+          webOnlyWindowName: '_self',
+        );
         if (!opened) throw StateError('Secure checkout could not be opened.');
         return;
       }
@@ -1387,45 +1390,43 @@ class _CampaignGlassCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => AppGlassContainer(
-      padding: const EdgeInsets.all(18),
-      radius: 20,
-      accent: const Color(0xFFC9B8FF),
-      surfaceColor: Colors.white.withValues(alpha: .052),
-      borderColor: Colors.white.withValues(alpha: .10),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  title,
-                  style: GoogleFonts.inter(
-                    color: Colors.white,
-                    fontSize: 14,
-                    fontWeight: FontWeight.w800,
+        padding: const EdgeInsets.all(18),
+        radius: 20,
+        accent: const Color(0xFFC9B8FF),
+        surfaceColor: Colors.white.withValues(alpha: .052),
+        borderColor: Colors.white.withValues(alpha: .10),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    title,
+                    style: GoogleFonts.inter(
+                      color: Colors.white,
+                      fontSize: 14,
+                      fontWeight: FontWeight.w800,
+                    ),
                   ),
-                ),
-                const SizedBox(height: 7),
-                Text(
-                  body,
-                  style: GoogleFonts.inter(
-                    color: const Color(0xFFB8AAB8),
-                    fontSize: 12.5,
-                    height: 1.42,
-                    fontWeight: FontWeight.w600,
+                  const SizedBox(height: 7),
+                  Text(
+                    body,
+                    style: GoogleFonts.inter(
+                      color: const Color(0xFFB8AAB8),
+                      fontSize: 12.5,
+                      height: 1.42,
+                      fontWeight: FontWeight.w600,
+                    ),
                   ),
-                ),
-              ],
+                ],
+              ),
             ),
-          ),
-          if (trailing != null) ...[
-            const SizedBox(width: 12),
-            trailing!,
+            if (trailing != null) ...[const SizedBox(width: 12), trailing!],
           ],
-        ],
-      ));
+        ),
+      );
 }
 
 class _CampaignToggle extends StatelessWidget {

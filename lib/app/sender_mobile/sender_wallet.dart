@@ -10,7 +10,6 @@ import 'package:intl/intl.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-import '../business/business_view.dart';
 import '../send_package/view/ride_chats.dart';
 import 'design_system/sender_design_system.dart';
 import 'sender_accessibility.dart';
@@ -33,8 +32,10 @@ class SenderWalletData {
     this.updatedAt,
   });
 
-  factory SenderWalletData.fromMap(Map<String, dynamic> map,
-      {bool onboardingCompleted = false}) {
+  factory SenderWalletData.fromMap(
+    Map<String, dynamic> map, {
+    bool onboardingCompleted = false,
+  }) {
     final timestamp = map['updatedAt'];
     return SenderWalletData(
       balance: (map['balance'] as num?)?.toDouble() ?? 0,
@@ -251,8 +252,10 @@ class _CachedSenderWalletSnapshot {
     if (walletData is! Map) return null;
     final transactions = (data['transactions'] as List? ?? const [])
         .whereType<Map>()
-        .map((item) =>
-            SenderWalletTransaction.fromMap(Map<String, dynamic>.from(item)))
+        .map(
+          (item) =>
+              SenderWalletTransaction.fromMap(Map<String, dynamic>.from(item)),
+        )
         .toList(growable: false);
     return _CachedSenderWalletSnapshot(
       wallet: SenderWalletData.fromMap(
@@ -336,9 +339,10 @@ class FirebaseSenderWalletRepository implements SenderWalletRepository {
     } catch (error) {
       debugPrint('Sender Wallet profile flag unavailable: $error');
     }
-    return SenderWalletData.fromMap(wallet,
-        onboardingCompleted:
-            profile['senderWalletOnboardingCompleted'] == true);
+    return SenderWalletData.fromMap(
+      wallet,
+      onboardingCompleted: profile['senderWalletOnboardingCompleted'] == true,
+    );
   }
 
   @override
@@ -354,11 +358,13 @@ class FirebaseSenderWalletRepository implements SenderWalletRepository {
       final wallet = latestWallet;
       if (wallet == null) return;
       final profile = latestProfile;
-      controller.add(SenderWalletData.fromMap(
-        wallet.data() ?? const {},
-        onboardingCompleted:
-            profile?.data['senderWalletOnboardingCompleted'] == true,
-      ));
+      controller.add(
+        SenderWalletData.fromMap(
+          wallet.data() ?? const {},
+          onboardingCompleted:
+              profile?.data['senderWalletOnboardingCompleted'] == true,
+        ),
+      );
     }
 
     controller.onListen = () {
@@ -366,12 +372,15 @@ class FirebaseSenderWalletRepository implements SenderWalletRepository {
           .collection('senderWallets')
           .doc(user.uid)
           .snapshots()
-          .listen((snapshot) {
-        latestWallet = snapshot;
-        emitIfReady();
-      }, onError: (error) {
-        debugPrint('Sender Wallet live balance unavailable: $error');
-      });
+          .listen(
+        (snapshot) {
+          latestWallet = snapshot;
+          emitIfReady();
+        },
+        onError: (error) {
+          debugPrint('Sender Wallet live balance unavailable: $error');
+        },
+      );
       profileSub = profileAuthority.watch('wallet.watch.profile').listen(
         (snapshot) {
           latestProfile = snapshot;
@@ -397,8 +406,11 @@ class FirebaseSenderWalletRepository implements SenderWalletRepository {
             _firebaseReadTimeout);
     final data = Map<String, dynamic>.from(result.data as Map);
     final records = (data['transactions'] as List? ?? const [])
-        .map((item) => SenderWalletTransaction.fromMap(
-            Map<String, dynamic>.from(item as Map)))
+        .map(
+          (item) => SenderWalletTransaction.fromMap(
+            Map<String, dynamic>.from(item as Map),
+          ),
+        )
         .toList(growable: false);
     return SenderWalletPage(records, data['nextPageToken'] as String?);
   }
@@ -410,7 +422,8 @@ class FirebaseSenderWalletRepository implements SenderWalletRepository {
         .call()
         .timeout(_firebaseReadTimeout);
     return SenderPaymentMethodsData.fromMap(
-        Map<String, dynamic>.from(result.data as Map));
+      Map<String, dynamic>.from(result.data as Map),
+    );
   }
 
   @override
@@ -420,7 +433,8 @@ class FirebaseSenderWalletRepository implements SenderWalletRepository {
         .call()
         .timeout(_firebaseReadTimeout);
     return SenderSetupIntentData.fromMap(
-        Map<String, dynamic>.from(result.data as Map));
+      Map<String, dynamic>.from(result.data as Map),
+    );
   }
 
   @override
@@ -437,9 +451,10 @@ class FirebaseSenderWalletRepository implements SenderWalletRepository {
 
   @override
   Future<void> saveCheckoutPreference(
-      SenderCheckoutPreference preference) async {
+    SenderCheckoutPreference preference,
+  ) async {
     await functions.httpsCallable('saveSenderCheckoutPreference').call({
-      'preference': senderCheckoutPreferenceValue(preference),
+      'preference': senderCheckoutPreferenceValue(preference)
     }).timeout(_firebaseReadTimeout);
   }
 
@@ -582,8 +597,10 @@ class _SenderWalletViewState extends State<SenderWalletView> {
       await _subscription?.cancel();
       _subscription = _repository
           .watch()
-          .timeout(_senderWalletOperationTimeout,
-              onTimeout: (sink) => sink.close())
+          .timeout(
+            _senderWalletOperationTimeout,
+            onTimeout: (sink) => sink.close(),
+          )
           .listen((value) {
         if (!mounted) return;
         setState(() {
@@ -640,9 +657,9 @@ class _SenderWalletViewState extends State<SenderWalletView> {
   }
 
   Future<void> _refreshPaymentMethods() async {
-    final methods = await _repository
-        .paymentMethods()
-        .timeout(_senderWalletOperationTimeout);
+    final methods = await _repository.paymentMethods().timeout(
+          _senderWalletOperationTimeout,
+        );
     if (mounted) setState(() => _paymentMethods = methods);
   }
 
@@ -653,9 +670,9 @@ class _SenderWalletViewState extends State<SenderWalletView> {
       _error = null;
     });
     try {
-      final setup = await _repository
-          .createSetupIntent()
-          .timeout(_senderWalletOperationTimeout);
+      final setup = await _repository.createSetupIntent().timeout(
+            _senderWalletOperationTimeout,
+          );
       await Stripe.instance.initPaymentSheet(
         paymentSheetParameters: SetupPaymentSheetParameters(
           merchantDisplayName: 'Circum',
@@ -682,7 +699,9 @@ class _SenderWalletViewState extends State<SenderWalletView> {
     } on StripeException catch (error) {
       if (mounted) {
         _notice(
-            context, error.error.localizedMessage ?? 'Card setup cancelled.');
+          context,
+          error.error.localizedMessage ?? 'Card setup cancelled.',
+        );
       }
     } on TimeoutException {
       if (mounted) {
@@ -720,11 +739,13 @@ class _SenderWalletViewState extends State<SenderWalletView> {
             content: Text('${method.title} will be removed from Circum.'),
             actions: [
               TextButton(
-                  onPressed: () => Navigator.pop(context, false),
-                  child: const Text('Cancel')),
+                onPressed: () => Navigator.pop(context, false),
+                child: const Text('Cancel'),
+              ),
               FilledButton(
-                  onPressed: () => Navigator.pop(context, true),
-                  child: const Text('Remove')),
+                onPressed: () => Navigator.pop(context, true),
+                child: const Text('Remove'),
+              ),
             ],
           ),
         ) ??
@@ -748,13 +769,17 @@ class _SenderWalletViewState extends State<SenderWalletView> {
 
   void _openManagePayments() {
     Navigator.of(context)
-        .push(MaterialPageRoute<void>(
-          builder: (_) => _ManagePaymentsScreen(
-            repository: _repository,
-            wallet: _wallet!,
+        .push(
+          MaterialPageRoute<void>(
+            builder: (_) => _ManagePaymentsScreen(
+              repository: _repository,
+              wallet: _wallet!,
+            ),
+            settings: const RouteSettings(
+              name: '/sender-mobile/wallet/payments',
+            ),
           ),
-          settings: const RouteSettings(name: '/sender-mobile/wallet/payments'),
-        ))
+        )
         .then((_) => _refreshPaymentMethods())
         .catchError((_) {});
   }
@@ -772,17 +797,19 @@ class _SenderWalletViewState extends State<SenderWalletView> {
     final platformName = type == SenderPaymentProfileOptionType.applePay
         ? 'an iPhone or iPad'
         : 'an Android device';
-    Navigator.of(context).push(MaterialPageRoute<void>(
-      builder: (_) => _WalletInformationScreen(
-        title: title,
-        icon: type == SenderPaymentProfileOptionType.applePay
-            ? Icons.apple_rounded
-            : Icons.android_rounded,
-        body: available
-            ? '$title is available during eligible Circum checkout. Manage your preferred checkout order from Manage Payments.'
-            : '$title is available when you use Circum on $platformName. Your saved cards and Roth remain available on this device.',
+    Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (_) => _WalletInformationScreen(
+          title: title,
+          icon: type == SenderPaymentProfileOptionType.applePay
+              ? Icons.apple_rounded
+              : Icons.android_rounded,
+          body: available
+              ? '$title is available during eligible Circum checkout. Manage your preferred checkout order from Manage Payments.'
+              : '$title is available when you use Circum on $platformName. Your saved cards and Roth remain available on this device.',
+        ),
       ),
-    ));
+    );
   }
 
   void _openRothInformation() => Navigator.of(context).push(
@@ -837,15 +864,17 @@ class _SenderWalletViewState extends State<SenderWalletView> {
     controller.dispose();
     if (code == null || code.isEmpty) return;
     try {
-      await FirebaseFunctions.instance
-          .httpsCallable('redeemGiftCard')
-          .call({'code': code});
+      await FirebaseFunctions.instance.httpsCallable('redeemGiftCard').call({
+        'code': code,
+      });
       await _load();
       if (mounted) _notice(context, 'Roth Card redeemed.');
     } on FirebaseFunctionsException catch (error) {
       if (mounted) {
         _notice(
-            context, error.message ?? 'This Roth Card could not be redeemed.');
+          context,
+          error.message ?? 'This Roth Card could not be redeemed.',
+        );
       }
     }
   }
@@ -987,8 +1016,10 @@ class _SenderWalletViewState extends State<SenderWalletView> {
                       padding: EdgeInsets.all(20),
                       child: Text(
                         'No Roth activity yet. Rewards and eligible purchases will appear here.',
-                        style:
-                            TextStyle(color: _WalletColors.muted, height: 1.45),
+                        style: TextStyle(
+                          color: _WalletColors.muted,
+                          height: 1.45,
+                        ),
                       ),
                     )
                   : Column(
@@ -1028,7 +1059,8 @@ class _SenderWalletViewState extends State<SenderWalletView> {
                       initialPageToken: _nextPage,
                     ),
                     settings: const RouteSettings(
-                        name: '/sender-mobile/wallet/activity'),
+                      name: '/sender-mobile/wallet/activity',
+                    ),
                   ),
                 ),
                 child: const Text('View all activity'),
@@ -1059,8 +1091,11 @@ class _SenderWalletViewState extends State<SenderWalletView> {
 class SenderWalletHomeSummary extends StatefulWidget {
   final SenderWalletRepository? repository;
   final VoidCallback onOpenWallet;
-  const SenderWalletHomeSummary(
-      {super.key, this.repository, required this.onOpenWallet});
+  const SenderWalletHomeSummary({
+    super.key,
+    this.repository,
+    required this.onOpenWallet,
+  });
   @override
   State<SenderWalletHomeSummary> createState() =>
       _SenderWalletHomeSummaryState();
@@ -1070,10 +1105,7 @@ class _ManagePaymentsScreen extends StatefulWidget {
   final SenderWalletRepository repository;
   final SenderWalletData wallet;
 
-  const _ManagePaymentsScreen({
-    required this.repository,
-    required this.wallet,
-  });
+  const _ManagePaymentsScreen({required this.repository, required this.wallet});
 
   @override
   State<_ManagePaymentsScreen> createState() => _ManagePaymentsScreenState();
@@ -1083,7 +1115,6 @@ class _ManagePaymentsScreenState extends State<_ManagePaymentsScreen> {
   SenderPaymentProfile? _profile;
   bool _loading = true;
   bool _busy = false;
-  bool _businessAccount = false;
   String? _error;
 
   @override
@@ -1098,27 +1129,12 @@ class _ManagePaymentsScreenState extends State<_ManagePaymentsScreen> {
       _error = null;
     });
     try {
-      final profile = await widget.repository
-          .paymentMethods()
-          .timeout(_senderWalletOperationTimeout);
-      var businessAccount = false;
-      try {
-        final user = FirebaseAuth.instance.currentUser;
-        if (user != null) {
-          final owned = await FirebaseFirestore.instance
-              .collection('businessAccounts')
-              .where('createdByUserId', isEqualTo: user.uid)
-              .limit(1)
-              .get();
-          businessAccount = owned.docs.isNotEmpty;
-        }
-      } catch (_) {
-        businessAccount = false;
-      }
+      final profile = await widget.repository.paymentMethods().timeout(
+            _senderWalletOperationTimeout,
+          );
       if (!mounted) return;
       setState(() {
         _profile = profile;
-        _businessAccount = businessAccount;
         _loading = false;
       });
     } catch (error) {
@@ -1135,9 +1151,9 @@ class _ManagePaymentsScreenState extends State<_ManagePaymentsScreen> {
     if (_busy) return;
     setState(() => _busy = true);
     try {
-      final setup = await widget.repository
-          .createSetupIntent()
-          .timeout(_senderWalletOperationTimeout);
+      final setup = await widget.repository.createSetupIntent().timeout(
+            _senderWalletOperationTimeout,
+          );
       await Stripe.instance.initPaymentSheet(
         paymentSheetParameters: SetupPaymentSheetParameters(
           merchantDisplayName: 'Circum',
@@ -1288,14 +1304,16 @@ class _ManagePaymentsScreenState extends State<_ManagePaymentsScreen> {
 
   void _openMethod(SenderPaymentProfileOptionType type) {
     final apple = type == SenderPaymentProfileOptionType.applePay;
-    Navigator.of(context).push(MaterialPageRoute<void>(
-      builder: (_) => _WalletInformationScreen(
-        title: apple ? 'Apple Pay' : 'Google Pay',
-        icon: apple ? Icons.apple_rounded : Icons.android_rounded,
-        body:
-            '${apple ? 'Apple Pay' : 'Google Pay'} is offered automatically on supported devices during checkout.',
+    Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (_) => _WalletInformationScreen(
+          title: apple ? 'Apple Pay' : 'Google Pay',
+          icon: apple ? Icons.apple_rounded : Icons.android_rounded,
+          body:
+              '${apple ? 'Apple Pay' : 'Google Pay'} is offered automatically on supported devices during checkout.',
+        ),
       ),
-    ));
+    );
   }
 
   Future<void> _rename(SenderPaymentMethod method) async {
@@ -1371,15 +1389,6 @@ class _ManagePaymentsScreenState extends State<_ManagePaymentsScreen> {
                         preference: _profile!.preference,
                         profile: _profile!,
                         wallet: widget.wallet,
-                      ),
-                      const SizedBox(height: 18),
-                      _BusinessPaymentProfileCard(
-                        connected: _businessAccount,
-                        onOpenBusiness: () => Navigator.of(context).push(
-                          MaterialPageRoute<void>(
-                            builder: (_) => const BusinessView(),
-                          ),
-                        ),
                       ),
                     ],
                   ),
@@ -1463,16 +1472,22 @@ class _SenderReferralScreenState extends State<SenderReferralScreen> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      const Text('Referral Code',
-                          style: TextStyle(
-                              color: _WalletColors.muted,
-                              fontWeight: FontWeight.w700)),
+                      const Text(
+                        'Referral Code',
+                        style: TextStyle(
+                          color: _WalletColors.muted,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
                       const SizedBox(height: 8),
-                      Text(_code.isEmpty ? 'Loading…' : _code,
-                          style: const TextStyle(
-                              color: Colors.white,
-                              fontSize: 24,
-                              fontWeight: FontWeight.w900)),
+                      Text(
+                        _code.isEmpty ? 'Loading…' : _code,
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 24,
+                          fontWeight: FontWeight.w900,
+                        ),
+                      ),
                       const SizedBox(height: 16),
                       _WalletLink(
                         icon: Icons.share_outlined,
@@ -1512,8 +1527,10 @@ class _SenderReferralScreenState extends State<SenderReferralScreen> {
                       const Divider(color: _WalletColors.hairline),
                       _ReferralMetric('Completed Rewards', '$completed'),
                       const Divider(color: _WalletColors.hairline),
-                      _ReferralMetric('Referral Status',
-                          _referrals.isEmpty ? 'Ready' : 'Active'),
+                      _ReferralMetric(
+                        'Referral Status',
+                        _referrals.isEmpty ? 'Ready' : 'Active',
+                      ),
                     ],
                   ),
                 ),
@@ -1534,12 +1551,18 @@ class _ReferralMetric extends StatelessWidget {
         child: Row(
           children: [
             Expanded(
-              child: Text(label,
-                  style: const TextStyle(color: _WalletColors.muted)),
+              child: Text(
+                label,
+                style: const TextStyle(color: _WalletColors.muted),
+              ),
             ),
-            Text(value,
-                style: const TextStyle(
-                    color: Colors.white, fontWeight: FontWeight.w900)),
+            Text(
+              value,
+              style: const TextStyle(
+                color: Colors.white,
+                fontWeight: FontWeight.w900,
+              ),
+            ),
           ],
         ),
       );
@@ -1568,9 +1591,11 @@ class _WalletInformationScreen extends StatelessWidget {
                 children: [
                   Icon(icon, color: _WalletColors.lightBlue, size: 42),
                   const SizedBox(height: 16),
-                  Text(body,
-                      textAlign: TextAlign.center,
-                      style: const TextStyle(color: Colors.white, height: 1.5)),
+                  Text(
+                    body,
+                    textAlign: TextAlign.center,
+                    style: const TextStyle(color: Colors.white, height: 1.5),
+                  ),
                 ],
               ),
             ),
@@ -1586,8 +1611,9 @@ class _WalletSupportScreen extends StatelessWidget {
   Widget build(BuildContext context) => Scaffold(
         backgroundColor: const Color(0xFF07090F),
         appBar: AppBar(
-            backgroundColor: Colors.transparent,
-            title: const Text('Wallet Support')),
+          backgroundColor: Colors.transparent,
+          title: const Text('Wallet Support'),
+        ),
         body: ListView(
           padding: const EdgeInsets.all(20),
           children: [
@@ -1603,9 +1629,8 @@ class _WalletSupportScreen extends StatelessWidget {
                       supportConversation: true,
                       initialMessage: 'Hi, I need help with my wallet.',
                     ),
-                    settings: RouteSettings(
-                      name: '/sender-mobile/support/wallet',
-                    ),
+                    settings:
+                        RouteSettings(name: '/sender-mobile/support/wallet'),
                   ),
                 ),
               ),
@@ -1659,8 +1684,9 @@ class _WalletActivityScreenState extends State<_WalletActivityScreen> {
   Widget build(BuildContext context) => Scaffold(
         backgroundColor: const Color(0xFF07090F),
         appBar: AppBar(
-            backgroundColor: Colors.transparent,
-            title: const Text('Recent Activity')),
+          backgroundColor: Colors.transparent,
+          title: const Text('Recent Activity'),
+        ),
         body: ListView(
           padding: const EdgeInsets.fromLTRB(20, 12, 20, 30),
           children: [
@@ -1669,21 +1695,24 @@ class _WalletActivityScreenState extends State<_WalletActivityScreen> {
               child: _transactions.isEmpty
                   ? const Padding(
                       padding: EdgeInsets.all(18),
-                      child: Text('No activity yet.',
-                          style: TextStyle(color: _WalletColors.muted)),
+                      child: Text(
+                        'No activity yet.',
+                        style: TextStyle(color: _WalletColors.muted),
+                      ),
                     )
                   : Column(
                       children: _transactions
-                          .map((item) => InkWell(
-                                onTap: () => Navigator.of(context).push(
-                                  MaterialPageRoute<void>(
-                                    builder: (_) => _TransactionDetailsScreen(
-                                      transaction: item,
-                                    ),
-                                  ),
+                          .map(
+                            (item) => InkWell(
+                              onTap: () => Navigator.of(context).push(
+                                MaterialPageRoute<void>(
+                                  builder: (_) => _TransactionDetailsScreen(
+                                      transaction: item),
                                 ),
-                                child: _TransactionRow(item),
-                              ))
+                              ),
+                              child: _TransactionRow(item),
+                            ),
+                          )
                           .toList(),
                     ),
             ),
@@ -1705,13 +1734,16 @@ class _TransactionDetailsScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     final title = _walletTransactionDisplayTitle(transaction);
     final description = _walletTransactionDisplayDescription(transaction);
-    final completedDate =
-        _walletTransactionDate(transaction, includeStatus: false);
+    final completedDate = _walletTransactionDate(
+      transaction,
+      includeStatus: false,
+    );
     return Scaffold(
       backgroundColor: const Color(0xFF07090F),
       appBar: AppBar(
-          backgroundColor: Colors.transparent,
-          title: const Text('Activity Details')),
+        backgroundColor: Colors.transparent,
+        title: const Text('Activity Details'),
+      ),
       body: ListView(
         padding: const EdgeInsets.all(20),
         children: [
@@ -1728,36 +1760,53 @@ class _TransactionDetailsScreen extends StatelessWidget {
                 ),
                 const SizedBox(height: 14),
                 _DetailRow(
-                    'Amount', '${transaction.amount.toStringAsFixed(2)} Roth'),
+                  'Amount',
+                  '${transaction.amount.toStringAsFixed(2)} Roth',
+                ),
                 _DetailRow('Status', _walletStatusLabel(transaction.status)),
                 if (completedDate != null)
                   _DetailRow('Completed date', completedDate),
                 _DetailRow(
-                    'Reference ID',
-                    transaction.referenceId.isEmpty
-                        ? transaction.id
-                        : transaction.referenceId),
+                  'Reference ID',
+                  transaction.referenceId.isEmpty
+                      ? transaction.id
+                      : transaction.referenceId,
+                ),
                 _DetailRow('Created by', _walletCreatedBy(transaction)),
                 _DetailRow('Description', description),
                 _DetailRow(
-                    'Transaction type', _walletCategory(transaction.type)),
-                _DetailRow('Balance after transaction',
-                    '${transaction.balanceAfter.toStringAsFixed(2)} Roth'),
+                  'Transaction type',
+                  _walletCategory(transaction.type),
+                ),
+                _DetailRow(
+                  'Balance after transaction',
+                  '${transaction.balanceAfter.toStringAsFixed(2)} Roth',
+                ),
                 if (transaction.totalAmount != null)
-                  _DetailRow('Total',
-                      '${transaction.totalAmount!.toStringAsFixed(2)} GBP'),
+                  _DetailRow(
+                    'Total',
+                    '${transaction.totalAmount!.toStringAsFixed(2)} GBP',
+                  ),
                 if (transaction.rothApplied != null)
-                  _DetailRow('Roth applied',
-                      '${transaction.rothApplied!.toStringAsFixed(2)} Roth'),
+                  _DetailRow(
+                    'Roth applied',
+                    '${transaction.rothApplied!.toStringAsFixed(2)} Roth',
+                  ),
                 if (transaction.stripeAmount != null)
-                  _DetailRow('Card charged',
-                      '${transaction.stripeAmount!.toStringAsFixed(2)} GBP'),
+                  _DetailRow(
+                    'Card charged',
+                    '${transaction.stripeAmount!.toStringAsFixed(2)} GBP',
+                  ),
                 if (transaction.canonicalTransactionId != null)
-                  _DetailRow('Circum transaction',
-                      transaction.canonicalTransactionId!),
+                  _DetailRow(
+                    'Circum transaction',
+                    transaction.canonicalTransactionId!,
+                  ),
                 if (transaction.productType != null)
                   _DetailRow(
-                      'Product', _walletProductLabel(transaction.productType!)),
+                    'Product',
+                    _walletProductLabel(transaction.productType!),
+                  ),
               ],
             ),
           ),
@@ -1780,14 +1829,20 @@ class _DetailRow extends StatelessWidget {
           children: [
             SizedBox(
               width: 110,
-              child: Text(label,
-                  style: const TextStyle(color: _WalletColors.muted)),
+              child: Text(
+                label,
+                style: const TextStyle(color: _WalletColors.muted),
+              ),
             ),
             Expanded(
-              child: Text(value,
-                  textAlign: TextAlign.right,
-                  style: const TextStyle(
-                      color: Colors.white, fontWeight: FontWeight.w700)),
+              child: Text(
+                value,
+                textAlign: TextAlign.right,
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
             ),
           ],
         ),
@@ -1852,36 +1907,52 @@ class _SenderWalletHomeSummaryState extends State<SenderWalletHomeSummary> {
 
   @override
   Widget build(BuildContext context) => _WalletGlass(
-          child: InkWell(
-        onTap: widget.onOpenWallet,
-        child: Row(children: [
-          const Icon(Icons.account_balance_wallet_outlined,
-              color: _WalletColors.lightBlue, size: 28),
-          const SizedBox(width: 13),
-          const Expanded(
-              child: Column(
+        child: InkWell(
+          onTap: widget.onOpenWallet,
+          child: Row(
+            children: [
+              const Icon(
+                Icons.account_balance_wallet_outlined,
+                color: _WalletColors.lightBlue,
+                size: 28,
+              ),
+              const SizedBox(width: 13),
+              const Expanded(
+                child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                Text('Roth balance',
-                    style: TextStyle(
+                    Text(
+                      'Roth balance',
+                      style: TextStyle(
                         color: Colors.white,
                         fontSize: 15,
-                        fontWeight: FontWeight.w900)),
-                SizedBox(height: 4),
-                Text('View Wallet',
-                    style: TextStyle(color: _WalletColors.muted, fontSize: 12))
-              ])),
-          Text(
-              _error ??
-                  (_wallet == null
-                      ? '…'
-                      : '${_wallet!.balance.toStringAsFixed(_wallet!.balance % 1 == 0 ? 0 : 2)} Roth'),
-              style: const TextStyle(
+                        fontWeight: FontWeight.w900,
+                      ),
+                    ),
+                    SizedBox(height: 4),
+                    Text(
+                      'View Wallet',
+                      style:
+                          TextStyle(color: _WalletColors.muted, fontSize: 12),
+                    ),
+                  ],
+                ),
+              ),
+              Text(
+                _error ??
+                    (_wallet == null
+                        ? '…'
+                        : '${_wallet!.balance.toStringAsFixed(_wallet!.balance % 1 == 0 ? 0 : 2)} Roth'),
+                style: const TextStyle(
                   color: _WalletColors.lightBlue,
                   fontSize: 18,
-                  fontWeight: FontWeight.w900)),
-        ]),
-      ));
+                  fontWeight: FontWeight.w900,
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
 }
 
 class _WalletMessage extends StatelessWidget {
@@ -1889,32 +1960,44 @@ class _WalletMessage extends StatelessWidget {
   final String title;
   final String body;
   final VoidCallback action;
-  const _WalletMessage(
-      {required this.icon,
-      required this.title,
-      required this.body,
-      required this.action});
+  const _WalletMessage({
+    required this.icon,
+    required this.title,
+    required this.body,
+    required this.action,
+  });
   @override
   Widget build(BuildContext context) => Center(
-      child: Padding(
+        child: Padding(
           padding: const EdgeInsets.all(24),
           child: _WalletGlass(
-              child: Column(mainAxisSize: MainAxisSize.min, children: [
-            Icon(icon, color: _WalletColors.lightBlue, size: 36),
-            const SizedBox(height: 14),
-            Text(title,
-                style: const TextStyle(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(icon, color: _WalletColors.lightBlue, size: 36),
+                const SizedBox(height: 14),
+                Text(
+                  title,
+                  style: const TextStyle(
                     color: Colors.white,
                     fontSize: 20,
-                    fontWeight: FontWeight.w900)),
-            const SizedBox(height: 8),
-            Text(body,
-                textAlign: TextAlign.center,
-                style:
-                    const TextStyle(color: _WalletColors.muted, height: 1.45)),
-            const SizedBox(height: 18),
-            FilledButton(onPressed: action, child: const Text('Retry'))
-          ]))));
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  body,
+                  textAlign: TextAlign.center,
+                  style:
+                      const TextStyle(color: _WalletColors.muted, height: 1.45),
+                ),
+                const SizedBox(height: 18),
+                FilledButton(onPressed: action, child: const Text('Retry')),
+              ],
+            ),
+          ),
+        ),
+      );
 }
 
 class _WalletInlineStatus extends StatelessWidget {
@@ -1987,10 +2070,7 @@ class _WalletSkeletonLine extends StatelessWidget {
   final double width;
   final double height;
 
-  const _WalletSkeletonLine({
-    required this.width,
-    this.height = 14,
-  });
+  const _WalletSkeletonLine({required this.width, this.height = 14});
 
   @override
   Widget build(BuildContext context) {
@@ -2016,55 +2096,75 @@ class _TransactionRow extends StatelessWidget {
     final date = _walletTransactionDate(transaction);
     final statusLine = date == null ? status : '$status · $date';
     return Semantics(
-        label:
-            '${credit ? 'Credit' : 'Debit'} ${transaction.amount} Roth. $title. ${transaction.status}',
-        child: Container(
-            constraints: const BoxConstraints(minHeight: 56),
-            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-            decoration: const BoxDecoration(
-                border:
-                    Border(bottom: BorderSide(color: _WalletColors.hairline))),
-            child: Row(children: [
-              Container(
-                width: 34,
-                height: 34,
-                decoration: BoxDecoration(
-                  color: _walletStatusColor(transaction.status)
-                      .withValues(alpha: .12),
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: Icon(
-                  _walletTransactionIcon(transaction.type),
-                  color: _walletStatusColor(transaction.status),
-                  size: 19,
-                ),
+      label:
+          '${credit ? 'Credit' : 'Debit'} ${transaction.amount} Roth. $title. ${transaction.status}',
+      child: Container(
+        constraints: const BoxConstraints(minHeight: 56),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+        decoration: const BoxDecoration(
+          border: Border(bottom: BorderSide(color: _WalletColors.hairline)),
+        ),
+        child: Row(
+          children: [
+            Container(
+              width: 34,
+              height: 34,
+              decoration: BoxDecoration(
+                color: _walletStatusColor(
+                  transaction.status,
+                ).withValues(alpha: .12),
+                borderRadius: BorderRadius.circular(12),
               ),
-              const SizedBox(width: 12),
-              Expanded(
-                  child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                    Text(title,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(
-                            color: Colors.white, fontWeight: FontWeight.w800)),
-                    const SizedBox(height: 3),
-                    Text(statusLine,
-                        style: TextStyle(
-                            color: _walletStatusColor(transaction.status),
-                            fontSize: 11,
-                            fontWeight: FontWeight.w600))
-                  ])),
-              const SizedBox(width: 8),
-              Text(
-                  '${credit ? '+' : '-'}${transaction.amount.toStringAsFixed(transaction.amount % 1 == 0 ? 0 : 2)} Roth',
-                  style: const TextStyle(
-                      color: Colors.white, fontWeight: FontWeight.w900)),
-              const SizedBox(width: 6),
-              const Icon(Icons.chevron_right_rounded,
-                  color: _WalletColors.muted, size: 20),
-            ])));
+              child: Icon(
+                _walletTransactionIcon(transaction.type),
+                color: _walletStatusColor(transaction.status),
+                size: 19,
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    title,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                  const SizedBox(height: 3),
+                  Text(
+                    statusLine,
+                    style: TextStyle(
+                      color: _walletStatusColor(transaction.status),
+                      fontSize: 11,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(width: 8),
+            Text(
+              '${credit ? '+' : '-'}${transaction.amount.toStringAsFixed(transaction.amount % 1 == 0 ? 0 : 2)} Roth',
+              style: const TextStyle(
+                color: Colors.white,
+                fontWeight: FontWeight.w900,
+              ),
+            ),
+            const SizedBox(width: 6),
+            const Icon(
+              Icons.chevron_right_rounded,
+              color: _WalletColors.muted,
+              size: 20,
+            ),
+          ],
+        ),
+      ),
+    );
   }
 }
 
@@ -2097,13 +2197,14 @@ class _PaymentMethodsSection extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final options = senderOrderedPaymentOptions(
-      data,
-      platform: Theme.of(context).platform,
-    )
-        .where((option) =>
-            option.type != SenderPaymentProfileOptionType.addPaymentMethod)
-        .toList(growable: false);
+    final options =
+        senderOrderedPaymentOptions(data, platform: Theme.of(context).platform)
+            .where(
+              (option) =>
+                  option.type !=
+                  SenderPaymentProfileOptionType.addPaymentMethod,
+            )
+            .toList(growable: false);
     final cards = options
         .where((item) => item.type == SenderPaymentProfileOptionType.savedCard)
         .toList(growable: false);
@@ -2111,8 +2212,11 @@ class _PaymentMethodsSection extends StatelessWidget {
         .where((item) => item.type != SenderPaymentProfileOptionType.savedCard)
         .toList(growable: false);
 
-    Widget optionRow(SenderPaymentProfileOption option, int index,
-            {bool premium = false}) =>
+    Widget optionRow(
+      SenderPaymentProfileOption option,
+      int index, {
+      bool premium = false,
+    }) =>
         _PaymentProfileOptionRow(
           option: option,
           busy: busy,
@@ -2172,22 +2276,22 @@ class _PaymentMethodsSection extends StatelessWidget {
             child: Column(children: standardRows),
           ),
         if (premiumCards) ...[
-          ...cards.map((card) => Padding(
-                padding: const EdgeInsets.only(bottom: 10),
-                child: optionRow(
-                  card,
-                  options.indexOf(card),
-                  premium: true,
-                ),
-              )),
+          ...cards.map(
+            (card) => Padding(
+              padding: const EdgeInsets.only(bottom: 10),
+              child: optionRow(card, options.indexOf(card), premium: true),
+            ),
+          ),
           _WalletGlass(
             child: Column(
               children: [
-                ...otherMethods.asMap().entries.expand((entry) => [
-                      if (entry.key > 0)
-                        const Divider(color: _WalletColors.hairline),
-                      optionRow(entry.value, entry.key),
-                    ]),
+                ...otherMethods.asMap().entries.expand(
+                      (entry) => [
+                        if (entry.key > 0)
+                          const Divider(color: _WalletColors.hairline),
+                        optionRow(entry.value, entry.key),
+                      ],
+                    ),
                 if (otherMethods.isNotEmpty)
                   const Divider(color: _WalletColors.hairline),
                 _RothPayWithRow(wallet: wallet, onTap: onOpenRoth),
@@ -2289,18 +2393,23 @@ class _PaymentProfileOptionRow extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                    premiumCard
-                        ? (method.brand.isEmpty
-                            ? 'Card'
-                            : _titleCase(method.brand))
-                        : method.title,
-                    style: const TextStyle(
-                        color: Colors.white, fontWeight: FontWeight.w800)),
+                  premiumCard
+                      ? (method.brand.isEmpty
+                          ? 'Card'
+                          : _titleCase(method.brand))
+                      : method.title,
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
                 const SizedBox(height: 3),
                 Text(
                   '•••• ${method.last4.isEmpty ? '----' : method.last4}',
-                  style:
-                      const TextStyle(color: _WalletColors.muted, fontSize: 11),
+                  style: const TextStyle(
+                    color: _WalletColors.muted,
+                    fontSize: 11,
+                  ),
                 ),
               ],
             ),
@@ -2316,7 +2425,9 @@ class _PaymentProfileOptionRow extends StatelessWidget {
             itemBuilder: (context) => [
               if (!method.isDefault)
                 const PopupMenuItem(
-                    value: 'default', child: Text('Set as default')),
+                  value: 'default',
+                  child: Text('Set as default'),
+                ),
               const PopupMenuItem(value: 'rename', child: Text('Rename')),
               const PopupMenuItem(value: 'remove', child: Text('Remove')),
             ],
@@ -2389,8 +2500,10 @@ class _PaymentProfileOptionRow extends StatelessWidget {
                 const Spacer(),
                 PopupMenuButton<String>(
                   enabled: !busy,
-                  icon:
-                      const Icon(Icons.more_horiz, color: _WalletColors.muted),
+                  icon: const Icon(
+                    Icons.more_horiz,
+                    color: _WalletColors.muted,
+                  ),
                   onSelected: (value) {
                     if (value == 'default') onSetDefault(method.id);
                     if (value == 'rename') onRename?.call(method);
@@ -2443,11 +2556,7 @@ class _WalletPageShell extends StatelessWidget {
         gradient: RadialGradient(
           center: Alignment(-.75, -.95),
           radius: 1.35,
-          colors: [
-            Color(0x302E7DF7),
-            Color(0x180D2A59),
-            Color(0xFF050913),
-          ],
+          colors: [Color(0x302E7DF7), Color(0x180D2A59), Color(0xFF050913)],
           stops: [0, .42, 1],
         ),
       ),
@@ -2710,8 +2819,9 @@ class _WalletActionCard extends StatelessWidget {
                 decoration: BoxDecoration(
                   color: _WalletColors.lightBlue.withValues(alpha: .14),
                   borderRadius: BorderRadius.circular(16),
-                  border:
-                      Border.all(color: Colors.white.withValues(alpha: .10)),
+                  border: Border.all(
+                    color: Colors.white.withValues(alpha: .10),
+                  ),
                 ),
                 child: Icon(icon, color: _WalletColors.lightBlue, size: 23),
               ),
@@ -2852,8 +2962,11 @@ class _WalletTransactionCard extends StatelessWidget {
               ),
             ),
             const SizedBox(width: 5),
-            const Icon(Icons.chevron_right_rounded,
-                color: _WalletColors.muted, size: 20),
+            const Icon(
+              Icons.chevron_right_rounded,
+              color: _WalletColors.muted,
+              size: 20,
+            ),
           ],
         ),
       ),
@@ -2887,8 +3000,10 @@ class _OfferRow extends StatelessWidget {
                   color: _WalletColors.lightBlue.withValues(alpha: .13),
                   borderRadius: BorderRadius.circular(15),
                 ),
-                child: const Icon(Icons.local_offer_outlined,
-                    color: _WalletColors.lightBlue),
+                child: const Icon(
+                  Icons.local_offer_outlined,
+                  color: _WalletColors.lightBlue,
+                ),
               ),
               const SizedBox(width: 12),
               Expanded(
@@ -2896,13 +3011,21 @@ class _OfferRow extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    Text(title,
-                        style: const TextStyle(
-                            color: Colors.white, fontWeight: FontWeight.w800)),
+                    Text(
+                      title,
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
                     const SizedBox(height: 3),
-                    Text(detail,
-                        style: const TextStyle(
-                            color: _WalletColors.muted, fontSize: 11)),
+                    Text(
+                      detail,
+                      style: const TextStyle(
+                        color: _WalletColors.muted,
+                        fontSize: 11,
+                      ),
+                    ),
                   ],
                 ),
               ),
@@ -2955,8 +3078,11 @@ class _CheckoutPreferenceSection extends StatelessWidget {
         SenderCheckoutPreference.googlePayFirst,
       if (profile.methods.isNotEmpty) SenderCheckoutPreference.defaultCard,
     ];
-    final effectivePreference =
-        senderEffectiveCheckoutPreference(preference, profile, platform);
+    final effectivePreference = senderEffectiveCheckoutPreference(
+      preference,
+      profile,
+      platform,
+    );
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -3186,81 +3312,7 @@ class _PaymentBreakdownArrow extends StatelessWidget {
   @override
   Widget build(BuildContext context) => const Padding(
         padding: EdgeInsets.symmetric(vertical: 7),
-        child: Icon(
-          Icons.south_rounded,
-          size: 18,
-          color: _WalletColors.muted,
-        ),
-      );
-}
-
-class _BusinessPaymentProfileCard extends StatelessWidget {
-  final bool connected;
-  final VoidCallback onOpenBusiness;
-
-  const _BusinessPaymentProfileCard({
-    required this.connected,
-    required this.onOpenBusiness,
-  });
-
-  @override
-  Widget build(BuildContext context) => Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const _WalletSectionTitle('Business Payment Profile'),
-          const SizedBox(height: 10),
-          _WalletGlass(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  children: [
-                    Icon(
-                      connected
-                          ? Icons.verified_outlined
-                          : Icons.business_outlined,
-                      color: connected
-                          ? const Color(0xFF34D399)
-                          : _WalletColors.muted,
-                    ),
-                    const SizedBox(width: 10),
-                    Expanded(
-                      child: Text(
-                        connected
-                            ? 'Connected'
-                            : 'No Business payment profile connected.',
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontWeight: FontWeight.w800,
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 10),
-                Text(
-                  connected
-                      ? 'Business Finance uses your approved payment profile during authorised Business checkouts.'
-                      : 'Create or join a Circum Business account to manage authorised Business payments.',
-                  style: const TextStyle(
-                    color: _WalletColors.muted,
-                    height: 1.45,
-                  ),
-                ),
-                const SizedBox(height: 14),
-                TextButton.icon(
-                  onPressed: onOpenBusiness,
-                  icon: Icon(connected
-                      ? Icons.arrow_forward_rounded
-                      : Icons.add_business_outlined),
-                  label: Text(connected
-                      ? 'Manage Business Payments'
-                      : 'Create Business Account'),
-                ),
-              ],
-            ),
-          ),
-        ],
+        child: Icon(Icons.south_rounded, size: 18, color: _WalletColors.muted),
       );
 }
 
@@ -3338,16 +3390,23 @@ class _WalletSectionTitle extends StatelessWidget {
   final String value;
   const _WalletSectionTitle(this.value);
   @override
-  Widget build(BuildContext context) => Text(value,
-      style: const TextStyle(
-          color: Colors.white, fontSize: 22, fontWeight: FontWeight.w800));
+  Widget build(BuildContext context) => Text(
+        value,
+        style: const TextStyle(
+          color: Colors.white,
+          fontSize: 22,
+          fontWeight: FontWeight.w800,
+        ),
+      );
 }
 
 class _WalletGlass extends StatelessWidget {
   final Widget child;
   final EdgeInsetsGeometry padding;
-  const _WalletGlass(
-      {required this.child, this.padding = const EdgeInsets.all(14)});
+  const _WalletGlass({
+    required this.child,
+    this.padding = const EdgeInsets.all(14),
+  });
   @override
   Widget build(BuildContext context) => AppGlassContainer(
         padding: padding,
@@ -3504,7 +3563,8 @@ String _walletProductLabel(String value) {
 }
 
 String _walletTransactionDisplayDescription(
-    SenderWalletTransaction transaction) {
+  SenderWalletTransaction transaction,
+) {
   return _walletTransactionIssuedByCircum(transaction.type)
       ? 'This Roth has been added to your account by the Circum team.'
       : transaction.description;

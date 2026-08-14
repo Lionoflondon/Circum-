@@ -7,16 +7,15 @@ import 'package:flutter/material.dart';
 // import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_svg/svg.dart';
-import 'package:url_launcher/url_launcher.dart';
 
 import '../../../utils/theme/theme.dart';
 import '../../authentication/bloc/auth_bloc.dart';
-import '../../authentication/view/enable_location.dart';
+import '../../sender_mobile/sender_external_navigation.dart';
 import 'onboarding_slider.dart';
 
 class OnboardingView extends StatelessWidget {
   // final BuildContext authBlocContext;
-  const OnboardingView({Key? key}) : super(key: key);
+  const OnboardingView({super.key});
 
   static Page<void> page() => const MaterialPage<void>(child: OnboardingView());
 
@@ -61,7 +60,7 @@ class OnboardingView extends StatelessWidget {
                         const SizedBox(height: 14),
                         oAuthButtons(),
                         const SizedBox(height: 10),
-                        termsOfService()
+                        termsOfService(context)
                       ],
                     )),
                 const SizedBox(height: 10),
@@ -120,7 +119,7 @@ class OnboardingView extends StatelessWidget {
                       shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.zero,
                           side: BorderSide(
-                              color: Colors.white.withOpacity(0.4)))),
+                              color: Colors.white.withValues(alpha: 0.4)))),
                   child: Row(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
@@ -143,7 +142,7 @@ class OnboardingView extends StatelessWidget {
                         shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.zero,
                             side: BorderSide(
-                                color: Colors.white.withOpacity(0.4)))),
+                                color: Colors.white.withValues(alpha: 0.4)))),
                     child: Row(
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
@@ -159,20 +158,28 @@ class OnboardingView extends StatelessWidget {
     });
   }
 
-  Widget termsOfService() {
+  Widget termsOfService(BuildContext context) {
     return Padding(
         padding: const EdgeInsets.symmetric(horizontal: 24),
         child: Column(
           children: [
             GestureDetector(
                 onTap: () async {
-                  await launchUrl(Uri.parse('https://circumuk.com/terms'));
+                  await SenderExternalNavigation.open(
+                    context,
+                    SenderExternalNavigation.termsUri,
+                    destination: SenderExternalDestination.terms,
+                  );
                 },
                 child: AppText.text('By signing up, you are agreeing to our',
                     fontSize: 12)),
             GestureDetector(
                 onTap: () async {
-                  await launchUrl(Uri.parse('https://circumuk.com/terms'));
+                  await SenderExternalNavigation.open(
+                    context,
+                    SenderExternalNavigation.termsUri,
+                    destination: SenderExternalDestination.terms,
+                  );
                 },
                 child: AppText.text('Terms of Service',
                     fontWeight: FontWeight.w600,

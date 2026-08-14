@@ -10,11 +10,11 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:url_launcher/url_launcher.dart';
 
 import '../sender_profile/sender_profile.dart';
 import '../send_package/view/ride_chats.dart';
 import 'design_system/sender_design_system.dart';
+import 'sender_external_navigation.dart';
 import 'sender_saved_addresses.dart';
 import 'sender_notifications.dart';
 import 'sender_page_shell.dart';
@@ -238,8 +238,10 @@ class SenderMobileProfileData {
       hasCompletedDeliveries: data['hasCompletedDeliveries'] != false,
       trustHistory: (data['trustHistory'] as List? ?? const [])
           .whereType<Map>()
-          .map((item) =>
-              SenderTrustActivity.fromMap(Map<String, dynamic>.from(item)))
+          .map(
+            (item) =>
+                SenderTrustActivity.fromMap(Map<String, dynamic>.from(item)),
+          )
           .toList(growable: false),
     );
   }
@@ -261,12 +263,14 @@ class SenderMobileProfileData {
         'completedDeliveries': completedDeliveries,
         'hasCompletedDeliveries': hasCompletedDeliveries,
         'trustHistory': trustHistory
-            .map((item) => {
-                  'points': item.points,
-                  'label': item.label,
-                  if (item.occurredAt != null)
-                    'occurredAt': item.occurredAt!.toIso8601String(),
-                })
+            .map(
+              (item) => {
+                'points': item.points,
+                'label': item.label,
+                if (item.occurredAt != null)
+                  'occurredAt': item.occurredAt!.toIso8601String(),
+              },
+            )
             .toList(),
       };
 
@@ -294,15 +298,19 @@ class SenderMobileProfileData {
   }
 
   String get trustTierLabel =>
-      (SenderTrustPolicy.tierLabels[trustTier] ?? 'New Sender')
-          .replaceAll(' Sender', '');
+      (SenderTrustPolicy.tierLabels[trustTier] ?? 'New Sender').replaceAll(
+        ' Sender',
+        '',
+      );
 
   String? get nextTierLabel {
     final resolvedNextTier = nextTier ?? SenderTrustPolicy.nextTier(trustTier);
     return resolvedNextTier == null
         ? null
-        : (SenderTrustPolicy.tierLabels[resolvedNextTier] ?? '')
-            .replaceAll(' Sender', '');
+        : (SenderTrustPolicy.tierLabels[resolvedNextTier] ?? '').replaceAll(
+            ' Sender',
+            '',
+          );
   }
 
   static DateTime? profileDate(Object? value) {
@@ -439,8 +447,9 @@ class FirebaseSenderMobileProfileRepository
 
   @override
   Stream<SenderMobileProfileData> watch() async* {
-    await for (final profileSnapshot
-        in profileAuthority.watch('profile.watch')) {
+    await for (final profileSnapshot in profileAuthority.watch(
+      'profile.watch',
+    )) {
       final user = profileSnapshot.user;
       List<Map<String, dynamic>> trustEvents = const [];
       try {
@@ -478,16 +487,18 @@ class FirebaseSenderMobileProfileRepository
     required String username,
     required String phone,
   }) async {
-    final user =
-        await profileAuthority.requireRestoredUser('profile.save.auth');
+    final user = await profileAuthority.requireRestoredUser(
+      'profile.save.auth',
+    );
     final normalizedUsername = username.trim().replaceFirst(RegExp(r'^@'), '');
     await functions.httpsCallable('updateSenderProfile').call({
       'displayName': displayName.trim(),
-      'phone': phone.trim(),
+      'phone': phone.trim()
     }).timeout(SenderProfileAuthority.senderAccountEnsureTimeout);
-    await functions.httpsCallable('claimCircumUsername').call({
-      'username': normalizedUsername,
-    }).timeout(SenderProfileAuthority.senderAccountEnsureTimeout);
+    await functions
+        .httpsCallable('claimCircumUsername')
+        .call({'username': normalizedUsername}).timeout(
+            SenderProfileAuthority.senderAccountEnsureTimeout);
     if (user.displayName != displayName.trim()) {
       await user.updateDisplayName(displayName.trim());
     }
@@ -509,11 +520,10 @@ class FirebaseSenderMobileProfileRepository
   }
 
   @override
-  Future<SenderMobileProfileData> uploadPhoto(
-    SenderProfilePhoto photo,
-  ) async {
-    final user =
-        await profileAuthority.requireRestoredUser('profile.photo.auth');
+  Future<SenderMobileProfileData> uploadPhoto(SenderProfilePhoto photo) async {
+    final user = await profileAuthority.requireRestoredUser(
+      'profile.photo.auth',
+    );
     if (photo.bytes.isEmpty || photo.bytes.lengthInBytes > 8 * 1024 * 1024) {
       throw SenderProfileAuthorityException(
         code: SenderProfileDiagnosticCode.schemaMismatch,
@@ -537,9 +547,10 @@ class FirebaseSenderMobileProfileRepository
       ),
     );
     final downloadUrl = await reference.getDownloadURL();
-    await functions.httpsCallable('updateSenderProfilePhoto').call({
-      'photoURL': downloadUrl,
-    }).timeout(SenderProfileAuthority.senderAccountEnsureTimeout);
+    await functions
+        .httpsCallable('updateSenderProfilePhoto')
+        .call({'photoURL': downloadUrl}).timeout(
+            SenderProfileAuthority.senderAccountEnsureTimeout);
     await user.updatePhotoURL(downloadUrl);
     final current = await load();
     return SenderMobileProfileData(
@@ -696,33 +707,36 @@ class _SenderMobileProfileViewState extends State<SenderMobileProfileView> {
         path: 'SenderMobileProfileView',
         event: 'listener_attach',
       );
-      _profileSubscription = _repository.watch().listen((liveProfile) {
-        if (!mounted) return;
-        logSenderProfileStage(
-          uid: liveProfile.userId,
-          phase: 'profile.widget.watch',
-          path: 'SenderMobileProfileView',
-          event: 'live_profile_received editing=$_editing saving=$_saving',
-        );
-        if (!_editing && !_saving) _applyProfile(liveProfile);
-        setState(() {
-          _profile = liveProfile;
-          _error = null;
-        });
-        unawaited(_cacheProfile(liveProfile));
-      }, onError: (_) {
-        if (!mounted) return;
-        logSenderProfileStage(
-          uid: _profile?.userId ?? _safeSenderProfileCurrentUid(),
-          phase: 'profile.widget.watch',
-          path: 'SenderMobileProfileView',
-          event: 'live_profile_error',
-        );
-        setState(() {
-          _error =
-              'Live profile updates are reconnecting. Showing your saved profile.';
-        });
-      });
+      _profileSubscription = _repository.watch().listen(
+        (liveProfile) {
+          if (!mounted) return;
+          logSenderProfileStage(
+            uid: liveProfile.userId,
+            phase: 'profile.widget.watch',
+            path: 'SenderMobileProfileView',
+            event: 'live_profile_received editing=$_editing saving=$_saving',
+          );
+          if (!_editing && !_saving) _applyProfile(liveProfile);
+          setState(() {
+            _profile = liveProfile;
+            _error = null;
+          });
+          unawaited(_cacheProfile(liveProfile));
+        },
+        onError: (_) {
+          if (!mounted) return;
+          logSenderProfileStage(
+            uid: _profile?.userId ?? _safeSenderProfileCurrentUid(),
+            phase: 'profile.widget.watch',
+            path: 'SenderMobileProfileView',
+            event: 'live_profile_error',
+          );
+          setState(() {
+            _error =
+                'Live profile updates are reconnecting. Showing your saved profile.';
+          });
+        },
+      );
     } catch (error) {
       if (!mounted) return;
       logSenderProfileStage(
@@ -907,9 +921,9 @@ class _SenderMobileProfileViewState extends State<SenderMobileProfileView> {
         _editing = false;
         _saving = false;
       });
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Profile saved.')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Profile saved.')));
     } catch (_) {
       if (!mounted) return;
       setState(() {
@@ -945,9 +959,9 @@ class _SenderMobileProfileViewState extends State<SenderMobileProfileView> {
         _profile = profile;
         _uploadingPhoto = false;
       });
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Profile photo saved.')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Profile photo saved.')));
     } catch (error) {
       if (!mounted) return;
       setState(() {
@@ -1063,10 +1077,7 @@ class _SenderMobileProfileViewState extends State<SenderMobileProfileView> {
             ],
             const SizedBox(height: 20),
             identity,
-            if (_editing) ...[
-              const SizedBox(height: 18),
-              details,
-            ],
+            if (_editing) ...[const SizedBox(height: 18), details],
             const SizedBox(height: 24),
             trust,
             const SizedBox(height: 28),
@@ -1171,34 +1182,41 @@ class _SenderMobileProfileViewState extends State<SenderMobileProfileView> {
                   icon: Icons.lock_outline_rounded,
                   title: 'Security',
                   subtitle: 'Password and account protection.',
-                  onTap: () =>
-                      Navigator.of(context).push(MaterialPageRoute<void>(
-                    builder: (_) => const _SenderSecuritySettingsScreen(),
-                    settings: const RouteSettings(
-                        name: '/sender-mobile/profile/security'),
-                  )),
+                  onTap: () => Navigator.of(context).push(
+                    MaterialPageRoute<void>(
+                      builder: (_) => const _SenderSecuritySettingsScreen(),
+                      settings: const RouteSettings(
+                        name: '/sender-mobile/profile/security',
+                      ),
+                    ),
+                  ),
                 ),
                 _ProfileShortcut(
                   icon: Icons.language_rounded,
                   title: 'Language',
                   subtitle: 'Language, region and time format.',
-                  onTap: () =>
-                      Navigator.of(context).push(MaterialPageRoute<void>(
-                    builder: (_) => const _SenderLanguageSettingsScreen(),
-                    settings: const RouteSettings(
-                        name: '/sender-mobile/profile/language'),
-                  )),
+                  onTap: () => Navigator.of(context).push(
+                    MaterialPageRoute<void>(
+                      builder: (_) => const _SenderLanguageSettingsScreen(),
+                      settings: const RouteSettings(
+                        name: '/sender-mobile/profile/language',
+                      ),
+                    ),
+                  ),
                 ),
                 _ProfileShortcut(
                   icon: Icons.accessibility_new_rounded,
                   title: 'Accessibility',
                   subtitle: 'Adjust your Circum experience.',
-                  onTap: () =>
-                      Navigator.of(context).push(MaterialPageRoute<void>(
-                    builder: (_) => const _SenderAccessibilitySettingsScreen(),
-                    settings: const RouteSettings(
-                        name: '/sender-mobile/profile/accessibility'),
-                  )),
+                  onTap: () => Navigator.of(context).push(
+                    MaterialPageRoute<void>(
+                      builder: (_) =>
+                          const _SenderAccessibilitySettingsScreen(),
+                      settings: const RouteSettings(
+                        name: '/sender-mobile/profile/accessibility',
+                      ),
+                    ),
+                  ),
                   showDivider: false,
                 ),
               ],
@@ -1249,7 +1267,9 @@ class _SenderMobileProfileViewState extends State<SenderMobileProfileView> {
                   title: 'Privacy',
                   subtitle: 'How Circum protects your information.',
                   onTap: () => _openLegalDocument(
-                      'Privacy', '/sender-mobile/profile/privacy'),
+                    'Privacy',
+                    '/sender-mobile/profile/privacy',
+                  ),
                   showDivider: false,
                 ),
               ],
@@ -1259,23 +1279,26 @@ class _SenderMobileProfileViewState extends State<SenderMobileProfileView> {
       );
 
   void _showLocalMessage(String message) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(message)),
-    );
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text(message)));
   }
 
   void _openLegalDocument(String title, String routeName) {
-    Navigator.of(context).push(MaterialPageRoute<void>(
-      builder: (_) => _SenderLegalDocumentScreen(title: title),
-      settings: RouteSettings(name: routeName),
-    ));
+    Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (_) => _SenderLegalDocumentScreen(title: title),
+        settings: RouteSettings(name: routeName),
+      ),
+    );
   }
 
   Future<void> _openNotifications() => Navigator.of(context).push(
         MaterialPageRoute<void>(
           builder: (_) => const SenderNotificationsView(),
-          settings:
-              const RouteSettings(name: '/sender-mobile/profile/notifications'),
+          settings: const RouteSettings(
+            name: '/sender-mobile/profile/notifications',
+          ),
         ),
       );
 
@@ -1323,7 +1346,8 @@ class _SenderMobileProfileViewState extends State<SenderMobileProfileView> {
             ],
           ),
           settings: const RouteSettings(
-              name: '/sender-mobile/profile/help-shape-circum'),
+            name: '/sender-mobile/profile/help-shape-circum',
+          ),
         ),
       );
 
@@ -1361,7 +1385,8 @@ class _SenderMobileProfileViewState extends State<SenderMobileProfileView> {
             ],
           ),
           settings: const RouteSettings(
-              name: '/sender-mobile/profile/community-requests'),
+            name: '/sender-mobile/profile/community-requests',
+          ),
         ),
       );
 
@@ -1566,10 +1591,7 @@ class _UsernameSummary extends StatelessWidget {
   final String username;
   final VoidCallback? onCreate;
 
-  const _UsernameSummary({
-    required this.username,
-    required this.onCreate,
-  });
+  const _UsernameSummary({required this.username, required this.onCreate});
 
   @override
   Widget build(BuildContext context) {
@@ -1816,14 +1838,8 @@ class _ProfileTrustCard extends StatelessWidget {
           else
             ...profile.trustHistory.take(3).map(_TrustActivityRow.new),
           const SizedBox(height: 8),
-          _TrustTextAction(
-            label: 'View Full History',
-            onTap: onViewHistory,
-          ),
-          _TrustTextAction(
-            label: 'View Trust Details →',
-            onTap: onViewDetails,
-          ),
+          _TrustTextAction(label: 'View Full History', onTap: onViewHistory),
+          _TrustTextAction(label: 'View Trust Details →', onTap: onViewDetails),
         ],
       ),
     );
@@ -2228,10 +2244,8 @@ class _SenderSecuritySettingsScreenState
                       ),
                     ),
                     TextButton(
-                      onPressed: () => _showPending(
-                        context,
-                        'Sign out this device',
-                      ),
+                      onPressed: () =>
+                          _showPending(context, 'Sign out this device'),
                       child: const Text('Sign out'),
                     ),
                   ],
@@ -2240,10 +2254,8 @@ class _SenderSecuritySettingsScreenState
               const SizedBox(height: 12),
               OutlinedButton.icon(
                 style: _secondaryButtonStyle(),
-                onPressed: () => _showPending(
-                  context,
-                  'Sign out all other devices',
-                ),
+                onPressed: () =>
+                    _showPending(context, 'Sign out all other devices'),
                 icon: const Icon(Icons.logout_rounded),
                 label: const Text('Sign out all other devices'),
               ),
@@ -2472,9 +2484,9 @@ class _SenderClosedSubmissionScreenState
       });
       if (!mounted) return;
       _controller.clear();
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(widget.successMessage)),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(widget.successMessage)));
       Navigator.of(context).pop();
     } on FirebaseFunctionsException catch (error) {
       if (!mounted) return;
@@ -2496,14 +2508,16 @@ class _SenderClosedSubmissionScreenState
           padding: EdgeInsets.zero,
           child: Column(
             children: widget.rows
-                .map((row) => Padding(
-                      padding: const EdgeInsets.all(16),
-                      child: _SettingsStaticRow(
-                        icon: row.icon,
-                        title: row.title,
-                        subtitle: row.subtitle,
-                      ),
-                    ))
+                .map(
+                  (row) => Padding(
+                    padding: const EdgeInsets.all(16),
+                    child: _SettingsStaticRow(
+                      icon: row.icon,
+                      title: row.title,
+                      subtitle: row.subtitle,
+                    ),
+                  ),
+                )
                 .toList(),
           ),
         ),
@@ -2513,10 +2527,9 @@ class _SenderClosedSubmissionScreenState
           minLines: 5,
           maxLines: 8,
           style: const TextStyle(color: Colors.white),
-          decoration: _fieldDecoration(widget.messageLabel).copyWith(
-            hintText: widget.messageHint,
-            alignLabelWithHint: true,
-          ),
+          decoration: _fieldDecoration(
+            widget.messageLabel,
+          ).copyWith(hintText: widget.messageHint, alignLabelWithHint: true),
         ),
         const SizedBox(height: 16),
         FilledButton.icon(
@@ -2753,8 +2766,10 @@ class _SettingsChoiceRow<T> extends StatelessWidget {
             child: ConstrainedBox(
               constraints: const BoxConstraints(minHeight: 56),
               child: Padding(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 16,
+                  vertical: 10,
+                ),
                 child: Row(
                   children: [
                     Expanded(
@@ -2788,9 +2803,9 @@ class _SettingsChoiceRow<T> extends StatelessWidget {
 }
 
 void _showPending(BuildContext context, String action) {
-  ScaffoldMessenger.of(context).showSnackBar(
-    SnackBar(content: Text('$action is being prepared.')),
-  );
+  ScaffoldMessenger.of(
+    context,
+  ).showSnackBar(SnackBar(content: Text('$action is being prepared.')));
 }
 
 class _ProfileShortcut extends StatelessWidget {
@@ -3031,9 +3046,7 @@ class _AccountTypeBadge extends StatelessWidget {
       decoration: BoxDecoration(
         color: _ProfileTokens.accent.withValues(alpha: .13),
         borderRadius: BorderRadius.circular(999),
-        border: Border.all(
-          color: _ProfileTokens.accent.withValues(alpha: .35),
-        ),
+        border: Border.all(color: _ProfileTokens.accent.withValues(alpha: .35)),
       ),
       child: Column(
         mainAxisSize: MainAxisSize.min,
@@ -3164,9 +3177,7 @@ class _TrustDetailsSheet extends StatelessWidget {
               ),
               const SizedBox(height: 14),
               _ProfileDetail(
-                label: 'Current tier',
-                value: profile.trustTierLabel,
-              ),
+                  label: 'Current tier', value: profile.trustTierLabel),
               _ProfileDetail(
                 label: 'Circum Trust Score',
                 value: profile.trustScoreLabel,
@@ -3240,9 +3251,9 @@ class _SenderLegalDocumentScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final isTerms = title == 'Terms';
-    final uri = Uri.parse(
-      isTerms ? 'https://circumuk.com/terms' : 'https://circumuk.com/privacy',
-    );
+    final uri = isTerms
+        ? SenderExternalNavigation.termsUri
+        : SenderExternalNavigation.privacyUri;
     return _SenderSettingsShell(
       title: title,
       subtitle: isTerms
@@ -3276,7 +3287,13 @@ class _SenderLegalDocumentScreen extends StatelessWidget {
               ),
               const SizedBox(height: 18),
               FilledButton.icon(
-                onPressed: () => launchUrl(uri),
+                onPressed: () => SenderExternalNavigation.open(
+                  context,
+                  uri,
+                  destination: isTerms
+                      ? SenderExternalDestination.terms
+                      : SenderExternalDestination.privacy,
+                ),
                 icon: const Icon(Icons.open_in_new_rounded),
                 label: Text(isTerms ? 'View Terms' : 'View Privacy Policy'),
               ),
@@ -3358,10 +3375,7 @@ class _ProfileMessage extends StatelessWidget {
         ),
         child: Row(
           children: [
-            const Icon(
-              Icons.error_outline_rounded,
-              color: Color(0xFFFCA5A5),
-            ),
+            const Icon(Icons.error_outline_rounded, color: Color(0xFFFCA5A5)),
             const SizedBox(width: 10),
             Expanded(
               child: Text(

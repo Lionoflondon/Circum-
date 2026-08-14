@@ -6,8 +6,9 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
-import 'package:url_launcher/url_launcher.dart';
+import 'package:url_launcher/url_launcher.dart' show LaunchMode;
 
+import '../../sender_mobile/sender_external_navigation.dart';
 import '../../send_package/models/suggestions.m.dart';
 import '../../send_package/repo/place_api.dart';
 import '../../platform/address_engine.dart';
@@ -89,8 +90,9 @@ class _HealthPlusViewState extends State<HealthPlusView> {
   final _pharmacyAddress = TextEditingController();
   final _deliveryAddress = TextEditingController();
   final _notes = TextEditingController();
-  final _preferredTime =
-      TextEditingController(text: _defaultHealthPickupDateTime());
+  final _preferredTime = TextEditingController(
+    text: _defaultHealthPickupDateTime(),
+  );
   final _customSchedule = TextEditingController();
   final _pharmacySearch = _HealthPlaceSearchController();
   final _deliverySearch = _HealthPlaceSearchController();
@@ -170,8 +172,9 @@ class _HealthPlusViewState extends State<HealthPlusView> {
         if (_selectedDelivery != null) {
           _goTo(_HealthStep.frequency);
         } else {
-          setState(() =>
-              _message = 'Choose a delivery address from the suggestions.');
+          setState(
+            () => _message = 'Choose a delivery address from the suggestions.',
+          );
         }
       case _HealthStep.frequency:
         _goTo(_HealthStep.plan);
@@ -203,9 +206,9 @@ class _HealthPlusViewState extends State<HealthPlusView> {
 
   Future<void> _loadRothBalance() async {
     try {
-      final result = await FirebaseFunctions.instanceFor(region: 'us-central1')
-          .httpsCallable('getSenderRothBalance')
-          .call<Map<String, dynamic>>();
+      final result = await FirebaseFunctions.instanceFor(
+        region: 'us-central1',
+      ).httpsCallable('getSenderRothBalance').call<Map<String, dynamic>>();
       final data = Map<String, dynamic>.from(result.data);
       if (!mounted) return;
       setState(() {
@@ -244,10 +247,12 @@ class _HealthPlusViewState extends State<HealthPlusView> {
         'email': _email.text.trim(),
         'pharmacyAddress': _pharmacyAddress.text.trim(),
         'deliveryAddress': _deliveryAddress.text.trim(),
-        'pharmacyAddressCanonical':
-            AddressEngine.canonicalAddressPayload(_selectedPharmacy!),
-        'deliveryAddressCanonical':
-            AddressEngine.canonicalAddressPayload(_selectedDelivery!),
+        'pharmacyAddressCanonical': AddressEngine.canonicalAddressPayload(
+          _selectedPharmacy!,
+        ),
+        'deliveryAddressCanonical': AddressEngine.canonicalAddressPayload(
+          _selectedDelivery!,
+        ),
         'notes': _notes.text.trim(),
         'consentConfirmed': _consent,
         'preferredPickupTime': _preferredTime.text.trim(),
@@ -314,7 +319,7 @@ class _HealthPlusViewState extends State<HealthPlusView> {
       });
 
       if (hasCheckoutUrl) {
-        await _openStripeCheckoutUrl(checkoutUrl);
+        await _openStripeCheckoutUrl(context, checkoutUrl);
       }
     } on FirebaseFunctionsException catch (error) {
       if (!mounted) return;
@@ -389,7 +394,7 @@ class _HealthPlusViewState extends State<HealthPlusView> {
       return;
     }
     try {
-      await _openStripeCheckoutUrl(_checkoutUrl!);
+      await _openStripeCheckoutUrl(context, _checkoutUrl!);
     } on _HealthCheckoutException catch (error) {
       if (!mounted) return;
       setState(() => _message = error.message);
@@ -401,9 +406,9 @@ class _HealthPlusViewState extends State<HealthPlusView> {
       setState(() => _message = 'This Health+ pickup is one-off.');
       return;
     }
-    await FirebaseFunctions.instanceFor(region: 'us-central1')
-        .httpsCallable('updateSenderHealthPlusBooking')
-        .call({
+    await FirebaseFunctions.instanceFor(
+      region: 'us-central1',
+    ).httpsCallable('updateSenderHealthPlusBooking').call({
       'action': 'pause_schedule',
       'scheduleId': _scheduleId,
       'idempotencyKey': 'healthplus:pause:$_scheduleId',
@@ -416,9 +421,9 @@ class _HealthPlusViewState extends State<HealthPlusView> {
       setState(() => _message = 'This Health+ pickup is one-off.');
       return;
     }
-    await FirebaseFunctions.instanceFor(region: 'us-central1')
-        .httpsCallable('updateSenderHealthPlusBooking')
-        .call({
+    await FirebaseFunctions.instanceFor(
+      region: 'us-central1',
+    ).httpsCallable('updateSenderHealthPlusBooking').call({
       'action': 'resume_schedule',
       'scheduleId': _scheduleId,
       'idempotencyKey': 'healthplus:resume:$_scheduleId',
@@ -429,9 +434,9 @@ class _HealthPlusViewState extends State<HealthPlusView> {
   Future<void> _cancelPickup() async {
     final pickupId = _latestPickup?['id']?.toString();
     if (pickupId == null) return;
-    await FirebaseFunctions.instanceFor(region: 'us-central1')
-        .httpsCallable('updateSenderHealthPlusBooking')
-        .call({
+    await FirebaseFunctions.instanceFor(
+      region: 'us-central1',
+    ).httpsCallable('updateSenderHealthPlusBooking').call({
       'action': 'cancel_pickup',
       'pickupId': pickupId,
       'idempotencyKey': 'healthplus:cancel:$pickupId',
@@ -472,10 +477,7 @@ class _HealthPlusViewState extends State<HealthPlusView> {
                     key: const Key('sender-health-guided-flow'),
                     padding: const EdgeInsets.fromLTRB(20, 6, 20, 28),
                     children: [
-                      _HealthStepRail(
-                        selected: _step,
-                        onSelected: _goTo,
-                      ),
+                      _HealthStepRail(selected: _step, onSelected: _goTo),
                       const SizedBox(height: 18),
                       _HealthEyebrow(_step.eyebrow),
                       const SizedBox(height: 6),
@@ -1207,7 +1209,9 @@ class _HealthReviewStep extends StatelessWidget {
         _HealthReviewRow(label: 'Plan', value: _healthPlanTitle(plan)),
         const _HealthDivider(),
         _HealthReviewRow(
-            label: 'Base fare', value: _money(quote.delivery.baseFare)),
+          label: 'Base fare',
+          value: _money(quote.delivery.baseFare),
+        ),
         _HealthReviewRow(
           label: 'Mileage fare',
           value: _money(quote.delivery.distanceFare),
@@ -1219,7 +1223,9 @@ class _HealthReviewStep extends StatelessWidget {
         _HealthReviewRow(label: 'Health+ fee', value: _money(quote.serviceFee)),
         if (quote.priorityFee > 0)
           _HealthReviewRow(
-              label: 'Priority fee', value: _money(quote.priorityFee)),
+            label: 'Priority fee',
+            value: _money(quote.priorityFee),
+          ),
         if (quote.familySupportFee > 0)
           _HealthReviewRow(
             label: 'Family support',
@@ -1327,7 +1333,9 @@ class _HealthConfirmedStep extends StatelessWidget {
         ),
         _HealthPrimaryButton(label: 'Back to Status', onTap: onStatus),
         _HealthSecondaryButton(
-            label: 'Open secure checkout', onTap: onCheckout),
+          label: 'Open secure checkout',
+          onTap: onCheckout,
+        ),
       ],
     );
   }
@@ -1409,10 +1417,7 @@ class _HealthDateTimeInput extends StatelessWidget {
   final TextEditingController controller;
   final String label;
 
-  const _HealthDateTimeInput({
-    required this.controller,
-    required this.label,
-  });
+  const _HealthDateTimeInput({required this.controller, required this.label});
 
   Future<void> _pick(BuildContext context) async {
     FocusScope.of(context).unfocus();
@@ -1465,8 +1470,10 @@ class _HealthDateTimeInput extends StatelessWidget {
         controller: controller,
         readOnly: true,
         onTap: () => _pick(context),
-        style:
-            const TextStyle(color: Colors.white, fontWeight: FontWeight.w700),
+        style: const TextStyle(
+          color: Colors.white,
+          fontWeight: FontWeight.w700,
+        ),
         decoration: InputDecoration(
           labelText: label,
           helperText: 'Choose day, month, year and time.',
@@ -1512,10 +1519,7 @@ class _HealthSuggestionRow extends StatelessWidget {
   final Suggestion suggestion;
   final VoidCallback onTap;
 
-  const _HealthSuggestionRow({
-    required this.suggestion,
-    required this.onTap,
-  });
+  const _HealthSuggestionRow({required this.suggestion, required this.onTap});
 
   @override
   Widget build(BuildContext context) {
@@ -1795,10 +1799,7 @@ class _HealthDisclaimer extends StatelessWidget {
       children: [
         const Text(
           'Safety and compliance',
-          style: TextStyle(
-            color: Colors.white,
-            fontWeight: FontWeight.w900,
-          ),
+          style: TextStyle(color: Colors.white, fontWeight: FontWeight.w900),
         ),
         const SizedBox(height: 8),
         ...items.map(
@@ -1856,10 +1857,7 @@ class _HealthReviewRow extends StatelessWidget {
   final String label;
   final String value;
 
-  const _HealthReviewRow({
-    required this.label,
-    required this.value,
-  });
+  const _HealthReviewRow({required this.label, required this.value});
 
   @override
   Widget build(BuildContext context) {
@@ -2058,10 +2056,7 @@ class _HealthSecondaryButton extends StatelessWidget {
   final String label;
   final VoidCallback onTap;
 
-  const _HealthSecondaryButton({
-    required this.label,
-    required this.onTap,
-  });
+  const _HealthSecondaryButton({required this.label, required this.onTap});
 
   @override
   Widget build(BuildContext context) {
@@ -2256,10 +2251,7 @@ class _HealthBackdrop extends StatelessWidget {
         gradient: RadialGradient(
           center: Alignment(-.8, -1),
           radius: 1.2,
-          colors: [
-            Color(0x2A2FAE8C),
-            _HealthTokens.bg,
-          ],
+          colors: [Color(0x2A2FAE8C), _HealthTokens.bg],
         ),
       ),
       child: SizedBox.expand(),
@@ -2286,9 +2278,14 @@ String _checkoutErrorMessage(String body) {
   return 'Secure payment could not be prepared. Please try again.';
 }
 
-Future<void> _openStripeCheckoutUrl(String checkoutUrl) async {
-  final opened = await launchUrl(
+Future<void> _openStripeCheckoutUrl(
+  BuildContext context,
+  String checkoutUrl,
+) async {
+  final opened = await SenderExternalNavigation.open(
+    context,
     Uri.parse(checkoutUrl),
+    destination: SenderExternalDestination.approvedStripePayment,
     mode: kIsWeb ? LaunchMode.platformDefault : LaunchMode.externalApplication,
     webOnlyWindowName: kIsWeb ? '_self' : null,
   );

@@ -4,9 +4,9 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
-import 'package:url_launcher/url_launcher.dart';
 
 import 'sender_accessibility.dart';
+import 'sender_external_navigation.dart';
 import 'gift_journey_draft.dart';
 import 'gift_relationship_view.dart';
 import 'gift_status_view.dart';
@@ -263,11 +263,13 @@ class _GiftPaymentViewState extends State<GiftPaymentView> {
       final draftRef = FirebaseFirestore.instance
           .collection(senderGiftPaymentDraftCollectionName)
           .doc();
-      final payload = Map<String, Object?>.from(widget.draft.adminReviewPayload(
-        senderId: user.uid,
-        senderEmail: user.email ?? '',
-        senderName: user.displayName,
-      ));
+      final payload = Map<String, Object?>.from(
+        widget.draft.adminReviewPayload(
+          senderId: user.uid,
+          senderEmail: user.email ?? '',
+          senderName: user.displayName,
+        ),
+      );
       payload.addAll({
         'applyRoth': _applyRoth && _rothBalance > 0,
         'paymentMethod': 'card',
@@ -312,7 +314,14 @@ class _GiftPaymentViewState extends State<GiftPaymentView> {
       if (checkoutUrl == null || checkoutUrl.host.isEmpty) {
         throw StateError('Stripe Checkout could not be opened.');
       }
-      await launchUrl(checkoutUrl, webOnlyWindowName: '_self');
+      if (!mounted) return;
+      final opened = await SenderExternalNavigation.open(
+        context,
+        checkoutUrl,
+        destination: SenderExternalDestination.approvedStripePayment,
+        webOnlyWindowName: '_self',
+      );
+      if (!opened) throw StateError('Stripe Checkout could not be opened.');
     } catch (error) {
       if (!mounted) return;
       setState(() {
@@ -479,7 +488,9 @@ class _RothBalanceSummary extends StatelessWidget {
       child: Column(
         children: [
           _PaymentSummaryRow(
-              label: 'Available Roth balance', value: balanceText),
+            label: 'Available Roth balance',
+            value: balanceText,
+          ),
           const SizedBox(height: 8),
           _PaymentSummaryRow(
             label: 'Amount covered by Roth',
