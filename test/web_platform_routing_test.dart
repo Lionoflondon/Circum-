@@ -259,5 +259,17 @@ void main() {
       expect(source, isNot(contains('SenderMobileHome')));
       expect(source, isNot(contains('_AdminOperationsPanel')));
     });
+
+    test('visible website CTAs do not keep empty enabled callbacks', () {
+      final source =
+          File('lib/website/shared/circum_website_app.dart').readAsStringSync();
+
+      expect(source, isNot(contains('onPressed: () {}')));
+      expect(source, isNot(contains('onPressed: () => null')));
+      expect(source, isNot(contains('onTap: () {}')));
+      expect(source, isNot(contains('onTap: () => null')));
+      expect(source, contains("scheme: 'tel'"));
+      expect(source, contains("webOnlyWindowName: '_self'"));
+    });
   });
 }

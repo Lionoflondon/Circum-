@@ -24691,7 +24691,12 @@ class _DriverCard extends StatelessWidget {
               ),
               IconButton.filled(
                 tooltip: 'Call',
-                onPressed: profile.phoneNumber.isEmpty ? null : () {},
+                onPressed: profile.phoneNumber.isEmpty
+                    ? null
+                    : () => launchUrl(Uri(
+                          scheme: 'tel',
+                          path: profile.phoneNumber,
+                        )),
                 icon: const Icon(Icons.call),
                 style: IconButton.styleFrom(
                   backgroundColor: colors.field,
@@ -25975,12 +25980,18 @@ class _LandingFooter extends StatelessWidget {
                         uri: _CircumWebsiteAppState._canonicalWebUri(
                           '/privacy',
                         ),
-                        onPressed: () {},
+                        onPressed: () => launchUrl(
+                          _CircumWebsiteAppState._canonicalWebUri('/privacy'),
+                          webOnlyWindowName: '_self',
+                        ),
                       ),
                       _FooterServiceLink(
                         label: 'Terms of Service',
                         uri: _CircumWebsiteAppState._canonicalWebUri('/terms'),
-                        onPressed: () {},
+                        onPressed: () => launchUrl(
+                          _CircumWebsiteAppState._canonicalWebUri('/terms'),
+                          webOnlyWindowName: '_self',
+                        ),
                       ),
                     ],
                   ),
