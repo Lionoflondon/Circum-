@@ -18,6 +18,8 @@ import 'sender_finance.dart';
 import 'sender_page_shell.dart';
 import 'sender_profile_authority.dart';
 
+const _senderWalletOperationTimeout = Duration(seconds: 15);
+
 class SenderWalletData {
   final double balance;
   final bool frozen;
@@ -391,7 +393,8 @@ class FirebaseSenderWalletRepository implements SenderWalletRepository {
   Future<SenderWalletPage> transactions({String? pageToken}) async {
     final result = await functions
         .httpsCallable('getSenderWalletTransactions')
-        .call({'pageSize': 20, 'pageToken': pageToken});
+        .call({'pageSize': 20, 'pageToken': pageToken}).timeout(
+            _firebaseReadTimeout);
     final data = Map<String, dynamic>.from(result.data as Map);
     final records = (data['transactions'] as List? ?? const [])
         .map((item) => SenderWalletTransaction.fromMap(
@@ -402,32 +405,34 @@ class FirebaseSenderWalletRepository implements SenderWalletRepository {
 
   @override
   Future<SenderPaymentMethodsData> paymentMethods() async {
-    final result =
-        await functions.httpsCallable('listSenderPaymentMethods').call();
+    final result = await functions
+        .httpsCallable('listSenderPaymentMethods')
+        .call()
+        .timeout(_firebaseReadTimeout);
     return SenderPaymentMethodsData.fromMap(
         Map<String, dynamic>.from(result.data as Map));
   }
 
   @override
   Future<SenderSetupIntentData> createSetupIntent() async {
-    final result =
-        await functions.httpsCallable('createSenderSetupIntent').call();
+    final result = await functions
+        .httpsCallable('createSenderSetupIntent')
+        .call()
+        .timeout(_firebaseReadTimeout);
     return SenderSetupIntentData.fromMap(
         Map<String, dynamic>.from(result.data as Map));
   }
 
   @override
   Future<void> detachPaymentMethod(String paymentMethodId) async {
-    await functions
-        .httpsCallable('detachSenderPaymentMethod')
-        .call({'paymentMethodId': paymentMethodId});
+    await functions.httpsCallable('detachSenderPaymentMethod').call(
+        {'paymentMethodId': paymentMethodId}).timeout(_firebaseReadTimeout);
   }
 
   @override
   Future<void> setDefaultPaymentMethod(String paymentMethodId) async {
-    await functions
-        .httpsCallable('setDefaultSenderPaymentMethod')
-        .call({'paymentMethodId': paymentMethodId});
+    await functions.httpsCallable('setDefaultSenderPaymentMethod').call(
+        {'paymentMethodId': paymentMethodId}).timeout(_firebaseReadTimeout);
   }
 
   @override
@@ -435,7 +440,7 @@ class FirebaseSenderWalletRepository implements SenderWalletRepository {
       SenderCheckoutPreference preference) async {
     await functions.httpsCallable('saveSenderCheckoutPreference').call({
       'preference': senderCheckoutPreferenceValue(preference),
-    });
+    }).timeout(_firebaseReadTimeout);
   }
 
   @override
@@ -467,8 +472,6 @@ class SenderWalletView extends StatefulWidget {
 }
 
 class _SenderWalletViewState extends State<SenderWalletView> {
-  static const _walletOperationTimeout = Duration(seconds: 15);
-
   late final SenderWalletRepository _repository;
   StreamSubscription<SenderWalletData>? _subscription;
   SenderWalletData? _wallet;
@@ -540,7 +543,7 @@ class _SenderWalletViewState extends State<SenderWalletView> {
     if (_refreshing) return;
     final generation = ++_loadGeneration;
     Future<T> withWalletTimeout<T>(Future<T> operation) =>
-        operation.timeout(_walletOperationTimeout);
+        operation.timeout(_senderWalletOperationTimeout);
 
     final startedAt = DateTime.now();
     setState(() {
@@ -579,7 +582,8 @@ class _SenderWalletViewState extends State<SenderWalletView> {
       await _subscription?.cancel();
       _subscription = _repository
           .watch()
-          .timeout(_walletOperationTimeout, onTimeout: (sink) => sink.close())
+          .timeout(_senderWalletOperationTimeout,
+              onTimeout: (sink) => sink.close())
           .listen((value) {
         if (!mounted) return;
         setState(() {
@@ -636,7 +640,9 @@ class _SenderWalletViewState extends State<SenderWalletView> {
   }
 
   Future<void> _refreshPaymentMethods() async {
-    final methods = await _repository.paymentMethods();
+    final methods = await _repository
+        .paymentMethods()
+        .timeout(_senderWalletOperationTimeout);
     if (mounted) setState(() => _paymentMethods = methods);
   }
 
@@ -647,7 +653,9 @@ class _SenderWalletViewState extends State<SenderWalletView> {
       _error = null;
     });
     try {
-      final setup = await _repository.createSetupIntent();
+      final setup = await _repository
+          .createSetupIntent()
+          .timeout(_senderWalletOperationTimeout);
       await Stripe.instance.initPaymentSheet(
         paymentSheetParameters: SetupPaymentSheetParameters(
           merchantDisplayName: 'Circum',
@@ -676,8 +684,12 @@ class _SenderWalletViewState extends State<SenderWalletView> {
         _notice(
             context, error.error.localizedMessage ?? 'Card setup cancelled.');
       }
+    } on TimeoutException {
+      if (mounted) {
+        _notice(context, 'Payment setup is taking too long. Try again.');
+      }
     } catch (error) {
-      if (mounted) setState(() => _error = '$error');
+      if (mounted) _notice(context, 'Could not start secure card setup.');
     } finally {
       if (mounted) setState(() => _paymentActionLoading = false);
     }
@@ -687,8 +699,12 @@ class _SenderWalletViewState extends State<SenderWalletView> {
     if (_paymentActionLoading) return;
     setState(() => _paymentActionLoading = true);
     try {
-      await _repository.setDefaultPaymentMethod(id);
+      await _repository
+          .setDefaultPaymentMethod(id)
+          .timeout(_senderWalletOperationTimeout);
       await _refreshPaymentMethods();
+    } on TimeoutException {
+      if (mounted) _notice(context, 'Default card update timed out.');
     } catch (error) {
       if (mounted) _notice(context, 'Could not update default card.');
     } finally {
@@ -716,8 +732,13 @@ class _SenderWalletViewState extends State<SenderWalletView> {
     if (!confirmed || _paymentActionLoading) return;
     setState(() => _paymentActionLoading = true);
     try {
-      await _repository.detachPaymentMethod(method.id);
+      await _repository
+          .detachPaymentMethod(method.id)
+          .timeout(_senderWalletOperationTimeout);
       await _refreshPaymentMethods();
+      if (mounted) _notice(context, 'Payment method removed.');
+    } on TimeoutException {
+      if (mounted) _notice(context, 'Card removal timed out. Try again.');
     } catch (error) {
       if (mounted) _notice(context, 'Could not remove payment method.');
     } finally {
@@ -734,7 +755,8 @@ class _SenderWalletViewState extends State<SenderWalletView> {
           ),
           settings: const RouteSettings(name: '/sender-mobile/wallet/payments'),
         ))
-        .then((_) => _refreshPaymentMethods());
+        .then((_) => _refreshPaymentMethods())
+        .catchError((_) {});
   }
 
   void _openPaymentInformation(SenderPaymentProfileOptionType type) {
@@ -1076,7 +1098,9 @@ class _ManagePaymentsScreenState extends State<_ManagePaymentsScreen> {
       _error = null;
     });
     try {
-      final profile = await widget.repository.paymentMethods();
+      final profile = await widget.repository
+          .paymentMethods()
+          .timeout(_senderWalletOperationTimeout);
       var businessAccount = false;
       try {
         final user = FirebaseAuth.instance.currentUser;
@@ -1100,7 +1124,7 @@ class _ManagePaymentsScreenState extends State<_ManagePaymentsScreen> {
     } catch (error) {
       if (mounted) {
         setState(() {
-          _error = '$error';
+          _error = 'Payment methods are taking too long to load.';
           _loading = false;
         });
       }
@@ -1111,7 +1135,9 @@ class _ManagePaymentsScreenState extends State<_ManagePaymentsScreen> {
     if (_busy) return;
     setState(() => _busy = true);
     try {
-      final setup = await widget.repository.createSetupIntent();
+      final setup = await widget.repository
+          .createSetupIntent()
+          .timeout(_senderWalletOperationTimeout);
       await Stripe.instance.initPaymentSheet(
         paymentSheetParameters: SetupPaymentSheetParameters(
           merchantDisplayName: 'Circum',
@@ -1139,16 +1165,47 @@ class _ManagePaymentsScreenState extends State<_ManagePaymentsScreen> {
           error.error.localizedMessage ?? 'Card setup cancelled.',
         );
       }
+    } on TimeoutException {
+      if (mounted) {
+        _SenderWalletViewState._notice(
+          context,
+          'Payment setup is taking too long. Try again.',
+        );
+      }
+    } catch (_) {
+      if (mounted) {
+        _SenderWalletViewState._notice(
+          context,
+          'Could not start secure card setup.',
+        );
+      }
     } finally {
       if (mounted) setState(() => _busy = false);
     }
   }
 
   Future<void> _setDefault(String id) async {
+    if (_busy) return;
     setState(() => _busy = true);
     try {
-      await widget.repository.setDefaultPaymentMethod(id);
+      await widget.repository
+          .setDefaultPaymentMethod(id)
+          .timeout(_senderWalletOperationTimeout);
       await _load();
+    } on TimeoutException {
+      if (mounted) {
+        _SenderWalletViewState._notice(
+          context,
+          'Default card update timed out.',
+        );
+      }
+    } catch (_) {
+      if (mounted) {
+        _SenderWalletViewState._notice(
+          context,
+          'Could not update default card.',
+        );
+      }
     } finally {
       if (mounted) setState(() => _busy = false);
     }
@@ -1173,21 +1230,57 @@ class _ManagePaymentsScreenState extends State<_ManagePaymentsScreen> {
           ),
         ) ??
         false;
-    if (!confirmed) return;
+    if (!confirmed || _busy) return;
     setState(() => _busy = true);
     try {
-      await widget.repository.detachPaymentMethod(method.id);
+      await widget.repository
+          .detachPaymentMethod(method.id)
+          .timeout(_senderWalletOperationTimeout);
       await _load();
+      if (mounted) {
+        _SenderWalletViewState._notice(context, 'Payment method removed.');
+      }
+    } on TimeoutException {
+      if (mounted) {
+        _SenderWalletViewState._notice(
+          context,
+          'Card removal timed out. Try again.',
+        );
+      }
+    } catch (_) {
+      if (mounted) {
+        _SenderWalletViewState._notice(
+          context,
+          'Could not remove payment method.',
+        );
+      }
     } finally {
       if (mounted) setState(() => _busy = false);
     }
   }
 
   Future<void> _savePreference(SenderCheckoutPreference value) async {
+    if (_busy) return;
     setState(() => _busy = true);
     try {
-      await widget.repository.saveCheckoutPreference(value);
+      await widget.repository
+          .saveCheckoutPreference(value)
+          .timeout(_senderWalletOperationTimeout);
       await _load();
+    } on TimeoutException {
+      if (mounted) {
+        _SenderWalletViewState._notice(
+          context,
+          'Checkout preference update timed out.',
+        );
+      }
+    } catch (_) {
+      if (mounted) {
+        _SenderWalletViewState._notice(
+          context,
+          'Could not update checkout preference.',
+        );
+      }
     } finally {
       if (mounted) setState(() => _busy = false);
     }

@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:cloud_functions/cloud_functions.dart';
 import 'package:flutter/foundation.dart';
 
@@ -300,6 +302,7 @@ abstract class SenderPaymentProfileRepository {
 
 class FirebaseSenderPaymentProfileRepository
     implements SenderPaymentProfileRepository {
+  static const _operationTimeout = Duration(seconds: 18);
   final FirebaseFunctions functions;
 
   FirebaseSenderPaymentProfileRepository({FirebaseFunctions? functions})
@@ -307,16 +310,20 @@ class FirebaseSenderPaymentProfileRepository
 
   @override
   Future<SenderPaymentProfile> paymentMethods() async {
-    final result =
-        await functions.httpsCallable('listSenderPaymentMethods').call();
+    final result = await functions
+        .httpsCallable('listSenderPaymentMethods')
+        .call()
+        .timeout(_operationTimeout);
     return SenderPaymentProfile.fromMap(
         Map<String, dynamic>.from(result.data as Map));
   }
 
   @override
   Future<SenderSetupIntentData> createSetupIntent() async {
-    final result =
-        await functions.httpsCallable('createSenderSetupIntent').call();
+    final result = await functions
+        .httpsCallable('createSenderSetupIntent')
+        .call()
+        .timeout(_operationTimeout);
     return SenderSetupIntentData.fromMap(
         Map<String, dynamic>.from(result.data as Map));
   }
@@ -325,14 +332,14 @@ class FirebaseSenderPaymentProfileRepository
   Future<void> detachPaymentMethod(String paymentMethodId) async {
     await functions
         .httpsCallable('detachSenderPaymentMethod')
-        .call({'paymentMethodId': paymentMethodId});
+        .call({'paymentMethodId': paymentMethodId}).timeout(_operationTimeout);
   }
 
   @override
   Future<void> setDefaultPaymentMethod(String paymentMethodId) async {
     await functions
         .httpsCallable('setDefaultSenderPaymentMethod')
-        .call({'paymentMethodId': paymentMethodId});
+        .call({'paymentMethodId': paymentMethodId}).timeout(_operationTimeout);
   }
 
   @override
@@ -340,6 +347,6 @@ class FirebaseSenderPaymentProfileRepository
       SenderCheckoutPreference preference) async {
     await functions.httpsCallable('saveSenderCheckoutPreference').call({
       'preference': senderCheckoutPreferenceValue(preference),
-    });
+    }).timeout(_operationTimeout);
   }
 }

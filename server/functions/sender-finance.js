@@ -4,6 +4,14 @@
 const functions = require("firebase-functions/v1");
 const {getFirestore, FieldValue} = require("firebase-admin/firestore");
 
+function isStripeMissingResource(error) {
+  return error && (
+    error.code === "resource_missing" ||
+    error.type === "StripeInvalidRequestError" &&
+      /No such PaymentMethod/i.test(`${error.message || ""}`)
+  );
+}
+
 function requireSender(context) {
   if (!context.auth) {
     throw new functions.https.HttpsError("unauthenticated", "Sign in to manage payment methods.");
@@ -104,17 +112,43 @@ exports.detachSenderPaymentMethod = (stripe) => functions.https.onCall(async (da
     throw new functions.https.HttpsError("invalid-argument", "Payment method is required.");
   }
   const customerId = await ensureStripeCustomer({stripe, sender});
-  const method = await stripe.paymentMethods.retrieve(paymentMethodId);
+  let method;
+  try {
+    method = await stripe.paymentMethods.retrieve(paymentMethodId);
+  } catch (error) {
+    if (isStripeMissingResource(error)) {
+      return {ok: true, detached: true, alreadyDetached: true};
+    }
+    throw error;
+  }
+  if (!method.customer) {
+    return {ok: true, detached: true, alreadyDetached: true};
+  }
   if (method.customer !== customerId) {
     throw new functions.https.HttpsError("permission-denied", "Payment method does not belong to this Sender.");
   }
   await stripe.paymentMethods.detach(paymentMethodId);
+  const customer = await stripe.customers.retrieve(customerId);
+  if (
+    customer &&
+    !customer.deleted &&
+    customer.invoice_settings &&
+    customer.invoice_settings.default_payment_method === paymentMethodId
+  ) {
+    await stripe.customers.update(customerId, {
+      invoice_settings: {default_payment_method: null},
+    });
+    await getFirestore().collection("users").doc(sender.uid).collection("finance").doc("checkoutPreferences").set({
+      defaultPaymentMethodId: null,
+      updatedAt: FieldValue.serverTimestamp(),
+    }, {merge: true});
+  }
   await getFirestore().collection("users").doc(sender.uid).collection("financeAudit").add({
     action: "payment_method_removed",
     paymentMethodId,
     createdAt: FieldValue.serverTimestamp(),
   });
-  return {ok: true};
+  return {ok: true, detached: true};
 });
 
 exports.setDefaultSenderPaymentMethod = (stripe) => functions.https.onCall(async (data, context) => {
