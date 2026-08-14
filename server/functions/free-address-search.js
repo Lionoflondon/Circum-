@@ -95,9 +95,9 @@ async function resolveUkAddressPlaceHandler(data, context, {db, resolveImpl = re
   }
 }
 
-exports.searchFreeUkAddresses = functions.https.onCall((data, context) =>
+exports.searchFreeUkAddresses = functions.runWith({enforceAppCheck: true}).https.onCall((data, context) =>
   searchFreeUkAddressesHandler(data, context));
-exports.resolveUkAddressPlace = functions.https.onCall((data, context) =>
+exports.resolveUkAddressPlace = functions.runWith({enforceAppCheck: true}).https.onCall((data, context) =>
   resolveUkAddressPlaceHandler(data, context));
 exports._searchFreeUkAddressesHandler = searchFreeUkAddressesHandler;
 exports._resolveUkAddressPlaceHandler = resolveUkAddressPlaceHandler;

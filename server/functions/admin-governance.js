@@ -660,7 +660,7 @@ function requestMeta(context, data = {}) {
   };
 }
 
-exports.adminGovernanceAction = functions.https.onCall(async (data, context) => {
+exports.adminGovernanceAction = functions.runWith({enforceAppCheck: true}).https.onCall(async (data, context) => {
   const actor = assertSuperAdmin(context);
   const action = lower(data && data.action);
   const reason = requireReason(data);

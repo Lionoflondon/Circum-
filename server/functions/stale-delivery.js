@@ -77,7 +77,7 @@ async function referencedPresenceDocs(db) {
   return [...docs.values()];
 }
 
-exports.resolveStaleDeliveryLock = functions.https.onCall(async (data, context) => {
+exports.resolveStaleDeliveryLock = functions.runWith({enforceAppCheck: true}).https.onCall(async (data, context) => {
   const actorUid = requireAdmin(context);
   const deliveryId = text(data && data.deliveryId);
   const reason = text(data && data.reason);

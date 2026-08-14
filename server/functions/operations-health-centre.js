@@ -269,7 +269,7 @@ async function writeOperationsAudit(db, adminUid, action, payload) {
 }
 
 function operationsHealthScan() {
-  return functions.https.onCall(async (data, context) => {
+  return functions.runWith({enforceAppCheck: true}).https.onCall(async (data, context) => {
     const adminUid = requireAdmin(context, "Operations Health Centre access is required.");
     const db = getFirestore();
     const started = Date.now();
@@ -335,7 +335,7 @@ async function repairRiders(db, adminUid, limit) {
 }
 
 function operationsHealthRepair() {
-  return functions.https.onCall(async (data, context) => {
+  return functions.runWith({enforceAppCheck: true}).https.onCall(async (data, context) => {
     const adminUid = requireAdmin(context, "Operations Health Repair access is required.");
     const reason = text(data && data.reason, 1000);
     if (reason.length < 12) {
@@ -463,7 +463,7 @@ function deliveryStageReport(delivery = {}, runtime = {}) {
 }
 
 function liveDeliveryDiagnostics() {
-  return functions.https.onCall(async (data, context) => {
+  return functions.runWith({enforceAppCheck: true}).https.onCall(async (data, context) => {
     const adminUid = requireAdmin(context, "Live Delivery Diagnostics access is required.");
     const deliveryId = text(data && data.deliveryId, 160);
     if (!deliveryId) {

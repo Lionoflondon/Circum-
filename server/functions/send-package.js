@@ -248,7 +248,7 @@ async function dispatchDeliveryRequest({
   };
 }
 
-const sendPackage = functions.https.onCall(async (data, context) => {
+const sendPackage = functions.runWith({enforceAppCheck: true}).https.onCall(async (data, context) => {
   try {
     const {requestId} = data;
     // Check if the user is authenticated

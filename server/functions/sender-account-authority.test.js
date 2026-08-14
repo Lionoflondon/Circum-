@@ -17,7 +17,7 @@ test("ensureSenderAccount emits lifecycle diagnostics around the transaction", (
 });
 
 test("ensureSenderAccount returns explicit outcomes without changing the callable", () => {
-  assert.match(source, /exports\.ensureSenderAccount = functions\.https\.onCall/);
+  assert.match(source, /exports\.ensureSenderAccount = functions\.runWith\(\{enforceAppCheck: true\}\)\.https\.onCall/);
   assert.match(source, /action: "existing_sender_role_allowed"/);
   assert.match(source, /action: "blocked_conflicting_role"/);
   assert.match(source, /action: userSnap\.exists \? "merged_sender_role" : "created_sender_profile"/);

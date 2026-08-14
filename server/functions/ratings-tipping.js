@@ -226,7 +226,7 @@ async function finalizeTip(db, tipRef, tip, stripeIntentId = null) {
 }
 
 function submitTip(stripe) {
-  return functions.https.onCall(async (data, context) => {
+  return functions.runWith({enforceAppCheck: true}).https.onCall(async (data, context) => {
     const sender = requireAuth(context);
     const deliveryId = text(data && (data.deliveryId || data.requestId));
     if (!deliveryId) throw new functions.https.HttpsError("invalid-argument", "Delivery is required.");
@@ -363,8 +363,8 @@ async function processStripeTipIntent(stripe, intent) {
   return {handled: true, status: intent.status};
 }
 
-exports.submitDeliveryRating = functions.https.onCall(submitRating);
+exports.submitDeliveryRating = functions.runWith({enforceAppCheck: true}).https.onCall(submitRating);
 exports.submitDeliveryTip = submitTip;
-exports.reportRating = functions.https.onCall(reportRating);
+exports.reportRating = functions.runWith({enforceAppCheck: true}).https.onCall(reportRating);
 exports.processStripeTipIntent = processStripeTipIntent;
 exports._test = {submitRating, reportRating, finalizeTip, resolveDelivery};

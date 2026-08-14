@@ -274,7 +274,7 @@ function requireAdmin(context) {
 
 const SUBJECT_COLLECTIONS = new Set(["users", "riderProfiles", "riders", "businessAccounts"]);
 
-exports.grantRecognition = functions.https.onCall(async (data, context) => {
+exports.grantRecognition = functions.runWith({enforceAppCheck: true}).https.onCall(async (data, context) => {
   requireAdmin(context);
   const type = `${data.type || ""}`.trim();
   const subjectCollection = `${data.subjectCollection || ""}`.trim();
@@ -294,7 +294,7 @@ exports.grantRecognition = functions.https.onCall(async (data, context) => {
   });
 });
 
-exports.revokeRecognition = functions.https.onCall(async (data, context) => {
+exports.revokeRecognition = functions.runWith({enforceAppCheck: true}).https.onCall(async (data, context) => {
   requireAdmin(context);
   const type = `${data.type || ""}`.trim();
   const subjectCollection = `${data.subjectCollection || ""}`.trim();

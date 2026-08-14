@@ -52,7 +52,7 @@ async function bookingReference(db, requestId) {
   return query.empty ? null : query.docs[0];
 }
 
-exports.reportLoadDiscrepancy = functions.https.onCall(async (data, context) => {
+exports.reportLoadDiscrepancy = functions.runWith({enforceAppCheck: true}).https.onCall(async (data, context) => {
   if (!context.auth) throw new functions.https.HttpsError("unauthenticated", "Authentication required.");
   const {requestId, reason, evidencePhotos = [], observedWeightKg, observedDescription, observedVehicleType, riderNotes, dimensions} = data;
   if (!requestId || !DISCREPANCY_REASONS.includes(reason)) throw new functions.https.HttpsError("invalid-argument", "A booking and supported discrepancy reason are required.");
@@ -155,7 +155,7 @@ exports.reportLoadDiscrepancy = functions.https.onCall(async (data, context) => 
   return {success: true, adjustmentId: adjustmentRef.id, additionalAmount: adjustment.additionalAmount, status: adjustment.additionalAmount > 0 ? "awaiting_admin_review" : "closed_no_charge"};
 });
 
-exports.reviewDeliveryAdjustment = functions.https.onCall(async (data, context) => {
+exports.reviewDeliveryAdjustment = functions.runWith({enforceAppCheck: true}).https.onCall(async (data, context) => {
   if (!context.auth) throw new functions.https.HttpsError("unauthenticated", "Authentication required.");
   const token = context.auth.token || {};
   const role = `${token.role || token.adminRole || ""}`.toLowerCase();
@@ -224,7 +224,7 @@ exports.reviewDeliveryAdjustment = functions.https.onCall(async (data, context) 
   return {success: true, adjustmentId, decision};
 });
 
-exports.cancelAdjustedCollection = functions.https.onCall(async (data, context) => {
+exports.cancelAdjustedCollection = functions.runWith({enforceAppCheck: true}).https.onCall(async (data, context) => {
   if (!context.auth) throw new functions.https.HttpsError("unauthenticated", "Authentication required.");
   const db = getFirestore();
   const adjustmentRef = db.collection("deliveryAdjustments").doc(data.adjustmentId);
@@ -239,7 +239,7 @@ exports.cancelAdjustedCollection = functions.https.onCall(async (data, context) 
   return {success: true};
 });
 
-exports.createDeliveryAdjustmentPayment = functions.https.onCall(async (data, context) => {
+exports.createDeliveryAdjustmentPayment = functions.runWith({enforceAppCheck: true}).https.onCall(async (data, context) => {
   if (!context.auth) throw new functions.https.HttpsError("unauthenticated", "Authentication required.");
   const db = getFirestore();
   const adjustmentRef = db.collection("deliveryAdjustments").doc(data.adjustmentId);
@@ -258,7 +258,7 @@ exports.createDeliveryAdjustmentPayment = functions.https.onCall(async (data, co
   return {clientSecret: intent.client_secret, paymentIntentId: intent.id, amount};
 });
 
-exports.finalizeDeliveryAdjustmentPayment = functions.https.onCall(async (data, context) => {
+exports.finalizeDeliveryAdjustmentPayment = functions.runWith({enforceAppCheck: true}).https.onCall(async (data, context) => {
   if (!context.auth) throw new functions.https.HttpsError("unauthenticated", "Authentication required.");
   const db = getFirestore();
   const adjustmentRef = db.collection("deliveryAdjustments").doc(data.adjustmentId);

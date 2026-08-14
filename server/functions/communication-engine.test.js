@@ -77,7 +77,7 @@ test("notification retry is backend-authoritative and audited", () => {
   assert.match(source, /actionType:\s*"notification_retry_failed"/);
   assert.match(
       source,
-      /exports\.retryNotificationDelivery = functions\.https\.onCall/,
+      /exports\.retryNotificationDelivery = functions\.runWith\(\{enforceAppCheck: true\}\)\.https\.onCall/,
   );
   assert.match(
       indexSource,

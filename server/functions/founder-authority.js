@@ -70,7 +70,7 @@ function cleanWaivers(values = []) {
 }
 
 function founderDesignateTestAccount() {
-  return functions.https.onCall(async (data, context) => {
+  return functions.runWith({enforceAppCheck: true}).https.onCall(async (data, context) => {
     const founder = assertFounder(context);
     const db = getFirestore();
     const targetUid = text(data && data.targetUid, 128);
@@ -125,7 +125,7 @@ function founderDesignateTestAccount() {
 }
 
 function founderRevokeTestAccount() {
-  return functions.https.onCall(async (data, context) => {
+  return functions.runWith({enforceAppCheck: true}).https.onCall(async (data, context) => {
     const founder = assertFounder(context);
     const db = getFirestore();
     const targetUid = text(data && data.targetUid, 128);
@@ -167,7 +167,7 @@ function founderRevokeTestAccount() {
 }
 
 function founderListTestAccounts() {
-  return functions.https.onCall(async (data, context) => {
+  return functions.runWith({enforceAppCheck: true}).https.onCall(async (data, context) => {
     assertFounder(context);
     const db = getFirestore();
     const activeOnly = !(data && data.activeOnly === false);
@@ -257,7 +257,7 @@ function stageSummary(stages) {
 }
 
 function founderPreflightE2E() {
-  return functions.https.onCall(async (data, context) => {
+  return functions.runWith({enforceAppCheck: true}).https.onCall(async (data, context) => {
     const founder = assertFounder(context);
     const db = getFirestore();
     const targetUid = text(data && data.targetUid, 128);

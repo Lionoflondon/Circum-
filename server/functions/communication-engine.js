@@ -276,7 +276,7 @@ async function sendMessage(data, context) {
   if (!context.auth) throw new functions.https.HttpsError("unauthenticated", "Sign in to send a message.");
   const senderId = context.auth.uid;
   const chatId = clean(data.chatId || data.requestId || data.bookingId);
-  const clientMessageId = clean(data.clientMessageId).replace(/[^A-Za-z0-9_-]/g, '').slice(0, 96);
+  const clientMessageId = clean(data.clientMessageId).replace(/[^A-Za-z0-9_-]/g, "").slice(0, 96);
   const message = maskContactDetails(data.message || data.messageText);
   const messageType = clean(data.messageType || "text").toLowerCase();
   if (!chatId || !message) {
@@ -770,16 +770,16 @@ async function markConversationRead(data, context) {
 exports.emitNotification = emitNotification;
 exports.destinationFor = destinationFor;
 exports._sendCircumMessageHandler = sendMessage;
-exports.sendCircumMessage = functions.https.onCall(sendMessage);
-exports.startAdminConversation = functions.https.onCall(startAdminConversation);
-exports.getOrCreateSupportConversation = functions.https.onCall(getOrCreateSupportConversation);
-exports.submitWebsiteSupportRequest = functions.https.onCall(submitWebsiteSupportRequest);
-exports.updateSupportConversationStatus = functions.https.onCall(updateSupportConversationStatus);
-exports.markConversationRead = functions.https.onCall(markConversationRead);
-exports.setConversationTyping = functions.https.onCall(setConversationTyping);
-exports.reportCircumMessage = functions.https.onCall(reportMessage);
-exports.sendCircumAnnouncement = functions.https.onCall(sendAnnouncement);
-exports.retryNotificationDelivery = functions.https.onCall(retryNotificationDelivery);
+exports.sendCircumMessage = functions.runWith({enforceAppCheck: true}).https.onCall(sendMessage);
+exports.startAdminConversation = functions.runWith({enforceAppCheck: true}).https.onCall(startAdminConversation);
+exports.getOrCreateSupportConversation = functions.runWith({enforceAppCheck: true}).https.onCall(getOrCreateSupportConversation);
+exports.submitWebsiteSupportRequest = functions.runWith({enforceAppCheck: true}).https.onCall(submitWebsiteSupportRequest);
+exports.updateSupportConversationStatus = functions.runWith({enforceAppCheck: true}).https.onCall(updateSupportConversationStatus);
+exports.markConversationRead = functions.runWith({enforceAppCheck: true}).https.onCall(markConversationRead);
+exports.setConversationTyping = functions.runWith({enforceAppCheck: true}).https.onCall(setConversationTyping);
+exports.reportCircumMessage = functions.runWith({enforceAppCheck: true}).https.onCall(reportMessage);
+exports.sendCircumAnnouncement = functions.runWith({enforceAppCheck: true}).https.onCall(sendAnnouncement);
+exports.retryNotificationDelivery = functions.runWith({enforceAppCheck: true}).https.onCall(retryNotificationDelivery);
 exports.closeDeliveryConversation = async (deliveryId, status) => {
   if (!terminalDeliveryStatuses.has(clean(status).toLowerCase())) return;
   await getFirestore().collection("chats").doc(clean(deliveryId)).set({

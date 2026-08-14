@@ -252,7 +252,7 @@ async function riderApplicationsFor(transaction, db, riderId, emails = []) {
   return {applications, refs};
 }
 
-exports.adminReviewRider = functions.https.onCall(async (data, context) => {
+exports.adminReviewRider = functions.runWith({enforceAppCheck: true}).https.onCall(async (data, context) => {
   const actorId = assertRiderAdmin(context);
   const db = getFirestore();
   const riderId = text(data && data.riderId);
@@ -460,7 +460,7 @@ exports.adminReviewRider = functions.https.onCall(async (data, context) => {
   };
 });
 
-exports.adminRepairCanonicalRider = functions.https.onCall(async (data, context) => {
+exports.adminRepairCanonicalRider = functions.runWith({enforceAppCheck: true}).https.onCall(async (data, context) => {
   const actorId = assertRiderAdmin(context);
   const db = getFirestore();
   const riderId = text(data && data.riderId);

@@ -59,7 +59,7 @@ test("Business backend exports the canonical workspace, team, and payment callab
 });
 
 test("Admin can create audited Business invoices through backend authority", () => {
-  assert.match(businessPaymentsSource, /exports\.adminCreateBusinessInvoice\s*=\s*functions\.https\.onCall/);
+  assert.match(businessPaymentsSource, /exports\.adminCreateBusinessInvoice\s*=\s*functions\.runWith\(\{enforceAppCheck: true\}\)\.https\.onCall/);
   assert.match(businessPaymentsSource, /requireAdmin\(context, "Your Admin role cannot create Business invoices\."\)/);
   assert.match(businessPaymentsSource, /collection\("businessInvoices"\)\.doc\(\)/);
   assert.match(businessPaymentsSource, /status: "open"/);

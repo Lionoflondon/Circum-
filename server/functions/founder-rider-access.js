@@ -13,7 +13,7 @@ function assertFounderTarget(uid) {
   if (uid !== FOUNDER_RIDER_UID) throw new functions.https.HttpsError("permission-denied", "Founder Rider access is restricted to the authorised UID.");
 }
 function setFounderRiderAccess() {
-  return functions.https.onCall(async (data, context) => {
+  return functions.runWith({enforceAppCheck: true}).https.onCall(async (data, context) => {
     if (!context.auth || !isAdmin(context)) throw new functions.https.HttpsError("permission-denied", "Admin access is required.");
     const uid = `${data && data.uid || ""}`;
     assertFounderTarget(uid);

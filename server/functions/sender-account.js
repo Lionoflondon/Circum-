@@ -81,7 +81,7 @@ function cleanSenderProfilePatch(data, context) {
   };
 }
 
-exports.updateSenderProfile = functions.https.onCall(async (data, context) => {
+exports.updateSenderProfile = functions.runWith({enforceAppCheck: true}).https.onCall(async (data, context) => {
   const uid = requireSender(context);
   const db = getFirestore();
   const ref = db.collection("users").doc(uid);
@@ -106,7 +106,7 @@ exports.updateSenderProfile = functions.https.onCall(async (data, context) => {
   return {ok: true};
 });
 
-exports.ensureSenderAccount = functions.https.onCall(async (data, context) => {
+exports.ensureSenderAccount = functions.runWith({enforceAppCheck: true}).https.onCall(async (data, context) => {
   const uid = requireSender(context);
   const db = getFirestore();
   const userRef = db.collection("users").doc(uid);
@@ -166,7 +166,7 @@ exports.ensureSenderAccount = functions.https.onCall(async (data, context) => {
   return {ok: true, ...result};
 });
 
-exports.markSenderLegendCelebrationSeen = functions.https.onCall(async (data, context) => {
+exports.markSenderLegendCelebrationSeen = functions.runWith({enforceAppCheck: true}).https.onCall(async (data, context) => {
   const uid = requireSender(context);
   const profileId = cleanText(data && data.profileId, 160);
   if (profileId && profileId !== uid) {
@@ -179,7 +179,7 @@ exports.markSenderLegendCelebrationSeen = functions.https.onCall(async (data, co
   return {ok: true};
 });
 
-exports.recordWebsiteVisit = functions.https.onCall(async (data, context) => {
+exports.recordWebsiteVisit = functions.runWith({enforceAppCheck: true}).https.onCall(async (data, context) => {
   const input = cleanMap(data);
   const query = cleanMap(input.query);
   const safeQuery = {};
@@ -200,7 +200,7 @@ exports.recordWebsiteVisit = functions.https.onCall(async (data, context) => {
   return {ok: true};
 });
 
-exports.requestSenderEmailChange = functions.https.onCall(async (data, context) => {
+exports.requestSenderEmailChange = functions.runWith({enforceAppCheck: true}).https.onCall(async (data, context) => {
   const uid = requireSender(context);
   const pendingEmail = cleanEmail(data.pendingEmail || data.email);
   const db = getFirestore();
@@ -221,7 +221,7 @@ exports.requestSenderEmailChange = functions.https.onCall(async (data, context) 
   return {ok: true};
 });
 
-exports.updateSenderLocation = functions.https.onCall(async (data, context) => {
+exports.updateSenderLocation = functions.runWith({enforceAppCheck: true}).https.onCall(async (data, context) => {
   const uid = requireSender(context);
   const position = data.position || {};
   const latitude = Number(position.latitude || position.lat || position.geopoint && position.geopoint.latitude);
@@ -244,7 +244,7 @@ exports.updateSenderLocation = functions.https.onCall(async (data, context) => {
   return {ok: true};
 });
 
-exports.recordIrisLearningCandidate = functions.https.onCall(async (data, context) => {
+exports.recordIrisLearningCandidate = functions.runWith({enforceAppCheck: true}).https.onCall(async (data, context) => {
   const uid = requireSender(context);
   const description = cleanText(data.description, 1000);
   const matchedItemName = cleanText(data.matchedItemName, 240);
@@ -284,7 +284,7 @@ exports.recordIrisLearningCandidate = functions.https.onCall(async (data, contex
   return {ok: true};
 });
 
-exports.recordIrisLearningOutlier = functions.https.onCall(async (data, context) => {
+exports.recordIrisLearningOutlier = functions.runWith({enforceAppCheck: true}).https.onCall(async (data, context) => {
   const uid = requireSender(context);
   const description = cleanText(data.description, 1000);
   const matchedItemName = cleanText(data.matchedItemName, 240);
@@ -307,7 +307,7 @@ exports.recordIrisLearningOutlier = functions.https.onCall(async (data, context)
   return {ok: true};
 });
 
-exports.updateSenderProfilePhoto = functions.https.onCall(async (data, context) => {
+exports.updateSenderProfilePhoto = functions.runWith({enforceAppCheck: true}).https.onCall(async (data, context) => {
   const uid = requireSender(context);
   const photoURL = cleanText(data.photoURL, 2048);
   if (!photoURL) {
@@ -331,7 +331,7 @@ exports.updateSenderProfilePhoto = functions.https.onCall(async (data, context) 
   return {ok: true, photoURL};
 });
 
-exports.updateSenderPushToken = functions.https.onCall(async (data, context) => {
+exports.updateSenderPushToken = functions.runWith({enforceAppCheck: true}).https.onCall(async (data, context) => {
   const uid = requireSender(context);
   const fcmToken = cleanText(data.fcmToken, 4096);
   if (!fcmToken) {
@@ -351,7 +351,7 @@ exports.updateSenderPushToken = functions.https.onCall(async (data, context) => 
   return {ok: true};
 });
 
-exports.updateSenderNotificationState = functions.https.onCall(async (data, context) => {
+exports.updateSenderNotificationState = functions.runWith({enforceAppCheck: true}).https.onCall(async (data, context) => {
   const uid = requireSender(context);
   const action = cleanText(data.action, 40);
   const ids = normalizeNotificationIds(data.notificationIds || data.notificationId);

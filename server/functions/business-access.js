@@ -114,6 +114,7 @@ async function reserveCompanyCode(db, businessId, uid) {
 }
 
 exports.createBusinessAccount = functions
+    .runWith({enforceAppCheck: true})
     .region("us-central1")
     .https.onCall(async (data, context) => {
       const uid = requireAuth(context);
@@ -300,6 +301,7 @@ exports.createBusinessAccount = functions
     });
 
 exports.ensureBusinessCompanyCode = functions
+    .runWith({enforceAppCheck: true})
     .region("us-central1")
     .https.onCall(async (data, context) => {
       const db = getFirestore();
@@ -406,6 +408,7 @@ exports.ensureBusinessCompanyCode = functions
     });
 
 exports.lookupBusinessByCompanyCode = functions
+    .runWith({enforceAppCheck: true})
     .region("us-central1")
     .https.onCall(async (data, context) => {
       requireAuth(context);
@@ -445,6 +448,7 @@ exports.lookupBusinessByCompanyCode = functions
     });
 
 exports.requestBusinessAccess = functions
+    .runWith({enforceAppCheck: true})
     .region("us-central1")
     .https.onCall(async (data, context) => {
       const uid = requireAuth(context);
@@ -548,6 +552,7 @@ exports.requestBusinessAccess = functions
     });
 
 exports.reviewBusinessAccessRequest = functions
+    .runWith({enforceAppCheck: true})
     .region("us-central1")
     .https.onCall(async (data, context) => {
       const uid = requireAuth(context);
@@ -661,6 +666,7 @@ exports.reviewBusinessAccessRequest = functions
     });
 
 exports.updateBusinessProfile = functions
+    .runWith({enforceAppCheck: true})
     .region("us-central1")
     .https.onCall(async (data, context) => {
       const businessId = clean(data.businessId);
@@ -728,6 +734,7 @@ exports.updateBusinessProfile = functions
     });
 
 exports.inviteBusinessMember = functions
+    .runWith({enforceAppCheck: true})
     .region("us-central1")
     .https.onCall(async (data, context) => {
       requireAuth(context);
@@ -816,6 +823,7 @@ exports.inviteBusinessMember = functions
     });
 
 exports.updateBusinessMemberStatus = functions
+    .runWith({enforceAppCheck: true})
     .region("us-central1")
     .https.onCall(async (data, context) => {
       requireAuth(context);
@@ -889,6 +897,7 @@ exports.updateBusinessMemberStatus = functions
     });
 
 exports.recordBusinessIrisMoment = functions
+    .runWith({enforceAppCheck: true})
     .region("us-central1")
     .https.onCall(async (data, context) => {
       const businessId = clean(data.businessId);
@@ -919,6 +928,7 @@ exports.recordBusinessIrisMoment = functions
     });
 
 exports.updateBusinessMemberRole = functions
+    .runWith({enforceAppCheck: true})
     .region("us-central1")
     .https.onCall(async (data, context) => {
       requireAuth(context);
@@ -1003,6 +1013,7 @@ exports.updateBusinessMemberRole = functions
     });
 
 exports.removeBusinessMember = functions
+    .runWith({enforceAppCheck: true})
     .region("us-central1")
     .https.onCall(async (data, context) => {
       requireAuth(context);

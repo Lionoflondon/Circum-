@@ -319,7 +319,7 @@ function healthPlusVanguardFields() {
   };
 }
 
-exports.createHealthPlusBooking = functions.runWith({secrets: ["GOOGLE_ROUTES_API_KEY"]}).https.onCall(async (data, context) => {
+exports.createHealthPlusBooking = functions.runWith({enforceAppCheck: true, secrets: ["GOOGLE_ROUTES_API_KEY"]}).https.onCall(async (data, context) => {
   const sender = requireCallableSender(context);
   if (data.consentConfirmed !== true) {
     throw new functions.https.HttpsError("failed-precondition", "Prescription consent is required.");
@@ -589,7 +589,7 @@ exports.createHealthPlusBooking = functions.runWith({secrets: ["GOOGLE_ROUTES_AP
   return result;
 });
 
-exports.updateSenderHealthPlusBooking = functions.https.onCall(async (data, context) => {
+exports.updateSenderHealthPlusBooking = functions.runWith({enforceAppCheck: true}).https.onCall(async (data, context) => {
   const sender = requireCallableSender(context);
   const action = text(data.action);
   const db = getFirestore();

@@ -19,7 +19,7 @@ function assignedRider(delivery) {
   return text(delivery.riderId || delivery.assignedRiderId || delivery.driverId || delivery.assignedDriverId);
 }
 
-exports.confirmRiderIrisAssessment = functions.https.onCall(async (data, context) => {
+exports.confirmRiderIrisAssessment = functions.runWith({enforceAppCheck: true}).https.onCall(async (data, context) => {
   const riderId = requireRider(context);
   const deliveryId = text(data && data.deliveryId);
   if (!deliveryId) {

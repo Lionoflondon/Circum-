@@ -13,7 +13,7 @@ const indexSource = fs.readFileSync(
 test("Admin governance actions are callable and exported", () => {
   assert.match(
       source,
-      /exports\.adminGovernanceAction = functions\.https\.onCall/,
+      /exports\.adminGovernanceAction = functions\.runWith\(\{enforceAppCheck: true\}\)\.https\.onCall/,
   );
   assert.match(
       indexSource,

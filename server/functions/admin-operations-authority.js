@@ -521,7 +521,7 @@ function platformOperationPatch(status, actor, reason) {
   };
 }
 
-exports.adminResolveAccess = functions.https.onCall(async (data, context) => {
+exports.adminResolveAccess = functions.runWith({enforceAppCheck: true}).https.onCall(async (data, context) => {
   const actor = await resolveActor(context);
   const db = getFirestore();
   const patch = {lastLoginAt: FieldValue.serverTimestamp()};
@@ -532,14 +532,14 @@ exports.adminResolveAccess = functions.https.onCall(async (data, context) => {
   return {roles: actor.roles};
 });
 
-exports.adminRecordAuditEntry = functions.https.onCall(async (data, context) => {
+exports.adminRecordAuditEntry = functions.runWith({enforceAppCheck: true}).https.onCall(async (data, context) => {
   const actor = await resolveActor(context);
   const db = getFirestore();
   const auditId = await writeAudit(db, actor, data || {}, data.oldValue || {}, data.newValue || {});
   return {ok: true, auditId};
 });
 
-exports.adminSaveAdminUser = functions.https.onCall(async (data, context) => {
+exports.adminSaveAdminUser = functions.runWith({enforceAppCheck: true}).https.onCall(async (data, context) => {
   const actor = await resolveActor(context);
   requireManageAdmins(actor);
   const email = lower(data.email);
@@ -571,7 +571,7 @@ exports.adminSaveAdminUser = functions.https.onCall(async (data, context) => {
   return {ok: true, documentId};
 });
 
-exports.adminDuplicateDelivery = functions.https.onCall(async (data, context) => {
+exports.adminDuplicateDelivery = functions.runWith({enforceAppCheck: true}).https.onCall(async (data, context) => {
   const actor = await resolveActor(context);
   requireOperations(actor);
   const id = clean(data.deliveryId);
@@ -588,7 +588,7 @@ exports.adminDuplicateDelivery = functions.https.onCall(async (data, context) =>
   );
 });
 
-exports.adminUpdateDeliveryOperation = functions.https.onCall(async (data, context) => {
+exports.adminUpdateDeliveryOperation = functions.runWith({enforceAppCheck: true}).https.onCall(async (data, context) => {
   const actor = await resolveActor(context);
   requireOperations(actor);
   const id = clean(data.deliveryId);
@@ -610,7 +610,7 @@ exports.adminUpdateDeliveryOperation = functions.https.onCall(async (data, conte
   return {ok: true};
 });
 
-exports.adminArchiveDelivery = functions.https.onCall(async (data, context) => {
+exports.adminArchiveDelivery = functions.runWith({enforceAppCheck: true}).https.onCall(async (data, context) => {
   const actor = await resolveActor(context);
   requireOperations(actor);
   const id = clean(data.deliveryId);
@@ -637,7 +637,7 @@ exports.adminArchiveDelivery = functions.https.onCall(async (data, context) => {
   return {ok: true};
 });
 
-exports.adminUpdateIrisReview = functions.https.onCall(async (data, context) => {
+exports.adminUpdateIrisReview = functions.runWith({enforceAppCheck: true}).https.onCall(async (data, context) => {
   const actor = await resolveActor(context);
   requireOperations(actor);
   const id = clean(data.deliveryId);
@@ -659,7 +659,7 @@ exports.adminUpdateIrisReview = functions.https.onCall(async (data, context) => 
   return {ok: true};
 });
 
-exports.adminUpdateSenderAccountStatus = functions.https.onCall(async (data, context) => {
+exports.adminUpdateSenderAccountStatus = functions.runWith({enforceAppCheck: true}).https.onCall(async (data, context) => {
   const actor = await resolveActor(context);
   requireSupport(actor);
   const id = clean(data.userId);
@@ -681,7 +681,7 @@ exports.adminUpdateSenderAccountStatus = functions.https.onCall(async (data, con
   return {ok: true};
 });
 
-exports.adminUpdateBusinessAccountStatus = functions.https.onCall(async (data, context) => {
+exports.adminUpdateBusinessAccountStatus = functions.runWith({enforceAppCheck: true}).https.onCall(async (data, context) => {
   const actor = await resolveActor(context);
   requireOperations(actor, "Business Operations Admin access is required.");
   const id = clean(data.businessId);
@@ -702,7 +702,7 @@ exports.adminUpdateBusinessAccountStatus = functions.https.onCall(async (data, c
   return {ok: true};
 });
 
-exports.adminUpdateBusinessOperation = functions.https.onCall(async (data, context) => {
+exports.adminUpdateBusinessOperation = functions.runWith({enforceAppCheck: true}).https.onCall(async (data, context) => {
   const actor = await resolveActor(context);
   requireOperations(actor, "Business Operations Admin access is required.");
   const id = clean(data.businessId);
@@ -724,7 +724,7 @@ exports.adminUpdateBusinessOperation = functions.https.onCall(async (data, conte
   return {ok: true};
 });
 
-exports.adminUpdateBusinessMember = functions.https.onCall(async (data, context) => {
+exports.adminUpdateBusinessMember = functions.runWith({enforceAppCheck: true}).https.onCall(async (data, context) => {
   const actor = await resolveActor(context);
   requireOperations(actor, "Business Operations Admin access is required.");
   const businessId = clean(data.businessId);
@@ -771,7 +771,7 @@ exports.adminUpdateBusinessMember = functions.https.onCall(async (data, context)
   return {ok: true};
 });
 
-exports.adminUpdateHealthPlusPickup = functions.https.onCall(async (data, context) => {
+exports.adminUpdateHealthPlusPickup = functions.runWith({enforceAppCheck: true}).https.onCall(async (data, context) => {
   const actor = await resolveActor(context);
   requireOperations(actor, "Health+ Operations Admin access is required.");
   const id = clean(data.pickupId);
@@ -801,7 +801,7 @@ exports.adminUpdateHealthPlusPickup = functions.https.onCall(async (data, contex
   return {ok: true};
 });
 
-exports.adminUpdateHealthPlusSchedule = functions.https.onCall(async (data, context) => {
+exports.adminUpdateHealthPlusSchedule = functions.runWith({enforceAppCheck: true}).https.onCall(async (data, context) => {
   const actor = await resolveActor(context);
   requireOperations(actor, "Health+ Operations Admin access is required.");
   const id = clean(data.scheduleId);
@@ -842,7 +842,7 @@ exports.adminUpdateHealthPlusSchedule = functions.https.onCall(async (data, cont
   return {ok: true};
 });
 
-exports.adminUpdateHealthPlusProfile = functions.https.onCall(async (data, context) => {
+exports.adminUpdateHealthPlusProfile = functions.runWith({enforceAppCheck: true}).https.onCall(async (data, context) => {
   const actor = await resolveActor(context);
   requireOperations(actor, "Health+ Operations Admin access is required.");
   const id = clean(data.profileId);
@@ -881,7 +881,7 @@ exports.adminUpdateHealthPlusProfile = functions.https.onCall(async (data, conte
   return {ok: true};
 });
 
-exports.adminUpdateFinanceWorkflow = functions.https.onCall(async (data, context) => {
+exports.adminUpdateFinanceWorkflow = functions.runWith({enforceAppCheck: true}).https.onCall(async (data, context) => {
   const actor = await resolveActor(context);
   requireFinance(actor);
   const id = clean(data.paymentId);
@@ -902,7 +902,7 @@ exports.adminUpdateFinanceWorkflow = functions.https.onCall(async (data, context
   return {ok: true};
 });
 
-exports.adminRequestAccountMergeReview = functions.https.onCall(async (data, context) => {
+exports.adminRequestAccountMergeReview = functions.runWith({enforceAppCheck: true}).https.onCall(async (data, context) => {
   const actor = await resolveActor(context);
   requireSupport(actor);
   const primaryAccountId = clean(data.primaryAccountId);
@@ -930,7 +930,7 @@ exports.adminRequestAccountMergeReview = functions.https.onCall(async (data, con
   return {ok: true, reviewId: ref.id};
 });
 
-exports.adminUpdateGiftWorkflow = functions.https.onCall(async (data, context) => {
+exports.adminUpdateGiftWorkflow = functions.runWith({enforceAppCheck: true}).https.onCall(async (data, context) => {
   const actor = await resolveActor(context);
   requireSupport(actor, "Gift Operations Admin access is required.");
   const id = clean(data.giftId);
@@ -955,7 +955,7 @@ exports.adminUpdateGiftWorkflow = functions.https.onCall(async (data, context) =
   return {ok: true};
 });
 
-exports.adminUpdateGiftCampaignParticipant = functions.https.onCall(async (data, context) => {
+exports.adminUpdateGiftCampaignParticipant = functions.runWith({enforceAppCheck: true}).https.onCall(async (data, context) => {
   const actor = await resolveActor(context);
   requireSupport(actor, "Gift Campaign Admin access is required.");
   const id = clean(data.participantId);
@@ -978,7 +978,7 @@ exports.adminUpdateGiftCampaignParticipant = functions.https.onCall(async (data,
   return {ok: true};
 });
 
-exports.adminSaveGiftBrandPartner = functions.https.onCall(async (data, context) => {
+exports.adminSaveGiftBrandPartner = functions.runWith({enforceAppCheck: true}).https.onCall(async (data, context) => {
   const actor = await resolveActor(context);
   requireSupport(actor, "Brand Partner Admin access is required.");
   const name = clean(data.partnerName || data.brandName);
@@ -1005,7 +1005,7 @@ exports.adminSaveGiftBrandPartner = functions.https.onCall(async (data, context)
   return {ok: true, brandId: id};
 });
 
-exports.adminSuggestGiftCampaignMatch = functions.https.onCall(async (data, context) => {
+exports.adminSuggestGiftCampaignMatch = functions.runWith({enforceAppCheck: true}).https.onCall(async (data, context) => {
   const actor = await resolveActor(context);
   requireSupport(actor, "Gift Campaign Admin access is required.");
   const participantId = clean(data.participantId);
@@ -1036,7 +1036,7 @@ exports.adminSuggestGiftCampaignMatch = functions.https.onCall(async (data, cont
   return {ok: true};
 });
 
-exports.adminApproveGiftCampaignMatch = functions.https.onCall(async (data, context) => {
+exports.adminApproveGiftCampaignMatch = functions.runWith({enforceAppCheck: true}).https.onCall(async (data, context) => {
   const actor = await resolveActor(context);
   requireSupport(actor, "Gift Campaign Admin access is required.");
   const participantId = clean(data.participantId);
@@ -1107,7 +1107,7 @@ exports.adminApproveGiftCampaignMatch = functions.https.onCall(async (data, cont
   return {ok: true, matchId: matchRef.id};
 });
 
-exports.adminBulkGiftCampaignAction = functions.https.onCall(async (data, context) => {
+exports.adminBulkGiftCampaignAction = functions.runWith({enforceAppCheck: true}).https.onCall(async (data, context) => {
   const actor = await resolveActor(context);
   requireSupport(actor, "Gift Campaign Admin access is required.");
   const action = lower(data.action);
@@ -1135,7 +1135,7 @@ exports.adminBulkGiftCampaignAction = functions.https.onCall(async (data, contex
   return {ok: true, count: participantIds.length};
 });
 
-exports.adminUpdateIrisRepositoryRecord = functions.https.onCall(async (data, context) => {
+exports.adminUpdateIrisRepositoryRecord = functions.runWith({enforceAppCheck: true}).https.onCall(async (data, context) => {
   const actor = await resolveActor(context);
   requireOperations(actor, "IRIS Operations Admin access is required.");
   const id = clean(data.recordId);
@@ -1176,7 +1176,7 @@ exports.adminUpdateIrisRepositoryRecord = functions.https.onCall(async (data, co
   return {ok: true, recordId: targetId};
 });
 
-exports.adminUpdateIrisCandidateWorkflow = functions.https.onCall(async (data, context) => {
+exports.adminUpdateIrisCandidateWorkflow = functions.runWith({enforceAppCheck: true}).https.onCall(async (data, context) => {
   const actor = await resolveActor(context);
   requireOperations(actor, "IRIS Operations Admin access is required.");
   const id = clean(data.candidateId);
@@ -1256,7 +1256,7 @@ exports.adminUpdateIrisCandidateWorkflow = functions.https.onCall(async (data, c
   return {ok: true};
 });
 
-exports.adminSaveGiftRequestEditor = functions.https.onCall(async (data, context) => {
+exports.adminSaveGiftRequestEditor = functions.runWith({enforceAppCheck: true}).https.onCall(async (data, context) => {
   const actor = await resolveActor(context);
   requireSupport(actor, "Gift Operations Admin access is required.");
   const id = clean(data.giftId);
@@ -1279,7 +1279,7 @@ exports.adminSaveGiftRequestEditor = functions.https.onCall(async (data, context
   return {ok: true};
 });
 
-exports.adminUpdateGiftWorkspace = functions.https.onCall(async (data, context) => {
+exports.adminUpdateGiftWorkspace = functions.runWith({enforceAppCheck: true}).https.onCall(async (data, context) => {
   const actor = await resolveActor(context);
   requireSupport(actor, "Gift Workspace Admin access is required.");
   const id = clean(data.giftId);
@@ -1316,7 +1316,7 @@ exports.adminUpdateGiftWorkspace = functions.https.onCall(async (data, context) 
   return {ok: true};
 });
 
-exports.adminUpdatePlatformRecord = functions.https.onCall(async (data, context) => {
+exports.adminUpdatePlatformRecord = functions.runWith({enforceAppCheck: true}).https.onCall(async (data, context) => {
   const actor = await resolveActor(context);
   requireManageAdmins(actor);
   const id = clean(data.recordId);
@@ -1340,7 +1340,7 @@ exports.adminUpdatePlatformRecord = functions.https.onCall(async (data, context)
   return {ok: true};
 });
 
-exports.adminAddAdminNote = functions.https.onCall(async (data, context) => {
+exports.adminAddAdminNote = functions.runWith({enforceAppCheck: true}).https.onCall(async (data, context) => {
   const actor = await resolveActor(context);
   requireSupport(actor);
   const recordType = clean(data.recordType);
@@ -1371,7 +1371,7 @@ exports.adminAddAdminNote = functions.https.onCall(async (data, context) => {
   return {ok: true, noteId: ref.id};
 });
 
-exports.adminRecordRiderEvent = functions.https.onCall(async (data, context) => {
+exports.adminRecordRiderEvent = functions.runWith({enforceAppCheck: true}).https.onCall(async (data, context) => {
   const actor = await resolveActor(context);
   requireAnyRole(actor, ["admin", "super_admin", "operations_admin", "driver_manager"], "Rider Operations Admin access is required.");
   const riderId = clean(data.riderId);
@@ -1400,7 +1400,7 @@ exports.adminRecordRiderEvent = functions.https.onCall(async (data, context) => 
   return {ok: true, eventId: ref.id};
 });
 
-exports.adminResolveMessageReport = functions.https.onCall(async (data, context) => {
+exports.adminResolveMessageReport = functions.runWith({enforceAppCheck: true}).https.onCall(async (data, context) => {
   const actor = await resolveActor(context);
   requireSupport(actor);
   const id = clean(data.reportId);

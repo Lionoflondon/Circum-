@@ -10,7 +10,7 @@ const riderStripeReturnUrl = `${appBaseUrl}/rider/stripe/return`;
 const riderStripeRefreshUrl = `${appBaseUrl}/rider/stripe/refresh`;
 
 const rawBankFields = ["bankName", "sortCode", "accountNumber", "bankAccountNumber"];
-const stripeSecretRuntime = functions.runWith({secrets: ["STRIPE_SECRET_KEY"]});
+const stripeSecretRuntime = functions.runWith({enforceAppCheck: true, secrets: ["STRIPE_SECRET_KEY"]});
 const stripeWebhookRuntime = functions.runWith({secrets: ["STRIPE_SECRET_KEY", "STRIPE_WEBHOOK_SECRET"]});
 
 function text(value) {
@@ -538,7 +538,7 @@ function syncStripeConnectStatus(stripeOrFactory) {
 }
 
 function riderPayoutReadiness() {
-  return functions.https.onCall(async (data, context) => {
+  return functions.runWith({enforceAppCheck: true}).https.onCall(async (data, context) => {
     const riderId = text((data && data.riderId) || (context.auth && context.auth.uid));
     await assertActor(context, riderId);
     const readiness = await computeRiderPayoutReadiness(riderId);
@@ -565,7 +565,7 @@ function riderPayoutReadiness() {
 }
 
 function resetRiderTestStripeAccount() {
-  return functions.https.onCall(async (data, context) => {
+  return functions.runWith({enforceAppCheck: true}).https.onCall(async (data, context) => {
     const riderId = text(data && data.riderId);
     await assertActor(context, riderId, {adminOnly: true});
     if (!riderId) {
@@ -880,7 +880,7 @@ function createRiderTransferOrPayout(stripeOrFactory) {
 }
 
 function requestRiderWithdrawal() {
-  return functions.https.onCall(async (data, context) => {
+  return functions.runWith({enforceAppCheck: true}).https.onCall(async (data, context) => {
     const riderId = text(context.auth && context.auth.uid);
     await assertActor(context, riderId);
     if (hasRawBankFields(data)) {
@@ -970,7 +970,7 @@ function requestRiderWithdrawal() {
 }
 
 function cancelRiderWithdrawal() {
-  return functions.https.onCall(async (data, context) => {
+  return functions.runWith({enforceAppCheck: true}).https.onCall(async (data, context) => {
     const riderId = text(context.auth && context.auth.uid);
     await assertActor(context, riderId);
     const requestId = text(data && data.requestId) || `active_${riderId}`;
@@ -1021,7 +1021,7 @@ function cancelRiderWithdrawal() {
 }
 
 function adminReviewRiderWithdrawal() {
-  return functions.https.onCall(async (data, context) => {
+  return functions.runWith({enforceAppCheck: true}).https.onCall(async (data, context) => {
     const riderId = text(data && data.riderId);
     const requestId = text(data && data.requestId);
     const action = text(data && data.action).toLowerCase();
@@ -1312,7 +1312,7 @@ function scheduledRiderStripeStatusSync(stripeOrFactory) {
 }
 
 function redactLegacyPayoutBankFields() {
-  return functions.https.onCall(async (data, context) => {
+  return functions.runWith({enforceAppCheck: true}).https.onCall(async (data, context) => {
     await assertActor(context, text((data && data.riderId) || (context.auth && context.auth.uid)), {adminOnly: true});
     const limit = Math.min(Number((data && data.limit) || 50), 200);
     const snapshot = await getFirestore().collection("payoutRequests").limit(limit).get();

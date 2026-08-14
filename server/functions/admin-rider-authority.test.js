@@ -5,7 +5,7 @@ const fs = require("node:fs");
 test("Admin Rider authority is backend-owned and auditable", () => {
   const source = fs.readFileSync("admin-rider-authority.js", "utf8");
 
-  assert.match(source, /exports\.adminReviewRider = functions\.https\.onCall/);
+  assert.match(source, /exports\.adminReviewRider = functions\.runWith\(\{enforceAppCheck: true\}\)\.https\.onCall/);
   assert.match(source, /assertRiderAdmin\(context\)/);
   assert.match(source, /isFounderContext\(context\)/);
   assert.match(source, /db\.runTransaction/);
@@ -47,7 +47,7 @@ test("Admin Rider approval performs canonical projection synchronisation", () =>
 test("Admin canonical Rider repair is admin-only, idempotent and audited", () => {
   const source = fs.readFileSync("admin-rider-authority.js", "utf8");
 
-  assert.match(source, /exports\.adminRepairCanonicalRider = functions\.https\.onCall/);
+  assert.match(source, /exports\.adminRepairCanonicalRider = functions\.runWith\(\{enforceAppCheck: true\}\)\.https\.onCall/);
   assert.match(source, /assertRiderAdmin\(context\)/);
   assert.match(source, /isFounderContext\(context\)/);
   assert.match(source, /db\.runTransaction/);

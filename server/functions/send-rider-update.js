@@ -1,7 +1,7 @@
 const functions = require("firebase-functions/v1");
 const {getMessaging} = require("firebase-admin/messaging");
 
-const sendRiderUpdate = functions.https.onCall(async (data, context) => {
+const sendRiderUpdate = functions.runWith({enforceAppCheck: true}).https.onCall(async (data, context) => {
   if (!context.auth) {
     throw new functions.https.HttpsError(
         "unauthenticated",

@@ -48,7 +48,7 @@ async function signedPreview(storagePath) {
   return url;
 }
 
-exports.getIrisReferenceImage = functions.https.onCall(async (data, context) => {
+exports.getIrisReferenceImage = functions.runWith({enforceAppCheck: true}).https.onCall(async (data, context) => {
   requireAdmin(context, "IRIS administrator access is required.");
   requireIrisAdmin(context);
   const {itemId} = identifiers(data);
@@ -69,7 +69,7 @@ exports.getIrisReferenceImage = functions.https.onCall(async (data, context) => 
   };
 });
 
-exports.finalizeIrisReferenceImage = functions.https.onCall(async (data, context) => {
+exports.finalizeIrisReferenceImage = functions.runWith({enforceAppCheck: true}).https.onCall(async (data, context) => {
   const adminId = requireAdmin(context, "IRIS administrator access is required.");
   requireIrisAdmin(context);
   const {itemId, storagePath} = identifiers(data);
@@ -130,7 +130,7 @@ exports.finalizeIrisReferenceImage = functions.https.onCall(async (data, context
   return {success: true, itemId, action, previewUrl: await signedPreview(storagePath)};
 });
 
-exports.deleteIrisReferenceImage = functions.https.onCall(async (data, context) => {
+exports.deleteIrisReferenceImage = functions.runWith({enforceAppCheck: true}).https.onCall(async (data, context) => {
   const adminId = requireAdmin(context, "IRIS administrator access is required.");
   requireIrisAdmin(context);
   const {itemId} = identifiers(data);

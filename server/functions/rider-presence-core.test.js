@@ -5,6 +5,10 @@ const fs = require("node:fs");
 const path = require("node:path");
 const core = require("./rider-presence-core");
 
+function protectedCallableExport(source, name) {
+  return source.indexOf(`exports.${name} = functions.runWith({enforceAppCheck: true}).https.onCall`);
+}
+
 test("approved rider receives dispatch only when online and available", () => {
   const profile = {
     onboardingStatus: "approved",
@@ -110,8 +114,8 @@ test("blocked profile trigger preserves an authorised founder test rider", () =>
 
 test("goOnline never leaks raw internal failures to riders", () => {
   const source = fs.readFileSync(path.join(__dirname, "rider-presence.js"), "utf8");
-  const goOnlineStart = source.indexOf("exports.goOnline = functions.https.onCall");
-  const goOfflineStart = source.indexOf("exports.goOffline = functions.https.onCall");
+  const goOnlineStart = protectedCallableExport(source, "goOnline");
+  const goOfflineStart = protectedCallableExport(source, "goOffline");
   const goOnlineSource = source.slice(goOnlineStart, goOfflineStart);
   assert.match(goOnlineSource, /catch \(error\)/);
   assert.match(goOnlineSource, /error instanceof functions\.https\.HttpsError/);
@@ -130,8 +134,8 @@ test("online presence clears stale offline status field", () => {
 
 test("goOnline mirrors dispatch availability into riderProfiles", () => {
   const source = fs.readFileSync(path.join(__dirname, "rider-presence.js"), "utf8");
-  const goOnlineStart = source.indexOf("exports.goOnline = functions.https.onCall");
-  const goOfflineStart = source.indexOf("exports.goOffline = functions.https.onCall");
+  const goOnlineStart = protectedCallableExport(source, "goOnline");
+  const goOfflineStart = protectedCallableExport(source, "goOffline");
   const goOnlineSource = source.slice(goOnlineStart, goOfflineStart);
   assert.match(goOnlineSource, /collection\("riderProfiles"\)\.doc\(riderId\)/);
   assert.match(goOnlineSource, /status: "online"/);
@@ -141,7 +145,7 @@ test("goOnline mirrors dispatch availability into riderProfiles", () => {
 
 test("heartbeat keeps riderProfiles dispatch state fresh", () => {
   const source = fs.readFileSync(path.join(__dirname, "rider-presence.js"), "utf8");
-  const heartbeatStart = source.indexOf("exports.updateRiderPresence = functions.https.onCall");
+  const heartbeatStart = protectedCallableExport(source, "updateRiderPresence");
   const deliveryWriteStart = source.indexOf("exports.onDeliveryPresenceWrite = functions.firestore");
   const heartbeatSource = source.slice(heartbeatStart, deliveryWriteStart);
   assert.match(heartbeatSource, /collection\("riderProfiles"\)\.doc\(riderId\)/);

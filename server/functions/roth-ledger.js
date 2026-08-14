@@ -418,11 +418,11 @@ async function applyWalletDebit({
 
 exports.applyWalletDebit = applyWalletDebit;
 
-exports.initialiseSenderWallet = functions.https.onCall(async (_data, context) => {
+exports.initialiseSenderWallet = functions.runWith({enforceAppCheck: true}).https.onCall(async (_data, context) => {
   return initialiseSenderWalletRecord(context);
 });
 
-exports.getSenderWallet = functions.https.onCall(async (_data, context) => {
+exports.getSenderWallet = functions.runWith({enforceAppCheck: true}).https.onCall(async (_data, context) => {
   return initialiseSenderWalletRecord(context);
 });
 
@@ -464,7 +464,7 @@ async function authorizedWalletProductJoin(db, context, view) {
   };
 }
 
-exports.getSenderWalletTransactions = functions.https.onCall(async (data, context) => {
+exports.getSenderWalletTransactions = functions.runWith({enforceAppCheck: true}).https.onCall(async (data, context) => {
   const identity = await requireSenderIdentity(context);
   const db = getFirestore();
   const walletSnap = await db.collection("walletTransactions")
@@ -499,7 +499,7 @@ exports.getSenderWalletTransactions = functions.https.onCall(async (data, contex
   };
 });
 
-exports.completeSenderWalletOnboarding = functions.https.onCall(async (_data, context) => {
+exports.completeSenderWalletOnboarding = functions.runWith({enforceAppCheck: true}).https.onCall(async (_data, context) => {
   await requireSenderIdentity(context);
   await getFirestore().collection("users").doc(context.auth.uid).set({
     senderWalletOnboardingCompleted: true,
@@ -509,7 +509,7 @@ exports.completeSenderWalletOnboarding = functions.https.onCall(async (_data, co
   return {completed: true};
 });
 
-exports.requestSenderWalletDebit = functions.https.onCall(async (data, context) => {
+exports.requestSenderWalletDebit = functions.runWith({enforceAppCheck: true}).https.onCall(async (data, context) => {
   await requireSenderIdentity(context);
   const amount = roundWalletMoney(data.amount);
   const idempotencyKey = `${data.idempotencyKey || ""}`.trim();
@@ -529,7 +529,7 @@ exports.requestSenderWalletDebit = functions.https.onCall(async (data, context) 
   }
 });
 
-exports.requestSenderWalletRefund = functions.https.onCall(async (data, context) => {
+exports.requestSenderWalletRefund = functions.runWith({enforceAppCheck: true}).https.onCall(async (data, context) => {
   const admin = await requireTrustedRothAdmin(context);
   const amount = roundWalletMoney(data.amount);
   const idempotencyKey = `${data.idempotencyKey || ""}`.trim();
@@ -545,7 +545,7 @@ exports.requestSenderWalletRefund = functions.https.onCall(async (data, context)
   });
 });
 
-exports.createWalletTopUp = (stripe) => functions.https.onCall(async (data, context) => {
+exports.createWalletTopUp = (stripe) => functions.runWith({enforceAppCheck: true}).https.onCall(async (data, context) => {
   if (!context.auth) {
     throw new functions.https.HttpsError("unauthenticated", "Sign in to top up Roth.");
   }
@@ -687,7 +687,7 @@ async function recordWalletTopUpFromStripeSession(sessionData, eventId = null) {
 
 exports.recordWalletTopUpFromStripeSession = recordWalletTopUpFromStripeSession;
 
-exports.applyCheckoutRoth = functions.https.onCall(async (data, context) => {
+exports.applyCheckoutRoth = functions.runWith({enforceAppCheck: true}).https.onCall(async (data, context) => {
   if (!context.auth) {
     throw new functions.https.HttpsError("unauthenticated", "Sign in to use Roth.");
   }
@@ -712,7 +712,7 @@ exports.applyCheckoutRoth = functions.https.onCall(async (data, context) => {
   });
 });
 
-exports.issueRothToWallets = functions.https.onCall(async (data, context) => {
+exports.issueRothToWallets = functions.runWith({enforceAppCheck: true}).https.onCall(async (data, context) => {
   const admin = await requireTrustedRothAdmin(context);
   const amount = roundWalletMoney(data.amount);
   const reason = `${data.reason || ""}`.trim();
@@ -907,7 +907,7 @@ exports.issueRothToWallets = functions.https.onCall(async (data, context) => {
   return result;
 });
 
-exports.issueRothCredit = functions.https.onCall(async (data, context) => {
+exports.issueRothCredit = functions.runWith({enforceAppCheck: true}).https.onCall(async (data, context) => {
   requireRothAdmin(context);
   const rawUser = `${data.userId || data.email || ""}`.trim();
   const amount = Number(data.amount || 0);
@@ -949,7 +949,7 @@ exports.issueRothCredit = functions.https.onCall(async (data, context) => {
   return result;
 });
 
-exports.debitRothCredit = functions.https.onCall(async (data, context) => {
+exports.debitRothCredit = functions.runWith({enforceAppCheck: true}).https.onCall(async (data, context) => {
   requireRothAdmin(context);
   const rawUser = `${data.userId || data.email || ""}`.trim();
   const amount = Number(data.amount || 0);
@@ -983,7 +983,7 @@ exports.debitRothCredit = functions.https.onCall(async (data, context) => {
   return result;
 });
 
-exports.setWalletFrozen = functions.https.onCall(async (data, context) => {
+exports.setWalletFrozen = functions.runWith({enforceAppCheck: true}).https.onCall(async (data, context) => {
   requireRothAdmin(context);
   const userId = `${data.userId || data.email || ""}`.trim();
   const frozen = data.isFrozen === true;
@@ -1025,7 +1025,7 @@ exports.setWalletFrozen = functions.https.onCall(async (data, context) => {
   return {userId: identity.walletId, isFrozen: frozen};
 });
 
-exports.redeemGiftCard = functions.https.onCall(async (data, context) => {
+exports.redeemGiftCard = functions.runWith({enforceAppCheck: true}).https.onCall(async (data, context) => {
   if (!context.auth) {
     throw new functions.https.HttpsError("unauthenticated", "Sign in to redeem a gift card.");
   }

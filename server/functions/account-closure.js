@@ -229,7 +229,7 @@ async function closeAccount(data, context) {
 }
 
 module.exports = {
-  closeAccount: functions.region("us-central1").https.onCall(closeAccount),
+  closeAccount: functions.runWith({enforceAppCheck: true}).region("us-central1").https.onCall(closeAccount),
   _test: {
     ACTIVE_DELIVERY_STATUSES,
     blockerMessage,

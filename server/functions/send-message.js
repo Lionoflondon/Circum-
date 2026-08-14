@@ -1,7 +1,7 @@
 const functions = require("firebase-functions/v1");
 const communicationEngine = require("./communication-engine");
 
-const sendMessage = functions.https.onCall(async (data, context) => {
+const sendMessage = functions.runWith({enforceAppCheck: true}).https.onCall(async (data, context) => {
   try {
     const legacyChatId = data.requestId || data.bookingId || data.chatId || "";
     const requestId = `${legacyChatId}`.trim();

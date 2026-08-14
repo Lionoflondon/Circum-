@@ -162,7 +162,7 @@ async function reconcileRiderEarnings({db, riderId, actorId = "system", reason =
 }
 
 function getRiderEarningsSummary() {
-  return functions.https.onCall(async (data, context) => {
+  return functions.runWith({enforceAppCheck: true}).https.onCall(async (data, context) => {
     if (!context.auth) throw new functions.https.HttpsError("unauthenticated", "Rider must be signed in.");
     const uid = context.auth.uid;
     const db = getFirestore();
@@ -186,7 +186,7 @@ function getRiderEarningsSummary() {
 }
 
 function adminReconcileRiderEarnings() {
-  return functions.https.onCall(async (data, context) => {
+  return functions.runWith({enforceAppCheck: true}).https.onCall(async (data, context) => {
     if (!context.auth || !isFinanceAdmin(context)) {
       throw new functions.https.HttpsError("permission-denied", "Finance administrator access is required.");
     }

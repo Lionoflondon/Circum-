@@ -111,7 +111,7 @@ async function candidateRequestDocs(db, riderData = {}) {
       .sort((a, b) => deliveryCreatedMillis(b.data() || {}) - deliveryCreatedMillis(a.data() || {}));
 }
 
-const getNearbyRequests = functions.https.onCall(async (data, context) => {
+const getNearbyRequests = functions.runWith({enforceAppCheck: true}).https.onCall(async (data, context) => {
   try {
     const toRadians = (degrees) => {
       return degrees * (Math.PI / 180);

@@ -432,7 +432,7 @@ const archiveExpiredDeliveries = functions.pubsub
     });
 
 function purgeFounderTestPipeline() {
-  return functions.https.onCall(async (data, context) => {
+  return functions.runWith({enforceAppCheck: true}).https.onCall(async (data, context) => {
     const founder = assertFounder(context);
     const db = getFirestore();
     const reason = `${data && data.reason || ""}`.trim().slice(0, 1000);
@@ -540,7 +540,7 @@ function purgeFounderTestPipeline() {
 }
 
 function pipelineHealthReset() {
-  return functions.https.onCall(async (data, context) => {
+  return functions.runWith({enforceAppCheck: true}).https.onCall(async (data, context) => {
     const adminUid = requireAdmin(context, "Operations Admin access is required.");
     const db = getFirestore();
     const reason = `${data && data.reason || ""}`.trim().slice(0, 1000);

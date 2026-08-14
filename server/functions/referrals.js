@@ -9,6 +9,7 @@ const {BALANCE_TYPES, TRANSACTION_TYPES} = require("./roth-ledger-core");
 const {
   DEFAULT_REFERRAL_REWARD_ROTH,
   REFERRAL_STATUSES,
+  normalizeReferralStatus,
   referralRewardFinanceMetadata,
 } = require("./referral-core");
 
@@ -41,7 +42,7 @@ function codeFromUser(user) {
   return `${source || "CIRCUM"}${user.uid.slice(0, 4).toUpperCase()}`.slice(0, 12);
 }
 
-exports.ensureReferralCode = functions.https.onCall(async (data, context) => {
+exports.ensureReferralCode = functions.runWith({enforceAppCheck: true}).https.onCall(async (data, context) => {
   requireAuth(context);
   const db = getFirestore();
   const uid = context.auth.uid;
@@ -79,7 +80,7 @@ exports.ensureReferralCode = functions.https.onCall(async (data, context) => {
   throw new functions.https.HttpsError("already-exists", "Could not create a unique referral code.");
 });
 
-exports.attachReferralCode = functions.https.onCall(async (data, context) => {
+exports.attachReferralCode = functions.runWith({enforceAppCheck: true}).https.onCall(async (data, context) => {
   requireAuth(context);
   const code = normalizeCode(data.referralCode);
   if (!code) throw new functions.https.HttpsError("invalid-argument", "Referral code is required.");
@@ -152,7 +153,7 @@ function customerReferralStatus(status) {
   }
 }
 
-exports.getReferralDashboard = functions.https.onCall(async (data, context) => {
+exports.getReferralDashboard = functions.runWith({enforceAppCheck: true}).https.onCall(async (data, context) => {
   requireAuth(context);
   const db = getFirestore();
   const uid = context.auth.uid;
@@ -182,7 +183,7 @@ exports.getReferralDashboard = functions.https.onCall(async (data, context) => {
   };
 });
 
-exports.activateReferral = functions.https.onCall(async (data, context) => {
+exports.activateReferral = functions.runWith({enforceAppCheck: true}).https.onCall(async (data, context) => {
   requireAuth(context);
   if (!context.auth.token.admin && !["super_admin", "operations_admin", "finance_admin"].includes(
     `${context.auth.token.role || context.auth.token.adminRole || ""}`.toLowerCase())) {

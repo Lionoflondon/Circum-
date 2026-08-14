@@ -241,7 +241,7 @@ async function readSenderDeliveries(db, uid) {
   return [...byId.values()];
 }
 
-exports.syncSenderTrustBaseline = functions.https.onCall(async (data, context) => {
+exports.syncSenderTrustBaseline = functions.runWith({enforceAppCheck: true}).https.onCall(async (data, context) => {
   if (!context.auth) {
     throw new functions.https.HttpsError("unauthenticated", "Sign in to sync sender trust.");
   }
@@ -303,7 +303,7 @@ exports.syncSenderTrustBaseline = functions.https.onCall(async (data, context) =
   return {ok: true, baseline};
 });
 
-exports.adminUpdateSenderTrust = functions.https.onCall(async (data, context) => {
+exports.adminUpdateSenderTrust = functions.runWith({enforceAppCheck: true}).https.onCall(async (data, context) => {
   const db = getFirestore();
   const operator = await requireSenderTrustAdmin(db, context);
   const request = trustActionRequest(data);

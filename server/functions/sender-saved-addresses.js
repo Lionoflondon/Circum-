@@ -72,7 +72,7 @@ function legacySavedAddressEntry(docId, data) {
   };
 }
 
-exports.saveSenderSavedAddress = functions.https.onCall(async (data, context) => {
+exports.saveSenderSavedAddress = functions.runWith({enforceAppCheck: true}).https.onCall(async (data, context) => {
   const userId = requireSender(context);
   const db = getFirestore();
   const collection = db.collection("users").doc(userId).collection("savedAddresses");
@@ -135,7 +135,7 @@ exports.saveSenderSavedAddress = functions.https.onCall(async (data, context) =>
   return {addressId: reference.id, version: saved.version};
 });
 
-exports.deleteSenderSavedAddress = functions.https.onCall(async (data, context) => {
+exports.deleteSenderSavedAddress = functions.runWith({enforceAppCheck: true}).https.onCall(async (data, context) => {
   const userId = requireSender(context);
   const addressId = clean(data && data.addressId);
   if (!addressId) throw new functions.https.HttpsError("invalid-argument", "Address id is required.");

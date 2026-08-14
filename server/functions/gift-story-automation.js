@@ -896,13 +896,13 @@ async function acknowledgeGiftStory(db, access) {
   return {ok: true, alreadySent: !created};
 }
 
-exports.acknowledgeGiftStory = functions.https.onCall(async (data, context) => {
+exports.acknowledgeGiftStory = functions.runWith({enforceAppCheck: true}).https.onCall(async (data, context) => {
   const db = getFirestore();
   const access = await resolveGiftStoryActionAccess(db, data, context, {requireAccount: true});
   return acknowledgeGiftStory(db, {...access, thankYouMessage: data && data.thankYouMessage});
 });
 
-exports.saveGiftStoryToVault = functions.https.onCall(async (data, context) => {
+exports.saveGiftStoryToVault = functions.runWith({enforceAppCheck: true}).https.onCall(async (data, context) => {
   const db = getFirestore();
   const access = await resolveGiftStoryActionAccess(db, data, context, {requireAccount: true});
   const ids = giftStoryActionIds(access.giftId, access.uid);
@@ -943,7 +943,7 @@ exports.saveGiftStoryToVault = functions.https.onCall(async (data, context) => {
   return {ok: true, alreadySaved: !created};
 });
 
-exports.getGiftStoryActionState = functions.https.onCall(async (data, context) => {
+exports.getGiftStoryActionState = functions.runWith({enforceAppCheck: true}).https.onCall(async (data, context) => {
   const db = getFirestore();
   const access = await resolveGiftStoryActionAccess(db, data, context);
   let saved = false;
@@ -958,7 +958,7 @@ exports.getGiftStoryActionState = functions.https.onCall(async (data, context) =
   };
 });
 
-exports.resolveGiftStoryAccess = functions.https.onCall(async (data, context) => {
+exports.resolveGiftStoryAccess = functions.runWith({enforceAppCheck: true}).https.onCall(async (data, context) => {
   const db = getFirestore();
   const record = await tokenRecord(db, data && data.token);
   if (!record) throw new functions.https.HttpsError("permission-denied", "This Gift Story link is invalid or expired.");
@@ -1047,7 +1047,7 @@ exports.recordGiftStoryGuestEvent = functions.https.onRequest(async (req, res) =
   }
 });
 
-exports.recordGiftStoryEvent = functions.https.onCall(async (data, context) => {
+exports.recordGiftStoryEvent = functions.runWith({enforceAppCheck: true}).https.onCall(async (data, context) => {
   const db = getFirestore();
   const record = await tokenRecord(db, data && data.token);
   if (!record) throw new functions.https.HttpsError("permission-denied", "Gift Story access expired.");
@@ -1084,7 +1084,7 @@ exports.recordGiftStoryEvent = functions.https.onCall(async (data, context) => {
   return {ok: true};
 });
 
-exports.updateGiftStoryPrivacy = functions.https.onCall(async (data, context) => {
+exports.updateGiftStoryPrivacy = functions.runWith({enforceAppCheck: true}).https.onCall(async (data, context) => {
   const db = getFirestore();
   const giftId = text(data.giftRequestId);
   const privacy = text(data.privacy).toLowerCase();
@@ -1124,7 +1124,7 @@ async function participantAuthorized(context, gift, suppliedToken) {
   return false;
 }
 
-exports.createGiftStoryVideoUpload = functions.https.onCall(async (data, context) => {
+exports.createGiftStoryVideoUpload = functions.runWith({enforceAppCheck: true}).https.onCall(async (data, context) => {
   const db = getFirestore();
   const giftId = text(data.giftRequestId);
   const giftSnap = await db.collection("giftRequests").doc(giftId).get();
@@ -1147,7 +1147,7 @@ exports.createGiftStoryVideoUpload = functions.https.onCall(async (data, context
   return {uploadUrl, storagePath, mime};
 });
 
-exports.finalizeGiftStoryVideoUpload = functions.https.onCall(async (data, context) => {
+exports.finalizeGiftStoryVideoUpload = functions.runWith({enforceAppCheck: true}).https.onCall(async (data, context) => {
   const db = getFirestore();
   const giftId = text(data.giftRequestId);
   const giftRef = db.collection("giftRequests").doc(giftId);
@@ -1178,7 +1178,7 @@ exports.finalizeGiftStoryVideoUpload = functions.https.onCall(async (data, conte
   return {ok: true, expiresAt: expiresAt.toMillis()};
 });
 
-exports.getGiftStoryVideoDownload = functions.https.onCall(async (data, context) => {
+exports.getGiftStoryVideoDownload = functions.runWith({enforceAppCheck: true}).https.onCall(async (data, context) => {
   const db = getFirestore();
   const giftId = text(data.giftRequestId);
   const suppliedToken = text(data.token);
@@ -1200,7 +1200,7 @@ exports.getGiftStoryVideoDownload = functions.https.onCall(async (data, context)
   return {downloadUrl, mime: gift.giftStoryVideoMime || "video/webm", expiresAt: expiry};
 });
 
-exports.retryGiftStoryAutomation = functions.https.onCall(async (data, context) => {
+exports.retryGiftStoryAutomation = functions.runWith({enforceAppCheck: true}).https.onCall(async (data, context) => {
   if (!await adminAuthorized(context)) throw new functions.https.HttpsError("permission-denied", "Admin access required.");
   const giftId = text(data.giftRequestId);
   const giftSnap = await getFirestore().collection("giftRequests").doc(giftId).get();
@@ -1214,7 +1214,7 @@ exports.retryGiftStoryAutomation = functions.https.onCall(async (data, context) 
   return {ok: true, expiresAt: result.expiresAt.toMillis()};
 });
 
-exports.manageGiftStoryAccess = functions.https.onCall(async (data, context) => {
+exports.manageGiftStoryAccess = functions.runWith({enforceAppCheck: true}).https.onCall(async (data, context) => {
   if (!await adminAuthorized(context)) throw new functions.https.HttpsError("permission-denied", "Admin access required.");
   const db = getFirestore();
   const giftId = text(data.giftRequestId);
