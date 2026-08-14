@@ -718,6 +718,12 @@ function riderDisplayAliases({quote = {}, data = {}, vanguardFields = {}} = {}) 
   };
 }
 
+function routeDurationMinutes(routeFacts = {}) {
+  const durationSeconds = Number(routeFacts.durationSeconds);
+  return Number.isFinite(durationSeconds) && durationSeconds > 0 ?
+    durationSeconds / 60 : null;
+}
+
 function quotePayload(data, uid, serverPhotoAnalysis = null) {
   const selectedSpeed = speedKey(data.selectedSpeed || data.selectedOption);
   const clientWeightKg = Number(data.weightKg || data.parcel && data.parcel.weightKg || 0.5);
@@ -792,6 +798,7 @@ function quotePayload(data, uid, serverPhotoAnalysis = null) {
     currency: "GBP",
     selectedSpeed,
     distanceMiles: Number(data.authoritativeRouteFacts ? data.authoritativeRouteFacts.distanceMiles : data.distanceMiles || 0),
+    estimatedDurationMinutes: routeDurationMinutes(data.authoritativeRouteFacts),
     routeFacts: data.authoritativeRouteFacts || null,
     scheduledJourneyAt: data.scheduledJourneyAt || null,
     scheduledJourneyTimezone: data.scheduledJourneyAt ? "Europe/London" : null,
@@ -1851,6 +1858,11 @@ async function createPaidDeliveryFromSession(stripe, sender, data) {
       paymentSessionId,
       price: quote.total,
       ...riderAliases,
+      estimatedDurationMinutes: quote.estimatedDurationMinutes,
+      driverJobSummary: {
+        ...(data.driverJobSummary || {}),
+        estimatedDurationMinutes: quote.estimatedDurationMinutes,
+      },
       paidAmount: quote.total,
       paymentStatus: "paid",
       paymentMethod: payment.paymentMethod,
@@ -2128,6 +2140,7 @@ exports._private = {
   stableId,
   quotePayload,
   riderDisplayAliases,
+  routeDurationMinutes,
   riderPayoutFromQuote,
   DRAFT_RETENTION_DAYS,
   DRAFT_INACTIVITY_MINUTES,

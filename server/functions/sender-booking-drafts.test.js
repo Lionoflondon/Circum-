@@ -141,6 +141,22 @@ test("sender quote charges distance in miles", () => {
   assert.equal(quote.total, 9.5);
 });
 
+test("sender quote projects canonical route duration", () => {
+  const quote = _private.quotePayload({
+    selectedSpeed: "Standard",
+    authoritativeRouteFacts: {
+      distanceMiles: 4.2,
+      durationSeconds: 930,
+    },
+    weightKg: 2,
+    parcel: {itemName: "Book", weightKg: 2},
+  }, "sender-test");
+
+  assert.equal(quote.estimatedDurationMinutes, 15.5);
+  assert.equal(_private.routeDurationMinutes({durationSeconds: 930}), 15.5);
+  assert.equal(_private.routeDurationMinutes({durationSeconds: 0}), null);
+});
+
 test("scheduled journey time is required and normalized for road-charge pricing", () => {
   const at = _private.validatedScheduledJourneyAt({
     type: "scheduled",

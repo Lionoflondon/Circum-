@@ -11990,7 +11990,6 @@ class _CustomerPortalState extends State<_CustomerPortal> {
         'dropoff': dropoffAddress.provider,
       },
       'estimatedDistanceMiles': distanceMiles,
-      'estimatedDurationMinutes': 28,
       'scheduledPickupDate': _scheduledPickupDate.text.trim(),
       'scheduledPickupWindow': _scheduledPickupWindow.text.trim(),
       'scheduledDropoffDate': _scheduledDropoffDate.text.trim(),
