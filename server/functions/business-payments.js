@@ -320,7 +320,18 @@ async function payBusinessInvoiceAtomically({
         createdAt: FieldValue.serverTimestamp(),
         previousBalance: previousWalletBalance,
         resultingBalance: resultingWalletBalance,
-        metadata,
+        metadata: {
+          ...metadata,
+          productType: "business",
+          productId: invoiceId,
+          businessId,
+          invoiceId,
+          paymentId: paymentRef.id,
+          canonicalTransactionId: paymentRef.id,
+          totalAmount: total,
+          rothApplied: normalizedRothAmount,
+          stripeAmount: normalizedCardAmount,
+        },
       }, {merge: false});
     }
     transaction.set(invoiceRef, {
@@ -345,7 +356,18 @@ async function payBusinessInvoiceAtomically({
       stripePaymentIntentId,
       paidAt: FieldValue.serverTimestamp(),
       createdAt: FieldValue.serverTimestamp(),
-      metadata,
+      metadata: {
+        ...metadata,
+        productType: "business",
+        productId: invoiceId,
+        businessId,
+        invoiceId,
+        paymentId: paymentRef.id,
+        canonicalTransactionId: paymentRef.id,
+        totalAmount: total,
+        rothApplied: normalizedRothAmount,
+        stripeAmount: normalizedCardAmount,
+      },
     }, {merge: true});
     transaction.set(accountRef, {
       ...(normalizedRothAmount > 0 ? {

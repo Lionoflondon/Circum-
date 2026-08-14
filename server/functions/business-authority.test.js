@@ -1,0 +1,21 @@
+const test = require("node:test");
+const assert = require("node:assert/strict");
+const {businessAuthority} = require("./business-authority");
+
+test("Business owner and finance-capable roles may perform financial actions", () => {
+  for (const role of ["owner", "admin", "manager", "finance"]) {
+    assert.equal(businessAuthority({teamMembers: [{userId: "u", role, status: "active"}]}, {uid: "u"}).financialAuthorized, true);
+  }
+});
+
+test("ordinary and legacy-only members cannot gain financial authority", () => {
+  assert.equal(businessAuthority({teamMembers: [{userId: "u", role: "member", status: "active"}]}, {uid: "u"}).financialAuthorized, false);
+  const legacy = businessAuthority({teamMemberIds: ["u"]}, {uid: "u"});
+  assert.equal(legacy.member, true);
+  assert.equal(legacy.financialAuthorized, false);
+});
+
+test("removed or suspended canonical members fail closed", () => {
+  assert.equal(businessAuthority({teamMembers: [{userId: "u", role: "finance", status: "removed"}]}, {uid: "u"}).member, false);
+  assert.equal(businessAuthority({teamMembers: [{userId: "u", role: "finance", status: "suspended"}]}, {uid: "u"}).member, false);
+});
