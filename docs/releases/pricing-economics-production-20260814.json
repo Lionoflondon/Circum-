@@ -1,0 +1,148 @@
+{
+  "purpose": "pricing_economics_certification",
+  "sourceCommit": "1108c90d29c6208b7f92a9c1a89ca1571fc4b0e9",
+  "branch": "sender-route-quote-fix",
+  "generatedAt": "2026-08-14T13:33:45Z",
+  "sourceFileSet": "server/functions committed tree at sourceCommit",
+  "sourcePackageSha256": "f4c158f98ac22c401f814e95db0613c0a7338bced55130fef21e9c32777279ed",
+  "sourcePackagePath": "/tmp/circum-release-artifacts/pricing-economics-functions-1108c90.tar.gz",
+  "sourcePackageCommand": "git archive --format=tar --prefix=server-functions/ HEAD:server/functions | gzip -n",
+  "manifestSha256": "2dca78feef3177004c3e7a1ba341a3b979605f8832bbc14c11550785d9b4bd75",
+  "deployment": {
+    "project": "circum-2797c",
+    "region": "us-central1",
+    "command": "firebase deploy --only functions:createSenderBookingQuote,functions:createSenderPaidDelivery,functions:createGiftPayment,functions:finalizeGiftPayment,functions:createHealthPlusBooking,functions:createHealthPlusCheckoutSession,functions:onGiftMovementWrite,functions:onHealthMovementWrite,functions:onHealthPaymentMovementWrite,functions:onMovementDeliveryWrite,functions:updateDeliveryTrackingStatus --project circum-2797c",
+    "sourceUploadUrl": "https://storage.googleapis.com/uploads-583581343405.us-central1.cloudfunctions.appspot.com/a36d4872-bf89-47fb-884e-8b9deb819810.zip",
+    "sourceZipRetrieval": {
+      "status": "forbidden",
+      "httpStatus": 403,
+      "note": "Google-managed source ZIP retrieval is permission-blocked in this environment; provenance is bound through committed source, local source package SHA256, scoped deployment command, live function revision metadata, and Firebase source labels."
+    }
+  },
+  "pricingContract": {
+    "shareableLogisticsValue": "base + distance + vehicle + applicable weight + applicable logistics handling + Express/timing components",
+    "roadCostValue": "road charges and tolls are non-shareable customer fees with separate road-cost recovery policy",
+    "riderLogisticsEarning": "65 percent of shareableLogisticsValue, rounded to currency",
+    "platformLogisticsShare": "shareableLogisticsValue minus riderLogisticsEarning, rounded to currency",
+    "riderTotalCompensation": "riderLogisticsEarning plus separately authorized riderRoadRecovery",
+    "customerTotal": "shareableLogisticsValue plus non-shareable customer fees",
+    "expressBase": "shareable logistics subtotal before road charges or tolls",
+    "vanguardBase": "non-shareable customer fee outside Rider 65 percent earnings"
+  },
+  "functions": [
+    {
+      "name": "createSenderBookingQuote",
+      "revision": "67",
+      "runtime": "nodejs22",
+      "state": "ACTIVE",
+      "updateTime": "2026-08-14T13:33:33.843Z",
+      "sourceLabel": "9b3c8b6e5f541a03912c337c6d0afa5d4037703a"
+    },
+    {
+      "name": "createSenderPaidDelivery",
+      "revision": "70",
+      "runtime": "nodejs22",
+      "state": "ACTIVE",
+      "updateTime": "2026-08-14T13:33:36.389Z",
+      "sourceLabel": "36c404bd7b075bbea6509192f53d85564e464073"
+    },
+    {
+      "name": "createGiftPayment",
+      "revision": "60",
+      "runtime": "nodejs22",
+      "state": "ACTIVE",
+      "updateTime": "2026-08-14T13:33:10.489Z",
+      "sourceLabel": "36c404bd7b075bbea6509192f53d85564e464073"
+    },
+    {
+      "name": "finalizeGiftPayment",
+      "revision": "51",
+      "runtime": "nodejs22",
+      "state": "ACTIVE",
+      "updateTime": "2026-08-14T13:33:09.549Z",
+      "sourceLabel": "36c404bd7b075bbea6509192f53d85564e464073"
+    },
+    {
+      "name": "createHealthPlusBooking",
+      "revision": "43",
+      "runtime": "nodejs22",
+      "state": "ACTIVE",
+      "updateTime": "2026-08-14T13:33:06.860Z",
+      "sourceLabel": "9b3c8b6e5f541a03912c337c6d0afa5d4037703a"
+    },
+    {
+      "name": "createHealthPlusCheckoutSession",
+      "revision": "62",
+      "runtime": "nodejs22",
+      "state": "ACTIVE",
+      "updateTime": "2026-08-14T13:33:06.347Z",
+      "sourceLabel": "36c404bd7b075bbea6509192f53d85564e464073"
+    },
+    {
+      "name": "updateDeliveryTrackingStatus",
+      "revision": "63",
+      "runtime": "nodejs22",
+      "state": "ACTIVE",
+      "updateTime": "2026-08-14T13:33:34.731Z",
+      "sourceLabel": "36c404bd7b075bbea6509192f53d85564e464073"
+    },
+    {
+      "name": "onGiftMovementWrite",
+      "revision": "30",
+      "runtime": "nodejs22",
+      "state": "ACTIVE",
+      "updateTime": "2026-08-14T13:33:32.765Z",
+      "sourceLabel": "36c404bd7b075bbea6509192f53d85564e464073"
+    },
+    {
+      "name": "onHealthMovementWrite",
+      "revision": "32",
+      "runtime": "nodejs22",
+      "state": "ACTIVE",
+      "updateTime": "2026-08-14T13:33:32.653Z",
+      "sourceLabel": "36c404bd7b075bbea6509192f53d85564e464073"
+    },
+    {
+      "name": "onHealthPaymentMovementWrite",
+      "revision": "33",
+      "runtime": "nodejs22",
+      "state": "ACTIVE",
+      "updateTime": "2026-08-14T13:33:33.812Z",
+      "sourceLabel": "36c404bd7b075bbea6509192f53d85564e464073"
+    },
+    {
+      "name": "onMovementDeliveryWrite",
+      "revision": "2",
+      "runtime": "nodejs22",
+      "state": "ACTIVE",
+      "updateTime": "2026-08-14T13:33:12.274Z",
+      "sourceLabel": "36c404bd7b075bbea6509192f53d85564e464073"
+    }
+  ],
+  "validation": {
+    "focusedPricing": {
+      "pass": 53,
+      "fail": 0,
+      "skip": 0
+    },
+    "fullFunctions": {
+      "pass": 613,
+      "fail": 0,
+      "skip": 10
+    },
+    "firestoreEmulator": {
+      "pass": 10,
+      "fail": 0,
+      "skip": 0
+    },
+    "changedBackendEslint": "PASS",
+    "gitDiffCheck": "PASS"
+  },
+  "productionImpact": {
+    "payments": 0,
+    "deliveries": 0,
+    "riderAcceptances": 0,
+    "riderSettlements": 0,
+    "manualFirestoreMutations": 0
+  }
+}
