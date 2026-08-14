@@ -9,6 +9,8 @@ import 'package:flutter/services.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import 'admin_operations.dart';
+import 'theme/admin_tokens.dart';
+import 'widgets/admin_glass.dart';
 
 enum AdminModule {
   dashboard('Dashboard', Icons.dashboard_rounded),
@@ -3502,147 +3504,153 @@ class _AdminPhaseOneShellState extends State<AdminPhaseOneShell> {
     final mobile = MediaQuery.sizeOf(context).width < 900;
     return Scaffold(
       key: _scaffoldKey,
-      body: SafeArea(
-        child: Row(
-          children: [
-            if (!mobile)
-              _AdminSidebar(
-                selected: _module,
-                roles: _roles,
-                onSelect: (module) => setState(() => _module = module),
-                onSignOut: _signOut,
-              ),
-            Expanded(
-              child: Column(
-                children: [
-                  _AdminTopBar(
-                    selected: _module,
-                    user: _user,
-                    roles: _roles,
-                    search: _search,
-                    loading: _loadingData,
-                    mobile: mobile,
-                    onRefresh: _loadAdminData,
-                    onSearchChanged: () => setState(() {}),
-                    onSelect: (module) => setState(() => _module = module),
-                  ),
-                  if (_message != null)
-                    Padding(
-                      padding: const EdgeInsets.fromLTRB(20, 0, 20, 12),
-                      child: _AdminNotice(message: _message!),
+      body: AdminGlassBackground(
+        child: SafeArea(
+          child: Row(
+            children: [
+              if (!mobile)
+                _AdminSidebar(
+                  selected: _module,
+                  roles: _roles,
+                  onSelect: (module) => setState(() => _module = module),
+                  onSignOut: _signOut,
+                ),
+              Expanded(
+                child: Column(
+                  children: [
+                    _AdminTopBar(
+                      selected: _module,
+                      user: _user,
+                      roles: _roles,
+                      search: _search,
+                      loading: _loadingData,
+                      mobile: mobile,
+                      onRefresh: _loadAdminData,
+                      onSearchChanged: () => setState(() {}),
+                      onSelect: (module) => setState(() => _module = module),
                     ),
-                  Expanded(
-                    child: _AdminModuleBody(
-                      module: _module,
-                      query: _search.text,
-                      data: _data,
-                      metrics: _metrics,
-                      canManageAdmins: _can(AdminPermission.manageAdmins),
-                      canDuplicateDeliveries: _can(
-                        AdminPermission.duplicateDeliveries,
+                    if (_message != null)
+                      Padding(
+                        padding: const EdgeInsets.fromLTRB(20, 0, 20, 12),
+                        child: _AdminNotice(message: _message!),
                       ),
-                      canManageRiders: _can(AdminPermission.approveDrivers),
-                      canEditDeliveries: _can(AdminPermission.editDeliveries),
-                      canManageIssues: _can(AdminPermission.manageIssues),
-                      canManageHealthPlus: _can(
-                        AdminPermission.manageHealthPlus,
+                    Expanded(
+                      child: _AdminModuleBody(
+                        module: _module,
+                        query: _search.text,
+                        data: _data,
+                        metrics: _metrics,
+                        canManageAdmins: _can(AdminPermission.manageAdmins),
+                        canDuplicateDeliveries: _can(
+                          AdminPermission.duplicateDeliveries,
+                        ),
+                        canManageRiders: _can(AdminPermission.approveDrivers),
+                        canEditDeliveries: _can(AdminPermission.editDeliveries),
+                        canManageIssues: _can(AdminPermission.manageIssues),
+                        canManageHealthPlus: _can(
+                          AdminPermission.manageHealthPlus,
+                        ),
+                        canManageFinance: _can(AdminPermission.manageFinance),
+                        onDuplicateDelivery: _duplicateDelivery,
+                        onSetRiderStatus: _setRiderStatus,
+                        onSetDeliveryOperationStatus:
+                            _setDeliveryOperationStatus,
+                        onResolveStaleDeliveryLock: _resolveStaleDeliveryLock,
+                        onArchiveDelivery: _archiveDeliveryFromAdmin,
+                        onSetIrisReviewStatus: _setIrisReviewStatus,
+                        onAdjudicateIrisReferral: _adjudicateIrisReferral,
+                        onLoadIrisReferenceImage: _loadIrisReferenceImage,
+                        onFinalizeIrisReferenceImage:
+                            _finalizeIrisReferenceImage,
+                        onDeleteIrisReferenceImage: _deleteIrisReferenceImage,
+                        onUpdateSupportTicket: _updateSupportTicket,
+                        onUpdateGiftWorkflow: _updateGiftWorkflow,
+                        onUpdateHealthPlusPickup: _updateHealthPlusPickup,
+                        onUpdateFinanceWorkflow: _updateFinanceWorkflow,
+                        onIssueRoth: _issueRothFromAdminRecord,
+                        onIssueManualRothCredit: _issueManualRothCredit,
+                        onManageRecognition: _manageRecognition,
+                        onSetWalletFrozen: _setWalletFrozenFromAdminRecord,
+                        onProcessPayoutRequest: _processPayoutRequestFromAdmin,
+                        onModerateRating: _moderateRating,
+                        onSyncRiderStripe: _syncRiderStripeStatus,
+                        onResetRiderStripe: _resetRiderStripe,
+                        onGenerateRiderStripeLink:
+                            _generateRiderStripeOnboardingLink,
+                        onOpenRiderStripeDashboard: _openRiderStripeDashboard,
+                        onMarkRiderStripeInvestigation:
+                            _markRiderStripeInvestigation,
+                        onRequestRiderMoreInformation:
+                            _requestRiderMoreInformation,
+                        onReviewRiderDocument: _reviewRiderDocument,
+                        onRemoveRiderProfilePhoto: _removeRiderProfilePhoto,
+                        onUpdateHealthPlusProfile: _updateHealthPlusProfile,
+                        onUpdateHealthPlusSchedule: _updateHealthPlusSchedule,
+                        onUpdateGiftCampaignParticipant:
+                            _updateGiftCampaignParticipant,
+                        onSetGiftBrandStatus: _setGiftBrandStatus,
+                        onEditGiftBrandPartner: _editGiftBrandPartner,
+                        onSuggestGiftCampaignMatch: _suggestGiftCampaignMatch,
+                        onApproveGiftCampaignMatch: _approveGiftCampaignMatch,
+                        onBulkGiftCampaignAction: _bulkGiftCampaignAction,
+                        onEditGiftRequest: _editGiftRequestWorkflow,
+                        onUpdateGiftStoryAccess: _updateGiftStoryAccess,
+                        onUpdateGiftStoryMedia: _updateGiftStoryMedia,
+                        onUpdateGiftWorkspace: _updateGiftWorkspace,
+                        onUpdateIrisRepositoryRecord:
+                            _updateIrisRepositoryRecord,
+                        onUpdateIrisCandidateWorkflow:
+                            _updateIrisCandidateWorkflow,
+                        onSetBusinessOperationStatus:
+                            _setBusinessOperationStatus,
+                        onCreateBusinessInvoice: _createBusinessInvoice,
+                        onChangeBusinessMemberRole: _changeBusinessMemberRole,
+                        onRemoveBusinessMember: _removeBusinessMember,
+                        onUpdatePlatformRecord: _updatePlatformRecord,
+                        announcementTitle: _announcementTitle,
+                        announcementBody: _announcementBody,
+                        onSendPlatformAnnouncement: _sendPlatformAnnouncement,
+                        onRetryNotificationDelivery: _retryNotificationDelivery,
+                        onOpenRiderProfile: _openRiderProfile,
+                        onOpenDeliveryProfile: _openDeliveryProfile,
+                        onOpenHealthPlusProfile: _openHealthPlusProfile,
+                        onOpenAccountProfile: _openAccountProfile,
+                        onSetSenderAccountStatus: _setSenderAccountStatus,
+                        onSetBusinessAccountStatus: _setBusinessAccountStatus,
+                        onRequestDuplicateMerge: _requestDuplicateMerge,
+                        adminInviteEmail: _adminInviteEmail,
+                        adminInviteNote: _adminInviteNote,
+                        adminInviteRole: _adminInviteRole,
+                        onAdminInviteRoleChanged: (role) =>
+                            setState(() => _adminInviteRole = role),
+                        onCreateAdminUser: () => _saveAdminUser(
+                          email: _adminInviteEmail.text,
+                          role: _adminInviteRole,
+                        ),
+                        onSetAdminUserStatus: _setAdminUserStatus,
+                        onSetAdminUserRole: _setAdminUserRole,
+                        chatMessage: _chatMessage,
+                        selectedChat: _selectedChat,
+                        selectedChatMessages: _selectedChatMessages,
+                        onSelectChat: _selectChat,
+                        onSendChatMessage: _sendChatMessage,
+                        onResolveMessageReport: _resolveMessageReport,
+                        onOpenSupportConversation: _openSupportConversation,
+                        onStartRiderConversation: _startRiderConversation,
+                        onAddAdminNote: _addAdminNote,
+                        onUpdateSenderTrust: _updateSenderTrust,
+                        onGovernanceAction: _performGovernanceAction,
+                        onPipelineHealthReset: _pipelineHealthReset,
+                        onOperationsHealthScan: _operationsHealthScan,
+                        onOperationsHealthRepair: _operationsHealthRepair,
+                        onLiveDeliveryDiagnostics: _liveDeliveryDiagnostics,
                       ),
-                      canManageFinance: _can(AdminPermission.manageFinance),
-                      onDuplicateDelivery: _duplicateDelivery,
-                      onSetRiderStatus: _setRiderStatus,
-                      onSetDeliveryOperationStatus: _setDeliveryOperationStatus,
-                      onResolveStaleDeliveryLock: _resolveStaleDeliveryLock,
-                      onArchiveDelivery: _archiveDeliveryFromAdmin,
-                      onSetIrisReviewStatus: _setIrisReviewStatus,
-                      onAdjudicateIrisReferral: _adjudicateIrisReferral,
-                      onLoadIrisReferenceImage: _loadIrisReferenceImage,
-                      onFinalizeIrisReferenceImage: _finalizeIrisReferenceImage,
-                      onDeleteIrisReferenceImage: _deleteIrisReferenceImage,
-                      onUpdateSupportTicket: _updateSupportTicket,
-                      onUpdateGiftWorkflow: _updateGiftWorkflow,
-                      onUpdateHealthPlusPickup: _updateHealthPlusPickup,
-                      onUpdateFinanceWorkflow: _updateFinanceWorkflow,
-                      onIssueRoth: _issueRothFromAdminRecord,
-                      onIssueManualRothCredit: _issueManualRothCredit,
-                      onManageRecognition: _manageRecognition,
-                      onSetWalletFrozen: _setWalletFrozenFromAdminRecord,
-                      onProcessPayoutRequest: _processPayoutRequestFromAdmin,
-                      onModerateRating: _moderateRating,
-                      onSyncRiderStripe: _syncRiderStripeStatus,
-                      onResetRiderStripe: _resetRiderStripe,
-                      onGenerateRiderStripeLink:
-                          _generateRiderStripeOnboardingLink,
-                      onOpenRiderStripeDashboard: _openRiderStripeDashboard,
-                      onMarkRiderStripeInvestigation:
-                          _markRiderStripeInvestigation,
-                      onRequestRiderMoreInformation:
-                          _requestRiderMoreInformation,
-                      onReviewRiderDocument: _reviewRiderDocument,
-                      onRemoveRiderProfilePhoto: _removeRiderProfilePhoto,
-                      onUpdateHealthPlusProfile: _updateHealthPlusProfile,
-                      onUpdateHealthPlusSchedule: _updateHealthPlusSchedule,
-                      onUpdateGiftCampaignParticipant:
-                          _updateGiftCampaignParticipant,
-                      onSetGiftBrandStatus: _setGiftBrandStatus,
-                      onEditGiftBrandPartner: _editGiftBrandPartner,
-                      onSuggestGiftCampaignMatch: _suggestGiftCampaignMatch,
-                      onApproveGiftCampaignMatch: _approveGiftCampaignMatch,
-                      onBulkGiftCampaignAction: _bulkGiftCampaignAction,
-                      onEditGiftRequest: _editGiftRequestWorkflow,
-                      onUpdateGiftStoryAccess: _updateGiftStoryAccess,
-                      onUpdateGiftStoryMedia: _updateGiftStoryMedia,
-                      onUpdateGiftWorkspace: _updateGiftWorkspace,
-                      onUpdateIrisRepositoryRecord: _updateIrisRepositoryRecord,
-                      onUpdateIrisCandidateWorkflow:
-                          _updateIrisCandidateWorkflow,
-                      onSetBusinessOperationStatus: _setBusinessOperationStatus,
-                      onCreateBusinessInvoice: _createBusinessInvoice,
-                      onChangeBusinessMemberRole: _changeBusinessMemberRole,
-                      onRemoveBusinessMember: _removeBusinessMember,
-                      onUpdatePlatformRecord: _updatePlatformRecord,
-                      announcementTitle: _announcementTitle,
-                      announcementBody: _announcementBody,
-                      onSendPlatformAnnouncement: _sendPlatformAnnouncement,
-                      onRetryNotificationDelivery: _retryNotificationDelivery,
-                      onOpenRiderProfile: _openRiderProfile,
-                      onOpenDeliveryProfile: _openDeliveryProfile,
-                      onOpenHealthPlusProfile: _openHealthPlusProfile,
-                      onOpenAccountProfile: _openAccountProfile,
-                      onSetSenderAccountStatus: _setSenderAccountStatus,
-                      onSetBusinessAccountStatus: _setBusinessAccountStatus,
-                      onRequestDuplicateMerge: _requestDuplicateMerge,
-                      adminInviteEmail: _adminInviteEmail,
-                      adminInviteNote: _adminInviteNote,
-                      adminInviteRole: _adminInviteRole,
-                      onAdminInviteRoleChanged: (role) =>
-                          setState(() => _adminInviteRole = role),
-                      onCreateAdminUser: () => _saveAdminUser(
-                        email: _adminInviteEmail.text,
-                        role: _adminInviteRole,
-                      ),
-                      onSetAdminUserStatus: _setAdminUserStatus,
-                      onSetAdminUserRole: _setAdminUserRole,
-                      chatMessage: _chatMessage,
-                      selectedChat: _selectedChat,
-                      selectedChatMessages: _selectedChatMessages,
-                      onSelectChat: _selectChat,
-                      onSendChatMessage: _sendChatMessage,
-                      onResolveMessageReport: _resolveMessageReport,
-                      onOpenSupportConversation: _openSupportConversation,
-                      onStartRiderConversation: _startRiderConversation,
-                      onAddAdminNote: _addAdminNote,
-                      onUpdateSenderTrust: _updateSenderTrust,
-                      onGovernanceAction: _performGovernanceAction,
-                      onPipelineHealthReset: _pipelineHealthReset,
-                      onOperationsHealthScan: _operationsHealthScan,
-                      onOperationsHealthRepair: _operationsHealthRepair,
-                      onLiveDeliveryDiagnostics: _liveDeliveryDiagnostics,
                     ),
-                  ),
-                ],
+                  ],
+                ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
       endDrawer: _selectedRider == null
@@ -4286,49 +4294,51 @@ class _AdminSidebar extends StatelessWidget {
     return Container(
       width: 260,
       margin: const EdgeInsets.all(16),
-      decoration: _panelDecoration(),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Padding(
-            padding: EdgeInsets.fromLTRB(18, 20, 18, 12),
-            child: Text(
-              'Admin',
-              style: TextStyle(fontSize: 24, fontWeight: FontWeight.w800),
+      child: AdminGlassPanel(
+        padding: EdgeInsets.zero,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Padding(
+              padding: EdgeInsets.fromLTRB(18, 20, 18, 12),
+              child: Text(
+                'Admin',
+                style: TextStyle(fontSize: 24, fontWeight: FontWeight.w800),
+              ),
             ),
-          ),
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 18),
-            child: Text(
-              roles.join(', '),
-              maxLines: 2,
-              overflow: TextOverflow.ellipsis,
-              style: TextStyle(color: Colors.white.withValues(alpha: .62)),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 18),
+              child: Text(
+                roles.join(', '),
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(color: Colors.white.withValues(alpha: .62)),
+              ),
             ),
-          ),
-          const SizedBox(height: 12),
-          Expanded(
-            child: ListView(
-              padding: const EdgeInsets.all(10),
-              children: [
-                for (final module in AdminModule.values)
-                  _ModuleButton(
-                    module: module,
-                    selected: selected == module,
-                    onTap: () => onSelect(module),
-                  ),
-              ],
+            const SizedBox(height: 12),
+            Expanded(
+              child: ListView(
+                padding: const EdgeInsets.all(10),
+                children: [
+                  for (final module in AdminModule.values)
+                    _ModuleButton(
+                      module: module,
+                      selected: selected == module,
+                      onTap: () => onSelect(module),
+                    ),
+                ],
+              ),
             ),
-          ),
-          Padding(
-            padding: const EdgeInsets.all(12),
-            child: OutlinedButton.icon(
-              onPressed: onSignOut,
-              icon: const Icon(Icons.logout_rounded),
-              label: const Text('Sign out'),
+            Padding(
+              padding: const EdgeInsets.all(12),
+              child: OutlinedButton.icon(
+                onPressed: onSignOut,
+                icon: const Icon(Icons.logout_rounded),
+                label: const Text('Sign out'),
+              ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
@@ -4361,96 +4371,97 @@ class _AdminTopBar extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       margin: const EdgeInsets.fromLTRB(20, 14, 20, 12),
-      padding: const EdgeInsets.fromLTRB(16, 12, 14, 12),
-      decoration: _panelDecoration(radius: 22),
-      child: Row(
-        children: [
-          if (mobile)
-            PopupMenuButton<AdminModule>(
-              icon: const Icon(Icons.menu_rounded),
-              onSelected: onSelect,
-              itemBuilder: (_) => [
-                for (final module in AdminModule.values)
-                  PopupMenuItem(value: module, child: Text(module.label)),
-              ],
+      child: AdminGlassPanel(
+        padding: const EdgeInsets.fromLTRB(16, 12, 14, 12),
+        child: Row(
+          children: [
+            if (mobile)
+              PopupMenuButton<AdminModule>(
+                icon: const Icon(Icons.menu_rounded),
+                onSelected: onSelect,
+                itemBuilder: (_) => [
+                  for (final module in AdminModule.values)
+                    PopupMenuItem(value: module, child: Text(module.label)),
+                ],
+              ),
+            Icon(selected.icon, color: const Color(0xFF7DD3FC), size: 22),
+            const SizedBox(width: 12),
+            SizedBox(
+              width: mobile ? 122 : 220,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Circum / Admin',
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      color: const Color(0xFF7DD3FC).withValues(alpha: .82),
+                      fontSize: 11,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    selected.label,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      fontSize: 20,
+                      fontWeight: FontWeight.w900,
+                    ),
+                  ),
+                ],
+              ),
             ),
-          Icon(selected.icon, color: const Color(0xFF7DD3FC), size: 22),
-          const SizedBox(width: 12),
-          SizedBox(
-            width: mobile ? 122 : 220,
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'Circum / Admin',
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
-                    color: const Color(0xFF7DD3FC).withValues(alpha: .82),
-                    fontSize: 11,
-                    fontWeight: FontWeight.w800,
-                  ),
-                ),
-                const SizedBox(height: 2),
-                Text(
-                  selected.label,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
-                    fontSize: 20,
-                    fontWeight: FontWeight.w900,
-                  ),
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(width: 14),
-          Expanded(
-            child: SizedBox(
-              height: 44,
-              child: TextField(
-                controller: search,
-                onChanged: (_) => onSearchChanged(),
-                decoration: InputDecoration(
-                  prefixIcon: const Icon(Icons.search_rounded, size: 20),
-                  hintText: 'Search ${selected.label}',
-                  contentPadding: const EdgeInsets.symmetric(
-                    horizontal: 12,
-                    vertical: 10,
-                  ),
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(16),
-                    borderSide: BorderSide(
-                      color: Colors.white.withValues(alpha: .10),
+            const SizedBox(width: 14),
+            Expanded(
+              child: SizedBox(
+                height: 44,
+                child: TextField(
+                  controller: search,
+                  onChanged: (_) => onSearchChanged(),
+                  decoration: InputDecoration(
+                    prefixIcon: const Icon(Icons.search_rounded, size: 20),
+                    hintText: 'Search ${selected.label}',
+                    contentPadding: const EdgeInsets.symmetric(
+                      horizontal: 12,
+                      vertical: 10,
+                    ),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(16),
+                      borderSide: BorderSide(
+                        color: Colors.white.withValues(alpha: .10),
+                      ),
                     ),
                   ),
                 ),
               ),
             ),
-          ),
-          const SizedBox(width: 12),
-          _StatusPill(label: loading ? 'Syncing' : 'Live'),
-          const SizedBox(width: 8),
-          IconButton.filledTonal(
-            tooltip: 'Refresh',
-            onPressed: loading ? null : onRefresh,
-            icon: loading
-                ? const SizedBox.square(
-                    dimension: 18,
-                    child: CircularProgressIndicator(strokeWidth: 2),
-                  )
-                : const Icon(Icons.refresh_rounded),
-          ),
-          if (!mobile) ...[
+            const SizedBox(width: 12),
+            _StatusPill(label: loading ? 'Syncing' : 'Live'),
             const SizedBox(width: 8),
-            CircleAvatar(
-              radius: 18,
-              backgroundColor: const Color(0xFF7C3AED).withValues(alpha: .22),
-              child: Text(
-                _adminInitials(user?.email),
-                style: const TextStyle(fontWeight: FontWeight.w900),
-              ),
+            IconButton.filledTonal(
+              tooltip: 'Refresh',
+              onPressed: loading ? null : onRefresh,
+              icon: loading
+                  ? const SizedBox.square(
+                      dimension: 18,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : const Icon(Icons.refresh_rounded),
             ),
+            if (!mobile) ...[
+              const SizedBox(width: 8),
+              CircleAvatar(
+                radius: 18,
+                backgroundColor: const Color(0xFF7C3AED).withValues(alpha: .22),
+                child: Text(
+                  _adminInitials(user?.email),
+                  style: const TextStyle(fontWeight: FontWeight.w900),
+                ),
+              ),
+            ],
           ],
-        ],
+        ),
       ),
     );
   }
@@ -6305,58 +6316,55 @@ class _HealthPlusAnalyticsPanel extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return DecoratedBox(
-      decoration: _panelDecoration(),
-      child: Padding(
-        padding: const EdgeInsets.all(18),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Text(
-              'Health+ analytics',
-              style: TextStyle(fontSize: 22, fontWeight: FontWeight.w800),
-            ),
-            const SizedBox(height: 14),
-            Wrap(
-              spacing: 10,
-              runSpacing: 10,
-              children: [
-                _HealthChip('Orders', records.length),
+    return AdminGlassPanel(
+      padding: const EdgeInsets.all(18),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            'Health+ analytics',
+            style: TextStyle(fontSize: 22, fontWeight: FontWeight.w800),
+          ),
+          const SizedBox(height: 14),
+          Wrap(
+            spacing: 10,
+            runSpacing: 10,
+            children: [
+              _HealthChip('Orders', records.length),
+              _HealthChip(
+                'Success',
+                records
+                    .where(
+                      (item) =>
+                          _healthStatus(item).contains('complete') ||
+                          _healthStatus(item).contains('delivered'),
+                    )
+                    .length,
+              ),
+              _HealthChip(
+                'Turnaround',
+                records.where((item) => item['completedAt'] != null).length,
+              ),
+              _HealthChip(
+                'Escalations',
+                records
+                    .where((item) => _healthStatus(item).contains('escalat'))
+                    .length,
+              ),
+              for (final pharmacy in _activePharmacies(records).take(6))
                 _HealthChip(
-                  'Success',
+                  pharmacy,
                   records
                       .where(
                         (item) =>
-                            _healthStatus(item).contains('complete') ||
-                            _healthStatus(item).contains('delivered'),
+                            '${item['pharmacyName'] ?? item['pharmacyAddress'] ?? ''}' ==
+                            pharmacy,
                       )
                       .length,
                 ),
-                _HealthChip(
-                  'Turnaround',
-                  records.where((item) => item['completedAt'] != null).length,
-                ),
-                _HealthChip(
-                  'Escalations',
-                  records
-                      .where((item) => _healthStatus(item).contains('escalat'))
-                      .length,
-                ),
-                for (final pharmacy in _activePharmacies(records).take(6))
-                  _HealthChip(
-                    pharmacy,
-                    records
-                        .where(
-                          (item) =>
-                              '${item['pharmacyName'] ?? item['pharmacyAddress'] ?? ''}' ==
-                              pharmacy,
-                        )
-                        .length,
-                  ),
-              ],
-            ),
-          ],
-        ),
+            ],
+          ),
+        ],
       ),
     );
   }
@@ -7346,50 +7354,47 @@ class _IrisHealthPanel extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return DecoratedBox(
-      decoration: _panelDecoration(),
-      child: Padding(
-        padding: const EdgeInsets.all(18),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Text(
-              'IRIS Health',
-              style: TextStyle(fontSize: 22, fontWeight: FontWeight.w800),
-            ),
-            const SizedBox(height: 14),
-            Wrap(
-              spacing: 10,
-              runSpacing: 10,
-              children: [
-                _HealthChip(
-                  'Queue depth',
-                  records.where(_isIrisPending).length,
-                ),
-                _HealthChip('Failures', records.where(_hasIrisFailure).length),
-                _HealthChip(
-                  'Retries',
-                  _countRecordsContaining(records, 'retry'),
-                ),
-                _HealthChip('Evidence growth', evidence.length),
-                _HealthChip(
-                  'Storage records',
-                  evidence
-                      .where(
-                        (item) => '${item['storagePath'] ?? item['url'] ?? ''}'
-                            .trim()
-                            .isNotEmpty,
-                      )
-                      .length,
-                ),
-                _HealthChip(
-                  'Active model',
-                  _distinctValues(records, 'modelVersion').length,
-                ),
-              ],
-            ),
-          ],
-        ),
+    return AdminGlassPanel(
+      padding: const EdgeInsets.all(18),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            'IRIS Health',
+            style: TextStyle(fontSize: 22, fontWeight: FontWeight.w800),
+          ),
+          const SizedBox(height: 14),
+          Wrap(
+            spacing: 10,
+            runSpacing: 10,
+            children: [
+              _HealthChip(
+                'Queue depth',
+                records.where(_isIrisPending).length,
+              ),
+              _HealthChip('Failures', records.where(_hasIrisFailure).length),
+              _HealthChip(
+                'Retries',
+                _countRecordsContaining(records, 'retry'),
+              ),
+              _HealthChip('Evidence growth', evidence.length),
+              _HealthChip(
+                'Storage records',
+                evidence
+                    .where(
+                      (item) => '${item['storagePath'] ?? item['url'] ?? ''}'
+                          .trim()
+                          .isNotEmpty,
+                    )
+                    .length,
+              ),
+              _HealthChip(
+                'Active model',
+                _distinctValues(records, 'modelVersion').length,
+              ),
+            ],
+          ),
+        ],
       ),
     );
   }
@@ -7461,40 +7466,37 @@ class _IrisAnalyticsPanel extends StatelessWidget {
   Widget build(BuildContext context) {
     final categories = _categoryDistribution(records);
     final vehicles = _vehicleDistribution(records);
-    return DecoratedBox(
-      decoration: _panelDecoration(),
-      child: Padding(
-        padding: const EdgeInsets.all(18),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Text(
-              'IRIS learning and recommendation analytics',
-              style: TextStyle(fontSize: 22, fontWeight: FontWeight.w800),
-            ),
-            const SizedBox(height: 14),
-            Wrap(
-              spacing: 10,
-              runSpacing: 10,
-              children: [
-                for (final entry in categories.entries.take(8))
-                  _HealthChip(entry.key, entry.value),
-                for (final entry in vehicles.entries.take(8))
-                  _HealthChip('Vehicle ${entry.key}', entry.value),
-                _HealthChip('Overrides', _countIrisOverrides(auditLogs)),
-                _HealthChip(
-                  'Reviewer productivity',
-                  _activeIrisReviewers(auditLogs).length,
-                ),
-                _HealthChip('Learning performance', learningCases.length),
-                _HealthChip(
-                  'Turnaround',
-                  records.where((item) => !_isIrisPending(item)).length,
-                ),
-              ],
-            ),
-          ],
-        ),
+    return AdminGlassPanel(
+      padding: const EdgeInsets.all(18),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            'IRIS learning and recommendation analytics',
+            style: TextStyle(fontSize: 22, fontWeight: FontWeight.w800),
+          ),
+          const SizedBox(height: 14),
+          Wrap(
+            spacing: 10,
+            runSpacing: 10,
+            children: [
+              for (final entry in categories.entries.take(8))
+                _HealthChip(entry.key, entry.value),
+              for (final entry in vehicles.entries.take(8))
+                _HealthChip('Vehicle ${entry.key}', entry.value),
+              _HealthChip('Overrides', _countIrisOverrides(auditLogs)),
+              _HealthChip(
+                'Reviewer productivity',
+                _activeIrisReviewers(auditLogs).length,
+              ),
+              _HealthChip('Learning performance', learningCases.length),
+              _HealthChip(
+                'Turnaround',
+                records.where((item) => !_isIrisPending(item)).length,
+              ),
+            ],
+          ),
+        ],
       ),
     );
   }
@@ -10955,26 +10957,29 @@ class _PlatformAlertRow extends StatelessWidget {
       'warning' => Icons.warning_amber_rounded,
       _ => Icons.info_rounded,
     };
-    return Row(
-      children: [
-        Icon(icon, size: 20, color: const Color(0xFF7DD3FC)),
-        const SizedBox(width: 10),
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                alert.title,
-                style: const TextStyle(fontWeight: FontWeight.w800),
-              ),
-              Text(
-                alert.detail,
-                style: TextStyle(color: Colors.white.withValues(alpha: .66)),
-              ),
-            ],
+    return AdminGlassPanel(
+      padding: const EdgeInsets.all(14),
+      child: Row(
+        children: [
+          Icon(icon, size: 20, color: const Color(0xFF7DD3FC)),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  alert.title,
+                  style: const TextStyle(fontWeight: FontWeight.w800),
+                ),
+                Text(
+                  alert.detail,
+                  style: TextStyle(color: Colors.white.withValues(alpha: .66)),
+                ),
+              ],
+            ),
           ),
-        ),
-      ],
+        ],
+      ),
     );
   }
 }
@@ -11512,12 +11517,7 @@ class _TimelineRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: .045),
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: Colors.white.withValues(alpha: .08)),
-      ),
+    return AdminGlassPanel(
       padding: const EdgeInsets.all(12),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -11572,17 +11572,14 @@ class _EmptyState extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
+    return SizedBox(
       width: double.infinity,
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: .035),
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: Colors.white.withValues(alpha: .08)),
-      ),
-      child: Text(
-        message,
-        style: TextStyle(color: Colors.white.withValues(alpha: .64)),
+      child: AdminGlassPanel(
+        padding: const EdgeInsets.all(14),
+        child: Text(
+          message,
+          style: TextStyle(color: Colors.white.withValues(alpha: .64)),
+        ),
       ),
     );
   }
@@ -12376,12 +12373,11 @@ class _GiftPeopleQueue extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
+    return AdminGlassPanel(
       padding: const EdgeInsets.all(16),
-      decoration: _panelDecoration(radius: 26),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
+        children: <Widget>[
           Row(
             children: [
               const Icon(Icons.people_alt_rounded, color: Color(0xFF7DD3FC)),
@@ -12712,95 +12708,97 @@ class _GiftPersonWorkspaceHeader extends StatelessWidget {
   Widget build(BuildContext context) {
     final sender = _giftSenderName(gift);
     final recipient = _giftRecipientName(gift);
-    return Container(
+    return SizedBox(
       width: double.infinity,
-      padding: const EdgeInsets.all(22),
-      decoration: _panelDecoration(radius: 28),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Expanded(
-                child: Wrap(
-                  spacing: 12,
-                  runSpacing: 10,
-                  crossAxisAlignment: WrapCrossAlignment.center,
+      child: AdminGlassPanel(
+        padding: const EdgeInsets.all(22),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Expanded(
+                  child: Wrap(
+                    spacing: 12,
+                    runSpacing: 10,
+                    crossAxisAlignment: WrapCrossAlignment.center,
+                    children: [
+                      _GiftPersonAvatar(
+                        imageUrl: _giftSenderPhoto(gift),
+                        label: sender,
+                        icon: Icons.person_rounded,
+                        large: true,
+                      ),
+                      Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            sender,
+                            style: const TextStyle(
+                              fontSize: 24,
+                              fontWeight: FontWeight.w900,
+                            ),
+                          ),
+                          Text(
+                            'Gift for',
+                            style: TextStyle(
+                              color: Colors.white.withValues(alpha: .58),
+                              fontWeight: FontWeight.w800,
+                            ),
+                          ),
+                          Text(
+                            recipient,
+                            style: const TextStyle(
+                              fontSize: 24,
+                              fontWeight: FontWeight.w900,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  alignment: WrapAlignment.end,
                   children: [
-                    _GiftPersonAvatar(
-                      imageUrl: _giftSenderPhoto(gift),
-                      label: sender,
-                      icon: Icons.person_rounded,
-                      large: true,
+                    _GiftCompactAction(
+                      label: 'Open workspace',
+                      onPressed: () => unawaited(onEditGift(gift)),
                     ),
-                    Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          sender,
-                          style: const TextStyle(
-                            fontSize: 24,
-                            fontWeight: FontWeight.w900,
-                          ),
+                    if (canManage)
+                      _GiftCompactAction(
+                        label: 'Mark ready',
+                        onPressed: () => unawaited(
+                          onUpdateWorkspace(gift, 'ready_for_delivery'),
                         ),
-                        Text(
-                          'Gift for',
-                          style: TextStyle(
-                            color: Colors.white.withValues(alpha: .58),
-                            fontWeight: FontWeight.w800,
-                          ),
-                        ),
-                        Text(
-                          recipient,
-                          style: const TextStyle(
-                            fontSize: 24,
-                            fontWeight: FontWeight.w900,
-                          ),
-                        ),
-                      ],
-                    ),
+                      ),
                   ],
                 ),
-              ),
-              Wrap(
-                spacing: 8,
-                runSpacing: 8,
-                alignment: WrapAlignment.end,
-                children: [
-                  _GiftCompactAction(
-                    label: 'Open workspace',
-                    onPressed: () => unawaited(onEditGift(gift)),
-                  ),
-                  if (canManage)
-                    _GiftCompactAction(
-                      label: 'Mark ready',
-                      onPressed: () => unawaited(
-                        onUpdateWorkspace(gift, 'ready_for_delivery'),
-                      ),
-                    ),
-                ],
-              ),
-            ],
-          ),
-          const SizedBox(height: 16),
-          Wrap(
-            spacing: 8,
-            runSpacing: 8,
-            children: [
-              _GiftStatusChip('${gift['occasion'] ?? 'Occasion not recorded'}'),
-              _GiftStatusChip(_giftBudgetSummary(gift)),
-              _GiftStatusChip(
-                '${gift['deliveryDate'] ?? gift['deliveryWindow'] ?? gift['preferredDeliveryWindow'] ?? 'Delivery date not recorded'}',
-              ),
-              _GiftStatusChip(
-                '${gift['priority'] ?? gift['urgency'] ?? 'Standard'}',
-              ),
-              _GiftStatusChip(_giftCurator(gift)),
-              _GiftStatusChip(_giftWorkflowStatus(gift)),
-            ],
-          ),
-        ],
+              ],
+            ),
+            const SizedBox(height: 16),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: [
+                _GiftStatusChip(
+                    '${gift['occasion'] ?? 'Occasion not recorded'}'),
+                _GiftStatusChip(_giftBudgetSummary(gift)),
+                _GiftStatusChip(
+                  '${gift['deliveryDate'] ?? gift['deliveryWindow'] ?? gift['preferredDeliveryWindow'] ?? 'Delivery date not recorded'}',
+                ),
+                _GiftStatusChip(
+                  '${gift['priority'] ?? gift['urgency'] ?? 'Standard'}',
+                ),
+                _GiftStatusChip(_giftCurator(gift)),
+                _GiftStatusChip(_giftWorkflowStatus(gift)),
+              ],
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -12817,14 +12815,15 @@ class _GiftWorkspaceTabStrip extends StatelessWidget {
       'Audit Trail',
       'Files',
     ];
-    return Container(
+    return SizedBox(
       width: double.infinity,
-      padding: const EdgeInsets.all(8),
-      decoration: _panelDecoration(radius: 20),
-      child: Wrap(
-        spacing: 8,
-        runSpacing: 8,
-        children: [for (final tab in tabs) _GiftStatusChip(tab)],
+      child: AdminGlassPanel(
+        padding: const EdgeInsets.all(8),
+        child: Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          children: [for (final tab in tabs) _GiftStatusChip(tab)],
+        ),
       ),
     );
   }
@@ -12843,32 +12842,33 @@ class _GiftWorkspacePanel extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
+    return SizedBox(
       width: double.infinity,
-      padding: const EdgeInsets.all(18),
-      decoration: _panelDecoration(radius: 24),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Icon(icon, color: const Color(0xFF7DD3FC)),
-              const SizedBox(width: 10),
-              Expanded(
-                child: Text(
-                  title,
-                  style: const TextStyle(
-                    fontSize: 18,
-                    fontWeight: FontWeight.w900,
+      child: AdminGlassPanel(
+        padding: const EdgeInsets.all(18),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Icon(icon, color: const Color(0xFF7DD3FC)),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Text(
+                    title,
+                    style: const TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.w900,
+                    ),
                   ),
                 ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 14),
-          for (final line in children)
-            _GiftWorkspaceLine(label: line.$1, value: line.$2),
-        ],
+              ],
+            ),
+            const SizedBox(height: 14),
+            for (final line in children)
+              _GiftWorkspaceLine(label: line.$1, value: line.$2),
+          ],
+        ),
       ),
     );
   }
@@ -12924,52 +12924,53 @@ class _GiftStudioPanel extends StatelessWidget {
       ),
       ('Procurement', _giftWorkspaceProgress(gift).join(' · ')),
     ];
-    return Container(
+    return SizedBox(
       width: double.infinity,
-      padding: const EdgeInsets.all(18),
-      decoration: _panelDecoration(radius: 24),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Row(
-            children: [
-              Icon(Icons.auto_awesome_rounded, color: Color(0xFF7DD3FC)),
-              SizedBox(width: 10),
-              Expanded(
-                child: Text(
-                  'Gift Creation Studio',
-                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.w900),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 14),
-          for (final line in lines)
-            _GiftWorkspaceLine(label: line.$1, value: line.$2),
-          if (canManage) ...[
-            const SizedBox(height: 12),
-            Wrap(
-              spacing: 8,
-              runSpacing: 8,
+      child: AdminGlassPanel(
+        padding: const EdgeInsets.all(18),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Row(
               children: [
-                _GiftCompactAction(
-                  label: 'Edit gift',
-                  onPressed: () => unawaited(onEditGift(gift)),
-                ),
-                _GiftCompactAction(
-                  label: 'Assign curator',
-                  onPressed: () =>
-                      unawaited(onUpdateWorkspace(gift, 'assigned')),
-                ),
-                _GiftCompactAction(
-                  label: 'Quality review',
-                  onPressed: () =>
-                      unawaited(onUpdateWorkspace(gift, 'quality_review')),
+                Icon(Icons.auto_awesome_rounded, color: Color(0xFF7DD3FC)),
+                SizedBox(width: 10),
+                Expanded(
+                  child: Text(
+                    'Gift Creation Studio',
+                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.w900),
+                  ),
                 ),
               ],
             ),
+            const SizedBox(height: 14),
+            for (final line in lines)
+              _GiftWorkspaceLine(label: line.$1, value: line.$2),
+            if (canManage) ...[
+              const SizedBox(height: 12),
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: [
+                  _GiftCompactAction(
+                    label: 'Edit gift',
+                    onPressed: () => unawaited(onEditGift(gift)),
+                  ),
+                  _GiftCompactAction(
+                    label: 'Assign curator',
+                    onPressed: () =>
+                        unawaited(onUpdateWorkspace(gift, 'assigned')),
+                  ),
+                  _GiftCompactAction(
+                    label: 'Quality review',
+                    onPressed: () =>
+                        unawaited(onUpdateWorkspace(gift, 'quality_review')),
+                  ),
+                ],
+              ),
+            ],
           ],
-        ],
+        ),
       ),
     );
   }
@@ -12992,57 +12993,60 @@ class _GiftStoryStudioPanel extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
+    return SizedBox(
       width: double.infinity,
-      padding: const EdgeInsets.all(18),
-      decoration: _panelDecoration(radius: 24),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Row(
-            children: [
-              Icon(Icons.video_camera_front_rounded, color: Color(0xFF7DD3FC)),
-              SizedBox(width: 10),
-              Expanded(
-                child: Text(
-                  'Story Studio',
-                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.w900),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 14),
-          for (final line in _giftStoryStudioLines(gift))
-            _GiftWorkspaceLine(label: line.$1, value: line.$2),
-          if (canManage) ...[
-            const SizedBox(height: 12),
-            Wrap(
-              spacing: 8,
-              runSpacing: 8,
+      child: AdminGlassPanel(
+        padding: const EdgeInsets.all(18),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Row(
               children: [
-                _GiftCompactAction(
-                  label: 'Preview',
-                  onPressed: () => unawaited(
-                    onUpdateStoryMedia(gift, 'record_preview_event'),
+                Icon(Icons.video_camera_front_rounded,
+                    color: Color(0xFF7DD3FC)),
+                SizedBox(width: 10),
+                Expanded(
+                  child: Text(
+                    'Story Studio',
+                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.w900),
                   ),
-                ),
-                _GiftCompactAction(
-                  label: 'Retry render',
-                  onPressed: () => unawaited(onUpdateStoryMedia(gift, 'retry')),
-                ),
-                _GiftCompactAction(
-                  label: 'Regenerate link',
-                  onPressed: () =>
-                      unawaited(onUpdateStoryAccess(gift, 'regenerate')),
-                ),
-                _GiftCompactAction(
-                  label: 'Edit story',
-                  onPressed: () => unawaited(onEditGift(gift)),
                 ),
               ],
             ),
+            const SizedBox(height: 14),
+            for (final line in _giftStoryStudioLines(gift))
+              _GiftWorkspaceLine(label: line.$1, value: line.$2),
+            if (canManage) ...[
+              const SizedBox(height: 12),
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: [
+                  _GiftCompactAction(
+                    label: 'Preview',
+                    onPressed: () => unawaited(
+                      onUpdateStoryMedia(gift, 'record_preview_event'),
+                    ),
+                  ),
+                  _GiftCompactAction(
+                    label: 'Retry render',
+                    onPressed: () =>
+                        unawaited(onUpdateStoryMedia(gift, 'retry')),
+                  ),
+                  _GiftCompactAction(
+                    label: 'Regenerate link',
+                    onPressed: () =>
+                        unawaited(onUpdateStoryAccess(gift, 'regenerate')),
+                  ),
+                  _GiftCompactAction(
+                    label: 'Edit story',
+                    onPressed: () => unawaited(onEditGift(gift)),
+                  ),
+                ],
+              ),
+            ],
           ],
-        ],
+        ),
       ),
     );
   }
@@ -13265,73 +13269,74 @@ class _GiftActionBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
+    return SizedBox(
       width: double.infinity,
-      padding: const EdgeInsets.all(12),
-      decoration: _panelDecoration(radius: 22),
-      child: Wrap(
-        spacing: 14,
-        runSpacing: 12,
-        crossAxisAlignment: WrapCrossAlignment.center,
-        children: [
-          if (showCampaignActions)
+      child: AdminGlassPanel(
+        padding: const EdgeInsets.all(12),
+        child: Wrap(
+          spacing: 14,
+          runSpacing: 12,
+          crossAxisAlignment: WrapCrossAlignment.center,
+          children: [
+            if (showCampaignActions)
+              _GiftActionGroup(
+                label: 'Primary',
+                children: [
+                  _GiftCommandButton(
+                    label: 'New Campaign',
+                    icon: Icons.add_rounded,
+                    tone: _GiftCommandTone.primary,
+                    onPressed: canManage ? onNewCampaign : null,
+                  ),
+                  _GiftCommandButton(
+                    label: 'Invite Brand',
+                    icon: Icons.storefront_rounded,
+                    tone: _GiftCommandTone.primary,
+                    onPressed: canManage ? onInviteBrand : null,
+                  ),
+                ],
+              ),
+            if (showReviewActions)
+              _GiftActionGroup(
+                label: 'Review',
+                children: [
+                  _GiftCommandButton(
+                    label: 'Approve',
+                    icon: Icons.check_circle_rounded,
+                    tone: _GiftCommandTone.primary,
+                    onPressed: canManage ? onBulkApprove : null,
+                  ),
+                  _GiftCommandButton(
+                    label: 'Reject',
+                    icon: Icons.block_rounded,
+                    tone: _GiftCommandTone.danger,
+                    onPressed: canManage ? onBulkReject : null,
+                  ),
+                  _GiftCommandButton(
+                    label: 'Assign',
+                    icon: Icons.assignment_ind_rounded,
+                    tone: _GiftCommandTone.primary,
+                    onPressed: canManage ? onAssign : null,
+                  ),
+                ],
+              ),
             _GiftActionGroup(
-              label: 'Primary',
+              label: 'Utility',
               children: [
                 _GiftCommandButton(
-                  label: 'New Campaign',
-                  icon: Icons.add_rounded,
-                  tone: _GiftCommandTone.primary,
-                  onPressed: canManage ? onNewCampaign : null,
+                  label: 'Export',
+                  icon: Icons.download_rounded,
+                  onPressed: canManage ? onExport : null,
                 ),
                 _GiftCommandButton(
-                  label: 'Invite Brand',
-                  icon: Icons.storefront_rounded,
-                  tone: _GiftCommandTone.primary,
-                  onPressed: canManage ? onInviteBrand : null,
+                  label: 'Filter',
+                  icon: Icons.tune_rounded,
+                  onPressed: onFilter,
                 ),
               ],
             ),
-          if (showReviewActions)
-            _GiftActionGroup(
-              label: 'Review',
-              children: [
-                _GiftCommandButton(
-                  label: 'Approve',
-                  icon: Icons.check_circle_rounded,
-                  tone: _GiftCommandTone.primary,
-                  onPressed: canManage ? onBulkApprove : null,
-                ),
-                _GiftCommandButton(
-                  label: 'Reject',
-                  icon: Icons.block_rounded,
-                  tone: _GiftCommandTone.danger,
-                  onPressed: canManage ? onBulkReject : null,
-                ),
-                _GiftCommandButton(
-                  label: 'Assign',
-                  icon: Icons.assignment_ind_rounded,
-                  tone: _GiftCommandTone.primary,
-                  onPressed: canManage ? onAssign : null,
-                ),
-              ],
-            ),
-          _GiftActionGroup(
-            label: 'Utility',
-            children: [
-              _GiftCommandButton(
-                label: 'Export',
-                icon: Icons.download_rounded,
-                onPressed: canManage ? onExport : null,
-              ),
-              _GiftCommandButton(
-                label: 'Filter',
-                icon: Icons.tune_rounded,
-                onPressed: onFilter,
-              ),
-            ],
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
@@ -13624,80 +13629,81 @@ class _GiftFilterPanel extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
+    return SizedBox(
       width: double.infinity,
-      padding: const EdgeInsets.all(14),
-      decoration: _panelDecoration(radius: 22),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              const Icon(Icons.tune_rounded, color: Color(0xFF7DD3FC)),
-              const SizedBox(width: 10),
-              const Expanded(
-                child: Text(
-                  'Operational filters',
-                  style: TextStyle(fontWeight: FontWeight.w900),
+      child: AdminGlassPanel(
+        padding: const EdgeInsets.all(14),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                const Icon(Icons.tune_rounded, color: Color(0xFF7DD3FC)),
+                const SizedBox(width: 10),
+                const Expanded(
+                  child: Text(
+                    'Operational filters',
+                    style: TextStyle(fontWeight: FontWeight.w900),
+                  ),
                 ),
-              ),
-              TextButton.icon(
-                onPressed: onClear,
-                icon: const Icon(Icons.clear_all_rounded, size: 18),
-                label: const Text('Clear'),
-              ),
-            ],
-          ),
-          const SizedBox(height: 12),
-          Wrap(
-            spacing: 10,
-            runSpacing: 10,
-            children: [
-              _GiftFilterDropdown(
-                label: 'Campaign',
-                value: campaign,
-                options: options.campaigns,
-                onChanged: onCampaignChanged,
-              ),
-              _GiftFilterDropdown(
-                label: 'Priority',
-                value: priority,
-                options: options.priorities,
-                onChanged: onPriorityChanged,
-              ),
-              _GiftFilterDropdown(
-                label: 'Partner',
-                value: partner,
-                options: options.partners,
-                onChanged: onPartnerChanged,
-              ),
-              _GiftFilterDropdown(
-                label: 'Assigned Staff',
-                value: staff,
-                options: options.staff,
-                onChanged: onStaffChanged,
-              ),
-              _GiftFilterDropdown(
-                label: 'Story Status',
-                value: story,
-                options: options.stories,
-                onChanged: onStoryChanged,
-              ),
-              _GiftFilterDropdown(
-                label: 'Current Stage',
-                value: stage,
-                options: options.stages,
-                onChanged: onStageChanged,
-              ),
-              _GiftFilterDropdown(
-                label: 'Matched / Unmatched',
-                value: match,
-                options: options.matches,
-                onChanged: onMatchChanged,
-              ),
-            ],
-          ),
-        ],
+                TextButton.icon(
+                  onPressed: onClear,
+                  icon: const Icon(Icons.clear_all_rounded, size: 18),
+                  label: const Text('Clear'),
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            Wrap(
+              spacing: 10,
+              runSpacing: 10,
+              children: [
+                _GiftFilterDropdown(
+                  label: 'Campaign',
+                  value: campaign,
+                  options: options.campaigns,
+                  onChanged: onCampaignChanged,
+                ),
+                _GiftFilterDropdown(
+                  label: 'Priority',
+                  value: priority,
+                  options: options.priorities,
+                  onChanged: onPriorityChanged,
+                ),
+                _GiftFilterDropdown(
+                  label: 'Partner',
+                  value: partner,
+                  options: options.partners,
+                  onChanged: onPartnerChanged,
+                ),
+                _GiftFilterDropdown(
+                  label: 'Assigned Staff',
+                  value: staff,
+                  options: options.staff,
+                  onChanged: onStaffChanged,
+                ),
+                _GiftFilterDropdown(
+                  label: 'Story Status',
+                  value: story,
+                  options: options.stories,
+                  onChanged: onStoryChanged,
+                ),
+                _GiftFilterDropdown(
+                  label: 'Current Stage',
+                  value: stage,
+                  options: options.stages,
+                  onChanged: onStageChanged,
+                ),
+                _GiftFilterDropdown(
+                  label: 'Matched / Unmatched',
+                  value: match,
+                  options: options.matches,
+                  onChanged: onMatchChanged,
+                ),
+              ],
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -13799,21 +13805,22 @@ class _GiftSegmentedTabs extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
+    return SizedBox(
       width: double.infinity,
-      padding: const EdgeInsets.all(8),
-      decoration: _panelDecoration(),
-      child: Wrap(
-        spacing: 8,
-        runSpacing: 8,
-        children: [
-          for (final tab in _GiftsWorkspaceTab.values)
-            _GiftTabButton(
-              tab: tab,
-              selected: tab == selected,
-              onTap: () => onSelected(tab),
-            ),
-        ],
+      child: AdminGlassPanel(
+        padding: const EdgeInsets.all(8),
+        child: Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          children: [
+            for (final tab in _GiftsWorkspaceTab.values)
+              _GiftTabButton(
+                tab: tab,
+                selected: tab == selected,
+                onTap: () => onSelected(tab),
+              ),
+          ],
+        ),
       ),
     );
   }
@@ -13913,10 +13920,9 @@ class _GiftOperationsBoard extends StatelessWidget {
         'completed',
       ),
     ];
-    return Container(
-      width: double.infinity,
+    return AdminGlassPanel(
       padding: const EdgeInsets.all(14),
-      decoration: _panelDecoration(radius: 22),
+      radius: 22,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -14005,15 +14011,11 @@ class _GiftBoardLane extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
+    return AdminGlassPanel(
       width: 268,
       margin: const EdgeInsets.only(right: 14),
       padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: .045),
-        borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: Colors.white.withValues(alpha: .09)),
-      ),
+      radius: 18,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -14040,16 +14042,10 @@ class _GiftBoardLane extends StatelessWidget {
               InkWell(
                 borderRadius: BorderRadius.circular(14),
                 onTap: () => onSelectGift(record),
-                child: Container(
+                child: AdminGlassPanel(
                   width: double.infinity,
                   padding: const EdgeInsets.all(12),
-                  decoration: BoxDecoration(
-                    color: Colors.white.withValues(alpha: .055),
-                    borderRadius: BorderRadius.circular(14),
-                    border: Border.all(
-                      color: Colors.white.withValues(alpha: .08),
-                    ),
-                  ),
+                  radius: 14,
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
@@ -14188,9 +14184,9 @@ class _GiftDetailPanel extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     if (record == null) {
-      return Container(
+      return AdminGlassPanel(
         padding: const EdgeInsets.all(18),
-        decoration: _panelDecoration(radius: 22),
+        radius: 22,
         child: const _GiftEmptyState(
           title: 'Select a gift',
           message:
@@ -14199,9 +14195,9 @@ class _GiftDetailPanel extends StatelessWidget {
       );
     }
     final gift = record!;
-    return Container(
+    return AdminGlassPanel(
       padding: const EdgeInsets.all(18),
-      decoration: _panelDecoration(radius: 22),
+      radius: 22,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -14465,48 +14461,50 @@ class _GiftGlassTable extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
+    return SizedBox(
       width: double.infinity,
-      padding: const EdgeInsets.all(18),
-      decoration: _panelDecoration(),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            title,
-            style: const TextStyle(
-              color: Colors.white,
-              fontSize: 20,
-              fontWeight: FontWeight.w900,
+      child: AdminGlassPanel(
+        padding: const EdgeInsets.all(18),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              title,
+              style: const TextStyle(
+                color: Colors.white,
+                fontSize: 20,
+                fontWeight: FontWeight.w900,
+              ),
             ),
-          ),
-          const SizedBox(height: 6),
-          Text(
-            subtitle,
-            style: TextStyle(
-              color: Colors.white.withValues(alpha: .62),
-              height: 1.45,
+            const SizedBox(height: 6),
+            Text(
+              subtitle,
+              style: TextStyle(
+                color: Colors.white.withValues(alpha: .62),
+                height: 1.45,
+              ),
             ),
-          ),
-          const SizedBox(height: 16),
-          if (records.isEmpty)
-            _GiftEmptyState(
-              title: emptyText,
-              message: 'Try a broader search or refresh the Admin data stream.',
-            )
-          else ...[
-            _GiftTableHeader(),
-            const SizedBox(height: 8),
-            for (final record in records.take(80)) ...[
-              _GiftTableRow(data: rowBuilder(record)),
+            const SizedBox(height: 16),
+            if (records.isEmpty)
+              _GiftEmptyState(
+                title: emptyText,
+                message:
+                    'Try a broader search or refresh the Admin data stream.',
+              )
+            else ...[
+              _GiftTableHeader(),
               const SizedBox(height: 8),
+              for (final record in records.take(80)) ...[
+                _GiftTableRow(data: rowBuilder(record)),
+                const SizedBox(height: 8),
+              ],
+              _GiftTableFooter(
+                showing: records.take(80).length,
+                total: records.length,
+              ),
             ],
-            _GiftTableFooter(
-              showing: records.take(80).length,
-              total: records.length,
-            ),
           ],
-        ],
+        ),
       ),
     );
   }
@@ -14850,109 +14848,110 @@ class _GiftBrandCard extends StatelessWidget {
     final status =
         '${record['status'] ?? record['partnershipStatus'] ?? 'pending'}';
     final logo = '${record['logoUrl'] ?? record['brandLogoUrl'] ?? ''}'.trim();
-    return Container(
+    return ConstrainedBox(
       constraints: const BoxConstraints(minHeight: 270),
-      padding: const EdgeInsets.all(18),
-      decoration: _panelDecoration(),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Container(
-                width: 48,
-                height: 48,
-                margin: const EdgeInsets.only(right: 12),
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  color: Colors.white.withValues(alpha: .08),
-                  border: Border.all(
-                    color: Colors.white.withValues(alpha: .12),
+      child: AdminGlassPanel(
+        padding: const EdgeInsets.all(18),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Container(
+                  width: 48,
+                  height: 48,
+                  margin: const EdgeInsets.only(right: 12),
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: Colors.white.withValues(alpha: .08),
+                    border: Border.all(
+                      color: Colors.white.withValues(alpha: .12),
+                    ),
+                    image: logo.isEmpty
+                        ? null
+                        : DecorationImage(
+                            image: NetworkImage(logo),
+                            fit: BoxFit.cover,
+                          ),
                   ),
-                  image: logo.isEmpty
-                      ? null
-                      : DecorationImage(
-                          image: NetworkImage(logo),
-                          fit: BoxFit.cover,
-                        ),
+                  child: logo.isEmpty
+                      ? const Icon(
+                          Icons.storefront_rounded,
+                          color: Color(0xFFBAE6FD),
+                        )
+                      : null,
                 ),
-                child: logo.isEmpty
-                    ? const Icon(
-                        Icons.storefront_rounded,
-                        color: Color(0xFFBAE6FD),
-                      )
-                    : null,
-              ),
-              Expanded(
-                child: Text(
-                  '${record['partnerName'] ?? record['brandName'] ?? _recordId(record)}',
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 18,
-                    fontWeight: FontWeight.w900,
+                Expanded(
+                  child: Text(
+                    '${record['partnerName'] ?? record['brandName'] ?? _recordId(record)}',
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 18,
+                      fontWeight: FontWeight.w900,
+                    ),
                   ),
                 ),
-              ),
-              _GiftStatusChip(status),
-            ],
-          ),
-          const SizedBox(height: 14),
-          _GiftCardMeta(
-            'Contact',
-            '${record['contactName'] ?? 'Not recorded'} · ${record['contactEmail'] ?? ''}',
-          ),
-          _GiftCardMeta(
-            'Catalogue',
-            '${record['category'] ?? record['categories'] ?? 'Uncategorised'}',
-          ),
-          _GiftCardMeta(
-            'Campaigns',
-            '${record['approvedFor'] ?? record['campaignName'] ?? 'No campaign association'}',
-          ),
-          _GiftCardMeta(
-            'Response',
-            '${record['responseTime'] ?? record['averageResponseTime'] ?? 'Not recorded'}',
-          ),
-          _GiftCardMeta(
-            'Performance',
-            '${record['performanceScore'] ?? record['rating'] ?? record['trustScore'] ?? 'Not recorded'}',
-          ),
-          _GiftCardMeta(
-            'Inventory',
-            '${record['inventoryStatus'] ?? record['availability'] ?? 'Not recorded'}',
-          ),
-          _GiftCardMeta('Recent Activity', '$auditCount audit entries'),
-          const Spacer(),
-          Wrap(
-            spacing: 8,
-            runSpacing: 8,
-            children: [
-              _GiftCompactAction(label: 'View', onPressed: onEdit),
-              _GiftCompactAction(label: 'Edit', onPressed: onEdit),
-              _GiftMoreMenu(
-                actions: canManage
-                    ? [
-                        _MiniAction(
-                          label: 'Approve',
-                          onPressed: () => onSetStatus('approved'),
-                        ),
-                        _MiniAction(
-                          label: 'Suspend',
-                          onPressed: () => onSetStatus('suspended'),
-                        ),
-                        _MiniAction(
-                          label: 'Reactivate',
-                          onPressed: () => onSetStatus('active'),
-                        ),
-                        _MiniAction(label: 'View history', onPressed: onEdit),
-                      ]
-                    : const [],
-              ),
-            ],
-          ),
-        ],
+                _GiftStatusChip(status),
+              ],
+            ),
+            const SizedBox(height: 14),
+            _GiftCardMeta(
+              'Contact',
+              '${record['contactName'] ?? 'Not recorded'} · ${record['contactEmail'] ?? ''}',
+            ),
+            _GiftCardMeta(
+              'Catalogue',
+              '${record['category'] ?? record['categories'] ?? 'Uncategorised'}',
+            ),
+            _GiftCardMeta(
+              'Campaigns',
+              '${record['approvedFor'] ?? record['campaignName'] ?? 'No campaign association'}',
+            ),
+            _GiftCardMeta(
+              'Response',
+              '${record['responseTime'] ?? record['averageResponseTime'] ?? 'Not recorded'}',
+            ),
+            _GiftCardMeta(
+              'Performance',
+              '${record['performanceScore'] ?? record['rating'] ?? record['trustScore'] ?? 'Not recorded'}',
+            ),
+            _GiftCardMeta(
+              'Inventory',
+              '${record['inventoryStatus'] ?? record['availability'] ?? 'Not recorded'}',
+            ),
+            _GiftCardMeta('Recent Activity', '$auditCount audit entries'),
+            const Spacer(),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: [
+                _GiftCompactAction(label: 'View', onPressed: onEdit),
+                _GiftCompactAction(label: 'Edit', onPressed: onEdit),
+                _GiftMoreMenu(
+                  actions: canManage
+                      ? [
+                          _MiniAction(
+                            label: 'Approve',
+                            onPressed: () => onSetStatus('approved'),
+                          ),
+                          _MiniAction(
+                            label: 'Suspend',
+                            onPressed: () => onSetStatus('suspended'),
+                          ),
+                          _MiniAction(
+                            label: 'Reactivate',
+                            onPressed: () => onSetStatus('active'),
+                          ),
+                          _MiniAction(label: 'View history', onPressed: onEdit),
+                        ]
+                      : const [],
+                ),
+              ],
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -18701,89 +18700,84 @@ class _RecordModule extends StatelessWidget {
   Widget build(BuildContext context) {
     final filtered =
         fields.isEmpty ? records : adminSearch(records, query, fields);
-    return DecoratedBox(
-      decoration: _panelDecoration(radius: 20),
-      child: Padding(
-        padding: const EdgeInsets.all(14),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                Expanded(
-                  child: Text(
-                    title,
-                    style: const TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.w900,
-                    ),
-                  ),
-                ),
-                _StatusPill(label: '${filtered.length} records'),
-              ],
-            ),
-            const SizedBox(height: 4),
-            Text(
-              subtitle,
-              style: TextStyle(color: Colors.white.withValues(alpha: .66)),
-            ),
-            const SizedBox(height: 12),
-            if (filtered.isEmpty)
-              Padding(
-                padding: const EdgeInsets.symmetric(vertical: 22),
-                child: _EmptyState('No records found.'),
-              )
-            else
-              SingleChildScrollView(
-                scrollDirection: Axis.horizontal,
-                child: DataTable(
-                  headingRowHeight: 40,
-                  dataRowMinHeight: 52,
-                  dataRowMaxHeight: 64,
-                  columnSpacing: 24,
-                  horizontalMargin: 12,
-                  headingTextStyle: TextStyle(
-                    color: Colors.white.withValues(alpha: .58),
-                    fontSize: 12,
+    return AdminGlassPanel(
+      padding: const EdgeInsets.all(14),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  title,
+                  style: const TextStyle(
+                    fontSize: 18,
                     fontWeight: FontWeight.w900,
                   ),
-                  columns: [
-                    for (final column in columns)
-                      DataColumn(label: Text(column)),
-                    if (actions != null)
-                      const DataColumn(label: Text('Actions')),
-                  ],
-                  rows: [
-                    for (final record in filtered.take(80))
-                      DataRow(
-                        cells: [
-                          for (final value in row(record))
-                            DataCell(
-                              ConstrainedBox(
-                                constraints: const BoxConstraints(
-                                  maxWidth: 280,
-                                ),
-                                child: Text(
-                                  value,
-                                  overflow: TextOverflow.ellipsis,
-                                ),
-                              ),
-                            ),
-                          if (actions != null)
-                            DataCell(
-                              Wrap(
-                                spacing: 8,
-                                runSpacing: 6,
-                                children: actions!(record),
-                              ),
-                            ),
-                        ],
-                      ),
-                  ],
                 ),
               ),
-          ],
-        ),
+              _StatusPill(label: '${filtered.length} records'),
+            ],
+          ),
+          const SizedBox(height: 4),
+          Text(
+            subtitle,
+            style: TextStyle(color: Colors.white.withValues(alpha: .66)),
+          ),
+          const SizedBox(height: 12),
+          if (filtered.isEmpty)
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 22),
+              child: _EmptyState('No records found.'),
+            )
+          else
+            SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              child: DataTable(
+                headingRowHeight: 40,
+                dataRowMinHeight: 52,
+                dataRowMaxHeight: 64,
+                columnSpacing: 24,
+                horizontalMargin: 12,
+                headingTextStyle: TextStyle(
+                  color: Colors.white.withValues(alpha: .58),
+                  fontSize: 12,
+                  fontWeight: FontWeight.w900,
+                ),
+                columns: [
+                  for (final column in columns) DataColumn(label: Text(column)),
+                  if (actions != null) const DataColumn(label: Text('Actions')),
+                ],
+                rows: [
+                  for (final record in filtered.take(80))
+                    DataRow(
+                      cells: [
+                        for (final value in row(record))
+                          DataCell(
+                            ConstrainedBox(
+                              constraints: const BoxConstraints(
+                                maxWidth: 280,
+                              ),
+                              child: Text(
+                                value,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
+                          ),
+                        if (actions != null)
+                          DataCell(
+                            Wrap(
+                              spacing: 8,
+                              runSpacing: 6,
+                              children: actions!(record),
+                            ),
+                          ),
+                      ],
+                    ),
+                ],
+              ),
+            ),
+        ],
       ),
     );
   }
@@ -18800,34 +18794,31 @@ class _MetricCard extends StatelessWidget {
   Widget build(BuildContext context) {
     return ConstrainedBox(
       constraints: const BoxConstraints(minWidth: 142, maxWidth: 190),
-      child: DecoratedBox(
-        decoration: _panelDecoration(radius: 999),
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Text(
-                value,
-                style: const TextStyle(
-                  fontSize: 18,
-                  fontWeight: FontWeight.w900,
+      child: AdminGlassPanel(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              value,
+              style: const TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.w900,
+              ),
+            ),
+            const SizedBox(width: 8),
+            Flexible(
+              child: Text(
+                label,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  color: Colors.white.withValues(alpha: .72),
+                  fontSize: 12,
+                  fontWeight: FontWeight.w800,
                 ),
               ),
-              const SizedBox(width: 8),
-              Flexible(
-                child: Text(
-                  label,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
-                    color: Colors.white.withValues(alpha: .72),
-                    fontSize: 12,
-                    fontWeight: FontWeight.w800,
-                  ),
-                ),
-              ),
-            ],
-          ),
+            ),
+          ],
         ),
       ),
     );
@@ -18842,24 +18833,21 @@ class _AdminModuleIntro extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return DecoratedBox(
-      decoration: _panelDecoration(),
-      child: Padding(
-        padding: const EdgeInsets.all(20),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              title,
-              style: const TextStyle(fontSize: 24, fontWeight: FontWeight.w800),
-            ),
-            const SizedBox(height: 8),
-            Text(
-              subtitle,
-              style: TextStyle(color: Colors.white.withValues(alpha: .68)),
-            ),
-          ],
-        ),
+    return AdminGlassPanel(
+      padding: const EdgeInsets.all(20),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            title,
+            style: const TextStyle(fontSize: 24, fontWeight: FontWeight.w800),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            subtitle,
+            style: TextStyle(color: Colors.white.withValues(alpha: .68)),
+          ),
+        ],
       ),
     );
   }
@@ -19661,58 +19649,55 @@ class _RiderProfileDrawer extends StatelessWidget {
               ],
             ),
             const SizedBox(height: 18),
-            DecoratedBox(
-              decoration: _panelDecoration(),
-              child: Padding(
-                padding: const EdgeInsets.all(18),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      children: [
-                        _RiderAvatar(rider: rider),
-                        const SizedBox(width: 14),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                '${rider['fullName'] ?? rider['name'] ?? 'Rider'}',
-                                style: const TextStyle(
-                                  fontSize: 22,
-                                  fontWeight: FontWeight.w800,
-                                ),
+            AdminGlassPanel(
+              padding: const EdgeInsets.all(18),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      _RiderAvatar(rider: rider),
+                      const SizedBox(width: 14),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              '${rider['fullName'] ?? rider['name'] ?? 'Rider'}',
+                              style: const TextStyle(
+                                fontSize: 22,
+                                fontWeight: FontWeight.w800,
                               ),
-                              Text(
-                                '${rider['email'] ?? 'No email recorded'}',
-                                overflow: TextOverflow.ellipsis,
-                                style: TextStyle(
-                                  color: Colors.white.withValues(alpha: .66),
-                                ),
+                            ),
+                            Text(
+                              '${rider['email'] ?? 'No email recorded'}',
+                              overflow: TextOverflow.ellipsis,
+                              style: TextStyle(
+                                color: Colors.white.withValues(alpha: .66),
                               ),
-                            ],
-                          ),
+                            ),
+                          ],
                         ),
-                      ],
-                    ),
-                    const SizedBox(height: 18),
-                    Wrap(
-                      spacing: 10,
-                      runSpacing: 10,
-                      children: [
-                        _InfoPill('Rank', RiderRankPolicy.fromProfile(rider)),
-                        _InfoPill(
-                          'Approval',
-                          '${rider['approvalStatus'] ?? rider['driverStatus'] ?? 'pending'}',
-                        ),
-                        _InfoPill(
-                          'Verification',
-                          '${rider['verificationStatus'] ?? 'pending'}',
-                        ),
-                      ],
-                    ),
-                  ],
-                ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 18),
+                  Wrap(
+                    spacing: 10,
+                    runSpacing: 10,
+                    children: [
+                      _InfoPill('Rank', RiderRankPolicy.fromProfile(rider)),
+                      _InfoPill(
+                        'Approval',
+                        '${rider['approvalStatus'] ?? rider['driverStatus'] ?? 'pending'}',
+                      ),
+                      _InfoPill(
+                        'Verification',
+                        '${rider['verificationStatus'] ?? 'pending'}',
+                      ),
+                    ],
+                  ),
+                ],
               ),
             ),
             const SizedBox(height: 14),
@@ -19869,66 +19854,63 @@ class _RiderProfileDrawer extends StatelessWidget {
               ],
             ),
             const SizedBox(height: 14),
-            DecoratedBox(
-              decoration: _panelDecoration(),
-              child: Padding(
-                padding: const EdgeInsets.all(16),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Text(
-                      'Status actions',
-                      style: TextStyle(
-                        fontSize: 17,
-                        fontWeight: FontWeight.w800,
+            AdminGlassPanel(
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text(
+                    'Status actions',
+                    style: TextStyle(
+                      fontSize: 17,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    children: [
+                      _MiniAction(
+                        label: 'Approve',
+                        onPressed: () => unawaited(onSetStatus('approved')),
                       ),
-                    ),
-                    const SizedBox(height: 12),
-                    Wrap(
-                      spacing: 8,
-                      runSpacing: 8,
-                      children: [
-                        _MiniAction(
-                          label: 'Approve',
-                          onPressed: () => unawaited(onSetStatus('approved')),
-                        ),
-                        _MiniAction(
-                          label: 'Suspend',
-                          onPressed: () => unawaited(onSetStatus('suspended')),
-                        ),
-                        _MiniAction(
-                          label: 'Reject',
-                          onPressed: () => unawaited(onSetStatus('rejected')),
-                        ),
-                        _MiniAction(
-                          label: 'Request docs',
-                          onPressed: () =>
-                              unawaited(onSetStatus('documents_requested')),
-                        ),
-                        _MiniAction(
-                          label: 'Approve docs',
-                          onPressed: () =>
-                              unawaited(onSetStatus('documents_approved')),
-                        ),
-                        _MiniAction(
-                          label: 'Reject docs',
-                          onPressed: () =>
-                              unawaited(onSetStatus('documents_rejected')),
-                        ),
-                        _MiniAction(
-                          label: 'Investigate',
-                          onPressed: () =>
-                              unawaited(onSetStatus('under_investigation')),
-                        ),
-                        _MiniAction(
-                          label: 'Clear investigation',
-                          onPressed: () =>
-                              unawaited(onSetStatus('investigation_cleared')),
-                        ),
-                      ],
-                    ),
-                  ],
-                ),
+                      _MiniAction(
+                        label: 'Suspend',
+                        onPressed: () => unawaited(onSetStatus('suspended')),
+                      ),
+                      _MiniAction(
+                        label: 'Reject',
+                        onPressed: () => unawaited(onSetStatus('rejected')),
+                      ),
+                      _MiniAction(
+                        label: 'Request docs',
+                        onPressed: () =>
+                            unawaited(onSetStatus('documents_requested')),
+                      ),
+                      _MiniAction(
+                        label: 'Approve docs',
+                        onPressed: () =>
+                            unawaited(onSetStatus('documents_approved')),
+                      ),
+                      _MiniAction(
+                        label: 'Reject docs',
+                        onPressed: () =>
+                            unawaited(onSetStatus('documents_rejected')),
+                      ),
+                      _MiniAction(
+                        label: 'Investigate',
+                        onPressed: () =>
+                            unawaited(onSetStatus('under_investigation')),
+                      ),
+                      _MiniAction(
+                        label: 'Clear investigation',
+                        onPressed: () =>
+                            unawaited(onSetStatus('investigation_cleared')),
+                      ),
+                    ],
+                  ),
+                ],
               ),
             ),
           ],
@@ -20184,71 +20166,67 @@ class _DeliveryOperationsDrawer extends StatelessWidget {
               ],
             ),
             const SizedBox(height: 10),
-            DecoratedBox(
-              decoration: _panelDecoration(),
-              child: Padding(
-                padding: const EdgeInsets.all(16),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Text(
-                      'Delivery actions',
-                      style: TextStyle(
-                        fontSize: 17,
-                        fontWeight: FontWeight.w800,
-                      ),
+            AdminGlassPanel(
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text(
+                    'Delivery actions',
+                    style: TextStyle(
+                      fontSize: 17,
+                      fontWeight: FontWeight.w800,
                     ),
-                    const SizedBox(height: 12),
-                    Wrap(
-                      spacing: 8,
-                      runSpacing: 8,
-                      children: [
+                  ),
+                  const SizedBox(height: 12),
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    children: [
+                      for (final action in const [
+                        ('Pause', 'paused'),
+                        ('Resume', 'resumed'),
+                        ('Escalate', 'escalated'),
+                        ('Cancel review', 'cancel_review'),
+                        ('Force complete review', 'force_complete_review'),
+                        ('Archive review', 'archive_review'),
+                        ('Waiting review', 'waiting_review'),
+                        ('No-show review', 'no_show_review'),
+                        ('IRIS override review', 'iris_review_override'),
+                        ('Flag fraud', 'fraud_flagged'),
+                      ])
+                        _MiniAction(
+                          label: action.$1,
+                          onPressed: () => unawaited(onSetStatus(action.$2)),
+                        ),
+                      if (_hasVanguardProtection(delivery))
                         for (final action in const [
-                          ('Pause', 'paused'),
-                          ('Resume', 'resumed'),
-                          ('Escalate', 'escalated'),
-                          ('Cancel review', 'cancel_review'),
-                          ('Force complete review', 'force_complete_review'),
-                          ('Archive review', 'archive_review'),
-                          ('Waiting review', 'waiting_review'),
-                          ('No-show review', 'no_show_review'),
-                          ('IRIS override review', 'iris_review_override'),
-                          ('Flag fraud', 'fraud_flagged'),
+                          (
+                            'Flag custody concern',
+                            'vanguard_custody_flagged',
+                          ),
+                          ('Escalate custody', 'vanguard_custody_escalated'),
+                          (
+                            'Request custody evidence',
+                            'vanguard_evidence_requested',
+                          ),
+                          (
+                            'Reopen custody review',
+                            'vanguard_custody_reopened',
+                          ),
+                          ('Close custody review', 'vanguard_custody_closed'),
+                          (
+                            'Assign custody reviewer',
+                            'vanguard_reviewer_assigned',
+                          ),
                         ])
                           _MiniAction(
                             label: action.$1,
                             onPressed: () => unawaited(onSetStatus(action.$2)),
                           ),
-                        if (_hasVanguardProtection(delivery))
-                          for (final action in const [
-                            (
-                              'Flag custody concern',
-                              'vanguard_custody_flagged',
-                            ),
-                            ('Escalate custody', 'vanguard_custody_escalated'),
-                            (
-                              'Request custody evidence',
-                              'vanguard_evidence_requested',
-                            ),
-                            (
-                              'Reopen custody review',
-                              'vanguard_custody_reopened',
-                            ),
-                            ('Close custody review', 'vanguard_custody_closed'),
-                            (
-                              'Assign custody reviewer',
-                              'vanguard_reviewer_assigned',
-                            ),
-                          ])
-                            _MiniAction(
-                              label: action.$1,
-                              onPressed: () =>
-                                  unawaited(onSetStatus(action.$2)),
-                            ),
-                      ],
-                    ),
-                  ],
-                ),
+                    ],
+                  ),
+                ],
               ),
             ),
           ],
@@ -20285,16 +20263,9 @@ class _InfoPill extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return DecoratedBox(
-      decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: .07),
-        borderRadius: BorderRadius.circular(999),
-        border: Border.all(color: Colors.white.withValues(alpha: .10)),
-      ),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-        child: Text('$label: ${value ?? 'Not recorded'}'),
-      ),
+    return AdminGlassPanel(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      child: Text('$label: ${value ?? 'Not recorded'}'),
     );
   }
 }
@@ -20307,43 +20278,40 @@ class _DrawerSection extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return DecoratedBox(
-      decoration: _panelDecoration(),
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              title,
-              style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w800),
-            ),
-            const SizedBox(height: 12),
-            for (final row in rows)
-              Padding(
-                padding: const EdgeInsets.symmetric(vertical: 5),
-                child: Row(
-                  children: [
-                    SizedBox(
-                      width: 128,
-                      child: Text(
-                        row.$1,
-                        style: TextStyle(
-                          color: Colors.white.withValues(alpha: .62),
-                        ),
+    return AdminGlassPanel(
+      padding: const EdgeInsets.all(16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            title,
+            style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w800),
+          ),
+          const SizedBox(height: 12),
+          for (final row in rows)
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 5),
+              child: Row(
+                children: [
+                  SizedBox(
+                    width: 128,
+                    child: Text(
+                      row.$1,
+                      style: TextStyle(
+                        color: Colors.white.withValues(alpha: .62),
                       ),
                     ),
-                    Expanded(
-                      child: Text(
-                        '${row.$2 ?? 'Not recorded'}',
-                        overflow: TextOverflow.ellipsis,
-                      ),
+                  ),
+                  Expanded(
+                    child: Text(
+                      '${row.$2 ?? 'Not recorded'}',
+                      overflow: TextOverflow.ellipsis,
                     ),
-                  ],
-                ),
+                  ),
+                ],
               ),
-          ],
-        ),
+            ),
+        ],
       ),
     );
   }
@@ -20383,36 +20351,30 @@ class _AdminNotice extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return DecoratedBox(
-      decoration: BoxDecoration(
-        color: const Color(0xFF0EA5E9).withValues(alpha: .12),
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(
-          color: const Color(0xFF7DD3FC).withValues(alpha: .24),
-        ),
-      ),
-      child: Padding(padding: const EdgeInsets.all(12), child: Text(message)),
+    return AdminGlassPanel(
+      padding: const EdgeInsets.all(12),
+      child: Text(message),
     );
   }
 }
 
 BoxDecoration _panelDecoration({double radius = 18}) {
   return BoxDecoration(
-    color: Colors.white.withValues(alpha: .06),
+    color: AdminTokens.glass,
     borderRadius: BorderRadius.circular(radius),
-    border: Border.all(color: Colors.white.withValues(alpha: .12)),
+    border: Border.all(color: AdminTokens.glassBorder),
     gradient: LinearGradient(
       begin: Alignment.topLeft,
       end: Alignment.bottomRight,
       colors: [
-        Colors.white.withValues(alpha: .09),
-        const Color(0xFF7C3AED).withValues(alpha: .035),
-        const Color(0xFF22D3EE).withValues(alpha: .025),
+        AdminTokens.glassStrong,
+        AdminTokens.glass,
+        AdminTokens.cyanGlow,
       ],
     ),
     boxShadow: [
       BoxShadow(
-        color: const Color(0xFF0EA5E9).withValues(alpha: .08),
+        color: AdminTokens.cyanGlow,
         blurRadius: 24,
         offset: const Offset(0, 12),
       ),

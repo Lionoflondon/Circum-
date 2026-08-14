@@ -114,6 +114,24 @@ class RequestCanonicalIrisEstimate extends SendPackageEvent {
   });
 }
 
+class CanonicalIrisEstimateResolved extends SendPackageEvent {
+  final int generation;
+  final Map<String, dynamic> data;
+  final String fallbackItemName;
+  final int fallbackQuantity;
+  final String declaredWeightText;
+  final int startedAtMs;
+
+  const CanonicalIrisEstimateResolved({
+    required this.generation,
+    required this.data,
+    required this.fallbackItemName,
+    required this.fallbackQuantity,
+    required this.declaredWeightText,
+    required this.startedAtMs,
+  });
+}
+
 class RequestSenderBookingQuote extends SendPackageEvent {
   final String selectedSpeed;
   final bool vanguardProtocolEnabled;

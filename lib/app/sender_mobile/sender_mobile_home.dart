@@ -311,7 +311,19 @@ class _SenderMobileHomeState extends State<SenderMobileHome> {
 
   Future<void> _restoreAuthenticatedSenderSession() async {
     if (!widget.previewAuthEnabled) return;
-    setState(() => _authRestoring = true);
+    final hydratedUser = FirebaseAuth.instance.currentUser;
+    if (hydratedUser != null) {
+      setState(() {
+        _authRestoring = false;
+        _entry = _SenderEntryScreen.app;
+      });
+    } else {
+      setState(() => _authRestoring = true);
+      Timer(const Duration(milliseconds: 750), () {
+        if (!mounted || !_authRestoring) return;
+        setState(() => _authRestoring = false);
+      });
+    }
     try {
       if (kIsWeb) {
         await FirebaseAuth.instance.setPersistence(Persistence.LOCAL);
@@ -2967,6 +2979,14 @@ class _RebuiltSenderPanelState extends State<_RebuiltSenderPanel> {
   }
 }
 
+@visibleForTesting
+String senderGreetingForLocalHour(int hour) {
+  final localHour = hour % 24;
+  if (localHour >= 5 && localHour < 12) return 'Good morning';
+  if (localHour >= 12 && localHour < 17) return 'Good afternoon';
+  return 'Good evening';
+}
+
 class _SenderDashboard extends StatefulWidget {
   final VoidCallback onStartDelivery;
   final VoidCallback onOpenGifts;
@@ -2992,6 +3012,7 @@ class _SenderDashboardState extends State<_SenderDashboard> {
   late final SenderHomeRepository _repository;
   StreamSubscription<List<SenderHomeOrder>>? _ordersSubscription;
   StreamSubscription<List<SenderHomeNotification>>? _notificationsSubscription;
+  Timer? _greetingRefreshTimer;
   SenderHomeSummary? _summary;
   List<SenderHomeOrder>? _orders;
   List<SenderHomeNotification>? _notifications;
@@ -3004,6 +3025,9 @@ class _SenderDashboardState extends State<_SenderDashboard> {
   void initState() {
     super.initState();
     _repository = FirebaseSenderHomeRepository();
+    _greetingRefreshTimer = Timer.periodic(const Duration(minutes: 1), (_) {
+      if (mounted) setState(() {});
+    });
     _load();
   }
 
@@ -3048,6 +3072,7 @@ class _SenderDashboardState extends State<_SenderDashboard> {
 
   @override
   void dispose() {
+    _greetingRefreshTimer?.cancel();
     _ordersSubscription?.cancel();
     _notificationsSubscription?.cancel();
     super.dispose();
@@ -3063,10 +3088,7 @@ class _SenderDashboardState extends State<_SenderDashboard> {
   }
 
   String get _greeting {
-    final hour = DateTime.now().hour;
-    if (hour < 12) return 'Good morning';
-    if (hour < 18) return 'Good afternoon';
-    return 'Good evening';
+    return senderGreetingForLocalHour(DateTime.now().hour);
   }
 
   int get _unreadCount =>

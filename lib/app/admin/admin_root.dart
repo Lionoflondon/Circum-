@@ -3,6 +3,8 @@ import 'package:cloud_functions/cloud_functions.dart';
 import 'package:flutter/material.dart';
 
 import 'admin_phase1_shell.dart';
+import 'theme/admin_theme.dart';
+import 'widgets/admin_glass.dart';
 
 class AdminRoot extends StatelessWidget {
   const AdminRoot({super.key});
@@ -12,15 +14,7 @@ class AdminRoot extends StatelessWidget {
     return MaterialApp(
       debugShowCheckedModeBanner: false,
       title: 'Circum Admin',
-      theme: ThemeData(
-        brightness: Brightness.dark,
-        scaffoldBackgroundColor: const Color(0xFF07090F),
-        colorScheme: ColorScheme.fromSeed(
-          seedColor: const Color(0xFF00B8FF),
-          brightness: Brightness.dark,
-        ),
-        useMaterial3: true,
-      ),
+      theme: AdminTheme.data,
       home: const AdminPhaseOneShell(),
     );
   }
@@ -128,80 +122,72 @@ class _DeliveryAdjustmentReviewQueueState
 
   @override
   Widget build(BuildContext context) {
-    return DecoratedBox(
-      decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.05),
-        borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: Colors.white.withValues(alpha: 0.10)),
-      ),
-      child: Padding(
-        padding: const EdgeInsets.all(18),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Text(
-              'Rider discrepancy review',
-              style: TextStyle(fontSize: 20, fontWeight: FontWeight.w800),
-            ),
-            const SizedBox(height: 8),
-            Text(
-              'Approve, reject, or request more evidence before a sender is asked to pay an adjustment.',
-              style: TextStyle(color: Colors.white.withValues(alpha: 0.70)),
-            ),
-            const SizedBox(height: 16),
-            Wrap(
-              spacing: 8,
-              children: [
-                for (final status in const [
-                  ('awaiting_admin_review', 'Queue'),
-                  ('more_evidence_requested', 'Evidence Requested'),
-                  ('awaiting_sender_payment', 'Approved'),
-                  ('rejected_by_admin', 'Rejected'),
-                ])
-                  ChoiceChip(
-                    label: Text(status.$2),
-                    selected: _filter == status.$1,
-                    onSelected: (_) => setState(() => _filter = status.$1),
-                  ),
-              ],
-            ),
-            const SizedBox(height: 16),
-            StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
-              stream: FirebaseFirestore.instance
-                  .collection('deliveryAdjustments')
-                  .where('status', isEqualTo: _filter)
-                  .limit(50)
-                  .snapshots(),
-              builder: (context, snapshot) {
-                if (snapshot.hasError) {
-                  return const Text('Review queue unavailable.');
-                }
-                if (!snapshot.hasData) {
-                  return const Padding(
-                    padding: EdgeInsets.all(24),
-                    child: Center(child: CircularProgressIndicator()),
-                  );
-                }
-                final docs = snapshot.data!.docs.toList()
-                  ..sort((a, b) => _millis(b.data()['createdAt'])
-                      .compareTo(_millis(a.data()['createdAt'])));
-                if (docs.isEmpty) {
-                  return Text(
-                    'No discrepancy reports awaiting review.',
-                    style:
-                        TextStyle(color: Colors.white.withValues(alpha: 0.66)),
-                  );
-                }
-                return Column(
-                  children: [
-                    for (final doc in docs)
-                      _DeliveryAdjustmentCard(id: doc.id, data: doc.data()),
-                  ],
+    return AdminGlassPanel(
+      padding: const EdgeInsets.all(18),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            'Rider discrepancy review',
+            style: TextStyle(fontSize: 20, fontWeight: FontWeight.w800),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            'Approve, reject, or request more evidence before a sender is asked to pay an adjustment.',
+            style: TextStyle(color: Colors.white.withValues(alpha: 0.70)),
+          ),
+          const SizedBox(height: 16),
+          Wrap(
+            spacing: 8,
+            children: [
+              for (final status in const [
+                ('awaiting_admin_review', 'Queue'),
+                ('more_evidence_requested', 'Evidence Requested'),
+                ('awaiting_sender_payment', 'Approved'),
+                ('rejected_by_admin', 'Rejected'),
+              ])
+                ChoiceChip(
+                  label: Text(status.$2),
+                  selected: _filter == status.$1,
+                  onSelected: (_) => setState(() => _filter = status.$1),
+                ),
+            ],
+          ),
+          const SizedBox(height: 16),
+          StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
+            stream: FirebaseFirestore.instance
+                .collection('deliveryAdjustments')
+                .where('status', isEqualTo: _filter)
+                .limit(50)
+                .snapshots(),
+            builder: (context, snapshot) {
+              if (snapshot.hasError) {
+                return const Text('Review queue unavailable.');
+              }
+              if (!snapshot.hasData) {
+                return const Padding(
+                  padding: EdgeInsets.all(24),
+                  child: Center(child: CircularProgressIndicator()),
                 );
-              },
-            ),
-          ],
-        ),
+              }
+              final docs = snapshot.data!.docs.toList()
+                ..sort((a, b) => _millis(b.data()['createdAt'])
+                    .compareTo(_millis(a.data()['createdAt'])));
+              if (docs.isEmpty) {
+                return Text(
+                  'No discrepancy reports awaiting review.',
+                  style: TextStyle(color: Colors.white.withValues(alpha: 0.66)),
+                );
+              }
+              return Column(
+                children: [
+                  for (final doc in docs)
+                    _DeliveryAdjustmentCard(id: doc.id, data: doc.data()),
+                ],
+              );
+            },
+          ),
+        ],
       ),
     );
   }

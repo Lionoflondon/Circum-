@@ -907,6 +907,7 @@ class _SenderMobileTrackingScreenState extends State<SenderMobileTrackingScreen>
     with TickerProviderStateMixin {
   late final AnimationController _mapDrift;
   late final AnimationController _pulse;
+  late final DraggableScrollableController _sheetController;
   late SenderTrackingState _lastState;
   bool _motionReduced = false;
 
@@ -921,6 +922,7 @@ class _SenderMobileTrackingScreenState extends State<SenderMobileTrackingScreen>
       vsync: this,
       duration: const Duration(milliseconds: 2600),
     )..repeat();
+    _sheetController = DraggableScrollableController();
     _lastState =
         widget.stateOverride ?? senderTrackingStateForEngine(widget.engine);
   }
@@ -949,7 +951,20 @@ class _SenderMobileTrackingScreenState extends State<SenderMobileTrackingScreen>
         widget.stateOverride ?? senderTrackingStateForEngine(widget.engine);
     if (next == _lastState) return;
     _lastState = next;
-    WidgetsBinding.instance.addPostFrameCallback((_) => _announceState(next));
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      _adaptSheetToState(next);
+      _announceState(next);
+    });
+  }
+
+  void _adaptSheetToState(SenderTrackingState state) {
+    if (!_sheetController.isAttached) return;
+    _sheetController.animateTo(
+      _trackingSheetExtentFor(state),
+      duration: const Duration(milliseconds: 220),
+      curve: Curves.easeOutCubic,
+    );
   }
 
   Future<void> _announceState(SenderTrackingState state) async {
@@ -997,6 +1012,7 @@ class _SenderMobileTrackingScreenState extends State<SenderMobileTrackingScreen>
   void dispose() {
     _mapDrift.dispose();
     _pulse.dispose();
+    _sheetController.dispose();
     super.dispose();
   }
 
@@ -1069,6 +1085,8 @@ class _SenderMobileTrackingScreenState extends State<SenderMobileTrackingScreen>
         if (delivered) const _DeliveredConfirmationOverlay(),
         Positioned.fill(
           child: FloatingGlassPanel(
+            controller: _sheetController,
+            initialChildSize: _trackingSheetExtentFor(state),
             child: _TrackingPanelContent(
               state: state,
               content: visibleContent,
@@ -1084,6 +1102,9 @@ class _SenderMobileTrackingScreenState extends State<SenderMobileTrackingScreen>
       ],
     );
   }
+
+  double _trackingSheetExtentFor(SenderTrackingState state) =>
+      trackingSheetExtentFor(state);
 
   void _openDeliveryChat() {
     final chatId = senderActiveDeliveryIdFor(widget.engine);
@@ -1186,6 +1207,34 @@ class _SenderMobileTrackingScreenState extends State<SenderMobileTrackingScreen>
     ScaffoldMessenger.of(
       context,
     ).showSnackBar(SnackBar(content: Text(message)));
+  }
+}
+
+double trackingSheetExtentFor(SenderTrackingState state) {
+  switch (state) {
+    case SenderTrackingState.findingRider:
+      return .30;
+    case SenderTrackingState.riderAssigned:
+      return .52;
+    case SenderTrackingState.riderArrivedAtPickup:
+    case SenderTrackingState.adjustmentUnderReview:
+    case SenderTrackingState.adjustmentMoreEvidence:
+      return .62;
+    case SenderTrackingState.pickupComplete:
+    case SenderTrackingState.inTransit:
+    case SenderTrackingState.riderEnRouteToPickup:
+    case SenderTrackingState.riderArrivingAtDropoff:
+      return .38;
+    case SenderTrackingState.delivered:
+    case SenderTrackingState.cancelled:
+    case SenderTrackingState.error:
+    case SenderTrackingState.issue:
+    case SenderTrackingState.adjustmentApproved:
+    case SenderTrackingState.adjustmentRejected:
+      return .62;
+    case SenderTrackingState.loading:
+    case SenderTrackingState.noActiveDelivery:
+      return .38;
   }
 }
 
@@ -1843,13 +1892,21 @@ const _senderTrackingGoogleMapStyle = '''
 
 class FloatingGlassPanel extends StatelessWidget {
   final Widget child;
+  final DraggableScrollableController? controller;
+  final double initialChildSize;
 
-  const FloatingGlassPanel({super.key, required this.child});
+  const FloatingGlassPanel({
+    super.key,
+    required this.child,
+    this.controller,
+    this.initialChildSize = .38,
+  });
 
   @override
   Widget build(BuildContext context) {
     return DraggableScrollableSheet(
-      initialChildSize: .38,
+      controller: controller,
+      initialChildSize: initialChildSize,
       minChildSize: .24,
       maxChildSize: .78,
       snap: true,
@@ -1868,14 +1925,34 @@ class FloatingGlassPanel extends StatelessWidget {
                 controller: controller,
                 padding: const EdgeInsets.fromLTRB(20, 10, 20, 18),
                 children: [
-                  Center(
-                    child: Container(
-                      width: 38,
-                      height: 4,
-                      margin: const EdgeInsets.only(bottom: 16),
-                      decoration: BoxDecoration(
-                        color: Colors.white.withValues(alpha: .18),
-                        borderRadius: BorderRadius.circular(99),
+                  Semantics(
+                    container: true,
+                    label: 'Delivery details',
+                    hint:
+                        'Use expand and collapse actions to change details height',
+                    onIncrease: this.controller == null
+                        ? null
+                        : () => this.controller!.animateTo(
+                              .78,
+                              duration: const Duration(milliseconds: 220),
+                              curve: Curves.easeOutCubic,
+                            ),
+                    onDecrease: this.controller == null
+                        ? null
+                        : () => this.controller!.animateTo(
+                              .24,
+                              duration: const Duration(milliseconds: 220),
+                              curve: Curves.easeOutCubic,
+                            ),
+                    child: Center(
+                      child: Container(
+                        width: 38,
+                        height: 4,
+                        margin: const EdgeInsets.only(bottom: 16),
+                        decoration: BoxDecoration(
+                          color: Colors.white.withValues(alpha: .18),
+                          borderRadius: BorderRadius.circular(99),
+                        ),
                       ),
                     ),
                   ),

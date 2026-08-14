@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:math' as math;
 import 'dart:ui' show Size;
 
@@ -50,8 +51,49 @@ void _logRecoverableSenderError(
 }
 
 void _logSenderPerformanceMetric(String event, Stopwatch stopwatch) {
+  _logSenderPerformanceMeasurement(
+    operation: event,
+    startedAt: DateTime.now()
+        .subtract(Duration(milliseconds: stopwatch.elapsedMilliseconds)),
+    authoritativeResponseMs: stopwatch.elapsedMilliseconds,
+  );
+}
+
+void _logSenderPerformanceSample(String event, int durationMs) {
+  _logSenderPerformanceMeasurement(
+    operation: event,
+    startedAt: DateTime.now().subtract(Duration(milliseconds: durationMs)),
+    authoritativeResponseMs: durationMs,
+  );
+}
+
+void _logSenderPerformanceMeasurement({
+  required String operation,
+  required DateTime startedAt,
+  int? firstUiResponseMs,
+  int? authoritativeResponseMs,
+  int? firstIrisResponseMs,
+  int? authoritativeIrisResponseMs,
+  bool cacheHit = false,
+  bool fallbackUsed = false,
+  bool coldStartHint = false,
+  bool success = true,
+}) {
   debugPrint(
-    'Sender performance metric: event=$event durationMs=${stopwatch.elapsedMilliseconds}',
+    'Circum performance ${jsonEncode({
+          'operation': operation,
+          if (firstUiResponseMs != null) 'firstUiResponseMs': firstUiResponseMs,
+          if (authoritativeResponseMs != null)
+            'authoritativeResponseMs': authoritativeResponseMs,
+          if (firstIrisResponseMs != null)
+            'firstIrisResponseMs': firstIrisResponseMs,
+          if (authoritativeIrisResponseMs != null)
+            'authoritativeIrisResponseMs': authoritativeIrisResponseMs,
+          'cacheHit': cacheHit,
+          'fallbackUsed': fallbackUsed,
+          'coldStartHint': coldStartHint,
+          'success': success,
+        })}',
   );
 }
 
@@ -132,6 +174,9 @@ class SendPackageBloc extends Bloc<SendPackageEvent, SendPackageState> {
   StreamSubscription<DocumentSnapshot<Map<String, dynamic>>>?
       _activeDeliveryLiveLocationSubscription;
   String? _activeDeliveryLiveLocationId;
+  int _addressSearchGeneration = 0;
+  int _irisGeneration = 0;
+  final Map<String, List<Suggestion>> _addressSearchCache = {};
   SendPackageBloc() : super(SendPackageState()) {
     on<CheckForPushToken>(_handleCheckForPushToken);
     on<SearchAPlaceEvent>(_handleSearchAPlaceEvent);
@@ -148,6 +193,7 @@ class SendPackageBloc extends Bloc<SendPackageEvent, SendPackageState> {
     on<SetParcelWeight>(_handleSetParcelWeight);
     on<ClearIrisParcelState>(_handleClearIrisParcelState);
     on<RequestCanonicalIrisEstimate>(_handleRequestCanonicalIrisEstimate);
+    on<CanonicalIrisEstimateResolved>(_handleCanonicalIrisEstimateResolved);
     on<RequestSenderBookingQuote>(_handleRequestSenderBookingQuote);
     on<LoadSenderRothBalance>(_handleLoadSenderRothBalance);
     on<StartSenderPaymentSession>(_handleStartSenderPaymentSession);
@@ -211,39 +257,37 @@ class SendPackageBloc extends Bloc<SendPackageEvent, SendPackageState> {
   }
 
   Future<void> _resolveActiveDeliveryByRequestId(String requestId) async {
+    final startedAt = DateTime.now();
+    final restoreTimer = Stopwatch()..start();
     try {
-      final snapshot = await db
-          .collection('deliveryRequests')
-          .where('requestId', isEqualTo: requestId)
-          .limit(1)
-          .get();
-      if (snapshot.docs.isNotEmpty) {
-        final doc = snapshot.docs.first;
-        _listenToActiveDeliveryLiveLocation(doc.id);
-        add(ActiveDeliverySnapshotChanged(data: {...doc.data(), 'id': doc.id}));
-        return;
-      }
-      await Future<void>.delayed(const Duration(seconds: 3));
-      final retryDoc =
-          await db.collection('deliveryRequests').doc(requestId).get();
-      if (retryDoc.exists) {
-        _listenToActiveDeliveryLiveLocation(retryDoc.id);
-        add(
-          ActiveDeliverySnapshotChanged(
-            data: {...?retryDoc.data(), 'id': retryDoc.id},
-          ),
+      final cached = await _cachedActiveDelivery(requestId);
+      if (cached != null) {
+        add(ActiveDeliverySnapshotChanged(data: cached));
+        _logSenderPerformanceMeasurement(
+          operation: 'active_delivery_restore',
+          startedAt: startedAt,
+          firstUiResponseMs: restoreTimer.elapsedMilliseconds,
+          cacheHit: true,
         );
-        return;
       }
-      final retrySnapshot = await db
+      final directFuture =
+          db.collection('deliveryRequests').doc(requestId).get();
+      final queryFuture = db
           .collection('deliveryRequests')
           .where('requestId', isEqualTo: requestId)
           .limit(1)
           .get();
-      if (retrySnapshot.docs.isNotEmpty) {
-        final doc = retrySnapshot.docs.first;
-        _listenToActiveDeliveryLiveLocation(doc.id);
-        add(ActiveDeliverySnapshotChanged(data: {...doc.data(), 'id': doc.id}));
+      final found = await _firstResolvedDelivery(directFuture, queryFuture);
+      if (found != null) {
+        _logSenderPerformanceMeasurement(
+          operation: 'active_delivery_restore',
+          startedAt: startedAt,
+          authoritativeResponseMs: restoreTimer.elapsedMilliseconds,
+          cacheHit: cached != null,
+        );
+        _listenToActiveDelivery(found.id);
+        _listenToActiveDeliveryLiveLocation(found.id);
+        add(ActiveDeliverySnapshotChanged(data: found.data));
         return;
       }
       unawaited(_clearActiveRequestIfCurrent(requestId));
@@ -255,6 +299,83 @@ class SendPackageBloc extends Bloc<SendPackageEvent, SendPackageState> {
         ),
       );
     }
+  }
+
+  Future<Map<String, dynamic>?> _cachedActiveDelivery(String requestId) async {
+    final prefs = await SharedPreferences.getInstance();
+    final raw = prefs.getString('activeDeliveryCache:$requestId');
+    if (raw == null || raw.trim().isEmpty) return null;
+    final decoded = jsonDecode(raw);
+    if (decoded is! Map) return null;
+    return Map<String, dynamic>.from(decoded);
+  }
+
+  Future<void> _cacheActiveDelivery(Map<String, dynamic> data) async {
+    final requestId = '${data['requestId'] ?? data['id'] ?? ''}'.trim();
+    if (requestId.isEmpty) return;
+    final safe = <String, dynamic>{
+      'id': '${data['id'] ?? requestId}',
+      'requestId': requestId,
+      'status': '${data['status'] ?? data['deliveryStatus'] ?? ''}',
+      'deliveryStatus': '${data['deliveryStatus'] ?? data['status'] ?? ''}',
+      'deliveryStage': '${data['deliveryStage'] ?? data['status'] ?? ''}',
+      'pickupDetails': data['pickupDetails'],
+      'dropoffDetails': data['dropoffDetails'],
+      'pickupPosition': data['pickupPosition'],
+      'dropoffPosition': data['dropoffPosition'],
+      'routePolyline': data['routePolyline'],
+      'routeFacts': data['routeFacts'],
+      'assignedRider': data['assignedRider'],
+      'assignedRiderSnapshot': data['assignedRiderSnapshot'],
+      'riderLiveLocation': data['riderLiveLocation'],
+      'deliveryType': data['deliveryType'] ?? data['productType'],
+      'trackingScreenState': data['trackingScreenState'],
+      'cachedAt': DateTime.now().toIso8601String(),
+    }..removeWhere((_, value) => value == null || value == '');
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString('activeDeliveryCache:$requestId', jsonEncode(safe));
+  }
+
+  Future<_ResolvedDelivery?> _firstResolvedDelivery(
+    Future<DocumentSnapshot<Map<String, dynamic>>> directFuture,
+    Future<QuerySnapshot<Map<String, dynamic>>> queryFuture,
+  ) async {
+    final completer = Completer<_ResolvedDelivery?>();
+    var remaining = 2;
+    void finish(_ResolvedDelivery? result) {
+      if (result != null && !completer.isCompleted) {
+        completer.complete(result);
+        return;
+      }
+      remaining -= 1;
+      if (remaining == 0 && !completer.isCompleted) completer.complete(null);
+    }
+
+    unawaited(directFuture.then<_ResolvedDelivery?>((doc) {
+      finish(doc.exists
+          ? _ResolvedDelivery(doc.id, {...?doc.data(), 'id': doc.id})
+          : null);
+      return null;
+    }).catchError((_) {
+      finish(null);
+      return null;
+    }));
+    unawaited(queryFuture.then<_ResolvedDelivery?>((snapshot) {
+      if (snapshot.docs.isEmpty) {
+        finish(null);
+        return null;
+      }
+      final doc = snapshot.docs.first;
+      finish(_ResolvedDelivery(doc.id, {...doc.data(), 'id': doc.id}));
+      return null;
+    }).catchError((_) {
+      finish(null);
+      return null;
+    }));
+    return completer.future.timeout(
+      const Duration(seconds: 1),
+      onTimeout: () => null,
+    );
   }
 
   Future<void> _clearActiveRequestIfCurrent(String requestId) async {
@@ -306,6 +427,7 @@ class SendPackageBloc extends Bloc<SendPackageEvent, SendPackageState> {
   ) async {
     const uuid = Uuid();
     if (event.query.trim().length < 3) {
+      _addressSearchGeneration++;
       emit(
         state.copyWith(
           suggestions: [],
@@ -315,12 +437,40 @@ class SendPackageBloc extends Bloc<SendPackageEvent, SendPackageState> {
       );
       return;
     }
+    final generation = ++_addressSearchGeneration;
+    final startedAt = DateTime.now();
+    final searchTimer = Stopwatch()..start();
+    final normalizedQuery = event.query.trim().toLowerCase();
+    final cachedSuggestions = _addressSearchCache[normalizedQuery];
+    if (cachedSuggestions != null) {
+      emit(
+        state.copyWith(
+          suggestions: cachedSuggestions,
+          isAddressSearching: true,
+          addressSearchError: '',
+        ),
+      );
+      _logSenderPerformanceMeasurement(
+        operation: 'address_search',
+        startedAt: startedAt,
+        firstUiResponseMs: searchTimer.elapsedMilliseconds,
+        cacheHit: true,
+      );
+    }
     emit(state.copyWith(isAddressSearching: true, addressSearchError: ''));
     try {
       List<Suggestion> suggestions = await PlaceApiProvider(
         uuid,
       ).fetchSuggestions(event.query, event.lang);
 
+      if (generation != _addressSearchGeneration) return;
+      _addressSearchCache[normalizedQuery] = suggestions;
+      _logSenderPerformanceMeasurement(
+        operation: 'address_search',
+        startedAt: startedAt,
+        authoritativeResponseMs: searchTimer.elapsedMilliseconds,
+        cacheHit: cachedSuggestions != null,
+      );
       emit(
         state.copyWith(
           suggestions: suggestions,
@@ -331,6 +481,14 @@ class SendPackageBloc extends Bloc<SendPackageEvent, SendPackageState> {
         ),
       );
     } catch (e) {
+      if (generation != _addressSearchGeneration) return;
+      _logSenderPerformanceMeasurement(
+        operation: 'address_search',
+        startedAt: startedAt,
+        authoritativeResponseMs: searchTimer.elapsedMilliseconds,
+        cacheHit: cachedSuggestions != null,
+        success: false,
+      );
       emit(
         state.copyWith(
           suggestions: [],
@@ -359,6 +517,7 @@ class SendPackageBloc extends Bloc<SendPackageEvent, SendPackageState> {
     ClearSuggestions event,
     Emitter<SendPackageState> emit,
   ) {
+    _addressSearchGeneration++;
     emit(state.copyWith(suggestions: []));
   }
 
@@ -758,6 +917,7 @@ class SendPackageBloc extends Bloc<SendPackageEvent, SendPackageState> {
     RequestCanonicalIrisEstimate event,
     Emitter<SendPackageState> emit,
   ) async {
+    final generation = ++_irisGeneration;
     final itemDescription = [
       event.itemName,
       event.description,
@@ -771,6 +931,7 @@ class SendPackageBloc extends Bloc<SendPackageEvent, SendPackageState> {
         irisResolving: true,
       ),
     );
+    final startedAt = DateTime.now();
     final irisTimer = Stopwatch()..start();
     try {
       final payload = <String, dynamic>{
@@ -790,35 +951,73 @@ class SendPackageBloc extends Bloc<SendPackageEvent, SendPackageState> {
         if (state.distance != null)
           'distanceMiles': DeliveryPricing.kilometresToMiles(state.distance!),
       };
-      final result = await FirebaseFunctions.instance
-          .httpsCallable('analyseIris')
-          .call(payload)
-          .timeout(const Duration(seconds: 15));
-      _logSenderPerformanceMetric('iris.analyseIris', irisTimer);
+      final startedAtMs = DateTime.now().millisecondsSinceEpoch;
+      final irisFuture =
+          FirebaseFunctions.instance.httpsCallable('analyseIris').call(payload);
+      final firstResult = await Future.any<Object?>([
+        irisFuture,
+        Future<void>.delayed(const Duration(milliseconds: 1500)),
+      ]);
+      if (firstResult == null) {
+        _logSenderPerformanceMeasurement(
+          operation: 'iris_analysis',
+          startedAt: startedAt,
+          firstUiResponseMs: irisTimer.elapsedMilliseconds,
+          firstIrisResponseMs: irisTimer.elapsedMilliseconds,
+          fallbackUsed: true,
+        );
+        emit(
+          state.copyWith(
+            isIrisResolving: false,
+            irisErrorMessage:
+                'IRIS is still checking. You can continue where available; Circum will update this automatically.',
+          ),
+        );
+        unawaited(
+          irisFuture.then<void>((result) {
+            final data = result.data is Map
+                ? Map<String, dynamic>.from(result.data as Map)
+                : <String, dynamic>{};
+            add(
+              CanonicalIrisEstimateResolved(
+                generation: generation,
+                data: data,
+                fallbackItemName: event.itemName,
+                fallbackQuantity: event.quantity <= 0 ? 1 : event.quantity,
+                declaredWeightText: event.declaredWeightText,
+                startedAtMs: startedAtMs,
+              ),
+            );
+          }).catchError((Object error) {
+            if (generation == _irisGeneration) {
+              debugPrint('late analyseIris failed: $error');
+            }
+          }),
+        );
+        return;
+      }
+      final result = firstResult as HttpsCallableResult<dynamic>;
       final data = result.data is Map
           ? Map<String, dynamic>.from(result.data as Map)
           : <String, dynamic>{};
-      final canonical = CanonicalIrisResult.fromCallable(
-        data,
-        fallbackItemName: event.itemName,
-        fallbackQuantity: event.quantity <= 0 ? 1 : event.quantity,
+      _logSenderPerformanceMeasurement(
+        operation: 'iris_analysis',
+        startedAt: startedAt,
+        firstUiResponseMs: irisTimer.elapsedMilliseconds,
+        authoritativeResponseMs: irisTimer.elapsedMilliseconds,
+        firstIrisResponseMs: irisTimer.elapsedMilliseconds,
+        authoritativeIrisResponseMs: irisTimer.elapsedMilliseconds,
       );
-      final declaredWeightKg = DeliveryPricing.parseWeightKg(
-        event.declaredWeightText,
-      );
-      final finalWeightKg = DeliveryPricing.checkoutPricingWeightKg(
-        userEnteredWeightKg: declaredWeightKg <= 0 ? null : declaredWeightKg,
-        irisEstimatedWeightKg: canonical.totalWeightKg,
-      );
-      emit(
-        state.copyWith(
-          canonicalIrisResult: canonical,
-          isIrisResolving: false,
-          irisErrorMessage: '',
-          parcelWeightKg: finalWeightKg,
+      add(
+        CanonicalIrisEstimateResolved(
+          generation: generation,
+          data: data,
+          fallbackItemName: event.itemName,
+          fallbackQuantity: event.quantity <= 0 ? 1 : event.quantity,
+          declaredWeightText: event.declaredWeightText,
+          startedAtMs: startedAtMs,
         ),
       );
-      add(SetPrice());
     } on FirebaseFunctionsException catch (error) {
       _logSenderPerformanceMetric('iris.analyseIris.failed', irisTimer);
       debugPrint(
@@ -842,6 +1041,48 @@ class SendPackageBloc extends Bloc<SendPackageEvent, SendPackageState> {
         ),
       );
     }
+  }
+
+  void _handleCanonicalIrisEstimateResolved(
+    CanonicalIrisEstimateResolved event,
+    Emitter<SendPackageState> emit,
+  ) {
+    if (event.generation != _irisGeneration) return;
+    _logSenderPerformanceSample(
+      'iris.authoritativeResult',
+      DateTime.now().millisecondsSinceEpoch - event.startedAtMs,
+    );
+    _logSenderPerformanceMeasurement(
+      operation: 'iris_analysis',
+      startedAt: DateTime.fromMillisecondsSinceEpoch(event.startedAtMs),
+      authoritativeResponseMs:
+          DateTime.now().millisecondsSinceEpoch - event.startedAtMs,
+      authoritativeIrisResponseMs:
+          DateTime.now().millisecondsSinceEpoch - event.startedAtMs,
+      fallbackUsed: true,
+    );
+    final canonical = CanonicalIrisResult.fromCallable(
+      event.data,
+      fallbackItemName: event.fallbackItemName,
+      fallbackQuantity:
+          event.fallbackQuantity <= 0 ? 1 : event.fallbackQuantity,
+    );
+    final declaredWeightKg = DeliveryPricing.parseWeightKg(
+      event.declaredWeightText,
+    );
+    final finalWeightKg = DeliveryPricing.checkoutPricingWeightKg(
+      userEnteredWeightKg: declaredWeightKg <= 0 ? null : declaredWeightKg,
+      irisEstimatedWeightKg: canonical.totalWeightKg,
+    );
+    emit(
+      state.copyWith(
+        canonicalIrisResult: canonical,
+        isIrisResolving: false,
+        irisErrorMessage: '',
+        parcelWeightKg: finalWeightKg,
+      ),
+    );
+    add(SetPrice());
   }
 
   double _numFrom(dynamic value) {
@@ -868,10 +1109,33 @@ class SendPackageBloc extends Bloc<SendPackageEvent, SendPackageState> {
         : <String, dynamic>{};
   }
 
+  void _dispatchPaidDeliveryInBackground(String requestId, String context) {
+    if (requestId.trim().isEmpty) return;
+    unawaited(
+      FirebaseFunctions.instanceFor(
+        region: 'us-central1',
+      )
+          .httpsCallable('sendPackage')
+          .call({'requestId': requestId})
+          .then<void>(
+            (_) {},
+          )
+          .catchError(
+            (Object error) {
+              debugPrint(
+                'sendPackage dispatch after $context failed; delivery remains created: $error',
+              );
+            },
+          ),
+    );
+  }
+
   void _handleRequestSenderBookingQuote(
     RequestSenderBookingQuote event,
     Emitter<SendPackageState> emit,
   ) async {
+    final startedAt = DateTime.now();
+    final quoteTimer = Stopwatch()..start();
     emit(
       state.copyWith(
         isSenderQuoteLoading: true,
@@ -890,7 +1154,11 @@ class SendPackageBloc extends Bloc<SendPackageEvent, SendPackageState> {
         clearSenderCreatedRequest: true,
       ),
     );
-    final quoteTimer = Stopwatch()..start();
+    _logSenderPerformanceMeasurement(
+      operation: 'sender_quote',
+      startedAt: startedAt,
+      firstUiResponseMs: quoteTimer.elapsedMilliseconds,
+    );
     try {
       final distanceKm = state.distance ?? _distanceKmFromRouteCoordinates();
       final data = await _callableMap('createSenderBookingQuote', {
@@ -936,7 +1204,11 @@ class SendPackageBloc extends Bloc<SendPackageEvent, SendPackageState> {
           },
         },
       });
-      _logSenderPerformanceMetric('iris.createSenderBookingQuote', quoteTimer);
+      _logSenderPerformanceMeasurement(
+        operation: 'sender_quote',
+        startedAt: startedAt,
+        authoritativeResponseMs: quoteTimer.elapsedMilliseconds,
+      );
       emit(
         state.copyWith(
           isSenderQuoteLoading: false,
@@ -957,6 +1229,12 @@ class SendPackageBloc extends Bloc<SendPackageEvent, SendPackageState> {
         'iris.createSenderBookingQuote.failed',
         quoteTimer,
       );
+      _logSenderPerformanceMeasurement(
+        operation: 'sender_quote',
+        startedAt: startedAt,
+        authoritativeResponseMs: quoteTimer.elapsedMilliseconds,
+        success: false,
+      );
       debugPrint(
         'createSenderBookingQuote failed: code=${error.code}, message=${error.message}, details=${error.details}',
       );
@@ -976,6 +1254,12 @@ class SendPackageBloc extends Bloc<SendPackageEvent, SendPackageState> {
       _logSenderPerformanceMetric(
         'iris.createSenderBookingQuote.failed',
         quoteTimer,
+      );
+      _logSenderPerformanceMeasurement(
+        operation: 'sender_quote',
+        startedAt: startedAt,
+        authoritativeResponseMs: quoteTimer.elapsedMilliseconds,
+        success: false,
       );
       debugPrint('createSenderBookingQuote unexpected failure: $error');
       emit(
@@ -1039,6 +1323,8 @@ class SendPackageBloc extends Bloc<SendPackageEvent, SendPackageState> {
       );
       return;
     }
+    final startedAt = DateTime.now();
+    final paymentTimer = Stopwatch()..start();
     emit(
       state.copyWith(
         isSenderPaymentLoading: true,
@@ -1052,6 +1338,11 @@ class SendPackageBloc extends Bloc<SendPackageEvent, SendPackageState> {
         clearSenderPaymentEphemeralKey: true,
         clearSenderPaymentCheckoutUrl: true,
       ),
+    );
+    _logSenderPerformanceMeasurement(
+      operation: 'sender_payment_session',
+      startedAt: startedAt,
+      firstUiResponseMs: paymentTimer.elapsedMilliseconds,
     );
     try {
       final data = await _callableMap('createSenderPaymentSession', {
@@ -1072,19 +1363,16 @@ class SendPackageBloc extends Bloc<SendPackageEvent, SendPackageState> {
           '${data['paymentStatus'] ?? data['status'] ?? ''}'.toLowerCase();
       final paymentSucceeded = paymentStatus == 'succeeded';
       if (requestId.isNotEmpty && paymentSucceeded) {
-        try {
-          await FirebaseFunctions.instanceFor(
-            region: 'us-central1',
-          ).httpsCallable('sendPackage').call({'requestId': requestId});
-        } catch (error) {
-          debugPrint(
-            'sendPackage dispatch after direct paid delivery failed; delivery remains created: $error',
-          );
-        }
+        _dispatchPaidDeliveryInBackground(requestId, 'direct paid delivery');
         final prefs = await SharedPreferences.getInstance();
         await prefs.setString('activeRequest', requestId);
         add(WatchActiveDelivery(requestId: requestId));
       }
+      _logSenderPerformanceMeasurement(
+        operation: 'sender_payment_session',
+        startedAt: startedAt,
+        authoritativeResponseMs: paymentTimer.elapsedMilliseconds,
+      );
       emit(
         state.copyWith(
           isSenderPaymentLoading: false,
@@ -1119,6 +1407,12 @@ class SendPackageBloc extends Bloc<SendPackageEvent, SendPackageState> {
       debugPrint(
         'createSenderPaymentSession failed: code=${error.code}, message=${error.message}, details=${error.details}',
       );
+      _logSenderPerformanceMeasurement(
+        operation: 'sender_payment_session',
+        startedAt: startedAt,
+        authoritativeResponseMs: paymentTimer.elapsedMilliseconds,
+        success: false,
+      );
       emit(
         state.copyWith(
           isSenderPaymentLoading: false,
@@ -1136,6 +1430,12 @@ class SendPackageBloc extends Bloc<SendPackageEvent, SendPackageState> {
         ),
       );
     } catch (error) {
+      _logSenderPerformanceMeasurement(
+        operation: 'sender_payment_session',
+        startedAt: startedAt,
+        authoritativeResponseMs: paymentTimer.elapsedMilliseconds,
+        success: false,
+      );
       emit(
         state.copyWith(
           isSenderPaymentLoading: false,
@@ -1164,8 +1464,15 @@ class SendPackageBloc extends Bloc<SendPackageEvent, SendPackageState> {
       );
       return;
     }
+    final startedAt = DateTime.now();
+    final deliveryTimer = Stopwatch()..start();
     emit(
       state.copyWith(isSenderDeliveryCreating: true, senderDeliveryError: ''),
+    );
+    _logSenderPerformanceMeasurement(
+      operation: 'sender_paid_delivery',
+      startedAt: startedAt,
+      firstUiResponseMs: deliveryTimer.elapsedMilliseconds,
     );
     try {
       final payload = {
@@ -1176,19 +1483,16 @@ class SendPackageBloc extends Bloc<SendPackageEvent, SendPackageState> {
       final data = await _callableMap('createSenderPaidDelivery', payload);
       final requestId = '${data['requestId'] ?? ''}';
       if (requestId.isNotEmpty) {
-        try {
-          await FirebaseFunctions.instanceFor(
-            region: 'us-central1',
-          ).httpsCallable('sendPackage').call({'requestId': requestId});
-        } catch (error) {
-          debugPrint(
-            'sendPackage dispatch after paid delivery failed; delivery remains created: $error',
-          );
-        }
+        _dispatchPaidDeliveryInBackground(requestId, 'paid delivery');
         final prefs = await SharedPreferences.getInstance();
         await prefs.setString('activeRequest', requestId);
         add(WatchActiveDelivery(requestId: requestId));
       }
+      _logSenderPerformanceMeasurement(
+        operation: 'sender_paid_delivery',
+        startedAt: startedAt,
+        authoritativeResponseMs: deliveryTimer.elapsedMilliseconds,
+      );
       emit(
         state.copyWith(
           isSenderDeliveryCreating: false,
@@ -1202,6 +1506,12 @@ class SendPackageBloc extends Bloc<SendPackageEvent, SendPackageState> {
       debugPrint(
         'createSenderPaidDelivery failed: code=${error.code}, message=${error.message}, details=${error.details}',
       );
+      _logSenderPerformanceMeasurement(
+        operation: 'sender_paid_delivery',
+        startedAt: startedAt,
+        authoritativeResponseMs: deliveryTimer.elapsedMilliseconds,
+        success: false,
+      );
       emit(
         state.copyWith(
           isSenderDeliveryCreating: false,
@@ -1213,6 +1523,12 @@ class SendPackageBloc extends Bloc<SendPackageEvent, SendPackageState> {
       );
     } catch (error) {
       debugPrint('createSenderPaidDelivery unexpected failure: $error');
+      _logSenderPerformanceMeasurement(
+        operation: 'sender_paid_delivery',
+        startedAt: startedAt,
+        authoritativeResponseMs: deliveryTimer.elapsedMilliseconds,
+        success: false,
+      );
       emit(
         state.copyWith(
           isSenderDeliveryCreating: false,
@@ -1240,15 +1556,7 @@ class SendPackageBloc extends Bloc<SendPackageEvent, SendPackageState> {
       });
       final requestId = '${data['requestId'] ?? data['deliveryId'] ?? ''}';
       if (requestId.isNotEmpty) {
-        try {
-          await FirebaseFunctions.instanceFor(
-            region: 'us-central1',
-          ).httpsCallable('sendPackage').call({'requestId': requestId});
-        } catch (error) {
-          debugPrint(
-            'sendPackage dispatch after finalized checkout failed; delivery remains created: $error',
-          );
-        }
+        _dispatchPaidDeliveryInBackground(requestId, 'finalized checkout');
         final prefs = await SharedPreferences.getInstance();
         await prefs.setString('activeRequest', requestId);
         add(WatchActiveDelivery(requestId: requestId));
@@ -1439,6 +1747,7 @@ class SendPackageBloc extends Bloc<SendPackageEvent, SendPackageState> {
     }
     final data = event.data;
     if (data == null) return;
+    unawaited(_cacheActiveDelivery(data));
 
     final requestStatus = '${data['status'] ?? ''}'.trim();
     if (_terminalRequestStatuses.contains(
@@ -1931,4 +2240,11 @@ class SendPackageBloc extends Bloc<SendPackageEvent, SendPackageState> {
       ),
     );
   }
+}
+
+class _ResolvedDelivery {
+  final String id;
+  final Map<String, dynamic> data;
+
+  const _ResolvedDelivery(this.id, this.data);
 }

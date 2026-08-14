@@ -1,5 +1,6 @@
 import 'dart:io';
 
+import 'package:circum/app/sender_mobile/sender_mobile_home.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
@@ -60,9 +61,12 @@ void main() {
         File('lib/app/sender_mobile/sender_wallet.dart').readAsStringSync();
 
     expect(wallet, contains('_loadCachedSnapshot()'));
-    expect(wallet, contains('_walletOperationTimeout'));
+    expect(wallet, contains('_senderWalletOperationTimeout'));
     expect(wallet, contains('_firebaseReadTimeout'));
-    expect(wallet, contains('operation.timeout(_walletOperationTimeout)'));
+    expect(
+      wallet,
+      contains('operation.timeout(_senderWalletOperationTimeout)'),
+    );
     expect(
       wallet,
       contains(RegExp(r'\.call\(\)\s*\.timeout\(_firebaseReadTimeout\)')),
@@ -126,5 +130,92 @@ void main() {
     expect(booking, isNot(contains(RegExp(r'\breturn\s+Scaffold\('))));
     expect(booking, isNot(contains(RegExp(r'\breturn\s+const\s+Scaffold\('))));
     expect(booking, contains('return ColoredBox('));
+  });
+
+  test('Sender greeting uses local day parts and treats late night as evening',
+      () {
+    expect(senderGreetingForLocalHour(5), 'Good morning');
+    expect(senderGreetingForLocalHour(11), 'Good morning');
+    expect(senderGreetingForLocalHour(12), 'Good afternoon');
+    expect(senderGreetingForLocalHour(16), 'Good afternoon');
+    expect(senderGreetingForLocalHour(17), 'Good evening');
+    expect(senderGreetingForLocalHour(22), 'Good evening');
+    expect(senderGreetingForLocalHour(2), 'Good evening');
+  });
+
+  test('Send starts usable while draft restore hydrates in the background', () {
+    final booking = File('lib/app/sender_mobile/sender_booking_canvas.dart')
+        .readAsStringSync();
+
+    expect(booking, isNot(contains("'Restoring delivery'")));
+    expect(booking, isNot(contains("'Loading your saved delivery draft.'")));
+    expect(booking, isNot(contains("'Please wait'")));
+    expect(booking, contains("'Checking draft'"));
+    expect(booking, contains("'Started fresh'"));
+  });
+
+  test('Sender launch retains one splash surface before usable app shell', () {
+    final index = File('web/index.html').readAsStringSync();
+    final home = File('lib/app/sender_mobile/sender_mobile_home.dart')
+        .readAsStringSync();
+    final booking = File('lib/app/sender_mobile/sender_booking_canvas.dart')
+        .readAsStringSync();
+
+    expect(index, contains('flutter_bootstrap.js'));
+    expect(home, isNot(contains('Restoring delivery')));
+    expect(booking, isNot(contains('Restoring delivery')));
+  });
+
+  test('Sender auth restore uses hydrated user and caps blocking splash', () {
+    final home = File('lib/app/sender_mobile/sender_mobile_home.dart')
+        .readAsStringSync();
+    final restoreStart =
+        home.indexOf('Future<void> _restoreAuthenticatedSenderSession');
+    final restoreEnd = home.indexOf('void _reportUnexpectedAuthRestoreError');
+    expect(restoreStart, isNonNegative);
+    expect(restoreEnd, greaterThan(restoreStart));
+    final restore = home.substring(restoreStart, restoreEnd);
+
+    expect(restore, contains('FirebaseAuth.instance.currentUser'));
+    expect(restore, contains('_entry = _SenderEntryScreen.app'));
+    expect(restore, contains('Duration(milliseconds: 750)'));
+    expect(restore, isNot(contains('Duration(seconds: 3)')));
+  });
+
+  test('map marker SVG descriptors are cached instead of rasterized repeatedly',
+      () {
+    final helper =
+        File('lib/helper/bitmap_descriptor_helper.dart').readAsStringSync();
+
+    expect(helper,
+        contains('static final Map<String, Future<BitmapDescriptor>> _cache'));
+    expect(helper, contains('final cached = _cache[cacheKey]'));
+    expect(helper, contains('_cache[cacheKey] = descriptor'));
+  });
+
+  test('Sender performance telemetry uses structured non-sensitive fields', () {
+    final source = File('lib/app/send_package/bloc/send_package_bloc.dart')
+        .readAsStringSync();
+    final logger = source.substring(
+      source.indexOf('void _logSenderPerformanceMeasurement'),
+      source.indexOf('String _senderPaymentMessage'),
+    );
+    expect(logger, contains('_logSenderPerformanceMeasurement'));
+    for (final field in [
+      'operation',
+      'firstUiResponseMs',
+      'authoritativeResponseMs',
+      'cacheHit',
+      'fallbackUsed',
+      'coldStartHint',
+      'success',
+    ]) {
+      expect(logger, contains("'$field'"));
+    }
+    expect(logger, isNot(contains("'email'")));
+    expect(logger, isNot(contains("'phone'")));
+    expect(logger, isNot(contains("'coordinates'")));
+    expect(logger, isNot(contains("'evidenceUrl'")));
+    expect(logger, isNot(contains("'startedAt'")));
   });
 }

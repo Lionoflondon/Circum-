@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:math';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:cloud_functions/cloud_functions.dart';
@@ -36,6 +37,8 @@ class _RideChatPageViewState extends State<RideChatPageView> {
   String? _deliveryChatTitle;
   String? _supportError;
   bool _sending = false;
+  String? _pendingMessageId;
+  bool _typingPublished = false;
   Timer? _typingDebounce;
 
   @override
@@ -144,6 +147,9 @@ class _RideChatPageViewState extends State<RideChatPageView> {
     }
   }
 
+  String _newMessageId() =>
+      '${DateTime.now().microsecondsSinceEpoch}_${Random().nextInt(1 << 32)}';
+
   Future<void> _markConversationRead(String chatId) async {
     try {
       await FirebaseFunctions.instance
@@ -159,12 +165,17 @@ class _RideChatPageViewState extends State<RideChatPageView> {
     final chatId = _chatId;
     if (message.isEmpty || chatId == null || readOnly || _sending) return;
     setState(() => _sending = true);
+    final clientMessageId = _pendingMessageId ??= _newMessageId();
     try {
-      await FirebaseFunctions.instance
-          .httpsCallable('sendCircumMessage')
-          .call({'chatId': chatId, 'message': message, 'messageType': 'text'});
+      await FirebaseFunctions.instance.httpsCallable('sendCircumMessage').call({
+        'chatId': chatId,
+        'message': message,
+        'messageType': 'text',
+        'clientMessageId': clientMessageId,
+      });
       _input.clear();
       await _setTyping(false);
+      _pendingMessageId = null;
     } on FirebaseFunctionsException catch (error) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -187,9 +198,11 @@ class _RideChatPageViewState extends State<RideChatPageView> {
         title: Text(_deliveryChatTitle?.trim().isNotEmpty == true
             ? _deliveryChatTitle!.trim()
             : widget.title),
-        backgroundColor: AppTokens.background,
+        backgroundColor: AppTokens.strongGlass,
         foregroundColor: AppTokens.text,
         elevation: 0,
+        surfaceTintColor: Colors.transparent,
+        shape: const Border(bottom: BorderSide(color: AppTokens.glassBorder)),
       ),
       body: _supportError != null
           ? AppEmptyState(
@@ -258,10 +271,16 @@ class _RideChatPageViewState extends State<RideChatPageView> {
                           role:
                               '${Map<String, dynamic>.from(chat['participantRoles'] as Map? ?? const {})[currentId] ?? 'sender'}',
                           onChanged: (_) {
-                            _setTyping(true);
+                            if (!_typingPublished) {
+                              _typingPublished = true;
+                              _setTyping(true);
+                            }
                             _typingDebounce?.cancel();
-                            _typingDebounce = Timer(const Duration(seconds: 4),
-                                () => _setTyping(false));
+                            _typingDebounce =
+                                Timer(const Duration(seconds: 4), () {
+                              _typingPublished = false;
+                              _setTyping(false);
+                            });
                           },
                           onQuickReply: (reply) {
                             _input.text = reply;
@@ -456,50 +475,74 @@ class _Composer extends StatelessWidget {
         child: Column(mainAxisSize: MainAxisSize.min, children: [
           if (!readOnly)
             SizedBox(
-              height: 40,
+              height: 42,
               child: ListView.separated(
                 scrollDirection: Axis.horizontal,
                 padding: const EdgeInsets.symmetric(horizontal: 16),
                 itemCount: _quickReplies.length,
                 separatorBuilder: (_, __) => const SizedBox(width: 8),
-                itemBuilder: (context, index) => ActionChip(
-                  label: Text(_quickReplies[index]),
-                  onPressed: () => onQuickReply(_quickReplies[index]),
+                itemBuilder: (context, index) => DecoratedBox(
+                  decoration: BoxDecoration(
+                    color: AppTokens.glass,
+                    borderRadius: BorderRadius.circular(999),
+                    border: Border.all(color: AppTokens.glassBorder),
+                  ),
+                  child: InkWell(
+                    borderRadius: BorderRadius.circular(999),
+                    onTap: () => onQuickReply(_quickReplies[index]),
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 14),
+                      child: Center(
+                        child: Text(_quickReplies[index],
+                            style: const TextStyle(
+                                color: AppTokens.mutedText, fontSize: 12)),
+                      ),
+                    ),
+                  ),
                 ),
               ),
             ),
           Padding(
             padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
-            child: Row(children: [
-              Expanded(
-                child: TextField(
-                  controller: controller,
-                  enabled: !readOnly && !sending,
-                  minLines: 1,
-                  maxLines: 4,
-                  onChanged: onChanged,
-                  decoration: InputDecoration(
-                    hintText:
-                        readOnly ? 'This conversation is closed' : hintText,
-                    filled: true,
-                    fillColor: AppTokens.raisedPanel,
-                    border: OutlineInputBorder(
-                        borderRadius:
-                            BorderRadius.circular(AppTokens.radius16)),
+            child: AppGlassContainer(
+              padding: const EdgeInsets.fromLTRB(8, 4, 8, 4),
+              accent: readOnly ? null : AppTokens.primary,
+              child: Row(children: [
+                Expanded(
+                  child: TextField(
+                    controller: controller,
+                    enabled: !readOnly && !sending,
+                    minLines: 1,
+                    maxLines: 4,
+                    onChanged: onChanged,
+                    style: const TextStyle(color: AppTokens.text),
+                    decoration: InputDecoration(
+                      hintText:
+                          readOnly ? 'This conversation is closed' : hintText,
+                      hintStyle: const TextStyle(color: AppTokens.mutedText),
+                      border: InputBorder.none,
+                      contentPadding:
+                          const EdgeInsets.symmetric(horizontal: 12),
+                    ),
                   ),
                 ),
-              ),
-              const SizedBox(width: 8),
-              IconButton.filled(
-                onPressed: readOnly || sending ? null : onSend,
-                tooltip: 'Send message',
-                icon: sending
-                    ? const SizedBox.square(
-                        dimension: 18,
-                        child: CircularProgressIndicator(strokeWidth: 2))
-                    : const Icon(Icons.send_rounded),
-              ),
-            ]),
+                IconButton(
+                  onPressed: readOnly || sending ? null : onSend,
+                  tooltip: 'Send message',
+                  style: IconButton.styleFrom(
+                    backgroundColor: AppTokens.primary,
+                    foregroundColor: Colors.white,
+                    disabledBackgroundColor: AppTokens.glass,
+                    minimumSize: const Size(44, 44),
+                  ),
+                  icon: sending
+                      ? const SizedBox.square(
+                          dimension: 18,
+                          child: CircularProgressIndicator(strokeWidth: 2))
+                      : const Icon(Icons.send_rounded),
+                ),
+              ]),
+            ),
           ),
         ]),
       );

@@ -233,7 +233,7 @@ void main() {
   });
 
   test(
-      'Sender IRIS requests timeout and stale matches require non-empty item text',
+      'Sender IRIS soft deadline and stale matches require non-empty item text',
       () {
     final bloc = read('lib/app/send_package/bloc/send_package_bloc.dart');
     final canvas = read('lib/app/sender_mobile/sender_booking_canvas.dart');
@@ -245,7 +245,19 @@ void main() {
     expect(handlerEnd, greaterThan(handlerStart));
     final handler = bloc.substring(handlerStart, handlerEnd);
     expect(handler, contains("httpsCallable('analyseIris')"));
-    expect(handler, contains('.timeout(const Duration(seconds: 15))'));
+    expect(
+      handler,
+      contains('Future<void>.delayed(const Duration(milliseconds: 1500))'),
+    );
+    expect(handler, contains('CanonicalIrisEstimateResolved'));
+    expect(handler, contains('generation != _irisGeneration'));
+    expect(handler, isNot(contains('.timeout(const Duration(seconds: 15))')));
+    expect(
+      handler,
+      isNot(contains(".call(payload)\n          .timeout")),
+      reason:
+          'The authoritative IRIS future must stay alive after the 1500ms UI deadline.',
+    );
 
     final matchStart = canvas.indexOf('bool _irisMatchesParcel');
     final matchEnd =
@@ -255,6 +267,35 @@ void main() {
     final matcher = canvas.substring(matchStart, matchEnd);
     expect(matcher, contains('final item = itemName.trim().toLowerCase();'));
     expect(matcher, contains('item.isNotEmpty && actual.contains(item)'));
+  });
+
+  test('Sender active delivery restore has no deliberate multi-second retry',
+      () {
+    final bloc = read('lib/app/send_package/bloc/send_package_bloc.dart');
+    final helperStart =
+        bloc.indexOf('Future<void> _resolveActiveDeliveryByRequestId');
+    final helperEnd = bloc.indexOf(
+        'Future<Map<String, dynamic>?> _cachedActiveDelivery', helperStart);
+    expect(helperStart, isNonNegative);
+    expect(helperEnd, greaterThan(helperStart));
+    final helper = bloc.substring(helperStart, helperEnd);
+    expect(helper, contains('_cachedActiveDelivery(requestId)'));
+    expect(helper, contains('directFuture'));
+    expect(helper, contains('queryFuture'));
+    expect(
+        helper, contains('_firstResolvedDelivery(directFuture, queryFuture)'));
+    expect(helper, isNot(contains('Duration(seconds: 3)')));
+  });
+
+  test('Sender dispatch after paid delivery is backgrounded from UI path', () {
+    final bloc = read('lib/app/send_package/bloc/send_package_bloc.dart');
+    expect(bloc, contains('void _dispatchPaidDeliveryInBackground'));
+    expect(bloc, contains("httpsCallable('sendPackage')"));
+    expect(bloc, contains('unawaited('));
+    expect(
+        bloc,
+        isNot(contains(
+            "await FirebaseFunctions.instanceFor(\n            region: 'us-central1',\n          ).httpsCallable('sendPackage')")));
   });
 
   test('Sender async IRIS and quote refreshes clear stale booking state first',

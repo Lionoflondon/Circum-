@@ -1,9 +1,9 @@
 import 'package:circum/app/support/view/faq.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
-import 'package:flutter_svg/svg.dart';
 
 import '../../send_package/view/ride_chats.dart';
+import '../../sender_mobile/design_system/sender_design_system.dart';
 import '../../../utils/theme/theme.dart';
 import '../bloc/support_bloc.dart';
 
@@ -12,29 +12,50 @@ class SupportView extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      color: AppColors.secondary,
+    return DecoratedBox(
+      decoration: const BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [AppTokens.background, AppTokens.midnight],
+        ),
+      ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
-        children: [appBar(context), const SizedBox(height: 40), options()],
+        children: [appBar(context), const SizedBox(height: 28), options()],
       ),
     );
   }
 
   Widget appBar(context) {
-    return Container(
-      margin: EdgeInsets.only(
-          top: MediaQuery.of(context).padding.top + 20, left: 24),
-      width: double.maxFinite,
-      child: AppText.text('Support',
-          color: Colors.white, fontSize: 28, fontWeight: FontWeight.bold),
+    return Padding(
+      padding: EdgeInsets.fromLTRB(
+          20, MediaQuery.of(context).padding.top + 16, 20, 0),
+      child: AppGlassContainer(
+        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 18),
+        accent: AppTokens.primary,
+        child: Row(
+          children: [
+            const Icon(Icons.support_agent_rounded,
+                color: AppTokens.primaryLight),
+            const SizedBox(width: 12),
+            Text('CIRCUM Support',
+                style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                      color: AppTokens.text,
+                      fontWeight: FontWeight.w800,
+                    )),
+          ],
+        ),
+      ),
     );
   }
 
   Widget options() {
     return BlocBuilder<SupportBloc, SupportState>(builder: (context, state) {
-      return SizedBox(
-          width: double.maxFinite,
+      return Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 20),
+        child: AppGlassContainer(
+          padding: EdgeInsets.zero,
           child: Column(
             children: [
               TextButton(
@@ -49,7 +70,8 @@ class SupportView extends StatelessWidget {
                     children: [
                       Row(
                         children: [
-                          SvgPicture.asset('assets/svg/support.svg'),
+                          const Icon(Icons.forum_rounded,
+                              color: AppTokens.primaryLight),
                           const SizedBox(width: 16),
                           AppText.text(
                             'Live Chat',
@@ -87,7 +109,8 @@ class SupportView extends StatelessWidget {
                     children: [
                       Row(
                         children: [
-                          SvgPicture.asset('assets/svg/support.svg'),
+                          const Icon(Icons.help_outline_rounded,
+                              color: AppTokens.primaryLight),
                           const SizedBox(width: 16),
                           AppText.text(
                             'FAQ',
@@ -105,7 +128,9 @@ class SupportView extends StatelessWidget {
                         MaterialPageRoute(builder: (_) => const FAQView()));
                   }),
             ],
-          ));
+          ),
+        ),
+      );
     });
   }
 }

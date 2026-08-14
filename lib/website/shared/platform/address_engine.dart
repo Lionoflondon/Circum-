@@ -56,6 +56,23 @@ class AddressEngine {
         .join(separator);
   }
 
+  static String joinDistinctParts(
+    Iterable<Object?> values, {
+    String separator = ', ',
+  }) {
+    final parts = <String>[];
+    for (final value in values.map(clean)) {
+      if (value.isEmpty || value == ',') continue;
+      final normalized = value.toLowerCase().replaceAll(RegExp(r'\s+'), ' ');
+      final duplicate = parts.any(
+        (part) =>
+            part.toLowerCase().replaceAll(RegExp(r'\s+'), ' ') == normalized,
+      );
+      if (!duplicate) parts.add(value);
+    }
+    return parts.join(separator);
+  }
+
   static String firstPart(Iterable<Object?> values) {
     for (final value in values) {
       final cleaned = clean(value);
@@ -166,7 +183,7 @@ class AddressEngine {
       raw['country'],
       manualParts.isNotEmpty ? manualParts.last : null,
     ]);
-    final formattedAddress = joinParts([
+    final formattedAddress = joinDistinctParts([
       addressLine1,
       addressLine2,
       city,

@@ -3204,6 +3204,7 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
   StreamSubscription<QuerySnapshot<Map<String, dynamic>>>? _availableJobsSub;
   StreamSubscription<QuerySnapshot<Map<String, dynamic>>>? _acceptedJobsSub;
   StreamSubscription<QuerySnapshot<Map<String, dynamic>>>? _completedJobsSub;
+  Timer? _scheduledJobsTimer;
   DriverPerformanceMetric _performance = DriverPerformanceMetric.empty(
     'web-rider',
   );
@@ -3211,6 +3212,7 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
   List<Map<String, dynamic>> _availableJobs = const [];
   List<Map<String, dynamic>> _acceptedJobs = const [];
   List<Map<String, dynamic>> _completedJobs = const [];
+  List<Map<String, dynamic>> _scheduledJobs = const [];
   Map<String, dynamic>? _riderProfile;
   Set<CircumRole> _availableRoles = const {};
   bool _superAdminRiderBypass = false;
@@ -3262,6 +3264,7 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
     _availableJobsSub?.cancel();
     _acceptedJobsSub?.cancel();
     _completedJobsSub?.cancel();
+    _scheduledJobsTimer?.cancel();
     _riderChatSub?.cancel();
     _stopRiderLiveLocationPublishing(status: 'offline');
     _fullName.dispose();
@@ -3888,6 +3891,31 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
             .toList(growable: false);
       });
     });
+    _scheduledJobsTimer?.cancel();
+    _refreshScheduledJobs();
+    _scheduledJobsTimer = Timer.periodic(
+      const Duration(minutes: 1),
+      (_) => _refreshScheduledJobs(),
+    );
+  }
+
+  Future<void> _refreshScheduledJobs() async {
+    if (_riderUser == null) return;
+    try {
+      final response = await FirebaseFunctions.instanceFor(
+        region: 'us-central1',
+      ).httpsCallable('getRiderScheduledJobs').call();
+      final data = Map<String, dynamic>.from(response.data as Map);
+      final jobs = (data['jobs'] as List? ?? const [])
+          .whereType<Map>()
+          .map((job) => Map<String, dynamic>.from(job))
+          .toList(growable: false);
+      if (!mounted) return;
+      setState(() => _scheduledJobs = jobs);
+    } catch (_) {
+      if (!mounted) return;
+      setState(() => _jobMessage = 'Could not refresh scheduled jobs.');
+    }
   }
 
   Future<void> _acceptDeliveryJob(Map<String, dynamic> job) async {
@@ -5010,6 +5038,7 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
     await _availableJobsSub?.cancel();
     await _acceptedJobsSub?.cancel();
     await _completedJobsSub?.cancel();
+    _scheduledJobsTimer?.cancel();
     await _riderChatSub?.cancel();
     await FirebaseAuth.instance.signOut();
     if (!mounted) return;
@@ -5021,6 +5050,7 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
       _recentRatings = const [];
       _availableJobs = const [];
       _acceptedJobs = const [];
+      _scheduledJobs = const [];
       _completedJobs = const [];
       _availableRoles = const {};
       _roleChoiceConfirmed = false;
@@ -5274,6 +5304,7 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
       recentRatings: _recentRatings,
       availableJobs: _availableJobs,
       acceptedJobs: _acceptedJobs,
+      scheduledJobs: _scheduledJobs,
       completedJobs: _completedJobs,
       applicationId: _applicationId,
       withdrawAmount: _withdrawAmount,
@@ -6037,6 +6068,7 @@ class _RiderWorkspace extends StatelessWidget {
   final List<DriverRating> recentRatings;
   final List<Map<String, dynamic>> availableJobs;
   final List<Map<String, dynamic>> acceptedJobs;
+  final List<Map<String, dynamic>> scheduledJobs;
   final List<Map<String, dynamic>> completedJobs;
   final String? applicationId;
   final TextEditingController withdrawAmount;
@@ -6081,6 +6113,7 @@ class _RiderWorkspace extends StatelessWidget {
     required this.recentRatings,
     required this.availableJobs,
     required this.acceptedJobs,
+    required this.scheduledJobs,
     required this.completedJobs,
     required this.applicationId,
     required this.withdrawAmount,
@@ -6226,6 +6259,8 @@ class _RiderWorkspace extends StatelessWidget {
             onReportIssue: onReportIssue,
             onOpenChat: onOpenChat,
           ),
+          const SizedBox(height: 14),
+          _RiderScheduledJobsPanel(colors: colors, jobs: scheduledJobs),
           const SizedBox(height: 14),
           _RiderJobListPanel(
             colors: colors,
@@ -6893,6 +6928,119 @@ class _AvailableDriverJobsPanel extends StatelessWidget {
         ],
       ),
     );
+  }
+}
+
+class _RiderScheduledJobsPanel extends StatelessWidget {
+  final _CircumColors colors;
+  final List<Map<String, dynamic>> jobs;
+
+  const _RiderScheduledJobsPanel({required this.colors, required this.jobs});
+
+  @override
+  Widget build(BuildContext context) {
+    return _GlassPanel(
+      colors: colors,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _SectionTitle(colors: colors, title: 'Scheduled Jobs'),
+          const SizedBox(height: 8),
+          Text(
+            'Reserved work appears here until its activation window.',
+            style: TextStyle(
+              color: colors.mutedText,
+              fontWeight: FontWeight.w700,
+              height: 1.35,
+            ),
+          ),
+          const SizedBox(height: 12),
+          if (jobs.isEmpty)
+            Text(
+              'No scheduled jobs are reserved for you.',
+              style: TextStyle(color: colors.mutedText),
+            )
+          else
+            ...jobs.map(
+              (job) => Container(
+                width: double.infinity,
+                margin: const EdgeInsets.only(bottom: 10),
+                padding: const EdgeInsets.all(14),
+                decoration: BoxDecoration(
+                  color: colors.panel,
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: colors.border),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Expanded(
+                          child: Text(
+                            '${job['domainBadge'] ?? 'Standard'} delivery',
+                            style: TextStyle(
+                              color: colors.text,
+                              fontWeight: FontWeight.w900,
+                            ),
+                          ),
+                        ),
+                        _HealthChip(label: '${job['status'] ?? 'scheduled'}'),
+                      ],
+                    ),
+                    const SizedBox(height: 10),
+                    _JobInfoLine(
+                      colors: colors,
+                      icon: Icons.schedule,
+                      label: 'Schedule',
+                      value: _scheduledJobTime(job),
+                    ),
+                    _JobInfoLine(
+                      colors: colors,
+                      icon: Icons.trip_origin,
+                      label: 'Pickup',
+                      value: '${job['pickupAddress'] ?? 'Pickup pending'}',
+                    ),
+                    _JobInfoLine(
+                      colors: colors,
+                      icon: Icons.location_on_outlined,
+                      label: 'Drop-off',
+                      value: '${job['dropoffAddress'] ?? 'Drop-off pending'}',
+                    ),
+                    _JobInfoLine(
+                      colors: colors,
+                      icon: Icons.payments_outlined,
+                      label: 'Earnings',
+                      value: _earnings(job['earnings']),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
+  static String _scheduledJobTime(Map<String, dynamic> job) {
+    final window = '${job['scheduledWindow'] ?? ''}'.trim();
+    final value = job['scheduledAt'];
+    DateTime? date;
+    if (value is Timestamp) date = value.toDate();
+    if (value is String) date = DateTime.tryParse(value)?.toLocal();
+    if (value is Map) {
+      final seconds = value['_seconds'] ?? value['seconds'];
+      if (seconds is num) {
+        date = DateTime.fromMillisecondsSinceEpoch(seconds.toInt() * 1000);
+      }
+    }
+    final dateText = date == null ? 'Time pending' : _adminDateText(date);
+    return window.isEmpty ? dateText : '$dateText · $window';
+  }
+
+  static String _earnings(Object? value) {
+    final amount = value is num ? value.toDouble() : double.tryParse('$value');
+    return amount == null ? 'To be confirmed' : '£${amount.toStringAsFixed(2)}';
   }
 }
 

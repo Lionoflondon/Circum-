@@ -49,8 +49,8 @@ class SenderBookingCanvas extends StatefulWidget {
 
 class _SenderBookingCanvasState extends State<SenderBookingCanvas> {
   static const Duration _localDraftRetention = Duration(minutes: 10);
-  static const Duration _backendDraftRestoreTimeout = Duration(seconds: 12);
-  static const Duration _localDraftRestoreTimeout = Duration(seconds: 4);
+  static const Duration _backendDraftRestoreTimeout = Duration(seconds: 5);
+  static const Duration _localDraftRestoreTimeout = Duration(seconds: 2);
 
   SenderBookingDraft _draft = const SenderBookingDraft();
   final _pickup = TextEditingController();
@@ -76,7 +76,7 @@ class _SenderBookingCanvasState extends State<SenderBookingCanvas> {
   int _draftRevision = 0;
   int _saveGeneration = 0;
   Future<void> _saveChain = Future.value();
-  String _syncStatus = 'Loading draft';
+  String _syncStatus = 'Checking draft';
   bool _suppressDraftSave = false;
   String? _lastBackendQuoteKey;
   XFile? _parcelPhoto;
@@ -85,6 +85,9 @@ class _SenderBookingCanvasState extends State<SenderBookingCanvas> {
   String? _irisPhotoAnalysisId;
   double? _photoEstimatedWeightKg;
   bool _resettingBooking = false;
+  final DraggableScrollableController _bookingSheetController =
+      DraggableScrollableController();
+  SenderBookingStep? _lastSheetStep;
 
   @override
   void initState() {
@@ -172,11 +175,23 @@ class _SenderBookingCanvasState extends State<SenderBookingCanvas> {
     _item.dispose();
     _description.dispose();
     _weight.dispose();
+    _bookingSheetController.dispose();
     super.dispose();
   }
 
   void _setDraft(SenderBookingDraft next) {
     setState(() => _draft = next);
+    if (_lastSheetStep != next.step) {
+      _lastSheetStep = next.step;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted || !_bookingSheetController.isAttached) return;
+        _bookingSheetController.animateTo(
+          _bookingSheetExtentFor(next.step),
+          duration: const Duration(milliseconds: 220),
+          curve: Curves.easeOutCubic,
+        );
+      });
+    }
     if (!_restoringDraft) _scheduleDraftSave(next);
   }
 
@@ -254,7 +269,10 @@ class _SenderBookingCanvasState extends State<SenderBookingCanvas> {
   }
 
   Future<void> _loadBackendDraft() async {
-    setState(() => _draftLoading = true);
+    setState(() {
+      _draftLoading = true;
+      _syncStatus = 'Checking draft';
+    });
     if (_uid == null) {
       await _clearQueuedLocalDraft();
       if (!mounted) return;
@@ -287,10 +305,15 @@ class _SenderBookingCanvasState extends State<SenderBookingCanvas> {
           stackTrace,
           'timed out loading Sender booking draft',
         );
-        if (mounted) setState(() => _syncStatus = 'Saved offline');
+        if (mounted) setState(() => _syncStatus = 'Started fresh');
       }
       await _restoreQueuedLocalDraft().timeout(_localDraftRestoreTimeout);
-      if (mounted) setState(() => _draftLoading = false);
+      if (mounted) {
+        setState(() {
+          _draftLoading = false;
+          if (_syncStatus == 'Checking draft') _syncStatus = 'Saved';
+        });
+      }
     } on FirebaseFunctionsException catch (error, stackTrace) {
       _reportUnexpectedRestoreFailure(
         error,
@@ -306,7 +329,10 @@ class _SenderBookingCanvasState extends State<SenderBookingCanvas> {
         _draftLoading = false;
         _initializationError = error.code == 'unauthenticated'
             ? 'Sign in again to send a parcel.'
-            : 'Your saved delivery could not be restored. Please try again.';
+            : null;
+        _syncStatus = error.code == 'unauthenticated'
+            ? 'Sign in needed'
+            : 'Started fresh';
       });
     } on TimeoutException catch (error, stackTrace) {
       _reportUnexpectedRestoreFailure(
@@ -318,8 +344,8 @@ class _SenderBookingCanvasState extends State<SenderBookingCanvas> {
       if (!mounted) return;
       setState(() {
         _draftLoading = false;
-        _initializationError =
-            "Your previous draft couldn't be restored. Please start again.";
+        _initializationError = null;
+        _syncStatus = 'Started fresh';
       });
     } catch (error, stackTrace) {
       _reportUnexpectedRestoreFailure(
@@ -330,7 +356,8 @@ class _SenderBookingCanvasState extends State<SenderBookingCanvas> {
       if (!mounted) return;
       setState(() {
         _draftLoading = false;
-        _initializationError = 'Your saved delivery draft could not be loaded.';
+        _initializationError = null;
+        _syncStatus = 'Started fresh';
       });
     }
   }
@@ -736,10 +763,10 @@ class _SenderBookingCanvasState extends State<SenderBookingCanvas> {
   }
 
   Future<bool> _resolveTypedAddressIfNeeded() async {
-    final pickup = _draft.step == SenderBookingStep.pickup;
+    final isPickupStep = _draft.step == SenderBookingStep.pickup;
     final address =
-        (pickup ? _draft.pickupAddress : _draft.dropoffAddress).trim();
-    final hasCoordinates = pickup
+        (isPickupStep ? _draft.pickupAddress : _draft.dropoffAddress).trim();
+    final hasCoordinates = isPickupStep
         ? _draft.pickupLat != null && _draft.pickupLng != null
         : _draft.dropoffLat != null && _draft.dropoffLng != null;
     if (address.isEmpty || hasCoordinates) return true;
@@ -751,64 +778,49 @@ class _SenderBookingCanvasState extends State<SenderBookingCanvas> {
     try {
       final provider = PlaceApiProvider(const Uuid());
       final lang = Localizations.localeOf(context).languageCode;
-      final suggestions = await provider.fetchSuggestions(
-        address,
-        lang,
-      );
+      final resolved = await provider.resolveTypedAddress(address, lang);
       if (!mounted) return false;
-      final normalized = address.toLowerCase().replaceAll(RegExp(r'\s+'), ' ');
-      final match = suggestions.where((suggestion) {
-        final description = suggestion.description
-            .trim()
-            .toLowerCase()
-            .replaceAll(RegExp(r'\s+'), ' ');
-        final main = suggestion.mainText
-            .trim()
-            .toLowerCase()
-            .replaceAll(RegExp(r'\s+'), ' ');
-        return description == normalized || main == normalized;
-      }).firstOrNull;
-      if (match == null) {
-        throw StateError('No exact address match found');
+      final lat = resolved.lat;
+      final lng = resolved.lng;
+      if (lat == null || lng == null) {
+        throw StateError('Resolved address did not include coordinates');
       }
-      final coordinate = await provider.fetchPlaceDetails(
-        match.placeId,
-        lang,
-      );
-      if (!mounted) return false;
-      if (pickup) {
+      if (isPickupStep) {
         context.read<SendPackageBloc>().add(
               SetPickupAddress(
-                val: match.description,
-                pickupLocationSubAddress: match.subText,
-                placeId: match.placeId,
+                val: resolved.description,
+                pickupLocationSubAddress: resolved.subText,
+                placeId: resolved.placeId,
                 lang: lang,
               ),
             );
+        _pickup.text = resolved.description;
         _setDraft(
           _draft.copyWith(
-            pickupAddress: match.description,
-            pickupLat: coordinate.lat,
-            pickupLng: coordinate.lng,
+            pickupAddress: resolved.description,
+            pickupLat: lat,
+            pickupLng: lng,
           ),
         );
       } else {
         context.read<SendPackageBloc>().add(
               SetDeliveryAddress(
-                val: match.description,
-                destinationLocationSubAddress: match.subText,
-                placeId: match.placeId,
+                val: resolved.description,
+                destinationLocationSubAddress: resolved.subText,
+                placeId: resolved.placeId,
                 lang: lang,
               ),
             );
+        _dropoff.text = resolved.description;
         _setDraft(
           _draft.copyWith(
-            dropoffAddress: match.description,
-            dropoffLat: coordinate.lat,
-            dropoffLng: coordinate.lng,
+            dropoffAddress: resolved.description,
+            dropoffLat: lat,
+            dropoffLng: lng,
           ),
         );
       }
+      debugPrint('Typed Sender address resolved via backend.');
       return true;
     } catch (error, stackTrace) {
       debugPrint('Typed Sender address resolution failed: $error');
@@ -816,7 +828,7 @@ class _SenderBookingCanvasState extends State<SenderBookingCanvas> {
       if (mounted) {
         setState(() {
           _addressResolutionMessage =
-              'Please choose a matching address suggestion before continuing.';
+              'We could not verify that address. Add a house or flat number, street, town and postcode, then try again.';
         });
       }
       return false;
@@ -1027,13 +1039,6 @@ class _SenderBookingCanvasState extends State<SenderBookingCanvas> {
         },
       );
     }
-    if (_draftLoading) {
-      return const _SendRouteStateScaffold(
-        title: 'Restoring delivery',
-        body: 'Loading your saved delivery draft.',
-        actionLabel: 'Please wait',
-      );
-    }
     return BlocBuilder<SendPackageBloc, SendPackageState>(
       builder: (context, engine) {
         final operationalStep = _stepForEngine(engine);
@@ -1073,6 +1078,7 @@ class _SenderBookingCanvasState extends State<SenderBookingCanvas> {
             onContinue: _advance,
           );
         }
+        final keyboardOpen = MediaQuery.viewInsetsOf(context).bottom > 0;
         return ColoredBox(
           color: _Tokens.bg,
           child: Stack(
@@ -1094,38 +1100,51 @@ class _SenderBookingCanvasState extends State<SenderBookingCanvas> {
                       onBack: _back,
                       onCancel: _confirmCancelBooking,
                     ),
-                    const Spacer(),
-                    _BookingPanel(
-                      draft: _draft,
-                      engine: engine,
-                      draftId: _draftId,
-                      senderUid: _uid,
-                      pickup: _pickup,
-                      dropoff: _dropoff,
-                      receiverName: _receiverName,
-                      receiverPhone: _receiverPhone,
-                      notes: _notes,
-                      scheduledDate: _scheduledDate,
-                      scheduledJourneyTime: _scheduledJourneyTime,
-                      customWindowStart: _customWindowStart,
-                      customWindowEnd: _customWindowEnd,
-                      item: _item,
-                      description: _description,
-                      weight: _weight,
-                      parcelPhoto: _parcelPhoto,
-                      parcelPhotoBusy: _parcelPhotoBusy,
-                      parcelPhotoMessage: _parcelPhotoMessage,
-                      photoEstimatedWeightKg: _photoEstimatedWeightKg,
-                      searchingPickup: _searchingPickup,
-                      onSearchingPickupChanged: (value) =>
-                          setState(() => _searchingPickup = value),
-                      onParcelChanged: _onParcelChanged,
-                      onPhotoTap: _pickParcelPhoto,
-                      onPhotoRemove: _removeParcelPhoto,
-                      onDraft: _setDraft,
-                      onContinue: _advance,
-                      addressResolutionMessage: _addressResolutionMessage,
-                      addressResolving: _addressResolving,
+                    Expanded(
+                      child: DraggableScrollableSheet(
+                        initialChildSize:
+                            _bookingSheetExtentFor(_draft.step, keyboardOpen),
+                        minChildSize: keyboardOpen ? .58 : .18,
+                        maxChildSize: keyboardOpen ? .94 : .90,
+                        snap: true,
+                        snapSizes: keyboardOpen
+                            ? const [.58, .78, .94]
+                            : const [.18, .45, .90],
+                        controller: _bookingSheetController,
+                        builder: (context, scrollController) => _BookingPanel(
+                          scrollController: scrollController,
+                          draft: _draft,
+                          engine: engine,
+                          draftId: _draftId,
+                          senderUid: _uid,
+                          pickup: _pickup,
+                          dropoff: _dropoff,
+                          receiverName: _receiverName,
+                          receiverPhone: _receiverPhone,
+                          notes: _notes,
+                          scheduledDate: _scheduledDate,
+                          scheduledJourneyTime: _scheduledJourneyTime,
+                          customWindowStart: _customWindowStart,
+                          customWindowEnd: _customWindowEnd,
+                          item: _item,
+                          description: _description,
+                          weight: _weight,
+                          parcelPhoto: _parcelPhoto,
+                          parcelPhotoBusy: _parcelPhotoBusy,
+                          parcelPhotoMessage: _parcelPhotoMessage,
+                          photoEstimatedWeightKg: _photoEstimatedWeightKg,
+                          searchingPickup: _searchingPickup,
+                          onSearchingPickupChanged: (value) =>
+                              setState(() => _searchingPickup = value),
+                          onParcelChanged: _onParcelChanged,
+                          onPhotoTap: _pickParcelPhoto,
+                          onPhotoRemove: _removeParcelPhoto,
+                          onDraft: _setDraft,
+                          onContinue: _advance,
+                          addressResolutionMessage: _addressResolutionMessage,
+                          addressResolving: _addressResolving,
+                        ),
+                      ),
                     ),
                   ],
                 ),
@@ -1151,6 +1170,33 @@ class _SenderBookingCanvasState extends State<SenderBookingCanvas> {
         return null;
     }
   }
+}
+
+double _bookingSheetExtentFor(SenderBookingStep step,
+    [bool keyboardOpen = false]) {
+  if (keyboardOpen) return .78;
+  switch (step) {
+    case SenderBookingStep.recipient:
+    case SenderBookingStep.iris:
+    case SenderBookingStep.options:
+    case SenderBookingStep.review:
+    case SenderBookingStep.payment:
+      return .90;
+    case SenderBookingStep.pickup:
+    case SenderBookingStep.dropoff:
+    case SenderBookingStep.deliveryTime:
+    case SenderBookingStep.parcel:
+      return .45;
+    case SenderBookingStep.findingRider:
+    case SenderBookingStep.liveTracking:
+      return .45;
+  }
+}
+
+@visibleForTesting
+double bookingSheetExtentForTest(SenderBookingStep step,
+    [bool keyboardOpen = false]) {
+  return _bookingSheetExtentFor(step, keyboardOpen);
 }
 
 int _intFrom(Object? value) {
@@ -1286,6 +1332,7 @@ class _TopBar extends StatelessWidget {
 }
 
 class _BookingPanel extends StatelessWidget {
+  final ScrollController scrollController;
   final SenderBookingDraft draft;
   final SendPackageState engine;
   final String? draftId;
@@ -1317,6 +1364,7 @@ class _BookingPanel extends StatelessWidget {
   final bool addressResolving;
 
   const _BookingPanel({
+    required this.scrollController,
     required this.draft,
     required this.engine,
     required this.draftId,
@@ -1352,49 +1400,43 @@ class _BookingPanel extends StatelessWidget {
   Widget build(BuildContext context) {
     final content = _content(context);
     final bottomInset = MediaQuery.paddingOf(context).bottom;
-    final maxPanelHeight = math.max(
-      320.0,
-      MediaQuery.sizeOf(context).height - bottomInset - 150,
-    );
     return Padding(
       padding: EdgeInsets.fromLTRB(14, 0, 14, bottomInset + 12),
-      child: ConstrainedBox(
-        constraints: BoxConstraints(maxHeight: maxPanelHeight),
-        child: _Glass(
-          child: AnimatedSwitcher(
-            duration: const Duration(milliseconds: 280),
-            child: SingleChildScrollView(
-              key: ValueKey(draft.step),
-              physics: const BouncingScrollPhysics(),
-              padding: EdgeInsets.only(bottom: bottomInset + 28),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Center(
-                    child: Container(
-                      height: 5,
-                      width: 48,
-                      margin: const EdgeInsets.only(bottom: 14),
-                      decoration: BoxDecoration(
-                        color: Colors.white.withValues(alpha: .18),
-                        borderRadius: BorderRadius.circular(999),
-                      ),
+      child: _Glass(
+        child: AnimatedSwitcher(
+          duration: const Duration(milliseconds: 280),
+          child: SingleChildScrollView(
+            controller: scrollController,
+            key: ValueKey(draft.step),
+            physics: const BouncingScrollPhysics(),
+            padding: EdgeInsets.only(bottom: bottomInset + 28),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Center(
+                  child: Container(
+                    height: 5,
+                    width: 48,
+                    margin: const EdgeInsets.only(bottom: 14),
+                    decoration: BoxDecoration(
+                      color: Colors.white.withValues(alpha: .18),
+                      borderRadius: BorderRadius.circular(999),
                     ),
                   ),
-                  Text(
-                    senderStepTitle(draft.step),
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontSize: 24,
-                      height: 1.08,
-                      fontWeight: FontWeight.w900,
-                    ),
+                ),
+                Text(
+                  senderStepTitle(draft.step),
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 24,
+                    height: 1.08,
+                    fontWeight: FontWeight.w900,
                   ),
-                  const SizedBox(height: 14),
-                  content,
-                ],
-              ),
+                ),
+                const SizedBox(height: 14),
+                content,
+              ],
             ),
           ),
         ),

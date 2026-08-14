@@ -59,7 +59,7 @@ class ProofOfDeliveryDetails {
       if (receiverConfirmationMethod.trim().isNotEmpty)
         ('Receiver confirmation', receiverConfirmationMethod),
       if (pinVerificationResult.trim().isNotEmpty)
-        ('PIN/OTP verification', pinVerificationResult),
+        ('PIN verification', pinVerificationResult),
       if (gpsConfirmation.trim().isNotEmpty)
         ('GPS confirmation', gpsConfirmation),
       if (finalAddress.trim().isNotEmpty) ('Final address', finalAddress),
@@ -132,9 +132,6 @@ ProofOfDeliveryDetails proofOfDeliveryFromRecord(
   final deliveryReference = _firstString(record, proof, const [
     'deliveryReference',
     'trackingReference',
-    'trackingId',
-    'requestId',
-    'id',
   ]);
   return ProofOfDeliveryDetails(
     photoUrl: _proofPhotoUrl(record, proof),
@@ -158,7 +155,7 @@ ProofOfDeliveryDetails proofOfDeliveryFromRecord(
     receiverConfirmationMethod: confirmationMethod.isNotEmpty
         ? confirmationMethod
         : deliveryPinVerified
-            ? 'PIN/OTP verified'
+            ? 'PIN verified'
             : gpsConfirmed
                 ? 'GPS confirmed'
                 : '',
@@ -176,13 +173,29 @@ ProofOfDeliveryDetails proofOfDeliveryFromRecord(
       'recipientAddress',
     ]),
     deliveryReference: deliveryReference.isNotEmpty
-        ? deliveryReference
-        : fallbackReference ?? '',
+        ? customerFacingDeliveryReference(deliveryReference)
+        : customerFacingDeliveryReference(fallbackReference ?? ''),
     collectionPinVerified: collectionPinVerified,
     deliveryPinVerified: deliveryPinVerified,
     underReview: _isUnderReview(record, proof),
     vanguard: vanguard,
   );
+}
+
+String customerFacingDeliveryReference(String reference) {
+  final value = reference.trim();
+  if (value.isEmpty) return '';
+  final normalized = value.toLowerCase();
+  final compact = value.replaceAll(RegExp(r'[^A-Za-z0-9]'), '');
+  final suffix = compact.length <= 6
+      ? compact.toUpperCase()
+      : compact.substring(compact.length - 6).toUpperCase();
+  if (normalized.startsWith('gift_')) return 'Gift #$suffix';
+  if (normalized.startsWith('health_')) return 'Health+ #$suffix';
+  if (normalized.contains('_') || compact.length > 18) {
+    return 'Delivery #$suffix';
+  }
+  return value;
 }
 
 String _proofPhotoUrl(Map<String, dynamic> record, Map<String, dynamic> proof) {

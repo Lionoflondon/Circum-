@@ -6,6 +6,8 @@ class AddressEngine {
     'formattedAddress',
     'addressLine1',
     'addressLine2',
+    'buildingNumber',
+    'street',
     'buildingName',
     'apartment',
     'floor',
@@ -21,6 +23,7 @@ class AddressEngine {
     'source',
     'createdAt',
     'updatedAt',
+    'resolutionPrecision',
   ];
 
   static const compatibilityFields = [
@@ -54,6 +57,23 @@ class AddressEngine {
         .where((value) => value != ',')
         .toList()
         .join(separator);
+  }
+
+  static String joinDistinctParts(
+    Iterable<Object?> values, {
+    String separator = ', ',
+  }) {
+    final parts = <String>[];
+    for (final value in values.map(clean)) {
+      if (value.isEmpty || value == ',') continue;
+      final normalized = value.toLowerCase().replaceAll(RegExp(r'\s+'), ' ');
+      final duplicate = parts.any(
+        (part) =>
+            part.toLowerCase().replaceAll(RegExp(r'\s+'), ' ') == normalized,
+      );
+      if (!duplicate) parts.add(value);
+    }
+    return parts.join(separator);
   }
 
   static String firstPart(Iterable<Object?> values) {
@@ -166,14 +186,24 @@ class AddressEngine {
       raw['country'],
       manualParts.isNotEmpty ? manualParts.last : null,
     ]);
-    final formattedAddress = joinParts([
-      addressLine1,
-      addressLine2,
-      city,
-      county,
-      postcode,
-      country,
-    ]);
+    final formattedAddress = apartment.isNotEmpty
+        ? joinDistinctParts([
+            apartment,
+            addressLine1,
+            if (addressLine2 != apartment) addressLine2,
+            city,
+            county,
+            postcode,
+            country,
+          ])
+        : joinDistinctParts([
+            addressLine1,
+            addressLine2,
+            city,
+            county,
+            postcode,
+            country,
+          ]);
     final lat =
         toDouble(latitude ?? raw['latitude'] ?? raw['lat'] ?? suggestion?.lat);
     final lng = toDouble(
@@ -188,6 +218,8 @@ class AddressEngine {
       'formattedAddress': formattedAddress,
       'addressLine1': addressLine1,
       'addressLine2': addressLine2,
+      'buildingNumber': streetNumber,
+      'street': route,
       'buildingName': buildingName,
       'apartment': apartment,
       'floor': floor,
@@ -208,6 +240,18 @@ class AddressEngine {
       ]),
       'createdAt': firstPart([createdAt, raw['createdAt']]),
       'updatedAt': firstPart([updatedAt, raw['updatedAt']]),
+      'resolutionPrecision': firstPart([
+        raw['resolutionPrecision'],
+        apartment.isNotEmpty
+            ? 'unit'
+            : streetNumber.isNotEmpty
+                ? 'premise'
+                : route.isNotEmpty
+                    ? 'street'
+                    : postcode.isNotEmpty
+                        ? 'postcode'
+                        : '',
+      ]),
       // Compatibility aliases for older readers while products migrate to the
       // canonical Address object above.
       'countyState': county,
@@ -311,6 +355,12 @@ class AddressEngine {
         'addressLine1': address['addressLine1'],
       if (address['addressLine2'] != null)
         'addressLine2': address['addressLine2'],
+      if (address['buildingNumber'] != null)
+        'buildingNumber': address['buildingNumber'],
+      if (address['street'] != null) 'street': address['street'],
+      if (address['apartment'] != null) 'apartment': address['apartment'],
+      if (address['resolutionPrecision'] != null)
+        'resolutionPrecision': address['resolutionPrecision'],
       if (address['city'] != null) 'city': address['city'],
       if (address['county'] != null) 'county': address['county'],
       if (address['country'] != null) 'country': address['country'],
