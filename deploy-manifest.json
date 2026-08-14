@@ -216,6 +216,8 @@
         "scripts/firebase_tools.sh",
         "scripts/release_orchestrator.js",
         "scripts/scoped_functions_deploy_list.js",
+        "scripts/functions_release_provenance.js",
+        "scripts/functions_release_provenance.test.js",
         "scripts/operations_health_deployment_gate.js",
         "scripts/validate_web_artifacts.js",
         "scripts/verify_sender_deployment_governance.js"
