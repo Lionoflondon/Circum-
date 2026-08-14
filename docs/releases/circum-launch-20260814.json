@@ -1,0 +1,89 @@
+{
+  "purpose": "circum_launch_release_line",
+  "releaseBranch": "release/circum-launch-20260814",
+  "releaseCommit": "9d65ff85fc4c7105f086b8152cc28f8deada5c83",
+  "pricingSourceCommit": "1108c90d29c6208b7f92a9c1a89ca1571fc4b0e9",
+  "pricingManifestCommit": "9d65ff85fc4c7105f086b8152cc28f8deada5c83",
+  "pricingSourcePackageSha256": "f4c158f98ac22c401f814e95db0613c0a7338bced55130fef21e9c32777279ed",
+  "pricingProvenanceBranch": "codex/pricing-economics-production-20260814",
+  "hashes": {
+    "firestoreRulesSha256": "1dd4b8ee948ca8b83023ddfad1db7edf957bf448a1c128b118b2450befc062e5",
+    "firestoreIndexesSha256": "68e6ee5d9a9e00bfd31db9e4352335fbed44573b8c2d0a0ab3a1dac6c6158905",
+    "firebaseJsonSha256": "9f7fe5b9f690862b6599cc4065a1be55678ad45df4b124e46dce4547824b6ce6",
+    "firebasercSha256": "d8b61afea54bd35230fd4c9892a52204e8b044ca80ddc042a56572349737965d"
+  },
+  "certifiedCommits": [
+    {"sha": "1c96d14", "classification": "CERTIFIED + DEPLOYED", "scope": "delivery lifecycle authority and evidence security"},
+    {"sha": "01c16ba", "classification": "CERTIFIED + DEPLOYED", "scope": "canonical delivery completion"},
+    {"sha": "d438ed3", "classification": "PARTIALLY CERTIFIED", "scope": "responsive Sender performance architecture"},
+    {"sha": "62b6701", "classification": "CERTIFIED + DEPLOYED", "scope": "Gift and Health+ Rider economics"},
+    {"sha": "1108c90", "classification": "CERTIFIED + DEPLOYED", "scope": "road-charge/pricing economics"},
+    {"sha": "9d65ff8", "classification": "CERTIFIED + DEPLOYED", "scope": "pricing production provenance manifest"}
+  ],
+  "productionFunctionPackages": {
+    "pricingGiftHealthSettlement": {
+      "sourceUpload": "a36d4872-bf89-47fb-884e-8b9deb819810.zip",
+      "functions": [
+        "createSenderBookingQuote",
+        "createSenderPaidDelivery",
+        "createGiftPayment",
+        "finalizeGiftPayment",
+        "createHealthPlusBooking",
+        "createHealthPlusCheckoutSession",
+        "updateDeliveryTrackingStatus",
+        "onGiftMovementWrite",
+        "onHealthMovementWrite",
+        "onHealthPaymentMovementWrite",
+        "onMovementDeliveryWrite"
+      ]
+    },
+    "walletBusinessLinkage": {
+      "sourceUpload": "25fcb69c-0d36-42ab-9bcb-f077be442bd9.zip",
+      "functions": [
+        "getSenderWalletTransactions",
+        "createBusinessInvoiceCheckout",
+        "createBusinessRothCheckout"
+      ]
+    },
+    "lifecycleDispatchIrisScheduled": {
+      "sourceUpload": "4b9e1b23-4a84-4eb3-991d-7146f1e3ea4f.zip",
+      "functions": [
+        "acceptRideRequests",
+        "updateDeliveryLiveLocation",
+        "analyseIris",
+        "analyseParcelPhotoForIris",
+        "reportLoadDiscrepancy",
+        "reviewDeliveryAdjustment",
+        "settleScheduledRoadChargeCashRefund",
+        "createBusinessAccount",
+        "updateSenderHealthPlusBooking",
+        "updateHealthPlusPickupStatus"
+      ]
+    },
+    "evidenceCancellationTimeline": {
+      "sourceUpload": "82b53fd8-0980-4c8c-aca2-eae7f541f684.zip",
+      "functions": [
+        "requestSenderCancellation",
+        "finalizeSenderWebCheckout",
+        "recordDeliveryEvidence",
+        "getDeliveryEvidenceAccess",
+        "onMovementTimelineWrite"
+      ]
+    }
+  },
+  "validation": {
+    "fullFunctions": {"pass": 613, "fail": 0, "skip": 10},
+    "firestoreEmulator": {"pass": 10, "fail": 0, "skip": 0},
+    "focusedPricing": {"pass": 53, "fail": 0, "skip": 0},
+    "changedBackendEslint": "PASS",
+    "gitDiffCheck": "PASS",
+    "performance": "PARTIALLY CERTIFIED - adequate live sample counts not produced in this closure"
+  },
+  "productionImpact": {
+    "payments": 0,
+    "deliveries": 0,
+    "riderAcceptances": 0,
+    "riderSettlements": 0,
+    "manualFirestoreMutations": 0
+  }
+}
