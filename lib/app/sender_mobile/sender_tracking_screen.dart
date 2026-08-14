@@ -1648,6 +1648,7 @@ class _SenderGoogleTrackingMapState extends State<SenderGoogleTrackingMap> {
   GoogleMapController? _controller;
   LatLng? _lastRider;
   LatLngBounds? _lastBounds;
+  String? _lastCameraSnapshotKey;
   BitmapDescriptor? _pickupIcon;
   BitmapDescriptor? _dropoffIcon;
   BitmapDescriptor? _riderIcon;
@@ -1662,8 +1663,16 @@ class _SenderGoogleTrackingMapState extends State<SenderGoogleTrackingMap> {
   @override
   void didUpdateWidget(covariant SenderGoogleTrackingMap oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (_cameraInputsChanged(oldWidget.snapshot, widget.snapshot) ||
-        oldWidget.delivered != widget.delivered) {
+    if (_cameraSnapshotKeyFor(
+          oldWidget.snapshot,
+          oldWidget.content,
+          oldWidget.delivered,
+        ) !=
+        _cameraSnapshotKeyFor(
+          widget.snapshot,
+          widget.content,
+          widget.delivered,
+        )) {
       WidgetsBinding.instance.addPostFrameCallback((_) => _moveCamera());
     }
   }
@@ -1804,6 +1813,12 @@ class _SenderGoogleTrackingMapState extends State<SenderGoogleTrackingMap> {
     final snapshot = widget.snapshot;
     final targetBounds = _cameraBounds(snapshot);
     final rider = snapshot.rider;
+    final cameraSnapshotKey = _cameraSnapshotKeyFor(
+      snapshot,
+      widget.content,
+      widget.delivered,
+    );
+    if (_lastCameraSnapshotKey == cameraSnapshotKey) return;
     if (rider != null &&
         _lastRider != null &&
         _jitterDistance(_lastRider!, rider) < .00006) {
@@ -1812,6 +1827,7 @@ class _SenderGoogleTrackingMapState extends State<SenderGoogleTrackingMap> {
     _lastRider = rider;
     if (_lastBounds == targetBounds && rider == null) return;
     _lastBounds = targetBounds;
+    _lastCameraSnapshotKey = cameraSnapshotKey;
     await controller.animateCamera(
       CameraUpdate.newLatLngBounds(targetBounds, 84),
     );
@@ -1856,21 +1872,56 @@ class _SenderGoogleTrackingMapState extends State<SenderGoogleTrackingMap> {
     );
   }
 
-  bool _cameraInputsChanged(
-    SenderTrackingMapSnapshot previous,
-    SenderTrackingMapSnapshot next,
+  String _cameraSnapshotKeyFor(
+    SenderTrackingMapSnapshot snapshot,
+    SenderTrackingContent content,
+    bool delivered,
   ) {
-    return previous.pickup != next.pickup ||
-        previous.dropoff != next.dropoff ||
-        previous.rider != next.rider ||
-        previous.route.length != next.route.length ||
-        previous.riderRouteIndex != next.riderRouteIndex;
+    return senderTrackingMapCameraIdentityForTest(
+      pickup: snapshot.pickup,
+      dropoff: snapshot.dropoff,
+      rider: snapshot.rider,
+      delivered: delivered,
+      showRoute: content.showRoute,
+      progress: content.progress,
+      routePointCount: snapshot.route.length,
+      riderRouteIndex: snapshot.riderRouteIndex,
+    );
   }
 
   double _jitterDistance(LatLng a, LatLng b) => math.sqrt(
         math.pow(a.latitude - b.latitude, 2) +
             math.pow(a.longitude - b.longitude, 2),
       );
+}
+
+@visibleForTesting
+String senderTrackingMapCameraIdentityForTest({
+  required LatLng pickup,
+  required LatLng dropoff,
+  required LatLng? rider,
+  required bool delivered,
+  required bool showRoute,
+  required int progress,
+  required int routePointCount,
+  required int riderRouteIndex,
+}) {
+  String pointKey(LatLng? point) {
+    if (point == null) return 'none';
+    return '${point.latitude.toStringAsFixed(6)},'
+        '${point.longitude.toStringAsFixed(6)}';
+  }
+
+  return [
+    'pickup:${pointKey(pickup)}',
+    'dropoff:${pointKey(dropoff)}',
+    'rider:${pointKey(rider)}',
+    'delivered:$delivered',
+    'showRoute:$showRoute',
+    'progress:$progress',
+    'routePoints:$routePointCount',
+    'riderRouteIndex:$riderRouteIndex',
+  ].join('|');
 }
 
 const _senderTrackingGoogleMapStyle = '''

@@ -6566,6 +6566,7 @@ class _SenderMobileMapState extends State<_SenderMobileMap>
   LatLngBounds? _lastBounds;
   LatLng? _lastPickup;
   LatLng? _lastDropoff;
+  String? _lastCameraRouteKey;
   BitmapDescriptor? _pickupIcon;
   BitmapDescriptor? _dropoffIcon;
 
@@ -6589,11 +6590,7 @@ class _SenderMobileMapState extends State<_SenderMobileMap>
   @override
   void didUpdateWidget(covariant _SenderMobileMap oldWidget) {
     super.didUpdateWidget(oldWidget);
-    final oldEngine = oldWidget.engine;
-    final nextEngine = widget.engine;
-    if (oldEngine != null &&
-        nextEngine != null &&
-        _coordinatesChanged(oldEngine, nextEngine)) {
+    if (_cameraRouteKeyFor(oldWidget) != _cameraRouteKeyFor(widget)) {
       WidgetsBinding.instance.addPostFrameCallback((_) => _moveCamera());
     }
   }
@@ -6690,13 +6687,19 @@ class _SenderMobileMapState extends State<_SenderMobileMap>
     );
   }
 
-  bool _coordinatesChanged(SendPackageState oldEngine, SendPackageState next) {
-    return oldEngine.pickupCoordinate?.lat != next.pickupCoordinate?.lat ||
-        oldEngine.pickupCoordinate?.lng != next.pickupCoordinate?.lng ||
-        oldEngine.desinationCoordinate?.lat != next.desinationCoordinate?.lat ||
-        oldEngine.desinationCoordinate?.lng != next.desinationCoordinate?.lng ||
-        oldEngine.polylines.length != next.polylines.length ||
-        oldEngine.markers.length != next.markers.length;
+  String _cameraRouteKeyFor(_SenderMobileMap map) {
+    final engine = map.engine;
+    return senderBookingMapCameraIdentityForTest(
+      pickup: _latLng(engine?.pickupCoordinate),
+      dropoff: _latLng(engine?.desinationCoordinate),
+      showDestination: map.showDestination,
+      routePointCount: engine?.polylines.fold<int>(
+            0,
+            (count, polyline) => count + polyline.points.length,
+          ) ??
+          0,
+      markerCount: engine?.markers.length ?? 0,
+    );
   }
 
   LatLng? _latLng(PlaceCoordinate? coordinate) {
@@ -6764,10 +6767,17 @@ class _SenderMobileMapState extends State<_SenderMobileMap>
     final pickup = _latLng(engine?.pickupCoordinate);
     if (controller == null || pickup == null) return;
     final dropoff = _latLng(engine?.desinationCoordinate);
+    final cameraRouteKey = _cameraRouteKeyFor(widget);
+    if (_lastCameraRouteKey == cameraRouteKey) return;
     if (dropoff == null) {
-      if (_lastPickup == pickup && _lastDropoff == null) return;
+      if (_lastPickup == pickup && _lastDropoff == null) {
+        _lastCameraRouteKey = cameraRouteKey;
+        return;
+      }
       _lastPickup = pickup;
       _lastDropoff = null;
+      _lastBounds = null;
+      _lastCameraRouteKey = cameraRouteKey;
       await controller.animateCamera(
         CameraUpdate.newCameraPosition(
           CameraPosition(target: pickup, zoom: 15.4),
@@ -6780,6 +6790,7 @@ class _SenderMobileMapState extends State<_SenderMobileMap>
     _lastPickup = pickup;
     _lastDropoff = dropoff;
     _lastBounds = bounds;
+    _lastCameraRouteKey = cameraRouteKey;
     await controller.animateCamera(CameraUpdate.newLatLngBounds(bounds, 72));
   }
 
@@ -6799,6 +6810,29 @@ class _SenderMobileMapState extends State<_SenderMobileMap>
 
 @visibleForTesting
 bool senderBookingMapShouldUseGoogle(LatLng? pickup) => pickup != null;
+
+@visibleForTesting
+String senderBookingMapCameraIdentityForTest({
+  required LatLng? pickup,
+  required LatLng? dropoff,
+  required bool showDestination,
+  required int routePointCount,
+  required int markerCount,
+}) {
+  String pointKey(LatLng? point) {
+    if (point == null) return 'none';
+    return '${point.latitude.toStringAsFixed(6)},'
+        '${point.longitude.toStringAsFixed(6)}';
+  }
+
+  return [
+    'pickup:${pointKey(pickup)}',
+    'dropoff:${pointKey(dropoff)}',
+    'showDestination:$showDestination',
+    'routePoints:$routePointCount',
+    'markers:$markerCount',
+  ].join('|');
+}
 
 const _senderMapStyle = '''
 [
