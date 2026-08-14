@@ -278,3 +278,85 @@ test("Business Vanguard is additive and does not duplicate a route charge", () =
   assert.equal(quote.lineItems.filter((item) => item.key === "daily_zone_charge").length, 1);
   assert.equal(quote.lineItems.filter((item) => item.key === "vanguard").length, 1);
 });
+
+test("road charges are excluded from the normal Rider and platform split", () => {
+  const quote = _private.quotePayload({
+    selectedSpeed: "Standard",
+    selectedVehicle: "Car",
+    weightKg: 2,
+    authoritativeRouteFacts: {
+      authority: "authoritative_route",
+      known: true,
+      distanceMiles: 3,
+      congestionZone: {entered: true, at: "2026-08-07T10:00:00Z"},
+      crossings: [],
+    },
+    authoritativeVehicleProfile: {
+      roadChargeFactsVerificationStatus: "verified",
+      cczAuthorityStatus: "CHARGEABLE",
+    },
+  }, "sender-test");
+  assert.equal(quote.shareableLogisticsValue, 11.5);
+  assert.equal(quote.roadChargeTotal, 9);
+  assert.equal(quote.customerTotal, 20.5);
+  assert.equal(quote.total, 20.5);
+  assert.equal(quote.riderLogisticsEarning, 7.48);
+  assert.equal(quote.totalRiderEarnings, 7.48);
+  assert.equal(quote.platformLogisticsShare, 4.02);
+  assert.equal(quote.totalCircumRevenue, 4.02);
+  assert.equal(quote.riderRoadRecovery, 9);
+  assert.equal(quote.riderTotalCompensationEstimate, 16.48);
+});
+
+test("Express surcharge is calculated from shareable logistics before road charges", () => {
+  const quote = _private.quotePayload({
+    selectedSpeed: "Express",
+    selectedVehicle: "Car",
+    weightKg: 2,
+    authoritativeRouteFacts: {
+      authority: "authoritative_route",
+      known: true,
+      distanceMiles: 3,
+      congestionZone: {entered: true, at: "2026-08-07T10:00:00Z"},
+      crossings: [],
+    },
+    authoritativeVehicleProfile: {
+      roadChargeFactsVerificationStatus: "verified",
+      cczAuthorityStatus: "CHARGEABLE",
+    },
+  }, "sender-test");
+  assert.equal(quote.logisticsSubtotal, 11.5);
+  assert.equal(quote.lineItems.find((item) => item.key === "speed_adjustment").amount, 5);
+  assert.equal(quote.shareableLogisticsValue, 16.5);
+  assert.equal(quote.roadChargeTotal, 9);
+  assert.equal(quote.customerTotal, 25.5);
+  assert.equal(quote.riderLogisticsEarning, 10.73);
+  assert.equal(quote.platformLogisticsShare, 5.77);
+});
+
+test("route tolls are excluded from the normal 65/35 split", () => {
+  const quote = _private.quotePayload({
+    selectedSpeed: "Standard",
+    selectedVehicle: "Car",
+    weightKg: 2,
+    authoritativeRouteFacts: {
+      authority: "authoritative_route",
+      known: true,
+      distanceMiles: 3,
+      crossings: [{
+        chargeId: "blackwall_silvertown",
+        crossingId: "blackwall_silvertown",
+        direction: "northbound",
+        at: "2026-08-07T05:00:00Z",
+      }],
+    },
+  }, "sender-test");
+  assert.equal(quote.shareableLogisticsValue, 11.5);
+  assert.equal(quote.tollTotal, 4);
+  assert.equal(quote.roadChargeTotal, 4);
+  assert.equal(quote.customerTotal, 15.5);
+  assert.equal(quote.riderLogisticsEarning, 7.48);
+  assert.equal(quote.platformLogisticsShare, 4.02);
+  assert.equal(quote.riderRoadRecovery, 4);
+  assert.equal(quote.riderTotalCompensationEstimate, 11.48);
+});

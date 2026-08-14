@@ -48,6 +48,14 @@ test("messages include backend-only diagnostic metadata", () => {
   assert.match(source, /notificationId:\s*null/);
 });
 
+test("message retries can reuse a stable client id without duplicating writes", () => {
+  assert.match(source, /clientMessageId/);
+  assert.match(source, /client_\$\{clientMessageId\}/);
+  assert.match(source, /const existing = await transaction\.get\(messageRef\)/);
+  assert.match(source, /existingData\.senderId !== senderId/);
+  assert.match(source, /existingData\.messageText !== message/);
+});
+
 test("legacy sendMessage delegates to canonical communication handler", () => {
   const legacySource = fs.readFileSync("send-message.js", "utf8");
   assert.match(

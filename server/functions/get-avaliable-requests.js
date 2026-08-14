@@ -4,6 +4,7 @@ const {getFirestore} = require("firebase-admin/firestore");
 const {dispatchPriority, isDispatchable, riderCanViewDispatch, riderDispatchEligibilityReason, riderDispatchPriority, riderMatchesIris} = require("./iris-core");
 const {loadFounderTestAccount} = require("./founder-authority");
 const {highestTrustAward} = require("./trust-award");
+const scheduledDelivery = require("./scheduled-delivery-core");
 
 const REQUEST_SCAN_LIMIT = 100;
 const openStatuses = new Set(["requested", "pending", "broadcast", "broadcasted", "awaiting_rider", "finding_rider"]);
@@ -57,6 +58,8 @@ function offerExclusionReason(delivery = {}, now = Date.now()) {
   const paymentStatus = text(delivery.paymentStatus || delivery.paymentState).toLowerCase();
   const assigned = assignedRiderId(delivery);
   const expiry = offerExpiryMillis(delivery);
+
+  if (!scheduledDelivery.isOpenDispatchOffer(delivery, now)) return "scheduled_not_active";
 
   if ([status, deliveryStatus, matchingStatus, dispatchStatus].some((value) => terminalStatuses.has(value))) return "terminal_status";
   if (assigned) return "already_assigned";

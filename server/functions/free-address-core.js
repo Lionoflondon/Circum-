@@ -8,6 +8,20 @@ function sanitizeQuery(value, maxLength = 160) {
   return text(value).replace(/\s+/g, " ").slice(0, maxLength);
 }
 
+function premiseHint(value) {
+  const query = sanitizeQuery(value);
+  const unitMatch = query.match(/\b(flat|apartment|apt|unit|suite)\s*([a-z0-9-]+)\b/i);
+  const apartment = unitMatch ? `${unitMatch[1]} ${unitMatch[2]}` : "";
+  const withoutUnit = apartment ?
+    query.replace(unitMatch[0], " ").replace(/\s*,\s*/g, " ").replace(/\s+/g, " ").trim() :
+    query;
+  const numberMatch = withoutUnit.match(/\b(\d+[a-z]?)\s+([a-z][a-z\s.'-]*?)(?:\s*,?\s*[A-Z]{1,2}\d[A-Z\d]?\s*\d[A-Z]{2}\b|,|$)/i);
+  return {
+    apartment,
+    buildingNumber: numberMatch ? numberMatch[1] : "",
+  };
+}
+
 function nominatimSearchUrl(query) {
   const params = new URLSearchParams({
     format: "jsonv2",
@@ -72,8 +86,17 @@ function mapAddress(result) {
 
 function mapGooglePrediction(prediction, sourceInput = "") {
   const structured = prediction.structured_formatting || {};
+  const hint = premiseHint(sourceInput);
+  const mainText = text(structured.main_text);
+  const predictionHasBuilding = hint.buildingNumber &&
+    new RegExp(`(^|\\D)${hint.buildingNumber}(\\D|$)`).test(mainText);
+  const displayAddress = text(prediction.description);
+  const displayWithUnit = hint.apartment && predictionHasBuilding &&
+    !displayAddress.toLowerCase().includes(hint.apartment.toLowerCase()) ?
+    `${hint.apartment}, ${displayAddress}` :
+    displayAddress;
   return {
-    displayAddress: text(prediction.description),
+    displayAddress: displayWithUnit,
     lat: null,
     lng: null,
     confidence: 0.98,
@@ -82,8 +105,11 @@ function mapGooglePrediction(prediction, sourceInput = "") {
     placeId: text(prediction.place_id),
     sourceInput: sanitizeQuery(sourceInput),
     components: cleanComponents({
-      addressLine1: text(structured.main_text),
+      addressLine1: mainText,
+      apartment: predictionHasBuilding ? hint.apartment : "",
+      buildingNumber: predictionHasBuilding ? hint.buildingNumber : "",
       country: "United Kingdom",
+      resolutionPrecision: predictionHasBuilding && hint.apartment ? "unit" : "",
     }),
   };
 }
@@ -96,13 +122,18 @@ function googleAddressComponent(components, type) {
   return text(component && component.long_name);
 }
 
-function mapGooglePlaceDetails(result) {
+function mapGooglePlaceDetails(result, sourceInput = "") {
   const components = result.address_components || [];
   const location = result.geometry && result.geometry.location || {};
   const lat = Number(location.lat);
   const lng = Number(location.lng);
+  const hint = premiseHint(sourceInput);
   const streetNumber = googleAddressComponent(components, "street_number");
   const route = googleAddressComponent(components, "route");
+  const apartment = hint.apartment && hint.buildingNumber &&
+    text(hint.buildingNumber).toLowerCase() === text(streetNumber).toLowerCase() ?
+    hint.apartment :
+    "";
   const addressLine1 = [streetNumber, route].map(text).filter(Boolean).join(" ");
   const city = text(
       googleAddressComponent(components, "postal_town") ||
@@ -113,7 +144,9 @@ function mapGooglePlaceDetails(result) {
       googleAddressComponent(components, "administrative_area_level_1"));
   const postcode = text(googleAddressComponent(components, "postal_code")).toUpperCase();
   return {
-    displayAddress: text(result.formatted_address || result.name),
+    displayAddress: apartment ?
+      `${apartment}, ${text(result.formatted_address || result.name)}` :
+      text(result.formatted_address || result.name),
     lat,
     lng,
     confidence: 0.99,
@@ -122,12 +155,14 @@ function mapGooglePlaceDetails(result) {
     placeId: text(result.place_id),
     components: cleanComponents({
       addressLine1,
+      apartment,
       street: route,
       buildingNumber: streetNumber,
       city,
       county,
       postcode,
       country: googleAddressComponent(components, "country") || "United Kingdom",
+      resolutionPrecision: apartment ? "unit" : streetNumber ? "premise" : route ? "street" : "",
     }),
   };
 }
@@ -195,7 +230,7 @@ async function searchGoogleUkAddresses({query, fetchImpl = global.fetch, googleP
   };
 }
 
-async function resolveUkAddressPlace({placeId, fetchImpl = global.fetch, googlePlacesApiKey = "", sessionToken = ""}) {
+async function resolveUkAddressPlace({placeId, sourceInput = "", fetchImpl = global.fetch, googlePlacesApiKey = "", sessionToken = ""}) {
   const apiKey = text(googlePlacesApiKey);
   const cleanPlaceId = text(placeId);
   if (!apiKey) throw new Error("GOOGLE_PLACES_API_KEY is not configured.");
@@ -206,7 +241,7 @@ async function resolveUkAddressPlace({placeId, fetchImpl = global.fetch, googleP
   if (body.status !== "OK" || !body.result) {
     throw new Error(`Google Places details returned ${body.status || "UNKNOWN"}.`);
   }
-  const mapped = mapGooglePlaceDetails(body.result);
+  const mapped = mapGooglePlaceDetails(body.result, sourceInput);
   if (!mapped.displayAddress || !Number.isFinite(mapped.lat) || !Number.isFinite(mapped.lng)) {
     throw new Error("Google Places details did not include a usable coordinate.");
   }
@@ -248,6 +283,7 @@ module.exports = {
   nominatimSearchUrl,
   resolveUkAddressPlace,
   sanitizeQuery,
+  premiseHint,
   searchFreeUkAddresses,
   searchGoogleUkAddresses,
   searchNominatimUkAddresses,

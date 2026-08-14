@@ -9,6 +9,22 @@ const {
 } = require("./iris-core");
 const {requireAdmin} = require("./admin-auth");
 
+const IRIS_DECISIONS = new Set(["accepted", "corrected", "unsupported", "prohibited", "referral_required"]);
+const IRIS_CATEGORIES = new Set([
+  "Documents", "Electronics", "Clothing & Fashion", "Personal Items & Luggage",
+  "Food & Consumables", "Furniture & Home", "Tools & Machinery", "Medical & Pharmacy",
+  "Business & Commercial", "Fragile & Valuable", "Other",
+]);
+const IRIS_WEIGHT_BANDS = new Set([
+  "Small Parcel", "Medium Parcel", "Large Parcel", "Heavy Goods", "Heavy Duty Freight",
+]);
+const IRIS_HANDLING_FLAGS = new Set([
+  "Fragile", "Perishable", "Keep Upright", "High Value", "Temperature Sensitive",
+  "Bulky", "Awkward Shape", "Van Required", "Two Person Lift",
+]);
+const IRIS_REFERRALS = new Set(["vehicle_transport", "pet_transport", "funeral_transport", "specialist_freight", "specialist"]);
+const IRIS_SERVICEABILITY = new Set(["serviceable", "manual_review", "blocked"]);
+
 function clean(value) {
   return `${value || ""}`.trim().toLowerCase();
 }
@@ -32,10 +48,35 @@ async function loadLearningExamples(description) {
       .where("iris.learningSnapshot.version", "==", "v1")
       .limit(40)
       .get();
-  return snapshot.docs.map((doc) => ({id: doc.id, ...doc.data()}));
+  // Only promoted learning fields enter inference. Never pass full history
+  // documents, which may contain addresses, contacts, payment, Health+, Gift,
+  // or Business-private data.
+  return snapshot.docs.map((doc) => {
+    const source = doc.data().iris && doc.data().iris.learningSnapshot || {};
+    const original = source.originalRecommendation || {};
+    const declaration = source.customerDeclaration || {};
+    const outcome = source.finalOutcome || {};
+    return {
+      id: doc.id,
+      learningSnapshot: {
+        originalRecommendation: {
+          detectedItem: `${original.detectedItem || ""}`.slice(0, 160),
+          category: `${original.category || ""}`.slice(0, 80),
+          weightBand: `${original.weightBand || ""}`.slice(0, 80),
+        },
+        customerDeclaration: {
+          description: `${declaration.description || ""}`.slice(0, 240),
+        },
+        finalOutcome: {
+          finalCategory: `${outcome.finalCategory || ""}`.slice(0, 80),
+          finalWeightBand: `${outcome.finalWeightBand || ""}`.slice(0, 80),
+        },
+      },
+    };
+  });
 }
 
-const analyseIris = functions.https.onCall(async (data, context) => {
+const analyseIris = functions.runWith({enforceAppCheck: true}).https.onCall(async (data, context) => {
   if (!context.auth) {
     throw new functions.https.HttpsError("unauthenticated",
         "User must be authenticated to call Iris.");
@@ -44,13 +85,32 @@ const analyseIris = functions.https.onCall(async (data, context) => {
   return customerSafeIris(classifyIris({...data, completedExamples}));
 });
 
-const adjudicateIris = functions.https.onCall(async (data, context) => {
+const adjudicateIris = functions.runWith({enforceAppCheck: true}).https.onCall(async (data, context) => {
   const adminUid = requireAdmin(context, "IRIS administrator access is required.");
   requireIrisAdmin(context);
   const {requestId, decision, finalCategory, finalWeightBand, finalHandlingFlags, reason, referralType, serviceabilityStatus} = data;
   if (!requestId || !decision || !reason) {
     throw new functions.https.HttpsError("invalid-argument",
         "requestId, decision, and reason are required.");
+  }
+  if (!IRIS_DECISIONS.has(decision)) {
+    throw new functions.https.HttpsError("invalid-argument", "Unsupported IRIS decision.");
+  }
+  if (finalCategory != null && !IRIS_CATEGORIES.has(finalCategory)) {
+    throw new functions.https.HttpsError("invalid-argument", "Unsupported IRIS category.");
+  }
+  if (finalWeightBand != null && !IRIS_WEIGHT_BANDS.has(finalWeightBand)) {
+    throw new functions.https.HttpsError("invalid-argument", "Unsupported IRIS weight band.");
+  }
+  if (finalHandlingFlags != null && (!Array.isArray(finalHandlingFlags) ||
+      finalHandlingFlags.some((flag) => !IRIS_HANDLING_FLAGS.has(flag)))) {
+    throw new functions.https.HttpsError("invalid-argument", "Unsupported IRIS handling flag.");
+  }
+  if (referralType != null && !IRIS_REFERRALS.has(referralType)) {
+    throw new functions.https.HttpsError("invalid-argument", "Unsupported IRIS referral type.");
+  }
+  if (serviceabilityStatus != null && !IRIS_SERVICEABILITY.has(serviceabilityStatus)) {
+    throw new functions.https.HttpsError("invalid-argument", "Unsupported IRIS serviceability status.");
   }
   const db = getFirestore();
   const snapshot = await db.collection("deliveryRequests").where("requestId", "==", requestId).limit(1).get();

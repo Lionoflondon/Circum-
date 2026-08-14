@@ -174,7 +174,7 @@ function buildPhotoAnalysis({uid, data, bytes, contentType}) {
   };
 }
 
-const analyseParcelPhotoForIris = functions.https.onCall(async (data, context) => {
+const analyseParcelPhotoForIris = functions.runWith({enforceAppCheck: true}).https.onCall(async (data, context) => {
   if (!context.auth) {
     throw new functions.https.HttpsError("unauthenticated", "Sign in to analyse a parcel photo.");
   }

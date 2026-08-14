@@ -12,6 +12,7 @@ const {verifiedPhotoAnalysis} = require("./iris-photo-analysis");
 const {dispatchDeliveryRequest} = require("./send-package");
 const {getAuthoritativeRouteFacts, coordinate} = require("./route-authority");
 const {evaluateRoadChargePolicy} = require("./road-charge-policy");
+const scheduledDelivery = require("./scheduled-delivery-core");
 
 const BASE_FARE_GBP = 5;
 const ADDITIONAL_FARE_PER_MILE_GBP = 1.5;
@@ -748,9 +749,15 @@ function quotePayload(data, uid, serverPhotoAnalysis = null) {
     at: data.scheduledJourneyAt ? new Date(data.scheduledJourneyAt) : undefined,
   });
   const roadChargeAmount = roadCharges.customerAmount;
+  const roadChargeBreakdown = roadCharges.breakdown || {};
+  const roadChargeRiderRecovery = money(roadChargeBreakdown.riderReimbursement || 0);
+  const roadChargeRetained = money(roadChargeBreakdown.circumRevenue || 0);
+  const tollAmount = money((roadCharges.lineItems || [])
+      .filter((item) => `${item.chargeType || ""}` === "route_toll")
+      .reduce((sum, item) => sum + Number(item.amount || 0), 0));
   const vehicle = vehicleSurcharge(selectedVehicle);
-  const subtotal = money(base + distance + weight + vehicle + roadChargeAmount);
-  const speed = money(speedAdjustment(subtotal, selectedSpeed));
+  const logisticsSubtotal = money(base + distance + weight + vehicle);
+  const speed = money(speedAdjustment(logisticsSubtotal, selectedSpeed));
   const parcelData = cleanMap(data.parcel);
   const highValueParcel = data.highValue === true || parcelData.highValue === true;
   const surfaceText = text(data.sourceModule || data.serviceType || data.type).toLowerCase();
@@ -773,15 +780,18 @@ function quotePayload(data, uid, serverPhotoAnalysis = null) {
         giftDelivery ?
           "Vanguard is required for Gifts deliveries." :
           data.iris && data.iris.vanguardRequiredReason || "";
-  const total = money(Math.max(0, subtotal + speed + vanguard));
-  const riderBaseShare = money(Math.max(0, subtotal + speed) * RIDER_DELIVERY_FARE_SHARE);
-  const platformBaseShare = money(Math.max(0, subtotal + speed) * PLATFORM_DELIVERY_FARE_SHARE);
+  const shareableLogisticsValue = money(Math.max(0, logisticsSubtotal + speed));
+  const nonShareableCustomerFees = money(roadChargeAmount + vanguard);
+  const total = money(Math.max(0, shareableLogisticsValue + nonShareableCustomerFees));
+  const riderBaseShare = money(shareableLogisticsValue * RIDER_DELIVERY_FARE_SHARE);
+  const platformBaseShare = money(Math.max(0, shareableLogisticsValue - riderBaseShare));
   const totalRiderEarnings = riderBaseShare;
-  const totalCircumRevenue = money(total - totalRiderEarnings);
+  const totalCircumRevenue = money(platformBaseShare + vanguard + roadChargeRetained);
   const quoteId = text(data.quoteId) || `sender_quote_${uid}_${Date.now()}`;
   const speedOptions = ["standard", "express"].map((speedOption) => {
-    const optionSpeed = money(speedAdjustment(subtotal, speedOption));
-    const optionTotal = money(Math.max(0, subtotal + optionSpeed + vanguard));
+    const optionSpeed = money(speedAdjustment(logisticsSubtotal, speedOption));
+    const optionShareable = money(Math.max(0, logisticsSubtotal + optionSpeed));
+    const optionTotal = money(Math.max(0, optionShareable + nonShareableCustomerFees));
     return {
       speed: `${speedOption[0].toUpperCase()}${speedOption.slice(1)}`,
       total: optionTotal,
@@ -803,6 +813,17 @@ function quotePayload(data, uid, serverPhotoAnalysis = null) {
     scheduledJourneyAt: data.scheduledJourneyAt || null,
     scheduledJourneyTimezone: data.scheduledJourneyAt ? "Europe/London" : null,
     roadCharges,
+    shareableLogisticsValue,
+    logisticsSubtotal,
+    roadChargeTotal: roadChargeAmount,
+    tollTotal: tollAmount,
+    nonShareableCustomerFees,
+    customerTotal: total,
+    riderLogisticsEarning: riderBaseShare,
+    riderRoadRecovery: roadChargeRiderRecovery,
+    riderTotalCompensationEstimate: money(riderBaseShare + roadChargeRiderRecovery),
+    platformLogisticsShare: platformBaseShare,
+    platformRoadRetainedAmount: roadChargeRetained,
     weightKg,
     selectedVehicle,
     vehicleType: selectedVehicle,
@@ -1629,6 +1650,14 @@ async function createPaidDeliveryFromSession(stripe, sender, data) {
     throw new functions.https.HttpsError("not-found", "Payment session not found.");
   }
   let payment = paymentSnap.data();
+  const deliveryTime = data.deliveryTime || {};
+  const schedulePolicy = {
+    productType: "standard",
+    deliveryTime,
+    scheduledJourneyAt: deliveryTime.scheduledJourneyAt || null,
+  };
+  const fulfilmentStrategy = scheduledDelivery.fulfilmentStrategy(schedulePolicy);
+  const isScheduledDelivery = fulfilmentStrategy === scheduledDelivery.STRATEGIES.SCHEDULED_DELIVERY;
   const rothOnlyPayment = payment.paymentMethod === "roth" &&
     Number(payment.remainingAmount || 0) <= 0 &&
     Number(payment.rothAppliedAmount || 0) > 0 &&
@@ -1829,7 +1858,12 @@ async function createPaidDeliveryFromSession(stripe, sender, data) {
       },
       contactMethod: "circum_relay",
       maskedCommunicationOnly: true,
-      deliveryTime: data.deliveryTime || {},
+      deliveryTime,
+      productType: "standard",
+      fulfilmentMode: isScheduledDelivery ? "scheduled" : "open",
+      fulfilmentStrategy,
+      scheduledAt: isScheduledDelivery ? deliveryTime.scheduledJourneyAt : null,
+      scheduledWindow: isScheduledDelivery ? deliveryTime.scheduledWindow || null : null,
       parcel,
       packageDescription: parcelDescription,
       originalDescription: parcelDescription,
@@ -1873,12 +1907,13 @@ async function createPaidDeliveryFromSession(stripe, sender, data) {
       remainingAmount: payment.remainingAmount || 0,
       pricingBreakdown: quote,
       currency: "GBP",
-      status: "requested",
-      deliveryStatus: "requested",
-      flowStatus: "requested",
+      status: isScheduledDelivery ? "scheduled" : "requested",
+      deliveryStatus: isScheduledDelivery ? "scheduled" : "requested",
+      deliveryStage: isScheduledDelivery ? "scheduled" : "requested",
+      flowStatus: isScheduledDelivery ? "scheduled" : "requested",
       currentStep: "tracking",
-      dispatchStatus: "requested",
-      matchingStatus: "available",
+      dispatchStatus: isScheduledDelivery ? "held" : "requested",
+      matchingStatus: isScheduledDelivery ? "held" : "available",
       trackingUrl: `/?app=sender&deliveryId=${requestId}`,
       ...vanguardFields,
       dispatchProtocol: {
@@ -1941,6 +1976,13 @@ async function createPaidDeliveryFromSession(stripe, sender, data) {
           quoteId,
           paymentSessionId,
           deliveryId: requestId,
+          canonicalTransactionId: paymentSessionId,
+          paymentId: paymentSessionId,
+          productType: "delivery",
+          productId: requestId,
+          totalAmount: payment.totalAmount || payment.amount || null,
+          rothApplied: rothAppliedAmount,
+          stripeAmount: Math.max(0, Number(payment.totalAmount || payment.amount || 0) - rothAppliedAmount),
           service: "delivery",
           source: "sender_booking_delivery_creation",
         },
@@ -1991,6 +2033,15 @@ async function createPaidDeliveryFromSession(stripe, sender, data) {
     rothDebitStatus: walletDebitRequired ? "completed" : payment.rothDebitStatus || "not_required",
   });
   let dispatchResult = null;
+  if (isScheduledDelivery) {
+    return {
+      requestId,
+      deliveryId: deliveryRef.id,
+      idempotencyKey,
+      dispatchStatus: "scheduled",
+      fulfilmentStrategy,
+    };
+  }
   try {
     dispatchResult = await dispatchDeliveryRequest({
       db,

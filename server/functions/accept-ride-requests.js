@@ -6,6 +6,7 @@ const {isDispatchable, riderCanViewDispatch, riderDispatchEligibilityReason, rid
 const {riderVehicleMatchesRequest} = require("./vehicle-dispatch");
 const {buildRiderVehicleSnapshot} = require("./rider-vehicle-snapshot");
 const {loadFounderTestAccount} = require("./founder-authority");
+const scheduledDelivery = require("./scheduled-delivery-core");
 
 const cleanText = (value, fallback = "") => {
   if (value === undefined || value === null) return fallback;
@@ -45,6 +46,8 @@ const offerExclusionReason = (delivery = {}, riderId = "", now = Date.now()) => 
   const paymentStatus = cleanText(delivery.paymentStatus || delivery.paymentState).toLowerCase();
   const assigned = assignedRiderId(delivery);
   const expiry = offerExpiryMillis(delivery);
+
+  if (!scheduledDelivery.isOpenDispatchOffer(delivery, now)) return "scheduled_not_active";
 
   if ([status, deliveryStatus, matchingStatus, dispatchStatus].some((value) => terminalStatuses.has(value))) {
     return assigned === riderId && ["accepted", "assigned"].includes(status) ? "" : "terminal_status";

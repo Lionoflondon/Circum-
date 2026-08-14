@@ -276,6 +276,7 @@ async function sendMessage(data, context) {
   if (!context.auth) throw new functions.https.HttpsError("unauthenticated", "Sign in to send a message.");
   const senderId = context.auth.uid;
   const chatId = clean(data.chatId || data.requestId || data.bookingId);
+  const clientMessageId = clean(data.clientMessageId).replace(/[^A-Za-z0-9_-]/g, '').slice(0, 96);
   const message = maskContactDetails(data.message || data.messageText);
   const messageType = clean(data.messageType || "text").toLowerCase();
   if (!chatId || !message) {
@@ -302,14 +303,25 @@ async function sendMessage(data, context) {
   }
 
   const recipientIds = (chat.participants || []).filter((uid) => uid && uid !== senderId);
-  const messageRef = chatRef.collection("messages").doc();
+  const messageRef = clientMessageId ?
+    chatRef.collection("messages").doc(`client_${clientMessageId}`) :
+    chatRef.collection("messages").doc();
   const correlationId = clean(data.correlationId) || `${chatId}_${messageRef.id}`;
   const senderRole = isAdmin(context) ? "admin" : recipientRoleFor(chat, senderId);
   const senderName = await participantDisplayName(senderId, senderRole, context);
   await db.runTransaction(async (transaction) => {
+    const existing = await transaction.get(messageRef);
+    if (existing.exists) {
+      const existingData = existing.data() || {};
+      if (existingData.senderId !== senderId || existingData.messageText !== message) {
+        throw new functions.https.HttpsError("already-exists", "This message id is already in use.");
+      }
+      return;
+    }
     transaction.set(messageRef, {
       messageId: messageRef.id,
       conversationId: chatId,
+      clientMessageId: clientMessageId || null,
       correlationId,
       senderId,
       senderName,

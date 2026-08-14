@@ -24,6 +24,8 @@ const BACKEND_STATUS_TO_SENDER_STATE = Object.freeze({
   awaiting_rider: SENDER_TRACKING_STATES.FINDING_RIDER,
   broadcast: SENDER_TRACKING_STATES.FINDING_RIDER,
   broadcasted: SENDER_TRACKING_STATES.FINDING_RIDER,
+  scheduled: SENDER_TRACKING_STATES.FINDING_RIDER,
+  ready: SENDER_TRACKING_STATES.RIDER_ASSIGNED,
   accepted: SENDER_TRACKING_STATES.RIDER_ASSIGNED,
   rider_assigned: SENDER_TRACKING_STATES.RIDER_ASSIGNED,
   navigating_to_pickup: SENDER_TRACKING_STATES.RIDER_EN_ROUTE_TO_PICKUP,
@@ -55,6 +57,7 @@ const BACKEND_STATUS_TO_SENDER_STATE = Object.freeze({
 
 const ALLOWED_TRANSITIONS = Object.freeze({
   requested: ["accepted", "cancelled", "issue_reported"],
+  ready: ["navigating_to_pickup", "arrived_at_pickup", "cancelled", "issue_reported"],
   accepted: ["navigating_to_pickup", "arrived_at_pickup", "cancelled", "issue_reported"],
   navigating_to_pickup: ["arrived_at_pickup", "cancelled", "issue_reported"],
   arrived_at_pickup: ["waiting", "pickup_verification", "pickup_verified", "collected", "cancelled", "issue_reported"],

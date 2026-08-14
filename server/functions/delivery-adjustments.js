@@ -21,6 +21,7 @@ const stripe = new Proxy({}, {
   },
 });
 const iris = require("./iris-core");
+const {quotePayload} = require("./sender-booking");
 const {
   DISCREPANCY_REASONS,
   buildAdjustment,
@@ -67,6 +68,7 @@ exports.reportLoadDiscrepancy = functions.https.onCall(async (data, context) => 
   if (booking.status === "awaiting_sender_adjustment") throw new functions.https.HttpsError("failed-precondition", "This booking already has a pending adjustment.");
 
   const originalWeightKg = Number(booking.finalWeightUsed || booking.finalChargeableWeight || booking.confirmedWeightKg || booking.weightKg || 0);
+  const senderId = booking.senderId || booking.userId;
   const description = observedDescription || booking.packageDescription || booking.description || "Parcel";
   const recalculated = iris.classifyIris({
     description: dimensions ? `${description}; dimensions ${dimensions}` : description,
@@ -79,9 +81,14 @@ exports.reportLoadDiscrepancy = functions.https.onCall(async (data, context) => 
   const recalculatedVehicle = `${observedVehicleType || (recalculated.recommendation && recalculated.recommendation.vehicleType) || ""}`.toLowerCase();
   const vehicleSuitabilityChanged = Boolean(recalculatedVehicle && recalculatedVehicle !== previousVehicle);
   if (!isMaterialDiscrepancy({reason, originalWeightKg, observedWeightKg, vehicleSuitabilityChanged})) throw new functions.https.HttpsError("failed-precondition", "The reported difference does not meet the material adjustment threshold.");
-  const revisedQuote = Number(recalculated.recommendation && recalculated.recommendation.estimatedPrice || booking.price || booking.quote || 0);
+  const canonicalQuote = quotePayload({
+    ...booking,
+    weightKg: Number(observedWeightKg) > 0 ? Number(observedWeightKg) : originalWeightKg,
+    selectedVehicle: observedVehicleType || booking.vehicleType || booking.vehicle,
+    authoritativeRouteFacts: booking.routeFacts || booking.pricingBreakdown && booking.pricingBreakdown.routeFacts || null,
+  }, senderId);
+  const revisedQuote = Number(canonicalQuote.total || 0);
   const originalQuote = Number(booking.paidAmount || booking.price || booking.quote || 0);
-  const senderId = booking.senderId || booking.userId;
   const adjustmentRef = db.collection("deliveryAdjustments").doc();
   const adjustment = buildAdjustment({
     bookingId: requestRef.id,
@@ -100,7 +107,12 @@ exports.reportLoadDiscrepancy = functions.https.onCall(async (data, context) => 
       observedVehicleType: observedVehicleType || null,
       dimensions: dimensions || null,
     },
-    irisCalculationMetadata: recalculated,
+    irisCalculationMetadata: {
+      ...recalculated,
+      estimatedPrice: null,
+      pricingAuthority: "sender_backend_quote_v1",
+      canonicalQuoteId: canonicalQuote.quoteId,
+    },
   });
 
   await db.runTransaction(async (transaction) => {

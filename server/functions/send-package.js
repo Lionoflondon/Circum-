@@ -4,6 +4,7 @@ const {getFirestore, FieldValue} = require("firebase-admin/firestore");
 const {getMessaging} = require("firebase-admin/messaging");
 const {dispatchComplianceDecision, dispatchPriority, riderMatchesIris} = require("./iris-core");
 const {hasAdminClaim} = require("./admin-auth");
+const scheduledDelivery = require("./scheduled-delivery-core");
 
 function senderOwnsRequest(delivery, uid) {
   return delivery.senderId === uid || delivery.userId === uid;
@@ -29,10 +30,21 @@ async function dispatchDeliveryRequest({
   if (deliveryRequest.length === 0) {
     return {message: "Delivery request not found", requestId};
   }
+  if (!scheduledDelivery.isOpenDispatchOffer(deliveryRequest[0])) {
+    return {
+      message: "Scheduled delivery is waiting for its activation window.",
+      requestId,
+      deliveryId: deliveryRequest[0].id,
+      scheduled: true,
+      closestRiders: [],
+      pushResults: [],
+    };
+  }
   if (!senderOwnsRequest(deliveryRequest[0], uid) &&
     !hasAdminClaim(authToken || {}) &&
     source !== "createSenderPaidDelivery" &&
     source !== "finalizeSenderCheckoutSession" &&
+    source !== "activateDueScheduledDeliveries" &&
     source !== "escalateUnclaimedDeliveries") {
     throw new functions.https.HttpsError(
         "permission-denied",

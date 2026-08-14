@@ -5,6 +5,8 @@ const test = require("node:test");
 const assert = require("node:assert/strict");
 const movement = require("./movement-ledger");
 
+const money = (value) => Math.round(Number(value || 0) * 100) / 100;
+
 const routeFacts = {
   authority: "authoritative_route",
   distanceMiles: 5,
@@ -238,7 +240,7 @@ test("Gift movement writes scheduled shell before asynchronous route pricing res
   assert.equal(pricedMovement.data.readyForDispatch, true);
   assert.equal(pricedMovement.data.dispatchStatus, "requested");
   assert.equal(pricedMovement.data.riderSettlementAuthority, "canonical_gift_delivery_pricing_v1");
-  assert.equal(pricedMovement.data.riderEarning + pricedMovement.data.platformShare, pricedMovement.data.deliveryCharge);
+  assert.equal(money(pricedMovement.data.riderEarning + pricedMovement.data.platformShare), pricedMovement.data.deliveryCharge);
 });
 
 test("Health+ movement writes held shell before asynchronous logistics pricing resolves", async () => {
@@ -286,5 +288,5 @@ test("Health+ movement writes held shell before asynchronous logistics pricing r
     write.collection === "deliveryRequests" && write.id === "health_async-health").at(-1);
   assert.equal(pricedMovement.data.matchingStatus, "available");
   assert.equal(pricedMovement.data.riderSettlementAuthority, "canonical_health_plus_delivery_pricing_v1");
-  assert.equal(pricedMovement.data.riderEarning + pricedMovement.data.platformShare, pricedMovement.data.deliveryCharge);
+  assert.equal(money(pricedMovement.data.riderEarning + pricedMovement.data.platformShare), pricedMovement.data.deliveryCharge);
 });

@@ -135,8 +135,59 @@ exports.attachReferralCode = functions.https.onCall(async (data, context) => {
   return {status: REFERRAL_STATUSES.signedUp};
 });
 
+function customerReferralStatus(status) {
+  switch (`${status || ""}`.toUpperCase()) {
+    case REFERRAL_STATUSES.signedUp:
+      return "Joined — first delivery pending";
+    case REFERRAL_STATUSES.firstQualifyingDeliveryCompleted:
+      return "Qualified — reward processing";
+    case REFERRAL_STATUSES.rothAwarded:
+      return "5 Roth earned";
+    case REFERRAL_STATUSES.review:
+      return "Reward under review";
+    case REFERRAL_STATUSES.rejected:
+      return "Not eligible";
+    default:
+      return "Invite sent";
+  }
+}
+
+exports.getReferralDashboard = functions.https.onCall(async (data, context) => {
+  requireAuth(context);
+  const db = getFirestore();
+  const uid = context.auth.uid;
+  const [userSnap, referralsSnap] = await Promise.all([
+    db.collection("users").doc(uid).get(),
+    db.collection("referrals").where("referrerUserId", "==", uid).limit(50).get(),
+  ]);
+  const user = userSnap.exists ? userSnap.data() : {};
+  const referralCode = normalizeCode(user.referralCode);
+  return {
+    referralCode,
+    referralLink: referralCode ? `https://circumuk.com/join/${referralCode}` : null,
+    rewardAmount: DEFAULT_REWARD,
+    rewardCurrency: "ROTH",
+    message: "Invite a friend. You both get 5 Roth after they complete their first qualifying delivery.",
+    referrals: referralsSnap.docs.map((doc) => {
+      const item = doc.data();
+      return {
+        id: doc.id,
+        status: normalizeReferralStatus(item.status || item.rewardStatus),
+        statusLabel: customerReferralStatus(item.status || item.rewardStatus),
+        joinedAt: item.signedUpAt || item.createdAt || null,
+        qualifiedAt: item.activatedAt || null,
+        rewardedAt: item.rewardedAt || null,
+      };
+    }),
+  };
+});
+
 exports.activateReferral = functions.https.onCall(async (data, context) => {
   requireAuth(context);
+  if (!context.auth.token.admin && !["super_admin", "operations_admin", "finance_admin"].includes(
+    `${context.auth.token.role || context.auth.token.adminRole || ""}`.toLowerCase())) {
+    throw new functions.https.HttpsError("permission-denied", "Referral qualification is backend-controlled.");
+  }
   const referredUserId = `${data.referredUserId || context.auth.uid}`.trim();
   if (referredUserId !== context.auth.uid && !context.auth.token.admin) {
     throw new functions.https.HttpsError("permission-denied", "Cannot activate another user's referral.");
@@ -245,8 +296,8 @@ async function activateReferralForUser({referredUserId, activityType, activityId
 function becameCompleted(before, after) {
   const was = `${before.status || before.giftStatus || ""}`.toLowerCase();
   const now = `${after.status || after.giftStatus || ""}`.toLowerCase();
-  return !["completed", "delivered", "active"].includes(was) &&
-    ["completed", "delivered", "active"].includes(now);
+  return !["completed", "delivered"].includes(was) &&
+    ["completed", "delivered"].includes(now);
 }
 
 exports.activateReferralOnDeliveryCompleted = functions.firestore
@@ -256,7 +307,7 @@ exports.activateReferralOnDeliveryCompleted = functions.firestore
       const after = change.after.data() || {};
       if (!becameCompleted(before, after)) return null;
       const payment = `${after.paymentStatus || ""}`.toLowerCase();
-      if (payment && !["paid", "succeeded", "success"].includes(payment)) return null;
+      if (!["paid", "succeeded", "success"].includes(payment)) return null;
       const deliveryId = context.params.deliveryId;
       const senderId = `${after.senderId || after.userId || ""}`;
       const riderId = `${after.riderId || after.assignedRiderId || ""}`;
