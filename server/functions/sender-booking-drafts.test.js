@@ -163,7 +163,7 @@ test("scheduled journey time is required and normalized for road-charge pricing"
     scheduledDate: "2027-08-10",
     scheduledJourneyAt: "2027-08-10T11:30:00Z",
   });
-  assert.equal(at, "2026-08-10T11:30:00.000Z");
+  assert.equal(at, "2027-08-10T11:30:00.000Z");
   assert.throws(() => _private.validatedScheduledJourneyAt({
     type: "scheduled",
     scheduledDate: "2027-08-10",
