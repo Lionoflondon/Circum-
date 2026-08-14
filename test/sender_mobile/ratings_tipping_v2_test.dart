@@ -93,7 +93,7 @@ void main() {
         File('lib/website/shared/circum_website_app.dart').readAsStringSync();
     final statusStart = source.indexOf('Future<void> _updateAcceptedJobStatus');
     final statusEnd = source.indexOf(
-      'Future<Map<String, dynamic>?> _collectVanguardPinVerification',
+      'double _jobCustomerWeight',
       statusStart,
     );
     expect(statusStart, isNonNegative);
@@ -104,6 +104,9 @@ void main() {
       statusSource,
       contains("httpsCallable('updateDeliveryTrackingStatus')"),
     );
+    expect(statusSource, contains("httpsCallable('recordDeliveryEvidence')"));
+    expect(statusSource, contains("'evidenceId'"));
+    expect(statusSource, isNot(contains("'photoUrl'")));
     expect(statusSource, isNot(contains("collection('deliveryRequests')")));
     expect(statusSource, isNot(contains("collection('riderEarnings')")));
     expect(

@@ -3,6 +3,7 @@
 
 const functions = require("firebase-functions/v1");
 const {getFirestore, FieldValue, GeoPoint} = require("firebase-admin/firestore");
+const {getStorage} = require("firebase-admin/storage");
 const tracking = require("./sender-tracking-state-core");
 const {highestTrustAward} = require("./trust-award");
 const {planRoadChargeSettlement, pence} = require("./road-charge-settlement");
@@ -208,7 +209,6 @@ function evidenceRequirements(delivery, action, evidence = {}) {
       delivery.requiresVanguard === true ||
       delivery.secureHandoverRequired === true;
   if (!required) return {valid: true};
-  if (!text(evidence.photoUrl)) return {valid: false, reason: "A delivery evidence photo is required."};
   if (pickup && evidence.conditionConfirmed !== true) {
     return {valid: false, reason: "Parcel condition must be confirmed."};
   }
@@ -222,7 +222,158 @@ function evidenceRequirements(delivery, action, evidence = {}) {
   if (handover && !text(evidence.recipientName) && evidence.recipientConfirmed !== true) {
     return {valid: false, reason: "Recipient confirmation is required."};
   }
+  if (!text(evidence.evidenceId)) {
+    return {valid: false, reason: "Canonical delivery evidence is required."};
+  }
   return {valid: true};
+}
+
+function evidenceRequired(delivery, action) {
+  const pickup = action === "verify_collection_pin";
+  const handover = action === "verify_receiver_pin";
+  if (!pickup && !handover) return false;
+  return pickup ?
+    delivery.verificationRequired === true ||
+      delivery.requiresVerification === true ||
+      delivery.requiresVanguard === true :
+    delivery.deliveryPhotoRequired === true ||
+      delivery.requiresVanguard === true ||
+      delivery.secureHandoverRequired === true;
+}
+
+function evidenceStageForAction(action) {
+  if (action === "verify_collection_pin") return "pickup";
+  if (action === "verify_receiver_pin") return "dropoff";
+  return "";
+}
+
+function stageMatches(action, stage) {
+  const expected = evidenceStageForAction(action);
+  const normalizedStage = normalized(stage);
+  if (expected === "pickup") return ["pickup", "collection"].includes(normalizedStage);
+  if (expected === "dropoff") return ["dropoff", "handover", "delivery"].includes(normalizedStage);
+  return true;
+}
+
+function evidenceIsFinalized(evidence = {}) {
+  const status = normalized(evidence.status);
+  return status === "finalized" ||
+    status === "verified" ||
+    status === "accepted" ||
+    !!(evidence.finalizedAt || evidence.verifiedAt);
+}
+
+function canonicalMediaReference(evidence = {}) {
+  return text(
+      evidence.storageObject ||
+      evidence.storagePath ||
+      evidence.path ||
+      evidence.canonicalMediaReference ||
+      evidence.mediaReference,
+  );
+}
+
+function canonicalEvidenceDecision({
+  evidenceId,
+  evidence,
+  deliveryId,
+  riderId,
+  action,
+}) {
+  const cleanId = text(evidenceId || evidence && evidence.evidenceId);
+  if (!cleanId) return {valid: false, reason: "Canonical delivery evidence is required."};
+  if (!evidence) return {valid: false, reason: "Canonical delivery evidence was not found."};
+  if (text(evidence.deliveryId) !== text(deliveryId)) {
+    return {valid: false, reason: "Evidence does not belong to this delivery."};
+  }
+  if (text(evidence.riderId) !== text(riderId)) {
+    return {valid: false, reason: "Evidence does not belong to this rider."};
+  }
+  if (!stageMatches(action, evidence.stage || evidence.lifecycleStage || evidence.evidenceStage)) {
+    return {valid: false, reason: "Evidence was recorded for the wrong delivery stage."};
+  }
+  if (!evidenceIsFinalized(evidence)) {
+    return {valid: false, reason: "Delivery evidence is still uploading."};
+  }
+  const mediaReference = canonicalMediaReference(evidence);
+  if (!mediaReference) {
+    return {valid: false, reason: "Delivery evidence media is not available."};
+  }
+  return {
+    valid: true,
+    evidenceId: cleanId,
+    stage: evidenceStageForAction(action),
+    canonicalMediaReference: mediaReference,
+    contentType: text(evidence.contentType) || null,
+  };
+}
+
+function sanitizedEvidencePatch(decision, riderId) {
+  return {
+    evidenceId: decision.evidenceId,
+    stage: decision.stage,
+    canonicalMediaReference: decision.canonicalMediaReference,
+    ...(decision.contentType ? {contentType: decision.contentType} : {}),
+    recordedAt: FieldValue.serverTimestamp(),
+    recordedBy: riderId,
+  };
+}
+
+async function canonicalEvidenceForTransition({db, transaction, deliveryId, riderId, action, delivery, evidence}) {
+  const supplied = evidence && typeof evidence === "object" ? evidence : {};
+  const requiresEvidence = evidenceRequired(delivery, action);
+  const evidenceId = text(supplied.evidenceId);
+  if ((supplied.photoUrl || supplied.imageUrl || supplied.url) && !evidenceId) {
+    throw new functions.https.HttpsError(
+        "failed-precondition",
+        "A canonical evidence ID is required for delivery evidence.",
+    );
+  }
+  if (!requiresEvidence && !evidenceId) return null;
+  const evidenceRef = db.collection("deliveryEvidence").doc(evidenceId);
+  const snapshot = await transaction.get(evidenceRef);
+  const decision = canonicalEvidenceDecision({
+    evidenceId,
+    evidence: snapshot.exists ? snapshot.data() : null,
+    deliveryId,
+    riderId,
+    action,
+  });
+  if (!decision.valid) {
+    throw new functions.https.HttpsError("failed-precondition", decision.reason);
+  }
+  return decision;
+}
+
+function normalizeContentType(value) {
+  const contentType = text(value || "image/jpeg").toLowerCase();
+  if (!/^image\/(jpeg|jpg|png|webp|heic|heif)$/.test(contentType)) {
+    throw new functions.https.HttpsError("invalid-argument", "Unsupported evidence image type.");
+  }
+  return contentType === "image/jpg" ? "image/jpeg" : contentType;
+}
+
+function extensionForContentType(contentType) {
+  if (contentType === "image/png") return "png";
+  if (contentType === "image/webp") return "webp";
+  if (contentType === "image/heic") return "heic";
+  if (contentType === "image/heif") return "heif";
+  return "jpg";
+}
+
+function decodeImageBytes(imageBase64) {
+  const encoded = text(imageBase64);
+  if (!encoded) {
+    throw new functions.https.HttpsError("invalid-argument", "Evidence image is required.");
+  }
+  const bytes = Buffer.from(encoded.replace(/^data:image\/[A-Za-z0-9.+-]+;base64,/, ""), "base64");
+  if (!bytes.length) {
+    throw new functions.https.HttpsError("invalid-argument", "Evidence image is empty.");
+  }
+  if (bytes.length > 8 * 1024 * 1024) {
+    throw new functions.https.HttpsError("resource-exhausted", "Evidence image is too large.");
+  }
+  return bytes;
 }
 
 function settlementValues(delivery = {}) {
@@ -341,7 +492,132 @@ function transitionPolicyDecision(delivery, currentStatus, nextStatus) {
   };
 }
 
-exports.updateDeliveryTrackingStatus = functions.https.onCall(async (data, context) => {
+exports.recordDeliveryEvidence = functions.runWith({enforceAppCheck: true}).https.onCall(async (data, context) => {
+  if (!context.auth) {
+    throw new functions.https.HttpsError("unauthenticated", "Rider must be signed in.");
+  }
+  const deliveryId = text(data && (data.deliveryId || data.requestId));
+  const action = normalized(data && data.action);
+  const stage = text(data && data.stage) || evidenceStageForAction(action);
+  if (!deliveryId) {
+    throw new functions.https.HttpsError("invalid-argument", "deliveryId is required.");
+  }
+  const normalizedStage = normalized(stage);
+  if (!["pickup", "collection", "dropoff", "handover", "delivery"].includes(normalizedStage)) {
+    throw new functions.https.HttpsError("invalid-argument", "Evidence stage is not valid for this action.");
+  }
+  const contentType = normalizeContentType(data && data.contentType);
+  const bytes = decodeImageBytes(data && (data.imageBase64 || data.base64 || data.bytesBase64));
+  const db = getFirestore();
+  const riderId = context.auth.uid;
+  const evidenceRef = db.collection("deliveryEvidence").doc();
+  const extension = extensionForContentType(contentType);
+  let canonicalDeliveryId = deliveryId;
+
+  await db.runTransaction(async (transaction) => {
+    const found = await findDelivery(db, transaction, deliveryId);
+    if (!found) {
+      throw new functions.https.HttpsError("not-found", "Delivery not found.");
+    }
+    const delivery = found.data || {};
+    assertRiderOwnsDelivery(delivery, riderId);
+    canonicalDeliveryId = found.id;
+    const currentStatus = normalized(delivery.status || delivery.deliveryStatus || delivery.deliveryStage);
+    if (["completed", "complete", "delivered", "cancelled", "canceled", "failed", "no_show"].includes(currentStatus)) {
+      throw new functions.https.HttpsError("failed-precondition", "Evidence cannot be attached to this delivery state.");
+    }
+  });
+
+  const canonicalStage = ["pickup", "collection"].includes(normalizedStage) ? "pickup" : "dropoff";
+  const storagePath = `deliveryEvidence/${canonicalDeliveryId}/${riderId}/${evidenceRef.id}.${extension}`;
+
+  await getStorage().bucket().file(storagePath).save(bytes, {
+    metadata: {
+      contentType,
+      metadata: {
+        deliveryId: canonicalDeliveryId,
+        riderId,
+        evidenceId: evidenceRef.id,
+        stage: canonicalStage,
+        source: text(data && data.sourceSurface) || "rider",
+      },
+    },
+    resumable: false,
+  });
+
+  await evidenceRef.set({
+    evidenceId: evidenceRef.id,
+    deliveryId: canonicalDeliveryId,
+    riderId,
+    evidenceType: "photo",
+    stage: canonicalStage,
+    lifecycleStage: canonicalStage,
+    storageObject: storagePath,
+    storagePath,
+    contentType,
+    sourceSurface: text(data && data.sourceSurface) || "rider",
+    visibility: stage === "dropoff" || stage === "handover" ? "sender_safe" : "rider_admin",
+    status: "finalized",
+    finalizedAt: FieldValue.serverTimestamp(),
+    createdAt: FieldValue.serverTimestamp(),
+    updatedAt: FieldValue.serverTimestamp(),
+  });
+
+  return {
+    success: true,
+    evidenceId: evidenceRef.id,
+    deliveryId: canonicalDeliveryId,
+    stage: canonicalStage,
+    contentType,
+  };
+});
+
+exports.getDeliveryEvidenceAccess = functions.runWith({enforceAppCheck: true}).https.onCall(async (data, context) => {
+  if (!context.auth) {
+    throw new functions.https.HttpsError("unauthenticated", "Sign in first.");
+  }
+  const evidenceId = text(data && data.evidenceId);
+  if (!evidenceId) {
+    throw new functions.https.HttpsError("invalid-argument", "evidenceId is required.");
+  }
+  const snapshot = await getFirestore().collection("deliveryEvidence").doc(evidenceId).get();
+  if (!snapshot.exists) {
+    throw new functions.https.HttpsError("not-found", "Evidence not found.");
+  }
+  const evidence = snapshot.data() || {};
+  const deliveryId = text(evidence.deliveryId);
+  const deliverySnapshot = await getFirestore().collection("deliveryRequests").doc(deliveryId).get();
+  const delivery = deliverySnapshot.exists ? deliverySnapshot.data() || {} : {};
+  const uid = context.auth.uid;
+  const senderId = text(delivery.senderId || delivery.userId || delivery.customerId);
+  const riderId = text(delivery.riderId || delivery.assignedRiderId);
+  const isAdmin = context.auth.token && (context.auth.token.admin === true || context.auth.token.role === "admin");
+  const visibility = normalized(evidence.visibility);
+  const senderAllowed = uid === senderId && ["sender_safe", "proof_of_delivery", "public_to_sender"].includes(visibility);
+  const riderAllowed = uid === riderId && text(evidence.riderId) === uid;
+  if (!isAdmin && !senderAllowed && !riderAllowed) {
+    throw new functions.https.HttpsError("permission-denied", "You cannot access this evidence.");
+  }
+  const storagePath = canonicalMediaReference(evidence);
+  if (!storagePath) {
+    throw new functions.https.HttpsError("failed-precondition", "Evidence media is unavailable.");
+  }
+  const [url] = await getStorage().bucket().file(storagePath).getSignedUrl({
+    version: "v4",
+    action: "read",
+    expires: Date.now() + 10 * 60 * 1000,
+  });
+  return {
+    success: true,
+    evidenceId,
+    deliveryId,
+    url,
+    expiresAt: Date.now() + 10 * 60 * 1000,
+    contentType: text(evidence.contentType) || null,
+  };
+});
+
+exports.updateDeliveryTrackingStatus = functions.runWith({enforceAppCheck: true}).https.onCall(async (data, context) => {
   if (!context.auth) {
     throw new functions.https.HttpsError("unauthenticated", "Rider must be signed in.");
   }
@@ -397,6 +673,15 @@ exports.updateDeliveryTrackingStatus = functions.https.onCall(async (data, conte
     if (!evidenceDecision.valid) {
       throw new functions.https.HttpsError("failed-precondition", evidenceDecision.reason);
     }
+    const canonicalEvidence = await canonicalEvidenceForTransition({
+      db,
+      transaction,
+      deliveryId: found.id,
+      riderId,
+      action,
+      delivery,
+      evidence,
+    });
 
 
     const privateRef = db.collection("deliveryRequestsPrivate").doc(found.id);
@@ -436,11 +721,9 @@ exports.updateDeliveryTrackingStatus = functions.https.onCall(async (data, conte
       nextStatus,
       riderId,
     });
-    if (Object.keys(evidence).length > 0) {
+    if (canonicalEvidence) {
       patch[action === "verify_receiver_pin" ? "handoverEvidence" : "pickupEvidence"] = {
-        ...evidence,
-        recordedAt: FieldValue.serverTimestamp(),
-        recordedBy: riderId,
+        ...sanitizedEvidencePatch(canonicalEvidence, riderId),
       };
     }
     if (action === "report_issue") {
@@ -652,7 +935,7 @@ exports.updateDeliveryTrackingStatus = functions.https.onCall(async (data, conte
   return result;
 });
 
-exports.updateDeliveryLiveLocation = functions.https.onCall(async (data, context) => {
+exports.updateDeliveryLiveLocation = functions.runWith({enforceAppCheck: true}).https.onCall(async (data, context) => {
   if (!context.auth) {
     throw new functions.https.HttpsError("unauthenticated", "Rider must be signed in.");
   }
@@ -795,6 +1078,15 @@ exports._private = {
   assertRiderOwnsDelivery,
   assertRiderOperational,
   evidenceRequirements,
+  evidenceRequired,
+  evidenceStageForAction,
+  stageMatches,
+  evidenceIsFinalized,
+  canonicalMediaReference,
+  canonicalEvidenceDecision,
+  sanitizedEvidencePatch,
+  normalizeContentType,
+  decodeImageBytes,
   settlementValues,
   highestTrustAward,
   canonicalRiderRankForTrust,

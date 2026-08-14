@@ -206,21 +206,108 @@ test("a rider cannot update another rider's delivery", () => {
   );
 });
 
-test("required pickup evidence blocks incomplete verification", () => {
+test("required pickup evidence requires canonical evidence metadata plus declarations", () => {
   assert.equal(deliveryTracking.evidenceRequirements(
       {verificationRequired: true},
       "verify_collection_pin",
-      {photoUrl: "secure-ref", conditionConfirmed: true},
+      {evidenceId: "evidence-1", conditionConfirmed: true},
   ).valid, false);
   assert.equal(deliveryTracking.evidenceRequirements(
       {verificationRequired: true},
       "verify_collection_pin",
       {
-        photoUrl: "secure-ref",
+        evidenceId: "evidence-1",
         conditionConfirmed: true,
         riderDeclarationAccepted: true,
       },
   ).valid, true);
+});
+
+test("client photo URLs cannot satisfy canonical delivery evidence", () => {
+  assert.equal(deliveryTracking.evidenceRequirements(
+      {verificationRequired: true},
+      "verify_collection_pin",
+      {
+        photoUrl: "https://example.com/proof.jpg",
+        conditionConfirmed: true,
+        riderDeclarationAccepted: true,
+      },
+  ).valid, false);
+  const decision = deliveryTracking.canonicalEvidenceDecision({
+    evidenceId: "",
+    evidence: null,
+    deliveryId: "delivery-1",
+    riderId: "rider-1",
+    action: "verify_collection_pin",
+  });
+  assert.equal(decision.valid, false);
+  assert.match(decision.reason, /Canonical delivery evidence/);
+});
+
+test("canonical evidence rejects wrong ownership, wrong stage and unfinalized records", () => {
+  const base = {
+    evidenceId: "evidence-1",
+    deliveryId: "delivery-1",
+    riderId: "rider-1",
+    stage: "pickup",
+    storagePath: "deliveryEvidence/delivery-1/rider-1/evidence-1.jpg",
+    status: "finalized",
+  };
+  assert.equal(deliveryTracking.canonicalEvidenceDecision({
+    evidenceId: "evidence-1",
+    evidence: base,
+    deliveryId: "delivery-1",
+    riderId: "rider-1",
+    action: "verify_collection_pin",
+  }).valid, true);
+  assert.equal(deliveryTracking.canonicalEvidenceDecision({
+    evidenceId: "evidence-1",
+    evidence: {...base, deliveryId: "delivery-2"},
+    deliveryId: "delivery-1",
+    riderId: "rider-1",
+    action: "verify_collection_pin",
+  }).valid, false);
+  assert.equal(deliveryTracking.canonicalEvidenceDecision({
+    evidenceId: "evidence-1",
+    evidence: {...base, riderId: "rider-2"},
+    deliveryId: "delivery-1",
+    riderId: "rider-1",
+    action: "verify_collection_pin",
+  }).valid, false);
+  assert.equal(deliveryTracking.canonicalEvidenceDecision({
+    evidenceId: "evidence-1",
+    evidence: {...base, stage: "dropoff"},
+    deliveryId: "delivery-1",
+    riderId: "rider-1",
+    action: "verify_collection_pin",
+  }).valid, false);
+  assert.equal(deliveryTracking.canonicalEvidenceDecision({
+    evidenceId: "evidence-1",
+    evidence: {...base, status: "uploading", finalizedAt: null},
+    deliveryId: "delivery-1",
+    riderId: "rider-1",
+    action: "verify_collection_pin",
+  }).valid, false);
+});
+
+test("valid canonical handover evidence is accepted", () => {
+  const decision = deliveryTracking.canonicalEvidenceDecision({
+    evidenceId: "evidence-2",
+    evidence: {
+      evidenceId: "evidence-2",
+      deliveryId: "delivery-1",
+      riderId: "rider-1",
+      lifecycleStage: "handover",
+      storageObject: "deliveryEvidence/delivery-1/rider-1/evidence-2.jpg",
+      finalizedAt: 123,
+    },
+    deliveryId: "delivery-1",
+    riderId: "rider-1",
+    action: "verify_receiver_pin",
+  });
+  assert.equal(decision.valid, true);
+  assert.equal(decision.stage, "dropoff");
+  assert.equal(decision.canonicalMediaReference, "deliveryEvidence/delivery-1/rider-1/evidence-2.jpg");
 });
 
 test("Confirm Pickup callable policy permits ordinary collection and protects verified pickup", () => {

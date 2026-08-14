@@ -2,6 +2,7 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
 const policy = require("./delivery-policy-core");
+const deliveryPolicyCallable = require("./delivery-policy");
 
 const now = Date.UTC(2026, 6, 4, 12, 0, 0);
 const pickup = {lat: 51.5155, lng: -0.1419};
@@ -115,6 +116,133 @@ test("rider cannot restart waiting timer with duplicate arrival", () => {
   });
   assert.equal(decision.duplicate, true);
   assert.equal(decision.reason, "arrival_already_recorded");
+});
+
+test("rider arrival callable transition guard blocks invalid lifecycle jumps", () => {
+  const {_private} = deliveryPolicyCallable;
+  assert.equal(_private.assertArrivalTransition(
+      {state: "accepted", riderId: "rider-1"},
+      "pickup",
+  ).targetState, "arrived_at_pickup");
+  assert.equal(_private.assertArrivalTransition(
+      {state: "navigating_to_pickup", riderId: "rider-1"},
+      "pickup",
+  ).targetState, "arrived_at_pickup");
+  assert.equal(_private.assertArrivalTransition(
+      {state: "navigating_to_dropoff", riderId: "rider-1"},
+      "dropoff",
+  ).targetState, "arrived_at_dropoff");
+  for (const state of ["cancelled", "delivered", "completed", "requested"]) {
+    assert.throws(
+        () => _private.assertArrivalTransition({state}, "pickup"),
+        /Cannot record pickup arrival/,
+    );
+    assert.throws(
+        () => _private.assertArrivalTransition({state}, "dropoff"),
+        /Cannot record dropoff arrival/,
+    );
+  }
+  for (const [state, phase] of [
+    ["pickup_verified", "pickup"],
+    ["accepted", "dropoff"],
+    ["navigating_to_pickup", "dropoff"],
+  ]) {
+    assert.throws(
+        () => _private.assertArrivalTransition({state}, phase),
+        /Cannot record/,
+    );
+  }
+});
+
+test("rider arrival callable preserves legitimate duplicate arrival only for matching phase", () => {
+  const {_private} = deliveryPolicyCallable;
+  assert.deepEqual(_private.assertArrivalTransition({
+    state: "arrived_at_pickup",
+    pickupArrivedAt: now - 1000,
+    waiting: {phase: "pickup"},
+  }, "pickup"), {
+    currentState: "arrived_at_pickup",
+    targetState: "arrived_at_pickup",
+    duplicate: true,
+  });
+  assert.throws(
+      () => _private.assertArrivalTransition({
+        state: "arrived_at_pickup",
+        pickupArrivedAt: now - 1000,
+        waiting: {phase: "dropoff"},
+      }, "pickup"),
+      /Cannot record pickup arrival/,
+  );
+});
+
+test("deterministic lifecycle fuzzer protects terminal and arrival boundaries", () => {
+  const {_private} = deliveryPolicyCallable;
+  const seed = 0xC1C0A11;
+  let state = seed;
+  const random = () => {
+    state = (Math.imul(state, 1664525) + 1013904223) >>> 0;
+    return state / 0x100000000;
+  };
+  const states = [
+    "requested",
+    "accepted",
+    "navigating_to_pickup",
+    "arrived_at_pickup",
+    "pickup_verified",
+    "collected",
+    "navigating_to_dropoff",
+    "arrived_at_dropoff",
+    "cancelled",
+    "delivered",
+    "completed",
+  ];
+  const phases = ["pickup", "dropoff"];
+  let attempts = 0;
+
+  for (let scenario = 0; scenario < 10000; scenario++) {
+    for (let step = 0; step < 20; step++) {
+      attempts += 1;
+      const current = states[Math.floor(random() * states.length)];
+      const phase = phases[Math.floor(random() * phases.length)];
+      const delivery = {state: current, riderId: "rider-1"};
+      if (current === "arrived_at_pickup" && phase === "pickup" && random() > 0.5) {
+        delivery.pickupArrivedAt = now - 1000;
+        delivery.waiting = {phase: "pickup"};
+      }
+      if (current === "arrived_at_dropoff" && phase === "dropoff" && random() > 0.5) {
+        delivery.dropoffArrivedAt = now - 1000;
+        delivery.waiting = {phase: "dropoff"};
+      }
+
+      if (["cancelled", "delivered", "completed"].includes(current)) {
+        assert.throws(() => _private.assertArrivalTransition(delivery, phase));
+        continue;
+      }
+      if (phase === "dropoff" && current !== "navigating_to_dropoff") {
+        const duplicateDropoff = current === "arrived_at_dropoff" &&
+          delivery.dropoffArrivedAt &&
+          delivery.waiting &&
+          delivery.waiting.phase === "dropoff";
+        if (!duplicateDropoff) {
+          assert.throws(() => _private.assertArrivalTransition(delivery, phase));
+          continue;
+        }
+      }
+      if (phase === "pickup" && !["accepted", "navigating_to_pickup"].includes(current)) {
+        const duplicatePickup = current === "arrived_at_pickup" &&
+          delivery.pickupArrivedAt &&
+          delivery.waiting &&
+          delivery.waiting.phase === "pickup";
+        if (!duplicatePickup) {
+          assert.throws(() => _private.assertArrivalTransition(delivery, phase));
+          continue;
+        }
+      }
+      assert.doesNotThrow(() => _private.assertArrivalTransition(delivery, phase));
+    }
+  }
+
+  assert.equal(attempts, 200000);
 });
 
 test("geofence leaving pauses waiting and re-entry resumes", () => {

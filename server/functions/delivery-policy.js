@@ -3,6 +3,7 @@ const functions = require("firebase-functions/v1");
 const {getFirestore, FieldValue} = require("firebase-admin/firestore");
 const core = require("./delivery-policy-core");
 const communicationEngine = require("./communication-engine");
+const tracking = require("./sender-tracking-state-core");
 
 function requireAuth(context) {
   if (!context.auth || !context.auth.uid) {
@@ -57,7 +58,41 @@ function policyPatch({state, event, evidenceId, extra = {}}) {
   };
 }
 
-exports.requestSenderCancellation = functions.https.onCall(async (data, context) => {
+function canonicalDeliveryState(delivery = {}) {
+  return tracking.normalizeStatus(
+      delivery.state ||
+      delivery.deliveryStage ||
+      delivery.deliveryStatus ||
+      delivery.status,
+  );
+}
+
+function arrivalTargetState(phase) {
+  return phase === "dropoff" ? "arrived_at_dropoff" : "arrived_at_pickup";
+}
+
+function legitimateDuplicateArrival(delivery = {}, phase) {
+  const existingArrival = phase === "dropoff" ?
+    delivery.dropoffArrivedAt : delivery.pickupArrivedAt;
+  return !!(existingArrival && delivery.waiting && delivery.waiting.phase === phase);
+}
+
+function assertArrivalTransition(delivery, phase) {
+  const currentState = canonicalDeliveryState(delivery);
+  const targetState = arrivalTargetState(phase);
+  if (currentState === targetState && legitimateDuplicateArrival(delivery, phase)) {
+    return {currentState, targetState, duplicate: true};
+  }
+  if (!tracking.canTransitionDeliveryStatus(currentState, targetState)) {
+    throw new functions.https.HttpsError(
+        "failed-precondition",
+        `Cannot record ${phase} arrival from ${currentState}.`,
+    );
+  }
+  return {currentState, targetState, duplicate: false};
+}
+
+exports.requestSenderCancellation = functions.runWith({enforceAppCheck: true}).https.onCall(async (data, context) => {
   const uid = requireAuth(context);
   const deliveryId = text(data.deliveryId || data.requestId);
   const cancellationReason = text(data.reason || data.cancellationReason) || "Sender requested cancellation";
@@ -167,7 +202,7 @@ exports.requestSenderCancellation = functions.https.onCall(async (data, context)
   return result;
 });
 
-exports.previewSenderCancellation = functions.https.onCall(async (data, context) => {
+exports.previewSenderCancellation = functions.runWith({enforceAppCheck: true}).https.onCall(async (data, context) => {
   const uid = requireAuth(context);
   const deliveryId = text(data.deliveryId || data.requestId);
   if (!deliveryId) throw new functions.https.HttpsError("invalid-argument", "deliveryId is required.");
@@ -206,7 +241,7 @@ exports.previewSenderCancellation = functions.https.onCall(async (data, context)
   };
 });
 
-exports.recordRiderArrival = functions.https.onCall(async (data, context) => {
+exports.recordRiderArrival = functions.runWith({enforceAppCheck: true}).https.onCall(async (data, context) => {
   const uid = requireAuth(context);
   const deliveryId = text(data.deliveryId);
   if (!deliveryId) throw new functions.https.HttpsError("invalid-argument", "deliveryId is required.");
@@ -215,9 +250,8 @@ exports.recordRiderArrival = functions.https.onCall(async (data, context) => {
   return db.runTransaction(async (transaction) => {
     const {ref, delivery} = await deliverySnapshot(transaction, deliveryId);
     assertAssignedRider(uid, delivery);
-    const existingArrival = phase === "dropoff" ?
-      delivery.dropoffArrivedAt : delivery.pickupArrivedAt;
-    if (existingArrival && delivery.waiting && delivery.waiting.phase === phase) {
+    const arrivalTransition = assertArrivalTransition(delivery, phase);
+    if (arrivalTransition.duplicate) {
       return {
         success: true,
         duplicate: true,
@@ -266,7 +300,7 @@ exports.recordRiderArrival = functions.https.onCall(async (data, context) => {
   });
 });
 
-exports.recordArrivalZoneCheck = functions.https.onCall(async (data, context) => {
+exports.recordArrivalZoneCheck = functions.runWith({enforceAppCheck: true}).https.onCall(async (data, context) => {
   const uid = requireAuth(context);
   const deliveryId = text(data.deliveryId);
   if (!deliveryId) throw new functions.https.HttpsError("invalid-argument", "deliveryId is required.");
@@ -306,7 +340,7 @@ exports.recordArrivalZoneCheck = functions.https.onCall(async (data, context) =>
   });
 });
 
-exports.recordCustomerArrivalResponse = functions.https.onCall(async (data, context) => {
+exports.recordCustomerArrivalResponse = functions.runWith({enforceAppCheck: true}).https.onCall(async (data, context) => {
   const uid = requireAuth(context);
   const deliveryId = text(data.deliveryId);
   if (!deliveryId) throw new functions.https.HttpsError("invalid-argument", "deliveryId is required.");
@@ -327,7 +361,7 @@ exports.recordCustomerArrivalResponse = functions.https.onCall(async (data, cont
   });
 });
 
-exports.reportWaitingContext = functions.https.onCall(async (data, context) => {
+exports.reportWaitingContext = functions.runWith({enforceAppCheck: true}).https.onCall(async (data, context) => {
   const uid = requireAuth(context);
   const deliveryId = text(data.deliveryId);
   const waitingType = text(data.type);
@@ -363,7 +397,7 @@ exports.reportWaitingContext = functions.https.onCall(async (data, context) => {
   });
 });
 
-exports.markRiderNoShow = functions.https.onCall(async (data, context) => {
+exports.markRiderNoShow = functions.runWith({enforceAppCheck: true}).https.onCall(async (data, context) => {
   const uid = requireAuth(context);
   const deliveryId = text(data.deliveryId);
   const idempotencyKey = text(data.idempotencyKey || `${deliveryId}:no_show:${uid}`);
@@ -422,3 +456,9 @@ exports.markRiderNoShow = functions.https.onCall(async (data, context) => {
 });
 
 exports._core = core;
+exports._private = {
+  canonicalDeliveryState,
+  arrivalTargetState,
+  legitimateDuplicateArrival,
+  assertArrivalTransition,
+};

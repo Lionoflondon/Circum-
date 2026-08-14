@@ -151,6 +151,10 @@ exports.updateDeliveryTrackingStatus =
   deliveryTracking.updateDeliveryTrackingStatus;
 exports.updateDeliveryLiveLocation =
   deliveryTracking.updateDeliveryLiveLocation;
+exports.recordDeliveryEvidence =
+  deliveryTracking.recordDeliveryEvidence;
+exports.getDeliveryEvidenceAccess =
+  deliveryTracking.getDeliveryEvidenceAccess;
 exports.settleScheduledRoadChargeCashRefund =
   scheduledRoadChargeRefunds.settleScheduledRoadChargeCashRefund;
 exports.submitDeliveryRating = ratingsTipping.submitDeliveryRating;

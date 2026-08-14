@@ -10,6 +10,7 @@ const {
 const {
   doc,
   getDoc,
+  deleteDoc,
   setDoc,
   writeBatch,
   serverTimestamp,
@@ -267,8 +268,11 @@ test("Rider profile self-writes are explicitly allowlisted", async () => {
   }));
   await assertSucceeds(setDoc(doc(riderDb, "riders", "rider-1"), {
     photoURL: "https://example.com/rider.jpg",
-    username: "riderone",
     vehicleType: "bike",
+    updatedAt: serverTimestamp(),
+  }, {merge: true}));
+  await assertFails(setDoc(doc(riderDb, "riders", "rider-1"), {
+    username: "riderone",
     updatedAt: serverTimestamp(),
   }, {merge: true}));
 });
@@ -371,6 +375,51 @@ test("Driver manager can update Rider admin fields", async () => {
     riderTrustPoints: 100,
     updatedAt: serverTimestamp(),
   }, {merge: true}));
+});
+
+test("Delivery evidence records are backend-owned and not client-forgeable", async () => {
+  await testEnv.withSecurityRulesDisabled(async (context) => {
+    await setDoc(doc(context.firestore(), "deliveryEvidence", "evidence-1"), {
+      evidenceId: "evidence-1",
+      deliveryId: "delivery-1",
+      riderId: "rider-1",
+      evidenceType: "photo",
+      lifecycleStage: "dropoff",
+      status: "finalized",
+      storagePath: "deliveryEvidence/delivery-1/rider-1/evidence-1.jpg",
+      createdAt: serverTimestamp(),
+      finalizedAt: serverTimestamp(),
+    });
+  });
+
+  const riderDb = testEnv.authenticatedContext("rider-1").firestore();
+  const otherRiderDb = testEnv.authenticatedContext("rider-2").firestore();
+  const senderDb = testEnv.authenticatedContext("sender-1").firestore();
+  const adminDb = testEnv.authenticatedContext("admin-1", {
+    roles: ["operations_admin"],
+  }).firestore();
+
+  await assertFails(getDoc(doc(riderDb, "deliveryEvidence", "evidence-1")));
+  await assertFails(getDoc(doc(senderDb, "deliveryEvidence", "evidence-1")));
+  await assertSucceeds(getDoc(doc(adminDb, "deliveryEvidence", "evidence-1")));
+
+  await assertFails(setDoc(doc(riderDb, "deliveryEvidence", "evidence-2"), {
+    evidenceId: "evidence-2",
+    deliveryId: "delivery-1",
+    riderId: "rider-1",
+    evidenceType: "photo",
+    lifecycleStage: "dropoff",
+    status: "finalized",
+    storagePath: "deliveryEvidence/delivery-1/rider-1/evidence-2.jpg",
+    createdAt: serverTimestamp(),
+    finalizedAt: serverTimestamp(),
+  }));
+  await assertFails(setDoc(doc(otherRiderDb, "deliveryEvidence", "evidence-1"), {
+    deliveryId: "delivery-2",
+    riderId: "rider-2",
+    updatedAt: serverTimestamp(),
+  }, {merge: true}));
+  await assertFails(deleteDoc(doc(senderDb, "deliveryEvidence", "evidence-1")));
 });
 
 test("Sender profile self-writes cannot escalate roles", async () => {

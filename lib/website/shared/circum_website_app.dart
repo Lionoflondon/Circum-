@@ -4137,11 +4137,11 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
           'evidence': {
             if (verificationPatch?['riderVerifiedWeightKg'] != null)
               'actualWeightKg': verificationPatch!['riderVerifiedWeightKg'],
-            if ((verificationPatch?['riderWeightEvidenceUrls'] as List?)
+            if ((verificationPatch?['riderWeightEvidenceIds'] as List?)
                     ?.isNotEmpty ==
                 true)
-              'photoUrl':
-                  (verificationPatch!['riderWeightEvidenceUrls'] as List).first,
+              'evidenceId':
+                  (verificationPatch!['riderWeightEvidenceIds'] as List).first,
             'conditionConfirmed': true,
             'riderDeclarationAccepted': true,
           },
@@ -4482,17 +4482,22 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
     final optionValue = '${result['option']}';
     final verifiedWeight = result['verifiedWeightKg'] as double;
     final photos = (result['photos'] as List<XFile>? ?? const <XFile>[]);
-    final evidenceUrls = <String>[];
-    final storagePaths = <String>[];
+    final evidenceIds = <String>[];
     for (final photo in photos) {
       final bytes = await photo.readAsBytes();
-      final safeName = photo.name.replaceAll(RegExp(r'[^A-Za-z0-9._-]'), '_');
-      final path =
-          'delivery_weight_evidence/$requestId/$riderId/${DateTime.now().millisecondsSinceEpoch}_$safeName';
-      final ref = FirebaseStorage.instance.ref(path);
-      await ref.putData(bytes);
-      storagePaths.add(path);
-      evidenceUrls.add(await ref.getDownloadURL());
+      final response = await FirebaseFunctions.instanceFor(
+        region: 'us-central1',
+      ).httpsCallable('recordDeliveryEvidence').call({
+        'deliveryId': requestId,
+        'action': 'verify_collection_pin',
+        'stage': 'pickup',
+        'imageBase64': base64Encode(bytes),
+        'contentType': photo.mimeType,
+        'sourceSurface': 'rider_web',
+      });
+      final data = Map<String, dynamic>.from(response.data as Map);
+      final evidenceId = '${data['evidenceId'] ?? ''}'.trim();
+      if (evidenceId.isNotEmpty) evidenceIds.add(evidenceId);
     }
 
     final customerWeight = _jobCustomerWeight(job);
@@ -4588,8 +4593,7 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
         'option': optionValue,
         'riderId': riderId,
         'note': result['note'],
-        'supportingImages': evidenceUrls,
-        'storagePaths': storagePaths,
+        'evidenceIds': evidenceIds,
         'timestamp': FieldValue.serverTimestamp(),
       },
       'driverJobSummary': {
