@@ -87,6 +87,7 @@
         "test/widget_test.dart",
         "test/authentication_screen_contract_test.dart",
         "test/booking_cancellation_test.dart",
+        "test/button_response_contract_test.dart",
         "test/delivery_pricing_test.dart",
         "test/delivery_receipt_test.dart",
         "test/proof_of_delivery_test.dart",
@@ -219,6 +220,7 @@
         "scripts/functions_release_provenance.js",
         "scripts/functions_release_provenance.test.js",
         "scripts/operations_health_deployment_gate.js",
+        "scripts/performance_certification_benchmark.dart",
         "scripts/validate_web_artifacts.js",
         "scripts/verify_sender_deployment_governance.js"
       ],
