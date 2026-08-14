@@ -2,6 +2,7 @@ import 'dart:io';
 
 import 'package:circum/app/platform/address_engine.dart';
 import 'package:circum/app/send_package/models/suggestions.m.dart';
+import 'package:circum/app/sender_mobile/sender_booking_state.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
@@ -136,6 +137,141 @@ void main() {
       expect(source, contains('_addressSearchGeneration'));
       expect(source, contains('final generation = ++_addressSearchGeneration'));
       expect(source, contains('generation != _addressSearchGeneration'));
+    });
+  });
+
+  group('Sender scheduled delivery contract', () {
+    test('preferred dates are generated from injected London current date', () {
+      final londonLateNight = DateTime.utc(2026, 8, 13, 23, 30);
+      final dates = senderScheduleDateOptions(now: londonLateNight, days: 5);
+
+      expect(dates.map(senderScheduleDateValue), [
+        '2026-08-14',
+        '2026-08-15',
+        '2026-08-16',
+        '2026-08-17',
+        '2026-08-18',
+      ]);
+      expect(senderScheduleDayLabel(dates[0], now: londonLateNight), 'Today');
+      expect(
+        senderScheduleDayLabel(dates[1], now: londonLateNight),
+        'Tomorrow',
+      );
+      expect(senderScheduleMonthDayLabel(dates[0]), '14 Aug');
+    });
+
+    test('schedule labels are not hardcoded in Sender booking UI', () {
+      final source = File('lib/app/sender_mobile/sender_booking_canvas.dart')
+          .readAsStringSync();
+
+      expect(source, contains('senderScheduleDateOptions()'));
+      expect(source, isNot(contains("'14 Aug'")));
+      expect(source, isNot(contains("'15 Aug'")));
+      expect(source, isNot(contains("'16 Aug'")));
+      expect(source, isNot(contains("'17 Aug'")));
+    });
+
+    test('today blocks past scheduled windows in London time', () {
+      final now = DateTime.utc(2026, 8, 14, 14);
+      final iso = senderScheduledJourneyIso(
+        scheduledDate: '2026-08-14',
+        scheduledWindow: 'Morning',
+      );
+
+      expect(
+        isSenderScheduledSelectionValid(
+          scheduledDate: '2026-08-14',
+          scheduledJourneyAt: iso,
+          scheduledWindow: 'Morning',
+          now: now,
+        ),
+        isFalse,
+      );
+    });
+
+    test('future dates allow valid London scheduled windows', () {
+      final now = DateTime.utc(2026, 8, 14, 14);
+      final iso = senderScheduledJourneyIso(
+        scheduledDate: '2026-08-15',
+        scheduledWindow: 'Morning',
+      );
+
+      expect(
+        isSenderScheduledSelectionValid(
+          scheduledDate: '2026-08-15',
+          scheduledJourneyAt: iso,
+          scheduledWindow: 'Morning',
+          now: now,
+        ),
+        isTrue,
+      );
+    });
+
+    test('custom scheduled window requires valid HH:mm range', () {
+      final iso = senderScheduledJourneyIso(
+        scheduledDate: '2026-08-15',
+        scheduledWindow: 'Custom',
+        customWindowStart: '16:30',
+        customWindowEnd: '18:00',
+      );
+
+      expect(iso, isNotEmpty);
+      expect(
+        isSenderScheduledSelectionValid(
+          scheduledDate: '2026-08-15',
+          scheduledJourneyAt: iso,
+          scheduledWindow: 'Custom',
+          customWindowStart: '16:30',
+          customWindowEnd: '18:00',
+          now: DateTime.utc(2026, 8, 14, 14),
+        ),
+        isTrue,
+      );
+      expect(
+        senderScheduledJourneyIso(
+          scheduledDate: '2026-08-15',
+          scheduledWindow: 'Custom',
+          customWindowStart: '18:00',
+          customWindowEnd: '16:30',
+        ),
+        isEmpty,
+      );
+    });
+
+    test('scheduled draft serializes canonical timestamp and window', () {
+      final iso = senderScheduledJourneyIso(
+        scheduledDate: '2026-08-15',
+        scheduledWindow: 'Afternoon',
+      );
+      final draft = SenderBookingDraft(
+        deliveryTimingType: SenderDeliveryTimingType.scheduled,
+        scheduledDate: '2026-08-15',
+        scheduledWindow: 'Afternoon',
+        scheduledJourneyAt: iso,
+      );
+      final deliveryTime = draft.toBackendDraftPayload()['deliveryTime'] as Map;
+
+      expect(draft.isDeliveryTimeValid, isTrue);
+      expect(deliveryTime['type'], 'scheduled');
+      expect(deliveryTime['scheduledDate'], '2026-08-15');
+      expect(deliveryTime['scheduledWindow'], 'Afternoon');
+      expect(deliveryTime['scheduledJourneyAt'], iso);
+      expect(deliveryTime['summary'], 'Scheduled: 15 Aug, Afternoon');
+    });
+
+    test('scheduled Rider availability warning is absent', () {
+      final source = File('lib/app/sender_mobile/sender_booking_canvas.dart')
+          .readAsStringSync();
+
+      expect(
+        source,
+        isNot(contains(
+            'Scheduled deliveries depend on Circum Rider availability')),
+      );
+      expect(
+        source,
+        isNot(contains("We'll confirm before the delivery begins")),
+      );
     });
   });
 }

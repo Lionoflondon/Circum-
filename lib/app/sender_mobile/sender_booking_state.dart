@@ -44,14 +44,32 @@ String senderFallbackPaymentMethodPrompt() => 'Saved card';
 bool isSenderScheduledDateValid(String value, {DateTime? now}) {
   final parsed = DateTime.tryParse(value.trim());
   if (parsed == null) return false;
-  final today = now ?? DateTime.now();
+  final today = senderLondonNow(now: now);
   final todayOnly = DateTime(today.year, today.month, today.day);
   final parsedOnly = DateTime(parsed.year, parsed.month, parsed.day);
   return !parsedOnly.isBefore(todayOnly);
 }
 
+DateTime senderLondonNow({DateTime? now}) {
+  final utc = (now ?? DateTime.now()).toUtc();
+  return utc.add(Duration(hours: _londonUtcOffsetHours(utc)));
+}
+
+int _londonUtcOffsetHours(DateTime utc) {
+  final start = _lastSundayUtc(utc.year, DateTime.march);
+  final end = _lastSundayUtc(utc.year, DateTime.october);
+  final dstStart = DateTime.utc(utc.year, DateTime.march, start.day, 1);
+  final dstEnd = DateTime.utc(utc.year, DateTime.october, end.day, 1);
+  return utc.isBefore(dstStart) || !utc.isBefore(dstEnd) ? 0 : 1;
+}
+
+DateTime _lastSundayUtc(int year, int month) {
+  final lastDay = DateTime.utc(year, month + 1, 0);
+  return lastDay.subtract(Duration(days: lastDay.weekday % 7));
+}
+
 List<DateTime> senderScheduleDateOptions({DateTime? now, int days = 7}) {
-  final base = now ?? DateTime.now();
+  final base = senderLondonNow(now: now);
   final today = DateTime(base.year, base.month, base.day);
   return List<DateTime>.generate(
       days, (index) => today.add(Duration(days: index)));
@@ -64,7 +82,7 @@ String senderScheduleDateValue(DateTime date) {
 }
 
 String senderScheduleDayLabel(DateTime date, {DateTime? now}) {
-  final base = now ?? DateTime.now();
+  final base = senderLondonNow(now: now);
   final today = DateTime(base.year, base.month, base.day);
   final dateOnly = DateTime(date.year, date.month, date.day);
   if (dateOnly == today) return 'Today';
@@ -109,6 +127,79 @@ bool isSenderCustomWindowValid(String start, String end) {
       endParts[0]! < 24 &&
       endParts[1]! < 60 &&
       endMinutes > startMinutes;
+}
+
+({String start, String end})? senderScheduledWindowRange({
+  required String window,
+  required String customStart,
+  required String customEnd,
+}) {
+  switch (window.trim()) {
+    case 'Morning':
+      return (start: '09:00', end: '12:00');
+    case 'Afternoon':
+      return (start: '12:00', end: '17:00');
+    case 'Evening':
+      return (start: '17:00', end: '20:00');
+    case 'Custom':
+      return isSenderCustomWindowValid(customStart, customEnd)
+          ? (start: customStart.trim(), end: customEnd.trim())
+          : null;
+    default:
+      return null;
+  }
+}
+
+String senderScheduledJourneyIso({
+  required String scheduledDate,
+  required String scheduledWindow,
+  String customWindowStart = '',
+  String customWindowEnd = '',
+}) {
+  final range = senderScheduledWindowRange(
+    window: scheduledWindow,
+    customStart: customWindowStart,
+    customEnd: customWindowEnd,
+  );
+  if (range == null) return '';
+  final date = DateTime.tryParse(scheduledDate.trim());
+  if (date == null) return '';
+  final offsetHours = _londonUtcOffsetHours(
+    DateTime.utc(date.year, date.month, date.day, 12),
+  );
+  final parts = range.start.split(':').map(int.tryParse).toList();
+  if (parts.length != 2 || parts.any((part) => part == null)) return '';
+  final londonTime = DateTime.utc(
+    date.year,
+    date.month,
+    date.day,
+    parts[0]! - offsetHours,
+    parts[1]!,
+  );
+  return londonTime.toIso8601String();
+}
+
+bool isSenderScheduledSelectionValid({
+  required String scheduledDate,
+  required String scheduledJourneyAt,
+  required String scheduledWindow,
+  String customWindowStart = '',
+  String customWindowEnd = '',
+  DateTime? now,
+}) {
+  if (!isSenderScheduledDateValid(scheduledDate, now: now)) return false;
+  final expectedIso = senderScheduledJourneyIso(
+    scheduledDate: scheduledDate,
+    scheduledWindow: scheduledWindow,
+    customWindowStart: customWindowStart,
+    customWindowEnd: customWindowEnd,
+  );
+  if (expectedIso.isEmpty || scheduledJourneyAt.trim() != expectedIso) {
+    return false;
+  }
+  final scheduled = DateTime.tryParse(expectedIso);
+  if (scheduled == null) return false;
+  return scheduled.isAfter((now ?? DateTime.now()).toUtc());
 }
 
 @immutable
@@ -325,13 +416,13 @@ class SenderBookingDraft {
 
   bool get isDeliveryTimeValid {
     if (deliveryTimingType == SenderDeliveryTimingType.now) return true;
-    if (!isSenderScheduledDateValid(scheduledDate)) return false;
-    if (DateTime.tryParse(scheduledJourneyAt) == null) return false;
-    if (scheduledWindow.trim().isEmpty) return false;
-    if (scheduledWindow == 'Custom') {
-      return isSenderCustomWindowValid(customWindowStart, customWindowEnd);
-    }
-    return true;
+    return isSenderScheduledSelectionValid(
+      scheduledDate: scheduledDate,
+      scheduledJourneyAt: scheduledJourneyAt,
+      scheduledWindow: scheduledWindow,
+      customWindowStart: customWindowStart,
+      customWindowEnd: customWindowEnd,
+    );
   }
 
   String get deliveryTimeSummary {
@@ -341,10 +432,13 @@ class SenderBookingDraft {
     if (scheduledDate.trim().isEmpty || scheduledWindow.trim().isEmpty) {
       return 'Scheduled';
     }
+    final parsed = DateTime.tryParse(scheduledDate);
+    final dateLabel =
+        parsed == null ? scheduledDate : senderScheduleMonthDayLabel(parsed);
     final window = scheduledWindow == 'Custom'
         ? '$customWindowStart-$customWindowEnd'
         : scheduledWindow;
-    return 'Scheduled: $scheduledDate, $window';
+    return 'Scheduled: $dateLabel, $window';
   }
 
   SenderBookingDraft next() {

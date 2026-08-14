@@ -27,17 +27,11 @@ import 'sender_finance.dart';
 import 'sender_saved_addresses.dart';
 import 'sender_tracking_screen.dart';
 
-String _scheduledJourneyIso(String date, String time) {
-  final value = '${date.trim()}T${time.trim()}:00';
-  final parsed = DateTime.tryParse(value);
-  return parsed?.toUtc().toIso8601String() ?? '';
-}
-
 String _londonTimeFromIso(String value) {
   final parsed = DateTime.tryParse(value);
   if (parsed == null) return '';
-  final local = parsed.toLocal();
-  return '${local.hour.toString().padLeft(2, '0')}:${local.minute.toString().padLeft(2, '0')}';
+  final london = senderLondonNow(now: parsed);
+  return '${london.hour.toString().padLeft(2, '0')}:${london.minute.toString().padLeft(2, '0')}';
 }
 
 class SenderBookingCanvas extends StatefulWidget {
@@ -180,6 +174,7 @@ class _SenderBookingCanvasState extends State<SenderBookingCanvas> {
   }
 
   void _setDraft(SenderBookingDraft next) {
+    _syncScheduledControllers(next);
     setState(() => _draft = next);
     if (_lastSheetStep != next.step) {
       _lastSheetStep = next.step;
@@ -193,6 +188,18 @@ class _SenderBookingCanvasState extends State<SenderBookingCanvas> {
       });
     }
     if (!_restoringDraft) _scheduleDraftSave(next);
+  }
+
+  void _syncScheduledControllers(SenderBookingDraft draft) {
+    void sync(TextEditingController controller, String value) {
+      if (controller.text == value) return;
+      controller.text = value;
+    }
+
+    sync(_scheduledDate, draft.scheduledDate);
+    sync(_scheduledJourneyTime, _londonTimeFromIso(draft.scheduledJourneyAt));
+    sync(_customWindowStart, draft.customWindowStart);
+    sync(_customWindowEnd, draft.customWindowEnd);
   }
 
   String? get _uid => FirebaseAuth.instance.currentUser?.uid;
@@ -1079,6 +1086,7 @@ class _SenderBookingCanvasState extends State<SenderBookingCanvas> {
           );
         }
         final keyboardOpen = MediaQuery.viewInsetsOf(context).bottom > 0;
+        final safePadding = MediaQuery.viewPaddingOf(context);
         return ColoredBox(
           color: _Tokens.bg,
           child: Stack(
@@ -1092,6 +1100,7 @@ class _SenderBookingCanvasState extends State<SenderBookingCanvas> {
                 distanceKm: engine.distance,
               ),
               SafeArea(
+                minimum: EdgeInsets.only(bottom: safePadding.bottom),
                 child: Column(
                   children: [
                     _TopBar(
@@ -1177,6 +1186,7 @@ double _bookingSheetExtentFor(SenderBookingStep step,
   if (keyboardOpen) return .78;
   switch (step) {
     case SenderBookingStep.recipient:
+    case SenderBookingStep.parcel:
     case SenderBookingStep.iris:
     case SenderBookingStep.options:
     case SenderBookingStep.review:
@@ -1185,7 +1195,6 @@ double _bookingSheetExtentFor(SenderBookingStep step,
     case SenderBookingStep.pickup:
     case SenderBookingStep.dropoff:
     case SenderBookingStep.deliveryTime:
-    case SenderBookingStep.parcel:
       return .45;
     case SenderBookingStep.findingRider:
     case SenderBookingStep.liveTracking:
@@ -1399,7 +1408,12 @@ class _BookingPanel extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final content = _content(context);
-    final bottomInset = MediaQuery.paddingOf(context).bottom;
+    final media = MediaQuery.of(context);
+    final bottomInset = math.max(
+      media.padding.bottom,
+      math.max(media.viewPadding.bottom, media.viewInsets.bottom),
+    );
+    final bottomClearance = bottomInset + 88;
     return Padding(
       padding: EdgeInsets.fromLTRB(14, 0, 14, bottomInset + 12),
       child: _Glass(
@@ -1409,7 +1423,7 @@ class _BookingPanel extends StatelessWidget {
             controller: scrollController,
             key: ValueKey(draft.step),
             physics: const BouncingScrollPhysics(),
-            padding: EdgeInsets.only(bottom: bottomInset + 28),
+            padding: EdgeInsets.only(bottom: bottomClearance),
             child: Column(
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -1886,9 +1900,9 @@ class _DeliveryTimePanel extends StatelessWidget {
           title: 'Schedule for later',
           caption: 'Choose a date and time window.',
           onTap: () => onDraft(
-            draft.copyWith(
+            _ensureScheduledDraft(draft.copyWith(
               deliveryTimingType: SenderDeliveryTimingType.scheduled,
-            ),
+            )),
           ),
         ),
         if (scheduled) ...[
@@ -1899,13 +1913,9 @@ class _DeliveryTimePanel extends StatelessWidget {
             selectedDate: draft.scheduledDate,
             onSelected: (value) {
               scheduledDate.text = value;
-              onDraft(draft.copyWith(
+              onDraft(_ensureScheduledDraft(draft.copyWith(
                 scheduledDate: value,
-                scheduledJourneyAt: _scheduledJourneyIso(
-                  value,
-                  scheduledJourneyTime.text,
-                ),
-              ));
+              )));
             },
           ),
           if (pastDate) ...[
@@ -1915,20 +1925,6 @@ class _DeliveryTimePanel extends StatelessWidget {
               style: TextStyle(color: Color(0xFFFCA5A5), fontSize: 12),
             ),
           ],
-          const SizedBox(height: 12),
-          const _SectionLabel('Exact journey time (London)'),
-          const SizedBox(height: 8),
-          _TextInput(
-            controller: scheduledJourneyTime,
-            hint: 'HH:MM',
-            keyboardType: TextInputType.datetime,
-            onChanged: (value) => onDraft(draft.copyWith(
-              scheduledJourneyAt: _scheduledJourneyIso(
-                draft.scheduledDate,
-                value,
-              ),
-            )),
-          ),
           const SizedBox(height: 12),
           const _SectionLabel('Preferred collection window'),
           const SizedBox(height: 8),
@@ -1941,7 +1937,9 @@ class _DeliveryTimePanel extends StatelessWidget {
               return _ToggleChip(
                 label: window,
                 selected: draft.scheduledWindow == window,
-                onTap: () => onDraft(draft.copyWith(scheduledWindow: window)),
+                onTap: () => onDraft(_ensureScheduledDraft(
+                  draft.copyWith(scheduledWindow: window),
+                )),
               );
             }).toList(),
           ),
@@ -1960,8 +1958,9 @@ class _DeliveryTimePanel extends StatelessWidget {
                             ).hasMatch(customWindowStart.text.trim())
                         ? 'Use HH:MM'
                         : null,
-                    onChanged: (value) =>
-                        onDraft(draft.copyWith(customWindowStart: value)),
+                    onChanged: (value) => onDraft(_ensureScheduledDraft(
+                      draft.copyWith(customWindowStart: value),
+                    )),
                   ),
                 ),
                 const SizedBox(width: 8),
@@ -1977,19 +1976,15 @@ class _DeliveryTimePanel extends StatelessWidget {
                             )
                         ? 'After start'
                         : null,
-                    onChanged: (value) =>
-                        onDraft(draft.copyWith(customWindowEnd: value)),
+                    onChanged: (value) => onDraft(_ensureScheduledDraft(
+                      draft.copyWith(customWindowEnd: value),
+                    )),
                   ),
                 ),
               ],
             ),
           ],
         ],
-        const SizedBox(height: 14),
-        const _InfoNote(
-          text:
-              "Scheduled deliveries depend on Circum Rider availability. We'll confirm before the delivery begins.",
-        ),
         const SizedBox(height: 14),
         _PrimaryButton(
           label: 'Confirm delivery time',
@@ -2033,6 +2028,82 @@ class _ScheduleDateSelector extends StatelessWidget {
       ),
     );
   }
+}
+
+SenderBookingDraft _ensureScheduledDraft(SenderBookingDraft draft) {
+  if (draft.deliveryTimingType != SenderDeliveryTimingType.scheduled) {
+    return draft;
+  }
+  final options = senderScheduleDateOptions();
+  var date = draft.scheduledDate;
+  if (!isSenderScheduledDateValid(date)) {
+    date = senderScheduleDateValue(options.first);
+  }
+  var window =
+      draft.scheduledWindow.trim().isEmpty ? 'Morning' : draft.scheduledWindow;
+  var customStart = draft.customWindowStart;
+  var customEnd = draft.customWindowEnd;
+  var iso = senderScheduledJourneyIso(
+    scheduledDate: date,
+    scheduledWindow: window,
+    customWindowStart: customStart,
+    customWindowEnd: customEnd,
+  );
+
+  if (window != 'Custom' &&
+      !isSenderScheduledSelectionValid(
+        scheduledDate: date,
+        scheduledJourneyAt: iso,
+        scheduledWindow: window,
+      )) {
+    for (final candidate in const ['Morning', 'Afternoon', 'Evening']) {
+      final candidateIso = senderScheduledJourneyIso(
+        scheduledDate: date,
+        scheduledWindow: candidate,
+      );
+      if (isSenderScheduledSelectionValid(
+        scheduledDate: date,
+        scheduledJourneyAt: candidateIso,
+        scheduledWindow: candidate,
+      )) {
+        window = candidate;
+        iso = candidateIso;
+        break;
+      }
+    }
+  }
+
+  if (iso.isEmpty ||
+      !isSenderScheduledSelectionValid(
+        scheduledDate: date,
+        scheduledJourneyAt: iso,
+        scheduledWindow: window,
+        customWindowStart: customStart,
+        customWindowEnd: customEnd,
+      )) {
+    final tomorrow = options.length > 1 ? options[1] : options.first;
+    date = senderScheduleDateValue(tomorrow);
+    if (window != 'Custom') {
+      window = 'Morning';
+    } else {
+      customStart = customStart.trim();
+      customEnd = customEnd.trim();
+    }
+    iso = senderScheduledJourneyIso(
+      scheduledDate: date,
+      scheduledWindow: window,
+      customWindowStart: customStart,
+      customWindowEnd: customEnd,
+    );
+  }
+
+  return draft.copyWith(
+    scheduledDate: date,
+    scheduledWindow: window,
+    scheduledJourneyAt: iso,
+    customWindowStart: customStart,
+    customWindowEnd: customEnd,
+  );
 }
 
 class _ScheduleDateCard extends StatelessWidget {

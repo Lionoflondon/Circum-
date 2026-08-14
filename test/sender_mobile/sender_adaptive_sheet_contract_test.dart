@@ -49,5 +49,17 @@ void main() {
       expect(resting, inInclusiveRange(.18, .90), reason: step.name);
       expect(bookingSheetExtentForTest(step, true), .78, reason: step.name);
     }
+    expect(bookingSheetExtentForTest(SenderBookingStep.parcel), .90);
+    expect(bookingSheetExtentForTest(SenderBookingStep.iris), .90);
+  });
+
+  test('Sender booking sheet preserves Safari bottom clearance', () {
+    final source = File('lib/app/sender_mobile/sender_booking_canvas.dart')
+        .readAsStringSync();
+
+    expect(source, contains('MediaQuery.viewPaddingOf(context)'));
+    expect(source, contains('media.viewPadding.bottom'));
+    expect(source, contains('media.viewInsets.bottom'));
+    expect(source, contains('bottomClearance = bottomInset + 88'));
   });
 }
