@@ -91,6 +91,91 @@ test("Sender cancellation is rejected after collection has started", {skip: !emu
   assert.equal(delivery.cancelledAt, undefined);
 });
 
+test("four concurrent completion calls settle exactly once and clear active state", {skip: !emulator}, async () => {
+  const {db, clear, wrappedTracking} = await lifecycleHarness("completion-race");
+  await clear();
+  const deliveryId = "delivery-completion-race";
+  await seedRider(db, "rider-a");
+  await seedDispatchableDelivery(db, deliveryId, {
+    status: "arrived_at_dropoff",
+    state: "arrived_at_dropoff",
+    deliveryStatus: "arrived_at_dropoff",
+    deliveryStage: "arrived_at_dropoff",
+    riderId: "rider-a",
+    assignedRiderId: "rider-a",
+    serviceType: "standard",
+    deliveryPhotoRequired: true,
+    riderEarning: 12.5,
+  });
+  await db.collection("deliveryEvidence").doc("evidence-completion-race").set({
+    evidenceId: "evidence-completion-race",
+    deliveryId,
+    riderId: "rider-a",
+    stage: "dropoff",
+    storagePath: `deliveryEvidence/${deliveryId}/rider-a/evidence-completion-race.jpg`,
+    status: "finalized",
+  });
+  await db.collection("riderPresence").doc("rider-a").set({
+    riderId: "rider-a",
+    isOnline: true,
+    status: "online",
+    busy: true,
+    activeDeliveryId: deliveryId,
+  });
+  await db.collection("activeDeliveries").doc(deliveryId).set({deliveryId, riderId: "rider-a", status: "active"});
+  await db.collection("deliveryLiveLocations").doc(deliveryId).set({deliveryId, riderId: "rider-a"});
+
+  const request = {
+    deliveryId,
+    action: "verify_receiver_pin",
+    evidence: {evidenceId: "evidence-completion-race", recipientConfirmed: true},
+  };
+  const results = await Promise.allSettled(Array.from({length: 4}, () =>
+    wrappedTracking(request, authContext("rider-a"))));
+  assert.equal(results.filter((result) => result.status === "fulfilled").length, 4);
+
+  const delivery = (await db.collection("deliveryRequests").doc(deliveryId).get()).data();
+  assert.equal(delivery.status, "delivered");
+  assert.ok(delivery.deliveredAt);
+  assert.ok(delivery.completedAt);
+  assert.equal(delivery.trustPointsAwarded, 1);
+  assert.equal((await db.collection("riderEarningTransactions").where("deliveryId", "==", deliveryId).get()).size, 1);
+  assert.equal((await db.collection("riderEarnings").doc("rider-a").get()).data().completedDeliveries, 1);
+  assert.equal((await db.collection("riderProfiles").doc("rider-a").get()).data().trustPoints, 1);
+  assert.equal((await db.collection("activeDeliveries").doc(deliveryId).get()).exists, false);
+  assert.equal((await db.collection("deliveryLiveLocations").doc(deliveryId).get()).exists, false);
+  const presence = (await db.collection("riderPresence").doc("rider-a").get()).data();
+  assert.equal(presence.busy, false);
+  assert.equal(presence.activeDeliveryId, undefined);
+
+  const replay = await wrappedTracking(request, authContext("rider-a"));
+  assert.equal(replay.idempotent, true);
+  assert.equal((await db.collection("riderEarningTransactions").where("deliveryId", "==", deliveryId).get()).size, 1);
+  assert.equal((await db.collection("riderEarnings").doc("rider-a").get()).data().completedDeliveries, 1);
+});
+
+test("completion rejects unpaid canonical delivery", {skip: !emulator}, async () => {
+  const {db, clear, wrappedTracking} = await lifecycleHarness("completion-payment");
+  await clear();
+  await seedRider(db, "rider-a");
+  await seedDispatchableDelivery(db, "delivery-unpaid", {
+    status: "arrived_at_dropoff",
+    deliveryStatus: "arrived_at_dropoff",
+    deliveryStage: "arrived_at_dropoff",
+    riderId: "rider-a",
+    assignedRiderId: "rider-a",
+    serviceType: "standard",
+    paymentStatus: "failed",
+  });
+  await assert.rejects(
+      () => wrappedTracking({deliveryId: "delivery-unpaid", action: "verify_receiver_pin"}, authContext("rider-a")),
+      /payment authority is not complete/i,
+  );
+  const delivery = (await db.collection("deliveryRequests").doc("delivery-unpaid").get()).data();
+  assert.equal(delivery.status, "arrived_at_dropoff");
+  assert.equal((await db.collection("riderEarningTransactions").doc("delivery-unpaid").get()).exists, false);
+});
+
 async function lifecycleHarness(suffix) {
   stubEligibilityModules();
   const admin = require("firebase-admin");
@@ -103,6 +188,7 @@ async function lifecycleHarness(suffix) {
   const db = admin.firestore();
   const acceptRideRequests = require("./accept-ride-requests");
   const deliveryPolicy = require("./delivery-policy");
+  const deliveryTracking = require("./delivery-tracking");
   return {
     db,
     clear: async () => {
@@ -111,6 +197,7 @@ async function lifecycleHarness(suffix) {
     },
     wrappedAccept: functionsTest.wrap(acceptRideRequests),
     wrappedCancel: functionsTest.wrap(deliveryPolicy.requestSenderCancellation),
+    wrappedTracking: functionsTest.wrap(deliveryTracking.updateDeliveryTrackingStatus),
   };
 }
 

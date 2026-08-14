@@ -34,3 +34,8 @@ test("movement delivery ids are deterministic", () => {
   assert.equal(movement.giftMovement("abc", {}).deliveryId, "gift_abc");
   assert.equal(movement.healthMovement("xyz", {}).deliveryId, "health_xyz");
 });
+
+test("specialized movement projections use canonical delivered terminal state", () => {
+  assert.equal(movement.giftMovement("gift-done", {status: "completed"}).status, "delivered");
+  assert.equal(movement.healthMovement("health-done", {status: "delivered"}).status, "delivered");
+});

@@ -36,7 +36,7 @@ function healthReady(data) {
 
 function giftDeliveryStatus(data) {
   const status = normalizedStatus(data.giftStatus || data.status);
-  if (isCompleted(status)) return "completed";
+  if (isCompleted(status)) return "delivered";
   if (status === "cancelled") return "cancelled";
   if (["out_for_delivery", "in_transit"].includes(status)) return "in_transit";
   if (giftReady(data)) return "requested";
@@ -46,7 +46,7 @@ function giftDeliveryStatus(data) {
 
 function healthDeliveryStatus(data) {
   const status = normalizedStatus(data.status);
-  if (isCompleted(status)) return "completed";
+  if (isCompleted(status)) return "delivered";
   if (status === "cancelled") return "cancelled";
   if (["collected", "picked_up"].includes(status)) return "picked_up";
   if (["in_transit", "travelling", "out_for_delivery"].includes(status)) return "in_transit";

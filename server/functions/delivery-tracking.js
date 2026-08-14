@@ -172,6 +172,16 @@ function assertRiderOperational(rider = {}) {
   }
 }
 
+function completionPaymentAllowed(delivery = {}) {
+  const status = normalized(
+      delivery.paymentStatus ||
+      delivery.paymentState ||
+      delivery.stripePaymentStatus ||
+      delivery.payment && delivery.payment.status,
+  );
+  return ["paid", "succeeded", "success"].includes(status);
+}
+
 function expectedPin(privateDelivery, action) {
   const protection = privateDelivery.vanguardProtection || {};
   if (action === "verify_collection_pin") {
@@ -667,6 +677,12 @@ exports.updateDeliveryTrackingStatus = functions.runWith({enforceAppCheck: true}
           `Settlement for ${settlementProduct(delivery)} deliveries must use its domain completion authority.`,
       );
     }
+    if (nextStatus === "delivered" && !completionPaymentAllowed(delivery)) {
+      throw new functions.https.HttpsError(
+          "failed-precondition",
+          "Delivery payment authority is not complete.",
+      );
+    }
 
     const evidence = data && data.evidence && typeof data.evidence === "object" ? data.evidence : {};
     const evidenceDecision = evidenceRequirements(delivery, action, evidence);
@@ -745,6 +761,10 @@ exports.updateDeliveryTrackingStatus = functions.runWith({enforceAppCheck: true}
       const activeSnapshot = await transaction.get(activeRef);
       shouldWriteLocation = shouldWriteLiveLocation(activeSnapshot.data(), liveLocation);
     }
+    if (nextStatus === "delivered" && !activeRef) {
+      activeRef = db.collection("activeDeliveries").doc(found.id);
+      await transaction.get(activeRef);
+    }
     const earningRef = nextStatus === "delivered" ?
       db.collection("riderEarningTransactions").doc(found.id) : null;
     const existingEarning = earningRef ? await transaction.get(earningRef) : null;
@@ -775,6 +795,9 @@ exports.updateDeliveryTrackingStatus = functions.runWith({enforceAppCheck: true}
     const riderProfileRef = settlementValues(delivery).trustPoints > 0 ?
       db.collection("riderProfiles").doc(riderId) : null;
     const riderProfileSnapshot = riderProfileRef ? await transaction.get(riderProfileRef) : null;
+    const presenceRef = nextStatus === "delivered" ?
+      db.collection("riderPresence").doc(riderId) : null;
+    const presenceSnapshot = presenceRef ? await transaction.get(presenceRef) : null;
     const existingAward = Number(delivery.trustPointsAwarded);
     const existingLedgerAward = existingEarning && existingEarning.exists ?
       Number(existingEarning.data()?.trustPoints) : NaN;
@@ -893,8 +916,31 @@ exports.updateDeliveryTrackingStatus = functions.runWith({enforceAppCheck: true}
           updatedAt: FieldValue.serverTimestamp(),
         }, {merge: true});
       }
+      const presence = presenceSnapshot.exists ? presenceSnapshot.data() || {} : {};
+      const riderOnline = presence.isOnline === true && normalized(presence.status) !== "offline";
+      transaction.set(presenceRef, {
+        riderId,
+        busy: false,
+        availabilityStatus: riderOnline ? "available" : "offline",
+        activeDeliveryId: FieldValue.delete(),
+        currentDeliveryId: FieldValue.delete(),
+        dispatchEligible: riderOnline,
+        updatedAt: FieldValue.serverTimestamp(),
+        source: "deliveryCompletion",
+      }, {merge: true});
+      for (const collection of ["riders", "riderProfiles"]) {
+        transaction.set(db.collection(collection).doc(riderId), {
+          activeDelivery: FieldValue.delete(),
+          activeDeliveryId: FieldValue.delete(),
+          currentDeliveryId: FieldValue.delete(),
+          availabilityStatus: riderOnline ? "available" : "offline",
+          updatedAt: FieldValue.serverTimestamp(),
+        }, {merge: true});
+      }
+      transaction.delete(db.collection("deliveryLiveLocations").doc(found.id));
+      transaction.delete(activeRef);
     }
-    if (activeRef && shouldWriteLocation) {
+    if (nextStatus !== "delivered" && activeRef && shouldWriteLocation) {
       transaction.set(
           activeRef,
           {
@@ -1077,6 +1123,7 @@ exports._private = {
   pinAuthorityRequired,
   assertRiderOwnsDelivery,
   assertRiderOperational,
+  completionPaymentAllowed,
   evidenceRequirements,
   evidenceRequired,
   evidenceStageForAction,

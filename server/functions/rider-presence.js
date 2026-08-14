@@ -265,13 +265,19 @@ exports.onDeliveryPresenceWrite = functions.firestore
       const next = core.nextPresenceOnDelivery({before, after, riderId});
       if (!next) return null;
       const busy = next === "busy";
-      await getFirestore().collection("riderPresence").doc(riderId).set({
+      const presenceRef = getFirestore().collection("riderPresence").doc(riderId);
+      const currentSnapshot = await presenceRef.get();
+      const current = currentSnapshot.exists ? currentSnapshot.data() || {} : {};
+      const remainsOnline = busy || current.isOnline === true && text(current.status).toLowerCase() !== "offline";
+      await presenceRef.set({
         riderId,
-        isOnline: true,
-        status: "online",
+        isOnline: remainsOnline,
+        status: remainsOnline ? "online" : "offline",
         busy,
-        availabilityStatus: next,
-        activeDeliveryId: busy ? context.params.deliveryId : null,
+        availabilityStatus: busy ? "busy" : remainsOnline ? "available" : "offline",
+        activeDeliveryId: busy ? context.params.deliveryId : FieldValue.delete(),
+        currentDeliveryId: busy ? context.params.deliveryId : FieldValue.delete(),
+        dispatchEligible: !busy && remainsOnline,
         updatedAt: FieldValue.serverTimestamp(),
         source: "deliveryWrite",
       }, {merge: true});

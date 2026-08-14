@@ -156,6 +156,15 @@ test("presence heartbeat mirrors valid coordinates into the rider dispatch posit
   assert.match(source, /\.\.\.riderPositionPatch\(data && data\.location\)/);
 });
 
+test("terminal delivery presence cleanup preserves explicit offline intent", () => {
+  const source = fs.readFileSync(path.join(__dirname, "rider-presence.js"), "utf8");
+  const trigger = source.slice(source.indexOf("exports.onDeliveryPresenceWrite"), source.indexOf("async function forceOfflineWhenBlocked"));
+  assert.match(trigger, /current\.isOnline === true/);
+  assert.match(trigger, /remainsOnline \? "available" : "offline"/);
+  assert.match(trigger, /activeDeliveryId: busy \? context\.params\.deliveryId : FieldValue\.delete\(\)/);
+  assert.doesNotMatch(trigger, /isOnline: true/);
+});
+
 test("stale heartbeat blocks dispatch", () => {
   const profile = {
     onboardingStatus: "approved",

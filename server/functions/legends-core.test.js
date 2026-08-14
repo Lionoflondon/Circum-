@@ -3,7 +3,8 @@ const test = require("node:test");
 const assert = require("node:assert/strict");
 const {isEligibleLegendDelivery, nextLegendNumber, legendAwardDecision} = require("./legends-core");
 
-test("only paid completed deliveries qualify", () => {
+test("only paid canonical or legacy completed deliveries qualify", () => {
+  assert.equal(isEligibleLegendDelivery({status: "delivered", paymentStatus: "paid"}), true);
   assert.equal(isEligibleLegendDelivery({status: "completed", paymentStatus: "paid"}), true);
   assert.equal(isEligibleLegendDelivery({status: "pending", paymentStatus: "paid"}), false);
   assert.equal(isEligibleLegendDelivery({status: "cancelled", paymentStatus: "paid"}), false);

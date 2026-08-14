@@ -190,6 +190,15 @@ test("blocked rider account states cannot transition deliveries", () => {
   );
 });
 
+test("completion requires canonical paid payment authority", () => {
+  for (const status of ["paid", "succeeded", "success"]) {
+    assert.equal(deliveryTracking.completionPaymentAllowed({paymentStatus: status}), true);
+  }
+  for (const status of ["", "unpaid", "failed", "cancelled", "refunded", "pending_verification"]) {
+    assert.equal(deliveryTracking.completionPaymentAllowed({paymentStatus: status}), false);
+  }
+});
+
 test("a rider cannot update another rider's delivery", () => {
   assert.throws(
       () => deliveryTracking.assertRiderOwnsDelivery(
