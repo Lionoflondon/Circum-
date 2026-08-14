@@ -245,5 +245,8 @@
     "lib/main_sender_web.dart",
     "scripts/deploy_main_web.sh"
   ],
-  "ignoredPrefixes": []
+  "ignoredPrefixes": [
+    "analysis_options.yaml",
+    "pubspec.lock"
+  ]
 }
