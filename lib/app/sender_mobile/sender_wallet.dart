@@ -64,6 +64,21 @@ class SenderWalletTransaction {
   final String referenceId;
   final String createdBy;
   final String source;
+  final String? canonicalTransactionId;
+  final String? paymentId;
+  final String? productType;
+  final String? productId;
+  final String? deliveryId;
+  final String? customerReference;
+  final String? activityRoute;
+  final String? displayLabel;
+  final bool viewAllowed;
+  final String? viewTargetId;
+  final String? stripePaymentIntentId;
+  final String? stripeCheckoutSessionId;
+  final double? totalAmount;
+  final double? rothApplied;
+  final double? stripeAmount;
 
   const SenderWalletTransaction({
     required this.id,
@@ -79,6 +94,21 @@ class SenderWalletTransaction {
     this.referenceId = '',
     this.createdBy = 'system',
     this.source = '',
+    this.canonicalTransactionId,
+    this.paymentId,
+    this.productType,
+    this.productId,
+    this.deliveryId,
+    this.customerReference,
+    this.activityRoute,
+    this.displayLabel,
+    this.viewAllowed = false,
+    this.viewTargetId,
+    this.stripePaymentIntentId,
+    this.stripeCheckoutSessionId,
+    this.totalAmount,
+    this.rothApplied,
+    this.stripeAmount,
   });
 
   factory SenderWalletTransaction.fromMap(Map<String, dynamic> map) {
@@ -103,6 +133,40 @@ class SenderWalletTransaction {
       referenceId: '${map['relatedEntityId'] ?? map['referenceId'] ?? ''}',
       createdBy: '${map['createdBy'] ?? 'system'}',
       source: '${map['source'] ?? metadata['source'] ?? ''}',
+      canonicalTransactionId: '${map['canonicalTransactionId'] ?? ''}'.isEmpty
+          ? null
+          : '${map['canonicalTransactionId']}',
+      paymentId:
+          '${map['paymentId'] ?? ''}'.isEmpty ? null : '${map['paymentId']}',
+      productType: '${map['productType'] ?? ''}'.isEmpty
+          ? null
+          : '${map['productType']}',
+      productId:
+          '${map['productId'] ?? ''}'.isEmpty ? null : '${map['productId']}',
+      deliveryId:
+          '${map['deliveryId'] ?? ''}'.isEmpty ? null : '${map['deliveryId']}',
+      customerReference: '${map['customerReference'] ?? ''}'.isEmpty
+          ? null
+          : '${map['customerReference']}',
+      activityRoute: '${map['activityRoute'] ?? ''}'.isEmpty
+          ? null
+          : '${map['activityRoute']}',
+      displayLabel: '${map['displayLabel'] ?? ''}'.isEmpty
+          ? null
+          : '${map['displayLabel']}',
+      viewAllowed: map['viewAllowed'] == true,
+      viewTargetId: '${map['viewTargetId'] ?? ''}'.isEmpty
+          ? null
+          : '${map['viewTargetId']}',
+      stripePaymentIntentId: '${map['stripePaymentIntentId'] ?? ''}'.isEmpty
+          ? null
+          : '${map['stripePaymentIntentId']}',
+      stripeCheckoutSessionId: '${map['stripeCheckoutSessionId'] ?? ''}'.isEmpty
+          ? null
+          : '${map['stripeCheckoutSessionId']}',
+      totalAmount: (map['totalAmount'] as num?)?.toDouble(),
+      rothApplied: (map['rothApplied'] as num?)?.toDouble(),
+      stripeAmount: (map['stripeAmount'] as num?)?.toDouble(),
     );
   }
 
@@ -120,6 +184,24 @@ class SenderWalletTransaction {
         'referenceId': referenceId,
         'createdBy': createdBy,
         'source': source,
+        if (canonicalTransactionId != null)
+          'canonicalTransactionId': canonicalTransactionId,
+        if (paymentId != null) 'paymentId': paymentId,
+        if (productType != null) 'productType': productType,
+        if (productId != null) 'productId': productId,
+        if (deliveryId != null) 'deliveryId': deliveryId,
+        if (customerReference != null) 'customerReference': customerReference,
+        if (activityRoute != null) 'activityRoute': activityRoute,
+        if (displayLabel != null) 'displayLabel': displayLabel,
+        'viewAllowed': viewAllowed,
+        if (viewTargetId != null) 'viewTargetId': viewTargetId,
+        if (stripePaymentIntentId != null)
+          'stripePaymentIntentId': stripePaymentIntentId,
+        if (stripeCheckoutSessionId != null)
+          'stripeCheckoutSessionId': stripeCheckoutSessionId,
+        if (totalAmount != null) 'totalAmount': totalAmount,
+        if (rothApplied != null) 'rothApplied': rothApplied,
+        if (stripeAmount != null) 'stripeAmount': stripeAmount,
       };
 }
 
@@ -1566,8 +1648,23 @@ class _TransactionDetailsScreen extends StatelessWidget {
                 _DetailRow('Description', description),
                 _DetailRow(
                     'Transaction type', _walletCategory(transaction.type)),
-                _DetailRow('Current balance',
+                _DetailRow('Balance after transaction',
                     '${transaction.balanceAfter.toStringAsFixed(2)} Roth'),
+                if (transaction.totalAmount != null)
+                  _DetailRow('Total',
+                      '${transaction.totalAmount!.toStringAsFixed(2)} GBP'),
+                if (transaction.rothApplied != null)
+                  _DetailRow('Roth applied',
+                      '${transaction.rothApplied!.toStringAsFixed(2)} Roth'),
+                if (transaction.stripeAmount != null)
+                  _DetailRow('Card charged',
+                      '${transaction.stripeAmount!.toStringAsFixed(2)} GBP'),
+                if (transaction.canonicalTransactionId != null)
+                  _DetailRow('Circum transaction',
+                      transaction.canonicalTransactionId!),
+                if (transaction.productType != null)
+                  _DetailRow(
+                      'Product', _walletProductLabel(transaction.productType!)),
               ],
             ),
           ),
@@ -3284,7 +3381,33 @@ bool _walletTransactionIssuedByCircum(String value) {
 String _walletTransactionDisplayTitle(SenderWalletTransaction transaction) {
   return _walletTransactionIssuedByCircum(transaction.type)
       ? 'Issued by Circum'
-      : transaction.description;
+      : _walletLinkedTitle(transaction) ?? transaction.description;
+}
+
+String? _walletLinkedTitle(SenderWalletTransaction transaction) {
+  if (transaction.displayLabel != null &&
+      transaction.displayLabel!.isNotEmpty) {
+    return transaction.displayLabel;
+  }
+  final product = transaction.productType?.toLowerCase() ?? '';
+  if (product.contains('gift')) return 'Gift purchase';
+  if (product.contains('health')) return 'Health+ delivery';
+  if (product.contains('business')) return 'Business payment';
+  if (transaction.deliveryId != null || product.contains('delivery')) {
+    return transaction.customerReference == null
+        ? 'Delivery payment'
+        : 'Delivery to ${transaction.customerReference}';
+  }
+  return null;
+}
+
+String _walletProductLabel(String value) {
+  final normalized = value.toLowerCase();
+  if (normalized.contains('gift')) return 'Gift';
+  if (normalized.contains('health')) return 'Health+';
+  if (normalized.contains('business')) return 'Business';
+  if (normalized.contains('delivery')) return 'Delivery';
+  return value;
 }
 
 String _walletTransactionDisplayDescription(

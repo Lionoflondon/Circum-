@@ -24,6 +24,7 @@ const {
 } = require("./wallet-core");
 const communicationEngine = require("./communication-engine");
 const senderTrust = require("./sender-trust");
+const {businessAuthority} = require("./business-authority");
 
 function hasAdminRole(context) {
   const token = context.auth && context.auth.token || {};
@@ -425,6 +426,44 @@ exports.getSenderWallet = functions.https.onCall(async (_data, context) => {
   return initialiseSenderWalletRecord(context);
 });
 
+async function authorizedWalletProductJoin(db, context, view) {
+  if (!view.viewAllowed || !view.activityRoute || !view.viewTargetId) return view;
+  const uid = context.auth && context.auth.uid;
+  const email = context.auth && context.auth.token && context.auth.token.email;
+  let allowed = false;
+  if (view.activityRoute === "delivery") {
+    const snap = await db.collection("deliveryRequests").doc(view.viewTargetId).get();
+    const delivery = snap.exists ? snap.data() || {} : {};
+    allowed = snap.exists && [delivery.senderId, delivery.userId, delivery.createdBy]
+        .some((value) => `${value || ""}` === uid);
+  } else if (view.activityRoute === "gift") {
+    const snap = await db.collection("giftRequests").doc(view.viewTargetId).get();
+    const gift = snap.exists ? snap.data() || {} : {};
+    allowed = snap.exists && [gift.senderId, gift.userId, gift.createdBy]
+        .some((value) => `${value || ""}` === uid);
+  } else if (view.activityRoute === "health_plus") {
+    const snap = await db.collection("prescriptionPickups").doc(view.viewTargetId).get();
+    const pickup = snap.exists ? snap.data() || {} : {};
+    allowed = snap.exists && [pickup.senderId, pickup.userId, pickup.createdBy]
+        .some((value) => `${value || ""}` === uid);
+  } else if (view.activityRoute === "business") {
+    const businessId = view.businessId || view.authorizationContext && view.authorizationContext.businessId;
+    if (businessId) {
+      const snap = await db.collection("businessAccounts").doc(businessId).get();
+      const account = snap.exists ? snap.data() || {} : {};
+      allowed = snap.exists && businessAuthority(account, {uid, email}).member === true;
+    }
+  }
+  if (allowed) return view;
+  return {
+    ...view,
+    activityRoute: null,
+    viewAllowed: false,
+    viewTargetId: null,
+    authorizationContext: null,
+  };
+}
+
 exports.getSenderWalletTransactions = functions.https.onCall(async (data, context) => {
   const identity = await requireSenderIdentity(context);
   const db = getFirestore();
@@ -439,7 +478,7 @@ exports.getSenderWalletTransactions = functions.https.onCall(async (data, contex
       .limit(100)
       .get() : {docs: []};
   const seen = new Set();
-  const records = [...walletSnap.docs, ...legacyUidSnap.docs].filter((doc) => {
+  const rawRecords = [...walletSnap.docs, ...legacyUidSnap.docs].filter((doc) => {
     if (seen.has(doc.id)) return false;
     seen.add(doc.id);
     return true;
@@ -448,6 +487,8 @@ exports.getSenderWalletTransactions = functions.https.onCall(async (data, contex
     const createdAt = doc.data().createdAt;
     return {...value, createdAtMillis: createdAt && typeof createdAt.toMillis === "function" ? createdAt.toMillis() : 0};
   });
+  const records = await Promise.all(rawRecords.map((record) =>
+    authorizedWalletProductJoin(db, context, record)));
   const page = paginateWalletTransactions(records, {
     pageSize: data && data.pageSize,
     pageOffset: Number(data && data.pageToken || 0),
