@@ -10850,7 +10850,9 @@ class _CustomerPortalState extends State<_CustomerPortal> {
         _irisImageInsight = insight;
         _parcelPhotoMessage = picked == null
             ? 'No parcel photo selected.'
-            : 'Parcel photo added. IRIS will use it with your item details.';
+            : insight == null
+                ? 'Photo added for pickup reference. IRIS will use item details.'
+                : 'Parcel photo reviewed by IRIS.';
       });
     } catch (_) {
       if (!mounted) return;
@@ -10879,7 +10881,7 @@ class _CustomerPortalState extends State<_CustomerPortal> {
     return allowedExtension && allowedMime && length <= 10 * 1024 * 1024;
   }
 
-  Future<_IrisImageInsight> _analyseParcelPhotoForIris(XFile photo) async {
+  Future<_IrisImageInsight?> _analyseParcelPhotoForIris(XFile photo) async {
     try {
       await _ensureFirebaseReady();
       final bytes = await photo.readAsBytes();
@@ -10898,7 +10900,7 @@ class _CustomerPortalState extends State<_CustomerPortal> {
       final data = Map<String, dynamic>.from(result.data as Map);
       return _IrisImageInsight.fromBackend(data, fallbackFileName: photo.name);
     } catch (_) {
-      return _IrisImageInsight.fallback(photo.name);
+      return null;
     }
   }
 
@@ -20256,25 +20258,6 @@ class _IrisImageInsight {
     required this.fileSizeBytes,
   });
 
-  factory _IrisImageInsight.fallback(String fileName) {
-    return _IrisImageInsight(
-      analysisId: null,
-      inferredItemName: 'Parcel photo',
-      inferredCategory: 'Parcel',
-      estimatedWeightKg: 2,
-      weightClass: DeliveryPricing.weightBandFor(2).category,
-      confidenceScore: 0.25,
-      fragilityRisk: 'medium',
-      valueRisk: 'low',
-      handlingNotes:
-          'IRIS could not fully analyse the photo, so item details were used.',
-      riderGuidance: 'Use the photo to verify condition at pickup.',
-      needsHumanReview: true,
-      fileName: fileName,
-      fileSizeBytes: 0,
-    );
-  }
-
   factory _IrisImageInsight.fromBackend(
     Map<String, dynamic> data, {
     required String fallbackFileName,
@@ -20320,7 +20303,7 @@ class _IrisImageInsight {
         'fileName': fileName,
         'fileSizeBytes': fileSizeBytes,
         'source': analysisId == null
-            ? 'parcel_photo_and_item_details'
+            ? 'photo_unverified_not_canonical'
             : 'backend_parcel_photo_analysis',
       };
 }

@@ -38,6 +38,12 @@ test("backend parcel photo analysis emits IRIS-compatible weight evidence", () =
   assert.ok(analysis.estimatedWeightKg > 0);
   assert.ok(analysis.weightClass);
   assert.ok(["low", "medium", "high"].includes(analysis.confidence));
+  assert.ok(Array.isArray(analysis.handlingFlags));
+  assert.equal(typeof analysis.recommendedVehicle, "string");
+  assert.equal(typeof analysis.vanguardRequired, "boolean");
+  assert.equal(typeof analysis.vanguardRecommended, "boolean");
+  assert.equal(analysis.complianceStatus, "allowed");
+  assert.equal(analysis.serviceabilityStatus, "serviceable");
 });
 
 test("parcel photo signal does not replace text IRIS accuracy", () => {
@@ -89,4 +95,45 @@ test("sender quote uses verified server photo analysis without trusting client p
   assert.equal(quote.photoEstimatedWeightKg, 12);
   assert.equal(quote.photoAnalysis.analysisId, "server-analysis");
   assert.equal(quote.photoAnalysis.estimatedWeightKg, 12);
+});
+
+test("sender quote projects operational photo IRIS parity fields from backend authority", () => {
+  const quote = senderBooking._private.quotePayload({
+    quoteId: "quote-photo-parity",
+    distanceMiles: 4,
+    weightKg: 1,
+    parcel: {
+      description: "large TV",
+      weightKg: 1,
+    },
+    irisPhotoAnalysisId: "server-analysis",
+  }, "sender-1", {
+    analysisId: "server-analysis",
+    serverAuthored: true,
+    source: "backend_parcel_photo_analysis",
+    estimatedWeightKg: 32,
+    weightClass: "Heavy Goods",
+    inferredItemName: "large TV",
+    inferredCategory: "Electronics",
+    confidence: "medium",
+    confidenceScore: 0.6,
+    handlingFlags: ["Fragile", "Van Required"],
+    recommendedVehicle: "van",
+    vanguardRequired: true,
+    vanguardRecommended: true,
+    complianceStatus: "allowed",
+    complianceReasonCodes: [],
+    serviceabilityStatus: "serviceable",
+    width: 1600,
+    height: 1200,
+    imageQuality: "usable",
+    needsHumanReview: true,
+  });
+
+  assert.deepEqual(quote.photoAnalysis.handlingFlags, ["Fragile", "Van Required"]);
+  assert.equal(quote.photoAnalysis.recommendedVehicle, "van");
+  assert.equal(quote.photoAnalysis.vanguardRequired, true);
+  assert.equal(quote.photoAnalysis.vanguardRecommended, true);
+  assert.equal(quote.photoAnalysis.complianceStatus, "allowed");
+  assert.equal(quote.photoAnalysis.serviceabilityStatus, "serviceable");
 });

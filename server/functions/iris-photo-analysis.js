@@ -140,6 +140,11 @@ function buildPhotoAnalysis({uid, data, bytes, contentType}) {
   });
   const confidence = Math.min(0.88, Math.max(0.38, quality.score));
   const weightBand = weightBandFor(visualWeightKg);
+  const recommendation = baseIris.recommendation || {};
+  const operationalRecommendation = baseIris.operationalRecommendation || {};
+  const vehicleRecommendation = operationalRecommendation.vehicleRecommendation || {};
+  const compliance = baseIris.compliance || {};
+  const handlingFlags = Array.isArray(recommendation.handlingFlags) ? recommendation.handlingFlags : [];
   const imageHash = crypto.createHash("sha256").update(bytes).digest("hex");
   const descriptionHash = crypto.createHash("sha256").update(description.toLowerCase()).digest("hex");
   const analysisId = crypto.createHash("sha256")
@@ -163,11 +168,19 @@ function buildPhotoAnalysis({uid, data, bytes, contentType}) {
     imageQuality: quality.label,
     confidenceScore: confidence,
     confidence: confidence >= 0.7 ? "high" : confidence >= 0.55 ? "medium" : "low",
-    inferredItemName: baseIris.recommendation && baseIris.recommendation.detectedItem || description || "Parcel",
-    inferredCategory: baseIris.recommendation && baseIris.recommendation.category || "Parcel",
+    inferredItemName: recommendation.detectedItem || description || "Parcel",
+    inferredCategory: recommendation.category || "Parcel",
     estimatedWeightKg: Math.round(visualWeightKg * 100) / 100,
     baseIrisWeightKg: Math.round(baseWeight * 100) / 100,
     weightClass: weightBand.label,
+    handlingFlags,
+    recommendedVehicle: recommendation.recommendedVehicle || vehicleRecommendation.required || "any",
+    vanguardRequired: baseIris.vanguardRequired === true,
+    vanguardRequiredReason: baseIris.vanguardRequiredReason || null,
+    vanguardRecommended: baseIris.vanguardRequired === true || recommendation.vanguardRecommended === true,
+    complianceStatus: compliance.status || baseIris.status || "allowed",
+    complianceReasonCodes: Array.isArray(compliance.reasonCodes) ? compliance.reasonCodes : [],
+    serviceabilityStatus: baseIris.serviceability && baseIris.serviceability.status || "serviceable",
     needsHumanReview: confidence < 0.7 || baseIris.verification && baseIris.verification.photoEvidenceRequired === true,
     riderGuidance: "Use the parcel photo to verify item condition and approximate size at pickup.",
     handlingNotes: "Backend verified the parcel photo before using it as an IRIS visual signal.",

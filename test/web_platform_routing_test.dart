@@ -220,12 +220,29 @@ void main() {
       expect(source, contains('Business sections'));
     });
 
-    test('Sender delivery payload leaves Rider offer display aliases to backend', () {
+    test(
+        'Sender delivery payload leaves Rider offer display aliases to backend',
+        () {
       final source =
           File('lib/website/shared/circum_website_app.dart').readAsStringSync();
       expect(source, isNot(contains("'riderEarning': driverPayout")));
       expect(source, isNot(contains("'requiresVanguard': vanguardEnabled")));
       expect(source, contains("httpsCallable('createSenderPaidDelivery')"));
+    });
+
+    test('Sender visual IRIS only treats backend photo analysis as canonical',
+        () {
+      final source =
+          File('lib/website/shared/circum_website_app.dart').readAsStringSync();
+
+      expect(source, contains("httpsCallable('analyseParcelPhotoForIris')"));
+      expect(
+          source,
+          contains(
+              'Photo added for pickup reference. IRIS will use item details.'));
+      expect(source, isNot(contains('_IrisImageInsight.fallback')));
+      expect(source, isNot(contains('parcel_photo_and_item_details')));
+      expect(source, isNot(contains('IRIS could not fully analyse the photo')));
     });
 
     test('Vanguard copy avoids customer rider choice wording', () {
