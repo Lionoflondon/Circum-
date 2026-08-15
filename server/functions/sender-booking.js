@@ -1589,8 +1589,13 @@ async function handleSenderPaymentIntent(stripe, intent, eventId = "") {
 }
 
 function geoData(point = {}) {
-  const lat = Number(point.lat || point.latitude || 0);
-  const lng = Number(point.lng || point.longitude || 0);
+  const hasLat = point && (point.lat !== undefined || point.latitude !== undefined);
+  const hasLng = point && (point.lng !== undefined || point.longitude !== undefined);
+  const lat = Number(point.lat !== undefined ? point.lat : point.latitude);
+  const lng = Number(point.lng !== undefined ? point.lng : point.longitude);
+  if (!hasLat || !hasLng || !Number.isFinite(lat) || !Number.isFinite(lng)) {
+    throw new Error("Delivery address coordinates are missing or invalid.");
+  }
   return {
     geopoint: new GeoPoint(lat, lng),
     geohash: "",
@@ -2082,7 +2087,7 @@ async function createPaidDeliveryFromSession(stripe, sender, data) {
     requestId,
     deliveryId: deliveryRef.id,
     idempotencyKey,
-    dispatchStatus: dispatchResult ? "attempted" : "failed",
+    dispatchStatus: dispatchResult && dispatchResult.blocked !== true ? "attempted" : "failed",
   };
 }
 
@@ -2192,6 +2197,7 @@ exports._private = {
   stableId,
   quotePayload,
   riderDisplayAliases,
+  geoData,
   routeDurationMinutes,
   riderPayoutFromQuote,
   DRAFT_RETENTION_DAYS,

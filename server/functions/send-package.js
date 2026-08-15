@@ -10,6 +10,19 @@ function senderOwnsRequest(delivery, uid) {
   return delivery.senderId === uid || delivery.userId === uid;
 }
 
+function canonicalGeoPoint(position) {
+  const geopoint = position && position.geopoint;
+  if (!geopoint ||
+      !Number.isFinite(Number(geopoint.latitude)) ||
+      !Number.isFinite(Number(geopoint.longitude))) {
+    return null;
+  }
+  return {
+    latitude: Number(geopoint.latitude),
+    longitude: Number(geopoint.longitude),
+  };
+}
+
 async function dispatchDeliveryRequest({
   db = getFirestore(),
   messaging = getMessaging(),
@@ -116,10 +129,26 @@ async function dispatchDeliveryRequest({
     deliveryRequest[0].irisPrivate = privateDoc.data();
   }
 
-  const pickupPoint = {
-    latitude: deliveryRequest[0].pickupPosition.geopoint.latitude,
-    longitude: deliveryRequest[0].pickupPosition.geopoint.longitude,
-  };
+  const pickupPoint = canonicalGeoPoint(deliveryRequest[0].pickupPosition);
+  if (!pickupPoint) {
+    await db.collection("dispatchInspections").doc(deliveryRequest[0].id).set({
+      deliveryId: deliveryRequest[0].id,
+      requestId,
+      status: "blocked",
+      reason: "missing_pickup_geo",
+      source,
+      updatedAt: FieldValue.serverTimestamp(),
+    }, {merge: true});
+    return {
+      message: "Delivery request is missing canonical pickup coordinates.",
+      requestId,
+      deliveryId: deliveryRequest[0].id,
+      closestRiders: [],
+      pushResults: [],
+      blocked: true,
+      reason: "missing_pickup_geo",
+    };
+  }
 
   const ridersSnapshot = await db.collection("riders")
       .where("status", "==", "online")
@@ -130,19 +159,13 @@ async function dispatchDeliveryRequest({
           .filter((doc) => {
             const riderData = doc.data();
             if (!riderMatchesIris(riderData, deliveryRequest[0])) return false;
-            return riderData.position &&
-               riderData.position.geopoint &&
-               riderData.position.geopoint.latitude &&
-               riderData.position.geopoint.longitude;
+            return canonicalGeoPoint(riderData.position) !== null;
           })
           .map(async (doc) => {
             try {
               const riderData = doc.data();
-              const riderLocation = riderData.position.geopoint;
-
-              if (!riderLocation.latitude || !riderLocation.longitude) {
-                return null;
-              }
+              const riderLocation = canonicalGeoPoint(riderData.position);
+              if (!riderLocation) return null;
 
               const R = 6371;
               const dLat = toRadians(riderLocation.latitude - pickupPoint.latitude);
@@ -242,7 +265,7 @@ async function dispatchDeliveryRequest({
     message: `Endpoint accessed by user ${uid}`,
     requestId: requestId,
     request: deliveryRequest,
-    coordinates: `${deliveryRequest[0].pickupPosition[0]}, ${deliveryRequest[0].pickupPosition[1]}`,
+    coordinates: `${pickupPoint.latitude}, ${pickupPoint.longitude}`,
     closestRiders: closestRiders,
     pushResults: sendResults,
   };
@@ -279,3 +302,4 @@ const sendPackage = functions.runWith({enforceAppCheck: true}).https.onCall(asyn
 
 module.exports = sendPackage;
 module.exports.dispatchDeliveryRequest = dispatchDeliveryRequest;
+module.exports._private = {canonicalGeoPoint};

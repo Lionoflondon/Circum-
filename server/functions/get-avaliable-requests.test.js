@@ -24,3 +24,21 @@ test("Rider nearby request lookup is bounded and locality-first", () => {
   assert.match(source, /rider_offer_returned/);
   assert.doesNotMatch(source, /where\("status", "==", "requested"\)[\s\S]{0,120}\.get\(\);[\s\S]{0,120}requestsSnapshot\.docs/);
 });
+
+test("dispatch broadcast validates geos without rejecting explicit zero coordinates", () => {
+  const sendPackage = require("./send-package");
+  const {canonicalGeoPoint} = sendPackage._private;
+  assert.deepEqual(canonicalGeoPoint({geopoint: {latitude: 0, longitude: 0}}), {
+    latitude: 0,
+    longitude: 0,
+  });
+  assert.equal(canonicalGeoPoint(null), null);
+  assert.equal(canonicalGeoPoint({}), null);
+  assert.equal(canonicalGeoPoint({geopoint: {latitude: 51.5}}), null);
+  assert.equal(canonicalGeoPoint({geopoint: {latitude: "north", longitude: 0}}), null);
+
+  const source = fs.readFileSync("send-package.js", "utf8");
+  assert.match(source, /reason: "missing_pickup_geo"/);
+  assert.doesNotMatch(source, /riderData\.position\.geopoint\.latitude\s*&&/);
+  assert.doesNotMatch(source, /riderLocation\.latitude\s*\|\|/);
+});

@@ -35,6 +35,16 @@ test("sender draft sanitizer keeps only canonical draft fields", () => {
   assert.equal(draft.review.amountDue, 12.5);
 });
 
+test("paid delivery geodata requires explicit valid coordinates", () => {
+  const valid = _private.geoData({latitude: 0, longitude: 0});
+  assert.equal(valid.geopoint.latitude, 0);
+  assert.equal(valid.geopoint.longitude, 0);
+
+  assert.throws(() => _private.geoData({}), /coordinates are missing or invalid/);
+  assert.throws(() => _private.geoData({latitude: 51.5}), /coordinates are missing or invalid/);
+  assert.throws(() => _private.geoData({lat: "north", lng: -0.1}), /coordinates are missing or invalid/);
+});
+
 test("sender draft sanitizer defaults unsafe values", () => {
   const draft = _private.sanitizeSenderDraftPayload({schemaVersion: 1, draft: {}}).draft;
 
