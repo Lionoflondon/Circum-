@@ -150,7 +150,7 @@ class _HealthPlusViewState extends State<HealthPlusView> {
     });
   }
 
-  void _next() {
+  Future<void> _next() async {
     switch (_step) {
       case _HealthStep.status:
         _goTo(_HealthStep.details);
@@ -161,17 +161,32 @@ class _HealthPlusViewState extends State<HealthPlusView> {
           _goTo(_HealthStep.pharmacy);
         }
       case _HealthStep.pharmacy:
-        if (_selectedPharmacy != null) {
+        if (await _resolveHealthAddressIfNeeded(
+          controller: _pharmacyAddress,
+          search: _pharmacySearch,
+          selected: _selectedPharmacy,
+          onResolved: (suggestion) => _selectedPharmacy = suggestion,
+          emptyMessage: 'Add the pharmacy address.',
+          failedMessage:
+              'That pharmacy address could not be verified. Check the street, town and postcode.',
+        )) {
           _goTo(_HealthStep.delivery);
         } else {
-          setState(() => _message = 'Choose a pharmacy from the suggestions.');
+          setState(() => _message ??= 'Add the pharmacy address.');
         }
       case _HealthStep.delivery:
-        if (_selectedDelivery != null) {
+        if (await _resolveHealthAddressIfNeeded(
+          controller: _deliveryAddress,
+          search: _deliverySearch,
+          selected: _selectedDelivery,
+          onResolved: (suggestion) => _selectedDelivery = suggestion,
+          emptyMessage: 'Add the delivery address.',
+          failedMessage:
+              'That delivery address could not be verified. Check the house or flat number, street, town and postcode.',
+        )) {
           _goTo(_HealthStep.frequency);
         } else {
-          setState(() =>
-              _message = 'Choose a delivery address from the suggestions.');
+          setState(() => _message ??= 'Add the delivery address.');
         }
       case _HealthStep.frequency:
         _goTo(_HealthStep.plan);
@@ -189,7 +204,7 @@ class _HealthPlusViewState extends State<HealthPlusView> {
       case _HealthStep.review:
         _goTo(_HealthStep.checkout);
       case _HealthStep.checkout:
-        _bookHealthPlus();
+        await _bookHealthPlus();
       case _HealthStep.confirmed:
         _goTo(_HealthStep.status);
     }
@@ -199,6 +214,54 @@ class _HealthPlusViewState extends State<HealthPlusView> {
     if (controller.text.trim().isNotEmpty) return true;
     setState(() => _message = message);
     return false;
+  }
+
+  Future<bool> _resolveHealthAddressIfNeeded({
+    required TextEditingController controller,
+    required _HealthPlaceSearchController search,
+    required Suggestion? selected,
+    required ValueChanged<Suggestion> onResolved,
+    required String emptyMessage,
+    required String failedMessage,
+  }) async {
+    final current = controller.text.trim();
+    if (selected != null &&
+        selected.description.trim() == current &&
+        selected.lat != null &&
+        selected.lng != null) {
+      return true;
+    }
+    if (!AddressEngine.hasRequiredFields(manualAddress: current)) {
+      setState(() => _message = emptyMessage);
+      return false;
+    }
+    setState(() {
+      _submitting = true;
+      _message = 'Verifying address...';
+    });
+    try {
+      final resolved = AddressEngine.cleanSuggestion(
+        await search.resolveTypedAddress(current),
+      );
+      if (!mounted) return false;
+      controller.text = resolved.description;
+      controller.selection = TextSelection.collapsed(
+        offset: resolved.description.length,
+      );
+      setState(() {
+        onResolved(resolved);
+        search.suggestions = const [];
+        search.error = null;
+        _message = null;
+      });
+      return true;
+    } catch (_) {
+      if (!mounted) return false;
+      setState(() => _message = failedMessage);
+      return false;
+    } finally {
+      if (mounted) setState(() => _submitting = false);
+    }
   }
 
   Future<void> _loadRothBalance() async {
@@ -228,6 +291,26 @@ class _HealthPlusViewState extends State<HealthPlusView> {
       });
       return;
     }
+    final pharmacyResolved = await _resolveHealthAddressIfNeeded(
+      controller: _pharmacyAddress,
+      search: _pharmacySearch,
+      selected: _selectedPharmacy,
+      onResolved: (suggestion) => _selectedPharmacy = suggestion,
+      emptyMessage: 'Add the pharmacy address.',
+      failedMessage:
+          'That pharmacy address could not be verified. Check the street, town and postcode.',
+    );
+    final deliveryResolved = pharmacyResolved &&
+        await _resolveHealthAddressIfNeeded(
+          controller: _deliveryAddress,
+          search: _deliverySearch,
+          selected: _selectedDelivery,
+          onResolved: (suggestion) => _selectedDelivery = suggestion,
+          emptyMessage: 'Add the delivery address.',
+          failedMessage:
+              'That delivery address could not be verified. Check the house or flat number, street, town and postcode.',
+        );
+    if (!deliveryResolved) return;
 
     final quote = _quote;
     setState(() {
@@ -621,6 +704,10 @@ class _HealthPlaceSearchController {
     return provider.resolveSuggestion(suggestion.placeId, 'en');
   }
 
+  Future<Suggestion> resolveTypedAddress(String query) {
+    return provider.resolveTypedAddress(query, 'en');
+  }
+
   void search(String query, VoidCallback onChanged) {
     _debounce?.cancel();
     if (query.trim().length < 3) {
@@ -932,6 +1019,11 @@ class _HealthAddressStep extends StatefulWidget {
 class _HealthAddressStepState extends State<_HealthAddressStep> {
   @override
   Widget build(BuildContext context) {
+    final canContinue = widget.selected != null ||
+        AddressEngine.hasRequiredFields(
+          suggestion: widget.selected,
+          manualAddress: widget.controller.text,
+        );
     return _HealthStepCard(
       children: [
         _HealthInput(
@@ -968,7 +1060,7 @@ class _HealthAddressStepState extends State<_HealthAddressStep> {
               },
             ),
           ),
-        if (widget.selected != null)
+        if (canContinue)
           _HealthPrimaryButton(label: 'Continue', onTap: widget.onContinue),
       ],
     );

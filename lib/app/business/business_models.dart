@@ -66,7 +66,7 @@ class BusinessAccount {
       recognitions['patron'] as Map? ?? {},
     );
     final pickups = (data['defaultPickupAddresses'] as List? ?? const [])
-        .map((item) => '$item'.trim())
+        .map(_addressLabel)
         .where((item) => item.isNotEmpty)
         .toList(growable: false);
     return BusinessAccount(
@@ -80,7 +80,9 @@ class BusinessAccount {
       contactEmail: '${data['contactEmail'] ?? ''}'.trim(),
       phone: '${data['phone'] ?? ''}'.trim(),
       billingEmail: '${data['billingEmail'] ?? ''}'.trim(),
-      businessAddress: '${data['businessAddress'] ?? ''}'.trim(),
+      businessAddress: _addressLabel(
+        data['businessAddressCanonical'] ?? data['businessAddress'],
+      ),
       companyNumber: '${data['companyNumber'] ?? ''}'.trim(),
       companyCode: '${data['companyCode'] ?? ''}'.trim(),
       defaultPickupAddress: pickups.isEmpty ? '' : pickups.first,

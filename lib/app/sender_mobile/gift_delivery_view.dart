@@ -17,6 +17,7 @@ const senderGiftDeliveryCountryFieldName = 'deliveryCountry';
 const senderGiftDeliveryDateFieldName = 'deliveryDate';
 const senderGiftDeliveryTimeWindowFieldName = 'deliveryTimeWindow';
 const senderGiftAddressLookupCallableName = 'searchFreeUkAddresses';
+const senderGiftAddressResolveCallableName = 'resolveUkAddressPlace';
 
 class GiftDeliveryView extends StatefulWidget {
   final GiftJourneyDraft draft;
@@ -51,6 +52,7 @@ class _GiftDeliveryViewState extends State<GiftDeliveryView> {
         suggestion: _selectedAddressSuggestion,
         manualAddress: _deliveryAddressController.text,
       ) &&
+      !_isAddressSearching &&
       _deliveryDate != null &&
       (_flexibleDelivery || _deliveryTimeWindow != null);
 
@@ -144,6 +146,52 @@ class _GiftDeliveryViewState extends State<GiftDeliveryView> {
         _addressError =
             'That address could not be resolved. Choose another suggestion.';
       });
+    }
+  }
+
+  Future<Suggestion?> _resolveDeliveryAddressForContinue() async {
+    final selected = _selectedAddressSuggestion;
+    if (selected != null && selected.lat != null && selected.lng != null) {
+      return selected;
+    }
+    final address = _deliveryAddressController.text.trim();
+    if (!AddressEngine.hasRequiredFields(manualAddress: address)) {
+      setState(() {
+        _addressError =
+            'Add a full delivery address with house or flat, town and postcode.';
+      });
+      return null;
+    }
+
+    _addressDebounce?.cancel();
+    setState(() {
+      _isAddressSearching = true;
+      _addressError = '';
+      _addressSuggestions = const [];
+    });
+
+    try {
+      final resolved = AddressEngine.cleanSuggestion(
+        await _addressSearch.resolveTypedAddress(address, 'en'),
+      );
+      if (!mounted) return null;
+      _deliveryAddressController.text = resolved.description;
+      _deliveryAddressController.selection = TextSelection.collapsed(
+        offset: resolved.description.length,
+      );
+      setState(() {
+        _selectedAddressSuggestion = resolved;
+        _isAddressSearching = false;
+      });
+      return resolved;
+    } catch (_) {
+      if (!mounted) return null;
+      setState(() {
+        _isAddressSearching = false;
+        _addressError =
+            'That address could not be verified. Check the house or flat number, street, town and postcode.';
+      });
+      return null;
     }
   }
 
@@ -275,12 +323,17 @@ class _GiftDeliveryViewState extends State<GiftDeliveryView> {
         label: 'Continue',
         onTap: !_canContinue
             ? null
-            : () => Navigator.of(context).push(
+            : () async {
+                final navigator = Navigator.of(context);
+                final resolvedAddress =
+                    await _resolveDeliveryAddressForContinue();
+                if (!mounted || resolvedAddress == null) return;
+                navigator.push(
                   MaterialPageRoute<void>(
                     builder: (_) => GiftMessageView(
                       draft: widget.draft.copyWith(
-                        deliveryAddress: _deliveryAddressController.text.trim(),
-                        deliveryAddressData: _selectedAddressSuggestion,
+                        deliveryAddress: resolvedAddress.description,
+                        deliveryAddressData: resolvedAddress,
                         deliveryDate:
                             _deliveryDate == null ? null : _deliveryDateLabel,
                         deliveryTimeWindow:
@@ -292,7 +345,8 @@ class _GiftDeliveryViewState extends State<GiftDeliveryView> {
                       name: GiftMessageView.routeName,
                     ),
                   ),
-                ),
+                );
+              },
       ),
     );
   }
@@ -330,7 +384,7 @@ class _GiftAddressLookupCard extends StatelessWidget {
           controller: controller,
           label: label,
           helper: selectedSuggestion == null
-              ? 'Select a verified address, or enter a full address with city, postcode and country.'
+              ? 'Enter a full address or choose a suggestion. We will verify it before continuing.'
               : 'Verified delivery address selected.',
           placeholder: placeholder,
           onChanged: onChanged,

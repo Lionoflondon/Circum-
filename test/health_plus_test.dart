@@ -213,26 +213,35 @@ void main() {
       expect(payload['provider'], 'google_places');
     });
 
-    test('Health+ booking requires selected canonical destinations', () {
+    test('Health+ booking resolves typed addresses before canonical payloads',
+        () {
       final source =
           File('lib/app/health_plus/view/health_plus.dart').readAsStringSync();
 
       expect(source, contains("'pharmacyAddressCanonical'"));
       expect(source, contains("'deliveryAddressCanonical'"));
-      expect(source, contains('_selectedPharmacy != null'));
-      expect(source, contains('_selectedDelivery != null'));
+      expect(source, contains('_resolveHealthAddressIfNeeded'));
+      expect(source, contains('search.resolveTypedAddress(current)'));
+      expect(source, contains('AddressEngine.hasRequiredFields'));
       expect(source, isNot(contains("'pharmacyPosition'")));
       expect(source, isNot(contains("'deliveryPosition'")));
     });
 
-    test('Gift address selection resolves before it becomes canonical', () {
+    test('Gift address selection and typed confirmation resolve canonically',
+        () {
       final source = File(
         'lib/app/sender_mobile/gift_delivery_view.dart',
       ).readAsStringSync();
 
       expect(source, contains('resolveSuggestion'));
+      expect(source, contains('resolveTypedAddress(address, \'en\')'));
+      expect(source, contains('senderGiftAddressResolveCallableName'));
       expect(source, contains('_selectedAddressSuggestion = resolved'));
       expect(source, contains('That address could not be resolved'));
+      expect(
+        source,
+        isNot(contains('Select a verified address, or enter a full address')),
+      );
     });
   });
 }
