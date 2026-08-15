@@ -4,7 +4,7 @@ const functions = require("firebase-functions/v1");
 const {getFirestore} = require("firebase-admin/firestore");
 const {getAuth} = require("firebase-admin/auth");
 const {FieldValue} = require("firebase-admin/firestore");
-const stripeConfig = functions.config().stripe || {};
+const stripeConfig = {};
 const {resolveStripeRuntimeConfig} = require("./stripe-config");
 let cachedStripe = null;
 
@@ -666,7 +666,7 @@ exports.updateSenderHealthPlusBooking = functions.runWith({enforceAppCheck: true
   return result;
 });
 
-exports.createHealthPlusCheckoutSession = functions.https.onRequest(async (req, res) => {
+exports.createHealthPlusCheckoutSession = functions.runWith({secrets: ["STRIPE_SECRET_KEY"]}).https.onRequest(async (req, res) => {
   allowCors(res);
   if (req.method === "OPTIONS") return res.status(204).send("");
   if (req.method !== "POST") return res.status(405).send({error: "POST required"});

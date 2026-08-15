@@ -57,7 +57,7 @@ function paymentMethodView(paymentMethod, defaultPaymentMethodId) {
   };
 }
 
-exports.listSenderPaymentMethods = (stripe) => functions.runWith({enforceAppCheck: true}).https.onCall(async (_, context) => {
+exports.listSenderPaymentMethods = (stripe) => functions.runWith({enforceAppCheck: true, secrets: ["STRIPE_SECRET_KEY"]}).https.onCall(async (_, context) => {
   const sender = requireSender(context);
   const customerId = await ensureStripeCustomer({stripe, sender});
   const customer = await stripe.customers.retrieve(customerId);
@@ -85,7 +85,7 @@ exports.listSenderPaymentMethods = (stripe) => functions.runWith({enforceAppChec
   };
 });
 
-exports.createSenderSetupIntent = (stripe) => functions.runWith({enforceAppCheck: true}).https.onCall(async (_, context) => {
+exports.createSenderSetupIntent = (stripe) => functions.runWith({enforceAppCheck: true, secrets: ["STRIPE_SECRET_KEY"]}).https.onCall(async (_, context) => {
   const sender = requireSender(context);
   const customerId = await ensureStripeCustomer({stripe, sender});
   const ephemeralKey = await stripe.ephemeralKeys.create(
@@ -105,7 +105,7 @@ exports.createSenderSetupIntent = (stripe) => functions.runWith({enforceAppCheck
   };
 });
 
-exports.detachSenderPaymentMethod = (stripe) => functions.runWith({enforceAppCheck: true}).https.onCall(async (data, context) => {
+exports.detachSenderPaymentMethod = (stripe) => functions.runWith({enforceAppCheck: true, secrets: ["STRIPE_SECRET_KEY"]}).https.onCall(async (data, context) => {
   const sender = requireSender(context);
   const paymentMethodId = `${data && data.paymentMethodId || ""}`.trim();
   if (!paymentMethodId) {
@@ -151,7 +151,7 @@ exports.detachSenderPaymentMethod = (stripe) => functions.runWith({enforceAppChe
   return {ok: true, detached: true};
 });
 
-exports.setDefaultSenderPaymentMethod = (stripe) => functions.runWith({enforceAppCheck: true}).https.onCall(async (data, context) => {
+exports.setDefaultSenderPaymentMethod = (stripe) => functions.runWith({enforceAppCheck: true, secrets: ["STRIPE_SECRET_KEY"]}).https.onCall(async (data, context) => {
   const sender = requireSender(context);
   const paymentMethodId = `${data && data.paymentMethodId || ""}`.trim();
   if (!paymentMethodId) {

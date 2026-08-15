@@ -2,7 +2,7 @@
 const functions = require("firebase-functions/v1");
 const {getFirestore} = require("firebase-admin/firestore");
 const {getMessaging} = require("firebase-admin/messaging");
-const stripeConfig = functions.config().stripe || {};
+const stripeConfig = {};
 const {resolveStripeRuntimeConfig} = require("./stripe-config");
 let cachedStripe = null;
 
@@ -239,7 +239,7 @@ exports.cancelAdjustedCollection = functions.runWith({enforceAppCheck: true}).ht
   return {success: true};
 });
 
-exports.createDeliveryAdjustmentPayment = functions.runWith({enforceAppCheck: true}).https.onCall(async (data, context) => {
+exports.createDeliveryAdjustmentPayment = functions.runWith({enforceAppCheck: true, secrets: ["STRIPE_SECRET_KEY"]}).https.onCall(async (data, context) => {
   if (!context.auth) throw new functions.https.HttpsError("unauthenticated", "Authentication required.");
   const db = getFirestore();
   const adjustmentRef = db.collection("deliveryAdjustments").doc(data.adjustmentId);
@@ -258,7 +258,7 @@ exports.createDeliveryAdjustmentPayment = functions.runWith({enforceAppCheck: tr
   return {clientSecret: intent.client_secret, paymentIntentId: intent.id, amount};
 });
 
-exports.finalizeDeliveryAdjustmentPayment = functions.runWith({enforceAppCheck: true}).https.onCall(async (data, context) => {
+exports.finalizeDeliveryAdjustmentPayment = functions.runWith({enforceAppCheck: true, secrets: ["STRIPE_SECRET_KEY"]}).https.onCall(async (data, context) => {
   if (!context.auth) throw new functions.https.HttpsError("unauthenticated", "Authentication required.");
   const db = getFirestore();
   const adjustmentRef = db.collection("deliveryAdjustments").doc(data.adjustmentId);

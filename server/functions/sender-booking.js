@@ -1030,7 +1030,7 @@ exports.createSenderBookingQuote = functions.runWith({enforceAppCheck: true, sec
   };
 });
 
-exports.createSenderPaymentSession = (stripe) => functions.runWith({enforceAppCheck: true}).https.onCall(async (data, context) => {
+exports.createSenderPaymentSession = (stripe) => functions.runWith({enforceAppCheck: true, secrets: ["STRIPE_SECRET_KEY"]}).https.onCall(async (data, context) => {
   const sender = requireSender(context);
   const quoteId = text(data.quoteId);
   if (!quoteId) {
@@ -2098,7 +2098,7 @@ async function createPaidDeliveryFromSession(stripe, sender, data) {
   };
 }
 
-exports.createSenderPaidDelivery = (stripe) => functions.runWith({enforceAppCheck: true}).https.onCall(async (data, context) => {
+exports.createSenderPaidDelivery = (stripe) => functions.runWith({enforceAppCheck: true, secrets: ["STRIPE_SECRET_KEY"]}).https.onCall(async (data, context) => {
   try {
     return await createPaidDeliveryFromSession(stripe, requireSender(context), data || {});
   } catch (error) {
@@ -2171,7 +2171,7 @@ async function finalizeSenderCheckoutSession(stripe, sessionData, eventId = "") 
   });
 }
 
-exports.finalizeSenderWebCheckout = (stripe) => functions.runWith({enforceAppCheck: true}).https.onCall(async (data, context) => {
+exports.finalizeSenderWebCheckout = (stripe) => functions.runWith({enforceAppCheck: true, secrets: ["STRIPE_SECRET_KEY"]}).https.onCall(async (data, context) => {
   const sender = requireSender(context);
   const sessionId = text(data.checkoutSessionId || data.sessionId);
   const paymentSessionId = text(data.paymentSessionId);

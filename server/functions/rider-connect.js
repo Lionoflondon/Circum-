@@ -3,8 +3,8 @@ const functions = require("firebase-functions/v1");
 const {getFirestore, FieldValue} = require("firebase-admin/firestore");
 const {payoutReadiness} = require("./rider-certification-policy");
 
-const safeConfig = functions.config() || {};
-const appBaseUrl = process.env.APP_BASE_URL || (safeConfig.app && safeConfig.app.base_url) || "https://circumuk.com";
+const safeConfig = {};
+const appBaseUrl = process.env.APP_BASE_URL || (safeConfig.app && safeConfig.app.base_url) || "https://circum-app-2797c.web.app/#";
 const adminBaseUrl = process.env.ADMIN_BASE_URL || (safeConfig.admin && safeConfig.admin.base_url) || "https://admin.circumuk.com";
 const riderStripeReturnUrl = `${appBaseUrl}/rider/stripe/return`;
 const riderStripeRefreshUrl = `${appBaseUrl}/rider/stripe/refresh`;

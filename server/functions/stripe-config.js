@@ -68,7 +68,7 @@ function resolveStripeRuntimeConfig({
     keyMode: resolvedKeyMode,
     webhookSecret: resolvedWebhookSecret,
     firebaseProject,
-    source: env.STRIPE_SECRET_KEY ? "env" : "functions_config",
+    source: env.STRIPE_SECRET_KEY ? "secret_manager" : "missing",
   };
 }
 

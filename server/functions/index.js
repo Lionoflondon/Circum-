@@ -4,7 +4,8 @@ const {getFirestore} = require("firebase-admin/firestore");
 const {getMessaging} = require("firebase-admin/messaging");
 const functions = require("firebase-functions/v1");
 const {defineSecret} = require("firebase-functions/params");
-const stripeConfig = functions.config().stripe || {};
+const stripeConfig = {};
+const stripeSecretKey = defineSecret("STRIPE_SECRET_KEY");
 const stripeWebhookSecret = defineSecret("STRIPE_WEBHOOK_SECRET");
 const {
   assertStripeEventMode,
@@ -455,7 +456,7 @@ exports.resolveStaleDeliveryLock = staleDelivery.resolveStaleDeliveryLock;
 exports.reconcileStaleDeliveryLocks = staleDelivery.reconcileStaleDeliveryLocks;
 
 exports.StripeWebhook = functions
-    .runWith({secrets: [stripeWebhookSecret]})
+    .runWith({secrets: [stripeSecretKey, stripeWebhookSecret]})
     .https.onRequest(async (req, res) => {
       const sig = req.headers["stripe-signature"];
       // console.log(sig);
@@ -671,7 +672,9 @@ exports.StripeWebhook = functions
       res.send({success: true});
     });
 
-exports.RetrieveCardDetails = functions.https.onRequest(async (req, res) => {
+exports.RetrieveCardDetails = functions
+    .runWith({secrets: [stripeSecretKey]})
+    .https.onRequest(async (req, res) => {
   try {
     const {customerId} = req.body;
     // const customer = await stripe.customers.retrieve(customerId);

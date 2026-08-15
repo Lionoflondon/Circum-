@@ -231,3 +231,9 @@ test("Stripe Connect webhook covers payout cancellation and external account upd
   assert.match(source, /const releaseBalance = status === "failed" \|\| status === "canceled"/);
   assert.match(source, /availableBalance: releaseBalance \? FieldValue\.increment\(amount\) : FieldValue\.increment\(0\)/);
 });
+
+test("Stripe Connect return defaults stay inside the CIRCUM app host", () => {
+  const source = fs.readFileSync("rider-connect.js", "utf8");
+  assert.match(source, /https:\/\/circum-app-2797c\.web\.app\/#/);
+  assert.doesNotMatch(source, /appBaseUrl[\s\S]*https:\/\/circumuk\.com/);
+});

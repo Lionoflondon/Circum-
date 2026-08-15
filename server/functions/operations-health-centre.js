@@ -150,9 +150,9 @@ async function buildHealthScan(db, options = {}) {
   ]);
   const frontendMaps = frontendMapsHealth(options.frontendMaps || {});
   const backendMaps = backendMapsHealth();
-  const stripeConfigured = Boolean(process.env.STRIPE_SECRET_KEY ||
-    process.env.STRIPE_WEBHOOK_SECRET ||
-    functions.config().stripe);
+  const stripeConfigured = ["test", "live"].includes(
+      `${process.env.STRIPE_MODE || ""}`.trim().toLowerCase(),
+  );
   const items = [
     healthItem(
         "Dispatch Pipeline",

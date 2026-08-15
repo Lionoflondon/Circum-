@@ -163,7 +163,7 @@ async function createStandardPaymentDraft({data, context}) {
   return {giftDraftId: draftRef.id, gift: draft};
 }
 
-exports.createGiftPayment = (stripe) => functions.runWith({enforceAppCheck: true}).https.onCall(async (data, context) => {
+exports.createGiftPayment = (stripe) => functions.runWith({enforceAppCheck: true, secrets: ["STRIPE_SECRET_KEY"]}).https.onCall(async (data, context) => {
   requireAuth(context);
   const campaignRequest = data.source === "sender_mobile_campaign" && data.campaignParticipant;
   const campaignDraft = campaignRequest ?
@@ -188,10 +188,9 @@ exports.createGiftPayment = (stripe) => functions.runWith({enforceAppCheck: true
   if (gross < 50 || gift.paymentStatus === "paid") {
     throw new functions.https.HttpsError("failed-precondition", "Gift payment cannot be started.");
   }
-  const config = functions.config().gifts || {};
-  const baseUrl = paymentReturnBase("gifts", data.returnUrl || config.return_url);
-  const successUrl = config.success_url || `${baseUrl}?gift_payment=success&giftDraftId=${giftDraftId}&session_id={CHECKOUT_SESSION_ID}`;
-  const cancelUrl = config.cancel_url || `${baseUrl}?gift_payment=cancelled&giftDraftId=${giftDraftId}`;
+  const baseUrl = paymentReturnBase("gifts", data.returnUrl || process.env.GIFTS_RETURN_URL);
+  const successUrl = process.env.GIFTS_SUCCESS_URL || `${baseUrl}?gift_payment=success&giftDraftId=${giftDraftId}&session_id={CHECKOUT_SESSION_ID}`;
+  const cancelUrl = process.env.GIFTS_CANCEL_URL || `${baseUrl}?gift_payment=cancelled&giftDraftId=${giftDraftId}`;
   let session;
   try {
     session = await stripe.checkout.sessions.create({
@@ -353,7 +352,7 @@ async function finalizeGiftPaymentSession({
   });
 }
 
-exports.finalizeGiftPayment = (stripe) => functions.runWith({enforceAppCheck: true}).https.onCall(async (data, context) => {
+exports.finalizeGiftPayment = (stripe) => functions.runWith({enforceAppCheck: true, secrets: ["STRIPE_SECRET_KEY"]}).https.onCall(async (data, context) => {
   requireAuth(context);
   const giftDraftId = String(data.giftDraftId || "");
   const sessionId = String(data.sessionId || "");
