@@ -339,15 +339,6 @@ class _SenderWebStartupLoading extends StatelessWidget {
                     ),
                   ),
                 ),
-                const SizedBox(height: 18),
-                const Text(
-                  'Starting Circum',
-                  style: TextStyle(
-                    color: Colors.white,
-                    fontSize: 16,
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
               ],
             ),
           ),
