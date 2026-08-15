@@ -214,10 +214,20 @@ void main() {
         now: DateTime.utc(2026, 8, 15, 9),
       );
 
-      expect(dates.length, greaterThanOrEqualTo(30));
+      expect(dates.length, greaterThanOrEqualTo(370));
       expect(senderScheduleDateValue(dates.first), '2026-08-15');
       expect(senderScheduleDateValue(dates[7]), '2026-08-22');
       expect(senderScheduleDateValue(dates[29]), '2026-09-13');
+      expect(senderScheduleDateValue(dates[365]), '2027-08-15');
+    });
+
+    test('scheduled date selector exposes a next-year capable date picker', () {
+      final source = File('lib/app/sender_mobile/sender_booking_canvas.dart')
+          .readAsStringSync();
+
+      expect(source, contains('showDatePicker'));
+      expect(source, contains('senderScheduleHorizonDays'));
+      expect(source, contains('Choose another date'));
     });
 
     test('schedule labels are not hardcoded in Sender booking UI', () {

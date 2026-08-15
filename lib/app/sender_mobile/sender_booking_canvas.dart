@@ -2142,24 +2142,59 @@ class _ScheduleDateSelector extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final dates = senderScheduleDateOptions();
-    return SizedBox(
-      height: 86,
-      child: ListView.separated(
-        scrollDirection: Axis.horizontal,
-        itemCount: dates.length,
-        separatorBuilder: (_, __) => const SizedBox(width: 8),
-        itemBuilder: (context, index) {
-          final date = dates[index];
-          final value = senderScheduleDateValue(date);
-          final selected = selectedDate == value;
-          return _ScheduleDateCard(
-            day: senderScheduleDayLabel(date),
-            date: senderScheduleMonthDayLabel(date),
-            selected: selected,
-            onTap: () => onSelected(value),
-          );
-        },
-      ),
+    final selected = DateTime.tryParse(selectedDate);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        SizedBox(
+          height: 86,
+          child: ListView.separated(
+            scrollDirection: Axis.horizontal,
+            itemCount: dates.length,
+            separatorBuilder: (_, __) => const SizedBox(width: 8),
+            itemBuilder: (context, index) {
+              final date = dates[index];
+              final value = senderScheduleDateValue(date);
+              final isSelected = selectedDate == value;
+              return _ScheduleDateCard(
+                day: senderScheduleDayLabel(date),
+                date: senderScheduleMonthDayLabel(date),
+                selected: isSelected,
+                onTap: () => onSelected(value),
+              );
+            },
+          ),
+        ),
+        const SizedBox(height: 8),
+        OutlinedButton.icon(
+          onPressed: () async {
+            final now = senderLondonNow();
+            final firstDate = DateTime(now.year, now.month, now.day);
+            final lastDate =
+                firstDate.add(const Duration(days: senderScheduleHorizonDays));
+            final picked = await showDatePicker(
+              context: context,
+              initialDate: selected == null || selected.isBefore(firstDate)
+                  ? firstDate
+                  : selected,
+              firstDate: firstDate,
+              lastDate: lastDate,
+              helpText: 'Choose collection date',
+              cancelText: 'Cancel',
+              confirmText: 'Select',
+            );
+            if (picked != null) {
+              onSelected(senderScheduleDateValue(picked));
+            }
+          },
+          icon: const Icon(Icons.calendar_month_outlined),
+          label: Text(
+            selected == null
+                ? 'Choose another date'
+                : 'Selected ${senderScheduleMonthDayLabel(selected)}',
+          ),
+        ),
+      ],
     );
   }
 }

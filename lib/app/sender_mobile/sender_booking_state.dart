@@ -24,7 +24,7 @@ const senderDeliverySpeeds = ['Standard', 'Express'];
 const senderVanguardAddOnPriceGbp = 1.99;
 const senderVanguardProtocolLabel = 'Vanguard Delivery Protocol';
 const senderRothPoundValue = 1.0;
-const senderScheduleHorizonDays = 30;
+const senderScheduleHorizonDays = 370;
 
 bool isSenderDeliverySpeed(String value) =>
     senderDeliverySpeeds.contains(value);
