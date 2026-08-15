@@ -1,4 +1,6 @@
 /* eslint-disable require-jsdoc */
+const {APP_ORIGIN, paymentReturnBase} = require("./payment-return-url");
+
 function selectedGiftBudgetGbp(gift) {
   return Number(
     gift.selectedBudgetGbp ||
@@ -11,16 +13,16 @@ function selectedGiftBudgetGbp(gift) {
 
 function giftReturnUrls({giftDraftId, source, origin, config = {}}) {
   if (source === "sender_mobile") {
-    const base = `${origin || "https://circum-app-2797c.web.app"}`.replace(/\/+$/, "");
+    const base = APP_ORIGIN;
     return {
       successUrl: `${base}/#/sender-mobile/gifts/confirmation?giftDraftId=${giftDraftId}&payment=success&session_id={CHECKOUT_SESSION_ID}`,
       cancelUrl: `${base}/#/sender-mobile/gifts/payment?giftDraftId=${giftDraftId}&payment=cancelled`,
     };
   }
-  const baseUrl = "https://circumuk.com/?app=gifts";
+  const baseUrl = paymentReturnBase("gifts", config.returnUrl);
   return {
-    successUrl: config.success_url || `${baseUrl}&gift_payment=success&giftDraftId=${giftDraftId}&session_id={CHECKOUT_SESSION_ID}`,
-    cancelUrl: config.cancel_url || `${baseUrl}&gift_payment=cancelled&giftDraftId=${giftDraftId}`,
+    successUrl: config.success_url || `${baseUrl}?gift_payment=success&giftDraftId=${giftDraftId}&session_id={CHECKOUT_SESSION_ID}`,
+    cancelUrl: config.cancel_url || `${baseUrl}?gift_payment=cancelled&giftDraftId=${giftDraftId}`,
   };
 }
 

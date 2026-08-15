@@ -72,15 +72,15 @@ test("sender mobile gifts checkout returns to sender mobile hash routes", () => 
   );
 });
 
-test("web gifts checkout keeps web gifts return routing", () => {
+test("web gifts checkout is contained to the Sender app route", () => {
   const urls = giftReturnUrls({giftDraftId: "draft_123", source: "web"});
   assert.equal(
     urls.successUrl,
-    "https://circumuk.com/?app=gifts&gift_payment=success&giftDraftId=draft_123&session_id={CHECKOUT_SESSION_ID}",
+    "https://circum-app-2797c.web.app/#/sender-mobile/gifts/payment?gift_payment=success&giftDraftId=draft_123&session_id={CHECKOUT_SESSION_ID}",
   );
   assert.equal(
     urls.cancelUrl,
-    "https://circumuk.com/?app=gifts&gift_payment=cancelled&giftDraftId=draft_123",
+    "https://circum-app-2797c.web.app/#/sender-mobile/gifts/payment?gift_payment=cancelled&giftDraftId=draft_123",
   );
 });
 

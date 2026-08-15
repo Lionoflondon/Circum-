@@ -5,6 +5,7 @@ const {getStorage} = require("firebase-admin/storage");
 const giftVoiceMedia = require("./gift-voice-media");
 const vanguardProtocol = require("./vanguard-protocol-core");
 const {createGiftBudgetAuthority} = require("./gift-budget-authority");
+const {paymentReturnBase} = require("./payment-return-url");
 
 function requireAuth(context) {
   if (!context.auth) {
@@ -188,9 +189,9 @@ exports.createGiftPayment = (stripe) => functions.runWith({enforceAppCheck: true
     throw new functions.https.HttpsError("failed-precondition", "Gift payment cannot be started.");
   }
   const config = functions.config().gifts || {};
-  const baseUrl = "https://circumuk.com/?app=gifts";
-  const successUrl = config.success_url || `${baseUrl}&gift_payment=success&giftDraftId=${giftDraftId}&session_id={CHECKOUT_SESSION_ID}`;
-  const cancelUrl = config.cancel_url || `${baseUrl}&gift_payment=cancelled&giftDraftId=${giftDraftId}`;
+  const baseUrl = paymentReturnBase("gifts", data.returnUrl || config.return_url);
+  const successUrl = config.success_url || `${baseUrl}?gift_payment=success&giftDraftId=${giftDraftId}&session_id={CHECKOUT_SESSION_ID}`;
+  const cancelUrl = config.cancel_url || `${baseUrl}?gift_payment=cancelled&giftDraftId=${giftDraftId}`;
   let session;
   try {
     session = await stripe.checkout.sessions.create({

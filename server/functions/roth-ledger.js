@@ -25,6 +25,7 @@ const {
 const communicationEngine = require("./communication-engine");
 const senderTrust = require("./sender-trust");
 const {businessAuthority} = require("./business-authority");
+const {paymentReturnBase} = require("./payment-return-url");
 
 function hasAdminRole(context) {
   const token = context.auth && context.auth.token || {};
@@ -558,7 +559,7 @@ exports.createWalletTopUp = (stripe) => functions.runWith({enforceAppCheck: true
     email: context.auth.token.email,
     authUid: context.auth.uid,
   });
-  const baseUrl = `${data.returnUrl || "https://circumuk.com/?app=sender&section=wallet"}`;
+  const baseUrl = paymentReturnBase("senderWallet", data.returnUrl);
   const separator = baseUrl.includes("?") ? "&" : "?";
   const session = await stripe.checkout.sessions.create({
     mode: "payment",

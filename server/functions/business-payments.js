@@ -11,6 +11,7 @@ const {requireAdmin} = require("./admin-auth");
 const {calculateWalletCheckout} = require("./wallet-core");
 const communicationEngine = require("./communication-engine");
 const {businessAuthority} = require("./business-authority");
+const {paymentReturnBase} = require("./payment-return-url");
 
 function money(value) {
   const parsed = Number(value || 0);
@@ -494,7 +495,7 @@ exports.createBusinessRothCheckout = (stripe) => functions.runWith({enforceAppCh
   const account = await requireBusinessMember(businessId, context, {financial: true});
   const db = getFirestore();
   const purchaseRef = db.collection("businessRothPurchases").doc();
-  const baseUrl = `${data.returnUrl || "https://circumuk.com/?app=business&section=invoicing"}`;
+  const baseUrl = paymentReturnBase("business", data.returnUrl);
   const separator = baseUrl.includes("?") ? "&" : "?";
   const session = await stripe.checkout.sessions.create({
     mode: "payment",
@@ -590,7 +591,7 @@ exports.createBusinessInvoiceCheckout = (stripe) => functions.runWith({enforceAp
     return {paid: true, method: "roth", paymentAmount, totalInvoice: balanceDue, rothApplied: rothAmount, cardAmount: 0, duplicate: result.duplicate === true};
   }
   const paymentRef = db.collection("businessInvoicePayments").doc();
-  const baseUrl = `${data.returnUrl || "https://circumuk.com/?app=business&section=invoicing"}`;
+  const baseUrl = paymentReturnBase("business", data.returnUrl);
   const separator = baseUrl.includes("?") ? "&" : "?";
   const bookingId = `${invoice.bookingId || invoice.deliveryId || invoice.requestId || ""}`;
   const session = await stripe.checkout.sessions.create({

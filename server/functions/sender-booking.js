@@ -13,6 +13,7 @@ const {dispatchDeliveryRequest} = require("./send-package");
 const {getAuthoritativeRouteFacts, coordinate} = require("./route-authority");
 const {evaluateRoadChargePolicy} = require("./road-charge-policy");
 const scheduledDelivery = require("./scheduled-delivery-core");
+const {paymentReturnBase} = require("./payment-return-url");
 
 const BASE_FARE_GBP = 5;
 const ADDITIONAL_FARE_PER_MILE_GBP = 1.5;
@@ -1265,7 +1266,7 @@ exports.createSenderPaymentSession = (stripe) => functions.runWith({enforceAppCh
       Number(existingSessionSnap.data().checkoutAttempt || 0) + 1 :
       1;
     const idempotencyKey = stableId(`${sender.uid}:${draftId || "web"}:${quoteId}:${sessionRef.id}:${requestedSessionKey}:${checkoutAttempt}`);
-    const baseUrl = text(data.returnUrl) || "https://circum-2797c.web.app/send";
+    const baseUrl = paymentReturnBase("senderDelivery", data.returnUrl);
     const separator = baseUrl.includes("?") ? "&" : "?";
     let checkoutSession;
     try {
