@@ -114,7 +114,7 @@ exports.requestSenderCancellation = functions.runWith({enforceAppCheck: true}).h
     const refundReviewRequired = ["paid", "succeeded", "success", "captured"].includes(paymentStatus.toLowerCase());
     const decision = core.cancellationDecision({
       delivery,
-      state: delivery.state || delivery.status,
+      state: canonicalDeliveryState(delivery),
       serverNow: now,
     });
     if (!decision.canCancel) {
@@ -216,7 +216,7 @@ exports.previewSenderCancellation = functions.runWith({enforceAppCheck: true}).h
   assertSender(uid, delivery);
   const decision = core.cancellationDecision({
     delivery,
-    state: delivery.state || delivery.status,
+    state: canonicalDeliveryState(delivery),
     serverNow: Date.now(),
   });
   const paidAmount = Number(delivery.price || delivery.total || delivery.amount || delivery.payment && delivery.payment.amount || 0) || 0;
