@@ -7208,7 +7208,33 @@ class _DriverJobCard extends StatelessWidget {
         '${job['irisConfidenceScore'] ?? job['irisWeightConfidence'] ?? 'unknown'}';
     final weightSource =
         '${job['irisWeightSource'] ?? summary['irisWeightSource'] ?? 'unknown'}';
-    final distance = _num(summary['estimatedDistanceMiles']);
+    final routeFacts =
+        (pricing['routeFacts'] as Map?)?.cast<String, dynamic>() ??
+            (job['routeFacts'] as Map?)?.cast<String, dynamic>() ??
+            const <String, dynamic>{};
+    final pickupDetails =
+        (job['pickupDetails'] as Map?)?.cast<String, dynamic>() ??
+            const <String, dynamic>{};
+    final dropoffDetails =
+        (job['dropoffDetails'] as Map?)?.cast<String, dynamic>() ??
+            const <String, dynamic>{};
+    final iris = (job['iris'] as Map?)?.cast<String, dynamic>() ??
+        (job['irisDeliveryEstimate'] as Map?)?.cast<String, dynamic>() ??
+        const <String, dynamic>{};
+    final irisRecommendation =
+        (iris['recommendation'] as Map?)?.cast<String, dynamic>() ??
+            const <String, dynamic>{};
+    final routeDistance = _firstNum([
+      summary['estimatedDistanceMiles'],
+      job['estimatedDistanceMiles'],
+      pricing['distanceMiles'],
+      routeFacts['distanceMiles'],
+    ]);
+    final riderPickupDistance = _firstNum([
+      job['distanceFromRider'],
+      job['riderDistanceMiles'],
+      summary['distanceFromRider'],
+    ]);
     final fare = _num(summary['totalFare'] ?? job['fare'] ?? job['price']);
     final payout = _num(summary['driverPayout'] ?? job['driverPayout']);
     final riderBaseShare = _num(
@@ -7233,18 +7259,47 @@ class _DriverJobCard extends StatelessWidget {
     final tip = _num(
       job['tipAmount'] ?? job['riderTip'] ?? summary['tipAmount'],
     );
-    final vehicle =
-        '${summary['vehicleType'] ?? job['vehicleType'] ?? 'Vehicle'}';
+    final vehicle = _firstText([
+      summary['vehicleType'],
+      job['vehicleType'],
+      job['selectedVehicle'],
+      job['preferredVehicle'],
+      job['recommendedVehicle'],
+      job['irisRecommendedVehicle'],
+      irisRecommendation['recommendedVehicle'],
+      irisRecommendation['vehicleType'],
+    ], fallback: 'Vehicle');
     final serviceLevel =
         '${job['selectedServiceLevel'] ?? job['serviceLevel'] ?? summary['serviceLevel'] ?? 'standard'}';
     final vanguardEnabled = job['vanguardEnabled'] == true ||
         summary['vanguardEnabled'] == true ||
         ((job['vanguardProtection'] as Map?)?['enabled'] == true);
-    final duration = _num(
-      summary['estimatedDurationMinutes'] ??
-          job['estimatedDurationMinutes'] ??
-          job['etaMinutes'],
-    );
+    final duration = _durationMinutes(summary, job, pricing, routeFacts);
+    final pickupAddress = _firstText([
+      summary['pickupDisplay'],
+      job['pickupAddress'],
+      pickupDetails['address'],
+      pickupDetails['rawAddress'],
+    ], fallback: 'Pickup address pending');
+    final dropoffAddress = _firstText([
+      summary['dropoffDisplay'],
+      job['dropoffAddress'],
+      dropoffDetails['address'],
+      dropoffDetails['rawAddress'],
+    ], fallback: 'Drop-off address pending');
+    final packageDescription = _firstText([
+      summary['packageDescription'],
+      job['packageDescription'],
+      job['normalizedItemName'],
+      irisRecommendation['detectedItem'],
+      irisRecommendation['description'],
+    ], fallback: 'Parcel');
+    final packageType = _firstText([
+      summary['packageType'],
+      job['packageType'],
+      irisRecommendation['category'],
+      irisRecommendation['weightBand'],
+    ], fallback: 'Parcel');
     final dimensions =
         '${summary['packageDimensions'] ?? job['packageDimensions'] ?? job['dimensions'] ?? ''}'
             .trim();
@@ -7379,14 +7434,13 @@ class _DriverJobCard extends StatelessWidget {
             colors: colors,
             icon: Icons.trip_origin,
             label: 'Pickup',
-            value: '${summary['pickupDisplay'] ?? job['pickupAddress'] ?? ''}',
+            value: pickupAddress,
           ),
           _JobInfoLine(
             colors: colors,
             icon: Icons.place,
             label: 'Drop-off',
-            value:
-                '${summary['dropoffDisplay'] ?? job['dropoffAddress'] ?? ''}',
+            value: dropoffAddress,
           ),
           if (showContactDetails) ...[
             _JobInfoLine(
@@ -7415,16 +7469,24 @@ class _DriverJobCard extends StatelessWidget {
           ],
           _JobInfoLine(
             colors: colors,
+            icon: Icons.near_me_outlined,
+            label: 'Rider to pickup',
+            value: riderPickupDistance > 0
+                ? '${riderPickupDistance.toStringAsFixed(1)} miles away'
+                : 'Updating',
+          ),
+          _JobInfoLine(
+            colors: colors,
             icon: Icons.route,
-            label: 'Distance',
-            value: distance > 0
-                ? '${distance.toStringAsFixed(1)} miles'
-                : 'Not set',
+            label: 'Delivery route',
+            value: routeDistance > 0
+                ? '${routeDistance.toStringAsFixed(1)} miles'
+                : 'Updating route',
           ),
           _JobInfoLine(
             colors: colors,
             icon: Icons.timer,
-            label: 'ETA',
+            label: 'Route ETA',
             value: duration > 0
                 ? '${duration.toStringAsFixed(0)} min'
                 : 'Updating ETA',
@@ -7439,8 +7501,7 @@ class _DriverJobCard extends StatelessWidget {
             colors: colors,
             icon: Icons.inventory_2,
             label: 'Parcel',
-            value:
-                '${summary['packageType'] ?? job['packageType'] ?? 'Parcel'} - ${summary['packageDescription'] ?? job['packageDescription'] ?? ''}',
+            value: '$packageType - $packageDescription',
           ),
           _JobInfoLine(
             colors: colors,
@@ -7595,6 +7656,45 @@ class _DriverJobCard extends StatelessWidget {
   static double _num(Object? value) {
     if (value is num) return value.toDouble();
     return double.tryParse('$value') ?? 0;
+  }
+
+  static double _firstNum(List<Object?> values) {
+    for (final value in values) {
+      final parsed = _num(value);
+      if (parsed > 0) return parsed;
+    }
+    return 0;
+  }
+
+  static String _firstText(List<Object?> values, {required String fallback}) {
+    for (final value in values) {
+      final text = '$value'.trim();
+      if (text.isNotEmpty && text != 'null') return text;
+    }
+    return fallback;
+  }
+
+  static double _durationMinutes(
+    Map<String, dynamic> summary,
+    Map<String, dynamic> job,
+    Map<String, dynamic> pricing,
+    Map<String, dynamic> routeFacts,
+  ) {
+    final minutes = _firstNum([
+      summary['estimatedDurationMinutes'],
+      job['estimatedDurationMinutes'],
+      job['etaMinutes'],
+      pricing['estimatedDurationMinutes'],
+      pricing['durationMinutes'],
+      routeFacts['durationMinutes'],
+    ]);
+    if (minutes > 0) return minutes;
+    final seconds = _firstNum([
+      routeFacts['durationSeconds'],
+      pricing['durationSeconds'],
+      job['durationSeconds'],
+    ]);
+    return seconds > 0 ? seconds / 60 : 0;
   }
 
   static String _money(double value) => '£${value.toStringAsFixed(2)}';
