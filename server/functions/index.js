@@ -440,6 +440,8 @@ exports.updateRiderPushToken = riderAccount.updateRiderPushToken;
 exports.updateRiderNotificationState =
   riderAccount.updateRiderNotificationState;
 exports.recordRiderJobDecision = riderAccount.recordRiderJobDecision;
+exports.confirmRiderActiveDelivery = riderAccount.confirmRiderActiveDelivery;
+exports.removeRiderProfilePhoto = riderAccount.removeRiderProfilePhoto;
 exports.ensureRiderRothWallet = riderAccount.ensureRiderRothWallet;
 exports.createWeightAdjustedNotification =
   riderAccount.createWeightAdjustedNotification;

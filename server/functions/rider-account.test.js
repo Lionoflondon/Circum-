@@ -13,12 +13,16 @@ const websiteSource = fs.readFileSync(
 
 test("Rider self-service authority callables are exported", () => {
   assert.match(source, /exports\.updateRiderProfile\s*=\s*functions\.runWith\(\{enforceAppCheck: true\}\)\.https\.onCall/);
+  assert.match(source, /exports\.removeRiderProfilePhoto\s*=\s*functions\.runWith\(\{enforceAppCheck: true\}\)\.https\.onCall/);
+  assert.match(source, /exports\.confirmRiderActiveDelivery\s*=\s*functions\.runWith\(\{enforceAppCheck: true\}\)\.https\.onCall/);
   assert.match(source, /exports\.requestRiderEmailChange\s*=\s*functions\.runWith\(\{enforceAppCheck: true\}\)\.https\.onCall/);
   assert.match(source, /exports\.createWeightAdjustedNotification\s*=\s*functions\.runWith\(\{enforceAppCheck: true\}\)\.https\.onCall/);
   assert.match(source, /exports\.submitRiderApplication\s*=\s*functions\.runWith\(\{enforceAppCheck: true\}\)\.https\.onCall/);
   assert.match(source, /exports\.updateRiderApplicationSection\s*=\s*functions\.runWith\(\{enforceAppCheck: true\}\)\.https\.onCall/);
   assert.match(source, /exports\.submitRiderDocument\s*=\s*functions\.runWith\(\{enforceAppCheck: true\}\)\.https\.onCall/);
   assert.match(indexSource, /exports\.updateRiderProfile\s*=\s*riderAccount\.updateRiderProfile/);
+  assert.match(indexSource, /exports\.removeRiderProfilePhoto\s*=\s*riderAccount\.removeRiderProfilePhoto/);
+  assert.match(indexSource, /exports\.confirmRiderActiveDelivery\s*=\s*riderAccount\.confirmRiderActiveDelivery/);
   assert.match(indexSource, /exports\.requestRiderEmailChange\s*=\s*riderAccount\.requestRiderEmailChange/);
   assert.match(indexSource, /exports\.createWeightAdjustedNotification\s*=\s*riderAccount\.createWeightAdjustedNotification/);
   assert.match(indexSource, /exports\.submitRiderApplication\s*=\s*riderAccount\.submitRiderApplication/);
@@ -34,6 +38,12 @@ test("Rider self-service authority validates auth ownership documents and audit"
   assert.match(source, /MAX_DOCUMENT_BYTES/);
   assert.match(source, /rider_documents\/\$\{rider\.uid\}/);
   assert.match(source, /riderOnboardingEvents/);
+  assert.match(source, /rider_profile_photo_removed/);
+  assert.match(source, /rider_active_delivery_confirmed/);
+  assert.match(source, /getAuth\(\)\.updateUser\(rider\.uid, \{photoURL: null\}\)/);
+  assert.match(source, /activeDeliveryId:\s*delivery\.id/);
+  assert.match(source, /availabilityStatus:\s*"busy"/);
+  assert.match(source, /dispatchEligible:\s*false/);
   assert.match(source, /riderApplicationIdempotency/);
   assert.match(source, /collection\("riderApplications"\)\.doc\(rider\.uid\)/);
   assert.match(source, /ALLOWED_APPLICATION_SECTIONS/);

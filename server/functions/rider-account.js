@@ -1,5 +1,6 @@
 /* eslint-disable max-len, require-jsdoc */
 const functions = require("firebase-functions/v1");
+const {getAuth} = require("firebase-admin/auth");
 const {getFirestore, FieldValue} = require("firebase-admin/firestore");
 const {getStorage} = require("firebase-admin/storage");
 const {canonicalDocumentId, DOCUMENT_MATRIX} = require("./rider-certification-policy");
@@ -98,6 +99,70 @@ function audit(type, rider, extra = {}) {
     createdAt: FieldValue.serverTimestamp(),
     ...extra,
   };
+}
+
+function riderPhotoRemovalPatch(rider) {
+  const timestamp = FieldValue.serverTimestamp();
+  return {
+    photoURL: FieldValue.delete(),
+    photoUrl: FieldValue.delete(),
+    photoPath: FieldValue.delete(),
+    profilePhoto: FieldValue.delete(),
+    profilePhotoUrl: FieldValue.delete(),
+    profileThumbnailUrl: FieldValue.delete(),
+    profilePhotoPath: FieldValue.delete(),
+    profileThumbnailPath: FieldValue.delete(),
+    profilePhotoMetadata: FieldValue.delete(),
+    profilePhotoVersion: FieldValue.increment(1),
+    profilePhotoRemovedAt: timestamp,
+    profilePhotoRemovedBy: rider.uid,
+    riderAuthorityUpdatedAt: timestamp,
+    riderAuthorityUpdatedBy: rider.uid,
+    updatedAt: timestamp,
+  };
+}
+
+function collectRiderPhotoPaths(...records) {
+  return [...new Set(records.flatMap((record = {}) => [
+    text(record.photoPath, 500),
+    text(record.profilePhotoPath, 500),
+    text(record.profileThumbnailPath, 500),
+    text(record.profilePhotoMetadata && record.profilePhotoMetadata.storagePath, 500),
+    text(record.profilePhotoMetadata && record.profilePhotoMetadata.thumbnailPath, 500),
+  ]).filter(Boolean))];
+}
+
+async function deleteRiderPhotoPaths(paths) {
+  await Promise.all(paths.map(async (path) => {
+    try {
+      await getStorage().bucket().file(path).delete({ignoreNotFound: true});
+    } catch (error) {
+      console.warn("rider_profile_photo_delete_failed", {
+        path,
+        message: error && error.message,
+      });
+    }
+  }));
+}
+
+async function deliveryForConfirmation(db, transaction, deliveryId) {
+  const id = text(deliveryId, 180);
+  if (!id) {
+    throw new functions.https.HttpsError("invalid-argument", "Delivery id is required.");
+  }
+  const directRef = db.collection("deliveryRequests").doc(id);
+  const directSnap = await transaction.get(directRef);
+  if (directSnap.exists) {
+    return {ref: directRef, id: directSnap.id, data: directSnap.data() || {}};
+  }
+  const matching = await transaction.get(
+      db.collection("deliveryRequests").where("requestId", "==", id).limit(1),
+  );
+  if (!matching.empty) {
+    const doc = matching.docs[0];
+    return {ref: doc.ref, id: doc.id, data: doc.data() || {}};
+  }
+  throw new functions.https.HttpsError("not-found", "Delivery request not found.");
 }
 
 function profilePatch(data, rider, existing = {}) {
@@ -231,6 +296,87 @@ exports.updateRiderProfile = functions.runWith({enforceAppCheck: true}).https.on
   });
 
   return {ok: true, riderId: rider.uid};
+});
+
+exports.removeRiderProfilePhoto = functions.runWith({enforceAppCheck: true}).https.onCall(async (data, context) => {
+  const rider = requireRider(context);
+  const db = getFirestore();
+  const profileRef = db.collection("riderProfiles").doc(rider.uid);
+  const riderRef = db.collection("riders").doc(rider.uid);
+  const applicationRef = db.collection("riderApplications").doc(rider.uid);
+  const eventRef = db.collection("riderOnboardingEvents").doc();
+  const paths = await db.runTransaction(async (transaction) => {
+    const [profileSnap, riderSnap, applicationSnap] = await Promise.all([
+      transaction.get(profileRef),
+      transaction.get(riderRef),
+      transaction.get(applicationRef),
+    ]);
+    const profile = profileSnap.data() || {};
+    const riderRecord = riderSnap.data() || {};
+    const application = applicationSnap.data() || {};
+    const patch = riderPhotoRemovalPatch(rider);
+    transaction.set(profileRef, patch, {merge: true});
+    transaction.set(riderRef, patch, {merge: true});
+    transaction.set(applicationRef, patch, {merge: true});
+    transaction.set(eventRef, audit("rider_profile_photo_removed", rider));
+    return collectRiderPhotoPaths(profile, riderRecord, application);
+  });
+  await Promise.all([
+    deleteRiderPhotoPaths(paths),
+    getAuth().updateUser(rider.uid, {photoURL: null}).catch((error) => {
+      console.warn("rider_auth_photo_clear_failed", {
+        riderId: rider.uid,
+        message: error && error.message,
+      });
+    }),
+  ]);
+  return {ok: true, riderId: rider.uid};
+});
+
+exports.confirmRiderActiveDelivery = functions.runWith({enforceAppCheck: true}).https.onCall(async (data, context) => {
+  const rider = requireRider(context);
+  const db = getFirestore();
+  const deliveryId = text(data && (data.deliveryId || data.requestId), 180);
+  const result = await db.runTransaction(async (transaction) => {
+    const delivery = await deliveryForConfirmation(db, transaction, deliveryId);
+    const assignedRider = text(
+        delivery.data.riderId || delivery.data.assignedRiderId || delivery.data.driverId || delivery.data.assignedDriverId,
+        180,
+    );
+    if (assignedRider !== rider.uid) {
+      throw new functions.https.HttpsError("permission-denied", "Delivery is not assigned to this Rider.");
+    }
+    const status = lower(delivery.data.status || delivery.data.deliveryStatus || delivery.data.deliveryStage, 80);
+    if (["cancelled", "canceled", "delivered", "completed", "failed"].includes(status)) {
+      throw new functions.https.HttpsError("failed-precondition", "Delivery is not active.");
+    }
+    const now = FieldValue.serverTimestamp();
+    transaction.set(db.collection("activeDeliveries").doc(delivery.id), {
+      deliveryId: delivery.id,
+      requestId: text(delivery.data.requestId, 180) || delivery.id,
+      riderId: rider.uid,
+      status: status || "assigned",
+      source: "confirmRiderActiveDelivery",
+      updatedAt: now,
+    }, {merge: true});
+    transaction.set(db.collection("riderPresence").doc(rider.uid), {
+      riderId: rider.uid,
+      activeDeliveryId: delivery.id,
+      availabilityStatus: "busy",
+      busy: true,
+      dispatchEligible: false,
+      updatedAt: now,
+    }, {merge: true});
+    transaction.set(db.collection("riderProfiles").doc(rider.uid), {
+      activeDeliveryId: delivery.id,
+      updatedAt: now,
+    }, {merge: true});
+    transaction.set(db.collection("riderOnboardingEvents").doc(), audit("rider_active_delivery_confirmed", rider, {
+      deliveryId: delivery.id,
+    }));
+    return {ok: true, deliveryId: delivery.id, status: status || "assigned"};
+  });
+  return result;
 });
 
 exports.requestRiderEmailChange = functions.runWith({enforceAppCheck: true}).https.onCall(async (data, context) => {
