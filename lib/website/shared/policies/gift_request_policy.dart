@@ -25,8 +25,9 @@ class GiftRequestPolicy {
       return 'Enter a valid sender email address.';
     }
     if (recipientName.trim().isEmpty) return 'Enter the recipient name.';
-    if (recipientPhone.trim().isEmpty)
+    if (recipientPhone.trim().isEmpty) {
       return 'Enter the recipient phone number.';
+    }
     if (!RegExp(r'^[^@\s]+@[^@\s]+\.[^@\s]+$')
         .hasMatch(recipientEmail.trim())) {
       return 'Enter a valid recipient email address.';
