@@ -21,6 +21,7 @@ import '../../helper/platform_view_visibility.dart';
 import '../send_package/bloc/send_package_bloc.dart';
 import '../send_package/models/place_coordinates.m.dart';
 import '../send_package/repo/place_api.dart';
+import '../platform/address_engine.dart';
 import 'sender_accessibility.dart';
 import 'sender_booking_state.dart';
 import 'sender_finance.dart';
@@ -48,7 +49,17 @@ class _SenderBookingCanvasState extends State<SenderBookingCanvas> {
 
   SenderBookingDraft _draft = const SenderBookingDraft();
   final _pickup = TextEditingController();
+  final _pickupLine1 = TextEditingController();
+  final _pickupLine2 = TextEditingController();
+  final _pickupCity = TextEditingController();
+  final _pickupPostcode = TextEditingController();
+  final _pickupCountry = TextEditingController(text: 'United Kingdom');
   final _dropoff = TextEditingController();
+  final _dropoffLine1 = TextEditingController();
+  final _dropoffLine2 = TextEditingController();
+  final _dropoffCity = TextEditingController();
+  final _dropoffPostcode = TextEditingController();
+  final _dropoffCountry = TextEditingController(text: 'United Kingdom');
   final _receiverName = TextEditingController();
   final _receiverPhone = TextEditingController();
   final _notes = TextEditingController();
@@ -158,7 +169,17 @@ class _SenderBookingCanvasState extends State<SenderBookingCanvas> {
       _queueDraftSave(_draft);
     }
     _pickup.dispose();
+    _pickupLine1.dispose();
+    _pickupLine2.dispose();
+    _pickupCity.dispose();
+    _pickupPostcode.dispose();
+    _pickupCountry.dispose();
     _dropoff.dispose();
+    _dropoffLine1.dispose();
+    _dropoffLine2.dispose();
+    _dropoffCity.dispose();
+    _dropoffPostcode.dispose();
+    _dropoffCountry.dispose();
     _receiverName.dispose();
     _receiverPhone.dispose();
     _notes.dispose();
@@ -402,7 +423,9 @@ class _SenderBookingCanvasState extends State<SenderBookingCanvas> {
   void _hydrateDraft(SenderBookingDraft restored) {
     if (!mounted) return;
     _pickup.text = restored.pickupAddress;
+    _hydrateManualAddressControllers(restored.pickupAddress, true);
     _dropoff.text = restored.dropoffAddress;
+    _hydrateManualAddressControllers(restored.dropoffAddress, false);
     _receiverName.text = restored.receiverName;
     _receiverPhone.text = restored.receiverPhone;
     _notes.text = restored.deliveryNotes;
@@ -676,7 +699,17 @@ class _SenderBookingCanvasState extends State<SenderBookingCanvas> {
       return;
     }
     _pickup.clear();
+    _pickupLine1.clear();
+    _pickupLine2.clear();
+    _pickupCity.clear();
+    _pickupPostcode.clear();
+    _pickupCountry.text = 'United Kingdom';
     _dropoff.clear();
+    _dropoffLine1.clear();
+    _dropoffLine2.clear();
+    _dropoffCity.clear();
+    _dropoffPostcode.clear();
+    _dropoffCountry.text = 'United Kingdom';
     _receiverName.clear();
     _receiverPhone.clear();
     _notes.clear();
@@ -771,22 +804,40 @@ class _SenderBookingCanvasState extends State<SenderBookingCanvas> {
 
   Future<bool> _resolveTypedAddressIfNeeded() async {
     final isPickupStep = _draft.step == SenderBookingStep.pickup;
-    final address =
-        (isPickupStep ? _draft.pickupAddress : _draft.dropoffAddress).trim();
+    final manualAddress = _manualAddressPayload(isPickupStep);
+    final address = manualAddress.formattedAddress;
     final hasCoordinates = isPickupStep
         ? _draft.pickupLat != null && _draft.pickupLng != null
         : _draft.dropoffLat != null && _draft.dropoffLng != null;
-    if (address.isEmpty || hasCoordinates) return true;
+    if (!manualAddress.isValid) {
+      setState(() {
+        _addressResolutionMessage =
+            'Add address line 1, city, postcode and country.';
+      });
+      return false;
+    }
+    if (hasCoordinates) return true;
 
+    unawaited(_enrichTypedAddressCoordinates(
+      address: address,
+      isPickupStep: isPickupStep,
+    ));
+    return true;
+  }
+
+  Future<void> _enrichTypedAddressCoordinates({
+    required String address,
+    required bool isPickupStep,
+  }) async {
     setState(() {
       _addressResolving = true;
-      _addressResolutionMessage = null;
+      _addressResolutionMessage = 'Locating this address...';
     });
     try {
       final provider = PlaceApiProvider(const Uuid());
       final lang = Localizations.localeOf(context).languageCode;
       final resolved = await provider.resolveTypedAddress(address, lang);
-      if (!mounted) return false;
+      if (!mounted) return;
       final lat = resolved.lat;
       final lng = resolved.lng;
       if (lat == null || lng == null) {
@@ -795,52 +846,104 @@ class _SenderBookingCanvasState extends State<SenderBookingCanvas> {
       if (isPickupStep) {
         context.read<SendPackageBloc>().add(
               SetPickupAddress(
-                val: resolved.description,
+                val: address,
                 pickupLocationSubAddress: resolved.subText,
                 placeId: resolved.placeId,
                 lang: lang,
               ),
             );
-        _pickup.text = resolved.description;
+        _pickup.text = address;
         _setDraft(
           _draft.copyWith(
-            pickupAddress: resolved.description,
+            pickupAddress: address,
             pickupLat: lat,
             pickupLng: lng,
           ),
         );
+        _hydrateManualAddressControllers(address, true);
       } else {
         context.read<SendPackageBloc>().add(
               SetDeliveryAddress(
-                val: resolved.description,
+                val: address,
                 destinationLocationSubAddress: resolved.subText,
                 placeId: resolved.placeId,
                 lang: lang,
               ),
             );
-        _dropoff.text = resolved.description;
+        _dropoff.text = address;
         _setDraft(
           _draft.copyWith(
-            dropoffAddress: resolved.description,
+            dropoffAddress: address,
             dropoffLat: lat,
             dropoffLng: lng,
           ),
         );
+        _hydrateManualAddressControllers(address, false);
       }
       debugPrint('Typed Sender address resolved via backend.');
-      return true;
     } catch (error, stackTrace) {
       debugPrint('Typed Sender address resolution failed: $error');
       debugPrintStack(stackTrace: stackTrace);
       if (mounted) {
         setState(() {
-          _addressResolutionMessage =
-              'We could not verify that address. Add a house or flat number, street, town and postcode, then try again.';
+          _addressResolutionMessage = null;
         });
       }
-      return false;
     } finally {
       if (mounted) setState(() => _addressResolving = false);
+    }
+  }
+
+  _ManualSenderAddress _manualAddressPayload(bool pickup) {
+    return _ManualSenderAddress.fromFields(
+      line1: pickup ? _pickupLine1.text : _dropoffLine1.text,
+      line2: pickup ? _pickupLine2.text : _dropoffLine2.text,
+      city: pickup ? _pickupCity.text : _dropoffCity.text,
+      postcode: pickup ? _pickupPostcode.text : _dropoffPostcode.text,
+      country: pickup ? _pickupCountry.text : _dropoffCountry.text,
+    );
+  }
+
+  void _hydrateManualAddressControllers(String address, bool pickup) {
+    final parsed = _ManualSenderAddress.fromFormatted(address);
+    void sync(TextEditingController controller, String value) {
+      if (controller.text == value) return;
+      controller.text = value;
+    }
+
+    if (pickup) {
+      sync(_pickupLine1, parsed.line1);
+      sync(_pickupLine2, parsed.line2);
+      sync(_pickupCity, parsed.city);
+      sync(_pickupPostcode, parsed.postcode);
+      sync(_pickupCountry, parsed.country);
+    } else {
+      sync(_dropoffLine1, parsed.line1);
+      sync(_dropoffLine2, parsed.line2);
+      sync(_dropoffCity, parsed.city);
+      sync(_dropoffPostcode, parsed.postcode);
+      sync(_dropoffCountry, parsed.country);
+    }
+  }
+
+  void _applyManualAddressDraft(bool pickup) {
+    final manual = _manualAddressPayload(pickup);
+    if (pickup) {
+      _pickup.text = manual.formattedAddress;
+      _setDraft(
+        _draft.copyWith(
+          pickupAddress: manual.formattedAddress,
+          clearPickupCoordinate: true,
+        ),
+      );
+    } else {
+      _dropoff.text = manual.formattedAddress;
+      _setDraft(
+        _draft.copyWith(
+          dropoffAddress: manual.formattedAddress,
+          clearDropoffCoordinate: true,
+        ),
+      );
     }
   }
 
@@ -1127,7 +1230,17 @@ class _SenderBookingCanvasState extends State<SenderBookingCanvas> {
                           draftId: _draftId,
                           senderUid: _uid,
                           pickup: _pickup,
+                          pickupLine1: _pickupLine1,
+                          pickupLine2: _pickupLine2,
+                          pickupCity: _pickupCity,
+                          pickupPostcode: _pickupPostcode,
+                          pickupCountry: _pickupCountry,
                           dropoff: _dropoff,
+                          dropoffLine1: _dropoffLine1,
+                          dropoffLine2: _dropoffLine2,
+                          dropoffCity: _dropoffCity,
+                          dropoffPostcode: _dropoffPostcode,
+                          dropoffCountry: _dropoffCountry,
                           receiverName: _receiverName,
                           receiverPhone: _receiverPhone,
                           notes: _notes,
@@ -1148,6 +1261,9 @@ class _SenderBookingCanvasState extends State<SenderBookingCanvas> {
                           onParcelChanged: _onParcelChanged,
                           onPhotoTap: _pickParcelPhoto,
                           onPhotoRemove: _removeParcelPhoto,
+                          onManualAddressChanged: _applyManualAddressDraft,
+                          hydrateManualAddress:
+                              _hydrateManualAddressControllers,
                           onDraft: _setDraft,
                           onContinue: _advance,
                           addressResolutionMessage: _addressResolutionMessage,
@@ -1192,10 +1308,11 @@ double _bookingSheetExtentFor(SenderBookingStep step,
     case SenderBookingStep.review:
     case SenderBookingStep.payment:
       return .90;
-    case SenderBookingStep.pickup:
-    case SenderBookingStep.dropoff:
     case SenderBookingStep.deliveryTime:
       return .45;
+    case SenderBookingStep.pickup:
+    case SenderBookingStep.dropoff:
+      return .78;
     case SenderBookingStep.findingRider:
     case SenderBookingStep.liveTracking:
       return .45;
@@ -1347,7 +1464,17 @@ class _BookingPanel extends StatelessWidget {
   final String? draftId;
   final String? senderUid;
   final TextEditingController pickup;
+  final TextEditingController pickupLine1;
+  final TextEditingController pickupLine2;
+  final TextEditingController pickupCity;
+  final TextEditingController pickupPostcode;
+  final TextEditingController pickupCountry;
   final TextEditingController dropoff;
+  final TextEditingController dropoffLine1;
+  final TextEditingController dropoffLine2;
+  final TextEditingController dropoffCity;
+  final TextEditingController dropoffPostcode;
+  final TextEditingController dropoffCountry;
   final TextEditingController receiverName;
   final TextEditingController receiverPhone;
   final TextEditingController notes;
@@ -1367,6 +1494,8 @@ class _BookingPanel extends StatelessWidget {
   final VoidCallback onParcelChanged;
   final VoidCallback onPhotoTap;
   final VoidCallback onPhotoRemove;
+  final ValueChanged<bool> onManualAddressChanged;
+  final void Function(String address, bool pickup) hydrateManualAddress;
   final ValueChanged<SenderBookingDraft> onDraft;
   final VoidCallback onContinue;
   final String? addressResolutionMessage;
@@ -1379,7 +1508,17 @@ class _BookingPanel extends StatelessWidget {
     required this.draftId,
     required this.senderUid,
     required this.pickup,
+    required this.pickupLine1,
+    required this.pickupLine2,
+    required this.pickupCity,
+    required this.pickupPostcode,
+    required this.pickupCountry,
     required this.dropoff,
+    required this.dropoffLine1,
+    required this.dropoffLine2,
+    required this.dropoffCity,
+    required this.dropoffPostcode,
+    required this.dropoffCountry,
     required this.receiverName,
     required this.receiverPhone,
     required this.notes,
@@ -1399,6 +1538,8 @@ class _BookingPanel extends StatelessWidget {
     required this.onParcelChanged,
     required this.onPhotoTap,
     required this.onPhotoRemove,
+    required this.onManualAddressChanged,
+    required this.hydrateManualAddress,
     required this.onDraft,
     required this.onContinue,
     required this.addressResolutionMessage,
@@ -1464,8 +1605,13 @@ class _BookingPanel extends StatelessWidget {
         return _AddressPanel(
           savedForPickup: true,
           controller: pickup,
+          line1: pickupLine1,
+          line2: pickupLine2,
+          city: pickupCity,
+          postcode: pickupPostcode,
+          country: pickupCountry,
           hint: 'Pickup address, flat or postcode',
-          helperText: 'Enter a postcode, business or address.',
+          helperText: 'Enter collection details manually. Search is optional.',
           suggestions: engine.suggestions,
           isSearching: engine.isAddressSearching,
           errorText: engine.addressSearchError,
@@ -1478,6 +1624,7 @@ class _BookingPanel extends StatelessWidget {
               draft.copyWith(pickupAddress: value, clearPickupCoordinate: true),
             );
           },
+          onManualChanged: () => onManualAddressChanged(true),
           onSuggestion: (suggestion) {
             final lat = suggestion.lat is num
                 ? (suggestion.lat as num).toDouble()
@@ -1494,6 +1641,7 @@ class _BookingPanel extends StatelessWidget {
                   ),
                 );
             pickup.text = suggestion.description;
+            hydrateManualAddress(suggestion.description, true);
             onDraft(
               draft.copyWith(
                 pickupAddress: suggestion.description,
@@ -1512,8 +1660,13 @@ class _BookingPanel extends StatelessWidget {
         return _AddressPanel(
           savedForPickup: false,
           controller: dropoff,
+          line1: dropoffLine1,
+          line2: dropoffLine2,
+          city: dropoffCity,
+          postcode: dropoffPostcode,
+          country: dropoffCountry,
           hint: 'Drop-off address, flat or postcode',
-          helperText: 'Enter a postcode, business or address.',
+          helperText: 'Enter delivery details manually. Search is optional.',
           suggestions: engine.suggestions,
           isSearching: engine.isAddressSearching,
           errorText: engine.addressSearchError,
@@ -1529,6 +1682,7 @@ class _BookingPanel extends StatelessWidget {
               ),
             );
           },
+          onManualChanged: () => onManualAddressChanged(false),
           onSuggestion: (suggestion) {
             final lat = suggestion.lat is num
                 ? (suggestion.lat as num).toDouble()
@@ -1545,6 +1699,7 @@ class _BookingPanel extends StatelessWidget {
                   ),
                 );
             dropoff.text = suggestion.description;
+            hydrateManualAddress(suggestion.description, false);
             onDraft(
               draft.copyWith(
                 dropoffAddress: suggestion.description,
@@ -1654,9 +1809,121 @@ double? _manualWeightKg(String value) {
   return parsed;
 }
 
+class _ManualSenderAddress {
+  final String line1;
+  final String line2;
+  final String city;
+  final String postcode;
+  final String country;
+
+  const _ManualSenderAddress({
+    required this.line1,
+    required this.line2,
+    required this.city,
+    required this.postcode,
+    required this.country,
+  });
+
+  factory _ManualSenderAddress.fromFields({
+    required String line1,
+    required String line2,
+    required String city,
+    required String postcode,
+    required String country,
+  }) {
+    return _ManualSenderAddress(
+      line1: AddressEngine.clean(line1),
+      line2: AddressEngine.clean(line2),
+      city: AddressEngine.clean(city),
+      postcode: _normalizeUkPostcode(postcode),
+      country: AddressEngine.clean(country).isEmpty
+          ? 'United Kingdom'
+          : AddressEngine.clean(country),
+    );
+  }
+
+  factory _ManualSenderAddress.fromFormatted(String address) {
+    final parts = address
+        .split(',')
+        .map(AddressEngine.clean)
+        .where((value) => value.isNotEmpty)
+        .toList(growable: false);
+    final postcode = _extractUkPostcode(address);
+    final country =
+        parts.isNotEmpty && parts.last.toLowerCase().contains('united kingdom')
+            ? parts.last
+            : 'United Kingdom';
+    final cityIndex = parts.length >= 3 ? parts.length - 3 : -1;
+    final lineParts = cityIndex > 0
+        ? parts.take(cityIndex).toList(growable: false)
+        : parts.where((part) => part != country && part != postcode).toList();
+    final line1 = lineParts.isEmpty
+        ? AddressEngine.clean(address)
+        : lineParts.length == 1
+            ? lineParts.single
+            : lineParts.last;
+    final line2 = lineParts.length > 1 ? lineParts.first : '';
+    final city = cityIndex >= 0 ? parts[cityIndex] : '';
+    return _ManualSenderAddress.fromFields(
+      line1: line1,
+      line2: line2,
+      city: city,
+      postcode: postcode,
+      country: country,
+    );
+  }
+
+  bool get isValid =>
+      line1.isNotEmpty &&
+      city.isNotEmpty &&
+      _isPlausibleUkPostcode(postcode) &&
+      _isSupportedCountry(country) &&
+      formattedAddress.isNotEmpty;
+
+  String get formattedAddress => AddressEngine.joinDistinctParts([
+        line2,
+        line1,
+        city,
+        postcode,
+        country,
+      ]);
+}
+
+String _extractUkPostcode(String value) {
+  return RegExp(
+        r'\b[A-Z]{1,2}\d[A-Z\d]?\s*\d[A-Z]{2}\b',
+        caseSensitive: false,
+      ).firstMatch(value)?.group(0) ??
+      '';
+}
+
+String _normalizeUkPostcode(String value) {
+  final compact =
+      AddressEngine.clean(value).toUpperCase().replaceAll(RegExp(r'\s+'), '');
+  if (compact.length <= 3) return compact;
+  return '${compact.substring(0, compact.length - 3)} ${compact.substring(compact.length - 3)}';
+}
+
+bool _isPlausibleUkPostcode(String value) {
+  return RegExp(
+    r'^[A-Z]{1,2}\d[A-Z\d]?\s\d[A-Z]{2}$',
+    caseSensitive: false,
+  ).hasMatch(_normalizeUkPostcode(value));
+}
+
+bool _isSupportedCountry(String value) {
+  final cleaned = AddressEngine.clean(value).toLowerCase();
+  return cleaned == 'united kingdom' || cleaned == 'uk' || cleaned == 'gb';
+}
+
 class _AddressPanel extends StatelessWidget {
   final bool savedForPickup;
   final TextEditingController controller;
+  final TextEditingController line1;
+  final TextEditingController line2;
+  final TextEditingController city;
+  final TextEditingController postcode;
+  final TextEditingController country;
   final String hint;
   final String helperText;
   final List suggestions;
@@ -1665,6 +1932,7 @@ class _AddressPanel extends StatelessWidget {
   final String? resolutionMessage;
   final bool isResolvingTypedAddress;
   final ValueChanged<String> onChanged;
+  final VoidCallback onManualChanged;
   final ValueChanged<dynamic> onSuggestion;
   final String primaryLabel;
   final bool canContinue;
@@ -1673,6 +1941,11 @@ class _AddressPanel extends StatelessWidget {
   const _AddressPanel({
     required this.savedForPickup,
     required this.controller,
+    required this.line1,
+    required this.line2,
+    required this.city,
+    required this.postcode,
+    required this.country,
     required this.hint,
     required this.helperText,
     required this.suggestions,
@@ -1681,6 +1954,7 @@ class _AddressPanel extends StatelessWidget {
     required this.resolutionMessage,
     required this.isResolvingTypedAddress,
     required this.onChanged,
+    required this.onManualChanged,
     required this.onSuggestion,
     required this.primaryLabel,
     required this.canContinue,
@@ -1691,8 +1965,15 @@ class _AddressPanel extends StatelessWidget {
   Widget build(BuildContext context) {
     final typed = controller.text.trim().toLowerCase();
     final typedAddressCanContinue = isSenderTypedAddressSpecific(typed);
+    final manualAddressCanContinue = _ManualSenderAddress.fromFields(
+      line1: line1.text,
+      line2: line2.text,
+      city: city.text,
+      postcode: postcode.text,
+      country: country.text,
+    ).isValid;
     final buttonEnabled =
-        !isResolvingTypedAddress && (canContinue || typedAddressCanContinue);
+        canContinue || typedAddressCanContinue || manualAddressCanContinue;
     dynamic exactSuggestion;
     if (!canContinue && typed.isNotEmpty) {
       for (final suggestion in suggestions) {
@@ -1724,6 +2005,45 @@ class _AddressPanel extends StatelessWidget {
           onSelected: (address) => onSuggestion(address.toSuggestion()),
         ),
         _TextInput(controller: controller, hint: hint, onChanged: onChanged),
+        const SizedBox(height: 12),
+        _TextInput(
+          controller: line1,
+          hint: 'Address line 1',
+          onChanged: (_) => onManualChanged(),
+        ),
+        const SizedBox(height: 10),
+        _TextInput(
+          controller: line2,
+          hint: 'Address line 2 (optional)',
+          onChanged: (_) => onManualChanged(),
+        ),
+        const SizedBox(height: 10),
+        Row(
+          children: [
+            Expanded(
+              child: _TextInput(
+                controller: city,
+                hint: 'City / town',
+                onChanged: (_) => onManualChanged(),
+              ),
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: _TextInput(
+                controller: postcode,
+                hint: 'Postcode',
+                keyboardType: TextInputType.streetAddress,
+                onChanged: (_) => onManualChanged(),
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 10),
+        _TextInput(
+          controller: country,
+          hint: 'Country',
+          onChanged: (_) => onManualChanged(),
+        ),
         const SizedBox(height: 10),
         if (isSearching || isResolvingTypedAddress)
           const Padding(
@@ -1735,7 +2055,9 @@ class _AddressPanel extends StatelessWidget {
             ),
           ),
         if (resolutionMessage != null ||
-            (errorText.isNotEmpty && !typedAddressCanContinue))
+            (errorText.isNotEmpty &&
+                !typedAddressCanContinue &&
+                !manualAddressCanContinue))
           Padding(
             padding: const EdgeInsets.only(bottom: 8),
             child: Align(
@@ -1746,15 +2068,17 @@ class _AddressPanel extends StatelessWidget {
               ),
             ),
           ),
-        if (controller.text.trim().isNotEmpty && !canContinue)
+        if (controller.text.trim().isNotEmpty &&
+            !canContinue &&
+            !manualAddressCanContinue)
           Padding(
             padding: const EdgeInsets.only(bottom: 8),
             child: Align(
               alignment: Alignment.centerLeft,
               child: Text(
                 suggestions.isEmpty
-                    ? 'Type the full address and postcode, then continue.'
-                    : 'Choose a suggestion, or keep your typed address and continue.',
+                    ? 'Search is optional. You can complete the manual fields below.'
+                    : 'Choose a suggestion, or keep your manual address and continue.',
                 style: const TextStyle(
                   color: Color(0xFFD6E4FF),
                   height: 1.35,
@@ -1763,7 +2087,9 @@ class _AddressPanel extends StatelessWidget {
               ),
             ),
           ),
-        if (controller.text.trim().isNotEmpty && !canContinue)
+        if (controller.text.trim().isNotEmpty &&
+            !canContinue &&
+            !manualAddressCanContinue)
           ConstrainedBox(
             constraints: const BoxConstraints(maxHeight: 164),
             child: ListView.builder(
@@ -1781,7 +2107,7 @@ class _AddressPanel extends StatelessWidget {
           ),
         const SizedBox(height: 12),
         _PrimaryButton(
-          label: isResolvingTypedAddress ? 'Checking address...' : primaryLabel,
+          label: isResolvingTypedAddress ? 'Locating address...' : primaryLabel,
           enabled: buttonEnabled,
           onTap: onContinue,
         ),

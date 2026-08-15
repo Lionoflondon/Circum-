@@ -69,13 +69,29 @@ void main() {
       expect(resolved.components['street'], 'City Road');
     });
 
-    test('typed Sender address confirmation is not suggestion-click gated', () {
+    test('manual Sender address confirmation is not provider gated', () {
       final canvas = File('lib/app/sender_mobile/sender_booking_canvas.dart')
           .readAsStringSync();
       final provider =
           File('lib/app/send_package/repo/place_api.dart').readAsStringSync();
 
+      expect(canvas, contains("hint: 'Address line 1'"));
+      expect(canvas, contains("hint: 'Address line 2 (optional)'"));
+      expect(canvas, contains("hint: 'City / town'"));
+      expect(canvas, contains("hint: 'Postcode'"));
+      expect(canvas, contains('unawaited(_enrichTypedAddressCoordinates'));
       expect(canvas, contains('resolveTypedAddress(address, lang)'));
+      expect(
+        canvas,
+        isNot(contains('We could not verify that address')),
+      );
+      expect(
+        canvas,
+        isNot(
+          contains(
+              'Add a house or flat number, street, town and postcode, then try again.'),
+        ),
+      );
       expect(canvas, isNot(contains('No exact address match found')));
       expect(
         canvas,
@@ -137,6 +153,29 @@ void main() {
       expect(source, contains('_addressSearchGeneration'));
       expect(source, contains('final generation = ++_addressSearchGeneration'));
       expect(source, contains('generation != _addressSearchGeneration'));
+    });
+
+    test('Gift delivery address can continue from manual entry', () {
+      final source = File('lib/app/sender_mobile/gift_delivery_view.dart')
+          .readAsStringSync();
+
+      expect(source, contains('_manualGiftAddressSuggestion(address)'));
+      expect(
+        source,
+        contains(
+            'Enter a full delivery address. Search suggestions are optional.'),
+      );
+      expect(
+        source,
+        isNot(
+          contains(
+              'That address could not be verified. Check the house or flat number, street, town and postcode.'),
+        ),
+      );
+      expect(
+        source,
+        isNot(contains('We will verify it before continuing.')),
+      );
     });
   });
 
