@@ -782,7 +782,7 @@ class _SenderBookingCanvasState extends State<SenderBookingCanvas> {
     if (!manualAddress.isValid) {
       setState(() {
         _addressResolutionMessage =
-            'Add the house or flat, street, city and postcode.';
+            'Add the house or flat, street and postcode.';
       });
       return false;
     }
@@ -1719,7 +1719,8 @@ class _ManualSenderAddress {
         .where((part) => _normalizeUkPostcode(part) != postcode)
         .where((part) => !_isSupportedCountry(part))
         .toList(growable: true);
-    final city = parts.length >= 2 ? parts.removeLast() : '';
+    final hasCommaSeparatedLocality = parts.length >= 3;
+    final city = hasCommaSeparatedLocality ? parts.removeLast() : '';
     final line1 = parts.isEmpty
         ? AddressEngine.clean(address)
         : parts.length == 1
@@ -1738,7 +1739,7 @@ class _ManualSenderAddress {
 
   bool get isValid =>
       line1.isNotEmpty &&
-      city.isNotEmpty &&
+      RegExp(r'\d').hasMatch(AddressEngine.joinParts([line2, line1])) &&
       _isPlausibleUkPostcode(postcode) &&
       _isSupportedCountry(country) &&
       formattedAddress.isNotEmpty;
@@ -1879,7 +1880,7 @@ class _AddressPanel extends StatelessWidget {
               alignment: Alignment.centerLeft,
               child: Text(
                 suggestions.isEmpty
-                    ? 'Type the full address with city and postcode, then continue.'
+                    ? 'Type the full address with postcode, then continue.'
                     : 'Choose a suggestion, or keep your typed address and continue.',
                 style: const TextStyle(
                   color: Color(0xFFD6E4FF),

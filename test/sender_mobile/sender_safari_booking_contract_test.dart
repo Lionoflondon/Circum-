@@ -80,6 +80,11 @@ void main() {
       expect(canvas, isNot(contains("hint: 'Address line 1'")));
       expect(canvas, isNot(contains("hint: 'City / town'")));
       expect(canvas, contains('unawaited(_enrichTypedAddressCoordinates'));
+      expect(
+        canvas,
+        contains('Type the full address with postcode, then continue.'),
+      );
+      expect(canvas, isNot(contains('street, city and postcode')));
       expect(canvas, contains('resolveTypedAddress(address, lang)'));
       expect(
         canvas,
