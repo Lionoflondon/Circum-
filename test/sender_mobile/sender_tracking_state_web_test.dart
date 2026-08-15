@@ -112,6 +112,37 @@ void main() {
     );
   });
 
+  test('Sender mobile keeps matching visible during active request handoff',
+      () {
+    expect(
+      senderTrackingStateForEngine(
+        SendPackageState(senderCreatedRequestId: 'request_123'),
+      ),
+      SenderTrackingState.findingRider,
+    );
+    expect(
+      senderTrackingContentFor(
+        senderTrackingStateForEngine(
+          SendPackageState(senderCreatedRequestId: 'request_123'),
+        ),
+      ).title,
+      'Finding your Circum Rider',
+    );
+  });
+
+  test('Sender mobile keeps matching visible when backend status is requested',
+      () {
+    expect(
+      senderTrackingStateForEngine(
+        SendPackageState(
+          deliveryStatus: DeliveryStatus.reconnectingWithRider,
+          deliveryRequestStatus: 'requested',
+        ),
+      ),
+      SenderTrackingState.findingRider,
+    );
+  });
+
   test('Sender mobile gates live lifecycle on backend proof fields', () {
     expect(
       senderTrackingStateForBackendData({
@@ -216,6 +247,33 @@ void main() {
     expect(
       senderTrackingContentFor(SenderTrackingState.delivered).showReceiverPin,
       isFalse,
+    );
+  });
+
+  test('Sender tracking never invents precise operational ETA copy', () {
+    const forbiddenEtaCopy = [
+      'Usually under 6 min',
+      '7 min',
+      '4 min',
+      '18 min',
+      '11 min',
+      '< 3 min',
+    ];
+
+    for (final stage in SenderTrackingState.values) {
+      final content = senderTrackingContentFor(stage);
+      for (final forbidden in forbiddenEtaCopy) {
+        expect(content.eta, isNot(forbidden));
+      }
+    }
+
+    expect(
+      senderTrackingContentFor(SenderTrackingState.riderAssigned).eta,
+      'Updating ETA',
+    );
+    expect(
+      senderTrackingContentFor(SenderTrackingState.inTransit).eta,
+      'Updating ETA',
     );
   });
 
@@ -376,8 +434,7 @@ void main() {
     final absent = SenderTrackingMapAdapter.snapshotFor(
       SendPackageState(
         pickupCoordinate: PlaceCoordinate(lat: 51.5045, lng: -0.0865),
-        desinationCoordinate:
-            PlaceCoordinate(lat: 51.4820203, lng: -0.1444907),
+        desinationCoordinate: PlaceCoordinate(lat: 51.4820203, lng: -0.1444907),
       ),
       content: senderTrackingContentFor(SenderTrackingState.delivered),
       stateDelivered: true,
@@ -385,8 +442,7 @@ void main() {
     final present = SenderTrackingMapAdapter.snapshotFor(
       SendPackageState(
         pickupCoordinate: PlaceCoordinate(lat: 51.5045, lng: -0.0865),
-        desinationCoordinate:
-            PlaceCoordinate(lat: 51.4820203, lng: -0.1444907),
+        desinationCoordinate: PlaceCoordinate(lat: 51.4820203, lng: -0.1444907),
         polylineCoordinates: const [
           LatLng(51.5045, -0.0865),
           LatLng(51.495, -0.12),

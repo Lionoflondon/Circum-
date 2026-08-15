@@ -164,6 +164,9 @@ SenderTrackingState senderTrackingStateForEngine(SendPackageState engine) {
     fallbackStatus: engine.deliveryRequestStatus,
   );
   if (backendState != null) return backendState;
+  if ((engine.senderCreatedRequestId ?? '').trim().isNotEmpty) {
+    return SenderTrackingState.findingRider;
+  }
   if (engine.senderDeliveryError.isNotEmpty) return SenderTrackingState.error;
   switch (engine.deliveryStatus) {
     case DeliveryStatus.deliveryConfirmed:
@@ -404,7 +407,6 @@ SenderTrackingContent senderTrackingContentFor(
         showAnonymousRiders: true,
         showVanguard: true,
         riderPosition: Offset(.34, .44),
-        eta: 'Usually under 6 min',
       );
     case SenderTrackingState.riderAssigned:
       return const SenderTrackingContent(
@@ -421,7 +423,7 @@ SenderTrackingContent senderTrackingContentFor(
         showReceiverPin: false,
         showVanguard: true,
         riderPosition: Offset(.40, .46),
-        eta: '7 min',
+        eta: 'Updating ETA',
       );
     case SenderTrackingState.riderEnRouteToPickup:
       return const SenderTrackingContent(
@@ -438,7 +440,7 @@ SenderTrackingContent senderTrackingContentFor(
         showReceiverPin: false,
         showVanguard: true,
         riderPosition: Offset(.32, .40),
-        eta: '4 min',
+        eta: 'Updating ETA',
       );
     case SenderTrackingState.riderArrivedAtPickup:
       return const SenderTrackingContent(
@@ -455,7 +457,6 @@ SenderTrackingContent senderTrackingContentFor(
         showReceiverPin: false,
         showVanguard: true,
         riderPosition: Offset(.20, .32),
-        eta: 'Arrived',
       );
     case SenderTrackingState.pickupComplete:
       return const SenderTrackingContent(
@@ -472,7 +473,7 @@ SenderTrackingContent senderTrackingContentFor(
         showReceiverPin: true,
         showVanguard: true,
         riderPosition: Offset(.24, .34),
-        eta: '18 min',
+        eta: 'Updating ETA',
       );
     case SenderTrackingState.inTransit:
       return const SenderTrackingContent(
@@ -489,7 +490,7 @@ SenderTrackingContent senderTrackingContentFor(
         showReceiverPin: true,
         showVanguard: true,
         riderPosition: Offset(.46, .50),
-        eta: '11 min',
+        eta: 'Updating ETA',
       );
     case SenderTrackingState.riderArrivingAtDropoff:
       return const SenderTrackingContent(
@@ -506,7 +507,6 @@ SenderTrackingContent senderTrackingContentFor(
         showReceiverPin: true,
         showVanguard: true,
         riderPosition: Offset(.68, .62),
-        eta: '< 3 min',
       );
     case SenderTrackingState.adjustmentUnderReview:
       return const SenderTrackingContent(

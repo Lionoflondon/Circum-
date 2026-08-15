@@ -1723,7 +1723,20 @@ class SendPackageBloc extends Bloc<SendPackageEvent, SendPackageState> {
     WatchActiveDelivery event,
     Emitter<SendPackageState> emit,
   ) async {
-    await _listenToActiveDelivery(event.requestId);
+    final requestId = event.requestId.trim();
+    if (requestId.isNotEmpty && state.activeDeliveryData.isEmpty) {
+      emit(
+        state.copyWith(
+          deliveryStatus: DeliveryStatus.reconnectingWithRider,
+          deliveryRequestStatus: state.deliveryRequestStatus.trim().isEmpty
+              ? 'requested'
+              : state.deliveryRequestStatus,
+          senderCreatedRequestId: requestId,
+          senderDeliveryError: '',
+        ),
+      );
+    }
+    await _listenToActiveDelivery(requestId);
   }
 
   void _handleActiveDeliverySnapshotChanged(

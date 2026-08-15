@@ -3880,17 +3880,17 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
     _completedJobsSub = FirebaseFirestore.instance
         .collection('deliveryRequests')
         .where('riderId', isEqualTo: riderId)
-        .where('status', isEqualTo: 'completed')
+        .where('status', whereIn: ['completed', 'delivered'])
         .limit(20)
         .snapshots()
         .listen((snapshot) {
-      if (!mounted) return;
-      setState(() {
-        _completedJobs = snapshot.docs
-            .map((doc) => {'id': doc.id, ...doc.data()})
-            .toList(growable: false);
-      });
-    });
+          if (!mounted) return;
+          setState(() {
+            _completedJobs = snapshot.docs
+                .map((doc) => {'id': doc.id, ...doc.data()})
+                .toList(growable: false);
+          });
+        });
     _scheduledJobsTimer?.cancel();
     _refreshScheduledJobs();
     _scheduledJobsTimer = Timer.periodic(
@@ -3963,7 +3963,19 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
     ) {
       final status = '${job?['status'] ?? ''}'.toLowerCase();
       return status == 'accepted' ||
+          status == 'assigned' ||
+          status == 'rider_assigned' ||
+          status == 'navigating_to_pickup' ||
+          status == 'en_route_to_pickup' ||
+          status == 'arrived_at_pickup' ||
+          status == 'waiting' ||
+          status == 'pickup_verification' ||
+          status == 'pickup_verified' ||
+          status == 'collected' ||
           status == 'picked_up' ||
+          status == 'navigating_to_dropoff' ||
+          status == 'out_for_delivery' ||
+          status == 'arrived_at_dropoff' ||
           status == 'in_transit' ||
           status == 'in_progress';
     }, orElse: () => null);
@@ -6870,7 +6882,7 @@ class _AccountSecurityPanel extends StatelessWidget {
   }
 }
 
-class _AvailableDriverJobsPanel extends StatelessWidget {
+class _AvailableDriverJobsPanel extends StatefulWidget {
   final _CircumColors colors;
   final List<Map<String, dynamic>> jobs;
   final ValueChanged<Map<String, dynamic>> onAcceptJob;
@@ -6890,7 +6902,29 @@ class _AvailableDriverJobsPanel extends StatelessWidget {
   });
 
   @override
+  State<_AvailableDriverJobsPanel> createState() =>
+      _AvailableDriverJobsPanelState();
+}
+
+class _AvailableDriverJobsPanelState extends State<_AvailableDriverJobsPanel> {
+  late final PageController _offerPageController;
+
+  @override
+  void initState() {
+    super.initState();
+    _offerPageController = PageController(viewportFraction: .92);
+  }
+
+  @override
+  void dispose() {
+    _offerPageController.dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
+    final colors = widget.colors;
+    final jobs = widget.jobs;
     return _GlassPanel(
       colors: colors,
       child: Column(
@@ -6913,18 +6947,46 @@ class _AvailableDriverJobsPanel extends StatelessWidget {
               style: TextStyle(color: colors.mutedText),
             )
           else
-            ...jobs.take(8).map(
-                  (job) => _DriverJobCard(
-                    colors: colors,
-                    job: job,
-                    onAccept: () => onAcceptJob(job),
-                    onReject: () => onRejectJob(job),
-                    onIgnore: () => onIgnoreJob(job),
-                    onReportDiscrepancy: () =>
-                        onReportIssue(job, 'discrepancy'),
-                    onOpenChat: () => onOpenChat(job),
+            LayoutBuilder(
+              builder: (context, constraints) {
+                final cardHeight = math.min(
+                  760.0,
+                  math.max(560.0, MediaQuery.sizeOf(context).height * .72),
+                );
+                final visibleJobs = jobs.take(8).toList(growable: false);
+                return SizedBox(
+                  height: cardHeight,
+                  child: PageView.builder(
+                    controller: _offerPageController,
+                    padEnds: false,
+                    physics: const BouncingScrollPhysics(
+                      parent: PageScrollPhysics(),
+                    ),
+                    itemCount: visibleJobs.length,
+                    itemBuilder: (context, index) {
+                      final job = visibleJobs[index];
+                      return Padding(
+                        padding: EdgeInsets.only(
+                          right: index == visibleJobs.length - 1 ? 0 : 12,
+                        ),
+                        child: SingleChildScrollView(
+                          child: _DriverJobCard(
+                            colors: colors,
+                            job: job,
+                            onAccept: () => widget.onAcceptJob(job),
+                            onReject: () => widget.onRejectJob(job),
+                            onIgnore: () => widget.onIgnoreJob(job),
+                            onReportDiscrepancy: () =>
+                                widget.onReportIssue(job, 'discrepancy'),
+                            onOpenChat: () => widget.onOpenChat(job),
+                          ),
+                        ),
+                      );
+                    },
                   ),
-                ),
+                );
+              },
+            ),
         ],
       ),
     );
@@ -7363,8 +7425,9 @@ class _DriverJobCard extends StatelessWidget {
             colors: colors,
             icon: Icons.timer,
             label: 'ETA',
-            value:
-                duration > 0 ? '${duration.toStringAsFixed(0)} min' : 'Not set',
+            value: duration > 0
+                ? '${duration.toStringAsFixed(0)} min'
+                : 'Updating ETA',
           ),
           _JobInfoLine(
             colors: colors,
@@ -7461,9 +7524,11 @@ class _DriverJobCard extends StatelessWidget {
                 _HealthChip(label: 'Completed')
               else
                 FilledButton.icon(
-                  onPressed: onAccept,
+                  onPressed: onUpdateStatus == null ? onAccept : null,
                   icon: const Icon(Icons.check_circle),
-                  label: const Text('Accept job'),
+                  label: Text(
+                    onUpdateStatus == null ? 'Accept job' : 'Active delivery',
+                  ),
                 ),
               OutlinedButton.icon(
                 onPressed: onOpenChat,

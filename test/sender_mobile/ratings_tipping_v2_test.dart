@@ -38,7 +38,8 @@ void main() {
     expect(source, contains("httpsCallable('submitDeliveryTip')"));
     expect(source, contains('Stripe.instance.presentPaymentSheet()'));
     expect(source, contains('Submit Appreciation'));
-    expect(source, contains('100% of your tip goes directly to your Circum Rider.'));
+    expect(source,
+        contains('100% of your tip goes directly to your Circum Rider.'));
     expect(source, isNot(contains("collection('driverRatings').doc")));
     expect(source, isNot(contains("collection('deliveryTips').doc")));
   });
@@ -141,5 +142,62 @@ void main() {
     final senderChatSource = source.substring(senderChatStart, senderChatEnd);
     expect(senderChatSource, contains("httpsCallable('sendCircumMessage')"));
     expect(senderChatSource, isNot(contains("collection('chats')")));
+  });
+
+  test('legacy web Rider active tracking follows canonical lifecycle states',
+      () {
+    final source =
+        File('lib/website/shared/circum_website_app.dart').readAsStringSync();
+    final syncStart = source.indexOf('void _syncRiderLiveLocationPublishing');
+    final syncEnd = source.indexOf(
+      'Future<void> _startRiderLiveLocationPublishing',
+      syncStart,
+    );
+    expect(syncStart, isNonNegative);
+    expect(syncEnd, greaterThan(syncStart));
+    final syncSource = source.substring(syncStart, syncEnd);
+
+    for (final status in [
+      'accepted',
+      'navigating_to_pickup',
+      'arrived_at_pickup',
+      'pickup_verified',
+      'collected',
+      'navigating_to_dropoff',
+      'arrived_at_dropoff',
+    ]) {
+      expect(syncSource, contains("status == '$status'"));
+    }
+  });
+
+  test('legacy web Rider offer card shows ETA without dead active accept CTA',
+      () {
+    final source =
+        File('lib/website/shared/circum_website_app.dart').readAsStringSync();
+    final availableStart = source.indexOf('class _AvailableDriverJobsPanel');
+    final availableEnd = source.indexOf('class _RiderScheduledJobsPanel');
+    expect(availableStart, isNonNegative);
+    expect(availableEnd, greaterThan(availableStart));
+    final availableSource = source.substring(availableStart, availableEnd);
+    final cardStart = source.indexOf('class _DriverJobCard');
+    final cardEnd = source.indexOf(
+      'static String _deliveryTimingLabel',
+      cardStart,
+    );
+    expect(cardStart, isNonNegative);
+    expect(cardEnd, greaterThan(cardStart));
+    final cardSource = source.substring(cardStart, cardEnd);
+
+    expect(availableSource, contains('PageController(viewportFraction: .92)'));
+    expect(availableSource, contains('PageView.builder'));
+    expect(availableSource, contains('PageScrollPhysics'));
+    expect(availableSource, contains('visibleJobs = jobs.take(8)'));
+    expect(cardSource, contains("label: 'ETA'"));
+    expect(cardSource, contains("'Updating ETA'"));
+    expect(cardSource, contains('onUpdateStatus == null ? onAccept : null'));
+    expect(
+      cardSource,
+      contains("onUpdateStatus == null ? 'Accept job' : 'Active delivery'"),
+    );
   });
 }
