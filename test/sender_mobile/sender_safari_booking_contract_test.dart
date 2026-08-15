@@ -239,13 +239,16 @@ void main() {
     });
 
     test('scheduled draft serializes canonical timestamp and window', () {
+      final futureDate = senderScheduleDateValue(
+        senderScheduleDateOptions(days: 3).last,
+      );
       final iso = senderScheduledJourneyIso(
-        scheduledDate: '2026-08-15',
+        scheduledDate: futureDate,
         scheduledWindow: 'Afternoon',
       );
       final draft = SenderBookingDraft(
         deliveryTimingType: SenderDeliveryTimingType.scheduled,
-        scheduledDate: '2026-08-15',
+        scheduledDate: futureDate,
         scheduledWindow: 'Afternoon',
         scheduledJourneyAt: iso,
       );
@@ -253,10 +256,13 @@ void main() {
 
       expect(draft.isDeliveryTimeValid, isTrue);
       expect(deliveryTime['type'], 'scheduled');
-      expect(deliveryTime['scheduledDate'], '2026-08-15');
+      expect(deliveryTime['scheduledDate'], futureDate);
       expect(deliveryTime['scheduledWindow'], 'Afternoon');
       expect(deliveryTime['scheduledJourneyAt'], iso);
-      expect(deliveryTime['summary'], 'Scheduled: 15 Aug, Afternoon');
+      expect(
+        deliveryTime['summary'],
+        'Scheduled: ${senderScheduleMonthDayLabel(DateTime.parse(futureDate))}, Afternoon',
+      );
     });
 
     test('scheduled Rider availability warning is absent', () {
