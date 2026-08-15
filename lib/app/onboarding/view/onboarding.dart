@@ -7,11 +7,10 @@ import 'package:flutter/material.dart';
 // import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_svg/svg.dart';
-import 'package:url_launcher/url_launcher.dart';
 
 import '../../../utils/theme/theme.dart';
+import '../../platform/external_navigation.dart';
 import '../../authentication/bloc/auth_bloc.dart';
-import '../../authentication/view/enable_location.dart';
 import 'onboarding_slider.dart';
 
 class OnboardingView extends StatelessWidget {
@@ -61,7 +60,7 @@ class OnboardingView extends StatelessWidget {
                         const SizedBox(height: 14),
                         oAuthButtons(),
                         const SizedBox(height: 10),
-                        termsOfService()
+                        termsOfService(context)
                       ],
                     )),
                 const SizedBox(height: 10),
@@ -159,20 +158,26 @@ class OnboardingView extends StatelessWidget {
     });
   }
 
-  Widget termsOfService() {
+  Widget termsOfService(BuildContext context) {
     return Padding(
         padding: const EdgeInsets.symmetric(horizontal: 24),
         child: Column(
           children: [
             GestureDetector(
                 onTap: () async {
-                  await launchUrl(Uri.parse('https://circumuk.com/terms'));
+                  await openCircumLegalLink(
+                    context,
+                    uri: Uri.parse('https://circumuk.com/terms'),
+                  );
                 },
                 child: AppText.text('By signing up, you are agreeing to our',
                     fontSize: 12)),
             GestureDetector(
                 onTap: () async {
-                  await launchUrl(Uri.parse('https://circumuk.com/terms'));
+                  await openCircumLegalLink(
+                    context,
+                    uri: Uri.parse('https://circumuk.com/terms'),
+                  );
                 },
                 child: AppText.text('Terms of Service',
                     fontWeight: FontWeight.w600,

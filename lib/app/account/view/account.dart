@@ -4,12 +4,11 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:share_plus/share_plus.dart';
-import 'package:url_launcher/url_launcher.dart';
 
 import '../../../utils/theme/theme.dart';
+import '../../platform/external_navigation.dart';
 import '../bloc/account_bloc.dart';
 import 'account_details.dart';
-import 'payment.dart';
 
 class AccountView extends StatelessWidget {
   const AccountView({Key? key}) : super(key: key);
@@ -200,7 +199,10 @@ class AccountView extends StatelessWidget {
                     ],
                   ),
                   onPressed: () async {
-                    await launchUrl(Uri.parse('https://circumuk.com/terms'));
+                    await openCircumLegalLink(
+                      context,
+                      uri: Uri.parse('https://circumuk.com/terms'),
+                    );
                   }),
             ],
           ));

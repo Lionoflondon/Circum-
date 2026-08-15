@@ -10,8 +10,8 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:url_launcher/url_launcher.dart';
 
+import '../platform/external_navigation.dart';
 import '../sender_profile/sender_profile.dart';
 import '../send_package/view/ride_chats.dart';
 import 'design_system/sender_design_system.dart';
@@ -3276,7 +3276,7 @@ class _SenderLegalDocumentScreen extends StatelessWidget {
               ),
               const SizedBox(height: 18),
               FilledButton.icon(
-                onPressed: () => launchUrl(uri),
+                onPressed: () => openCircumLegalLink(context, uri: uri),
                 icon: const Icon(Icons.open_in_new_rounded),
                 label: Text(isTerms ? 'View Terms' : 'View Privacy Policy'),
               ),
