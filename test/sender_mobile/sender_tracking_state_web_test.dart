@@ -494,6 +494,19 @@ void main() {
         contains('state != SenderTrackingState.delivered && waiting.visible'));
   });
 
+  test('cancel preflight does not route the sender to support', () {
+    final source = File('lib/app/sender_mobile/sender_tracking_screen.dart')
+        .readAsStringSync();
+    final methodStart = source.indexOf('Future<void> _confirmCancelDelivery');
+    final methodEnd = source.indexOf('\n  void _showActionMessage', methodStart);
+    final method = source.substring(methodStart, methodEnd);
+
+    expect(method, contains("_callFunction('previewSenderCancellation'"));
+    expect(method, contains("_callFunction('requestSenderCancellation'"));
+    expect(method, contains(r"_showActionMessage('$reason')"));
+    expect(method, isNot(contains('_openSupportChat();')));
+  });
+
   test('Sender tracking map layer keeps GoogleMap beneath searching radar', () {
     final source = File('lib/app/sender_mobile/sender_tracking_screen.dart')
         .readAsStringSync();

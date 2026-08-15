@@ -1167,7 +1167,12 @@ class _SenderMobileTrackingScreenState extends State<SenderMobileTrackingScreen>
         (quote['decision'] is Map &&
             (quote['decision'] as Map)['canCancel'] == true);
     if (!canCancel) {
-      _openSupportChat();
+      final decision = quote['decision'];
+      final reason = quote['backendReason'] ??
+          (decision is Map ? decision['userFacingMessage'] : null) ??
+          (decision is Map ? decision['adminFacingReason'] : null) ??
+          'This delivery cannot be cancelled at its current stage.';
+      _showActionMessage('$reason');
       return;
     }
     if (!mounted) return;
