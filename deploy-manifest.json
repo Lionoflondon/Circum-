@@ -84,6 +84,7 @@
         "lib/app/support/",
         "test/sender_",
         "test/sender_mobile/",
+        "test/customer_",
         "test/widget_test.dart",
         "test/authentication_screen_contract_test.dart",
         "test/booking_cancellation_test.dart",
