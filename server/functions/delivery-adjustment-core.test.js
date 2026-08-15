@@ -35,9 +35,28 @@ test("new adjustments keep sender payment pending until Admin review", () => {
   assert.equal(adjustment.additionalAmount, 4);
 });
 
+test("adjustment can link canonical evidence ids without public photo URLs", () => {
+  const adjustment = buildAdjustment({
+    bookingId: "booking-1",
+    bookingRequestId: "request-1",
+    senderId: "sender-1",
+    riderId: "rider-1",
+    originalQuote: 10,
+    revisedQuote: 14,
+    riderReason: "weight_exceeded",
+    evidenceIds: ["evidence-1"],
+  });
+  assert.deepEqual(adjustment.evidenceIds, ["evidence-1"]);
+  assert.deepEqual(adjustment.evidencePhotos, []);
+});
+
 test("delivery adjustment callable requires Admin review before sender payment", () => {
   const source = fs.readFileSync(path.join(__dirname, "delivery-adjustments.js"), "utf8");
   assert.match(source, /exports\.reviewDeliveryAdjustment/);
+  assert.match(source, /const canonicalEvidenceIds = Array\.isArray\(evidenceIds\)/);
+  assert.match(source, /db\.collection\("deliveryEvidence"\)\.doc\(evidenceId\)\.get\(\)/);
+  assert.match(source, /evidence\.riderId !== riderId/);
+  assert.match(source, /\[requestRef\.id, requestId\]\.includes\(evidence\.deliveryId\)/);
   assert.match(source, /status: "awaiting_admin_review"/);
   assert.match(source, /status: "awaiting_adjustment_review"/);
   assert.match(source, /status: "awaiting_sender_payment"/);

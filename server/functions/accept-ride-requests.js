@@ -75,7 +75,7 @@ const riderPayload = (riderId, rider) => {
     code: cleanText(rider.code || rider.fcmToken),
     rating: cleanText(rider.rating || rider.averageRating, "New"),
     riderId,
-    photoURL: cleanText(rider.photoURL || rider.profilePhotoUrl || rider.avatarUrl, "null"),
+    photoURL: cleanText(rider.photoURL || rider.profilePhotoUrl || rider.avatarUrl) || null,
   };
 };
 

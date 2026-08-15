@@ -54,9 +54,9 @@ async function bookingReference(db, requestId) {
 
 exports.reportLoadDiscrepancy = functions.runWith({enforceAppCheck: true}).https.onCall(async (data, context) => {
   if (!context.auth) throw new functions.https.HttpsError("unauthenticated", "Authentication required.");
-  const {requestId, reason, evidencePhotos = [], observedWeightKg, observedDescription, observedVehicleType, riderNotes, dimensions} = data;
+  const {requestId, reason, evidencePhotos = [], evidenceIds = [], observedWeightKg, observedDescription, observedVehicleType, riderNotes, dimensions} = data;
   if (!requestId || !DISCREPANCY_REASONS.includes(reason)) throw new functions.https.HttpsError("invalid-argument", "A booking and supported discrepancy reason are required.");
-  if (!Array.isArray(evidencePhotos) || evidencePhotos.length === 0) throw new functions.https.HttpsError("invalid-argument", "At least one evidence photo is required.");
+  if ((!Array.isArray(evidencePhotos) || evidencePhotos.length === 0) && (!Array.isArray(evidenceIds) || evidenceIds.length === 0)) throw new functions.https.HttpsError("invalid-argument", "At least one evidence item is required.");
 
   const db = getFirestore();
   const bookingSnapshot = await bookingReference(db, requestId);
@@ -66,6 +66,19 @@ exports.reportLoadDiscrepancy = functions.runWith({enforceAppCheck: true}).https
   const riderId = context.auth.uid;
   if (![booking.riderId, booking.driverId, booking.assignedDriverId].includes(riderId)) throw new functions.https.HttpsError("permission-denied", "Only the assigned rider can report this discrepancy.");
   if (booking.status === "awaiting_sender_adjustment") throw new functions.https.HttpsError("failed-precondition", "This booking already has a pending adjustment.");
+  const canonicalEvidenceIds = Array.isArray(evidenceIds) ?
+    [...new Set(evidenceIds.map((id) => `${id || ""}`.trim()).filter(Boolean))] :
+    [];
+  for (const evidenceId of canonicalEvidenceIds) {
+    const evidenceSnapshot = await db.collection("deliveryEvidence").doc(evidenceId).get();
+    if (!evidenceSnapshot.exists) {
+      throw new functions.https.HttpsError("not-found", "Evidence not found.");
+    }
+    const evidence = evidenceSnapshot.data() || {};
+    if (evidence.riderId !== riderId || ![requestRef.id, requestId].includes(evidence.deliveryId)) {
+      throw new functions.https.HttpsError("permission-denied", "Evidence does not belong to this delivery.");
+    }
+  }
 
   const originalWeightKg = Number(booking.finalWeightUsed || booking.finalChargeableWeight || booking.confirmedWeightKg || booking.weightKg || 0);
   const senderId = booking.senderId || booking.userId;
@@ -100,6 +113,7 @@ exports.reportLoadDiscrepancy = functions.runWith({enforceAppCheck: true}).https
     riderReason: reason,
     riderNotes,
     evidencePhotos,
+    evidenceIds: canonicalEvidenceIds,
     observations: {
       originalWeightKg,
       observedWeightKg: Number(observedWeightKg) || null,
@@ -131,6 +145,7 @@ exports.reportLoadDiscrepancy = functions.runWith({enforceAppCheck: true}).https
       additionalAmount: adjustment.additionalAmount,
       riderReason: reason,
       evidencePhotos,
+      evidenceIds: canonicalEvidenceIds,
       adminDecision: "pending",
       senderDecision: "pending",
       reportedAt: Date.now(),

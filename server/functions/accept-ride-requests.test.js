@@ -58,3 +58,16 @@ test("accepted rider payload never exposes personal phone numbers to sender surf
   assert.doesNotMatch(payloadSource, /rider\.phoneNumber/);
   assert.doesNotMatch(payloadSource, /rider\.mobile/);
 });
+
+test("accepted rider payload never fabricates a literal null profile photo", () => {
+  const source = fs.readFileSync(
+      path.join(__dirname, "accept-ride-requests.js"),
+      "utf8",
+  );
+  const payloadStart = source.indexOf("const riderPayload =");
+  const payloadEnd = source.indexOf("const findDeliveryRequest", payloadStart);
+  const payloadSource = source.slice(payloadStart, payloadEnd);
+
+  assert.match(payloadSource, /photoURL: cleanText\(rider\.photoURL \|\| rider\.profilePhotoUrl \|\| rider\.avatarUrl\) \|\| null/);
+  assert.doesNotMatch(payloadSource, /photoURL:[^\n]*"null"/);
+});

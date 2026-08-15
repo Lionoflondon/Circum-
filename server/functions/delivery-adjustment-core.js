@@ -57,6 +57,7 @@ function buildAdjustment(input) {
     riderReason: input.riderReason,
     riderNotes: input.riderNotes || "",
     evidencePhotos: input.evidencePhotos || [],
+    evidenceIds: input.evidenceIds || [],
     observations: input.observations || {},
     senderDecision: "pending",
     status: "awaiting_sender_payment",

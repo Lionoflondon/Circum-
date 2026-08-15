@@ -3657,7 +3657,17 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
     _availableJobsSub?.cancel();
     _availableJobsSub = FirebaseFirestore.instance
         .collection('deliveryRequests')
-        .where('status', isEqualTo: 'requested')
+        .where(
+          'status',
+          whereIn: [
+            'requested',
+            'pending',
+            'broadcast',
+            'broadcasted',
+            'awaiting_rider',
+            'finding_rider',
+          ],
+        )
         .limit(20)
         .snapshots()
         .listen(
@@ -3701,7 +3711,9 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
               return false;
             }
             return matchingStatus == 'available' ||
-                matchingStatus == 'requested';
+                matchingStatus == 'requested' ||
+                matchingStatus == 'broadcast' ||
+                matchingStatus == 'broadcasted';
           }).toList();
           jobs.sort(_compareRiderJobs);
           _availableJobs = jobs;
@@ -4914,23 +4926,38 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
                         error = null;
                       });
                       try {
-                        final urls = <String>[];
+                        final evidenceIds = <String>[];
                         for (var index = 0; index < photos.length; index++) {
                           final photo = photos[index];
-                          final ref = FirebaseStorage.instance.ref(
-                            'delivery-discrepancies/$requestId/${user.uid}/${DateTime.now().millisecondsSinceEpoch}-$index.jpg',
+                          final response = await FirebaseFunctions.instanceFor(
+                            region: 'us-central1',
+                          ).httpsCallable('recordDeliveryEvidence').call({
+                            'deliveryId': requestId,
+                            'action': 'report_discrepancy',
+                            'stage': 'pickup',
+                            'imageBase64': base64Encode(
+                              await photo.readAsBytes(),
+                            ),
+                            'contentType': photo.mimeType ?? 'image/jpeg',
+                            'sourceSurface': 'rider_web_discrepancy',
+                          });
+                          final data = Map<String, dynamic>.from(
+                            response.data as Map,
                           );
-                          await ref.putData(
-                            await photo.readAsBytes(),
-                            SettableMetadata(contentType: photo.mimeType),
-                          );
-                          urls.add(await ref.getDownloadURL());
+                          final evidenceId =
+                              '${data['evidenceId'] ?? ''}'.trim();
+                          if (evidenceId.isNotEmpty) {
+                            evidenceIds.add(evidenceId);
+                          }
+                        }
+                        if (evidenceIds.isEmpty) {
+                          throw StateError('Missing evidenceId');
                         }
                         if (!dialogContext.mounted) return;
                         Navigator.of(dialogContext).pop({
                           'requestId': requestId,
                           'reason': reason,
-                          'evidencePhotos': urls,
+                          'evidenceIds': evidenceIds,
                           if (observedWeight != null)
                             'observedWeightKg': observedWeight,
                           if (description.text.trim().isNotEmpty)
