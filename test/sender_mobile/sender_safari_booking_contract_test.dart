@@ -75,10 +75,10 @@ void main() {
       final provider =
           File('lib/app/send_package/repo/place_api.dart').readAsStringSync();
 
-      expect(canvas, contains("hint: 'Address line 1'"));
-      expect(canvas, contains("hint: 'Address line 2 (optional)'"));
-      expect(canvas, contains("hint: 'City / town'"));
-      expect(canvas, contains("hint: 'Postcode'"));
+      expect(canvas, contains("hint: 'Pickup address, flat or postcode'"));
+      expect(canvas, contains("hint: 'Drop-off address, flat or postcode'"));
+      expect(canvas, isNot(contains("hint: 'Address line 1'")));
+      expect(canvas, isNot(contains("hint: 'City / town'")));
       expect(canvas, contains('unawaited(_enrichTypedAddressCoordinates'));
       expect(canvas, contains('resolveTypedAddress(address, lang)'));
       expect(
