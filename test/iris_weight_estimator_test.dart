@@ -354,6 +354,14 @@ void main() {
       );
     });
 
+    test('high-quantity electronics require vehicle review', () {
+      final macBooks = IrisWeightEstimator.knownProductEstimate('10 macbook');
+
+      expect(macBooks, isNotNull);
+      expect(macBooks!.weightKg, greaterThanOrEqualTo(10));
+      expect(macBooks.requiresVehicleReview, isTrue);
+    });
+
     test('category-first matching prevents wig and luggage drift', () {
       final category = IrisItemRepository.detectCategory('wigs');
       final match = IrisItemRepository.match('wigs');

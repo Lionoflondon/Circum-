@@ -549,19 +549,34 @@ class SendPackageBloc extends Bloc<SendPackageEvent, SendPackageState> {
     );
 
     try {
-      PlaceCoordinate coordinate = await PlaceApiProvider(
-        uuid,
-      ).fetchPlaceDetails(event.placeId, event.lang);
+      PlaceCoordinate coordinate;
+      if (event.lat != null && event.lng != null) {
+        coordinate = PlaceCoordinate(lat: event.lat!, lng: event.lng!);
+      } else {
+        coordinate = await PlaceApiProvider(
+          uuid,
+        ).fetchPlaceDetails(event.placeId, event.lang);
+      }
 
-      var address = await placemarkFromCoordinates(
-        coordinate.lat,
-        coordinate.lng,
-      );
+      String locality = '';
+      try {
+        final address = await placemarkFromCoordinates(
+          coordinate.lat,
+          coordinate.lng,
+        );
+        locality = address.isEmpty ? '' : address[0].locality ?? '';
+      } catch (error, stackTrace) {
+        _logRecoverableSenderError(
+          'pickup reverse geocode lookup failed',
+          error,
+          stackTrace,
+        );
+      }
 
       emit(
         state.copyWith(
           pickupCoordinate: coordinate,
-          pickupLocality: address[0].locality,
+          pickupLocality: locality,
         ),
       );
       if (state.desinationCoordinate != null) {
@@ -595,20 +610,33 @@ class SendPackageBloc extends Bloc<SendPackageEvent, SendPackageState> {
       );
     }
     try {
-      PlaceCoordinate coordinate = await PlaceApiProvider(
-        uuid,
-      ).fetchPlaceDetails(event.placeId, event.lang);
-      // var addresses = await Geocoder.google ( '<---------YOUR APIKEY-------->' ).findAddressesFromCoordinates(coordinates);
-      var address = await placemarkFromCoordinates(
-        coordinate.lat,
-        coordinate.lng,
-        // localeIdentifier: "en_US"
-      );
+      PlaceCoordinate coordinate;
+      if (event.lat != null && event.lng != null) {
+        coordinate = PlaceCoordinate(lat: event.lat!, lng: event.lng!);
+      } else {
+        coordinate = await PlaceApiProvider(
+          uuid,
+        ).fetchPlaceDetails(event.placeId, event.lang);
+      }
+      String locality = '';
+      try {
+        final address = await placemarkFromCoordinates(
+          coordinate.lat,
+          coordinate.lng,
+        );
+        locality = address.isEmpty ? '' : address[0].locality ?? '';
+      } catch (error, stackTrace) {
+        _logRecoverableSenderError(
+          'delivery reverse geocode lookup failed',
+          error,
+          stackTrace,
+        );
+      }
 
       emit(
         state.copyWith(
           desinationCoordinate: coordinate,
-          destinationLocality: address[0].locality,
+          destinationLocality: locality,
         ),
       );
       if (state.pickupCoordinate != null) {

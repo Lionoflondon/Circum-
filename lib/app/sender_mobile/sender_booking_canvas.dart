@@ -788,14 +788,13 @@ class _SenderBookingCanvasState extends State<SenderBookingCanvas> {
     }
     if (hasCoordinates) return true;
 
-    unawaited(_enrichTypedAddressCoordinates(
+    return _enrichTypedAddressCoordinates(
       address: address,
       isPickupStep: isPickupStep,
-    ));
-    return true;
+    );
   }
 
-  Future<void> _enrichTypedAddressCoordinates({
+  Future<bool> _enrichTypedAddressCoordinates({
     required String address,
     required bool isPickupStep,
   }) async {
@@ -807,7 +806,7 @@ class _SenderBookingCanvasState extends State<SenderBookingCanvas> {
       final provider = PlaceApiProvider(const Uuid());
       final lang = Localizations.localeOf(context).languageCode;
       final resolved = await provider.resolveTypedAddress(address, lang);
-      if (!mounted) return;
+      if (!mounted) return false;
       final lat = resolved.lat;
       final lng = resolved.lng;
       if (lat == null || lng == null) {
@@ -820,6 +819,8 @@ class _SenderBookingCanvasState extends State<SenderBookingCanvas> {
                 pickupLocationSubAddress: resolved.subText,
                 placeId: resolved.placeId,
                 lang: lang,
+                lat: lat,
+                lng: lng,
               ),
             );
         _pickup.text = address;
@@ -837,6 +838,8 @@ class _SenderBookingCanvasState extends State<SenderBookingCanvas> {
                 destinationLocationSubAddress: resolved.subText,
                 placeId: resolved.placeId,
                 lang: lang,
+                lat: lat,
+                lng: lng,
               ),
             );
         _dropoff.text = address;
@@ -849,14 +852,17 @@ class _SenderBookingCanvasState extends State<SenderBookingCanvas> {
         );
       }
       debugPrint('Typed Sender address resolved via backend.');
+      return true;
     } catch (error, stackTrace) {
       debugPrint('Typed Sender address resolution failed: $error');
       debugPrintStack(stackTrace: stackTrace);
       if (mounted) {
         setState(() {
-          _addressResolutionMessage = null;
+          _addressResolutionMessage =
+              'We could not locate that address. Check the postcode and try again.';
         });
       }
+      return false;
     } finally {
       if (mounted) setState(() => _addressResolving = false);
     }
@@ -1112,8 +1118,7 @@ class _SenderBookingCanvasState extends State<SenderBookingCanvas> {
               _SenderMobileMap(
                 active: true,
                 engine: engine,
-                showDestination: engine.desinationCoordinate != null ||
-                    _dropoff.text.trim().isNotEmpty,
+                showDestination: engine.desinationCoordinate != null,
                 showVanguardShield: _draft.vanguard,
                 distanceKm: engine.distance,
               ),
@@ -3790,8 +3795,7 @@ class _SenderReviewDeliveryScreenState
             child: _SenderMobileMap(
               active: true,
               engine: widget.engine,
-              showDestination: widget.engine.desinationCoordinate != null ||
-                  widget.draft.dropoffAddress.trim().isNotEmpty,
+              showDestination: widget.engine.desinationCoordinate != null,
               showVanguardShield: widget.draft.vanguard,
               distanceKm: widget.engine.distance,
             ),

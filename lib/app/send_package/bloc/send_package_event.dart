@@ -16,11 +16,15 @@ class SetPickupAddress extends SendPackageEvent {
   String pickupLocationSubAddress;
   String placeId;
   String lang;
+  double? lat;
+  double? lng;
   SetPickupAddress({
     required this.val,
     required this.pickupLocationSubAddress,
     required this.placeId,
     required this.lang,
+    this.lat,
+    this.lng,
   });
 }
 
@@ -29,11 +33,15 @@ class SetDeliveryAddress extends SendPackageEvent {
   String destinationLocationSubAddress;
   String placeId;
   String lang;
+  double? lat;
+  double? lng;
   SetDeliveryAddress({
     required this.val,
     required this.destinationLocationSubAddress,
     required this.placeId,
     required this.lang,
+    this.lat,
+    this.lng,
   });
 }
 

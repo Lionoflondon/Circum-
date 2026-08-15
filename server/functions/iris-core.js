@@ -2253,7 +2253,7 @@ function classifyIris(input = {}) {
       dimensionalBand,
       vehicleRecommendation: {
         required: matching.vehicleRequired,
-        motorbikeSuitable: matching.vehicleRequired === "any" && authoritativeRecommendation.estimatedWeightKg <= 10,
+        motorbikeSuitable: matching.vehicleRequired === "any" && authoritativeRecommendation.estimatedWeightKg < 10,
         carSuitable: matching.vehicleRequired === "any" &&
           authoritativeRecommendation.estimatedWeightKg < deliveryPolicy.vehiclePolicy.carSuitableMaxExclusiveKg,
         vanSuitable: true,

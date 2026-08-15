@@ -268,6 +268,10 @@ test("parser distinguishes quantities from model numbers screen sizes capacities
     assert.equal(result.internal.riderMatching.vehicleRequired, expectedVehicle, description);
   }
 
+  const boundary = customerSafeIris(classifyIris({description: "5 macbook"}));
+  assert.equal(boundary.recommendation.estimatedWeightKg, 10);
+  assert.equal(boundary.recommendation.recommendedVehicle, "Car");
+
   const explicitWeights = [
     ["15 kg parcel", 15],
     ["3.5 kg box", 3.5],

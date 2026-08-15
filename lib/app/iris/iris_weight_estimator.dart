@@ -98,7 +98,7 @@ class IrisWeightEstimator {
           weightSource: 'known_product_lookup',
           truthBand: product.truthBand,
           requiresVehicleReview:
-              totalWeightKg > 10 || product.vehicleSuitability == 'Van',
+              totalWeightKg >= 10 || product.vehicleSuitability == 'Van',
           typicalDimensions: product.typicalDimensions,
           vehicleSuitability: product.vehicleSuitability,
           fragile: product.fragile,
@@ -138,7 +138,7 @@ class IrisWeightEstimator {
             ? 'Repository Match'
             : 'Medium Confidence',
         requiresVehicleReview: repositoryItem.requiresIRISReview ||
-            totalWeightKg > 10 ||
+            totalWeightKg >= 10 ||
             repositoryItem.vehicleSuitability == 'Van',
         typicalDimensions: ItemDimensionsCm(
           length: dimensions.lengthCm,
