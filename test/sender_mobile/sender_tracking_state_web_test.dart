@@ -130,6 +130,17 @@ void main() {
     );
   });
 
+  test('Sender tracking never shows old nothing-in-motion copy', () {
+    final source = File('lib/app/sender_mobile/sender_tracking_screen.dart')
+        .readAsStringSync();
+
+    expect(source, isNot(contains('Nothing in motion right now')));
+    expect(
+      senderTrackingContentFor(SenderTrackingState.noActiveDelivery).title,
+      'Ready for your next delivery',
+    );
+  });
+
   test('Sender mobile keeps matching visible when backend status is requested',
       () {
     expect(

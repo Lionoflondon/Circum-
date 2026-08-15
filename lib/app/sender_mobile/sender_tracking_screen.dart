@@ -377,8 +377,8 @@ SenderTrackingContent senderTrackingContentFor(
   switch (state) {
     case SenderTrackingState.noActiveDelivery:
       return const SenderTrackingContent(
-        title: 'Nothing in motion right now',
-        body: 'Your next delivery will appear here.',
+        title: 'Ready for your next delivery',
+        body: 'Start a delivery when you are ready.',
         pill: '',
         progress: 0,
         dimMap: true,
