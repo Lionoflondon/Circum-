@@ -19,32 +19,6 @@ const senderGiftDeliveryTimeWindowFieldName = 'deliveryTimeWindow';
 const senderGiftAddressLookupCallableName = 'searchFreeUkAddresses';
 const senderGiftAddressResolveCallableName = 'resolveUkAddressPlace';
 
-Suggestion _manualGiftAddressSuggestion(String address) {
-  final normalized = AddressEngine.normalize(
-    manualAddress: address,
-    source: 'manual',
-    verified: false,
-  );
-  final display = AddressEngine.firstPart([
-    normalized['formattedAddress'],
-    address,
-  ]);
-  return Suggestion(
-    placeId: display,
-    description: display,
-    mainText: AddressEngine.firstPart([
-      normalized['addressLine1'],
-      display,
-    ]),
-    subText: AddressEngine.joinParts([
-      normalized['city'],
-      normalized['postcode'],
-      normalized['country'],
-    ]),
-    components: normalized,
-  );
-}
-
 class GiftDeliveryView extends StatefulWidget {
   final GiftJourneyDraft draft;
 
@@ -190,7 +164,6 @@ class _GiftDeliveryViewState extends State<GiftDeliveryView> {
     }
 
     _addressDebounce?.cancel();
-    final manualAddress = _manualGiftAddressSuggestion(address);
     setState(() {
       _isAddressSearching = true;
       _addressError = '';
@@ -215,9 +188,10 @@ class _GiftDeliveryViewState extends State<GiftDeliveryView> {
       if (!mounted) return null;
       setState(() {
         _isAddressSearching = false;
-        _addressError = '';
+        _addressError =
+            'That address could not be verified. Check the house or flat number, street, town and postcode.';
       });
-      return manualAddress;
+      return null;
     }
   }
 

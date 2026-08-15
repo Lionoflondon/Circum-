@@ -165,26 +165,19 @@ void main() {
       expect(source, contains('generation != _addressSearchGeneration'));
     });
 
-    test('Gift delivery address can continue from manual entry', () {
+    test('Gift delivery address cannot bypass Google Places verification', () {
       final source = File('lib/app/sender_mobile/gift_delivery_view.dart')
           .readAsStringSync();
 
-      expect(source, contains('_manualGiftAddressSuggestion(address)'));
+      expect(source, isNot(contains('_manualGiftAddressSuggestion')));
+      expect(source, contains('resolveTypedAddress(address'));
       expect(
         source,
-        contains(
-            'Enter a full delivery address. Search suggestions are optional.'),
+        contains('That address could not be verified.'),
       );
       expect(
         source,
-        isNot(
-          contains(
-              'That address could not be verified. Check the house or flat number, street, town and postcode.'),
-        ),
-      );
-      expect(
-        source,
-        isNot(contains('We will verify it before continuing.')),
+        isNot(contains("source: 'manual'")),
       );
     });
   });

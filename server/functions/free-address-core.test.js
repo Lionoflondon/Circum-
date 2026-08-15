@@ -4,7 +4,6 @@ const assert = require("node:assert/strict");
 const {
   googlePlaceDetailsUrl,
   googlePlacesAutocompleteUrl,
-  nominatimSearchUrl,
   resolveUkAddressPlace,
   premiseHint,
   sanitizeQuery,
@@ -25,14 +24,6 @@ test("extracts flat and premise hints without stripping delivery detail", () => 
     apartment: "Flat 190",
     buildingNumber: "4",
   });
-});
-
-test("builds a free UK-only Nominatim search URL", () => {
-  const url = nominatimSearchUrl("Harley Street London");
-  assert.match(url, /nominatim\.openstreetmap\.org\/search/);
-  assert.match(url, /countrycodes=gb/);
-  assert.match(url, /addressdetails=1/);
-  assert.doesNotMatch(url, /maps\.googleapis\.com/);
 });
 
 test("builds a paid Google Places UK autocomplete URL", () => {
@@ -185,66 +176,35 @@ test("Google place details preserves flat only when the building matches", async
   assert.equal(result.components.resolutionPrecision, "unit");
 });
 
-test("maps free address search results into Circum address suggestions", async () => {
+test("Google Places is required for operational address search", async () => {
   const fetchImpl = async (url, options) => {
-    assert.match(url, /nominatim\.openstreetmap\.org/);
+    assert.match(url, /maps\.googleapis\.com\/maps\/api\/place\/autocomplete\/json/);
     assert.equal(options.signal instanceof AbortSignal, true);
     return {
       ok: true,
       async json() {
-        return [{
-          osm_type: "way",
-          osm_id: 502230296,
-          lat: "51.5181037",
-          lon: "-0.1465558",
-          importance: 0.05,
-          display_name: "Harley Street, Marylebone, London, W1G 9QU, United Kingdom",
-          address: {
-            road: "Harley Street",
-            city: "City of Westminster",
-            postcode: "W1G 9QU",
-            country: "United Kingdom",
-          },
-        }];
+        return {status: "OK", predictions: []};
       },
     };
   };
   const result = await searchFreeUkAddresses({
     query: "Harley Street London",
     fetchImpl,
-    googlePlacesApiKey: "",
+    googlePlacesApiKey: "paid-google-key",
   });
   assert.equal(result.status, "OK");
-  assert.equal(result.attribution, "OpenStreetMap");
-  assert.equal(result.results.length, 1);
-  assert.equal(result.results[0].provider, "openstreetmap_nominatim");
-  assert.equal(result.results[0].components.postcode, "W1G 9QU");
-  assert.equal(result.results[0].lat, 51.5181037);
+  assert.equal(result.attribution, "Google Places");
+  assert.deepEqual(result.results, []);
 });
 
-test("falls back to Nominatim when Google Places is unavailable", async () => {
+test("does not fall back to OpenStreetMap when Google Places is unavailable", async () => {
   const seenUrls = [];
   const fetchImpl = async (url) => {
     seenUrls.push(url);
-    if (url.includes("maps.googleapis.com")) {
-      return {
-        ok: true,
-        async json() {
-          return {status: "REQUEST_DENIED", predictions: []};
-        },
-      };
-    }
     return {
       ok: true,
       async json() {
-        return [{
-          osm_type: "way",
-          osm_id: 502230296,
-          lat: "51.5181037",
-          lon: "-0.1465558",
-          display_name: "Harley Street, London, W1G 9QU, United Kingdom",
-          address: {road: "Harley Street", city: "London", postcode: "W1G 9QU"},
-        }];
+        return {status: "REQUEST_DENIED", predictions: []};
       },
     };
   };
@@ -253,10 +213,9 @@ test("falls back to Nominatim when Google Places is unavailable", async () => {
     fetchImpl,
     googlePlacesApiKey: "bad-key",
   });
-  assert.equal(result.status, "OK");
-  assert.equal(result.fallbackReason, "REQUEST_DENIED");
-  assert.equal(result.attribution, "OpenStreetMap");
-  assert.deepEqual(seenUrls.map((url) => url.includes("maps.googleapis.com")), [true, false]);
+  assert.equal(result.status, "REQUEST_DENIED");
+  assert.deepEqual(result.results, []);
+  assert.deepEqual(seenUrls.map((url) => url.includes("maps.googleapis.com")), [true]);
 });
 
 test("address search uses an abortable backend timeout", () => {

@@ -726,7 +726,7 @@ class _HealthPlaceSearchController {
         error = null;
       } catch (_) {
         suggestions = const [];
-        error = 'Address search is unavailable. You can type the address.';
+        error = 'Address search is unavailable. Try again in a moment.';
       } finally {
         loading = false;
         onChanged();

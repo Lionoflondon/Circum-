@@ -64,7 +64,7 @@ async function searchFreeUkAddressesHandler(data, context, {db, searchImpl = sea
     console.error("UK address search failed", error);
     throw new functions.https.HttpsError(
         "unavailable",
-        "Address search is unavailable. Enter the address manually or try again.",
+        "Address search is unavailable. Try again in a moment.",
     );
   }
 }
@@ -88,7 +88,7 @@ async function resolveUkAddressPlaceHandler(data, context, {db, resolveImpl = re
     console.error("UK address details lookup failed", {placeId, error});
     throw new functions.https.HttpsError(
         "unavailable",
-        "Address details are unavailable. Enter the address manually or try again.",
+        "Address details are unavailable. Try again in a moment.",
     );
   }
 }
