@@ -204,6 +204,17 @@ void main() {
       expect(senderScheduleMonthDayLabel(dates[0]), '14 Aug');
     });
 
+    test('preferred dates expose a rolling future scheduling horizon', () {
+      final dates = senderScheduleDateOptions(
+        now: DateTime.utc(2026, 8, 15, 9),
+      );
+
+      expect(dates.length, greaterThanOrEqualTo(30));
+      expect(senderScheduleDateValue(dates.first), '2026-08-15');
+      expect(senderScheduleDateValue(dates[7]), '2026-08-22');
+      expect(senderScheduleDateValue(dates[29]), '2026-09-13');
+    });
+
     test('schedule labels are not hardcoded in Sender booking UI', () {
       final source = File('lib/app/sender_mobile/sender_booking_canvas.dart')
           .readAsStringSync();

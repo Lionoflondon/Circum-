@@ -24,6 +24,7 @@ const senderDeliverySpeeds = ['Standard', 'Express'];
 const senderVanguardAddOnPriceGbp = 1.99;
 const senderVanguardProtocolLabel = 'Vanguard Delivery Protocol';
 const senderRothPoundValue = 1.0;
+const senderScheduleHorizonDays = 30;
 
 bool isSenderDeliverySpeed(String value) =>
     senderDeliverySpeeds.contains(value);
@@ -68,7 +69,10 @@ DateTime _lastSundayUtc(int year, int month) {
   return lastDay.subtract(Duration(days: lastDay.weekday % 7));
 }
 
-List<DateTime> senderScheduleDateOptions({DateTime? now, int days = 7}) {
+List<DateTime> senderScheduleDateOptions({
+  DateTime? now,
+  int days = senderScheduleHorizonDays,
+}) {
   final base = senderLondonNow(now: now);
   final today = DateTime(base.year, base.month, base.day);
   return List<DateTime>.generate(
