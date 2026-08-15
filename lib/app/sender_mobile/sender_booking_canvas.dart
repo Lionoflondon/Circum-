@@ -1109,9 +1109,11 @@ class _SenderBookingCanvasState extends State<SenderBookingCanvas> {
             onContinue: _advance,
           );
         }
-        final keyboardOpen = MediaQuery.viewInsetsOf(context).bottom > 0;
-        final safePadding = MediaQuery.viewPaddingOf(context);
-        return ColoredBox(
+                    final keyboardOpen = MediaQuery.viewInsetsOf(context).bottom > 0;
+                    final safePadding = MediaQuery.viewPaddingOf(context);
+                    final sheetExtent =
+                        _bookingSheetExtentFor(_draft.step, keyboardOpen);
+                    return ColoredBox(
           color: _Tokens.bg,
           child: Stack(
             children: [
@@ -1134,14 +1136,13 @@ class _SenderBookingCanvasState extends State<SenderBookingCanvas> {
                     ),
                     Expanded(
                       child: DraggableScrollableSheet(
-                        initialChildSize:
-                            _bookingSheetExtentFor(_draft.step, keyboardOpen),
+                        initialChildSize: sheetExtent,
                         minChildSize: keyboardOpen ? .58 : .18,
                         maxChildSize: keyboardOpen ? .94 : .90,
                         snap: true,
                         snapSizes: keyboardOpen
                             ? const [.58, .78, .94]
-                            : const [.18, .45, .90],
+                            : <double>[.18, sheetExtent, .90],
                         controller: _bookingSheetController,
                         builder: (context, scrollController) => _BookingPanel(
                           scrollController: scrollController,
@@ -1208,21 +1209,23 @@ double _bookingSheetExtentFor(SenderBookingStep step,
     [bool keyboardOpen = false]) {
   if (keyboardOpen) return .78;
   switch (step) {
-    case SenderBookingStep.recipient:
     case SenderBookingStep.parcel:
     case SenderBookingStep.iris:
+      return .58;
     case SenderBookingStep.options:
     case SenderBookingStep.review:
     case SenderBookingStep.payment:
-      return .90;
+      return .60;
+    case SenderBookingStep.recipient:
+      return .40;
     case SenderBookingStep.deliveryTime:
-      return .45;
+      return .38;
     case SenderBookingStep.pickup:
     case SenderBookingStep.dropoff:
-      return .78;
+      return .34;
     case SenderBookingStep.findingRider:
     case SenderBookingStep.liveTracking:
-      return .45;
+      return .30;
   }
 }
 

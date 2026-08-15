@@ -11,7 +11,7 @@ void main() {
 
     expect(source, contains('DraggableScrollableSheet('));
     expect(source, contains('minChildSize: keyboardOpen ? .58 : .18'));
-    expect(source, contains('const [.18, .45, .90]'));
+    expect(source, contains('<double>[.18, sheetExtent, .90]'));
     expect(source, contains('snapSizes: keyboardOpen'));
     expect(source, contains('maxChildSize: keyboardOpen ? .94 : .90'));
     expect(source, contains('controller: scrollController'));
@@ -49,8 +49,12 @@ void main() {
       expect(resting, inInclusiveRange(.18, .90), reason: step.name);
       expect(bookingSheetExtentForTest(step, true), .78, reason: step.name);
     }
-    expect(bookingSheetExtentForTest(SenderBookingStep.parcel), .90);
-    expect(bookingSheetExtentForTest(SenderBookingStep.iris), .90);
+    expect(bookingSheetExtentForTest(SenderBookingStep.pickup), .34);
+    expect(bookingSheetExtentForTest(SenderBookingStep.dropoff), .34);
+    expect(bookingSheetExtentForTest(SenderBookingStep.deliveryTime), .38);
+    expect(bookingSheetExtentForTest(SenderBookingStep.parcel), .58);
+    expect(bookingSheetExtentForTest(SenderBookingStep.iris), .58);
+    expect(bookingSheetExtentForTest(SenderBookingStep.options), .60);
   });
 
   test('Sender booking sheet preserves Safari bottom clearance', () {
