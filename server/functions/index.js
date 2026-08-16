@@ -172,6 +172,7 @@ exports.markRiderNoShow = deliveryPolicy.markRiderNoShow(stripe);
 exports.processNoShowSettlementRetries = noShowSettlement.scheduledNoShowSettlementRetries(stripe);
 exports.adminRetryNoShowSettlement = noShowSettlement.adminRetryNoShowSettlement(stripe);
 exports.cancelDelivery = deliveryPolicy.requestSenderCancellation;
+exports.requestRiderCancellation = deliveryPolicy.requestRiderCancellation;
 exports.updateDeliveryTrackingStatus =
   deliveryTracking.updateDeliveryTrackingStatus;
 exports.completeDelivery = deliveryTracking.completeDelivery;

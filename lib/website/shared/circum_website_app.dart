@@ -10238,6 +10238,21 @@ class _CustomerPortalState extends State<_CustomerPortal> {
     FirebaseFunctionsException error,
     String fallback,
   ) {
+    switch (error.code) {
+      case 'unauthenticated':
+        return 'Your session expired. Sign in again.';
+      case 'unauthorized':
+      case 'permission-denied':
+        return 'You do not have permission to cancel this delivery.';
+      case 'failed-precondition':
+        return 'This delivery can no longer be cancelled.';
+      case 'app-check-failed':
+      case 'failed-precondition-app-check':
+        return 'Security verification failed. Please retry.';
+      case 'unavailable':
+      case 'deadline-exceeded':
+        return 'Cancellation is temporarily unavailable.';
+    }
     final message = error.message?.trim();
     if (message != null &&
         message.isNotEmpty &&

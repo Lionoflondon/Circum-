@@ -213,6 +213,75 @@ exports.requestSenderCancellation = functions.runWith({enforceAppCheck: true}).h
   return result;
 });
 
+const RIDER_CANCEL_REASONS = new Set([
+  "vehicle_breakdown", "unsafe_pickup", "sender_unavailable", "item_mismatch",
+  "prohibited_item", "emergency", "cannot_complete", "other",
+]);
+const RIDER_PRE_PICKUP_STATES = new Set([
+  "accepted", "rider_assigned", "navigating_to_pickup", "en_route_to_pickup",
+  "arrived_at_pickup", "waiting_for_collection", "waiting",
+]);
+const RIDER_CUSTODY_STATES = new Set([
+  "collected", "pickup_verified", "navigating_to_dropoff", "arrived_at_dropoff",
+  "pin_required", "in_transit",
+]);
+
+exports.requestRiderCancellation = functions.runWith({enforceAppCheck: true}).https.onCall(async (data, context) => {
+  const uid = requireAuth(context);
+  const deliveryId = text(data.deliveryId || data.requestId);
+  const reason = text(data.reason).toLowerCase();
+  const detail = text(data.detail).slice(0, 500);
+  const idempotencyKey = text(data.idempotencyKey || `${deliveryId}:rider_cancel:${uid}:${reason}`);
+  if (!deliveryId) throw new functions.https.HttpsError("invalid-argument", "deliveryId is required.");
+  if (!RIDER_CANCEL_REASONS.has(reason)) throw new functions.https.HttpsError("invalid-argument", "A valid cancellation reason is required.");
+  const db = getFirestore();
+  const result = await db.runTransaction(async (transaction) => {
+    const idemRef = idempotencyRef(deliveryId, idempotencyKey);
+    const existing = await transaction.get(idemRef);
+    if (existing.exists) return {...existing.data(), duplicate: true};
+    const {ref, delivery} = await deliverySnapshot(transaction, deliveryId);
+    assertAssignedRider(uid, delivery);
+    const current = text(delivery.state || delivery.deliveryStage || delivery.deliveryStatus || delivery.status).toLowerCase();
+    if (RIDER_CUSTODY_STATES.has(current)) {
+      throw new functions.https.HttpsError("failed-precondition", "This delivery is in custody. Report an incident instead.");
+    }
+    if (!RIDER_PRE_PICKUP_STATES.has(current)) {
+      throw new functions.https.HttpsError("failed-precondition", "This delivery cannot be cancelled from its current state.");
+    }
+    const now = Date.now();
+    const event = {type: "rider_cancellation_requested", deliveryId, riderId: uid, reason, detail, previousState: current, createdAt: now, redispatch: true};
+    const result = {success: true, deliveryId, riderId: uid, reason, redispatch: true, createdAt: now};
+    transaction.set(idemRef, result);
+    const presenceRef = db.collection("riderPresence").doc(uid);
+    const presence = await transaction.get(presenceRef);
+    transaction.update(ref, {
+      status: "requested", deliveryStatus: "requested", deliveryStage: "requested",
+      state: "requested", matchingStatus: "requested", dispatchStatus: "requested",
+      riderId: FieldValue.delete(), assignedRider: FieldValue.delete(), assignedDriverId: FieldValue.delete(),
+      dispatchBlocked: false, broadcastBlocked: false, removedFromActiveQueues: false,
+      riderCancellation: {reason, detail, riderId: uid, previousState: current, redispatch: true, createdAt: FieldValue.serverTimestamp()},
+      lastRiderAction: "rider_cancelled", lastRiderActionAt: FieldValue.serverTimestamp(),
+      updatedAt: FieldValue.serverTimestamp(), auditHistory: FieldValue.arrayUnion(event),
+    });
+    transaction.delete(db.collection("activeDeliveries").doc(deliveryId));
+    if (presence.exists) {
+      const p = presence.data() || {};
+      if (text(p.activeDeliveryId || p.currentDeliveryId) === deliveryId) {
+        transaction.update(presenceRef, {activeDeliveryId: FieldValue.delete(), currentDeliveryId: FieldValue.delete(), busy: false, dispatchEligible: true, updatedAt: FieldValue.serverTimestamp()});
+      }
+    }
+    transaction.set(db.collection("deliveryTimeline").doc(), event);
+    return result;
+  });
+  if (result.success && !result.duplicate) {
+    await communicationEngine.emitNotification({recipientId: text(result.riderId), recipientRole: "rider", type: "rider_cancellation_recorded", title: "Delivery released", body: "The delivery was released and is being offered again.", data: {deliveryId}});
+    const delivery = await db.collection("deliveryRequests").doc(deliveryId).get();
+    const senderId = text(delivery.data() && (delivery.data().senderId || delivery.data().userId));
+    if (senderId) await communicationEngine.emitNotification({recipientId: senderId, recipientRole: "sender", type: "rider_unavailable", title: "Finding another Rider", body: "Your Rider is no longer available. We’re finding another Rider.", data: {deliveryId}});
+  }
+  return result;
+});
+
 exports.previewSenderCancellation = functions.runWith({enforceAppCheck: true}).https.onCall(async (data, context) => {
   const uid = requireAuth(context);
   const deliveryId = text(data.deliveryId || data.requestId);
