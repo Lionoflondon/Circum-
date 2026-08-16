@@ -51,6 +51,17 @@ void main() {
       expect(route.canonicalPath, '/vanguard');
     });
 
+    test('/delete_account selects the public account deletion page', () {
+      final route = resolveCircumWebRoute(
+        Uri.parse('https://circumuk.com/delete_account'),
+        adminHostingTarget: false,
+        publicHostingHost: true,
+      );
+
+      expect(route.surface, CircumWebSurface.deleteAccount);
+      expect(route.canonicalPath, '/delete_account');
+    });
+
     test('Sender feature deep links select canonical Sender entry', () {
       final health = resolveCircumWebRoute(
         Uri.parse('https://circumuk.com/send/health'),

@@ -51,7 +51,7 @@ const _spectrumGradient = [
   Color(0xff19a0ff),
 ];
 
-enum _WebAppMode { landing, sender, rider, gifts, vanguard }
+enum _WebAppMode { landing, sender, rider, gifts, vanguard, deleteAccount }
 
 Future<void> _ensureCircumFirebaseReady() async {
   if (Firebase.apps.isEmpty) {
@@ -92,6 +92,7 @@ class _CircumWebsiteAppState extends State<CircumWebsiteApp> {
       CircumWebSurface.rider => _WebAppMode.rider,
       CircumWebSurface.gifts => _WebAppMode.gifts,
       CircumWebSurface.vanguard => _WebAppMode.vanguard,
+      CircumWebSurface.deleteAccount => _WebAppMode.deleteAccount,
       CircumWebSurface.admin => _WebAppMode.landing,
     };
   }
@@ -138,6 +139,7 @@ class _CircumWebsiteAppState extends State<CircumWebsiteApp> {
       _WebAppMode.rider => '/rider',
       _WebAppMode.gifts => '/gifts',
       _WebAppMode.vanguard => '/vanguard',
+      _WebAppMode.deleteAccount => '/delete_account',
     };
     if (kIsWeb) {
       await _openCanonicalPath(path);
@@ -231,6 +233,10 @@ class _CircumWebsiteAppState extends State<CircumWebsiteApp> {
           key: const ValueKey('vanguard-page'),
           colors: colors,
           onBack: () => _openSurface(_WebAppMode.landing),
+        ),
+      _WebAppMode.deleteAccount => _AccountDeletionPage(
+          key: const ValueKey('account-deletion'),
+          colors: colors,
         ),
       _WebAppMode.landing => _LandingPage(
           key: const ValueKey(circumPublicWebIdentity),
@@ -26221,6 +26227,113 @@ BoxDecoration _vanguardCardDecoration({bool darker = false}) {
       ),
     ],
   );
+}
+
+class _AccountDeletionPage extends StatelessWidget {
+  final _CircumColors colors;
+
+  const _AccountDeletionPage({super.key, required this.colors});
+
+  Future<void> _requestDeletion() async {
+    final subject = Uri.encodeComponent('CIRCUM account deletion request');
+    final body = Uri.encodeComponent(
+      'Please send this request from the email address linked to my CIRCUM account.\n\n'
+      'I understand CIRCUM will verify my identity and check for active deliveries, '
+      'pending payments, disputes, and other safety or legal blockers before closure.',
+    );
+    await launchUrl(Uri.parse(
+      'mailto:support@circumuk.com?subject=$subject&body=$body',
+    ));
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return SelectionArea(
+      child: SingleChildScrollView(
+        padding: const EdgeInsets.fromLTRB(24, 48, 24, 56),
+        child: Center(
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 760),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text('CIRCUM', style: TextStyle(color: colors.text, fontSize: 18, fontWeight: FontWeight.w800, letterSpacing: 1.5)),
+                const SizedBox(height: 42),
+                Text('Delete your CIRCUM account', style: TextStyle(color: colors.text, fontSize: 38, fontWeight: FontWeight.w800)),
+                const SizedBox(height: 18),
+                Text('CIRCUM TECHNOLOGIES LTD provides two secure ways to request account closure.', style: TextStyle(color: colors.mutedText, fontSize: 17, height: 1.5)),
+                const SizedBox(height: 28),
+                _DeletionSection(
+                  colors: colors,
+                  title: 'From the CIRCUM app',
+                  body: 'Open Profile > Account > Delete Account. The app verifies your signed-in identity and recent authentication before sending the request to our protected account-closure service.',
+                ),
+                const SizedBox(height: 18),
+                _DeletionSection(
+                  colors: colors,
+                  title: 'From the web',
+                  body: 'Select the button below and send the request from the email address linked to your CIRCUM account. Our team verifies ownership before any account closure is started. Supplying another person\'s email address cannot close their account.',
+                  child: Padding(
+                    padding: const EdgeInsets.only(top: 18),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        FilledButton(onPressed: _requestDeletion, child: const Text('Request account deletion')),
+                        const SizedBox(height: 10),
+                        Text('Or email support@circumuk.com from your linked account address.', style: TextStyle(color: colors.mutedText, fontSize: 14, height: 1.45)),
+                      ],
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 28),
+                Text('What happens next', style: TextStyle(color: colors.text, fontSize: 22, fontWeight: FontWeight.w700)),
+                const SizedBox(height: 10),
+                Text('We verify the request, check for active deliveries, pending payments, disputes, safety obligations, and other account blockers, then confirm the outcome. This includes removing or anonymising the account profile, contact details, saved addresses, notification tokens, drafts, and profile media associated with the account when closure is approved.', style: TextStyle(color: colors.mutedText, fontSize: 16, height: 1.55)),
+                const SizedBox(height: 18),
+                Text('Some records may be retained where required for fraud prevention, payment and accounting records, disputes, safety, regulatory compliance, or legal obligations. Retention lasts only for the applicable legal or operational period, after which the retained records are deleted or anonymised.', style: TextStyle(color: colors.mutedText, fontSize: 16, height: 1.55)),
+                const SizedBox(height: 32),
+                Wrap(
+                  spacing: 18,
+                  runSpacing: 12,
+                  children: [
+                    TextButton(onPressed: () => launchUrl(Uri.base.replace(path: '/privacy', queryParameters: {}, fragment: ''), webOnlyWindowName: '_self'), child: const Text('Privacy Policy')),
+                    TextButton(onPressed: () => launchUrl(Uri.base.replace(path: '/terms', queryParameters: {}, fragment: ''), webOnlyWindowName: '_self'), child: const Text('Terms of Service')),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _DeletionSection extends StatelessWidget {
+  final _CircumColors colors;
+  final String title;
+  final String body;
+  final Widget? child;
+
+  const _DeletionSection({required this.colors, required this.title, required this.body, this.child});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(22),
+      decoration: BoxDecoration(color: colors.panel, borderRadius: BorderRadius.circular(16), border: Border.all(color: colors.border)),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(title, style: TextStyle(color: colors.text, fontSize: 19, fontWeight: FontWeight.w700)),
+          const SizedBox(height: 8),
+          Text(body, style: TextStyle(color: colors.mutedText, fontSize: 15, height: 1.5)),
+          if (child != null) child!,
+        ],
+      ),
+    );
+  }
 }
 
 class _LandingFooter extends StatelessWidget {
