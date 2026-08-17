@@ -210,6 +210,7 @@
         "scripts/backend_authority_guard.js",
         "scripts/deploy_guard.js",
         "scripts/deploy_guard.self_test.js",
+        "scripts/deploy_guard.test.js",
         "scripts/deploy_isolated.sh",
         "scripts/finalize_web_artifact.js",
         "scripts/firebase_tools.sh",

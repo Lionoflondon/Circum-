@@ -17,7 +17,7 @@ function fail(message, details = []) {
 }
 
 function usage() {
-  console.error('Usage: node scripts/deploy_guard.js --product|--target <website|sender-app|rider-app|admin|backend> [--base <ref>]');
+  console.error('Usage: node scripts/deploy_guard.js --product|--target <website|sender-app|rider-app|admin|backend> [--base <ref>] [--head <ref>] [--ci]');
   process.exit(64);
 }
 
@@ -25,16 +25,22 @@ const args = process.argv.slice(2);
 let productIndex = args.indexOf('--product');
 if (productIndex === -1) productIndex = args.indexOf('--target');
 const baseIndex = args.indexOf('--base');
+const headIndex = args.indexOf('--head');
 const productArg = args.find((arg) => arg.startsWith('--product=') || arg.startsWith('--target='));
 const baseArg = args.find((arg) => arg.startsWith('--base='));
+const headArg = args.find((arg) => arg.startsWith('--head='));
+const ciMode = args.includes('--ci');
 if (productIndex === -1 && !productArg) usage();
 
 const productName = productArg ? productArg.split('=')[1] : args[productIndex + 1];
 const product = manifest.products[productName];
 if (!product) fail(`Unknown product: ${productName}`);
 
-const base = baseArg ? baseArg.split('=')[1] : (baseIndex === -1 ? 'HEAD' : args[baseIndex + 1]);
-if (!base) usage();
+const base = baseArg ? baseArg.split('=')[1] :
+  (baseIndex === -1 ? (process.env.GUARD_BASE_SHA || 'HEAD') : args[baseIndex + 1]);
+const head = headArg ? headArg.split('=')[1] :
+  (headIndex === -1 ? (process.env.GUARD_HEAD_SHA || 'HEAD') : args[headIndex + 1]);
+if (!base || !head) usage();
 
 function git(args) {
   return cp.execFileSync('git', args, {
@@ -45,17 +51,10 @@ function git(args) {
 }
 
 function changedFiles() {
-  const diff = git(['diff', '--name-only', `${base}...HEAD`]);
-  const working = git(['status', '--porcelain=v1', '--untracked-files=all'])
+  return git(['diff', '--name-only', '--diff-filter=ACDMRTUXB', `${base}...${head}`])
     .split('\n')
     .filter(Boolean)
-    .flatMap((line) => {
-      const file = line.replace(/^[ MADRCU?!]{1,2}\s+/, '').trim();
-      if (file.includes(' -> ')) return file.split(' -> ').map((part) => part.trim());
-      return [file];
-    })
     .filter((file) => file !== '.firebase/' && !file.startsWith('.firebase/'));
-  return [...new Set([...diff.split('\n').filter(Boolean), ...working])];
 }
 
 function startsWithAny(file, prefixes) {
@@ -63,6 +62,15 @@ function startsWithAny(file, prefixes) {
 }
 
 const changed = changedFiles();
+if (ciMode && !changed.some((file) => startsWithAny(file, product.ownedPrefixes))) {
+  console.log(JSON.stringify({
+    ok: true,
+    skipped: true,
+    product: productName,
+    changedFiles: changed,
+  }, null, 2));
+  process.exit(0);
+}
 const blocked = changed.filter((file) => startsWithAny(file, manifest.blockedPrefixes || []));
 if (blocked.length > 0) {
   fail('Blocked legacy deployment path changed.', blocked);
