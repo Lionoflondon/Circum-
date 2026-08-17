@@ -26010,12 +26010,22 @@ class _LandingFooter extends StatelessWidget {
                         uri: _CircumWebsiteAppState._canonicalWebUri(
                           '/privacy',
                         ),
-                        onPressed: () {},
+                        onPressed: () {
+                          unawaited(launchUrl(
+                            _CircumWebsiteAppState._canonicalWebUri('/privacy'),
+                            webOnlyWindowName: '_self',
+                          ));
+                        },
                       ),
                       _FooterServiceLink(
                         label: 'Terms of Service',
                         uri: _CircumWebsiteAppState._canonicalWebUri('/terms'),
-                        onPressed: () {},
+                        onPressed: () {
+                          unawaited(launchUrl(
+                            _CircumWebsiteAppState._canonicalWebUri('/terms'),
+                            webOnlyWindowName: '_self',
+                          ));
+                        },
                       ),
                     ],
                   ),
