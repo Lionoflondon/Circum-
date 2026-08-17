@@ -2,7 +2,7 @@
 const functions = require("firebase-functions/v1");
 const {getFirestore, FieldValue} = require("firebase-admin/firestore");
 const {getMessaging} = require("firebase-admin/messaging");
-const {dispatchComplianceDecision, dispatchPriority, riderMatchesIris} = require("./iris-core");
+const {dispatchComplianceDecision, dispatchPriority, riderCanViewDispatch, riderMatchesIris} = require("./iris-core");
 const {hasAdminClaim} = require("./admin-auth");
 
 function senderOwnsRequest(delivery, uid) {
@@ -140,6 +140,7 @@ async function dispatchDeliveryRequest({
       ridersSnapshot.docs
           .filter((doc) => {
             const riderData = doc.data();
+            if (!riderCanViewDispatch(riderData, deliveryRequest[0])) return false;
             if (!riderMatchesIris(riderData, deliveryRequest[0])) return false;
             return riderData.position &&
                riderData.position.geopoint &&

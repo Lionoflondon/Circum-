@@ -309,6 +309,39 @@ exports.generateHealthPlusRecurringBookings = functions.pubsub
             lastGeneratedPickupId: pickupId,
             updatedAt: FieldValue.serverTimestamp(),
           }, {merge: true});
+          transaction.set(db.collection("notifications").doc(`health_admin_${pickupId}_booking_created`), {
+            notificationId: `health_admin_${pickupId}_booking_created`,
+            recipientId: "circum-operations",
+            recipientRole: "admin",
+            type: "health_plus_booking_created",
+            title: "Health+ recurring pickup scheduled",
+            body: "A recurring Health+ pickup is ready for Operations review.",
+            message: "A recurring Health+ pickup is ready for Operations review.",
+            category: "health",
+            pickupId,
+            healthPickupId: pickupId,
+            profileId: schedule.profileId || null,
+            senderId: schedule.senderId || schedule.userId || null,
+            destination: {
+              route: "admin_health_plus",
+              healthPickupId: pickupId,
+              pickupId,
+            },
+            data: {
+              category: "Health+",
+              pickupId,
+              scheduleId: scheduleDoc.id,
+              status: "scheduled",
+              recurring: true,
+            },
+            read: false,
+            archived: false,
+            deliveryStatus: "persisted",
+            deliveryState: "persisted",
+            source: "health-plus-recurring-engine",
+            createdAt: FieldValue.serverTimestamp(),
+            updatedAt: FieldValue.serverTimestamp(),
+          }, {merge: true});
         });
       }));
       return null;
