@@ -2,12 +2,15 @@
 
 const assert = require("node:assert/strict");
 const {execFileSync} = require("node:child_process");
+const path = require("node:path");
 const test = require("node:test");
+
+const root = path.join(__dirname, "..");
 
 function names(base) {
   const output = execFileSync(process.execPath, [
-    "scripts/scoped_functions_deploy_list.js", "--base", base, "--names",
-  ], {encoding: "utf8"});
+    path.join(root, "scripts/scoped_functions_deploy_list.js"), "--base", base, "--names",
+  ], {cwd: root, encoding: "utf8"});
   return output.trim() ? output.trim().split(/\r?\n/) : [];
 }
 
