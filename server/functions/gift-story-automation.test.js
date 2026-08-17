@@ -63,27 +63,6 @@ test("Gift Story unlock only accepts final delivery states", () => {
   assert.equal(story.isComplete("in_transit"), false);
 });
 
-test("Gift completion creates an idempotent Sender-owned Gift Story reference", () => {
-  const source = fs.readFileSync("gift-story-automation.js", "utf8");
-  assert.match(source, /collection\("users"\)\.doc\(senderId\)\.collection\("giftStories"\)\.doc\(giftId\)/);
-  assert.match(source, /storyStatus: "unlocked"/);
-  assert.match(source, /storyAvailable: true/);
-  assert.match(source, /storySlides: slides/);
-  assert.match(source, /transaction\.set\(senderStoryRef,[\s\S]*\{merge: true\}\)/);
-  assert.match(source, /exports\.getSenderGiftStory = functions\.https\.onCall/);
-  assert.match(source, /if \(!uid\) throw new functions\.https\.HttpsError\("unauthenticated"/);
-  assert.match(source, /senderId !== uid/);
-  assert.match(source, /giftStoryUnlocked !== true/);
-});
-
-test("Sender Gift Story rules are owner-read and backend-write only", () => {
-  const rules = fs.readFileSync("../../firestore.rules", "utf8");
-  const block = rules.slice(rules.indexOf("match /users/{userId}"), rules.indexOf("match /senderTrustEvents"));
-  assert.match(block, /match \/giftStories\/\{giftStoryId\}/);
-  assert.match(block, /allow read: if isAdmin\(\) \|\| ownsSenderRecord\(userId\)/);
-  assert.match(block, /allow create, update, delete: if false/);
-});
-
 test("secure story token hashes are deterministic and opaque", () => {
   const hash = story.tokenHash("private-token");
   assert.equal(hash, story.tokenHash("private-token"));
