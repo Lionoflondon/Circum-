@@ -2,6 +2,11 @@ name: Deploy Functions
 
 on:
   workflow_dispatch:
+    inputs:
+      base_ref:
+        description: "Previous backend release SHA/ref used to compute affected Functions"
+        required: true
+        type: string
 
 jobs:
   deploy-functions:
@@ -25,4 +30,4 @@ jobs:
       - run: printf "GOOGLE_PLACES_API_KEY=%s\n" "$GOOGLE_PLACES_API_KEY" > server/functions/.env
         env:
           GOOGLE_PLACES_API_KEY: ${{ secrets.GOOGLE_PLACES_API_KEY }}
-      - run: firebase deploy --only "$(node scripts/scoped_functions_deploy_list.js)" --project circum-2797c
+      - run: firebase deploy --only "$(node scripts/scoped_functions_deploy_list.js --base '${{ inputs.base_ref }}')" --project circum-2797c
