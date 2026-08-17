@@ -410,9 +410,7 @@ class SendPackageBloc extends Bloc<SendPackageEvent, SendPackageState> {
         add(CalculateDistance());
       }
 
-      if (state.pickupCoordinate != null &&
-          state.pickupLocationSubAddress?.split(',').last ==
-              event.destinationLocationSubAddress.split(',').last) {
+      if (state.pickupCoordinate != null) {
         List<LatLng> latLngList = [];
 
         PolylinePoints points = PolylinePoints();
