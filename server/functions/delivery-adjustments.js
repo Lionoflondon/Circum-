@@ -260,8 +260,9 @@ exports.finalizeDeliveryAdjustmentPayment = functions.https.onCall(async (data, 
     const latest = await transaction.get(adjustmentRef);
     const booking = await transaction.get(bookingRef);
     if (latest.data().status === "paid") return;
+    const riderAdjustmentAmount = Number(latest.data().additionalAmount) || 0;
     transaction.update(adjustmentRef, {status: "paid", paymentStatus: "succeeded", senderDecision: "approved_and_paid", paidAt: Date.now(), updatedAt: Date.now()});
-    transaction.update(bookingRef, {"status": booking.data().preAdjustmentStatus || "accepted", "price": latest.data().revisedQuote, "paidAmount": latest.data().revisedQuote, "adjustmentResolvedBy": "sender_payment", "loadDiscrepancy.senderDecision": "approved_and_paid", "updatedAt": Date.now()});
+    transaction.update(bookingRef, {"status": booking.data().preAdjustmentStatus || "accepted", "price": latest.data().revisedQuote, "paidAmount": latest.data().revisedQuote, "adjustmentResolvedBy": "sender_payment", "loadDiscrepancy.senderDecision": "approved_and_paid", "riderAdjustment": riderAdjustmentAmount, "updatedAt": Date.now()});
   });
   await notifyUser(adjustment.data().riderId, "Booking adjustment paid", "The sender paid the revised quote. You may continue the collection.", {type: "delivery_adjustment_paid", adjustmentId: adjustment.id});
   return {success: true};

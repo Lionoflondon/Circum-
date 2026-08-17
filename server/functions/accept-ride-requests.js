@@ -234,14 +234,18 @@ const acceptRideRequests = functions.https.onCall(async (data, context) => {
       updatedAt: FieldValue.serverTimestamp(),
     }, {merge: true});
 
+    const chatSenderId = cleanText(deliveryRequest.senderId || deliveryRequest.userId || deliveryRequest.customerId);
     const chatRef = db.collection("chats").doc(found.data.requestId || found.id);
     transaction.set(chatRef, {
       threadId: found.data.requestId || found.id,
       bookingId: found.data.requestId || found.id,
       requestId: found.data.requestId || found.id,
-      participants: FieldValue.arrayUnion(riderId, "circum-support"),
+      participants: chatSenderId ?
+        FieldValue.arrayUnion(riderId, chatSenderId, "circum-support") :
+        FieldValue.arrayUnion(riderId, "circum-support"),
       participantRoles: {
         [riderId]: "rider",
+        ...(chatSenderId ? {[chatSenderId]: "sender"} : {}),
         "circum-support": "admin",
       },
       assignedRiderId: riderId,
