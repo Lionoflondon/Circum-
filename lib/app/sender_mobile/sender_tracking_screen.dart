@@ -15,6 +15,14 @@ import '../send_package/view/ride_chats.dart';
 import 'design_system/sender_design_system.dart';
 import 'sender_accessibility.dart';
 
+void _logRecoverableTrackingMapError(
+  String context,
+  Object error,
+  StackTrace stackTrace,
+) {
+  debugPrint('[sender-tracking-map] $context: $error');
+}
+
 enum SenderTrackingState {
   noActiveDelivery,
   loading,
@@ -1526,6 +1534,12 @@ class _SenderGoogleTrackingMapState extends State<SenderGoogleTrackingMap> {
         oldWidget.delivered != widget.delivered) {
       WidgetsBinding.instance.addPostFrameCallback((_) => _moveCamera());
     }
+    if (oldWidget.vehicleKind != widget.vehicleKind) {
+      _loadVehicleIcon(widget.vehicleKind).then((icon) {
+        if (!mounted) return;
+        setState(() => _riderIcon = icon);
+      });
+    }
   }
 
   @override
@@ -1601,6 +1615,30 @@ class _SenderGoogleTrackingMapState extends State<SenderGoogleTrackingMap> {
     };
   }
 
+  static const _vehicleMarkerAssets = {
+    'car': 'assets/svg/car_top.svg',
+    'van': 'assets/svg/van_top.svg',
+    'bike': 'assets/svg/bike_top.svg',
+  };
+
+  Future<BitmapDescriptor> _loadVehicleIcon(String kind) async {
+    final assetName = _vehicleMarkerAssets[kind] ?? 'assets/svg/bike_top.svg';
+    try {
+      return await BitmapDescriptorHelper.getBitmapDescriptorFromSvgAsset(
+        assetName,
+      );
+    } catch (error, stackTrace) {
+      _logRecoverableTrackingMapError(
+        'vehicle marker asset "$assetName" failed to load, falling back to bike',
+        error,
+        stackTrace,
+      );
+      return BitmapDescriptorHelper.getBitmapDescriptorFromSvgAsset(
+        'assets/svg/bike_top.svg',
+      );
+    }
+  }
+
   Future<void> _loadCircumMarkerIcons() async {
     final pickupIcon =
         await BitmapDescriptorHelper.getBitmapDescriptorFromSvgAsset(
@@ -1612,10 +1650,7 @@ class _SenderGoogleTrackingMapState extends State<SenderGoogleTrackingMap> {
       'assets/svg/destination_marker.svg',
       const Size(27, 43),
     );
-    final riderIcon =
-        await BitmapDescriptorHelper.getBitmapDescriptorFromSvgAsset(
-      'assets/svg/bike_top.svg',
-    );
+    final riderIcon = await _loadVehicleIcon(widget.vehicleKind);
     if (!mounted) return;
     setState(() {
       _pickupIcon = pickupIcon;
