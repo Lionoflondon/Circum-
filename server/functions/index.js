@@ -322,6 +322,7 @@ exports.onMovementTimelineWrite = movementTimeline.onMovementTimelineWrite;
 exports.onDeliveryLiveLocationWrite =
   movementTimeline.onDeliveryLiveLocationWrite;
 exports.onGiftDeliveryCompleted = giftStoryAutomation.onGiftDeliveryCompleted;
+exports.getSenderGiftStory = giftStoryAutomation.getSenderGiftStory;
 exports.resolveGiftStoryAccess = giftStoryAutomation.resolveGiftStoryAccess;
 exports.recordGiftStoryEvent = giftStoryAutomation.recordGiftStoryEvent;
 exports.recordGiftStoryGuestEvent =
