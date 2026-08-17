@@ -579,6 +579,7 @@ class _SenderAuthEntry extends StatefulWidget {
 class _SenderAuthEntryState extends State<_SenderAuthEntry> {
   final _identity = TextEditingController();
   final _password = TextEditingController();
+  final _referralCode = TextEditingController();
   var _showErrors = false;
   var _busy = false;
   var _showPassword = false;
@@ -590,6 +591,7 @@ class _SenderAuthEntryState extends State<_SenderAuthEntry> {
   void dispose() {
     _identity.dispose();
     _password.dispose();
+    _referralCode.dispose();
     super.dispose();
   }
 
@@ -682,6 +684,15 @@ class _SenderAuthEntryState extends State<_SenderAuthEntry> {
               ),
               onChanged: (_) => setState(() {}),
             ),
+            if (!_isSignIn) ...[
+              const SizedBox(height: 14),
+              _AuthField(
+                controller: _referralCode,
+                label: 'REFERRAL CODE (OPTIONAL)',
+                hint: 'e.g. JASON1234',
+                onChanged: (_) => setState(() {}),
+              ),
+            ],
             const SizedBox(height: 14),
             _SenderPrimaryAction(
               label: _busy
@@ -773,6 +784,7 @@ class _SenderAuthEntryState extends State<_SenderAuthEntry> {
     if (kIsWeb) {
       await auth.setPersistence(Persistence.LOCAL);
     }
+    var accountCreated = false;
     UserCredential credential;
     if (createAccount) {
       try {
@@ -780,6 +792,7 @@ class _SenderAuthEntryState extends State<_SenderAuthEntry> {
           email: email,
           password: password,
         );
+        accountCreated = true;
       } on FirebaseAuthException catch (error) {
         if (error.code != 'email-already-in-use') rethrow;
         credential = await auth.signInWithEmailAndPassword(
@@ -800,6 +813,18 @@ class _SenderAuthEntryState extends State<_SenderAuthEntry> {
     await FirebaseFunctions.instanceFor(region: 'us-central1')
         .httpsCallable('ensureSenderAccount')
         .call();
+    if (accountCreated) {
+      final referralCode = _referralCode.text.trim();
+      if (referralCode.isNotEmpty) {
+        try {
+          await FirebaseFunctions.instanceFor(region: 'us-central1')
+              .httpsCallable('attachReferralCode')
+              .call({'referralCode': referralCode});
+        } catch (error) {
+          debugPrint('Referral code attach failed: $error');
+        }
+      }
+    }
     await user.getIdToken(true);
   }
 
