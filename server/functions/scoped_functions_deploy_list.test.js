@@ -27,5 +27,5 @@ test("a UI-only change produces no Functions deployment", () => {
 });
 
 test("no backend diff produces no Functions deployment", () => {
-  assert.deepEqual(names([]), []);
+  assert.deepEqual(names(["--files", ""]), []);
 });
