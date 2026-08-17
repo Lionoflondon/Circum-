@@ -1026,6 +1026,31 @@ service cloud.firestore {
       allow create, update, delete: if false;
     }
 
+    match /referrals/{referredUid} {
+      allow read: if isAdmin() || (signedIn() && (
+        referredUid == request.auth.uid ||
+        resource.data.referrerUserId == request.auth.uid
+      ));
+      allow create, update, delete: if false;
+    }
+
+    match /wallets/{walletId} {
+      allow read: if isAdmin() || (signedIn() && (
+        resource.data.uid == request.auth.uid ||
+        resource.data.userId == request.auth.uid ||
+        walletId == request.auth.uid
+      ));
+      allow create, update, delete: if false;
+    }
+
+    match /walletTransactions/{transactionId} {
+      allow read: if isAdmin() || (signedIn() && (
+        resource.data.uid == request.auth.uid ||
+        resource.data.userId == request.auth.uid
+      ));
+      allow create, update, delete: if false;
+    }
+
     match /history/{historyId} {
       allow read: if isAdmin() || isOwnDelivery(historyId) || isAssignedRider();
       allow create, update: if isAdmin();
