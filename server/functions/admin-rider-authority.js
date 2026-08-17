@@ -2,7 +2,6 @@
 const functions = require("firebase-functions/v1");
 const {getFirestore, FieldValue} = require("firebase-admin/firestore");
 const {getStorage} = require("firebase-admin/storage");
-const {requireAdmin} = require("./admin-auth");
 const {payoutReadiness} = require("./rider-certification-policy");
 
 const RIDER_ACTIONS = new Set([
@@ -38,7 +37,9 @@ function roleValues(token = {}) {
 }
 
 function assertRiderAdmin(context) {
-  const uid = requireAdmin(context, "Rider administrator access is required.");
+  if (!context || !context.auth || !context.auth.uid) {
+    throw new functions.https.HttpsError("unauthenticated", "Sign in first.");
+  }
   const roles = roleValues(context.auth.token || {});
   if (
     context.auth.token.superAdmin === true ||
@@ -49,7 +50,7 @@ function assertRiderAdmin(context) {
     roles.has("driver_manager") ||
     roles.has("rider_manager")
   ) {
-    return uid;
+    return context.auth.uid;
   }
   throw new functions.https.HttpsError(
       "permission-denied",
