@@ -205,6 +205,7 @@ class _CircumWebsiteAppState extends State<CircumWebsiteApp> {
             darkMode: _darkMode,
             colors: colors,
             initialStep: _senderInitialStep,
+            referralCode: _initialRoute.referralCode,
             onBack: () => _openSurface(_WebAppMode.landing),
             onRoleSelected: _openRole,
             onGifts: () => _openSurface(_WebAppMode.gifts),
@@ -7834,6 +7835,7 @@ class _CustomerPortal extends StatefulWidget {
   final bool darkMode;
   final _CircumColors colors;
   final _SenderStep initialStep;
+  final String? referralCode;
   final VoidCallback onBack;
   final ValueChanged<CircumRole> onRoleSelected;
   final VoidCallback onGifts;
@@ -7843,6 +7845,7 @@ class _CustomerPortal extends StatefulWidget {
     required this.darkMode,
     required this.colors,
     required this.initialStep,
+    required this.referralCode,
     required this.onBack,
     required this.onRoleSelected,
     required this.onGifts,
@@ -7887,6 +7890,7 @@ class _CustomerPortalState extends State<_CustomerPortal> {
   final _ratingFeedback = TextEditingController();
   final _senderEmail = TextEditingController();
   final _senderPassword = TextEditingController();
+  final _senderReferralCode = TextEditingController();
   final _senderCurrentPassword = TextEditingController();
   final _senderNewPassword = TextEditingController();
   final _senderConfirmNewPassword = TextEditingController();
@@ -8044,6 +8048,9 @@ class _CustomerPortalState extends State<_CustomerPortal> {
   @override
   void initState() {
     super.initState();
+    if (widget.referralCode != null) {
+      _senderReferralCode.text = widget.referralCode!;
+    }
     _weight.addListener(_handleWeightChanged);
     _senderName.addListener(_handleContactDetailsChanged);
     _senderPhone.addListener(_handleContactDetailsChanged);
@@ -8108,6 +8115,7 @@ class _CustomerPortalState extends State<_CustomerPortal> {
     _ratingFeedback.dispose();
     _senderEmail.dispose();
     _senderPassword.dispose();
+    _senderReferralCode.dispose();
     _senderCurrentPassword.dispose();
     _senderNewPassword.dispose();
     _senderConfirmNewPassword.dispose();
@@ -8232,6 +8240,7 @@ class _CustomerPortalState extends State<_CustomerPortal> {
         password: _senderPassword,
         fullName: _senderName,
         phone: _senderPhone,
+        referralCode: _senderReferralCode,
         onToggleMode: () =>
             setState(() => _senderSignupMode = !_senderSignupMode),
         onSignIn: _signInSender,
@@ -8619,6 +8628,7 @@ class _CustomerPortalState extends State<_CustomerPortal> {
           password: _senderPassword,
           fullName: _senderName,
           phone: _senderPhone,
+          referralCode: _senderReferralCode,
           currentPassword: _senderCurrentPassword,
           newPassword: _senderNewPassword,
           confirmNewPassword: _senderConfirmNewPassword,
@@ -9621,6 +9631,16 @@ class _CustomerPortalState extends State<_CustomerPortal> {
         'displayName': _senderName.text.trim(),
         'phone': _senderPhone.text.trim(),
       });
+      final referralCode = _senderReferralCode.text.trim();
+      if (referralCode.isNotEmpty) {
+        try {
+          await FirebaseFunctions.instanceFor(region: 'us-central1')
+              .httpsCallable('attachReferralCode')
+              .call({'referralCode': referralCode});
+        } catch (error) {
+          debugPrint('Web referral attach failed: $error');
+        }
+      }
       _availableRoles = {CircumRole.sender};
       _attachSender(user);
       await _loadSenderDeliveries(user.uid);
@@ -13342,6 +13362,7 @@ class _SenderAccessGate extends StatelessWidget {
   final TextEditingController password;
   final TextEditingController fullName;
   final TextEditingController phone;
+  final TextEditingController referralCode;
   final VoidCallback onToggleMode;
   final VoidCallback onSignIn;
   final VoidCallback onSignUp;
@@ -13356,6 +13377,7 @@ class _SenderAccessGate extends StatelessWidget {
     required this.password,
     required this.fullName,
     required this.phone,
+    required this.referralCode,
     required this.onToggleMode,
     required this.onSignIn,
     required this.onSignUp,
@@ -13414,6 +13436,14 @@ class _SenderAccessGate extends StatelessWidget {
                 hint: 'Password',
                 obscureText: true,
               ),
+              if (signupMode) ...[
+                const SizedBox(height: 10),
+                _InputBox(
+                  colors: colors,
+                  controller: referralCode,
+                  hint: 'Referral code',
+                ),
+              ],
               Align(
                 alignment: Alignment.centerRight,
                 child: TextButton(
@@ -16770,6 +16800,7 @@ class _SenderProfileStep extends StatelessWidget {
   final TextEditingController password;
   final TextEditingController fullName;
   final TextEditingController phone;
+  final TextEditingController referralCode;
   final TextEditingController currentPassword;
   final TextEditingController newPassword;
   final TextEditingController confirmNewPassword;
@@ -16812,6 +16843,7 @@ class _SenderProfileStep extends StatelessWidget {
     required this.password,
     required this.fullName,
     required this.phone,
+    required this.referralCode,
     required this.currentPassword,
     required this.newPassword,
     required this.confirmNewPassword,
@@ -16869,6 +16901,12 @@ class _SenderProfileStep extends StatelessWidget {
               controller: password,
               hint: 'Password',
               obscureText: true,
+            ),
+            const SizedBox(height: 10),
+            _InputBox(
+              colors: colors,
+              controller: referralCode,
+              hint: 'Referral code',
             ),
             Align(
               alignment: Alignment.centerRight,

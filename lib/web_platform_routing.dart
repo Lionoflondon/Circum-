@@ -8,12 +8,14 @@ class CircumWebRouteResolution {
     required this.canonicalPath,
     this.senderEntry = CircumSenderEntry.dashboard,
     this.legacyRedirectPath,
+    this.referralCode,
   });
 
   final CircumWebSurface surface;
   final String canonicalPath;
   final CircumSenderEntry senderEntry;
   final String? legacyRedirectPath;
+  final String? referralCode;
 }
 
 const circumPublicWebIdentity = 'circum-public-web';
@@ -85,6 +87,14 @@ CircumWebRouteResolution resolveCircumWebRoute(
       return CircumWebRouteResolution(
         surface: CircumWebSurface.vanguard,
         canonicalPath: path,
+      );
+    case 'join':
+      final rawCode = segments.length > 1 ? segments[1] : '';
+      final code = rawCode.toUpperCase().replaceAll(RegExp(r'[^A-Z0-9]'), '');
+      return CircumWebRouteResolution(
+        surface: CircumWebSurface.sender,
+        canonicalPath: '/send',
+        referralCode: code.isEmpty ? null : code,
       );
     default:
       return const CircumWebRouteResolution(
