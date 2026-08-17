@@ -9,7 +9,7 @@ const root = path.join(__dirname, "..", "..");
 
 function names(args) {
   const output = execFileSync(process.execPath, [
-    path.join(root, "scripts/scoped_functions_deploy_list.js"), ...args, "--names",
+    path.join(root, "scripts/scoped_functions_deploy_list.js"), ...args, "--allow-empty", "--names",
   ], {cwd: root, encoding: "utf8"});
   return output.trim() ? output.trim().split(/\r?\n/) : [];
 }
