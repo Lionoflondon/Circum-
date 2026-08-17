@@ -15,6 +15,8 @@ function argValue(name) {
 }
 
 function changedPaths() {
+  const files = argValue("--files");
+  if (files) return files.split(",").filter(Boolean);
   const base = argValue("--base") || "HEAD^";
   const output = require("node:child_process").execFileSync("git", [
     "diff", "--name-only", `${base}...HEAD`, "--", "server/functions",
