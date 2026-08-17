@@ -971,7 +971,7 @@ exports.resolveGiftStoryAccess = functions.https.onCall(async (data, context) =>
   if (text(gift.giftStoryStatus) === "locked" || text(gift.giftStoryAccessStatus) === "revoked") {
     throw new functions.https.HttpsError("failed-precondition", "This Gift Story is currently locked.");
   }
-  const viewerUserId = context.auth && context.auth.uid ? context.auth.uid : text(data && data.viewerUserId);
+  const viewerUserId = context.auth && context.auth.uid ? context.auth.uid : "";
   await record.snap.ref.set({views: FieldValue.increment(1), lastViewedAt: FieldValue.serverTimestamp()}, {merge: true});
   const storyViewPatch = {
     giftStoryViews: FieldValue.increment(1),
@@ -1061,7 +1061,7 @@ exports.recordGiftStoryEvent = functions.https.onCall(async (data, context) => {
   };
   const field = fields[event];
   if (!field) throw new functions.https.HttpsError("invalid-argument", "Unknown Gift Story event.");
-  const viewerUserId = context.auth && context.auth.uid ? context.auth.uid : text(data && data.viewerUserId);
+  const viewerUserId = context.auth && context.auth.uid ? context.auth.uid : "";
   const giftRef = db.collection("giftRequests").doc(record.data.giftRequestId);
   const giftPatch = {
     [`giftStory${field[0].toUpperCase()}${field.slice(1)}`]: FieldValue.increment(1),

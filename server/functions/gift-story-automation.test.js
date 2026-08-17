@@ -3,13 +3,46 @@
 
 const test = require("node:test");
 const assert = require("node:assert/strict");
+const fs = require("node:fs");
 const story = require("./gift-story-automation");
+const source = fs.readFileSync("gift-story-automation.js", "utf8");
 
 test("Gift Story automation only targets Gifts deliveries", () => {
   assert.equal(story.isGiftDelivery({serviceType: "GIFTS"}), true);
   assert.equal(story.isGiftDelivery({sourceModule: "gifts"}), true);
   assert.equal(story.isGiftDelivery({serviceType: "STANDARD"}), false);
   assert.equal(story.isGiftDelivery({serviceType: "HEALTH_PLUS"}), false);
+});
+
+test("resolveGiftStoryAccess uses Auth identity only and preserves guest analytics", () => {
+  const block = source.slice(
+      source.indexOf("exports.resolveGiftStoryAccess"),
+      source.indexOf("const GUEST_STORY_EVENTS"),
+  );
+  assert.match(block, /const viewerUserId = context\.auth && context\.auth\.uid \? context\.auth\.uid : "";/);
+  assert.doesNotMatch(block, /data\.viewerUserId/);
+  assert.match(block, /giftStoryViews: FieldValue\.increment\(1\)/);
+  assert.match(block, /if \(viewerUserId\) \{/);
+  assert.match(block, /maybeCreateRevealedCampaignMatch\([^\n]*viewerUserId\)/);
+});
+
+test("recordGiftStoryEvent ignores guest spoofed identity for view and complete", () => {
+  const block = source.slice(
+      source.indexOf("exports.recordGiftStoryEvent"),
+      source.indexOf("exports.updateGiftStoryPrivacy"),
+  );
+  assert.match(block, /const viewerUserId = context\.auth && context\.auth\.uid \? context\.auth\.uid : "";/);
+  assert.doesNotMatch(block, /data\.viewerUserId/);
+  assert.match(block, /view: "views"/);
+  assert.match(block, /complete: "completedViews"/);
+  assert.match(block, /if \(event === "view" \|\| event === "complete"\)/);
+  assert.match(block, /maybeCreateRevealedCampaignMatch\([^\n]*viewerUserId\)/);
+});
+
+test("authenticated Firebase UID remains authoritative over client viewerUserId", () => {
+  const viewerLines = source.match(/const viewerUserId = context\.auth && context\.auth\.uid \? context\.auth\.uid : "";/g) || [];
+  assert.equal(viewerLines.length, 2);
+  assert.doesNotMatch(source, /text\(data && data\.viewerUserId\)/);
 });
 
 test("Gift Story unlock only accepts final delivery states", () => {
