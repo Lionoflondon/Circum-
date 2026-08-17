@@ -20,6 +20,8 @@ import 'sender_notifications.dart';
 import 'sender_page_shell.dart';
 import 'sender_profile_authority.dart';
 import 'sender_wallet.dart';
+import 'gift_journey_draft.dart';
+import 'gift_story_view.dart';
 
 class SenderTrustActivity {
   final int points;
@@ -1068,6 +1070,8 @@ class _SenderMobileProfileViewState extends State<SenderMobileProfileView> {
             const SizedBox(height: 24),
             trust,
             const SizedBox(height: 28),
+            const _SenderGiftStoriesCard(),
+            const SizedBox(height: 28),
             _circumShortcuts(),
             const SizedBox(height: 28),
             _accountSection(),
@@ -1378,6 +1382,76 @@ class _SenderMobileProfileViewState extends State<SenderMobileProfileView> {
       backgroundColor: _ProfileTokens.panel,
       showDragHandle: true,
       builder: (_) => _TrustHistorySheet(activities: profile.trustHistory),
+    );
+  }
+}
+
+class _SenderGiftStoriesCard extends StatelessWidget {
+  const _SenderGiftStoriesCard();
+
+  @override
+  Widget build(BuildContext context) {
+    User? user;
+    try {
+      user = FirebaseAuth.instance.currentUser;
+    } catch (_) {
+      return const SizedBox.shrink();
+    }
+    if (user == null) return const SizedBox.shrink();
+    final stories = FirebaseFirestore.instance
+        .collection('users')
+        .doc(user.uid)
+        .collection('giftStories')
+        .orderBy('deliveredAt', descending: true)
+        .limit(20);
+    return StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
+      stream: stories.snapshots(),
+      builder: (context, snapshot) {
+        final docs = snapshot.data?.docs ?? const [];
+        if (docs.isEmpty && !snapshot.hasError) return const SizedBox.shrink();
+        return _ProfileGlassCard(
+          padding: EdgeInsets.zero,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              const _ProfileSectionTitleRow(title: 'Gift Stories'),
+              if (snapshot.hasError)
+                const Padding(
+                  padding: EdgeInsets.fromLTRB(18, 0, 18, 18),
+                  child: Text('Gift Stories are temporarily unavailable.'),
+                )
+              else
+                ...docs.map((doc) {
+                  final data = doc.data();
+                  final recipient = '${data['recipientDisplayName'] ?? 'Recipient'}';
+                  final occasion = '${data['occasion'] ?? 'A special moment'}';
+                  return _ProfileShortcut(
+                    key: Key('sender-gift-story-${doc.id}'),
+                    icon: Icons.auto_awesome_outlined,
+                    title: recipient,
+                    subtitle: '$occasion · Delivered',
+                    onTap: () => Navigator.of(context).push(
+                      MaterialPageRoute<void>(
+                        builder: (_) => GiftStoryView(
+                          draft: GiftJourneyDraft.forMode(SenderGiftMode.someone).copyWith(
+                            recipientName: recipient,
+                            occasion: occasion,
+                            linkedGiftDeliveryStatus: 'delivered',
+                            riderCompletionAccepted: true,
+                            deliveryVerificationCompleted: true,
+                            deliveryAuditSuccessful: true,
+                          ),
+                          senderStoryId: doc.id,
+                        ),
+                      ),
+                    ),
+                    showDivider: doc.id != docs.last.id,
+                  );
+                }),
+            ],
+          ),
+        );
+      },
     );
   }
 }

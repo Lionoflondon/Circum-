@@ -16,6 +16,7 @@ test.before(async () => {
     await setDoc(doc(db, "referrals", "referred-1"), {referrerUserId: "referrer-1", referredUserId: "referred-1", status: "SIGNED_UP", rewardAmount: 5});
     await setDoc(doc(db, "wallets", "wallet-1"), {uid: "owner-1", userId: "owner-1", balance: 5});
     await setDoc(doc(db, "walletTransactions", "tx-1"), {uid: "owner-1", userId: "owner-1", amount: 5, type: "referral_reward"});
+    await setDoc(doc(db, "users", "sender-1", "giftStories", "gift-1"), {senderId: "sender-1", storyStatus: "unlocked", storyAvailable: true});
   });
 });
 test.after(async () => testEnv.cleanup());
@@ -37,4 +38,13 @@ test("wallet owner can read wallet and ledger, unrelated user cannot, and client
   await assertFails(getDoc(doc(other, "walletTransactions", "tx-1")));
   await assertFails(setDoc(doc(owner, "wallets", "wallet-1"), {balance: 500}, {merge: true}));
   await assertFails(setDoc(doc(owner, "walletTransactions", "tx-2"), {amount: 500}, {merge: true}));
+});
+
+test("Sender Gift Stories are owner-readable and backend-write only", async () => {
+  const owner = testEnv.authenticatedContext("sender-1").firestore();
+  await assertSucceeds(getDoc(doc(owner, "users", "sender-1", "giftStories", "gift-1")));
+  const other = testEnv.authenticatedContext("other-1").firestore();
+  await assertFails(getDoc(doc(other, "users", "sender-1", "giftStories", "gift-1")));
+  await assertFails(setDoc(doc(owner, "users", "sender-1", "giftStories", "gift-2"), {senderId: "sender-1"}));
+  await assertFails(setDoc(doc(owner, "users", "sender-1", "giftStories", "gift-1"), {storyStatus: "changed"}, {merge: true}));
 });

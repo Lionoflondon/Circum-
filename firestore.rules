@@ -998,6 +998,11 @@ service cloud.firestore {
             !hasUnsafeSelfUserTypeUpdate()
           )));
       allow delete: if hasRole('super_admin');
+
+      match /giftStories/{giftStoryId} {
+        allow read: if isAdmin() || ownsSenderRecord(userId);
+        allow create, update, delete: if false;
+      }
     }
 
     match /senderTrustEvents/{eventId} {
