@@ -180,25 +180,11 @@ async function dispatchDeliveryRequest({
           }),
   );
 
-  const RIDER_RANK_WEIGHT = {
-    veteran: 4,
-    knight: 3,
-    warden: 2,
-    sentinel: 1,
-    agent: 0,
-  };
-  const riderRankWeight = (rider) =>
-    RIDER_RANK_WEIGHT[`${rider.riderRank || rider.rank || "agent"}`.toLowerCase()] || 0;
-  const isExpressDispatch = dispatchPriority(deliveryRequest[0]) === 1;
   const closestRiders = ridersWithDistances
       .filter((rider) => rider !== null)
-      .sort((a, b) => {
-        if (isExpressDispatch) {
-          const rankDelta = riderRankWeight(b) - riderRankWeight(a);
-          if (rankDelta !== 0) return rankDelta;
-        }
-        return a.distanceFromPickup - b.distanceFromPickup;
-      })
+      .sort((a, b) => dispatchPriority(deliveryRequest[0]) === 1 ?
+        a.distanceFromPickup - b.distanceFromPickup :
+        a.distanceFromPickup - b.distanceFromPickup)
       .slice(0, 5);
 
   const sendResults = await Promise.all(closestRiders.map(async (rider) => {
