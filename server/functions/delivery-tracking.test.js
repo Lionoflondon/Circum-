@@ -4,6 +4,28 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
 const deliveryTracking = require("./delivery-tracking")._private;
+const tracking = require("./sender-tracking-state-core");
+
+test("standard delivery tracking path confirms collection from pickup and continues to dropoff", () => {
+  const collected = tracking.statusForRiderAction("confirm_collected");
+  for (const startingStatus of ["arrived_at_pickup", "waiting"]) {
+    assert.equal(
+        tracking.canTransitionDeliveryStatus(startingStatus, collected),
+        true,
+    );
+    const collectionPatch = deliveryTracking.patchForTransition({
+      action: "confirm_collected",
+      nextStatus: collected,
+      riderId: "rider-1",
+    });
+    assert.equal(collectionPatch.status, "collected");
+    assert.equal(collectionPatch.lastRiderAction, "confirm_collected");
+    assert.equal(
+        tracking.canTransitionDeliveryStatus(collectionPatch.status, "navigating_to_dropoff"),
+        true,
+    );
+  }
+});
 
 test("collection PIN verification patch updates backend tracking fields", () => {
   const patch = deliveryTracking.patchForTransition({
