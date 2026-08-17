@@ -27,10 +27,26 @@ jobs:
       - run: node scripts/absolute_product_ownership.js
       - run: node scripts/backend_authority_guard.js
       - run: node scripts/deploy_guard.self_test.js
-      - run: node scripts/deploy_guard.js --target=sender-app --base HEAD
-      - run: node scripts/deploy_guard.js --target=website --base HEAD
-      - run: node scripts/deploy_guard.js --target=admin --base HEAD
-      - run: node scripts/deploy_guard.js --target=backend --base HEAD
+      - name: Check Sender application ownership
+        env:
+          GUARD_BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before || github.sha }}
+          GUARD_HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: node scripts/deploy_guard.js --target=sender-app --ci
+      - name: Check Website ownership
+        env:
+          GUARD_BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before || github.sha }}
+          GUARD_HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: node scripts/deploy_guard.js --target=website --ci
+      - name: Check Admin ownership
+        env:
+          GUARD_BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before || github.sha }}
+          GUARD_HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: node scripts/deploy_guard.js --target=admin --ci
+      - name: Check Backend ownership
+        env:
+          GUARD_BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before || github.sha }}
+          GUARD_HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: node scripts/deploy_guard.js --target=backend --ci
       - run: node scripts/validate_sender_mobile_artifacts.js
 
   functions:
