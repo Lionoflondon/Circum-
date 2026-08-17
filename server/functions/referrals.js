@@ -135,23 +135,47 @@ exports.attachReferralCode = functions.https.onCall(async (data, context) => {
   return {status: REFERRAL_STATUSES.signedUp};
 });
 
-exports.activateReferral = functions.https.onCall(async (data, context) => {
+exports.activateReferral = functions.https.onCall(async (_, context) => {
   requireAuth(context);
-  const referredUserId = `${data.referredUserId || context.auth.uid}`.trim();
-  if (referredUserId !== context.auth.uid && !context.auth.token.admin) {
-    throw new functions.https.HttpsError("permission-denied", "Cannot activate another user's referral.");
-  }
-  const activityType = `${data.activityType || "activity"}`.trim();
-  const activityId = `${data.activityId || ""}`.trim();
-  return activateReferralForUser({
-    referredUserId,
-    activityType,
-    activityId,
-    userEmail: context.auth.token.email,
-  });
+  throw new functions.https.HttpsError(
+      "permission-denied",
+      "Referral activation is only available from verified backend completion events.",
+  );
 });
 
+const QUALIFYING_TERMINAL_STATES = new Set(["completed", "delivered"]);
+const PAID_STATES = new Set(["paid", "succeeded", "success"]);
+
+async function loadQualifyingActivity({referredUserId, activityType, activityId}) {
+  const collections = {
+    sender_completed_paid_booking: "deliveryRequests",
+    rider_completed_delivery: "deliveryRequests",
+    gift_request_completed: "giftRequests",
+    health_plus_completed: "prescriptionPickups",
+  };
+  const collection = collections[activityType];
+  if (!collection || !activityId) return null;
+  const snap = await getFirestore().collection(collection).doc(activityId).get();
+  if (!snap.exists) return null;
+  const activity = snap.data() || {};
+  const ownerId = activityType === "rider_completed_delivery" ?
+    (activity.riderId || activity.assignedRiderId) :
+    (activity.senderId || activity.userId || activity.profileId);
+  const status = `${activity.status || activity.deliveryStatus || activity.giftStatus || ""}`.toLowerCase();
+  const payment = `${activity.paymentStatus || ""}`.toLowerCase();
+  const refund = `${activity.refundStatus || ""}`.toLowerCase();
+  if (`${ownerId || ""}` !== referredUserId ||
+      !QUALIFYING_TERMINAL_STATES.has(status) ||
+      !PAID_STATES.has(payment) ||
+      ["refunded", "partially_refunded", "failed", "cancelled", "canceled"].includes(refund)) {
+    return null;
+  }
+  return activity;
+}
+
 async function activateReferralForUser({referredUserId, activityType, activityId, userEmail = ""}) {
+  const activity = await loadQualifyingActivity({referredUserId, activityType, activityId});
+  if (!activity) return {status: "not_qualifying"};
   const db = getFirestore();
   const referralRef = db.collection("referrals").doc(referredUserId);
   const snap = await referralRef.get();
@@ -245,8 +269,7 @@ async function activateReferralForUser({referredUserId, activityType, activityId
 function becameCompleted(before, after) {
   const was = `${before.status || before.giftStatus || ""}`.toLowerCase();
   const now = `${after.status || after.giftStatus || ""}`.toLowerCase();
-  return !["completed", "delivered", "active"].includes(was) &&
-    ["completed", "delivered", "active"].includes(now);
+  return !QUALIFYING_TERMINAL_STATES.has(was) && QUALIFYING_TERMINAL_STATES.has(now);
 }
 
 exports.activateReferralOnDeliveryCompleted = functions.firestore
