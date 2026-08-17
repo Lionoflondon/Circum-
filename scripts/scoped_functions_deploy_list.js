@@ -59,7 +59,14 @@ if (unique.length === 0) {
 }
 
 const changed = changedPaths();
-if (changed.length === 0) process.exit(0);
+const allowEmpty = process.argv.includes("--allow-empty");
+if (changed.length === 0) {
+  if (!allowEmpty) {
+    console.error("No backend changes found; refusing an empty Functions deployment scope.");
+    process.exit(3);
+  }
+  process.exit(0);
+}
 const base = argValue("--base") || "HEAD^";
 
 const mapping = moduleExportMap();
@@ -74,7 +81,13 @@ if (changed.includes("server/functions/index.js")) {
   for (const name of addedIndexExports(base)) affected.add(name);
 }
 
-if (affected.size === 0) process.exit(0);
+if (affected.size === 0) {
+  if (!allowEmpty) {
+    console.error("Backend changes do not map to exported Functions; refusing deployment.");
+    process.exit(3);
+  }
+  process.exit(0);
+}
 
 if (process.argv.includes("--count")) {
   console.log(affected.size);
