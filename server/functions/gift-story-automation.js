@@ -215,6 +215,7 @@ function safeStory(giftId, gift) {
     giftStoryShareEnabled: gift.giftStoryShareEnabled !== false,
     giftStorySharePrivacy: gift.giftStorySharePrivacy || "private",
     giftStoryVideoStatus: gift.giftStoryVideoStatus || "processing",
+    giftStorySlides: Array.isArray(gift.giftStorySlides) ? gift.giftStorySlides : [],
     giftStoryVideoExpiresAt: gift.giftStoryVideoExpiresAt || null,
     giftStoryMusicEnabled: gift.giftStoryMusicEnabled === true,
     giftStoryCustomAudioUrl: gift.giftStoryCustomAudioUrl || null,
@@ -644,6 +645,8 @@ async function unlockGiftStory(db, giftSnap, deliveryId, {forceNewToken = false,
   const giftRef = giftSnap.ref;
   const slides = buildGiftStorySlides(gift);
   const skin = cleanSkin(gift.giftStorySkin);
+  const senderId = text(gift.senderId || gift.userId || gift.customerId);
+  const senderStoryRef = senderId ? db.collection("users").doc(senderId).collection("giftStories").doc(giftId) : null;
   await db.runTransaction(async (transaction) => {
     transaction.set(tokenRef, {
       giftRequestId: giftId,
@@ -697,6 +700,23 @@ async function unlockGiftStory(db, giftSnap, deliveryId, {forceNewToken = false,
       giftStoryAvailableAt: FieldValue.serverTimestamp(),
       giftStoryUpdatedAt: FieldValue.serverTimestamp(),
     }, {merge: true});
+    if (senderStoryRef) {
+      transaction.set(senderStoryRef, {
+        giftRequestId: giftId,
+        deliveryId,
+        senderId,
+        recipientDisplayName: text(gift.recipientName || "Recipient"),
+        occasion: text(gift.occasion || "A special moment"),
+        storyStatus: "unlocked",
+        storyAvailable: true,
+        storySkin: skin,
+        storyPreview: text(gift.personalMessage || gift.giftStoryCircumMessage || "Your Gift Story is ready."),
+        storySlides: slides,
+        createdAt: gift.giftStoryAvailableAt || FieldValue.serverTimestamp(),
+        deliveredAt: gift.deliveredAt || FieldValue.serverTimestamp(),
+        updatedAt: FieldValue.serverTimestamp(),
+      }, {merge: true});
+    }
   });
   const senderEmail = normalizeEmail(gift.senderEmail);
   const recipientEmail = normalizeEmail(gift.recipientEmail || gift.recipientContact);
@@ -763,6 +783,34 @@ exports.onGiftDeliveryCompleted = functions.firestore.document("deliveryRequests
     await markAutomationFailure(db, context.params.deliveryId, giftSnap && giftSnap.id, error);
   }
   return null;
+});
+
+exports.getSenderGiftStory = functions.https.onCall(async (data, context) => {
+  const uid = context.auth && context.auth.uid ? context.auth.uid : "";
+  if (!uid) throw new functions.https.HttpsError("unauthenticated", "Sign in to view sent Gift Stories.");
+  const giftId = text(data && data.giftRequestId);
+  if (!giftId) throw new functions.https.HttpsError("invalid-argument", "Gift Story reference required.");
+  const db = getFirestore();
+  const [storySnap, giftSnap] = await Promise.all([
+    db.collection("users").doc(uid).collection("giftStories").doc(giftId).get(),
+    db.collection("giftRequests").doc(giftId).get(),
+  ]);
+  if (!storySnap.exists || !giftSnap.exists) throw new functions.https.HttpsError("not-found", "Gift Story not found.");
+  const gift = giftSnap.data() || {};
+  const senderId = text(gift.senderId || gift.userId || gift.customerId);
+  if (senderId !== uid) throw new functions.https.HttpsError("permission-denied", "Sender Gift Story access denied.");
+  if (!isComplete(gift.giftStatus || gift.status) || gift.giftStoryUnlocked !== true || text(gift.giftStoryStatus) !== "unlocked") {
+    throw new functions.https.HttpsError("failed-precondition", "This Gift Story is not available yet.");
+  }
+  const saved = storySnap.data() || {};
+  return {
+    story: safeStory(giftId, {
+      ...gift,
+      giftStorySlides: Array.isArray(gift.giftStorySlides) && gift.giftStorySlides.length ? gift.giftStorySlides : saved.storySlides,
+      giftStorySkin: gift.giftStorySkin || saved.storySkin,
+    }),
+    storyStatus: saved.storyStatus || "unlocked",
+  };
 });
 
 async function tokenRecord(db, token) {
@@ -1369,3 +1417,4 @@ module.exports.revealPolicyAllowsMutualReveal = revealPolicyAllowsMutualReveal;
 module.exports.campaignRevealMatchDecision = campaignRevealMatchDecision;
 module.exports.buildRevealedCampaignMatchRecord = buildRevealedCampaignMatchRecord;
 module.exports.giftStoryActionIds = giftStoryActionIds;
+module.exports.getSenderGiftStory = exports.getSenderGiftStory;

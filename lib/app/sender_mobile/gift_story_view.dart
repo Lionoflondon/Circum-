@@ -14,8 +14,9 @@ import 'gift_relationship_view.dart';
 
 class GiftStoryView extends StatefulWidget {
   final GiftJourneyDraft draft;
+  final String? senderStoryId;
 
-  const GiftStoryView({super.key, required this.draft});
+  const GiftStoryView({super.key, required this.draft, this.senderStoryId});
 
   static const routeName = '/sender-mobile/gifts/story';
 
@@ -180,15 +181,23 @@ class _GiftStoryViewState extends State<GiftStoryView>
 
   Future<void> _resolveStoryFromBackend() async {
     final token = _actionPayload['token'];
-    if (token == null || token.isEmpty) return;
+    final senderStoryId = _actionPayload['senderStoryId'];
+    if ((token == null || token.isEmpty) &&
+        (senderStoryId == null || senderStoryId.isEmpty)) {
+      return;
+    }
     setState(() {
       _storyLoading = true;
       _storyError = null;
     });
     try {
       final result = await FirebaseFunctions.instance
-          .httpsCallable('resolveGiftStoryAccess')
-          .call<Map<String, dynamic>>({'token': token});
+          .httpsCallable(senderStoryId != null && senderStoryId.isNotEmpty
+              ? 'getSenderGiftStory'
+              : 'resolveGiftStoryAccess')
+          .call<Map<String, dynamic>>(senderStoryId != null && senderStoryId.isNotEmpty
+              ? {'giftRequestId': senderStoryId}
+              : {'token': token});
       final data = Map<String, dynamic>.from(result.data);
       final story = Map<String, dynamic>.from(data['story'] as Map);
       if (!mounted) return;
@@ -214,6 +223,8 @@ class _GiftStoryViewState extends State<GiftStoryView>
     return {
       if (giftRequestId.isNotEmpty) 'giftRequestId': giftRequestId,
       if (token.isNotEmpty) 'token': token,
+      if (widget.senderStoryId?.trim().isNotEmpty == true)
+        'senderStoryId': widget.senderStoryId!.trim(),
     };
   }
 
