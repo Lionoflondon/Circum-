@@ -135,8 +135,8 @@ function profilePatch(data, rider, existing = {}) {
     approvalStatus: existing.approvalStatus || "pending",
     onboardingStatus: existing.onboardingStatus || "not_started",
     verificationStatus: existing.verificationStatus || "pending",
-    riderRank: "agent",
-    trustPoints: 0,
+    riderRank: existing.riderRank || "agent",
+    trustPoints: Number.isFinite(Number(existing.trustPoints)) ? Number(existing.trustPoints) : 0,
     driverStatus: "active",
     role: "rider",
     roles: ["rider"],
@@ -197,10 +197,11 @@ exports.updateRiderProfile = functions.https.onCall(async (data, context) => {
   const eventRef = db.collection("riderOnboardingEvents").doc();
 
   await db.runTransaction(async (transaction) => {
-    const [profileSnap, riderSnap, applicationSnap] = await Promise.all([
+    const [profileSnap, riderSnap, applicationSnap, metricsSnap] = await Promise.all([
       transaction.get(profileRef),
       transaction.get(riderRef),
       transaction.get(applicationRef),
+      transaction.get(metricsRef),
     ]);
     const existing = {
       ...(riderSnap.data() || {}),
@@ -217,14 +218,20 @@ exports.updateRiderProfile = functions.https.onCall(async (data, context) => {
       ...applicationPatchFromProfile(data || {}, rider, profile),
       ...(applicationSnap.exists ? {} : {createdAt: FieldValue.serverTimestamp()}),
     }, {merge: true});
-    transaction.set(metricsRef, {
-      riderId: rider.uid,
-      completedDeliveries: 0,
-      cancelledDeliveries: 0,
-      averageRating: 0,
-      onTimeRate: 0,
-      updatedAt: FieldValue.serverTimestamp(),
-    }, {merge: true});
+    if (!metricsSnap.exists) {
+      transaction.set(metricsRef, {
+        riderId: rider.uid,
+        completedDeliveries: 0,
+        cancelledDeliveries: 0,
+        averageRating: 0,
+        onTimeRate: 0,
+        updatedAt: FieldValue.serverTimestamp(),
+      }, {merge: true});
+    } else {
+      transaction.set(metricsRef, {
+        updatedAt: FieldValue.serverTimestamp(),
+      }, {merge: true});
+    }
     transaction.set(eventRef, audit("rider_profile_updated", rider, {
       changedFields: ["fullName", "phoneNumber", "vehicleType", "vehicleRegistration"],
     }));
