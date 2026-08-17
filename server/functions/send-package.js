@@ -2,7 +2,7 @@
 const functions = require("firebase-functions/v1");
 const {getFirestore, FieldValue} = require("firebase-admin/firestore");
 const {getMessaging} = require("firebase-admin/messaging");
-const {dispatchComplianceDecision, dispatchPriority, riderMatchesIris} = require("./iris-core");
+const {dispatchComplianceDecision, dispatchPriority, riderCanViewDispatch, riderMatchesIris} = require("./iris-core");
 const {hasAdminClaim} = require("./admin-auth");
 
 function senderOwnsRequest(delivery, uid) {
@@ -102,10 +102,34 @@ async function dispatchDeliveryRequest({
   if (privateDoc.exists) {
     deliveryRequest[0].irisPrivate = privateDoc.data();
   }
+  const rawPickupPosition = deliveryRequest[0].pickupPosition;
+  const rawPickupGeo = rawPickupPosition && rawPickupPosition.geopoint;
+  const hasValidPickupGeo = Boolean(
+      rawPickupGeo &&
+      Number.isFinite(Number(rawPickupGeo.latitude)) &&
+      Number.isFinite(Number(rawPickupGeo.longitude)),
+  );
+  if (!hasValidPickupGeo) {
+    await db.collection("dispatchInspections").doc(deliveryRequest[0].id).set({
+      deliveryId: deliveryRequest[0].id,
+      requestId,
+      status: "blocked",
+      reason: "missing_pickup_geo",
+      source,
+      updatedAt: FieldValue.serverTimestamp(),
+    }, {merge: true});
+    return {
+      message: "Delivery request is missing a valid pickup location.",
+      requestId,
+      deliveryId: deliveryRequest[0].id,
+      closestRiders: [],
+      pushResults: [],
+    };
+  }
 
   const pickupPoint = {
-    latitude: deliveryRequest[0].pickupPosition.geopoint.latitude,
-    longitude: deliveryRequest[0].pickupPosition.geopoint.longitude,
+    latitude: Number(rawPickupGeo.latitude),
+    longitude: Number(rawPickupGeo.longitude),
   };
 
   const ridersSnapshot = await db.collection("riders")
@@ -116,6 +140,7 @@ async function dispatchDeliveryRequest({
       ridersSnapshot.docs
           .filter((doc) => {
             const riderData = doc.data();
+            if (!riderCanViewDispatch(riderData, deliveryRequest[0])) return false;
             if (!riderMatchesIris(riderData, deliveryRequest[0])) return false;
             return riderData.position &&
                riderData.position.geopoint &&
