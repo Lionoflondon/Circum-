@@ -82,3 +82,16 @@ test("rider actions resolve to canonical backend statuses", () => {
   assert.equal(tracking.statusForRiderAction("report_issue"), "issue_reported");
   assert.equal(tracking.statusForRiderAction("unknown"), "");
 });
+
+test("standard (non-Vanguard) delivery: confirm_collected is reachable from arrived_at_pickup and waiting", () => {
+  const collectedStatus = tracking.statusForRiderAction("confirm_collected");
+  assert.equal(collectedStatus, "collected");
+  assert.equal(
+      tracking.canTransitionDeliveryStatus("arrived_at_pickup", collectedStatus),
+      true,
+  );
+  assert.equal(
+      tracking.canTransitionDeliveryStatus("waiting", collectedStatus),
+      true,
+  );
+});
