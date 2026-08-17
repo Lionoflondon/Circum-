@@ -102,10 +102,34 @@ async function dispatchDeliveryRequest({
   if (privateDoc.exists) {
     deliveryRequest[0].irisPrivate = privateDoc.data();
   }
+  const rawPickupPosition = deliveryRequest[0].pickupPosition;
+  const rawPickupGeo = rawPickupPosition && rawPickupPosition.geopoint;
+  const hasValidPickupGeo = Boolean(
+      rawPickupGeo &&
+      Number.isFinite(Number(rawPickupGeo.latitude)) &&
+      Number.isFinite(Number(rawPickupGeo.longitude)),
+  );
+  if (!hasValidPickupGeo) {
+    await db.collection("dispatchInspections").doc(deliveryRequest[0].id).set({
+      deliveryId: deliveryRequest[0].id,
+      requestId,
+      status: "blocked",
+      reason: "missing_pickup_geo",
+      source,
+      updatedAt: FieldValue.serverTimestamp(),
+    }, {merge: true});
+    return {
+      message: "Delivery request is missing a valid pickup location.",
+      requestId,
+      deliveryId: deliveryRequest[0].id,
+      closestRiders: [],
+      pushResults: [],
+    };
+  }
 
   const pickupPoint = {
-    latitude: deliveryRequest[0].pickupPosition.geopoint.latitude,
-    longitude: deliveryRequest[0].pickupPosition.geopoint.longitude,
+    latitude: Number(rawPickupGeo.latitude),
+    longitude: Number(rawPickupGeo.longitude),
   };
 
   const ridersSnapshot = await db.collection("riders")
@@ -156,11 +180,25 @@ async function dispatchDeliveryRequest({
           }),
   );
 
+  const RIDER_RANK_WEIGHT = {
+    veteran: 4,
+    knight: 3,
+    warden: 2,
+    sentinel: 1,
+    agent: 0,
+  };
+  const riderRankWeight = (rider) =>
+    RIDER_RANK_WEIGHT[`${rider.riderRank || rider.rank || "agent"}`.toLowerCase()] || 0;
+  const isExpressDispatch = dispatchPriority(deliveryRequest[0]) === 1;
   const closestRiders = ridersWithDistances
       .filter((rider) => rider !== null)
-      .sort((a, b) => dispatchPriority(deliveryRequest[0]) === 1 ?
-        a.distanceFromPickup - b.distanceFromPickup :
-        a.distanceFromPickup - b.distanceFromPickup)
+      .sort((a, b) => {
+        if (isExpressDispatch) {
+          const rankDelta = riderRankWeight(b) - riderRankWeight(a);
+          if (rankDelta !== 0) return rankDelta;
+        }
+        return a.distanceFromPickup - b.distanceFromPickup;
+      })
       .slice(0, 5);
 
   const sendResults = await Promise.all(closestRiders.map(async (rider) => {
