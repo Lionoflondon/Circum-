@@ -1272,7 +1272,7 @@ exports.giftStoryLanding = functions.https.onRequest(async (req, res) => {
   if (!isComplete(gift.giftStatus || gift.status) && gift.giftStoryAdminOverride !== true) {
     return res.status(423).send("<!doctype html><title>Gift Story locked</title><meta name=robots content=noindex><body style='background:#090B1D;color:#F5F3ED;font-family:Helvetica;padding:48px'><h1>Gift Story locked</h1><p>Your story will unlock after delivery is confirmed.</p></body>");
   }
-  await maybeCreateRevealedCampaignMatch(getFirestore(), giftSnap.ref, giftSnap.id, gift, text(req.query.viewerUserId));
+  await maybeCreateRevealedCampaignMatch(getFirestore(), giftSnap.ref, giftSnap.id, gift, "");
   return res.status(200).send(renderGiftStoryHtml({
     token,
     giftId: giftSnap.id,
