@@ -10,6 +10,7 @@ const vanguardProtocol = require("./vanguard-protocol-core");
 const {classifyIris} = require("./iris-core");
 const {verifiedPhotoAnalysis} = require("./iris-photo-analysis");
 const {dispatchDeliveryRequest} = require("./send-package");
+const {resolveAuthoritativeRoute} = require("./dispatch-route-authority");
 
 const BASE_FARE_GBP = 5;
 const ADDITIONAL_FARE_PER_MILE_GBP = 1.5;
@@ -669,13 +670,8 @@ function walletRefsForSender(db, sender) {
 }
 
 function riderDisplayAliases({quote = {}, data = {}, vanguardFields = {}} = {}) {
-  const distanceMiles = Number(quote.distanceMiles || data.distanceMiles || 0);
-  const durationMinutes = Number(
-      quote.estimatedDurationMinutes ||
-      data.estimatedDurationMinutes ||
-      data.durationMinutes ||
-      0,
-  );
+  const distanceMiles = Number(quote.distanceMiles);
+  const durationMinutes = Number(quote.durationMinutes || quote.estimatedDurationMinutes);
   const deliveryTime = cleanMap(data.deliveryTime);
   const pickupWindow = text(
       deliveryTime.scheduledWindow ||
@@ -698,13 +694,17 @@ function riderDisplayAliases({quote = {}, data = {}, vanguardFields = {}} = {}) 
   };
 }
 
-function quotePayload(data, uid, serverPhotoAnalysis = null) {
+function quotePayload(data, uid, serverPhotoAnalysis = null, route = null) {
+  route = route || data.authoritativeRoute || null;
   const selectedSpeed = speedKey(data.selectedSpeed || data.selectedOption);
   const clientWeightKg = Number(data.weightKg || data.parcel && data.parcel.weightKg || 0.5);
   const photoWeightKg = Number(serverPhotoAnalysis && serverPhotoAnalysis.estimatedWeightKg || 0);
   const weightKg = Math.max(0.5, clientWeightKg, photoWeightKg);
   const base = BASE_FARE_GBP;
-  const distance = distanceFare(data.distanceMiles);
+  const authoritativeDistanceMiles = route ?
+    (Number.isFinite(Number(route.distanceMiles)) ? Number(route.distanceMiles) : 0) :
+    Number(data.distanceMiles || 0);
+  const distance = distanceFare(authoritativeDistanceMiles);
   const weight = weightSurcharge(weightKg);
   const selectedVehicle = canonicalVehicle(
       data.selectedVehicle ||
@@ -761,7 +761,13 @@ function quotePayload(data, uid, serverPhotoAnalysis = null) {
     userId: uid,
     currency: "GBP",
     selectedSpeed,
-    distanceMiles: Number(data.distanceMiles || 0),
+    distanceMiles: route ? (Number.isFinite(Number(route.distanceMiles)) ? Number(route.distanceMiles) : null) : Number(data.distanceMiles || 0),
+    durationMinutes: route && Number.isFinite(Number(route.durationMinutes)) ? Number(route.durationMinutes) : null,
+    routeSource: route && route.source || "unresolved",
+    routeResolvedAt: route && route.resolvedAt || null,
+    routeResolutionReason: route && route.reason || null,
+    routeProvisional: !(route && Number.isFinite(Number(route.distanceMiles)) && Number.isFinite(Number(route.durationMinutes))),
+    clientDisplayedDistanceMiles: cleanNumber(data.distanceMiles),
     weightKg,
     selectedVehicle,
     vehicleType: selectedVehicle,
@@ -906,9 +912,14 @@ exports.createSenderBookingQuote = functions.https.onCall(async (data, context) 
     analysisId: data && data.irisPhotoAnalysisId,
     description: parcelDescription,
   });
+  const route = await resolveAuthoritativeRoute({
+    pickupCoordinates: data && data.pickup && data.pickup.coordinates,
+    dropoffCoordinates: data && data.dropoff && data.dropoff.coordinates,
+  });
   const quote = quotePayload({
     ...(data || {}),
     ...(businessContext || {}),
+    authoritativeRoute: route,
   }, sender.uid, serverPhotoAnalysis);
   const clientDisplayQuote = cleanMap(data && data.clientDisplayQuote);
   const clientDisplayedAmount = cleanNumber(clientDisplayQuote.amount);
@@ -1705,7 +1716,7 @@ async function createPaidDeliveryFromSession(stripe, sender, data) {
         description: parcelDescription,
         declaredWeightText: parcel.weightLabel || parcel.weightKg || quote.weightKg || "",
         photoEstimatedWeightKg: quote.photoEstimatedWeightKg || null,
-        distanceMiles: quote.distanceMiles || data.distanceMiles || 0,
+        distanceMiles: quote.distanceMiles || 0,
         speed: selectedServiceLevel,
         vehicleType: clientIris.recommendedVehicle || clientIris.vehicleType || null,
       }),

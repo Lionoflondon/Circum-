@@ -176,3 +176,21 @@ test("sender express surcharge is five pounds or twenty percent", () => {
   assert.equal(longQuote.lineItems.find((item) => item.key === "speed_adjustment").amount, 15.4);
   assert.equal(longQuote.total, 92.4);
 });
+
+test("sender callable route failure never turns client distance into quote or Rider authority", () => {
+  const quote = _private.quotePayload({
+    selectedSpeed: "Standard",
+    distanceMiles: 40,
+    weightKg: 2,
+    parcel: {itemName: "Book", weightKg: 2},
+    authoritativeRoute: {source: "unresolved", reason: "route_request_failed"},
+  }, "sender-test");
+  const distanceLine = quote.lineItems.find((item) => item.key === "distance");
+  const aliases = _private.riderDisplayAliases({quote, data: {distanceMiles: 40, durationMinutes: 90}});
+
+  assert.equal(quote.distanceMiles, null);
+  assert.equal(distanceLine.amount, 0);
+  assert.equal(quote.routeProvisional, true);
+  assert.equal(aliases.distanceText, null);
+  assert.equal(aliases.durationText, null);
+});
