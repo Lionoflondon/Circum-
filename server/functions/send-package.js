@@ -4,6 +4,7 @@ const {getFirestore, FieldValue} = require("firebase-admin/firestore");
 const {getMessaging} = require("firebase-admin/messaging");
 const {dispatchComplianceDecision, dispatchPriority, riderCanViewDispatch, riderMatchesIris} = require("./iris-core");
 const {hasAdminClaim} = require("./admin-auth");
+const {resolvePickupRoute} = require("./dispatch-route-authority");
 
 function senderOwnsRequest(delivery, uid) {
   return delivery.senderId === uid || delivery.userId === uid;
@@ -169,10 +170,16 @@ async function dispatchDeliveryRequest({
               const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
               const distance = R * c;
 
+              const pickupRoute = await resolvePickupRoute({
+                origin: riderLocation,
+                destination: pickupPoint,
+              });
+
               return {
                 id: doc.id,
                 ...riderData,
                 distanceFromPickup: distance,
+                pickupRoute,
               };
             } catch (error) {
               console.error("Error processing rider:", error);
@@ -181,11 +188,23 @@ async function dispatchDeliveryRequest({
           }),
   );
 
+  const isExpress = dispatchPriority(deliveryRequest[0]) === 1;
   const closestRiders = ridersWithDistances
       .filter((rider) => rider !== null)
-      .sort((a, b) => dispatchPriority(deliveryRequest[0]) === 1 ?
-        a.distanceFromPickup - b.distanceFromPickup :
-        a.distanceFromPickup - b.distanceFromPickup)
+      .sort((a, b) => {
+        if (isExpress) {
+          const aDuration = a.pickupRoute && a.pickupRoute.durationSeconds;
+          const bDuration = b.pickupRoute && b.pickupRoute.durationSeconds;
+          const aHasRoute = Number.isFinite(Number(aDuration));
+          const bHasRoute = Number.isFinite(Number(bDuration));
+          if (aHasRoute !== bHasRoute) return aHasRoute ? -1 : 1;
+          if (aHasRoute && aDuration !== bDuration) return aDuration - bDuration;
+        }
+        if (a.distanceFromPickup !== b.distanceFromPickup) {
+          return a.distanceFromPickup - b.distanceFromPickup;
+        }
+        return `${a.id}`.localeCompare(`${b.id}`);
+      })
       .slice(0, 5);
 
   const sendResults = await Promise.all(closestRiders.map(async (rider) => {
@@ -209,6 +228,7 @@ async function dispatchDeliveryRequest({
           requestId,
           riderId: rider.id,
           distanceFromPickup: rider.distanceFromPickup,
+          pickupRoute: rider.pickupRoute || null,
         }),
       },
       token: rider.fcmToken,
