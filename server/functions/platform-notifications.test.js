@@ -26,6 +26,31 @@ test("Gifts in-app notification record is always created", () => {
   assert.equal(record.channel, "in_app");
 });
 
+test("future scheduled deliveries do not escalate by age alone", () => {
+  const now = Date.parse("2026-08-20T12:00:00Z");
+  assert.equal(_private.escalationStage({
+    createdAt: "2026-08-20T11:50:00Z",
+    deliveryTime: {type: "scheduled", scheduledAt: "2026-11-20T12:00:00Z"},
+  }, now), 0);
+});
+
+test("approaching scheduled deliveries escalate by remaining time", () => {
+  const now = Date.parse("2026-08-20T12:00:00Z");
+  assert.equal(_private.escalationStage({
+    createdAt: "2026-08-20T08:00:00Z",
+    deliveryTime: {type: "scheduled", scheduledAt: "2026-08-20T18:00:00Z"},
+  }, now), 2);
+  assert.equal(_private.escalationStage({
+    createdAt: "2026-08-20T08:00:00Z",
+    deliveryTime: {type: "scheduled", scheduledAt: "2026-08-20T12:30:00Z"},
+  }, now), 4);
+});
+
+test("ASAP escalation retains the existing age policy", () => {
+  const now = Date.parse("2026-08-20T12:05:00Z");
+  assert.equal(_private.escalationStage({createdAt: "2026-08-20T12:00:00Z"}, now), 5);
+});
+
 test("Gifts email and push mark skipped when providers are not configured", () => {
   const email = giftNotificationRecord({
     userId: "sender-1",

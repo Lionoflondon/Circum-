@@ -11,6 +11,31 @@ test("delivery tracking does not exempt founder claims from terminal controls", 
   assert.doesNotMatch(source, /founderRider[^\n]*assertRiderOperational/);
 });
 
+test("scheduled acceptance remains possible but pickup transitions wait for the scheduled time", () => {
+  const now = Date.parse("2026-08-20T12:00:00Z");
+  const delivery = {
+    deliveryTime: {type: "scheduled", scheduledAt: "2026-08-20T18:00:00Z"},
+  };
+  assert.equal(
+      deliveryTracking.scheduledOperationalTransitionAllowed(delivery, "accepted", now).allowed,
+      true,
+  );
+  const blocked = deliveryTracking.scheduledOperationalTransitionAllowed(delivery, "navigating_to_pickup", now);
+  assert.equal(blocked.allowed, false);
+  assert.equal(blocked.reason, "scheduled_pickup_not_started");
+  assert.equal(
+      deliveryTracking.scheduledOperationalTransitionAllowed(delivery, "navigating_to_pickup", Date.parse("2026-08-20T18:00:00Z")).allowed,
+      true,
+  );
+});
+
+test("ASAP delivery tracking is not affected by the scheduled transition guard", () => {
+  assert.equal(
+      deliveryTracking.scheduledOperationalTransitionAllowed({}, "navigating_to_pickup", Date.now()).allowed,
+      true,
+  );
+});
+
 test("standard delivery tracking path confirms collection from pickup and continues to dropoff", () => {
   const collected = tracking.statusForRiderAction("confirm_collected");
   for (const startingStatus of ["arrived_at_pickup", "waiting"]) {
