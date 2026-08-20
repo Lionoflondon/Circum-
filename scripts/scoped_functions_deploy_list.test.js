@@ -35,3 +35,12 @@ test("cycle traversal is finite and deduplicated", () => {
   const names = scope(["server/functions/sender-tracking-state-core.js"]);
   assert.equal(new Set(names).size, names.length);
 });
+
+test("direct module aliases are included in the deployment scope", () => {
+  const names = scope([
+    "server/functions/get-avaliable-requests.js",
+    "server/functions/accept-ride-requests.js",
+  ]);
+  assert.equal(names.includes("getAvailableRequests"), true);
+  assert.equal(names.includes("acceptRideRequests"), true);
+});
