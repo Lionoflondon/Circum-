@@ -51,6 +51,10 @@ function canGoOnline(profile = {}) {
 }
 
 function blockedReasonForAccess(profile = {}, founder = false) {
+  const terminal = lower(profile.riderStatus);
+  if (profile.isFrozen === true || terminal === "frozen") return "Account frozen.";
+  if (profile.isSuspended === true || terminal === "suspended") return "Account suspended.";
+  if (profile.isClosed === true || terminal === "closed") return "Account closed.";
   return founder ? "" : blockedReason(profile);
 }
 

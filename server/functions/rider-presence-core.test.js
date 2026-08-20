@@ -54,6 +54,12 @@ test("founder claim bypasses readiness while normal rider remains blocked", () =
   assert.equal(core.blockedReasonForAccess(incomplete, false), "Rider approval required.");
 });
 
+test("founder access never bypasses terminal account controls", () => {
+  for (const profile of [{isFrozen: true}, {isSuspended: true}, {isClosed: true}]) {
+    assert.notEqual(core.blockedReasonForAccess(profile, true), "");
+  }
+});
+
 test("goOnline never leaks raw internal failures to riders", () => {
   const source = fs.readFileSync(path.join(__dirname, "rider-presence.js"), "utf8");
   const goOnlineStart = source.indexOf("exports.goOnline = functions.https.onCall");
