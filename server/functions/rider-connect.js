@@ -3,9 +3,8 @@ const functions = require("firebase-functions/v1");
 const {getFirestore, FieldValue} = require("firebase-admin/firestore");
 const {payoutReadiness} = require("./rider-certification-policy");
 
-const safeConfig = functions.config() || {};
-const appBaseUrl = process.env.APP_BASE_URL || (safeConfig.app && safeConfig.app.base_url) || "https://circumuk.com";
-const adminBaseUrl = process.env.ADMIN_BASE_URL || (safeConfig.admin && safeConfig.admin.base_url) || "https://admin.circumuk.com";
+const appBaseUrl = process.env.APP_BASE_URL || "https://circumuk.com";
+const adminBaseUrl = process.env.ADMIN_BASE_URL || "https://admin.circumuk.com";
 const riderStripeReturnUrl = `${appBaseUrl}/rider/stripe/return`;
 const riderStripeRefreshUrl = `${appBaseUrl}/rider/stripe/refresh`;
 
@@ -44,23 +43,16 @@ function roundMoney(value) {
 }
 
 function payoutFeePolicy() {
-  const config = (safeConfig.rider_payout || safeConfig.riderPayout || {});
   const percentBps = numberValue(
       process.env.RIDER_PAYOUT_STRIPE_FEE_PERCENT_BPS ||
-      config.stripe_fee_percent_bps ||
-      config.stripeFeePercentBps,
       150,
   );
   const fixedPence = numberValue(
       process.env.RIDER_PAYOUT_STRIPE_FEE_FIXED_PENCE ||
-      config.stripe_fee_fixed_pence ||
-      config.stripeFeeFixedPence,
       20,
   );
   const minimumPence = numberValue(
       process.env.RIDER_PAYOUT_STRIPE_FEE_MINIMUM_PENCE ||
-      config.stripe_fee_minimum_pence ||
-      config.stripeFeeMinimumPence,
       0,
   );
   return {
@@ -1129,9 +1121,7 @@ function handleStripeConnectWebhook(stripeOrFactory) {
   return stripeWebhookRuntime.https.onRequest(async (req, res) => {
     const stripe = stripeFrom(stripeOrFactory);
     const signature = req.headers["stripe-signature"];
-    const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET ||
-      (safeConfig.stripe && safeConfig.stripe.connect_webhook_secret) ||
-      (safeConfig.stripe && safeConfig.stripe.webhook_secret);
+    const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET;
     let event;
     try {
       if (!webhookSecret) {
