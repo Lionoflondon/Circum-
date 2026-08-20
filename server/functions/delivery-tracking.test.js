@@ -6,6 +6,11 @@ const assert = require("node:assert/strict");
 const deliveryTracking = require("./delivery-tracking")._private;
 const tracking = require("./sender-tracking-state-core");
 
+test("delivery tracking does not exempt founder claims from terminal controls", () => {
+  const source = require("node:fs").readFileSync(require("node:path").join(__dirname, "delivery-tracking.js"), "utf8");
+  assert.doesNotMatch(source, /founderRider[^\n]*assertRiderOperational/);
+});
+
 test("standard delivery tracking path confirms collection from pickup and continues to dropoff", () => {
   const collected = tracking.statusForRiderAction("confirm_collected");
   for (const startingStatus of ["arrived_at_pickup", "waiting"]) {

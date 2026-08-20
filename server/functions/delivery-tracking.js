@@ -353,7 +353,7 @@ exports.updateDeliveryTrackingStatus = functions.https.onCall(async (data, conte
 
     const riderRef = db.collection("riders").doc(riderId);
     const riderSnapshot = await transaction.get(riderRef);
-    if (!(context.auth.token && context.auth.token.founderRider === true)) assertRiderOperational(riderSnapshot.data());
+    assertRiderOperational(riderSnapshot.data());
 
     const currentStatus = normalized(delivery.status || delivery.deliveryStatus || "requested");
     if (currentStatus === nextStatus ||
