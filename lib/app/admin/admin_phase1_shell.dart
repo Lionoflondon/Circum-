@@ -76,6 +76,9 @@ class _AdminPhaseOneShellState extends State<AdminPhaseOneShell> {
   bool _loading = true;
   bool _signingIn = false;
   bool _loadingData = false;
+  bool _rothSubmissionInFlight = false;
+  String? _rothSubmissionKey;
+  String? _rothSubmissionSignature;
   String? _message;
   StreamSubscription<User?>? _authSub;
   StreamSubscription<QuerySnapshot<Map<String, dynamic>>>? _chatMessagesSub;
@@ -2246,6 +2249,7 @@ class _AdminPhaseOneShellState extends State<AdminPhaseOneShell> {
   }
 
   Future<void> _issueRothFromAdminRecord(Map<String, dynamic> record) async {
+    if (_rothSubmissionInFlight) return;
     if (!_can(AdminPermission.manageFinance)) {
       setState(() => _message = 'Your role cannot issue Roth.');
       return;
@@ -2261,12 +2265,16 @@ class _AdminPhaseOneShellState extends State<AdminPhaseOneShell> {
       return;
     }
     try {
-      final idempotencyKey =
+      setState(() => _rothSubmissionInFlight = true);
+      final signature = 'record:${_idFor(record)}:$recipient:$amount';
+      if (_rothSubmissionSignature != signature) {
+        _rothSubmissionKey = null;
+        _rothSubmissionSignature = signature;
+      }
+      final idempotencyKey = _rothSubmissionKey ??=
           'admin_${_user?.uid ?? _user?.email}_${_idFor(record)}_${DateTime.now().microsecondsSinceEpoch}';
-      await _functions.httpsCallable('issueRothToWallets').call({
-        recipient.contains('@') ? 'recipientEmail' : 'recipientUid': recipient,
-        'walletTarget':
-            '${record['walletType'] ?? record['walletTarget'] ?? 'sender'}',
+      await _functions.httpsCallable('issueRothCredit').call({
+        recipient.contains('@') ? 'email' : 'userId': recipient,
         'amount': amount,
         'reason': 'Historical Admin Roth issue restored in isolated Admin',
         'idempotencyKey': idempotencyKey,
@@ -2282,9 +2290,13 @@ class _AdminPhaseOneShellState extends State<AdminPhaseOneShell> {
         ),
       );
       setState(() => _message = 'Roth issue submitted for $recipient.');
+      _rothSubmissionKey = null;
+      _rothSubmissionSignature = null;
       await _loadAdminData();
     } on FirebaseFunctionsException catch (error) {
       setState(() => _message = error.message ?? 'Roth issue failed.');
+    } finally {
+      if (mounted) setState(() => _rothSubmissionInFlight = false);
     }
   }
 
@@ -2294,6 +2306,7 @@ class _AdminPhaseOneShellState extends State<AdminPhaseOneShell> {
     required String reason,
     required String walletTarget,
   }) async {
+    if (_rothSubmissionInFlight) return;
     if (!_can(AdminPermission.manageFinance)) {
       setState(() => _message = 'Your role cannot issue Roth.');
       return;
@@ -2305,12 +2318,17 @@ class _AdminPhaseOneShellState extends State<AdminPhaseOneShell> {
       return;
     }
     try {
-      final idempotencyKey =
+      setState(() => _rothSubmissionInFlight = true);
+      final signature =
+          'manual:$cleanRecipient:$amount:$cleanReason:$walletTarget';
+      if (_rothSubmissionSignature != signature) {
+        _rothSubmissionKey = null;
+        _rothSubmissionSignature = signature;
+      }
+      final idempotencyKey = _rothSubmissionKey ??=
           'manual_${_user?.uid ?? _user?.email}_${DateTime.now().microsecondsSinceEpoch}';
-      await _functions.httpsCallable('issueRothToWallets').call({
-        cleanRecipient.contains('@') ? 'recipientEmail' : 'recipientUid':
-            cleanRecipient,
-        'walletTarget': walletTarget,
+      await _functions.httpsCallable('issueRothCredit').call({
+        cleanRecipient.contains('@') ? 'email' : 'userId': cleanRecipient,
         'amount': amount,
         'reason': cleanReason,
         'idempotencyKey': idempotencyKey,
@@ -2330,9 +2348,65 @@ class _AdminPhaseOneShellState extends State<AdminPhaseOneShell> {
         ),
       );
       setState(() => _message = 'Manual Roth credit submitted.');
+      _rothSubmissionKey = null;
+      _rothSubmissionSignature = null;
       await _loadAdminData();
     } on FirebaseFunctionsException catch (error) {
       setState(() => _message = error.message ?? 'Roth issue failed.');
+    } finally {
+      if (mounted) setState(() => _rothSubmissionInFlight = false);
+    }
+  }
+
+  Future<void> _debitRothFromAdminRecord(Map<String, dynamic> record) async {
+    if (_rothSubmissionInFlight) return;
+    if (!_can(AdminPermission.manageFinance)) {
+      setState(() => _message = 'Your role cannot debit Roth.');
+      return;
+    }
+    final recipient =
+        '${record['userId'] ?? record['uid'] ?? record['email'] ?? record['riderId'] ?? record['senderId'] ?? ''}'
+            .trim();
+    final amount = _numberFrom(
+      record['amount'] ?? record['rothAmount'] ?? record['balance'],
+    );
+    if (recipient.isEmpty || amount <= 0) {
+      setState(() => _message = 'Roth debit needs a recipient and amount.');
+      return;
+    }
+    try {
+      setState(() => _rothSubmissionInFlight = true);
+      final signature = 'debit:${_idFor(record)}:$recipient:$amount';
+      if (_rothSubmissionSignature != signature) {
+        _rothSubmissionKey = null;
+        _rothSubmissionSignature = signature;
+      }
+      final idempotencyKey = _rothSubmissionKey ??=
+          'admin_debit_${_user?.uid ?? _user?.email}_${_idFor(record)}_${DateTime.now().microsecondsSinceEpoch}';
+      await _functions.httpsCallable('debitRothCredit').call({
+        recipient.contains('@') ? 'email' : 'userId': recipient,
+        'amount': amount,
+        'reason': 'Roth debit requested through Operations Centre',
+        'idempotencyKey': idempotencyKey,
+      });
+      await _writeAudit(
+        AdminAuditEntry(
+          adminUserId: _user?.uid ?? 'unknown-admin',
+          actionType: 'admin_roth_debit_requested',
+          recordType: '${record['_collection'] ?? 'wallets'}',
+          recordId: _idFor(record),
+          newValue: {'recipient': recipient, 'amount': amount},
+          reason: 'Roth debited through Operations Centre',
+        ),
+      );
+      setState(() => _message = 'Roth debit submitted for $recipient.');
+      _rothSubmissionKey = null;
+      _rothSubmissionSignature = null;
+      await _loadAdminData();
+    } on FirebaseFunctionsException catch (error) {
+      setState(() => _message = error.message ?? 'Roth debit failed.');
+    } finally {
+      if (mounted) setState(() => _rothSubmissionInFlight = false);
     }
   }
 
@@ -3295,6 +3369,7 @@ class _AdminPhaseOneShellState extends State<AdminPhaseOneShell> {
                       onUpdateHealthPlusPickup: _updateHealthPlusPickup,
                       onUpdateFinanceWorkflow: _updateFinanceWorkflow,
                       onIssueRoth: _issueRothFromAdminRecord,
+                      onDebitRoth: _debitRothFromAdminRecord,
                       onIssueManualRothCredit: _issueManualRothCredit,
                       onManageRecognition: _manageRecognition,
                       onSetWalletFrozen: _setWalletFrozenFromAdminRecord,
@@ -4212,6 +4287,7 @@ class _AdminModuleBody extends StatelessWidget {
     required this.onUpdateHealthPlusPickup,
     required this.onUpdateFinanceWorkflow,
     required this.onIssueRoth,
+    required this.onDebitRoth,
     required this.onIssueManualRothCredit,
     required this.onManageRecognition,
     required this.onSetWalletFrozen,
@@ -4309,6 +4385,7 @@ class _AdminModuleBody extends StatelessWidget {
   final Future<void> Function(Map<String, dynamic>, String)
       onUpdateFinanceWorkflow;
   final Future<void> Function(Map<String, dynamic>) onIssueRoth;
+  final Future<void> Function(Map<String, dynamic>) onDebitRoth;
   final Future<void> Function({
     required String recipient,
     required double amount,
@@ -4632,6 +4709,7 @@ class _AdminModuleBody extends StatelessWidget {
               canManageFinance: canManageFinance,
               onUpdateFinanceWorkflow: onUpdateFinanceWorkflow,
               onIssueRoth: onIssueRoth,
+              onDebitRoth: onDebitRoth,
               onIssueManualRothCredit: onIssueManualRothCredit,
               onSetWalletFrozen: onSetWalletFrozen,
               onProcessPayoutRequest: onProcessPayoutRequest,
@@ -7238,6 +7316,7 @@ class _FinanceOperationsModule extends StatelessWidget {
     required this.canManageFinance,
     required this.onUpdateFinanceWorkflow,
     required this.onIssueRoth,
+    required this.onDebitRoth,
     required this.onIssueManualRothCredit,
     required this.onSetWalletFrozen,
     required this.onProcessPayoutRequest,
@@ -7269,6 +7348,7 @@ class _FinanceOperationsModule extends StatelessWidget {
   final Future<void> Function(Map<String, dynamic>, String)
       onUpdateFinanceWorkflow;
   final Future<void> Function(Map<String, dynamic>) onIssueRoth;
+  final Future<void> Function(Map<String, dynamic>) onDebitRoth;
   final Future<void> Function({
     required String recipient,
     required double amount,
@@ -7435,6 +7515,7 @@ class _FinanceOperationsModule extends StatelessWidget {
           query: query,
           canManageFinance: canManageFinance,
           onIssueRoth: onIssueRoth,
+          onDebitRoth: onDebitRoth,
           onSetWalletFrozen: onSetWalletFrozen,
           onProcessPayoutRequest: onProcessPayoutRequest,
         ),
@@ -7578,6 +7659,7 @@ class _FinanceLedgerPanel extends StatelessWidget {
     required this.query,
     required this.canManageFinance,
     required this.onIssueRoth,
+    required this.onDebitRoth,
     required this.onSetWalletFrozen,
     required this.onProcessPayoutRequest,
   });
@@ -7591,6 +7673,7 @@ class _FinanceLedgerPanel extends StatelessWidget {
   final String query;
   final bool canManageFinance;
   final Future<void> Function(Map<String, dynamic>) onIssueRoth;
+  final Future<void> Function(Map<String, dynamic>) onDebitRoth;
   final Future<void> Function(Map<String, dynamic>, bool) onSetWalletFrozen;
   final Future<void> Function(Map<String, dynamic>, String)
       onProcessPayoutRequest;
@@ -7657,6 +7740,10 @@ class _FinanceLedgerPanel extends StatelessWidget {
                       label: 'Issue Roth',
                       onPressed: () => unawaited(onIssueRoth(record)),
                     ),
+                    _MiniAction(
+                      label: 'Debit Roth',
+                      onPressed: () => unawaited(onDebitRoth(record)),
+                    ),
                   ];
                 }
               : null,
@@ -7695,6 +7782,10 @@ class _FinanceLedgerPanel extends StatelessWidget {
                     _MiniAction(
                       label: 'Issue Roth',
                       onPressed: () => unawaited(onIssueRoth(record)),
+                    ),
+                    _MiniAction(
+                      label: 'Debit Roth',
+                      onPressed: () => unawaited(onDebitRoth(record)),
                     ),
                     _MiniAction(
                       label: 'Freeze',
