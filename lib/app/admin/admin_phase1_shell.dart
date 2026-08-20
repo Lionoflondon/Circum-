@@ -76,6 +76,9 @@ class _AdminPhaseOneShellState extends State<AdminPhaseOneShell> {
   bool _loading = true;
   bool _signingIn = false;
   bool _loadingData = false;
+  bool _rothSubmissionInFlight = false;
+  String? _rothSubmissionKey;
+  String? _rothSubmissionSignature;
   String? _message;
   StreamSubscription<User?>? _authSub;
   StreamSubscription<QuerySnapshot<Map<String, dynamic>>>? _chatMessagesSub;
@@ -2246,6 +2249,7 @@ class _AdminPhaseOneShellState extends State<AdminPhaseOneShell> {
   }
 
   Future<void> _issueRothFromAdminRecord(Map<String, dynamic> record) async {
+    if (_rothSubmissionInFlight) return;
     if (!_can(AdminPermission.manageFinance)) {
       setState(() => _message = 'Your role cannot issue Roth.');
       return;
@@ -2261,7 +2265,13 @@ class _AdminPhaseOneShellState extends State<AdminPhaseOneShell> {
       return;
     }
     try {
-      final idempotencyKey =
+      setState(() => _rothSubmissionInFlight = true);
+      final signature = 'record:${_idFor(record)}:$recipient:$amount';
+      if (_rothSubmissionSignature != signature) {
+        _rothSubmissionKey = null;
+        _rothSubmissionSignature = signature;
+      }
+      final idempotencyKey = _rothSubmissionKey ??=
           'admin_${_user?.uid ?? _user?.email}_${_idFor(record)}_${DateTime.now().microsecondsSinceEpoch}';
       await _functions.httpsCallable('issueRothToWallets').call({
         recipient.contains('@') ? 'recipientEmail' : 'recipientUid': recipient,
@@ -2282,9 +2292,13 @@ class _AdminPhaseOneShellState extends State<AdminPhaseOneShell> {
         ),
       );
       setState(() => _message = 'Roth issue submitted for $recipient.');
+      _rothSubmissionKey = null;
+      _rothSubmissionSignature = null;
       await _loadAdminData();
     } on FirebaseFunctionsException catch (error) {
       setState(() => _message = error.message ?? 'Roth issue failed.');
+    } finally {
+      if (mounted) setState(() => _rothSubmissionInFlight = false);
     }
   }
 
@@ -2294,6 +2308,7 @@ class _AdminPhaseOneShellState extends State<AdminPhaseOneShell> {
     required String reason,
     required String walletTarget,
   }) async {
+    if (_rothSubmissionInFlight) return;
     if (!_can(AdminPermission.manageFinance)) {
       setState(() => _message = 'Your role cannot issue Roth.');
       return;
@@ -2305,7 +2320,13 @@ class _AdminPhaseOneShellState extends State<AdminPhaseOneShell> {
       return;
     }
     try {
-      final idempotencyKey =
+      setState(() => _rothSubmissionInFlight = true);
+      final signature = 'manual:$cleanRecipient:$amount:$cleanReason:$walletTarget';
+      if (_rothSubmissionSignature != signature) {
+        _rothSubmissionKey = null;
+        _rothSubmissionSignature = signature;
+      }
+      final idempotencyKey = _rothSubmissionKey ??=
           'manual_${_user?.uid ?? _user?.email}_${DateTime.now().microsecondsSinceEpoch}';
       await _functions.httpsCallable('issueRothToWallets').call({
         cleanRecipient.contains('@') ? 'recipientEmail' : 'recipientUid':
@@ -2330,9 +2351,13 @@ class _AdminPhaseOneShellState extends State<AdminPhaseOneShell> {
         ),
       );
       setState(() => _message = 'Manual Roth credit submitted.');
+      _rothSubmissionKey = null;
+      _rothSubmissionSignature = null;
       await _loadAdminData();
     } on FirebaseFunctionsException catch (error) {
       setState(() => _message = error.message ?? 'Roth issue failed.');
+    } finally {
+      if (mounted) setState(() => _rothSubmissionInFlight = false);
     }
   }
 
