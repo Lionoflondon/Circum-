@@ -81,6 +81,10 @@ function moduleExportMap() {
     const modulePath = [...aliases.entries()].find(([, alias]) => alias === match[2]);
     if (modulePath) mapping.set(modulePath[0], [...(mapping.get(modulePath[0]) || []), match[1]]);
   }
+  for (const match of source.matchAll(/exports\.([A-Za-z0-9_]+)\s*=\s*([A-Za-z0-9_]+)\s*;/g)) {
+    const modulePath = [...aliases.entries()].find(([, alias]) => alias === match[2]);
+    if (modulePath) mapping.set(modulePath[0], [...(mapping.get(modulePath[0]) || []), match[1]]);
+  }
   return mapping;
 }
 
