@@ -13,6 +13,37 @@ function normalized(value) {
   return tracking.normalizeStatus(value);
 }
 
+function scheduledPickupMillis(delivery = {}) {
+  const deliveryTime = delivery.deliveryTime && typeof delivery.deliveryTime === "object" ? delivery.deliveryTime : {};
+  const value = delivery.scheduledAt || delivery.scheduledFor || delivery.scheduledDateTime ||
+    delivery.scheduledDate || deliveryTime.scheduledAt || deliveryTime.scheduledDate;
+  if (!value) return 0;
+  if (typeof value === "number") return value;
+  if (typeof value.toMillis === "function") return value.toMillis();
+  if (value instanceof Date) return value.getTime();
+  const parsed = Date.parse(value);
+  return Number.isFinite(parsed) ? parsed : 0;
+}
+
+function scheduledOperationalTransitionAllowed(delivery = {}, nextStatus, now = Date.now()) {
+  const deliveryTime = delivery.deliveryTime && typeof delivery.deliveryTime === "object" ? delivery.deliveryTime : {};
+  const scheduled = deliveryTime.type === "scheduled" || delivery.isScheduled === true ||
+    delivery.scheduledAt || delivery.scheduledFor || delivery.scheduledDateTime ||
+    delivery.scheduledDate || deliveryTime.scheduledAt || deliveryTime.scheduledDate;
+  if (!scheduled) return {allowed: true};
+  const operationalStatuses = new Set([
+    "navigating_to_pickup", "en_route_to_pickup", "arrived_at_pickup", "rider_arrived_pickup",
+    "waiting", "pickup_verification", "pickup_verified", "collected", "picked_up", "in_transit",
+    "navigating_to_dropoff", "arrived_at_dropoff", "pin_required", "delivered", "completed",
+  ]);
+  if (!operationalStatuses.has(nextStatus)) return {allowed: true};
+  const pickupAt = scheduledPickupMillis(delivery);
+  if (pickupAt && now < pickupAt) {
+    return {allowed: false, reason: "scheduled_pickup_not_started", pickupAt};
+  }
+  return {allowed: true};
+}
+
 function firstDefined(...values) {
   for (const value of values) {
     if (value !== undefined && value !== null) return value;
@@ -369,6 +400,14 @@ exports.updateDeliveryTrackingStatus = functions.https.onCall(async (data, conte
     if (!tracking.canTransitionDeliveryStatus(currentStatus, nextStatus)) {
       throw new functions.https.HttpsError("failed-precondition", `Cannot move delivery from ${currentStatus} to ${nextStatus}.`);
     }
+    const scheduleDecision = scheduledOperationalTransitionAllowed(delivery, nextStatus);
+    if (!scheduleDecision.allowed) {
+      throw new functions.https.HttpsError(
+          "failed-precondition",
+          "This scheduled delivery is not ready for pickup yet.",
+          {reason: scheduleDecision.reason, pickupAt: scheduleDecision.pickupAt},
+      );
+    }
 
     const evidence = data && data.evidence && typeof data.evidence === "object" ? data.evidence : {};
     const evidenceDecision = evidenceRequirements(delivery, action, evidence);
@@ -645,4 +684,6 @@ exports._private = {
   canonicalRiderRankForTrust,
   hasManualRankOverride,
   riderTrustRankPatch,
+  scheduledPickupMillis,
+  scheduledOperationalTransitionAllowed,
 };

@@ -8,6 +8,40 @@ const communicationEngine = require("./communication-engine");
 
 const text = (value) => `${value || ""}`.trim();
 const openStatuses = new Set(["requested", "pending", "broadcast", "broadcasted", "awaiting_rider", "finding_rider"]);
+const ESCALATION_THRESHOLDS_MS = [24 * 60 * 60 * 1000, 6 * 60 * 60 * 1000, 2 * 60 * 60 * 1000, 60 * 60 * 1000];
+
+function timestampMillis(value) {
+  if (!value) return 0;
+  if (typeof value === "number") return value;
+  if (typeof value.toMillis === "function") return value.toMillis();
+  if (value instanceof Date) return value.getTime();
+  const parsed = Date.parse(value);
+  return Number.isFinite(parsed) ? parsed : 0;
+}
+
+function scheduledPickupMillis(delivery = {}) {
+  const deliveryTime = delivery.deliveryTime && typeof delivery.deliveryTime === "object" ? delivery.deliveryTime : {};
+  return timestampMillis(
+      delivery.scheduledAt || delivery.scheduledFor || delivery.scheduledDateTime ||
+      delivery.scheduledDate || deliveryTime.scheduledAt || deliveryTime.scheduledDate,
+  );
+}
+
+function escalationStage(delivery = {}, now = Date.now()) {
+  const scheduledAt = scheduledPickupMillis(delivery);
+  if (scheduledAt && scheduledAt > now) {
+    const remaining = scheduledAt - now;
+    for (let index = 0; index < ESCALATION_THRESHOLDS_MS.length; index += 1) {
+      const nextThreshold = ESCALATION_THRESHOLDS_MS[index + 1];
+      if (remaining <= ESCALATION_THRESHOLDS_MS[index] &&
+          (nextThreshold === undefined || remaining > nextThreshold)) return index + 1;
+    }
+    return 0;
+  }
+  const createdAt = timestampMillis(delivery.createdAt);
+  const ageMinutes = createdAt ? Math.floor((now - createdAt) / 60000) : 0;
+  return ageMinutes >= 5 ? 5 : ageMinutes >= 4 ? 4 : ageMinutes >= 3 ? 3 : ageMinutes >= 2 ? 2 : 0;
+}
 const giftEvents = new Set([
   "gift_draft_saved",
   "gift_submitted",
@@ -496,9 +530,7 @@ exports.escalateUnclaimedDeliveries = functions.pubsub.schedule("every 1 minutes
   for (const doc of snapshot.docs) {
     const delivery = doc.data();
     if (!openStatuses.has(text(delivery.status).toLowerCase())) continue;
-    const createdAt = delivery.createdAt && delivery.createdAt.toMillis ? delivery.createdAt.toMillis() : Date.now();
-    const ageMinutes = Math.floor((Date.now() - createdAt) / 60000);
-    const stage = ageMinutes >= 5 ? 5 : ageMinutes >= 4 ? 4 : ageMinutes >= 3 ? 3 : ageMinutes >= 2 ? 2 : 0;
+    const stage = escalationStage(delivery);
     if (!stage || Number(delivery.notificationEscalationStage || 0) >= stage) continue;
     if (stage === 5) {
       await notify({recipientRole: "admin", type: "unclaimed_delivery", title: "Unclaimed delivery", body: "A delivery remains unclaimed after five minutes.", bookingId: text(delivery.requestId || doc.id)});
@@ -524,4 +556,6 @@ exports._private = {
   onlineCandidateRiderProfileDocs,
   onlineCandidateRiderRecords,
   dispatchCandidateDecision,
+  escalationStage,
+  scheduledPickupMillis,
 };
