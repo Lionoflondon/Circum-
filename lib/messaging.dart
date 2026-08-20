@@ -87,6 +87,7 @@ void _openSenderNotification(RemoteMessage message) {
   );
 }
 
+@pragma('vm:entry-point')
 Future<void> _firebaseMessagingBackgroundHandler(RemoteMessage message) async {
   if (Firebase.apps.isEmpty) {
     await Firebase.initializeApp();
@@ -102,12 +103,11 @@ Future<void> _firebaseMessagingBackgroundHandler(RemoteMessage message) async {
         stage: 'background',
       );
       if (mapData != null) {
-        sendPackageBloc.add(DeliveryAccepted(data: mapData));
-
         notifyUser(
-            title: 'Circum Rider on the way!',
-            body:
-                '${mapData['courierName'].split(' ').first.trim()} will be picking up your parcel soon.');
+          title: 'Circum Rider on the way!',
+          body:
+              '${mapData['courierName'].split(' ').first.trim()} will be picking up your parcel soon.',
+        );
       }
     }
   }
@@ -119,8 +119,6 @@ Future<void> _firebaseMessagingBackgroundHandler(RemoteMessage message) async {
       stage: 'background',
     );
     if (msg == null) return Future<void>.value();
-    sendPackageBloc.add(IncomingMessage(data: msg));
-
     await ChatsHelper().storeChat(msg);
 
     notifyUser(title: 'New message', body: msg['message']);
@@ -133,16 +131,12 @@ Future<void> _firebaseMessagingBackgroundHandler(RemoteMessage message) async {
       stage: 'background',
     );
     if (data != null) {
-      accountBloc.add(UpdatePaymentStatus(data: data));
+      notifyUser(
+        title: 'Payment update',
+        body: 'Your payment status has changed.',
+      );
     }
   }
-
-  // if (message.data['type'] == 'message') {
-  //   final msg = jsonDecode(message.data['data']);
-  //   sendPackageBloc.add(IncomingMessage(data: msg));
-
-  //   await ChatsHelper().storeChat(msg);
-  // }
 
   if (message.data['type'] == 'delivery-completed') {
     final mapData = _decodeCommunicationPayload(
@@ -151,8 +145,6 @@ Future<void> _firebaseMessagingBackgroundHandler(RemoteMessage message) async {
       stage: 'background',
     );
     if (mapData != null) {
-      sendPackageBloc.add(DeliveryCompleted(data: mapData));
-
       notifyUser(title: 'Delivery completed!', body: '');
     }
   }

@@ -49,17 +49,21 @@ void main() {
   });
 
   test('Sender support opens the canonical backend conversation surface', () {
-    final supportView =
-        File('lib/app/support/view/support.dart').readAsStringSync();
-    final supportBloc =
-        File('lib/app/support/bloc/support_bloc.dart').readAsStringSync();
+    final supportView = File(
+      'lib/app/support/view/support.dart',
+    ).readAsStringSync();
+    final supportBloc = File(
+      'lib/app/support/bloc/support_bloc.dart',
+    ).readAsStringSync();
 
     expect(supportView, contains('RideChatPageView'));
     expect(supportView, contains('supportConversation: true'));
     expect(supportView, isNot(contains("import 'chat.dart'")));
     expect(supportView, isNot(contains('const ChatPageView')));
-    expect(supportBloc,
-        contains("httpsCallable('getOrCreateSupportConversation')"));
+    expect(
+      supportBloc,
+      contains("httpsCallable('getOrCreateSupportConversation')"),
+    );
     expect(supportBloc, isNot(contains('ChatsHelper')));
     expect(supportBloc, isNot(contains('storeChat')));
   });
@@ -71,8 +75,24 @@ void main() {
     expect(messaging, contains('_logRecoverablePushPayload'));
     expect(messaging, contains('Recoverable Sender push payload discarded'));
     expect(
-        messaging,
-        isNot(contains(
-            "Map<String, dynamic> msg = jsonDecode(message.data['data'])")));
+      messaging,
+      isNot(
+        contains("Map<String, dynamic> msg = jsonDecode(message.data['data'])"),
+      ),
+    );
+  });
+
+  test('background FCM handling stays isolate-safe and refreshes tokens', () {
+    final messaging = File('lib/messaging.dart').readAsStringSync();
+    final main = File('lib/main.dart').readAsStringSync();
+
+    expect(messaging, contains('@pragma(\'vm:entry-point\')'));
+    final background = messaging.substring(
+      messaging.indexOf('Future<void> _firebaseMessagingBackgroundHandler'),
+    );
+    expect(background, isNot(contains('sendPackageBloc.add')));
+    expect(background, isNot(contains('accountBloc.add')));
+    expect(main, contains('FirebaseMessaging.instance.onTokenRefresh'));
+    expect(main, contains("httpsCallable('updateSenderPushToken')"));
   });
 }

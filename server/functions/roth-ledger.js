@@ -2,6 +2,7 @@
 "use strict";
 
 const functions = require("firebase-functions/v1");
+const crypto = require("node:crypto");
 const {getFirestore, FieldValue} = require("firebase-admin/firestore");
 const {getAuth} = require("firebase-admin/auth");
 const {
@@ -33,10 +34,16 @@ function hasAdminRole(context) {
     [role, ...roles].some((item) => ["super_admin", "finance_admin", "operations_admin"].includes(item));
 }
 
-function requireRothAdmin(context) {
-  if (!context.auth || !hasAdminRole(context)) {
-    throw new functions.https.HttpsError("permission-denied", "Roth wallet access requires admin finance permissions.");
+async function requireRothAdmin(context) {
+  if (!context.auth) {
+    throw new functions.https.HttpsError("unauthenticated", "Roth admin authentication is required.");
   }
+  if (hasAdminRole(context)) return;
+  const adminSnap = await getFirestore().collection("adminUsers").doc(context.auth.uid).get();
+  const admin = adminSnap.exists ? adminSnap.data() : {};
+  const role = `${admin.role || ""}`.toLowerCase();
+  if (admin.status === "active" && ["super_admin", "finance_admin", "operations_admin"].includes(role)) return;
+  throw new functions.https.HttpsError("permission-denied", "Roth wallet access requires admin finance permissions.");
 }
 
 async function requireTrustedRothAdmin(context) {
@@ -196,6 +203,7 @@ async function recordRothMovement({
   allowNegative = false,
   ledgerOnly = false,
   transactionId = null,
+  idempotencyKey = null,
 }) {
   if (!userId) throw new Error("Roth ledger movement requires userId.");
   assertBalanceType(balanceType);
@@ -207,14 +215,33 @@ async function recordRothMovement({
   const ledgerRef = transactionId ?
     db.collection("walletTransactions").doc(transactionId) :
     db.collection("walletTransactions").doc();
+  const operationKey = `${idempotencyKey || transactionId || providerTransactionId || ledgerRef.id}`.trim();
+  const operationKeyId = crypto.createHash("sha256").update(operationKey).digest("hex");
+  const idempotencyRef = db.collection("rothMovementIdempotency").doc(operationKeyId);
   const senderWalletRef = identity.uid ? db.collection("senderWallets").doc(identity.uid) : null;
   await db.runTransaction(async (transaction) => {
-    const [existingLedger, wallet, senderWalletSnap] = await Promise.all([
+    const [existingLedger, existingIdempotency, wallet, senderWalletSnap] = await Promise.all([
       transaction.get(ledgerRef),
+      transaction.get(idempotencyRef),
       transaction.get(walletRef),
       senderWalletRef ? transaction.get(senderWalletRef) : Promise.resolve(null),
     ]);
-    if (existingLedger.exists) return;
+    const signature = {
+      walletId: identity.walletId,
+      uid: identity.uid || null,
+      amount: roundedAmount,
+      balanceType,
+      type,
+      reason: reason || type,
+    };
+    const existingSignature = existingIdempotency.exists ? existingIdempotency.data() :
+      existingLedger.exists ? existingLedger.data() : null;
+    if (existingSignature) {
+      const fieldsMatch = ["walletId", "uid", "amount", "balanceType", "type", "reason"]
+        .every((field) => existingSignature[field] === signature[field]);
+      if (!fieldsMatch) throw new Error("Roth idempotency key conflict.");
+      return;
+    }
     const walletData = wallet.exists ? wallet.data() : {};
     const senderWallet = senderWalletSnap && senderWalletSnap.exists ? senderWalletSnap.data() : {};
     const rawBalance = balanceType === BALANCE_TYPES.rothCredit ?
@@ -273,7 +300,7 @@ async function recordRothMovement({
       reason: reason || type,
       description: reason || type,
       relatedEntityId,
-      idempotencyKey: transactionId || providerTransactionId || ledgerRef.id,
+      idempotencyKey: operationKey,
       createdBy: issuedByAdminId || "system",
       status: "completed",
       paymentProvider,
@@ -290,6 +317,12 @@ async function recordRothMovement({
       ledgerOnly,
       createdAt: now,
       metadata,
+    });
+    transaction.create(idempotencyRef, {
+      ...signature,
+      idempotencyKey: operationKey,
+      transactionId: ledgerRef.id,
+      createdAt: now,
     });
   });
   return {transactionId: ledgerRef.id};
@@ -867,7 +900,7 @@ exports.issueRothToWallets = functions.https.onCall(async (data, context) => {
 });
 
 exports.issueRothCredit = functions.https.onCall(async (data, context) => {
-  requireRothAdmin(context);
+  await requireRothAdmin(context);
   const rawUser = `${data.userId || data.email || ""}`.trim();
   const amount = Number(data.amount || 0);
   const reason = `${data.reason || ""}`.trim();
@@ -889,6 +922,7 @@ exports.issueRothCredit = functions.https.onCall(async (data, context) => {
     issuedByAdminId: context.auth.uid,
     issuedByAdminEmail: context.auth.token.email || null,
     transactionId,
+    idempotencyKey,
     metadata: {
       source: "admin_issue_roth",
       input: rawUser,
@@ -909,14 +943,16 @@ exports.issueRothCredit = functions.https.onCall(async (data, context) => {
 });
 
 exports.debitRothCredit = functions.https.onCall(async (data, context) => {
-  requireRothAdmin(context);
+  await requireRothAdmin(context);
   const rawUser = `${data.userId || data.email || ""}`.trim();
   const amount = Number(data.amount || 0);
   const reason = `${data.reason || ""}`.trim();
-  if (!rawUser || amount <= 0 || !reason) {
-    throw new functions.https.HttpsError("invalid-argument", "User, amount and reason are required.");
+  const idempotencyKey = `${data.idempotencyKey || data.adminIssueId || ""}`.trim();
+  if (!rawUser || amount <= 0 || !reason || !idempotencyKey) {
+    throw new functions.https.HttpsError("invalid-argument", "User, amount, reason and idempotency key are required.");
   }
   const identity = await resolveWalletIdentity({userId: rawUser, email: data.email});
+  const transactionId = `admin_roth_debit_${idempotencyKey}`;
   const result = await recordRothMovement({
     userId: identity.walletId,
     uid: identity.uid,
@@ -928,7 +964,9 @@ exports.debitRothCredit = functions.https.onCall(async (data, context) => {
     paymentProvider: "manual_admin",
     issuedByAdminId: context.auth.uid,
     issuedByAdminEmail: context.auth.token.email || null,
-    metadata: {source: "admin_debit_roth", input: rawUser},
+    transactionId,
+    idempotencyKey,
+    metadata: {source: "admin_debit_roth", input: rawUser, idempotencyKey},
   });
   await writeRothAudit({
     adminId: context.auth.uid,
@@ -943,7 +981,7 @@ exports.debitRothCredit = functions.https.onCall(async (data, context) => {
 });
 
 exports.setWalletFrozen = functions.https.onCall(async (data, context) => {
-  requireRothAdmin(context);
+  await requireRothAdmin(context);
   const userId = `${data.userId || data.email || ""}`.trim();
   const frozen = data.isFrozen === true;
   const reason = `${data.reason || ""}`.trim();

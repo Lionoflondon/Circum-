@@ -1,6 +1,8 @@
 import 'dart:convert';
 import 'dart:developer' as developer;
 
+import 'package:cloud_functions/cloud_functions.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/foundation.dart';
@@ -39,6 +41,20 @@ Future<void> main() async {
     await _configureNotifications();
     FirebaseMessaging.onBackgroundMessage(_firebaseMessagingBackgroundHandler);
     foregoundMessage();
+    FirebaseMessaging.instance.onTokenRefresh.listen((token) async {
+      final user = FirebaseAuth.instance.currentUser;
+      if (user == null || token.trim().isEmpty) return;
+      try {
+        await FirebaseFunctions.instance
+            .httpsCallable('updateSenderPushToken')
+            .call({'fcmToken': token});
+      } catch (_) {
+        developer.log(
+          'Push token refresh registration failed',
+          name: 'circum.sender.messaging',
+        );
+      }
+    });
     configureNotificationOpenRouting();
   }
 
