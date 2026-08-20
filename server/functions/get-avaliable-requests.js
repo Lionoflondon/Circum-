@@ -1,7 +1,7 @@
 /* eslint-disable max-len, require-jsdoc */
 const functions = require("firebase-functions/v1");
 const {getFirestore} = require("firebase-admin/firestore");
-const {dispatchPriority, isDispatchable, riderCanViewDispatch, riderDispatchPriority, riderMatchesIris} = require("./iris-core");
+const {dispatchPriority, isDispatchable, riderCanViewDispatch, riderMatchesIris} = require("./iris-core");
 
 const REQUEST_SCAN_LIMIT = 100;
 const openStatuses = new Set(["requested", "pending", "broadcast", "broadcasted", "awaiting_rider", "finding_rider"]);
@@ -194,7 +194,7 @@ const getNearbyRequests = functions.https.onCall(async (data, context) => {
                   requestData.irisPrivate = privateDoc.data();
                 }
                 if (!riderCanViewDispatch(riderData, requestData)) {
-                  console.info("rider_offer_excluded", {riderId, bookingId: text(requestData.bookingId || requestData.requestId || doc.id), deliveryId: doc.id, reason: "rank_or_visibility"});
+                  console.info("rider_offer_excluded", {riderId, bookingId: text(requestData.bookingId || requestData.requestId || doc.id), deliveryId: doc.id, reason: "rider_not_approved"});
                   return null;
                 }
                 if (!riderMatchesIris(riderData, requestData)) {
@@ -232,8 +232,7 @@ const getNearbyRequests = functions.https.onCall(async (data, context) => {
     // Filter out null values and get 5 closest requests
     const nearestRequests = requestsWithDistances
         .filter((request) => request !== null)
-        .sort((a, b) => riderDispatchPriority(riderData, b) - riderDispatchPriority(riderData, a) ||
-          dispatchPriority(b) - dispatchPriority(a) ||
+        .sort((a, b) => dispatchPriority(b) - dispatchPriority(a) ||
           deliveryCreatedMillis(b) - deliveryCreatedMillis(a) ||
           a.distanceFromRider - b.distanceFromRider)
         .slice(0, 5);

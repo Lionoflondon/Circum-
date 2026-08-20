@@ -2463,17 +2463,6 @@ function riderCanViewDispatch(rider, request, now = Date.now()) {
   return isApprovedRiderForDispatch(rider);
 }
 
-function riderDispatchPriority(rider, request, now = Date.now()) {
-  const rank = normalizeRiderRank(rider.rank || rider.riderRank);
-  const rawCreatedAt = request.createdAt || request.requestedAt || request.timestamp || request.timeStamp;
-  const createdAt = rawCreatedAt && typeof rawCreatedAt.toMillis === "function" ?
-    rawCreatedAt.toMillis() : new Date(rawCreatedAt).getTime();
-  if (!Number.isFinite(createdAt)) return 0;
-  const elapsedMinutes = Math.floor((now - createdAt) / 60000);
-  const thresholds = {agent: 0, sentinel: 5, warden: 10, knight: 15, veteran: 20};
-  return elapsedMinutes >= thresholds[rank] ? 1 : 0;
-}
-
 function deliveryProtocolState(delivery = {}) {
   return {
     vanguardProtocolEnabled: delivery.vanguardProtocolEnabled === true ||
@@ -2511,7 +2500,6 @@ module.exports = {
   dispatchPriority,
   normalizeRiderRank,
   riderCanViewDispatch,
-  riderDispatchPriority,
   deliveryProtocolState,
   normalizeVehicleClass: vehicleDispatch.normalizeVehicleClass,
   normalizeRiderVehicle: vehicleDispatch.normalizeRiderVehicle,

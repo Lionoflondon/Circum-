@@ -12,7 +12,6 @@ const {
   dispatchPriority,
   normalizeRiderRank,
   riderCanViewDispatch,
-  riderDispatchPriority,
 } = require("./iris-core");
 
 test("weight band boundaries match Iris v1", () => {
@@ -1040,7 +1039,7 @@ test("express jobs receive dispatch priority", () => {
   assert.ok(express.recommendation.estimatedPrice > standard.recommendation.estimatedPrice);
 });
 
-test("rider rank never hides jobs and only changes backup priority", () => {
+test("rider rank never hides ordinary jobs or changes dispatch authority", () => {
   const now = Date.parse("2026-06-14T12:00:00Z");
   const approved = {approvalStatus: "approved"};
   assert.equal(normalizeRiderRank(), "agent");
@@ -1059,8 +1058,9 @@ test("rider rank never hides jobs and only changes backup priority", () => {
     dispatchRankOverrideEnabled: true,
     dispatchAllowedRanks: ["sentinel"],
   }, now), true);
-  assert.equal(riderDispatchPriority({rank: "sentinel"}, {createdAt: "2026-06-14T11:59:00Z"}, now), 0);
-  assert.equal(riderDispatchPriority({rank: "sentinel"}, {createdAt: "2026-06-14T11:55:00Z"}, now), 1);
+  for (const rank of ["agent", "sentinel", "warden", "knight", "veteran"]) {
+    assert.equal(riderCanViewDispatch({...approved, rank}, {createdAt: "2026-06-14T11:59:00Z"}, now), true);
+  }
 });
 
 test("rider mismatch is evidence, not final truth", () => {

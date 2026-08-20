@@ -180,7 +180,7 @@ const acceptRideRequests = functions.https.onCall(async (data, context) => {
     }
 
     if (!riderCanViewDispatch(rider, deliveryRequest)) {
-      throw new functions.https.HttpsError("permission-denied", "This delivery is not available to the rider's current rank.");
+      throw new functions.https.HttpsError("permission-denied", "This delivery is not available to this rider.");
     }
 
     if (!riderVehicleMatchesRequest(rider, deliveryRequest) &&
