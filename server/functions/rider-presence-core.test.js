@@ -66,12 +66,13 @@ test("goOnline never leaks raw internal failures to riders", () => {
   assert.doesNotMatch(goOnlineSource, /throw new functions\.https\.HttpsError\("internal"/);
 });
 
-test("online presence clears stale offline status field", () => {
+test("presence writes expose explicit state without rewriting availability", () => {
   const source = fs.readFileSync(path.join(__dirname, "rider-presence.js"), "utf8");
 
   assert.match(source, /status: status === "offline" \? "offline" : "online"/);
   assert.match(source, /availabilityStatus: status/);
-  assert.match(source, /status: "online",\s+availabilityStatus: "connection_lost"/);
+  assert.match(source, /presenceState: core\.PRESENCE_STATES\.STALE/);
+  assert.doesNotMatch(source, /availabilityStatus:\s*["']connection_lost["']/);
 });
 
 test("goOnline mirrors dispatch availability into riderProfiles", () => {
@@ -113,6 +114,38 @@ test("stale heartbeat blocks dispatch", () => {
     },
   };
   assert.equal(core.canReceiveDispatch({profile, presence}), false);
+  assert.deepEqual(core.dispatchDecision({profile, presence}).presenceState, core.PRESENCE_STATES.STALE);
+});
+
+test("presence states separate reachability from explicit availability", () => {
+  const profile = {onboardingStatus: "approved", vehicleStatus: "approved"};
+  const now = Date.now();
+  const gps = {
+    latitude: 51.5072,
+    longitude: -0.1276,
+    accuracyMeters: 18,
+    updatedAt: now,
+  };
+  const fresh = {isOnline: true, availabilityStatus: "available", busy: false, lastHeartbeatAt: now, currentLocation: gps, gpsStatus: "active"};
+  assert.deepEqual(core.dispatchDecision({profile, presence: fresh, now}), {allowed: true, presenceState: core.PRESENCE_STATES.FRESH, reason: null});
+
+  const stale = {...fresh, lastHeartbeatAt: now - core.STALE_HEARTBEAT_MS - 1};
+  const staleDecision = core.dispatchDecision({profile, presence: stale, now});
+  assert.equal(staleDecision.allowed, false);
+  assert.equal(staleDecision.presenceState, core.PRESENCE_STATES.STALE);
+  assert.equal(stale.availabilityStatus, "available");
+  assert.equal(core.presenceState({presence: {...stale, lastHeartbeatAt: now}, now}), core.PRESENCE_STATES.FRESH);
+
+  const offline = {...fresh, isOnline: false, availabilityStatus: "offline"};
+  assert.deepEqual(core.dispatchDecision({profile, presence: offline, now}), {allowed: false, presenceState: core.PRESENCE_STATES.OFFLINE, reason: "offline"});
+});
+
+test("busy and stale GPS remain non-dispatchable independently", () => {
+  const profile = {onboardingStatus: "approved", vehicleStatus: "approved"};
+  const now = Date.now();
+  const base = {isOnline: true, availabilityStatus: "available", lastHeartbeatAt: now, currentLocation: {latitude: 51.5072, longitude: -0.1276, accuracyMeters: 18, updatedAt: now}, gpsStatus: "active"};
+  assert.equal(core.dispatchDecision({profile, presence: {...base, busy: true}, now}).reason, "busy");
+  assert.equal(core.dispatchDecision({profile, presence: {...base, gpsStatus: "stale"}, now}).reason, "gps_unhealthy");
 });
 
 test("dispatch requires fresh accurate GPS", () => {

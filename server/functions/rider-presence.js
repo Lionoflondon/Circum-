@@ -58,6 +58,7 @@ function presencePatch({riderId, status, busy = false, location = null}) {
     riderId,
     isOnline: status !== "offline",
     status: status === "offline" ? "offline" : "online",
+    presenceState: status === "offline" ? core.PRESENCE_STATES.OFFLINE : core.PRESENCE_STATES.FRESH,
     availabilityStatus: status,
     busy,
     updatedAt: FieldValue.serverTimestamp(),
@@ -118,6 +119,7 @@ exports.goOnline = functions.https.onCall(async (data, context) => {
       status: "online",
       availabilityStatus: "available",
       isOnline: true,
+      presenceState: core.PRESENCE_STATES.FRESH,
       dispatchEligible: patch.dispatchEligible === true,
       lastHeartbeatAt: patch.lastHeartbeatAt,
       lastOnlineAt: FieldValue.serverTimestamp(),
@@ -190,6 +192,7 @@ exports.goOffline = functions.https.onCall(async (data, context) => {
     status: "offline",
     availabilityStatus: "offline",
     isOnline: false,
+    presenceState: core.PRESENCE_STATES.OFFLINE,
     dispatchEligible: false,
     lastOfflineAt: FieldValue.serverTimestamp(),
     updatedAt: FieldValue.serverTimestamp(),
@@ -233,6 +236,7 @@ exports.updateRiderPresence = functions.https.onCall(async (data, context) => {
     status: "online",
     availabilityStatus: status,
     isOnline: true,
+    presenceState: core.PRESENCE_STATES.FRESH,
     dispatchEligible: patch.dispatchEligible === true,
     lastHeartbeatAt: patch.lastHeartbeatAt,
     updatedAt: FieldValue.serverTimestamp(),
@@ -273,6 +277,7 @@ async function forceOfflineWhenBlocked(change, context) {
   await db.collection("riderPresence").doc(riderId).set({
     riderId,
     isOnline: false,
+    presenceState: core.PRESENCE_STATES.OFFLINE,
     busy: false,
     availabilityStatus: "offline",
     connectionStatus: "offline",
@@ -307,9 +312,20 @@ exports.markStaleRiderPresenceOffline = functions.pubsub
       snapshot.docs.forEach((doc) => {
         batch.set(doc.ref, {
           status: "online",
-          availabilityStatus: "connection_lost",
-          connectionStatus: "lost",
-          gpsStatus: "stale",
+          presenceState: core.PRESENCE_STATES.STALE,
+          presenceFreshness: "stale",
+          connectionStatus: "stale",
+          dispatchEligible: false,
+          staleAt: FieldValue.serverTimestamp(),
+          updatedAt: FieldValue.serverTimestamp(),
+          source: "staleHeartbeat",
+        }, {merge: true});
+        batch.set(db.collection("riderProfiles").doc(doc.id), {
+          isOnline: true,
+          status: "online",
+          presenceState: core.PRESENCE_STATES.STALE,
+          presenceFreshness: "stale",
+          connectionStatus: "stale",
           dispatchEligible: false,
           staleAt: FieldValue.serverTimestamp(),
           updatedAt: FieldValue.serverTimestamp(),
@@ -317,14 +333,19 @@ exports.markStaleRiderPresenceOffline = functions.pubsub
         }, {merge: true});
       });
       await batch.commit();
-      return {markedConnectionLost: snapshot.size};
+      return {markedStale: snapshot.size};
     });
 
 exports.requireDispatchablePresence = async function(riderId, riderProfileData = {}) {
   const presenceDoc = await getFirestore().collection("riderPresence").doc(riderId).get();
   const presence = presenceDoc.exists ? presenceDoc.data() : {};
-  if (!core.canReceiveDispatch({profile: riderProfileData, presence})) {
-    throw new functions.https.HttpsError("failed-precondition", "Go online and remain available before accepting deliveries.");
+  const decision = core.dispatchDecision({profile: riderProfileData, presence});
+  if (!decision.allowed) {
+    throw new functions.https.HttpsError(
+        "failed-precondition",
+        "Go online and remain available before accepting deliveries.",
+        {presenceState: decision.presenceState, reason: decision.reason},
+    );
   }
-  return presence;
+  return {...presence, presenceState: decision.presenceState};
 };
