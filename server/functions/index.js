@@ -396,6 +396,7 @@ exports.updateSenderLocation = senderAccount.updateSenderLocation;
 exports.recordIrisLearningCandidate = senderAccount.recordIrisLearningCandidate;
 exports.recordIrisLearningOutlier = senderAccount.recordIrisLearningOutlier;
 exports.updateRiderProfile = riderAccount.updateRiderProfile;
+exports.advanceRiderOnboarding = riderAccount.advanceRiderOnboarding;
 exports.requestRiderEmailChange = riderAccount.requestRiderEmailChange;
 exports.updateRiderPushToken = riderAccount.updateRiderPushToken;
 exports.updateRiderNotificationState =

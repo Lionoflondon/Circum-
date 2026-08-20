@@ -56,6 +56,30 @@ test("Rider self-service authority validates auth ownership documents and audit"
   assert.match(source, /runTransaction/);
 });
 
+test("Rider document authority supports validated multipart identity submissions", () => {
+  assert.match(source, /function normalizeRiderDocumentFiles\(data, documentType\)/);
+  assert.match(source, /Array\.isArray\(data && data\.files\)/);
+  assert.match(source, /side === "front"/);
+  assert.match(source, /side === "back"/);
+  assert.match(source, /Front and back document files are required/);
+  assert.match(source, /bytes\.toString\("base64"\)/);
+  assert.match(source, /attachments/);
+  assert.match(source, /Promise\.all\(uploaded\.map/);
+  assert.doesNotMatch(source, /recordRiderDocumentUpload/);
+  assert.doesNotMatch(indexSource, /recordRiderDocumentUpload/);
+});
+
+test("Rider document authority ignores client review and storage authority fields", () => {
+  assert.match(source, /source: "cloud-functions"/);
+  assert.match(source, /status: "pending"/);
+  assert.match(source, /verificationStatus: "pending"/);
+  assert.match(source, /rider_documents\/\$\{rider\.uid\}/);
+  assert.doesNotMatch(source, /data\.storagePath/);
+  assert.doesNotMatch(source, /data\.downloadUrl/);
+  assert.doesNotMatch(source, /data\.reviewedBy/);
+  assert.doesNotMatch(source, /data\.approvalStatus/);
+});
+
 test("Rider account creation initializes backend-owned rank and trust", () => {
   assert.match(source, /riderRank:\s*"agent"/);
   assert.match(source, /trustPoints:\s*0/);

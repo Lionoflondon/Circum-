@@ -32,6 +32,14 @@ const ALLOWED_SECTION_STATUSES = new Set([
   "needs_attention",
   "approved",
 ]);
+const ONBOARDING_TRANSITIONS = new Map([
+  ["account_created", new Set(["profile_started"])],
+  ["not_started", new Set(["profile_started", "phone_verified", "email_verified", "profile_complete"])],
+  ["profile_started", new Set(["phone_verified", "email_verified", "profile_complete"])],
+  ["phone_verified", new Set(["email_verified", "profile_complete"])],
+  ["email_verified", new Set(["profile_complete"])],
+  ["profile_complete", new Set(["profile_complete"])],
+]);
 
 function requireRider(context) {
   if (!context.auth) {
@@ -85,6 +93,49 @@ function cleanSectionStatus(value) {
 
 function safeFileName(value) {
   return text(value || "rider-document", 180).replace(/[^A-Za-z0-9._-]/g, "_");
+}
+
+function normalizeRiderDocumentFiles(data, documentType) {
+  const multipart = Array.isArray(data && data.files) ? data.files : null;
+  const rawFiles = multipart || [{
+    side: "primary",
+    base64: data && data.fileBase64,
+    mimeType: data && data.contentType,
+    fileName: data && data.fileName,
+  }];
+  const files = rawFiles.map((entry) => {
+    if (!entry || typeof entry !== "object") {
+      throw new functions.https.HttpsError("invalid-argument", "Invalid document attachment.");
+    }
+    const side = lower(entry.side || "primary", 20);
+    if (!new Set(["front", "back", "primary"]).has(side)) {
+      throw new functions.https.HttpsError("invalid-argument", "Unsupported document side.");
+    }
+    const contentType = lower(entry.mimeType || entry.contentType, 120);
+    if (!ALLOWED_CONTENT_TYPES.has(contentType)) {
+      throw new functions.https.HttpsError("invalid-argument", "Unsupported document file type.");
+    }
+    const encoded = text(entry.base64 || entry.fileBase64, MAX_DOCUMENT_BYTES * 2);
+    if (!encoded || !/^[A-Za-z0-9+/]*={0,2}$/.test(encoded) || encoded.length % 4 !== 0) {
+      throw new functions.https.HttpsError("invalid-argument", "Document file is invalid.");
+    }
+    const bytes = Buffer.from(encoded, "base64");
+    if (!bytes.length || bytes.length > MAX_DOCUMENT_BYTES ||
+        bytes.toString("base64") !== encoded.replace(/\s/g, "")) {
+      throw new functions.https.HttpsError("invalid-argument", "Document file is too large or invalid.");
+    }
+    return {side, contentType, bytes, fileName: safeFileName(entry.fileName)};
+  });
+  const requiresSides = documentType === "driving_licence" || documentType === "identity_document";
+  if (requiresSides) {
+    if (files.length !== 2 || files.filter((file) => file.side === "front").length !== 1 ||
+        files.filter((file) => file.side === "back").length !== 1) {
+      throw new functions.https.HttpsError("invalid-argument", "Front and back document files are required.");
+    }
+  } else if (files.length !== 1 || files[0].side !== "primary") {
+    throw new functions.https.HttpsError("invalid-argument", "One document file is required.");
+  }
+  return files;
 }
 
 function audit(type, rider, extra = {}) {
@@ -160,6 +211,82 @@ function riderPatch(data, rider, existing = {}) {
     updatedAt: FieldValue.serverTimestamp(),
   };
 }
+
+function cleanPosition(value) {
+  if (!value || typeof value !== "object") return null;
+  const geopoint = value.geopoint || value;
+  const latitude = Number(geopoint.latitude);
+  const longitude = Number(geopoint.longitude);
+  if (!Number.isFinite(latitude) || !Number.isFinite(longitude) ||
+      latitude < -90 || latitude > 90 || longitude < -180 || longitude > 180) {
+    throw new functions.https.HttpsError("invalid-argument", "A valid location is required.");
+  }
+  return {
+    geohash: text(value.geohash, 32),
+    geopoint: {latitude, longitude},
+  };
+}
+
+function nextOnboardingStatus(current, requested) {
+  const normalizedCurrent = lower(current || "not_started", 80);
+  const normalizedRequested = lower(requested, 80);
+  if (!ONBOARDING_TRANSITIONS.has(normalizedCurrent) ||
+      !ONBOARDING_TRANSITIONS.get(normalizedCurrent).has(normalizedRequested)) {
+    throw new functions.https.HttpsError("failed-precondition", "Invalid Rider onboarding transition.");
+  }
+  return normalizedRequested;
+}
+
+exports.advanceRiderOnboarding = functions.https.onCall(async (data, context) => {
+  const rider = requireRider(context);
+  const requestedStage = lower(data && data.stage, 80);
+  const db = getFirestore();
+  const riderRef = db.collection("riders").doc(rider.uid);
+  const profileRef = db.collection("riderProfiles").doc(rider.uid);
+  const eventRef = db.collection("riderOnboardingEvents").doc();
+  let result;
+
+  await db.runTransaction(async (transaction) => {
+    const [riderSnap, profileSnap] = await Promise.all([
+      transaction.get(riderRef),
+      transaction.get(profileRef),
+    ]);
+    const existing = {...(profileSnap.data() || {}), ...(riderSnap.data() || {})};
+    const onboardingStatus = nextOnboardingStatus(existing.onboardingStatus, requestedStage);
+    const patch = {
+      onboardingStatus,
+      profileCompletionStatus: onboardingStatus === "profile_complete" ? "complete" : existing.profileCompletionStatus || "started",
+      updatedAt: FieldValue.serverTimestamp(),
+    };
+
+    if (onboardingStatus === "phone_verified") {
+      const phone = context.auth.token.phone_number;
+      if (!phone) throw new functions.https.HttpsError("failed-precondition", "Phone verification is required.");
+      patch.phone = phone;
+      patch.phoneVerified = true;
+      patch.phoneVerifiedAt = FieldValue.serverTimestamp();
+    }
+    if (onboardingStatus === "email_verified") {
+      if (context.auth.token.email_verified !== true) {
+        throw new functions.https.HttpsError("failed-precondition", "Email verification is required.");
+      }
+      patch.emailVerified = true;
+      patch.emailVerifiedAt = FieldValue.serverTimestamp();
+    }
+    if (data && data.name) patch.name = text(data.name, 160);
+    if (data && data.locationEnabled === true) patch.locationEnabled = true;
+    if (data && data.position) patch.position = cleanPosition(data.position);
+
+    transaction.set(riderRef, patch, {merge: true});
+    transaction.set(profileRef, patch, {merge: true});
+    transaction.set(eventRef, audit("rider_onboarding_advanced", rider, {
+      statusAfterEvent: onboardingStatus,
+      changedFields: Object.keys(patch).filter((field) => field !== "updatedAt"),
+    }));
+    result = {onboardingStatus};
+  });
+  return {ok: true, riderId: rider.uid, ...result};
+});
 
 function applicationPatchFromProfile(data, rider, profile) {
   const section = data.section ? cleanApplicationSection(data.section) : null;
@@ -587,82 +714,65 @@ exports.updateRiderApplicationSection = functions.https.onCall(async (data, cont
 exports.submitRiderDocument = functions.https.onCall(async (data, context) => {
   const rider = requireRider(context);
   const documentType = cleanDocumentType(data.documentType || data.type);
-  const contentType = text(data.contentType, 120).toLowerCase();
-  if (!ALLOWED_CONTENT_TYPES.has(contentType)) {
-    throw new functions.https.HttpsError("invalid-argument", "Unsupported document file type.");
-  }
-  const fileBase64 = text(data.fileBase64, MAX_DOCUMENT_BYTES * 2);
-  if (!fileBase64) {
-    throw new functions.https.HttpsError("invalid-argument", "Document file is required.");
-  }
-  const bytes = Buffer.from(fileBase64, "base64");
-  if (!bytes.length || bytes.length > MAX_DOCUMENT_BYTES) {
-    throw new functions.https.HttpsError("invalid-argument", "Document file is too large.");
-  }
+  const files = normalizeRiderDocumentFiles(data, documentType);
 
   const db = getFirestore();
   const documentRef = db.collection("riderDocuments").doc();
-  const fileName = safeFileName(data.fileName);
-  const storagePath = `rider_documents/${rider.uid}/${Date.now()}_${documentRef.id}_${fileName}`;
-  await getStorage().bucket().file(storagePath).save(bytes, {
-    metadata: {
-      contentType,
-      metadata: {
-        riderId: rider.uid,
-        documentType,
-        source: "submitRiderDocument",
-      },
-    },
-    resumable: false,
-  });
-
-  const file = getStorage().bucket().file(storagePath);
-  const [signedUrl] = await file.getSignedUrl({
-    action: "read",
-    expires: Date.now() + 1000 * 60 * 60 * 24 * 7,
-  });
-
-  const now = FieldValue.serverTimestamp();
-  await db.runTransaction(async (transaction) => {
-    transaction.set(documentRef, {
-      documentId: documentRef.id,
-      riderId: rider.uid,
-      riderEmail: rider.email,
-      type: documentType,
-      notes: text(data.notes, 1000),
-      fileName,
-      storagePath,
-      downloadUrl: signedUrl,
-      fileUrl: signedUrl,
-      contentType,
-      sizeBytes: bytes.length,
-      uploadedAt: now,
-      status: "pending",
-      verificationStatus: "pending",
-      source: "cloud-functions",
-      createdAt: now,
-      updatedAt: now,
-    });
-    transaction.set(db.collection("riderProfiles").doc(rider.uid), {
-      verificationStatus: "pending",
-      verificationDocuments: {
-        [documentType]: {
-          type: documentType,
-          fileUrl: signedUrl,
-          storagePath,
-          uploadedAt: new Date().toISOString(),
-          status: "pending",
+  const uploaded = [];
+  try {
+    for (const attachment of files) {
+      const storagePath = `rider_documents/${rider.uid}/${Date.now()}_${documentRef.id}_${attachment.side}_${attachment.fileName}`;
+      const file = getStorage().bucket().file(storagePath);
+      await file.save(attachment.bytes, {
+        metadata: {
+          contentType: attachment.contentType,
+          metadata: {riderId: rider.uid, documentType, side: attachment.side, source: "submitRiderDocument"},
         },
-      },
-      lastDocumentUploadedAt: now,
-      updatedAt: now,
-    }, {merge: true});
-    transaction.set(db.collection("riderOnboardingEvents").doc(), audit("rider_document_uploaded", rider, {
-      documentId: documentRef.id,
-      documentType,
-      storagePath,
-    }));
-  });
+        resumable: false,
+      });
+      const [signedUrl] = await file.getSignedUrl({action: "read", expires: Date.now() + 1000 * 60 * 60 * 24 * 7});
+      uploaded.push({...attachment, storagePath, signedUrl});
+    }
 
-  return {ok: true, documentId: documentRef.id, storagePath, downloadUrl: signedUrl};
+    const primary = uploaded.find((file) => file.side === "primary") || uploaded[0];
+    const attachments = Object.fromEntries(uploaded.map((file) => [file.side, {
+      storagePath: file.storagePath,
+      fileUrl: file.signedUrl,
+      downloadUrl: file.signedUrl,
+      mimeType: file.contentType,
+      sizeBytes: file.bytes.length,
+    }]));
+    const now = FieldValue.serverTimestamp();
+    await db.runTransaction(async (transaction) => {
+      transaction.set(documentRef, {
+        documentId: documentRef.id,
+        riderId: rider.uid,
+        riderEmail: rider.email,
+        type: documentType,
+        notes: text(data.notes, 1000),
+        ...(primary ? {fileName: primary.fileName, storagePath: primary.storagePath, downloadUrl: primary.signedUrl, fileUrl: primary.signedUrl, contentType: primary.contentType, sizeBytes: primary.bytes.length} : {}),
+        attachments,
+        uploadedAt: now,
+        status: "pending",
+        verificationStatus: "pending",
+        source: "cloud-functions",
+        createdAt: now,
+        updatedAt: now,
+      });
+      transaction.set(db.collection("riderProfiles").doc(rider.uid), {
+        verificationStatus: "pending",
+        verificationDocuments: {[documentType]: {type: documentType, ...(primary ? {fileUrl: primary.signedUrl, storagePath: primary.storagePath} : {}), attachments, uploadedAt: new Date().toISOString(), status: "pending"}},
+        lastDocumentUploadedAt: now,
+        updatedAt: now,
+      }, {merge: true});
+      transaction.set(db.collection("riderOnboardingEvents").doc(), audit("rider_document_uploaded", rider, {
+        documentId: documentRef.id, documentType, storagePaths: uploaded.map((file) => file.storagePath),
+      }));
+    });
+  } catch (error) {
+    await Promise.all(uploaded.map((file) => getStorage().bucket().file(file.storagePath).delete().catch(() => null)));
+    throw error;
+  }
+  const primary = uploaded.find((file) => file.side === "primary") || uploaded[0];
+  return {ok: true, documentId: documentRef.id, storagePath: primary.storagePath, downloadUrl: primary.signedUrl, attachments: Object.fromEntries(uploaded.map((file) => [file.side, {storagePath: file.storagePath, downloadUrl: file.signedUrl}]))};
 });
