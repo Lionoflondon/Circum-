@@ -6,10 +6,8 @@ const {
 } = require("./free-address-core");
 
 function googlePlacesApiKey() {
-  const config = functions.config() || {};
   return `${process.env.GOOGLE_PLACES_API_KEY ||
     process.env.CIRCUM_GOOGLE_PLACES_API_KEY ||
-    config.google && config.google.places_api_key ||
     ""}`.trim();
 }
 

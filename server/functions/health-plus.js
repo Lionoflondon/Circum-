@@ -4,13 +4,12 @@ const functions = require("firebase-functions/v1");
 const {getFirestore} = require("firebase-admin/firestore");
 const {getAuth} = require("firebase-admin/auth");
 const {FieldValue} = require("firebase-admin/firestore");
-const stripeConfig = functions.config().stripe || {};
 const {resolveStripeRuntimeConfig} = require("./stripe-config");
 let cachedStripe = null;
 
 function getStripeClient() {
   if (!cachedStripe) {
-    const runtimeConfig = resolveStripeRuntimeConfig({config: stripeConfig});
+    const runtimeConfig = resolveStripeRuntimeConfig();
     cachedStripe = require("stripe")(runtimeConfig.secretKey);
     cachedStripe._circumStripeMode = runtimeConfig.mode;
   }

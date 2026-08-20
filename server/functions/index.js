@@ -4,7 +4,6 @@ const {getFirestore} = require("firebase-admin/firestore");
 const {getMessaging} = require("firebase-admin/messaging");
 const functions = require("firebase-functions/v1");
 const {defineSecret} = require("firebase-functions/params");
-const stripeConfig = functions.config().stripe || {};
 const stripeWebhookSecret = defineSecret("STRIPE_WEBHOOK_SECRET");
 const {
   assertStripeEventMode,
@@ -15,9 +14,7 @@ let cachedStripe = null;
 
 function getStripeRuntimeConfig() {
   if (!cachedStripeRuntimeConfig) {
-    cachedStripeRuntimeConfig = resolveStripeRuntimeConfig({
-      config: stripeConfig,
-    });
+    cachedStripeRuntimeConfig = resolveStripeRuntimeConfig();
   }
   return cachedStripeRuntimeConfig;
 }
@@ -424,7 +421,6 @@ exports.StripeWebhook = functions
       let webhookRuntimeConfig;
       try {
         webhookRuntimeConfig = resolveStripeRuntimeConfig({
-          config: stripeConfig,
           webhookSecret: stripeWebhookSecret.value(),
           requireWebhookSecret: true,
         });

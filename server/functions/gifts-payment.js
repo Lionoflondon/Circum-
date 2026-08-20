@@ -176,10 +176,9 @@ exports.createGiftPayment = (stripe) => functions.https.onCall(async (data, cont
   if (gross < 50 || gift.paymentStatus === "paid") {
     throw new functions.https.HttpsError("failed-precondition", "Gift payment cannot be started.");
   }
-  const config = functions.config().gifts || {};
   const baseUrl = "https://circumuk.com/?app=gifts";
-  const successUrl = config.success_url || `${baseUrl}&gift_payment=success&giftDraftId=${giftDraftId}&session_id={CHECKOUT_SESSION_ID}`;
-  const cancelUrl = config.cancel_url || `${baseUrl}&gift_payment=cancelled&giftDraftId=${giftDraftId}`;
+  const successUrl = `${baseUrl}&gift_payment=success&giftDraftId=${giftDraftId}&session_id={CHECKOUT_SESSION_ID}`;
+  const cancelUrl = `${baseUrl}&gift_payment=cancelled&giftDraftId=${giftDraftId}`;
   let session;
   try {
     session = await stripe.checkout.sessions.create({
