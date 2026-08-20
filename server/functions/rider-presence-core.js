@@ -2,6 +2,11 @@
 const STALE_HEARTBEAT_MS = 2 * 60 * 1000;
 const STALE_LOCATION_MS = 2 * 60 * 1000;
 const MAX_DISPATCH_ACCURACY_METERS = 100;
+const PRESENCE_STATES = Object.freeze({
+  FRESH: "ONLINE_FRESH",
+  STALE: "ONLINE_STALE",
+  OFFLINE: "OFFLINE",
+});
 
 function text(value) {
   return `${value || ""}`.trim();
@@ -49,17 +54,6 @@ function blockedReasonForAccess(profile = {}, founder = false) {
   return founder ? "" : blockedReason(profile);
 }
 
-function canReceiveDispatch({profile = {}, presence = {}, now = Date.now()}) {
-  if (!canGoOnline(profile)) return false;
-  if (presence.isOnline !== true) return false;
-  if (presence.availabilityStatus !== "available") return false;
-  if (presence.busy === true) return false;
-  const heartbeat = Number(presence.lastHeartbeatAt || 0);
-  if (!heartbeat) return false;
-  if (now - heartbeat > STALE_HEARTBEAT_MS) return false;
-  return gpsHealthy({presence, now});
-}
-
 function timestampMillis(value) {
   if (!value) return 0;
   if (typeof value === "number") return value;
@@ -70,6 +64,28 @@ function timestampMillis(value) {
   }
   const parsed = Date.parse(value);
   return Number.isFinite(parsed) ? parsed : 0;
+}
+
+function presenceState({presence = {}, now = Date.now()}) {
+  if (presence.isOnline !== true) return PRESENCE_STATES.OFFLINE;
+  const heartbeat = timestampMillis(presence.lastHeartbeatAt);
+  if (!heartbeat || now - heartbeat > STALE_HEARTBEAT_MS) return PRESENCE_STATES.STALE;
+  return PRESENCE_STATES.FRESH;
+}
+
+function dispatchDecision({profile = {}, presence = {}, now = Date.now()}) {
+  const state = presenceState({presence, now});
+  if (!canGoOnline(profile)) return {allowed: false, presenceState: state, reason: "rider_not_operational"};
+  if (state === PRESENCE_STATES.OFFLINE) return {allowed: false, presenceState: state, reason: "offline"};
+  if (state === PRESENCE_STATES.STALE) return {allowed: false, presenceState: state, reason: "presence_stale"};
+  if (presence.availabilityStatus !== "available") return {allowed: false, presenceState: state, reason: "availability_not_available"};
+  if (presence.busy === true) return {allowed: false, presenceState: state, reason: "busy"};
+  if (!gpsHealthy({presence, now})) return {allowed: false, presenceState: state, reason: "gps_unhealthy"};
+  return {allowed: true, presenceState: state, reason: null};
+}
+
+function canReceiveDispatch(args) {
+  return dispatchDecision(args).allowed;
 }
 
 function gpsHealthy({presence = {}, now = Date.now()}) {
@@ -124,14 +140,17 @@ function nextPresenceOnDelivery({before = {}, after = {}, riderId}) {
 
 module.exports = {
   MAX_DISPATCH_ACCURACY_METERS,
+  PRESENCE_STATES,
   STALE_LOCATION_MS,
   STALE_HEARTBEAT_MS,
   blockedReason,
   blockedReasonForAccess,
   canGoOnline,
   canReceiveDispatch,
+  dispatchDecision,
   gpsHealthy,
   nextPresenceOnDelivery,
+  presenceState,
   riderApproved,
   vehicleVerified,
 };
