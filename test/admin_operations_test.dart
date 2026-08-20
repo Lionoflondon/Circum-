@@ -672,8 +672,10 @@ void main() {
         'lib/app/admin/admin_phase1_shell.dart',
       ).readAsStringSync();
 
-      expect(source, contains("httpsCallable('issueRothToWallets')"));
+      expect(source, contains("httpsCallable('issueRothCredit')"));
+      expect(source, contains("httpsCallable('debitRothCredit')"));
       expect(source, contains("httpsCallable('setWalletFrozen')"));
+      expect(source, isNot(contains("httpsCallable('issueRothToWallets')")));
       expect(source, contains("httpsCallable('createRiderTransferOrPayout')"));
       expect(source, contains("httpsCallable('adminReviewRiderWithdrawal')"));
       expect(source, isNot(contains('stripeSecretKey')));
@@ -1064,7 +1066,8 @@ void main() {
 
       expect(source, contains('Manual Roth Credit'));
       expect(source, contains('Future<void> _issueManualRothCredit'));
-      expect(source, contains("httpsCallable('issueRothToWallets')"));
+      expect(source, contains("httpsCallable('issueRothCredit')"));
+      expect(source, contains("Future<void> _debitRothFromAdminRecord"));
       expect(source, contains('manual_roth_credit_requested'));
       expect(source, contains('Recipient, amount and reason are required.'));
     });
