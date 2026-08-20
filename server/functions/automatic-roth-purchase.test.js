@@ -24,8 +24,9 @@ test("business Roth purchases are finalized from verified Stripe amount only", (
 });
 
 test("Roth purchase finalizers are idempotent", () => {
-  assert.match(rothLedgerSource, /const \[existingLedger, wallet, senderWalletSnap\]/);
-  assert.match(rothLedgerSource, /if \(existingLedger\.exists\) return;/);
+  assert.match(rothLedgerSource, /const \[existingLedger, existingIdempotency, wallet, senderWalletSnap\]/);
+  assert.match(rothLedgerSource, /Roth idempotency key conflict/);
+  assert.match(rothLedgerSource, /rothMovementIdempotency/);
   assert.match(businessPaymentsSource, /const existingTx = await transaction\.get\(txRef\);/);
   assert.match(businessPaymentsSource, /if \(existingTx\.exists\) return;/);
   assert.match(businessPaymentsSource, /purchaseRecord\.status === "paid" \|\| purchaseRecord\.creditedAt/);
