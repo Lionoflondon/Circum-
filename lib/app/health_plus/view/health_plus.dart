@@ -7,6 +7,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:url_launcher/url_launcher.dart';
+import 'package:uuid/uuid.dart';
 
 import '../../send_package/models/suggestions.m.dart';
 import '../../send_package/repo/place_api.dart';
@@ -93,6 +94,8 @@ class _HealthPlusViewState extends State<HealthPlusView> {
   final _customSchedule = TextEditingController();
   final _pharmacySearch = _HealthPlaceSearchController();
   final _deliverySearch = _HealthPlaceSearchController();
+  Suggestion? _pharmacyPlace;
+  Suggestion? _deliveryPlace;
 
   var _step = _HealthStep.status;
   var _frequency = HealthPlusFrequency.monthly;
@@ -158,11 +161,13 @@ class _HealthPlusViewState extends State<HealthPlusView> {
           _goTo(_HealthStep.pharmacy);
         }
       case _HealthStep.pharmacy:
-        if (_requireText(_pharmacyAddress, 'Choose a pharmacy.')) {
+        if (_requireResolvedAddress(_pharmacyAddress, _pharmacyPlace,
+            'Choose a Google-resolved pharmacy.')) {
           _goTo(_HealthStep.delivery);
         }
       case _HealthStep.delivery:
-        if (_requireText(_deliveryAddress, 'Choose a delivery address.')) {
+        if (_requireResolvedAddress(_deliveryAddress, _deliveryPlace,
+            'Choose a Google-resolved delivery address.')) {
           _goTo(_HealthStep.frequency);
         }
       case _HealthStep.frequency:
@@ -191,6 +196,27 @@ class _HealthPlusViewState extends State<HealthPlusView> {
     if (controller.text.trim().isNotEmpty) return true;
     setState(() => _message = message);
     return false;
+  }
+
+  bool _requireResolvedAddress(
+      TextEditingController controller, Suggestion? place, String message) {
+    if (controller.text.trim().isNotEmpty &&
+        place?.placeId.isNotEmpty == true &&
+        place?.lat != null &&
+        place?.lng != null) return true;
+    setState(() => _message = message);
+    return false;
+  }
+
+  Map<String, dynamic>? _addressData(Suggestion? place) {
+    if (place == null || place.lat == null || place.lng == null) return null;
+    return {
+      'placeId': place.placeId,
+      'displayAddress': place.description,
+      'lat': place.lat,
+      'lng': place.lng,
+      'components': place.components,
+    };
   }
 
   Future<void> _loadRothBalance() async {
@@ -236,6 +262,8 @@ class _HealthPlusViewState extends State<HealthPlusView> {
         'email': _email.text.trim(),
         'pharmacyAddress': _pharmacyAddress.text.trim(),
         'deliveryAddress': _deliveryAddress.text.trim(),
+        'pharmacyAddressData': _addressData(_pharmacyPlace),
+        'deliveryAddressData': _addressData(_deliveryPlace),
         'notes': _notes.text.trim(),
         'consentConfirmed': _consent,
         'preferredPickupTime': _preferredTime.text.trim(),
@@ -520,14 +548,14 @@ class _HealthPlusViewState extends State<HealthPlusView> {
           title: 'Search pharmacy or address',
           controller: _pharmacyAddress,
           search: _pharmacySearch,
-          onSelected: () => _goTo(_HealthStep.delivery),
+          onSelected: (place) => setState(() => _pharmacyPlace = place),
           onContinue: _next,
         ),
       _HealthStep.delivery => _HealthAddressStep(
           title: 'Search delivery address',
           controller: _deliveryAddress,
           search: _deliverySearch,
-          onSelected: () => _goTo(_HealthStep.frequency),
+          onSelected: (place) => setState(() => _deliveryPlace = place),
           onContinue: _next,
         ),
       _HealthStep.frequency => _HealthFrequencyStep(
@@ -579,15 +607,17 @@ class _HealthPlusViewState extends State<HealthPlusView> {
 }
 
 class _HealthPlaceSearchController {
-  final provider = PlaceApiProvider(DateTime.now().microsecondsSinceEpoch);
+  final provider = PlaceApiProvider(const Uuid().v4());
   Timer? _debounce;
   var loading = false;
   String? error;
   List<Suggestion> suggestions = const [];
+  int requestId = 0;
 
   void dispose() => _debounce?.cancel();
 
   void search(String query, VoidCallback onChanged) {
+    final currentRequest = ++requestId;
     _debounce?.cancel();
     if (query.trim().length < 3) {
       loading = false;
@@ -602,6 +632,7 @@ class _HealthPlaceSearchController {
     _debounce = Timer(const Duration(milliseconds: 280), () async {
       try {
         suggestions = await provider.fetchSuggestions(query, 'en');
+        if (currentRequest != requestId) return;
         error = null;
       } catch (_) {
         suggestions = const [];
@@ -876,7 +907,7 @@ class _HealthAddressStep extends StatefulWidget {
   final String title;
   final TextEditingController controller;
   final _HealthPlaceSearchController search;
-  final VoidCallback onSelected;
+  final ValueChanged<Suggestion> onSelected;
   final VoidCallback onContinue;
 
   const _HealthAddressStep({
@@ -914,7 +945,7 @@ class _HealthAddressStepState extends State<_HealthAddressStep> {
               suggestion: suggestion,
               onTap: () {
                 widget.controller.text = suggestion.description;
-                widget.onSelected();
+                widget.onSelected(suggestion);
               },
             ),
           ),
