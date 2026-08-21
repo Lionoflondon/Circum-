@@ -1,5 +1,6 @@
 /* eslint-disable max-len */
 const functions = require("firebase-functions/v1");
+const {riderCallable} = require("./rider-app-check");
 const {getFirestore, FieldValue} = require("firebase-admin/firestore");
 const {getMessaging} = require("firebase-admin/messaging");
 const {isDispatchable, riderCanViewDispatch, riderMatchesIris} = require("./iris-core");
@@ -134,7 +135,7 @@ const notifySender = async (deliveryRequest, payload) => {
   return true;
 };
 
-const acceptRideRequests = functions.https.onCall(async (data, context) => {
+const acceptRideRequests = riderCallable(async (data, context) => {
   if (!context.auth) {
     throw new functions.https.HttpsError("unauthenticated", "User must be authenticated to accept a delivery.");
   }

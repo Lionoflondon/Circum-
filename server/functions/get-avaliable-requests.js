@@ -1,5 +1,6 @@
 /* eslint-disable max-len, require-jsdoc */
 const functions = require("firebase-functions/v1");
+const {riderCallable} = require("./rider-app-check");
 const {getFirestore} = require("firebase-admin/firestore");
 const {dispatchPriority, isDispatchable, riderCanViewDispatch, riderMatchesIris} = require("./iris-core");
 
@@ -106,7 +107,7 @@ async function candidateRequestDocs(db, riderData = {}) {
       .sort((a, b) => deliveryCreatedMillis(b.data() || {}) - deliveryCreatedMillis(a.data() || {}));
 }
 
-const getNearbyRequests = functions.https.onCall(async (data, context) => {
+const getNearbyRequests = riderCallable(async (data, context) => {
   try {
     const toRadians = (degrees) => {
       return degrees * (Math.PI / 180);
