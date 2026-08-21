@@ -52,7 +52,6 @@ dependencies:
   flutter_bloc: ^8.1.0
   flutter_dotenv: ^5.1.0
   google_fonts: ^8.1.0
-  flutter_keyboard_visibility: ^6.0.0
   flutter_keyboard_size: ^1.0.1
   flutter_local_notifications: ^18.0.1
   flutter_tts: ^4.2.3
@@ -91,7 +90,6 @@ dependencies:
   # stripe_android: "10.1.1"
   stripe_android: 12.6.0
 
-  flutter_native_splash: ^2.3.7
   url_launcher: ^6.2.2
   uuid: ^4.3.3
   web: 1.1.1
