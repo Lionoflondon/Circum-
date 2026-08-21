@@ -2,6 +2,7 @@
 "use strict";
 
 const functions = require("firebase-functions/v1");
+const {riderCallable} = require("./rider-app-check");
 const {getFirestore, FieldValue, GeoPoint} = require("firebase-admin/firestore");
 const tracking = require("./sender-tracking-state-core");
 
@@ -363,7 +364,7 @@ function patchForTransition({action, nextStatus, riderId}) {
   return patch;
 }
 
-exports.updateDeliveryTrackingStatus = functions.https.onCall(async (data, context) => {
+exports.updateDeliveryTrackingStatus = riderCallable(async (data, context) => {
   if (!context.auth) {
     throw new functions.https.HttpsError("unauthenticated", "Rider must be signed in.");
   }
@@ -571,7 +572,7 @@ exports.updateDeliveryTrackingStatus = functions.https.onCall(async (data, conte
   return result;
 });
 
-exports.updateDeliveryLiveLocation = functions.https.onCall(async (data, context) => {
+exports.updateDeliveryLiveLocation = riderCallable(async (data, context) => {
   if (!context.auth) {
     throw new functions.https.HttpsError("unauthenticated", "Rider must be signed in.");
   }

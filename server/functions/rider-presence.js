@@ -1,5 +1,6 @@
 /* eslint-disable max-len, require-jsdoc */
 const functions = require("firebase-functions/v1");
+const {riderCallable} = require("./rider-app-check");
 const {getFirestore, FieldValue} = require("firebase-admin/firestore");
 const core = require("./rider-presence-core");
 const staleCore = require("./stale-delivery-core");
@@ -101,7 +102,7 @@ function signalQuality(accuracy) {
   return "reduced";
 }
 
-exports.goOnline = functions.https.onCall(async (data, context) => {
+exports.goOnline = riderCallable(async (data, context) => {
   try {
     const riderId = requireAuth(context);
     const db = getFirestore();
@@ -142,7 +143,7 @@ exports.goOnline = functions.https.onCall(async (data, context) => {
   }
 });
 
-exports.goOffline = functions.https.onCall(async (data, context) => {
+exports.goOffline = riderCallable(async (data, context) => {
   const riderId = requireAuth(context);
   const db = getFirestore();
   const current = await db.collection("riderPresence").doc(riderId).get();
@@ -212,7 +213,7 @@ exports.goOffline = functions.https.onCall(async (data, context) => {
   return {success: true, presence: {...patch, serverTimestampPending: true}};
 });
 
-exports.updateRiderPresence = functions.https.onCall(async (data, context) => {
+exports.updateRiderPresence = riderCallable(async (data, context) => {
   const riderId = requireAuth(context);
   const db = getFirestore();
   const current = await db.collection("riderPresence").doc(riderId).get();
