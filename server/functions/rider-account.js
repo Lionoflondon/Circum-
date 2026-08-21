@@ -259,6 +259,18 @@ exports.advanceRiderOnboarding = functions.https.onCall(async (data, context) =>
       updatedAt: FieldValue.serverTimestamp(),
     };
 
+    if (onboardingStatus === "profile_complete" && !existing.approvalStatus) {
+      Object.assign(patch, {
+        role: "rider",
+        roles: ["rider"],
+        approvalStatus: "pending",
+        verificationStatus: "verification_pending",
+        driverStatus: "offline",
+        riderRank: "agent",
+        rating: "0.0",
+      });
+    }
+
     if (onboardingStatus === "phone_verified") {
       const phone = context.auth.token.phone_number;
       if (!phone) throw new functions.https.HttpsError("failed-precondition", "Phone verification is required.");

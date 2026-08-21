@@ -85,6 +85,15 @@ test("Rider account creation initializes backend-owned rank and trust", () => {
   assert.match(source, /trustPoints:\s*0/);
 });
 
+test("profile completion initializes authority defaults only without prior review", () => {
+  assert.match(source, /onboardingStatus === "profile_complete" && !existing\.approvalStatus/);
+  assert.match(source, /approvalStatus: "pending"/);
+  assert.match(source, /verificationStatus: "verification_pending"/);
+  assert.match(source, /driverStatus: "offline"/);
+  assert.match(source, /rating: "0\.0"/);
+  assert.doesNotMatch(source, /existing\.approvalStatus\s*\|\|\s*"pending"[\s\S]{0,120}onboardingStatus === "profile_complete"/);
+});
+
 test("Rider Web routes operational self-service mutations through callables", () => {
   assert.match(websiteSource, /httpsCallable\('updateRiderProfile'\)/);
   assert.match(websiteSource, /httpsCallable\('requestRiderEmailChange'\)/);
