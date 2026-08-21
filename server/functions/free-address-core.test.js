@@ -4,7 +4,6 @@ const assert = require("node:assert/strict");
 const {
   googlePlaceDetailsUrl,
   googlePlacesAutocompleteUrl,
-  nominatimSearchUrl,
   resolveUkAddressPlace,
   sanitizeQuery,
   searchFreeUkAddresses,
@@ -13,14 +12,6 @@ const {
 test("sanitizes address queries", () => {
   assert.equal(sanitizeQuery("  Harley   Street   London  "), "Harley Street London");
   assert.equal(sanitizeQuery("ab"), "ab");
-});
-
-test("builds a free UK-only Nominatim search URL", () => {
-  const url = nominatimSearchUrl("Harley Street London");
-  assert.match(url, /nominatim\.openstreetmap\.org\/search/);
-  assert.match(url, /countrycodes=gb/);
-  assert.match(url, /addressdetails=1/);
-  assert.doesNotMatch(url, /maps\.googleapis\.com/);
 });
 
 test("builds a paid Google Places UK autocomplete URL", () => {
@@ -65,6 +56,33 @@ test("uses Google Places autocomplete when a paid key is configured", async () =
   assert.equal(seenUrls.length, 1);
 });
 
+test("does not restrict autocomplete to street addresses", async () => {
+  let requestUrl = "";
+  const result = await searchFreeUkAddresses({
+    query: "King's Cross Station",
+    googlePlacesApiKey: "paid-google-key",
+    fetchImpl: async (url) => {
+      requestUrl = url;
+      return {
+        ok: true,
+        async json() {
+          return {
+            status: "OK",
+            predictions: [{
+              place_id: "station-1",
+              description: "King's Cross Station, London, UK",
+              structured_formatting: {main_text: "King's Cross Station"},
+            }],
+          };
+        },
+      };
+    },
+  });
+  assert.equal(result.results[0].placeId, "station-1");
+  assert.doesNotMatch(requestUrl, /types=address/);
+  assert.doesNotMatch(requestUrl, /type=address/);
+});
+
 test("resolves a selected Google place into coordinates and address components", async () => {
   const url = googlePlaceDetailsUrl("google-place-1", "test-key", "session-1");
   assert.match(url, /place_id=google-place-1/);
@@ -105,66 +123,44 @@ test("resolves a selected Google place into coordinates and address components",
   assert.equal(result.components.postcode, "SE6 1DQ");
 });
 
-test("maps free address search results into Circum address suggestions", async () => {
-  const fetchImpl = async (url, options) => {
-    assert.match(url, /nominatim\.openstreetmap\.org/);
-    assert.equal(options.signal instanceof AbortSignal, true);
-    return {
+test("accepts named businesses and POIs without a street number", async () => {
+  const result = await resolveUkAddressPlace({
+    placeId: "hospital-1",
+    fetchImpl: async () => ({
       ok: true,
       async json() {
-        return [{
-          osm_type: "way",
-          osm_id: 502230296,
-          lat: "51.5181037",
-          lon: "-0.1465558",
-          importance: 0.05,
-          display_name: "Harley Street, Marylebone, London, W1G 9QU, United Kingdom",
-          address: {
-            road: "Harley Street",
-            city: "City of Westminster",
-            postcode: "W1G 9QU",
-            country: "United Kingdom",
+        return {
+          status: "OK",
+          result: {
+            place_id: "hospital-1",
+            name: "St Thomas' Hospital",
+            formatted_address: "St Thomas' Hospital, London SE1 7EH, UK",
+            geometry: {location: {lat: 51.4988, lng: -0.1187}},
+            address_components: [
+              {long_name: "London", types: ["postal_town"]},
+              {long_name: "SE1 7EH", types: ["postal_code"]},
+              {long_name: "United Kingdom", types: ["country"]},
+            ],
           },
-        }];
+        };
       },
-    };
-  };
-  const result = await searchFreeUkAddresses({
-    query: "Harley Street London",
-    fetchImpl,
-    googlePlacesApiKey: "",
+    }),
+    googlePlacesApiKey: "paid-google-key",
   });
-  assert.equal(result.status, "OK");
-  assert.equal(result.attribution, "OpenStreetMap");
-  assert.equal(result.results.length, 1);
-  assert.equal(result.results[0].provider, "openstreetmap_nominatim");
-  assert.equal(result.results[0].components.postcode, "W1G 9QU");
-  assert.equal(result.results[0].lat, 51.5181037);
+  assert.equal(result.provider, "google_places");
+  assert.equal(result.displayAddress, "St Thomas' Hospital, London SE1 7EH, UK");
+  assert.equal(result.lat, 51.4988);
+  assert.equal(result.lng, -0.1187);
 });
 
-test("falls back to Nominatim when Google Places is unavailable", async () => {
+test("returns the Google failure so the UI can keep manual entry available", async () => {
   const seenUrls = [];
   const fetchImpl = async (url) => {
     seenUrls.push(url);
-    if (url.includes("maps.googleapis.com")) {
-      return {
-        ok: true,
-        async json() {
-          return {status: "REQUEST_DENIED", predictions: []};
-        },
-      };
-    }
     return {
       ok: true,
       async json() {
-        return [{
-          osm_type: "way",
-          osm_id: 502230296,
-          lat: "51.5181037",
-          lon: "-0.1465558",
-          display_name: "Harley Street, London, W1G 9QU, United Kingdom",
-          address: {road: "Harley Street", city: "London", postcode: "W1G 9QU"},
-        }];
+        return {status: "REQUEST_DENIED", predictions: []};
       },
     };
   };
@@ -173,10 +169,16 @@ test("falls back to Nominatim when Google Places is unavailable", async () => {
     fetchImpl,
     googlePlacesApiKey: "bad-key",
   });
-  assert.equal(result.status, "OK");
-  assert.equal(result.fallbackReason, "REQUEST_DENIED");
-  assert.equal(result.attribution, "OpenStreetMap");
-  assert.deepEqual(seenUrls.map((url) => url.includes("maps.googleapis.com")), [true, false]);
+  assert.equal(result.status, "REQUEST_DENIED");
+  assert.equal(result.provider, "google_places");
+  assert.deepEqual(seenUrls.map((url) => url.includes("maps.googleapis.com")), [true]);
+});
+
+test("has no runtime Nominatim or OpenStreetMap geocoder", () => {
+  const source = require("node:fs").readFileSync("free-address-core.js", "utf8");
+  assert.doesNotMatch(source, /nominatim/i);
+  assert.doesNotMatch(source, /openstreetmap/i);
+  assert.doesNotMatch(source, /searchNominatimUkAddresses/);
 });
 
 test("address search uses an abortable backend timeout", () => {

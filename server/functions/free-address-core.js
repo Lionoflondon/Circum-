@@ -8,17 +8,6 @@ function sanitizeQuery(value, maxLength = 160) {
   return text(value).replace(/\s+/g, " ").slice(0, maxLength);
 }
 
-function nominatimSearchUrl(query) {
-  const params = new URLSearchParams({
-    format: "jsonv2",
-    addressdetails: "1",
-    countrycodes: "gb",
-    limit: "6",
-    q: sanitizeQuery(query),
-  });
-  return `https://nominatim.openstreetmap.org/search?${params.toString()}`;
-}
-
 function googlePlacesAutocompleteUrl(query, apiKey, sessionToken = "") {
   const params = new URLSearchParams({
     input: sanitizeQuery(query),
@@ -39,35 +28,6 @@ function googlePlaceDetailsUrl(placeId, apiKey, sessionToken = "") {
   });
   if (text(sessionToken)) params.set("sessiontoken", text(sessionToken));
   return `https://maps.googleapis.com/maps/api/place/details/json?${params.toString()}`;
-}
-
-function mapAddress(result) {
-  const address = result.address || {};
-  const road = text(address.road || address.pedestrian || address.footway || address.path);
-  const houseNumber = text(address.house_number);
-  const city = text(address.city || address.town || address.village || address.municipality || address.suburb);
-  const county = text(address.county || address.state_district || address.state);
-  const postcode = text(address.postcode).toUpperCase();
-  const displayAddress = text(result.display_name);
-  const lat = Number(result.lat);
-  const lng = Number(result.lon);
-  return {
-    displayAddress,
-    lat,
-    lng,
-    confidence: Number.isFinite(Number(result.importance)) ?
-      Math.min(0.96, Math.max(0.82, 0.82 + Number(result.importance))) : 0.84,
-    provider: "openstreetmap_nominatim",
-    locationId: `${text(result.osm_type)}_${text(result.osm_id)}`.replace(/^_+|_+$/g, ""),
-    components: {
-      buildingNumber: houseNumber,
-      street: road,
-      city,
-      county,
-      postcode,
-      country: text(address.country || "United Kingdom"),
-    },
-  };
 }
 
 function mapGooglePrediction(prediction, sourceInput = "") {
@@ -158,24 +118,6 @@ async function fetchJsonWithTimeout(url, {fetchImpl = global.fetch, headers = {}
   }
 }
 
-async function searchNominatimUkAddresses({query, fetchImpl = global.fetch}) {
-  const result = await fetchJsonWithTimeout(nominatimSearchUrl(query), {
-    fetchImpl,
-    headers: {"User-Agent": "Circum/1.0 (address search; circumuk.com)"},
-  });
-  if (!result.ok) return {status: result.status, results: []};
-  const body = result.body;
-  return {
-    status: Array.isArray(body) && body.length ? "OK" : "ZERO_RESULTS",
-    results: (Array.isArray(body) ? body : [])
-        .map(mapAddress)
-        .filter((item) => item.displayAddress && Number.isFinite(item.lat) && Number.isFinite(item.lng))
-        .map((item) => ({...item, components: cleanComponents(item.components)}))
-        .slice(0, 6),
-    attribution: "OpenStreetMap",
-  };
-}
-
 async function searchGoogleUkAddresses({query, fetchImpl = global.fetch, googlePlacesApiKey = "", sessionToken = ""}) {
   const apiKey = text(googlePlacesApiKey);
   if (!apiKey) return {status: "MISSING_GOOGLE_PLACES_API_KEY", results: []};
@@ -231,24 +173,14 @@ async function searchFreeUkAddresses({
     googlePlacesApiKey,
     sessionToken,
   });
-  if (googleResult.status === "OK" && googleResult.results.length) {
-    return googleResult;
-  }
-
-  const fallback = await searchNominatimUkAddresses({query: clean, fetchImpl});
-  return {
-    ...fallback,
-    fallbackReason: googleResult.status,
-  };
+  return googleResult;
 }
 
 module.exports = {
   googlePlacesAutocompleteUrl,
   googlePlaceDetailsUrl,
-  nominatimSearchUrl,
   resolveUkAddressPlace,
   sanitizeQuery,
   searchFreeUkAddresses,
   searchGoogleUkAddresses,
-  searchNominatimUkAddresses,
 };
