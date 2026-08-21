@@ -274,7 +274,13 @@ test("settlement values reuse canonical earnings and highest trust category", ()
     riderEarning: 12.345,
     isScheduled: true,
     requiresVanguard: true,
-  }), {amount: 12.35, deliveryAmount: 12.35, tip: 0, waiting: 0, adjustment: 0, trustPoints: 5});
+  }), {amount: 12.35, amountSource: "explicit_rider_earning", requiresReview: false, deliveryAmount: 12.35, tip: 0, waiting: 0, adjustment: 0, trustPoints: 5});
+  assert.deepEqual(deliveryTracking.settlementValues({
+    riderEligibleFare: 10,
+    riderPayoutCalculationVersion: "65_35_v1",
+  }), {amount: 6.5, amountSource: "computed_authoritative_65_35", requiresReview: false, deliveryAmount: 6.5, tip: 0, waiting: 0, adjustment: 0, trustPoints: 1});
+  assert.equal(deliveryTracking.settlementValues({price: 100, paidAmount: 100}).requiresReview, true);
+  assert.equal(deliveryTracking.settlementValues({price: 100, paidAmount: 100}).amount, 0);
   assert.equal(deliveryTracking.highestTrustAward({isHealthPlus: true, requiresVanguard: true}), 6);
   assert.equal(deliveryTracking.highestTrustAward({isGift: true, isBusiness: true}), 5);
   assert.equal(deliveryTracking.highestTrustAward({}), 1);
