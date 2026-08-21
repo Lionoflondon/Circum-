@@ -1281,7 +1281,7 @@ class _BookingPanel extends StatelessWidget {
           isResolvingTypedAddress: addressResolving,
           onChanged: (value) {
             onSearchingPickupChanged(true);
-            _search(context, value);
+            _search(context, value, pickup: true);
             onDraft(
               draft.copyWith(pickupAddress: value, clearPickupCoordinate: true),
             );
@@ -1329,7 +1329,7 @@ class _BookingPanel extends StatelessWidget {
           isResolvingTypedAddress: addressResolving,
           onChanged: (value) {
             onSearchingPickupChanged(false);
-            _search(context, value);
+            _search(context, value, pickup: false);
             onDraft(
               draft.copyWith(
                 dropoffAddress: value,
@@ -1439,7 +1439,7 @@ class _BookingPanel extends StatelessWidget {
     }
   }
 
-  void _search(BuildContext context, String value) {
+  void _search(BuildContext context, String value, {required bool pickup}) {
     if (value.trim().length < 3) {
       context.read<SendPackageBloc>().add(ClearSuggestions());
       return;
@@ -1448,6 +1448,7 @@ class _BookingPanel extends StatelessWidget {
           SearchAPlaceEvent(
             query: value,
             lang: Localizations.localeOf(context).languageCode,
+            pickup: pickup,
           ),
         );
   }

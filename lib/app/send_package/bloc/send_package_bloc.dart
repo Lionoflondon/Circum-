@@ -87,6 +87,8 @@ class SendPackageBloc extends Bloc<SendPackageEvent, SendPackageState> {
   StreamSubscription<DocumentSnapshot<Map<String, dynamic>>>?
       _activeDeliveryLiveLocationSubscription;
   String? _activeDeliveryLiveLocationId;
+  final Map<bool, String> _addressSessionTokens = {};
+  final Map<bool, int> _addressSearchRequestIds = {true: 0, false: 0};
   SendPackageBloc() : super(SendPackageState()) {
     on<CheckForPushToken>(_handleCheckForPushToken);
     on<SearchAPlaceEvent>(_handleSearchAPlaceEvent);
@@ -258,8 +260,10 @@ class SendPackageBloc extends Bloc<SendPackageEvent, SendPackageState> {
     SearchAPlaceEvent event,
     Emitter<SendPackageState> emit,
   ) async {
-    const uuid = Uuid();
+    final requestId = (_addressSearchRequestIds[event.pickup] ?? 0) + 1;
+    _addressSearchRequestIds[event.pickup] = requestId;
     if (event.query.trim().length < 3) {
+      _addressSessionTokens.remove(event.pickup);
       emit(
         state.copyWith(
           suggestions: [],
@@ -270,10 +274,17 @@ class SendPackageBloc extends Bloc<SendPackageEvent, SendPackageState> {
       return;
     }
     emit(state.copyWith(isAddressSearching: true, addressSearchError: ''));
+    final sessionToken = _addressSessionTokens.putIfAbsent(
+      event.pickup,
+      () => const Uuid().v4(),
+    );
+    await Future<void>.delayed(const Duration(milliseconds: 400));
+    if (_addressSearchRequestIds[event.pickup] != requestId) return;
     try {
       List<Suggestion> suggestions = await PlaceApiProvider(
-        uuid,
+        sessionToken,
       ).fetchSuggestions(event.query, event.lang);
+      if (_addressSearchRequestIds[event.pickup] != requestId) return;
 
       emit(
         state.copyWith(
@@ -285,6 +296,7 @@ class SendPackageBloc extends Bloc<SendPackageEvent, SendPackageState> {
         ),
       );
     } catch (e) {
+      if (_addressSearchRequestIds[event.pickup] != requestId) return;
       emit(
         state.copyWith(
           suggestions: [],
@@ -325,6 +337,10 @@ class SendPackageBloc extends Bloc<SendPackageEvent, SendPackageState> {
     await _activeDeliveryLiveLocationSubscription?.cancel();
     _activeDeliveryLiveLocationSubscription = null;
     _activeDeliveryLiveLocationId = null;
+    _addressSessionTokens.clear();
+    _addressSearchRequestIds[true] = (_addressSearchRequestIds[true] ?? 0) + 1;
+    _addressSearchRequestIds[false] =
+        (_addressSearchRequestIds[false] ?? 0) + 1;
     emit(SendPackageState(senderRothBalance: state.senderRothBalance));
   }
 
@@ -332,7 +348,7 @@ class SendPackageBloc extends Bloc<SendPackageEvent, SendPackageState> {
     SetPickupAddress event,
     Emitter<SendPackageState> emit,
   ) async {
-    const uuid = Uuid();
+    final sessionToken = _addressSessionTokens[true] ??= const Uuid().v4();
 
     emit(
       state.copyWith(
@@ -345,7 +361,7 @@ class SendPackageBloc extends Bloc<SendPackageEvent, SendPackageState> {
 
     try {
       PlaceCoordinate coordinate = await PlaceApiProvider(
-        uuid,
+        sessionToken,
       ).fetchPlaceDetails(event.placeId, event.lang);
 
       var address = await placemarkFromCoordinates(
@@ -368,11 +384,15 @@ class SendPackageBloc extends Bloc<SendPackageEvent, SendPackageState> {
         error,
         stackTrace,
       );
+    } finally {
+      if (_addressSessionTokens[true] == sessionToken) {
+        _addressSessionTokens.remove(true);
+      }
     }
   }
 
   void _handleSetDeliveryAddress(SetDeliveryAddress event, Emitter emit) async {
-    const uuid = Uuid();
+    final sessionToken = _addressSessionTokens[false] ??= const Uuid().v4();
     emit(
       state.copyWith(
         destinationLocation: event.val,
@@ -391,7 +411,7 @@ class SendPackageBloc extends Bloc<SendPackageEvent, SendPackageState> {
     }
     try {
       PlaceCoordinate coordinate = await PlaceApiProvider(
-        uuid,
+        sessionToken,
       ).fetchPlaceDetails(event.placeId, event.lang);
       // var addresses = await Geocoder.google ( '<---------YOUR APIKEY-------->' ).findAddressesFromCoordinates(coordinates);
       var address = await placemarkFromCoordinates(
@@ -516,6 +536,10 @@ class SendPackageBloc extends Bloc<SendPackageEvent, SendPackageState> {
         error,
         stackTrace,
       );
+    } finally {
+      if (_addressSessionTokens[false] == sessionToken) {
+        _addressSessionTokens.remove(false);
+      }
     }
   }
 

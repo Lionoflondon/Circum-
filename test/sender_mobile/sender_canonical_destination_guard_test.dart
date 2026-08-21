@@ -335,12 +335,22 @@ void main() {
 
   test('Sender address search is backend-mediated and bounded by timeout', () {
     final source = read('lib/app/send_package/repo/place_api.dart');
+    final bloc = read('lib/app/send_package/bloc/send_package_bloc.dart');
+    final event = read('lib/app/send_package/bloc/send_package_event.dart');
 
     expect(source, contains("httpsCallable('searchFreeUkAddresses')"));
     expect(source, contains("httpsCallable('resolveUkAddressPlace')"));
     expect(source, contains("'sessionToken': '\$sessionToken'"));
     expect(source, contains(".timeout(const Duration(seconds: 8))"));
     expect(source, isNot(contains('maps.googleapis.com')));
+    expect(bloc, contains('const Duration(milliseconds: 400)'));
+    expect(bloc, contains('_addressSessionTokens'));
+    expect(bloc, contains('_addressSearchRequestIds'));
+    expect(bloc, contains('sessionToken,'));
+    expect(event, contains('final bool pickup;'));
+    final bookingCanvas =
+        read('lib/app/sender_mobile/sender_booking_canvas.dart');
+    expect(bookingCanvas, contains('pickup: pickup'));
   });
 
   test('Sender-facing delivery models never expose Rider phone fallbacks', () {

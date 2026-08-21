@@ -7,8 +7,13 @@ abstract class SendPackageEvent {
 class SearchAPlaceEvent extends SendPackageEvent {
   final String query;
   final String lang;
+  final bool pickup;
 
-  const SearchAPlaceEvent({required this.query, required this.lang});
+  const SearchAPlaceEvent({
+    required this.query,
+    required this.lang,
+    required this.pickup,
+  });
 }
 
 class SetPickupAddress extends SendPackageEvent {
