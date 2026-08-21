@@ -142,6 +142,8 @@ test("canonical backend delivery records include Rider display aliases", () => {
   assert.match(senderBookingSource, /const riderAliases = riderDisplayAliases\(\{quote, data, vanguardFields\}\)/);
   assert.match(senderBookingSource, /\.\.\.riderAliases/);
   assert.match(senderBookingSource, /riderEarning: riderPayout/);
+  assert.match(senderBookingSource, /riderEligibleFare: riderEligibleFareFromQuote\(quote\)/);
+  assert.match(senderBookingSource, /riderPayoutCalculationVersion: "65_35_v1"/);
   assert.match(senderBookingSource, /distanceText: distanceMiles > 0/);
   assert.match(senderBookingSource, /durationText: durationMinutes > 0/);
   assert.match(senderBookingSource, /requiresVanguard: vanguardFields\.vanguardProtocolEnabled === true/);

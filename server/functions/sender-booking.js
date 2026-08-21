@@ -1798,6 +1798,8 @@ async function createPaidDeliveryFromSession(stripe, sender, data) {
       paymentSessionId,
       price: quote.total,
       ...riderAliases,
+      riderEligibleFare: riderEligibleFareFromQuote(quote),
+      riderPayoutCalculationVersion: "65_35_v1",
       paidAmount: quote.total,
       paymentStatus: "paid",
       paymentMethod: payment.paymentMethod,
