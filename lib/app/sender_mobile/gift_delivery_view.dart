@@ -1,9 +1,11 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:uuid/uuid.dart';
 
 import '../platform/address_engine.dart';
 import '../send_package/models/suggestions.m.dart';
+import '../send_package/models/place_coordinates.m.dart';
 import '../send_package/repo/place_api.dart';
 import 'gift_journey_draft.dart';
 import 'gift_message_view.dart';
@@ -34,9 +36,8 @@ class GiftDeliveryView extends StatefulWidget {
 
 class _GiftDeliveryViewState extends State<GiftDeliveryView> {
   final _deliveryAddressController = TextEditingController();
-  final _addressSearch = PlaceApiProvider(
-    'sender-mobile-gifts-delivery-address',
-  );
+  PlaceApiProvider _addressSearch = PlaceApiProvider(const Uuid().v4());
+  int _addressRequestId = 0;
   Timer? _addressDebounce;
   List<Suggestion> _addressSuggestions = const [];
   Suggestion? _selectedAddressSuggestion;
@@ -74,6 +75,8 @@ class _GiftDeliveryViewState extends State<GiftDeliveryView> {
   }
 
   void _onAddressChanged(String value) {
+    final requestId = ++_addressRequestId;
+    _addressSearch = PlaceApiProvider(const Uuid().v4());
     setState(() {
       _selectedAddressSuggestion = null;
       _addressError = '';
@@ -91,7 +94,7 @@ class _GiftDeliveryViewState extends State<GiftDeliveryView> {
     _addressDebounce = Timer(const Duration(milliseconds: 360), () async {
       try {
         final suggestions = await _addressSearch.fetchSuggestions(query, 'en');
-        if (!mounted) return;
+        if (!mounted || requestId != _addressRequestId) return;
         setState(() {
           _addressSuggestions = suggestions
               .map(AddressEngine.cleanSuggestion)
@@ -114,15 +117,34 @@ class _GiftDeliveryViewState extends State<GiftDeliveryView> {
     });
   }
 
-  void _selectAddressSuggestion(Suggestion suggestion) {
+  Future<void> _selectAddressSuggestion(Suggestion suggestion) async {
     _addressDebounce?.cancel();
     final cleanSuggestion = AddressEngine.cleanSuggestion(suggestion);
+    final provider = _addressSearch;
+    PlaceCoordinate? coordinate;
+    try {
+      coordinate =
+          await provider.fetchPlaceDetails(cleanSuggestion.placeId, 'en');
+    } catch (_) {
+      if (!mounted) return;
+      setState(() => _addressError =
+          'This place could not be resolved. Please choose another result.');
+      return;
+    }
     _deliveryAddressController.text = cleanSuggestion.description;
     _deliveryAddressController.selection = TextSelection.collapsed(
       offset: cleanSuggestion.description.length,
     );
     setState(() {
-      _selectedAddressSuggestion = cleanSuggestion;
+      _selectedAddressSuggestion = Suggestion(
+        placeId: cleanSuggestion.placeId,
+        description: cleanSuggestion.description,
+        mainText: cleanSuggestion.mainText,
+        subText: cleanSuggestion.subText,
+        lat: coordinate!.lat,
+        lng: coordinate.lng,
+        components: cleanSuggestion.components,
+      );
       _addressSuggestions = const [];
       _isAddressSearching = false;
       _addressError = '';
