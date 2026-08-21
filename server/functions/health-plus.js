@@ -316,6 +316,8 @@ exports.createHealthPlusBooking = functions.https.onCall(async (data, context) =
   const pharmacyName = text(data.pharmacyName);
   const pharmacyAddress = text(data.pharmacyAddress);
   const deliveryAddress = text(data.deliveryAddress);
+  const pharmacyAddressData = data.pharmacyAddressData && typeof data.pharmacyAddressData === "object" ? data.pharmacyAddressData : null;
+  const deliveryAddressData = data.deliveryAddressData && typeof data.deliveryAddressData === "object" ? data.deliveryAddressData : null;
   const prescriptionType = text(data.prescriptionType);
   const subscriptionPlan = text(data.subscriptionPlan || data.healthPlusPlan);
   const preferredDay = text(data.preferredDay || data.preferredPickupDay);
@@ -359,7 +361,9 @@ exports.createHealthPlusBooking = functions.https.onCall(async (data, context) =
       email,
       pharmacyName,
       pharmacyAddress,
+      pharmacyAddressData,
       deliveryAddress,
+      deliveryAddressData,
       notes: text(data.notes),
       prescriptionNotes: text(data.notes),
       prescriptionType,
@@ -386,7 +390,9 @@ exports.createHealthPlusBooking = functions.https.onCall(async (data, context) =
       email,
       pharmacyName,
       pharmacyAddress,
+      pharmacyAddressData,
       deliveryAddress,
+      deliveryAddressData,
       notes: text(data.notes),
       prescriptionNotes: text(data.notes),
       prescriptionType,
@@ -450,7 +456,9 @@ exports.createHealthPlusBooking = functions.https.onCall(async (data, context) =
         frequency,
         pharmacyName,
         pharmacyAddress,
+        pharmacyAddressData,
         deliveryAddress,
+        deliveryAddressData,
         prescriptionType,
         subscriptionPlan,
         healthPlusPlan: subscriptionPlan,
