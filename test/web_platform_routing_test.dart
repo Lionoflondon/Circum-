@@ -29,6 +29,17 @@ void main() {
       }
     });
 
+    test('/terms selects the consolidated public Terms & Conditions page', () {
+      final route = resolveCircumWebRoute(
+        Uri.parse('https://circumuk.com/terms'),
+        adminHostingTarget: false,
+        publicHostingHost: true,
+      );
+
+      expect(route.surface, CircumWebSurface.terms);
+      expect(route.canonicalPath, '/terms');
+    });
+
     test('/send and /send/... select Sender Web', () {
       for (final path in ['/send', '/send/', '/send/profile']) {
         final route = resolveCircumWebRoute(

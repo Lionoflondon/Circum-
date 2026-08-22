@@ -1,4 +1,4 @@
-enum CircumWebSurface { public, sender, rider, gifts, vanguard, deleteAccount, privacyPolicy, admin }
+enum CircumWebSurface { public, sender, rider, gifts, vanguard, deleteAccount, privacyPolicy, terms, admin }
 
 enum CircumSenderEntry { dashboard, healthPlus, business, profile }
 
@@ -95,6 +95,8 @@ CircumWebRouteResolution resolveCircumWebRoute(
     case 'privacy-policy':
     case 'privacy_policy':
       return const CircumWebRouteResolution(surface: CircumWebSurface.privacyPolicy, canonicalPath: '/privacy_policy');
+    case 'terms':
+      return const CircumWebRouteResolution(surface: CircumWebSurface.terms, canonicalPath: '/terms');
     case 'join':
       final rawCode = segments.length > 1 ? segments[1] : '';
       final code = rawCode.toUpperCase().replaceAll(RegExp(r'[^A-Z0-9]'), '');
