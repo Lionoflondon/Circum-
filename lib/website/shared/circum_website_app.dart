@@ -51,7 +51,7 @@ const _spectrumGradient = [
   Color(0xff19a0ff),
 ];
 
-enum _WebAppMode { landing, sender, rider, gifts, vanguard }
+enum _WebAppMode { landing, sender, rider, gifts, vanguard, deleteAccount, privacyPolicy }
 
 Future<void> _ensureCircumFirebaseReady() async {
   if (Firebase.apps.isEmpty) {
@@ -92,6 +92,8 @@ class _CircumWebsiteAppState extends State<CircumWebsiteApp> {
       CircumWebSurface.rider => _WebAppMode.rider,
       CircumWebSurface.gifts => _WebAppMode.gifts,
       CircumWebSurface.vanguard => _WebAppMode.vanguard,
+      CircumWebSurface.deleteAccount => _WebAppMode.deleteAccount,
+      CircumWebSurface.privacyPolicy => _WebAppMode.privacyPolicy,
       CircumWebSurface.admin => _WebAppMode.landing,
     };
   }
@@ -138,6 +140,8 @@ class _CircumWebsiteAppState extends State<CircumWebsiteApp> {
       _WebAppMode.rider => '/rider',
       _WebAppMode.gifts => '/gifts',
       _WebAppMode.vanguard => '/vanguard',
+      _WebAppMode.deleteAccount => '/delete_account',
+      _WebAppMode.privacyPolicy => '/privacy-policy',
     };
     if (kIsWeb) {
       await _openCanonicalPath(path);
@@ -233,6 +237,8 @@ class _CircumWebsiteAppState extends State<CircumWebsiteApp> {
           colors: colors,
           onBack: () => _openSurface(_WebAppMode.landing),
         ),
+      _WebAppMode.deleteAccount => _AccountDeletionPage(key: const ValueKey('account-deletion'), colors: colors),
+      _WebAppMode.privacyPolicy => _PrivacyPolicyPage(key: const ValueKey('privacy-policy'), colors: colors),
       _WebAppMode.landing => _LandingPage(
           key: const ValueKey(circumPublicWebIdentity),
           colors: colors,
@@ -25955,6 +25961,90 @@ BoxDecoration _vanguardCardDecoration({bool darker = false}) {
       ),
     ],
   );
+}
+
+class _ComplianceSection {
+  final String title;
+  final String body;
+  const _ComplianceSection(this.title, this.body);
+}
+
+class _CompliancePage extends StatelessWidget {
+  final _CircumColors colors;
+  final String title;
+  final String intro;
+  final List<_ComplianceSection> sections;
+  final List<Widget> actions;
+
+  const _CompliancePage({required this.colors, required this.title, required this.intro, required this.sections, required this.actions});
+
+  @override
+  Widget build(BuildContext context) => SelectionArea(child: SingleChildScrollView(
+        padding: const EdgeInsets.fromLTRB(24, 48, 24, 56),
+        child: Center(child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 820),
+          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Text('CIRCUM', style: TextStyle(color: colors.text, fontSize: 18, fontWeight: FontWeight.w800, letterSpacing: 1.5)),
+            const SizedBox(height: 42),
+            Text(title, style: TextStyle(color: colors.text, fontSize: 38, fontWeight: FontWeight.w800)),
+            const SizedBox(height: 18),
+            Text(intro, style: TextStyle(color: colors.mutedText, fontSize: 17, height: 1.55)),
+            const SizedBox(height: 28),
+            ...sections.map(
+              (section) => Padding(
+                padding: const EdgeInsets.only(bottom: 18),
+                child: Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(22),
+                  decoration: BoxDecoration(
+                    color: colors.panel,
+                    borderRadius: BorderRadius.circular(16),
+                    border: Border.all(color: colors.border),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(section.title, style: TextStyle(color: colors.text, fontSize: 19, fontWeight: FontWeight.w700)),
+                      const SizedBox(height: 8),
+                      Text(section.body, style: TextStyle(color: colors.mutedText, fontSize: 15, height: 1.5)),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+            Wrap(spacing: 18, runSpacing: 12, children: actions),
+          ]),
+        )),
+      ));
+}
+
+class _AccountDeletionPage extends StatelessWidget {
+  final _CircumColors colors;
+  const _AccountDeletionPage({super.key, required this.colors});
+
+  Future<void> _requestDeletion() => launchUrl(Uri.parse('mailto:support@circumuk.com?subject=${Uri.encodeComponent('CIRCUM account deletion request')}&body=${Uri.encodeComponent('Please send this request from the email address linked to my CIRCUM account.') }'));
+
+  @override
+  Widget build(BuildContext context) => _CompliancePage(colors: colors, title: 'Delete your CIRCUM account', intro: 'This page applies to CIRCUM Sender and CIRCUM Rider, operated by Circum Technologies Ltd.', sections: const [
+    _ComplianceSection('Delete account', 'In the app, open Profile > Account > Delete Account. The app reauthenticates your identity and calls the protected closeCircumAccount service before removing the authentication account. You may also email support@circumuk.com from your linked address for a verified request; this is not automatic web deletion.'),
+    _ComplianceSection('Delete particular data', 'There is no separate automated partial-data deletion form. Email support@circumuk.com from your linked address, identify the data you want removed, and we will verify ownership and confirm what can be deleted or retained.'),
+    _ComplianceSection('Retention', 'Account profile and access data are removed or anonymised when closure is approved. Financial, payment, accounting, fraud-prevention, safety, dispute, regulatory, and legal records may need to be retained for the applicable period, then deleted or anonymised.'),
+  ], actions: [TextButton(onPressed: _requestDeletion, child: const Text('Request account deletion')), TextButton(onPressed: () => launchUrl(Uri.base.replace(path: '/privacy-policy', queryParameters: {}, fragment: ''), webOnlyWindowName: '_self'), child: const Text('Privacy Policy'))]);
+}
+
+class _PrivacyPolicyPage extends StatelessWidget {
+  final _CircumColors colors;
+  const _PrivacyPolicyPage({super.key, required this.colors});
+
+  @override
+  Widget build(BuildContext context) => _CompliancePage(colors: colors, title: 'Privacy Policy', intro: 'Last updated: 22 August 2026. This policy applies to CIRCUM Sender, CIRCUM Rider, Gifts, Gift Stories, Health+, Business, Vanguard, and related delivery services operated by Circum Technologies Ltd.', sections: const [
+    _ComplianceSection('Information we use', 'Depending on the feature, we process name, email, account and user IDs, addresses, phone numbers, precise location, payment information through Stripe, device or other identifiers, photos, videos, Gift Stories, optional Gifts voice or sound recordings, and supported in-app messages.'),
+    _ComplianceSection('Purposes and choices', 'We use information for account management, address resolution, booking, payment, dispatch, Rider matching, tracking, support, safety, fraud prevention, service reliability, and legal obligations. Required service data is required; optional media, Gift Stories, and voice features are optional.'),
+    _ComplianceSection('Processors', 'CIRCUM uses processors including Firebase/Google Cloud, Google Maps or Places, Stripe, hosting, and communications providers where needed. Google Play Data Safety “data shared with third parties” has a defined meaning and does not mean necessary service processors are absent.'),
+    _ComplianceSection('Location and communications', 'Precise location is used for delivery, dispatch, presence, navigation, and live tracking where enabled. Service notifications and supported communications may be sent; SMS/MMS is used only where a CIRCUM flow requires it.'),
+    _ComplianceSection('Retention and deletion', 'We retain information as needed for the service and applicable payment, accounting, fraud, safety, dispute, regulatory, and legal requirements. See /delete_account for account closure and particular-data requests.'),
+    _ComplianceSection('Security and rights', 'We use access controls and encryption in transit with appropriate safeguards. Under applicable law, including the UK GDPR and Data Protection Act 2018, you may have rights to access, correct, delete, restrict, object to, or receive a copy of your information. Contact support@circumuk.com; identity verification and legal exceptions may apply.'),
+  ], actions: [TextButton(onPressed: () => launchUrl(Uri.base.replace(path: '/delete_account', queryParameters: {}, fragment: ''), webOnlyWindowName: '_self'), child: const Text('Account deletion')), TextButton(onPressed: () => launchUrl(Uri.base.replace(path: '/', queryParameters: {}, fragment: ''), webOnlyWindowName: '_self'), child: const Text('CIRCUM home'))]);
 }
 
 class _LandingFooter extends StatelessWidget {
