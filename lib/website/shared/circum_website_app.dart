@@ -51,7 +51,19 @@ const _spectrumGradient = [
   Color(0xff19a0ff),
 ];
 
-enum _WebAppMode { landing, sender, rider, gifts, vanguard, deleteAccount, privacyPolicy, terms }
+enum _WebAppMode {
+  landing,
+  sender,
+  rider,
+  gifts,
+  vanguard,
+  deleteAccount,
+  privacyPolicy,
+  terms,
+  cookiePolicy,
+}
+
+const _analyticsConsentStorageKey = 'circum_public_optional_analytics_consent';
 
 Future<void> _ensureCircumFirebaseReady() async {
   if (Firebase.apps.isEmpty) {
@@ -68,6 +80,7 @@ class CircumWebsiteApp extends StatefulWidget {
 
 class _CircumWebsiteAppState extends State<CircumWebsiteApp> {
   bool _darkMode = true;
+  bool? _optionalAnalyticsConsent;
   late final CircumWebRouteResolution _initialRoute = resolveCircumWebRoute(
     Uri.base,
     adminHostingTarget: false,
@@ -82,7 +95,12 @@ class _CircumWebsiteAppState extends State<CircumWebsiteApp> {
   void initState() {
     super.initState();
     _redirectLegacyQueryIfNeeded();
-    _logWebsiteVisit();
+    if (kIsWeb) {
+      _optionalAnalyticsConsent =
+          web.window.localStorage.getItem(_analyticsConsentStorageKey) ==
+              'accepted';
+      if (_optionalAnalyticsConsent == true) _logWebsiteVisit();
+    }
   }
 
   _WebAppMode _modeFromRoute(CircumWebRouteResolution route) {
@@ -95,6 +113,7 @@ class _CircumWebsiteAppState extends State<CircumWebsiteApp> {
       CircumWebSurface.deleteAccount => _WebAppMode.deleteAccount,
       CircumWebSurface.privacyPolicy => _WebAppMode.privacyPolicy,
       CircumWebSurface.terms => _WebAppMode.terms,
+      CircumWebSurface.cookiePolicy => _WebAppMode.cookiePolicy,
       CircumWebSurface.admin => _WebAppMode.landing,
     };
   }
@@ -144,6 +163,7 @@ class _CircumWebsiteAppState extends State<CircumWebsiteApp> {
       _WebAppMode.deleteAccount => '/delete_account',
       _WebAppMode.privacyPolicy => '/privacy_policy',
       _WebAppMode.terms => '/terms',
+      _WebAppMode.cookiePolicy => '/cookie_policy',
     };
     if (kIsWeb) {
       await _openCanonicalPath(path);
@@ -156,6 +176,7 @@ class _CircumWebsiteAppState extends State<CircumWebsiteApp> {
   }
 
   Future<void> _logWebsiteVisit() async {
+    if (_optionalAnalyticsConsent != true) return;
     try {
       await _ensureCircumFirebaseReady();
       await FirebaseFunctions.instanceFor(
@@ -196,6 +217,13 @@ class _CircumWebsiteAppState extends State<CircumWebsiteApp> {
             ),
             _PlatformNotificationCenter(colors: colors, mode: _mode),
             _CompanyLiveChatButton(colors: colors),
+            if (kIsWeb && _optionalAnalyticsConsent == null)
+              _CookieConsentBanner(
+                colors: colors,
+                onReject: () => _setAnalyticsConsent(false),
+                onAccept: () => _setAnalyticsConsent(true),
+                onManage: _showConsentPreferences,
+              ),
           ],
         ),
       ),
@@ -239,9 +267,23 @@ class _CircumWebsiteAppState extends State<CircumWebsiteApp> {
           colors: colors,
           onBack: () => _openSurface(_WebAppMode.landing),
         ),
-      _WebAppMode.deleteAccount => _AccountDeletionPage(key: const ValueKey('account-deletion'), colors: colors),
-      _WebAppMode.privacyPolicy => _PrivacyPolicyPage(key: const ValueKey('privacy_policy'), colors: colors),
-      _WebAppMode.terms => _TermsPage(key: const ValueKey('terms'), colors: colors),
+      _WebAppMode.deleteAccount => _AccountDeletionPage(
+          key: const ValueKey('account-deletion'),
+          colors: colors,
+        ),
+      _WebAppMode.privacyPolicy => _PrivacyPolicyPage(
+          key: const ValueKey('privacy_policy'),
+          colors: colors,
+        ),
+      _WebAppMode.terms => _TermsPage(
+          key: const ValueKey('terms'),
+          colors: colors,
+        ),
+      _WebAppMode.cookiePolicy => _CookiePolicyPage(
+          key: const ValueKey('cookie_policy'),
+          colors: colors,
+          onManageConsent: _showConsentPreferences,
+        ),
       _WebAppMode.landing => _LandingPage(
           key: const ValueKey(circumPublicWebIdentity),
           colors: colors,
@@ -259,6 +301,44 @@ class _CircumWebsiteAppState extends State<CircumWebsiteApp> {
           onToggleTheme: () => setState(() => _darkMode = !_darkMode),
         ),
     };
+  }
+
+  void _setAnalyticsConsent(bool accepted) {
+    if (!kIsWeb) return;
+    web.window.localStorage.setItem(
+      _analyticsConsentStorageKey,
+      accepted ? 'accepted' : 'rejected',
+    );
+    setState(() => _optionalAnalyticsConsent = accepted);
+    if (accepted) _logWebsiteVisit();
+  }
+
+  void _showConsentPreferences() {
+    showDialog<void>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Cookie and storage preferences'),
+        content: const Text(
+          'Optional visitor analytics is currently disabled. You can allow or keep it off. Strictly necessary technologies remain active.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () {
+              Navigator.pop(context);
+              _setAnalyticsConsent(false);
+            },
+            child: const Text('Reject optional'),
+          ),
+          FilledButton(
+            onPressed: () {
+              Navigator.pop(context);
+              _setAnalyticsConsent(true);
+            },
+            child: const Text('Accept optional'),
+          ),
+        ],
+      ),
+    );
   }
 
   void _openRole(CircumRole role) {
@@ -1184,8 +1264,9 @@ class _HeroMockup extends StatelessWidget {
             border: Border.all(color: colors.border),
             boxShadow: [
               BoxShadow(
-                color:
-                    Colors.black.withValues(alpha: colors.dark ? 0.32 : 0.08),
+                color: Colors.black.withValues(
+                  alpha: colors.dark ? 0.32 : 0.08,
+                ),
                 blurRadius: 36,
                 offset: const Offset(0, 18),
               ),
@@ -2464,8 +2545,9 @@ class _CircumOrderContentState extends State<_CircumOrderContent> {
                       Color(0xffffffff),
                     ],
             ),
-            border:
-                Border.all(color: colors.adminAccent.withValues(alpha: 0.18)),
+            border: Border.all(
+              color: colors.adminAccent.withValues(alpha: 0.18),
+            ),
           ),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -3748,9 +3830,11 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
     if (pickupCompare != 0) return pickupCompare;
 
     final createdCompare = _jobTimestampMillis(
-            b['createdAt'] ?? b['requestedAt'] ?? b['updatedAt'])
-        .compareTo(
-      _jobTimestampMillis(a['createdAt'] ?? a['requestedAt'] ?? a['updatedAt']),
+      b['createdAt'] ?? b['requestedAt'] ?? b['updatedAt'],
+    ).compareTo(
+      _jobTimestampMillis(
+        a['createdAt'] ?? a['requestedAt'] ?? a['updatedAt'],
+      ),
     );
     if (createdCompare != 0) return createdCompare;
 
@@ -25366,8 +25450,9 @@ class _GlassPanel extends StatelessWidget {
             offset: const Offset(0, 8),
           ),
           BoxShadow(
-            color:
-                colors.adminGlow.withValues(alpha: colors.dark ? 0.12 : 0.08),
+            color: colors.adminGlow.withValues(
+              alpha: colors.dark ? 0.12 : 0.08,
+            ),
             blurRadius: 24,
             offset: const Offset(0, 12),
           ),
@@ -25979,60 +26064,145 @@ class _CompliancePage extends StatelessWidget {
   final List<_ComplianceSection> sections;
   final List<Widget> actions;
 
-  const _CompliancePage({required this.colors, required this.title, required this.intro, required this.sections, required this.actions});
+  const _CompliancePage({
+    required this.colors,
+    required this.title,
+    required this.intro,
+    required this.sections,
+    required this.actions,
+  });
 
   @override
-  Widget build(BuildContext context) => SelectionArea(child: SingleChildScrollView(
-        padding: const EdgeInsets.fromLTRB(24, 48, 24, 56),
-        child: Center(child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 820),
-          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Text('CIRCUM', style: TextStyle(color: colors.text, fontSize: 18, fontWeight: FontWeight.w800, letterSpacing: 1.5)),
-            const SizedBox(height: 42),
-            Text(title, style: TextStyle(color: colors.text, fontSize: 38, fontWeight: FontWeight.w800)),
-            const SizedBox(height: 18),
-            Text(intro, style: TextStyle(color: colors.mutedText, fontSize: 17, height: 1.55)),
-            const SizedBox(height: 28),
-            ...sections.map(
-              (section) => Padding(
-                padding: const EdgeInsets.only(bottom: 18),
-                child: Container(
-                  width: double.infinity,
-                  padding: const EdgeInsets.all(22),
-                  decoration: BoxDecoration(
-                    color: colors.panel,
-                    borderRadius: BorderRadius.circular(16),
-                    border: Border.all(color: colors.border),
+  Widget build(BuildContext context) => SelectionArea(
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.fromLTRB(24, 48, 24, 56),
+          child: Center(
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 820),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'CIRCUM',
+                    style: TextStyle(
+                      color: colors.text,
+                      fontSize: 18,
+                      fontWeight: FontWeight.w800,
+                      letterSpacing: 1.5,
+                    ),
                   ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(section.title, style: TextStyle(color: colors.text, fontSize: 19, fontWeight: FontWeight.w700)),
-                      const SizedBox(height: 8),
-                      Text(section.body, style: TextStyle(color: colors.mutedText, fontSize: 15, height: 1.5)),
-                    ],
+                  const SizedBox(height: 42),
+                  Text(
+                    title,
+                    style: TextStyle(
+                      color: colors.text,
+                      fontSize: 38,
+                      fontWeight: FontWeight.w800,
+                    ),
                   ),
-                ),
+                  const SizedBox(height: 18),
+                  Text(
+                    intro,
+                    style: TextStyle(
+                      color: colors.mutedText,
+                      fontSize: 17,
+                      height: 1.55,
+                    ),
+                  ),
+                  const SizedBox(height: 28),
+                  ...sections.map(
+                    (section) => Padding(
+                      padding: const EdgeInsets.only(bottom: 18),
+                      child: Container(
+                        width: double.infinity,
+                        padding: const EdgeInsets.all(22),
+                        decoration: BoxDecoration(
+                          color: colors.panel,
+                          borderRadius: BorderRadius.circular(16),
+                          border: Border.all(color: colors.border),
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              section.title,
+                              style: TextStyle(
+                                color: colors.text,
+                                fontSize: 19,
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                            const SizedBox(height: 8),
+                            Text(
+                              section.body,
+                              style: TextStyle(
+                                color: colors.mutedText,
+                                fontSize: 15,
+                                height: 1.5,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                  Wrap(spacing: 18, runSpacing: 12, children: actions),
+                ],
               ),
             ),
-            Wrap(spacing: 18, runSpacing: 12, children: actions),
-          ]),
-        )),
-      ));
+          ),
+        ),
+      );
 }
 
 class _AccountDeletionPage extends StatelessWidget {
   final _CircumColors colors;
   const _AccountDeletionPage({super.key, required this.colors});
 
-  Future<void> _requestDeletion() => launchUrl(Uri.parse('mailto:support@circumuk.com?subject=${Uri.encodeComponent('CIRCUM account deletion request')}&body=${Uri.encodeComponent('Please send this request from the email address linked to my CIRCUM account.') }'));
+  Future<void> _requestDeletion() => launchUrl(
+        Uri.parse(
+          'mailto:support@circumuk.com?subject=${Uri.encodeComponent('CIRCUM account deletion request')}&body=${Uri.encodeComponent('Please send this request from the email address linked to my CIRCUM account.')}',
+        ),
+      );
 
   @override
-  Widget build(BuildContext context) => _CompliancePage(colors: colors, title: 'Delete your CIRCUM account', intro: 'This page applies to CIRCUM and Circum Rider, operated by Circum Technologies Ltd.', sections: const [
-    _ComplianceSection('Delete account', 'In the app, open Profile > Account > Delete Account and follow the confirmation steps. You may also email support@circumuk.com from your linked address for a verified request; this is not automatic web deletion.'),
-    _ComplianceSection('Delete particular data', 'There is no separate automated partial-data deletion form. Email support@circumuk.com from your linked address, identify the data you want removed, and we will verify ownership and confirm what can be deleted or retained.'),
-    _ComplianceSection('Retention', 'Account profile and access data are removed or anonymised when closure is approved. Financial, payment, accounting, fraud-prevention, safety, dispute, regulatory, and legal records may need to be retained for the applicable period, then deleted or anonymised.'),
-  ], actions: [TextButton(onPressed: _requestDeletion, child: const Text('Request account deletion')), TextButton(onPressed: () => launchUrl(Uri.base.replace(path: '/privacy_policy', queryParameters: {}, fragment: ''), webOnlyWindowName: '_self'), child: const Text('Privacy Policy'))]);
+  Widget build(BuildContext context) => _CompliancePage(
+        colors: colors,
+        title: 'Delete your CIRCUM account',
+        intro:
+            'This page applies to CIRCUM and Circum Rider, operated by Circum Technologies Ltd.',
+        sections: const [
+          _ComplianceSection(
+            'Delete account',
+            'In the app, open Profile > Account > Delete Account and follow the confirmation steps. You may also email support@circumuk.com from your linked address for a verified request; this is not automatic web deletion.',
+          ),
+          _ComplianceSection(
+            'Delete particular data',
+            'There is no separate automated partial-data deletion form. Email support@circumuk.com from your linked address, identify the data you want removed, and we will verify ownership and confirm what can be deleted or retained.',
+          ),
+          _ComplianceSection(
+            'Retention',
+            'Account profile and access data are removed or anonymised when closure is approved. Financial, payment, accounting, fraud-prevention, safety, dispute, regulatory, and legal records may need to be retained for the applicable period, then deleted or anonymised.',
+          ),
+        ],
+        actions: [
+          TextButton(
+            onPressed: _requestDeletion,
+            child: const Text('Request account deletion'),
+          ),
+          TextButton(
+            onPressed: () => launchUrl(
+              Uri.base.replace(
+                path: '/privacy_policy',
+                queryParameters: {},
+                fragment: '',
+              ),
+              webOnlyWindowName: '_self',
+            ),
+            child: const Text('Privacy Policy'),
+          ),
+        ],
+      );
 }
 
 class _PrivacyPolicyPage extends StatelessWidget {
@@ -26040,19 +26210,207 @@ class _PrivacyPolicyPage extends StatelessWidget {
   const _PrivacyPolicyPage({super.key, required this.colors});
 
   @override
-  Widget build(BuildContext context) => _CompliancePage(colors: colors, title: 'Privacy Policy', intro: 'Last updated: 22 August 2026. This policy applies to CIRCUM, Circum Rider, Gifts, Gift Stories, Health+, Business, Vanguard, and related delivery services operated by Circum Technologies Ltd.', sections: const [
-    _ComplianceSection('Who we are and lawful bases', 'Circum Technologies Ltd is responsible for the personal information described here. Depending on the activity, we may process information to provide a requested service, perform a contract, comply with legal obligations, protect people and the service, or pursue legitimate interests. Where consent is the appropriate basis, we will ask for it and explain how to withdraw it. The exact legal basis can depend on the feature and facts of the request.'),
-    _ComplianceSection('Information we use', 'Depending on the feature, we process name, email, account and user IDs, addresses, phone numbers, precise location, payment information through Stripe, device or other identifiers, photos, videos, Gift Stories, optional Gifts voice or sound recordings, and supported in-app messages.'),
-    _ComplianceSection('Purposes and choices', 'We use information for account management, address resolution, booking, payment, dispatch, Rider matching, tracking, support, safety, fraud prevention, service reliability, and legal obligations. Required service data is required; optional media, Gift Stories, and voice features are optional.'),
-    _ComplianceSection('Health+ information', 'Health+ can involve prescription, medication, pharmacy, collection, and recipient information supplied for a requested pickup or delivery. CIRCUM provides delivery coordination and does not diagnose, treat, cure, or prevent disease. Health-related processing may require additional legal conditions; we will use the information only for the requested service, safety, compliance, and related legal purposes.'),
-    _ComplianceSection('Matching and service decisions', 'We use service information, eligibility information, safety checks, delivery details, and operational signals to match requests, protect the service, support Riders, and manage delivery risk. These processes may affect which service options or delivery opportunities are shown. We do not describe these operational checks as a decision about a person beyond the service context.'),
-    _ComplianceSection('Processors', 'CIRCUM uses processors including Firebase/Google Cloud, Google Maps or Places, Stripe, hosting, and communications providers where needed. Google Play Data Safety “data shared with third parties” has a defined meaning and does not mean necessary service processors are absent.'),
-    _ComplianceSection('Transfers and security', 'Some service providers may process information in countries outside the UK. Where this occurs, we use appropriate contractual, technical, or other safeguards required by applicable law. We use access controls and encryption in transit, but no online service can promise absolute security.'),
-    _ComplianceSection('Location and communications', 'Precise location is used for delivery, dispatch, presence, navigation, and live tracking where enabled. Service notifications and supported communications may be sent; SMS/MMS is used only where a CIRCUM flow requires it.'),
-    _ComplianceSection('Retention and deletion', 'We retain information only for as long as needed for the service and applicable payment, accounting, fraud, safety, dispute, regulatory, and legal requirements. Some completed-delivery, financial, compliance, and security records may need to be retained after an account closes. See /delete_account for account closure and particular-data requests.'),
-    _ComplianceSection('Security and rights', 'Under applicable law, including the UK GDPR and Data Protection Act 2018, you may have rights to access, correct, delete, restrict, object to, or receive a copy of your information. You may also withdraw consent where consent is used. Contact support@circumuk.com; identity verification and legal exceptions may apply. You can complain to the UK Information Commissioner’s Office at ico.org.uk.'),
-    _ComplianceSection('Contact', 'For privacy questions or requests, contact support@circumuk.com. Written requests may require identity verification before we can act on them.'),
-  ], actions: [TextButton(onPressed: () => launchUrl(Uri.base.replace(path: '/delete_account', queryParameters: {}, fragment: ''), webOnlyWindowName: '_self'), child: const Text('Account deletion')), TextButton(onPressed: () => launchUrl(Uri.base.replace(path: '/terms', queryParameters: {}, fragment: ''), webOnlyWindowName: '_self'), child: const Text('Terms & Conditions')), TextButton(onPressed: () => launchUrl(Uri.base.replace(path: '/', queryParameters: {}, fragment: ''), webOnlyWindowName: '_self'), child: const Text('CIRCUM home'))]);
+  Widget build(BuildContext context) => _CompliancePage(
+        colors: colors,
+        title: 'Privacy Policy',
+        intro:
+            'Last updated: 22 August 2026. This policy applies to CIRCUM, Circum Rider, Gifts, Gift Stories, Health+, Business, Vanguard, and related delivery services operated by Circum Technologies Ltd.',
+        sections: const [
+          _ComplianceSection(
+            'Who we are and lawful bases',
+            'Circum Technologies Ltd is responsible for the personal information described here. Depending on the activity, we may process information to provide a requested service, perform a contract, comply with legal obligations, protect people and the service, or pursue legitimate interests. Where consent is the appropriate basis, we will ask for it and explain how to withdraw it. The exact legal basis can depend on the feature and facts of the request.',
+          ),
+          _ComplianceSection(
+            'Information we use',
+            'Depending on the feature, we process name, email, account and user IDs, addresses, phone numbers, precise location, payment information through Stripe, device or other identifiers, photos, videos, Gift Stories, optional Gifts voice or sound recordings, and supported in-app messages.',
+          ),
+          _ComplianceSection(
+            'Purposes and choices',
+            'We use information for account management, address resolution, booking, payment, dispatch, Rider matching, tracking, support, safety, fraud prevention, service reliability, and legal obligations. Required service data is required; optional media, Gift Stories, and voice features are optional.',
+          ),
+          _ComplianceSection(
+            'Health+ information',
+            'Health+ can involve prescription, medication, pharmacy, collection, and recipient information supplied for a requested pickup or delivery. CIRCUM provides delivery coordination and does not diagnose, treat, cure, or prevent disease. Health-related processing may require additional legal conditions; we will use the information only for the requested service, safety, compliance, and related legal purposes.',
+          ),
+          _ComplianceSection(
+            'Matching and service decisions',
+            'We use service information, eligibility information, safety checks, delivery details, and operational signals to match requests, protect the service, support Riders, and manage delivery risk. These processes may affect which service options or delivery opportunities are shown. We do not describe these operational checks as a decision about a person beyond the service context.',
+          ),
+          _ComplianceSection(
+            'Processors',
+            'CIRCUM uses processors including Firebase/Google Cloud, Google Maps or Places, Stripe, hosting, and communications providers where needed. Google Play Data Safety “data shared with third parties” has a defined meaning and does not mean necessary service processors are absent.',
+          ),
+          _ComplianceSection(
+            'Transfers and security',
+            'Some service providers may process information in countries outside the UK. Where this occurs, we use appropriate contractual, technical, or other safeguards required by applicable law. We use access controls and encryption in transit, but no online service can promise absolute security.',
+          ),
+          _ComplianceSection(
+            'Location and communications',
+            'Precise location is used for delivery, dispatch, presence, navigation, and live tracking where enabled. Service notifications and supported communications may be sent; SMS/MMS is used only where a CIRCUM flow requires it.',
+          ),
+          _ComplianceSection(
+            'Retention and deletion',
+            'We retain information only for as long as needed for the service and applicable payment, accounting, fraud, safety, dispute, regulatory, and legal requirements. Some completed-delivery, financial, compliance, and security records may need to be retained after an account closes. See /delete_account for account closure and particular-data requests.',
+          ),
+          _ComplianceSection(
+            'Security and rights',
+            'Under applicable law, including the UK GDPR and Data Protection Act 2018, you may have rights to access, correct, delete, restrict, object to, or receive a copy of your information. You may also withdraw consent where consent is used. Contact support@circumuk.com; identity verification and legal exceptions may apply. You can complain to the UK Information Commissioner’s Office at ico.org.uk.',
+          ),
+          _ComplianceSection(
+            'Contact',
+            'For privacy questions or requests, contact support@circumuk.com. Written requests may require identity verification before we can act on them.',
+          ),
+        ],
+        actions: [
+          TextButton(
+            onPressed: () => launchUrl(
+              Uri.base.replace(
+                path: '/delete_account',
+                queryParameters: {},
+                fragment: '',
+              ),
+              webOnlyWindowName: '_self',
+            ),
+            child: const Text('Account deletion'),
+          ),
+          TextButton(
+            onPressed: () => launchUrl(
+              Uri.base
+                  .replace(path: '/terms', queryParameters: {}, fragment: ''),
+              webOnlyWindowName: '_self',
+            ),
+            child: const Text('Terms & Conditions'),
+          ),
+          TextButton(
+            onPressed: () => launchUrl(
+              Uri.base.replace(path: '/', queryParameters: {}, fragment: ''),
+              webOnlyWindowName: '_self',
+            ),
+            child: const Text('CIRCUM home'),
+          ),
+        ],
+      );
+}
+
+class _CookiePolicyPage extends StatelessWidget {
+  final _CircumColors colors;
+  final VoidCallback onManageConsent;
+
+  const _CookiePolicyPage({
+    super.key,
+    required this.colors,
+    required this.onManageConsent,
+  });
+
+  @override
+  Widget build(BuildContext context) => _CompliancePage(
+        colors: colors,
+        title: 'Cookie & Storage Technologies Policy',
+        intro:
+            'This policy explains the cookies and storage technologies used by the public CIRCUM website, operated by Circum Technologies Ltd.',
+        sections: const [
+          _ComplianceSection(
+            'What we use',
+            'The website uses browser storage for your optional analytics preference. Strictly necessary browser and hosting technologies support page delivery, navigation, security, and requested functionality.',
+          ),
+          _ComplianceSection(
+            'Optional visitor analytics',
+            'If you choose Accept optional, the website may send a visit record containing the page, URL, query parameters, app mode, and, where you are signed in, the account context available to the service. This is used for visitor analytics and service improvement. It is off by default and is not required to browse the website.',
+          ),
+          _ComplianceSection(
+            'Storage and duration',
+            'The preference is stored in your browser under a CIRCUM preference key until you remove it, clear site data, or change your choice. The website does not claim a fixed duration for other strictly necessary browser or hosting technologies where the browser or provider controls that duration.',
+          ),
+          _ComplianceSection(
+            'Your choices',
+            'You can reject optional analytics, accept it, or reopen these choices from this page. You can also clear CIRCUM site data in your browser settings. Rejecting optional analytics does not disable necessary service functionality.',
+          ),
+          _ComplianceSection(
+            'Relationship with privacy information',
+            'The Privacy Policy at /privacy_policy explains wider personal-information processing, including service providers, location, communications, and rights. This policy concerns website cookies, storage, and access technologies.',
+          ),
+          _ComplianceSection(
+            'PECR and data protection',
+            'CIRCUM applies the UK Privacy and Electronic Communications Regulations and the UK data-protection framework to technologies used on this website. We will review this policy before introducing analytics, advertising, tracking pixels, behavioural tracking, fingerprinting, or other optional technologies.',
+          ),
+          _ComplianceSection(
+            'Contact',
+            'For questions about this policy, contact support@circumuk.com.',
+          ),
+        ],
+        actions: [
+          TextButton(
+            onPressed: onManageConsent,
+            child: const Text('Manage preferences'),
+          ),
+          TextButton(
+            onPressed: () => launchUrl(
+              Uri.base.replace(
+                path: '/privacy_policy',
+                queryParameters: {},
+                fragment: '',
+              ),
+              webOnlyWindowName: '_self',
+            ),
+            child: const Text('Privacy Policy'),
+          ),
+        ],
+      );
+}
+
+class _CookieConsentBanner extends StatelessWidget {
+  final _CircumColors colors;
+  final VoidCallback onReject;
+  final VoidCallback onAccept;
+  final VoidCallback onManage;
+
+  const _CookieConsentBanner({
+    required this.colors,
+    required this.onReject,
+    required this.onAccept,
+    required this.onManage,
+  });
+
+  @override
+  Widget build(BuildContext context) => Positioned(
+        left: 16,
+        right: 16,
+        bottom: 16,
+        child: Material(
+          elevation: 8,
+          color: colors.panel,
+          borderRadius: BorderRadius.circular(8),
+          child: Padding(
+            padding: const EdgeInsets.all(16),
+            child: Wrap(
+              alignment: WrapAlignment.spaceBetween,
+              crossAxisAlignment: WrapCrossAlignment.center,
+              spacing: 12,
+              runSpacing: 10,
+              children: [
+                const SizedBox(
+                  width: 420,
+                  child: Text(
+                    'CIRCUM uses optional visitor analytics only with your permission. Necessary technologies remain active.',
+                  ),
+                ),
+                TextButton(
+                  onPressed: onManage,
+                  child: const Text('Manage preferences'),
+                ),
+                OutlinedButton(
+                  onPressed: onReject,
+                  child: const Text('Reject optional'),
+                ),
+                FilledButton(
+                  onPressed: onAccept,
+                  child: const Text('Accept optional'),
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
 }
 
 class _TermsPage extends StatelessWidget {
@@ -26063,22 +26421,73 @@ class _TermsPage extends StatelessWidget {
   Widget build(BuildContext context) => _CompliancePage(
         colors: colors,
         title: 'Terms & Conditions',
-        intro: 'These Terms & Conditions apply to customers using CIRCUM and participants using Circum Rider, operated by Circum Technologies Ltd. They govern use of the service, delivery requests, and participation in delivery work.',
+        intro:
+            'These Terms & Conditions apply to customers using CIRCUM and participants using Circum Rider, operated by Circum Technologies Ltd. They govern use of the service, delivery requests, and participation in delivery work.',
         sections: const [
-          _ComplianceSection('Using CIRCUM', 'You must provide accurate information, keep your account secure, use the service lawfully, and follow instructions for pickup, delivery, payment, safety, and communications. You remain responsible for the information and items you submit.'),
-          _ComplianceSection('Bookings and delivery services', 'CIRCUM may offer parcel, scheduled, Express, Gifts, Health+, Business, and Vanguard services where available. Pickup and drop-off details, timing, service level, price, availability, and operational requirements are shown during booking. A booking is not confirmed until CIRCUM confirms it and any required payment is completed.'),
-          _ComplianceSection('Items and safety', 'Do not request delivery of unlawful, unsafe, dangerous, prohibited, restricted, or improperly packaged items. You must provide accurate item, weight, access, and handling information. CIRCUM may refuse, pause, inspect, or escalate a request where safety, legal, payment, or service requirements are not met.'),
-          _ComplianceSection('Payments, cancellations, and liability', 'Prices and payment requirements are shown before confirmation. Cancellations, refunds, adjustments, loss, damage, delays, and liability are handled according to the service details, applicable law, and the facts of the request. Nothing in these terms limits rights that cannot lawfully be limited.'),
-          _ComplianceSection('Health+ and Gifts', 'Health+ is a delivery-coordination service for eligible prescription and pharmacy collections. CIRCUM does not diagnose or treat medical conditions. Gifts may include recipient details, media, messages, and named collection locations. You must have the rights and permissions needed to provide information or media about another person.'),
-          _ComplianceSection('Scheduled deliveries', 'Scheduled requests may be matched or reserved before their pickup time. Reservation does not mean collection starts immediately. Pickup, arrival, collection, and other operational stages remain subject to the scheduled timing and service requirements.'),
-          _ComplianceSection('Circum Rider participation', 'Riders must meet the eligibility, identity, right-to-work, vehicle, insurance, safety, document, and service requirements that apply to their chosen activity. Riders must accept only work they can perform safely, follow pickup and delivery instructions, protect customer information, provide required evidence, and complete accepted work accurately.'),
-          _ComplianceSection('Rider status and earnings', 'Rider participation, offers, availability, earnings, and payouts depend on completed service, eligibility, applicable pricing, payment status, operational records, and these terms. A Rider may be unable to receive work or may have participation restricted when safety, compliance, account, or service requirements are not met.'),
-          _ComplianceSection('Suspension, termination, and complaints', 'We may restrict, suspend, or close access where required for safety, fraud prevention, non-payment, legal compliance, misuse, inaccurate information, or breach of these terms. Contact support@circumuk.com with a complaint or service question. We will review it using the information available and applicable legal requirements.'),
-          _ComplianceSection('Intellectual property and governing law', 'CIRCUM materials, names, software, and content belong to Circum Technologies Ltd or its licensors. You may use them only as permitted by the service. These terms are governed by the law of England and Wales, subject to any mandatory consumer or other legal rights that apply.'),
+          _ComplianceSection(
+            'Using CIRCUM',
+            'You must provide accurate information, keep your account secure, use the service lawfully, and follow instructions for pickup, delivery, payment, safety, and communications. You remain responsible for the information and items you submit.',
+          ),
+          _ComplianceSection(
+            'Bookings and delivery services',
+            'CIRCUM may offer parcel, scheduled, Express, Gifts, Health+, Business, and Vanguard services where available. Pickup and drop-off details, timing, service level, price, availability, and operational requirements are shown during booking. A booking is not confirmed until CIRCUM confirms it and any required payment is completed.',
+          ),
+          _ComplianceSection(
+            'Items and safety',
+            'Do not request delivery of unlawful, unsafe, dangerous, prohibited, restricted, or improperly packaged items. You must provide accurate item, weight, access, and handling information. CIRCUM may refuse, pause, inspect, or escalate a request where safety, legal, payment, or service requirements are not met.',
+          ),
+          _ComplianceSection(
+            'Payments, cancellations, and liability',
+            'Prices and payment requirements are shown before confirmation. Cancellations, refunds, adjustments, loss, damage, delays, and liability are handled according to the service details, applicable law, and the facts of the request. Nothing in these terms limits rights that cannot lawfully be limited.',
+          ),
+          _ComplianceSection(
+            'Health+ and Gifts',
+            'Health+ is a delivery-coordination service for eligible prescription and pharmacy collections. CIRCUM does not diagnose or treat medical conditions. Gifts may include recipient details, media, messages, and named collection locations. You must have the rights and permissions needed to provide information or media about another person.',
+          ),
+          _ComplianceSection(
+            'Scheduled deliveries',
+            'Scheduled requests may be matched or reserved before their pickup time. Reservation does not mean collection starts immediately. Pickup, arrival, collection, and other operational stages remain subject to the scheduled timing and service requirements.',
+          ),
+          _ComplianceSection(
+            'Circum Rider participation',
+            'Riders must meet the eligibility, identity, right-to-work, vehicle, insurance, safety, document, and service requirements that apply to their chosen activity. Riders must accept only work they can perform safely, follow pickup and delivery instructions, protect customer information, provide required evidence, and complete accepted work accurately.',
+          ),
+          _ComplianceSection(
+            'Rider status and earnings',
+            'Rider participation, offers, availability, earnings, and payouts depend on completed service, eligibility, applicable pricing, payment status, operational records, and these terms. A Rider may be unable to receive work or may have participation restricted when safety, compliance, account, or service requirements are not met.',
+          ),
+          _ComplianceSection(
+            'Suspension, termination, and complaints',
+            'We may restrict, suspend, or close access where required for safety, fraud prevention, non-payment, legal compliance, misuse, inaccurate information, or breach of these terms. Contact support@circumuk.com with a complaint or service question. We will review it using the information available and applicable legal requirements.',
+          ),
+          _ComplianceSection(
+            'Intellectual property and governing law',
+            'CIRCUM materials, names, software, and content belong to Circum Technologies Ltd or its licensors. You may use them only as permitted by the service. These terms are governed by the law of England and Wales, subject to any mandatory consumer or other legal rights that apply.',
+          ),
         ],
         actions: [
-          TextButton(onPressed: () => launchUrl(Uri.base.replace(path: '/privacy_policy', queryParameters: {}, fragment: ''), webOnlyWindowName: '_self'), child: const Text('Privacy Policy')),
-          TextButton(onPressed: () => launchUrl(Uri.base.replace(path: '/delete_account', queryParameters: {}, fragment: ''), webOnlyWindowName: '_self'), child: const Text('Account deletion')),
+          TextButton(
+            onPressed: () => launchUrl(
+              Uri.base.replace(
+                path: '/privacy_policy',
+                queryParameters: {},
+                fragment: '',
+              ),
+              webOnlyWindowName: '_self',
+            ),
+            child: const Text('Privacy Policy'),
+          ),
+          TextButton(
+            onPressed: () => launchUrl(
+              Uri.base.replace(
+                path: '/delete_account',
+                queryParameters: {},
+                fragment: '',
+              ),
+              webOnlyWindowName: '_self',
+            ),
+            child: const Text('Account deletion'),
+          ),
         ],
       );
 }
@@ -26137,20 +26546,58 @@ class _LandingFooter extends StatelessWidget {
                           '/privacy_policy',
                         ),
                         onPressed: () {
-                          unawaited(launchUrl(
-                            _CircumWebsiteAppState._canonicalWebUri('/privacy_policy'),
-                            webOnlyWindowName: '_self',
-                          ));
+                          unawaited(
+                            launchUrl(
+                              _CircumWebsiteAppState._canonicalWebUri(
+                                '/privacy_policy',
+                              ),
+                              webOnlyWindowName: '_self',
+                            ),
+                          );
                         },
                       ),
                       _FooterServiceLink(
                         label: 'Terms of Service',
                         uri: _CircumWebsiteAppState._canonicalWebUri('/terms'),
                         onPressed: () {
-                          unawaited(launchUrl(
-                            _CircumWebsiteAppState._canonicalWebUri('/terms'),
-                            webOnlyWindowName: '_self',
-                          ));
+                          unawaited(
+                            launchUrl(
+                              _CircumWebsiteAppState._canonicalWebUri('/terms'),
+                              webOnlyWindowName: '_self',
+                            ),
+                          );
+                        },
+                      ),
+                      _FooterServiceLink(
+                        label: 'Cookie Policy',
+                        uri: _CircumWebsiteAppState._canonicalWebUri(
+                          '/cookie_policy',
+                        ),
+                        onPressed: () {
+                          unawaited(
+                            launchUrl(
+                              _CircumWebsiteAppState._canonicalWebUri(
+                                '/cookie_policy',
+                              ),
+                              webOnlyWindowName: '_self',
+                            ),
+                          );
+                        },
+                      ),
+                      _FooterServiceLink(
+                        label: 'Account deletion',
+                        uri: _CircumWebsiteAppState._canonicalWebUri(
+                          '/delete_account',
+                        ),
+                        onPressed: () {
+                          unawaited(
+                            launchUrl(
+                              _CircumWebsiteAppState._canonicalWebUri(
+                                '/delete_account',
+                              ),
+                              webOnlyWindowName: '_self',
+                            ),
+                          );
                         },
                       ),
                     ],
@@ -27537,10 +27984,7 @@ class _GiftsComingSoonPage extends StatefulWidget {
   final _CircumColors colors;
   final VoidCallback onBack;
 
-  const _GiftsComingSoonPage({
-    required this.colors,
-    required this.onBack,
-  });
+  const _GiftsComingSoonPage({required this.colors, required this.onBack});
 
   @override
   State<_GiftsComingSoonPage> createState() => _GiftsComingSoonPageState();

@@ -40,6 +40,22 @@ void main() {
       expect(route.canonicalPath, '/terms');
     });
 
+    test(
+      'cookie policy and legacy cookie paths select the canonical policy',
+      () {
+        for (final path in ['/cookie_policy', '/cookies', '/cookie-policy']) {
+          final route = resolveCircumWebRoute(
+            Uri.parse('https://circumuk.com$path'),
+            adminHostingTarget: false,
+            publicHostingHost: true,
+          );
+
+          expect(route.surface, CircumWebSurface.cookiePolicy);
+          expect(route.canonicalPath, '/cookie_policy');
+        }
+      },
+    );
+
     test('/send and /send/... select Sender Web', () {
       for (final path in ['/send', '/send/', '/send/profile']) {
         final route = resolveCircumWebRoute(
@@ -158,8 +174,9 @@ void main() {
       'Website bootstrap uses path resolver instead of product switching',
       () {
         expect(File('lib/web_sender_app.dart').existsSync(), isFalse);
-        final source = File('lib/website/shared/circum_website_app.dart')
-            .readAsStringSync();
+        final source = File(
+          'lib/website/shared/circum_website_app.dart',
+        ).readAsStringSync();
 
         expect(source, contains('resolveCircumWebRoute'));
         expect(source, contains('Uri.base'));
@@ -174,16 +191,18 @@ void main() {
     );
 
     test('Rider Web does not mount the standalone Rider App shell', () {
-      final source =
-          File('lib/website/shared/circum_website_app.dart').readAsStringSync();
+      final source = File(
+        'lib/website/shared/circum_website_app.dart',
+      ).readAsStringSync();
 
       expect(source, contains('_RiderEnrollmentPortal'));
       expect(source, isNot(contains('CircumRiderApp')));
     });
 
     test('stable build identity markers are present', () {
-      final source =
-          File('lib/website/shared/circum_website_app.dart').readAsStringSync();
+      final source = File(
+        'lib/website/shared/circum_website_app.dart',
+      ).readAsStringSync();
       final routing = File('lib/web_platform_routing.dart').readAsStringSync();
 
       expect(routing, contains(circumPublicWebIdentity));
@@ -195,8 +214,9 @@ void main() {
     });
 
     test('Public homepage keeps Health Vanguard and Business entries', () {
-      final source =
-          File('lib/website/shared/circum_website_app.dart').readAsStringSync();
+      final source = File(
+        'lib/website/shared/circum_website_app.dart',
+      ).readAsStringSync();
 
       expect(source, contains('Get started with Health+'));
       expect(source, contains('Health+'));
@@ -220,8 +240,9 @@ void main() {
     });
 
     test('Business and Health web keep app-style section parity', () {
-      final source =
-          File('lib/website/shared/circum_website_app.dart').readAsStringSync();
+      final source = File(
+        'lib/website/shared/circum_website_app.dart',
+      ).readAsStringSync();
 
       expect(source, contains('enum _BusinessWebSection'));
       for (final label in [
@@ -244,17 +265,22 @@ void main() {
       expect(source, contains('Business sections'));
     });
 
-    test('Sender delivery payload leaves Rider offer display aliases to backend', () {
-      final source =
-          File('lib/website/shared/circum_website_app.dart').readAsStringSync();
-      expect(source, isNot(contains("'riderEarning': driverPayout")));
-      expect(source, isNot(contains("'requiresVanguard': vanguardEnabled")));
-      expect(source, contains("httpsCallable('createSenderPaidDelivery')"));
-    });
+    test(
+      'Sender delivery payload leaves Rider offer display aliases to backend',
+      () {
+        final source = File(
+          'lib/website/shared/circum_website_app.dart',
+        ).readAsStringSync();
+        expect(source, isNot(contains("'riderEarning': driverPayout")));
+        expect(source, isNot(contains("'requiresVanguard': vanguardEnabled")));
+        expect(source, contains("httpsCallable('createSenderPaidDelivery')"));
+      },
+    );
 
     test('Vanguard copy avoids customer rider choice wording', () {
-      final source =
-          File('lib/website/shared/circum_website_app.dart').readAsStringSync();
+      final source = File(
+        'lib/website/shared/circum_website_app.dart',
+      ).readAsStringSync();
 
       expect(source, contains('Customers do not choose riders'));
       expect(source, contains('Vanguard is not insurance'));
@@ -272,16 +298,21 @@ void main() {
       expect(source, isNot(contains('Dedicated rider')));
     });
 
-    test('Website does not compile mobile app or Admin console entrypoints',
-        () {
-      final source =
-          File('lib/website/shared/circum_website_app.dart').readAsStringSync();
+    test(
+      'Website does not compile mobile app or Admin console entrypoints',
+      () {
+        final source = File(
+          'lib/website/shared/circum_website_app.dart',
+        ).readAsStringSync();
 
-      expect(source,
-          isNot(contains("package:circum/app/admin/admin_operations.dart")));
-      expect(source, isNot(contains("package:circum/app/sender_mobile/")));
-      expect(source, isNot(contains('SenderMobileHome')));
-      expect(source, isNot(contains('_AdminOperationsPanel')));
-    });
+        expect(
+          source,
+          isNot(contains("package:circum/app/admin/admin_operations.dart")),
+        );
+        expect(source, isNot(contains("package:circum/app/sender_mobile/")));
+        expect(source, isNot(contains('SenderMobileHome')));
+        expect(source, isNot(contains('_AdminOperationsPanel')));
+      },
+    );
   });
 }

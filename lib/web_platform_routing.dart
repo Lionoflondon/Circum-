@@ -1,4 +1,15 @@
-enum CircumWebSurface { public, sender, rider, gifts, vanguard, deleteAccount, privacyPolicy, terms, admin }
+enum CircumWebSurface {
+  public,
+  sender,
+  rider,
+  gifts,
+  vanguard,
+  deleteAccount,
+  privacyPolicy,
+  terms,
+  cookiePolicy,
+  admin,
+}
 
 enum CircumSenderEntry { dashboard, healthPlus, business, profile }
 
@@ -90,13 +101,29 @@ CircumWebRouteResolution resolveCircumWebRoute(
       );
     case 'delete_account':
     case 'delete-account':
-      return const CircumWebRouteResolution(surface: CircumWebSurface.deleteAccount, canonicalPath: '/delete_account');
+      return const CircumWebRouteResolution(
+        surface: CircumWebSurface.deleteAccount,
+        canonicalPath: '/delete_account',
+      );
     case 'privacy':
     case 'privacy-policy':
     case 'privacy_policy':
-      return const CircumWebRouteResolution(surface: CircumWebSurface.privacyPolicy, canonicalPath: '/privacy_policy');
+      return const CircumWebRouteResolution(
+        surface: CircumWebSurface.privacyPolicy,
+        canonicalPath: '/privacy_policy',
+      );
     case 'terms':
-      return const CircumWebRouteResolution(surface: CircumWebSurface.terms, canonicalPath: '/terms');
+      return const CircumWebRouteResolution(
+        surface: CircumWebSurface.terms,
+        canonicalPath: '/terms',
+      );
+    case 'cookie_policy':
+    case 'cookies':
+    case 'cookie-policy':
+      return const CircumWebRouteResolution(
+        surface: CircumWebSurface.cookiePolicy,
+        canonicalPath: '/cookie_policy',
+      );
     case 'join':
       final rawCode = segments.length > 1 ? segments[1] : '';
       final code = rawCode.toUpperCase().replaceAll(RegExp(r'[^A-Z0-9]'), '');

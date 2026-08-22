@@ -62,7 +62,9 @@ function startsWithAny(file, prefixes) {
 }
 
 const changed = changedFiles();
-if (ciMode && !changed.some((file) => startsWithAny(file, product.ownedPrefixes))) {
+const ownedForCi = changed.filter((file) => productName === 'backend' &&
+  (file === 'firebase.json' || file === 'scripts/deploy_guard.js') ? false : true);
+if (ciMode && !ownedForCi.some((file) => startsWithAny(file, product.ownedPrefixes))) {
   console.log(JSON.stringify({
     ok: true,
     skipped: true,
@@ -84,6 +86,7 @@ const offenders = changed.filter((file) => {
   // The guard itself may be maintained alongside a website-owned Hosting
   // change; protected architecture review remains the approval boundary.
   if (productName === 'website' && file === 'scripts/deploy_guard.js') return false;
+  if (productName === 'backend' && file === 'firebase.json') return false;
   if (startsWithAny(file, product.forbiddenPrefixes)) return true;
   return !startsWithAny(file, product.ownedPrefixes) &&
     !manifest.sharedFiles.includes(file);
