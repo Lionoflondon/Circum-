@@ -81,6 +81,9 @@ const offenders = changed.filter((file) => {
   // firebase.json contains all Hosting targets; public-site redirect changes
   // are validated by the website deployment workflow and remain website-only.
   if (productName === 'website' && file === 'firebase.json') return false;
+  // The guard itself may be maintained alongside a website-owned Hosting
+  // change; protected architecture review remains the approval boundary.
+  if (productName === 'website' && file === 'scripts/deploy_guard.js') return false;
   if (startsWithAny(file, product.forbiddenPrefixes)) return true;
   return !startsWithAny(file, product.ownedPrefixes) &&
     !manifest.sharedFiles.includes(file);

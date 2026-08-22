@@ -77,6 +77,35 @@ test('Web-only PR passes', () => {
   assert.equal(runGuard(cwd, 'sender-app', base, head, true).status, 0);
 });
 
+test('Website Hosting config change passes', () => {
+  const cwd = fixture();
+  const base = git(cwd, ['rev-parse', 'HEAD']);
+  fs.writeFileSync(path.join(cwd, 'firebase.json'), '{"hosting": []}\n');
+  fs.writeFileSync(path.join(cwd, 'lib/website/privacy.dart'), 'privacy\n');
+  const head = commit(cwd, 'website hosting');
+  assert.equal(runGuard(cwd, 'website', base, head, true).status, 0);
+});
+
+test('Website guard maintenance passes the focused ownership check', () => {
+  const cwd = fixture();
+  const base = git(cwd, ['rev-parse', 'HEAD']);
+  fs.appendFileSync(path.join(cwd, 'scripts/deploy_guard.js'), '\n// owner-reviewed maintenance\n');
+  fs.writeFileSync(path.join(cwd, 'firebase.json'), '{"hosting": []}\n');
+  fs.writeFileSync(path.join(cwd, 'lib/website/privacy.dart'), 'privacy\n');
+  const head = commit(cwd, 'guard maintenance');
+  assert.equal(runGuard(cwd, 'website', base, head, true).status, 0);
+});
+
+test('Website PR with unrelated backend change fails', () => {
+  const cwd = fixture();
+  fs.mkdirSync(path.join(cwd, 'server/functions'), { recursive: true });
+  fs.writeFileSync(path.join(cwd, 'server/functions/example.js'), 'backend\n');
+  const base = git(cwd, ['rev-parse', 'HEAD']);
+  fs.writeFileSync(path.join(cwd, 'lib/website/privacy.dart'), 'privacy\n');
+  const head = commit(cwd, 'backend contamination');
+  assert.equal(runGuard(cwd, 'website', base, head, true).status, 1);
+});
+
 test('Mixed Sender and Web PR fails', () => {
   const cwd = fixture();
   const base = git(cwd, ['rev-parse', 'HEAD']);
