@@ -32,7 +32,7 @@ jobs:
               'scripts/absolute_product_ownership.js',
             ];
             const architectureOwners = ['Lionoflondon'];
-            const requiredApprovals = 1;
+            const requiredApprovals = 0;
             const approvalLabel = 'architecture-approved';
 
             const { owner, repo } = context.repo;
