@@ -102,6 +102,16 @@
           "source": "/privacy-policy",
           "destination": "/privacy_policy",
           "type": 308
+        },
+        {
+          "source": "/cookies",
+          "destination": "/cookie_policy",
+          "type": 308
+        },
+        {
+          "source": "/cookie-policy",
+          "destination": "/cookie_policy",
+          "type": 308
         }
       ],
       "rewrites": [
