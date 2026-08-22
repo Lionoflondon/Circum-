@@ -141,7 +141,7 @@ class _CircumWebsiteAppState extends State<CircumWebsiteApp> {
       _WebAppMode.gifts => '/gifts',
       _WebAppMode.vanguard => '/vanguard',
       _WebAppMode.deleteAccount => '/delete_account',
-      _WebAppMode.privacyPolicy => '/privacy-policy',
+      _WebAppMode.privacyPolicy => '/privacy_policy',
     };
     if (kIsWeb) {
       await _openCanonicalPath(path);
@@ -238,7 +238,7 @@ class _CircumWebsiteAppState extends State<CircumWebsiteApp> {
           onBack: () => _openSurface(_WebAppMode.landing),
         ),
       _WebAppMode.deleteAccount => _AccountDeletionPage(key: const ValueKey('account-deletion'), colors: colors),
-      _WebAppMode.privacyPolicy => _PrivacyPolicyPage(key: const ValueKey('privacy-policy'), colors: colors),
+      _WebAppMode.privacyPolicy => _PrivacyPolicyPage(key: const ValueKey('privacy_policy'), colors: colors),
       _WebAppMode.landing => _LandingPage(
           key: const ValueKey(circumPublicWebIdentity),
           colors: colors,
@@ -26029,7 +26029,7 @@ class _AccountDeletionPage extends StatelessWidget {
     _ComplianceSection('Delete account', 'In the app, open Profile > Account > Delete Account and follow the confirmation steps. You may also email support@circumuk.com from your linked address for a verified request; this is not automatic web deletion.'),
     _ComplianceSection('Delete particular data', 'There is no separate automated partial-data deletion form. Email support@circumuk.com from your linked address, identify the data you want removed, and we will verify ownership and confirm what can be deleted or retained.'),
     _ComplianceSection('Retention', 'Account profile and access data are removed or anonymised when closure is approved. Financial, payment, accounting, fraud-prevention, safety, dispute, regulatory, and legal records may need to be retained for the applicable period, then deleted or anonymised.'),
-  ], actions: [TextButton(onPressed: _requestDeletion, child: const Text('Request account deletion')), TextButton(onPressed: () => launchUrl(Uri.base.replace(path: '/privacy-policy', queryParameters: {}, fragment: ''), webOnlyWindowName: '_self'), child: const Text('Privacy Policy'))]);
+  ], actions: [TextButton(onPressed: _requestDeletion, child: const Text('Request account deletion')), TextButton(onPressed: () => launchUrl(Uri.base.replace(path: '/privacy_policy', queryParameters: {}, fragment: ''), webOnlyWindowName: '_self'), child: const Text('Privacy Policy'))]);
 }
 
 class _PrivacyPolicyPage extends StatelessWidget {

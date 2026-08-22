@@ -16,6 +16,19 @@ void main() {
       expect(route.canonicalPath, '/');
     });
 
+    test('privacy paths select the canonical public privacy page', () {
+      for (final path in ['/privacy', '/privacy-policy', '/privacy_policy']) {
+        final route = resolveCircumWebRoute(
+          Uri.parse('https://circumuk.com$path'),
+          adminHostingTarget: false,
+          publicHostingHost: true,
+        );
+
+        expect(route.surface, CircumWebSurface.privacyPolicy);
+        expect(route.canonicalPath, '/privacy_policy');
+      }
+    });
+
     test('/send and /send/... select Sender Web', () {
       for (final path in ['/send', '/send/', '/send/profile']) {
         final route = resolveCircumWebRoute(

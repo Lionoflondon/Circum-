@@ -92,6 +92,18 @@
           ]
         }
       ],
+      "redirects": [
+        {
+          "source": "/privacy",
+          "destination": "/privacy_policy",
+          "type": 308
+        },
+        {
+          "source": "/privacy-policy",
+          "destination": "/privacy_policy",
+          "type": 308
+        }
+      ],
       "rewrites": [
         {
           "source": "**",
