@@ -484,7 +484,7 @@ class DeliveryPricing {
         'Similar completed parcels indicate a higher $band classification.',
       'iris_estimate' => 'IRIS selected the final billing weight.',
       'customer_declared' =>
-        'IRIS selected the sender supplied weight as the final billing weight.',
+        'IRIS selected the user-supplied weight as the final billing weight.',
       _ => 'Minimum valid parcel weight applied.',
     };
   }
@@ -494,7 +494,7 @@ class DeliveryPricing {
       'repository_match' ||
       'catalogue_match' ||
       'known_product_lookup' =>
-        'Repository Match',
+        'Catalogue Match',
       'photo_match' || 'iris_confirmed' || 'visual_estimate' => 'Photo Match',
       'rider_verified' || 'driver_verified' => 'Rider Verified',
       'admin_verified' => 'Admin Verified',
@@ -531,7 +531,7 @@ class DeliveryPricing {
     if (dimensions != null) factors.add('Dimensions');
     if ((itemCategory ?? '').trim().isNotEmpty) factors.add('Item type');
     if ((repositoryVehicleSuitability ?? '').trim().isNotEmpty) {
-      factors.add('Repository metadata');
+      factors.add('Catalogue information');
     }
 
     final bulkyByKeyword = [

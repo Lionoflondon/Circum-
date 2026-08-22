@@ -4328,7 +4328,7 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
     final receiverDetails =
         (job['receiverDetails'] as Map?)?.cast<String, dynamic>();
     final collectionName =
-        '${summary['collectionContactName'] ?? job['collectionContactName'] ?? collectionContact?['name'] ?? job['senderName'] ?? 'the sender or collection contact'}'
+        '${summary['collectionContactName'] ?? job['collectionContactName'] ?? collectionContact?['name'] ?? job['senderName'] ?? 'the collection contact'}'
             .trim();
     final receiverName =
         '${summary['receiverName'] ?? job['receiverName'] ?? receiverDetails?['name'] ?? 'the receiver'}'
@@ -4350,7 +4350,7 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
               Text(
                 stage == 'delivery'
                     ? 'This is a Vanguard protected delivery. Enter ${receiverName.isEmpty ? 'the receiver' : receiverName}’s delivery PIN to complete delivery.'
-                    : 'This is a Vanguard protected delivery. Enter ${collectionName.isEmpty ? 'the sender or collection contact' : collectionName}’s collection PIN to confirm handover.',
+                    : 'This is a Vanguard protected delivery. Enter ${collectionName.isEmpty ? 'the collection contact' : collectionName}’s collection PIN to confirm handover.',
                 style: TextStyle(color: Theme.of(context).hintColor),
               ),
               const SizedBox(height: 12),
@@ -4776,7 +4776,7 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
       if (!mounted) return;
       setState(
         () => _jobMessage =
-            'Discrepancy reported. Collection is paused for the sender.',
+      'Discrepancy reported. Collection is paused for the user.',
       );
     } on FirebaseFunctionsException catch (error) {
       if (!mounted) return;
@@ -5044,7 +5044,7 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
                   label: role == 'admin' || role == 'support'
                       ? 'CIRCUM Support'
                       : role == 'sender' || role == 'user'
-                          ? 'Sender'
+                          ? 'User'
                           : 'Rider',
                 );
               }).where((message) => message.text.trim().isNotEmpty),
@@ -5597,7 +5597,7 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
           _ChatSheet(
             colors: colors,
             title: 'Delivery chat',
-            recipient: 'Sender and CIRCUM Support',
+            recipient: 'User and CIRCUM Support',
             messages: _riderChatMessages,
             input: _riderChatInput,
             onClose: () => setState(() => _riderChatOpen = false),
@@ -7272,7 +7272,7 @@ class _DriverJobCard extends StatelessWidget {
             _JobInfoLine(
               colors: colors,
               icon: Icons.person,
-              label: 'Sender',
+              label: 'User',
               value:
                   '${senderName.isEmpty ? 'Not set' : senderName}${senderPhone.isEmpty ? '' : ' • $senderPhone'}',
             ),
@@ -8894,7 +8894,7 @@ class _CustomerPortalState extends State<_CustomerPortal> {
 
   String get _contactValidationMessage {
     if (_effectiveSenderName.isEmpty || _effectiveSenderPhone.isEmpty) {
-      return 'Add sender name and phone number before pricing.';
+    return 'Add your name and phone number before pricing.';
     }
     if (_receiverName.text.trim().isEmpty ||
         _receiverPhone.text.trim().isEmpty) {
@@ -8905,7 +8905,7 @@ class _CustomerPortalState extends State<_CustomerPortal> {
             _collectionContactPhone.text.trim().isEmpty)) {
       return 'Add the collection contact name and phone number.';
     }
-    return 'Sender, receiver, and collection contact details are ready.';
+    return 'User, receiver, and collection contact details are ready.';
   }
 
   String get _locationValidationMessage {
@@ -10851,7 +10851,7 @@ class _CustomerPortalState extends State<_CustomerPortal> {
           DeliveryPricing.weightBandFor(estimateWeight).category,
       confidence: _irisWeightConfidence ?? 'low',
       explanation:
-          _irisWeightExplanation ?? 'Iris estimate confirmed by sender.',
+          _irisWeightExplanation ?? 'IRIS estimate confirmed by you.',
       packageType: _inferPackageType(),
       requiresVehicleReview: false,
       weightSource: _irisWeightSource ?? 'category_fallback',
@@ -11012,7 +11012,7 @@ class _CustomerPortalState extends State<_CustomerPortal> {
         classification.selectedWeightSource != 'keyword_override') {
       return const _WeightPricingDecision(
         message: 'Confirm parcel weight before payment.',
-        reason: 'Iris confidence is low, so sender weight is required.',
+        reason: 'IRIS confidence is low, so your parcel weight is required.',
         verificationRequired: true,
       );
     }
@@ -11023,7 +11023,7 @@ class _CustomerPortalState extends State<_CustomerPortal> {
         weightBand: higherBand.category,
         source: classification.selectedWeightSource,
         message: significantDifference
-            ? 'Iris is not confident and the details may indicate a different weight band. Confirm your weight to continue; the Circum Rider will verify at pickup.'
+            ? 'IRIS is not confident and the details may indicate a different weight band. Confirm your weight to continue; the Circum Rider will verify at pickup.'
             : 'IRIS has analysed this item and selected the most reliable weight available.',
         reason: classification.resolutionReason,
         verificationRequired: true,
@@ -11123,7 +11123,7 @@ class _CustomerPortalState extends State<_CustomerPortal> {
       packageType = 'Large item';
       vehicleReview = true;
       explanation =
-          'The item may be oversized or heavy, so sender confirmation is required.';
+          'The item may be oversized or heavy, so your confirmation is required.';
     }
 
     final totalEstimate = estimate * quantity;
@@ -13908,7 +13908,7 @@ class _WeightConfirmationPanel extends StatelessWidget {
     final source = weightSource.toLowerCase();
     if (truthBand == 'Exact Match') return 'Exact Match (High Confidence)';
     if (source == 'repository match') {
-      return 'Repository Match (Medium Confidence)';
+      return 'Catalogue Match (Medium Confidence)';
     }
     if (source == 'photo match') return 'Image Estimate (Medium Confidence)';
     if (source == 'customer declared') {
@@ -13993,7 +13993,7 @@ class _SenderDashboardStep extends StatelessWidget {
                 ),
                 const SizedBox(height: 8),
                 Text(
-                  'Book a parcel, check a past delivery, or update your sender details.',
+                  'Book a parcel, check a past delivery, or update your details.',
                   style: TextStyle(
                     color: colors.mutedText,
                     height: 1.45,
@@ -18044,7 +18044,7 @@ class _DetailsStep extends StatelessWidget {
               const SizedBox(height: 10),
               if (senderDetailsRequired) ...[
                 Text(
-                  'Add sender details for the person booking this delivery.',
+                  'Add your details before booking this delivery.',
                   style: TextStyle(
                     color: colors.mutedText,
                     fontSize: 12,
@@ -18076,7 +18076,7 @@ class _DetailsStep extends StatelessWidget {
                 _ContactSummaryLine(
                   colors: colors,
                   icon: Icons.person,
-                  label: 'Sender',
+                  label: 'User',
                   value: '$senderDisplayName • $senderDisplayPhone',
                 ),
               ],
@@ -22301,7 +22301,7 @@ class _VanguardCustomerPanel extends StatelessWidget {
     final receiverDetails =
         (data['receiverDetails'] as Map?)?.cast<String, dynamic>();
     final collectionName =
-        '${data['collectionContactName'] ?? collectionContact?['name'] ?? data['senderName'] ?? 'the sender or collection contact'}'
+        '${data['collectionContactName'] ?? collectionContact?['name'] ?? data['senderName'] ?? 'the collection contact'}'
             .trim();
     final receiverName =
         '${data['receiverName'] ?? receiverDetails?['name'] ?? 'the receiver'}'
@@ -22331,7 +22331,7 @@ class _VanguardCustomerPanel extends StatelessWidget {
           Text(
             handoffCompleted
                 ? '✓ PIN verified\n✓ Recipient confirmed\n✓ Secure handoff completed'
-                : 'Vanguard Protection Activated\n\nThis item qualifies for enhanced delivery protection.\n\n${collectionVerified ? '✓ Collection PIN verified' : '• PIN pending'}\n${deliveryVerified ? '✓ Recipient confirmed' : '• Awaiting recipient verification'}\n${deliveryVerified ? '✓ Secure handoff completed' : '• Handoff not yet completed'}\n\nGive this collection PIN to the rider only when ${collectionName.isEmpty ? 'the sender or collection contact' : collectionName} hands over the sealed parcel.',
+                : 'Vanguard Protection Activated\n\nThis item qualifies for enhanced delivery protection.\n\n${collectionVerified ? '✓ Collection PIN verified' : '• PIN pending'}\n${deliveryVerified ? '✓ Recipient confirmed' : '• Awaiting recipient verification'}\n${deliveryVerified ? '✓ Secure handoff completed' : '• Handoff not yet completed'}\n\nGive this collection PIN to the Rider only when ${collectionName.isEmpty ? 'the collection contact' : collectionName} hands over the sealed parcel.',
             style: TextStyle(
               color: colors.mutedText,
               height: 1.35,
@@ -27465,7 +27465,7 @@ class _GiftsRequestPageState extends State<_GiftsRequestPage> {
                               ),
                               const SizedBox(height: 8),
                               Text(
-                                'Circum knows who arranged the gift for safety and fraud prevention. The recipient only sees the sender identity when consent permits or disclosure is legally required.',
+                                'CIRCUM knows who arranged the gift for safety and fraud prevention. The recipient only sees the arranging user’s identity when consent permits or disclosure is legally required.',
                                 style: TextStyle(
                                   color: colors.mutedText,
                                   fontSize: 12,
@@ -27516,7 +27516,7 @@ class _GiftsRequestPageState extends State<_GiftsRequestPage> {
                             ),
                             _giftField(
                               _senderEmail,
-                              'Sender email',
+                              'Your email',
                               Icons.email_outlined,
                               type: TextInputType.emailAddress,
                             ),
