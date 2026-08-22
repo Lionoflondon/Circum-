@@ -78,6 +78,9 @@ if (blocked.length > 0) {
 
 const offenders = changed.filter((file) => {
   if (startsWithAny(file, manifest.ignoredPrefixes || [])) return false;
+  // firebase.json contains all Hosting targets; public-site redirect changes
+  // are validated by the website deployment workflow and remain website-only.
+  if (productName === 'website' && file === 'firebase.json') return false;
   if (startsWithAny(file, product.forbiddenPrefixes)) return true;
   return !startsWithAny(file, product.ownedPrefixes) &&
     !manifest.sharedFiles.includes(file);
