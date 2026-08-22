@@ -20124,7 +20124,7 @@ class _IrisImageInsight {
       fragilityRisk: '${data['fragilityRisk'] ?? 'medium'}',
       valueRisk: '${data['valueRisk'] ?? 'low'}',
       handlingNotes:
-          '${data['handlingNotes'] ?? 'Backend verified the parcel photo before using it as an IRIS visual signal.'}',
+          '${data['handlingNotes'] ?? 'The parcel photo was checked before it was used as an IRIS visual signal.'}',
       riderGuidance:
           '${data['riderGuidance'] ?? 'Use the parcel photo to verify condition at pickup.'}',
       needsHumanReview: data['needsHumanReview'] == true,
@@ -20149,7 +20149,7 @@ class _IrisImageInsight {
         'fileSizeBytes': fileSizeBytes,
         'source': analysisId == null
             ? 'parcel_photo_and_item_details'
-            : 'backend_parcel_photo_analysis',
+            : 'parcel_photo_analysis',
       };
 }
 
@@ -25137,7 +25137,7 @@ class _IrisDeliveryAnalysisCard extends StatelessWidget {
           ),
           _AnalysisLine(
             colors: colors,
-            label: 'Repository match',
+            label: 'Item library match',
             value: repositoryMatched ? 'Yes' : 'No',
           ),
           if (confidenceText != null && confidenceText.isNotEmpty)
@@ -26025,8 +26025,8 @@ class _AccountDeletionPage extends StatelessWidget {
   Future<void> _requestDeletion() => launchUrl(Uri.parse('mailto:support@circumuk.com?subject=${Uri.encodeComponent('CIRCUM account deletion request')}&body=${Uri.encodeComponent('Please send this request from the email address linked to my CIRCUM account.') }'));
 
   @override
-  Widget build(BuildContext context) => _CompliancePage(colors: colors, title: 'Delete your CIRCUM account', intro: 'This page applies to CIRCUM Sender and CIRCUM Rider, operated by Circum Technologies Ltd.', sections: const [
-    _ComplianceSection('Delete account', 'In the app, open Profile > Account > Delete Account. The app reauthenticates your identity and calls the protected closeCircumAccount service before removing the authentication account. You may also email support@circumuk.com from your linked address for a verified request; this is not automatic web deletion.'),
+  Widget build(BuildContext context) => _CompliancePage(colors: colors, title: 'Delete your CIRCUM account', intro: 'This page applies to CIRCUM and Circum Rider, operated by Circum Technologies Ltd.', sections: const [
+    _ComplianceSection('Delete account', 'In the app, open Profile > Account > Delete Account and follow the confirmation steps. You may also email support@circumuk.com from your linked address for a verified request; this is not automatic web deletion.'),
     _ComplianceSection('Delete particular data', 'There is no separate automated partial-data deletion form. Email support@circumuk.com from your linked address, identify the data you want removed, and we will verify ownership and confirm what can be deleted or retained.'),
     _ComplianceSection('Retention', 'Account profile and access data are removed or anonymised when closure is approved. Financial, payment, accounting, fraud-prevention, safety, dispute, regulatory, and legal records may need to be retained for the applicable period, then deleted or anonymised.'),
   ], actions: [TextButton(onPressed: _requestDeletion, child: const Text('Request account deletion')), TextButton(onPressed: () => launchUrl(Uri.base.replace(path: '/privacy-policy', queryParameters: {}, fragment: ''), webOnlyWindowName: '_self'), child: const Text('Privacy Policy'))]);
@@ -26037,7 +26037,7 @@ class _PrivacyPolicyPage extends StatelessWidget {
   const _PrivacyPolicyPage({super.key, required this.colors});
 
   @override
-  Widget build(BuildContext context) => _CompliancePage(colors: colors, title: 'Privacy Policy', intro: 'Last updated: 22 August 2026. This policy applies to CIRCUM Sender, CIRCUM Rider, Gifts, Gift Stories, Health+, Business, Vanguard, and related delivery services operated by Circum Technologies Ltd.', sections: const [
+  Widget build(BuildContext context) => _CompliancePage(colors: colors, title: 'Privacy Policy', intro: 'Last updated: 22 August 2026. This policy applies to CIRCUM, Circum Rider, Gifts, Gift Stories, Health+, Business, Vanguard, and related delivery services operated by Circum Technologies Ltd.', sections: const [
     _ComplianceSection('Information we use', 'Depending on the feature, we process name, email, account and user IDs, addresses, phone numbers, precise location, payment information through Stripe, device or other identifiers, photos, videos, Gift Stories, optional Gifts voice or sound recordings, and supported in-app messages.'),
     _ComplianceSection('Purposes and choices', 'We use information for account management, address resolution, booking, payment, dispatch, Rider matching, tracking, support, safety, fraud prevention, service reliability, and legal obligations. Required service data is required; optional media, Gift Stories, and voice features are optional.'),
     _ComplianceSection('Processors', 'CIRCUM uses processors including Firebase/Google Cloud, Google Maps or Places, Stripe, hosting, and communications providers where needed. Google Play Data Safety “data shared with third parties” has a defined meaning and does not mean necessary service processors are absent.'),
