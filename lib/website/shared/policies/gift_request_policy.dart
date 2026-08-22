@@ -22,7 +22,7 @@ class GiftRequestPolicy {
     required double? grossBudget,
   }) {
     if (!RegExp(r'^[^@\s]+@[^@\s]+\.[^@\s]+$').hasMatch(senderEmail.trim())) {
-      return 'Enter a valid sender email address.';
+      return 'Enter a valid email address.';
     }
     if (recipientName.trim().isEmpty) return 'Enter the recipient name.';
     if (recipientPhone.trim().isEmpty)

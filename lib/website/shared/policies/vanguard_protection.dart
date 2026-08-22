@@ -398,7 +398,7 @@ class VanguardProtection {
       flagForReview: flagForReview,
       errorMessage: passed
           ? ''
-          : 'Incorrect $label PIN. Ask the ${stage == 'delivery' ? 'recipient' : 'sender'} to confirm the code.',
+          : 'Incorrect $label PIN. Ask the ${stage == 'delivery' ? 'recipient' : 'collection contact'} to confirm the code.',
     );
   }
 

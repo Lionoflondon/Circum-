@@ -130,12 +130,12 @@ class IrisWeightEstimator {
                 : 'low',
         confidenceScore: repositoryItem.confidenceBaseline,
         explanation: quantity == 1
-            ? 'Iris matched the description to ${repositoryItem.itemName} using the Circum item repository.'
-            : 'Iris matched $quantity × ${repositoryItem.itemName} using the Circum item repository.',
+            ? 'IRIS matched the description to ${repositoryItem.itemName} using CIRCUM item guidance.'
+            : 'IRIS matched $quantity × ${repositoryItem.itemName} using CIRCUM item guidance.',
         packageType: repositoryItem.category,
         weightSource: 'repository_match',
         truthBand: repositoryItem.confidenceBaseline >= 0.85
-            ? 'Repository Match'
+            ? 'Catalogue Match'
             : 'Medium Confidence',
         requiresVehicleReview: repositoryItem.requiresIRISReview ||
             totalWeightKg > 10 ||
