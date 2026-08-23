@@ -7,7 +7,8 @@ const {FOUNDER_RIDER_UID} = require("./founder-rider-access");
 
 const PURPOSE = "google_play_review";
 const ACCOUNT_TYPE = "demo_account";
-const FIXTURE_TTL_MS = 30 * 60 * 1000;
+const REVIEWER_TTL_MS = 90 * 24 * 60 * 60 * 1000;
+const FIXTURE_TTL_MS = 30 * 24 * 60 * 60 * 1000;
 
 function authUid(context) {
   if (!context.auth || !context.auth.uid) {
@@ -57,7 +58,7 @@ function designateReviewAccount() {
     const reviewerUid = `${data.reviewerUid || ""}`.trim();
     if (!reviewerUid || reviewerUid === FOUNDER_RIDER_UID) throw new functions.https.HttpsError("invalid-argument", "A separate reviewer account is required.");
     const db = getFirestore();
-    const expiresAt = Timestamp.fromMillis(Date.now() + FIXTURE_TTL_MS);
+    const expiresAt = Timestamp.fromMillis(Date.now() + REVIEWER_TTL_MS);
     await db.collection("founderTestAccounts").doc(reviewerUid).set({
       reviewerUid,
       accountType: ACCOUNT_TYPE,
@@ -169,5 +170,12 @@ module.exports = {
   getReviewFixture,
   updateReviewFixtureLocation,
   revokeReviewAccount,
-  _private: {activeDesignation, assertFounder, PURPOSE, ACCOUNT_TYPE, FIXTURE_TTL_MS},
+  _private: {
+    activeDesignation,
+    assertFounder,
+    PURPOSE,
+    ACCOUNT_TYPE,
+    REVIEWER_TTL_MS,
+    FIXTURE_TTL_MS,
+  },
 };
