@@ -55,6 +55,7 @@ const stripeRefunds = require("./stripe-refunds");
 const riderEarningsSummary = require("./rider-earnings-summary");
 const founderRiderAccess = require("./founder-rider-access");
 const founderReviewFixture = require("./founder-review-fixture");
+const reviewerProvisioning = require("./google-play-reviewer-provisioning");
 const healthPlusOperations = require("./health-plus-operations");
 const rothLedger = require("./roth-ledger");
 const businessPayments = require("./business-payments");
@@ -158,6 +159,7 @@ exports.revokeGooglePlayReviewAccount = founderReviewFixture.revokeReviewAccount
 exports.createGooglePlayReviewFixture = founderReviewFixture.createReviewFixture();
 exports.getGooglePlayReviewFixture = founderReviewFixture.getReviewFixture();
 exports.updateGooglePlayReviewFixtureLocation = founderReviewFixture.updateReviewFixtureLocation();
+exports.provisionGooglePlayReviewer = reviewerProvisioning.provisionGooglePlayReviewer();
 exports.startAdminConversation = communicationEngine.startAdminConversation;
 exports.getOrCreateSupportConversation =
   communicationEngine.getOrCreateSupportConversation;
