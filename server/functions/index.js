@@ -157,6 +157,7 @@ exports.designateGooglePlayReviewAccount = founderReviewFixture.designateReviewA
 exports.revokeGooglePlayReviewAccount = founderReviewFixture.revokeReviewAccount();
 exports.createGooglePlayReviewFixture = founderReviewFixture.createReviewFixture();
 exports.getGooglePlayReviewFixture = founderReviewFixture.getReviewFixture();
+exports.setGooglePlayReviewPresence = founderReviewFixture.setReviewPresence();
 exports.updateGooglePlayReviewFixtureLocation = founderReviewFixture.updateReviewFixtureLocation();
 exports.startAdminConversation = communicationEngine.startAdminConversation;
 exports.getOrCreateSupportConversation =

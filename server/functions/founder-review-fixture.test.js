@@ -36,10 +36,21 @@ test("review fixture uses isolated namespaces and explicit Google Play purpose",
 test("review fixture exports are registered without production delivery wiring", () => {
   assert.match(index, /createGooglePlayReviewFixture/);
   assert.match(index, /getGooglePlayReviewFixture/);
+  assert.match(index, /setGooglePlayReviewPresence/);
   assert.match(index, /updateGooglePlayReviewFixtureLocation/);
   assert.match(index, /revokeGooglePlayReviewAccount/);
   assert.doesNotMatch(source, /deliveryRequests/);
   assert.doesNotMatch(source, /stripe|riderEarnings|roth|settlement|dispatch|notification/i);
+});
+
+test("review presence remains isolated from production rider availability", () => {
+  assert.match(source, /reviewPresence: "offline"/);
+  assert.match(source, /reviewPresence: requestedPresence/);
+  assert.match(source, /set_review_presence/);
+  assert.doesNotMatch(source, /collection\("riderPresence"\)/);
+  assert.doesNotMatch(source, /collection\("riderProfiles"\)/);
+  assert.doesNotMatch(source, /collection\("deliveryRequests"\)/);
+  assert.doesNotMatch(source, /goOnline|goOffline/);
 });
 
 test("fixture authority is server-side and expires", () => {
