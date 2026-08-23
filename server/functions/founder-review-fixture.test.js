@@ -88,3 +88,22 @@ test("expired and revoked reviewer designations fail closed server-side", async 
     expiresAt: timestamp(now + _private.REVIEWER_TTL_MS),
   }), "reviewer", now), null);
 });
+
+test("an expired fixture cannot mask a later valid reviewer fixture", () => {
+  const now = Date.now();
+  const fixture = (id, expiresAt) => ({
+    id,
+    exists: true,
+    data: () => ({
+      reviewerUid: "reviewer",
+      purpose: _private.PURPOSE,
+      state: "active",
+      expiresAt: timestamp(expiresAt),
+    }),
+  });
+  const expired = fixture("expired", now - 1);
+  const valid = fixture("valid", now + _private.FIXTURE_TTL_MS);
+
+  assert.equal(_private.selectUsableFixture([expired, valid], "reviewer", now), valid);
+  assert.equal(_private.selectUsableFixture([expired], "reviewer", now), undefined);
+});

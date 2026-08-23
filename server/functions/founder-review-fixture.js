@@ -38,6 +38,16 @@ async function activeDesignation(db, uid, now = Date.now()) {
   return value;
 }
 
+function selectUsableFixture(snapshots, reviewerUid, now = Date.now()) {
+  return snapshots.find((candidate) => {
+    if (!candidate.exists) return false;
+    const fixture = candidate.data() || {};
+    const expiresAt = fixture.expiresAt && fixture.expiresAt.toMillis ? fixture.expiresAt.toMillis() : 0;
+    return fixture.reviewerUid === reviewerUid && fixture.purpose === PURPOSE &&
+      fixture.state === "active" && expiresAt > now;
+  });
+}
+
 async function audit(db, action, actorUid, reviewerUid, fixtureId, expiresAt, result) {
   await db.collection("founderReviewAudit").add({
     action,
@@ -131,7 +141,7 @@ function getReviewFixture() {
     const designation = await activeDesignation(db, reviewerUid);
     const query = db.collection("reviewDeliveryFixtures").where("reviewerUid", "==", reviewerUid).where("state", "==", "active").limit(10);
     const snapshots = (await query.get()).docs;
-    const snap = snapshots.find((candidate) => candidate.exists && candidate.data().reviewerUid === reviewerUid);
+    const snap = selectUsableFixture(snapshots, reviewerUid);
     const fixture = snap && snap.exists ? snap.data() : null;
     const fixtureId = snap ? snap.id : null;
     const expiresAt = fixture && fixture.expiresAt && fixture.expiresAt.toMillis ? fixture.expiresAt.toMillis() : 0;
@@ -172,6 +182,7 @@ module.exports = {
   revokeReviewAccount,
   _private: {
     activeDesignation,
+    selectUsableFixture,
     assertFounder,
     PURPOSE,
     ACCOUNT_TYPE,
