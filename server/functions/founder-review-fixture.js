@@ -51,7 +51,7 @@ async function audit(db, action, actorUid, reviewerUid, fixtureId, expiresAt, re
 }
 
 function designateReviewAccount() {
-  return functions.https.onCall({enforceAppCheck: true}, async (data, context) => {
+  return riderCallable(async (data, context) => {
     assertFounder(context);
     assertReviewData(data);
     const reviewerUid = `${data.reviewerUid || ""}`.trim();
@@ -74,7 +74,7 @@ function designateReviewAccount() {
 }
 
 function createReviewFixture() {
-  return functions.https.onCall({enforceAppCheck: true}, async (data, context) => {
+  return riderCallable(async (data, context) => {
     assertFounder(context);
     const reviewerUid = `${data && data.reviewerUid || ""}`.trim();
     const db = getFirestore();
@@ -104,7 +104,7 @@ function createReviewFixture() {
 }
 
 function revokeReviewAccount() {
-  return functions.https.onCall({enforceAppCheck: true}, async (data, context) => {
+  return riderCallable(async (data, context) => {
     assertFounder(context);
     const reviewerUid = `${data && data.reviewerUid || ""}`.trim();
     if (!reviewerUid || reviewerUid === FOUNDER_RIDER_UID) throw new functions.https.HttpsError("invalid-argument", "A reviewer account is required.");

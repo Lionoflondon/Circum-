@@ -8,7 +8,9 @@ const path = require("node:path");
 const source = (file) => fs.readFileSync(path.join(__dirname, file), "utf8");
 
 test("Rider operational callable wrapper enforces Firebase App Check", () => {
-  assert.match(source("rider-app-check.js"), /enforceAppCheck:\s*true/);
+  const wrapper = source("rider-app-check.js");
+  assert.match(wrapper, /runWith\(\{enforceAppCheck:\s*true\}\)\.https\.onCall\(handler\)/);
+  assert.doesNotMatch(wrapper, /https\.onCall\(\{enforceAppCheck:/);
 });
 
 test("Rider operational callables use the App Check wrapper", () => {

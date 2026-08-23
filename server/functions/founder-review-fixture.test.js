@@ -13,7 +13,8 @@ test("review fixture uses isolated namespaces and explicit Google Play purpose",
   assert.match(source, /reviewDeliveryFixtures/);
   assert.match(source, /google_play_review/);
   assert.match(source, /demo_account/);
-  assert.match(source, /enforceAppCheck: true/);
+  assert.match(source, /riderCallable/);
+  assert.doesNotMatch(source, /onCall\(\{enforceAppCheck: true\}/);
   assert.match(source, /FOUNDER_RIDER_UID/);
 });
 
