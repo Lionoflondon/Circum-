@@ -38,6 +38,16 @@ async function activeDesignation(db, uid, now = Date.now()) {
   return value;
 }
 
+function selectUsableFixture(snapshots, reviewerUid, now = Date.now()) {
+  return snapshots.find((candidate) => {
+    if (!candidate.exists) return false;
+    const fixture = candidate.data() || {};
+    const expiresAt = fixture.expiresAt && fixture.expiresAt.toMillis ? fixture.expiresAt.toMillis() : 0;
+    return fixture.reviewerUid === reviewerUid && fixture.purpose === PURPOSE &&
+      fixture.state === "active" && expiresAt > now;
+  });
+}
+
 async function audit(db, action, actorUid, reviewerUid, fixtureId, expiresAt, result) {
   await db.collection("founderReviewAudit").add({
     action,
@@ -92,6 +102,7 @@ function createReviewFixture() {
       createdBy: context.auth.uid,
       createdAt: FieldValue.serverTimestamp(),
       expiresAt,
+      reviewPresence: "offline",
       syntheticRoute: {
         pickupLabel: "CIRCUM Review Pickup",
         dropoffLabel: "CIRCUM Review Drop-off",
@@ -131,7 +142,7 @@ function getReviewFixture() {
     const designation = await activeDesignation(db, reviewerUid);
     const query = db.collection("reviewDeliveryFixtures").where("reviewerUid", "==", reviewerUid).where("state", "==", "active").limit(10);
     const snapshots = (await query.get()).docs;
-    const snap = snapshots.find((candidate) => candidate.exists && candidate.data().reviewerUid === reviewerUid);
+    const snap = selectUsableFixture(snapshots, reviewerUid);
     const fixture = snap && snap.exists ? snap.data() : null;
     const fixtureId = snap ? snap.id : null;
     const expiresAt = fixture && fixture.expiresAt && fixture.expiresAt.toMillis ? fixture.expiresAt.toMillis() : 0;
@@ -140,7 +151,40 @@ function getReviewFixture() {
       throw new functions.https.HttpsError("permission-denied", "Review fixture is unavailable.");
     }
     await audit(db, "read_fixture", context.auth.uid, reviewerUid, fixtureId, fixture.expiresAt, "allowed");
-    return {fixtureId, expiresAt, state: fixture.state, syntheticRoute: fixture.syntheticRoute};
+    return {
+      fixtureId,
+      expiresAt,
+      state: fixture.state,
+      reviewPresence: fixture.reviewPresence === "online" ? "online" : "offline",
+      syntheticRoute: fixture.syntheticRoute,
+    };
+  });
+}
+
+function setReviewPresence() {
+  return riderCallable(async (data, context) => {
+    const reviewerUid = authUid(context);
+    const fixtureId = `${data && data.fixtureId || ""}`.trim();
+    const requestedPresence = `${data && data.presence || ""}`.trim().toLowerCase();
+    if (!fixtureId || !["online", "offline"].includes(requestedPresence)) {
+      throw new functions.https.HttpsError("invalid-argument", "A valid review presence is required.");
+    }
+    const db = getFirestore();
+    const designation = await activeDesignation(db, reviewerUid);
+    const ref = db.collection("reviewDeliveryFixtures").doc(fixtureId);
+    const snap = await ref.get();
+    const fixture = snap.exists ? snap.data() : null;
+    const expiresAt = fixture && fixture.expiresAt && fixture.expiresAt.toMillis ? fixture.expiresAt.toMillis() : 0;
+    if (!designation || !fixture || fixture.reviewerUid !== reviewerUid ||
+        fixture.purpose !== PURPOSE || fixture.state !== "active" || expiresAt <= Date.now()) {
+      throw new functions.https.HttpsError("permission-denied", "Review fixture is unavailable.");
+    }
+    await ref.update({
+      reviewPresence: requestedPresence,
+      reviewPresenceUpdatedAt: FieldValue.serverTimestamp(),
+    });
+    await audit(db, "set_review_presence", context.auth.uid, reviewerUid, fixtureId, fixture.expiresAt, "allowed");
+    return {fixtureId, reviewPresence: requestedPresence};
   });
 }
 
@@ -168,10 +212,12 @@ module.exports = {
   designateReviewAccount,
   createReviewFixture,
   getReviewFixture,
+  setReviewPresence,
   updateReviewFixtureLocation,
   revokeReviewAccount,
   _private: {
     activeDesignation,
+    selectUsableFixture,
     assertFounder,
     PURPOSE,
     ACCOUNT_TYPE,

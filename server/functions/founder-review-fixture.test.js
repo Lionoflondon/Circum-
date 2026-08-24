@@ -36,10 +36,21 @@ test("review fixture uses isolated namespaces and explicit Google Play purpose",
 test("review fixture exports are registered without production delivery wiring", () => {
   assert.match(index, /createGooglePlayReviewFixture/);
   assert.match(index, /getGooglePlayReviewFixture/);
+  assert.match(index, /setGooglePlayReviewPresence/);
   assert.match(index, /updateGooglePlayReviewFixtureLocation/);
   assert.match(index, /revokeGooglePlayReviewAccount/);
   assert.doesNotMatch(source, /deliveryRequests/);
   assert.doesNotMatch(source, /stripe|riderEarnings|roth|settlement|dispatch|notification/i);
+});
+
+test("review presence remains isolated from production rider availability", () => {
+  assert.match(source, /reviewPresence: "offline"/);
+  assert.match(source, /reviewPresence: requestedPresence/);
+  assert.match(source, /set_review_presence/);
+  assert.doesNotMatch(source, /collection\("riderPresence"\)/);
+  assert.doesNotMatch(source, /collection\("riderProfiles"\)/);
+  assert.doesNotMatch(source, /collection\("deliveryRequests"\)/);
+  assert.doesNotMatch(source, /goOnline|goOffline/);
 });
 
 test("fixture authority is server-side and expires", () => {
@@ -87,4 +98,23 @@ test("expired and revoked reviewer designations fail closed server-side", async 
     revokedAt: timestamp(now - 1),
     expiresAt: timestamp(now + _private.REVIEWER_TTL_MS),
   }), "reviewer", now), null);
+});
+
+test("an expired fixture cannot mask a later valid reviewer fixture", () => {
+  const now = Date.now();
+  const fixture = (id, expiresAt) => ({
+    id,
+    exists: true,
+    data: () => ({
+      reviewerUid: "reviewer",
+      purpose: _private.PURPOSE,
+      state: "active",
+      expiresAt: timestamp(expiresAt),
+    }),
+  });
+  const expired = fixture("expired", now - 1);
+  const valid = fixture("valid", now + _private.FIXTURE_TTL_MS);
+
+  assert.equal(_private.selectUsableFixture([expired, valid], "reviewer", now), valid);
+  assert.equal(_private.selectUsableFixture([expired], "reviewer", now), undefined);
 });
