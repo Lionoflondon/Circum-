@@ -191,6 +191,7 @@ exports.grantRecognition = legends.grantRecognition;
 exports.revokeRecognition = legends.revokeRecognition;
 exports.issueRothCredit = rothLedger.issueRothCredit;
 exports.createRothGrantCampaign = rothGrantCampaigns.createRothGrantCampaign;
+exports.adminGrantRothToUser = rothGrantCampaigns.adminGrantRothToUser;
 exports.dryRunRothGrantCampaign = rothGrantCampaigns.dryRunRothGrantCampaign;
 exports.approveRothGrantCampaign = rothGrantCampaigns.approveRothGrantCampaign;
 exports.executeRothGrantCampaign = rothGrantCampaigns.executeRothGrantCampaign;

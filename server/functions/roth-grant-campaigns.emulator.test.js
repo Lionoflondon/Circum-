@@ -43,7 +43,7 @@ test("campaign grant is atomic and duplicate/concurrent settlement is one econom
   await Promise.all([recordRothMovement(args), recordRothMovement(args), recordRothMovement(args)]);
   const wallet = await db.collection("wallets").doc(uid).get();
   const ledger = await db.collection("walletTransactions").doc(args.transactionId).get();
-  const idempotency = await db.collection("rothMovementIdempotency").get();
+  const idempotency = await db.collection("rothMovementIdempotency").where("idempotencyKey", "==", args.idempotencyKey).get();
   assert.equal(wallet.data().balance, 10);
   assert.equal(ledger.data().amount, 10);
   assert.equal(ledger.data().metadata.campaignId, campaignId);
@@ -58,4 +58,27 @@ test("dry-run style recipient records do not mutate the wallet or ledger", {skip
   const ledger = await db.collection("walletTransactions").where("uid", "==", "dry-user").get();
   assert.equal(wallet.exists, false);
   assert.equal(ledger.empty, true);
+});
+
+test("individual grant idempotency is one wallet mutation and one ledger event", {skip: !emulatorAvailable}, async () => {
+  const uid = "individual-user-1";
+  const grantId = "individual-emulator-1";
+  const args = {
+    db, userId: uid, uid, amount: 25,
+    balanceType: BALANCE_TYPES.rothCredit,
+    type: TRANSACTION_TYPES.adminCredit,
+    reason: "Individual emulator grant",
+    issuedByAdminId: "finance-admin",
+    transactionId: `roth_admin_grant_${grantId}_${uid}`,
+    idempotencyKey: `admin_roth_grant:${grantId}:${uid}`,
+    relatedEntityId: grantId,
+    metadata: {source: "admin_individual_grant", sourceType: "admin_roth_grant", grantId},
+  };
+  await Promise.all([recordRothMovement(args), recordRothMovement(args)]);
+  const wallet = await db.collection("wallets").doc(uid).get();
+  const ledger = await db.collection("walletTransactions").doc(args.transactionId).get();
+  const idempotency = await db.collection("rothMovementIdempotency").where("idempotencyKey", "==", args.idempotencyKey).get();
+  assert.equal(wallet.data().balance, 25);
+  assert.equal(ledger.data().metadata.grantId, grantId);
+  assert.equal(idempotency.size, 1);
 });

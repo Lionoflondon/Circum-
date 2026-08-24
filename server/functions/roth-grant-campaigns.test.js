@@ -4,7 +4,7 @@ const assert = require("assert");
 const {test} = require("node:test");
 const fs = require("fs");
 const path = require("path");
-const {definitionHash, isEligibleUser, MAX_ROTH_PER_USER, MAX_CAMPAIGN_ROTH} = require("./roth-grant-campaigns");
+const {definitionHash, isEligibleUser, MAX_ROTH_PER_USER, MAX_CAMPAIGN_ROTH, MAX_INDIVIDUAL_ROTH} = require("./roth-grant-campaigns");
 
 const definition = {
   name: "Welcome gift",
@@ -46,4 +46,18 @@ test("campaign implementation is isolated from payments, dispatch, notifications
   assert.match(source, /runTransaction/);
   assert.match(source, /offset \+= 400/);
   assert.match(source, /retryFailed === true/);
+});
+
+test("individual grant authority is isolated, capped and idempotent by grant identity", () => {
+  const source = fs.readFileSync(path.join(__dirname, "roth-grant-campaigns.js"), "utf8");
+  assert.equal(MAX_INDIVIDUAL_ROTH, MAX_ROTH_PER_USER);
+  assert.match(source, /exports\.adminGrantRothToUser/);
+  assert.match(source, /requireTrustedRothAdmin/);
+  assert.match(source, /rothAdminGrants/);
+  assert.match(source, /admin_roth_grant:\$\{grantId\}:\$\{uid\}/);
+  assert.match(source, /sourceType: "admin_roth_grant"/);
+  assert.match(source, /recordRothMovement/);
+  assert.doesNotMatch(source, /deliveryRequests/);
+  assert.doesNotMatch(source, /stripe/i);
+  assert.doesNotMatch(source, /sendNotification|notifyCustomer|dispatch/i);
 });

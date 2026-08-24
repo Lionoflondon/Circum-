@@ -12,6 +12,7 @@ const MAX_ROTH_PER_USER = 1000;
 const MAX_CAMPAIGN_ROTH = 1000000;
 const MAX_RECIPIENTS = 100000;
 const CLAIM_TTL_MS = 10 * 60 * 1000;
+const MAX_INDIVIDUAL_ROTH = MAX_ROTH_PER_USER;
 
 function clean(value) {
   return `${value || ""}`.trim();
@@ -67,6 +68,31 @@ function requireCampaignId(data) {
   return id;
 }
 
+function requireGrantId(data) {
+  const id = clean(data.grantId);
+  if (!id || !/^[a-zA-Z0-9_-]{1,100}$/.test(id)) {
+    throw new functions.https.HttpsError("invalid-argument", "A valid grant ID is required.");
+  }
+  return id;
+}
+
+function requireReason(data) {
+  const reason = clean(data.reason);
+  if (!reason || reason.length > 500) {
+    throw new functions.https.HttpsError("invalid-argument", "A reason of 1-500 characters is required.");
+  }
+  return reason;
+}
+
+function assertIndividualEligibility(uid, user) {
+  const result = isEligibleUser(uid, user, {
+    eligibilityRules: {}, uidAllowlist: [], uidExclusionList: [],
+  });
+  if (!result.eligible && ["closed_or_deleted", "internal_or_excluded_account"].includes(result.reason)) {
+    throw new functions.https.HttpsError("failed-precondition", "The selected account is not eligible for a Roth grant.");
+  }
+}
+
 async function audit(db, actor, campaignId, action, metadata = {}) {
   await db.collection("adminAuditLogs").add({
     adminUserId: actor.uid,
@@ -102,6 +128,48 @@ exports.createRothGrantCampaign = functions.runWith({enforceAppCheck: true}).htt
   await ref.create({campaignId, ...definition, definition, definitionHash: hash, status: "draft", createdBy: actor.uid, createdAt: FieldValue.serverTimestamp(), estimatedRecipients: 0, estimatedRothLiability: 0, actualRecipients: 0, actualRothGranted: 0, failureCount: 0});
   await audit(db, actor, campaignId, "roth_grant_campaign_created", {definitionHash: hash});
   return {campaignId, status: "draft", definitionHash: hash};
+});
+
+exports.adminGrantRothToUser = functions.runWith({enforceAppCheck: true}).https.onCall(async (data, context) => {
+  const actor = await requireTrustedRothAdmin(context);
+  const grantId = requireGrantId(data || {});
+  const reason = requireReason(data || {});
+  const amount = roundMoney(Number(data.amountRoth));
+  if (!Number.isFinite(amount) || amount <= 0 || amount > MAX_INDIVIDUAL_ROTH) {
+    throw new functions.https.HttpsError("invalid-argument", `Roth amount must be greater than zero and no more than ${MAX_INDIVIDUAL_ROTH}.`);
+  }
+  const uid = clean(data.recipientUid || data.userId);
+  if (!uid || !/^[A-Za-z0-9_-]{1,128}$/.test(uid)) {
+    throw new functions.https.HttpsError("invalid-argument", "A valid recipient UID is required.");
+  }
+  const db = getFirestore();
+  const grantRef = db.collection("rothAdminGrants").doc(grantId);
+  const existing = await grantRef.get();
+  if (existing.exists) {
+    const prior = existing.data();
+    if (prior.recipientUid !== uid || Number(prior.amountRoth) !== amount || prior.reason !== reason) {
+      throw new functions.https.HttpsError("already-exists", "Grant ID is already used for different grant data.");
+    }
+    if (prior.status === "completed") {
+      return {grantId, recipientUid: uid, amountRoth: amount, transactionId: prior.transactionId, idempotentReplay: true};
+    }
+  }
+  const user = await getAuth().getUser(uid);
+  const userDoc = await db.collection("users").doc(uid).get();
+  assertIndividualEligibility(uid, userDoc.exists ? userDoc.data() : {});
+  await grantRef.set({grantId, recipientUid: uid, recipientEmail: user.email || null, amountRoth: amount, reason, status: "pending", actorUid: actor.uid, actorEmail: actor.email || null, idempotencyKey: `admin_roth_grant:${grantId}:${uid}`, updatedAt: FieldValue.serverTimestamp(), createdAt: existing.exists ? (existing.data().createdAt || FieldValue.serverTimestamp()) : FieldValue.serverTimestamp()}, {merge: true});
+  const result = await recordRothMovement({
+    db, userId: uid, uid, userEmail: user.email || null, amount,
+    balanceType: BALANCE_TYPES.rothCredit, type: TRANSACTION_TYPES.adminCredit,
+    reason, issuedByAdminId: actor.uid, issuedByAdminEmail: actor.email || null,
+    transactionId: `roth_admin_grant_${grantId}_${uid}`,
+    idempotencyKey: `admin_roth_grant:${grantId}:${uid}`,
+    relatedEntityId: grantId,
+    metadata: {source: "admin_individual_grant", sourceType: "admin_roth_grant", grantId, reason, targetUid: uid},
+  });
+  await grantRef.update({status: "completed", transactionId: result.transactionId, ledgerId: result.transactionId, completedAt: FieldValue.serverTimestamp(), updatedAt: FieldValue.serverTimestamp()});
+  await audit(db, actor, grantId, "roth_individual_grant_completed", {targetUid: uid, amountRoth: amount, reason, grantId, ledgerId: result.transactionId});
+  return {grantId, recipientUid: uid, amountRoth: amount, transactionId: result.transactionId, idempotentReplay: false};
 });
 
 exports.dryRunRothGrantCampaign = functions.runWith({enforceAppCheck: true}).https.onCall(async (data, context) => {
@@ -200,7 +268,7 @@ exports.reconcileRothGrantCampaign = functions.runWith({enforceAppCheck: true}).
   const db = getFirestore();
   const campaignRef = db.collection("rothGrantCampaigns").doc(campaignId);
   const recipients = await campaignRef.collection("recipients").where("grantStatus", "==", "granted").get();
-  const ledger = await db.collection("rothLedger").where("metadata.campaignId", "==", campaignId).get();
+  const ledger = await db.collection("walletTransactions").where("metadata.campaignId", "==", campaignId).get();
   const expected = recipients.docs.reduce((sum, doc) => sum + Number(doc.data().amountRoth || 0), 0);
   const actual = ledger.docs.reduce((sum, doc) => sum + Number(doc.data().amount || 0), 0);
   const result = {campaignId, recipientCount: recipients.size, ledgerCount: ledger.size, expectedRoth: roundMoney(expected), actualRoth: roundMoney(actual), ok: recipients.size === ledger.size && roundMoney(expected) === roundMoney(actual)};
@@ -225,6 +293,7 @@ exports.cancelRothGrantCampaign = functions.runWith({enforceAppCheck: true}).htt
 });
 
 module.exports.MAX_ROTH_PER_USER = MAX_ROTH_PER_USER;
+module.exports.MAX_INDIVIDUAL_ROTH = MAX_INDIVIDUAL_ROTH;
 module.exports.MAX_CAMPAIGN_ROTH = MAX_CAMPAIGN_ROTH;
 module.exports.definitionHash = definitionHash;
 module.exports.isEligibleUser = isEligibleUser;
