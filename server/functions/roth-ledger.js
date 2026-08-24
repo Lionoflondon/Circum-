@@ -359,6 +359,7 @@ async function safeRecordRothMovement(args) {
 
 exports.recordRothMovement = recordRothMovement;
 exports.safeRecordRothMovement = safeRecordRothMovement;
+exports.requireTrustedRothAdmin = requireTrustedRothAdmin;
 
 async function applyWalletDebit({
   db = getFirestore(),
