@@ -16,6 +16,10 @@ class _RothGrantCampaignsModuleState extends State<RothGrantCampaignsModule> {
   final _name = TextEditingController();
   final _description = TextEditingController();
   final _amount = TextEditingController(text: '10');
+  final _individualUid = TextEditingController();
+  final _individualAmount = TextEditingController(text: '10');
+  final _individualReason = TextEditingController();
+  final _individualReference = TextEditingController();
   String? _campaignId;
   Map<String, dynamic>? _dryRun;
   bool _busy = false;
@@ -26,6 +30,10 @@ class _RothGrantCampaignsModuleState extends State<RothGrantCampaignsModule> {
     _name.dispose();
     _description.dispose();
     _amount.dispose();
+    _individualUid.dispose();
+    _individualAmount.dispose();
+    _individualReason.dispose();
+    _individualReference.dispose();
     super.dispose();
   }
 
@@ -59,6 +67,45 @@ class _RothGrantCampaignsModuleState extends State<RothGrantCampaignsModule> {
       });
     } on FirebaseFunctionsException catch (error) {
       setState(() => _message = error.message ?? 'Campaign creation failed.');
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  Future<void> _grantIndividual() async {
+    final uid = _individualUid.text.trim();
+    final amount = double.tryParse(_individualAmount.text.trim());
+    final reason = _individualReason.text.trim();
+    if (uid.isEmpty || amount == null || amount <= 0 || reason.isEmpty) {
+      setState(() => _message = 'Enter a user UID, amount and mandatory reason.');
+      return;
+    }
+    final confirmed = await showDialog<bool>(
+          context: context,
+          builder: (context) => AlertDialog(
+            title: const Text('Confirm individual Roth grant'),
+            content: Text('Grant $amount Roth to $uid?\n\nReason: $reason\n\nThis creates one audited financial event.'),
+            actions: [
+              TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancel')),
+              FilledButton(onPressed: () => Navigator.pop(context, true), child: const Text('Confirm grant')),
+            ],
+          ),
+        ) ??
+        false;
+    if (!confirmed) return;
+    setState(() { _busy = true; _message = null; });
+    final grantId = 'admin-${DateTime.now().toUtc().millisecondsSinceEpoch}';
+    try {
+      final result = await _call('adminGrantRothToUser', {
+        'grantId': grantId,
+        'recipientUid': uid,
+        'amountRoth': amount,
+        'reason': reason,
+        'reference': _individualReference.text.trim(),
+      });
+      setState(() => _message = 'Individual grant completed: ${result['transactionId']}.');
+    } on FirebaseFunctionsException catch (error) {
+      setState(() => _message = error.message ?? 'Individual grant failed.');
     } finally {
       if (mounted) setState(() => _busy = false);
     }
@@ -198,6 +245,20 @@ class _RothGrantCampaignsModuleState extends State<RothGrantCampaignsModule> {
         const Text(
             'One-time, server-authorised gifts for eligible active CIRCUM users. Dry run and approval are required before any balance changes.'),
         const SizedBox(height: 20),
+        const Text('Issue Roth to one user', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600)),
+        const SizedBox(height: 8),
+        TextField(controller: _individualUid, decoration: const InputDecoration(labelText: 'Circum user UID')),
+        const SizedBox(height: 8),
+        TextField(controller: _individualAmount, keyboardType: const TextInputType.numberWithOptions(decimal: true), decoration: const InputDecoration(labelText: 'Roth amount')),
+        const SizedBox(height: 8),
+        TextField(controller: _individualReason, decoration: const InputDecoration(labelText: 'Mandatory reason')),
+        const SizedBox(height: 8),
+        TextField(controller: _individualReference, decoration: const InputDecoration(labelText: 'Internal reference (optional)')),
+        const SizedBox(height: 8),
+        FilledButton.icon(onPressed: _busy ? null : _grantIndividual, icon: const Icon(Icons.person_add_alt_1), label: const Text('Grant Roth to user')),
+        const Divider(height: 32),
+        const Text('Campaign / global issuance', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600)),
+        const SizedBox(height: 8),
         TextField(
             controller: _name,
             decoration: const InputDecoration(labelText: 'Campaign name')),
