@@ -9,6 +9,7 @@ import 'package:flutter/services.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import 'admin_operations.dart';
+import 'roth_grant_campaigns.dart';
 
 enum AdminModule {
   dashboard('Dashboard', Icons.dashboard_rounded),
@@ -24,6 +25,7 @@ enum AdminModule {
   verification('Verification', Icons.verified_user_rounded),
   support('Support', Icons.support_agent_rounded),
   finance('Finance', Icons.account_balance_wallet_rounded),
+  rothGrantCampaigns('Roth campaigns', Icons.card_giftcard_rounded),
   healthPlus('Health+', Icons.local_hospital_rounded),
   business('Business', Icons.business_center_rounded),
   gifts('Gifts', Icons.card_giftcard_rounded),
@@ -4719,6 +4721,7 @@ class _AdminModuleBody extends StatelessWidget {
               onOpenRiderStripeDashboard: onOpenRiderStripeDashboard,
               onMarkRiderStripeInvestigation: onMarkRiderStripeInvestigation,
             ),
+          AdminModule.rothGrantCampaigns => const RothGrantCampaignsModule(),
           AdminModule.healthPlus => _HealthPlusOperationsModule(
               pickups: data.healthPlusPickups,
               profiles: data.healthPlusProfiles,
