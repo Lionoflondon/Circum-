@@ -141,6 +141,53 @@ class _RothGrantCampaignsModuleState extends State<RothGrantCampaignsModule> {
     }
   }
 
+  Future<void> _reconcile() async {
+    final id = _campaignId;
+    if (id == null) return;
+    setState(() => _busy = true);
+    try {
+      final result =
+          await _call('reconcileRothGrantCampaign', {'campaignId': id});
+      setState(() => _message = result['ok'] == true
+          ? 'Reconciliation passed.'
+          : 'Reconciliation found a discrepancy. Stop and investigate.');
+    } on FirebaseFunctionsException catch (error) {
+      setState(() => _message = error.message ?? 'Reconciliation failed.');
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  Future<void> _retryFailed() async {
+    final id = _campaignId;
+    if (id == null) return;
+    setState(() => _busy = true);
+    try {
+      final result = await _call(
+          'executeRothGrantCampaign', {'campaignId': id, 'retryFailed': true});
+      setState(() => _message =
+          'Retry batch: ${result['granted']} granted, ${result['failures']} failed.');
+    } on FirebaseFunctionsException catch (error) {
+      setState(() => _message = error.message ?? 'Retry failed.');
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  Future<void> _cancel() async {
+    final id = _campaignId;
+    if (id == null) return;
+    setState(() => _busy = true);
+    try {
+      await _call('cancelRothGrantCampaign', {'campaignId': id});
+      setState(() => _message = 'Campaign cancelled.');
+    } on FirebaseFunctionsException catch (error) {
+      setState(() => _message = error.message ?? 'Cancellation failed.');
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return ListView(
@@ -182,6 +229,18 @@ class _RothGrantCampaignsModuleState extends State<RothGrantCampaignsModule> {
               onPressed: _busy || _dryRun == null ? null : _execute,
               icon: const Icon(Icons.play_arrow),
               label: const Text('Execute batch')),
+          OutlinedButton.icon(
+              onPressed: _busy || _campaignId == null ? null : _retryFailed,
+              icon: const Icon(Icons.replay),
+              label: const Text('Retry failures')),
+          OutlinedButton.icon(
+              onPressed: _busy || _campaignId == null ? null : _reconcile,
+              icon: const Icon(Icons.rule),
+              label: const Text('Reconcile')),
+          TextButton.icon(
+              onPressed: _busy || _campaignId == null ? null : _cancel,
+              icon: const Icon(Icons.cancel_outlined),
+              label: const Text('Cancel')),
         ]),
         if (_campaignId != null) ...[
           const SizedBox(height: 16),
