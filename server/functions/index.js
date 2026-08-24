@@ -195,6 +195,7 @@ exports.dryRunRothGrantCampaign = rothGrantCampaigns.dryRunRothGrantCampaign;
 exports.approveRothGrantCampaign = rothGrantCampaigns.approveRothGrantCampaign;
 exports.executeRothGrantCampaign = rothGrantCampaigns.executeRothGrantCampaign;
 exports.reconcileRothGrantCampaign = rothGrantCampaigns.reconcileRothGrantCampaign;
+exports.cancelRothGrantCampaign = rothGrantCampaigns.cancelRothGrantCampaign;
 exports.issueRothToWallets = rothLedger.issueRothToWallets;
 exports.debitRothCredit = rothLedger.debitRothCredit;
 exports.redeemGiftCard = rothLedger.redeemGiftCard;

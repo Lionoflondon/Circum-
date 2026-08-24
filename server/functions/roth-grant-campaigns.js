@@ -208,6 +208,22 @@ exports.reconcileRothGrantCampaign = functions.runWith({enforceAppCheck: true}).
   return result;
 });
 
+exports.cancelRothGrantCampaign = functions.runWith({enforceAppCheck: true}).https.onCall(async (data, context) => {
+  const actor = await requireTrustedRothAdmin(context);
+  const campaignId = requireCampaignId(data || {});
+  const db = getFirestore();
+  const ref = db.collection("rothGrantCampaigns").doc(campaignId);
+  await db.runTransaction(async (transaction) => {
+    const snap = await transaction.get(ref);
+    if (!snap.exists || !["draft", "dry_run_complete", "approved"].includes(snap.data().status)) {
+      throw new functions.https.HttpsError("failed-precondition", "Only unexecuted campaigns can be cancelled.");
+    }
+    transaction.update(ref, {status: "cancelled", cancelledBy: actor.uid, cancelledAt: FieldValue.serverTimestamp()});
+  });
+  await audit(db, actor, campaignId, "roth_grant_campaign_cancelled");
+  return {campaignId, status: "cancelled"};
+});
+
 module.exports.MAX_ROTH_PER_USER = MAX_ROTH_PER_USER;
 module.exports.MAX_CAMPAIGN_ROTH = MAX_CAMPAIGN_ROTH;
 module.exports.definitionHash = definitionHash;
