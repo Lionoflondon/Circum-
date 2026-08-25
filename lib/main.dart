@@ -28,21 +28,29 @@ final NotificationService _notificationService = NotificationService();
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  await _configureStripe();
-  await Firebase.initializeApp();
-  final appCheckStartup = await initializeCircumAppCheck();
-  if (appCheckStartup.blockStartup) {
-    runApp(CircumStartupBlocked(message: appCheckStartup.message));
-    return;
-  }
-  if (!kIsWeb) {
-    await _configureNotifications();
-    FirebaseMessaging.onBackgroundMessage(_firebaseMessagingBackgroundHandler);
-    foregoundMessage();
-    configureNotificationOpenRouting();
-  }
+  try {
+    await _configureStripe();
+    await Firebase.initializeApp();
+    final appCheckStartup = await initializeCircumAppCheck();
+    if (appCheckStartup.blockStartup) {
+      runApp(CircumStartupBlocked(message: appCheckStartup.message));
+      return;
+    }
+    if (!kIsWeb) {
+      await _configureNotifications();
+      FirebaseMessaging.onBackgroundMessage(
+        _firebaseMessagingBackgroundHandler,
+      );
+      foregoundMessage();
+      configureNotificationOpenRouting();
+    }
 
-  runApp(const App());
+    runApp(const App());
+  } catch (_) {
+    runApp(const CircumStartupBlocked(
+      message: 'Circum could not start. Please try again.',
+    ));
+  }
 }
 
 Future<void> _configureStripe() async {

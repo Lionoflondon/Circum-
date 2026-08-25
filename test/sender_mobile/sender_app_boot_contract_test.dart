@@ -29,6 +29,18 @@ void main() {
     expect(appNav, contains('SenderMobileHome(previewAuthEnabled: true)'));
   });
 
+  test('Sender startup has a visible recovery boundary before runApp', () {
+    final source = File('lib/main.dart').readAsStringSync();
+    final tryStart = source.indexOf('try {');
+    final catchStart = source.indexOf('} catch (_) {', tryStart);
+    final runAppStart = source.indexOf('runApp(const App())');
+
+    expect(tryStart, isNonNegative);
+    expect(catchStart, greaterThan(tryStart));
+    expect(runAppStart, greaterThan(tryStart));
+    expect(source.substring(catchStart), contains('CircumStartupBlocked'));
+  });
+
   test('Sender session restore never signs out existing users by account age',
       () {
     final authBloc =
