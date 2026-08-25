@@ -2275,11 +2275,11 @@ class _AdminPhaseOneShellState extends State<AdminPhaseOneShell> {
       }
       final idempotencyKey = _rothSubmissionKey ??=
           'admin_${_user?.uid ?? _user?.email}_${_idFor(record)}_${DateTime.now().microsecondsSinceEpoch}';
-      await _functions.httpsCallable('issueRothCredit').call({
-        recipient.contains('@') ? 'email' : 'userId': recipient,
-        'amount': amount,
+      await _functions.httpsCallable('adminGrantRothToUser').call({
+        'grantId': idempotencyKey,
+        recipient.contains('@') ? 'recipientEmail' : 'recipientUid': recipient,
+        'amountRoth': amount,
         'reason': 'Historical Admin Roth issue restored in isolated Admin',
-        'idempotencyKey': idempotencyKey,
       });
       await _writeAudit(
         AdminAuditEntry(
@@ -2329,11 +2329,11 @@ class _AdminPhaseOneShellState extends State<AdminPhaseOneShell> {
       }
       final idempotencyKey = _rothSubmissionKey ??=
           'manual_${_user?.uid ?? _user?.email}_${DateTime.now().microsecondsSinceEpoch}';
-      await _functions.httpsCallable('issueRothCredit').call({
-        cleanRecipient.contains('@') ? 'email' : 'userId': cleanRecipient,
-        'amount': amount,
+      await _functions.httpsCallable('adminGrantRothToUser').call({
+        'grantId': idempotencyKey,
+        cleanRecipient.contains('@') ? 'recipientEmail' : 'recipientUid': cleanRecipient,
+        'amountRoth': amount,
         'reason': cleanReason,
-        'idempotencyKey': idempotencyKey,
       });
       await _writeAudit(
         AdminAuditEntry(
