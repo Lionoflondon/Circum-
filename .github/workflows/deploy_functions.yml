@@ -47,4 +47,19 @@ jobs:
           else
             echo "No affected Functions; skipping source deployment."
           fi
-      - run: firebase functions:delete issueRothCredit issueRothToWallets --region us-central1 --project circum-2797c --force
+      - name: Delete retired Roth Functions when present
+        run: |
+          set -euo pipefail
+          existing="$(firebase functions:list --project circum-2797c --json | node -e '
+            let input = "";
+            process.stdin.on("data", chunk => input += chunk);
+            process.stdin.on("end", () => {
+              const ids = new Set((JSON.parse(input).result || []).map(fn => fn.id));
+              process.stdout.write(["issueRothCredit", "issueRothToWallets"].filter(id => ids.has(id)).join(" "));
+            });
+          ')"
+          if [ -n "$existing" ]; then
+            firebase functions:delete $existing --region us-central1 --project circum-2797c --force
+          else
+            echo "Retired Roth Functions already absent."
+          fi
