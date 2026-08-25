@@ -28,3 +28,15 @@ jobs:
           credentials_json: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_CIRCUM_2797C }}
       - run: npm install -g firebase-tools
       - run: firebase deploy --only hosting:app --project circum-2797c
+      - run: npm install --no-save playwright@1.52.0
+      - run: npx playwright install chromium
+      - run: node test/sender_mobile/sender_browser_smoke.mjs
+        env:
+          SENDER_BROWSER_BASE_URL: https://circum-app-2797c.web.app/
+          SENDER_EXPECTED_SHA: ${{ github.sha }}
+          SENDER_BROWSER_ARTIFACT_DIR: build/sender-browser-artifacts
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: sender-browser-certification
+          path: build/sender-browser-artifacts
