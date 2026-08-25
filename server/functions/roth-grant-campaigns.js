@@ -117,6 +117,23 @@ async function loadDefinition(campaign) {
   };
 }
 
+function reconcileGrantRecords(recipients, ledger) {
+  const ledgerByUid = new Map();
+  for (const entry of ledger) {
+    const data = entry.data ? entry.data() : entry;
+    const uid = clean(data.uid);
+    const metadata = data.metadata || {};
+    if (!uid || metadata.sourceType !== "roth_grant_campaign" || ledgerByUid.has(uid)) return false;
+    ledgerByUid.set(uid, {amount: roundMoney(Number(data.amount)), transactionId: entry.id || data.transactionId});
+  }
+  if (recipients.length !== ledgerByUid.size) return false;
+  return recipients.every((entry) => {
+    const data = entry.data ? entry.data() : entry;
+    const ledgerEntry = ledgerByUid.get(clean(data.uid || entry.id));
+    return Boolean(ledgerEntry) && roundMoney(Number(data.amountRoth)) === ledgerEntry.amount && data.ledgerEntryId === ledgerEntry.transactionId;
+  });
+}
+
 exports.createRothGrantCampaign = functions.runWith({enforceAppCheck: true}).https.onCall(async (data, context) => {
   const actor = await requireTrustedRothAdmin(context);
   const definition = campaignDefinition(data || {});
@@ -138,11 +155,17 @@ exports.adminGrantRothToUser = functions.runWith({enforceAppCheck: true}).https.
   if (!Number.isFinite(amount) || amount <= 0 || amount > MAX_INDIVIDUAL_ROTH) {
     throw new functions.https.HttpsError("invalid-argument", `Roth amount must be greater than zero and no more than ${MAX_INDIVIDUAL_ROTH}.`);
   }
-  const uid = clean(data.recipientUid || data.userId);
-  if (!uid || !/^[A-Za-z0-9_-]{1,128}$/.test(uid)) {
-    throw new functions.https.HttpsError("invalid-argument", "A valid recipient UID is required.");
+  const requestedUid = clean(data.recipientUid || data.userId);
+  const requestedEmail = clean(data.recipientEmail || data.email).toLowerCase();
+  if (!requestedUid && !requestedEmail) {
+    throw new functions.https.HttpsError("invalid-argument", "A valid recipient UID or email is required.");
   }
   const db = getFirestore();
+  const user = requestedEmail ? await getAuth().getUserByEmail(requestedEmail) : await getAuth().getUser(requestedUid);
+  const uid = user.uid;
+  if (!/^[A-Za-z0-9_-]{1,128}$/.test(uid)) {
+    throw new functions.https.HttpsError("invalid-argument", "A valid recipient UID is required.");
+  }
   const grantRef = db.collection("rothAdminGrants").doc(grantId);
   const existing = await grantRef.get();
   if (existing.exists) {
@@ -154,7 +177,6 @@ exports.adminGrantRothToUser = functions.runWith({enforceAppCheck: true}).https.
       return {grantId, recipientUid: uid, amountRoth: amount, transactionId: prior.transactionId, idempotentReplay: true};
     }
   }
-  const user = await getAuth().getUser(uid);
   const userDoc = await db.collection("users").doc(uid).get();
   assertIndividualEligibility(uid, userDoc.exists ? userDoc.data() : {});
   await grantRef.set({grantId, recipientUid: uid, recipientEmail: user.email || null, amountRoth: amount, reason, status: "pending", actorUid: actor.uid, actorEmail: actor.email || null, idempotencyKey: `admin_roth_grant:${grantId}:${uid}`, updatedAt: FieldValue.serverTimestamp(), createdAt: existing.exists ? (existing.data().createdAt || FieldValue.serverTimestamp()) : FieldValue.serverTimestamp()}, {merge: true});
@@ -165,7 +187,7 @@ exports.adminGrantRothToUser = functions.runWith({enforceAppCheck: true}).https.
     transactionId: `roth_admin_grant_${grantId}_${uid}`,
     idempotencyKey: `admin_roth_grant:${grantId}:${uid}`,
     relatedEntityId: grantId,
-    metadata: {source: "admin_individual_grant", sourceType: "admin_roth_grant", grantId, reason, targetUid: uid},
+    metadata: {source: "admin_individual_grant", sourceType: "admin_roth_grant", grantId, reason, targetUid: uid, reference: clean(data.reference)},
   });
   await grantRef.update({status: "completed", transactionId: result.transactionId, ledgerId: result.transactionId, completedAt: FieldValue.serverTimestamp(), updatedAt: FieldValue.serverTimestamp()});
   await audit(db, actor, grantId, "roth_individual_grant_completed", {targetUid: uid, amountRoth: amount, reason, grantId, ledgerId: result.transactionId});
@@ -271,7 +293,7 @@ exports.reconcileRothGrantCampaign = functions.runWith({enforceAppCheck: true}).
   const ledger = await db.collection("walletTransactions").where("metadata.campaignId", "==", campaignId).get();
   const expected = recipients.docs.reduce((sum, doc) => sum + Number(doc.data().amountRoth || 0), 0);
   const actual = ledger.docs.reduce((sum, doc) => sum + Number(doc.data().amount || 0), 0);
-  const result = {campaignId, recipientCount: recipients.size, ledgerCount: ledger.size, expectedRoth: roundMoney(expected), actualRoth: roundMoney(actual), ok: recipients.size === ledger.size && roundMoney(expected) === roundMoney(actual)};
+  const result = {campaignId, recipientCount: recipients.size, ledgerCount: ledger.size, expectedRoth: roundMoney(expected), actualRoth: roundMoney(actual), ok: recipients.size === ledger.size && roundMoney(expected) === roundMoney(actual) && reconcileGrantRecords(recipients.docs, ledger.docs)};
   await audit(db, actor, campaignId, "roth_grant_campaign_reconciled", result);
   return result;
 });
@@ -297,3 +319,4 @@ module.exports.MAX_INDIVIDUAL_ROTH = MAX_INDIVIDUAL_ROTH;
 module.exports.MAX_CAMPAIGN_ROTH = MAX_CAMPAIGN_ROTH;
 module.exports.definitionHash = definitionHash;
 module.exports.isEligibleUser = isEligibleUser;
+module.exports.reconcileGrantRecords = reconcileGrantRecords;

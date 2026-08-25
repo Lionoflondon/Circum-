@@ -189,7 +189,6 @@ exports.awardPatronOnBusinessInvoicePaid =
   legends.awardPatronOnBusinessInvoicePaid;
 exports.grantRecognition = legends.grantRecognition;
 exports.revokeRecognition = legends.revokeRecognition;
-exports.issueRothCredit = rothLedger.issueRothCredit;
 exports.createRothGrantCampaign = rothGrantCampaigns.createRothGrantCampaign;
 exports.adminGrantRothToUser = rothGrantCampaigns.adminGrantRothToUser;
 exports.dryRunRothGrantCampaign = rothGrantCampaigns.dryRunRothGrantCampaign;
@@ -197,7 +196,6 @@ exports.approveRothGrantCampaign = rothGrantCampaigns.approveRothGrantCampaign;
 exports.executeRothGrantCampaign = rothGrantCampaigns.executeRothGrantCampaign;
 exports.reconcileRothGrantCampaign = rothGrantCampaigns.reconcileRothGrantCampaign;
 exports.cancelRothGrantCampaign = rothGrantCampaigns.cancelRothGrantCampaign;
-exports.issueRothToWallets = rothLedger.issueRothToWallets;
 exports.debitRothCredit = rothLedger.debitRothCredit;
 exports.redeemGiftCard = rothLedger.redeemGiftCard;
 exports.setWalletFrozen = rothLedger.setWalletFrozen;
