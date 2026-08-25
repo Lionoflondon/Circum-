@@ -32,5 +32,12 @@ jobs:
       - run: printf "GOOGLE_PLACES_API_KEY=%s\n" "$GOOGLE_PLACES_API_KEY" > server/functions/.env
         env:
           GOOGLE_PLACES_API_KEY: ${{ secrets.GOOGLE_PLACES_API_KEY }}
-      - run: firebase deploy --only "$(node scripts/scoped_functions_deploy_list.js --base '${{ inputs.base_ref }}')" --project circum-2797c
+      - name: Deploy affected Functions
+        run: |
+          scope="$(node scripts/scoped_functions_deploy_list.js --base '${{ inputs.base_ref }}')"
+          if [ -n "$scope" ]; then
+            firebase deploy --only "$scope" --project circum-2797c
+          else
+            echo "No affected Functions; skipping source deployment."
+          fi
       - run: firebase functions:delete issueRothCredit issueRothToWallets --region us-central1 --project circum-2797c --force
