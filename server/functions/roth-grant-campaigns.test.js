@@ -4,7 +4,7 @@ const assert = require("assert");
 const {test} = require("node:test");
 const fs = require("fs");
 const path = require("path");
-const {definitionHash, isEligibleUser, MAX_ROTH_PER_USER, MAX_CAMPAIGN_ROTH, MAX_INDIVIDUAL_ROTH} = require("./roth-grant-campaigns");
+const {definitionHash, isEligibleUser, reconcileGrantRecords, MAX_ROTH_PER_USER, MAX_CAMPAIGN_ROTH, MAX_INDIVIDUAL_ROTH} = require("./roth-grant-campaigns");
 
 const definition = {
   name: "Welcome gift",
@@ -60,4 +60,26 @@ test("individual grant authority is isolated, capped and idempotent by grant ide
   assert.doesNotMatch(source, /deliveryRequests/);
   assert.doesNotMatch(source, /stripe/i);
   assert.doesNotMatch(source, /sendNotification|notifyCustomer|dispatch/i);
+});
+
+test("legacy issuance exports cannot bypass the canonical grant and campaign authorities", () => {
+  const indexSource = fs.readFileSync(path.join(__dirname, "index.js"), "utf8");
+  assert.match(indexSource, /exports\.adminGrantRothToUser/);
+  assert.doesNotMatch(indexSource, /exports\.issueRothCredit\s*=/);
+  assert.doesNotMatch(indexSource, /exports\.issueRothToWallets\s*=/);
+});
+
+test("campaign reconciliation rejects corrupted recipient identity, amount or ledger linkage", () => {
+  const recipients = [
+    {id: "user-1", data: () => ({uid: "user-1", amountRoth: 5, ledgerEntryId: "tx-1"})},
+    {id: "user-2", data: () => ({uid: "user-2", amountRoth: 5, ledgerEntryId: "tx-2"})},
+  ];
+  const ledger = [
+    {id: "tx-1", data: () => ({uid: "user-1", amount: 5, metadata: {sourceType: "roth_grant_campaign"}})},
+    {id: "tx-2", data: () => ({uid: "user-2", amount: 5, metadata: {sourceType: "roth_grant_campaign"}})},
+  ];
+  assert.equal(reconcileGrantRecords(recipients, ledger), true);
+  assert.equal(reconcileGrantRecords(recipients, ledger.map((entry, index) => index === 1 ? {...entry, data: () => ({uid: "user-1", amount: 5, metadata: {sourceType: "roth_grant_campaign"}})} : entry)), false);
+  assert.equal(reconcileGrantRecords(recipients, ledger.map((entry, index) => index === 1 ? {...entry, data: () => ({uid: "user-2", amount: 4, metadata: {sourceType: "roth_grant_campaign"}})} : entry)), false);
+  assert.equal(reconcileGrantRecords(recipients, ledger.map((entry, index) => index === 1 ? {...entry, data: () => ({uid: "user-2", amount: 5, metadata: {sourceType: "other"}})} : entry)), false);
 });

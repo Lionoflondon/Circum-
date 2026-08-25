@@ -82,3 +82,43 @@ test("individual grant idempotency is one wallet mutation and one ledger event",
   assert.equal(ledger.data().metadata.grantId, grantId);
   assert.equal(idempotency.size, 1);
 });
+
+test("high contention identical and distinct individual grants preserve every economic event", {skip: !emulatorAvailable}, async () => {
+  const uid = "individual-contention-user";
+  const duplicate = {
+    db, userId: uid, uid, amount: 3, balanceType: BALANCE_TYPES.rothCredit,
+    type: TRANSACTION_TYPES.adminCredit, reason: "Contention grant", issuedByAdminId: "finance-admin",
+    transactionId: "roth_admin_grant_contention_same", idempotencyKey: "admin_roth_grant:contention:same", relatedEntityId: "contention-same",
+    metadata: {source: "admin_individual_grant", grantId: "contention-same"},
+  };
+  await Promise.all(Array.from({length: 20}, () => recordRothMovement(duplicate)));
+  await Promise.all(Array.from({length: 5}, (_, index) => recordRothMovement({
+    ...duplicate, amount: 2, transactionId: `roth_admin_grant_contention_${index}`, idempotencyKey: `admin_roth_grant:contention:${index}`, relatedEntityId: `contention-${index}`,
+    metadata: {source: "admin_individual_grant", grantId: `contention-${index}`},
+  })));
+  const wallet = await db.collection("wallets").doc(uid).get();
+  const ledger = await db.collection("walletTransactions").where("uid", "==", uid).get();
+  assert.equal(wallet.data().balance, 13);
+  assert.equal(ledger.size, 6);
+  assert.equal(ledger.docs.reduce((total, doc) => total + Number(doc.data().amount), 0), 13);
+});
+
+test("conflicting idempotency payload fails closed and campaign plus individual race has no lost update", {skip: !emulatorAvailable}, async () => {
+  const uid = "individual-conflict-user";
+  const base = {
+    db, userId: uid, uid, amount: 7, balanceType: BALANCE_TYPES.rothCredit,
+    type: TRANSACTION_TYPES.adminCredit, reason: "Conflict grant", issuedByAdminId: "finance-admin",
+    transactionId: "roth_admin_grant_conflict", idempotencyKey: "admin_roth_grant:conflict:one", relatedEntityId: "conflict-one",
+    metadata: {source: "admin_individual_grant", grantId: "conflict-one"},
+  };
+  await recordRothMovement(base);
+  await assert.rejects(() => recordRothMovement({...base, amount: 8}));
+  await Promise.all([
+    recordRothMovement({...base, amount: 5, transactionId: "roth_campaign_race_campaign_race-user", idempotencyKey: "roth_campaign:race:race-user", relatedEntityId: "race", metadata: {source: "roth_grant_campaign", campaignId: "race"}}),
+    recordRothMovement({...base, amount: 4, transactionId: "roth_admin_grant_race-two", idempotencyKey: "admin_roth_grant:race:two", relatedEntityId: "race-two", metadata: {source: "admin_individual_grant", grantId: "race-two"}}),
+  ]);
+  const wallet = await db.collection("wallets").doc(uid).get();
+  const ledger = await db.collection("walletTransactions").where("uid", "==", uid).get();
+  assert.equal(wallet.data().balance, 16);
+  assert.equal(ledger.docs.reduce((total, doc) => total + Number(doc.data().amount), 0), 16);
+});
