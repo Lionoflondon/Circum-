@@ -34,8 +34,15 @@ jobs:
           GOOGLE_PLACES_API_KEY: ${{ secrets.GOOGLE_PLACES_API_KEY }}
       - name: Deploy affected Functions
         run: |
+          set +e
           scope="$(node scripts/scoped_functions_deploy_list.js --base '${{ inputs.base_ref }}')"
-          if [ -n "$scope" ]; then
+          resolver_status=$?
+          set -e
+          if [ "$resolver_status" -ne 0 ] && [ "$resolver_status" -ne 3 ]; then
+            echo "Scoped Functions resolver failed with status $resolver_status."
+            exit "$resolver_status"
+          fi
+          if [ "$resolver_status" -eq 0 ] && [ -n "$scope" ]; then
             firebase deploy --only "$scope" --project circum-2797c
           else
             echo "No affected Functions; skipping source deployment."
