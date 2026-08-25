@@ -56,6 +56,17 @@ test("Rider self-service authority validates auth ownership documents and audit"
   assert.match(source, /runTransaction/);
 });
 
+test("Rider profile authority validates canonical adult dates and preserves legal names", () => {
+  assert.match(source, /function canonicalDateOfBirth\(value\)/);
+  assert.match(source, /Date of birth must use YYYY-MM-DD/);
+  assert.match(source, /Date of birth cannot be in the future/);
+  assert.match(source, /Riders must be at least 18 years old/);
+  assert.match(source, /legalFirstName/);
+  assert.match(source, /legalSurname/);
+  assert.match(source, /preferredName/);
+  assert.match(source, /data\.section/);
+});
+
 test("Rider document authority supports validated multipart identity submissions", () => {
   assert.match(source, /function normalizeRiderDocumentFiles\(data, documentType\)/);
   assert.match(source, /Array\.isArray\(data && data\.files\)/);

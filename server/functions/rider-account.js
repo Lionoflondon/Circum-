@@ -153,7 +153,11 @@ function audit(type, rider, extra = {}) {
 
 function profilePatch(data, rider, existing = {}) {
   const vehicleExisting = existing.vehicle && typeof existing.vehicle === "object" ? existing.vehicle : {};
-  const fullName = text(data.fullName || existing.fullName || existing.name || rider.name, 160);
+  const legalFirstName = text(data.legalFirstName || existing.legalFirstName, 80);
+  const legalSurname = text(data.legalSurname || existing.legalSurname, 80);
+  const fullName = text(
+      data.fullName || [legalFirstName, legalSurname].filter(Boolean).join(" ") ||
+      existing.fullName || existing.name || rider.name, 160);
   const phoneNumber = text(data.phoneNumber || data.phone || existing.phoneNumber || existing.phone, 60);
   const vehicleType = lower(data.vehicleType || existing.vehicleType || existing.typeOfVehicle || vehicleExisting.type, 80);
   const vehicleRegistration = text(data.vehicleRegistration || data.plateNumber || existing.vehicleRegistration || existing.plateNumber || vehicleExisting.registration || vehicleExisting.plateNumber, 40);
@@ -163,14 +167,19 @@ function profilePatch(data, rider, existing = {}) {
     colour: text(data.vehicleColour || existing.vehicleColour || vehicleExisting.colour, 80),
     plateNumber: vehicleRegistration,
   };
+  const dateOfBirth = canonicalDateOfBirth(
+      data.dateOfBirth || existing.dateOfBirth);
   return {
     uid: rider.uid,
     riderId: rider.uid,
     fullName,
+    legalFirstName,
+    legalSurname,
+    preferredName: text(data.preferredName || existing.preferredName, 120),
     phoneNumber,
     email: rider.email || text(data.email, 180),
     postcode: text(data.postcode || existing.postcode || existing.homePostcode, 40),
-    dateOfBirth: text(data.dateOfBirth || existing.dateOfBirth, 40),
+    dateOfBirth,
     homeAddress: text(data.homeAddress || data.address || existing.homeAddress || existing.address, 500),
     address: text(data.address || data.homeAddress || existing.address || existing.homeAddress, 500),
     emergencyContactName: text(data.emergencyContactName || existing.emergencyContactName, 160),
@@ -196,9 +205,39 @@ function profilePatch(data, rider, existing = {}) {
   };
 }
 
+function canonicalDateOfBirth(value) {
+  const raw = text(value, 40);
+  if (!raw) return "";
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(raw)) {
+    throw new functions.https.HttpsError("invalid-argument", "Date of birth must use YYYY-MM-DD.");
+  }
+  const [year, month, day] = raw.split("-").map(Number);
+  const date = new Date(Date.UTC(year, month - 1, day));
+  if (date.getUTCFullYear() !== year || date.getUTCMonth() !== month - 1 ||
+      date.getUTCDate() !== day) {
+    throw new functions.https.HttpsError("invalid-argument", "Date of birth is not a valid date.");
+  }
+  const today = new Date();
+  const todayUtc = Date.UTC(today.getUTCFullYear(), today.getUTCMonth(), today.getUTCDate());
+  if (date.getTime() > todayUtc) {
+    throw new functions.https.HttpsError("invalid-argument", "Date of birth cannot be in the future.");
+  }
+  let age = today.getUTCFullYear() - year;
+  if (today.getUTCMonth() < month - 1 ||
+      (today.getUTCMonth() === month - 1 && today.getUTCDate() < day)) age--;
+  if (age < 18) {
+    throw new functions.https.HttpsError("invalid-argument", "Riders must be at least 18 years old.");
+  }
+  return raw;
+}
+
 function riderPatch(data, rider, existing = {}) {
   return {
     name: text(data.fullName || existing.fullName || existing.name || rider.name, 160),
+    legalFirstName: text(data.legalFirstName || existing.legalFirstName, 80),
+    legalSurname: text(data.legalSurname || existing.legalSurname, 80),
+    preferredName: text(data.preferredName || existing.preferredName, 120),
+    dateOfBirth: canonicalDateOfBirth(data.dateOfBirth || existing.dateOfBirth),
     phone: text(data.phoneNumber || data.phone || existing.phoneNumber || existing.phone, 60),
     role: "delivery",
     status: text(existing.status || "offline", 40),
@@ -307,6 +346,9 @@ function applicationPatchFromProfile(data, rider, profile) {
     id: rider.uid,
     riderId: rider.uid,
     fullName: profile.fullName,
+    legalFirstName: profile.legalFirstName,
+    legalSurname: profile.legalSurname,
+    preferredName: profile.preferredName,
     phoneNumber: profile.phoneNumber,
     email: profile.email,
     postcode: profile.postcode,
