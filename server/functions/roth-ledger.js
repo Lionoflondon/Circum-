@@ -104,20 +104,6 @@ async function resolveWalletIdentity({userId = "", email = "", authUid = ""}) {
   return {walletId, uid: uid || null, userEmail: normalizedEmail || null};
 }
 
-async function resolveRecipientUser({recipientUid = "", recipientEmail = ""}) {
-  const email = normalizeEmail(recipientEmail || "");
-  const uid = `${recipientUid || ""}`.trim();
-  try {
-    const user = email ? await getAuth().getUserByEmail(email) : await getAuth().getUser(uid);
-    return {
-      uid: user.uid,
-      email: normalizeEmail(user.email || email),
-    };
-  } catch (error) {
-    throw new functions.https.HttpsError("not-found", "Recipient user could not be found.");
-  }
-}
-
 async function requireSenderIdentity(context) {
   if (!context.auth) {
     throw new functions.https.HttpsError("unauthenticated", "Sign in to access your Wallet.");
@@ -175,14 +161,6 @@ async function initialiseSenderWalletRecord(context) {
     };
   });
   return result;
-}
-
-function walletTargetsFor(value) {
-  const target = `${value || ""}`.trim().toLowerCase();
-  if (target === "sender") return ["sender"];
-  if (target === "rider") return ["rider"];
-  if (target === "both") return ["sender", "rider"];
-  throw new functions.https.HttpsError("invalid-argument", "Wallet target must be sender, rider, or both.");
 }
 
 async function recordRothMovement({
@@ -705,6 +683,8 @@ exports.applyCheckoutRoth = functions.https.onCall(async (data, context) => {
   });
 });
 
+/* Legacy issueRothToWallets implementation removed from the deployable source.
+ * Retained only in history for auditability; do not restore this callable.
 exports.issueRothToWallets = functions.https.onCall(async (data, context) => {
   const admin = await requireTrustedRothAdmin(context);
   const amount = roundWalletMoney(data.amount);
@@ -899,7 +879,10 @@ exports.issueRothToWallets = functions.https.onCall(async (data, context) => {
   });
   return result;
 });
+*/
 
+/* Legacy issueRothCredit implementation removed from the deployable source.
+ * Retained only in history for auditability; do not restore this callable.
 exports.issueRothCredit = functions.https.onCall(async (data, context) => {
   await requireRothAdmin(context);
   const rawUser = `${data.userId || data.email || ""}`.trim();
@@ -942,6 +925,7 @@ exports.issueRothCredit = functions.https.onCall(async (data, context) => {
   });
   return result;
 });
+*/
 
 exports.debitRothCredit = functions.https.onCall(async (data, context) => {
   await requireRothAdmin(context);
