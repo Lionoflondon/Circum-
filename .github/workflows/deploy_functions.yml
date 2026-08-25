@@ -33,3 +33,4 @@ jobs:
         env:
           GOOGLE_PLACES_API_KEY: ${{ secrets.GOOGLE_PLACES_API_KEY }}
       - run: firebase deploy --only "$(node scripts/scoped_functions_deploy_list.js --base '${{ inputs.base_ref }}')" --project circum-2797c
+      - run: firebase functions:delete issueRothCredit issueRothToWallets --region us-central1 --project circum-2797c --force
