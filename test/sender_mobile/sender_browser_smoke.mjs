@@ -30,7 +30,7 @@ try {
     const pane = document.querySelector('flt-glass-pane');
     const canvas = document.querySelector('canvas') ||
       pane?.shadowRoot?.querySelector('flt-scene-host canvas, canvas');
-    return /We're having trouble starting Circum|Circum could not start/.test(text) ||
+    return /We're having trouble starting Circum|Circum could not start|Circum is taking longer than expected to start/.test(text) ||
       (canvas && canvas.width > 0 && canvas.height > 0);
   }, null, { timeout: 30000 });
 
@@ -41,7 +41,7 @@ try {
       pane?.shadowRoot?.querySelector('flt-scene-host canvas, canvas');
     return { width: canvas?.width || 0, height: canvas?.height || 0 };
   });
-  const recovery = /We're having trouble starting Circum|Circum could not start/.test(visibleText);
+  const recovery = /We're having trouble starting Circum|Circum could not start|Circum is taking longer than expected to start/.test(visibleText);
   const screenshot = await page.screenshot({ path: `${artifactDir}/sender-startup.png`, fullPage: true });
   const normal = !recovery && renderSurface.width > 0 &&
     renderSurface.height > 0 && screenshot.length > 10000;
