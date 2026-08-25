@@ -30,15 +30,13 @@ void main() {
   });
 
   test('Sender startup has a visible recovery boundary before runApp', () {
-    final source = File('lib/main.dart').readAsStringSync();
-    final tryStart = source.indexOf('try {');
-    final catchStart = source.indexOf('} catch (_) {', tryStart);
-    final runAppStart = source.indexOf('runApp(const App())');
+    final main = File('lib/main.dart').readAsStringSync();
+    final startup =
+        File('lib/app/sender_mobile/sender_startup.dart').readAsStringSync();
 
-    expect(tryStart, isNonNegative);
-    expect(catchStart, greaterThan(tryStart));
-    expect(runAppStart, greaterThan(tryStart));
-    expect(source.substring(catchStart), contains('CircumStartupBlocked'));
+    expect(main, contains('runSenderStartup('));
+    expect(startup, contains('renderRecovery();'));
+    expect(startup, contains('catch (_)'));
   });
 
   test('Sender session restore never signs out existing users by account age',

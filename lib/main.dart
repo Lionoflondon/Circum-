@@ -16,6 +16,7 @@ import 'app/send_package/bloc/send_package_bloc.dart';
 import 'env/env.dart';
 import 'helper/chats_help.dart';
 import 'helper/notifications_helper.dart';
+import 'app/sender_mobile/sender_startup.dart';
 
 part 'messaging.dart';
 
@@ -28,29 +29,29 @@ final NotificationService _notificationService = NotificationService();
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  try {
-    await _configureStripe();
-    await Firebase.initializeApp();
-    final appCheckStartup = await initializeCircumAppCheck();
-    if (appCheckStartup.blockStartup) {
-      runApp(CircumStartupBlocked(message: appCheckStartup.message));
-      return;
-    }
-    if (!kIsWeb) {
-      await _configureNotifications();
-      FirebaseMessaging.onBackgroundMessage(
-        _firebaseMessagingBackgroundHandler,
-      );
-      foregoundMessage();
-      configureNotificationOpenRouting();
-    }
-
-    runApp(const App());
-  } catch (_) {
-    runApp(const CircumStartupBlocked(
+  await runSenderStartup(
+    initialize: () async {
+      await _configureStripe();
+      await Firebase.initializeApp();
+      final appCheckStartup = await initializeCircumAppCheck();
+      if (appCheckStartup.blockStartup) {
+        runApp(CircumStartupBlocked(message: appCheckStartup.message));
+        return;
+      }
+      if (!kIsWeb) {
+        await _configureNotifications();
+        FirebaseMessaging.onBackgroundMessage(
+          _firebaseMessagingBackgroundHandler,
+        );
+        foregoundMessage();
+        configureNotificationOpenRouting();
+      }
+    },
+    renderApp: () => runApp(const App()),
+    renderRecovery: () => runApp(const CircumStartupBlocked(
       message: 'Circum could not start. Please try again.',
-    ));
-  }
+    )),
+  );
 }
 
 Future<void> _configureStripe() async {
