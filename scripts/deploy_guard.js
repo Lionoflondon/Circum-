@@ -63,7 +63,9 @@ function startsWithAny(file, prefixes) {
 
 const changed = changedFiles();
 const ownedForCi = changed.filter((file) => productName === 'backend' &&
-  (file === 'firebase.json' || file === 'scripts/deploy_guard.js') ? false : true);
+  (file === 'firebase.json' ||
+    file === '.github/workflows/rc1_release_build.yml' ||
+    file === 'scripts/deploy_guard.js') ? false : true);
 if (ciMode && !ownedForCi.some((file) => startsWithAny(file, product.ownedPrefixes))) {
   console.log(JSON.stringify({
     ok: true,
@@ -86,6 +88,11 @@ const offenders = changed.filter((file) => {
   // The guard itself may be maintained alongside a website-owned Hosting
   // change; protected architecture review remains the approval boundary.
   if (productName === 'website' && file === 'scripts/deploy_guard.js') return false;
+  // The RC1 release workflow contains Sender Android AAB release steps
+  // alongside repository orchestration; protected architecture review remains
+  // the approval boundary for this narrow shared release-pipeline file.
+  if (productName === 'sender-app' && file === '.github/workflows/rc1_release_build.yml') return false;
+  if (productName === 'sender-app' && file === 'scripts/deploy_guard.js') return false;
   if (productName === 'backend' && file === 'firebase.json') return false;
   if (startsWithAny(file, product.forbiddenPrefixes)) return true;
   return !startsWithAny(file, product.ownedPrefixes) &&
