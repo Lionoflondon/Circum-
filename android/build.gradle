@@ -27,9 +27,6 @@ rootProject.buildDir = '../build'
 subprojects {
     project.buildDir = "${rootProject.buildDir}/${project.name}"
 }
-subprojects {
-    project.evaluationDependsOn(':app')
-}
 
 gradle.beforeProject { project ->
     project.pluginManager.withPlugin("com.android.library") {
@@ -41,6 +38,10 @@ gradle.beforeProject { project ->
             }
         }
     }
+}
+
+subprojects {
+    project.evaluationDependsOn(':app')
 }
 
 gradle.projectsEvaluated {
