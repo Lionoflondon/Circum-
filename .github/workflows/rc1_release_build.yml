@@ -51,13 +51,16 @@ jobs:
             -o /tmp/bundletool.jar \
             https://github.com/google/bundletool/releases/download/1.17.2/bundletool-all-1.17.2.jar
       - run: flutter pub get
-      - name: Normalize geocoding Android compile SDK
+      - name: Normalize Flutter plugin Android compile SDKs
         run: |
           set -euo pipefail
-          GEOCODING_GRADLE="$(find "$HOME/.pub-cache" -path '*/geocoding_android-*/android/build.gradle' ! -path '*/example/*' -print -quit)"
-          test -n "$GEOCODING_GRADLE"
-          sed -i -e 's/compileSdkVersion 33/compileSdkVersion 36/g' -e 's/compileSdk 33/compileSdk 36/g' "$GEOCODING_GRADLE"
-          grep -Eq 'compileSdk(Version)? 36' "$GEOCODING_GRADLE"
+          find "$HOME/.pub-cache" -path '*/android/build.gradle' ! -path '*/example/*' -print0 |
+            xargs -0 sed -i -e 's/compileSdkVersion 33/compileSdkVersion 36/g' -e 's/compileSdk 33/compileSdk 36/g'
+          if find "$HOME/.pub-cache" -path '*/android/build.gradle' ! -path '*/example/*' -print0 |
+            xargs -0 grep -nE 'compileSdk(Version)? 33'; then
+            echo "Flutter plugin compile SDK normalization left Android 33 behind" >&2
+            exit 1
+          fi
       - name: Verify release inputs
         env:
           SENDER_ANDROID_GOOGLE_MAPS_API_KEY: ${{ secrets.SENDER_ANDROID_GOOGLE_MAPS_API_KEY }}
