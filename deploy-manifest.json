@@ -207,6 +207,7 @@
         "test/web_artifact_isolation_test.dart",
         "tools/",
         "scripts/absolute_product_ownership.js",
+        "scripts/android_release_guard.js",
         "scripts/backend_authority_guard.js",
         "scripts/deploy_guard.js",
         "scripts/deploy_guard.self_test.js",
