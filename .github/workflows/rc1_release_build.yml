@@ -97,6 +97,7 @@ jobs:
           chmod 600 android/key.properties
       - name: Build signed Sender AAB
         env:
+          GRADLE_OPTS: -Dorg.gradle.jvmargs=-Xmx6g
           GOOGLE_MAPS_API_KEY: ${{ secrets.SENDER_ANDROID_GOOGLE_MAPS_API_KEY }}
           GOOGLE_MAPS_DIRECTIONS_API_KEY: ${{ secrets.GOOGLE_MAPS_DIRECTIONS_API_KEY }}
           STRIPE_PUBLISHABLE_KEY: ${{ secrets.STRIPE_PUBLISHABLE_KEY }}

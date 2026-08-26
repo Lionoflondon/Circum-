@@ -32,7 +32,7 @@ subprojects {
 }
 
 subprojects { subproject ->
-    if (subproject.plugins.hasPlugin("com.android.library")) {
+    subproject.pluginManager.withPlugin("com.android.library") {
         subproject.android {
             compileSdk = 36
             lint {
