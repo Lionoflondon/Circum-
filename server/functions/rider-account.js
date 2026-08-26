@@ -647,9 +647,6 @@ exports.createWeightAdjustedNotification = functions.https.onCall(async (data, c
 
 exports.submitRiderApplication = functions.https.onCall(async (data, context) => {
   const rider = requireRider(context);
-  if (data.rightToWorkConfirmed !== true || data.sealedPackageConsent !== true) {
-    throw new functions.https.HttpsError("failed-precondition", "Rider confirmations are required.");
-  }
   const db = getFirestore();
   const idempotencyKey = text(data.idempotencyKey, 180) || `rider_application_${rider.uid}`;
   const idempotencyRef = db.collection("riderApplicationIdempotency").doc(idempotencyKey.replace(/[/.#[\]]/g, "_"));
@@ -691,16 +688,14 @@ exports.submitRiderApplication = functions.https.onCall(async (data, context) =>
       vehicle,
       availability: text(data.availability || existing.availability, 240),
       notes: text(data.notes, 1000),
-      rightToWorkConfirmed: data.rightToWorkConfirmed === true,
-      sealedPackageConsent: data.sealedPackageConsent === true,
+      rightToWorkConfirmed: data.rightToWorkConfirmed === undefined ?
+        existing.rightToWorkConfirmed === true : data.rightToWorkConfirmed === true,
+      sealedPackageConsent: data.sealedPackageConsent === undefined ?
+        existing.sealedPackageConsent === true : data.sealedPackageConsent === true,
       status: "submitted",
       source: "cloud-functions",
       updatedAt: now,
     };
-    if (!application.fullName || !application.phoneNumber || !application.vehicleType ||
-        !application.dateOfBirth || !application.homeAddress) {
-      throw new functions.https.HttpsError("invalid-argument", "Name, phone and vehicle type are required.");
-    }
     transaction.set(applicationRef, {
       ...application,
       ...(existing.sectionStatus ? {sectionStatus: existing.sectionStatus} : {}),

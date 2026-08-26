@@ -26,18 +26,27 @@ test("Rider self-service authority callables are exported", () => {
   assert.match(indexSource, /exports\.submitRiderDocument\s*=\s*riderAccount\.submitRiderDocument/);
 });
 
-test("Rider application submission keeps confirmation and lifecycle authority server-side", () => {
+test("Rider application submission is non-blocking while lifecycle authority stays server-side", () => {
   const start = source.indexOf("exports.submitRiderApplication");
   const end = source.indexOf("exports.updateRiderApplicationSection", start);
   const body = source.slice(start, end);
-  assert.match(body, /data\.rightToWorkConfirmed !== true/);
-  assert.match(body, /data\.sealedPackageConsent !== true/);
-  assert.match(body, /rightToWorkConfirmed: data\.rightToWorkConfirmed === true/);
-  assert.match(body, /sealedPackageConsent: data\.sealedPackageConsent === true/);
+  assert.doesNotMatch(body, /data\.rightToWorkConfirmed !== true/);
+  assert.doesNotMatch(body, /data\.sealedPackageConsent !== true/);
+  assert.match(body, /rightToWorkConfirmed: data\.rightToWorkConfirmed === undefined/);
+  assert.match(body, /sealedPackageConsent: data\.sealedPackageConsent === undefined/);
   assert.match(body, /status: "submitted"/);
   assert.match(body, /approvalStatus: "pending"/);
   assert.match(body, /verificationStatus: "pending"/);
   assert.doesNotMatch(body, /dispatchEligible:\s*true/);
+});
+
+test("Incomplete application fields and confirmations do not gate submission", () => {
+  const start = source.indexOf("exports.submitRiderApplication");
+  const end = source.indexOf("exports.updateRiderApplicationSection", start);
+  const body = source.slice(start, end);
+  assert.doesNotMatch(body, /Name, phone and vehicle type are required/);
+  assert.match(body, /status: "submitted"/);
+  assert.match(body, /onboardingSubmittedAt: now/);
 });
 
 test("Rider self-service authority validates auth ownership documents and audit", () => {
