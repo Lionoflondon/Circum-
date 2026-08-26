@@ -27,8 +27,11 @@ test("UI-only input has no Functions", () => {
   assert.deepEqual(scope(["lib/app/sender_mobile/sender_mobile_home.dart"]), []);
 });
 
-test("unmapped backend input fails closed", () => {
-  assert.throws(() => scope(["server/functions/package.json"]), /Backend changes|Dynamic require/);
+test("runtime declaration changes include every exported Function", () => {
+  const names = scope(["server/functions/package.json"]);
+  assert.ok(names.length > 0);
+  assert.equal(names.includes("submitRiderApplication"), true);
+  assert.equal(names.includes("updateRiderProfile"), true);
 });
 
 test("cycle traversal is finite and deduplicated", () => {

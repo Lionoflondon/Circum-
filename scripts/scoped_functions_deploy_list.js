@@ -119,6 +119,12 @@ const base = argValue("--base") || "HEAD^";
 
 const mapping = moduleExportMap();
 const affected = new Set();
+const runtimeDeclarationChanged = changed.includes("server/functions/package.json") ||
+    changed.includes("server/functions/package-lock.json");
+if (runtimeDeclarationChanged) {
+  // A Functions runtime declaration applies to every exported Function.
+  for (const name of unique) affected.add(name);
+}
 const reverse = dependencyGraph();
 const impacted = new Set(changed);
 const queue = [...changed];
