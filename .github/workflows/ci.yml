@@ -20,7 +20,7 @@ jobs:
           channel: stable
       - uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 22
       - run: flutter pub get
       - run: flutter analyze --no-fatal-warnings --no-fatal-infos
       - run: flutter test
@@ -58,7 +58,7 @@ jobs:
           fetch-depth: 0
       - uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 22
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
