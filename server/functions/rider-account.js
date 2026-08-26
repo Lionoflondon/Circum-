@@ -169,6 +169,7 @@ function profilePatch(data, rider, existing = {}) {
   };
   const dateOfBirth = canonicalDateOfBirth(
       data.dateOfBirth || existing.dateOfBirth);
+  const vehicles = Array.isArray(data.vehicles) ? data.vehicles.slice(0, 2) : existing.vehicles;
   return {
     uid: rider.uid,
     riderId: rider.uid,
@@ -191,6 +192,7 @@ function profilePatch(data, rider, existing = {}) {
     plateNumber: vehicleRegistration,
     vehicleRegistration,
     vehicle,
+    ...(Array.isArray(vehicles) ? {vehicles} : {}),
     availability: text(data.availability || existing.availability, 240),
     approvalStatus: existing.approvalStatus || "pending",
     onboardingStatus: existing.onboardingStatus || "not_started",
@@ -232,6 +234,7 @@ function canonicalDateOfBirth(value) {
 }
 
 function riderPatch(data, rider, existing = {}) {
+  const vehicles = Array.isArray(data.vehicles) ? data.vehicles.slice(0, 2) : existing.vehicles;
   return {
     name: text(data.fullName || existing.fullName || existing.name || rider.name, 160),
     legalFirstName: text(data.legalFirstName || existing.legalFirstName, 80),
@@ -244,6 +247,7 @@ function riderPatch(data, rider, existing = {}) {
     rating: text(existing.rating || "0.00", 20),
     plateNumber: text(data.vehicleRegistration || data.plateNumber || existing.vehicleRegistration || existing.plateNumber, 40),
     typeOfVehicle: text(data.vehicleType || existing.vehicleType || existing.typeOfVehicle, 80),
+    ...(Array.isArray(vehicles) ? {vehicles} : {}),
     vehicleMakeModel: text(data.vehicleMakeModel || existing.vehicleMakeModel, 120),
     vehicleColour: text(data.vehicleColour || existing.vehicleColour, 80),
     verificationStatus: existing.verificationStatus || "pending",
@@ -687,13 +691,14 @@ exports.submitRiderApplication = functions.https.onCall(async (data, context) =>
       vehicle,
       availability: text(data.availability || existing.availability, 240),
       notes: text(data.notes, 1000),
-      rightToWorkConfirmed: true,
-      sealedPackageConsent: true,
+      rightToWorkConfirmed: data.rightToWorkConfirmed === true,
+      sealedPackageConsent: data.sealedPackageConsent === true,
       status: "submitted",
       source: "cloud-functions",
       updatedAt: now,
     };
-    if (!application.fullName || !application.phoneNumber || !application.vehicleType) {
+    if (!application.fullName || !application.phoneNumber || !application.vehicleType ||
+        !application.dateOfBirth || !application.homeAddress) {
       throw new functions.https.HttpsError("invalid-argument", "Name, phone and vehicle type are required.");
     }
     transaction.set(applicationRef, {
