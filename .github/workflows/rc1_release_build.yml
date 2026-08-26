@@ -85,9 +85,9 @@ jobs:
           SENDER_ANDROID_KEY_ALIAS: ${{ secrets.SENDER_ANDROID_KEY_ALIAS }}
         run: |
           set -euo pipefail
-          mkdir -p android/release-signing
-          printf '%s' "$SENDER_ANDROID_UPLOAD_KEYSTORE_BASE64" | base64 --decode > android/release-signing/circum-sender-upload.jks
-          chmod 600 android/release-signing/circum-sender-upload.jks
+          mkdir -p android/app/release-signing
+          printf '%s' "$SENDER_ANDROID_UPLOAD_KEYSTORE_BASE64" | base64 --decode > android/app/release-signing/circum-sender-upload.jks
+          chmod 600 android/app/release-signing/circum-sender-upload.jks
           {
             echo "storeFile=release-signing/circum-sender-upload.jks"
             echo "storePassword=$SENDER_ANDROID_KEYSTORE_PASSWORD"
@@ -135,4 +135,4 @@ jobs:
         if: always()
         run: |
           rm -f android/key.properties
-          rm -rf android/release-signing
+          rm -rf android/app/release-signing
