@@ -45,6 +45,13 @@ subprojects { subproject ->
 
 gradle.projectsEvaluated {
     subprojects { subproject ->
+        subproject.pluginManager.withPlugin("com.android.library") {
+            subproject.android {
+                compileSdk = 36
+            }
+        }
+    }
+    subprojects { subproject ->
         subproject.tasks.matching { task ->
             task.name.toLowerCase().contains("lint")
         }.configureEach { task ->
