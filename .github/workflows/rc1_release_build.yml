@@ -31,20 +31,107 @@ jobs:
             build/sender_app_web
 
   sender-mobile:
-    name: Build Sender Android
+    name: Build Sender Android AAB
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
       - uses: subosito/flutter-action@v2
         with:
           channel: stable
+      - name: Install bundletool
+        run: |
+          set -euo pipefail
+          curl -fsSL \
+            -o /tmp/bundletool.jar \
+            https://github.com/google/bundletool/releases/download/1.17.2/bundletool-all-1.17.2.jar
       - run: flutter pub get
-      - run: |
-          test -n "${{ secrets.SENDER_ANDROID_GOOGLE_MAPS_API_KEY }}" || (echo "Missing SENDER_ANDROID_GOOGLE_MAPS_API_KEY" >&2; exit 1)
-          test -n "${{ secrets.GOOGLE_MAPS_DIRECTIONS_API_KEY }}" || (echo "Missing GOOGLE_MAPS_DIRECTIONS_API_KEY" >&2; exit 1)
-          test -n "${{ secrets.STRIPE_PUBLISHABLE_KEY }}" || (echo "Missing STRIPE_PUBLISHABLE_KEY" >&2; exit 1)
-          GOOGLE_MAPS_API_KEY="${{ secrets.SENDER_ANDROID_GOOGLE_MAPS_API_KEY }}" flutter build apk --release --target=lib/main.dart --dart-define=GOOGLE_MAPS_DIRECTIONS_API_KEY="${{ secrets.GOOGLE_MAPS_DIRECTIONS_API_KEY }}" --dart-define=STRIPE_PUBLISHABLE_KEY="${{ secrets.STRIPE_PUBLISHABLE_KEY }}"
+      - name: Verify release inputs
+        env:
+          SENDER_ANDROID_GOOGLE_MAPS_API_KEY: ${{ secrets.SENDER_ANDROID_GOOGLE_MAPS_API_KEY }}
+          GOOGLE_MAPS_DIRECTIONS_API_KEY: ${{ secrets.GOOGLE_MAPS_DIRECTIONS_API_KEY }}
+          STRIPE_PUBLISHABLE_KEY: ${{ secrets.STRIPE_PUBLISHABLE_KEY }}
+          SENDER_ANDROID_UPLOAD_KEYSTORE_BASE64: ${{ secrets.SENDER_ANDROID_UPLOAD_KEYSTORE_BASE64 }}
+          SENDER_ANDROID_KEYSTORE_PASSWORD: ${{ secrets.SENDER_ANDROID_KEYSTORE_PASSWORD }}
+          SENDER_ANDROID_KEY_PASSWORD: ${{ secrets.SENDER_ANDROID_KEY_PASSWORD }}
+          SENDER_ANDROID_KEY_ALIAS: ${{ secrets.SENDER_ANDROID_KEY_ALIAS }}
+        run: |
+          set -euo pipefail
+          test -n "$SENDER_ANDROID_GOOGLE_MAPS_API_KEY" || (echo "Missing SENDER_ANDROID_GOOGLE_MAPS_API_KEY" >&2; exit 1)
+          test -n "$GOOGLE_MAPS_DIRECTIONS_API_KEY" || (echo "Missing GOOGLE_MAPS_DIRECTIONS_API_KEY" >&2; exit 1)
+          test -n "$STRIPE_PUBLISHABLE_KEY" || (echo "Missing STRIPE_PUBLISHABLE_KEY" >&2; exit 1)
+          test -n "$SENDER_ANDROID_UPLOAD_KEYSTORE_BASE64" || (echo "Missing SENDER_ANDROID_UPLOAD_KEYSTORE_BASE64" >&2; exit 1)
+          test -n "$SENDER_ANDROID_KEYSTORE_PASSWORD" || (echo "Missing SENDER_ANDROID_KEYSTORE_PASSWORD" >&2; exit 1)
+          test -n "$SENDER_ANDROID_KEY_PASSWORD" || (echo "Missing SENDER_ANDROID_KEY_PASSWORD" >&2; exit 1)
+          test -n "$SENDER_ANDROID_KEY_ALIAS" || (echo "Missing SENDER_ANDROID_KEY_ALIAS" >&2; exit 1)
+      - name: Enforce repository version floor
+        run: node scripts/android_release_guard.js sender --expected-package com.circum.app --min-version-code 29
+      - name: Run Sender release gates
+        run: |
+          set -euo pipefail
+          flutter analyze --no-fatal-warnings --no-fatal-infos
+          flutter test
+          git diff --check HEAD
+      - name: Restore release signing
+        env:
+          SENDER_ANDROID_UPLOAD_KEYSTORE_BASE64: ${{ secrets.SENDER_ANDROID_UPLOAD_KEYSTORE_BASE64 }}
+          SENDER_ANDROID_KEYSTORE_PASSWORD: ${{ secrets.SENDER_ANDROID_KEYSTORE_PASSWORD }}
+          SENDER_ANDROID_KEY_PASSWORD: ${{ secrets.SENDER_ANDROID_KEY_PASSWORD }}
+          SENDER_ANDROID_KEY_ALIAS: ${{ secrets.SENDER_ANDROID_KEY_ALIAS }}
+        run: |
+          set -euo pipefail
+          mkdir -p android/release-signing
+          printf '%s' "$SENDER_ANDROID_UPLOAD_KEYSTORE_BASE64" | base64 --decode > android/release-signing/circum-sender-upload.jks
+          chmod 600 android/release-signing/circum-sender-upload.jks
+          {
+            echo "storeFile=release-signing/circum-sender-upload.jks"
+            echo "storePassword=$SENDER_ANDROID_KEYSTORE_PASSWORD"
+            echo "keyPassword=$SENDER_ANDROID_KEY_PASSWORD"
+            echo "keyAlias=$SENDER_ANDROID_KEY_ALIAS"
+          } > android/key.properties
+          chmod 600 android/key.properties
+      - name: Build signed Sender AAB
+        env:
+          GOOGLE_MAPS_API_KEY: ${{ secrets.SENDER_ANDROID_GOOGLE_MAPS_API_KEY }}
+          GOOGLE_MAPS_DIRECTIONS_API_KEY: ${{ secrets.GOOGLE_MAPS_DIRECTIONS_API_KEY }}
+          STRIPE_PUBLISHABLE_KEY: ${{ secrets.STRIPE_PUBLISHABLE_KEY }}
+        run: |
+          set -euo pipefail
+          flutter build appbundle --release --target=lib/main.dart \
+            --dart-define=GOOGLE_MAPS_DIRECTIONS_API_KEY="$GOOGLE_MAPS_DIRECTIONS_API_KEY" \
+            --dart-define=STRIPE_PUBLISHABLE_KEY="$STRIPE_PUBLISHABLE_KEY"
+      - name: Verify Sender AAB
+        env:
+          EXPECTED_UPLOAD_SHA1: 00:37:09:93:0D:C7:F1:4C:96:B7:CB:28:55:7F:09:83:60:AA:4A:91
+        run: |
+          set -euo pipefail
+          AAB="build/app/outputs/bundle/release/app-release.aab"
+          test -f "$AAB"
+          java -jar /tmp/bundletool.jar validate --bundle="$AAB"
+          PACKAGE="$(java -jar /tmp/bundletool.jar dump manifest --bundle="$AAB" --xpath=/manifest/@package)"
+          TARGET_SDK="$(java -jar /tmp/bundletool.jar dump manifest --bundle="$AAB" --xpath=/manifest/uses-sdk/@android:targetSdkVersion)"
+          LAUNCHERS="$(java -jar /tmp/bundletool.jar dump manifest --bundle="$AAB" --xpath='count(/manifest/application/activity[intent-filter/action/@android:name="android.intent.action.MAIN" and intent-filter/category/@android:name="android.intent.category.LAUNCHER"])')"
+          test "$PACKAGE" = "com.circum.app"
+          test "$TARGET_SDK" = "36"
+          test "$LAUNCHERS" = "1"
+          unzip -p "$AAB" 'META-INF/*.RSA' > /tmp/sender-aab-cert.rsa
+          ACTUAL_SHA1="$(keytool -printcert -file /tmp/sender-aab-cert.rsa | awk -F': ' '/SHA1:/{print $2}')"
+          test "$ACTUAL_SHA1" = "$EXPECTED_UPLOAD_SHA1"
+          jarsigner -verify -strict "$AAB" >/dev/null
+          shasum -a 256 "$AAB" | tee build/app/outputs/bundle/release/app-release.aab.sha256
       - uses: actions/upload-artifact@v4
         with:
-          name: sender-android-release
-          path: build/app/outputs/flutter-apk/app-release.apk
+          name: sender-android-release-aab
+          path: |
+            build/app/outputs/bundle/release/app-release.aab
+            build/app/outputs/bundle/release/app-release.aab.sha256
+      - name: Cleanup signing material
+        if: always()
+        run: |
+          rm -f android/key.properties
+          rm -rf android/release-signing

@@ -1,0 +1,13 @@
+{
+  "app": "sender",
+  "package": "com.circum.app",
+  "repositoryVersionFloor": {
+    "versionName": "1.0.6",
+    "versionCode": 28,
+    "sourceSha": "9826099b1e8e1be16d8609c8f64d950afcfa8a51",
+    "artifactSha256": "e8fac5790150e0721a1f680d7f369ebc4a2be00142f28f7eb446302efa6c2d85",
+    "uploadCertificateSha1": "00:37:09:93:0D:C7:F1:4C:96:B7:CB:28:55:7F:09:83:60:AA:4A:91",
+    "releaseDate": "2026-08-26",
+    "status": "repository_floor_not_play_console_confirmed"
+  }
+}
