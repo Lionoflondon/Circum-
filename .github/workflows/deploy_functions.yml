@@ -20,7 +20,7 @@ jobs:
           fetch-depth: 0
       - uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 22
       - run: node scripts/deploy_guard.self_test.js
       - run: node scripts/deploy_guard.js --target=backend --base HEAD
       - run: npm --prefix server/functions ci
