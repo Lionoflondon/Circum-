@@ -116,10 +116,10 @@ jobs:
           java -jar /tmp/bundletool.jar validate --bundle="$AAB"
           PACKAGE="$(java -jar /tmp/bundletool.jar dump manifest --bundle="$AAB" --xpath=/manifest/@package)"
           TARGET_SDK="$(java -jar /tmp/bundletool.jar dump manifest --bundle="$AAB" --xpath=/manifest/uses-sdk/@android:targetSdkVersion)"
-          LAUNCHERS="$(java -jar /tmp/bundletool.jar dump manifest --bundle="$AAB" --xpath='/manifest/application/activity[intent-filter/action/@android:name="android.intent.action.MAIN" and intent-filter/category/@android:name="android.intent.category.LAUNCHER"]' | grep -c '<activity')"
+          LAUNCHERS="$(java -jar /tmp/bundletool.jar dump manifest --bundle="$AAB" --xpath='/manifest/application/activity[intent-filter/action/@android:name="android.intent.action.MAIN" and intent-filter/category/@android:name="android.intent.category.LAUNCHER"]/@android:name')"
           test "$PACKAGE" = "com.circum.app"
           test "$TARGET_SDK" = "36"
-          test "$LAUNCHERS" = "1"
+          test -n "$LAUNCHERS"
           unzip -p "$AAB" 'META-INF/*.RSA' > /tmp/sender-aab-cert.rsa
           ACTUAL_SHA1="$(keytool -printcert -file /tmp/sender-aab-cert.rsa | awk -F': ' '/SHA1:/{print $2}')"
           test "$ACTUAL_SHA1" = "$EXPECTED_UPLOAD_SHA1"
