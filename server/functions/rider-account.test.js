@@ -26,6 +26,20 @@ test("Rider self-service authority callables are exported", () => {
   assert.match(indexSource, /exports\.submitRiderDocument\s*=\s*riderAccount\.submitRiderDocument/);
 });
 
+test("Rider application submission keeps confirmation and lifecycle authority server-side", () => {
+  const start = source.indexOf("exports.submitRiderApplication");
+  const end = source.indexOf("exports.updateRiderApplicationSection", start);
+  const body = source.slice(start, end);
+  assert.match(body, /data\.rightToWorkConfirmed !== true/);
+  assert.match(body, /data\.sealedPackageConsent !== true/);
+  assert.match(body, /rightToWorkConfirmed: data\.rightToWorkConfirmed === true/);
+  assert.match(body, /sealedPackageConsent: data\.sealedPackageConsent === true/);
+  assert.match(body, /status: "submitted"/);
+  assert.match(body, /approvalStatus: "pending"/);
+  assert.match(body, /verificationStatus: "pending"/);
+  assert.doesNotMatch(body, /dispatchEligible:\s*true/);
+});
+
 test("Rider self-service authority validates auth ownership documents and audit", () => {
   assert.match(source, /function requireRider\(context\)/);
   assert.match(source, /context\.auth\.uid/);
