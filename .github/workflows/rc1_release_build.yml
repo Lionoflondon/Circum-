@@ -232,6 +232,40 @@ jobs:
         run: |
           mkdir -p "artifacts/android-${{ matrix.api }}"
           printf 'api=%s\nsource=50d1ef8c2141d6fc28e32f501fb7c81294ddfe0d\n' "${{ matrix.api }}" > "artifacts/android-${{ matrix.api }}/run-meta.txt"
+          cat > "artifacts/android-${{ matrix.api }}/smoke.sh" <<'EOF'
+          #!/usr/bin/env bash
+          set -u
+          evidence="artifacts/android-${{ matrix.api }}"
+          timeout_seconds=30
+          status=0
+          adb_timed() { timeout --foreground "${timeout_seconds}s" adb "$@"; }
+          capture() { output="$1"; shift; "$@" > "$output" 2>&1; result=$?; return "$result"; }
+          capture "$evidence/adb-state.txt" adb_timed get-state || status=1
+          capture "$evidence/boot-state.txt" adb_timed shell getprop sys.boot_completed || status=1
+          boot_state="$(adb_timed shell getprop sys.boot_completed 2>/dev/null | tr -d '\r' || true)"
+          test "$boot_state" = "1" || status=1
+          capture "$evidence/install.txt" adb_timed install -r build/app/outputs/flutter-apk/app-release.apk || status=1
+          capture "$evidence/package-path.txt" adb_timed shell pm path com.circum.app
+          capture "$evidence/clear.txt" adb_timed shell pm clear com.circum.app || status=1
+          capture "$evidence/logcat-before.txt" adb_timed logcat -c
+          capture "$evidence/launch.txt" adb_timed shell monkey -p com.circum.app 1 || status=1
+          sleep 8
+          capture "$evidence/cold-launch.png" adb_timed exec-out screencap -p
+          capture "$evidence/cold-launch-ui-dump.txt" adb_timed shell uiautomator dump /sdcard/window.xml
+          capture "$evidence/cold-launch-ui.xml" adb_timed pull /sdcard/window.xml "$evidence/cold-launch-ui.xml"
+          capture "$evidence/logcat.txt" adb_timed logcat -d -v threadtime
+          if rg -n "FATAL EXCEPTION|AndroidRuntime|Fatal signal|ANR in|Process: com\.circum\.app" "$evidence/logcat.txt"; then status=1; fi
+          capture "$evidence/pid.txt" adb_timed shell pidof com.circum.app
+          capture "$evidence/force-stop.txt" adb_timed shell am force-stop com.circum.app
+          capture "$evidence/relaunch.txt" adb_timed shell monkey -p com.circum.app 1 || status=1
+          sleep 3
+          capture "$evidence/relaunch.png" adb_timed exec-out screencap -p
+          capture "$evidence/final-ui-dump.txt" adb_timed shell uiautomator dump /sdcard/final.xml
+          capture "$evidence/final-ui.xml" adb_timed pull /sdcard/final.xml "$evidence/final-ui.xml"
+          capture "$evidence/final-logcat.txt" adb_timed logcat -d -v threadtime
+          exit "$status"
+          EOF
+          chmod +x "artifacts/android-${{ matrix.api }}/smoke.sh"
       - name: Android ${{ matrix.api }} launch smoke test
         uses: reactivecircus/android-emulator-runner@v2
         with:
@@ -243,36 +277,7 @@ jobs:
           emulator-options: -no-window -no-audio -no-boot-anim -gpu swiftshader_indirect
           disable-animations: true
           script: |
-            set -u
-            evidence="artifacts/android-${{ matrix.api }}"
-            timeout_seconds=30
-            status=0
-            adb_timed() { timeout --foreground "${timeout_seconds}s" adb "$@"; }
-            capture() { output="$1"; shift; "$@" > "$output" 2>&1; result=$?; return "$result"; }
-            capture "$evidence/adb-state.txt" adb_timed get-state || status=1
-            capture "$evidence/boot-state.txt" adb_timed shell getprop sys.boot_completed || status=1
-            boot_state="$(adb_timed shell getprop sys.boot_completed 2>/dev/null | tr -d '\r' || true)"
-            test "$boot_state" = "1" || status=1
-            capture "$evidence/install.txt" adb_timed install -r build/app/outputs/flutter-apk/app-release.apk || status=1
-            capture "$evidence/package-path.txt" adb_timed shell pm path com.circum.app
-            capture "$evidence/clear.txt" adb_timed shell pm clear com.circum.app || status=1
-            capture "$evidence/logcat-before.txt" adb_timed logcat -c
-            capture "$evidence/launch.txt" adb_timed shell monkey -p com.circum.app 1 || status=1
-            sleep 8
-            capture "$evidence/cold-launch.png" adb_timed exec-out screencap -p
-            capture "$evidence/cold-launch-ui-dump.txt" adb_timed shell uiautomator dump /sdcard/window.xml
-            capture "$evidence/cold-launch-ui.xml" adb_timed pull /sdcard/window.xml "$evidence/cold-launch-ui.xml"
-            capture "$evidence/logcat.txt" adb_timed logcat -d -v threadtime
-            if rg -n "FATAL EXCEPTION|AndroidRuntime|Fatal signal|ANR in|Process: com\.circum\.app" "$evidence/logcat.txt"; then status=1; fi
-            capture "$evidence/pid.txt" adb_timed shell pidof com.circum.app
-            capture "$evidence/force-stop.txt" adb_timed shell am force-stop com.circum.app
-            capture "$evidence/relaunch.txt" adb_timed shell monkey -p com.circum.app 1 || status=1
-            sleep 3
-            capture "$evidence/relaunch.png" adb_timed exec-out screencap -p
-            capture "$evidence/final-ui-dump.txt" adb_timed shell uiautomator dump /sdcard/final.xml
-            capture "$evidence/final-ui.xml" adb_timed pull /sdcard/final.xml "$evidence/final-ui.xml"
-            capture "$evidence/final-logcat.txt" adb_timed logcat -d -v threadtime
-            exit "$status"
+            bash "artifacts/android-${{ matrix.api }}/smoke.sh"
       - uses: actions/upload-artifact@v4
         if: always()
         with:
