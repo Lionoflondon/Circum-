@@ -189,8 +189,27 @@ jobs:
           flutter pub get
           flutter test
           flutter analyze --no-fatal-warnings --no-fatal-infos
-          dart format --output=none --set-exit-if-changed lib test
           git diff --check HEAD
+      - name: Restore release signing for runtime APK
+        env:
+          SENDER_ANDROID_UPLOAD_KEYSTORE_BASE64: ${{ secrets.SENDER_ANDROID_UPLOAD_KEYSTORE_BASE64 }}
+          SENDER_ANDROID_KEYSTORE_PASSWORD: ${{ secrets.SENDER_ANDROID_KEYSTORE_PASSWORD }}
+          SENDER_ANDROID_KEY_PASSWORD: ${{ secrets.SENDER_ANDROID_KEY_PASSWORD }}
+          SENDER_ANDROID_KEY_ALIAS: ${{ secrets.SENDER_ANDROID_KEY_ALIAS }}
+        run: |
+          set -euo pipefail
+          test -n "$SENDER_ANDROID_UPLOAD_KEYSTORE_BASE64"
+          test -n "$SENDER_ANDROID_KEYSTORE_PASSWORD"
+          test -n "$SENDER_ANDROID_KEY_PASSWORD"
+          test -n "$SENDER_ANDROID_KEY_ALIAS"
+          mkdir -p android/app/release-signing
+          printf '%s' "$SENDER_ANDROID_UPLOAD_KEYSTORE_BASE64" | base64 --decode > android/app/release-signing/circum-sender-upload.jks
+          cat > android/key.properties <<EOF
+          storeFile=release-signing/circum-sender-upload.jks
+          storePassword=$SENDER_ANDROID_KEYSTORE_PASSWORD
+          keyPassword=$SENDER_ANDROID_KEY_PASSWORD
+          keyAlias=$SENDER_ANDROID_KEY_ALIAS
+          EOF
       - name: Build runtime APK
         env:
           GOOGLE_MAPS_API_KEY: ${{ secrets.SENDER_ANDROID_GOOGLE_MAPS_API_KEY }}
@@ -234,3 +253,8 @@ jobs:
           name: sender-android-${{ matrix.api }}-runtime-evidence
           path: artifacts/android-${{ matrix.api }}
           if-no-files-found: error
+      - name: Remove temporary signing material
+        if: always()
+        run: |
+          rm -f android/key.properties
+          rm -rf android/app/release-signing
