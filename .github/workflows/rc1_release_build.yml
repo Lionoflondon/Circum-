@@ -238,14 +238,18 @@ jobs:
           evidence="artifacts/android-${{ matrix.api }}"
           timeout_seconds=30
           status=0
+          apk="build/app/outputs/flutter-apk/app-release.apk"
           adb_timed() { timeout --foreground "${timeout_seconds}s" adb "$@"; }
           capture() { output="$1"; shift; "$@" > "$output" 2>&1; result=$?; return "$result"; }
+          capture "$evidence/host-state.txt" sh -c "pwd; ls -l '$apk'"
+          test -f "$apk" || status=1
           capture "$evidence/adb-state.txt" adb_timed get-state || status=1
           capture "$evidence/boot-state.txt" adb_timed shell getprop sys.boot_completed || status=1
           boot_state="$(adb_timed shell getprop sys.boot_completed 2>/dev/null | tr -d '\r' || true)"
           test "$boot_state" = "1" || status=1
-          capture "$evidence/install.txt" adb_timed install -r build/app/outputs/flutter-apk/app-release.apk || status=1
+          capture "$evidence/install.txt" adb_timed install -r "$apk" || status=1
           capture "$evidence/package-path.txt" adb_timed shell pm path com.circum.app
+          grep -q 'package:' "$evidence/package-path.txt" || status=1
           capture "$evidence/clear.txt" adb_timed shell pm clear com.circum.app || status=1
           capture "$evidence/logcat-before.txt" adb_timed logcat -c
           capture "$evidence/launch.txt" adb_timed shell monkey -p com.circum.app 1 || status=1
