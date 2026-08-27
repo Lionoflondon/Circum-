@@ -2,9 +2,16 @@ name: RC1 Release Build
 
 on:
   workflow_dispatch:
+    inputs:
+      runtime_only:
+        description: Run only the Android API 35/36 runtime certification matrix
+        required: false
+        default: false
+        type: boolean
 
 jobs:
   web:
+    if: ${{ !inputs.runtime_only }}
     name: Build Public Website and Sender Web
     runs-on: ubuntu-latest
     steps:
@@ -40,6 +47,7 @@ jobs:
             build/sender_app_web
 
   sender-mobile:
+    if: ${{ !inputs.runtime_only }}
     name: Build Sender Android AAB
     runs-on: ubuntu-latest
     steps:
