@@ -37,6 +37,25 @@ void main() {
     expect(main, contains('runSenderStartup('));
     expect(startup, contains('renderRecovery();'));
     expect(startup, contains('catch (_)'));
+    expect(startup, contains("timeout(const Duration(seconds: 20))"));
+  });
+
+  test('Sender unresolved startup does not reuse the branded splash', () {
+    final app = File('lib/app.dart').readAsStringSync();
+
+    expect(app, contains('case AppState.unknownSessionState:'));
+    expect(app, contains('return const _SenderBootSurface();'));
+    expect(app, isNot(contains('return const IndexPage();')));
+    expect(app, isNot(contains('assets/images/splash.png')));
+    expect(app, isNot(contains("authentication/view/index_page.dart")));
+    expect(app, contains('class _SenderBootSurface'));
+  });
+
+  test('Sender App Check activation is bounded on every platform', () {
+    final source =
+        File('lib/app/security/circum_app_check.dart').readAsStringSync();
+    expect(source, contains('activation.timeout(const Duration(seconds: 5))'));
+    expect(source, contains('on TimeoutException'));
   });
 
   test('Sender session restore never signs out existing users by account age',

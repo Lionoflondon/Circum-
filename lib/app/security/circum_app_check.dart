@@ -78,18 +78,13 @@ Future<CircumAppCheckStartup> initializeCircumAppCheck({
       appleProvider: circumAppleAppCheckProvider(debug: debug),
       webProvider: webProvider,
     );
-    if (isWeb) {
-      await activation.timeout(const Duration(seconds: 3));
-    } else {
-      await activation;
-    }
+    await activation.timeout(const Duration(seconds: 5));
     return const CircumAppCheckStartup.enabled();
   } on TimeoutException {
     return const CircumAppCheckStartup._(
       enabled: false,
       blockStartup: false,
-      message:
-          'Circum security verification is taking longer than expected.',
+      message: 'Circum security verification is taking longer than expected.',
     );
   } catch (_) {
     return const CircumAppCheckStartup._(
