@@ -7,7 +7,7 @@ Future<void> runSenderStartup({
   required SenderStartupRender renderRecovery,
 }) async {
   try {
-    await initialize();
+    await initialize().timeout(const Duration(seconds: 20));
     renderApp();
   } catch (_) {
     renderRecovery();
