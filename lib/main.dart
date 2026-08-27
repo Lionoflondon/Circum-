@@ -30,13 +30,15 @@ final NotificationService _notificationService = NotificationService();
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await runSenderStartup(
+    renderBoot: () => runApp(const CircumStartupBlocked(
+      message: 'Starting Circum...',
+    )),
     initialize: () async {
       await _configureStripe();
       await Firebase.initializeApp();
       final appCheckStartup = await initializeCircumAppCheck();
       if (appCheckStartup.blockStartup) {
-        runApp(CircumStartupBlocked(message: appCheckStartup.message));
-        return;
+        developer.log('App Check unavailable; continuing after boot render.');
       }
       if (!kIsWeb) {
         await _configureNotifications();
