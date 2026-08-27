@@ -187,6 +187,13 @@ jobs:
         run: |
           set -euo pipefail
           flutter pub get
+          find "$HOME/.pub-cache" -path '*/android/build.gradle' ! -path '*/example/*' -print0 |
+            xargs -0 sed -i -e 's/compileSdkVersion 33/compileSdkVersion 36/g' -e 's/compileSdk 33/compileSdk 36/g'
+          if find "$HOME/.pub-cache" -path '*/android/build.gradle' ! -path '*/example/*' -print0 |
+            xargs -0 grep -nE 'compileSdk(Version)? 33'; then
+            echo "Flutter plugin compile SDK normalization left Android 33 behind" >&2
+            exit 1
+          fi
           flutter test
           flutter analyze --no-fatal-warnings --no-fatal-infos
           git diff --check HEAD
