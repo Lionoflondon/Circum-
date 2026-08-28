@@ -355,6 +355,39 @@ service cloud.firestore {
         !isSafeSenderRoleValue(request.resource.data.userType);
     }
 
+    function senderPrivilegedFields() {
+      return [
+        'role',
+        'roles',
+        'adminRole',
+        'isAdmin',
+        'admin',
+        'verificationStatus',
+        'approvalStatus',
+        'dispatchEligible',
+        'accountStatus',
+        'permissions',
+        'claims',
+        'customClaims',
+        'financialAuthority',
+        'paymentAuthority',
+        'reviewStatus',
+        'adminReviewStatus'
+      ];
+    }
+
+    function isSafeSenderSelfCreate(senderId) {
+      return ownsSenderRecord(senderId) &&
+        !request.resource.data.keys().hasAny(senderPrivilegedFields()) &&
+        !hasUnsafeSelfUserTypeCreate();
+    }
+
+    function isSafeSenderSelfUpdate(senderId) {
+      return ownsSenderRecord(senderId) &&
+        !request.resource.data.diff(resource.data).affectedKeys().hasAny(senderPrivilegedFields()) &&
+        !hasUnsafeSelfUserTypeUpdate();
+    }
+
     function riderSelfWritableFields() {
       return [
         'name',
@@ -643,12 +676,6 @@ service cloud.firestore {
       return signedIn() &&
         resource.data.participants is list &&
         request.auth.uid in resource.data.participants;
-    }
-
-    function isCreatingAsParticipant() {
-      return signedIn() &&
-        request.resource.data.participants is list &&
-        request.auth.uid in request.resource.data.participants;
     }
 
     match /adminUsers/{userId} {
@@ -962,8 +989,8 @@ service cloud.firestore {
     }
 
     match /chats/{chatId} {
-      allow read, update: if isAdmin() || isParticipant();
-      allow create: if isAdmin() || isCreatingAsParticipant();
+      allow read: if isAdmin() || isParticipant();
+      allow create, update: if isAdmin();
       allow delete: if hasRole('super_admin');
 
       match /messages/{messageId} {
@@ -1022,7 +1049,8 @@ service cloud.firestore {
 
     match /senders/{senderId} {
       allow read: if isAdmin() || ownsSenderRecord(senderId);
-      allow create, update: if isAdmin() || ownsSenderRecord(senderId);
+      allow create: if isAdmin() || isSafeSenderSelfCreate(senderId);
+      allow update: if isAdmin() || isSafeSenderSelfUpdate(senderId);
       allow delete: if hasRole('super_admin');
     }
 
