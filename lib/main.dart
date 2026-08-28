@@ -30,15 +30,16 @@ final NotificationService _notificationService = NotificationService();
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await runSenderStartup(
-    renderBoot: () => runApp(const CircumStartupBlocked(
-      message: 'Starting Circum...',
-    )),
+    renderBoot: () =>
+        runApp(const CircumStartupBlocked(message: 'Starting Circum...')),
     initialize: () async {
       await _configureStripe();
       await Firebase.initializeApp();
       final appCheckStartup = await initializeCircumAppCheck();
       if (appCheckStartup.blockStartup) {
-        developer.log('App Check unavailable; continuing after boot render.');
+        developer.log(
+          'Service protection unavailable; continuing after boot render.',
+        );
       }
       if (!kIsWeb) {
         await _configureNotifications();
@@ -50,9 +51,11 @@ Future<void> main() async {
       }
     },
     renderApp: () => runApp(const App()),
-    renderRecovery: () => runApp(const CircumStartupBlocked(
-      message: 'Circum could not start. Please try again.',
-    )),
+    renderRecovery: () => runApp(
+      const CircumStartupBlocked(
+        message: 'Circum could not start. Please try again.',
+      ),
+    ),
   );
 }
 
@@ -96,8 +99,9 @@ class CircumStartupBlocked extends StatelessWidget {
 }
 
 Future<void> _configureNotifications() async {
-  const androidSettings =
-      AndroidInitializationSettings('@mipmap/launcher_icon');
+  const androidSettings = AndroidInitializationSettings(
+    '@mipmap/launcher_icon',
+  );
   const iOSSettings = DarwinInitializationSettings();
   const settings = InitializationSettings(
     android: androidSettings,

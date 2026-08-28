@@ -2571,7 +2571,7 @@ class _CancelDeliverySheet extends StatelessWidget {
               ),
               const SizedBox(height: 8),
               const Text(
-                'This will stop the live delivery if Circum policy still allows it. Your rider, activity and tracking will update immediately after backend confirmation.',
+                'This will stop the live delivery if Circum policy still allows it. Your rider, activity and tracking will update immediately after Circum confirms the change.',
                 style: TextStyle(
                   color: _TrackingTokens.muted,
                   height: 1.4,
