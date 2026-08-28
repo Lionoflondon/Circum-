@@ -29,7 +29,8 @@ test("rider document storage paths are not client-writable", () => {
 });
 
 test("rider document uploads use backend callable and canonical matrix", () => {
-  assert.match(riderAccount, /exports\.submitRiderDocument = functions\.https\.onCall/);
+  assert.match(riderAccount, /exports\.submitRiderDocument = riderCallable/);
+  assert.match(riderAccount, /require\("\.\/rider-app-check"\)/);
   assert.match(riderAccount, /canonicalDocumentId/);
   assert.match(riderAccount, /DOCUMENT_MATRIX/);
   assert.match(riderAccount, /source: "cloud-functions"/);

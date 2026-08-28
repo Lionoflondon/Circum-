@@ -3,6 +3,7 @@ const functions = require("firebase-functions/v1");
 const {getFirestore, FieldValue} = require("firebase-admin/firestore");
 const {getStorage} = require("firebase-admin/storage");
 const {canonicalDocumentId, DOCUMENT_MATRIX} = require("./rider-certification-policy");
+const {riderCallable} = require("./rider-app-check");
 
 const ALLOWED_DOCUMENT_TYPES = new Set(Object.values(DOCUMENT_MATRIX).flat());
 const ALLOWED_CONTENT_TYPES = new Set([
@@ -280,7 +281,7 @@ function nextOnboardingStatus(current, requested) {
   return normalizedRequested;
 }
 
-exports.advanceRiderOnboarding = functions.https.onCall(async (data, context) => {
+exports.advanceRiderOnboarding = riderCallable(async (data, context) => {
   const rider = requireRider(context);
   const requestedStage = lower(data && data.stage, 80);
   const db = getFirestore();
@@ -372,7 +373,7 @@ function applicationPatchFromProfile(data, rider, profile) {
   };
 }
 
-exports.updateRiderProfile = functions.https.onCall(async (data, context) => {
+exports.updateRiderProfile = riderCallable(async (data, context) => {
   const rider = requireRider(context);
   const db = getFirestore();
   const profileRef = db.collection("riderProfiles").doc(rider.uid);
@@ -425,7 +426,7 @@ exports.updateRiderProfile = functions.https.onCall(async (data, context) => {
   return {ok: true, riderId: rider.uid};
 });
 
-exports.requestRiderEmailChange = functions.https.onCall(async (data, context) => {
+exports.requestRiderEmailChange = riderCallable(async (data, context) => {
   const rider = requireRider(context);
   const pendingEmail = lower(data.pendingEmail || data.email, 180);
   if (!pendingEmail || !pendingEmail.includes("@")) {
@@ -448,7 +449,7 @@ exports.requestRiderEmailChange = functions.https.onCall(async (data, context) =
   return {ok: true, riderId: rider.uid};
 });
 
-exports.updateRiderPushToken = functions.https.onCall(async (data, context) => {
+exports.updateRiderPushToken = riderCallable(async (data, context) => {
   const rider = requireRider(context);
   const fcmToken = text(data.fcmToken, 4096);
   if (!fcmToken) {
@@ -467,7 +468,7 @@ exports.updateRiderPushToken = functions.https.onCall(async (data, context) => {
   return {ok: true};
 });
 
-exports.updateRiderNotificationState = functions.https.onCall(async (data, context) => {
+exports.updateRiderNotificationState = riderCallable(async (data, context) => {
   const rider = requireRider(context);
   const action = lower(data.action, 40);
   const ids = normalizeNotificationIds(data.notificationIds || data.notificationId);
@@ -508,7 +509,7 @@ exports.updateRiderNotificationState = functions.https.onCall(async (data, conte
   return {ok: true, notificationIds: ids, action};
 });
 
-exports.recordRiderJobDecision = functions.https.onCall(async (data, context) => {
+exports.recordRiderJobDecision = riderCallable(async (data, context) => {
   const rider = requireRider(context);
   const requestId = text(data.requestId || data.deliveryId, 180);
   const action = lower(data.action, 40);
@@ -543,7 +544,7 @@ exports.recordRiderJobDecision = functions.https.onCall(async (data, context) =>
   return {ok: true, requestId, action};
 });
 
-exports.ensureRiderRothWallet = functions.https.onCall(async (data, context) => {
+exports.ensureRiderRothWallet = riderCallable(async (data, context) => {
   const rider = requireRider(context);
   const requestedRiderId = text(data.riderId, 180);
   if (requestedRiderId && requestedRiderId !== rider.uid) {
@@ -597,7 +598,7 @@ exports.ensureRiderRothWallet = functions.https.onCall(async (data, context) => 
   return {ok: true, ...result};
 });
 
-exports.createWeightAdjustedNotification = functions.https.onCall(async (data, context) => {
+exports.createWeightAdjustedNotification = riderCallable(async (data, context) => {
   const rider = requireRider(context);
   const requestId = text(data.requestId, 180);
   if (!requestId) {
@@ -645,7 +646,7 @@ exports.createWeightAdjustedNotification = functions.https.onCall(async (data, c
   return {ok: true, notificationId: notificationRef.id};
 });
 
-exports.submitRiderApplication = functions.https.onCall(async (data, context) => {
+exports.submitRiderApplication = riderCallable(async (data, context) => {
   const rider = requireRider(context);
   const db = getFirestore();
   const idempotencyKey = text(data.idempotencyKey, 180) || `rider_application_${rider.uid}`;
@@ -732,7 +733,7 @@ exports.submitRiderApplication = functions.https.onCall(async (data, context) =>
   return result;
 });
 
-exports.updateRiderApplicationSection = functions.https.onCall(async (data, context) => {
+exports.updateRiderApplicationSection = riderCallable(async (data, context) => {
   const rider = requireRider(context);
   const section = cleanApplicationSection(data.section);
   const status = cleanSectionStatus(data.status || "in_progress");
@@ -765,7 +766,7 @@ exports.updateRiderApplicationSection = functions.https.onCall(async (data, cont
   return {ok: true, applicationId: rider.uid, section, status};
 });
 
-exports.submitRiderDocument = functions.https.onCall(async (data, context) => {
+exports.submitRiderDocument = riderCallable(async (data, context) => {
   const rider = requireRider(context);
   const documentType = cleanDocumentType(data.documentType || data.type);
   const files = normalizeRiderDocumentFiles(data, documentType);

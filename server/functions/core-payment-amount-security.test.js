@@ -53,6 +53,13 @@ test("legacy standard delivery payment HTTP endpoints are retired", () => {
   assert.doesNotMatch(indexSource, /exports\.confirmPaymentIntent/);
   assert.doesNotMatch(indexSource, /createPaymentIntentHandler/);
   assert.doesNotMatch(indexSource, /legacyCorePaymentSessions/);
+  assert.match(indexSource, /exports\.RetrieveCardDetails = functions\.https\.onRequest/);
+  assert.match(indexSource, /retired_card_details_endpoint/);
+  assert.doesNotMatch(indexSource, /stripe\.paymentMethods\.list\(\{/);
+  assert.match(indexSource, /exports\.calculateEarnings = functions\.https\.onRequest/);
+  assert.match(indexSource, /retired_rider_earnings_endpoint/);
+  assert.doesNotMatch(indexSource, /collection\("payments"\)\s*\.doc\(riderId\)/);
+  assert.match(indexSource, /Use getRiderEarningsSummary for authenticated Rider earnings access\./);
   assert.doesNotMatch(accountBlocSource, /createPaymentIntent/);
   assert.doesNotMatch(accountBlocSource, /confirmPaymentIntent/);
 });

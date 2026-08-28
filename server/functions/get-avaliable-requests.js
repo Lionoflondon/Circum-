@@ -257,7 +257,10 @@ const getNearbyRequests = riderCallable(async (data, context) => {
   } catch (error) {
     if (error instanceof functions.https.HttpsError) throw error;
     console.error("Error in getNearbyRequests:", error);
-    throw new functions.https.HttpsError("internal", error.message);
+    throw new functions.https.HttpsError(
+        "internal",
+        "Delivery offers are unavailable right now.",
+    );
   }
 });
 

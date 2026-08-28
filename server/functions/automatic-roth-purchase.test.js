@@ -52,10 +52,10 @@ test("Roth purchase confirmation notifications are emitted without client balanc
   assert.doesNotMatch(rothLedgerSource, /exports\.recordWalletTopUpFromStripeSession\s*=\s*functions\.https\.onCall/);
 });
 
-test("legacy admin Roth credit callable requires idempotency", () => {
-  assert.match(rothLedgerSource, /const idempotencyKey = `\$\{data\.idempotencyKey \|\| data\.adminIssueId \|\| ""\}`\.trim\(\);/);
-  assert.match(rothLedgerSource, /User, amount, reason and idempotency key are required/);
-  assert.match(rothLedgerSource, /const transactionId = `admin_roth_credit_\$\{idempotencyKey\}`;/);
-  assert.match(rothLedgerSource, /transactionId,/);
-  assert.match(rothLedgerSource, /correlationId: transactionId/);
+test("legacy admin Roth credit implementations are absent from current source", () => {
+  assert.doesNotMatch(rothLedgerSource, /exports\.issueRothCredit\s*=/);
+  assert.doesNotMatch(rothLedgerSource, /exports\.issueRothToWallets\s*=/);
+  assert.doesNotMatch(rothLedgerSource, /admin_roth_credit_\$\{idempotencyKey\}/);
+  assert.match(rothLedgerSource, /recordRothMovement/);
+  assert.match(rothLedgerSource, /recordWalletTopUpFromStripeSession/);
 });

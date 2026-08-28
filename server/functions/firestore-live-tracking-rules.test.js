@@ -260,9 +260,6 @@ test("Rider profile self-writes are explicitly allowlisted", async () => {
     name: "Rider One",
     email: "rider@example.com",
     phone: "+447700900000",
-    status: "offline",
-    profileCompletionStatus: "complete",
-    onboardingStatus: "profile_complete",
     updatedAt: serverTimestamp(),
   }));
   await assertSucceeds(setDoc(doc(riderDb, "riders", "rider-1"), {
@@ -295,6 +292,13 @@ test("Rider profile self-writes cannot alter admin payment or trust authority", 
     "rating",
     "availableBalance",
     "stripeConnectAccountId",
+    "status",
+    "availabilityStatus",
+    "profileCompletionStatus",
+    "onboardingStatus",
+    "applicationSubmittedAt",
+    "submittedAt",
+    "activeDelivery",
     "admin",
   ]) {
     await assertFails(setDoc(doc(riderDb, "riders", "rider-1"), {
