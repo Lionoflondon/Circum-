@@ -77,7 +77,7 @@ class SenderProfileAuthority {
     logSenderProfileStage(
       uid: auth.currentUser?.uid,
       phase: phase,
-      path: 'FirebaseAuth.currentUser',
+      path: 'Current user session',
       event: 'auth_restore_begin',
     );
     final current = auth.currentUser;
@@ -85,7 +85,7 @@ class SenderProfileAuthority {
       logSenderProfileStage(
         uid: current.uid,
         phase: phase,
-        path: 'FirebaseAuth.currentUser',
+        path: 'Current user session',
         event: 'auth_restore_current_user',
       );
       return current;
@@ -100,7 +100,7 @@ class SenderProfileAuthority {
       logSenderProfileStage(
         uid: restored.uid,
         phase: phase,
-        path: 'FirebaseAuth.authStateChanges',
+        path: 'User session changes',
         event: 'auth_restore_stream_user',
       );
       return restored;
@@ -115,7 +115,7 @@ class SenderProfileAuthority {
         code: SenderProfileDiagnosticCode.repositoryFailure,
         uid: null,
         phase: phase,
-        path: 'FirebaseAuth.authStateChanges',
+        path: 'User session changes',
         error: error,
         stack: stack,
       );

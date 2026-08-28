@@ -238,7 +238,7 @@ class FirebaseSenderWalletRepository implements SenderWalletRepository {
           .call()
           .timeout(_firebaseReadTimeout);
     } catch (error) {
-      debugPrint('Sender Wallet initialise callable unavailable: $error');
+      debugPrint('Sender Wallet service initialization unavailable: $error');
     }
     final walletSnapshot = await firestore
         .collection('senderWallets')

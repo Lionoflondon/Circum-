@@ -22,19 +22,16 @@ import 'sender_startup_diagnostics.dart';
 
 Future<void> main() async {
   SenderStartupDiagnostics.installGlobalHandlers();
-  await runZonedGuarded<Future<void>>(
-    _startSenderWeb,
-    (error, stackTrace) {
-      SenderStartupDiagnostics.instance.fail(
-        'runZonedGuarded',
-        error,
-        stackTrace,
-      );
-      if (!_senderAppStarted) {
-        _runSenderApp(const _SenderWebStartupRecovery());
-      }
-    },
-  );
+  await runZonedGuarded<Future<void>>(_startSenderWeb, (error, stackTrace) {
+    SenderStartupDiagnostics.instance.fail(
+      'runZonedGuarded',
+      error,
+      stackTrace,
+    );
+    if (!_senderAppStarted) {
+      _runSenderApp(const _SenderWebStartupRecovery());
+    }
+  });
 }
 
 var _senderAppStarted = false;
@@ -67,7 +64,7 @@ Future<void> _startSenderWeb() async {
 
   if (kIsWeb) {
     final firebaseReady = await _runRequiredStartupStep(
-      'Firebase.initializeApp()',
+      'Core services initialization',
       () => Firebase.initializeApp(options: DefaultFirebaseOptions.web),
       timeout: _requiredStartupTimeout,
     );
@@ -78,7 +75,7 @@ Future<void> _startSenderWeb() async {
     _appCheckState = 'Starting';
     _refreshRuntimeHealth();
     final appCheckStartup = await _runRequiredStartupValue(
-      'App Check initialization',
+      'Service protection initialization',
       initializeCircumAppCheck,
       timeout: _requiredStartupTimeout,
     );
@@ -90,7 +87,7 @@ Future<void> _startSenderWeb() async {
     if (appCheckStartup.blockStartup) {
       _appCheckState = 'Blocking failure';
       diagnostics.fail(
-        'App Check initialization',
+        'Service protection initialization',
         appCheckStartup.message,
         StackTrace.current,
       );
@@ -101,7 +98,7 @@ Future<void> _startSenderWeb() async {
     _refreshRuntimeHealth();
 
     final authReady = await _runRequiredStartupStep(
-      'Firebase Auth initialization',
+      'Authentication initialization',
       () async => FirebaseAuth.instance,
       timeout: _requiredStartupTimeout,
     );
@@ -110,7 +107,7 @@ Future<void> _startSenderWeb() async {
     _refreshRuntimeHealth();
 
     final firestoreReady = await _runRequiredStartupStep(
-      'Firestore initialization',
+      'Data service initialization',
       () async => FirebaseFirestore.instance,
       timeout: _requiredStartupTimeout,
     );
@@ -119,7 +116,7 @@ Future<void> _startSenderWeb() async {
     _refreshRuntimeHealth();
 
     final functionsReady = await _runRequiredStartupStep(
-      'Callable initialization',
+      'Secure service connection',
       () async => FirebaseFunctions.instance,
       timeout: _requiredStartupTimeout,
     );
@@ -128,7 +125,7 @@ Future<void> _startSenderWeb() async {
     _refreshRuntimeHealth();
   } else {
     final firebaseReady = await _runRequiredStartupStep(
-      'Firebase.initializeApp()',
+      'Core services initialization',
       Firebase.initializeApp,
       timeout: _requiredStartupTimeout,
     );
@@ -175,11 +172,7 @@ Future<bool> _runRequiredStartupStep<T>(
   Future<T> Function() step, {
   required Duration timeout,
 }) async {
-  final result = await _runRequiredStartupValue(
-    stage,
-    step,
-    timeout: timeout,
-  );
+  final result = await _runRequiredStartupValue(stage, step, timeout: timeout);
   return result != null;
 }
 
@@ -219,18 +212,20 @@ void _refreshRuntimeHealth() {
       authenticated = false;
     }
   }
-  SenderStartupDiagnostics.instance.updateHealth(SenderRuntimeHealthSnapshot(
-    buildHash: senderBuildHash,
-    releaseTag: senderReleaseTag,
-    firebaseInitialized: _firebaseInitialized,
-    appCheckState: _appCheckState,
-    authInitialized: _authInitialized,
-    firestoreConnected: _firestoreConnected,
-    functionsConnected: _functionsConnected,
-    mapsReady: false,
-    stripeReady: _stripeReady,
-    authenticated: authenticated,
-  ));
+  SenderStartupDiagnostics.instance.updateHealth(
+    SenderRuntimeHealthSnapshot(
+      buildHash: senderBuildHash,
+      releaseTag: senderReleaseTag,
+      firebaseInitialized: _firebaseInitialized,
+      appCheckState: _appCheckState,
+      authInitialized: _authInitialized,
+      firestoreConnected: _firestoreConnected,
+      functionsConnected: _functionsConnected,
+      mapsReady: false,
+      stripeReady: _stripeReady,
+      authenticated: authenticated,
+    ),
+  );
 }
 
 class SenderMobilePreviewApp extends StatelessWidget {
@@ -325,10 +320,7 @@ class _SenderWebStartupLoading extends StatelessWidget {
                     shape: BoxShape.circle,
                     border: Border.all(color: const Color(0xFF60A5FA)),
                     boxShadow: const [
-                      BoxShadow(
-                        color: Color(0x663B82F6),
-                        blurRadius: 28,
-                      ),
+                      BoxShadow(color: Color(0x663B82F6), blurRadius: 28),
                     ],
                   ),
                   child: const Padding(
