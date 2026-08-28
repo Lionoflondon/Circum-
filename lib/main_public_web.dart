@@ -20,7 +20,7 @@ Future<void> main() async {
     (error, stack) {
       if (_isAppCheckStartupError(error)) {
         if (kDebugMode) {
-          debugPrint('Website App Check startup warning: $error');
+          debugPrint('Website service protection startup warning: $error');
         }
         return;
       }
@@ -39,11 +39,13 @@ Future<void> _activateAppCheckAfterStartup() async {
   try {
     final appCheckStartup = await initializeCircumAppCheck();
     if (appCheckStartup.blockStartup && kDebugMode) {
-      debugPrint('Website App Check warning: ${appCheckStartup.message}');
+      debugPrint(
+        'Website service protection warning: ${appCheckStartup.message}',
+      );
     }
   } catch (error) {
     if (kDebugMode) {
-      debugPrint('Website App Check warning: $error');
+      debugPrint('Website service protection warning: $error');
     }
   }
 }
@@ -52,7 +54,7 @@ void _installAppCheckStartupBoundary() {
   PlatformDispatcher.instance.onError = (error, stack) {
     if (!_isAppCheckStartupError(error)) return false;
     if (kDebugMode) {
-      debugPrint('Website App Check startup warning: $error');
+      debugPrint('Website service protection startup warning: $error');
     }
     return true;
   };

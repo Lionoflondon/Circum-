@@ -4776,7 +4776,7 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
       if (!mounted) return;
       setState(
         () => _jobMessage =
-      'Discrepancy reported. Collection is paused for the user.',
+            'Discrepancy reported. Collection is paused for the user.',
       );
     } on FirebaseFunctionsException catch (error) {
       if (!mounted) return;
@@ -8894,7 +8894,7 @@ class _CustomerPortalState extends State<_CustomerPortal> {
 
   String get _contactValidationMessage {
     if (_effectiveSenderName.isEmpty || _effectiveSenderPhone.isEmpty) {
-    return 'Add your name and phone number before pricing.';
+      return 'Add your name and phone number before pricing.';
     }
     if (_receiverName.text.trim().isEmpty ||
         _receiverPhone.text.trim().isEmpty) {
@@ -10850,8 +10850,7 @@ class _CustomerPortalState extends State<_CustomerPortal> {
       weightBand: _irisWeightBand ??
           DeliveryPricing.weightBandFor(estimateWeight).category,
       confidence: _irisWeightConfidence ?? 'low',
-      explanation:
-          _irisWeightExplanation ?? 'IRIS estimate confirmed by you.',
+      explanation: _irisWeightExplanation ?? 'IRIS estimate confirmed by you.',
       packageType: _inferPackageType(),
       requiresVehicleReview: false,
       weightSource: _irisWeightSource ?? 'category_fallback',
@@ -26238,7 +26237,7 @@ class _PrivacyPolicyPage extends StatelessWidget {
           ),
           _ComplianceSection(
             'Processors',
-            'CIRCUM uses processors including Firebase/Google Cloud, Google Maps or Places, Stripe, hosting, and communications providers where needed. Google Play Data Safety “data shared with third parties” has a defined meaning and does not mean necessary service processors are absent.',
+            'CIRCUM uses service providers for cloud infrastructure, Google Maps or Places, Stripe, hosting, and communications where needed. Google Play Data Safety “data shared with third parties” has a defined meaning and does not mean necessary service processors are absent.',
           ),
           _ComplianceSection(
             'Transfers and security',
