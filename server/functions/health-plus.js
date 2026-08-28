@@ -873,7 +873,7 @@ exports.createHealthPlusCheckoutSession = functions.https.onRequest(async (req, 
   } catch (error) {
     if (sendHttpsError(res, error)) return;
     console.error("Health+ checkout session error", error);
-    return res.status(500).send({error: error.message});
+    return res.status(500).send({error: "health_plus_checkout_unavailable"});
   }
 });
 
@@ -971,6 +971,6 @@ exports.updateHealthPlusPickupStatus = functions.https.onRequest(async (req, res
   } catch (error) {
     if (sendHttpsError(res, error)) return;
     console.error("Health+ status update error", error);
-    return res.status(500).send({error: error.message});
+    return res.status(500).send({error: "health_plus_status_update_unavailable"});
   }
 });

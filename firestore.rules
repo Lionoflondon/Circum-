@@ -409,8 +409,6 @@ service cloud.firestore {
         'phoneVerifiedAt',
         'locationEnabled',
         'position',
-        'status',
-        'availabilityStatus',
         'fcmToken',
         'photoURL',
         'photoUrl',
@@ -431,17 +429,8 @@ service cloud.firestore {
         'vehicleMakeModel',
         'vehicleColour',
         'vehicleRegistration',
-        'vehicleRegistrationDocument',
-        'vehicleRegistrationDocumentStatus',
         'plateNumber',
         'typeOfVehicle',
-        'verificationData',
-        'documentChecklist',
-        'profileCompletionStatus',
-        'onboardingStatus',
-        'applicationSubmittedAt',
-        'submittedAt',
-        'activeDelivery',
         'updatedAt'
       ];
     }

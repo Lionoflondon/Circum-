@@ -12,12 +12,12 @@ const websiteSource = fs.readFileSync(
 );
 
 test("Rider self-service authority callables are exported", () => {
-  assert.match(source, /exports\.updateRiderProfile\s*=\s*functions\.https\.onCall/);
-  assert.match(source, /exports\.requestRiderEmailChange\s*=\s*functions\.https\.onCall/);
-  assert.match(source, /exports\.createWeightAdjustedNotification\s*=\s*functions\.https\.onCall/);
-  assert.match(source, /exports\.submitRiderApplication\s*=\s*functions\.https\.onCall/);
-  assert.match(source, /exports\.updateRiderApplicationSection\s*=\s*functions\.https\.onCall/);
-  assert.match(source, /exports\.submitRiderDocument\s*=\s*functions\.https\.onCall/);
+  assert.match(source, /exports\.updateRiderProfile\s*=\s*riderCallable/);
+  assert.match(source, /exports\.requestRiderEmailChange\s*=\s*riderCallable/);
+  assert.match(source, /exports\.createWeightAdjustedNotification\s*=\s*riderCallable/);
+  assert.match(source, /exports\.submitRiderApplication\s*=\s*riderCallable/);
+  assert.match(source, /exports\.updateRiderApplicationSection\s*=\s*riderCallable/);
+  assert.match(source, /exports\.submitRiderDocument\s*=\s*riderCallable/);
   assert.match(indexSource, /exports\.updateRiderProfile\s*=\s*riderAccount\.updateRiderProfile/);
   assert.match(indexSource, /exports\.requestRiderEmailChange\s*=\s*riderAccount\.requestRiderEmailChange/);
   assert.match(indexSource, /exports\.createWeightAdjustedNotification\s*=\s*riderAccount\.createWeightAdjustedNotification/);

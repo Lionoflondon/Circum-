@@ -162,6 +162,36 @@ test("rider self updates are field allowlisted and cannot alter admin authority"
   assert.match(rules, /function riderSelfWritableFields\(\)/);
   assert.match(rules, /function isSafeRiderSelfCreate\(driverId\)/);
   assert.match(rules, /function isSafeRiderSelfUpdate\(driverId\)/);
+  const selfWritableStart = rules.indexOf("function riderSelfWritableFields()");
+  const selfWritableEnd = rules.indexOf("function isSafeRiderSelfCreate", selfWritableStart);
+  const selfWritable = rules.slice(selfWritableStart, selfWritableEnd);
+  for (const field of [
+    "name",
+    "fullName",
+    "homeAddress",
+    "phoneNumber",
+    "vehicleType",
+    "vehicleRegistration",
+    "fcmToken",
+    "updatedAt",
+  ]) {
+    assert.match(selfWritable, new RegExp(`'${field}'`));
+  }
+  for (const field of [
+    "status",
+    "availabilityStatus",
+    "vehicleRegistrationDocument",
+    "vehicleRegistrationDocumentStatus",
+    "verificationData",
+    "documentChecklist",
+    "profileCompletionStatus",
+    "onboardingStatus",
+    "applicationSubmittedAt",
+    "submittedAt",
+    "activeDelivery",
+  ]) {
+    assert.doesNotMatch(selfWritable, new RegExp(`'${field}'`));
+  }
   for (const field of [
     "approvalStatus",
     "verificationStatus",

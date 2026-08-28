@@ -19,6 +19,7 @@ test("Rider operational callables use the App Check wrapper", () => {
     "get-avaliable-requests.js",
     "accept-ride-requests.js",
     "delivery-tracking.js",
+    "rider-account.js",
   ]) {
     const text = source(file);
     assert.match(text, /require\("\.\/rider-app-check"\)/, file);
