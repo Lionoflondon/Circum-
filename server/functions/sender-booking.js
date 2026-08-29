@@ -10,6 +10,7 @@ const vanguardProtocol = require("./vanguard-protocol-core");
 const {classifyIris} = require("./iris-core");
 const {verifiedPhotoAnalysis} = require("./iris-photo-analysis");
 const {dispatchDeliveryRequest} = require("./send-package");
+const {start: startLatency} = require("./latency-observability");
 
 const BASE_FARE_GBP = 5;
 const ADDITIONAL_FARE_PER_MILE_GBP = 1.5;
@@ -896,6 +897,7 @@ exports.getSenderRothBalance = functions.https.onCall(async (_, context) => {
 
 exports.createSenderBookingQuote = functions.https.onCall(async (data, context) => {
   const sender = requireSender(context);
+  const completeQuote = startLatency("QUOTE", {correlationId: text(data && data.quoteId) || "quote-request"});
   const db = getFirestore();
   const businessContext = await verifiedBusinessContext(db, sender, data && data.businessContext);
   const parcel = data && data.parcel && typeof data.parcel === "object" ? data.parcel : {};
@@ -910,6 +912,7 @@ exports.createSenderBookingQuote = functions.https.onCall(async (data, context) 
     ...(data || {}),
     ...(businessContext || {}),
   }, sender.uid, serverPhotoAnalysis);
+  completeQuote({success: true});
   const clientDisplayQuote = cleanMap(data && data.clientDisplayQuote);
   const clientDisplayedAmount = cleanNumber(clientDisplayQuote.amount);
   const clientDisplayedAmountPence = cleanNumber(clientDisplayQuote.amountPence);
@@ -1972,9 +1975,13 @@ async function createPaidDeliveryFromSession(stripe, sender, data) {
 }
 
 exports.createSenderPaidDelivery = (stripe) => functions.https.onCall(async (data, context) => {
+  const completeDelivery = startLatency("DELIVERY_CREATE", {correlationId: text(data && (data.idempotencyKey || data.paymentSessionId)) || "delivery-request"});
   try {
-    return await createPaidDeliveryFromSession(stripe, requireSender(context), data || {});
+    const result = await createPaidDeliveryFromSession(stripe, requireSender(context), data || {});
+    completeDelivery({success: true, deliveryId: result && result.deliveryId});
+    return result;
   } catch (error) {
+    completeDelivery({success: false});
     if (error instanceof functions.https.HttpsError) throw error;
     const safe = safeDeliveryCreationError(error);
     throw new functions.https.HttpsError(safe.code, safe.message, {

@@ -3,6 +3,7 @@
 
 const functions = require("firebase-functions/v1");
 const {riderCallable} = require("./rider-app-check");
+const {start: startLatency} = require("./latency-observability");
 const {getFirestore, FieldValue, GeoPoint} = require("firebase-admin/firestore");
 const tracking = require("./sender-tracking-state-core");
 
@@ -588,7 +589,8 @@ exports.updateDeliveryLiveLocation = riderCallable(async (data, context) => {
 
   const db = getFirestore();
   const riderId = context.auth.uid;
-  return db.runTransaction(async (transaction) => {
+  const completeTracking = startLatency("TRACKING_WRITE", {correlationId: deliveryId});
+  const result = await db.runTransaction(async (transaction) => {
     const found = await findDelivery(db, transaction, deliveryId);
     if (!found) {
       throw new functions.https.HttpsError("not-found", "Delivery not found.");
@@ -681,6 +683,8 @@ exports.updateDeliveryLiveLocation = riderCallable(async (data, context) => {
     }, {merge: true});
     return {success: true, deliveryId: found.id, trackingHealth};
   });
+  completeTracking({success: true, deliveryId: result.deliveryId});
+  return result;
 });
 
 exports._private = {

@@ -4,6 +4,7 @@ const {getFirestore, FieldValue} = require("firebase-admin/firestore");
 const {getMessaging} = require("firebase-admin/messaging");
 const {dispatchComplianceDecision, dispatchPriority, riderCanViewDispatch, riderMatchesIris} = require("./iris-core");
 const {hasAdminClaim} = require("./admin-auth");
+const {timing, start: startLatency} = require("./latency-observability");
 
 function senderOwnsRequest(delivery, uid) {
   return delivery.senderId === uid || delivery.userId === uid;
@@ -17,6 +18,7 @@ async function dispatchDeliveryRequest({
   authToken = {},
   source = "sendPackage",
 }) {
+  const completeDispatch = startLatency("DISPATCH", {correlationId: requestId, source});
   const toRadians = (degrees) => {
     return degrees * (Math.PI / 180);
   };
@@ -187,6 +189,7 @@ async function dispatchDeliveryRequest({
         a.distanceFromPickup - b.distanceFromPickup :
         a.distanceFromPickup - b.distanceFromPickup)
       .slice(0, 5);
+  timing("ELIGIBILITY_COMPLETE", {correlationId: requestId, workloadCount: closestRiders.length});
 
   const sendResults = await Promise.all(closestRiders.map(async (rider) => {
     if (!rider.fcmToken) {
@@ -249,6 +252,8 @@ async function dispatchDeliveryRequest({
     dispatchMatchedRiderIds: closestRiders.map((rider) => rider.id),
     updatedAt: FieldValue.serverTimestamp(),
   }, {merge: true});
+  timing("FIRST_OFFER_COMMIT", {correlationId: requestId, deliveryId: deliveryRequest[0].id, workloadCount: closestRiders.length});
+  completeDispatch({success: true, workloadCount: closestRiders.length, deliveryId: deliveryRequest[0].id});
 
   return {
     message: `Endpoint accessed by user ${uid}`,
