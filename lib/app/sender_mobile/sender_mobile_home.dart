@@ -54,15 +54,17 @@ const senderMobileAuthSignInHeadline = 'Welcome back';
 const senderMobileAuthCreateHeadline = 'Join Circum';
 const senderMobileAuthFinePrint =
     "By continuing, you agree to Circum's Terms and Privacy Policy.";
-const senderMobilePreviewAuthEnabledContract =
+const senderMobileAuthEnabledContract =
     'Sender opens with secure sign-in before booking.';
+const _senderAuthOperationTimeout = Duration(seconds: 20);
+const _senderAuthRestoreTimeout = Duration(seconds: 12);
 
 enum _SenderEntryScreen { landing, auth, app }
 
 enum _SenderAuthMode { signIn, createAccount }
 
 class SenderMobileHome extends StatefulWidget {
-  final bool previewAuthEnabled;
+  final bool senderAuthEnabled;
   final bool initialAuthenticated;
   final int initialIndex;
   final String? initialRouteName;
@@ -75,7 +77,7 @@ class SenderMobileHome extends StatefulWidget {
 
   const SenderMobileHome({
     super.key,
-    this.previewAuthEnabled = false,
+    this.senderAuthEnabled = false,
     this.initialAuthenticated = false,
     this.initialIndex = 0,
     this.initialRouteName,
@@ -178,7 +180,7 @@ class _SenderMobileHomeState extends State<SenderMobileHome> {
       case _SenderEntryScreen.auth:
         return _SenderAuthEntry(
           mode: _authMode,
-          previewAuthEnabled: widget.previewAuthEnabled,
+          senderAuthEnabled: widget.senderAuthEnabled,
           onBack: () => setState(() => _entry = _SenderEntryScreen.landing),
           onAuthenticated: () =>
               setState(() => _entry = _SenderEntryScreen.app),
@@ -310,14 +312,27 @@ class _SenderMobileHomeState extends State<SenderMobileHome> {
       );
 
   Future<void> _restoreAuthenticatedSenderSession() async {
-    if (!widget.previewAuthEnabled) return;
+    if (!widget.senderAuthEnabled) return;
     setState(() => _authRestoring = true);
     try {
       if (kIsWeb) {
-        await FirebaseAuth.instance.setPersistence(Persistence.LOCAL);
+        await FirebaseAuth.instance
+            .setPersistence(Persistence.LOCAL)
+            .timeout(_senderAuthOperationTimeout);
       }
+      final firstUser = await FirebaseAuth.instance
+          .authStateChanges()
+          .first
+          .timeout(_senderAuthRestoreTimeout);
+      if (!mounted) return;
+      setState(() {
+        _authRestoring = false;
+        _entry = firstUser == null
+            ? _SenderEntryScreen.landing
+            : _SenderEntryScreen.app;
+      });
       _authSubscription =
-          FirebaseAuth.instance.authStateChanges().listen((user) {
+          FirebaseAuth.instance.authStateChanges().skip(1).listen((user) {
         if (!mounted) return;
         setState(() {
           _authRestoring = false;
@@ -336,6 +351,17 @@ class _SenderMobileHomeState extends State<SenderMobileHome> {
           _authRestoring = false;
           _entry = _SenderEntryScreen.landing;
         });
+      });
+    } on TimeoutException catch (error, stackTrace) {
+      _reportUnexpectedAuthRestoreError(
+        error,
+        stackTrace,
+        'restoring Sender session',
+      );
+      if (!mounted) return;
+      setState(() {
+        _authRestoring = false;
+        _entry = _SenderEntryScreen.landing;
       });
     } catch (error, stackTrace) {
       _reportUnexpectedAuthRestoreError(
@@ -559,14 +585,14 @@ class _SenderPreAuthLanding extends StatelessWidget {
 
 class _SenderAuthEntry extends StatefulWidget {
   final _SenderAuthMode mode;
-  final bool previewAuthEnabled;
+  final bool senderAuthEnabled;
   final VoidCallback onBack;
   final VoidCallback onAuthenticated;
   final ValueChanged<_SenderAuthMode> onModeChanged;
 
   const _SenderAuthEntry({
     required this.mode,
-    required this.previewAuthEnabled,
+    required this.senderAuthEnabled,
     required this.onBack,
     required this.onAuthenticated,
     required this.onModeChanged,
@@ -602,8 +628,8 @@ class _SenderAuthEntryState extends State<_SenderAuthEntry> {
         ? null
         : identityText.isEmpty
             ? 'Email or phone is required'
-            : widget.previewAuthEnabled && !identityText.contains('@')
-                ? 'Use an email address for preview auth'
+            : widget.senderAuthEnabled && !identityText.contains('@')
+                ? 'Use an email address'
                 : null;
     return Stack(
       children: [
@@ -696,7 +722,7 @@ class _SenderAuthEntryState extends State<_SenderAuthEntry> {
             const SizedBox(height: 14),
             _SenderPrimaryAction(
               label: _busy
-                  ? 'Preparing preview...'
+                  ? 'Preparing account...'
                   : _isSignIn
                       ? 'Sign in'
                       : 'Create account',
@@ -739,14 +765,14 @@ class _SenderAuthEntryState extends State<_SenderAuthEntry> {
     final validIdentity = _identity.text.trim().isNotEmpty;
     final validPassword =
         _isSignIn ? _password.text.isNotEmpty : _password.text.length >= 6;
-    final validPreviewEmail =
-        !widget.previewAuthEnabled || _identity.text.trim().contains('@');
+    final validSenderEmail =
+        !widget.senderAuthEnabled || _identity.text.trim().contains('@');
     setState(() {
       _showErrors = true;
       _authMessage = null;
     });
-    if (!validIdentity || !validPassword || !validPreviewEmail) return;
-    if (!widget.previewAuthEnabled) {
+    if (!validIdentity || !validPassword || !validSenderEmail) return;
+    if (!widget.senderAuthEnabled) {
       setState(() {
         _authMessage =
             'Authentication handler is not enabled for this production surface.';
@@ -755,7 +781,7 @@ class _SenderAuthEntryState extends State<_SenderAuthEntry> {
     }
     setState(() => _busy = true);
     try {
-      await _authenticatePreviewSender(
+      await _authenticateSender(
         email: _identity.text.trim().toLowerCase(),
         password: _password.text,
         createAccount: !_isSignIn,
@@ -763,83 +789,94 @@ class _SenderAuthEntryState extends State<_SenderAuthEntry> {
       widget.onAuthenticated();
     } on FirebaseAuthException catch (error) {
       if (!mounted) return;
-      setState(() => _authMessage = _previewAuthMessage(error));
+      setState(() => _authMessage = _senderAuthMessage(error));
     } catch (error) {
-      debugPrint('Sender Mobile preview auth failed: $error');
+      debugPrint('Sender Mobile auth failed: ${error.runtimeType}');
       if (!mounted) return;
       setState(
-        () => _authMessage = 'Preview authentication failed. Please try again.',
+        () =>
+            _authMessage = 'Sign in could not be completed. Please try again.',
       );
     } finally {
       if (mounted) setState(() => _busy = false);
     }
   }
 
-  Future<void> _authenticatePreviewSender({
+  Future<void> _authenticateSender({
     required String email,
     required String password,
     required bool createAccount,
   }) async {
     final auth = FirebaseAuth.instance;
     if (kIsWeb) {
-      await auth.setPersistence(Persistence.LOCAL);
+      await auth
+          .setPersistence(Persistence.LOCAL)
+          .timeout(_senderAuthOperationTimeout);
     }
     var accountCreated = false;
     UserCredential credential;
     if (createAccount) {
       try {
-        credential = await auth.createUserWithEmailAndPassword(
-          email: email,
-          password: password,
-        );
+        credential = await auth
+            .createUserWithEmailAndPassword(
+              email: email,
+              password: password,
+            )
+            .timeout(_senderAuthOperationTimeout);
         accountCreated = true;
       } on FirebaseAuthException catch (error) {
         if (error.code != 'email-already-in-use') rethrow;
-        credential = await auth.signInWithEmailAndPassword(
-          email: email,
-          password: password,
-        );
+        credential = await auth
+            .signInWithEmailAndPassword(
+              email: email,
+              password: password,
+            )
+            .timeout(_senderAuthOperationTimeout);
       }
     } else {
-      credential = await auth.signInWithEmailAndPassword(
-        email: email,
-        password: password,
-      );
+      credential = await auth
+          .signInWithEmailAndPassword(
+            email: email,
+            password: password,
+          )
+          .timeout(_senderAuthOperationTimeout);
     }
     final user = credential.user;
     if (user == null) {
-      throw FirebaseAuthException(code: 'preview-no-user');
+      throw FirebaseAuthException(code: 'sender-no-user');
     }
     await FirebaseFunctions.instanceFor(region: 'us-central1')
         .httpsCallable('ensureSenderAccount')
-        .call();
+        .call()
+        .timeout(SenderProfileAuthority.senderAccountEnsureTimeout);
     if (accountCreated) {
       final referralCode = _referralCode.text.trim();
       if (referralCode.isNotEmpty) {
         try {
           await FirebaseFunctions.instanceFor(region: 'us-central1')
               .httpsCallable('attachReferralCode')
-              .call({'referralCode': referralCode});
+              .call({'referralCode': referralCode}).timeout(
+                  _senderAuthOperationTimeout);
         } catch (error) {
-          debugPrint('Referral code attach failed: $error');
+          debugPrint('Referral code attach failed: ${error.runtimeType}');
         }
       }
     }
-    await user.getIdToken(true);
+    await user.getIdToken(true).timeout(_senderAuthOperationTimeout);
   }
 
-  String _previewAuthMessage(FirebaseAuthException error) {
+  String _senderAuthMessage(FirebaseAuthException error) {
     switch (error.code) {
       case 'invalid-email':
-        return 'Enter a valid email address for preview auth.';
+        return 'Enter a valid email address.';
       case 'invalid-credential':
       case 'wrong-password':
       case 'user-not-found':
-        return 'Preview sign-in failed. Check the email and password.';
+        return 'Sign in failed. Check the email and password.';
       case 'weak-password':
-        return 'Preview password is too weak.';
+        return 'Use a stronger password.';
       default:
-        return 'Preview authentication failed (${error.code}).';
+        return 'Sign in could not be completed. Please try again.';
     }
   }
 }
