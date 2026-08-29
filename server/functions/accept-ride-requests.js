@@ -5,6 +5,7 @@ const {getFirestore, FieldValue} = require("firebase-admin/firestore");
 const {getMessaging} = require("firebase-admin/messaging");
 const {isDispatchable, riderCanViewDispatch, riderMatchesIris} = require("./iris-core");
 const {riderVehicleMatchesRequest} = require("./vehicle-dispatch");
+const {start: startLatency} = require("./latency-observability");
 
 const cleanText = (value, fallback = "") => {
   if (value === undefined || value === null) return fallback;
@@ -146,6 +147,7 @@ const acceptRideRequests = riderCallable(async (data, context) => {
   }
 
   const riderId = context.auth.uid;
+  const completeAccept = startLatency("ACCEPT", {correlationId: requestId});
   const db = getFirestore();
   const rider = await getRiderProfile(db, riderId);
 
@@ -267,6 +269,7 @@ const acceptRideRequests = riderCallable(async (data, context) => {
     riderId,
     assignmentTimestamp: Date.now(),
   });
+  completeAccept({success: true, deliveryId: accepted.id});
 
   let senderNotified = false;
   try {
