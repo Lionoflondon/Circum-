@@ -92,9 +92,9 @@ class _SessionGate extends StatelessWidget {
       builder: (context, state) {
         switch (state.currentState) {
           case AppState.authenticated:
-            return const SenderMobileHome(previewAuthEnabled: true);
+            return const SenderMobileHome(senderAuthEnabled: true);
           case AppState.unauthenticated:
-            return const SenderMobileHome(previewAuthEnabled: true);
+            return const SenderMobileHome(senderAuthEnabled: true);
           case AppState.unknownSessionState:
           default:
             return const _SenderBootSurface();

@@ -20,13 +20,13 @@ void main() {
         File('lib/app/bottom_nav/view/app_nav.dart').readAsStringSync();
 
     expect(preview, contains('initialAuthenticated: false'));
-    expect(preview, contains('previewAuthEnabled: true'));
+    expect(preview, contains('senderAuthEnabled: true'));
     expect(preview, isNot(contains('initialAuthenticated: true')));
-    expect(preview, isNot(contains('previewAuthEnabled: false')));
+    expect(preview, isNot(contains('senderAuthEnabled: false')));
     expect(app, isNot(contains('initialAuthenticated: true')));
-    expect(app, contains('SenderMobileHome(previewAuthEnabled: true)'));
+    expect(app, contains('SenderMobileHome(senderAuthEnabled: true)'));
     expect(appNav, isNot(contains('initialAuthenticated: true')));
-    expect(appNav, contains('SenderMobileHome(previewAuthEnabled: true)'));
+    expect(appNav, contains('SenderMobileHome(senderAuthEnabled: true)'));
   });
 
   test('Sender startup has a visible recovery boundary before runApp', () {

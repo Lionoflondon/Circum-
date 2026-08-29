@@ -7,6 +7,6 @@ class AppNavView extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return const SenderMobileHome(previewAuthEnabled: true);
+    return const SenderMobileHome(senderAuthEnabled: true);
   }
 }

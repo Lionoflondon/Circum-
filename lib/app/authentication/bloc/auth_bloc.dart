@@ -28,6 +28,8 @@ part 'auth_state.dart';
 part 'signup_event.dart';
 
 class AuthBloc extends Bloc<AuthEvent, AuthState> {
+  static const _authOperationTimeout = Duration(seconds: 20);
+
   FirebaseAuth auth = FirebaseAuth.instance;
   FirebaseFirestore db = FirebaseFirestore.instance;
   FirebaseFunctions functions =
@@ -113,8 +115,9 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
 
   void _logRecoverableAuthError(String step, Object error,
       [StackTrace? stack]) {
-    debugPrint('Sender auth recoverable failure [$step]: $error');
-    if (stack != null) debugPrint('$stack');
+    final code = error is FirebaseException ? error.code : error.runtimeType;
+    debugPrint('Sender auth recoverable failure [$step]: $code');
+    if (stack != null && kDebugMode) debugPrint('$stack');
   }
 
   Future<void> _handleSortSessionState(
@@ -125,7 +128,8 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
     User? user = auth.currentUser;
     if (user != null) {
       // print("User is signed in: ${user.uid}");
-      final phone = (await storage.readAll())["phone"];
+      final phone =
+          (await storage.readAll().timeout(_authOperationTimeout))["phone"];
       // print("User is signed in: ${user.uid}");
       // You can also access user information like user.displayName, user.email, etc.
       emit(state.copyWith(
@@ -438,12 +442,15 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
     FlutterSecureStorage storage = const FlutterSecureStorage();
     try {
       emit(state.copyWith(status: Status.loading));
-      final UserCredential userCredential =
-          await auth.signInWithEmailAndPassword(
-              email: event.email, password: event.password);
+      final UserCredential userCredential = await auth
+          .signInWithEmailAndPassword(
+              email: event.email, password: event.password)
+          .timeout(_authOperationTimeout);
 
       if (auth.currentUser?.emailVerified == false) {
-        await auth.currentUser?.sendEmailVerification();
+        await auth.currentUser
+            ?.sendEmailVerification()
+            .timeout(_authOperationTimeout);
         emit(state.copyWith(
           status: Status.unverifiedEmail,
         ));
@@ -472,7 +479,9 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
             ).load('auth.email.profile');
             final phone = profile.data['phone'];
             if (phone != null) {
-              await storage.write(key: 'phone', value: '$phone');
+              await storage
+                  .write(key: 'phone', value: '$phone')
+                  .timeout(_authOperationTimeout);
               emit(state.copyWith(phoneNumber: '$phone'));
             }
           } catch (error, stack) {
@@ -503,11 +512,15 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
       SignUpWithEmail event, Emitter<AuthState> emit) async {
     try {
       emit(state.copyWith(status: Status.loading));
-      await auth.createUserWithEmailAndPassword(
-          email: event.email, password: event.password);
+      await auth
+          .createUserWithEmailAndPassword(
+              email: event.email, password: event.password)
+          .timeout(_authOperationTimeout);
 
       if (auth.currentUser?.emailVerified == false) {
-        await auth.currentUser?.sendEmailVerification();
+        await auth.currentUser
+            ?.sendEmailVerification()
+            .timeout(_authOperationTimeout);
         emit(state.copyWith(
           status: Status.unverifiedEmail,
         ));
@@ -533,7 +546,7 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
 
   void _handleConfirmEmailVerification(
       ConfirmEmailVerification event, Emitter<AuthState> emit) async {
-    await auth.currentUser?.reload();
+    await auth.currentUser?.reload().timeout(_authOperationTimeout);
     if (auth.currentUser?.emailVerified == true) {
       if (auth.currentUser?.displayName == null) {
         emit(state.copyWith(
@@ -652,7 +665,9 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
       ResetPassword event, Emitter<AuthState> emit) async {
     try {
       emit(state.copyWith(status: Status.loading));
-      await auth.sendPasswordResetEmail(email: event.email);
+      await auth
+          .sendPasswordResetEmail(email: event.email)
+          .timeout(_authOperationTimeout);
       emit(state.copyWith(status: Status.passwordResetEmailSent));
     } on FirebaseAuthException catch (err) {
       emit(state.copyWith(status: Status.failure));
@@ -663,11 +678,8 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
       if (err.code == 'user-not-found') {
         emit(state.copyWith(errorMessage: 'User not found'));
       }
-
-      throw Exception(err.message.toString());
     } catch (err) {
       emit(state.copyWith(status: Status.failure));
-      throw Exception(err.toString());
     }
   }
 
