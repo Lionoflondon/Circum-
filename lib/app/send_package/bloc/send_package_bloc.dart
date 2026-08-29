@@ -38,6 +38,7 @@ part 'send_package_state.dart';
 
 const _googleMapsDirectionsApiKey =
     String.fromEnvironment('GOOGLE_MAPS_DIRECTIONS_API_KEY');
+const _senderCallableTimeout = Duration(seconds: 30);
 
 void _logRecoverableSenderError(
   String context,
@@ -839,11 +840,27 @@ class SendPackageBloc extends Bloc<SendPackageEvent, SendPackageState> {
     String name,
     Map<String, dynamic> payload,
   ) async {
-    final result =
-        await FirebaseFunctions.instance.httpsCallable(name).call(payload);
+    final result = await FirebaseFunctions.instance
+        .httpsCallable(name)
+        .call(payload)
+        .timeout(_senderCallableTimeout);
     return result.data is Map
         ? Map<String, dynamic>.from(result.data as Map)
         : <String, dynamic>{};
+  }
+
+  Future<void> _dispatchPaidDelivery(String requestId, String context) async {
+    try {
+      await FirebaseFunctions.instanceFor(
+        region: 'us-central1',
+      )
+          .httpsCallable('sendPackage')
+          .call({'requestId': requestId}).timeout(_senderCallableTimeout);
+    } catch (error) {
+      debugPrint(
+        'sendPackage dispatch after $context failed; delivery remains created: $error',
+      );
+    }
   }
 
   void _handleRequestSenderBookingQuote(
@@ -1029,15 +1046,7 @@ class SendPackageBloc extends Bloc<SendPackageEvent, SendPackageState> {
       });
       final requestId = '${data['requestId'] ?? data['deliveryId'] ?? ''}';
       if (requestId.isNotEmpty) {
-        try {
-          await FirebaseFunctions.instanceFor(
-            region: 'us-central1',
-          ).httpsCallable('sendPackage').call({'requestId': requestId});
-        } catch (error) {
-          debugPrint(
-            'sendPackage dispatch after direct paid delivery failed; delivery remains created: $error',
-          );
-        }
+        await _dispatchPaidDelivery(requestId, 'direct paid delivery');
         final prefs = await SharedPreferences.getInstance();
         await prefs.setString('activeRequest', requestId);
         add(WatchActiveDelivery(requestId: requestId));
@@ -1134,15 +1143,7 @@ class SendPackageBloc extends Bloc<SendPackageEvent, SendPackageState> {
       final data = await _callableMap('createSenderPaidDelivery', payload);
       final requestId = '${data['requestId'] ?? ''}';
       if (requestId.isNotEmpty) {
-        try {
-          await FirebaseFunctions.instanceFor(
-            region: 'us-central1',
-          ).httpsCallable('sendPackage').call({'requestId': requestId});
-        } catch (error) {
-          debugPrint(
-            'sendPackage dispatch after paid delivery failed; delivery remains created: $error',
-          );
-        }
+        await _dispatchPaidDelivery(requestId, 'paid delivery');
         final prefs = await SharedPreferences.getInstance();
         await prefs.setString('activeRequest', requestId);
         add(WatchActiveDelivery(requestId: requestId));
@@ -1198,15 +1199,7 @@ class SendPackageBloc extends Bloc<SendPackageEvent, SendPackageState> {
       });
       final requestId = '${data['requestId'] ?? data['deliveryId'] ?? ''}';
       if (requestId.isNotEmpty) {
-        try {
-          await FirebaseFunctions.instanceFor(
-            region: 'us-central1',
-          ).httpsCallable('sendPackage').call({'requestId': requestId});
-        } catch (error) {
-          debugPrint(
-            'sendPackage dispatch after finalized checkout failed; delivery remains created: $error',
-          );
-        }
+        await _dispatchPaidDelivery(requestId, 'finalized checkout');
         final prefs = await SharedPreferences.getInstance();
         await prefs.setString('activeRequest', requestId);
         add(WatchActiveDelivery(requestId: requestId));
