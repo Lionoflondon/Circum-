@@ -97,7 +97,10 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
         'username': username.trim(),
       if (phone != null && phone.trim().isNotEmpty) 'phone': phone.trim(),
     };
-    await functions.httpsCallable('updateSenderProfile').call(payload);
+    await functions
+        .httpsCallable('updateSenderProfile')
+        .call(payload)
+        .timeout(_authOperationTimeout);
   }
 
   Future<void> _updateSenderLocation(Position locationData) async {
@@ -110,7 +113,7 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
         'longitude': locationData.longitude,
         'geohash': raw['geohash'],
       },
-    });
+    }).timeout(_authOperationTimeout);
   }
 
   void _logRecoverableAuthError(String step, Object error,
@@ -226,19 +229,21 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
   Future<void> _handleSignInWithAppleAuth(
       SignInWithAppleAuth event, Emitter<AuthState> emit) async {
     try {
+      emit(state.copyWith(status: Status.loading));
       final appleCredential = await SignInWithApple.getAppleIDCredential(
         scopes: [
           AppleIDAuthorizationScopes.email,
           AppleIDAuthorizationScopes.fullName,
         ],
-      );
+      ).timeout(_authOperationTimeout);
 
       final oauthCredential = OAuthProvider("apple.com").credential(
           idToken: appleCredential.identityToken,
           accessToken: appleCredential.authorizationCode);
 
-      UserCredential userCredential =
-          await auth.signInWithCredential(oauthCredential);
+      UserCredential userCredential = await auth
+          .signInWithCredential(oauthCredential)
+          .timeout(_authOperationTimeout);
 
       emit(state.copyWith(
           username: userCredential.user?.displayName,
@@ -256,7 +261,6 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
             username:
                 "${appleCredential.givenName} ${appleCredential.familyName}"));
       }
-      await Future.delayed(const Duration(seconds: 2));
     } catch (e, stack) {
       _logRecoverableAuthError('apple_sign_in', e, stack);
       emit(state.copyWith(
@@ -268,7 +272,7 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
 
   void _handleRequestForOTP(
       RequestForOTP event, Emitter<AuthState> emit) async {
-    var completer = Completer<bool>();
+    final completer = Completer<bool>();
 
     String? verificationIdValue;
     int? resendTokenValue;
@@ -278,27 +282,30 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
       await auth.verifyPhoneNumber(
         phoneNumber: state.phoneNumber,
         verificationCompleted: (_) {},
-        verificationFailed: (_) {
-          throw 'Verification failed';
+        verificationFailed: (error) {
+          if (!completer.isCompleted) completer.completeError(error);
         },
         codeSent: (String verificationId, int? resendToken) async {
           verificationIdValue = verificationId;
           resendTokenValue = resendToken;
-          completer.complete(true);
+          if (!completer.isCompleted) completer.complete(true);
         },
         codeAutoRetrievalTimeout: (_) {
-          throw 'Code timed out';
+          if (!completer.isCompleted) {
+            completer.completeError(TimeoutException('phone_otp_request'));
+          }
         },
       );
-      await completer.future;
+      await completer.future.timeout(_authOperationTimeout);
 
       emit(state.copyWith(
           verificationId: verificationIdValue,
           resendToken: resendTokenValue,
           status: Status.success));
-    } catch (e) {
+    } catch (e, stack) {
+      _logRecoverableAuthError('request_phone_otp', e, stack);
       emit(state.copyWith(
-          errorMessage: e.toString().split(':').last.trim(),
+          errorMessage: 'Verification code could not be sent. Please retry.',
           isLoading: false,
           status: Status.failure));
     }
@@ -306,13 +313,19 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
 
   Future<void> _handleSignInWithGoogle(
       SignInWithGoogle event, Emitter<AuthState> emit) async {
-    final GoogleSignIn googleSignIn = GoogleSignIn();
-    final GoogleSignInAccount? googleSignInAccount =
-        await googleSignIn.signIn();
+    try {
+      emit(state.copyWith(status: Status.loading));
+      final GoogleSignIn googleSignIn = GoogleSignIn();
+      final GoogleSignInAccount? googleSignInAccount =
+          await googleSignIn.signIn().timeout(_authOperationTimeout);
 
-    if (googleSignInAccount != null) {
+      if (googleSignInAccount == null) {
+        emit(state.copyWith(status: Status.initial));
+        return;
+      }
       final GoogleSignInAuthentication googleSignInAuthentication =
-          await googleSignInAccount.authentication;
+          await googleSignInAccount.authentication
+              .timeout(_authOperationTimeout);
 
       final credential = GoogleAuthProvider.credential(
         accessToken: googleSignInAuthentication.accessToken,
@@ -320,8 +333,9 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
       );
 
       // Sign in with credential
-      UserCredential userCredential =
-          await auth.signInWithCredential(credential);
+      UserCredential userCredential = await auth
+          .signInWithCredential(credential)
+          .timeout(_authOperationTimeout);
 
       emit(state.copyWith(
           username: userCredential.user?.displayName,
@@ -331,7 +345,17 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
           currentState: AppState.authenticated,
           authenticatedStatus: AuthenticatedStatus.authenticated));
 
-      add(UpdateUserProfile(username: userCredential.user!.displayName!));
+      final displayName = userCredential.user?.displayName?.trim();
+      if (displayName != null && displayName.isNotEmpty) {
+        add(UpdateUserProfile(username: displayName));
+      }
+    } catch (e, stack) {
+      _logRecoverableAuthError('google_sign_in', e, stack);
+      emit(state.copyWith(
+        status: Status.failure,
+        errorMessage:
+            'Google sign-in could not be completed. Please try again.',
+      ));
     }
   }
 
@@ -346,10 +370,13 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
       // else, sign user in
 
       if (auth.currentUser != null) {
-        await auth.currentUser?.linkWithCredential(credential);
+        await auth.currentUser
+            ?.linkWithCredential(credential)
+            .timeout(_authOperationTimeout);
       } else {
-        final UserCredential userCredential =
-            await auth.signInWithCredential(credential);
+        final UserCredential userCredential = await auth
+            .signInWithCredential(credential)
+            .timeout(_authOperationTimeout);
 
         if (userCredential.user?.displayName == null) {
           if (state.oAuthFirstName == null) {
@@ -385,12 +412,19 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
       // Sign the user in (or link) with the credential
     } on FirebaseException catch (e) {
       if (e.code == 'invalid-verification-code') {
-        emit(state.copyWith(errorMessage: 'Invalid verification code'));
+        emit(state.copyWith(
+            status: Status.failure, errorMessage: 'Invalid verification code'));
+      } else {
+        _logRecoverableAuthError('verify_sent_code', e);
+        emit(state.copyWith(
+            status: Status.failure,
+            errorMessage: 'Verification could not be completed.'));
       }
     } catch (e, stack) {
       _logRecoverableAuthError('verify_sent_code', e, stack);
-      emit(
-          state.copyWith(errorMessage: 'Verification could not be completed.'));
+      emit(state.copyWith(
+          status: Status.failure,
+          errorMessage: 'Verification could not be completed.'));
     }
   }
 
@@ -546,22 +580,34 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
 
   void _handleConfirmEmailVerification(
       ConfirmEmailVerification event, Emitter<AuthState> emit) async {
-    await auth.currentUser?.reload().timeout(_authOperationTimeout);
-    if (auth.currentUser?.emailVerified == true) {
-      if (auth.currentUser?.displayName == null) {
-        emit(state.copyWith(
-          authenticatedStatus: AuthenticatedStatus.incompleteData,
-          currentState: AppState.authenticated,
-        ));
+    try {
+      emit(state.copyWith(status: Status.loading));
+      await auth.currentUser?.reload().timeout(_authOperationTimeout);
+      if (auth.currentUser?.emailVerified == true) {
+        if (auth.currentUser?.displayName == null) {
+          emit(state.copyWith(
+            authenticatedStatus: AuthenticatedStatus.incompleteData,
+            currentState: AppState.authenticated,
+          ));
+        } else {
+          emit(state.copyWith(
+            status: Status.success,
+            authenticatedStatus: AuthenticatedStatus.authenticated,
+            currentState: AppState.authenticated,
+            username: auth.currentUser?.displayName,
+            profilePhoto: auth.currentUser?.photoURL,
+          ));
+        }
       } else {
-        emit(state.copyWith(
-          authenticatedStatus: AuthenticatedStatus.authenticated,
-          currentState: AppState.authenticated,
-          username: auth.currentUser?.displayName,
-          profilePhoto: auth.currentUser?.photoURL,
-        ));
+        emit(state.copyWith(status: Status.unverifiedEmail));
       }
-    } else {}
+    } catch (error, stack) {
+      _logRecoverableAuthError('confirm_email_verification', error, stack);
+      emit(state.copyWith(
+          status: Status.failure,
+          errorMessage:
+              'Email verification could not be confirmed. Please try again.'));
+    }
   }
 
   void _handleUpdatePhoneNumber(
@@ -573,13 +619,17 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
       if (user != null) {
         await _updateSenderProfile(phone: event.value);
 
-        await storage.write(key: 'phone', value: event.value);
+        await storage
+            .write(key: 'phone', value: event.value)
+            .timeout(_authOperationTimeout);
 
         emit(state.copyWith(phoneNumber: event.value));
       }
     } catch (e, stack) {
       _logRecoverableAuthError('update_phone_number', e, stack);
-      emit(state.copyWith(errorMessage: 'Phone number could not be updated.'));
+      emit(state.copyWith(
+          status: Status.failure,
+          errorMessage: 'Phone number could not be updated.'));
     }
   }
 
@@ -587,30 +637,51 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
       UpdateUserProfilePhoto event, Emitter<AuthState> emit) async {
     try {
       User? user = auth.currentUser;
-      final fileName = user!.uid;
+      if (user == null) {
+        emit(state.copyWith(
+          status: Status.failure,
+          errorMessage: 'Sign in again before updating your profile photo.',
+        ));
+        return;
+      }
+      final fileName = user.uid;
 
       final storageRef = FirebaseStorage.instance;
-      await storageRef.ref('profile-photos/$fileName').putData(
+      await storageRef
+          .ref('profile-photos/$fileName')
+          .putData(
             event.imageBytes,
             SettableMetadata(contentType: 'image/jpeg'),
-          );
-      final downloadUrl =
-          await storageRef.ref('profile-photos/$fileName').getDownloadURL();
+          )
+          .timeout(_authOperationTimeout);
+      final downloadUrl = await storageRef
+          .ref('profile-photos/$fileName')
+          .getDownloadURL()
+          .timeout(_authOperationTimeout);
 
-      await user.updatePhotoURL(downloadUrl);
+      await user.updatePhotoURL(downloadUrl).timeout(_authOperationTimeout);
       emit(state.copyWith(profilePhoto: downloadUrl));
     } catch (e, stack) {
       _logRecoverableAuthError('update_profile_photo', e, stack);
-      emit(state.copyWith(errorMessage: 'Profile photo could not be updated.'));
+      emit(state.copyWith(
+          status: Status.failure,
+          errorMessage: 'Profile photo could not be updated.'));
     }
   }
 
   void _handleSignOut(SignOut event, Emitter<AuthState> emit) async {
     FlutterSecureStorage storage = const FlutterSecureStorage();
-    await auth.signOut();
-    emit(const AuthState());
-    emit(state.copyWith(currentState: AppState.unauthenticated));
-    await storage.deleteAll();
+    try {
+      emit(state.copyWith(status: Status.loading));
+      await auth.signOut().timeout(_authOperationTimeout);
+      await storage.deleteAll().timeout(_authOperationTimeout);
+      emit(const AuthState(currentState: AppState.unauthenticated));
+    } catch (error, stack) {
+      _logRecoverableAuthError('sign_out', error, stack);
+      emit(state.copyWith(
+          status: Status.failure,
+          errorMessage: 'Sign out could not be completed. Please try again.'));
+    }
   }
 
   void _handleDeleteAccount(
@@ -637,25 +708,35 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
           EmailAuthProvider.credential(email: state.email!, password: password);
 
       // Reauthenticate user with phone credential
-      await user.reauthenticateWithCredential(credential);
+      await user
+          .reauthenticateWithCredential(credential)
+          .timeout(_authOperationTimeout);
 
       await functions.httpsCallable('closeCircumAccount').call({
         'accountType': 'sender',
-      });
+      }).timeout(_authOperationTimeout);
       // Reauthentication successful, proceed with account deletion
-      await user.delete();
-      await storage.deleteAll();
+      await user.delete().timeout(_authOperationTimeout);
+      await storage.deleteAll().timeout(_authOperationTimeout);
       // Account deleted successfully
       // print("Account deleted successfully.");
       emit(state.copyWith(currentState: AppState.unauthenticated));
     } on FirebaseException catch (e) {
       // print(e.code);
       if (e.code == 'invalid-verification-code') {
-        emit(state.copyWith(errorMessage: 'Invalid verification code'));
+        emit(state.copyWith(
+            status: Status.failure, errorMessage: 'Invalid verification code'));
+      } else {
+        _logRecoverableAuthError('delete_account', e);
+        emit(state.copyWith(
+            status: Status.failure,
+            errorMessage:
+                'Account deletion could not be completed. Please sign in again and retry.'));
       }
     } catch (error, stack) {
       _logRecoverableAuthError('delete_account', error, stack);
       emit(state.copyWith(
+          status: Status.failure,
           errorMessage:
               'Account deletion could not be completed. Please sign in again and retry.'));
     }
@@ -696,7 +777,8 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
       RequestLocationData event, Emitter<AuthState> emit) async {
     try {
       final User? user = auth.currentUser;
-      Position locationData = await locationHelper.enableLocation();
+      Position locationData =
+          await locationHelper.enableLocation().timeout(_authOperationTimeout);
 
       emit(state.copyWith(
           locationData: locationData,
@@ -713,6 +795,13 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
             hasLocationPermission: false,
             status: Status.locationRequested,
             appLocationStatus: AppLocationStatus.denied));
+      } else {
+        _logRecoverableAuthError('request_location', e);
+        emit(state.copyWith(
+            hasLocationPermission: false,
+            status: Status.failure,
+            appLocationStatus: AppLocationStatus.denied,
+            errorMessage: 'Location could not be enabled. Please try again.'));
       }
     }
   }
@@ -722,7 +811,9 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
     try {
       emit(state.copyWith(status: Status.loading));
       final User? user = auth.currentUser;
-      await user?.updateDisplayName(event.username);
+      await user?.updateDisplayName(event.username).timeout(
+            _authOperationTimeout,
+          );
 
       await _updateSenderProfile(
         displayName: event.username,
@@ -737,7 +828,9 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
           username: event.username));
     } catch (e, stack) {
       _logRecoverableAuthError('update_user_profile', e, stack);
-      emit(state.copyWith(errorMessage: 'Profile could not be updated.'));
+      emit(state.copyWith(
+          status: Status.failure,
+          errorMessage: 'Profile could not be updated.'));
     }
   }
 
@@ -745,7 +838,8 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
       OpenSettingsApp event, Emitter<AuthState> emit) async {
     try {
       final User? user = auth.currentUser;
-      Position locationData = await locationHelper.enableLocation();
+      Position locationData =
+          await locationHelper.enableLocation().timeout(_authOperationTimeout);
 
       emit(state.copyWith(
           locationData: locationData,
@@ -755,14 +849,40 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
       if (user != null) {
         await _updateSenderLocation(locationData);
       }
-    } catch (e) {
+    } catch (e, stack) {
       if (e == 'Location permissions are permanently denied') {
-        await Geolocator.openLocationSettings();
+        try {
+          await Geolocator.openLocationSettings()
+              .timeout(_authOperationTimeout);
+          emit(state.copyWith(status: Status.locationRequested));
+        } catch (settingsError, settingsStack) {
+          _logRecoverableAuthError(
+              'open_location_settings', settingsError, settingsStack);
+          emit(state.copyWith(
+              status: Status.failure,
+              errorMessage: 'Location settings could not be opened.'));
+        }
+        return;
       }
 
       if (e == 'Location services are disabled') {
-        await Geolocator.openAppSettings();
+        try {
+          await Geolocator.openAppSettings().timeout(_authOperationTimeout);
+          emit(state.copyWith(status: Status.locationRequested));
+        } catch (settingsError, settingsStack) {
+          _logRecoverableAuthError(
+              'open_app_settings', settingsError, settingsStack);
+          emit(state.copyWith(
+              status: Status.failure,
+              errorMessage: 'Location settings could not be opened.'));
+        }
+        return;
       }
+
+      _logRecoverableAuthError('open_settings_location', e, stack);
+      emit(state.copyWith(
+          status: Status.failure,
+          errorMessage: 'Location settings could not be opened.'));
     }
   }
 
@@ -773,19 +893,25 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
       final lastName = state.username?.trim().split(' ').last;
 
       if (lastName != null) {
-        await user?.updateDisplayName('${event.value} $lastName');
+        await user
+            ?.updateDisplayName('${event.value} $lastName')
+            .timeout(_authOperationTimeout);
         // print('${event.value} $lastName');
         emit(state.copyWith(username: '${event.value} $lastName'));
         await _updateSenderProfile(displayName: '${event.value} $lastName');
       } else {
-        await user?.updateDisplayName(event.value);
+        await user
+            ?.updateDisplayName(event.value)
+            .timeout(_authOperationTimeout);
         // print(user?.displayName);
         emit(state.copyWith(username: event.value));
         await _updateSenderProfile(displayName: event.value);
       }
     } catch (e, stack) {
       _logRecoverableAuthError('update_first_name', e, stack);
-      emit(state.copyWith(errorMessage: 'First name could not be updated.'));
+      emit(state.copyWith(
+          status: Status.failure,
+          errorMessage: 'First name could not be updated.'));
     }
   }
 
@@ -796,19 +922,25 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
       final firstName = state.username?.trim().split(' ').first;
 
       if (firstName != null) {
-        await user?.updateDisplayName('$firstName ${event.value}');
+        await user
+            ?.updateDisplayName('$firstName ${event.value}')
+            .timeout(_authOperationTimeout);
         // print(user?.displayName);
         emit(state.copyWith(username: '$firstName ${event.value}'));
         await _updateSenderProfile(displayName: '$firstName ${event.value}');
       } else {
-        await user?.updateDisplayName(event.value);
+        await user
+            ?.updateDisplayName(event.value)
+            .timeout(_authOperationTimeout);
         // print(user?.displayName);
         emit(state.copyWith(username: event.value));
         await _updateSenderProfile(displayName: event.value);
       }
     } catch (e, stack) {
       _logRecoverableAuthError('update_last_name', e, stack);
-      emit(state.copyWith(errorMessage: 'Last name could not be updated.'));
+      emit(state.copyWith(
+          status: Status.failure,
+          errorMessage: 'Last name could not be updated.'));
     }
   }
 
