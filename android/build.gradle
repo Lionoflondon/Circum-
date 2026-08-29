@@ -31,10 +31,19 @@ subprojects {
 gradle.beforeProject { project ->
     project.pluginManager.withPlugin("com.android.library") {
         project.android {
+            compileSdkVersion 36
             compileSdk = 36
             lint {
                 checkReleaseBuilds false
                 abortOnError false
+            }
+        }
+    }
+    project.afterEvaluate {
+        if (project.plugins.hasPlugin("com.android.library")) {
+            project.android {
+                compileSdkVersion 36
+                compileSdk = 36
             }
         }
     }

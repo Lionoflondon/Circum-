@@ -5,7 +5,6 @@ import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'app/account/bloc/account_bloc.dart';
 import 'app/authentication/bloc/auth_bloc.dart';
 import 'app/history/bloc/history_bloc.dart';
-import 'app/onboarding/view/onboarding.dart';
 import 'app/sender_mobile/sender_mobile_home.dart';
 import 'app/send_package/bloc/send_package_bloc.dart';
 import 'app/support/bloc/support_bloc.dart';
@@ -95,7 +94,7 @@ class _SessionGate extends StatelessWidget {
           case AppState.authenticated:
             return const SenderMobileHome(previewAuthEnabled: true);
           case AppState.unauthenticated:
-            return const OnboardingView();
+            return const SenderMobileHome(previewAuthEnabled: true);
           case AppState.unknownSessionState:
           default:
             return const _SenderBootSurface();
