@@ -7,6 +7,11 @@ on:
         description: "Previous backend release SHA/ref used to compute affected Functions"
         required: true
         type: string
+      function_scope:
+        description: "Optional comma-separated functions:<export> scope for a protected retry"
+        required: false
+        default: ""
+        type: string
 
 jobs:
   deploy-functions:
@@ -35,8 +40,13 @@ jobs:
       - name: Deploy affected Functions
         run: |
           set +e
-          scope="$(node scripts/scoped_functions_deploy_list.js --base '${{ inputs.base_ref }}')"
-          resolver_status=$?
+          if [ -n "${{ inputs.function_scope }}" ]; then
+            scope="$(node scripts/validate_functions_deploy_scope.js '${{ inputs.function_scope }}')"
+            resolver_status=$?
+          else
+            scope="$(node scripts/scoped_functions_deploy_list.js --base '${{ inputs.base_ref }}')"
+            resolver_status=$?
+          fi
           set -e
           if [ "$resolver_status" -ne 0 ] && [ "$resolver_status" -ne 3 ]; then
             echo "Scoped Functions resolver failed with status $resolver_status."

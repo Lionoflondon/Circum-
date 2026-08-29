@@ -5,6 +5,7 @@ const test = require("node:test");
 
 const root = path.resolve(__dirname, "..");
 const script = path.join(__dirname, "scoped_functions_deploy_list.js");
+const scopeValidator = path.join(__dirname, "validate_functions_deploy_scope.js");
 
 function scope(files) {
   return childProcess.execFileSync(process.execPath, [script, "--files", files.join(","), "--names"], {
@@ -46,4 +47,23 @@ test("direct module aliases are included in the deployment scope", () => {
   ]);
   assert.equal(names.includes("getAvailableRequests"), true);
   assert.equal(names.includes("acceptRideRequests"), true);
+});
+
+test("manual retry scope accepts only known exported Functions", () => {
+  const output = childProcess.execFileSync(process.execPath, [
+    scopeValidator,
+    "functions:goOnline,functions:goOffline",
+  ], {cwd: root, encoding: "utf8"});
+  assert.equal(output, "functions:goOnline,functions:goOffline");
+});
+
+test("manual retry scope rejects unknown or unscoped targets", () => {
+  assert.throws(() => childProcess.execFileSync(process.execPath, [
+    scopeValidator,
+    "functions:notAnExport",
+  ], {cwd: root, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"]}));
+  assert.throws(() => childProcess.execFileSync(process.execPath, [
+    scopeValidator,
+    "functions:goOnline,functions:goOnline",
+  ], {cwd: root, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"]}));
 });
