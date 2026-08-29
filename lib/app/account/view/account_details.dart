@@ -34,11 +34,6 @@ class _AccountDetailsState extends State<AccountDetails> {
             child: BlocListener<AuthBloc, AuthState>(
                 listener: (context, state) async {
                   if (state.currentState == AppState.unauthenticated) {
-                    // Navigator.pushAndRemoveUntil(
-                    //   context,
-                    //   MaterialPageRoute(builder: (context) => OnboardingView()),
-                    //   (route) => false, // Remove all existing routes
-                    // );
                     Navigator.popUntil(context, (route) => route.isFirst);
                     // await Future.delayed(const Duration(milliseconds: 500));
                     // // ignore: use_build_context_synchronously
