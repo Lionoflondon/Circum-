@@ -27,9 +27,6 @@ class _FakeProfileRepository implements SenderMobileProfileRepository {
   }
 
   @override
-  Future<void> closeAccount() async {}
-
-  @override
   Future<SenderMobileProfileData> load() async => profile;
 
   @override
@@ -74,9 +71,6 @@ class _FakeProfileRepository implements SenderMobileProfileRepository {
 
 class _FailingProfileRepository implements SenderMobileProfileRepository {
   const _FailingProfileRepository();
-
-  @override
-  Future<void> closeAccount() async {}
 
   @override
   Future<SenderMobileProfileData> load() {

@@ -7,6 +7,11 @@ void main() {
       File('lib/app/sender_mobile/sender_mobile_home.dart').readAsStringSync();
   final authBloc =
       File('lib/app/authentication/bloc/auth_bloc.dart').readAsStringSync();
+  final accountClosure =
+      File('lib/app/authentication/sender_account_closure.dart')
+          .readAsStringSync();
+  final profile = File('lib/app/sender_mobile/sender_mobile_profile.dart')
+      .readAsStringSync();
   final app = File('lib/app.dart').readAsStringSync();
 
   test('production Sender auth no longer depends on preview terminology', () {
@@ -26,6 +31,7 @@ void main() {
     expect(home, contains('createUserWithEmailAndPassword'));
     expect(home, contains('signInWithEmailAndPassword'));
     expect(home, contains("httpsCallable('ensureSenderAccount')"));
+    expect(home, contains(".load('sender_mobile.auth.profile')"));
     expect(home, contains('getIdToken(true)'));
     expect(home, contains('.timeout('));
   });
@@ -33,7 +39,8 @@ void main() {
   test('legacy Sender AuthBloc auth operations are bounded and do not rethrow',
       () {
     expect(authBloc, contains('_authOperationTimeout'));
-    expect(authBloc, contains('readAll().timeout'));
+    expect(authBloc, contains('_hydrateSenderSession'));
+    expect(authBloc, contains('SenderProfileAuthority'));
     expect(authBloc, contains('signInWithEmailAndPassword'));
     expect(authBloc, contains('createUserWithEmailAndPassword'));
     expect(authBloc, contains('sendEmailVerification()'));
@@ -83,6 +90,36 @@ void main() {
     expect(authBloc, contains("updatePhotoURL(downloadUrl).timeout"));
   });
 
+  test('SOURCE CONTRACT: Google, Apple, and phone provider paths are terminal',
+      () {
+    final apple = authBloc.substring(
+      authBloc.indexOf('Future<void> _handleSignInWithAppleAuth'),
+      authBloc.indexOf('void _handleRequestForOTP'),
+    );
+    final google = authBloc.substring(
+      authBloc.indexOf('Future<void> _handleSignInWithGoogle'),
+      authBloc.indexOf('Future<void> _handleVerifySentCode'),
+    );
+    final phone = authBloc.substring(
+      authBloc.indexOf('void _handleRequestForOTP'),
+      authBloc.indexOf('Future<void> _handleSignInWithGoogle'),
+    );
+
+    expect(apple, contains('getAppleIDCredential'));
+    expect(apple, contains('rawNonce: rawNonce'));
+    expect(apple, contains('_hydrateSenderSession'));
+    expect(apple, contains('status: Status.failure'));
+    expect(google, contains('if (googleSignInAccount == null)'));
+    expect(google, contains('_hydrateSenderSession'));
+    expect(google, contains('status: Status.failure'));
+    expect(phone, contains('verificationCompleted'));
+    expect(phone, contains('verificationFailed'));
+    expect(phone, contains('codeSent'));
+    expect(phone, contains('codeAutoRetrievalTimeout'));
+    expect(phone, contains('if (!completer.isCompleted)'));
+    expect(phone, contains('completer.future.timeout(_authOperationTimeout)'));
+  });
+
   test('Sender verification and account-exit operations are bounded', () {
     final verificationHandler = authBloc.substring(
       authBloc.indexOf('Future<void> _handleVerifySentCode'),
@@ -97,21 +134,21 @@ void main() {
 
     final signOutHandler = authBloc.substring(
       authBloc.indexOf('void _handleSignOut'),
-      authBloc.indexOf('void _handleDeleteAccount'),
+      authBloc.indexOf('void _handleResetPassword'),
     );
     expect(signOutHandler, contains('auth.signOut().timeout'));
     expect(signOutHandler, contains('storage.deleteAll().timeout'));
     expect(signOutHandler, contains('status: Status.failure'));
 
-    final deleteHandler = authBloc.substring(
-      authBloc.indexOf('void _handleDeleteAccount'),
-      authBloc.indexOf('void _handleResetPassword'),
-    );
-    expect(deleteHandler, contains('reauthenticateWithCredential(credential)'));
-    expect(deleteHandler, contains("httpsCallable('closeCircumAccount')"));
-    expect(deleteHandler, contains('user.delete().timeout'));
-    expect(deleteHandler, contains('storage.deleteAll().timeout'));
-    expect(deleteHandler, contains('status: Status.failure'));
+    expect(authBloc, isNot(contains('void _handleDeleteAccount')));
+    expect(accountClosure, contains('reauthenticateWithCredential'));
+    expect(accountClosure, contains("httpsCallable('closeCircumAccount')"));
+    expect(accountClosure, contains('deleteFirebaseIdentity: user.delete'));
+    expect(accountClosure, contains('clearLocalSession: _storage.deleteAll'));
+    expect(accountClosure, contains('getIdToken(true)'));
+    expect(accountClosure, contains('rawNonce: rawNonce'));
+    expect(profile, contains('SenderAccountClosure'));
+    expect(accountClosure, contains('closeWithPhoneCredential'));
   });
 
   test('Sender profile field operations fail visibly and safely', () {

@@ -13,6 +13,7 @@ import 'package:google_fonts/google_fonts.dart';
 import '../business/business_access_view.dart';
 import '../health_plus/view/health_plus.dart';
 import '../sender_profile/sender_profile.dart';
+import '../authentication/sender_auth_commit_sequence.dart';
 import '../send_package/bloc/send_package_bloc.dart';
 import '../send_package/view/ride_chats.dart';
 import 'design_system/sender_design_system.dart';
@@ -845,10 +846,23 @@ class _SenderAuthEntryState extends State<_SenderAuthEntry> {
     if (user == null) {
       throw FirebaseAuthException(code: 'sender-no-user');
     }
-    await FirebaseFunctions.instanceFor(region: 'us-central1')
-        .httpsCallable('ensureSenderAccount')
-        .call()
-        .timeout(SenderProfileAuthority.senderAccountEnsureTimeout);
+    final functions = FirebaseFunctions.instanceFor(region: 'us-central1');
+    await SenderAuthCommitSequence(
+      operationTimeout: _senderAuthOperationTimeout,
+    ).run(
+      ensureAccount: () => functions
+          .httpsCallable('ensureSenderAccount')
+          .call()
+          .timeout(SenderProfileAuthority.senderAccountEnsureTimeout),
+      hydrateProfile: () => SenderProfileAuthority(
+        auth: auth,
+        firestore: FirebaseFirestore.instance,
+        functions: functions,
+      ).load('sender_mobile.auth.profile'),
+      refreshToken: () async {
+        await user.getIdToken(true).timeout(_senderAuthOperationTimeout);
+      },
+    );
     if (accountCreated) {
       final referralCode = _referralCode.text.trim();
       if (referralCode.isNotEmpty) {
@@ -862,7 +876,6 @@ class _SenderAuthEntryState extends State<_SenderAuthEntry> {
         }
       }
     }
-    await user.getIdToken(true).timeout(_senderAuthOperationTimeout);
   }
 
   String _senderAuthMessage(FirebaseAuthException error) {

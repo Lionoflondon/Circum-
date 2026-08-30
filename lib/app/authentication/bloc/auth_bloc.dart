@@ -1,6 +1,9 @@
 import 'dart:async';
+import 'dart:convert';
+import 'dart:math';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:crypto/crypto.dart';
 import 'package:cloud_functions/cloud_functions.dart';
 import 'package:equatable/equatable.dart';
 import 'package:firebase_auth/firebase_auth.dart';
@@ -29,6 +32,16 @@ part 'signup_event.dart';
 
 class AuthBloc extends Bloc<AuthEvent, AuthState> {
   static const _authOperationTimeout = Duration(seconds: 20);
+
+  String _createAppleNonce([int length = 32]) {
+    const alphabet =
+        '0123456789ABCDEFGHIJKLMNOPQRSTUVXYZabcdefghijklmnopqrstuvwxyz-._';
+    final random = Random.secure();
+    return List<String>.generate(
+      length,
+      (_) => alphabet[random.nextInt(alphabet.length)],
+    ).join();
+  }
 
   FirebaseAuth auth = FirebaseAuth.instance;
   FirebaseFirestore db = FirebaseFirestore.instance;
@@ -82,7 +95,6 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
     on<UpdatePhoneNumber>(_handleUpdatePhoneNumber);
     on<UpdateUserProfilePhoto>(_handleUpdateUserProfilePhoto);
     on<SignOut>(_handleSignOut);
-    on<DeleteAccount>(_handleDeleteAccount);
   }
 
   Future<void> _updateSenderProfile({
@@ -123,27 +135,60 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
     if (stack != null && kDebugMode) debugPrint('$stack');
   }
 
+  Future<String?> _hydrateSenderSession(User user, String phase) async {
+    final storage = const FlutterSecureStorage();
+    final profile = await SenderProfileAuthority(
+      auth: auth,
+      firestore: db,
+      functions: functions,
+    ).load(phase);
+    final phone = profile.data['phone'] ?? user.phoneNumber;
+    if (phone != null && '$phone'.trim().isNotEmpty) {
+      await storage
+          .write(key: 'phone', value: '$phone')
+          .timeout(_authOperationTimeout);
+      return '$phone';
+    }
+    return null;
+  }
+
+  Future<bool> _sendVerificationEmail(User user, String phase) async {
+    try {
+      await user.sendEmailVerification().timeout(_authOperationTimeout);
+      return true;
+    } catch (error, stack) {
+      _logRecoverableAuthError(phase, error, stack);
+      return false;
+    }
+  }
+
   Future<void> _handleSortSessionState(
       SortSessionState event, Emitter<AuthState> emit) async {
-    // FirebaseAuth auth = FirebaseAuth.instance;
-    final storage = FlutterSecureStorage();
-
-    User? user = auth.currentUser;
-    if (user != null) {
-      // print("User is signed in: ${user.uid}");
-      final phone =
-          (await storage.readAll().timeout(_authOperationTimeout))["phone"];
-      // print("User is signed in: ${user.uid}");
-      // You can also access user information like user.displayName, user.email, etc.
+    try {
+      final user = auth.currentUser;
+      if (user == null) {
+        emit(state.copyWith(currentState: AppState.unauthenticated));
+        return;
+      }
+      final phone = await _hydrateSenderSession(user, 'auth.restore.profile');
       emit(state.copyWith(
-          currentState: AppState.authenticated,
-          username: user.displayName,
-          phoneNumber: user.phoneNumber ?? phone,
-          email: user.email,
-          profilePhoto: user.photoURL,
-          authenticatedStatus: AuthenticatedStatus.authenticated));
-    } else {
-      emit(state.copyWith(currentState: AppState.unauthenticated));
+        currentState: AppState.authenticated,
+        username: user.displayName,
+        phoneNumber: phone,
+        email: user.email,
+        profilePhoto: user.photoURL,
+        authenticatedStatus: user.displayName == null
+            ? AuthenticatedStatus.incompleteData
+            : AuthenticatedStatus.authenticated,
+      ));
+    } catch (error, stack) {
+      _logRecoverableAuthError('session_restore', error, stack);
+      emit(state.copyWith(
+        currentState: AppState.unauthenticated,
+        status: Status.failure,
+        errorMessage:
+            'Your session could not be restored. Please sign in again.',
+      ));
     }
   }
 
@@ -230,37 +275,56 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
       SignInWithAppleAuth event, Emitter<AuthState> emit) async {
     try {
       emit(state.copyWith(status: Status.loading));
+      final rawNonce = _createAppleNonce();
+      final nonce = sha256.convert(utf8.encode(rawNonce)).toString();
       final appleCredential = await SignInWithApple.getAppleIDCredential(
         scopes: [
           AppleIDAuthorizationScopes.email,
           AppleIDAuthorizationScopes.fullName,
         ],
+        nonce: nonce,
       ).timeout(_authOperationTimeout);
 
       final oauthCredential = OAuthProvider("apple.com").credential(
           idToken: appleCredential.identityToken,
-          accessToken: appleCredential.authorizationCode);
+          accessToken: appleCredential.authorizationCode,
+          rawNonce: rawNonce);
 
       UserCredential userCredential = await auth
           .signInWithCredential(oauthCredential)
           .timeout(_authOperationTimeout);
 
+      final user = userCredential.user;
+      if (user == null) {
+        emit(state.copyWith(
+          status: Status.failure,
+          errorMessage:
+              'Apple sign-in could not be completed. Please try again.',
+        ));
+        return;
+      }
+
+      final fullName = [appleCredential.givenName, appleCredential.familyName]
+          .whereType<String>()
+          .map((part) => part.trim())
+          .where((part) => part.isNotEmpty)
+          .join(' ');
+      if (fullName.isNotEmpty && user.displayName != fullName) {
+        await user.updateDisplayName(fullName).timeout(_authOperationTimeout);
+        await _updateSenderProfile(displayName: fullName);
+      }
+      final phone = await _hydrateSenderSession(user, 'auth.apple.profile');
+
       emit(state.copyWith(
-          username: userCredential.user?.displayName,
-          email: userCredential.user?.email,
-          profilePhoto: userCredential.user?.photoURL,
+          username: user.displayName ?? fullName,
+          email: user.email,
+          phoneNumber: phone,
+          profilePhoto: user.photoURL,
           status: Status.signedInWithOAuth,
           currentState: AppState.authenticated,
-          authenticatedStatus: appleCredential.givenName == null &&
-                  userCredential.user?.displayName == null
+          authenticatedStatus: fullName.isEmpty && user.displayName == null
               ? AuthenticatedStatus.incompleteData
               : AuthenticatedStatus.authenticated));
-
-      if (appleCredential.givenName != null) {
-        add(UpdateUserProfile(
-            username:
-                "${appleCredential.givenName} ${appleCredential.familyName}"));
-      }
     } catch (e, stack) {
       _logRecoverableAuthError('apple_sign_in', e, stack);
       emit(state.copyWith(
@@ -337,18 +401,30 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
           .signInWithCredential(credential)
           .timeout(_authOperationTimeout);
 
+      final user = userCredential.user;
+      if (user == null) {
+        emit(state.copyWith(
+          status: Status.failure,
+          errorMessage:
+              'Google sign-in could not be completed. Please try again.',
+        ));
+        return;
+      }
+
+      final displayName = user.displayName?.trim();
+      if (displayName != null && displayName.isNotEmpty) {
+        await _updateSenderProfile(displayName: displayName);
+      }
+      final phone = await _hydrateSenderSession(user, 'auth.google.profile');
+
       emit(state.copyWith(
-          username: userCredential.user?.displayName,
-          email: userCredential.user?.email,
-          profilePhoto: userCredential.user?.photoURL,
+          username: user.displayName,
+          email: user.email,
+          phoneNumber: phone,
+          profilePhoto: user.photoURL,
           status: Status.signedInWithOAuth,
           currentState: AppState.authenticated,
           authenticatedStatus: AuthenticatedStatus.authenticated));
-
-      final displayName = userCredential.user?.displayName?.trim();
-      if (displayName != null && displayName.isNotEmpty) {
-        add(UpdateUserProfile(username: displayName));
-      }
     } catch (e, stack) {
       _logRecoverableAuthError('google_sign_in', e, stack);
       emit(state.copyWith(
@@ -369,47 +445,39 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
       // if user is already signed in by other means, link the credentials
       // else, sign user in
 
-      if (auth.currentUser != null) {
-        await auth.currentUser
-            ?.linkWithCredential(credential)
+      User? user = auth.currentUser;
+      if (user != null) {
+        await user
+            .linkWithCredential(credential)
             .timeout(_authOperationTimeout);
       } else {
         final UserCredential userCredential = await auth
             .signInWithCredential(credential)
             .timeout(_authOperationTimeout);
-
-        if (userCredential.user?.displayName == null) {
-          if (state.oAuthFirstName == null) {
-            emit(state.copyWith(
-                authenticatedStatus: AuthenticatedStatus.incompleteData,
-                currentState: AppState.authenticated));
-          } else {
-            add(UpdateUserProfile(
-                username: "${state.oAuthFirstName} ${state.oAuthLastName}"));
-            emit(state.copyWith(
-                status: Status.success,
-                username: "${state.oAuthFirstName} ${state.oAuthLastName}",
-                profilePhoto: state.oAuthPhotoURL,
-                email: state.oAuthEmail,
-                verificationId: '',
-                otp: '',
-                phoneNumber: userCredential.user?.phoneNumber,
-                currentState: AppState.authenticated));
-          }
-        } else {
-          emit(state.copyWith(
-              status: Status.success,
-              username: userCredential.user?.displayName,
-              profilePhoto: userCredential.user?.photoURL,
-              email: userCredential.user?.email,
-              verificationId: '',
-              otp: '',
-              phoneNumber: userCredential.user?.phoneNumber,
-              authenticatedStatus: AuthenticatedStatus.authenticated,
-              currentState: AppState.authenticated));
-        }
+        user = userCredential.user;
       }
-      // Sign the user in (or link) with the credential
+      if (user == null) {
+        emit(state.copyWith(
+          status: Status.failure,
+          errorMessage: 'Verification could not be completed.',
+        ));
+        return;
+      }
+      final phone = await _hydrateSenderSession(user, 'auth.phone.profile');
+      final isIncomplete = user.displayName == null;
+      emit(state.copyWith(
+        status: isIncomplete ? Status.initial : Status.success,
+        username: user.displayName,
+        profilePhoto: user.photoURL,
+        email: user.email,
+        verificationId: '',
+        otp: '',
+        phoneNumber: phone,
+        authenticatedStatus: isIncomplete
+            ? AuthenticatedStatus.incompleteData
+            : AuthenticatedStatus.authenticated,
+        currentState: AppState.authenticated,
+      ));
     } on FirebaseException catch (e) {
       if (e.code == 'invalid-verification-code') {
         emit(state.copyWith(
@@ -473,7 +541,6 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
 
   void _handleSignInWithEmail(
       SignInWithEmail event, Emitter<AuthState> emit) async {
-    FlutterSecureStorage storage = const FlutterSecureStorage();
     try {
       emit(state.copyWith(status: Status.loading));
       final UserCredential userCredential = await auth
@@ -481,46 +548,41 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
               email: event.email, password: event.password)
           .timeout(_authOperationTimeout);
 
-      if (auth.currentUser?.emailVerified == false) {
-        await auth.currentUser
-            ?.sendEmailVerification()
-            .timeout(_authOperationTimeout);
+      final user = userCredential.user;
+      if (user == null) {
+        emit(state.copyWith(
+          status: Status.failure,
+          errorMessage: 'Sign in could not be completed. Please try again.',
+        ));
+        return;
+      }
+      if (user.emailVerified == false) {
+        final verificationSent =
+            await _sendVerificationEmail(user, 'auth.email.verification');
         emit(state.copyWith(
           status: Status.unverifiedEmail,
+          errorMessage: verificationSent
+              ? null
+              : 'Your verification email could not be sent. Please retry.',
         ));
       } else {
-        if (userCredential.user?.displayName == null) {
+        final phone = await _hydrateSenderSession(user, 'auth.email.profile');
+        if (user.displayName == null) {
           emit(state.copyWith(
               authenticatedStatus: AuthenticatedStatus.incompleteData,
-              currentState: AppState.authenticated));
+              currentState: AppState.authenticated,
+              phoneNumber: phone));
         } else {
           emit(state.copyWith(
               status: Status.success,
               authenticatedStatus: AuthenticatedStatus.authenticated,
-              username: userCredential.user?.displayName,
-              profilePhoto: userCredential.user?.photoURL,
-              email: userCredential.user?.email,
+              username: user.displayName,
+              profilePhoto: user.photoURL,
+              email: user.email,
               verificationId: '',
               otp: '',
-              phoneNumber: userCredential.user?.phoneNumber,
+              phoneNumber: phone,
               currentState: AppState.authenticated));
-
-          try {
-            final profile = await SenderProfileAuthority(
-              auth: auth,
-              firestore: db,
-              functions: functions,
-            ).load('auth.email.profile');
-            final phone = profile.data['phone'];
-            if (phone != null) {
-              await storage
-                  .write(key: 'phone', value: '$phone')
-                  .timeout(_authOperationTimeout);
-              emit(state.copyWith(phoneNumber: '$phone'));
-            }
-          } catch (error, stack) {
-            _logRecoverableAuthError('auth.email.profile', error, stack);
-          }
         }
       }
     } on FirebaseAuthException catch (e) {
@@ -537,8 +599,12 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
       if (e.code == 'wrong-password') {
         emit(state.copyWith(errorMessage: 'Password incorrect'));
       }
-    } catch (e) {
-      emit(state.copyWith(status: Status.failure));
+    } catch (error, stack) {
+      _logRecoverableAuthError('email_sign_in', error, stack);
+      emit(state.copyWith(
+        status: Status.failure,
+        errorMessage: 'Sign in could not be completed. Please try again.',
+      ));
     }
   }
 
@@ -546,19 +612,29 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
       SignUpWithEmail event, Emitter<AuthState> emit) async {
     try {
       emit(state.copyWith(status: Status.loading));
-      await auth
+      final credential = await auth
           .createUserWithEmailAndPassword(
               email: event.email, password: event.password)
           .timeout(_authOperationTimeout);
-
-      if (auth.currentUser?.emailVerified == false) {
-        await auth.currentUser
-            ?.sendEmailVerification()
-            .timeout(_authOperationTimeout);
+      final user = credential.user;
+      if (user == null) {
         emit(state.copyWith(
-          status: Status.unverifiedEmail,
+          status: Status.failure,
+          errorMessage:
+              'Account setup could not be completed. Please try again.',
         ));
+        return;
       }
+      await _hydrateSenderSession(user, 'auth.signup.profile');
+      final verificationSent =
+          await _sendVerificationEmail(user, 'auth.signup.verification');
+      emit(state.copyWith(
+        status: Status.unverifiedEmail,
+        email: user.email,
+        errorMessage: verificationSent
+            ? null
+            : 'Your account was created, but the verification email could not be sent. Please retry.',
+      ));
     } on FirebaseAuthException catch (e) {
       emit(state.copyWith(status: Status.failure));
       if (e.code == 'invalid-email') {
@@ -573,8 +649,12 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
       if (e.code == 'weak-password') {
         emit(state.copyWith(errorMessage: 'Use a strong password'));
       }
-    } catch (e) {
-      emit(state.copyWith(status: Status.failure));
+    } catch (error, stack) {
+      _logRecoverableAuthError('email_sign_up', error, stack);
+      emit(state.copyWith(
+        status: Status.failure,
+        errorMessage: 'Account setup could not be completed. Please try again.',
+      ));
     }
   }
 
@@ -674,72 +754,20 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
     try {
       emit(state.copyWith(status: Status.loading));
       await auth.signOut().timeout(_authOperationTimeout);
-      await storage.deleteAll().timeout(_authOperationTimeout);
-      emit(const AuthState(currentState: AppState.unauthenticated));
     } catch (error, stack) {
       _logRecoverableAuthError('sign_out', error, stack);
       emit(state.copyWith(
           status: Status.failure,
           errorMessage: 'Sign out could not be completed. Please try again.'));
-    }
-  }
-
-  void _handleDeleteAccount(
-      DeleteAccount event, Emitter<AuthState> emit) async {
-    FlutterSecureStorage storage = const FlutterSecureStorage();
-    final user = auth.currentUser!;
-    final password = state.password?.trim() ?? '';
-    if (password.isEmpty) {
-      emit(state.copyWith(
-          errorMessage:
-              'Enter your password again before deleting your account.'));
       return;
     }
 
-    // auth.currentUser.reauthenticateWithProvider(provider)
-
     try {
-      // if(user.)
-
-      // final AuthCredential credential = PhoneAuthProvider.credential(
-      //     verificationId: state.verificationId!, smsCode: '${state.otp}');
-
-      final AuthCredential credential =
-          EmailAuthProvider.credential(email: state.email!, password: password);
-
-      // Reauthenticate user with phone credential
-      await user
-          .reauthenticateWithCredential(credential)
-          .timeout(_authOperationTimeout);
-
-      await functions.httpsCallable('closeCircumAccount').call({
-        'accountType': 'sender',
-      }).timeout(_authOperationTimeout);
-      // Reauthentication successful, proceed with account deletion
-      await user.delete().timeout(_authOperationTimeout);
       await storage.deleteAll().timeout(_authOperationTimeout);
-      // Account deleted successfully
-      // print("Account deleted successfully.");
-      emit(state.copyWith(currentState: AppState.unauthenticated));
-    } on FirebaseException catch (e) {
-      // print(e.code);
-      if (e.code == 'invalid-verification-code') {
-        emit(state.copyWith(
-            status: Status.failure, errorMessage: 'Invalid verification code'));
-      } else {
-        _logRecoverableAuthError('delete_account', e);
-        emit(state.copyWith(
-            status: Status.failure,
-            errorMessage:
-                'Account deletion could not be completed. Please sign in again and retry.'));
-      }
     } catch (error, stack) {
-      _logRecoverableAuthError('delete_account', error, stack);
-      emit(state.copyWith(
-          status: Status.failure,
-          errorMessage:
-              'Account deletion could not be completed. Please sign in again and retry.'));
+      _logRecoverableAuthError('sign_out_local_cleanup', error, stack);
     }
+    emit(const AuthState(currentState: AppState.unauthenticated));
   }
 
   void _handleResetPassword(

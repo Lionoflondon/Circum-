@@ -38,30 +38,19 @@ function assertRecentAuthentication(context) {
   }
 }
 
-async function queryAny(collection, field, op, value) {
-  const snapshot = await getFirestore()
-      .collection(collection)
-      .where(field, op, value)
-      .limit(1)
-      .get();
-  return !snapshot.empty;
-}
-
 async function senderHasBlocker(uid) {
-  const activeDelivery = await queryAny(
-      "deliveryRequests",
-      "userId",
-      "==",
-      uid,
-  );
-  if (activeDelivery) {
-    const snapshot = await getFirestore()
+  const activeDeliveryChecks = [];
+  for (let index = 0; index < ACTIVE_DELIVERY_STATUSES.length; index += 10) {
+    activeDeliveryChecks.push(getFirestore()
         .collection("deliveryRequests")
         .where("userId", "==", uid)
-        .where("status", "in", ACTIVE_DELIVERY_STATUSES.slice(0, 10))
+        .where("status", "in", ACTIVE_DELIVERY_STATUSES.slice(index, index + 10))
         .limit(1)
-        .get();
-    if (!snapshot.empty) return "active_delivery";
+        .get());
+  }
+  const activeDeliveries = await Promise.all(activeDeliveryChecks);
+  if (activeDeliveries.some((snapshot) => !snapshot.empty)) {
+    return "active_delivery";
   }
 
   const dispute = await getFirestore()
@@ -84,13 +73,19 @@ async function senderHasBlocker(uid) {
 }
 
 async function riderHasBlocker(uid) {
-  const activeDelivery = await getFirestore()
-      .collection("deliveryRequests")
-      .where("riderId", "==", uid)
-      .where("status", "in", ACTIVE_DELIVERY_STATUSES.slice(0, 10))
-      .limit(1)
-      .get();
-  if (!activeDelivery.empty) return "active_delivery";
+  const activeDeliveryChecks = [];
+  for (let index = 0; index < ACTIVE_DELIVERY_STATUSES.length; index += 10) {
+    activeDeliveryChecks.push(getFirestore()
+        .collection("deliveryRequests")
+        .where("riderId", "==", uid)
+        .where("status", "in", ACTIVE_DELIVERY_STATUSES.slice(index, index + 10))
+        .limit(1)
+        .get());
+  }
+  const activeDeliveries = await Promise.all(activeDeliveryChecks);
+  if (activeDeliveries.some((snapshot) => !snapshot.empty)) {
+    return "active_delivery";
+  }
 
   const dispute = await getFirestore()
       .collection("disputes")
@@ -151,6 +146,20 @@ async function closeAccount(data, context) {
     );
   }
 
+  const db = getFirestore();
+  const closedAccountRef = db.collection("closedAccounts").doc(uid);
+  const existingClosure = await closedAccountRef.get();
+  if (existingClosure.exists) {
+    const existing = existingClosure.data() || {};
+    if (existing.accountType && existing.accountType !== accountType) {
+      throw new functions.https.HttpsError(
+          "failed-precondition",
+          "This account cannot be closed using that account type.",
+      );
+    }
+    return {status: "ready_for_auth_deletion", idempotent: true};
+  }
+
   const blocker = accountType === "rider" ?
     await riderHasBlocker(uid) :
     await senderHasBlocker(uid);
@@ -162,13 +171,12 @@ async function closeAccount(data, context) {
     );
   }
 
-  const db = getFirestore();
   const batch = db.batch();
   const timestamp = FieldValue.serverTimestamp();
   const closure = {
     uid,
     accountType,
-    status: "closed",
+    status: "ready_for_auth_deletion",
     closedAt: timestamp,
     initiatedBy: uid,
     retainedRecords:
@@ -184,6 +192,7 @@ async function closeAccount(data, context) {
   profileCollections.forEach((collection) => {
     batch.set(db.collection(collection).doc(uid), {
       accountClosed: true,
+      accountStatus: "closed",
       closedAt: timestamp,
       displayName: FieldValue.delete(),
       fullName: FieldValue.delete(),
@@ -222,10 +231,18 @@ async function closeAccount(data, context) {
 
   await batch.commit();
 
-  await getAuth().revokeRefreshTokens(uid);
-  await getAuth().deleteUser(uid);
+  if (accountType === "rider") {
+    // Preserve the established Rider contract until that client is migrated
+    // through its own provider-aware closure flow.
+    await getAuth().revokeRefreshTokens(uid);
+    await getAuth().deleteUser(uid);
+    return {status: "closed", idempotent: false};
+  }
 
-  return {status: "closed"};
+  // Sender deletes its Firebase identity after this operation succeeds.
+  // Keeping that final identity operation client-side preserves a recoverable,
+  // authenticated retry path if it fails after data closure.
+  return {status: "ready_for_auth_deletion", idempotent: false};
 }
 
 module.exports = {
