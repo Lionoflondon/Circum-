@@ -91,6 +91,8 @@ class SenderMobileHome extends StatefulWidget {
   State<SenderMobileHome> createState() => _SenderMobileHomeState();
 }
 
+const _senderAuthOperationTimeout = Duration(seconds: 30);
+
 class _SenderMobileHomeState extends State<SenderMobileHome> {
   var _index = 0;
   var _entry = _SenderEntryScreen.landing;
@@ -326,7 +328,9 @@ class _SenderMobileHomeState extends State<SenderMobileHome> {
     }
     try {
       if (kIsWeb) {
-        await FirebaseAuth.instance.setPersistence(Persistence.LOCAL);
+        await FirebaseAuth.instance
+            .setPersistence(Persistence.LOCAL)
+            .timeout(_senderAuthOperationTimeout);
       }
       _authSubscription =
           FirebaseAuth.instance.authStateChanges().listen((user) {
@@ -783,27 +787,26 @@ class _SenderAuthEntryState extends State<_SenderAuthEntry> {
   }) async {
     final auth = FirebaseAuth.instance;
     if (kIsWeb) {
-      await auth.setPersistence(Persistence.LOCAL);
+      await auth
+          .setPersistence(Persistence.LOCAL)
+          .timeout(_senderAuthOperationTimeout);
     }
     UserCredential credential;
     if (createAccount) {
       try {
-        credential = await auth.createUserWithEmailAndPassword(
-          email: email,
-          password: password,
-        );
+        credential = await auth
+            .createUserWithEmailAndPassword(email: email, password: password)
+            .timeout(_senderAuthOperationTimeout);
       } on FirebaseAuthException catch (error) {
         if (error.code != 'email-already-in-use') rethrow;
-        credential = await auth.signInWithEmailAndPassword(
-          email: email,
-          password: password,
-        );
+        credential = await auth
+            .signInWithEmailAndPassword(email: email, password: password)
+            .timeout(_senderAuthOperationTimeout);
       }
     } else {
-      credential = await auth.signInWithEmailAndPassword(
-        email: email,
-        password: password,
-      );
+      credential = await auth
+          .signInWithEmailAndPassword(email: email, password: password)
+          .timeout(_senderAuthOperationTimeout);
     }
     final user = credential.user;
     if (user == null) {
@@ -811,8 +814,9 @@ class _SenderAuthEntryState extends State<_SenderAuthEntry> {
     }
     await FirebaseFunctions.instanceFor(region: 'us-central1')
         .httpsCallable('ensureSenderAccount')
-        .call();
-    await user.getIdToken(true);
+        .call()
+        .timeout(_senderAuthOperationTimeout);
+    await user.getIdToken(true).timeout(_senderAuthOperationTimeout);
   }
 
   String _previewAuthMessage(FirebaseAuthException error) {
@@ -826,7 +830,7 @@ class _SenderAuthEntryState extends State<_SenderAuthEntry> {
       case 'weak-password':
         return 'Preview password is too weak.';
       default:
-        return 'Preview authentication failed (${error.code}).';
+        return 'Authentication failed. Please try again.';
     }
   }
 }
