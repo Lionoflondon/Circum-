@@ -238,6 +238,15 @@
       "products": ["sender-app", "website"],
       "files": ["lib/env/env.dart"],
       "reason": "Shared read-only build-time environment accessors."
+    },
+    {
+      "products": ["sender-app", "backend"],
+      "files": [
+        "deploy-manifest.json",
+        "server/functions/account-closure.js",
+        "server/functions/account-closure.test.js"
+      ],
+      "reason": "Sender account closure must coordinate client-owned Firebase Auth deletion with backend-owned anonymisation and idempotent delivery-state checks."
     }
   ],
   "blockedPrefixes": [
