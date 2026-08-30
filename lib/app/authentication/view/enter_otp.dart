@@ -7,13 +7,11 @@ import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:pinput/pinput.dart';
 
-import '../../../utils/app_state/app_state.dart';
 import '../../../utils/theme/theme.dart';
 import '../bloc/auth_bloc.dart';
 
 class EnterOTPView extends StatefulWidget {
-  final bool deleteAccount;
-  const EnterOTPView({super.key, this.deleteAccount = false});
+  const EnterOTPView({super.key});
 
   @override
   EnterOTPViewState createState() => EnterOTPViewState();
@@ -62,17 +60,12 @@ class EnterOTPViewState extends State<EnterOTPView> {
           foregroundColor: Colors.white,
           backgroundColor: AppColors.secondary,
           centerTitle: true,
-          title: AppText.text(
-              widget.deleteAccount == true
-                  ? 'Enter OTP to delete account'
-                  : 'Enter 6 Digit Code',
-              fontSize: 16,
-              fontWeight: FontWeight.w700),
+          title: AppText.text('Enter 6 Digit Code',
+              fontSize: 16, fontWeight: FontWeight.w700),
         ),
         body: BlocListener<AuthBloc, AuthState>(
             listener: (context, state) async {
-              if (state.status == Status.success &&
-                  widget.deleteAccount == false) {
+              if (state.status == Status.success) {
                 context.read<AuthBloc>().add(ResetStatus());
                 // context.read<AuthBloc>().add(StartCountDown());
                 Navigator.popUntil(context, (route) => route.isFirst);
@@ -86,14 +79,6 @@ class EnterOTPViewState extends State<EnterOTPView> {
                   AuthenticatedStatus.incompleteData) {
                 // context.read<AuthBloc>().add(ResetStatus());
                 Navigator.popUntil(context, (route) => route.isFirst);
-              }
-
-              if (state.currentState == AppState.unauthenticated &&
-                  widget.deleteAccount == true) {
-                Navigator.popUntil(context, (route) => route.isFirst);
-                // await Future.delayed(const Duration(milliseconds: 500));
-                // Navigator.pushReplacement(
-                //     context, MaterialPageRoute(builder: (_) => App()));
               }
             },
             child: SizedBox(
@@ -219,9 +204,6 @@ class EnterOTPViewState extends State<EnterOTPView> {
           onCompleted: (pin) async {
             context.read<AuthBloc>().add(SetOTP(otp: pin));
             await Future.delayed(const Duration(microseconds: 300));
-            if (widget.deleteAccount == true) {
-              context.read<AuthBloc>().add(DeleteAccount());
-            }
 
             context.read<AuthBloc>().add(VerifySentCode());
             // resetOTP();

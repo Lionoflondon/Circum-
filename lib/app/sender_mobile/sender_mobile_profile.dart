@@ -13,6 +13,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../sender_profile/sender_profile.dart';
+import '../authentication/sender_account_closure_dialog.dart';
 import '../send_package/view/ride_chats.dart';
 import 'design_system/sender_design_system.dart';
 import 'sender_saved_addresses.dart';
@@ -339,8 +340,6 @@ abstract class SenderMobileProfileRepository {
   Future<SenderMobileProfileData> uploadPhoto(SenderProfilePhoto photo);
 
   Future<void> logout();
-
-  Future<void> closeAccount();
 }
 
 class SenderProfilePhoto {
@@ -563,14 +562,6 @@ class FirebaseSenderMobileProfileRepository
 
   @override
   Future<void> logout() => profileAuthority.auth.signOut();
-
-  @override
-  Future<void> closeAccount() async {
-    await functions.httpsCallable('closeCircumAccount').call<void>({
-      'accountType': 'sender',
-    });
-    await profileAuthority.auth.signOut();
-  }
 }
 
 String? _senderProfileCacheKey() {
@@ -960,43 +951,8 @@ class _SenderMobileProfileViewState extends State<SenderMobileProfileView> {
   }
 
   Future<void> _confirmCloseAccount() async {
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (dialogContext) => AlertDialog(
-        backgroundColor: _ProfileTokens.panel,
-        title: const Text('Close your profile?'),
-        content: const Text(
-          'This permanently closes your profile. Active deliveries, '
-          'open disputes or pending payments must be resolved first.',
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(dialogContext, false),
-            child: const Text('Keep account'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.pop(dialogContext, true),
-            style: FilledButton.styleFrom(
-              backgroundColor: const Color(0xFFB91C1C),
-            ),
-            child: const Text('Close account'),
-          ),
-        ],
-      ),
-    );
-    if (confirmed != true || !mounted) return;
-    try {
-      await _repository.closeAccount();
-      if (!mounted) return;
+    if (await SenderAccountClosureDialog.show(context) && mounted) {
       widget.onLoggedOut?.call();
-    } catch (error) {
-      if (!mounted) return;
-      setState(() {
-        _error = error is FirebaseFunctionsException &&
-                (error.message?.trim().isNotEmpty ?? false)
-            ? error.message!.trim()
-            : 'Your account could not be closed. Please try again.';
-      });
     }
   }
 

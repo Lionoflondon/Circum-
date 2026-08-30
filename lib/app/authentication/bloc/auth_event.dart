@@ -173,8 +173,6 @@ class SetErrorMessage extends AuthEvent {
 
 class SignOut extends AuthEvent {}
 
-class DeleteAccount extends AuthEvent {}
-
 class ResetPassword extends AuthEvent {
   final String email;
   const ResetPassword({required this.email});

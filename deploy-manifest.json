@@ -82,9 +82,10 @@
         "lib/app/sender_mobile/",
         "lib/app/sender_profile/",
         "lib/app/support/",
-        "test/sender_",
-        "test/sender_mobile/",
-        "test/widget_test.dart",
+    "test/sender_",
+    "test/sender_mobile/",
+    "test/authentication/",
+    "test/widget_test.dart",
         "test/authentication_screen_contract_test.dart",
         "test/booking_cancellation_test.dart",
         "test/delivery_pricing_test.dart",
@@ -237,6 +238,29 @@
       "products": ["sender-app", "website"],
       "files": ["lib/env/env.dart"],
       "reason": "Shared read-only build-time environment accessors."
+    },
+    {
+      "products": ["sender-app", "backend"],
+      "files": [
+        "deploy-manifest.json",
+        "lib/app/account/view/account_details.dart",
+        "lib/app/authentication/bloc/auth_bloc.dart",
+        "lib/app/authentication/bloc/auth_event.dart",
+        "lib/app/authentication/repo/auth_repo.dart",
+        "lib/app/authentication/sender_account_closure.dart",
+        "lib/app/authentication/sender_account_closure_dialog.dart",
+        "lib/app/authentication/sender_auth_commit_sequence.dart",
+        "lib/app/authentication/view/enter_otp.dart",
+        "lib/app/sender_mobile/sender_mobile_home.dart",
+        "lib/app/sender_mobile/sender_mobile_profile.dart",
+        "server/functions/account-closure.js",
+        "server/functions/account-closure.test.js",
+        "test/authentication/sender_account_closure_sequence_test.dart",
+        "test/authentication/sender_auth_commit_sequence_test.dart",
+        "test/sender_mobile/sender_auth_deterministic_contract_test.dart",
+        "test/sender_mobile/sender_mobile_profile_test.dart"
+      ],
+      "reason": "Sender account closure must coordinate client-owned Firebase Auth deletion with backend-owned anonymisation and idempotent delivery-state checks."
     }
   ],
   "blockedPrefixes": [

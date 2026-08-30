@@ -61,6 +61,13 @@ function startsWithAny(file, prefixes) {
   return prefixes.some((prefix) => file === prefix || file.startsWith(prefix));
 }
 
+function isAllowedDependencyIntersection(file) {
+  return (manifest.allowedDependencyIntersections || []).some((intersection) =>
+    intersection.products.includes(productName) &&
+    intersection.files.includes(file),
+  );
+}
+
 const changed = changedFiles();
 const ownedForCi = changed.filter((file) => productName === 'backend' &&
   (file === 'firebase.json' ||
@@ -94,6 +101,7 @@ const offenders = changed.filter((file) => {
   if (productName === 'sender-app' && file === '.github/workflows/rc1_release_build.yml') return false;
   if (productName === 'sender-app' && file === 'scripts/deploy_guard.js') return false;
   if (productName === 'backend' && file === 'firebase.json') return false;
+  if (isAllowedDependencyIntersection(file)) return false;
   if (startsWithAny(file, product.forbiddenPrefixes)) return true;
   return !startsWithAny(file, product.ownedPrefixes) &&
     !manifest.sharedFiles.includes(file);

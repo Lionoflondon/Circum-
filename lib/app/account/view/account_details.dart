@@ -6,6 +6,7 @@ import 'package:image_picker/image_picker.dart';
 import '../../../utils/app_state/app_state.dart';
 import '../../../utils/theme/theme.dart';
 import '../../authentication/bloc/auth_bloc.dart';
+import '../../sender_mobile/sender_mobile_profile.dart';
 import 'bottom_sheets/bottom_sheets.dart';
 import 'bottom_sheets/image_bs.dart';
 import 'package:cached_network_image/cached_network_image.dart';
@@ -369,11 +370,15 @@ class _AccountDetailsState extends State<AccountDetails> {
             style: TextButton.styleFrom(
                 padding: const EdgeInsets.symmetric(vertical: 20)),
             onPressed: () async {
+              final navigator = Navigator.of(context);
               final deleteAccount = await deleteAccountBottomSheet(context);
 
-              if (deleteAccount == true) {
-                // ignore: use_build_context_synchronously
-                context.read<AuthBloc>().add(DeleteAccount());
+              if (deleteAccount == true && mounted) {
+                // Account closure lives in the canonical Sender profile flow,
+                // which collects fresh provider authentication first.
+                navigator.push(MaterialPageRoute(
+                  builder: (_) => const SenderMobileProfileView(),
+                ));
               }
             },
             child: Center(
