@@ -884,6 +884,30 @@ async function ensureStripeCustomerForSender(stripe, sender) {
   return customer.id;
 }
 
+async function resumeExistingSenderPaymentIntent({
+  stripe,
+  existingSession,
+  sender,
+  quoteId,
+  paymentSessionId,
+}) {
+  const paymentIntentId = text(existingSession.stripePaymentIntentId);
+  const customerId = text(existingSession.stripeCustomerId);
+  if (!paymentIntentId || !customerId) return null;
+  const intent = await stripe.paymentIntents.retrieve(paymentIntentId);
+  const metadata = intent && intent.metadata || {};
+  if (text(intent && intent.customer) !== customerId ||
+      text(metadata.userId) !== sender.uid ||
+      text(metadata.quoteId) !== quoteId ||
+      text(metadata.paymentSessionId) !== paymentSessionId) {
+    throw new functions.https.HttpsError(
+        "permission-denied",
+        "Payment session ownership mismatch.",
+    );
+  }
+  return intent;
+}
+
 exports.getSenderRothBalance = functions.https.onCall(async (_, context) => {
   const sender = requireSender(context);
   const balance = await walletBalanceForSender(sender);
@@ -1011,11 +1035,24 @@ exports.createSenderPaymentSession = (stripe) => functions.https.onCall(async (d
         previousStatus: text(existingSession.paymentStatus || existingSession.status),
       });
     }
-    if (!webCheckout && sameRequestedSession && existingSession.clientSecret && existingSession.stripeCustomerId) {
+    if (!webCheckout && sameRequestedSession && existingSession.stripePaymentIntentId && existingSession.stripeCustomerId) {
+      const existingIntent = await resumeExistingSenderPaymentIntent({
+        stripe,
+        existingSession,
+        sender,
+        quoteId,
+        paymentSessionId: sessionRef.id,
+      });
       const existingEphemeralKey = await stripe.ephemeralKeys.create(
           {customer: existingSession.stripeCustomerId},
           {apiVersion: "2020-08-27"},
       );
+      if (Object.prototype.hasOwnProperty.call(existingSession, "clientSecret")) {
+        await sessionRef.update({
+          clientSecret: FieldValue.delete(),
+          updatedAt: FieldValue.serverTimestamp(),
+        });
+      }
       return {
         paymentSessionId: sessionRef.id,
         quoteId,
@@ -1030,7 +1067,7 @@ exports.createSenderPaymentSession = (stripe) => functions.https.onCall(async (d
         paymentMethod: requestedFallback,
         savedPaymentMethodId: savedPaymentMethodId || null,
         stripePaymentIntentId: existingSession.stripePaymentIntentId || null,
-        clientSecret: existingSession.clientSecret,
+        clientSecret: existingIntent.client_secret,
         customerId: existingSession.stripeCustomerId,
         ephemeralKeySecret: existingEphemeralKey.secret,
         idempotent: true,
@@ -1210,7 +1247,6 @@ exports.createSenderPaymentSession = (stripe) => functions.https.onCall(async (d
         success_url: `${baseUrl}${separator}sender_payment=success&paymentSessionId=${sessionRef.id}&checkoutSessionId={CHECKOUT_SESSION_ID}`,
         cancel_url: `${baseUrl}${separator}sender_payment=cancelled&paymentSessionId=${sessionRef.id}`,
         payment_intent_data: {
-          setup_future_usage: "off_session",
           metadata: {
             paymentType: "delivery",
             type: "sender_delivery_payment",
@@ -1301,7 +1337,6 @@ exports.createSenderPaymentSession = (stripe) => functions.https.onCall(async (d
       automatic_payment_methods: {enabled: true},
       customer: customerId,
       payment_method: savedPaymentMethodId || undefined,
-      setup_future_usage: savedPaymentMethodId ? undefined : "off_session",
       metadata: {
         paymentType: "delivery",
         userId: sender.uid,
@@ -1331,7 +1366,6 @@ exports.createSenderPaymentSession = (stripe) => functions.https.onCall(async (d
     savedPaymentMethodId: savedPaymentMethodId || null,
     stripeCustomerId: customerId,
     stripePaymentIntentId: intent.id,
-    clientSecret: intent.client_secret,
     idempotencyKey,
   });
   return {
@@ -2084,6 +2118,7 @@ exports._private = {
   quotePayload,
   riderDisplayAliases,
   riderPayoutFromQuote,
+  resumeExistingSenderPaymentIntent,
   DRAFT_RETENTION_DAYS,
   DRAFT_INACTIVITY_MINUTES,
 };
