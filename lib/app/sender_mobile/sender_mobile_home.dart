@@ -14,6 +14,7 @@ import '../business/business_access_view.dart';
 import '../health_plus/view/health_plus.dart';
 import '../sender_profile/sender_profile.dart';
 import '../authentication/sender_auth_commit_sequence.dart';
+import '../authentication/sender_auth_error_message.dart';
 import '../send_package/bloc/send_package_bloc.dart';
 import '../send_package/view/ride_chats.dart';
 import 'design_system/sender_design_system.dart';
@@ -782,28 +783,31 @@ class _SenderAuthEntryState extends State<_SenderAuthEntry> {
     }
     setState(() => _busy = true);
     try {
-      await _authenticateSender(
+      final bootstrap = await _authenticateSender(
         email: _identity.text.trim().toLowerCase(),
         password: _password.text,
         createAccount: !_isSignIn,
       );
+      if (!bootstrap.succeeded) {
+        debugPrint(
+          'Sender auth bootstrap deferred: stage=${bootstrap.failedStage?.name} '
+          'error=${bootstrap.error.runtimeType}',
+        );
+      }
       widget.onAuthenticated();
-    } on FirebaseAuthException catch (error) {
-      if (!mounted) return;
-      setState(() => _authMessage = _senderAuthMessage(error));
     } catch (error) {
       debugPrint('Sender Mobile auth failed: ${error.runtimeType}');
       if (!mounted) return;
-      setState(
-        () =>
-            _authMessage = 'Sign in could not be completed. Please try again.',
-      );
+      final action = _isSignIn
+          ? SenderAuthAction.signIn
+          : SenderAuthAction.createAccount;
+      setState(() => _authMessage = senderAuthErrorMessage(action, error));
     } finally {
       if (mounted) setState(() => _busy = false);
     }
   }
 
-  Future<void> _authenticateSender({
+  Future<SenderAuthCommitResult> _authenticateSender({
     required String email,
     required String password,
     required bool createAccount,
@@ -847,9 +851,9 @@ class _SenderAuthEntryState extends State<_SenderAuthEntry> {
       throw FirebaseAuthException(code: 'sender-no-user');
     }
     final functions = FirebaseFunctions.instanceFor(region: 'us-central1');
-    await SenderAuthCommitSequence(
+    final bootstrap = await SenderAuthCommitSequence(
       operationTimeout: _senderAuthOperationTimeout,
-    ).run(
+    ).runRecoverable(
       ensureAccount: () => functions
           .httpsCallable('ensureSenderAccount')
           .call()
@@ -876,21 +880,7 @@ class _SenderAuthEntryState extends State<_SenderAuthEntry> {
         }
       }
     }
-  }
-
-  String _senderAuthMessage(FirebaseAuthException error) {
-    switch (error.code) {
-      case 'invalid-email':
-        return 'Enter a valid email address.';
-      case 'invalid-credential':
-      case 'wrong-password':
-      case 'user-not-found':
-        return 'Sign in failed. Check the email and password.';
-      case 'weak-password':
-        return 'Use a stronger password.';
-      default:
-        return 'Sign in could not be completed. Please try again.';
-    }
+    return bootstrap;
   }
 }
 

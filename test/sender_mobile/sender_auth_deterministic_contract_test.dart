@@ -40,6 +40,7 @@ void main() {
       () {
     expect(authBloc, contains('_authOperationTimeout'));
     expect(authBloc, contains('_hydrateSenderSession'));
+    expect(authBloc, contains('_hydrateSenderSessionRecoverably'));
     expect(authBloc, contains('SenderProfileAuthority'));
     expect(authBloc, contains('signInWithEmailAndPassword'));
     expect(authBloc, contains('createUserWithEmailAndPassword'));
@@ -107,10 +108,14 @@ void main() {
 
     expect(apple, contains('getAppleIDCredential'));
     expect(apple, contains('rawNonce: rawNonce'));
-    expect(apple, contains('_hydrateSenderSession'));
+    expect(
+      apple,
+      isNot(contains('accessToken: appleCredential.authorizationCode')),
+    );
+    expect(apple, contains('_hydrateSenderSessionRecoverably'));
     expect(apple, contains('status: Status.failure'));
     expect(google, contains('if (googleSignInAccount == null)'));
-    expect(google, contains('_hydrateSenderSession'));
+    expect(google, contains('_hydrateSenderSessionRecoverably'));
     expect(google, contains('status: Status.failure'));
     expect(phone, contains('verificationCompleted'));
     expect(phone, contains('verificationFailed'));
