@@ -187,6 +187,19 @@ class SenderPaymentProfile {
       googlePaySupported: map['googlePaySupported'] != false,
     );
   }
+
+  SenderPaymentProfile withPlatformPaySupport({
+    required bool applePay,
+    required bool googlePay,
+  }) {
+    return SenderPaymentProfile(
+      methods: methods,
+      preference: preference,
+      defaultPaymentMethodId: defaultPaymentMethodId,
+      applePaySupported: applePaySupported && applePay,
+      googlePaySupported: googlePaySupported && googlePay,
+    );
+  }
 }
 
 typedef SenderPaymentMethodsData = SenderPaymentProfile;

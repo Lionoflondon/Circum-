@@ -63,6 +63,9 @@ Future<void> _configureStripe() async {
   final key = Env.stripePublishableKey.trim();
   if (key.isEmpty) return;
   Stripe.publishableKey = key;
+  if (!kIsWeb) {
+    Stripe.merchantIdentifier = 'merchant.com.circum.app';
+  }
   await Stripe.instance.applySettings();
 }
 
