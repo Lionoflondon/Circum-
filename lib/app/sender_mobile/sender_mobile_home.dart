@@ -25,6 +25,7 @@ import 'sender_accessibility.dart';
 import 'sender_activity.dart';
 import 'sender_booking_canvas.dart';
 import 'sender_gifts_icon.dart';
+import 'sender_identity.dart';
 import 'sender_mobile_profile.dart';
 import 'sender_notification_routing.dart';
 import 'sender_notifications.dart';
@@ -605,6 +606,7 @@ class _SenderAuthEntry extends StatefulWidget {
 }
 
 class _SenderAuthEntryState extends State<_SenderAuthEntry> {
+  final _firstName = TextEditingController();
   final _identity = TextEditingController();
   final _password = TextEditingController();
   final _referralCode = TextEditingController();
@@ -617,6 +619,7 @@ class _SenderAuthEntryState extends State<_SenderAuthEntry> {
 
   @override
   void dispose() {
+    _firstName.dispose();
     _identity.dispose();
     _password.dispose();
     _referralCode.dispose();
@@ -681,6 +684,20 @@ class _SenderAuthEntryState extends State<_SenderAuthEntry> {
               ),
             ),
             const SizedBox(height: 26),
+            if (!_isSignIn) ...[
+              _AuthField(
+                controller: _firstName,
+                label: 'FIRST NAME',
+                hint: 'First name',
+                textCapitalization: TextCapitalization.words,
+                errorText: _showErrors &&
+                        normalizeSenderFirstName(_firstName.text).isEmpty
+                    ? 'First name is required'
+                    : null,
+                onChanged: (_) => setState(() {}),
+              ),
+              const SizedBox(height: 14),
+            ],
             _AuthField(
               controller: _identity,
               label: 'EMAIL OR PHONE',
@@ -764,6 +781,8 @@ class _SenderAuthEntryState extends State<_SenderAuthEntry> {
   }
 
   Future<void> _submit() async {
+    final firstName = normalizeSenderFirstName(_firstName.text);
+    final validFirstName = _isSignIn || firstName.isNotEmpty;
     final validIdentity = _identity.text.trim().isNotEmpty;
     final validPassword =
         _isSignIn ? _password.text.isNotEmpty : _password.text.length >= 6;
@@ -773,7 +792,12 @@ class _SenderAuthEntryState extends State<_SenderAuthEntry> {
       _showErrors = true;
       _authMessage = null;
     });
-    if (!validIdentity || !validPassword || !validSenderEmail) return;
+    if (!validFirstName ||
+        !validIdentity ||
+        !validPassword ||
+        !validSenderEmail) {
+      return;
+    }
     if (!widget.senderAuthEnabled) {
       setState(() {
         _authMessage =
@@ -787,6 +811,7 @@ class _SenderAuthEntryState extends State<_SenderAuthEntry> {
         email: _identity.text.trim().toLowerCase(),
         password: _password.text,
         createAccount: !_isSignIn,
+        firstName: firstName,
       );
       if (!bootstrap.succeeded) {
         debugPrint(
@@ -811,6 +836,7 @@ class _SenderAuthEntryState extends State<_SenderAuthEntry> {
     required String email,
     required String password,
     required bool createAccount,
+    required String firstName,
   }) async {
     final auth = FirebaseAuth.instance;
     if (kIsWeb) {
@@ -854,10 +880,21 @@ class _SenderAuthEntryState extends State<_SenderAuthEntry> {
     final bootstrap = await SenderAuthCommitSequence(
       operationTimeout: _senderAuthOperationTimeout,
     ).runRecoverable(
-      ensureAccount: () => functions
-          .httpsCallable('ensureSenderAccount')
-          .call()
-          .timeout(SenderProfileAuthority.senderAccountEnsureTimeout),
+      ensureAccount: () async {
+        await functions
+            .httpsCallable('ensureSenderAccount')
+            .call()
+            .timeout(SenderProfileAuthority.senderAccountEnsureTimeout);
+        if (!createAccount) return;
+        await functions.httpsCallable('updateSenderProfile').call({
+          'firstName': firstName,
+        }).timeout(SenderProfileAuthority.senderAccountEnsureTimeout);
+        if (user.displayName != firstName) {
+          await user
+              .updateDisplayName(firstName)
+              .timeout(_senderAuthOperationTimeout);
+        }
+      },
       hydrateProfile: () => SenderProfileAuthority(
         auth: auth,
         firestore: FirebaseFirestore.instance,
@@ -1492,6 +1529,7 @@ class _AuthField extends StatelessWidget {
   final String label;
   final String hint;
   final TextInputType? keyboardType;
+  final TextCapitalization textCapitalization;
   final bool obscureText;
   final String? errorText;
   final Widget? suffix;
@@ -1502,6 +1540,7 @@ class _AuthField extends StatelessWidget {
     required this.label,
     required this.hint,
     this.keyboardType,
+    this.textCapitalization = TextCapitalization.none,
     this.obscureText = false,
     this.errorText,
     this.suffix,
@@ -1529,6 +1568,7 @@ class _AuthField extends StatelessWidget {
           TextField(
             controller: controller,
             keyboardType: keyboardType,
+            textCapitalization: textCapitalization,
             obscureText: obscureText,
             onChanged: onChanged,
             style: GoogleFonts.inter(
@@ -1883,7 +1923,7 @@ class FirebaseSenderHomeRepository implements SenderHomeRepository {
         ? SenderTrustPolicy.normalizeTier(backendNextTier)
         : SenderTrustPolicy.nextTier(trustTier);
     return SenderHomeSummary(
-      displayName: '${profile['displayName'] ?? user.displayName ?? ''}'.trim(),
+      displayName: '${profile['firstName'] ?? ''}'.trim(),
       healthProfileExists: healthSnapshot.exists,
       businessAccountCount:
           <String>{...ownedBusinesses, ...teamBusinesses}.length,
@@ -3118,21 +3158,10 @@ class _SenderDashboardState extends State<_SenderDashboard> {
     super.dispose();
   }
 
-  String get _firstName {
-    final name = _summary?.displayName.trim() ?? '';
-    if (name.isNotEmpty) return name.split(RegExp(r'\s+')).first;
-    final user = FirebaseAuth.instance.currentUser;
-    final authName = user?.displayName?.trim() ?? '';
-    if (authName.isNotEmpty) return authName.split(RegExp(r'\s+')).first;
-    return 'there';
-  }
-
-  String get _greeting {
-    final hour = DateTime.now().hour;
-    if (hour < 12) return 'Good morning';
-    if (hour < 18) return 'Good afternoon';
-    return 'Good evening';
-  }
+  String get _greeting => senderGreeting(
+        localTime: DateTime.now(),
+        firstName: _summary?.displayName ?? '',
+      );
 
   int get _unreadCount =>
       _notifications?.where((item) => !item.read).length ?? 0;
@@ -3284,7 +3313,7 @@ class _SenderDashboardState extends State<_SenderDashboard> {
         ),
         const SizedBox(height: 22),
         Text(
-          _summaryError == null ? '$_greeting, $_firstName' : 'Welcome back',
+          _summaryError == null ? _greeting : 'Welcome back',
           style: TextStyle(
             color: Colors.white,
             fontSize: 27,

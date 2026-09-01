@@ -561,7 +561,14 @@ class FirebaseSenderMobileProfileRepository
   }
 
   @override
-  Future<void> logout() => profileAuthority.auth.signOut();
+  Future<void> logout() async {
+    final key = _senderProfileCacheKey();
+    if (key != null) {
+      final preferences = await SharedPreferences.getInstance();
+      await preferences.remove(key);
+    }
+    await profileAuthority.auth.signOut();
+  }
 }
 
 String? _senderProfileCacheKey() {

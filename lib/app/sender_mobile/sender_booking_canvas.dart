@@ -4376,6 +4376,7 @@ class _PaymentPanel extends StatefulWidget {
 
 class _PaymentPanelState extends State<_PaymentPanel> {
   late Future<SenderPaymentMethodsData> _paymentMethodsFuture;
+  String? _paymentConfirmationMessage;
 
   SendPackageState get engine => widget.engine;
   SenderBookingDraft get draft => widget.draft;
@@ -4397,8 +4398,10 @@ class _PaymentPanelState extends State<_PaymentPanel> {
     }
   }
 
-  Future<SenderPaymentMethodsData> _loadPaymentMethods() {
-    return FirebaseSenderPaymentProfileRepository().paymentMethods().timeout(
+  Future<SenderPaymentMethodsData> _loadPaymentMethods() async {
+    final profile = await FirebaseSenderPaymentProfileRepository()
+        .paymentMethods()
+        .timeout(
       const Duration(seconds: 6),
       onTimeout: () {
         debugPrint(
@@ -4408,10 +4411,29 @@ class _PaymentPanelState extends State<_PaymentPanel> {
       },
     ).catchError((error) {
       debugPrint(
-        'Sender payment methods unavailable; falling back to card checkout: $error',
+        'Sender payment methods unavailable; falling back to card checkout: '
+        '${error.runtimeType}',
       );
       return SenderPaymentProfile.empty();
     });
+    if (kIsWeb) return profile;
+    var platformPaySupported = false;
+    try {
+      platformPaySupported = await Stripe.instance
+          .isPlatformPaySupported()
+          .timeout(const Duration(seconds: 4));
+    } catch (error) {
+      debugPrint(
+        'Sender wallet readiness unavailable; keeping card checkout: '
+        '${error.runtimeType}',
+      );
+    }
+    return profile.withPlatformPaySupport(
+      applePay:
+          defaultTargetPlatform == TargetPlatform.iOS && platformPaySupported,
+      googlePay: defaultTargetPlatform == TargetPlatform.android &&
+          platformPaySupported,
+    );
   }
 
   @override
@@ -4453,7 +4475,11 @@ class _PaymentPanelState extends State<_PaymentPanel> {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (!context.mounted) return;
         onDraft(draft.copyWith(cardConfirmationStarted: true));
-        _confirmCardPayment(context, engine.senderPaymentClientSecret!, engine);
+        _confirmStripePayment(
+          context,
+          engine.senderPaymentClientSecret!,
+          engine,
+        );
       });
     }
     if (kIsWeb &&
@@ -4698,6 +4724,13 @@ class _PaymentPanelState extends State<_PaymentPanel> {
                 'Please try again. No payment has been confirmed and no Circum Rider broadcast has been created.',
           ),
         ],
+        if (_paymentConfirmationMessage != null) ...[
+          const SizedBox(height: 12),
+          _GapNotice(
+            title: 'Payment not completed',
+            body: _paymentConfirmationMessage!,
+          ),
+        ],
         if ((engine.senderPaymentError.isNotEmpty ||
                 engine.senderDeliveryError.isNotEmpty) &&
             (engine.senderPaymentCheckoutUrl == null ||
@@ -4751,6 +4784,7 @@ class _PaymentPanelState extends State<_PaymentPanel> {
     String paymentMethodId = '',
     String paymentMethodLabel = '',
   }) {
+    setState(() => _paymentConfirmationMessage = null);
     final split = SenderPaymentSplit.calculate(
       totalDue: total,
       rothEnabled: draft.rothEnabled,
@@ -4925,7 +4959,7 @@ class _PaymentPanelState extends State<_PaymentPanel> {
         queryParameters: {...base.queryParameters, 'app': 'sender'}).toString();
   }
 
-  Future<void> _confirmCardPayment(
+  Future<void> _confirmStripePayment(
     BuildContext context,
     String clientSecret,
     SendPackageState engine,
@@ -4944,6 +4978,7 @@ class _PaymentPanelState extends State<_PaymentPanel> {
               ? const PaymentSheetGooglePay(
                   merchantCountryCode: 'GB',
                   currencyCode: 'GBP',
+                  testEnv: false,
                 )
               : null,
           style: ThemeMode.dark,
@@ -4951,18 +4986,34 @@ class _PaymentPanelState extends State<_PaymentPanel> {
       );
       await Stripe.instance.presentPaymentSheet();
       if (!context.mounted) return;
-      onDraft(draft.copyWith(paymentStatus: SenderPaymentStatus.paid));
+      setState(() => _paymentConfirmationMessage =
+          'Payment is being verified. Your delivery will be submitted once confirmation completes.');
+      onDraft(draft.copyWith(paymentStatus: SenderPaymentStatus.processing));
       _createPaidDelivery(context, engine);
       SenderAccessibilityScope.maybeOf(
         context,
       )?.haptic(SenderFeedbackEvent.paymentCompleted);
     } on StripeException catch (error) {
-      debugPrint('Sender mobile Stripe confirmation failed: $error');
+      debugPrint(
+        'Sender mobile payment confirmation ended: ${error.error.code.name}',
+      );
       if (!context.mounted) return;
+      setState(() {
+        _paymentConfirmationMessage =
+            error.error.code == FailureCode.Canceled
+                ? 'Payment was cancelled. Your delivery has not been submitted.'
+                : error.error.code == FailureCode.Timeout
+                    ? 'Payment is still processing. We will confirm your delivery once payment completes.'
+                    : "We couldn't complete the payment. Your delivery has not been submitted.";
+      });
       onDraft(draft.copyWith(paymentStatus: SenderPaymentStatus.failed));
     } catch (error) {
-      debugPrint('Sender mobile Stripe confirmation failed: $error');
+      debugPrint(
+        'Sender mobile payment confirmation failed: ${error.runtimeType}',
+      );
       if (!context.mounted) return;
+      setState(() => _paymentConfirmationMessage =
+          "We couldn't complete the payment. Your delivery has not been submitted.");
       onDraft(draft.copyWith(paymentStatus: SenderPaymentStatus.failed));
     }
   }
