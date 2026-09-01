@@ -152,6 +152,17 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
     return null;
   }
 
+  Future<String?> _hydrateSenderSessionRecoverably(
+      User user, String phase) async {
+    try {
+      return await _hydrateSenderSession(user, phase)
+          .timeout(_authOperationTimeout);
+    } catch (error, stack) {
+      _logRecoverableAuthError('$phase.deferred', error, stack);
+      return null;
+    }
+  }
+
   Future<bool> _sendVerificationEmail(User user, String phase) async {
     try {
       await user.sendEmailVerification().timeout(_authOperationTimeout);
@@ -170,7 +181,8 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
         emit(state.copyWith(currentState: AppState.unauthenticated));
         return;
       }
-      final phone = await _hydrateSenderSession(user, 'auth.restore.profile');
+      final phone = await _hydrateSenderSessionRecoverably(
+          user, 'auth.restore.profile');
       emit(state.copyWith(
         currentState: AppState.authenticated,
         username: user.displayName,
@@ -287,7 +299,6 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
 
       final oauthCredential = OAuthProvider("apple.com").credential(
           idToken: appleCredential.identityToken,
-          accessToken: appleCredential.authorizationCode,
           rawNonce: rawNonce);
 
       UserCredential userCredential = await auth
@@ -313,7 +324,8 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
         await user.updateDisplayName(fullName).timeout(_authOperationTimeout);
         await _updateSenderProfile(displayName: fullName);
       }
-      final phone = await _hydrateSenderSession(user, 'auth.apple.profile');
+      final phone = await _hydrateSenderSessionRecoverably(
+          user, 'auth.apple.profile');
 
       emit(state.copyWith(
           username: user.displayName ?? fullName,
@@ -415,7 +427,8 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
       if (displayName != null && displayName.isNotEmpty) {
         await _updateSenderProfile(displayName: displayName);
       }
-      final phone = await _hydrateSenderSession(user, 'auth.google.profile');
+      final phone = await _hydrateSenderSessionRecoverably(
+          user, 'auth.google.profile');
 
       emit(state.copyWith(
           username: user.displayName,
@@ -463,7 +476,8 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
         ));
         return;
       }
-      final phone = await _hydrateSenderSession(user, 'auth.phone.profile');
+      final phone = await _hydrateSenderSessionRecoverably(
+          user, 'auth.phone.profile');
       final isIncomplete = user.displayName == null;
       emit(state.copyWith(
         status: isIncomplete ? Status.initial : Status.success,
@@ -566,7 +580,8 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
               : 'Your verification email could not be sent. Please retry.',
         ));
       } else {
-        final phone = await _hydrateSenderSession(user, 'auth.email.profile');
+        final phone = await _hydrateSenderSessionRecoverably(
+            user, 'auth.email.profile');
         if (user.displayName == null) {
           emit(state.copyWith(
               authenticatedStatus: AuthenticatedStatus.incompleteData,
@@ -625,7 +640,7 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
         ));
         return;
       }
-      await _hydrateSenderSession(user, 'auth.signup.profile');
+      await _hydrateSenderSessionRecoverably(user, 'auth.signup.profile');
       final verificationSent =
           await _sendVerificationEmail(user, 'auth.signup.verification');
       emit(state.copyWith(
