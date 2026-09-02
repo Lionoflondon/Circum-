@@ -39,6 +39,7 @@ function file(side, content) {
 test("multipart document callable writes both sides and canonical pending metadata", async () => {
   const result = await functions.submitRiderDocument.run({
     documentType: "driving_licence",
+    idempotencyKey: "integration-upload-001",
     files: [file("front", "front"), file("back", "back")],
     approved: true,
     dispatchEligible: true,
@@ -64,6 +65,7 @@ test("invalid multipart document is rejected before any Storage or Firestore wri
   await assert.rejects(
       functions.submitRiderDocument.run({
         documentType: "driving_licence",
+        idempotencyKey: "integration-invalid-001",
         files: [file("front", "front"), {...file("back", "back"), base64: "not-base64"}],
       }, {auth: {uid: "rider-invalid", token: {email: "invalid@example.test"}}}),
   );
@@ -72,4 +74,39 @@ test("invalid multipart document is rejected before any Storage or Firestore wri
   assert.equal(documents.size, 0);
   const [files] = await bucket.getFiles({prefix: "rider_documents/rider-invalid/"});
   assert.equal(files.length, 0);
+});
+
+test("replaying an upload request does not create duplicate records or objects", async () => {
+  const request = {
+    documentType: "driving_licence",
+    idempotencyKey: "integration-replay-001",
+    files: [file("front", "front-replay"), file("back", "back-replay")],
+  };
+  const context = {auth: {uid: "rider-replay", token: {email: "replay@example.test"}}};
+
+  const first = await functions.submitRiderDocument.run(request, context);
+  const second = await functions.submitRiderDocument.run(request, context);
+
+  assert.equal(second.documentId, first.documentId);
+  assert.equal(second.idempotentReplay, true);
+  const documents = await db.collection("riderDocuments")
+      .where("riderId", "==", "rider-replay").get();
+  assert.equal(documents.size, 1);
+  const [files] = await bucket.getFiles({prefix: "rider_documents/rider-replay/"});
+  assert.equal(files.length, 2);
+});
+
+test("legacy clients without an upload request key remain compatible", async () => {
+  const result = await functions.submitRiderDocument.run({
+    documentType: "insurance",
+    fileBase64: Buffer.from("legacy-insurance").toString("base64"),
+    contentType: "application/pdf",
+    fileName: "insurance.pdf",
+  }, {auth: {uid: "rider-legacy", token: {email: "legacy@example.test"}}});
+
+  assert.equal(result.ok, true);
+  const documents = await db.collection("riderDocuments")
+      .where("riderId", "==", "rider-legacy").get();
+  assert.equal(documents.size, 1);
+  assert.equal(documents.docs[0].data().idempotencyKey, undefined);
 });
