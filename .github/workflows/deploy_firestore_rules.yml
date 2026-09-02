@@ -19,9 +19,9 @@ jobs:
           distribution: temurin
           java-version: "21"
       - run: npm --prefix server/functions ci
+      - run: npm install -g firebase-tools
       - run: npm --prefix server/functions run test:rules
       - uses: google-github-actions/auth@v2
         with:
           credentials_json: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_CIRCUM_2797C }}
-      - run: npm install -g firebase-tools
       - run: firebase deploy --only firestore:rules --project circum-2797c
