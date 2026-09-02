@@ -140,6 +140,29 @@ String? _senderWalletCacheKey() {
   return uid == null ? null : 'senderWalletSnapshot:$uid';
 }
 
+const _senderWalletActionTimeout = Duration(seconds: 15);
+
+Future<SenderPaymentProfile> _withDeviceWalletSupport(
+    SenderPaymentProfile profile) async {
+  if (kIsWeb) {
+    return profile.withPlatformPaySupport(applePay: false, googlePay: false);
+  }
+  var supported = false;
+  try {
+    supported = await Stripe.instance
+        .isPlatformPaySupported()
+        .timeout(const Duration(seconds: 4));
+  } catch (error) {
+    debugPrint(
+        'Sender Wallet device-pay readiness unavailable: ${error.runtimeType}');
+  }
+  return profile.withPlatformPaySupport(
+    applePay: defaultTargetPlatform == TargetPlatform.iOS && supported,
+    googlePay:
+        defaultTargetPlatform == TargetPlatform.android && supported,
+  );
+}
+
 class _CachedSenderWalletSnapshot {
   final SenderWalletData wallet;
   final List<SenderWalletTransaction> transactions;
@@ -385,7 +408,7 @@ class SenderWalletView extends StatefulWidget {
 }
 
 class _SenderWalletViewState extends State<SenderWalletView> {
-  static const _walletOperationTimeout = Duration(seconds: 15);
+  static const _walletOperationTimeout = _senderWalletActionTimeout;
 
   late final SenderWalletRepository _repository;
   StreamSubscription<SenderWalletData>? _subscription;
@@ -475,7 +498,8 @@ class _SenderWalletViewState extends State<SenderWalletView> {
         debugPrint('Sender Wallet transactions unavailable: $error');
       }
       try {
-        methods = await withWalletTimeout(_repository.paymentMethods());
+        methods = await _withDeviceWalletSupport(
+            await withWalletTimeout(_repository.paymentMethods()));
       } catch (error) {
         debugPrint('Sender Wallet payment methods unavailable: $error');
       }
@@ -554,7 +578,8 @@ class _SenderWalletViewState extends State<SenderWalletView> {
   }
 
   Future<void> _refreshPaymentMethods() async {
-    final methods = await _repository.paymentMethods();
+    final methods = await _withDeviceWalletSupport(
+        await _repository.paymentMethods().timeout(_walletOperationTimeout));
     if (mounted) setState(() => _paymentMethods = methods);
   }
 
@@ -565,7 +590,9 @@ class _SenderWalletViewState extends State<SenderWalletView> {
       _error = null;
     });
     try {
-      final setup = await _repository.createSetupIntent();
+      final setup = await _repository
+          .createSetupIntent()
+          .timeout(_walletOperationTimeout);
       await Stripe.instance.initPaymentSheet(
         paymentSheetParameters: SetupPaymentSheetParameters(
           merchantDisplayName: 'Circum',
@@ -579,6 +606,7 @@ class _SenderWalletViewState extends State<SenderWalletView> {
               ? const PaymentSheetGooglePay(
                   merchantCountryCode: 'GB',
                   currencyCode: 'GBP',
+                  testEnv: false,
                 )
               : null,
           style: ThemeMode.dark,
@@ -589,13 +617,14 @@ class _SenderWalletViewState extends State<SenderWalletView> {
       if (mounted) {
         _notice(context, 'Payment method added.');
       }
-    } on StripeException catch (error) {
+    } on StripeException catch (_) {
       if (mounted) {
-        _notice(
-            context, error.error.localizedMessage ?? 'Card setup cancelled.');
+        _notice(context, 'Card setup was cancelled or could not be completed.');
       }
-    } catch (error) {
-      if (mounted) setState(() => _error = '$error');
+    } on TimeoutException {
+      if (mounted) _notice(context, 'Card setup timed out. Please try again.');
+    } catch (_) {
+      if (mounted) _notice(context, 'Card setup could not be completed.');
     } finally {
       if (mounted) setState(() => _paymentActionLoading = false);
     }
@@ -605,7 +634,9 @@ class _SenderWalletViewState extends State<SenderWalletView> {
     if (_paymentActionLoading) return;
     setState(() => _paymentActionLoading = true);
     try {
-      await _repository.setDefaultPaymentMethod(id);
+      await _repository
+          .setDefaultPaymentMethod(id)
+          .timeout(_walletOperationTimeout);
       await _refreshPaymentMethods();
     } catch (error) {
       if (mounted) _notice(context, 'Could not update default card.');
@@ -634,7 +665,9 @@ class _SenderWalletViewState extends State<SenderWalletView> {
     if (!confirmed || _paymentActionLoading) return;
     setState(() => _paymentActionLoading = true);
     try {
-      await _repository.detachPaymentMethod(method.id);
+      await _repository
+          .detachPaymentMethod(method.id)
+          .timeout(_walletOperationTimeout);
       await _refreshPaymentMethods();
     } catch (error) {
       if (mounted) _notice(context, 'Could not remove payment method.');
@@ -735,14 +768,18 @@ class _SenderWalletViewState extends State<SenderWalletView> {
     try {
       await FirebaseFunctions.instance
           .httpsCallable('redeemGiftCard')
-          .call({'code': code});
+          .call({'code': code})
+          .timeout(_walletOperationTimeout);
       await _load();
       if (mounted) _notice(context, 'Roth Card redeemed.');
-    } on FirebaseFunctionsException catch (error) {
+    } on FirebaseFunctionsException catch (_) {
       if (mounted) {
-        _notice(
-            context, error.message ?? 'This Roth Card could not be redeemed.');
+        _notice(context, 'This Roth Card could not be redeemed.');
       }
+    } on TimeoutException {
+      if (mounted) _notice(context, 'Redemption timed out. Please try again.');
+    } catch (_) {
+      if (mounted) _notice(context, 'This Roth Card could not be redeemed.');
     }
   }
 
@@ -994,7 +1031,9 @@ class _ManagePaymentsScreenState extends State<_ManagePaymentsScreen> {
       _error = null;
     });
     try {
-      final profile = await widget.repository.paymentMethods();
+      final profile = await _withDeviceWalletSupport(await widget.repository
+          .paymentMethods()
+          .timeout(_senderWalletActionTimeout));
       var businessAccount = false;
       try {
         final user = FirebaseAuth.instance.currentUser;
@@ -1003,7 +1042,8 @@ class _ManagePaymentsScreenState extends State<_ManagePaymentsScreen> {
               .collection('businessAccounts')
               .where('createdByUserId', isEqualTo: user.uid)
               .limit(1)
-              .get();
+              .get()
+              .timeout(_senderWalletActionTimeout);
           businessAccount = owned.docs.isNotEmpty;
         }
       } catch (_) {
@@ -1029,7 +1069,9 @@ class _ManagePaymentsScreenState extends State<_ManagePaymentsScreen> {
     if (_busy) return;
     setState(() => _busy = true);
     try {
-      final setup = await widget.repository.createSetupIntent();
+      final setup = await widget.repository
+          .createSetupIntent()
+          .timeout(_senderWalletActionTimeout);
       await Stripe.instance.initPaymentSheet(
         paymentSheetParameters: SetupPaymentSheetParameters(
           merchantDisplayName: 'Circum',
@@ -1043,6 +1085,7 @@ class _ManagePaymentsScreenState extends State<_ManagePaymentsScreen> {
               ? const PaymentSheetGooglePay(
                   merchantCountryCode: 'GB',
                   currencyCode: 'GBP',
+                  testEnv: false,
                 )
               : null,
           style: ThemeMode.dark,
@@ -1050,12 +1093,22 @@ class _ManagePaymentsScreenState extends State<_ManagePaymentsScreen> {
       );
       await Stripe.instance.presentPaymentSheet();
       await _load();
-    } on StripeException catch (error) {
+    } on StripeException catch (_) {
       if (mounted) {
         _SenderWalletViewState._notice(
           context,
-          error.error.localizedMessage ?? 'Card setup cancelled.',
+          'Card setup was cancelled or could not be completed.',
         );
+      }
+    } on TimeoutException {
+      if (mounted) {
+        _SenderWalletViewState._notice(
+            context, 'Card setup timed out. Please try again.');
+      }
+    } catch (_) {
+      if (mounted) {
+        _SenderWalletViewState._notice(
+            context, 'Card setup could not be completed.');
       }
     } finally {
       if (mounted) setState(() => _busy = false);
@@ -1065,8 +1118,15 @@ class _ManagePaymentsScreenState extends State<_ManagePaymentsScreen> {
   Future<void> _setDefault(String id) async {
     setState(() => _busy = true);
     try {
-      await widget.repository.setDefaultPaymentMethod(id);
+      await widget.repository
+          .setDefaultPaymentMethod(id)
+          .timeout(_senderWalletActionTimeout);
       await _load();
+    } catch (_) {
+      if (mounted) {
+        _SenderWalletViewState._notice(
+            context, 'Could not update the default card. Please try again.');
+      }
     } finally {
       if (mounted) setState(() => _busy = false);
     }
@@ -1094,8 +1154,15 @@ class _ManagePaymentsScreenState extends State<_ManagePaymentsScreen> {
     if (!confirmed) return;
     setState(() => _busy = true);
     try {
-      await widget.repository.detachPaymentMethod(method.id);
+      await widget.repository
+          .detachPaymentMethod(method.id)
+          .timeout(_senderWalletActionTimeout);
       await _load();
+    } catch (_) {
+      if (mounted) {
+        _SenderWalletViewState._notice(context,
+            'Could not remove the payment method. Please try again.');
+      }
     } finally {
       if (mounted) setState(() => _busy = false);
     }
@@ -1104,8 +1171,15 @@ class _ManagePaymentsScreenState extends State<_ManagePaymentsScreen> {
   Future<void> _savePreference(SenderCheckoutPreference value) async {
     setState(() => _busy = true);
     try {
-      await widget.repository.saveCheckoutPreference(value);
+      await widget.repository
+          .saveCheckoutPreference(value)
+          .timeout(_senderWalletActionTimeout);
       await _load();
+    } catch (_) {
+      if (mounted) {
+        _SenderWalletViewState._notice(context,
+            'Could not update checkout preferences. Please try again.');
+      }
     } finally {
       if (mounted) setState(() => _busy = false);
     }
@@ -1236,13 +1310,15 @@ class _SenderReferralScreenState extends State<SenderReferralScreen> {
       if (user == null) throw StateError('Sign in to use referrals.');
       final result = await FirebaseFunctions.instance
           .httpsCallable('ensureReferralCode')
-          .call();
+          .call()
+          .timeout(_senderWalletActionTimeout);
       final data = Map<String, dynamic>.from(result.data as Map);
       final referrals = await FirebaseFirestore.instance
           .collection('referrals')
           .where('referrerUserId', isEqualTo: user.uid)
           .limit(100)
-          .get();
+          .get()
+          .timeout(_senderWalletActionTimeout);
       if (!mounted) return;
       setState(() {
         _code = '${data['referralCode'] ?? ''}';
@@ -1470,13 +1546,23 @@ class _WalletActivityScreenState extends State<_WalletActivityScreen> {
   Future<void> _loadMore() async {
     if (_loading || _nextPage == null) return;
     setState(() => _loading = true);
-    final page = await widget.repository.transactions(pageToken: _nextPage);
-    if (mounted) {
-      setState(() {
-        _transactions.addAll(page.transactions);
-        _nextPage = page.nextPageToken;
-        _loading = false;
-      });
+    try {
+      final page = await widget.repository
+          .transactions(pageToken: _nextPage)
+          .timeout(_senderWalletActionTimeout);
+      if (mounted) {
+        setState(() {
+          _transactions.addAll(page.transactions);
+          _nextPage = page.nextPageToken;
+        });
+      }
+    } catch (_) {
+      if (mounted) {
+        _SenderWalletViewState._notice(context,
+            'More wallet activity could not be loaded. Please try again.');
+      }
+    } finally {
+      if (mounted) setState(() => _loading = false);
     }
   }
 
