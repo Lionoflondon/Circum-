@@ -9,6 +9,34 @@ test("public Rider IDs are opaque, stable-format identifiers", () => {
   for (const id of ids) assert.match(id, /^CR-[A-F0-9]{10}$/);
   assert.equal([...ids].some((id) => id.includes("firebase-uid")), false);
 });
+
+test("Rider profile accepts canonical and legacy display dates consistently", () => {
+  assert.equal(riderAccount._test.canonicalDateOfBirth("1988-04-23"), "1988-04-23");
+  assert.equal(riderAccount._test.canonicalDateOfBirth("23/04/1988"), "1988-04-23");
+  assert.throws(() => riderAccount._test.canonicalDateOfBirth("31/02/1988"));
+});
+
+test("Rider-editable profile fields cannot overwrite Rider authority", () => {
+  const patch = riderAccount._test.profilePatch({
+    fullName: "Normal Rider",
+    username: "normal.rider",
+    gender: "Prefer not to say",
+    dateOfBirth: "23/04/1988",
+    approvalStatus: "approved",
+    verificationStatus: "approved",
+    dispatchEligible: true,
+    riderRank: "veteran",
+    trustPoints: 999,
+  }, {uid: "normal-rider", email: "rider@example.test"}, {});
+  assert.equal(patch.username, "normal.rider");
+  assert.equal(patch.gender, "Prefer not to say");
+  assert.equal(patch.dateOfBirth, "1988-04-23");
+  assert.equal(patch.approvalStatus, "pending");
+  assert.equal(patch.verificationStatus, "pending");
+  assert.equal(patch.riderRank, "agent");
+  assert.equal(patch.trustPoints, 0);
+  assert.equal(patch.dispatchEligible, undefined);
+});
 const fs = require("node:fs");
 const path = require("node:path");
 

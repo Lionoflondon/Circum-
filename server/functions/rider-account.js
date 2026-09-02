@@ -184,6 +184,9 @@ function profilePatch(data, rider, existing = {}) {
     legalFirstName,
     legalSurname,
     preferredName: text(data.preferredName || existing.preferredName, 120),
+    username: text(data.username || data.handle || existing.username || existing.handle, 80),
+    handle: text(data.handle || data.username || existing.handle || existing.username, 80),
+    gender: text(data.gender || existing.gender, 40),
     phoneNumber,
     email: rider.email || text(data.email, 180),
     postcode: text(data.postcode || existing.postcode || existing.homePostcode, 40),
@@ -215,8 +218,10 @@ function profilePatch(data, rider, existing = {}) {
 }
 
 function canonicalDateOfBirth(value) {
-  const raw = text(value, 40);
+  let raw = text(value, 40);
   if (!raw) return "";
+  const legacy = raw.match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
+  if (legacy) raw = `${legacy[3]}-${legacy[2]}-${legacy[1]}`;
   if (!/^\d{4}-\d{2}-\d{2}$/.test(raw)) {
     throw new functions.https.HttpsError("invalid-argument", "Date of birth must use YYYY-MM-DD.");
   }
@@ -247,6 +252,9 @@ function riderPatch(data, rider, existing = {}) {
     legalFirstName: text(data.legalFirstName || existing.legalFirstName, 80),
     legalSurname: text(data.legalSurname || existing.legalSurname, 80),
     preferredName: text(data.preferredName || existing.preferredName, 120),
+    username: text(data.username || data.handle || existing.username || existing.handle, 80),
+    handle: text(data.handle || data.username || existing.handle || existing.username, 80),
+    gender: text(data.gender || existing.gender, 40),
     dateOfBirth: canonicalDateOfBirth(data.dateOfBirth || existing.dateOfBirth),
     phone: text(data.phoneNumber || data.phone || existing.phoneNumber || existing.phone, 60),
     role: "delivery",
@@ -360,6 +368,9 @@ function applicationPatchFromProfile(data, rider, profile) {
     legalFirstName: profile.legalFirstName,
     legalSurname: profile.legalSurname,
     preferredName: profile.preferredName,
+    username: profile.username,
+    handle: profile.handle,
+    gender: profile.gender,
     phoneNumber: profile.phoneNumber,
     email: profile.email,
     postcode: profile.postcode,
@@ -900,4 +911,4 @@ exports.submitRiderDocument = riderCallable(async (data, context) => {
   return {ok: true, documentId: documentRef.id, storagePath: primary.storagePath, downloadUrl: primary.signedUrl, attachments: Object.fromEntries(uploaded.map((file) => [file.side, {storagePath: file.storagePath, downloadUrl: file.signedUrl}]))};
 });
 
-exports._test = {newPublicRiderId};
+exports._test = {canonicalDateOfBirth, newPublicRiderId, profilePatch};
