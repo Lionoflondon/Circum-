@@ -2,7 +2,11 @@
 const test = require("node:test");
 const fs = require("node:fs");
 const path = require("node:path");
-const {assertFails, initializeTestEnvironment} = require("@firebase/rules-unit-testing");
+const {
+  assertFails,
+  assertSucceeds,
+  initializeTestEnvironment,
+} = require("@firebase/rules-unit-testing");
 
 let testEnv;
 
@@ -42,4 +46,27 @@ test("Unauthenticated clients cannot upload Rider documents", async () => {
   const anonymous = testEnv.unauthenticatedContext();
   await assertClientUploadDenied(anonymous, "riderDocuments/rider-a/front.jpg");
   await assertClientUploadDenied(anonymous, "vehicleDocuments/rider-a/document.pdf");
+});
+
+test("Rider profile photos enforce the canonical 10 MiB owner-only contract", async () => {
+  const rider = testEnv.authenticatedContext("rider-a");
+  const storage = rider.storage();
+  const tenMiB = Buffer.alloc(10 * 1024 * 1024);
+
+  await assertSucceeds(storage.ref("rider-profiles/rider-a/profile.jpg").put(
+    tenMiB,
+    {contentType: "image/jpeg"},
+  ));
+  await assertFails(storage.ref("rider-profiles/rider-a/profile.jpg").put(
+    Buffer.alloc((10 * 1024 * 1024) + 1),
+    {contentType: "image/jpeg"},
+  ));
+  await assertFails(storage.ref("rider-profiles/rider-b/profile.jpg").put(
+    Buffer.from("test"),
+    {contentType: "image/jpeg"},
+  ));
+  await assertFails(storage.ref("rider-profiles/rider-a/profile.jpg").put(
+    Buffer.from("test"),
+    {contentType: "application/pdf"},
+  ));
 });
