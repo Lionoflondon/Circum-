@@ -333,6 +333,7 @@ test("Rider cannot self-write admin authority on riderProfiles", async () => {
     "availableBalance",
     "stripeConnectAccountId",
     "admin",
+    "publicRiderId",
   ]) {
     await assertFails(setDoc(doc(riderDb, "riderProfiles", "rider-1"), {
       [field]: field === "roles" ? ["driver_manager"] : "forged",
@@ -344,6 +345,22 @@ test("Rider cannot self-write admin authority on riderProfiles", async () => {
     vehicleType: "bike",
     updatedAt: serverTimestamp(),
   }, {merge: true}));
+});
+
+test("Rider cannot choose or mutate a public Rider ID", async () => {
+  await testEnv.withSecurityRulesDisabled(async (context) => {
+    await setDoc(doc(context.firestore(), "riders", "rider-1"), {
+      name: "Rider One",
+      publicRiderId: "CR-AAAAAAAAAA",
+    });
+  });
+  const riderDb = testEnv.authenticatedContext("rider-1").firestore();
+  await assertFails(setDoc(doc(riderDb, "riders", "rider-1"), {
+    publicRiderId: "CR-BBBBBBBBBB",
+  }, {merge: true}));
+  await assertFails(setDoc(doc(riderDb, "publicRiderIds", "CR-BBBBBBBBBB"), {
+    riderId: "rider-1",
+  }));
 });
 
 test("Driver manager can update Rider admin fields", async () => {

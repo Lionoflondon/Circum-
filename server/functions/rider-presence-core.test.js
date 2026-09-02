@@ -86,6 +86,10 @@ test("goOnline mirrors dispatch availability into riderProfiles", () => {
   const goOnlineStart = source.indexOf("exports.goOnline = riderCallable");
   const goOfflineStart = source.indexOf("exports.goOffline = riderCallable");
   const goOnlineSource = source.slice(goOnlineStart, goOfflineStart);
+  const rejection = goOnlineSource.indexOf("patch.dispatchEligible !== true");
+  const firstWrite = goOnlineSource.indexOf("const batch = db.batch()");
+  assert.ok(rejection >= 0 && rejection < firstWrite);
+  assert.match(goOnlineSource, /A fresh, accurate location is required/);
   assert.match(goOnlineSource, /collection\("riderProfiles"\)\.doc\(riderId\)/);
   assert.match(goOnlineSource, /status: "online"/);
   assert.match(goOnlineSource, /availabilityStatus: "available"/);
