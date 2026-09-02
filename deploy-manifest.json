@@ -182,6 +182,7 @@
         ".github/PULL_REQUEST_TEMPLATE/",
         ".github/workflows/architecture_review_gate.yml",
         ".github/workflows/ci.yml",
+        ".github/workflows/deploy_firestore_rules.yml",
         ".github/workflows/deploy_functions.yml",
         ".github/workflows/rc1_deploy.yml",
         ".github/workflows/rc1_release_build.yml",
