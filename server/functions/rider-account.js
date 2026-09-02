@@ -42,6 +42,11 @@ const ONBOARDING_TRANSITIONS = new Map([
   ["email_verified", new Set(["profile_complete"])],
   ["profile_complete", new Set(["profile_complete"])],
 ]);
+const PUBLIC_RIDER_ID_PREFIX = "CR";
+
+function newPublicRiderId() {
+  return `${PUBLIC_RIDER_ID_PREFIX}-${crypto.randomBytes(5).toString("hex").toUpperCase()}`;
+}
 
 function requireRider(context) {
   if (!context.auth) {
@@ -425,6 +430,46 @@ exports.updateRiderProfile = riderCallable(async (data, context) => {
   });
 
   return {ok: true, riderId: rider.uid};
+});
+
+exports.ensurePublicRiderId = riderCallable(async (data, context) => {
+  const rider = requireRider(context);
+  const db = getFirestore();
+  const riderRef = db.collection("riders").doc(rider.uid);
+  const profileRef = db.collection("riderProfiles").doc(rider.uid);
+
+  for (let attempt = 0; attempt < 5; attempt += 1) {
+    const candidate = newPublicRiderId();
+    const reservationRef = db.collection("publicRiderIds").doc(candidate);
+    try {
+      return await db.runTransaction(async (transaction) => {
+        const [riderSnap, profileSnap, reservationSnap] = await Promise.all([
+          transaction.get(riderRef),
+          transaction.get(profileRef),
+          transaction.get(reservationRef),
+        ]);
+        const existing = text(
+            (profileSnap.data() || {}).publicRiderId ||
+            (riderSnap.data() || {}).publicRiderId,
+            40,
+        );
+        if (existing) return {ok: true, publicRiderId: existing, created: false};
+        if (reservationSnap.exists) throw new Error("public-rider-id-collision");
+        const now = FieldValue.serverTimestamp();
+        transaction.create(reservationRef, {riderId: rider.uid, createdAt: now});
+        transaction.set(riderRef, {publicRiderId: candidate, updatedAt: now}, {merge: true});
+        transaction.set(profileRef, {publicRiderId: candidate, updatedAt: now}, {merge: true});
+        return {ok: true, publicRiderId: candidate, created: true};
+      });
+    } catch (error) {
+      if (error.message === "public-rider-id-collision") continue;
+      throw error;
+    }
+  }
+  throw new functions.https.HttpsError(
+      "internal",
+      "Your Rider ID could not be prepared. Please try again.",
+  );
 });
 
 exports.requestRiderEmailChange = riderCallable(async (data, context) => {
@@ -854,3 +899,5 @@ exports.submitRiderDocument = riderCallable(async (data, context) => {
   const primary = uploaded.find((file) => file.side === "primary") || uploaded[0];
   return {ok: true, documentId: documentRef.id, storagePath: primary.storagePath, downloadUrl: primary.signedUrl, attachments: Object.fromEntries(uploaded.map((file) => [file.side, {storagePath: file.storagePath, downloadUrl: file.signedUrl}]))};
 });
+
+exports._test = {newPublicRiderId};

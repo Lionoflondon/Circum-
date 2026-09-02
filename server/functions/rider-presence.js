@@ -113,6 +113,12 @@ exports.goOnline = riderCallable(async (data, context) => {
       throw new functions.https.HttpsError("failed-precondition", reason);
     }
     const patch = presencePatch({riderId, status: "available", busy: false, location: data && data.location});
+    if (patch.dispatchEligible !== true) {
+      throw new functions.https.HttpsError(
+          "failed-precondition",
+          "A fresh, accurate location is required before you can go online.",
+      );
+    }
     const batch = db.batch();
     batch.set(db.collection("riderPresence").doc(riderId), {...patch, source: "goOnline"}, {merge: true});
     batch.set(db.collection("riders").doc(riderId), {status: "online", availabilityStatus: "available", updatedAt: FieldValue.serverTimestamp()}, {merge: true});
@@ -128,7 +134,11 @@ exports.goOnline = riderCallable(async (data, context) => {
     }, {merge: true});
     batch.set(db.collection("riderOperationalAudit").doc(), {riderId, action: "go_online", founderOverride: founder, actorUid: riderId, createdAt: FieldValue.serverTimestamp()});
     await batch.commit();
-    return {success: true, presence: {...patch, serverTimestampPending: true}};
+    return {
+      success: true,
+      dispatchEligible: true,
+      presence: {...patch, serverTimestampPending: true},
+    };
   } catch (error) {
     if (error instanceof functions.https.HttpsError) throw error;
     console.error("goOnline unexpected failure", {

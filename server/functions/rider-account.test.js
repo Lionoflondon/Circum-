@@ -1,6 +1,14 @@
 /* eslint-disable max-len */
 const test = require("node:test");
 const assert = require("node:assert/strict");
+const riderAccount = require("./rider-account");
+
+test("public Rider IDs are opaque, stable-format identifiers", () => {
+  const ids = new Set(Array.from({length: 100}, () => riderAccount._test.newPublicRiderId()));
+  assert.equal(ids.size, 100);
+  for (const id of ids) assert.match(id, /^CR-[A-F0-9]{10}$/);
+  assert.equal([...ids].some((id) => id.includes("firebase-uid")), false);
+});
 const fs = require("node:fs");
 const path = require("node:path");
 
