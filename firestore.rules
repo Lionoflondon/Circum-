@@ -1140,7 +1140,7 @@ service cloud.firestore {
 
     match /riderOnboardingEvents/{eventId} {
       allow read: if isAdmin();
-      allow create: if isAdmin() || isRiderAccount();
+      allow create: if isAdmin();
       allow update, delete: if false;
     }
 
