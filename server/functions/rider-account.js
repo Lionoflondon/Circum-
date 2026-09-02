@@ -1,5 +1,6 @@
 /* eslint-disable max-len, require-jsdoc */
 const functions = require("firebase-functions/v1");
+const crypto = require("node:crypto");
 const {getFirestore, FieldValue} = require("firebase-admin/firestore");
 const {getStorage} = require("firebase-admin/storage");
 const {canonicalDocumentId, DOCUMENT_MATRIX} = require("./rider-certification-policy");
@@ -770,9 +771,30 @@ exports.submitRiderDocument = riderCallable(async (data, context) => {
   const rider = requireRider(context);
   const documentType = cleanDocumentType(data.documentType || data.type);
   const files = normalizeRiderDocumentFiles(data, documentType);
+  const idempotencyKey = text(data.idempotencyKey, 120);
+  if (idempotencyKey && !/^[A-Za-z0-9_-]{8,120}$/.test(idempotencyKey)) {
+    throw new functions.https.HttpsError("invalid-argument", "A valid upload request key is required.");
+  }
 
   const db = getFirestore();
-  const documentRef = db.collection("riderDocuments").doc();
+  const documentRef = idempotencyKey ? db.collection("riderDocuments").doc(
+      crypto.createHash("sha256").update(`${rider.uid}:${idempotencyKey}`).digest("hex"),
+  ) : db.collection("riderDocuments").doc();
+  const existing = idempotencyKey ? await documentRef.get() : null;
+  if (existing && existing.exists) {
+    const record = existing.data() || {};
+    if (record.riderId !== rider.uid || record.type !== documentType) {
+      throw new functions.https.HttpsError("already-exists", "This upload request key is already in use.");
+    }
+    return {
+      ok: true,
+      documentId: documentRef.id,
+      storagePath: record.storagePath,
+      downloadUrl: record.downloadUrl,
+      attachments: record.attachments || {},
+      idempotentReplay: true,
+    };
+  }
   const uploaded = [];
   try {
     for (const attachment of files) {
@@ -801,6 +823,7 @@ exports.submitRiderDocument = riderCallable(async (data, context) => {
     await db.runTransaction(async (transaction) => {
       transaction.set(documentRef, {
         documentId: documentRef.id,
+        ...(idempotencyKey ? {idempotencyKey} : {}),
         riderId: rider.uid,
         riderEmail: rider.email,
         type: documentType,
