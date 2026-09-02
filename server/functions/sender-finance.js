@@ -108,8 +108,24 @@ exports.detachSenderPaymentMethod = (stripe) => functions.https.onCall(async (da
   if (method.customer !== customerId) {
     throw new functions.https.HttpsError("permission-denied", "Payment method does not belong to this Sender.");
   }
+  const customer = await stripe.customers.retrieve(customerId);
+  const isDefault = customer && customer.invoice_settings &&
+    customer.invoice_settings.default_payment_method === paymentMethodId;
   await stripe.paymentMethods.detach(paymentMethodId);
-  await getFirestore().collection("users").doc(sender.uid).collection("financeAudit").add({
+  if (isDefault) {
+    await stripe.customers.update(customerId, {
+      invoice_settings: {default_payment_method: null},
+    });
+  }
+  const db = getFirestore();
+  if (isDefault) {
+    await db.collection("users").doc(sender.uid).collection("finance")
+        .doc("checkoutPreferences").set({
+          defaultPaymentMethodId: FieldValue.delete(),
+          updatedAt: FieldValue.serverTimestamp(),
+        }, {merge: true});
+  }
+  await db.collection("users").doc(sender.uid).collection("financeAudit").add({
     action: "payment_method_removed",
     paymentMethodId,
     createdAt: FieldValue.serverTimestamp(),

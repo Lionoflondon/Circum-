@@ -87,3 +87,18 @@ test("saved-card operations retain authenticated ownership checks", () => {
   assert.match(financeSource, /stripe\.paymentMethods\.detach\(paymentMethodId\)/);
   assert.match(financeSource, /default_payment_method: paymentMethodId/);
 });
+
+test("removing a default card clears stale default authority", () => {
+  assert.match(
+      financeSource,
+      /default_payment_method === paymentMethodId/,
+  );
+  assert.match(
+      financeSource,
+      /invoice_settings: \{default_payment_method: null\}/,
+  );
+  assert.match(
+      financeSource,
+      /defaultPaymentMethodId: FieldValue\.delete\(\)/,
+  );
+});
