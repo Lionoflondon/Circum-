@@ -4,7 +4,7 @@
   "scripts": {
     "lint": "eslint .",
     "test": "node --test $(find . -maxdepth 1 -name '*.test.js' ! -name 'firestore-*-rules.test.js' ! -name 'storage-rider-document-rules.test.js' ! -name 'rider-document-emulator-integration.test.js' -print)",
-    "test:rules": "cd ../.. && firebase emulators:exec --only firestore \"node --test server/functions/firestore-live-tracking-rules.test.js server/functions/firestore-financial-authority-rules.test.js server/functions/firestore-sender-trust-rules.test.js server/functions/firestore-referral-rules.test.js server/functions/firestore-chat-sender-security-rules.test.js\"",
+    "test:rules": "cd ../.. && firebase emulators:exec --only firestore \"node --test server/functions/firestore-live-tracking-rules.test.js server/functions/firestore-financial-authority-rules.test.js server/functions/firestore-sender-trust-rules.test.js server/functions/firestore-referral-rules.test.js server/functions/firestore-chat-sender-security-rules.test.js server/functions/firestore-rider-onboarding-events-rules.test.js\"",
     "test:storage-rules": "cd ../.. && firebase emulators:exec --only storage \"node --test server/functions/storage-rider-document-rules.test.js\"",
     "test:document-integration": "cd ../.. && firebase emulators:exec --only firestore,storage \"node --test server/functions/rider-document-emulator-integration.test.js\"",
     "test:iris": "node --test iris-core.test.js iris-security.test.js",
