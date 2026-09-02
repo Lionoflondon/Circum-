@@ -78,4 +78,39 @@ void main() {
       contains("Stripe.merchantIdentifier = 'merchant.com.circum.app'"),
     );
   });
+
+  test('wallet management is production-safe and bounded', () {
+    final source = File(
+      'lib/app/sender_mobile/sender_wallet.dart',
+    ).readAsStringSync();
+
+    expect(source, contains('isPlatformPaySupported()'));
+    expect(source, contains('testEnv: false'));
+    expect(source, contains('_senderWalletActionTimeout'));
+    expect(source, contains('.timeout(_senderWalletActionTimeout)'));
+    expect(source, isNot(contains('error.error.localizedMessage')));
+    expect(source, contains('finally {'));
+    expect(source, contains('setState(() => _loading = false)'));
+  });
+
+  test('Apple and Google merchant paths use production configuration', () {
+    final startup = File('lib/main.dart').readAsStringSync();
+    final entitlements = File(
+      'ios/Runner/RunnerRelease.entitlements',
+    ).readAsStringSync();
+    final wallet = File(
+      'lib/app/sender_mobile/sender_wallet.dart',
+    ).readAsStringSync();
+    final checkout = File(
+      'lib/app/sender_mobile/sender_booking_canvas.dart',
+    ).readAsStringSync();
+
+    expect(
+      startup,
+      contains("Stripe.merchantIdentifier = 'merchant.com.circum.app'"),
+    );
+    expect(entitlements, contains('merchant.com.circum.app'));
+    expect(RegExp(r'testEnv: false').allMatches(wallet), hasLength(2));
+    expect(checkout, contains('testEnv: false'));
+  });
 }
