@@ -57,6 +57,7 @@ enum _WebAppMode {
   rider,
   gifts,
   vanguard,
+  support,
   deleteAccount,
   privacyPolicy,
   terms,
@@ -110,6 +111,7 @@ class _CircumWebsiteAppState extends State<CircumWebsiteApp> {
       CircumWebSurface.rider => _WebAppMode.rider,
       CircumWebSurface.gifts => _WebAppMode.gifts,
       CircumWebSurface.vanguard => _WebAppMode.vanguard,
+      CircumWebSurface.support => _WebAppMode.support,
       CircumWebSurface.deleteAccount => _WebAppMode.deleteAccount,
       CircumWebSurface.privacyPolicy => _WebAppMode.privacyPolicy,
       CircumWebSurface.terms => _WebAppMode.terms,
@@ -160,6 +162,7 @@ class _CircumWebsiteAppState extends State<CircumWebsiteApp> {
       _WebAppMode.rider => '/rider',
       _WebAppMode.gifts => '/gifts',
       _WebAppMode.vanguard => '/vanguard',
+      _WebAppMode.support => '/support',
       _WebAppMode.deleteAccount => '/delete_account',
       _WebAppMode.privacyPolicy => '/privacy_policy',
       _WebAppMode.terms => '/terms',
@@ -266,6 +269,10 @@ class _CircumWebsiteAppState extends State<CircumWebsiteApp> {
           key: const ValueKey('vanguard-page'),
           colors: colors,
           onBack: () => _openSurface(_WebAppMode.landing),
+        ),
+      _WebAppMode.support => _SupportPage(
+          key: const ValueKey('support-page'),
+          colors: colors,
         ),
       _WebAppMode.deleteAccount => _AccountDeletionPage(
           key: const ValueKey('account-deletion'),
@@ -26204,6 +26211,56 @@ class _AccountDeletionPage extends StatelessWidget {
       );
 }
 
+class _SupportPage extends StatelessWidget {
+  final _CircumColors colors;
+  const _SupportPage({super.key, required this.colors});
+
+  @override
+  Widget build(BuildContext context) => _CompliancePage(
+        colors: colors,
+        title: 'CIRCUM Support',
+        intro:
+            'Get help with your CIRCUM account, deliveries, and payments.',
+        sections: const [
+          _ComplianceSection(
+            'Account support',
+            'Get help with signup or sign-in problems, account access, and account closure.',
+          ),
+          _ComplianceSection(
+            'Delivery support',
+            'Contact us for booking and delivery help, Rider or delivery issues, and delivery status support.',
+          ),
+          _ComplianceSection(
+            'Payment support',
+            'Get help with card payment issues, Apple Pay, Google Pay, refunds, and payment queries.',
+          ),
+          _ComplianceSection(
+            'Contact',
+            'Email: support@circumuk.com\nPhone: +44 7756 800319',
+          ),
+        ],
+        actions: [
+          TextButton(
+            onPressed: () => launchUrl(
+              Uri.parse('mailto:support@circumuk.com'),
+            ),
+            child: const Text('Email support'),
+          ),
+          TextButton(
+            onPressed: () => launchUrl(Uri.parse('tel:+447756800319')),
+            child: const Text('Call support'),
+          ),
+          TextButton(
+            onPressed: () => launchUrl(
+              Uri.base.replace(path: '/', queryParameters: {}, fragment: ''),
+              webOnlyWindowName: '_self',
+            ),
+            child: const Text('CIRCUM home'),
+          ),
+        ],
+      );
+}
+
 class _PrivacyPolicyPage extends StatelessWidget {
   final _CircumColors colors;
   const _PrivacyPolicyPage({super.key, required this.colors});
@@ -26539,6 +26596,22 @@ class _LandingFooter extends StatelessWidget {
                     spacing: 14,
                     runSpacing: 8,
                     children: [
+                      _FooterServiceLink(
+                        label: 'Support',
+                        uri: _CircumWebsiteAppState._canonicalWebUri(
+                          '/support',
+                        ),
+                        onPressed: () {
+                          unawaited(
+                            launchUrl(
+                              _CircumWebsiteAppState._canonicalWebUri(
+                                '/support',
+                              ),
+                              webOnlyWindowName: '_self',
+                            ),
+                          );
+                        },
+                      ),
                       _FooterServiceLink(
                         label: 'Privacy Policy',
                         uri: _CircumWebsiteAppState._canonicalWebUri(

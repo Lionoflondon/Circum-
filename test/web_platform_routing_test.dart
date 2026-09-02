@@ -40,6 +40,19 @@ void main() {
       expect(route.canonicalPath, '/terms');
     });
 
+    test('/support selects the dedicated public support page', () {
+      final route = resolveCircumWebRoute(
+        Uri.parse('https://circumuk.com/support'),
+        adminHostingTarget: false,
+        publicHostingHost: true,
+      );
+
+      expect(route.surface, CircumWebSurface.support);
+      expect(route.surface, isNot(CircumWebSurface.public));
+      expect(route.canonicalPath, '/support');
+      expect(route.legacyRedirectPath, isNull);
+    });
+
     test(
       'cookie policy and legacy cookie paths select the canonical policy',
       () {
@@ -237,6 +250,21 @@ void main() {
       expect(source, contains('Corporate Gifts · Vanguard Included'));
       expect(source, contains('Add Vanguard for £1.99'));
       expect(source, contains('senderStep: _SenderStep.business'));
+    });
+
+    test('Public support page exposes the official contact and help areas', () {
+      final source = File(
+        'lib/website/shared/circum_website_app.dart',
+      ).readAsStringSync();
+
+      expect(source, contains("_WebAppMode.support => '/support'"));
+      expect(source, contains("ValueKey('support-page')"));
+      expect(source, contains('Account support'));
+      expect(source, contains('Delivery support'));
+      expect(source, contains('Payment support'));
+      expect(source, contains('support@circumuk.com'));
+      expect(source, contains('+44 7756 800319'));
+      expect(source, contains('tel:+447756800319'));
     });
 
     test('Business and Health web keep app-style section parity', () {
