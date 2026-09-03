@@ -19,6 +19,9 @@ import 'sender_finance.dart';
 import 'sender_page_shell.dart';
 import 'sender_profile_authority.dart';
 
+const _senderWalletSheetInitTimeout = Duration(seconds: 20);
+const _senderWalletSheetPresentTimeout = Duration(seconds: 90);
+
 class SenderWalletData {
   final double balance;
   final bool frozen;
@@ -159,8 +162,7 @@ Future<SenderPaymentProfile> _withDeviceWalletSupport(
   }
   return profile.withPlatformPaySupport(
     applePay: defaultTargetPlatform == TargetPlatform.iOS && supported,
-    googlePay:
-        defaultTargetPlatform == TargetPlatform.android && supported,
+    googlePay: defaultTargetPlatform == TargetPlatform.android && supported,
   );
 }
 
@@ -594,26 +596,30 @@ class _SenderWalletViewState extends State<SenderWalletView> {
       final setup = await _repository
           .createSetupIntent()
           .timeout(_walletOperationTimeout);
-      await Stripe.instance.initPaymentSheet(
-        paymentSheetParameters: SetupPaymentSheetParameters(
-          merchantDisplayName: 'Circum',
-          customerId: setup.customerId,
-          customerEphemeralKeySecret: setup.ephemeralKeySecret,
-          setupIntentClientSecret: setup.setupIntentClientSecret,
-          applePay: senderPlatformSupportsApplePay(defaultTargetPlatform)
-              ? const PaymentSheetApplePay(merchantCountryCode: 'GB')
-              : null,
-          googlePay: senderPlatformSupportsGooglePay(defaultTargetPlatform)
-              ? PaymentSheetGooglePay(
-                  merchantCountryCode: 'GB',
-                  currencyCode: 'GBP',
-                  testEnv: Env.googlePayTestEnvironment,
-                )
-              : null,
-          style: ThemeMode.dark,
-        ),
-      );
-      await Stripe.instance.presentPaymentSheet();
+      await Stripe.instance
+          .initPaymentSheet(
+            paymentSheetParameters: SetupPaymentSheetParameters(
+              merchantDisplayName: 'Circum',
+              customerId: setup.customerId,
+              customerEphemeralKeySecret: setup.ephemeralKeySecret,
+              setupIntentClientSecret: setup.setupIntentClientSecret,
+              applePay: senderPlatformSupportsApplePay(defaultTargetPlatform)
+                  ? const PaymentSheetApplePay(merchantCountryCode: 'GB')
+                  : null,
+              googlePay: senderPlatformSupportsGooglePay(defaultTargetPlatform)
+                  ? PaymentSheetGooglePay(
+                      merchantCountryCode: 'GB',
+                      currencyCode: 'GBP',
+                      testEnv: Env.googlePayTestEnvironment,
+                    )
+                  : null,
+              style: ThemeMode.dark,
+            ),
+          )
+          .timeout(_senderWalletSheetInitTimeout);
+      await Stripe.instance
+          .presentPaymentSheet()
+          .timeout(_senderWalletSheetPresentTimeout);
       await _refreshPaymentMethods();
       if (mounted) {
         _notice(context, 'Payment method added.');
@@ -769,8 +775,7 @@ class _SenderWalletViewState extends State<SenderWalletView> {
     try {
       await FirebaseFunctions.instance
           .httpsCallable('redeemGiftCard')
-          .call({'code': code})
-          .timeout(_walletOperationTimeout);
+          .call({'code': code}).timeout(_walletOperationTimeout);
       await _load();
       if (mounted) _notice(context, 'Roth Card redeemed.');
     } on FirebaseFunctionsException catch (_) {
@@ -1073,26 +1078,30 @@ class _ManagePaymentsScreenState extends State<_ManagePaymentsScreen> {
       final setup = await widget.repository
           .createSetupIntent()
           .timeout(_senderWalletActionTimeout);
-      await Stripe.instance.initPaymentSheet(
-        paymentSheetParameters: SetupPaymentSheetParameters(
-          merchantDisplayName: 'Circum',
-          customerId: setup.customerId,
-          customerEphemeralKeySecret: setup.ephemeralKeySecret,
-          setupIntentClientSecret: setup.setupIntentClientSecret,
-          applePay: senderPlatformSupportsApplePay(defaultTargetPlatform)
-              ? const PaymentSheetApplePay(merchantCountryCode: 'GB')
-              : null,
-          googlePay: senderPlatformSupportsGooglePay(defaultTargetPlatform)
-              ? PaymentSheetGooglePay(
-                  merchantCountryCode: 'GB',
-                  currencyCode: 'GBP',
-                  testEnv: Env.googlePayTestEnvironment,
-                )
-              : null,
-          style: ThemeMode.dark,
-        ),
-      );
-      await Stripe.instance.presentPaymentSheet();
+      await Stripe.instance
+          .initPaymentSheet(
+            paymentSheetParameters: SetupPaymentSheetParameters(
+              merchantDisplayName: 'Circum',
+              customerId: setup.customerId,
+              customerEphemeralKeySecret: setup.ephemeralKeySecret,
+              setupIntentClientSecret: setup.setupIntentClientSecret,
+              applePay: senderPlatformSupportsApplePay(defaultTargetPlatform)
+                  ? const PaymentSheetApplePay(merchantCountryCode: 'GB')
+                  : null,
+              googlePay: senderPlatformSupportsGooglePay(defaultTargetPlatform)
+                  ? PaymentSheetGooglePay(
+                      merchantCountryCode: 'GB',
+                      currencyCode: 'GBP',
+                      testEnv: Env.googlePayTestEnvironment,
+                    )
+                  : null,
+              style: ThemeMode.dark,
+            ),
+          )
+          .timeout(_senderWalletSheetInitTimeout);
+      await Stripe.instance
+          .presentPaymentSheet()
+          .timeout(_senderWalletSheetPresentTimeout);
       await _load();
     } on StripeException catch (_) {
       if (mounted) {
@@ -1161,8 +1170,8 @@ class _ManagePaymentsScreenState extends State<_ManagePaymentsScreen> {
       await _load();
     } catch (_) {
       if (mounted) {
-        _SenderWalletViewState._notice(context,
-            'Could not remove the payment method. Please try again.');
+        _SenderWalletViewState._notice(
+            context, 'Could not remove the payment method. Please try again.');
       }
     } finally {
       if (mounted) setState(() => _busy = false);
@@ -2159,18 +2168,17 @@ class _PaymentProfileOptionRow extends StatelessWidget {
     }
     if (option.type == SenderPaymentProfileOptionType.applePay) {
       return _WalletLink(
-        icon: Icons.apple_rounded,
+        icon: Icons.account_balance_wallet_outlined,
         title: 'Apple Pay',
-        detail: showDefaultBadge ? '✓ Default' : 'Use on supported iOS devices',
+        detail: 'Use on supported iOS devices',
         onTap: () => onOpenMethod(SenderPaymentProfileOptionType.applePay),
       );
     }
     if (option.type == SenderPaymentProfileOptionType.googlePay) {
       return _WalletLink(
-        icon: Icons.android_rounded,
+        icon: Icons.account_balance_wallet_outlined,
         title: 'Google Pay',
-        detail:
-            showDefaultBadge ? '✓ Default' : 'Use on supported Android devices',
+        detail: 'Use on supported Android devices',
         onTap: () => onOpenMethod(SenderPaymentProfileOptionType.googlePay),
       );
     }

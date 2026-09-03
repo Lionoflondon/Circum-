@@ -53,8 +53,8 @@ assertContains('scripts/build_public_web.sh', 'GOOGLE_PLACES_API_KEY',
   'Public Web Places key validation');
 assertContains('.github/workflows/rc1_release_build.yml', 'SENDER_ANDROID_GOOGLE_MAPS_API_KEY',
   'Sender Android CI Maps secret');
-assertContains('.github/workflows/rc1_release_build.yml', 'GOOGLE_MAPS_DIRECTIONS_API_KEY',
-  'Sender Directions CI key');
+assertContains('lib/app/send_package/bloc/send_package_bloc.dart', 'getSenderRoutePreview',
+  'Sender backend route preview contract');
 assertContains('.github/workflows/rc1_release_build.yml', 'CIRCUM_WEB_GOOGLE_MAPS_API_KEY',
   'Sender Web CI Maps secret');
 assertContains('.github/workflows/rc1_release_build.yml', 'GOOGLE_PLACES_API_KEY',
