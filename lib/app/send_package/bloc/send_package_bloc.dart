@@ -115,6 +115,9 @@ class SendPackageBloc extends Bloc<SendPackageEvent, SendPackageState> {
     ).timeout(_senderRoutePreviewTimeout),
   );
   int _routeRequestId = 0;
+  int _quoteRequestId = 0;
+  int _irisRequestId = 0;
+  final Map<bool, int> _addressSelectionRequestIds = {true: 0, false: 0};
   SendPackageBloc() : super(SendPackageState()) {
     on<CheckForPushToken>(_handleCheckForPushToken);
     on<SearchAPlaceEvent>(_handleSearchAPlaceEvent);
@@ -367,6 +370,9 @@ class SendPackageBloc extends Bloc<SendPackageEvent, SendPackageState> {
     _addressSearchRequestIds[true] = (_addressSearchRequestIds[true] ?? 0) + 1;
     _addressSearchRequestIds[false] =
         (_addressSearchRequestIds[false] ?? 0) + 1;
+    ++_routeRequestId;
+    ++_quoteRequestId;
+    ++_irisRequestId;
     emit(SendPackageState(senderRothBalance: state.senderRothBalance));
   }
 
@@ -374,6 +380,13 @@ class SendPackageBloc extends Bloc<SendPackageEvent, SendPackageState> {
     SetPickupAddress event,
     Emitter<SendPackageState> emit,
   ) async {
+    final selectionRequestId = _addressSelectionRequestIds[true] =
+        (_addressSelectionRequestIds[true] ?? 0) + 1;
+    _addressSelectionRequestIds[false] =
+        (_addressSelectionRequestIds[false] ?? 0) + 1;
+    ++_routeRequestId;
+    ++_quoteRequestId;
+    ++_irisRequestId;
     final sessionToken = _addressSessionTokens[true] ??= const Uuid().v4();
 
     emit(
@@ -382,6 +395,27 @@ class SendPackageBloc extends Bloc<SendPackageEvent, SendPackageState> {
         pickupLocationSubAddress: event.pickupLocationSubAddress,
         destinationLocation: '',
         destinationLocationSubAddress: '',
+        clearPickupCoordinate: true,
+        clearDestinationCoordinate: true,
+        clearDistance: true,
+        clearPrice: true,
+        markers: const {},
+        polylines: const [],
+        polylineCoordinates: const [],
+        sourceAndDestinationStatus: SourceAndDestinationStatus.unselected,
+        mapCameraStatus: MapCameraStatus.initialized,
+        clearSenderQuoteId: true,
+        clearSenderQuoteTotal: true,
+        clearSenderQuoteSpeed: true,
+        senderQuoteLineItems: const [],
+        senderQuoteSpeedOptions: const [],
+        clearSenderPaymentSession: true,
+        clearSenderPaymentClientSecret: true,
+        clearSenderPaymentIntent: true,
+        clearSenderPaymentCustomer: true,
+        clearSenderPaymentEphemeralKey: true,
+        clearSenderPaymentCheckoutUrl: true,
+        clearSenderCreatedRequest: true,
       ),
     );
 
@@ -389,11 +423,13 @@ class SendPackageBloc extends Bloc<SendPackageEvent, SendPackageState> {
       PlaceCoordinate coordinate = await PlaceApiProvider(
         sessionToken,
       ).fetchPlaceDetails(event.placeId, event.lang);
+      if (_addressSelectionRequestIds[true] != selectionRequestId) return;
 
       var address = await placemarkFromCoordinates(
         coordinate.lat,
         coordinate.lng,
       );
+      if (_addressSelectionRequestIds[true] != selectionRequestId) return;
 
       emit(
         state.copyWith(
@@ -419,6 +455,10 @@ class SendPackageBloc extends Bloc<SendPackageEvent, SendPackageState> {
 
   void _handleSetDeliveryAddress(SetDeliveryAddress event, Emitter emit) async {
     final routeRequestId = ++_routeRequestId;
+    ++_quoteRequestId;
+    ++_irisRequestId;
+    final selectionRequestId = _addressSelectionRequestIds[false] =
+        (_addressSelectionRequestIds[false] ?? 0) + 1;
     final sessionToken = _addressSessionTokens[false] ??= const Uuid().v4();
     final routeTimer = Stopwatch()..start();
     _senderFlowDiagnostic('route_start');
@@ -426,6 +466,25 @@ class SendPackageBloc extends Bloc<SendPackageEvent, SendPackageState> {
       state.copyWith(
         destinationLocation: event.val,
         destinationLocationSubAddress: event.destinationLocationSubAddress,
+        clearDestinationCoordinate: true,
+        clearDistance: true,
+        clearPrice: true,
+        markers: const {},
+        polylines: const [],
+        polylineCoordinates: const [],
+        sourceAndDestinationStatus: SourceAndDestinationStatus.unselected,
+        clearSenderQuoteId: true,
+        clearSenderQuoteTotal: true,
+        clearSenderQuoteSpeed: true,
+        senderQuoteLineItems: const [],
+        senderQuoteSpeedOptions: const [],
+        clearSenderPaymentSession: true,
+        clearSenderPaymentClientSecret: true,
+        clearSenderPaymentIntent: true,
+        clearSenderPaymentCustomer: true,
+        clearSenderPaymentEphemeralKey: true,
+        clearSenderPaymentCheckoutUrl: true,
+        clearSenderCreatedRequest: true,
       ),
     );
 
@@ -442,12 +501,14 @@ class SendPackageBloc extends Bloc<SendPackageEvent, SendPackageState> {
       PlaceCoordinate coordinate = await PlaceApiProvider(
         sessionToken,
       ).fetchPlaceDetails(event.placeId, event.lang);
+      if (_addressSelectionRequestIds[false] != selectionRequestId) return;
       // var addresses = await Geocoder.google ( '<---------YOUR APIKEY-------->' ).findAddressesFromCoordinates(coordinates);
       var address = await placemarkFromCoordinates(
         coordinate.lat,
         coordinate.lng,
         // localeIdentifier: "en_US"
       );
+      if (_addressSelectionRequestIds[false] != selectionRequestId) return;
 
       emit(
         state.copyWith(
@@ -681,6 +742,8 @@ class SendPackageBloc extends Bloc<SendPackageEvent, SendPackageState> {
     SetParcelWeight event,
     Emitter<SendPackageState> emit,
   ) async {
+    final irisRequestId = ++_irisRequestId;
+    ++_quoteRequestId;
     final itemDescription =
         event.itemDescription ?? state.itemDescription ?? '';
     final quickEstimate = itemDescription.trim().isEmpty
@@ -704,6 +767,18 @@ class SendPackageBloc extends Bloc<SendPackageEvent, SendPackageState> {
                 irisWeightKg: quickEstimate.weightKg,
                 finalWeightKg: quickWeight,
               ),
+        clearSenderQuoteId: true,
+        clearSenderQuoteTotal: true,
+        clearSenderQuoteSpeed: true,
+        senderQuoteLineItems: const [],
+        senderQuoteSpeedOptions: const [],
+        clearSenderPaymentSession: true,
+        clearSenderPaymentClientSecret: true,
+        clearSenderPaymentIntent: true,
+        clearSenderPaymentCustomer: true,
+        clearSenderPaymentEphemeralKey: true,
+        clearSenderPaymentCheckoutUrl: true,
+        clearSenderCreatedRequest: true,
       ),
     );
     add(SetPrice());
@@ -714,6 +789,7 @@ class SendPackageBloc extends Bloc<SendPackageEvent, SendPackageState> {
         quantity: quickEstimate.quantity,
         userWeightKg: event.weightKg,
       );
+      if (irisRequestId != _irisRequestId) return;
       final finalWeight = DeliveryPricing.checkoutPricingWeightKg(
         userEnteredWeightKg: event.weightKg,
         irisEstimatedWeightKg: trusted.pricingWeightKg,
@@ -734,6 +810,7 @@ class SendPackageBloc extends Bloc<SendPackageEvent, SendPackageState> {
       );
       add(SetPrice());
     } catch (_) {
+      if (irisRequestId != _irisRequestId) return;
       emit(
         state.copyWith(
           parcelWeightKg: quickWeight,
@@ -772,6 +849,8 @@ class SendPackageBloc extends Bloc<SendPackageEvent, SendPackageState> {
     RequestCanonicalIrisEstimate event,
     Emitter<SendPackageState> emit,
   ) async {
+    final irisRequestId = ++_irisRequestId;
+    ++_quoteRequestId;
     final itemDescription = [
       event.itemName,
       event.description,
@@ -823,6 +902,7 @@ class SendPackageBloc extends Bloc<SendPackageEvent, SendPackageState> {
       final data = result.data is Map
           ? Map<String, dynamic>.from(result.data as Map)
           : <String, dynamic>{};
+      if (irisRequestId != _irisRequestId) return;
       final canonical = CanonicalIrisResult.fromCallable(
         data,
         fallbackItemName: event.itemName,
@@ -845,6 +925,7 @@ class SendPackageBloc extends Bloc<SendPackageEvent, SendPackageState> {
       );
       add(SetPrice());
     } on FirebaseFunctionsException catch (error) {
+      if (irisRequestId != _irisRequestId) return;
       debugPrint(
         'analyseIris failed: code=${error.code}, message=${error.message}, details=${error.details}',
       );
@@ -856,6 +937,7 @@ class SendPackageBloc extends Bloc<SendPackageEvent, SendPackageState> {
         ),
       );
     } catch (error) {
+      if (irisRequestId != _irisRequestId) return;
       debugPrint('analyseIris unexpected failure: $error');
       emit(
         state.copyWith(
@@ -911,6 +993,7 @@ class SendPackageBloc extends Bloc<SendPackageEvent, SendPackageState> {
     RequestSenderBookingQuote event,
     Emitter<SendPackageState> emit,
   ) async {
+    final quoteRequestId = ++_quoteRequestId;
     final pricingTimer = Stopwatch()..start();
     _senderFlowDiagnostic('pricing_start');
     emit(
@@ -943,6 +1026,16 @@ class SendPackageBloc extends Bloc<SendPackageEvent, SendPackageState> {
         'distanceMiles': distanceKm == null
             ? 0
             : DeliveryPricing.kilometresToMiles(distanceKm),
+        'route': {
+          'origin': {
+            'latitude': state.pickupCoordinate?.lat,
+            'longitude': state.pickupCoordinate?.lng,
+          },
+          'destination': {
+            'latitude': state.desinationCoordinate?.lat,
+            'longitude': state.desinationCoordinate?.lng,
+          },
+        },
         'weightKg':
             state.parcelWeightKg <= 0 ? event.weightKg : state.parcelWeightKg,
         'parcel': {
@@ -968,6 +1061,7 @@ class SendPackageBloc extends Bloc<SendPackageEvent, SendPackageState> {
           },
         },
       });
+      if (quoteRequestId != _quoteRequestId) return;
       emit(
         state.copyWith(
           isSenderQuoteLoading: false,
@@ -985,6 +1079,7 @@ class SendPackageBloc extends Bloc<SendPackageEvent, SendPackageState> {
       );
       _senderFlowDiagnostic('pricing_success', timer: pricingTimer);
     } on FirebaseFunctionsException catch (error) {
+      if (quoteRequestId != _quoteRequestId) return;
       _senderFlowDiagnostic('pricing_failure',
           timer: pricingTimer, error: error);
       debugPrint(
@@ -1003,6 +1098,7 @@ class SendPackageBloc extends Bloc<SendPackageEvent, SendPackageState> {
         ),
       );
     } catch (error) {
+      if (quoteRequestId != _quoteRequestId) return;
       _senderFlowDiagnostic('pricing_failure',
           timer: pricingTimer, error: error);
       debugPrint('createSenderBookingQuote unexpected failure: $error');

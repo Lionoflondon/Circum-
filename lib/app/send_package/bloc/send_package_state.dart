@@ -174,10 +174,13 @@ class SendPackageState {
     String? destinationLocationSubAddress,
     PlaceCoordinate? pickupCoordinate,
     PlaceCoordinate? desinationCoordinate,
+    bool clearPickupCoordinate = false,
+    bool clearDestinationCoordinate = false,
     PlaceCoordinate? riderLocation,
     DateTime? riderLiveLocationUpdatedAt,
     double? riderLiveLocationHeading,
     double? distance,
+    bool clearDistance = false,
     DeliveryStatus? deliveryStatus,
     String? deliveryRequestStatus,
     Map<String, dynamic>? activeDeliveryData,
@@ -190,6 +193,7 @@ class SendPackageState {
     String? pickupLocality,
     String? destinationLocality,
     double? price,
+    bool clearPrice = false,
     double? parcelWeightKg,
     DeliveryData? deliveryData,
     Map<MarkerId, Marker>? markers,
@@ -256,14 +260,18 @@ class SendPackageState {
           pickupLocationSubAddress ?? this.pickupLocationSubAddress,
       destinationLocationSubAddress:
           destinationLocationSubAddress ?? this.destinationLocationSubAddress,
-      pickupCoordinate: pickupCoordinate ?? this.pickupCoordinate,
-      desinationCoordinate: desinationCoordinate ?? this.desinationCoordinate,
+      pickupCoordinate: clearPickupCoordinate
+          ? null
+          : pickupCoordinate ?? this.pickupCoordinate,
+      desinationCoordinate: clearDestinationCoordinate
+          ? null
+          : desinationCoordinate ?? this.desinationCoordinate,
       riderLocation: riderLocation ?? this.riderLocation,
       riderLiveLocationUpdatedAt:
           riderLiveLocationUpdatedAt ?? this.riderLiveLocationUpdatedAt,
       riderLiveLocationHeading:
           riderLiveLocationHeading ?? this.riderLiveLocationHeading,
-      distance: distance ?? this.distance,
+      distance: clearDistance ? null : distance ?? this.distance,
       deliveryStatus: deliveryStatus ?? this.deliveryStatus,
       deliveryRequestStatus:
           deliveryRequestStatus ?? this.deliveryRequestStatus,
@@ -277,7 +285,7 @@ class SendPackageState {
       dropoffDetails: dropoffDetails ?? this.dropoffDetails,
       pickupLocality: pickupLocality ?? this.pickupLocality,
       destinationLocality: destinationLocality ?? this.destinationLocality,
-      price: price ?? this.price,
+      price: clearPrice ? null : price ?? this.price,
       parcelWeightKg: parcelWeightKg ?? this.parcelWeightKg,
       deliveryData: deliveryData ?? this.deliveryData,
       markers: markers ?? this.markers,

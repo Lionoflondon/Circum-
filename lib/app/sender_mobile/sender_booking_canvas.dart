@@ -4929,7 +4929,7 @@ class _PaymentPanelState extends State<_PaymentPanel> {
             draftId: draftId ?? '',
             idempotencyKey:
                 'sender-${senderUid ?? 'anonymous'}-${draftId ?? 'draft'}-${engine.senderQuoteId ?? 'quote'}',
-            deliveryPayload: kIsWeb ? _bookingPayload(engine) : const {},
+            deliveryPayload: _bookingPayload(engine),
           ),
         );
   }
