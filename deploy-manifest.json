@@ -83,7 +83,9 @@
         "lib/app/sender_profile/",
         "lib/app/support/",
     "test/sender_",
-    "test/sender_mobile/",
+        "test/sender_mobile/",
+        "test/env/payment_environment_test.dart",
+        "test/send_package/route_request_coordinator_test.dart",
     "test/authentication/",
     "test/widget_test.dart",
         "test/authentication_screen_contract_test.dart",
@@ -100,6 +102,7 @@
         "scripts/build_sender_app_web.sh",
         "scripts/deploy_sender_app_web.sh",
         "scripts/validate_sender_mobile_artifacts.js",
+        "scripts/validate_sender_payment_environment.sh",
         "android/",
         "ios/",
         "lib/extension/"
