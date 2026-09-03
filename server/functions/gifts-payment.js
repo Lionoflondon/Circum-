@@ -4,6 +4,7 @@ const {getFirestore, FieldValue} = require("firebase-admin/firestore");
 const {getStorage} = require("firebase-admin/storage");
 const giftVoiceMedia = require("./gift-voice-media");
 const vanguardProtocol = require("./vanguard-protocol-core");
+const {senderPaymentCallable} = require("./sender-app-check");
 
 function requireAuth(context) {
   if (!context.auth) {
@@ -151,7 +152,7 @@ async function createStandardPaymentDraft({data, context}) {
   return {giftDraftId: draftRef.id, gift: draft};
 }
 
-exports.createGiftPayment = (stripe) => functions.https.onCall(async (data, context) => {
+exports.createGiftPayment = (stripe) => senderPaymentCallable(async (data, context) => {
   requireAuth(context);
   const campaignRequest = data.source === "sender_mobile_campaign" && data.campaignParticipant;
   const campaignDraft = campaignRequest ?
@@ -314,7 +315,7 @@ async function finalizeGiftPaymentSession({
   });
 }
 
-exports.finalizeGiftPayment = (stripe) => functions.https.onCall(async (data, context) => {
+exports.finalizeGiftPayment = (stripe) => senderPaymentCallable(async (data, context) => {
   requireAuth(context);
   const giftDraftId = String(data.giftDraftId || "");
   const sessionId = String(data.sessionId || "");

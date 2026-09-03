@@ -3,6 +3,7 @@ const functions = require("firebase-functions/v1");
 const {getFirestore} = require("firebase-admin/firestore");
 const {getMessaging} = require("firebase-admin/messaging");
 const {resolveStripeRuntimeConfig} = require("./stripe-config");
+const {senderPaymentCallable} = require("./sender-app-check");
 let cachedStripe = null;
 
 function getStripeClient() {
@@ -226,7 +227,7 @@ exports.cancelAdjustedCollection = functions.https.onCall(async (data, context) 
   return {success: true};
 });
 
-exports.createDeliveryAdjustmentPayment = functions.https.onCall(async (data, context) => {
+exports.createDeliveryAdjustmentPayment = senderPaymentCallable(async (data, context) => {
   if (!context.auth) throw new functions.https.HttpsError("unauthenticated", "Authentication required.");
   const db = getFirestore();
   const adjustmentRef = db.collection("deliveryAdjustments").doc(data.adjustmentId);
@@ -245,7 +246,7 @@ exports.createDeliveryAdjustmentPayment = functions.https.onCall(async (data, co
   return {clientSecret: intent.client_secret, paymentIntentId: intent.id, amount};
 });
 
-exports.finalizeDeliveryAdjustmentPayment = functions.https.onCall(async (data, context) => {
+exports.finalizeDeliveryAdjustmentPayment = senderPaymentCallable(async (data, context) => {
   if (!context.auth) throw new functions.https.HttpsError("unauthenticated", "Authentication required.");
   const db = getFirestore();
   const adjustmentRef = db.collection("deliveryAdjustments").doc(data.adjustmentId);

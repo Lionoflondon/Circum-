@@ -69,6 +69,7 @@ const riderPresence = require("./rider-presence");
 const freeAddressSearch = require("./free-address-search");
 const senderBooking = require("./sender-booking");
 const senderFinance = require("./sender-finance");
+const {senderPaymentCallable} = require("./sender-app-check");
 const senderSavedAddresses = require("./sender-saved-addresses");
 const senderAccount = require("./sender-account");
 const riderAccount = require("./rider-account");
@@ -374,6 +375,16 @@ exports.markStaleRiderPresenceOffline =
 exports.searchFreeUkAddresses = freeAddressSearch.searchFreeUkAddresses;
 exports.resolveUkAddressPlace = freeAddressSearch.resolveUkAddressPlace;
 exports.getSenderRothBalance = senderBooking.getSenderRothBalance;
+exports.getSenderRoutePreview = senderBooking.getSenderRoutePreview;
+exports.getSenderPaymentMode = senderPaymentCallable((_data, context) => {
+  if (!context.auth) {
+    throw new functions.https.HttpsError(
+        "unauthenticated",
+        "Sign in to continue payment.",
+    );
+  }
+  return {mode: getStripeRuntimeConfig().mode};
+});
 exports.createSenderBookingQuote = senderBooking.createSenderBookingQuote;
 exports.createSenderPaymentSession =
   senderBooking.createSenderPaymentSession(stripe);

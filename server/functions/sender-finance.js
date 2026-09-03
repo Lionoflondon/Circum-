@@ -3,6 +3,7 @@
 
 const functions = require("firebase-functions/v1");
 const {getFirestore, FieldValue} = require("firebase-admin/firestore");
+const {senderPaymentCallable} = require("./sender-app-check");
 
 function requireSender(context) {
   if (!context.auth) {
@@ -54,7 +55,7 @@ function paymentMethodView(paymentMethod, defaultPaymentMethodId) {
   };
 }
 
-exports.listSenderPaymentMethods = (stripe) => functions.https.onCall(async (_, context) => {
+exports.listSenderPaymentMethods = (stripe) => senderPaymentCallable(async (_, context) => {
   const sender = requireSender(context);
   const customerId = await ensureStripeCustomer({stripe, sender});
   const customer = await stripe.customers.retrieve(customerId);
@@ -82,7 +83,7 @@ exports.listSenderPaymentMethods = (stripe) => functions.https.onCall(async (_, 
   };
 });
 
-exports.createSenderSetupIntent = (stripe) => functions.https.onCall(async (_, context) => {
+exports.createSenderSetupIntent = (stripe) => senderPaymentCallable(async (_, context) => {
   const sender = requireSender(context);
   const customerId = await ensureStripeCustomer({stripe, sender});
   const ephemeralKey = await stripe.ephemeralKeys.create(
@@ -102,7 +103,7 @@ exports.createSenderSetupIntent = (stripe) => functions.https.onCall(async (_, c
   };
 });
 
-exports.detachSenderPaymentMethod = (stripe) => functions.https.onCall(async (data, context) => {
+exports.detachSenderPaymentMethod = (stripe) => senderPaymentCallable(async (data, context) => {
   const sender = requireSender(context);
   const paymentMethodId = `${data && data.paymentMethodId || ""}`.trim();
   if (!paymentMethodId) {
@@ -138,7 +139,7 @@ exports.detachSenderPaymentMethod = (stripe) => functions.https.onCall(async (da
   return {ok: true};
 });
 
-exports.setDefaultSenderPaymentMethod = (stripe) => functions.https.onCall(async (data, context) => {
+exports.setDefaultSenderPaymentMethod = (stripe) => senderPaymentCallable(async (data, context) => {
   const sender = requireSender(context);
   const paymentMethodId = `${data && data.paymentMethodId || ""}`.trim();
   if (!paymentMethodId) {
@@ -159,7 +160,7 @@ exports.setDefaultSenderPaymentMethod = (stripe) => functions.https.onCall(async
   return {ok: true};
 });
 
-exports.saveSenderCheckoutPreference = functions.https.onCall(async (data, context) => {
+exports.saveSenderCheckoutPreference = senderPaymentCallable(async (data, context) => {
   const sender = requireSender(context);
   const preference = `${data && data.preference || ""}`.trim();
   const allowed = new Set([

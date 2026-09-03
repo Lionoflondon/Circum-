@@ -4,6 +4,7 @@
 const functions = require("firebase-functions/v1");
 const crypto = require("crypto");
 const {getFirestore, FieldValue, GeoPoint, Timestamp} = require("firebase-admin/firestore");
+const {defineSecret} = require("firebase-functions/params");
 const {calculateWalletCheckout, roundMoney, minorUnits} = require("./wallet-core");
 const {verifiedStripePaidGbpSession} = require("./roth-ledger-core");
 const vanguardProtocol = require("./vanguard-protocol-core");
@@ -11,6 +12,8 @@ const {classifyIris} = require("./iris-core");
 const {verifiedPhotoAnalysis} = require("./iris-photo-analysis");
 const {dispatchDeliveryRequest} = require("./send-package");
 const {start: startLatency} = require("./latency-observability");
+const {senderPaymentCallable} = require("./sender-app-check");
+const senderDirectionsApiKey = defineSecret("GOOGLE_MAPS_DIRECTIONS_API_KEY");
 
 const BASE_FARE_GBP = 5;
 const ADDITIONAL_FARE_PER_MILE_GBP = 1.5;
@@ -43,6 +46,7 @@ const FORBIDDEN_DRAFT_KEYS = [
   "verificationpin", "receiverpin", "senderpin", "rawmedia", "base64",
   "blob", "bytes", "debug", "internal", "functionresponse",
 ];
+const ROUTE_REQUEST_TIMEOUT_MS = 10000;
 
 function requireSender(context) {
   if (!context.auth) {
@@ -130,6 +134,61 @@ function cleanNumber(value) {
   const parsed = Number(value);
   return Number.isFinite(parsed) ? parsed : null;
 }
+
+function routeCoordinate(value, name) {
+  const source = cleanMap(value);
+  const latitude = Number(source.latitude);
+  const longitude = Number(source.longitude);
+  if (!Number.isFinite(latitude) || latitude < -90 || latitude > 90 ||
+      !Number.isFinite(longitude) || longitude < -180 || longitude > 180) {
+    throw new functions.https.HttpsError(
+        "invalid-argument",
+        `${name} coordinate is invalid.`,
+    );
+  }
+  return {latitude, longitude};
+}
+
+exports.getSenderRoutePreview = senderPaymentCallable(async (data, context) => {
+  requireSender(context);
+  const apiKey = text(senderDirectionsApiKey.value());
+  if (!apiKey) {
+    throw new functions.https.HttpsError(
+        "failed-precondition",
+        "Route preview is unavailable.",
+    );
+  }
+  const origin = routeCoordinate(data && data.origin, "Pickup");
+  const destination = routeCoordinate(data && data.destination, "Destination");
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), ROUTE_REQUEST_TIMEOUT_MS);
+  try {
+    const url = new URL("https://maps.googleapis.com/maps/api/directions/json");
+    url.searchParams.set("origin", `${origin.latitude},${origin.longitude}`);
+    url.searchParams.set("destination", `${destination.latitude},${destination.longitude}`);
+    url.searchParams.set("mode", "driving");
+    url.searchParams.set("key", apiKey);
+    const response = await fetch(url, {signal: controller.signal});
+    if (!response.ok) throw new Error(`directions_http_${response.status}`);
+    const payload = await response.json();
+    const route = payload && Array.isArray(payload.routes) ? payload.routes[0] : null;
+    const leg = route && Array.isArray(route.legs) ? route.legs[0] : null;
+    const encodedPolyline = text(route && route.overview_polyline && route.overview_polyline.points);
+    const distanceMetres = Number(leg && leg.distance && leg.distance.value);
+    if (!encodedPolyline || !Number.isFinite(distanceMetres)) {
+      throw new Error("directions_route_missing");
+    }
+    return {encodedPolyline, distanceMetres};
+  } catch (error) {
+    console.error("Sender route preview failed", {errorType: error && error.name || "Error"});
+    throw new functions.https.HttpsError(
+        error && error.name === "AbortError" ? "deadline-exceeded" : "unavailable",
+        "Route preview could not be prepared.",
+    );
+  } finally {
+    clearTimeout(timeout);
+  }
+}, {secrets: [senderDirectionsApiKey]});
 
 function rejectSensitiveDraftKeys(value, path = "", depth = 0) {
   if (depth > MAX_DEPTH) {
@@ -908,7 +967,7 @@ async function resumeExistingSenderPaymentIntent({
   return intent;
 }
 
-exports.getSenderRothBalance = functions.https.onCall(async (_, context) => {
+exports.getSenderRothBalance = senderPaymentCallable(async (_, context) => {
   const sender = requireSender(context);
   const balance = await walletBalanceForSender(sender);
   return {
@@ -919,7 +978,7 @@ exports.getSenderRothBalance = functions.https.onCall(async (_, context) => {
   };
 });
 
-exports.createSenderBookingQuote = functions.https.onCall(async (data, context) => {
+exports.createSenderBookingQuote = senderPaymentCallable(async (data, context) => {
   const sender = requireSender(context);
   const completeQuote = startLatency("QUOTE", {correlationId: text(data && data.quoteId) || "quote-request"});
   const db = getFirestore();
@@ -968,7 +1027,7 @@ exports.createSenderBookingQuote = functions.https.onCall(async (data, context) 
   };
 });
 
-exports.createSenderPaymentSession = (stripe) => functions.https.onCall(async (data, context) => {
+exports.createSenderPaymentSession = (stripe) => senderPaymentCallable(async (data, context) => {
   const sender = requireSender(context);
   const quoteId = text(data.quoteId);
   if (!quoteId) {
@@ -2008,7 +2067,7 @@ async function createPaidDeliveryFromSession(stripe, sender, data) {
   };
 }
 
-exports.createSenderPaidDelivery = (stripe) => functions.https.onCall(async (data, context) => {
+exports.createSenderPaidDelivery = (stripe) => senderPaymentCallable(async (data, context) => {
   const completeDelivery = startLatency("DELIVERY_CREATE", {correlationId: text(data && (data.idempotencyKey || data.paymentSessionId)) || "delivery-request"});
   try {
     const result = await createPaidDeliveryFromSession(stripe, requireSender(context), data || {});
@@ -2085,7 +2144,7 @@ async function finalizeSenderCheckoutSession(stripe, sessionData, eventId = "") 
   });
 }
 
-exports.finalizeSenderWebCheckout = (stripe) => functions.https.onCall(async (data, context) => {
+exports.finalizeSenderWebCheckout = (stripe) => senderPaymentCallable(async (data, context) => {
   const sender = requireSender(context);
   const sessionId = text(data.checkoutSessionId || data.sessionId);
   const paymentSessionId = text(data.paymentSessionId);
