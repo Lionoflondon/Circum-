@@ -247,6 +247,11 @@ class _SenderBookingCanvasState extends State<SenderBookingCanvas> {
       return;
     }
     try {
+      final restoredLocally = await _restoreQueuedLocalDraft()
+          .timeout(_localDraftRestoreTimeout);
+      if (!mounted) return;
+      setState(() => _draftLoading = false);
+      if (restoredLocally) return;
       try {
         final data = await _callDraftFunction(
           'loadSenderDraft',
@@ -271,8 +276,6 @@ class _SenderBookingCanvasState extends State<SenderBookingCanvas> {
         );
         if (mounted) setState(() => _syncStatus = 'Saved offline');
       }
-      await _restoreQueuedLocalDraft().timeout(_localDraftRestoreTimeout);
-      if (mounted) setState(() => _draftLoading = false);
     } on FirebaseFunctionsException catch (error, stackTrace) {
       _reportUnexpectedRestoreFailure(
         error,
@@ -493,14 +496,14 @@ class _SenderBookingCanvasState extends State<SenderBookingCanvas> {
     await prefs.remove(key);
   }
 
-  Future<void> _restoreQueuedLocalDraft() async {
+  Future<bool> _restoreQueuedLocalDraft() async {
     final key = _localDraftKey;
-    if (key == null) return;
+    if (key == null) return false;
     final prefs = await SharedPreferences.getInstance();
     final raw = prefs.getString(key);
     if (raw == null || raw.isEmpty) {
       if (mounted) setState(() => _syncStatus = 'Saved');
-      return;
+      return false;
     }
     final Object? decoded;
     try {
@@ -514,17 +517,17 @@ class _SenderBookingCanvasState extends State<SenderBookingCanvas> {
               "Your previous draft couldn't be restored. Please start again.";
         });
       }
-      return;
+      return false;
     }
     if (decoded is! Map || decoded['draft'] is! Map) {
       await _clearQueuedLocalDraft();
       if (mounted) setState(() => _syncStatus = 'Saved');
-      return;
+      return false;
     }
     if (_queuedLocalDraftExpired(decoded)) {
       await _clearQueuedLocalDraft();
       if (mounted) setState(() => _syncStatus = 'Saved');
-      return;
+      return false;
     }
     final SenderBookingDraft restored;
     try {
@@ -540,11 +543,12 @@ class _SenderBookingCanvasState extends State<SenderBookingCanvas> {
               "Your previous draft couldn't be restored. Please start again.";
         });
       }
-      return;
+      return false;
     }
     _hydrateRestoredDraft(restored);
     if (mounted) setState(() => _syncStatus = 'Sync needed');
     _queueDraftSave(restored);
+    return true;
   }
 
   Future<void> _deleteBackendDraft() async {
@@ -1785,11 +1789,6 @@ class _DeliveryTimePanel extends StatelessWidget {
             ),
           ],
         ],
-        const SizedBox(height: 14),
-        const _InfoNote(
-          text:
-              "Scheduled deliveries depend on Circum Rider availability. We'll confirm before the delivery begins.",
-        ),
         const SizedBox(height: 14),
         _PrimaryButton(
           label: 'Confirm delivery time',
@@ -4816,7 +4815,7 @@ class _PaymentPanelState extends State<_PaymentPanel> {
     switch (option.type) {
       case SenderPaymentProfileOptionType.applePay:
         return _PaymentMethodTile(
-          title: 'Apple Pay${option.isDefault ? ' · Default' : ''}',
+          title: 'Apple Pay',
           subtitle: 'Fast checkout on supported iOS devices.',
           icon: Icons.apple_rounded,
           selected: draft.selectedPaymentMethod ==
