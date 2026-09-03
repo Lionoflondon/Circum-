@@ -9560,15 +9560,20 @@ class _CustomerPortalState extends State<_CustomerPortal> {
                           final data = Map<String, dynamic>.from(
                             payment.data as Map,
                           );
-                          await Stripe.instance.initPaymentSheet(
-                            paymentSheetParameters: SetupPaymentSheetParameters(
-                              paymentIntentClientSecret:
-                                  '${data['clientSecret']}',
-                              merchantDisplayName: 'Circum',
-                              style: ThemeMode.dark,
-                            ),
-                          );
-                          await Stripe.instance.presentPaymentSheet();
+                          await Stripe.instance
+                              .initPaymentSheet(
+                                paymentSheetParameters:
+                                    SetupPaymentSheetParameters(
+                                  paymentIntentClientSecret:
+                                      '${data['clientSecret']}',
+                                  merchantDisplayName: 'Circum',
+                                  style: ThemeMode.dark,
+                                ),
+                              )
+                              .timeout(const Duration(seconds: 20));
+                          await Stripe.instance
+                              .presentPaymentSheet()
+                              .timeout(const Duration(seconds: 90));
                           await FirebaseFunctions.instance
                               .httpsCallable(
                             'finalizeDeliveryAdjustmentPayment',
@@ -26219,8 +26224,7 @@ class _SupportPage extends StatelessWidget {
   Widget build(BuildContext context) => _CompliancePage(
         colors: colors,
         title: 'CIRCUM Support',
-        intro:
-            'Get help with your CIRCUM account, deliveries, and payments.',
+        intro: 'Get help with your CIRCUM account, deliveries, and payments.',
         sections: const [
           _ComplianceSection(
             'Account support',
