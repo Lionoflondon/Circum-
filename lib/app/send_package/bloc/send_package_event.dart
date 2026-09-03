@@ -126,6 +126,10 @@ class RequestSenderBookingQuote extends SendPackageEvent {
   final String selectedVehicle;
   final String irisPhotoAnalysisId;
   final Map<String, dynamic>? businessContext;
+  final double? pickupLatitude;
+  final double? pickupLongitude;
+  final double? dropoffLatitude;
+  final double? dropoffLongitude;
 
   const RequestSenderBookingQuote({
     required this.selectedSpeed,
@@ -138,6 +142,10 @@ class RequestSenderBookingQuote extends SendPackageEvent {
     this.selectedVehicle = '',
     this.irisPhotoAnalysisId = '',
     this.businessContext,
+    this.pickupLatitude,
+    this.pickupLongitude,
+    this.dropoffLatitude,
+    this.dropoffLongitude,
   });
 }
 
