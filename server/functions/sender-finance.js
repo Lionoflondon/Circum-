@@ -15,18 +15,13 @@ function requireSender(context) {
   };
 }
 
-async function ensureStripeCustomer({stripe, sender, db = getFirestore()}) {
+async function ensureStripeCustomer({stripe, sender}) {
+  const db = getFirestore();
   const userRef = db.collection("users").doc(sender.uid);
   const userSnap = await userRef.get();
   const user = userSnap.exists ? userSnap.data() : {};
-  const existingCustomerId = user.stripeCustomerId || user.customerId;
-  if (existingCustomerId) {
-    try {
-      const existingCustomer = await stripe.customers.retrieve(existingCustomerId);
-      if (existingCustomer && existingCustomer.deleted !== true) return existingCustomerId;
-    } catch (error) {
-      if (error && error.code !== "resource_missing") throw error;
-    }
+  if (user.stripeCustomerId || user.customerId) {
+    return user.stripeCustomerId || user.customerId;
   }
   const customer = await stripe.customers.create({
     email: sender.email || undefined,
@@ -179,5 +174,3 @@ exports.saveSenderCheckoutPreference = functions.https.onCall(async (data, conte
   }, {merge: true});
   return {preference};
 });
-
-exports.ensureStripeCustomer = ensureStripeCustomer;
