@@ -1016,6 +1016,14 @@ class SendPackageBloc extends Bloc<SendPackageEvent, SendPackageState> {
     );
     try {
       final distanceKm = state.distance ?? _distanceKmFromRouteCoordinates();
+      final pickupLatitude =
+          event.pickupLatitude ?? state.pickupCoordinate?.lat;
+      final pickupLongitude =
+          event.pickupLongitude ?? state.pickupCoordinate?.lng;
+      final dropoffLatitude =
+          event.dropoffLatitude ?? state.desinationCoordinate?.lat;
+      final dropoffLongitude =
+          event.dropoffLongitude ?? state.desinationCoordinate?.lng;
       final data = await _callableMap('createSenderBookingQuote', {
         if (event.businessContext != null)
           'businessContext': event.businessContext,
@@ -1028,12 +1036,12 @@ class SendPackageBloc extends Bloc<SendPackageEvent, SendPackageState> {
             : DeliveryPricing.kilometresToMiles(distanceKm),
         'route': {
           'origin': {
-            'latitude': state.pickupCoordinate?.lat,
-            'longitude': state.pickupCoordinate?.lng,
+            'latitude': pickupLatitude,
+            'longitude': pickupLongitude,
           },
           'destination': {
-            'latitude': state.desinationCoordinate?.lat,
-            'longitude': state.desinationCoordinate?.lng,
+            'latitude': dropoffLatitude,
+            'longitude': dropoffLongitude,
           },
         },
         'weightKg':

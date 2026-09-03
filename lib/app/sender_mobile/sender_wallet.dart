@@ -22,6 +22,39 @@ import 'sender_profile_authority.dart';
 const _senderWalletSheetInitTimeout = Duration(seconds: 20);
 const _senderWalletSheetPresentTimeout = Duration(seconds: 90);
 
+Future<void> _confirmNativeWalletSetup(
+  SenderPaymentProfileOptionType type,
+  SenderSetupIntentData setup,
+) async {
+  final confirmParams = type == SenderPaymentProfileOptionType.applePay
+      ? const PlatformPayConfirmParams.applePay(
+          applePay: ApplePayParams(
+            merchantCountryCode: 'GB',
+            currencyCode: 'GBP',
+            cartItems: [
+              ApplePayCartSummaryItem.immediate(
+                label: 'Circum payment method',
+                amount: '0.00',
+              ),
+            ],
+          ),
+        )
+      : PlatformPayConfirmParams.googlePay(
+          googlePay: GooglePayParams(
+            merchantCountryCode: 'GB',
+            currencyCode: 'GBP',
+            merchantName: 'Circum',
+            testEnv: Env.googlePayTestEnvironment,
+          ),
+        );
+  await Stripe.instance
+      .confirmPlatformPaySetupIntent(
+        clientSecret: setup.setupIntentClientSecret,
+        confirmParams: confirmParams,
+      )
+      .timeout(_senderWalletSheetPresentTimeout);
+}
+
 class SenderWalletData {
   final double balance;
   final bool frozen;
@@ -695,7 +728,9 @@ class _SenderWalletViewState extends State<SenderWalletView> {
         .then((_) => _refreshPaymentMethods());
   }
 
-  void _openPaymentInformation(SenderPaymentProfileOptionType type) {
+  Future<void> _openPaymentInformation(
+    SenderPaymentProfileOptionType type,
+  ) async {
     final platform = Theme.of(context).platform;
     final appleAvailable = platform == TargetPlatform.iOS;
     final googleAvailable = platform == TargetPlatform.android;
@@ -708,17 +743,47 @@ class _SenderWalletViewState extends State<SenderWalletView> {
     final platformName = type == SenderPaymentProfileOptionType.applePay
         ? 'an iPhone or iPad'
         : 'an Android device';
-    Navigator.of(context).push(MaterialPageRoute<void>(
-      builder: (_) => _WalletInformationScreen(
-        title: title,
-        icon: type == SenderPaymentProfileOptionType.applePay
-            ? Icons.apple_rounded
-            : Icons.android_rounded,
-        body: available
-            ? '$title is available during eligible Circum checkout. Manage your preferred checkout order from Manage Payments.'
-            : '$title is available when you use Circum on $platformName. Your saved cards and Roth remain available on this device.',
-      ),
-    ));
+    if (!available) {
+      Navigator.of(context).push(MaterialPageRoute<void>(
+        builder: (_) => _WalletInformationScreen(
+          title: title,
+          icon: type == SenderPaymentProfileOptionType.applePay
+              ? Icons.apple_rounded
+              : Icons.android_rounded,
+          body:
+              '$title is available when you use Circum on $platformName. Your saved cards and Roth remain available on this device.',
+        ),
+      ));
+      return;
+    }
+    if (_paymentActionLoading) return;
+    setState(() {
+      _paymentActionLoading = true;
+      _error = null;
+    });
+    try {
+      final setup = await _repository
+          .createSetupIntent()
+          .timeout(_senderWalletActionTimeout);
+      await _confirmNativeWalletSetup(type, setup);
+      await _refreshPaymentMethods();
+      if (mounted) _notice(context, '$title is ready for Circum checkout.');
+    } on StripeException catch (_) {
+      if (mounted) {
+        _notice(
+          context,
+          '$title setup was cancelled or could not be completed.',
+        );
+      }
+    } on TimeoutException {
+      if (mounted) {
+        _notice(context, '$title setup timed out. Please try again.');
+      }
+    } catch (_) {
+      if (mounted) _notice(context, '$title setup could not be completed.');
+    } finally {
+      if (mounted) setState(() => _paymentActionLoading = false);
+    }
   }
 
   void _openRothInformation() => Navigator.of(context).push(
@@ -1195,16 +1260,60 @@ class _ManagePaymentsScreenState extends State<_ManagePaymentsScreen> {
     }
   }
 
-  void _openMethod(SenderPaymentProfileOptionType type) {
+  Future<void> _openMethod(SenderPaymentProfileOptionType type) async {
     final apple = type == SenderPaymentProfileOptionType.applePay;
-    Navigator.of(context).push(MaterialPageRoute<void>(
-      builder: (_) => _WalletInformationScreen(
-        title: apple ? 'Apple Pay' : 'Google Pay',
-        icon: apple ? Icons.apple_rounded : Icons.android_rounded,
-        body:
-            '${apple ? 'Apple Pay' : 'Google Pay'} is offered automatically on supported devices during checkout.',
-      ),
-    ));
+    final title = apple ? 'Apple Pay' : 'Google Pay';
+    final platformAvailable = apple
+        ? defaultTargetPlatform == TargetPlatform.iOS
+        : defaultTargetPlatform == TargetPlatform.android;
+    if (!platformAvailable) {
+      Navigator.of(context).push(MaterialPageRoute<void>(
+        builder: (_) => _WalletInformationScreen(
+          title: title,
+          icon: apple ? Icons.apple_rounded : Icons.android_rounded,
+          body: '$title is not available on this device.',
+        ),
+      ));
+      return;
+    }
+    if (_busy) return;
+    setState(() => _busy = true);
+    try {
+      final setup = await widget.repository
+          .createSetupIntent()
+          .timeout(_senderWalletActionTimeout);
+      await _confirmNativeWalletSetup(type, setup);
+      await _load();
+      if (mounted) {
+        _SenderWalletViewState._notice(
+          context,
+          '$title is ready for Circum checkout.',
+        );
+      }
+    } on StripeException catch (_) {
+      if (mounted) {
+        _SenderWalletViewState._notice(
+          context,
+          '$title setup was cancelled or could not be completed.',
+        );
+      }
+    } on TimeoutException {
+      if (mounted) {
+        _SenderWalletViewState._notice(
+          context,
+          '$title setup timed out. Please try again.',
+        );
+      }
+    } catch (_) {
+      if (mounted) {
+        _SenderWalletViewState._notice(
+          context,
+          '$title setup could not be completed.',
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
   }
 
   Future<void> _rename(SenderPaymentMethod method) async {

@@ -113,8 +113,10 @@ void main() {
     expect(entitlements, contains('merchant.com.circum.app'));
     expect(
       RegExp(r'testEnv: Env.googlePayTestEnvironment').allMatches(wallet),
-      hasLength(2),
+      hasLength(3),
     );
+    expect(wallet, contains('confirmPlatformPaySetupIntent('));
+    expect(wallet, contains('PlatformPayConfirmParams.applePay('));
     expect(checkout, contains('testEnv: Env.googlePayTestEnvironment'));
   });
 

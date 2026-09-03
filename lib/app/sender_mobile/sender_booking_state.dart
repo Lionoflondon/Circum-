@@ -278,6 +278,12 @@ class SenderBookingDraft {
     this.cardConfirmationStarted = false,
   });
 
+  bool get hasCompleteRouteCoordinates =>
+      pickupLat != null &&
+      pickupLng != null &&
+      dropoffLat != null &&
+      dropoffLng != null;
+
   bool get canContinue {
     switch (step) {
       case SenderBookingStep.pickup:

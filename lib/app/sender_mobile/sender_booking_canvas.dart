@@ -720,7 +720,7 @@ class _SenderBookingCanvasState extends State<SenderBookingCanvas> {
   void _requestBackendQuote(SenderBookingDraft draft) {
     _restoreRouteFromDraftIfReady(draft);
     final engine = context.read<SendPackageBloc>().state;
-    if (!_routeReadyForQuote(engine)) return;
+    if (!_routeReadyForQuote(engine, draft)) return;
     final business = BusinessJourneyScope.maybeOf(context);
     final iris = engine.canonicalIrisResult;
     final requiresVanguard =
@@ -728,6 +728,18 @@ class _SenderBookingCanvasState extends State<SenderBookingCanvas> {
             draft.vanguard;
     final selectedVehicle = _selectedVehicleFor(draft, iris);
     final quoteKey = [
+      draft.pickupLat?.toStringAsFixed(6) ??
+          engine.pickupCoordinate?.lat.toStringAsFixed(6) ??
+          '',
+      draft.pickupLng?.toStringAsFixed(6) ??
+          engine.pickupCoordinate?.lng.toStringAsFixed(6) ??
+          '',
+      draft.dropoffLat?.toStringAsFixed(6) ??
+          engine.desinationCoordinate?.lat.toStringAsFixed(6) ??
+          '',
+      draft.dropoffLng?.toStringAsFixed(6) ??
+          engine.desinationCoordinate?.lng.toStringAsFixed(6) ??
+          '',
       (engine.distance ?? -1).toStringAsFixed(3),
       draft.selectedOption,
       selectedVehicle,
@@ -754,6 +766,10 @@ class _SenderBookingCanvasState extends State<SenderBookingCanvas> {
             selectedVehicle: selectedVehicle,
             irisPhotoAnalysisId: _irisPhotoAnalysisId ?? '',
             businessContext: business?.toMap(),
+            pickupLatitude: draft.pickupLat,
+            pickupLongitude: draft.pickupLng,
+            dropoffLatitude: draft.dropoffLat,
+            dropoffLongitude: draft.dropoffLng,
           ),
         );
   }
@@ -922,7 +938,7 @@ class _SenderBookingCanvasState extends State<SenderBookingCanvas> {
         if ((_draft.step == SenderBookingStep.options ||
                 _draft.step == SenderBookingStep.review ||
                 _draft.step == SenderBookingStep.payment) &&
-            _routeReadyForQuote(engine) &&
+            _routeReadyForQuote(engine, _draft) &&
             !engine.isSenderQuoteLoading) {
           WidgetsBinding.instance.addPostFrameCallback((_) {
             if (!mounted) return;
@@ -2978,9 +2994,13 @@ List<String> _customerIrisReasons(dynamic iris, SenderBookingDraft draft) {
   return reasons.toSet().toList(growable: false);
 }
 
-bool _routeReadyForQuote(SendPackageState engine) {
+bool _routeReadyForQuote(
+  SendPackageState engine, [
+  SenderBookingDraft? draft,
+]) {
   return engine.distance != null ||
-      engine.pickupCoordinate != null && engine.desinationCoordinate != null;
+      engine.pickupCoordinate != null && engine.desinationCoordinate != null ||
+      draft?.hasCompleteRouteCoordinates == true;
 }
 
 class _OptionsPanel extends StatelessWidget {
@@ -2999,7 +3019,7 @@ class _OptionsPanel extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final quoteTotal = engine.senderQuoteTotal;
-    final routeReady = _routeReadyForQuote(engine);
+    final routeReady = _routeReadyForQuote(engine, draft);
     final iris = engine.canonicalIrisResult;
     final business = BusinessJourneyScope.maybeOf(context);
     final includedVanguard = _irisRequiresIncludedVanguard(
@@ -3104,7 +3124,7 @@ class _OptionsPanel extends StatelessWidget {
 
   void _requestQuote(BuildContext context, SenderBookingDraft draft) {
     final engine = context.read<SendPackageBloc>().state;
-    if (!_routeReadyForQuote(engine)) return;
+    if (!_routeReadyForQuote(engine, draft)) return;
     final iris = engine.canonicalIrisResult;
     final business = BusinessJourneyScope.maybeOf(context);
     final includedVanguard = _irisRequiresIncludedVanguard(
@@ -3121,6 +3141,10 @@ class _OptionsPanel extends StatelessWidget {
             fragile: _irisHasHandling(iris, 'fragile'),
             highValue: _irisHasHandling(iris, 'high value'),
             selectedVehicle: _selectedVehicleFor(draft, iris),
+            pickupLatitude: draft.pickupLat,
+            pickupLongitude: draft.pickupLng,
+            dropoffLatitude: draft.dropoffLat,
+            dropoffLongitude: draft.dropoffLng,
           ),
         );
   }

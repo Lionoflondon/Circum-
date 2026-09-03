@@ -1,8 +1,27 @@
 import 'dart:io';
 
+import 'package:circum/app/sender_mobile/sender_booking_state.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
+  test('persisted route coordinates remain quote-ready after engine restore',
+      () {
+    const complete = SenderBookingDraft(
+      pickupLat: 51.5074,
+      pickupLng: -0.1278,
+      dropoffLat: 51.5155,
+      dropoffLng: -0.0922,
+    );
+    const incomplete = SenderBookingDraft(
+      pickupLat: 51.5074,
+      pickupLng: -0.1278,
+      dropoffLat: 51.5155,
+    );
+
+    expect(complete.hasCompleteRouteCoordinates, isTrue);
+    expect(incomplete.hasCompleteRouteCoordinates, isFalse);
+  });
+
   final canvas = File(
     'lib/app/sender_mobile/sender_booking_canvas.dart',
   ).readAsStringSync();
