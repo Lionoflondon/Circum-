@@ -189,10 +189,18 @@ void main() {
       File('lib/website/shared/circum_website_app.dart').readAsStringSync(),
       contains("String.fromEnvironment('GOOGLE_PLACES_API_KEY')"),
     );
+    final senderRouteSource =
+        File('lib/app/send_package/bloc/send_package_bloc.dart')
+            .readAsStringSync();
+    final usesLegacyConfiguredKey = senderRouteSource.contains(
+      "String.fromEnvironment('GOOGLE_MAPS_DIRECTIONS_API_KEY')",
+    );
+    final usesProtectedRouteCallable =
+        senderRouteSource.contains("'getSenderRoutePreview'");
     expect(
-      File('lib/app/send_package/bloc/send_package_bloc.dart')
-          .readAsStringSync(),
-      contains("String.fromEnvironment('GOOGLE_MAPS_DIRECTIONS_API_KEY')"),
+      usesLegacyConfiguredKey != usesProtectedRouteCallable,
+      isTrue,
+      reason: 'Sender must use exactly one protected route credential path.',
     );
     expect(
       File('android/app/src/main/AndroidManifest.xml').readAsStringSync(),
