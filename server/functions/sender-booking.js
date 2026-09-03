@@ -137,8 +137,10 @@ function cleanNumber(value) {
 
 function routeCoordinate(value, name) {
   const source = cleanMap(value);
-  const latitude = Number(source.latitude);
-  const longitude = Number(source.longitude);
+  const rawLatitude = source.latitude ?? source.lat;
+  const rawLongitude = source.longitude ?? source.lng;
+  const latitude = rawLatitude == null || rawLatitude === "" ? NaN : Number(rawLatitude);
+  const longitude = rawLongitude == null || rawLongitude === "" ? NaN : Number(rawLongitude);
   if (!Number.isFinite(latitude) || latitude < -90 || latitude > 90 ||
       !Number.isFinite(longitude) || longitude < -180 || longitude > 180) {
     throw new functions.https.HttpsError(
@@ -147,6 +149,36 @@ function routeCoordinate(value, name) {
     );
   }
   return {latitude, longitude};
+}
+
+async function fetchSenderRoute({origin, destination, apiKey, fetchImpl = fetch}) {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), ROUTE_REQUEST_TIMEOUT_MS);
+  try {
+    const url = new URL("https://maps.googleapis.com/maps/api/directions/json");
+    url.searchParams.set("origin", `${origin.latitude},${origin.longitude}`);
+    url.searchParams.set("destination", `${destination.latitude},${destination.longitude}`);
+    url.searchParams.set("mode", "driving");
+    url.searchParams.set("key", apiKey);
+    const response = await fetchImpl(url, {signal: controller.signal});
+    if (!response.ok) throw new Error(`directions_http_${response.status}`);
+    const payload = await response.json();
+    const route = payload && Array.isArray(payload.routes) ? payload.routes[0] : null;
+    const leg = route && Array.isArray(route.legs) ? route.legs[0] : null;
+    const encodedPolyline = text(route && route.overview_polyline && route.overview_polyline.points);
+    const distanceMetres = Number(leg && leg.distance && leg.distance.value);
+    const durationSeconds = Number(leg && leg.duration && leg.duration.value);
+    if (!encodedPolyline || !Number.isFinite(distanceMetres)) {
+      throw new Error("directions_route_missing");
+    }
+    return {
+      encodedPolyline,
+      distanceMetres,
+      durationSeconds: Number.isFinite(durationSeconds) ? durationSeconds : null,
+    };
+  } finally {
+    clearTimeout(timeout);
+  }
 }
 
 exports.getSenderRoutePreview = senderPaymentCallable(async (data, context) => {
@@ -160,35 +192,49 @@ exports.getSenderRoutePreview = senderPaymentCallable(async (data, context) => {
   }
   const origin = routeCoordinate(data && data.origin, "Pickup");
   const destination = routeCoordinate(data && data.destination, "Destination");
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), ROUTE_REQUEST_TIMEOUT_MS);
   try {
-    const url = new URL("https://maps.googleapis.com/maps/api/directions/json");
-    url.searchParams.set("origin", `${origin.latitude},${origin.longitude}`);
-    url.searchParams.set("destination", `${destination.latitude},${destination.longitude}`);
-    url.searchParams.set("mode", "driving");
-    url.searchParams.set("key", apiKey);
-    const response = await fetch(url, {signal: controller.signal});
-    if (!response.ok) throw new Error(`directions_http_${response.status}`);
-    const payload = await response.json();
-    const route = payload && Array.isArray(payload.routes) ? payload.routes[0] : null;
-    const leg = route && Array.isArray(route.legs) ? route.legs[0] : null;
-    const encodedPolyline = text(route && route.overview_polyline && route.overview_polyline.points);
-    const distanceMetres = Number(leg && leg.distance && leg.distance.value);
-    if (!encodedPolyline || !Number.isFinite(distanceMetres)) {
-      throw new Error("directions_route_missing");
-    }
-    return {encodedPolyline, distanceMetres};
+    return await fetchSenderRoute({origin, destination, apiKey});
   } catch (error) {
     console.error("Sender route preview failed", {errorType: error && error.name || "Error"});
     throw new functions.https.HttpsError(
         error && error.name === "AbortError" ? "deadline-exceeded" : "unavailable",
         "Route preview could not be prepared.",
     );
-  } finally {
-    clearTimeout(timeout);
   }
 }, {secrets: [senderDirectionsApiKey]});
+
+function deliveryRoute(data) {
+  const pickup = cleanMap(data && data.pickup);
+  const dropoff = cleanMap(data && data.dropoff);
+  return {
+    origin: routeCoordinate(pickup.coordinates || pickup.coordinate || pickup, "Pickup"),
+    destination: routeCoordinate(dropoff.coordinates || dropoff.coordinate || dropoff, "Destination"),
+  };
+}
+
+function assertDeliveryMatchesQuote(data, quote) {
+  const actual = deliveryRoute(data);
+  const expected = cleanMap(quote && quote.route);
+  const expectedOrigin = routeCoordinate(expected.origin, "Quoted pickup");
+  const expectedDestination = routeCoordinate(expected.destination, "Quoted destination");
+  const matches = (left, right) =>
+    Math.abs(left.latitude - right.latitude) <= 0.00001 &&
+    Math.abs(left.longitude - right.longitude) <= 0.00001;
+  if (!matches(actual.origin, expectedOrigin) ||
+      !matches(actual.destination, expectedDestination)) {
+    throw new functions.https.HttpsError(
+        "failed-precondition",
+        "Delivery addresses changed after the quote. Please request a new quote.",
+    );
+  }
+  if (!data.parcel || !data.recipient) {
+    throw new functions.https.HttpsError(
+        "invalid-argument",
+        "Complete delivery details are required before payment.",
+    );
+  }
+  return actual;
+}
 
 function rejectSensitiveDraftKeys(value, path = "", depth = 0) {
   if (depth > MAX_DEPTH) {
@@ -991,10 +1037,40 @@ exports.createSenderBookingQuote = senderPaymentCallable(async (data, context) =
     analysisId: data && data.irisPhotoAnalysisId,
     description: parcelDescription,
   });
+  const apiKey = text(senderDirectionsApiKey.value());
+  if (!apiKey) {
+    throw new functions.https.HttpsError(
+        "failed-precondition",
+        "Delivery pricing is temporarily unavailable.",
+    );
+  }
+  const requestedRoute = cleanMap(data && data.route);
+  const origin = routeCoordinate(requestedRoute.origin, "Pickup");
+  const destination = routeCoordinate(requestedRoute.destination, "Destination");
+  let authoritativeRoute;
+  try {
+    authoritativeRoute = await fetchSenderRoute({origin, destination, apiKey});
+  } catch (error) {
+    console.error("Sender authoritative route failed", {
+      errorType: error && error.name || "Error",
+    });
+    throw new functions.https.HttpsError(
+        error && error.name === "AbortError" ? "deadline-exceeded" : "unavailable",
+        "Delivery pricing could not be prepared.",
+    );
+  }
+  const authoritativeDistanceMiles = authoritativeRoute.distanceMetres / 1609.344;
   const quote = quotePayload({
     ...(data || {}),
     ...(businessContext || {}),
+    distanceMiles: authoritativeDistanceMiles,
   }, sender.uid, serverPhotoAnalysis);
+  quote.route = {
+    origin,
+    destination,
+    distanceMetres: authoritativeRoute.distanceMetres,
+    durationSeconds: authoritativeRoute.durationSeconds,
+  };
   completeQuote({success: true});
   const clientDisplayQuote = cleanMap(data && data.clientDisplayQuote);
   const clientDisplayedAmount = cleanNumber(clientDisplayQuote.amount);
@@ -1025,7 +1101,7 @@ exports.createSenderBookingQuote = senderPaymentCallable(async (data, context) =
     },
     pricingDiscrepancy: discrepancy,
   };
-});
+}, {secrets: [senderDirectionsApiKey]});
 
 exports.createSenderPaymentSession = (stripe) => senderPaymentCallable(async (data, context) => {
   const sender = requireSender(context);
@@ -1095,6 +1171,11 @@ exports.createSenderPaymentSession = (stripe) => senderPaymentCallable(async (da
       });
     }
     if (!webCheckout && sameRequestedSession && existingSession.stripePaymentIntentId && existingSession.stripeCustomerId) {
+      assertDeliveryMatchesQuote(deliveryPayload, quote);
+      await sessionRef.set({
+        deliveryPayload,
+        updatedAt: FieldValue.serverTimestamp(),
+      }, {merge: true});
       const existingIntent = await resumeExistingSenderPaymentIntent({
         stripe,
         existingSession,
@@ -1133,6 +1214,7 @@ exports.createSenderPaymentSession = (stripe) => senderPaymentCallable(async (da
       };
     }
   }
+  assertDeliveryMatchesQuote(deliveryPayload, quote);
   const sessionBase = {
     paymentSessionId: sessionRef.id,
     quoteId,
@@ -1156,13 +1238,11 @@ exports.createSenderPaymentSession = (stripe) => senderPaymentCallable(async (da
     remainingAmount: split.remainingGbp,
     currency: "GBP",
     paymentSessionKey: requestedSessionKey,
+    deliveryPayload,
     createdAt: FieldValue.serverTimestamp(),
     updatedAt: FieldValue.serverTimestamp(),
   };
   if (!split.stripeRequired) {
-    if (!deliveryPayload.pickup || !deliveryPayload.dropoff || !deliveryPayload.parcel || !deliveryPayload.recipient) {
-      throw new functions.https.HttpsError("invalid-argument", "Delivery details are required before Roth payment.");
-    }
     const requestId = text(data.requestId) || `sender_${stableId(`${sender.uid}:${quoteId}:${sessionRef.id}`)}`;
     const draftId = text(data.draftId);
     const idempotencyKey = text(data.idempotencyKey) ||
@@ -1274,9 +1354,6 @@ exports.createSenderPaymentSession = (stripe) => senderPaymentCallable(async (da
     throw new functions.https.HttpsError("failed-precondition", "Saved payment method is unavailable.");
   }
   if (webCheckout) {
-    if (!deliveryPayload.pickup || !deliveryPayload.dropoff || !deliveryPayload.parcel || !deliveryPayload.recipient) {
-      throw new functions.https.HttpsError("invalid-argument", "Delivery details are required before web checkout.");
-    }
     const requestId = text(data.requestId) || `sender_${stableId(`${sender.uid}:${quoteId}:${sessionRef.id}`)}`;
     const draftId = text(data.draftId);
     const checkoutAttempt = existingSessionSnap.exists ?
@@ -1691,6 +1768,7 @@ async function createPaidDeliveryFromSession(stripe, sender, data) {
     });
   }
   const quote = quoteSnap.data();
+  assertDeliveryMatchesQuote(data, quote);
   const draftId = text(data.draftId);
   const idempotencyKey = text(data.idempotencyKey) ||
     stableId(`${sender.uid}:${draftId || "no-draft"}:${quoteId}:${paymentSessionId}`);
@@ -2175,6 +2253,9 @@ exports._private = {
   draftInactive,
   stableId,
   quotePayload,
+  routeCoordinate,
+  fetchSenderRoute,
+  assertDeliveryMatchesQuote,
   riderDisplayAliases,
   riderPayoutFromQuote,
   resumeExistingSenderPaymentIntent,
