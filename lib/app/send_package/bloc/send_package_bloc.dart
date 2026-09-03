@@ -6,6 +6,7 @@ import 'package:circum/app/iris/iris_learning_bridge.dart';
 import 'package:circum/app/iris/iris_weight_estimator.dart';
 import 'package:circum/app/send_package/models/place_coordinates.m.dart';
 import 'package:circum/pricing/delivery_pricing.dart';
+import 'package:circum/env/env.dart';
 import 'package:circum/utils/theme/colors.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:cloud_functions/cloud_functions.dart';
@@ -32,12 +33,11 @@ import '../models/delivery_restoration_coordinates.dart';
 import '../models/message.m.dart';
 import '../models/suggestions.m.dart';
 import '../repo/place_api.dart';
+import '../repo/route_request_coordinator.dart';
 
 part 'send_package_event.dart';
 part 'send_package_state.dart';
 
-const _googleMapsDirectionsApiKey =
-    String.fromEnvironment('GOOGLE_MAPS_DIRECTIONS_API_KEY');
 const _senderCallableTimeout = Duration(seconds: 30);
 const _senderRoutePreviewTimeout = Duration(seconds: 12);
 
@@ -98,6 +98,23 @@ class SendPackageBloc extends Bloc<SendPackageEvent, SendPackageState> {
   String? _activeDeliveryLiveLocationId;
   final Map<bool, String> _addressSessionTokens = {};
   final Map<bool, int> _addressSearchRequestIds = {true: 0, false: 0};
+  late final RouteRequestCoordinator<Map<String, dynamic>> _routeRequests =
+      RouteRequestCoordinator<Map<String, dynamic>>(
+    load: (origin, destination) => _callableMap(
+      'getSenderRoutePreview',
+      {
+        'origin': {
+          'latitude': origin.latitude,
+          'longitude': origin.longitude,
+        },
+        'destination': {
+          'latitude': destination.latitude,
+          'longitude': destination.longitude,
+        },
+      },
+    ).timeout(_senderRoutePreviewTimeout),
+  );
+  int _routeRequestId = 0;
   SendPackageBloc() : super(SendPackageState()) {
     on<CheckForPushToken>(_handleCheckForPushToken);
     on<SearchAPlaceEvent>(_handleSearchAPlaceEvent);
@@ -401,6 +418,7 @@ class SendPackageBloc extends Bloc<SendPackageEvent, SendPackageState> {
   }
 
   void _handleSetDeliveryAddress(SetDeliveryAddress event, Emitter emit) async {
+    final routeRequestId = ++_routeRequestId;
     final sessionToken = _addressSessionTokens[false] ??= const Uuid().v4();
     final routeTimer = Stopwatch()..start();
     _senderFlowDiagnostic('route_start');
@@ -444,40 +462,28 @@ class SendPackageBloc extends Bloc<SendPackageEvent, SendPackageState> {
       if (state.pickupCoordinate != null) {
         List<LatLng> latLngList = [];
 
-        PolylinePoints points = PolylinePoints();
-
-        if (_googleMapsDirectionsApiKey.isEmpty) {
-          emit(
-            state.copyWith(
-              addressSearchError: 'Route preview could not be prepared.',
-              sourceAndDestinationStatus: SourceAndDestinationStatus.selected,
-            ),
-          );
-          return;
-        }
-
-        PolylineResult polylineResult = await points.getRouteBetweenCoordinates(
-          request: PolylineRequest(
-            origin: PointLatLng(
-              state.pickupCoordinate!.lat,
-              state.pickupCoordinate!.lng,
-            ),
-            destination: PointLatLng(
-              state.desinationCoordinate!.lat,
-              state.desinationCoordinate!.lng,
-            ),
-            mode: TravelMode.driving,
+        final routePreview = await _routeRequests.resolve(
+          RouteCoordinate(
+            state.pickupCoordinate!.lat,
+            state.pickupCoordinate!.lng,
           ),
-          googleApiKey: _googleMapsDirectionsApiKey,
-        ).timeout(_senderRoutePreviewTimeout);
+          RouteCoordinate(
+            state.desinationCoordinate!.lat,
+            state.desinationCoordinate!.lng,
+          ),
+        );
+        if (routeRequestId != _routeRequestId) return;
 
-        if (polylineResult.points.isNotEmpty) {
+        final encodedPolyline = '${routePreview['encodedPolyline'] ?? ''}';
+        final distanceMetres = routePreview['distanceMetres'];
+        final routePoints = PolylinePoints().decodePolyline(encodedPolyline);
+        if (routePoints.isNotEmpty && distanceMetres is num) {
           double tripDistance;
-          tripDistance = polylineResult.totalDistanceValue!.toDouble() / 1000;
+          tripDistance = distanceMetres.toDouble() / 1000;
           // print(polylineResult.distance);
           // print(polylineResult.distanceText);
           // print(polylineResult.distanceValue);
-          for (final point in polylineResult.points) {
+          for (final point in routePoints) {
             latLngList.add(LatLng(point.latitude, point.longitude));
           }
 
@@ -501,6 +507,7 @@ class SendPackageBloc extends Bloc<SendPackageEvent, SendPackageState> {
             'assets/svg/destination_marker.svg',
             const Size(27, 43),
           );
+          if (routeRequestId != _routeRequestId) return;
 
           final Marker sourceMarker = Marker(
             markerId: const MarkerId('source_marker'),
@@ -552,6 +559,7 @@ class SendPackageBloc extends Bloc<SendPackageEvent, SendPackageState> {
         // add(CalculateDistance());
       }
     } catch (error, stackTrace) {
+      if (routeRequestId != _routeRequestId) return;
       _senderFlowDiagnostic(
         error is TimeoutException ? 'route_timeout' : 'route_failure',
         timer: routeTimer,
@@ -977,7 +985,8 @@ class SendPackageBloc extends Bloc<SendPackageEvent, SendPackageState> {
       );
       _senderFlowDiagnostic('pricing_success', timer: pricingTimer);
     } on FirebaseFunctionsException catch (error) {
-      _senderFlowDiagnostic('pricing_failure', timer: pricingTimer, error: error);
+      _senderFlowDiagnostic('pricing_failure',
+          timer: pricingTimer, error: error);
       debugPrint(
         'createSenderBookingQuote failed: code=${error.code}, message=${error.message}, details=${error.details}',
       );
@@ -994,7 +1003,8 @@ class SendPackageBloc extends Bloc<SendPackageEvent, SendPackageState> {
         ),
       );
     } catch (error) {
-      _senderFlowDiagnostic('pricing_failure', timer: pricingTimer, error: error);
+      _senderFlowDiagnostic('pricing_failure',
+          timer: pricingTimer, error: error);
       debugPrint('createSenderBookingQuote unexpected failure: $error');
       emit(
         state.copyWith(
@@ -1072,6 +1082,18 @@ class SendPackageBloc extends Bloc<SendPackageEvent, SendPackageState> {
       ),
     );
     try {
+      final mode = await _callableMap('getSenderPaymentMode', const {});
+      if (!Env.paymentModeMatchesBackend('${mode['mode'] ?? ''}')) {
+        emit(
+          state.copyWith(
+            isSenderPaymentLoading: false,
+            senderPaymentStatus: 'configuration_blocked',
+            senderPaymentError:
+                'Payments are temporarily unavailable. Please try again later.',
+          ),
+        );
+        return;
+      }
       final data = await _callableMap('createSenderPaymentSession', {
         'quoteId': state.senderQuoteId,
         'rothEnabled': event.rothEnabled,

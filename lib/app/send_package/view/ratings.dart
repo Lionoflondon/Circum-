@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:cloud_functions/cloud_functions.dart';
 import 'package:flutter/foundation.dart';
@@ -5,6 +7,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter_stripe/flutter_stripe.dart';
 
 import '../../../env/env.dart';
+
+const _senderTipSheetInitTimeout = Duration(seconds: 20);
+const _senderTipSheetPresentTimeout = Duration(seconds: 90);
 
 const ratingFeedbackChoices = <String>[
   'Friendly',
@@ -585,27 +590,33 @@ class _RatingsViewState extends State<RatingsView> {
         );
         final secret = _text(result['clientSecret']);
         if (secret.isNotEmpty && result['status'] != 'succeeded') {
-          await Stripe.instance.initPaymentSheet(
-            paymentSheetParameters: SetupPaymentSheetParameters(
-              paymentIntentClientSecret: secret,
-              customerId: _text(result['customerId']),
-              customerEphemeralKeySecret: _text(result['ephemeralKeySecret']),
-              merchantDisplayName: 'Circum',
-              applePay: !kIsWeb && defaultTargetPlatform == TargetPlatform.iOS
-                  ? const PaymentSheetApplePay(merchantCountryCode: 'GB')
-                  : null,
-              googlePay:
-                  !kIsWeb && defaultTargetPlatform == TargetPlatform.android
-                      ? PaymentSheetGooglePay(
-                          merchantCountryCode: 'GB',
-                          currencyCode: 'GBP',
-                          testEnv: Env.googlePayTestEnvironment,
-                        )
+          await Stripe.instance
+              .initPaymentSheet(
+                paymentSheetParameters: SetupPaymentSheetParameters(
+                  paymentIntentClientSecret: secret,
+                  customerId: _text(result['customerId']),
+                  customerEphemeralKeySecret:
+                      _text(result['ephemeralKeySecret']),
+                  merchantDisplayName: 'Circum',
+                  applePay: !kIsWeb &&
+                          defaultTargetPlatform == TargetPlatform.iOS
+                      ? const PaymentSheetApplePay(merchantCountryCode: 'GB')
                       : null,
-              style: ThemeMode.dark,
-            ),
-          );
-          await Stripe.instance.presentPaymentSheet();
+                  googlePay:
+                      !kIsWeb && defaultTargetPlatform == TargetPlatform.android
+                          ? PaymentSheetGooglePay(
+                              merchantCountryCode: 'GB',
+                              currencyCode: 'GBP',
+                              testEnv: Env.googlePayTestEnvironment,
+                            )
+                          : null,
+                  style: ThemeMode.dark,
+                ),
+              )
+              .timeout(_senderTipSheetInitTimeout);
+          await Stripe.instance
+              .presentPaymentSheet()
+              .timeout(_senderTipSheetPresentTimeout);
           result = await _service.submitTip(
             deliveryId: widget.deliveryId,
             amountPence: _tipPence,

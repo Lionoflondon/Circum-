@@ -36,9 +36,11 @@ void main() {
         File('lib/app/send_package/view/ratings.dart').readAsStringSync();
     expect(source, contains("httpsCallable('submitDeliveryRating')"));
     expect(source, contains("httpsCallable('submitDeliveryTip')"));
-    expect(source, contains('Stripe.instance.presentPaymentSheet()'));
+    expect(source, contains('.presentPaymentSheet()'));
+    expect(source, contains('.timeout(_senderTipSheetPresentTimeout)'));
     expect(source, contains('Submit Appreciation'));
-    expect(source, contains('100% of your tip goes directly to your Circum Rider.'));
+    expect(source,
+        contains('100% of your tip goes directly to your Circum Rider.'));
     expect(source, isNot(contains("collection('driverRatings').doc")));
     expect(source, isNot(contains("collection('deliveryTips').doc")));
   });
