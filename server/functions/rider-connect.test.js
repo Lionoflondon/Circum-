@@ -7,6 +7,7 @@ const {
   resolveRiderPayoutBreakdown,
   stripeStatusFromAccount,
   computeRiderPayoutReadiness,
+  stripeConnectAccountIdempotencyKey,
 } = require("./rider-connect");
 const fs = require("node:fs");
 const {
@@ -130,6 +131,34 @@ test("Rider payout transfer uses Stripe idempotency", () => {
   assert.match(source, /existingTransferId/);
   assert.match(source, /\["processing", "scheduled", "paid"\]\.includes\(existingStatus\)/);
   assert.match(source, /idempotent: true/);
+});
+
+test("Rider Connect account creation is retry-idempotent per authenticated Rider", () => {
+  assert.equal(
+      stripeConnectAccountIdempotencyKey("rider-123"),
+      "rider_connect_account_rider-123_initial",
+  );
+  assert.equal(
+      stripeConnectAccountIdempotencyKey("rider-123", "acct_deleted"),
+      "rider_connect_account_rider-123_acct_deleted",
+  );
+  const source = fs.readFileSync("rider-connect.js", "utf8");
+  assert.match(source, /stripeConnectAccountIdempotencyKey\([\s\S]*riderId,[\s\S]*existingAccountId/);
+  assert.match(source, /function createStripeAccountManagementLink/);
+  assert.match(source, /const riderId = text\(context\.auth && context\.auth\.uid\)/);
+  for (const functionName of [
+    "createStripeConnectAccountForRider",
+    "createStripeOnboardingLink",
+    "syncStripeConnectStatus",
+    "riderPayoutReadiness",
+  ]) {
+    const start = source.indexOf(`function ${functionName}`);
+    const end = source.indexOf("\nfunction ", start + 1);
+    const body = source.slice(start, end < 0 ? source.length : end);
+    assert.match(body, /const riderId = text\(context\.auth && context\.auth\.uid\)/);
+    assert.doesNotMatch(body, /data && data\.riderId/);
+  }
+  assert.match(source, /stripe\.accounts\.createLoginLink\(account\.id\)/);
 });
 
 test("Rider payout readiness is backend authoritative", () => {

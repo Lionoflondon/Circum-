@@ -2,6 +2,7 @@
 const functions = require("firebase-functions/v1");
 const {getFirestore, FieldValue} = require("firebase-admin/firestore");
 const {payoutReadiness} = require("./rider-certification-policy");
+const {riderCallable} = require("./rider-app-check");
 
 const appBaseUrl = process.env.APP_BASE_URL || "https://circumuk.com";
 const adminBaseUrl = process.env.ADMIN_BASE_URL || "https://admin.circumuk.com";
@@ -11,6 +12,10 @@ const riderStripeRefreshUrl = `${appBaseUrl}/rider/stripe/refresh`;
 const rawBankFields = ["bankName", "sortCode", "accountNumber", "bankAccountNumber"];
 const stripeSecretRuntime = functions.runWith({secrets: ["STRIPE_SECRET_KEY"]});
 const stripeWebhookRuntime = functions.runWith({secrets: ["STRIPE_SECRET_KEY", "STRIPE_WEBHOOK_SECRET"]});
+const riderStripeCallable = (handler) => functions.runWith({
+  secrets: ["STRIPE_SECRET_KEY"],
+  enforceAppCheck: true,
+}).https.onCall(handler);
 
 function text(value) {
   return `${value || ""}`.trim();
@@ -107,6 +112,11 @@ function resolveRiderPayoutBreakdown(input = {}) {
 
 function stripeTransferIdempotencyKey(requestId) {
   return `rider_payout_transfer_${text(requestId)}`;
+}
+
+function stripeConnectAccountIdempotencyKey(riderId, replacedAccountId = "") {
+  const generation = text(replacedAccountId) || "initial";
+  return `rider_connect_account_${text(riderId)}_${generation}`;
 }
 
 function hasRawBankFields(data) {
@@ -315,10 +325,10 @@ async function retrieveUsableAccount(stripe, riderId, accountId) {
 }
 
 function createStripeConnectAccountForRider(stripeOrFactory) {
-  return stripeSecretRuntime.https.onCall(async (data, context) => {
+  return riderStripeCallable(async (_data, context) => {
     const stripe = stripeFrom(stripeOrFactory);
     const mode = stripeClientMode(stripe);
-    const riderId = text((data && data.riderId) || (context.auth && context.auth.uid));
+    const riderId = text(context.auth && context.auth.uid);
     await assertActor(context, riderId);
     const {profile} = await loadRider(riderId);
     const existingAccountId = text(profile.stripeConnectAccountId || profile.stripeAccountId);
@@ -339,7 +349,7 @@ function createStripeConnectAccountForRider(stripeOrFactory) {
     const account = await stripe.accounts.create({
       type: "express",
       country: "GB",
-      email: text(profile.email || (data && data.email) || (context.auth && context.auth.token && context.auth.token.email)) || undefined,
+      email: text(profile.email || (context.auth && context.auth.token && context.auth.token.email)) || undefined,
       business_type: "individual",
       capabilities: {
         transfers: {requested: true},
@@ -349,6 +359,11 @@ function createStripeConnectAccountForRider(stripeOrFactory) {
         payoutFeePayer: "rider",
         platform: "circum",
       },
+    }, {
+      idempotencyKey: stripeConnectAccountIdempotencyKey(
+          riderId,
+          existingAccountId,
+      ),
     });
     await updateRiderConnectFields(riderId, connectPatch(account, {
       stripeMode: mode,
@@ -377,10 +392,10 @@ function createStripeConnectAccountForRider(stripeOrFactory) {
 }
 
 function createStripeOnboardingLink(stripeOrFactory) {
-  return stripeSecretRuntime.https.onCall(async (data, context) => {
+  return riderStripeCallable(async (_data, context) => {
     const stripe = stripeFrom(stripeOrFactory);
     const mode = stripeClientMode(stripe);
-    const riderId = text((data && data.riderId) || (context.auth && context.auth.uid));
+    const riderId = text(context.auth && context.auth.uid);
     await assertActor(context, riderId);
     const {profile} = await loadRider(riderId);
     let accountId = text(profile.stripeConnectAccountId || profile.stripeAccountId);
@@ -400,6 +415,11 @@ function createStripeOnboardingLink(stripeOrFactory) {
         business_type: "individual",
         capabilities: {transfers: {requested: true}},
         metadata: {riderId, payoutFeePayer: "rider", platform: "circum"},
+      }, {
+        idempotencyKey: stripeConnectAccountIdempotencyKey(
+            riderId,
+            text(profile.stripeConnectAccountId || profile.stripeAccountId),
+        ),
       });
       accountId = created.id;
       await updateRiderConnectFields(riderId, connectPatch(created, {
@@ -442,10 +462,10 @@ function refreshStripeOnboardingLink(stripe) {
 }
 
 function syncStripeConnectStatus(stripeOrFactory) {
-  return stripeSecretRuntime.https.onCall(async (data, context) => {
+  return riderStripeCallable(async (_data, context) => {
     const stripe = stripeFrom(stripeOrFactory);
     const mode = stripeClientMode(stripe);
-    const riderId = text((data && data.riderId) || (context.auth && context.auth.uid));
+    const riderId = text(context.auth && context.auth.uid);
     await assertActor(context, riderId);
     const {profile} = await loadRider(riderId);
     const accountId = text(profile.stripeConnectAccountId || profile.stripeAccountId);
@@ -529,9 +549,35 @@ function syncStripeConnectStatus(stripeOrFactory) {
   });
 }
 
+function createStripeAccountManagementLink(stripeOrFactory) {
+  return riderStripeCallable(async (data, context) => {
+    const stripe = stripeFrom(stripeOrFactory);
+    const riderId = text(context.auth && context.auth.uid);
+    await assertActor(context, riderId);
+    const {profile} = await loadRider(riderId);
+    const accountId = text(profile.stripeConnectAccountId || profile.stripeAccountId);
+    const account = await retrieveUsableAccount(stripe, riderId, accountId);
+    if (!account || account.details_submitted !== true) {
+      throw new functions.https.HttpsError(
+          "failed-precondition",
+          "Complete payout account setup first.",
+      );
+    }
+    const link = await stripe.accounts.createLoginLink(account.id);
+    const url = text(link && link.url);
+    if (!url) {
+      throw new functions.https.HttpsError(
+          "internal",
+          "Payout account management is temporarily unavailable.",
+      );
+    }
+    return {url};
+  });
+}
+
 function riderPayoutReadiness() {
-  return functions.https.onCall(async (data, context) => {
-    const riderId = text((data && data.riderId) || (context.auth && context.auth.uid));
+  return riderCallable(async (_data, context) => {
+    const riderId = text(context.auth && context.auth.uid);
     await assertActor(context, riderId);
     const readiness = await computeRiderPayoutReadiness(riderId);
     await updateRiderConnectFields(riderId, {
@@ -557,7 +603,7 @@ function riderPayoutReadiness() {
 }
 
 function resetRiderTestStripeAccount() {
-  return functions.https.onCall(async (data, context) => {
+  return riderCallable(async (data, context) => {
     const riderId = text(data && data.riderId);
     await assertActor(context, riderId, {adminOnly: true});
     if (!riderId) {
@@ -588,7 +634,7 @@ function resetRiderTestStripeAccount() {
 }
 
 function createRiderTransferOrPayout(stripeOrFactory) {
-  return stripeSecretRuntime.https.onCall(async (data, context) => {
+  return riderStripeCallable(async (data, context) => {
     const stripe = stripeFrom(stripeOrFactory);
     const mode = stripeClientMode(stripe);
     const riderId = text(data && data.riderId);
@@ -872,7 +918,7 @@ function createRiderTransferOrPayout(stripeOrFactory) {
 }
 
 function requestRiderWithdrawal() {
-  return functions.https.onCall(async (data, context) => {
+  return riderCallable(async (data, context) => {
     const riderId = text(context.auth && context.auth.uid);
     await assertActor(context, riderId);
     if (hasRawBankFields(data)) {
@@ -962,7 +1008,7 @@ function requestRiderWithdrawal() {
 }
 
 function cancelRiderWithdrawal() {
-  return functions.https.onCall(async (data, context) => {
+  return riderCallable(async (data, context) => {
     const riderId = text(context.auth && context.auth.uid);
     await assertActor(context, riderId);
     const requestId = text(data && data.requestId) || `active_${riderId}`;
@@ -1013,7 +1059,7 @@ function cancelRiderWithdrawal() {
 }
 
 function adminReviewRiderWithdrawal() {
-  return functions.https.onCall(async (data, context) => {
+  return riderCallable(async (data, context) => {
     const riderId = text(data && data.riderId);
     const requestId = text(data && data.requestId);
     const action = text(data && data.action).toLowerCase();
@@ -1302,7 +1348,7 @@ function scheduledRiderStripeStatusSync(stripeOrFactory) {
 }
 
 function redactLegacyPayoutBankFields() {
-  return functions.https.onCall(async (data, context) => {
+  return riderCallable(async (data, context) => {
     await assertActor(context, text((data && data.riderId) || (context.auth && context.auth.uid)), {adminOnly: true});
     const limit = Math.min(Number((data && data.limit) || 50), 200);
     const snapshot = await getFirestore().collection("payoutRequests").limit(limit).get();
@@ -1331,6 +1377,7 @@ module.exports = {
   createStripeOnboardingLink,
   refreshStripeOnboardingLink,
   syncStripeConnectStatus,
+  createStripeAccountManagementLink,
   riderPayoutReadiness,
   createRiderTransferOrPayout,
   requestRiderWithdrawal,
@@ -1343,6 +1390,7 @@ module.exports = {
   adminBaseUrl,
   estimateStripeFee,
   resolveRiderPayoutBreakdown,
+  stripeConnectAccountIdempotencyKey,
   riderWithdrawalFailure,
   stripeStatusFromAccount,
   computeRiderPayoutReadiness,

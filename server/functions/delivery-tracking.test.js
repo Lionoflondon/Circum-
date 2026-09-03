@@ -279,6 +279,21 @@ test("settlement values reuse canonical earnings and highest trust category", ()
     riderEligibleFare: 10,
     riderPayoutCalculationVersion: "65_35_v1",
   }), {amount: 6.5, amountSource: "computed_authoritative_65_35", requiresReview: false, deliveryAmount: 6.5, tip: 0, waiting: 0, adjustment: 0, trustPoints: 1});
+  const roundingCases = [
+    [0.01, 0.01],
+    [0.05, 0.03],
+    [10.01, 6.51],
+    [99.99, 64.99],
+  ];
+  for (const [gross, rider] of roundingCases) {
+    const result = deliveryTracking.settlementValues({
+      riderEligibleFare: gross,
+      riderPayoutCalculationVersion: "65_35_v1",
+    });
+    assert.equal(result.amount, rider);
+    assert.equal(Math.round((gross - result.amount) * 100) / 100,
+        Math.round((gross * 0.35) * 100) / 100);
+  }
   assert.equal(deliveryTracking.settlementValues({price: 100, paidAmount: 100}).requiresReview, true);
   assert.equal(deliveryTracking.settlementValues({price: 100, paidAmount: 100}).amount, 0);
   assert.equal(deliveryTracking.highestTrustAward({isHealthPlus: true, requiresVanguard: true}), 6);
