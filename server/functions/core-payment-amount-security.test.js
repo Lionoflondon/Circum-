@@ -110,8 +110,16 @@ test("Sender clients do not hardcode Stripe runtime keys", () => {
   assert.match(envSource, /String\.fromEnvironment\('STRIPE_PUBLISHABLE_KEY'\)/);
   assert.match(senderBuildScript, /Missing STRIPE_PUBLISHABLE_KEY/);
   assert.match(senderBuildScript, /--dart-define=STRIPE_PUBLISHABLE_KEY=/);
-  assert.match(deployWorkflow, /secrets\.STRIPE_PUBLISHABLE_KEY/);
-  assert.match(releaseWorkflow, /secrets\.STRIPE_PUBLISHABLE_KEY/);
+  for (const workflow of [deployWorkflow, releaseWorkflow]) {
+    const usesLegacySecret = /secrets\.STRIPE_PUBLISHABLE_KEY(?!_)/.test(workflow);
+    const usesSplitSecrets = /secrets\.STRIPE_TEST_PUBLISHABLE_KEY/.test(workflow) &&
+      /secrets\.STRIPE_LIVE_PUBLISHABLE_KEY/.test(workflow);
+    assert.equal(
+        usesLegacySecret !== usesSplitSecrets,
+        true,
+        "release workflow must use exactly one protected Stripe key contract",
+    );
+  }
 });
 
 test("Sender payment callable responses exclude Firestore sentinel fields", () => {
