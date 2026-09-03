@@ -78,7 +78,8 @@ test("Sender mobile uses canonical quote, payment session, and paid delivery cal
 test("canonical payment authority calculates and records authoritative pricing", () => {
   assert.match(senderBookingSource, /exports\.createSenderBookingQuote/);
   assert.match(senderBookingSource, /verifiedPhotoAnalysis\(\{/);
-  assert.match(senderBookingSource, /quotePayload\(\{\s*\.\.\.\(data \|\| \{\}\),\s*\.\.\.\(businessContext \|\| \{\}\),\s*\}, sender\.uid, serverPhotoAnalysis\)/);
+  assert.match(senderBookingSource, /authoritativeDistanceMiles = authoritativeRoute\.distanceMetres \/ 1609\.344/);
+  assert.match(senderBookingSource, /distanceMiles: authoritativeDistanceMiles/);
   assert.match(senderBookingSource, /clientDisplayQuote/);
   assert.match(senderBookingSource, /pricingDiscrepancyPence/);
   assert.match(senderBookingSource, /exports\.createSenderPaymentSession/);
