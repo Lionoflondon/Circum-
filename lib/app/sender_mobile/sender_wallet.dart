@@ -10,6 +10,7 @@ import 'package:intl/intl.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../../env/env.dart';
 import '../business/business_view.dart';
 import '../send_package/view/ride_chats.dart';
 import 'design_system/sender_design_system.dart';
@@ -603,10 +604,10 @@ class _SenderWalletViewState extends State<SenderWalletView> {
               ? const PaymentSheetApplePay(merchantCountryCode: 'GB')
               : null,
           googlePay: senderPlatformSupportsGooglePay(defaultTargetPlatform)
-              ? const PaymentSheetGooglePay(
+              ? PaymentSheetGooglePay(
                   merchantCountryCode: 'GB',
                   currencyCode: 'GBP',
-                  testEnv: false,
+                  testEnv: Env.googlePayTestEnvironment,
                 )
               : null,
           style: ThemeMode.dark,
@@ -1082,10 +1083,10 @@ class _ManagePaymentsScreenState extends State<_ManagePaymentsScreen> {
               ? const PaymentSheetApplePay(merchantCountryCode: 'GB')
               : null,
           googlePay: senderPlatformSupportsGooglePay(defaultTargetPlatform)
-              ? const PaymentSheetGooglePay(
+              ? PaymentSheetGooglePay(
                   merchantCountryCode: 'GB',
                   currencyCode: 'GBP',
-                  testEnv: false,
+                  testEnv: Env.googlePayTestEnvironment,
                 )
               : null,
           style: ThemeMode.dark,

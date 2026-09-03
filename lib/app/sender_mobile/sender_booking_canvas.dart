@@ -14,6 +14,7 @@ import 'package:image_picker/image_picker.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:url_launcher/url_launcher.dart';
 
+import '../../env/env.dart';
 import '../business/business_journey_context.dart';
 import '../../helper/bitmap_descriptor_helper.dart';
 import '../send_package/bloc/send_package_bloc.dart';
@@ -4974,10 +4975,10 @@ class _PaymentPanelState extends State<_PaymentPanel> {
               ? const PaymentSheetApplePay(merchantCountryCode: 'GB')
               : null,
           googlePay: !kIsWeb && defaultTargetPlatform == TargetPlatform.android
-              ? const PaymentSheetGooglePay(
+              ? PaymentSheetGooglePay(
                   merchantCountryCode: 'GB',
                   currencyCode: 'GBP',
-                  testEnv: false,
+                  testEnv: Env.googlePayTestEnvironment,
                 )
               : null,
           style: ThemeMode.dark,

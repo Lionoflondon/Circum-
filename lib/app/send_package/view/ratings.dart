@@ -4,6 +4,8 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_stripe/flutter_stripe.dart';
 
+import '../../../env/env.dart';
+
 const ratingFeedbackChoices = <String>[
   'Friendly',
   'Professional',
@@ -594,8 +596,11 @@ class _RatingsViewState extends State<RatingsView> {
                   : null,
               googlePay:
                   !kIsWeb && defaultTargetPlatform == TargetPlatform.android
-                      ? const PaymentSheetGooglePay(
-                          merchantCountryCode: 'GB', testEnv: false)
+                      ? PaymentSheetGooglePay(
+                          merchantCountryCode: 'GB',
+                          currencyCode: 'GBP',
+                          testEnv: Env.googlePayTestEnvironment,
+                        )
                       : null,
               style: ThemeMode.dark,
             ),
