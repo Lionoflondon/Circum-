@@ -3,6 +3,7 @@
 /* eslint-disable max-len, require-jsdoc */
 const functions = require("firebase-functions/v1");
 const {getFirestore, FieldValue} = require("firebase-admin/firestore");
+const {riderCallable} = require("./rider-app-check");
 
 const ACTIVE_PAYOUTS = new Set(["requested", "processing"]);
 const LEDGER_TYPES = new Set(["delivery_earning", "tip", "waiting_fee", "no_show_fee", "adjustment_credit", "adjustment_debit", "payout_reserved", "payout_completed", "payout_failed_release", "refund", "reversal"]);
@@ -162,7 +163,7 @@ async function reconcileRiderEarnings({db, riderId, actorId = "system", reason =
 }
 
 function getRiderEarningsSummary() {
-  return functions.https.onCall(async (data, context) => {
+  return riderCallable(async (data, context) => {
     if (!context.auth) throw new functions.https.HttpsError("unauthenticated", "Rider must be signed in.");
     const uid = context.auth.uid;
     const db = getFirestore();
@@ -186,7 +187,7 @@ function getRiderEarningsSummary() {
 }
 
 function adminReconcileRiderEarnings() {
-  return functions.https.onCall(async (data, context) => {
+  return riderCallable(async (data, context) => {
     if (!context.auth || !isFinanceAdmin(context)) {
       throw new functions.https.HttpsError("permission-denied", "Finance administrator access is required.");
     }

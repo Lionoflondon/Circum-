@@ -244,6 +244,8 @@ exports.refreshStripeOnboardingLink =
   riderConnect.refreshStripeOnboardingLink(stripeConnectClient);
 exports.syncStripeConnectStatus =
   riderConnect.syncStripeConnectStatus(stripeConnectClient);
+exports.createStripeAccountManagementLink =
+  riderConnect.createStripeAccountManagementLink(stripeConnectClient);
 exports.riderPayoutReadiness = riderConnect.riderPayoutReadiness();
 exports.createRiderTransferOrPayout =
   riderConnect.createRiderTransferOrPayout(stripeConnectClient);
