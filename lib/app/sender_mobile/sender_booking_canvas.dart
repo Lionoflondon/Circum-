@@ -25,6 +25,9 @@ import 'sender_finance.dart';
 import 'sender_saved_addresses.dart';
 import 'sender_tracking_screen.dart';
 
+const _senderPaymentSheetInitTimeout = Duration(seconds: 20);
+const _senderPaymentSheetPresentTimeout = Duration(seconds: 90);
+
 class SenderBookingCanvas extends StatefulWidget {
   const SenderBookingCanvas({super.key});
 
@@ -248,8 +251,8 @@ class _SenderBookingCanvasState extends State<SenderBookingCanvas> {
       return;
     }
     try {
-      final restoredLocally = await _restoreQueuedLocalDraft()
-          .timeout(_localDraftRestoreTimeout);
+      final restoredLocally =
+          await _restoreQueuedLocalDraft().timeout(_localDraftRestoreTimeout);
       if (!mounted) return;
       setState(() => _draftLoading = false);
       if (restoredLocally) return;
@@ -4399,9 +4402,8 @@ class _PaymentPanelState extends State<_PaymentPanel> {
   }
 
   Future<SenderPaymentMethodsData> _loadPaymentMethods() async {
-    final profile = await FirebaseSenderPaymentProfileRepository()
-        .paymentMethods()
-        .timeout(
+    final profile =
+        await FirebaseSenderPaymentProfileRepository().paymentMethods().timeout(
       const Duration(seconds: 6),
       onTimeout: () {
         debugPrint(
@@ -4815,34 +4817,36 @@ class _PaymentPanelState extends State<_PaymentPanel> {
   ) {
     switch (option.type) {
       case SenderPaymentProfileOptionType.applePay:
-        return _PaymentMethodTile(
-          title: 'Apple Pay',
-          subtitle: 'Fast checkout on supported iOS devices.',
-          icon: Icons.apple_rounded,
-          selected: draft.selectedPaymentMethod ==
+        if (total == null) return const SizedBox.shrink();
+        return SizedBox(
+          height: 48,
+          child: PlatformPayButton(
+            key: const ValueKey('senderApplePayButton'),
+            type: PlatformButtonType.pay,
+            appearance: PlatformButtonStyle.black,
+            borderRadius: 6,
+            onPressed: () => _selectMethod(
+              total,
+              availableRoth,
               SenderFallbackPaymentMethod.applePay,
-          onTap: total == null
-              ? null
-              : () => _selectMethod(
-                    total,
-                    availableRoth,
-                    SenderFallbackPaymentMethod.applePay,
-                  ),
+            ),
+          ),
         );
       case SenderPaymentProfileOptionType.googlePay:
-        return _PaymentMethodTile(
-          title: 'Google Pay${option.isDefault ? ' · Default' : ''}',
-          subtitle: 'Fast checkout on supported Android devices.',
-          icon: Icons.android_rounded,
-          selected: draft.selectedPaymentMethod ==
+        if (total == null) return const SizedBox.shrink();
+        return SizedBox(
+          height: 48,
+          child: PlatformPayButton(
+            key: const ValueKey('senderGooglePayButton'),
+            type: PlatformButtonType.pay,
+            appearance: PlatformButtonStyle.black,
+            borderRadius: 6,
+            onPressed: () => _selectMethod(
+              total,
+              availableRoth,
               SenderFallbackPaymentMethod.googlePay,
-          onTap: total == null
-              ? null
-              : () => _selectMethod(
-                    total,
-                    availableRoth,
-                    SenderFallbackPaymentMethod.googlePay,
-                  ),
+            ),
+          ),
         );
       case SenderPaymentProfileOptionType.savedCard:
         final method = option.method;
@@ -4965,26 +4969,32 @@ class _PaymentPanelState extends State<_PaymentPanel> {
     SendPackageState engine,
   ) async {
     try {
-      await Stripe.instance.initPaymentSheet(
-        paymentSheetParameters: SetupPaymentSheetParameters(
-          paymentIntentClientSecret: clientSecret,
-          merchantDisplayName: 'Circum',
-          customerId: engine.senderPaymentCustomerId,
-          customerEphemeralKeySecret: engine.senderPaymentEphemeralKeySecret,
-          applePay: !kIsWeb && defaultTargetPlatform == TargetPlatform.iOS
-              ? const PaymentSheetApplePay(merchantCountryCode: 'GB')
-              : null,
-          googlePay: !kIsWeb && defaultTargetPlatform == TargetPlatform.android
-              ? PaymentSheetGooglePay(
-                  merchantCountryCode: 'GB',
-                  currencyCode: 'GBP',
-                  testEnv: Env.googlePayTestEnvironment,
-                )
-              : null,
-          style: ThemeMode.dark,
-        ),
-      );
-      await Stripe.instance.presentPaymentSheet();
+      await Stripe.instance
+          .initPaymentSheet(
+            paymentSheetParameters: SetupPaymentSheetParameters(
+              paymentIntentClientSecret: clientSecret,
+              merchantDisplayName: 'Circum',
+              customerId: engine.senderPaymentCustomerId,
+              customerEphemeralKeySecret:
+                  engine.senderPaymentEphemeralKeySecret,
+              applePay: !kIsWeb && defaultTargetPlatform == TargetPlatform.iOS
+                  ? const PaymentSheetApplePay(merchantCountryCode: 'GB')
+                  : null,
+              googlePay:
+                  !kIsWeb && defaultTargetPlatform == TargetPlatform.android
+                      ? PaymentSheetGooglePay(
+                          merchantCountryCode: 'GB',
+                          currencyCode: 'GBP',
+                          testEnv: Env.googlePayTestEnvironment,
+                        )
+                      : null,
+              style: ThemeMode.dark,
+            ),
+          )
+          .timeout(_senderPaymentSheetInitTimeout);
+      await Stripe.instance
+          .presentPaymentSheet()
+          .timeout(_senderPaymentSheetPresentTimeout);
       if (!context.mounted) return;
       setState(() => _paymentConfirmationMessage =
           'Payment is being verified. Your delivery will be submitted once confirmation completes.');
@@ -4993,20 +5003,30 @@ class _PaymentPanelState extends State<_PaymentPanel> {
       SenderAccessibilityScope.maybeOf(
         context,
       )?.haptic(SenderFeedbackEvent.paymentCompleted);
+    } on TimeoutException {
+      if (!context.mounted) return;
+      setState(() => _paymentConfirmationMessage =
+          'Payment confirmation is taking longer than expected. We will check its status before another attempt.');
+      onDraft(draft.copyWith(paymentStatus: SenderPaymentStatus.processing));
     } on StripeException catch (error) {
       debugPrint(
         'Sender mobile payment confirmation ended: ${error.error.code.name}',
       );
       if (!context.mounted) return;
       setState(() {
-        _paymentConfirmationMessage =
-            error.error.code == FailureCode.Canceled
-                ? 'Payment was cancelled. Your delivery has not been submitted.'
-                : error.error.code == FailureCode.Timeout
-                    ? 'Payment is still processing. We will confirm your delivery once payment completes.'
-                    : "We couldn't complete the payment. Your delivery has not been submitted.";
+        _paymentConfirmationMessage = error.error.code == FailureCode.Canceled
+            ? 'Payment was cancelled. Your delivery has not been submitted.'
+            : error.error.code == FailureCode.Timeout
+                ? 'Payment is still processing. We will confirm your delivery once payment completes.'
+                : "We couldn't complete the payment. Your delivery has not been submitted.";
       });
-      onDraft(draft.copyWith(paymentStatus: SenderPaymentStatus.failed));
+      onDraft(
+        draft.copyWith(
+          paymentStatus: error.error.code == FailureCode.Timeout
+              ? SenderPaymentStatus.processing
+              : SenderPaymentStatus.failed,
+        ),
+      );
     } catch (error) {
       debugPrint(
         'Sender mobile payment confirmation failed: ${error.runtimeType}',

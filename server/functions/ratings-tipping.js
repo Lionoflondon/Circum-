@@ -6,6 +6,7 @@ const {getFirestore, FieldValue} = require("firebase-admin/firestore");
 const core = require("./ratings-tipping-core");
 const rothLedger = require("./roth-ledger");
 const communication = require("./communication-engine");
+const {senderPaymentCallable} = require("./sender-app-check");
 
 const text = (value) => `${value || ""}`.trim();
 const money = (value) => Math.round(Number(value || 0) * 100) / 100;
@@ -226,7 +227,7 @@ async function finalizeTip(db, tipRef, tip, stripeIntentId = null) {
 }
 
 function submitTip(stripe) {
-  return functions.https.onCall(async (data, context) => {
+  return senderPaymentCallable(async (data, context) => {
     const sender = requireAuth(context);
     const deliveryId = text(data && (data.deliveryId || data.requestId));
     if (!deliveryId) throw new functions.https.HttpsError("invalid-argument", "Delivery is required.");
@@ -291,7 +292,6 @@ function submitTip(stripe) {
         amount: input.amountPence, currency: "gbp", customer: customerId,
         automatic_payment_methods: {enabled: true},
         payment_method: paymentMethodId || undefined,
-        setup_future_usage: paymentMethodId ? undefined : "off_session",
         metadata: {paymentType: "delivery_tip", tipId: tipRef.id, deliveryId: delivery.id, senderId: sender.uid, riderId: parties.riderId},
       }, {idempotencyKey: `delivery_tip_${delivery.id}_${attempt}`});
       await tipRef.set({stripeCustomerId: customerId, stripePaymentIntentId: intent.id, paymentAttempt: attempt, paymentStatus: intent.status, status: intent.status, updatedAt: FieldValue.serverTimestamp()}, {merge: true});

@@ -5,6 +5,7 @@ const functions = require("firebase-functions/v1");
 const crypto = require("node:crypto");
 const {getFirestore, FieldValue} = require("firebase-admin/firestore");
 const {getAuth} = require("firebase-admin/auth");
+const {senderPaymentCallable} = require("./sender-app-check");
 const {
   BALANCE_TYPES,
   TRANSACTION_TYPES,
@@ -429,15 +430,15 @@ async function applyWalletDebit({
 
 exports.applyWalletDebit = applyWalletDebit;
 
-exports.initialiseSenderWallet = functions.https.onCall(async (_data, context) => {
+exports.initialiseSenderWallet = senderPaymentCallable(async (_data, context) => {
   return initialiseSenderWalletRecord(context);
 });
 
-exports.getSenderWallet = functions.https.onCall(async (_data, context) => {
+exports.getSenderWallet = senderPaymentCallable(async (_data, context) => {
   return initialiseSenderWalletRecord(context);
 });
 
-exports.getSenderWalletTransactions = functions.https.onCall(async (data, context) => {
+exports.getSenderWalletTransactions = senderPaymentCallable(async (data, context) => {
   const identity = await requireSenderIdentity(context);
   const db = getFirestore();
   const walletSnap = await db.collection("walletTransactions")
@@ -470,7 +471,7 @@ exports.getSenderWalletTransactions = functions.https.onCall(async (data, contex
   };
 });
 
-exports.completeSenderWalletOnboarding = functions.https.onCall(async (_data, context) => {
+exports.completeSenderWalletOnboarding = senderPaymentCallable(async (_data, context) => {
   await requireSenderIdentity(context);
   await getFirestore().collection("users").doc(context.auth.uid).set({
     senderWalletOnboardingCompleted: true,
@@ -480,7 +481,7 @@ exports.completeSenderWalletOnboarding = functions.https.onCall(async (_data, co
   return {completed: true};
 });
 
-exports.requestSenderWalletDebit = functions.https.onCall(async (data, context) => {
+exports.requestSenderWalletDebit = senderPaymentCallable(async (data, context) => {
   await requireSenderIdentity(context);
   const amount = roundWalletMoney(data.amount);
   const idempotencyKey = `${data.idempotencyKey || ""}`.trim();
@@ -500,7 +501,7 @@ exports.requestSenderWalletDebit = functions.https.onCall(async (data, context) 
   }
 });
 
-exports.requestSenderWalletRefund = functions.https.onCall(async (data, context) => {
+exports.requestSenderWalletRefund = senderPaymentCallable(async (data, context) => {
   const admin = await requireTrustedRothAdmin(context);
   const amount = roundWalletMoney(data.amount);
   const idempotencyKey = `${data.idempotencyKey || ""}`.trim();
@@ -516,7 +517,7 @@ exports.requestSenderWalletRefund = functions.https.onCall(async (data, context)
   });
 });
 
-exports.createWalletTopUp = (stripe) => functions.https.onCall(async (data, context) => {
+exports.createWalletTopUp = (stripe) => senderPaymentCallable(async (data, context) => {
   if (!context.auth) {
     throw new functions.https.HttpsError("unauthenticated", "Sign in to top up Roth.");
   }
@@ -658,7 +659,7 @@ async function recordWalletTopUpFromStripeSession(sessionData, eventId = null) {
 
 exports.recordWalletTopUpFromStripeSession = recordWalletTopUpFromStripeSession;
 
-exports.applyCheckoutRoth = functions.https.onCall(async (data, context) => {
+exports.applyCheckoutRoth = senderPaymentCallable(async (data, context) => {
   if (!context.auth) {
     throw new functions.https.HttpsError("unauthenticated", "Sign in to use Roth.");
   }
@@ -683,7 +684,7 @@ exports.applyCheckoutRoth = functions.https.onCall(async (data, context) => {
   });
 });
 
-exports.debitRothCredit = functions.https.onCall(async (data, context) => {
+exports.debitRothCredit = senderPaymentCallable(async (data, context) => {
   await requireRothAdmin(context);
   const rawUser = `${data.userId || data.email || ""}`.trim();
   const amount = Number(data.amount || 0);
@@ -763,7 +764,7 @@ exports.setWalletFrozen = functions.https.onCall(async (data, context) => {
   return {userId: identity.walletId, isFrozen: frozen};
 });
 
-exports.redeemGiftCard = functions.https.onCall(async (data, context) => {
+exports.redeemGiftCard = senderPaymentCallable(async (data, context) => {
   if (!context.auth) {
     throw new functions.https.HttpsError("unauthenticated", "Sign in to redeem a gift card.");
   }

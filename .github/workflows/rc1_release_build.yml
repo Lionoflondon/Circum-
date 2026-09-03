@@ -8,6 +8,14 @@ on:
         required: false
         default: false
         type: boolean
+      payment_environment:
+        description: Stripe/wallet environment for this artifact
+        required: true
+        default: test
+        type: choice
+        options:
+          - test
+          - live
 
 jobs:
   web:
@@ -33,11 +41,11 @@ jobs:
         env:
           CIRCUM_WEB_RECAPTCHA_ENTERPRISE_SITE_KEY: ${{ secrets.CIRCUM_WEB_RECAPTCHA_ENTERPRISE_SITE_KEY }}
           CIRCUM_WEB_GOOGLE_MAPS_API_KEY: ${{ secrets.CIRCUM_WEB_GOOGLE_MAPS_API_KEY }}
-          GOOGLE_MAPS_DIRECTIONS_API_KEY: ${{ secrets.GOOGLE_MAPS_DIRECTIONS_API_KEY }}
-          STRIPE_PUBLISHABLE_KEY: ${{ secrets.STRIPE_PUBLISHABLE_KEY }}
+          PAYMENT_ENVIRONMENT: ${{ inputs.payment_environment }}
+          STRIPE_PUBLISHABLE_KEY: ${{ inputs.payment_environment == 'live' && secrets.STRIPE_LIVE_PUBLISHABLE_KEY || secrets.STRIPE_TEST_PUBLISHABLE_KEY }}
         run: |
           set -euo pipefail
-          test -n "$GOOGLE_MAPS_DIRECTIONS_API_KEY" || (echo "Missing GOOGLE_MAPS_DIRECTIONS_API_KEY for Sender Web" >&2; exit 1)
+          scripts/validate_sender_payment_environment.sh
           scripts/build_sender_app_web.sh
       - uses: actions/upload-artifact@v4
         with:
@@ -81,8 +89,8 @@ jobs:
       - name: Verify release inputs
         env:
           SENDER_ANDROID_GOOGLE_MAPS_API_KEY: ${{ secrets.SENDER_ANDROID_GOOGLE_MAPS_API_KEY }}
-          GOOGLE_MAPS_DIRECTIONS_API_KEY: ${{ secrets.GOOGLE_MAPS_DIRECTIONS_API_KEY }}
-          STRIPE_PUBLISHABLE_KEY: ${{ secrets.STRIPE_PUBLISHABLE_KEY }}
+          PAYMENT_ENVIRONMENT: ${{ inputs.payment_environment }}
+          STRIPE_PUBLISHABLE_KEY: ${{ inputs.payment_environment == 'live' && secrets.STRIPE_LIVE_PUBLISHABLE_KEY || secrets.STRIPE_TEST_PUBLISHABLE_KEY }}
           SENDER_ANDROID_UPLOAD_KEYSTORE_BASE64: ${{ secrets.SENDER_ANDROID_UPLOAD_KEYSTORE_BASE64 }}
           SENDER_ANDROID_KEYSTORE_PASSWORD: ${{ secrets.SENDER_ANDROID_KEYSTORE_PASSWORD }}
           SENDER_ANDROID_KEY_PASSWORD: ${{ secrets.SENDER_ANDROID_KEY_PASSWORD }}
@@ -90,8 +98,8 @@ jobs:
         run: |
           set -euo pipefail
           test -n "$SENDER_ANDROID_GOOGLE_MAPS_API_KEY" || (echo "Missing SENDER_ANDROID_GOOGLE_MAPS_API_KEY" >&2; exit 1)
-          test -n "$GOOGLE_MAPS_DIRECTIONS_API_KEY" || (echo "Missing GOOGLE_MAPS_DIRECTIONS_API_KEY" >&2; exit 1)
           test -n "$STRIPE_PUBLISHABLE_KEY" || (echo "Missing STRIPE_PUBLISHABLE_KEY" >&2; exit 1)
+          scripts/validate_sender_payment_environment.sh
           test -n "$SENDER_ANDROID_UPLOAD_KEYSTORE_BASE64" || (echo "Missing SENDER_ANDROID_UPLOAD_KEYSTORE_BASE64" >&2; exit 1)
           test -n "$SENDER_ANDROID_KEYSTORE_PASSWORD" || (echo "Missing SENDER_ANDROID_KEYSTORE_PASSWORD" >&2; exit 1)
           test -n "$SENDER_ANDROID_KEY_PASSWORD" || (echo "Missing SENDER_ANDROID_KEY_PASSWORD" >&2; exit 1)
@@ -126,13 +134,13 @@ jobs:
         env:
           GRADLE_OPTS: -Dorg.gradle.jvmargs=-Xmx6g
           GOOGLE_MAPS_API_KEY: ${{ secrets.SENDER_ANDROID_GOOGLE_MAPS_API_KEY }}
-          GOOGLE_MAPS_DIRECTIONS_API_KEY: ${{ secrets.GOOGLE_MAPS_DIRECTIONS_API_KEY }}
-          STRIPE_PUBLISHABLE_KEY: ${{ secrets.STRIPE_PUBLISHABLE_KEY }}
+          STRIPE_PUBLISHABLE_KEY: ${{ inputs.payment_environment == 'live' && secrets.STRIPE_LIVE_PUBLISHABLE_KEY || secrets.STRIPE_TEST_PUBLISHABLE_KEY }}
+          PAYMENT_ENVIRONMENT: ${{ inputs.payment_environment }}
         run: |
           set -euo pipefail
           flutter build appbundle --release --target=lib/main.dart \
-            --dart-define=GOOGLE_MAPS_DIRECTIONS_API_KEY="$GOOGLE_MAPS_DIRECTIONS_API_KEY" \
-            --dart-define=STRIPE_PUBLISHABLE_KEY="$STRIPE_PUBLISHABLE_KEY"
+            --dart-define=STRIPE_PUBLISHABLE_KEY="$STRIPE_PUBLISHABLE_KEY" \
+            --dart-define=PAYMENT_ENVIRONMENT="$PAYMENT_ENVIRONMENT"
       - name: Verify Sender AAB
         env:
           EXPECTED_UPLOAD_SHA1: 00:37:09:93:0D:C7:F1:4C:96:B7:CB:28:55:7F:09:83:60:AA:4A:91
@@ -221,13 +229,13 @@ jobs:
       - name: Build runtime APK
         env:
           GOOGLE_MAPS_API_KEY: ${{ secrets.SENDER_ANDROID_GOOGLE_MAPS_API_KEY }}
-          GOOGLE_MAPS_DIRECTIONS_API_KEY: ${{ secrets.GOOGLE_MAPS_DIRECTIONS_API_KEY }}
-          STRIPE_PUBLISHABLE_KEY: ${{ secrets.STRIPE_PUBLISHABLE_KEY }}
+          PAYMENT_ENVIRONMENT: test
+          STRIPE_PUBLISHABLE_KEY: ${{ secrets.STRIPE_TEST_PUBLISHABLE_KEY }}
         run: |
           set -euo pipefail
           flutter build apk --release --target=lib/main.dart \
-            --dart-define=GOOGLE_MAPS_DIRECTIONS_API_KEY="$GOOGLE_MAPS_DIRECTIONS_API_KEY" \
-            --dart-define=STRIPE_PUBLISHABLE_KEY="$STRIPE_PUBLISHABLE_KEY"
+            --dart-define=STRIPE_PUBLISHABLE_KEY="$STRIPE_PUBLISHABLE_KEY" \
+            --dart-define=PAYMENT_ENVIRONMENT="$PAYMENT_ENVIRONMENT"
       - name: Prepare runtime evidence directory
         run: |
           mkdir -p "artifacts/android-${{ matrix.api }}"

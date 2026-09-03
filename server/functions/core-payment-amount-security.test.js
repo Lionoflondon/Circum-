@@ -110,8 +110,10 @@ test("Sender clients do not hardcode Stripe runtime keys", () => {
   assert.match(envSource, /String\.fromEnvironment\('STRIPE_PUBLISHABLE_KEY'\)/);
   assert.match(senderBuildScript, /Missing STRIPE_PUBLISHABLE_KEY/);
   assert.match(senderBuildScript, /--dart-define=STRIPE_PUBLISHABLE_KEY=/);
-  assert.match(deployWorkflow, /secrets\.STRIPE_PUBLISHABLE_KEY/);
-  assert.match(releaseWorkflow, /secrets\.STRIPE_PUBLISHABLE_KEY/);
+  assert.match(deployWorkflow, /secrets\.STRIPE_LIVE_PUBLISHABLE_KEY/);
+  assert.match(releaseWorkflow, /secrets\.STRIPE_TEST_PUBLISHABLE_KEY/);
+  assert.match(releaseWorkflow, /secrets\.STRIPE_LIVE_PUBLISHABLE_KEY/);
+  assert.match(releaseWorkflow, /payment_environment/);
 });
 
 test("Sender payment callable responses exclude Firestore sentinel fields", () => {

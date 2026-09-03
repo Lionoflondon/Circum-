@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:equatable/equatable.dart';
 import 'package:cloud_functions/cloud_functions.dart';
 import 'package:firebase_auth/firebase_auth.dart';
@@ -7,6 +9,9 @@ import 'package:flutter_stripe/flutter_stripe.dart';
 
 part 'account_event.dart';
 part 'account_state.dart';
+
+const _accountPaymentSheetInitTimeout = Duration(seconds: 20);
+const _accountPaymentSheetPresentTimeout = Duration(seconds: 90);
 
 class AccountBloc extends Bloc<AccountEvent, AccountState> {
   FirebaseAuth auth = FirebaseAuth.instance;
@@ -144,22 +149,26 @@ class AccountBloc extends Bloc<AccountEvent, AccountState> {
     required bool saveCard,
   }) async {
     try {
-      await Stripe.instance.initPaymentSheet(
-        paymentSheetParameters: SetupPaymentSheetParameters(
-          paymentIntentClientSecret: clientIntentSecret,
-          customerId: customerId,
-          customerEphemeralKeySecret: ephemeralKeySecret,
-          style: ThemeMode.dark,
-          merchantDisplayName: 'Circum',
+      await Stripe.instance
+          .initPaymentSheet(
+            paymentSheetParameters: SetupPaymentSheetParameters(
+              paymentIntentClientSecret: clientIntentSecret,
+              customerId: customerId,
+              customerEphemeralKeySecret: ephemeralKeySecret,
+              style: ThemeMode.dark,
+              merchantDisplayName: 'Circum',
 
-          // savePaymentMethodOptions: PaymentSheetSavePaymentMethodOptions(
-          //   backgroundColor: Colors.grey[800],
-          //   textColor: Colors.white,
-          // ),
-        ),
-      );
+              // savePaymentMethodOptions: PaymentSheetSavePaymentMethodOptions(
+              //   backgroundColor: Colors.grey[800],
+              //   textColor: Colors.white,
+              // ),
+            ),
+          )
+          .timeout(_accountPaymentSheetInitTimeout);
 
-      await Stripe.instance.presentPaymentSheet();
+      await Stripe.instance
+          .presentPaymentSheet()
+          .timeout(_accountPaymentSheetPresentTimeout);
     } catch (e) {
       throw Exception(e.toString());
     }

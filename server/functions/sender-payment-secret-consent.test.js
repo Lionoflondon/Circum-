@@ -62,6 +62,8 @@ test("foreign PaymentIntents cannot be resumed", async () => {
 
 test("ordinary card checkout is one-time and client secrets are response-only", () => {
   assert.doesNotMatch(bookingSource, /setup_future_usage/);
+  const tippingSource = fs.readFileSync(require.resolve("./ratings-tipping"), "utf8");
+  assert.doesNotMatch(tippingSource, /setup_future_usage/);
   assert.equal(
       bookingSource.match(/clientSecret: intent\.client_secret/g)?.length,
       1,
