@@ -39,6 +39,7 @@ part 'send_package_state.dart';
 const _googleMapsDirectionsApiKey =
     String.fromEnvironment('GOOGLE_MAPS_DIRECTIONS_API_KEY');
 const _senderCallableTimeout = Duration(seconds: 30);
+const _senderRoutePreviewTimeout = Duration(seconds: 12);
 
 void _logRecoverableSenderError(
   String context,
@@ -48,6 +49,13 @@ void _logRecoverableSenderError(
   if (!kDebugMode) return;
   debugPrint('Sender booking recoverable error: $context: $error');
   debugPrintStack(stackTrace: stackTrace);
+}
+
+void _senderFlowDiagnostic(String event, {Stopwatch? timer, Object? error}) {
+  debugPrint(
+    'sender_flow event=$event durationMs=${timer?.elapsedMilliseconds ?? 0} '
+    'errorType=${error?.runtimeType ?? 'none'}',
+  );
 }
 
 String _senderPaymentMessage(
@@ -394,6 +402,8 @@ class SendPackageBloc extends Bloc<SendPackageEvent, SendPackageState> {
 
   void _handleSetDeliveryAddress(SetDeliveryAddress event, Emitter emit) async {
     final sessionToken = _addressSessionTokens[false] ??= const Uuid().v4();
+    final routeTimer = Stopwatch()..start();
+    _senderFlowDiagnostic('route_start');
     emit(
       state.copyWith(
         destinationLocation: event.val,
@@ -440,6 +450,7 @@ class SendPackageBloc extends Bloc<SendPackageEvent, SendPackageState> {
           emit(
             state.copyWith(
               addressSearchError: 'Route preview could not be prepared.',
+              sourceAndDestinationStatus: SourceAndDestinationStatus.selected,
             ),
           );
           return;
@@ -458,7 +469,7 @@ class SendPackageBloc extends Bloc<SendPackageEvent, SendPackageState> {
             mode: TravelMode.driving,
           ),
           googleApiKey: _googleMapsDirectionsApiKey,
-        );
+        ).timeout(_senderRoutePreviewTimeout);
 
         if (polylineResult.points.isNotEmpty) {
           double tripDistance;
@@ -528,15 +539,40 @@ class SendPackageBloc extends Bloc<SendPackageEvent, SendPackageState> {
               status: SourceAndDestinationStatus.selected,
             ),
           );
+          _senderFlowDiagnostic('route_success', timer: routeTimer);
+        } else {
+          _senderFlowDiagnostic('route_failure', timer: routeTimer);
+          emit(
+            state.copyWith(
+              addressSearchError: 'Route preview could not be prepared.',
+              sourceAndDestinationStatus: SourceAndDestinationStatus.selected,
+            ),
+          );
         }
         // add(CalculateDistance());
       }
     } catch (error, stackTrace) {
+      _senderFlowDiagnostic(
+        error is TimeoutException ? 'route_timeout' : 'route_failure',
+        timer: routeTimer,
+        error: error,
+      );
       _logRecoverableSenderError(
         'delivery route lookup failed',
         error,
         stackTrace,
       );
+      if (state.pickupCoordinate != null &&
+          state.desinationCoordinate != null) {
+        emit(
+          state.copyWith(
+            addressSearchError: 'Route preview could not be prepared.',
+            sourceAndDestinationStatus: SourceAndDestinationStatus.selected,
+          ),
+        );
+        add(CalculateDistance());
+        add(SetPrice());
+      }
     } finally {
       if (_addressSessionTokens[false] == sessionToken) {
         _addressSessionTokens.remove(false);
@@ -867,6 +903,8 @@ class SendPackageBloc extends Bloc<SendPackageEvent, SendPackageState> {
     RequestSenderBookingQuote event,
     Emitter<SendPackageState> emit,
   ) async {
+    final pricingTimer = Stopwatch()..start();
+    _senderFlowDiagnostic('pricing_start');
     emit(
       state.copyWith(
         isSenderQuoteLoading: true,
@@ -937,7 +975,9 @@ class SendPackageBloc extends Bloc<SendPackageEvent, SendPackageState> {
           ),
         ),
       );
+      _senderFlowDiagnostic('pricing_success', timer: pricingTimer);
     } on FirebaseFunctionsException catch (error) {
+      _senderFlowDiagnostic('pricing_failure', timer: pricingTimer, error: error);
       debugPrint(
         'createSenderBookingQuote failed: code=${error.code}, message=${error.message}, details=${error.details}',
       );
@@ -954,6 +994,7 @@ class SendPackageBloc extends Bloc<SendPackageEvent, SendPackageState> {
         ),
       );
     } catch (error) {
+      _senderFlowDiagnostic('pricing_failure', timer: pricingTimer, error: error);
       debugPrint('createSenderBookingQuote unexpected failure: $error');
       emit(
         state.copyWith(
