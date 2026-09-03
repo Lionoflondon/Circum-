@@ -1,6 +1,7 @@
 import 'dart:io';
 
 import 'package:circum/app/sender_mobile/sender_finance.dart';
+import 'package:circum/env/env.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -52,7 +53,7 @@ void main() {
       );
 
       expect(source, contains('isPlatformPaySupported'));
-      expect(confirmation, contains('testEnv: false'));
+      expect(confirmation, contains('testEnv: Env.googlePayTestEnvironment'));
       expect(
         confirmation,
         contains('paymentStatus: SenderPaymentStatus.processing'),
@@ -85,7 +86,7 @@ void main() {
     ).readAsStringSync();
 
     expect(source, contains('isPlatformPaySupported()'));
-    expect(source, contains('testEnv: false'));
+    expect(source, contains('testEnv: Env.googlePayTestEnvironment'));
     expect(source, contains('_senderWalletActionTimeout'));
     expect(source, contains('.timeout(_senderWalletActionTimeout)'));
     expect(source, isNot(contains('error.error.localizedMessage')));
@@ -93,7 +94,7 @@ void main() {
     expect(source, contains('setState(() => _loading = false)'));
   });
 
-  test('Apple and Google merchant paths use production configuration', () {
+  test('Apple and Google merchant paths use coherent configuration', () {
     final startup = File('lib/main.dart').readAsStringSync();
     final entitlements = File(
       'ios/Runner/RunnerRelease.entitlements',
@@ -110,7 +111,31 @@ void main() {
       contains("Stripe.merchantIdentifier = 'merchant.com.circum.app'"),
     );
     expect(entitlements, contains('merchant.com.circum.app'));
-    expect(RegExp(r'testEnv: false').allMatches(wallet), hasLength(2));
-    expect(checkout, contains('testEnv: false'));
+    expect(
+      RegExp(r'testEnv: Env.googlePayTestEnvironment').allMatches(wallet),
+      hasLength(2),
+    );
+    expect(checkout, contains('testEnv: Env.googlePayTestEnvironment'));
+  });
+
+  test('Google Pay mode follows the Stripe publishable key', () {
+    expect(Env.googlePayTestEnvironmentForKey('pk_test_example'), isTrue);
+    expect(Env.googlePayTestEnvironmentForKey('pk_live_example'), isFalse);
+    expect(
+      () => Env.googlePayTestEnvironmentForKey(''),
+      throwsA(isA<FormatException>()),
+    );
+  });
+
+  test('Android release declares the Google Wallet API', () {
+    final manifest = File(
+      'android/app/src/main/AndroidManifest.xml',
+    ).readAsStringSync();
+
+    expect(
+      manifest,
+      contains('android:name="com.google.android.gms.wallet.api.enabled"'),
+    );
+    expect(manifest, contains('android:value="true"'));
   });
 }
