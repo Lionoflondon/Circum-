@@ -1343,7 +1343,8 @@ class _BookingPanel extends StatelessWidget {
             );
           },
           primaryLabel: 'Confirm pickup',
-          canContinue: draft.canContinue,
+          canContinue: engine.pickupCoordinate != null ||
+              draft.pickupLat != null && draft.pickupLng != null,
           onContinue: onContinue,
         );
       case SenderBookingStep.dropoff:
@@ -1392,7 +1393,8 @@ class _BookingPanel extends StatelessWidget {
             );
           },
           primaryLabel: 'Confirm drop-off',
-          canContinue: draft.canContinue,
+          canContinue: engine.desinationCoordinate != null ||
+              draft.dropoffLat != null && draft.dropoffLng != null,
           onContinue: onContinue,
         );
       case SenderBookingStep.recipient:
@@ -1529,8 +1531,7 @@ class _AddressPanel extends StatelessWidget {
   Widget build(BuildContext context) {
     final typed = controller.text.trim().toLowerCase();
     final typedAddressCanContinue = isSenderTypedAddressSpecific(typed);
-    final buttonEnabled =
-        !isResolvingTypedAddress && (canContinue || typedAddressCanContinue);
+    final buttonEnabled = !isResolvingTypedAddress && canContinue;
     dynamic exactSuggestion;
     if (!canContinue && typed.isNotEmpty) {
       for (final suggestion in suggestions) {
@@ -1590,9 +1591,7 @@ class _AddressPanel extends StatelessWidget {
             child: Align(
               alignment: Alignment.centerLeft,
               child: Text(
-                suggestions.isEmpty
-                    ? 'Type the full address and postcode, then continue.'
-                    : 'Choose a suggestion, or keep your typed address and continue.',
+                'Select an address from the suggestions to continue.',
                 style: const TextStyle(
                   color: Color(0xFFD6E4FF),
                   height: 1.35,
