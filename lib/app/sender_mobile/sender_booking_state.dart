@@ -1,5 +1,19 @@
 import 'package:flutter/foundation.dart';
 
+bool senderQuoteRequestNeeded({
+  required String? lastRequestKey,
+  required String requestKey,
+  required String? quoteId,
+  required double? quoteTotal,
+  required String quoteError,
+}) {
+  final completedForKey = lastRequestKey == requestKey &&
+      quoteError.isEmpty &&
+      quoteId?.isNotEmpty == true &&
+      quoteTotal != null;
+  return !completedForKey;
+}
+
 enum SenderBookingStep {
   pickup,
   dropoff,
