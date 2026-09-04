@@ -24,9 +24,12 @@ function giftReturnUrls({giftDraftId, source, origin, config = {}}) {
   };
 }
 
-function giftPaymentMethodFromSplit(split = {}) {
-  if (Number(split.walletContributionGbp || 0) <= 0) return "card";
-  return Number(split.remainingGbp || 0) > 0 ? "roth_card" : "roth";
+function giftPaymentMethodFromSplit(split = {}, requested = "card") {
+  const allowed = new Set(["card", "saved_card", "apple_pay", "google_pay"]);
+  const normalized = `${requested || "card"}`.trim().toLowerCase().replaceAll(" ", "_");
+  const method = allowed.has(normalized.replace(/^roth_/, "")) ? normalized.replace(/^roth_/, "") : "card";
+  if (Number(split.walletContributionGbp || 0) <= 0) return method;
+  return Number(split.remainingGbp || 0) > 0 ? `roth_${method}` : "roth";
 }
 
 function normalizeSelfGiftFrequency(value) {
