@@ -492,16 +492,30 @@ exports.updateDeliveryTrackingStatus = riderCallable(async (data, context) => {
     const riderProfileRef = settlementValues(delivery).trustPoints > 0 ?
       db.collection("riderProfiles").doc(riderId) : null;
     const riderProfileSnapshot = riderProfileRef ? await transaction.get(riderProfileRef) : null;
+    const settlement = nextStatus === "delivered" ? settlementValues(delivery) : null;
+    if (settlement && settlement.requiresReview) {
+      Object.assign(patch, {
+        status: "settlement_pending",
+        deliveryStatus: "settlement_pending",
+        deliveryStage: "settlement_pending",
+        settlementStatus: "pending_authority",
+        settlementIssue: "missing_authoritative_payout",
+        settlementAmountSource: settlement.amountSource,
+        completionIntent: {
+          riderId,
+          requestedAction: action,
+          recordedAt: FieldValue.serverTimestamp(),
+        },
+        settlementNextRetryAt: FieldValue.serverTimestamp(),
+      });
+      delete patch.deliveredAt;
+      delete patch.completedAt;
+    }
     transaction.set(found.ref, patch, {merge: true});
     if (nextStatus === "delivered") {
-      const settlement = settlementValues(delivery);
       if (settlement.requiresReview) {
-        transaction.set(found.ref, {
-          settlementStatus: "requires_admin_review",
-          settlementIssue: "missing_authoritative_payout",
-          settlementAmountSource: settlement.amountSource,
-          settlementReviewRequiredAt: FieldValue.serverTimestamp(),
-        }, {merge: true});
+        // The completion proof is retained, but terminal delivery is deferred
+        // until automated reconciliation can settle authoritative finances.
       } else if (earningRef && existingEarning && !existingEarning.exists) {
         transaction.set(earningRef, {
           transactionId: found.id,
@@ -541,6 +555,27 @@ exports.updateDeliveryTrackingStatus = riderCallable(async (data, context) => {
           completedAt: FieldValue.serverTimestamp(),
           updatedAt: FieldValue.serverTimestamp(),
         }, {merge: true});
+        transaction.set(db.collection("riderPresence").doc(riderId), {
+          activeDeliveryId: FieldValue.delete(),
+          currentDeliveryId: FieldValue.delete(),
+          busy: false,
+          updatedAt: FieldValue.serverTimestamp(),
+        }, {merge: true});
+        transaction.set(db.collection("riders").doc(riderId), {
+          activeDeliveryId: FieldValue.delete(),
+          currentDeliveryId: FieldValue.delete(),
+          updatedAt: FieldValue.serverTimestamp(),
+        }, {merge: true});
+        transaction.set(db.collection("riderProfiles").doc(riderId), {
+          activeDeliveryId: FieldValue.delete(),
+          currentDeliveryId: FieldValue.delete(),
+          updatedAt: FieldValue.serverTimestamp(),
+        }, {merge: true});
+        transaction.set(db.collection("activeDeliveries").doc(found.id), {
+          status: "completed",
+          completedAt: FieldValue.serverTimestamp(),
+          updatedAt: FieldValue.serverTimestamp(),
+        }, {merge: true});
       }
     }
     if (activeRef && shouldWriteLocation) {
@@ -560,8 +595,10 @@ exports.updateDeliveryTrackingStatus = riderCallable(async (data, context) => {
     return {
       deliveryId: found.id,
       requestId: delivery.requestId || found.id,
-      status: nextStatus,
-      senderTrackingState: tracking.senderTrackingStateForBackendStatus(nextStatus),
+      status: settlement && settlement.requiresReview ? "settlement_pending" : nextStatus,
+      senderTrackingState: tracking.senderTrackingStateForBackendStatus(
+          settlement && settlement.requiresReview ? "settlement_pending" : nextStatus,
+      ),
     };
   });
   if (result.verificationFailed) {
@@ -687,6 +724,127 @@ exports.updateDeliveryLiveLocation = riderCallable(async (data, context) => {
   return result;
 });
 
+async function reconcileSettlementPendingDelivery(db, deliveryId) {
+  return db.runTransaction(async (transaction) => {
+    const deliveryRef = db.collection("deliveryRequests").doc(deliveryId);
+    const deliverySnapshot = await transaction.get(deliveryRef);
+    if (!deliverySnapshot.exists) return {deliveryId, status: "missing"};
+    const delivery = deliverySnapshot.data() || {};
+    if (normalized(delivery.status) !== "settlement_pending") {
+      return {deliveryId, status: normalized(delivery.status), idempotent: true};
+    }
+    const riderId = text(
+        delivery.riderId || delivery.assignedRiderId || delivery.driverId,
+    );
+    if (!riderId) return {deliveryId, status: "pending_authority"};
+    const settlement = settlementValues(delivery);
+    if (settlement.requiresReview) {
+      transaction.set(deliveryRef, {
+        settlementStatus: "pending_authority",
+        settlementAttemptCount: FieldValue.increment(1),
+        settlementLastAttemptAt: FieldValue.serverTimestamp(),
+      }, {merge: true});
+      return {deliveryId, status: "pending_authority"};
+    }
+    const earningRef = db.collection("riderEarningTransactions").doc(deliveryId);
+    const profileRef = db.collection("riderProfiles").doc(riderId);
+    const [earningSnapshot, profileSnapshot] = await Promise.all([
+      transaction.get(earningRef),
+      transaction.get(profileRef),
+    ]);
+    if (!earningSnapshot.exists) {
+      transaction.set(earningRef, {
+        transactionId: deliveryId,
+        deliveryId,
+        riderId,
+        type: "delivery_earning",
+        amount: settlement.amount,
+        amountSource: settlement.amountSource,
+        trustPoints: settlement.trustPoints,
+        status: "completed",
+        createdAt: FieldValue.serverTimestamp(),
+      });
+      transaction.set(db.collection("riderEarnings").doc(riderId), {
+        availableBalance: FieldValue.increment(settlement.amount),
+        deliveryEarningsTotal: FieldValue.increment(settlement.deliveryAmount),
+        tipsTotal: FieldValue.increment(settlement.tip),
+        waitingNoShowTotal: FieldValue.increment(settlement.waiting),
+        adjustmentsTotal: FieldValue.increment(settlement.adjustment),
+        lifetimeEarnings: FieldValue.increment(settlement.amount),
+        totalAmountEarned: FieldValue.increment(settlement.amount),
+        completedDeliveries: FieldValue.increment(1),
+        updatedAt: FieldValue.serverTimestamp(),
+      }, {merge: true});
+      if (settlement.trustPoints > 0) {
+        transaction.set(
+            profileRef,
+            riderTrustRankPatch(profileSnapshot.exists ? profileSnapshot.data() : {}, settlement.trustPoints),
+            {merge: true},
+        );
+      }
+    }
+    const completedAt = FieldValue.serverTimestamp();
+    transaction.set(deliveryRef, {
+      status: "delivered",
+      deliveryStatus: "delivered",
+      deliveryStage: "delivered",
+      deliveryPinVerified: true,
+      deliveryPinVerifiedAt: completedAt,
+      deliveryPinVerifiedBy: riderId,
+      deliveredAt: completedAt,
+      completedAt,
+      settlementId: earningRef.id,
+      settlementStatus: "completed",
+      settlementIssue: FieldValue.delete(),
+      settlementAmountSource: settlement.amountSource,
+      settlementCompletedAt: completedAt,
+      settlementNextRetryAt: FieldValue.delete(),
+      trustPointsAwarded: settlement.trustPoints,
+      pendingNotification: {
+        recipient: "sender",
+        message: "Your delivery is complete.",
+        triggeredByState: "delivered",
+        createdAt: Date.now(),
+      },
+      updatedAt: completedAt,
+    }, {merge: true});
+    transaction.set(db.collection("chats").doc(delivery.requestId || deliveryId), {
+      readOnly: true,
+      completedAt,
+      updatedAt: completedAt,
+    }, {merge: true});
+    for (const collection of ["riderPresence", "riders", "riderProfiles"]) {
+      transaction.set(db.collection(collection).doc(riderId), {
+        activeDeliveryId: FieldValue.delete(),
+        currentDeliveryId: FieldValue.delete(),
+        ...(collection === "riderPresence" ? {busy: false} : {}),
+        updatedAt: completedAt,
+      }, {merge: true});
+    }
+    transaction.set(db.collection("activeDeliveries").doc(deliveryId), {
+      status: "completed",
+      completedAt,
+      updatedAt: completedAt,
+    }, {merge: true});
+    return {deliveryId, status: "delivered", reconciled: true};
+  });
+}
+
+exports.reconcilePendingDeliverySettlements = functions.pubsub
+    .schedule("every 5 minutes")
+    .onRun(async () => {
+      const db = getFirestore();
+      const snapshot = await db.collection("deliveryRequests")
+          .where("settlementStatus", "==", "pending_authority")
+          .limit(100)
+          .get();
+      const results = [];
+      for (const document of snapshot.docs) {
+        results.push(await reconcileSettlementPendingDelivery(db, document.id));
+      }
+      return {scanned: snapshot.size, results};
+    });
+
 exports._private = {
   liveLocationPatch,
   shouldWriteLiveLocation,
@@ -704,6 +862,7 @@ exports._private = {
   canonicalRiderRankForTrust,
   hasManualRankOverride,
   riderTrustRankPatch,
+  reconcileSettlementPendingDelivery,
   scheduledPickupMillis,
   scheduledOperationalTransitionAllowed,
 };

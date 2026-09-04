@@ -147,6 +147,8 @@ exports.updateDeliveryTrackingStatus =
   deliveryTracking.updateDeliveryTrackingStatus;
 exports.updateDeliveryLiveLocation =
   deliveryTracking.updateDeliveryLiveLocation;
+exports.reconcilePendingDeliverySettlements =
+  deliveryTracking.reconcilePendingDeliverySettlements;
 exports.submitDeliveryRating = ratingsTipping.submitDeliveryRating;
 exports.submitDeliveryTip = ratingsTipping.submitDeliveryTip(stripe);
 

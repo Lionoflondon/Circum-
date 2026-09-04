@@ -156,6 +156,8 @@ test("busy and stale GPS remain non-dispatchable independently", () => {
   const base = {isOnline: true, availabilityStatus: "available", lastHeartbeatAt: now, currentLocation: {latitude: 51.5072, longitude: -0.1276, accuracyMeters: 18, updatedAt: now}, gpsStatus: "active"};
   assert.equal(core.dispatchDecision({profile, presence: {...base, busy: true}, now}).reason, "busy");
   assert.equal(core.dispatchDecision({profile, presence: {...base, gpsStatus: "stale"}, now}).reason, "gps_unhealthy");
+  assert.equal(core.dispatchDecision({profile, presence: {...base, dispatchEligible: false}, now}).reason, "dispatch_ineligible");
+  assert.equal(core.dispatchDecision({profile, presence: {...base, connectionStatus: "disconnected"}, now}).reason, "connection_unhealthy");
 });
 
 test("dispatch requires fresh accurate GPS", () => {

@@ -3,6 +3,7 @@ const functions = require("firebase-functions/v1");
 const {riderCallable} = require("./rider-app-check");
 const {getFirestore} = require("firebase-admin/firestore");
 const {dispatchPriority, isDispatchable, riderCanViewDispatch, riderMatchesIris} = require("./iris-core");
+const {requireDispatchablePresence} = require("./rider-presence");
 
 const REQUEST_SCAN_LIMIT = 100;
 const openStatuses = new Set(["requested", "pending", "broadcast", "broadcasted", "awaiting_rider", "finding_rider"]);
@@ -132,6 +133,7 @@ const getNearbyRequests = riderCallable(async (data, context) => {
       ...(riderProfileDoc.exists ? riderProfileDoc.data() : {}),
       ...riderDoc.data(),
     };
+    await requireDispatchablePresence(riderId, riderData);
     if (!riderData.position || !riderData.position.geopoint ||
         !Number.isFinite(Number(riderData.position.geopoint.latitude)) ||
         !Number.isFinite(Number(riderData.position.geopoint.longitude))) {

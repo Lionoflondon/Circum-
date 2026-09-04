@@ -6,6 +6,7 @@ const {getMessaging} = require("firebase-admin/messaging");
 const {isDispatchable, riderCanViewDispatch, riderMatchesIris} = require("./iris-core");
 const {riderVehicleMatchesRequest} = require("./vehicle-dispatch");
 const {start: startLatency} = require("./latency-observability");
+const {requireDispatchablePresence, dispatchablePresenceDecision} = require("./rider-presence");
 
 const cleanText = (value, fallback = "") => {
   if (value === undefined || value === null) return fallback;
@@ -154,14 +155,56 @@ const acceptRideRequests = riderCallable(async (data, context) => {
   if (!rider) {
     throw new functions.https.HttpsError("not-found", "Rider profile not found.");
   }
+  const directExisting = await db.collection("deliveryRequests").doc(requestId).get();
+  const matchingExisting = directExisting.exists ? directExisting :
+    (await db.collection("deliveryRequests").where("requestId", "==", requestId).limit(1).get()).docs[0];
+  if (matchingExisting && matchingExisting.exists && assignedRiderId(matchingExisting.data()) === riderId) {
+    const status = cleanText(matchingExisting.data().status).toLowerCase();
+    if (["accepted", "assigned", "navigating_to_pickup", "arrived_at_pickup", "pickup_verified", "collected", "picked_up", "navigating_to_dropoff", "arrived_at_dropoff"].includes(status)) {
+      completeAccept({success: true, deliveryId: matchingExisting.id, idempotent: true});
+      return {status: "accepted", requestId, riderId, senderNotified: false, idempotent: true};
+    }
+  }
+  await requireDispatchablePresence(riderId, rider);
 
   const accepted = await db.runTransaction(async (transaction) => {
+    const [presenceDoc, profileDoc, operationalRiderDoc] = await Promise.all([
+      transaction.get(db.collection("riderPresence").doc(riderId)),
+      transaction.get(db.collection("riderProfiles").doc(riderId)),
+      transaction.get(db.collection("riders").doc(riderId)),
+    ]);
+    const transactionalRider = {
+      ...(profileDoc.exists ? profileDoc.data() : {}),
+      ...(operationalRiderDoc.exists ? operationalRiderDoc.data() : {}),
+    };
+    const presenceDecision = dispatchablePresenceDecision(
+        transactionalRider,
+        presenceDoc.exists ? presenceDoc.data() : {},
+    );
+    if (!presenceDecision.allowed) {
+      throw new functions.https.HttpsError(
+          "failed-precondition",
+          "Go online and remain available before accepting deliveries.",
+          {presenceState: presenceDecision.presenceState, reason: presenceDecision.reason},
+      );
+    }
     const found = await findDeliveryRequest(db, transaction, requestId);
     if (!found) {
       throw new functions.https.HttpsError("not-found", "Delivery request not found.");
     }
 
     const deliveryRequest = found.data;
+    const activeDeliveryId = cleanText(
+        transactionalRider.activeDeliveryId ||
+        transactionalRider.currentDeliveryId ||
+        (presenceDoc.exists && presenceDoc.data().activeDeliveryId),
+    );
+    if (activeDeliveryId && activeDeliveryId !== found.id && activeDeliveryId !== deliveryRequest.requestId) {
+      throw new functions.https.HttpsError(
+          "failed-precondition",
+          "Complete your active delivery before accepting another.",
+      );
+    }
     console.info("rider_offer_accept_attempt", {
       bookingId: cleanText(deliveryRequest.bookingId || deliveryRequest.requestId || found.id),
       deliveryId: found.id,

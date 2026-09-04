@@ -82,6 +82,10 @@ function dispatchDecision({profile = {}, presence = {}, now = Date.now()}) {
   if (!canGoOnline(profile)) return {allowed: false, presenceState: state, reason: "rider_not_operational"};
   if (state === PRESENCE_STATES.OFFLINE) return {allowed: false, presenceState: state, reason: "offline"};
   if (state === PRESENCE_STATES.STALE) return {allowed: false, presenceState: state, reason: "presence_stale"};
+  if (["offline", "stale", "disconnected"].includes(lower(presence.connectionStatus))) {
+    return {allowed: false, presenceState: state, reason: "connection_unhealthy"};
+  }
+  if (presence.dispatchEligible === false) return {allowed: false, presenceState: state, reason: "dispatch_ineligible"};
   if (presence.availabilityStatus !== "available") return {allowed: false, presenceState: state, reason: "availability_not_available"};
   if (presence.busy === true) return {allowed: false, presenceState: state, reason: "busy"};
   if (!gpsHealthy({presence, now})) return {allowed: false, presenceState: state, reason: "gps_unhealthy"};

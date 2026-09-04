@@ -18,6 +18,35 @@ function normalizedStatus(value) {
   return `${value || ""}`.trim().toLowerCase().replace(/[\s-]+/g, "_");
 }
 
+function firstDefined(...values) {
+  return values.find((value) => value !== undefined && value !== null);
+}
+
+function specialFlowAuthority(data = {}, payment = {}) {
+  const route = data.authoritativeRoute || data.route || data.routeMetrics || {};
+  const pricing = data.authoritativePricing || payment.authoritativePricing || {};
+  const riderEarning = firstDefined(data.riderEarning, data.riderPay, data.riderPayout, pricing.riderEarning, pricing.riderPay);
+  return {
+    ...(riderEarning !== undefined ? {riderEarning: Number(riderEarning)} : {}),
+    ...(firstDefined(data.riderEligibleFare, pricing.riderEligibleFare) !== undefined ? {riderEligibleFare: Number(firstDefined(data.riderEligibleFare, pricing.riderEligibleFare))} : {}),
+    ...(data.riderPayoutCalculationVersion || pricing.riderPayoutCalculationVersion ? {riderPayoutCalculationVersion: data.riderPayoutCalculationVersion || pricing.riderPayoutCalculationVersion} : {}),
+    distance: firstDefined(data.distance, data.distanceText, route.distanceText, route.distance),
+    distanceText: firstDefined(data.distanceText, route.distanceText),
+    duration: firstDefined(data.duration, data.durationText, route.durationText, route.duration),
+    durationText: firstDefined(data.durationText, route.durationText),
+    routeDistanceMeters: firstDefined(data.routeDistanceMeters, route.distanceMeters),
+    routeDurationSeconds: firstDefined(data.routeDurationSeconds, route.durationSeconds),
+    pickupDetails: data.pickupDetails || data.pickupAddressData || data.pharmacyAddressData || null,
+    dropoffDetails: data.dropoffDetails || data.deliveryAddressData || null,
+    pickupLocality: firstDefined(data.pickupLocality, data.pharmacyLocality, data.pickupDetails && data.pickupDetails.locality, data.pickupAddressData && data.pickupAddressData.locality, data.pharmacyAddressData && data.pharmacyAddressData.locality),
+    dropoffLocality: firstDefined(data.dropoffLocality, data.deliveryLocality, data.dropoffDetails && data.dropoffDetails.locality, data.deliveryAddressData && data.deliveryAddressData.locality),
+    minimumVehicle: firstDefined(data.minimumVehicle, data.recommendedVehicle, data.vehicleType, pricing.vehicleType),
+    iris: data.iris || data.irisAssessment || null,
+    irisRequired: data.irisRequired === true,
+    handlingInstructions: firstDefined(data.handlingInstructions, data.specialInstructions, data.riderInstructions),
+  };
+}
+
 function isCompleted(value) {
   return ["completed", "complete", "delivered"].includes(normalizedStatus(value));
 }
@@ -57,10 +86,12 @@ function healthDeliveryStatus(data) {
 function giftMovement(giftId, data) {
   const ready = giftReady(data);
   return {
+    ...specialFlowAuthority(data),
     id: `gift_${giftId}`,
     requestId: `gift_${giftId}`,
     deliveryId: `gift_${giftId}`,
     serviceType: SERVICE_TYPES.GIFTS,
+    isGift: true,
     sourceModule: "gifts",
     giftOrderId: giftId,
     giftRequestId: giftId,
@@ -98,10 +129,12 @@ function giftMovement(giftId, data) {
 function healthMovement(pickupId, data, payment = {}) {
   const ready = healthReady(data);
   return {
+    ...specialFlowAuthority(data, payment),
     id: `health_${pickupId}`,
     requestId: `health_${pickupId}`,
     deliveryId: `health_${pickupId}`,
     serviceType: SERVICE_TYPES.HEALTH_PLUS,
+    isHealthPlus: true,
     sourceModule: "health_plus",
     healthPlusOrderId: pickupId,
     healthPlusPickupId: pickupId,
