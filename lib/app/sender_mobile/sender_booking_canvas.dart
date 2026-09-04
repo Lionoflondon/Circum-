@@ -750,7 +750,13 @@ class _SenderBookingCanvasState extends State<SenderBookingCanvas> {
       _irisPhotoAnalysisId ?? '',
       business?.businessId ?? '',
     ].join('|');
-    if (_lastBackendQuoteKey == quoteKey && engine.senderQuoteError.isEmpty) {
+    if (!senderQuoteRequestNeeded(
+      lastRequestKey: _lastBackendQuoteKey,
+      requestKey: quoteKey,
+      quoteId: engine.senderQuoteId,
+      quoteTotal: engine.senderQuoteTotal,
+      quoteError: engine.senderQuoteError,
+    )) {
       return;
     }
     _lastBackendQuoteKey = quoteKey;

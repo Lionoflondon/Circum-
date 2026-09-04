@@ -29,6 +29,30 @@ void main() {
     'lib/app/send_package/bloc/send_package_bloc.dart',
   ).readAsStringSync();
 
+  test('cleared or invalidated quotes are eligible for a same-route retry', () {
+    expect(
+      senderQuoteRequestNeeded(
+        lastRequestKey: 'route-a',
+        requestKey: 'route-a',
+        quoteId: null,
+        quoteTotal: null,
+        quoteError: '',
+      ),
+      isTrue,
+    );
+    expect(
+      senderQuoteRequestNeeded(
+        lastRequestKey: 'route-a',
+        requestKey: 'route-a',
+        quoteId: 'quote-1',
+        quoteTotal: 12.50,
+        quoteError: '',
+      ),
+      isFalse,
+    );
+    expect(canvas, contains('senderQuoteRequestNeeded('));
+  });
+
   test('queued draft restores before backend draft retrieval', () {
     final loader = canvas.substring(
       canvas.indexOf('Future<void> _loadBackendDraft'),
