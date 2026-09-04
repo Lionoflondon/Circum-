@@ -66,7 +66,7 @@ void main() {
     expect(loader, contains('if (restoredLocally) return'));
   });
 
-  test('unresolved manual addresses cannot advance into quote generation', () {
+  test('manual addresses resolve before entering quote generation', () {
     expect(
       canvas,
       contains('Select an address from the suggestions to continue.'),
@@ -74,7 +74,7 @@ void main() {
     expect(
       canvas,
       contains(
-          'final buttonEnabled = !isResolvingTypedAddress && canContinue;'),
+          '(canContinue || isSenderTypedAddressSpecific(controller.text))'),
     );
     expect(
       canvas,
@@ -86,8 +86,15 @@ void main() {
     );
     expect(
       canvas,
-      isNot(contains('canContinue || typedAddressCanContinue')),
+      contains('unawaited(_resolveTypedAddress(pickup: true))'),
     );
+    expect(canvas, contains('unawaited(_resolveTypedAddress(pickup: false))'));
+    expect(canvas, contains('_advanceResolved();'));
+    expect(canvas, contains('const InvalidateAddressSelection(pickup: true)'));
+    expect(canvas, contains('const InvalidateAddressSelection(pickup: false)'));
+    expect(bloc, contains('void _handleInvalidateAddressSelection('));
+    expect(bloc, contains('clearSenderQuoteId: true'));
+    expect(bloc, contains('clearSenderPaymentSession: true'));
   });
 
   test('route preview failure preserves locally calculated checkout route', () {

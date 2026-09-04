@@ -123,6 +123,7 @@ class SendPackageBloc extends Bloc<SendPackageEvent, SendPackageState> {
     on<SearchAPlaceEvent>(_handleSearchAPlaceEvent);
     on<SetDrawerHeight>(_handleSetDrawerHeight);
     on<ClearSuggestions>(_handleClearSuggestionsEvent);
+    on<InvalidateAddressSelection>(_handleInvalidateAddressSelection);
     on<ResetSenderBookingSession>(_handleResetSenderBookingSession);
     on<SetPickupAddress>(_handleSetPickupAddressEvent);
     on<SetDeliveryAddress>(_handleSetDeliveryAddress);
@@ -355,6 +356,42 @@ class SendPackageBloc extends Bloc<SendPackageEvent, SendPackageState> {
     Emitter<SendPackageState> emit,
   ) {
     emit(state.copyWith(suggestions: []));
+  }
+
+  void _handleInvalidateAddressSelection(
+    InvalidateAddressSelection event,
+    Emitter<SendPackageState> emit,
+  ) {
+    _addressSelectionRequestIds[event.pickup] =
+        (_addressSelectionRequestIds[event.pickup] ?? 0) + 1;
+    ++_routeRequestId;
+    ++_quoteRequestId;
+    ++_irisRequestId;
+    emit(
+      state.copyWith(
+        clearPickupCoordinate: event.pickup,
+        clearDestinationCoordinate: !event.pickup,
+        clearDistance: true,
+        clearPrice: true,
+        markers: const {},
+        polylines: const [],
+        polylineCoordinates: const [],
+        sourceAndDestinationStatus: SourceAndDestinationStatus.unselected,
+        isSenderQuoteLoading: false,
+        clearSenderQuoteId: true,
+        clearSenderQuoteTotal: true,
+        clearSenderQuoteSpeed: true,
+        senderQuoteLineItems: const [],
+        senderQuoteSpeedOptions: const [],
+        clearSenderPaymentSession: true,
+        clearSenderPaymentClientSecret: true,
+        clearSenderPaymentIntent: true,
+        clearSenderPaymentCustomer: true,
+        clearSenderPaymentEphemeralKey: true,
+        clearSenderPaymentCheckoutUrl: true,
+        clearSenderCreatedRequest: true,
+      ),
+    );
   }
 
   Future<void> _handleResetSenderBookingSession(
