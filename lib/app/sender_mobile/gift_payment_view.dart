@@ -1,12 +1,17 @@
+import 'dart:async';
+
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:cloud_functions/cloud_functions.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_stripe/flutter_stripe.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:url_launcher/url_launcher.dart';
 
+import '../../env/env.dart';
 import 'sender_accessibility.dart';
+import 'sender_finance.dart';
 import 'gift_journey_draft.dart';
 import 'gift_relationship_view.dart';
 import 'gift_status_view.dart';
@@ -23,12 +28,20 @@ class GiftPaymentView extends StatefulWidget {
 }
 
 class _GiftPaymentViewState extends State<GiftPaymentView> {
+  late final String _giftDraftId;
   var _submitting = false;
   var _rothLoading = true;
   var _rothUnavailable = false;
   String? _message;
   String? _paymentMethod;
   bool _applyRoth = false;
+  bool _platformPaySupported = false;
+  List<SenderPaymentMethod> _savedMethods = const [];
+  String? _selectedPaymentMethodId;
+
+  static const _backendTimeout = Duration(seconds: 20);
+  static const _paymentSheetInitTimeout = Duration(seconds: 20);
+  static const _paymentSheetPresentTimeout = Duration(seconds: 90);
 
   double _rothBalance = 0;
   bool get _rothCanFullyCover =>
@@ -42,15 +55,25 @@ class _GiftPaymentViewState extends State<GiftPaymentView> {
     if (_rothApplied >= widget.draft.budget && widget.draft.budget > 0) {
       return 'roth';
     }
-    if (_rothApplied > 0) return 'roth_card';
-    return 'card';
+    final selected = switch (_paymentMethod) {
+      'Apple Pay' => 'apple_pay',
+      'Google Pay' => 'google_pay',
+      'Saved card' => 'saved_card',
+      _ => 'card',
+    };
+    if (_rothApplied > 0) return 'roth_$selected';
+    return selected;
   }
 
   List<String> get _availablePaymentMethods {
     final methods = <String>[];
-    if (!kIsWeb && defaultTargetPlatform == TargetPlatform.iOS) {
+    if (_platformPaySupported &&
+        !kIsWeb &&
+        defaultTargetPlatform == TargetPlatform.iOS) {
       methods.add('Apple Pay');
-    } else if (!kIsWeb && defaultTargetPlatform == TargetPlatform.android) {
+    } else if (_platformPaySupported &&
+        !kIsWeb &&
+        defaultTargetPlatform == TargetPlatform.android) {
       methods.add('Google Pay');
     }
     methods.add('Card');
@@ -60,6 +83,10 @@ class _GiftPaymentViewState extends State<GiftPaymentView> {
   @override
   void initState() {
     super.initState();
+    _giftDraftId = FirebaseFirestore.instance
+        .collection(senderGiftPaymentDraftCollectionName)
+        .doc()
+        .id;
     final uri = Uri.base;
     final cancelled = uri.queryParameters['payment'] == 'cancelled' ||
         uri.fragment.contains('payment=cancelled');
@@ -68,6 +95,27 @@ class _GiftPaymentViewState extends State<GiftPaymentView> {
           'Payment cancelled. Your gift request is saved. You can try again.';
     }
     _loadRothBalance();
+    _loadPaymentOptions();
+  }
+
+  Future<void> _loadPaymentOptions() async {
+    try {
+      final profile = await FirebaseSenderPaymentProfileRepository()
+          .paymentMethods()
+          .timeout(_backendTimeout);
+      final platformPay = kIsWeb
+          ? false
+          : await Stripe.instance.isPlatformPaySupported().timeout(
+                const Duration(seconds: 4),
+              );
+      if (!mounted) return;
+      setState(() {
+        _savedMethods = profile.methods;
+        _platformPaySupported = platformPay;
+      });
+    } catch (_) {
+      if (mounted) setState(() => _platformPaySupported = false);
+    }
   }
 
   Future<void> _loadRothBalance() async {
@@ -96,6 +144,7 @@ class _GiftPaymentViewState extends State<GiftPaymentView> {
   void _selectPaymentMethod(String method) {
     setState(() {
       _paymentMethod = method;
+      if (method != 'Saved card') _selectedPaymentMethodId = null;
       if (method == 'Roth') {
         _applyRoth = _rothCanFullyCover;
       } else if (_rothBalance <= 0) {
@@ -160,10 +209,40 @@ class _GiftPaymentViewState extends State<GiftPaymentView> {
         const SizedBox(height: 12),
         ..._availablePaymentMethods.expand(
           (method) => [
+            if (method == 'Apple Pay' || method == 'Google Pay')
+              SizedBox(
+                height: 48,
+                child: PlatformPayButton(
+                  key: ValueKey(
+                    method == 'Apple Pay'
+                        ? 'giftApplePayButton'
+                        : 'giftGooglePayButton',
+                  ),
+                  type: PlatformButtonType.pay,
+                  appearance: PlatformButtonStyle.black,
+                  borderRadius: 6,
+                  onPressed: () => _selectPaymentMethod(method),
+                ),
+              )
+            else
+              _PaymentMethodTile(
+                label: method,
+                selected: _paymentMethod == method,
+                onTap: () => _selectPaymentMethod(method),
+              ),
+            const SizedBox(height: 10),
+          ],
+        ),
+        ..._savedMethods.expand(
+          (method) => [
             _PaymentMethodTile(
-              label: method,
-              selected: _paymentMethod == method,
-              onTap: () => _selectPaymentMethod(method),
+              label:
+                  method.isDefault ? '${method.title} · Default' : method.title,
+              selected: _selectedPaymentMethodId == method.id,
+              onTap: () => setState(() {
+                _paymentMethod = 'Saved card';
+                _selectedPaymentMethodId = method.id;
+              }),
             ),
             const SizedBox(height: 10),
           ],
@@ -260,21 +339,24 @@ class _GiftPaymentViewState extends State<GiftPaymentView> {
       _message = null;
     });
     try {
-      final draftRef = FirebaseFirestore.instance
-          .collection(senderGiftPaymentDraftCollectionName)
-          .doc();
-      final payload = Map<String, Object?>.from(widget.draft.adminReviewPayload(
-        senderId: user.uid,
-        senderEmail: user.email ?? '',
-        senderName: user.displayName,
-      ));
+      final modeResult = await FirebaseFunctions.instance
+          .httpsCallable('getSenderPaymentMode')
+          .call()
+          .timeout(_backendTimeout);
+      final modeData = Map<String, dynamic>.from(modeResult.data as Map);
+      if (!Env.paymentModeMatchesBackend('${modeData['mode'] ?? ''}')) {
+        throw StateError('Gift payment configuration is unavailable.');
+      }
+      final payload = Map<String, Object?>.from(
+        widget.draft.adminReviewPayload(
+          senderId: user.uid,
+          senderEmail: user.email ?? '',
+          senderName: user.displayName,
+        ),
+      );
       payload.addAll({
         'applyRoth': _applyRoth && _rothBalance > 0,
-        'paymentMethod': 'card',
-        'rothApplied': 0,
-        'cardAmount': widget.draft.budget,
-        'walletContributionGbp': 0,
-        'remainingStripeAmountGbp': widget.draft.budget,
+        'paymentMethod': _verifiedPaymentMethod,
         'grossGiftBudget': widget.draft.budget,
         'paymentStatus': 'payment_pending',
       });
@@ -284,21 +366,45 @@ class _GiftPaymentViewState extends State<GiftPaymentView> {
       if (parsedDeliveryDate != null) {
         payload['deliveryDate'] = Timestamp.fromDate(parsedDeliveryDate);
       }
-      await draftRef.set({
-        ...payload,
-        'createdAt': FieldValue.serverTimestamp(),
-        'updatedAt': FieldValue.serverTimestamp(),
-      });
       final payment = await FirebaseFunctions.instance
           .httpsCallable(senderGiftPaymentCallableName)
           .call({
-        'giftDraftId': draftRef.id,
+        'giftDraftId': _giftDraftId,
+        'giftDraft': payload,
         'source': 'sender_mobile',
         'applyRoth': _applyRoth && _rothBalance > 0,
+        'paymentMethod': _verifiedPaymentMethod,
+        if (_selectedPaymentMethodId != null)
+          'paymentMethodId': _selectedPaymentMethodId,
+        'checkoutMode': kIsWeb ? 'web_checkout' : 'payment_intent',
+        'idempotencyKey': 'gift_${user.uid}_$_giftDraftId',
         'returnOrigin': Uri.base.origin,
-      });
+      }).timeout(_backendTimeout);
       final paymentData = Map<String, dynamic>.from(payment.data as Map);
       if (paymentData['walletPaidInFull'] == true) {
+        if (!mounted) return;
+        Navigator.of(context).push(
+          MaterialPageRoute<void>(
+            builder: (_) => GiftStatusView(draft: widget.draft),
+            settings: const RouteSettings(name: GiftStatusView.routeName),
+          ),
+        );
+        return;
+      }
+      if (!kIsWeb) {
+        if (paymentData['requiresConfirmation'] != false) {
+          await _confirmNativeGiftPayment(paymentData);
+        }
+        final finalized = await FirebaseFunctions.instance
+            .httpsCallable('finalizeGiftPayment')
+            .call({
+          'giftDraftId': _giftDraftId,
+          'paymentIntentId': paymentData['paymentIntentId'],
+        }).timeout(_backendTimeout);
+        final finalData = Map<String, dynamic>.from(finalized.data as Map);
+        if (finalData['paymentStatus'] != 'paid') {
+          throw StateError('Gift payment is still being verified.');
+        }
         if (!mounted) return;
         Navigator.of(context).push(
           MaterialPageRoute<void>(
@@ -313,6 +419,19 @@ class _GiftPaymentViewState extends State<GiftPaymentView> {
         throw StateError('Stripe Checkout could not be opened.');
       }
       await launchUrl(checkoutUrl, webOnlyWindowName: '_self');
+    } on TimeoutException {
+      if (!mounted) return;
+      setState(() {
+        _message =
+            'Payment is taking longer than expected. We will verify it before another attempt.';
+      });
+    } on StripeException catch (error) {
+      if (!mounted) return;
+      setState(() {
+        _message = error.error.code == FailureCode.Canceled
+            ? 'Payment was cancelled. Your Gift request remains saved.'
+            : 'Payment could not be completed. No duplicate request will be created.';
+      });
     } catch (error) {
       if (!mounted) return;
       setState(() {
@@ -323,6 +442,67 @@ class _GiftPaymentViewState extends State<GiftPaymentView> {
     } finally {
       if (mounted) setState(() => _submitting = false);
     }
+  }
+
+  Future<void> _confirmNativeGiftPayment(
+    Map<String, dynamic> paymentData,
+  ) async {
+    final clientSecret = '${paymentData['clientSecret'] ?? ''}'.trim();
+    if (clientSecret.isEmpty) {
+      throw StateError('Gift payment confirmation is unavailable.');
+    }
+    if (_paymentMethod == 'Apple Pay') {
+      final amount = (paymentData['remainingAmount'] as num?)?.toDouble() ?? 0;
+      await Stripe.instance
+          .confirmPlatformPayPaymentIntent(
+            clientSecret: clientSecret,
+            confirmParams: PlatformPayConfirmParams.applePay(
+              applePay: ApplePayParams(
+                merchantCountryCode: 'GB',
+                currencyCode: 'GBP',
+                cartItems: [
+                  ApplePayCartSummaryItem.immediate(
+                    label: 'Circum Gift',
+                    amount: amount.toStringAsFixed(2),
+                  ),
+                ],
+              ),
+            ),
+          )
+          .timeout(_paymentSheetPresentTimeout);
+      return;
+    }
+    if (_paymentMethod == 'Google Pay') {
+      await Stripe.instance
+          .confirmPlatformPayPaymentIntent(
+            clientSecret: clientSecret,
+            confirmParams: PlatformPayConfirmParams.googlePay(
+              googlePay: GooglePayParams(
+                merchantCountryCode: 'GB',
+                currencyCode: 'GBP',
+                merchantName: 'Circum',
+                testEnv: Env.googlePayTestEnvironment,
+              ),
+            ),
+          )
+          .timeout(_paymentSheetPresentTimeout);
+      return;
+    }
+    await Stripe.instance
+        .initPaymentSheet(
+          paymentSheetParameters: SetupPaymentSheetParameters(
+            paymentIntentClientSecret: clientSecret,
+            merchantDisplayName: 'Circum',
+            customerId: '${paymentData['customerId'] ?? ''}',
+            customerEphemeralKeySecret:
+                '${paymentData['ephemeralKeySecret'] ?? ''}',
+            style: ThemeMode.dark,
+          ),
+        )
+        .timeout(_paymentSheetInitTimeout);
+    await Stripe.instance.presentPaymentSheet().timeout(
+          _paymentSheetPresentTimeout,
+        );
   }
 }
 
@@ -479,7 +659,9 @@ class _RothBalanceSummary extends StatelessWidget {
       child: Column(
         children: [
           _PaymentSummaryRow(
-              label: 'Available Roth balance', value: balanceText),
+            label: 'Available Roth balance',
+            value: balanceText,
+          ),
           const SizedBox(height: 8),
           _PaymentSummaryRow(
             label: 'Amount covered by Roth',
