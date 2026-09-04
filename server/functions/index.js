@@ -78,7 +78,6 @@ const staleDelivery = require("./stale-delivery");
 const accountClosure = require("./account-closure");
 const businessAccess = require("./business-access");
 const riderIrisAcknowledgement = require("./rider-iris-acknowledgement");
-const riderGiftVoice = require("./rider-gift-voice");
 const adminIrisReferenceImages = require("./admin-iris-reference-images");
 const adminRiderAuthority = require("./admin-rider-authority");
 const adminGovernance = require("./admin-governance");
@@ -366,7 +365,6 @@ exports.recordCustomerArrivalResponse =
 exports.goOnline = riderPresence.goOnline;
 exports.goOffline = riderPresence.goOffline;
 exports.updateRiderPresence = riderPresence.updateRiderPresence;
-exports.getRiderGiftVoicePlayback = riderGiftVoice.getRiderGiftVoicePlayback;
 exports.onDeliveryPresenceWrite = riderPresence.onDeliveryPresenceWrite;
 exports.onRiderRecordAvailabilityWrite =
   riderPresence.onRiderRecordAvailabilityWrite;

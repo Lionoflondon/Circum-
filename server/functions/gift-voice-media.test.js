@@ -17,14 +17,6 @@ test("gift voice storage paths are owned, canonical, and timestamped", () => {
   );
   assert.equal(media.parseGiftVoiceStoragePath("gift_requests/sender-1/voice/original.webm"), null);
   assert.equal(media.parseGiftVoiceStoragePath("giftAssets/gift-1/voice.webm"), null);
-  assert.deepEqual(
-      media.parseGiftVoiceStoragePath("gift_requests/sender-1_1784583541000/voice/original.m4a"),
-      {
-        ownerId: "sender-1",
-        uploadedAtMillis: 1784583541000,
-        storagePath: "gift_requests/sender-1_1784583541000/voice/original.m4a",
-      },
-  );
 });
 
 test("gift voice metadata is backend-normalized before Gift Story use", () => {

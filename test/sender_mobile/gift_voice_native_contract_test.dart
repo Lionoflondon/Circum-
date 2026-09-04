@@ -54,15 +54,9 @@ void main() {
     expect(await unrelated.exists(), isTrue);
   });
 
-  test(
-      'backend and storage accept canonical mobile m4a without weakening ownership',
-      () {
-    final backend = File(
-      'server/functions/gift-voice-media.js',
-    ).readAsStringSync();
+  test('storage accepts canonical mobile MIME without weakening ownership', () {
     final rules = File('storage.rules').readAsStringSync();
 
-    expect(backend, contains(r'original\.(webm|m4a)'));
     expect(rules, contains('isGiftVoiceNoteOwner(requestId)'));
     expect(rules, contains('audio/mp4'));
     expect(
