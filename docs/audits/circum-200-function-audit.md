@@ -1,5 +1,4 @@
 # CIRCUM 200-Function Critical Infrastructure Audit
-
 Deterministic stratified sample from Sender `40c174dce6d454a347f0930079c641de9a56567b`, Rider `77935220020fc38267d991266cb967422af98273`, and backend at the Sender SHA. The sample contains exactly 200 distinct release-relevant symbols and excludes founder-specific files and logic.
 
 | # | Repo | File | Function/Symbol | Subsystem | Why selected | Risk | Result | Severity | Issue | Test Coverage | Fix Commit |
@@ -227,4 +226,3 @@ Deterministic stratified sample from Sender `40c174dce6d454a347f0930079c641de9a5
 - P1 found and fixed: 4
 - Remaining P0/P1: 0
 - Founder logic changed: none
-
