@@ -85,7 +85,6 @@ function healthDeliveryStatus(data) {
 
 function giftMovement(giftId, data) {
   const ready = giftReady(data);
-  const voice = data.voiceNote && typeof data.voiceNote === "object" ? data.voiceNote : null;
   return {
     ...specialFlowAuthority(data),
     id: `gift_${giftId}`,
@@ -122,16 +121,21 @@ function giftMovement(giftId, data) {
     displayTitle: `${data.occasion || "Gift"} Gift`,
     packageDescription: "Confidential Gifts by Circum experience",
     giftContentsConfidential: true,
-    ...(voice && voice.storagePath ? {voiceNote: {
-      hasVoiceNote: true,
-      storagePath: voice.storagePath,
-      mimeType: voice.mimeType || "audio/webm",
-      durationSeconds: Number(voice.durationSeconds || 0),
-      version: Number(voice.version || 1),
-      ownerId: data.senderId || data.userId || null,
-    }} : {}),
     createdAt: data.createdAt || FieldValue.serverTimestamp(),
     updatedAt: FieldValue.serverTimestamp(),
+  };
+}
+
+function riderGiftStoryVoiceRedaction() {
+  return {
+    voiceNote: FieldValue.delete(),
+    voiceNoteUrl: FieldValue.delete(),
+    giftStorySenderVoiceNoteUrl: FieldValue.delete(),
+    giftStoryCustomAudioUrl: FieldValue.delete(),
+    voiceStoragePath: FieldValue.delete(),
+    voiceMimeType: FieldValue.delete(),
+    voiceDuration: FieldValue.delete(),
+    voiceDurationSeconds: FieldValue.delete(),
   };
 }
 
@@ -189,7 +193,10 @@ async function projectGift(db, giftId, data) {
   const ref = db.collection("deliveryRequests").doc(deliveryId);
   await db.runTransaction(async (transaction) => {
     const movement = giftMovement(giftId, data);
-    transaction.set(ref, movement, {merge: true});
+    transaction.set(ref, {
+      ...movement,
+      ...riderGiftStoryVoiceRedaction(),
+    }, {merge: true});
     if (data.deliveryId !== deliveryId || data.serviceType !== SERVICE_TYPES.GIFTS || data.sourceModule !== "gifts") {
       transaction.set(db.collection("giftRequests").doc(giftId), {
         deliveryId,
@@ -247,3 +254,4 @@ module.exports.giftReady = giftReady;
 module.exports.healthReady = healthReady;
 module.exports.projectGift = projectGift;
 module.exports.projectHealth = projectHealth;
+module.exports.riderGiftStoryVoiceRedaction = riderGiftStoryVoiceRedaction;

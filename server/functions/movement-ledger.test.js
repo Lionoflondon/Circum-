@@ -3,6 +3,7 @@
 
 const test = require("node:test");
 const assert = require("node:assert/strict");
+const {FieldValue} = require("firebase-admin/firestore");
 const movement = require("./movement-ledger");
 
 test("gift movement remains held until ready for dispatch", () => {
@@ -56,6 +57,42 @@ test("Gift projection preserves Rider authority without inventing earnings", () 
   assert.equal(movement.giftMovement("g3", {price: 100}).riderEarning, undefined);
 });
 
+test("Gift movement never projects Gift Story voice metadata to Rider", () => {
+  const projected = movement.giftMovement("g-voice", {
+    status: "packed",
+    senderId: "sender-1",
+    voiceNote: {
+      storagePath: "giftAssets/sender-1/voice.m4a",
+      downloadUrl: "https://storage.example/voice.m4a?token=secret",
+      mimeType: "audio/mp4",
+      durationSeconds: 42,
+    },
+    voiceNoteUrl: "https://storage.example/legacy.webm",
+    giftStorySenderVoiceNoteUrl: "https://storage.example/story.webm",
+  });
+
+  expectNoGiftStoryVoice(projected);
+});
+
+test("Gift projection redacts stale Rider voice fields on merge", () => {
+  const patch = movement.riderGiftStoryVoiceRedaction();
+  const expectedFields = [
+    "voiceNote",
+    "voiceNoteUrl",
+    "giftStorySenderVoiceNoteUrl",
+    "giftStoryCustomAudioUrl",
+    "voiceStoragePath",
+    "voiceMimeType",
+    "voiceDuration",
+    "voiceDurationSeconds",
+  ];
+
+  assert.deepEqual(Object.keys(patch).sort(), expectedFields.sort());
+  for (const value of Object.values(patch)) {
+    assert.equal(value.isEqual(FieldValue.delete()), true);
+  }
+});
+
 test("Health+ projection preserves classification route and payout", () => {
   const projected = movement.healthMovement("h2", {
     collectionDetailsReady: true,
@@ -72,3 +109,18 @@ test("Health+ projection preserves classification route and payout", () => {
   assert.equal(projected.pickupLocality, "Brixton");
   assert.equal(projected.handlingInstructions, "Temperature controlled");
 });
+
+function expectNoGiftStoryVoice(projected) {
+  for (const key of [
+    "voiceNote",
+    "voiceNoteUrl",
+    "giftStorySenderVoiceNoteUrl",
+    "giftStoryCustomAudioUrl",
+    "voiceStoragePath",
+    "voiceMimeType",
+    "voiceDuration",
+    "voiceDurationSeconds",
+  ]) {
+    assert.equal(Object.hasOwn(projected, key), false, `${key} must not be projected`);
+  }
+}
