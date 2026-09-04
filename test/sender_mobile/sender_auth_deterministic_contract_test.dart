@@ -13,6 +13,8 @@ void main() {
   final profile = File('lib/app/sender_mobile/sender_mobile_profile.dart')
       .readAsStringSync();
   final app = File('lib/app.dart').readAsStringSync();
+  final website =
+      File('lib/website/shared/circum_website_app.dart').readAsStringSync();
 
   test('production Sender auth no longer depends on preview terminology', () {
     expect(home, contains('senderAuthEnabled'));
@@ -34,6 +36,25 @@ void main() {
     expect(home, contains(".load('sender_mobile.auth.profile')"));
     expect(home, contains('getIdToken(true)'));
     expect(home, contains('.timeout('));
+  });
+
+  test('Sender web auth and post-auth bootstrap are bounded and terminal', () {
+    final signIn = website.substring(
+      website.indexOf('Future<void> _signInSender()'),
+      website.indexOf('Future<void> _signUpSender()'),
+    );
+    final signUp = website.substring(
+      website.indexOf('Future<void> _signUpSender()'),
+      website.indexOf('Future<void> _sendSenderPasswordReset()'),
+    );
+    for (final handler in [signIn, signUp]) {
+      expect(handler, contains('_senderAuthOperationTimeout'));
+      expect(handler, contains('on TimeoutException'));
+      expect(handler, contains('catch (_)'));
+      expect(handler, contains('_senderAuthBusy = false'));
+    }
+    expect(signUp, contains('account may have been created'));
+    expect(signUp, isNot(contains('Sign in could not be completed')));
   });
 
   test('legacy Sender AuthBloc auth operations are bounded and do not rethrow',
