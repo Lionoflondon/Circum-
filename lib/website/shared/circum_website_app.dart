@@ -8078,6 +8078,7 @@ class _CustomerPortalState extends State<_CustomerPortal> {
   bool _firebaseOnline = false;
   bool _senderAuthLoading = true;
   bool _senderAuthBusy = false;
+  static const _senderAuthOperationTimeout = Duration(seconds: 30);
   bool _senderSecurityBusy = false;
   bool _senderProfileSaving = false;
   bool _senderSignupMode = false;
@@ -9692,11 +9693,13 @@ class _CustomerPortalState extends State<_CustomerPortal> {
       _senderProfileMessage = 'Signing you in...';
     });
     try {
-      await _ensureFirebaseReady();
-      final credential = await FirebaseAuth.instance.signInWithEmailAndPassword(
-        email: _senderEmail.text.trim(),
-        password: _senderPassword.text.trim(),
-      );
+      await _ensureFirebaseReady().timeout(_senderAuthOperationTimeout);
+      final credential = await FirebaseAuth.instance
+          .signInWithEmailAndPassword(
+            email: _senderEmail.text.trim(),
+            password: _senderPassword.text.trim(),
+          )
+          .timeout(_senderAuthOperationTimeout);
       final user = credential.user!;
       if (!await _allowSenderUser(user)) {
         await FirebaseAuth.instance.signOut();
@@ -9707,10 +9710,17 @@ class _CustomerPortalState extends State<_CustomerPortal> {
         return;
       }
       _attachSender(user);
-      await _loadSenderDeliveries(user.uid);
+      await _loadSenderDeliveries(user.uid)
+          .timeout(_senderAuthOperationTimeout);
       setState(() => _senderProfileMessage = 'Profile ready.');
     } on FirebaseAuthException catch (error) {
       setState(() => _senderProfileMessage = _friendlySenderAuthMessage(error));
+    } on TimeoutException {
+      setState(() => _senderProfileMessage =
+          'Sign in timed out. Check your connection and try again.');
+    } catch (_) {
+      setState(() => _senderProfileMessage =
+          'Sign in could not be completed. Please try again.');
     } finally {
       if (mounted) setState(() => _senderAuthBusy = false);
     }
@@ -9723,35 +9733,44 @@ class _CustomerPortalState extends State<_CustomerPortal> {
       _senderProfileMessage = 'Creating your Circum profile...';
     });
     try {
-      await _ensureFirebaseReady();
-      final credential =
-          await FirebaseAuth.instance.createUserWithEmailAndPassword(
-        email: _senderEmail.text.trim(),
-        password: _senderPassword.text.trim(),
-      );
+      await _ensureFirebaseReady().timeout(_senderAuthOperationTimeout);
+      final credential = await FirebaseAuth.instance
+          .createUserWithEmailAndPassword(
+            email: _senderEmail.text.trim(),
+            password: _senderPassword.text.trim(),
+          )
+          .timeout(_senderAuthOperationTimeout);
       final user = credential.user!;
       await FirebaseFunctions.instanceFor(
         region: 'us-central1',
       ).httpsCallable('updateSenderProfile').call({
         'displayName': _senderName.text.trim(),
         'phone': _senderPhone.text.trim(),
-      });
+      }).timeout(_senderAuthOperationTimeout);
       final referralCode = _senderReferralCode.text.trim();
       if (referralCode.isNotEmpty) {
         try {
           await FirebaseFunctions.instanceFor(region: 'us-central1')
               .httpsCallable('attachReferralCode')
-              .call({'referralCode': referralCode});
+              .call({'referralCode': referralCode}).timeout(
+                  _senderAuthOperationTimeout);
         } catch (error) {
           debugPrint('Web referral attach failed: $error');
         }
       }
       _availableRoles = {CircumRole.sender};
       _attachSender(user);
-      await _loadSenderDeliveries(user.uid);
+      await _loadSenderDeliveries(user.uid)
+          .timeout(_senderAuthOperationTimeout);
       setState(() => _senderProfileMessage = 'Your Circum profile is ready.');
     } on FirebaseAuthException catch (error) {
       setState(() => _senderProfileMessage = _friendlySenderAuthMessage(error));
+    } on TimeoutException {
+      setState(() => _senderProfileMessage =
+          'Your account was created, but setup timed out. Sign in to continue setup.');
+    } catch (_) {
+      setState(() => _senderProfileMessage =
+          'Your account may have been created, but setup did not finish. Sign in to continue.');
     } finally {
       if (mounted) setState(() => _senderAuthBusy = false);
     }
