@@ -66,6 +66,30 @@ void main() {
     expect(loader, contains('if (restoredLocally) return'));
   });
 
+  test('unresolved manual addresses cannot advance into quote generation', () {
+    expect(
+      canvas,
+      contains('Select an address from the suggestions to continue.'),
+    );
+    expect(
+      canvas,
+      contains(
+          'final buttonEnabled = !isResolvingTypedAddress && canContinue;'),
+    );
+    expect(
+      canvas,
+      contains('canContinue: engine.pickupCoordinate != null ||'),
+    );
+    expect(
+      canvas,
+      contains('canContinue: engine.desinationCoordinate != null ||'),
+    );
+    expect(
+      canvas,
+      isNot(contains('canContinue || typedAddressCanContinue')),
+    );
+  });
+
   test('route preview failure preserves locally calculated checkout route', () {
     expect(bloc, contains('_senderRoutePreviewTimeout'));
     expect(bloc, contains('.timeout(_senderRoutePreviewTimeout)'));
