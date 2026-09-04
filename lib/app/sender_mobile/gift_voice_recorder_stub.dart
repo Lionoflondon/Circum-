@@ -25,6 +25,8 @@ class SenderGiftVoiceRecorder {
 
   void cancel() {}
 
+  Future<void> deleteLocal(String localUrl) async {}
+
   void dispose() {}
 }
 

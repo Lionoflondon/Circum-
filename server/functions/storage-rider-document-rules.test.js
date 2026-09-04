@@ -70,3 +70,31 @@ test("Rider profile photos enforce the canonical 10 MiB owner-only contract", as
     {contentType: "application/pdf"},
   ));
 });
+
+test("Gift voice owner can upload and read canonical m4a while other users cannot", async () => {
+  const owner = testEnv.authenticatedContext("sender-a").storage();
+  const other = testEnv.authenticatedContext("sender-b").storage();
+  const path = "gift_requests/sender-a_1784583541000/voice/original.m4a";
+
+  await assertSucceeds(owner.ref(path).put(Buffer.from("audio"), {
+    contentType: "audio/mp4",
+  }));
+  await assertSucceeds(owner.ref(path).getDownloadURL());
+  await assertFails(other.ref(path).getDownloadURL());
+  await assertFails(other.ref(path).put(Buffer.from("forged"), {
+    contentType: "audio/mp4",
+  }));
+});
+
+test("Gift voice storage rejects unsupported MIME and oversized uploads", async () => {
+  const owner = testEnv.authenticatedContext("sender-a").storage();
+  const base = "gift_requests/sender-a_1784583541001/voice";
+
+  await assertFails(owner.ref(`${base}/invalid.m4a`).put(Buffer.from("audio"), {
+    contentType: "application/octet-stream",
+  }));
+  await assertFails(owner.ref(`${base}/oversized.m4a`).put(
+      Buffer.alloc((60 * 1024 * 1024) + 1),
+      {contentType: "audio/mp4"},
+  ));
+});

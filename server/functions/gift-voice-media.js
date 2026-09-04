@@ -23,7 +23,7 @@ function text(value) {
 
 function parseGiftVoiceStoragePath(storagePath) {
   const path = text(storagePath);
-  const match = path.match(/^gift_requests\/([^/]+)_([0-9]+)\/voice\/original\.webm$/);
+  const match = path.match(/^gift_requests\/([^/]+)_([0-9]+)\/voice\/original\.(webm|m4a)$/);
   if (!match) return null;
   return {
     ownerId: match[1],
@@ -243,6 +243,7 @@ module.exports = {
   cleanupGiftVoiceMediaForAccount,
   deleteGiftVoiceStoragePath,
   giftVoiceLifecycleAudit,
+  isAllowedGiftVoiceMime,
   onGiftRequestVoiceMediaDeleted,
   parseGiftVoiceStoragePath,
   sanitizeGiftVoiceNoteMetadata,

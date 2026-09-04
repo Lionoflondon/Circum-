@@ -55,6 +55,8 @@ class CircumVoiceRecorder {
 
   void cancel() => _recorder.cancel();
 
+  Future<void> deleteLocal(String localUrl) => _recorder.deleteLocal(localUrl);
+
   void dispose() => _recorder.dispose();
 }
 
@@ -78,6 +80,7 @@ class CircumMediaStorage {
         _storage = storage ?? FirebaseStorage.instance;
 
   static const voiceMetadataVersion = 1;
+  static const operationTimeout = Duration(seconds: 20);
   static const maxVoiceUploadBytes = 60 * 1024 * 1024;
   static const allowedVoiceMimeTypes = {
     'audio/webm',
@@ -104,26 +107,33 @@ class CircumMediaStorage {
     if (audio.bytes.lengthInBytes > maxVoiceUploadBytes) {
       throw StateError('Voice note is too large.');
     }
+    if (audio.bytes.isEmpty) {
+      throw StateError('Voice note is empty.');
+    }
     final now = DateTime.now().millisecondsSinceEpoch;
-    final path = 'gift_requests/${user.uid}_$now/voice/original.webm';
+    final extension =
+        mimeType == 'audio/mp4' || mimeType == 'audio/aac' ? 'm4a' : 'webm';
+    final path = 'gift_requests/${user.uid}_$now/voice/original.$extension';
     final ref = _storage.ref(path);
-    await ref.putData(
-      audio.bytes,
-      SettableMetadata(
-        contentType: mimeType,
-        customMetadata: {
-          'purpose': 'sender_mobile_gift_voice_note',
-          'uploadedBy': user.uid,
-          'ownerId': user.uid,
-          'version': '$voiceMetadataVersion',
-          'uploadStatus': 'uploaded',
-          'retryState': 'none',
-        },
-      ),
-    );
+    await ref
+        .putData(
+          audio.bytes,
+          SettableMetadata(
+            contentType: mimeType,
+            customMetadata: {
+              'purpose': 'sender_mobile_gift_voice_note',
+              'uploadedBy': user.uid,
+              'ownerId': user.uid,
+              'version': '$voiceMetadataVersion',
+              'uploadStatus': 'uploaded',
+              'retryState': 'none',
+            },
+          ),
+        )
+        .timeout(operationTimeout);
     return CircumUploadedMedia(
       storagePath: path,
-      downloadUrl: await ref.getDownloadURL(),
+      downloadUrl: await ref.getDownloadURL().timeout(operationTimeout),
       mimeType: mimeType,
       uploadStatus: 'uploaded',
       retryState: 'none',
@@ -135,6 +145,6 @@ class CircumMediaStorage {
   Future<void> deleteMedia(String? storagePath) async {
     final path = storagePath?.trim();
     if (path == null || path.isEmpty) return;
-    await _storage.ref(path).delete();
+    await _storage.ref(path).delete().timeout(operationTimeout);
   }
 }
