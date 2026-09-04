@@ -5,8 +5,8 @@ const policy = require("./delivery-policy-core");
 
 const now = Date.UTC(2026, 6, 4, 12, 0, 0);
 const pickup = {lat: 51.5155, lng: -0.1419};
-const nearby = {lat: 51.51555, lng: -0.14185};
-const farAway = {lat: 51.517, lng: -0.145};
+const nearby = {lat: 51.51555, lng: -0.14185, clientRecordedAt: now};
+const farAway = {lat: 51.517, lng: -0.145, clientRecordedAt: now};
 
 test("cancellation policy is free before rider acceptance", () => {
   for (const state of ["requested", "pending", "unmatched", "finding_rider", "broadcasting", "available", "awaiting_rider"]) {
@@ -115,6 +115,26 @@ test("rider cannot restart waiting timer with duplicate arrival", () => {
   });
   assert.equal(decision.duplicate, true);
   assert.equal(decision.reason, "arrival_already_recorded");
+});
+
+test("arrival requires a fresh accurate non-mocked device fix", () => {
+  const delivery = {riderId: "rider-1", pickupLocation: pickup};
+  for (const [location, accuracy, reason] of [
+    [{...nearby, clientRecordedAt: now - 120001}, 5, "fresh_location_required"],
+    [{...nearby, mocked: true}, 5, "mocked_location"],
+    [nearby, 101, "accurate_location_required"],
+  ]) {
+    const decision = policy.validateArrival({
+      deliveryId: "delivery-1",
+      riderId: "rider-1",
+      delivery,
+      location,
+      gpsAccuracyMeters: accuracy,
+      serverNow: now,
+    });
+    assert.equal(decision.accepted, false);
+    assert.equal(decision.reason, reason);
+  }
 });
 
 test("geofence leaving pauses waiting and re-entry resumes", () => {

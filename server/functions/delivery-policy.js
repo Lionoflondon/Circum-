@@ -1,5 +1,7 @@
 /* eslint-disable max-len, require-jsdoc */
 const functions = require("firebase-functions/v1");
+const {riderCallable} = require("./rider-app-check");
+const {senderPaymentCallable} = require("./sender-app-check");
 const {getFirestore, FieldValue} = require("firebase-admin/firestore");
 const core = require("./delivery-policy-core");
 const communicationEngine = require("./communication-engine");
@@ -57,7 +59,49 @@ function policyPatch({state, event, evidenceId, extra = {}}) {
   };
 }
 
-exports.requestSenderCancellation = functions.https.onCall(async (data, context) => {
+function recordRiderCompensation(transaction, db, financial) {
+  const riderId = text(financial && financial.riderId);
+  const amount = Number(financial && financial.riderCompensation || 0);
+  if (!riderId || amount <= 0) return;
+  const transactionId = `policy_${Buffer.from(financial.idempotencyKey).toString("base64url")}`;
+  transaction.create(db.collection("riderEarningTransactions").doc(transactionId), {
+    transactionId,
+    deliveryId: financial.deliveryId,
+    riderId,
+    type: financial.chargeType === "no_show_fee" ? "no_show_compensation" : "cancellation_compensation",
+    amount,
+    currency: "GBP",
+    status: "completed",
+    idempotencyKey: financial.idempotencyKey,
+    createdAt: FieldValue.serverTimestamp(),
+  });
+  transaction.set(db.collection("riderEarnings").doc(riderId), {
+    availableBalance: FieldValue.increment(amount),
+    lifetimeEarnings: FieldValue.increment(amount),
+    totalAmountEarned: FieldValue.increment(amount),
+    waitingNoShowTotal: FieldValue.increment(
+        financial.chargeType === "no_show_fee" ? amount : 0,
+    ),
+    adjustmentsTotal: FieldValue.increment(
+        financial.chargeType === "no_show_fee" ? 0 : amount,
+    ),
+    updatedAt: FieldValue.serverTimestamp(),
+  }, {merge: true});
+}
+
+function clearRiderAssignment(transaction, db, riderId) {
+  if (!riderId) return;
+  for (const collection of ["riderPresence", "riders", "riderProfiles"]) {
+    transaction.set(db.collection(collection).doc(riderId), {
+      activeDeliveryId: FieldValue.delete(),
+      currentDeliveryId: FieldValue.delete(),
+      ...(collection === "riderPresence" ? {busy: false} : {}),
+      updatedAt: FieldValue.serverTimestamp(),
+    }, {merge: true});
+  }
+}
+
+exports.requestSenderCancellation = senderPaymentCallable(async (data, context) => {
   const uid = requireAuth(context);
   const deliveryId = text(data.deliveryId || data.requestId);
   const cancellationReason = text(data.reason || data.cancellationReason) || "Sender requested cancellation";
@@ -124,6 +168,8 @@ exports.requestSenderCancellation = functions.https.onCall(async (data, context)
       deliveryId, riderId: text(delivery.riderId || delivery.assignedRiderId) || null,
       stripePaymentIntentId, paymentStatus, refundReviewRequired};
     transaction.set(idemRef, result);
+    recordRiderCompensation(transaction, db, financial);
+    clearRiderAssignment(transaction, db, result.riderId);
     transaction.update(ref, policyPatch({
       state: "cancelled_by_sender",
       event,
@@ -167,7 +213,7 @@ exports.requestSenderCancellation = functions.https.onCall(async (data, context)
   return result;
 });
 
-exports.previewSenderCancellation = functions.https.onCall(async (data, context) => {
+exports.previewSenderCancellation = senderPaymentCallable(async (data, context) => {
   const uid = requireAuth(context);
   const deliveryId = text(data.deliveryId || data.requestId);
   if (!deliveryId) throw new functions.https.HttpsError("invalid-argument", "deliveryId is required.");
@@ -206,7 +252,7 @@ exports.previewSenderCancellation = functions.https.onCall(async (data, context)
   };
 });
 
-exports.recordRiderArrival = functions.https.onCall(async (data, context) => {
+exports.recordRiderArrival = riderCallable(async (data, context) => {
   const uid = requireAuth(context);
   const deliveryId = text(data.deliveryId);
   if (!deliveryId) throw new functions.https.HttpsError("invalid-argument", "deliveryId is required.");
@@ -266,7 +312,7 @@ exports.recordRiderArrival = functions.https.onCall(async (data, context) => {
   });
 });
 
-exports.recordArrivalZoneCheck = functions.https.onCall(async (data, context) => {
+exports.recordArrivalZoneCheck = riderCallable(async (data, context) => {
   const uid = requireAuth(context);
   const deliveryId = text(data.deliveryId);
   if (!deliveryId) throw new functions.https.HttpsError("invalid-argument", "deliveryId is required.");
@@ -306,7 +352,7 @@ exports.recordArrivalZoneCheck = functions.https.onCall(async (data, context) =>
   });
 });
 
-exports.recordCustomerArrivalResponse = functions.https.onCall(async (data, context) => {
+exports.recordCustomerArrivalResponse = senderPaymentCallable(async (data, context) => {
   const uid = requireAuth(context);
   const deliveryId = text(data.deliveryId);
   if (!deliveryId) throw new functions.https.HttpsError("invalid-argument", "deliveryId is required.");
@@ -327,7 +373,7 @@ exports.recordCustomerArrivalResponse = functions.https.onCall(async (data, cont
   });
 });
 
-exports.reportWaitingContext = functions.https.onCall(async (data, context) => {
+exports.reportWaitingContext = riderCallable(async (data, context) => {
   const uid = requireAuth(context);
   const deliveryId = text(data.deliveryId);
   const waitingType = text(data.type);
@@ -363,7 +409,7 @@ exports.reportWaitingContext = functions.https.onCall(async (data, context) => {
   });
 });
 
-exports.markRiderNoShow = functions.https.onCall(async (data, context) => {
+exports.markRiderNoShow = riderCallable(async (data, context) => {
   const uid = requireAuth(context);
   const deliveryId = text(data.deliveryId);
   const idempotencyKey = text(data.idempotencyKey || `${deliveryId}:no_show:${uid}`);
@@ -407,6 +453,8 @@ exports.markRiderNoShow = functions.https.onCall(async (data, context) => {
     const event = {...decision.auditEvent, financial, evidenceId: evidenceRef.id};
     transaction.set(evidenceRef, evidence);
     transaction.set(idemRef, {success: true, decision, financial, evidenceId: evidenceRef.id, createdAt: now});
+    recordRiderCompensation(transaction, db, financial);
+    clearRiderAssignment(transaction, db, uid);
     transaction.update(ref, policyPatch({
       state: "sender_no_show_pickup",
       event,

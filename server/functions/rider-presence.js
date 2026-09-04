@@ -360,3 +360,7 @@ exports.requireDispatchablePresence = async function(riderId, riderProfileData =
   }
   return {...presence, presenceState: decision.presenceState};
 };
+
+exports.dispatchablePresenceDecision = function(riderProfileData = {}, presence = {}) {
+  return core.dispatchDecision({profile: riderProfileData, presence});
+};

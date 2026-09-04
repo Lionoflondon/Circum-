@@ -103,11 +103,14 @@ async function participantDisplayName(uid, role, context) {
   return role === "rider" ? "Rider" : "Sender";
 }
 
-async function emitNotification({recipientId, recipientRole = "sender", type, title, body, data = {}}) {
+async function emitNotification({recipientId, recipientRole = "sender", type, title, body, data = {}, dedupeKey = ""}) {
   const db = getFirestore();
   const safeData = redactContactFields(data);
   const destination = destinationFor(type, safeData);
-  const ref = db.collection("notifications").doc();
+  const normalizedDedupeKey = clean(dedupeKey);
+  const ref = normalizedDedupeKey ?
+    db.collection("notifications").doc(`event_${Buffer.from(normalizedDedupeKey).toString("base64url")}`) :
+    db.collection("notifications").doc();
   const correlationId = clean(safeData.correlationId) || ref.id;
   const payload = {
     notificationId: ref.id,
@@ -132,7 +135,17 @@ async function emitNotification({recipientId, recipientRole = "sender", type, ti
     pushProvider: "fcm",
     createdAt: FieldValue.serverTimestamp(),
   };
-  await ref.set(payload);
+  if (normalizedDedupeKey) {
+    const created = await db.runTransaction(async (transaction) => {
+      const existing = await transaction.get(ref);
+      if (existing.exists) return false;
+      transaction.set(ref, {...payload, dedupeKey: normalizedDedupeKey});
+      return true;
+    });
+    if (!created) return ref.id;
+  } else {
+    await ref.set(payload);
+  }
   const token = await profileToken(recipientId, recipientRole);
   if (!token) {
     await ref.set({

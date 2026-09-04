@@ -216,6 +216,7 @@ function validateArrival(input = {}) {
   const assigned = `${delivery.riderId || delivery.assignedRiderId || ""}`.trim();
   const phase = input.phase === "dropoff" ? "dropoff" : "pickup";
   const location = input.location || null;
+  const recordedAt = toMillis(location && location.clientRecordedAt);
   const target = input.target || (phase === "dropoff" ? delivery.dropoffLocation : delivery.pickupLocation);
   const existingArrival = phase === "dropoff" ? delivery.dropoffArrivedAt : delivery.pickupArrivedAt;
   const distance = distanceMeters(location, target);
@@ -229,16 +230,19 @@ function validateArrival(input = {}) {
   if (existingArrival) {
     return {accepted: false, duplicate: true, reason: "arrival_already_recorded", auditEvent: auditEvent("arrival_duplicate", input, now, {phase})};
   }
-  if (distance == null) {
+  if (!location || location.mocked === true || !recordedAt || now - recordedAt > 2 * 60 * 1000 || recordedAt > now + 30 * 1000) {
     return {
-      accepted: true,
+      accepted: false,
       flagged: true,
-      reason: "gps_unavailable_manual_review",
-      state: phase === "dropoff" ? "arrived_at_dropoff" : "arrived_at_pickup",
-      arrivedAt: now,
-      waiting: waitingState({deliveryId: input.deliveryId, riderId, phase, now, config}),
-      auditEvent: auditEvent("arrival_unverified_gps_missing", input, now, {phase}),
+      reason: location && location.mocked === true ? "mocked_location" : "fresh_location_required",
+      auditEvent: auditEvent("arrival_rejected_untrusted_location", input, now, {phase}),
     };
+  }
+  if (!Number.isFinite(accuracy) || accuracy <= 0 || accuracy > 100) {
+    return {accepted: false, flagged: true, reason: "accurate_location_required", auditEvent: auditEvent("arrival_rejected_inaccurate_location", input, now, {phase})};
+  }
+  if (distance == null) {
+    return {accepted: false, flagged: true, reason: "valid_location_required", auditEvent: auditEvent("arrival_rejected_gps_missing", input, now, {phase})};
   }
   if (distance > allowedDistance) {
     return {
