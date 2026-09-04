@@ -56,6 +56,7 @@ function healthDeliveryStatus(data) {
 
 function giftMovement(giftId, data) {
   const ready = giftReady(data);
+  const voice = data.voiceNote && typeof data.voiceNote === "object" ? data.voiceNote : null;
   return {
     id: `gift_${giftId}`,
     requestId: `gift_${giftId}`,
@@ -90,6 +91,14 @@ function giftMovement(giftId, data) {
     displayTitle: `${data.occasion || "Gift"} Gift`,
     packageDescription: "Confidential Gifts by Circum experience",
     giftContentsConfidential: true,
+    ...(voice && voice.storagePath ? {voiceNote: {
+      hasVoiceNote: true,
+      storagePath: voice.storagePath,
+      mimeType: voice.mimeType || "audio/webm",
+      durationSeconds: Number(voice.durationSeconds || 0),
+      version: Number(voice.version || 1),
+      ownerId: data.senderId || data.userId || null,
+    }} : {}),
     createdAt: data.createdAt || FieldValue.serverTimestamp(),
     updatedAt: FieldValue.serverTimestamp(),
   };
