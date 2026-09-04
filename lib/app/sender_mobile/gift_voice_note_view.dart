@@ -58,6 +58,8 @@ class _GiftVoiceNoteViewState extends State<GiftVoiceNoteView> {
     _timer?.cancel();
     _playbackTimer?.cancel();
     _playback.dispose();
+    final localUrl = _voiceNote?.localUrl ?? _voiceNote?.localPath;
+    if (localUrl != null) unawaited(_recorder.deleteLocal(localUrl));
     _recorder.dispose();
     super.dispose();
   }
@@ -126,13 +128,11 @@ class _GiftVoiceNoteViewState extends State<GiftVoiceNoteView> {
       setState(() {
         _state = GiftVoiceNoteState.uploadFailed;
         _statusMessage =
-            'Voice recording is unavailable in this browser. You can skip this step.';
+            'Voice recording is unavailable on this device. You can skip this step.';
       });
       return;
     }
     try {
-      // Browser MediaRecorder/getUserMedia is the permission request on web.
-      // It keeps localhost and app preview aligned with the native browser prompt.
       await _recorder.start();
       setState(() {
         _state = GiftVoiceNoteState.recording;
@@ -154,7 +154,7 @@ class _GiftVoiceNoteViewState extends State<GiftVoiceNoteView> {
       setState(() {
         _state = GiftVoiceNoteState.permissionDenied;
         _statusMessage =
-            'Microphone access is blocked. Enable it in your browser settings, or skip this step.';
+            'Microphone access is blocked. Enable it in your device settings, or skip this step.';
       });
     }
   }
@@ -234,10 +234,12 @@ class _GiftVoiceNoteViewState extends State<GiftVoiceNoteView> {
 
   void _delete() {
     final path = _voiceNote?.storagePath;
+    final localUrl = _voiceNote?.localUrl ?? _voiceNote?.localPath;
     _timer?.cancel();
     _playbackTimer?.cancel();
     _playback.pause();
     _recorder.cancel();
+    if (localUrl != null) unawaited(_recorder.deleteLocal(localUrl));
     unawaited(_mediaStorage.deleteMedia(path).catchError((_) {}));
     setState(() {
       _state = GiftVoiceNoteState.idle;
@@ -356,7 +358,7 @@ class _VoiceNoteCard extends StatelessWidget {
           Text(
             statusMessage ??
                 (permissionDenied
-                    ? 'Microphone access is blocked. Enable it in your browser settings, or skip this step.'
+                    ? 'Microphone access is blocked. Enable it in your device settings, or skip this step.'
                     : recording
                         ? 'Maximum length is 60 seconds.'
                         : hasNote

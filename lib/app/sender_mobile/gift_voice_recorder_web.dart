@@ -76,6 +76,10 @@ class SenderGiftVoiceRecorder {
     _stopTracks();
   }
 
+  Future<void> deleteLocal(String localUrl) async {
+    if (localUrl.startsWith('blob:')) html.Url.revokeObjectUrl(localUrl);
+  }
+
   void dispose() {
     cancel();
   }
