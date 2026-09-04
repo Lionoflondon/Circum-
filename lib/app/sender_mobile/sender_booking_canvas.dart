@@ -19,9 +19,11 @@ import '../business/business_journey_context.dart';
 import '../../helper/bitmap_descriptor_helper.dart';
 import '../send_package/bloc/send_package_bloc.dart';
 import '../send_package/models/place_coordinates.m.dart';
+import '../send_package/repo/place_api.dart';
 import 'sender_accessibility.dart';
 import 'sender_booking_state.dart';
 import 'sender_finance.dart';
+import 'sender_manual_address_resolution.dart';
 import 'sender_saved_addresses.dart';
 import 'sender_tracking_screen.dart';
 
@@ -56,6 +58,9 @@ class _SenderBookingCanvasState extends State<SenderBookingCanvas> {
   String? _initializationError;
   String? _addressResolutionMessage;
   bool _addressResolving = false;
+  int _addressResolutionGeneration = 0;
+  final SenderManualAddressResolver _manualAddressResolver =
+      SenderManualAddressResolver();
   bool _draftLoading = true;
   bool _restoringDraft = false;
   Timer? _draftSaveDebounce;
@@ -663,6 +668,23 @@ class _SenderBookingCanvasState extends State<SenderBookingCanvas> {
   }
 
   void _advance() {
+    final engine = context.read<SendPackageBloc>().state;
+    if (_draft.step == SenderBookingStep.pickup &&
+        engine.pickupCoordinate == null &&
+        (_draft.pickupLat == null || _draft.pickupLng == null)) {
+      unawaited(_resolveTypedAddress(pickup: true));
+      return;
+    }
+    if (_draft.step == SenderBookingStep.dropoff &&
+        engine.desinationCoordinate == null &&
+        (_draft.dropoffLat == null || _draft.dropoffLng == null)) {
+      unawaited(_resolveTypedAddress(pickup: false));
+      return;
+    }
+    _advanceResolved();
+  }
+
+  void _advanceResolved() {
     if (_draft.step == SenderBookingStep.payment) return;
     _restoreRouteFromDraftIfReady(_draft);
     if (_draft.step == SenderBookingStep.pickup ||
@@ -715,6 +737,153 @@ class _SenderBookingCanvasState extends State<SenderBookingCanvas> {
       context.read<SendPackageBloc>().add(const LoadSenderRothBalance());
     }
     _setDraft(_draft.next());
+  }
+
+  void _invalidateAddressResolution() {
+    _addressResolutionGeneration++;
+    _manualAddressResolver.invalidate();
+    if (_addressResolutionMessage == null && !_addressResolving) return;
+    setState(() {
+      _addressResolutionMessage = null;
+      _addressResolving = false;
+    });
+  }
+
+  Future<void> _resolveTypedAddress({required bool pickup}) async {
+    if (_addressResolving) return;
+    final controller = pickup ? _pickup : _dropoff;
+    final typed = controller.text.trim();
+    if (!isSenderTypedAddressSpecific(typed)) {
+      setState(() {
+        _addressResolutionMessage =
+            'Select an address from the suggestions to continue.';
+      });
+      return;
+    }
+
+    final generation = ++_addressResolutionGeneration;
+    final languageCode = Localizations.localeOf(context).languageCode;
+    setState(() {
+      _addressResolving = true;
+      _addressResolutionMessage = null;
+    });
+
+    try {
+      final provider = PlaceApiProvider(
+        'manual-${pickup ? 'pickup' : 'dropoff'}-$generation',
+      );
+      final result = await _manualAddressResolver.resolve(
+        input: typed,
+        search: (input) => provider.fetchSuggestions(input, languageCode),
+      );
+      if (!mounted ||
+          generation != _addressResolutionGeneration ||
+          controller.text.trim() != typed) {
+        return;
+      }
+      if (result.status == SenderManualAddressResolutionStatus.stale) return;
+      if (result.status == SenderManualAddressResolutionStatus.noMatch ||
+          result.status == SenderManualAddressResolutionStatus.failed) {
+        setState(() {
+          _addressResolutionMessage =
+              "We couldn't locate that address. Choose a suggested address or edit it.";
+        });
+        return;
+      }
+      if (result.status == SenderManualAddressResolutionStatus.timeout) {
+        setState(() {
+          _addressResolutionMessage =
+              'Address lookup timed out. Check the address and try again.';
+        });
+        return;
+      }
+      if (result.status == SenderManualAddressResolutionStatus.ambiguous) {
+        context.read<SendPackageBloc>().add(
+              SearchAPlaceEvent(
+                query: typed,
+                lang: languageCode,
+                pickup: pickup,
+              ),
+            );
+        setState(() {
+          _addressResolutionMessage =
+              'Choose the matching address from the suggestions to continue.';
+        });
+        return;
+      }
+
+      final suggestion = result.suggestion!;
+      final bloc = context.read<SendPackageBloc>();
+      if (pickup) {
+        bloc.add(
+          SetPickupAddress(
+            val: suggestion.description,
+            pickupLocationSubAddress: suggestion.subText,
+            placeId: suggestion.placeId,
+            lang: languageCode,
+          ),
+        );
+      } else {
+        bloc.add(
+          SetDeliveryAddress(
+            val: suggestion.description,
+            destinationLocationSubAddress: suggestion.subText,
+            placeId: suggestion.placeId,
+            lang: languageCode,
+          ),
+        );
+      }
+      final resolved = await bloc.stream
+          .firstWhere(
+            (state) => pickup
+                ? state.pickupCoordinate != null
+                : state.desinationCoordinate != null,
+          )
+          .timeout(const Duration(seconds: 10));
+      if (!mounted ||
+          generation != _addressResolutionGeneration ||
+          controller.text.trim() != typed) {
+        return;
+      }
+      final coordinate =
+          pickup ? resolved.pickupCoordinate! : resolved.desinationCoordinate!;
+      controller.text = suggestion.description;
+      final nextDraft = pickup
+          ? _draft.copyWith(
+              pickupAddress: suggestion.description,
+              pickupLat: coordinate.lat,
+              pickupLng: coordinate.lng,
+              dropoffAddress: '',
+              clearDropoffCoordinate: true,
+            )
+          : _draft.copyWith(
+              dropoffAddress: suggestion.description,
+              dropoffLat: coordinate.lat,
+              dropoffLng: coordinate.lng,
+            );
+      setState(() {
+        _addressResolving = false;
+        _addressResolutionMessage = null;
+      });
+      _setDraft(nextDraft);
+      _advanceResolved();
+    } on TimeoutException {
+      if (!mounted || generation != _addressResolutionGeneration) return;
+      setState(() {
+        _addressResolutionMessage =
+            'Address lookup timed out. Check the address and try again.';
+      });
+    } catch (_) {
+      if (!mounted || generation != _addressResolutionGeneration) return;
+      setState(() {
+        _addressResolutionMessage =
+            "We couldn't locate that address. Choose a suggested address or edit it.";
+      });
+    } finally {
+      if (mounted && generation == _addressResolutionGeneration) {
+        setState(() => _addressResolving = false);
+      }
+    }
   }
 
   void _requestBackendQuote(SenderBookingDraft draft) {
@@ -1019,6 +1188,7 @@ class _SenderBookingCanvasState extends State<SenderBookingCanvas> {
                       onPhotoTap: _pickParcelPhoto,
                       onPhotoRemove: _removeParcelPhoto,
                       onDraft: _setDraft,
+                      onAddressInputChanged: _invalidateAddressResolution,
                       onContinue: _advance,
                       addressResolutionMessage: _addressResolutionMessage,
                       addressResolving: _addressResolving,
@@ -1207,6 +1377,7 @@ class _BookingPanel extends StatelessWidget {
   final VoidCallback onPhotoTap;
   final VoidCallback onPhotoRemove;
   final ValueChanged<SenderBookingDraft> onDraft;
+  final VoidCallback onAddressInputChanged;
   final VoidCallback onContinue;
   final String? addressResolutionMessage;
   final bool addressResolving;
@@ -1237,6 +1408,7 @@ class _BookingPanel extends StatelessWidget {
     required this.onPhotoTap,
     required this.onPhotoRemove,
     required this.onDraft,
+    required this.onAddressInputChanged,
     required this.onContinue,
     required this.addressResolutionMessage,
     required this.addressResolving,
@@ -1310,6 +1482,10 @@ class _BookingPanel extends StatelessWidget {
           resolutionMessage: addressResolutionMessage,
           isResolvingTypedAddress: addressResolving,
           onChanged: (value) {
+            onAddressInputChanged();
+            context.read<SendPackageBloc>().add(
+                  const InvalidateAddressSelection(pickup: true),
+                );
             onSearchingPickupChanged(true);
             _search(context, value, pickup: true);
             onDraft(
@@ -1359,6 +1535,10 @@ class _BookingPanel extends StatelessWidget {
           resolutionMessage: addressResolutionMessage,
           isResolvingTypedAddress: addressResolving,
           onChanged: (value) {
+            onAddressInputChanged();
+            context.read<SendPackageBloc>().add(
+                  const InvalidateAddressSelection(pickup: false),
+                );
             onSearchingPickupChanged(false);
             _search(context, value, pickup: false);
             onDraft(
@@ -1531,7 +1711,8 @@ class _AddressPanel extends StatelessWidget {
   Widget build(BuildContext context) {
     final typed = controller.text.trim().toLowerCase();
     final typedAddressCanContinue = isSenderTypedAddressSpecific(typed);
-    final buttonEnabled = !isResolvingTypedAddress && canContinue;
+    final buttonEnabled = !isResolvingTypedAddress &&
+        (canContinue || isSenderTypedAddressSpecific(controller.text));
     dynamic exactSuggestion;
     if (!canContinue && typed.isNotEmpty) {
       for (final suggestion in suggestions) {

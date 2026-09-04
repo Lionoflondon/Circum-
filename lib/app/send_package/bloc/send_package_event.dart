@@ -44,6 +44,12 @@ class SetDeliveryAddress extends SendPackageEvent {
 
 class ClearSuggestions extends SendPackageEvent {}
 
+class InvalidateAddressSelection extends SendPackageEvent {
+  const InvalidateAddressSelection({required this.pickup});
+
+  final bool pickup;
+}
+
 class ResetSenderBookingSession extends SendPackageEvent {
   const ResetSenderBookingSession();
 }
