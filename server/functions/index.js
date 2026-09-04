@@ -504,6 +504,24 @@ exports.StripeWebhook = functions
       event.type === "payment_intent.payment_failed" ||
       event.type === "payment_intent.canceled"
       ) {
+        try {
+          const giftIntentResult = await giftsPayment.handleGiftPaymentIntent(
+              stripe,
+              event.data.object,
+              event.id,
+          );
+          if (giftIntentResult && giftIntentResult.handled) {
+            return res.send({success: true, gift: giftIntentResult});
+          }
+        } catch (error) {
+          console.error("Gift PaymentIntent webhook finalization failed", {
+            eventId: event.id,
+            paymentIntentId: event.data && event.data.object ? event.data.object.id : null,
+            status: event.data && event.data.object ? event.data.object.status : null,
+            errorType: error && error.name || "Error",
+          });
+          return res.status(500).send({success: false, error: "gift_payment_intent_failed"});
+        }
         const tipResult = await ratingsTipping.processStripeTipIntent(
             stripe,
             event.data.object,

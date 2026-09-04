@@ -54,6 +54,22 @@ test("gift checkout persists canonical payment method labels", () => {
     walletContributionGbp: 1500,
     remainingGbp: 0,
   }), "roth");
+  assert.equal(giftPaymentMethodFromSplit({
+    walletContributionGbp: 0,
+    remainingGbp: 20,
+  }, "apple_pay"), "apple_pay");
+  assert.equal(giftPaymentMethodFromSplit({
+    walletContributionGbp: 7,
+    remainingGbp: 13,
+  }, "apple_pay"), "roth_apple_pay");
+  assert.equal(giftPaymentMethodFromSplit({
+    walletContributionGbp: 7,
+    remainingGbp: 13,
+  }, "google_pay"), "roth_google_pay");
+  assert.equal(giftPaymentMethodFromSplit({
+    walletContributionGbp: 7,
+    remainingGbp: 13,
+  }, "saved_card"), "roth_saved_card");
 });
 
 test("sender mobile gifts checkout returns to sender mobile hash routes", () => {
