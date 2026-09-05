@@ -20,18 +20,17 @@ test("Firestore rules expose irisPrivate to admins only for reads", () => {
 
 test("Firestore rules prevent senders from mutating public Iris", () => {
   assert.match(rules, /function isOwnDeliveryUpdate\(\)[\s\S]*affectedKeys\(\)\.hasAny\(\['iris'\]\)/);
-  assert.match(rules, /match \/webSenderRequests\/\{requestId\}[\s\S]*changedKeys\(\)\.hasAny\(\['iris'\]\)/);
+  assert.match(rules, /match \/webSenderRequests\/\{requestId\}[\s\S]*affectedKeys\(\)\.hasOnly\(\['packageDescription', 'updatedAt'\]\)/);
 });
 
 test("Firestore rules reject create-time Iris injection from clients", () => {
   assert.match(rules, /function isSafeDeliveryCreate\(\)[\s\S]*!request\.resource\.data\.keys\(\)\.hasAny\(\['iris'\]\)/);
-  assert.match(rules, /match \/webSenderRequests\/\{requestId\}[\s\S]*allow create: if isAdmin\(\) \|\| \(\s*isCreatingOwnDelivery\(\) &&\s*!request\.resource\.data\.keys\(\)\.hasAny\(\['iris'\]\)\s*\);/);
+  assert.match(rules, /match \/webSenderRequests\/\{requestId\}[\s\S]*allow create: if isAdmin\(\) \|\| \(\s*isCreatingOwnDelivery\(\) &&\s*!request\.resource\.data\.keys\(\)\.hasAny\(\['iris'\]\)[\s\S]*?hasOnly/);
 });
 
-test("Firestore rules restrict rider private writes to verification.rider", () => {
-  assert.match(rules, /function isAssignedRiderPrivateCreate\(\)[\s\S]*request\.resource\.data\.verification\.keys\(\)\.hasOnly\(\['rider'\]\)/);
-  assert.match(rules, /function isAssignedRiderPrivateUpdate\(\)[\s\S]*request\.resource\.data\.verification\.keys\(\)\.hasOnly\(\['rider'\]\)/);
-  assert.doesNotMatch(rules, /isAssignedRiderUpdate\(\)[\s\S]*changedKeys\(\)\.hasOnly\(\['iris'/);
+test("Firestore rules reserve private IRIS authority for backend/admin writes", () => {
+  assert.match(rules, /match \/irisPrivate\/\{requestId\}[\s\S]*?allow create, update: if isAdmin\(\);/);
+  assert.doesNotMatch(rules, /function isSenderPrivateCreate|function isAssignedRiderPrivate/);
 });
 
 test("Firestore rules keep referrals admin-only", () => {

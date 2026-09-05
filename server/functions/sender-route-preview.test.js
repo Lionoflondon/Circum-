@@ -47,14 +47,14 @@ test("route provider result is authoritative and includes duration", async () =>
 });
 
 test("paid delivery must match the backend-quoted endpoints", () => {
-  const quote = {route: {
+  const quote = {parcelAuthority: {description: "Book", weightKg: 1}, route: {
     origin: {latitude: 51.5, longitude: -0.1},
     destination: {latitude: 51.6, longitude: -0.2},
   }};
   const delivery = {
     pickup: {lat: 51.5, lng: -0.1},
     dropoff: {lat: 51.6, lng: -0.2},
-    parcel: {itemName: "Parcel"},
+    parcel: {itemName: "Book", weightKg: 1},
     recipient: {name: "Recipient"},
   };
   assert.deepEqual(_private.assertDeliveryMatchesQuote(delivery, quote), {

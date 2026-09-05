@@ -7,9 +7,10 @@ const path = require("node:path");
 const source = (name) => fs.readFileSync(path.join(__dirname, name), "utf8");
 
 test("offer discovery and acceptance require canonical dispatchable presence", () => {
-  const nearby = source("get-avaliable-requests.js");
+  const nearby = source("rider-offers.js");
   const accept = source("accept-ride-requests.js");
-  assert.match(nearby, /requireDispatchablePresence\(riderId, riderData\)/);
+  assert.match(nearby, /dispatchDecision\(\{\s*profile: combined,\s*presence: state,\s*now,?\s*\}\)/);
+  assert.match(nearby, /state\.dispatchEligible === true/);
   assert.match(accept, /requireDispatchablePresence\(riderId, rider\)/);
   assert.match(accept, /dispatchablePresenceDecision/);
   assert.match(accept, /activeDeliveryId/);

@@ -68,7 +68,18 @@ function buildAdjustment(input) {
   };
 }
 
+function verifiedAdjustmentPayment(intent, adjustment, adjustmentId) {
+  const expected = Math.round(Number(adjustment.additionalAmount) * 100);
+  const metadata = intent && intent.metadata || {};
+  return Boolean(intent && intent.status === "succeeded" && intent.currency === "gbp" &&
+    Number.isSafeInteger(expected) && expected > 0 && intent.amount === expected &&
+    intent.amount_received === expected && metadata.feature === "delivery_adjustment" &&
+    metadata.adjustmentId === adjustmentId && metadata.bookingId === adjustment.bookingId &&
+    metadata.senderId === adjustment.senderId);
+}
+
 module.exports = {
+  verifiedAdjustmentPayment,
   DISCREPANCY_REASONS,
   additionalAmount,
   buildAdjustment,

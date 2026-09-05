@@ -3301,7 +3301,7 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
   StreamSubscription<DocumentSnapshot<Map<String, dynamic>>>? _earningsSub;
   StreamSubscription<DocumentSnapshot<Map<String, dynamic>>>? _performanceSub;
   StreamSubscription<QuerySnapshot<Map<String, dynamic>>>? _ratingSub;
-  StreamSubscription<QuerySnapshot<Map<String, dynamic>>>? _availableJobsSub;
+  StreamSubscription<List<Map<String, dynamic>>>? _availableJobsSub;
   StreamSubscription<QuerySnapshot<Map<String, dynamic>>>? _acceptedJobsSub;
   StreamSubscription<QuerySnapshot<Map<String, dynamic>>>? _completedJobsSub;
   DriverPerformanceMetric _performance = DriverPerformanceMetric.empty(
@@ -3750,187 +3750,46 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
     });
   }
 
+  Stream<List<Map<String, dynamic>>> _authorizedRiderOffers(
+      String riderId) async* {
+    while (mounted && _riderUser?.uid == riderId) {
+      try {
+        final response =
+            await FirebaseFunctions.instanceFor(region: 'us-central1')
+                .httpsCallable('getAvailableRequests')
+                .call(<String, dynamic>{}).timeout(const Duration(seconds: 15));
+        final data = Map<String, dynamic>.from(response.data as Map);
+        final rows = data['nearestRequests'];
+        if (data['riderId'] != riderId ||
+            data['eligible'] != true ||
+            rows is! List) {
+          yield const [];
+        } else {
+          final now = DateTime.now().millisecondsSinceEpoch;
+          yield rows
+              .whereType<Map>()
+              .map((row) => Map<String, dynamic>.from(row))
+              .where((row) =>
+                  row['projectionVersion'] == 2 &&
+                  row['offerExpiresAt'] is num &&
+                  (row['offerExpiresAt'] as num) > now)
+              .toList();
+        }
+      } catch (_) {
+        yield const [];
+      }
+      await Future<void>.delayed(const Duration(seconds: 10));
+    }
+  }
+
   void _listenToAvailableJobs() {
     _availableJobsSub?.cancel();
-    _availableJobsSub = FirebaseFirestore.instance
-        .collection('deliveryRequests')
-        .where('status', isEqualTo: 'requested')
-        .limit(20)
-        .snapshots()
-        .listen(
-      (snapshot) {
-        if (!mounted) return;
-        setState(() {
-          final jobs = snapshot.docs
-              .map((doc) => {'id': doc.id, ...doc.data()})
-              .where((job) {
-            if (!_isLiveRiderOffer(job)) return false;
-            final matchingStatus =
-                '${job['matchingStatus'] ?? 'available'}'.toLowerCase();
-            final ignoredBy = (job['ignoredByRiders'] as List?) ?? const [];
-            final rejectedBy = (job['rejectedByRiders'] as List?) ?? const [];
-            final currentRider = _riderUser?.uid;
-            if (currentRider != null &&
-                (ignoredBy.contains(currentRider) ||
-                    rejectedBy.contains(currentRider))) {
-              return false;
-            }
-            final riderVehicle = '${_riderProfile?['vehicleType'] ?? ''}';
-            final requiredVehicle =
-                '${job['vehicleType'] ?? job['irisRecommendedVehicle'] ?? ''}';
-            if (!_superAdminRiderBypass &&
-                riderVehicle.isNotEmpty &&
-                requiredVehicle.isNotEmpty &&
-                !DeliveryPricing.vehicleMeetsMinimum(
-                  riderVehicle,
-                  requiredVehicle,
-                )) {
-              return false;
-            }
-            final riderRank = _riderProfile?['rank'] ??
-                _riderProfile?['riderRank'] ??
-                'agent';
-            if (!_superAdminRiderBypass &&
-                !RiderDispatchPolicy.canViewJob(
-                  riderRank: riderRank,
-                  job: job,
-                )) {
-              return false;
-            }
-            return matchingStatus == 'available' ||
-                matchingStatus == 'requested';
-          }).toList();
-          jobs.sort(_compareRiderJobs);
-          _availableJobs = jobs;
-        });
-      },
-      onError: (_) {
-        if (!mounted) return;
-        setState(
-          () => _jobMessage = 'Could not load available jobs right now.',
-        );
-      },
-    );
-  }
-
-  int _compareRiderJobs(Map<String, dynamic> a, Map<String, dynamic> b) {
-    final riderRank =
-        _riderProfile?['rank'] ?? _riderProfile?['riderRank'] ?? 'agent';
-    final rankPriority = RiderDispatchPolicy.priorityScore(
-      riderRank: riderRank,
-      job: b,
-    ).compareTo(
-      RiderDispatchPolicy.priorityScore(riderRank: riderRank, job: a),
-    );
-    if (rankPriority != 0) return rankPriority;
-    final serviceA = '${a['selectedServiceLevel'] ?? a['serviceLevel'] ?? ''}';
-    final serviceB = '${b['selectedServiceLevel'] ?? b['serviceLevel'] ?? ''}';
-    final priorityCompare = DeliveryPricing.matchingPriorityRank(
-      serviceA,
-    ).compareTo(DeliveryPricing.matchingPriorityRank(serviceB));
-    if (priorityCompare != 0) return priorityCompare;
-
-    final pickupCompare =
-        '${a['scheduledPickupDate'] ?? ''} ${a['scheduledPickupWindow'] ?? ''}'
-            .compareTo(
-      '${b['scheduledPickupDate'] ?? ''} ${b['scheduledPickupWindow'] ?? ''}',
-    );
-    if (pickupCompare != 0) return pickupCompare;
-
-    final createdCompare = _jobTimestampMillis(
-      b['createdAt'] ?? b['requestedAt'] ?? b['updatedAt'],
-    ).compareTo(
-      _jobTimestampMillis(
-        a['createdAt'] ?? a['requestedAt'] ?? a['updatedAt'],
-      ),
-    );
-    if (createdCompare != 0) return createdCompare;
-
-    return _jobDistanceMiles(a).compareTo(_jobDistanceMiles(b));
-  }
-
-  bool _isLiveRiderOffer(Map<String, dynamic> job) {
-    const terminalStatuses = {
-      'accepted',
-      'assigned',
-      'collected',
-      'picked_up',
-      'navigating_to_pickup',
-      'arrived_at_pickup',
-      'pickup_verified',
-      'navigating_to_dropoff',
-      'in_transit',
-      'arrived_at_dropoff',
-      'delivered',
-      'completed',
-      'cancelled',
-      'canceled',
-      'expired',
-      'failed',
-      'blocked',
-    };
-    const paidStatuses = {
-      '',
-      'paid',
-      'succeeded',
-      'payment_confirmed',
-      'confirmed',
-      'roth_paid',
-      'stripe_paid',
-    };
-    const openMatchingStatuses = {
-      '',
-      'available',
-      'requested',
-      'broadcast',
-      'broadcasted',
-    };
-    const openDispatchStatuses = {
-      '',
-      'requested',
-      'available',
-      'broadcast',
-      'broadcasted',
-      'queued',
-      'waiting',
-    };
-    final status = '${job['status'] ?? ''}'.toLowerCase();
-    final deliveryStatus =
-        '${job['deliveryStatus'] ?? job['deliveryStage'] ?? ''}'.toLowerCase();
-    final matchingStatus = '${job['matchingStatus'] ?? ''}'.toLowerCase();
-    final dispatchStatus = '${job['dispatchStatus'] ?? ''}'.toLowerCase();
-    final paymentStatus =
-        '${job['paymentStatus'] ?? job['paymentState'] ?? ''}'.toLowerCase();
-    final assignedRider =
-        '${job['riderId'] ?? job['driverId'] ?? job['assignedRider'] ?? job['assignedRiderId'] ?? job['assignedDriverId'] ?? job['courierId'] ?? ''}'
-            .trim();
-    if (terminalStatuses.contains(status) ||
-        terminalStatuses.contains(deliveryStatus) ||
-        terminalStatuses.contains(matchingStatus) ||
-        terminalStatuses.contains(dispatchStatus)) {
-      return false;
-    }
-    if (assignedRider.isNotEmpty) return false;
-    if (!paidStatuses.contains(paymentStatus)) return false;
-    if (!openMatchingStatuses.contains(matchingStatus)) return false;
-    if (!openDispatchStatuses.contains(dispatchStatus)) return false;
-    final expiry = _jobTimestampMillis(
-      job['offerExpiresAt'] ??
-          job['dispatchExpiresAt'] ??
-          job['expiresAt'] ??
-          job['matchingExpiresAt'],
-    );
-    return expiry <= 0 || expiry > DateTime.now().millisecondsSinceEpoch;
-  }
-
-  int _jobTimestampMillis(Object? value) {
-    if (value is Timestamp) return value.millisecondsSinceEpoch;
-    if (value is DateTime) return value.millisecondsSinceEpoch;
-    if (value is num) return value.toInt();
-    if (value is String) {
-      return DateTime.tryParse(value)?.millisecondsSinceEpoch ?? 0;
-    }
-    return 0;
+    final riderId = _riderUser?.uid;
+    if (riderId == null) return;
+    _availableJobsSub = _authorizedRiderOffers(riderId).listen((jobs) {
+      if (!mounted || _riderUser?.uid != riderId) return;
+      setState(() => _availableJobs = jobs);
+    });
   }
 
   void _listenToRiderJobs(String riderId) {
@@ -9222,6 +9081,7 @@ class _CustomerPortalState extends State<_CustomerPortal> {
       await _loadSenderDeliveries(user.uid);
       await _loadBusinessWorkspaces(user.uid);
       await _loadSenderRothBalance();
+      await _handleBusinessCheckoutReturn();
       await _handleSenderCheckoutReturn();
     } catch (_) {
       if (!mounted) return;
@@ -9229,6 +9089,34 @@ class _CustomerPortalState extends State<_CustomerPortal> {
         _senderAuthLoading = false;
         _senderProfileMessage = 'We could not load your profile just now.';
       });
+    }
+  }
+
+  Future<void> _handleBusinessCheckoutReturn() async {
+    final query = Uri.base.queryParameters;
+    if (query['paymentStatus'] != 'payment-cancelled' ||
+        query['paymentId'] == null) {
+      return;
+    }
+    try {
+      final response =
+          await FirebaseFunctions.instanceFor(region: 'us-central1')
+              .httpsCallable('cancelBusinessInvoiceCheckout')
+              .call({'paymentId': query['paymentId']}).timeout(
+                  const Duration(seconds: 15));
+      final data = Map<String, dynamic>.from(response.data as Map);
+      if (!mounted) return;
+      setState(() => _businessMessage = data['paid'] == true
+          ? 'The invoice payment has completed.'
+          : 'Checkout cancelled. Reserved Roth is available again.');
+    } on FirebaseFunctionsException catch (error) {
+      if (!mounted) return;
+      setState(() => _businessMessage = error.message ??
+          'Checkout is still being reconciled. Retry before starting another payment.');
+    } catch (_) {
+      if (!mounted) return;
+      setState(() => _businessMessage =
+          'We could not confirm cancellation. Reopen the invoice to retry safely.');
     }
   }
 
@@ -9930,7 +9818,9 @@ class _CustomerPortalState extends State<_CustomerPortal> {
       ensureAccount: () async {
         final result = await FirebaseFunctions.instanceFor(
           region: 'us-central1',
-        ).httpsCallable('ensureSenderAccount').call<Map<String, dynamic>>()
+        )
+            .httpsCallable('ensureSenderAccount')
+            .call<Map<String, dynamic>>()
             .timeout(_senderAuthOperationTimeout);
         return result.data;
       },
@@ -10570,8 +10460,8 @@ class _CustomerPortalState extends State<_CustomerPortal> {
       final response =
           await FirebaseFunctions.instanceFor(region: 'us-central1')
               .httpsCallable('previewSenderCancellation')
-              .call({'deliveryId': delivery.id})
-              .timeout(const Duration(seconds: 20));
+              .call({'deliveryId': delivery.id}).timeout(
+                  const Duration(seconds: 20));
       preview = Map<String, dynamic>.from(response.data as Map);
     } on TimeoutException {
       if (!mounted) return;
@@ -10639,10 +10529,9 @@ class _CustomerPortalState extends State<_CustomerPortal> {
           await FirebaseFunctions.instanceFor(region: 'us-central1')
               .httpsCallable('cancelDelivery')
               .call({
-                'quoteToken': preview['quoteToken'],
-                'deliveryId': delivery.id,
-              })
-              .timeout(const Duration(seconds: 20));
+        'quoteToken': preview['quoteToken'],
+        'deliveryId': delivery.id,
+      }).timeout(const Duration(seconds: 20));
       final data = Map<String, dynamic>.from(response.data as Map);
       if (data['success'] != true || data['status'] != 'settled') {
         final decision = Map<String, dynamic>.from(
