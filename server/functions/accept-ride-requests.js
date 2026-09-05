@@ -39,6 +39,7 @@ const assignedRiderId = (delivery = {}) =>
   cleanText(delivery.riderId || delivery.driverId || delivery.assignedRider || delivery.assignedRiderId || delivery.assignedDriverId || delivery.courierId);
 
 const offerExclusionReason = (delivery = {}, riderId = "", now = Date.now()) => {
+  if (delivery.cancellationSettlementStatus) return "cancellation_in_progress";
   const status = cleanText(delivery.status).toLowerCase();
   const deliveryStatus = cleanText(delivery.deliveryStatus || delivery.deliveryStage).toLowerCase();
   const matchingStatus = cleanText(delivery.matchingStatus).toLowerCase();
@@ -158,7 +159,7 @@ const acceptRideRequests = riderCallable(async (data, context) => {
   const directExisting = await db.collection("deliveryRequests").doc(requestId).get();
   const matchingExisting = directExisting.exists ? directExisting :
     (await db.collection("deliveryRequests").where("requestId", "==", requestId).limit(1).get()).docs[0];
-  if (matchingExisting && matchingExisting.exists && assignedRiderId(matchingExisting.data()) === riderId) {
+  if (matchingExisting && matchingExisting.exists && !matchingExisting.data().cancellationSettlementStatus && assignedRiderId(matchingExisting.data()) === riderId) {
     const status = cleanText(matchingExisting.data().status).toLowerCase();
     if (["accepted", "assigned", "navigating_to_pickup", "arrived_at_pickup", "pickup_verified", "collected", "picked_up", "navigating_to_dropoff", "arrived_at_dropoff"].includes(status)) {
       completeAccept({success: true, deliveryId: matchingExisting.id, idempotent: true});

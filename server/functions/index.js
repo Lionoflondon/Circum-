@@ -142,7 +142,7 @@ exports.onGiftRequestVoiceMediaDeleted =
 exports.recordRiderArrival = deliveryPolicy.recordRiderArrival;
 exports.reportWaitingContext = deliveryPolicy.reportWaitingContext;
 exports.markRiderNoShow = deliveryPolicy.markRiderNoShow;
-exports.cancelDelivery = deliveryPolicy.requestSenderCancellation;
+exports.cancelDelivery = deliveryPolicy.requestSenderCancellation(stripe);
 exports.updateDeliveryTrackingStatus =
   deliveryTracking.updateDeliveryTrackingStatus;
 exports.updateDeliveryLiveLocation =
@@ -359,8 +359,10 @@ exports.getGiftStoryActionState = giftStoryAutomation.getGiftStoryActionState;
 exports.onStoryNotificationWrite = giftStoryAutomation.onStoryNotificationWrite;
 exports.cleanupExpiredGiftStories =
   giftStoryAutomation.cleanupExpiredGiftStories;
-exports.requestSenderCancellation = deliveryPolicy.requestSenderCancellation;
+exports.requestSenderCancellation = deliveryPolicy.requestSenderCancellation(stripe);
 exports.previewSenderCancellation = deliveryPolicy.previewSenderCancellation;
+exports.reconcilePendingSenderCancellations =
+  deliveryPolicy.reconcilePendingSenderCancellations(stripe);
 exports.recordArrivalZoneCheck = deliveryPolicy.recordArrivalZoneCheck;
 exports.recordCustomerArrivalResponse =
   deliveryPolicy.recordCustomerArrivalResponse;

@@ -152,6 +152,30 @@ service cloud.firestore {
         'refundStatus',
         'refundAmount',
         'refundReviewStatus',
+        'state',
+        'senderId',
+        'userId',
+        'senderEmail',
+        'riderId',
+        'assignedRiderId',
+        'price',
+        'total',
+        'amount',
+        'payment',
+        'rothAppliedAmount',
+        'remainingAmount',
+        'cancellationSettlementStatus',
+        'cancellationRequestedAt',
+        'cancellationRequestedBy',
+        'cancellationPolicy',
+        'cancellationFinancial',
+        'cancellationSettlement',
+        'broadcastBlocked',
+        'broadcastBlockReason',
+        'matchingStatus',
+        'dispatchStatus',
+        'arrivedAt',
+        'pickupArrivedAt',
         'cancellationFee',
         'cancellationCharge',
         'cancellationChargeStatus',
@@ -1178,6 +1202,10 @@ service cloud.firestore {
     }
 
     match /stripeConnectWebhookEvents/{eventId} {
+      allow read, write: if false;
+    }
+
+    match /deliveryCancellationSettlements/{deliveryId} {
       allow read, write: if false;
     }
 

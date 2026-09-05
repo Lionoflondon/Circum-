@@ -22,7 +22,7 @@ test("financial endpoints use CORS preflight and idempotent earnings", () => {
 });
 
 test("canonical cancellation is exported, auditable and refund-review aware", () => {
-  assert.match(index, /exports\.cancelDelivery\s*=\s*deliveryPolicy\.requestSenderCancellation/);
+  assert.match(index, /exports\.cancelDelivery\s*=\s*deliveryPolicy\.requestSenderCancellation\(stripe\)/);
   for (const field of ["previousLifecycleState", "cancellationReason", "refundReviewRequired", "stripePaymentIntentId", "deliveryTimeline"]) {
     assert.match(cancellation, new RegExp(field));
   }
@@ -37,6 +37,12 @@ test("Sender clients wait for the cancellation callable and never delete the del
   assert.match(web, /httpsCallable\('cancelDelivery'\)/);
   assert.doesNotMatch(web, /transaction\.update\(reference,[\s\S]{0,200}'cancelled_by_sender'/);
   assert.doesNotMatch(web, /collection\('deliveryRequests'\)[\s\S]{0,300}\.delete\(\)/);
+  assert.match(mobile, /cancellationConfirmed\(data\)/);
+  assert.match(mobile, /Duration\(seconds: 20\)/);
+  assert.match(web, /httpsCallable\('previewSenderCancellation'\)/);
+  for (const field of ["stripeRefund", "rothRestoration", "totalRefundValue"]) {
+    assert.match(web, new RegExp(field));
+  }
 });
 
 test("payment intents and Stripe refunds map back to deliveries", () => {

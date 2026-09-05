@@ -103,7 +103,7 @@ async function participantDisplayName(uid, role, context) {
   return role === "rider" ? "Rider" : "Sender";
 }
 
-async function emitNotification({recipientId, recipientRole = "sender", type, title, body, data = {}, dedupeKey = ""}) {
+async function emitNotification({recipientId, recipientRole = "sender", type, title, body, data = {}, dedupeKey = "", retryExisting = false}) {
   const db = getFirestore();
   const safeData = redactContactFields(data);
   const destination = destinationFor(type, safeData);
@@ -142,7 +142,15 @@ async function emitNotification({recipientId, recipientRole = "sender", type, ti
       transaction.set(ref, {...payload, dedupeKey: normalizedDedupeKey});
       return true;
     });
-    if (!created) return ref.id;
+    if (!created) {
+      if (retryExisting) {
+        const existing = (await ref.get()).data() || {};
+        if (["pending", "failed"].includes(existing.pushDeliveryStatus)) {
+          await retryStoredNotification(ref.id);
+        }
+      }
+      return ref.id;
+    }
   } else {
     await ref.set(payload);
   }
@@ -447,6 +455,10 @@ async function retryNotificationDelivery(data, context) {
   if (!context.auth || !isAdmin(context)) throw new functions.https.HttpsError("permission-denied", "Admin access is required.");
   const notificationId = clean(data.notificationId);
   if (!notificationId) throw new functions.https.HttpsError("invalid-argument", "A notification id is required.");
+  return retryStoredNotification(notificationId, context.auth.uid);
+}
+
+async function retryStoredNotification(notificationId, actorId = "system:cancellation") {
   const db = getFirestore();
   const ref = db.collection("notifications").doc(notificationId);
   const snap = await ref.get();
@@ -494,7 +506,7 @@ async function retryNotificationDelivery(data, context) {
       updatedAt: FieldValue.serverTimestamp(),
     }, {merge: true});
     await db.collection("adminAuditLogs").doc().set({
-      adminUserId: context.auth.uid,
+      adminUserId: actorId,
       actionType: "notification_retry_sent",
       recordType: "notifications",
       recordId: notificationId,
@@ -514,7 +526,7 @@ async function retryNotificationDelivery(data, context) {
       updatedAt: FieldValue.serverTimestamp(),
     }, {merge: true});
     await db.collection("adminAuditLogs").doc().set({
-      adminUserId: context.auth.uid,
+      adminUserId: actorId,
       actionType: "notification_retry_failed",
       recordType: "notifications",
       recordId: notificationId,

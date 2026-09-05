@@ -388,6 +388,9 @@ exports.updateDeliveryTrackingStatus = riderCallable(async (data, context) => {
     }
     const delivery = found.data || {};
     assertRiderOwnsDelivery(delivery, riderId);
+    if (delivery.cancellationSettlementStatus === "pending_reconciliation") {
+      throw new functions.https.HttpsError("failed-precondition", "Cancellation is being reconciled. Delivery actions are paused.");
+    }
 
     const riderRef = db.collection("riders").doc(riderId);
     const riderSnapshot = await transaction.get(riderRef);

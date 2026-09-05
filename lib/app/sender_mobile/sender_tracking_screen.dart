@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:math' as math;
 import 'dart:ui';
 
+import 'package:circum/app/delivery/cancellation_contract.dart';
 import 'package:cloud_functions/cloud_functions.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -872,9 +873,13 @@ Future<Map<String, dynamic>> _callFunction(
   String name,
   Map<String, dynamic> payload,
 ) async {
-  final result = await FirebaseFunctions.instance
+  final operation = FirebaseFunctions.instance
       .httpsCallable(name)
       .call<Map<String, dynamic>>(payload);
+  final result =
+      name == 'previewSenderCancellation' || name == 'requestSenderCancellation'
+      ? await boundedCancellationCall(operation)
+      : await operation;
   return Map<String, dynamic>.from(result.data);
 }
 
@@ -1156,12 +1161,22 @@ class _SenderMobileTrackingScreenState extends State<SenderMobileTrackingScreen>
     );
     if (confirmed != true) return;
     try {
-      await _callFunction('requestSenderCancellation', {
+      final result = await _callFunction('requestSenderCancellation', {
+        'quoteToken': quote['quoteToken'],
         'deliveryId': deliveryId,
         'requestId': deliveryId,
       });
       if (!mounted) return;
-      _showActionMessage('Delivery cancellation sent.');
+      if (!cancellationConfirmed(result)) {
+        final decision = result['decision'] is Map
+            ? Map<String, dynamic>.from(result['decision'] as Map)
+            : const <String, dynamic>{};
+        _showActionMessage(
+          '${decision['userFacingMessage'] ?? 'Cancellation could not be completed. Your delivery remains active.'}',
+        );
+        return;
+      }
+      _showActionMessage('Delivery cancelled and refund settled.');
     } catch (error) {
       if (!mounted) return;
       _showActionMessage(
@@ -2544,6 +2559,9 @@ class _CancelDeliverySheet extends StatelessWidget {
               ? (quote['decision'] as Map)['riderCompensation']
               : null),
     );
+    final circumRetained = _numberFrom(quote['circumRetained']);
+    final stripeRefund = _numberFrom(quote['stripeRefund']);
+    final rothRestoration = _numberFrom(quote['rothRestoration']);
     final currency = '${quote['currency'] ?? 'GBP'}';
     final reason =
         '${quote['reason'] ?? quote['backendReason'] ?? 'Cancellation terms apply.'}';
@@ -2590,6 +2608,24 @@ class _CancelDeliverySheet extends StatelessWidget {
                 value: riderCompensation == null
                     ? 'Calculated by Circum'
                     : _moneyText(riderCompensation, currency),
+              ),
+              _CancellationQuoteLine(
+                label: 'Circum retained',
+                value: circumRetained == null
+                    ? 'Calculated by Circum'
+                    : _moneyText(circumRetained, currency),
+              ),
+              _CancellationQuoteLine(
+                label: 'Card refund',
+                value: stripeRefund == null
+                    ? 'Calculated by Circum'
+                    : _moneyText(stripeRefund, currency),
+              ),
+              _CancellationQuoteLine(
+                label: 'Roth restored',
+                value: rothRestoration == null
+                    ? 'Calculated by Circum'
+                    : _moneyText(rothRestoration, currency),
               ),
               _CancellationQuoteLine(label: 'Reason', value: reason),
               _CancellationQuoteLine(
