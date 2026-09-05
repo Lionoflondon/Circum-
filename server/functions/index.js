@@ -453,7 +453,7 @@ exports.resolveStaleDeliveryLock = staleDelivery.resolveStaleDeliveryLock;
 exports.reconcileStaleDeliveryLocks = staleDelivery.reconcileStaleDeliveryLocks;
 
 exports.StripeWebhook = functions
-    .runWith({secrets: [stripeWebhookSecret]})
+    .runWith({secrets: [stripeWebhookSecret, "STRIPE_SECRET_KEY"]})
     .https.onRequest(async (req, res) => {
       const sig = req.headers["stripe-signature"];
       // console.log(sig);

@@ -306,7 +306,7 @@ function healthPlusVanguardFields() {
   };
 }
 
-exports.createHealthPlusBooking = functions.runWith({secrets: [healthDirectionsKey]}).https.onCall(async (data, context) => {
+exports.createHealthPlusBooking = functions.runWith({secrets: [healthDirectionsKey, "STRIPE_SECRET_KEY"]}).https.onCall(async (data, context) => {
   const sender = requireCallableSender(context);
   if (data.consentConfirmed !== true) {
     throw new functions.https.HttpsError("failed-precondition", "Prescription consent is required.");
@@ -637,7 +637,7 @@ exports.updateSenderHealthPlusBooking = functions.https.onCall(async (data, cont
   return result;
 });
 
-exports.createHealthPlusCheckoutSession = functions.runWith({secrets: [healthDirectionsKey]}).https.onRequest(async (req, res) => {
+exports.createHealthPlusCheckoutSession = functions.runWith({secrets: [healthDirectionsKey, "STRIPE_SECRET_KEY"]}).https.onRequest(async (req, res) => {
   allowCors(res);
   if (req.method === "OPTIONS") return res.status(204).send("");
   if (req.method !== "POST") return res.status(405).send({error: "POST required"});

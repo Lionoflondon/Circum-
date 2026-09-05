@@ -1549,7 +1549,7 @@ exports.createSenderPaymentSession = (stripe) => senderPaymentCallable(async (da
     stripePaymentIntentId: intent.id,
     clientSecret: intent.client_secret,
   };
-});
+}, {secrets: ["STRIPE_SECRET_KEY"]});
 
 async function updateSenderPaymentIntentStatus(stripe, intent, eventId = "") {
   const metadata = intent.metadata || {};
@@ -2193,7 +2193,7 @@ exports.createSenderPaidDelivery = (stripe) => senderPaymentCallable(async (data
       originalMessage: text(error && error.message),
     });
   }
-});
+}, {secrets: ["STRIPE_SECRET_KEY"]});
 
 async function finalizeSenderCheckoutSession(stripe, sessionData, eventId = "") {
   const metadata = sessionData.metadata || {};
@@ -2272,7 +2272,7 @@ exports.finalizeSenderWebCheckout = (stripe) => senderPaymentCallable(async (dat
   } catch (error) {
     throw new functions.https.HttpsError("failed-precondition", safePaymentFinalizationError(error));
   }
-});
+}, {secrets: ["STRIPE_SECRET_KEY"]});
 
 exports.handleSenderCheckoutSession = async (stripe, sessionData, eventId = null) => {
   return finalizeSenderCheckoutSession(stripe, sessionData, eventId || "");
