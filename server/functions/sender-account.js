@@ -2,6 +2,7 @@
 const functions = require("firebase-functions/v1");
 const {getFirestore, FieldValue} = require("firebase-admin/firestore");
 const crypto = require("crypto");
+const rothLedger = require("./roth-ledger");
 
 function requireSender(context) {
   if (!context.auth) {
@@ -41,6 +42,22 @@ function senderProfileLog(event, payload = {}) {
     timestamp: new Date().toISOString(),
     ...payload,
   }));
+}
+
+function starterRothPending(existing = {}) {
+  return cleanText(existing.starterRothGrantStatus, 80).toLowerCase() === "pending";
+}
+
+async function grantAndMarkSenderStarterRoth({uid, email, source}) {
+  const grant = await rothLedger.grantSenderWelcomeRoth({uid, email, source});
+  await getFirestore().collection("users").doc(uid).set({
+    starterRothGrantStatus: "granted",
+    starterRothGrantedAt: FieldValue.serverTimestamp(),
+    starterRothAmount: rothLedger.SENDER_WELCOME_ROTH_AMOUNT,
+    starterRothTransactionId: grant.transactionId,
+    updatedAt: FieldValue.serverTimestamp(),
+  }, {merge: true});
+  return grant;
 }
 
 function cleanSenderProfilePatch(data, context) {
@@ -89,8 +106,15 @@ exports.updateSenderProfile = functions.https.onCall(async (data, context) => {
   const ref = db.collection("users").doc(uid);
   senderProfileLog("update_profile_begin", {uid, path: ref.path});
   const existing = await ref.get();
+  const existingData = existing.exists ? existing.data() || {} : {};
   const {patch, changedFields} = cleanSenderProfilePatch(data || {}, context);
-  if (!existing.exists) patch.createdAt = FieldValue.serverTimestamp();
+  const creatingProfile = !existing.exists;
+  const starterRothRequired = creatingProfile || starterRothPending(existingData);
+  if (creatingProfile) {
+    patch.createdAt = FieldValue.serverTimestamp();
+    patch.starterRothGrantStatus = "pending";
+    patch.starterRothAmount = rothLedger.SENDER_WELCOME_ROTH_AMOUNT;
+  }
   await ref.set(patch, {merge: true});
   await db.collection("senderProfileEvents").doc().set({
     uid,
@@ -105,7 +129,21 @@ exports.updateSenderProfile = functions.https.onCall(async (data, context) => {
     existed: existing.exists,
     changedFields,
   });
-  return {ok: true};
+  const starterRoth = starterRothRequired ?
+    await grantAndMarkSenderStarterRoth({
+      uid,
+      email: context.auth.token && context.auth.token.email,
+      source: "updateSenderProfile",
+    }) :
+    null;
+  return {
+    ok: true,
+    ...(starterRoth ? {
+      starterRothGranted: true,
+      starterRothAmount: starterRoth.amount,
+      starterRothTransactionId: starterRoth.transactionId,
+    } : {}),
+  };
 });
 
 exports.ensureSenderAccount = functions.https.onCall(async (data, context) => {
@@ -140,10 +178,16 @@ exports.ensureSenderAccount = functions.https.onCall(async (data, context) => {
     });
     if (roles.has("admin") || roles.has("rider") || riderSnap.exists || adminSnap.exists) {
       if (roles.has("sender") || roles.has("user") || roles.has("customer")) {
-        return {allowed: true, roles: Array.from(roles), action: "existing_sender_role_allowed"};
+        return {
+          allowed: true,
+          roles: Array.from(roles),
+          action: "existing_sender_role_allowed",
+          starterRothEligible: starterRothPending(existing),
+        };
       }
       return {allowed: false, roles: Array.from(roles), action: "blocked_conflicting_role"};
     }
+    const starterRothEligible = !userSnap.exists || !roles.has("sender") || starterRothPending(existing);
     transaction.set(userRef, {
       uid,
       email: cleanText(context.auth.token && context.auth.token.email, 180),
@@ -153,6 +197,10 @@ exports.ensureSenderAccount = functions.https.onCall(async (data, context) => {
       accountType: "sender",
       status: "active",
       createdAt: userSnap.exists ? existing.createdAt || now : now,
+      ...(starterRothEligible ? {
+        starterRothGrantStatus: "pending",
+        starterRothAmount: rothLedger.SENDER_WELCOME_ROTH_AMOUNT,
+      } : {}),
       updatedAt: now,
     }, {merge: true});
     transaction.set(db.collection("senderProfileEvents").doc(), {
@@ -161,9 +209,25 @@ exports.ensureSenderAccount = functions.https.onCall(async (data, context) => {
       source: "ensureSenderAccount",
       createdAt: now,
     });
-    return {allowed: true, roles: ["sender"], action: userSnap.exists ? "merged_sender_role" : "created_sender_profile"};
+    return {
+      allowed: true,
+      roles: ["sender"],
+      action: userSnap.exists ? "merged_sender_role" : "created_sender_profile",
+      starterRothEligible,
+    };
   });
 
+  if (result.allowed && result.starterRothEligible) {
+    const starterRoth = await grantAndMarkSenderStarterRoth({
+      uid,
+      email: context.auth.token && context.auth.token.email,
+      source: "ensureSenderAccount",
+    });
+    result.starterRothGranted = true;
+    result.starterRothAmount = starterRoth.amount;
+    result.starterRothTransactionId = starterRoth.transactionId;
+  }
+  delete result.starterRothEligible;
   senderProfileLog("ensure_complete", {uid, path: userRef.path, ...result});
   return {ok: true, ...result};
 });

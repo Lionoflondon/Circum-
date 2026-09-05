@@ -185,3 +185,14 @@ test("sender wallet history prefers canonical walletId query with bounded legacy
   assert.match(source, /collection\("walletTransactions"\)\s*\.where\("walletId", "==", identity\.walletId\)\s*\.orderBy\("createdAt", "desc"\)\s*\.limit\(100\)/);
   assert.match(source, /walletSnap\.empty \? await db\.collection\("walletTransactions"\)\s*\.where\("uid", "==", context\.auth\.uid\)\s*\.orderBy\("createdAt", "desc"\)\s*\.limit\(100\)/);
 });
+
+test("new Sender accounts receive an idempotent 5 Roth welcome ledger credit", () => {
+  const source = fs.readFileSync("roth-ledger.js", "utf8");
+  assert.match(source, /const SENDER_WELCOME_ROTH_AMOUNT = 5;/);
+  assert.match(source, /async function grantSenderWelcomeRoth/);
+  assert.match(source, /const transactionId = `sender_welcome_roth_\$\{cleanUid\}`;/);
+  assert.match(source, /idempotencyKey: `sender_welcome_roth:\$\{cleanUid\}`/);
+  assert.match(source, /type: TRANSACTION_TYPES\.promotionalReward/);
+  assert.match(source, /policy: "new_sender_account_starter_roth"/);
+  assert.match(source, /repairPendingSenderWelcomeRoth\(context, "initialiseSenderWallet"\)/);
+});
