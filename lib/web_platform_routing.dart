@@ -131,8 +131,15 @@ CircumWebRouteResolution resolveCircumWebRoute(
         canonicalPath: '/cookie_policy',
       );
     case 'join':
-      final rawCode = segments.length > 1 ? segments[1] : '';
-      final code = rawCode.toUpperCase().replaceAll(RegExp(r'[^A-Z0-9]'), '');
+      var rawCode = segments.length > 1 ? segments[1] : '';
+      try {
+        rawCode = Uri.decodeComponent(rawCode);
+      } on FormatException {
+        rawCode = '';
+      }
+      final normalized =
+          rawCode.toUpperCase().replaceAll(RegExp(r'[^A-Z0-9]'), '');
+      final code = normalized.substring(0, normalized.length.clamp(0, 24));
       return CircumWebRouteResolution(
         surface: CircumWebSurface.sender,
         canonicalPath: '/send',
