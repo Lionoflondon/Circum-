@@ -67,7 +67,11 @@ test("Operations Admin writes remain available and usage events remain append-on
 
 test("legitimate create and schedule controls work through backend callables with idempotency and ownership", async (t) => {
   process.env.GOOGLE_MAPS_DIRECTIONS_API_KEY = "emulator-test";
-  t.mock.method(global, "fetch", async () => ({ok: true, json: async () => ({status: "OK", routes: [{legs: [{distance: {value: 3218.688}}]}]})}));
+  t.mock.method(global, "fetch", async (url, options) => {
+    assert.equal(url, "https://routes.googleapis.com/directions/v2:computeRoutes");
+    assert.equal(options.headers["X-Goog-FieldMask"], "routes.distanceMeters");
+    return {ok: true, json: async () => ({routes: [{distanceMeters: 3218.688}]})};
+  });
   const context = {auth: {uid: "booking-owner", token: {email: "booking-owner@example.invalid"}}};
   const input = {consentConfirmed: true, fullName: "Sender", phoneNumber: "+447700900001", pharmacyAddress: "Pharmacy", deliveryAddress: "Home", preferredPickupTime: "10:00", frequency: "weekly", subscriptionPlan: "core", pricingInputs: {distanceMiles: 2, medicationWeightKg: 1}, idempotencyKey: "health-authority-booking"};
   const booking = await health.createHealthPlusBooking.run(input, context);

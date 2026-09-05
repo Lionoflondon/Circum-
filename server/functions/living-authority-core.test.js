@@ -55,13 +55,12 @@ test("evidence requires an existing canonical upload for the delivery, stage and
 });
 test("Health+ distance comes from the server route for the submitted addresses", async () => {
   const calls = [];
-  const fetchImpl = async (u) => {
-    calls.push(u);
+  const fetchImpl = async (u, options) => {
+    calls.push({url: u, options});
     return {
       ok: true,
       json: async () => ({
-        status: "OK",
-        routes: [{legs: [{distance: {value: 3218.688}}]}],
+        routes: [{distanceMeters: 3218.688}],
       }),
     };
   };
@@ -77,7 +76,11 @@ test("Health+ distance comes from the server route for the submitted addresses",
       2,
     );
   }
-  assert.equal(calls[0].searchParams.get("origin"), "Pharmacy");
+  assert.equal(calls[0].url, "https://routes.googleapis.com/directions/v2:computeRoutes");
+  assert.equal(calls[0].options.headers["X-Goog-Api-Key"], "test");
+  assert.equal(calls[0].options.headers["X-Goog-FieldMask"], "routes.distanceMeters");
+  assert.equal(JSON.parse(calls[0].options.body).origin.address, "Pharmacy");
+  assert.ok(calls[0].options.signal instanceof AbortSignal);
   await assert.rejects(
     healthRouteDistance({
       pharmacyAddress: "A",
