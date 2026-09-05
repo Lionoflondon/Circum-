@@ -148,3 +148,12 @@ test("dispatch candidate decision rejects offline presence even when profile is 
   assert.equal(decision.eligible, false);
   assert.equal(decision.reason, "offline");
 });
+
+
+test("chat message notification identity includes message and recipient", () => {
+  const source = fs.readFileSync(path.join(__dirname, "platform-notifications.js"), "utf8");
+  const chat = source.slice(source.indexOf("exports.onChatMessageCreated"), source.indexOf("exports.onSupportTicketCreated"));
+  assert.ok(chat.includes("const messageId = text(context.params.messageId);"));
+  assert.ok(chat.includes("dedupeKey: `${context.params.chatId}:${messageId}:chat:${uid}`"));
+  assert.ok(chat.includes("dedupeKey: `${context.params.chatId}:${messageId}:chat:admin`"));
+});

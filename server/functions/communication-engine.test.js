@@ -116,3 +116,10 @@ test("closed support submissions create admin-visible read-only messages",
       assert.match(source, /closedSubmission: closeImmediately/);
       assert.match(source, /adminUnreadCount: initialMessage \? 1 : 0/);
     });
+
+
+test("website support message content is redacted before storage", () => {
+  const support = source.slice(source.indexOf("async function submitWebsiteSupportRequest"));
+  assert.match(support, /const message = maskContactDetails\(data\.message\)\.slice\(0, 4000\)/);
+  assert.doesNotMatch(support, /const message = clean\(data\.message\)/);
+});

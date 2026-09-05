@@ -693,8 +693,9 @@ service cloud.firestore {
     }
 
     match /notifications/{notificationId} {
-      allow read, update: if isAdmin() ||
+      allow read: if isAdmin() ||
         (signedIn() && resource.data.recipientId == request.auth.uid);
+      allow update: if isAdmin();
       allow create: if isAdmin();
       allow delete: if hasRole('super_admin');
     }

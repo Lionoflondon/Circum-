@@ -154,6 +154,8 @@ test("notifications are backend or admin authored only", () => {
   const notificationBlock = rules.match(
       /match \/notifications\/\{notificationId\} \{[\s\S]*?\n {4}\}/,
   )[0];
+  assert.match(notificationBlock, /allow update: if isAdmin\(\);/);
+  assert.doesNotMatch(notificationBlock, /allow read, update:/);
   assert.match(
       notificationBlock,
       /allow create: if isAdmin\(\);/,
