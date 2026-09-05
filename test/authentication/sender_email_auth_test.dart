@@ -79,6 +79,6 @@ void main() {
     expect(authenticate, contains('authenticateSenderEmail'));
     expect(authenticate, isNot(contains("email-already-in-use")));
     expect(authenticate, contains("httpsCallable('attachReferralCode')"));
-    expect(authenticate, contains('if (accountCreated)'));
+    expect(authenticate, contains('if (accountCreated && bootstrap.succeeded)'));
   });
 }
