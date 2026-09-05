@@ -91,9 +91,29 @@ test(
 test(
   "concurrent record/submit retries create one immutable verified evidence record",
   {skip: !enabled},
-  async () => {
+  async (t) => {
     await fixture("retry");
-    const results = await Promise.all([
+    // Storage emulator 15.22.3 ignores ifGenerationMatch, unlike GCS.
+    // Model only its create-only precondition; keep real uploads and all
+    // callable/Firestore contention concurrent, with no generation bypass.
+    const filePrototype = Object.getPrototypeOf(bucket.file("retry-probe"));
+    const save = filePrototype.save;
+    const creates = new Map();
+    let rejectedCreates = 0;
+    t.mock.method(filePrototype, "save", async function(bytes, options) {
+      assert.equal(options.preconditionOpts.ifGenerationMatch, 0);
+      const key = `${this.bucket.name}/${this.name}`;
+      if (creates.has(key)) {
+        await creates.get(key);
+        rejectedCreates++;
+        throw Object.assign(new Error("Precondition Failed"), {code: 412});
+      }
+      const pending = save.call(this, bytes, options);
+      creates.set(key, pending);
+      return pending;
+    });
+    // Drain every caller even on failure before test teardown restores mocks.
+    const settled = await Promise.allSettled([
       upload("retry"),
       upload("retry"),
       evidence().submitDeliveryEvidence.run(
@@ -101,6 +121,12 @@ test(
         ctx,
       ),
     ]);
+    assert.deepEqual(settled.map((result) => result.status), [
+      "fulfilled", "fulfilled", "fulfilled",
+    ]);
+    const results = settled.map((result) => result.value);
+    assert.equal(creates.size, 1);
+    assert.equal(rejectedCreates, 2);
     assert.equal(new Set(results.map((r) => r.evidenceId)).size, 1);
     assert.equal(
       (await db.doc("deliveryEvidence/retry").get()).data().verifiedPhotoCount,
