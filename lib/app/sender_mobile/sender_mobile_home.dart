@@ -15,6 +15,7 @@ import '../health_plus/view/health_plus.dart';
 import '../sender_profile/sender_profile.dart';
 import '../authentication/sender_auth_commit_sequence.dart';
 import '../authentication/sender_auth_error_message.dart';
+import '../authentication/sender_email_auth.dart';
 import '../send_package/bloc/send_package_bloc.dart';
 import '../send_package/view/ride_chats.dart';
 import 'design_system/sender_design_system.dart';
@@ -101,6 +102,7 @@ class _SenderMobileHomeState extends State<SenderMobileHome> {
   var _entry = _SenderEntryScreen.landing;
   var _authMode = _SenderAuthMode.createAccount;
   var _authRestoring = false;
+  var _authRestoreGeneration = 0;
   SendPackageBloc? _standaloneSendPackageBloc;
   StreamSubscription<User?>? _authSubscription;
 
@@ -327,22 +329,14 @@ class _SenderMobileHomeState extends State<SenderMobileHome> {
           .authStateChanges()
           .first
           .timeout(_senderAuthRestoreTimeout);
+      await _applyRestoredSenderSession(firstUser);
       if (!mounted) return;
-      setState(() {
-        _authRestoring = false;
-        _entry = firstUser == null
-            ? _SenderEntryScreen.landing
-            : _SenderEntryScreen.app;
-      });
       _authSubscription =
-          FirebaseAuth.instance.authStateChanges().skip(1).listen((user) {
+          FirebaseAuth.instance.authStateChanges().listen((user) {
         if (!mounted) return;
-        setState(() {
-          _authRestoring = false;
-          _entry = user == null
-              ? _SenderEntryScreen.landing
-              : _SenderEntryScreen.app;
-        });
+        // The interactive form commits its own profile and referral work.
+        if (user != null && _entry == _SenderEntryScreen.auth) return;
+        unawaited(_applyRestoredSenderSession(user));
       }, onError: (Object error, StackTrace stackTrace) {
         _reportUnexpectedAuthRestoreError(
           error,
@@ -380,6 +374,38 @@ class _SenderMobileHomeState extends State<SenderMobileHome> {
     }
   }
 
+  Future<void> _applyRestoredSenderSession(User? user) async {
+    if (!mounted) return;
+    final generation = ++_authRestoreGeneration;
+    setState(() => _authRestoring = true);
+    try {
+      if (user != null) {
+        await SenderProfileAuthority(
+          auth: FirebaseAuth.instance,
+          firestore: FirebaseFirestore.instance,
+          functions: FirebaseFunctions.instanceFor(region: 'us-central1'),
+        ).ensureCanonicalSenderAccount(user, 'sender_mobile.restore.ensure');
+      }
+      if (!mounted ||
+          generation != _authRestoreGeneration ||
+          FirebaseAuth.instance.currentUser?.uid != user?.uid) {
+        return;
+      }
+      setState(() => _entry =
+          user == null ? _SenderEntryScreen.landing : _SenderEntryScreen.app);
+    } catch (error, stackTrace) {
+      _reportUnexpectedAuthRestoreError(
+          error, stackTrace, 'bootstrapping Sender session');
+      if (mounted && generation == _authRestoreGeneration) {
+        setState(() => _entry = _SenderEntryScreen.landing);
+      }
+    } finally {
+      if (mounted && generation == _authRestoreGeneration) {
+        setState(() => _authRestoring = false);
+      }
+    }
+  }
+
   void _reportUnexpectedAuthRestoreError(
     Object error,
     StackTrace stackTrace,
@@ -398,6 +424,14 @@ class _SenderMobileHomeState extends State<SenderMobileHome> {
   }
 
   bool _isExpectedAuthRestoreFailure(Object error) {
+    if (error is SenderProfileAuthorityException) {
+      return const {
+        SenderProfileDiagnosticCode.authUnavailable,
+        SenderProfileDiagnosticCode.permissionDenied,
+        SenderProfileDiagnosticCode.startupRace,
+        SenderProfileDiagnosticCode.repositoryFailure,
+      }.contains(error.code);
+    }
     if (error is FirebaseAuthException) {
       return const {
         'app-deleted',
@@ -818,15 +852,25 @@ class _SenderAuthEntryState extends State<_SenderAuthEntry> {
           'Sender auth bootstrap deferred: stage=${bootstrap.failedStage?.name} '
           'error=${bootstrap.error.runtimeType}',
         );
+        if (!mounted) return;
+        setState(() => _authMessage =
+            'Account setup did not finish. Sign in to continue setup.');
+        widget.onModeChanged(_SenderAuthMode.signIn);
+        return;
       }
       widget.onAuthenticated();
     } catch (error) {
       debugPrint('Sender Mobile auth failed: ${error.runtimeType}');
       if (!mounted) return;
-      final action = _isSignIn
-          ? SenderAuthAction.signIn
-          : SenderAuthAction.createAccount;
+      final action =
+          _isSignIn ? SenderAuthAction.signIn : SenderAuthAction.createAccount;
       setState(() => _authMessage = senderAuthErrorMessage(action, error));
+      if (action == SenderAuthAction.createAccount &&
+          error is FirebaseAuthException &&
+          error.code == 'email-already-in-use') {
+        _password.clear();
+        widget.onModeChanged(_SenderAuthMode.signIn);
+      }
     } finally {
       if (mounted) setState(() => _busy = false);
     }
@@ -844,34 +888,14 @@ class _SenderAuthEntryState extends State<_SenderAuthEntry> {
           .setPersistence(Persistence.LOCAL)
           .timeout(_senderAuthOperationTimeout);
     }
-    var accountCreated = false;
-    UserCredential credential;
-    if (createAccount) {
-      try {
-        credential = await auth
-            .createUserWithEmailAndPassword(
-              email: email,
-              password: password,
-            )
-            .timeout(_senderAuthOperationTimeout);
-        accountCreated = true;
-      } on FirebaseAuthException catch (error) {
-        if (error.code != 'email-already-in-use') rethrow;
-        credential = await auth
-            .signInWithEmailAndPassword(
-              email: email,
-              password: password,
-            )
-            .timeout(_senderAuthOperationTimeout);
-      }
-    } else {
-      credential = await auth
-          .signInWithEmailAndPassword(
-            email: email,
-            password: password,
-          )
-          .timeout(_senderAuthOperationTimeout);
-    }
+    final credential = await authenticateSenderEmail(
+      auth: auth,
+      email: email,
+      password: password,
+      createAccount: createAccount,
+      timeout: _senderAuthOperationTimeout,
+    );
+    final accountCreated = createAccount;
     final user = credential.user;
     if (user == null) {
       throw FirebaseAuthException(code: 'sender-no-user');
@@ -881,10 +905,11 @@ class _SenderAuthEntryState extends State<_SenderAuthEntry> {
       operationTimeout: _senderAuthOperationTimeout,
     ).runRecoverable(
       ensureAccount: () async {
-        await functions
-            .httpsCallable('ensureSenderAccount')
-            .call()
-            .timeout(SenderProfileAuthority.senderAccountEnsureTimeout);
+        await SenderProfileAuthority(
+          auth: auth,
+          firestore: FirebaseFirestore.instance,
+          functions: functions,
+        ).ensureCanonicalSenderAccount(user, 'sender_mobile.auth.ensure');
         if (!createAccount) return;
         await functions.httpsCallable('updateSenderProfile').call({
           'firstName': firstName,
