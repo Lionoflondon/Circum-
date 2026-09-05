@@ -187,7 +187,7 @@ exports.ensureSenderAccount = functions.https.onCall(async (data, context) => {
       }
       return {allowed: false, roles: Array.from(roles), action: "blocked_conflicting_role"};
     }
-    const starterRothEligible = !userSnap.exists || !roles.has("sender") || starterRothPending(existing);
+    const starterRothEligible = !userSnap.exists || starterRothPending(existing);
     transaction.set(userRef, {
       uid,
       email: cleanText(context.auth.token && context.auth.token.email, 180),

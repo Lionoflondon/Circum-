@@ -35,3 +35,8 @@ test("new Sender profiles mark and grant the 5 Roth starter credit once", () => 
   assert.match(source, /starterRothGranted = true/);
   assert.match(source, /delete result\.starterRothEligible/);
 });
+
+
+test("existing profiles require a pending grant regardless of legacy Sender role representation", () => {
+  assert.match(source, /const starterRothEligible = !userSnap\.exists \|\| starterRothPending\(existing\);/);
+});
