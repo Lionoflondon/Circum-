@@ -94,6 +94,9 @@ test("wrong surface denied, shared idempotency keys cannot leak another Rider ap
   assert.notEqual(a.applicationId, b.applicationId);
   for (const section of ["personal_details", "identity_verification", "review_status", "vehicle_documents"]) {
     await assert.rejects(account.updateRiderApplicationSection.run({section, status: "approved"}, context("rider-a")), (e) => e.code === "permission-denied");
+    if (section !== "personal_details") {
+      await assert.rejects(account.updateRiderProfile.run({section}, context("rider-a")), (e) => e.code === "permission-denied");
+    }
   }
 });
 

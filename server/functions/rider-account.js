@@ -414,6 +414,9 @@ exports.advanceRiderOnboarding = riderCallable(async (data, context) => {
 
 function applicationPatchFromProfile(data, rider, profile) {
   const section = data.section ? cleanApplicationSection(data.section) : null;
+  if (["review_status", "identity_verification", "right_to_work", "vehicle_documents"].includes(section)) {
+    throw new functions.https.HttpsError("permission-denied", "Document and review status are managed by Circum.");
+  }
   const now = FieldValue.serverTimestamp();
   return {
     id: rider.uid,
