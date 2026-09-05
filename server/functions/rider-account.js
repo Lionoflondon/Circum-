@@ -873,6 +873,31 @@ exports.updateRiderApplicationSection = riderCallable(async (data, context) => {
   await assertRiderSurface(rider);
   const section = cleanApplicationSection(data.section);
   const status = cleanSectionStatus(data.status || "in_progress");
+  const documentSections = {
+    identity_verification: ["identity", "driving_licence"],
+    right_to_work: ["right_to_work"],
+    vehicle_documents: ["registration_v5c", "mot", "insurance"],
+  };
+  if (documentSections[section]) {
+    // Old native clients acknowledge a section after submitRiderDocument.
+    // Acknowledge only existing backend-authored evidence; never write review
+    // or section authority from this legacy notification.
+    if (status !== "submitted" || Object.keys(data).some((key) => !["section", "status"].includes(key))) {
+      throw new functions.https.HttpsError("permission-denied", "Document and review status are managed by Circum.");
+    }
+    const documents = await getFirestore().collection("riderDocuments").where("riderId", "==", rider.uid).get();
+    const evidence = documents.docs.some((snapshot) => {
+      const document = snapshot.data();
+      return document.source === "cloud-functions" &&
+        documentSections[section].includes(document.type) &&
+        ["pending", "submitted", "approved", "verified"].includes(document.status) &&
+        text(document.storagePath).startsWith(`rider_documents/${rider.uid}/`);
+    });
+    if (!evidence) {
+      throw new functions.https.HttpsError("failed-precondition", "Upload a document for this section before continuing.");
+    }
+    return {ok: true, applicationId: rider.uid, section, status: "submitted", derivedFromDocuments: true};
+  }
   if (!["not_started", "in_progress", "submitted"].includes(status) ||
       ["review_status", "identity_verification", "right_to_work", "vehicle_documents"].includes(section)) {
     throw new functions.https.HttpsError("permission-denied", "Document and review status are managed by Circum.");
