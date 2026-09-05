@@ -233,6 +233,14 @@ function assertDeliveryMatchesQuote(data, quote) {
         "Complete delivery details are required before payment.",
     );
   }
+  if (!quote.parcelAuthority) throw new functions.https.HttpsError("failed-precondition", "This quote requires regeneration with parcel authority.");
+  if (quote.parcelAuthority) {
+    const actualParcel = parcelSafety(data, quote.photoEstimatedWeightKg);
+    if (actualParcel.description !== quote.parcelAuthority.description ||
+        actualParcel.weightKg > Number(quote.parcelAuthority.weightKg)) {
+      throw new functions.https.HttpsError("failed-precondition", "Parcel details changed after the quote. Please request a new quote.");
+    }
+  }
   return actual;
 }
 
@@ -804,7 +812,22 @@ function riderDisplayAliases({quote = {}, data = {}, vanguardFields = {}} = {}) 
   };
 }
 
+function parcelSafety(data, photoWeightKg = 0) {
+  const parcel = cleanMap(data.parcel);
+  const description = text(data.description || data.packageDescription || parcel.description || parcel.itemName);
+  const weightKg = Math.max(Number(data.weightKg || parcel.weightKg || 0.5), Number(photoWeightKg || 0));
+  const iris = classifyIris({description, declaredWeightText: `${weightKg} kg`});
+  if (!description || iris.compliance.status !== "allowed" ||
+      iris.serviceability.status !== "serviceable" ||
+      (iris.recommendation.handlingFlags || []).includes("Two Person Lift")) {
+    throw new functions.https.HttpsError("failed-precondition", "This parcel needs review before payment. Contact Circum Support.");
+  }
+  return {description, weightKg, iris};
+}
+
 function quotePayload(data, uid, serverPhotoAnalysis = null) {
+  const description = text(data.description || data.packageDescription || data.parcel && (data.parcel.description || data.parcel.itemName));
+  const safety = description ? parcelSafety(data, serverPhotoAnalysis && serverPhotoAnalysis.estimatedWeightKg) : null;
   const selectedSpeed = speedKey(data.selectedSpeed || data.selectedOption);
   const clientWeightKg = Number(data.weightKg || data.parcel && data.parcel.weightKg || 0.5);
   const photoWeightKg = Number(serverPhotoAnalysis && serverPhotoAnalysis.estimatedWeightKg || 0);
@@ -829,7 +852,7 @@ function quotePayload(data, uid, serverPhotoAnalysis = null) {
   const healthDelivery = surfaceText.includes("health");
   const giftDelivery = surfaceText.includes("gift");
   const vanguardSelected = data.vanguardProtocolEnabled === true || data.vanguard === true;
-  const irisVanguardRequired = data.iris && data.iris.vanguardRequired === true;
+  const irisVanguardRequired = safety && safety.iris.vanguardRequired === true;
   const vanguardRequired = irisVanguardRequired || highValueParcel ||
     businessDelivery || healthDelivery || giftDelivery;
   const vanguardIncluded = vanguardRequired;
@@ -842,7 +865,7 @@ function quotePayload(data, uid, serverPhotoAnalysis = null) {
         "Vanguard is required for Health+ deliveries." :
         giftDelivery ?
           "Vanguard is required for Gifts deliveries." :
-          data.iris && data.iris.vanguardRequiredReason || "";
+          safety && safety.iris.vanguardRequiredReason || "";
   const total = money(Math.max(0, subtotal + speed + vanguard));
   const riderBaseShare = money(Math.max(0, subtotal + speed) * RIDER_DELIVERY_FARE_SHARE);
   const platformBaseShare = money(Math.max(0, subtotal + speed) * PLATFORM_DELIVERY_FARE_SHARE);
@@ -901,6 +924,7 @@ function quotePayload(data, uid, serverPhotoAnalysis = null) {
     driverShare: RIDER_DELIVERY_FARE_SHARE,
     platformShare: PLATFORM_DELIVERY_FARE_SHARE,
     pricingSource: "sender_backend_quote_v1",
+    ...(safety ? {parcelAuthority: {description: safety.description, weightKg}} : {}),
     ...(serverPhotoAnalysis ? {
       irisPhotoAnalysisId: serverPhotoAnalysis.analysisId,
       photoEstimatedWeightKg: photoWeightKg,
@@ -1031,6 +1055,7 @@ exports.createSenderBookingQuote = senderPaymentCallable(async (data, context) =
   const businessContext = await verifiedBusinessContext(db, sender, data && data.businessContext);
   const parcel = data && data.parcel && typeof data.parcel === "object" ? data.parcel : {};
   const parcelDescription = text(data && (data.description || data.packageDescription) || parcel.description || parcel.itemName || "");
+  parcelSafety(data);
   const serverPhotoAnalysis = await verifiedPhotoAnalysis({
     db,
     uid: sender.uid,
@@ -1115,6 +1140,7 @@ exports.createSenderPaymentSession = (stripe) => senderPaymentCallable(async (da
     throw new functions.https.HttpsError("not-found", "Booking quote not found.");
   }
   const quote = quoteSnap.data();
+  await require("./legacy-payment-artifacts").rejectLegacySenderQuote({db, stripe, quote, quoteId, senderId: sender.uid});
   const total = money(quote.total || quote.finalAmount || quote.amountDue);
   const rothEnabled = data.rothEnabled === true;
   const rothBalance = rothEnabled ? await walletBalanceForSender(sender) : 0;
@@ -1767,8 +1793,6 @@ async function createPaidDeliveryFromSession(stripe, sender, data) {
       quoteId,
     });
   }
-  const quote = quoteSnap.data();
-  assertDeliveryMatchesQuote(data, quote);
   const draftId = text(data.draftId);
   const idempotencyKey = text(data.idempotencyKey) ||
     stableId(`${sender.uid}:${draftId || "no-draft"}:${quoteId}:${paymentSessionId}`);
@@ -1776,6 +1800,9 @@ async function createPaidDeliveryFromSession(stripe, sender, data) {
   const replay = await idempotencyRef.get();
   if (replay.exists) {
     const existing = replay.data() || {};
+    if (existing.userId !== sender.uid || existing.paymentSessionId !== paymentSessionId || existing.quoteId !== quoteId) {
+      throw new functions.https.HttpsError("permission-denied", "Delivery retry ownership mismatch.");
+    }
     return {
       requestId: existing.requestId,
       deliveryId: existing.deliveryId || existing.requestId,
@@ -1783,6 +1810,12 @@ async function createPaidDeliveryFromSession(stripe, sender, data) {
       idempotencyKey,
     };
   }
+  const quote = quoteSnap.data();
+  if (!quote.parcelAuthority) {
+    await db.doc(`paymentArtifactReconciliations/sender_${quoteId}`).set({service: "sender", quoteId, paymentSessionId, senderId: sender.uid, status: "review_required", reason: "paid_legacy_quote_missing_parcel_authority", updatedAt: Date.now()}, {merge: true});
+    throw new functions.https.HttpsError("failed-precondition", "This earlier payment requires parcel review before dispatch. Do not pay again.", {reason: "legacy_payment_reconciliation_required"});
+  }
+  assertDeliveryMatchesQuote(data, quote);
   const requestId = text(data.requestId) || `sender_${stableId(`${sender.uid}:${draftId || quoteId}:${paymentSessionId}`)}`;
   const deliveryRef = db.collection("deliveryRequests").doc(requestId);
   const rothAppliedAmount = money(payment.rothAppliedAmount || 0);
@@ -2253,6 +2286,7 @@ exports._private = {
   draftInactive,
   stableId,
   quotePayload,
+  parcelSafety,
   routeCoordinate,
   fetchSenderRoute,
   assertDeliveryMatchesQuote,

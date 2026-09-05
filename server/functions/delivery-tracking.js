@@ -6,6 +6,7 @@ const {riderCallable} = require("./rider-app-check");
 const {start: startLatency} = require("./latency-observability");
 const {getFirestore, FieldValue, GeoPoint} = require("firebase-admin/firestore");
 const tracking = require("./sender-tracking-state-core");
+const evidenceAuthority = require("./delivery-evidence")._private;
 
 function text(value) {
   return `${value || ""}`.trim();
@@ -231,7 +232,7 @@ function evidenceRequirements(delivery, action, evidence = {}) {
       delivery.requiresVanguard === true ||
       delivery.secureHandoverRequired === true;
   if (!required) return {valid: true};
-  if (!text(evidence.photoUrl)) return {valid: false, reason: "A delivery evidence photo is required."};
+  if (!text(evidence.photoUrl) && !text(evidence.evidenceId)) return {valid: false, reason: "A delivery evidence photo is required."};
   if (pickup && evidence.conditionConfirmed !== true) {
     return {valid: false, reason: "Parcel condition must be confirmed."};
   }
@@ -426,9 +427,23 @@ exports.updateDeliveryTrackingStatus = riderCallable(async (data, context) => {
     }
 
 
+    const verificationStage = action === "verify_collection_pin" ? "pickup" : action === "verify_receiver_pin" ? "handover" : null;
+    if ((evidence.photoUrl || evidence.evidenceId) && !verificationStage) throw new functions.https.HttpsError("invalid-argument", "Evidence must accompany its verification action.");
+    const resolvedEvidence = verificationStage ? await evidenceAuthority.resolve({db, transaction, deliveryId: found.id, riderId, requiredStage: verificationStage, evidence}) : null;
+    if (nextStatus === "delivered") {
+      if (!["paid", "succeeded", "success", "roth_paid", "stripe_paid"].includes(normalized(delivery.paymentStatus || delivery.paymentState))) throw new functions.https.HttpsError("failed-precondition", "Delivery payment authority is not complete.");
+      await evidenceAuthority.completionProof({db, transaction, deliveryId: found.id, riderId, resolved: resolvedEvidence});
+    }
     const privateRef = db.collection("deliveryRequestsPrivate").doc(found.id);
     const privateSnapshot = await transaction.get(privateRef);
     const privateDelivery = privateSnapshot.exists ? privateSnapshot.data() || {} : {};
+    const pickupVerificationRequired = Boolean(expectedPin(privateDelivery, "verify_collection_pin")) ||
+      pinAuthorityRequired(delivery, "verify_collection_pin") ||
+      delivery.verificationRequired === true || delivery.requiresVerification === true;
+    if (["confirm_collected", "start_delivery", "verify_receiver_pin"].includes(action) &&
+        pickupVerificationRequired && delivery.collectionPinVerified !== true) {
+      throw new functions.https.HttpsError("failed-precondition", "Verify the collection PIN and pickup evidence before continuing.");
+    }
     const requiredPin = expectedPin(privateDelivery, action);
     if (!requiredPin && pinAuthorityRequired(delivery, action)) {
       throw new functions.https.HttpsError(
@@ -466,6 +481,8 @@ exports.updateDeliveryTrackingStatus = riderCallable(async (data, context) => {
     if (Object.keys(evidence).length > 0) {
       patch[action === "verify_receiver_pin" ? "handoverEvidence" : "pickupEvidence"] = {
         ...evidence,
+        deliveryId: found.id,
+        riderId,
         recordedAt: FieldValue.serverTimestamp(),
         recordedBy: riderId,
       };
@@ -514,6 +531,13 @@ exports.updateDeliveryTrackingStatus = riderCallable(async (data, context) => {
       delete patch.deliveredAt;
       delete patch.completedAt;
     }
+    evidenceAuthority.writeVerified({db, transaction, resolved: resolvedEvidence, deliveryId: found.id, riderId});
+    if (resolvedEvidence) {
+patch[action === "verify_receiver_pin" ? "handoverEvidence" : "pickupEvidence"] = {
+      ...patch[action === "verify_receiver_pin" ? "handoverEvidence" : "pickupEvidence"],
+      evidenceId: resolvedEvidence.id, canonicalMediaReference: resolvedEvidence.record.storagePath,
+    };
+}
     transaction.set(found.ref, patch, {merge: true});
     if (nextStatus === "delivered") {
       if (settlement.requiresReview) {
@@ -740,6 +764,25 @@ async function reconcileSettlementPendingDelivery(db, deliveryId) {
         delivery.riderId || delivery.assignedRiderId || delivery.driverId,
     );
     if (!riderId) return {deliveryId, status: "pending_authority"};
+    const privateSnapshot = await transaction.get(db.collection("deliveryRequestsPrivate").doc(deliveryId));
+    const privateDelivery = privateSnapshot.data() || {};
+    try {
+      if (!["paid", "succeeded", "success", "roth_paid", "stripe_paid"].includes(normalized(delivery.paymentStatus || delivery.paymentState)) || delivery.cancellationSettlementStatus) {
+        throw new functions.https.HttpsError("failed-precondition", "Payment or cancellation authority is unresolved.");
+      }
+      if ((expectedPin(privateDelivery, "verify_collection_pin") || pinAuthorityRequired(delivery, "verify_collection_pin")) && delivery.collectionPinVerified !== true) {
+        throw new functions.https.HttpsError("failed-precondition", "Pickup verification is incomplete.");
+      }
+      if ((expectedPin(privateDelivery, "verify_receiver_pin") || pinAuthorityRequired(delivery, "verify_receiver_pin")) && delivery.deliveryPinVerified !== true) {
+        throw new functions.https.HttpsError("failed-precondition", "Handover verification is incomplete.");
+      }
+      const evidence = delivery.handoverEvidence || {};
+      const resolved = await evidenceAuthority.resolve({db, transaction, deliveryId, riderId, requiredStage: "handover", evidence});
+      await evidenceAuthority.completionProof({db, transaction, deliveryId, riderId, resolved});
+    } catch (error) {
+      transaction.set(deliveryRef, {settlementIssue: "completion_authority_unresolved", settlementAttemptCount: FieldValue.increment(1), settlementLastAttemptAt: FieldValue.serverTimestamp()}, {merge: true});
+      return {deliveryId, status: "pending_authority", reason: "completion_authority_unresolved"};
+    }
     const settlement = settlementValues(delivery);
     if (settlement.requiresReview) {
       transaction.set(deliveryRef, {

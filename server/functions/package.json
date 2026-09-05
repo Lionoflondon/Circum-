@@ -3,10 +3,11 @@
   "description": "Cloud Functions for Firebase",
   "scripts": {
     "lint": "eslint .",
-    "test": "node --test $(find . -maxdepth 1 -name '*.test.js' ! -name 'firestore-*-rules.test.js' ! -name 'storage-rider-document-rules.test.js' ! -name 'rider-document-emulator-integration.test.js' -print)",
-    "test:rules": "cd ../.. && firebase emulators:exec --only firestore \"node --test server/functions/firestore-live-tracking-rules.test.js server/functions/firestore-financial-authority-rules.test.js server/functions/firestore-sender-trust-rules.test.js server/functions/firestore-referral-rules.test.js server/functions/firestore-chat-sender-security-rules.test.js server/functions/firestore-rider-onboarding-events-rules.test.js server/functions/delivery-cancellation.emulator.test.js server/functions/firestore-starter-roth-rules.test.js server/functions/firestore-health-plus-authority-rules.test.js server/functions/firestore-sender-bootstrap-rules.test.js\"",
-    "test:storage-rules": "cd ../.. && firebase emulators:exec --only storage \"node --test server/functions/storage-rider-document-rules.test.js\"",
+    "test": "node --test $(find . -maxdepth 1 -name '*.test.js' ! -name 'firestore-*-rules.test.js' ! -name 'storage-*-rules.test.js' ! -name '*.emulator.test.js' ! -name 'rider-document-emulator-integration.test.js' -print)",
+    "test:rules": "cd ../.. && firebase emulators:exec --only firestore \"node --test --test-concurrency=1 server/functions/firestore-*-rules.test.js server/functions/delivery-cancellation.emulator.test.js\"",
+    "test:storage-rules": "cd ../.. && firebase emulators:exec --only firestore,storage \"node --test server/functions/storage-rider-document-rules.test.js server/functions/storage-delivery-evidence-rules.test.js\"",
     "test:document-integration": "cd ../.. && firebase emulators:exec --only firestore,storage \"node --test server/functions/rider-document-emulator-integration.test.js\"",
+    "test:lifecycle": "cd ../.. && firebase emulators:exec --only firestore,storage \"node --test server/functions/delivery-lifecycle.emulator.test.js\"",
     "test:iris": "node --test iris-core.test.js iris-security.test.js",
     "test:adjustments": "node --test delivery-adjustment-core.test.js",
     "check:functions-inventory": "node check-functions-inventory.js",
@@ -14,7 +15,8 @@
     "shell": "firebase functions:shell",
     "start": "npm run shell",
     "deploy": "firebase deploy --only functions",
-    "logs": "firebase functions:log"
+    "logs": "firebase functions:log",
+    "test:integration": "cd ../.. && firebase emulators:exec --only firestore,storage \"node --test --test-concurrency=1 server/functions/*.emulator.test.js server/functions/rider-document-emulator-integration.test.js\""
   },
   "engines": {
     "node": "22"

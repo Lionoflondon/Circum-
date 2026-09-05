@@ -1,6 +1,8 @@
+const healthCheckoutAuthority = require("./health-checkout-authority");
 /* eslint-disable max-len */
 /* eslint-disable require-jsdoc */
 const functions = require("firebase-functions/v1");
+const {healthRouteDistance, healthDirectionsKey} = require("./health-route-authority");
 const {getFirestore} = require("firebase-admin/firestore");
 const {getAuth} = require("firebase-admin/auth");
 const {FieldValue} = require("firebase-admin/firestore");
@@ -304,7 +306,7 @@ function healthPlusVanguardFields() {
   };
 }
 
-exports.createHealthPlusBooking = functions.https.onCall(async (data, context) => {
+exports.createHealthPlusBooking = functions.runWith({secrets: [healthDirectionsKey]}).https.onCall(async (data, context) => {
   const sender = requireCallableSender(context);
   if (data.consentConfirmed !== true) {
     throw new functions.https.HttpsError("failed-precondition", "Prescription consent is required.");
@@ -329,7 +331,10 @@ exports.createHealthPlusBooking = functions.https.onCall(async (data, context) =
 
   let authoritative;
   try {
-    authoritative = calculateAuthoritativeHealthPlusPricing(serverHealthPricingInput(data));
+    const distanceMiles = await healthRouteDistance({pharmacyAddress, deliveryAddress});
+    authoritative = calculateAuthoritativeHealthPlusPricing(serverHealthPricingInput({
+      ...data, pricingInputs: {...data.pricingInputs, distanceMiles},
+    }));
   } catch (error) {
     throw new functions.https.HttpsError("failed-precondition", "Health+ booking requires route distance and medication weight before checkout.");
   }
@@ -418,6 +423,7 @@ exports.createHealthPlusBooking = functions.https.onCall(async (data, context) =
       amountPence: authoritative.amountPence,
       currency: "GBP",
       authoritativePricing: authoritative,
+      routeAuthorityVersion: 2,
       pricingInputs: {
         distanceMiles: authoritative.distanceMiles,
         medicationWeightKg: authoritative.medicationWeightKg,
@@ -440,6 +446,7 @@ exports.createHealthPlusBooking = functions.https.onCall(async (data, context) =
       status: "pending_secure_checkout",
       savedPaymentMethod: data.savedPaymentMethod !== false,
       authoritativePricing: authoritative,
+      routeAuthorityVersion: 2,
       createdAt: now,
       updatedAt: now,
     };
@@ -630,7 +637,7 @@ exports.updateSenderHealthPlusBooking = functions.https.onCall(async (data, cont
   return result;
 });
 
-exports.createHealthPlusCheckoutSession = functions.https.onRequest(async (req, res) => {
+exports.createHealthPlusCheckoutSession = functions.runWith({secrets: [healthDirectionsKey]}).https.onRequest(async (req, res) => {
   allowCors(res);
   if (req.method === "OPTIONS") return res.status(204).send("");
   if (req.method !== "POST") return res.status(405).send({error: "POST required"});
@@ -678,7 +685,12 @@ exports.createHealthPlusCheckoutSession = functions.https.onRequest(async (req, 
     if (["paid", "succeeded", "checkout_completed"].includes(`${existingPayment.status || ""}`)) {
       throw new functions.https.HttpsError("failed-precondition", "This Health+ booking has already been paid.");
     }
+    await healthCheckoutAuthority.legacyGate({stripe, db, bookingId, booking, payment: existingPayment});
     if (existingPayment.checkoutSessionId && existingPayment.checkoutUrl) {
+      const previous = await stripe.checkout.sessions.retrieve(existingPayment.checkoutSessionId);
+      if (previous.status !== "open" || previous.payment_status === "paid") {
+        throw new functions.https.HttpsError("failed-precondition", "This checkout is closed. Reconcile any completed payment or create a fresh booking.");
+      }
       return res.send({
         checkoutUrl: existingPayment.checkoutUrl,
         sessionId: existingPayment.checkoutSessionId,
@@ -691,7 +703,10 @@ exports.createHealthPlusCheckoutSession = functions.https.onRequest(async (req, 
     let authoritative;
     try {
       authoritative = calculateAuthoritativeHealthPlusPricing(
-          healthPlusPricingInputFromBooking(booking, profile),
+          {...healthPlusPricingInputFromBooking(booking, profile),
+            distanceMiles: await healthRouteDistance({
+              pharmacyAddress: booking.pharmacyAddress, deliveryAddress: booking.deliveryAddress,
+            })},
       );
     } catch (error) {
       await db.collection("healthPlusUsageEvents").add({
@@ -708,9 +723,9 @@ exports.createHealthPlusCheckoutSession = functions.https.onRequest(async (req, 
           "Health+ booking requires route distance and medication weight before checkout.",
       );
     }
-    const amountPence = authoritative.amountPence;
-    const orderTotalGbp = money(amountPence / 100);
-    const recurring = authoritative.recurring;
+    let amountPence = authoritative.amountPence;
+    let orderTotalGbp = money(amountPence / 100);
+    let recurring = authoritative.recurring;
     const submittedPence = submittedAmountPence(priceBreakdown || {});
     const discrepancyPence = submittedPence == null ? null : submittedPence - amountPence;
     const rothRequested = useRoth === true;
@@ -720,10 +735,12 @@ exports.createHealthPlusCheckoutSession = functions.https.onRequest(async (req, 
       walletBalanceGbp: walletBalance,
       selectedCurrency: "gbp",
     });
-    const rothAmount = split.walletContributionGbp;
-    const cardAmount = split.remainingGbp;
+    let rothAmount = split.walletContributionGbp;
+    let cardAmount = split.remainingGbp;
+    const checkoutAuthority = await healthCheckoutAuthority.reserve({db, paymentRef, candidate: {amountPence, orderTotalGbp, recurring, rothAmount, cardAmount, authoritative}});
+    ({amountPence, orderTotalGbp, recurring, rothAmount, cardAmount, authoritative} = checkoutAuthority);
 
-    if (!recurring && !split.stripeRequired) {
+    if (!recurring && cardAmount <= 0) {
       await rothLedger.applyWalletDebit({
         userId: sender.uid,
         userEmail: sender.email,
@@ -801,8 +818,8 @@ exports.createHealthPlusCheckoutSession = functions.https.onRequest(async (req, 
     });
     params.client_reference_id = sender.uid;
 
-    const session = await stripe.checkout.sessions.create(params);
-    await paymentRef.set({
+    params.expires_at = checkoutAuthority.expiresAt;
+    const session = await healthCheckoutAuthority.create({db, stripe, paymentRef, params, record: {
       bookingId,
       profileId,
       senderId: sender.uid,
@@ -819,14 +836,13 @@ exports.createHealthPlusCheckoutSession = functions.https.onRequest(async (req, 
       paymentStatus: "pending_verification",
       method: rothAmount > 0 ? "roth_card" : "card",
       paymentMethod: rothAmount > 0 ? "roth_card" : "card",
-      checkoutSessionId: session.id,
-      checkoutUrl: session.url,
+
       authoritativePricing: authoritative,
       submittedQuoteAmountPence: submittedPence,
       pricingDiscrepancyPence: discrepancyPence,
       updatedAt: Date.now(),
       createdAt: existingPayment.createdAt || Date.now(),
-    }, {merge: true});
+    }});
     await bookingRef.set({
       authoritativePricing: authoritative,
       paymentStatus: "checkout_created",
@@ -893,6 +909,10 @@ exports.handleHealthPlusCheckoutSession = async (sessionData, eventId = null) =>
   }
   const payment = paymentSnap.data() || {};
   if (payment.status === "paid" || payment.paymentStatus === "paid") return;
+  if (payment.pricingAuthorityVersion !== 2 || payment.checkoutSessionId !== sessionData.id || payment.senderId !== senderId || payment.profileId !== profileId) {
+    await db.doc(`paymentArtifactReconciliations/health_${bookingId}`).set({service: "health_plus", bookingId, sessionId: sessionData.id, status: "review_required", reason: "legacy_or_unbound_paid_checkout", updatedAt: Date.now()}, {merge: true});
+    throw new Error("Health+ legacy or unbound checkout requires payment reconciliation before dispatch.");
+  }
   const rothAmount = money(payment.rothAmount);
   const verifiedPayment = verifiedStripePaidGbpSession(sessionData, {
     ownerId: senderId,

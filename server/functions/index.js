@@ -50,6 +50,7 @@ const giftsPayment = require("./gifts-payment");
 const communicationEngine = require("./communication-engine");
 const deliveryPolicy = require("./delivery-policy");
 const deliveryTracking = require("./delivery-tracking");
+const deliveryEvidence = require("./delivery-evidence");
 const ratingsTipping = require("./ratings-tipping");
 const stripeRefunds = require("./stripe-refunds");
 const riderEarningsSummary = require("./rider-earnings-summary");
@@ -101,6 +102,7 @@ function allowCors(req, res) {
 exports.sendPackage = sendPackage;
 exports.getAvaliableRequests = getAvaliableRequests;
 exports.getAvailableRequests = getAvaliableRequests;
+exports.getNearbyRequests = getAvaliableRequests;
 exports.acceptRideRequests = acceptRideRequests;
 exports.sendMessage = sendMessage;
 exports.sendCircumMessage = communicationEngine.sendCircumMessage;
@@ -145,6 +147,9 @@ exports.markRiderNoShow = deliveryPolicy.markRiderNoShow;
 exports.cancelDelivery = deliveryPolicy.requestSenderCancellation(stripe);
 exports.updateDeliveryTrackingStatus =
   deliveryTracking.updateDeliveryTrackingStatus;
+exports.completeDelivery = require("./delivery-completion-reconciled").completeDelivery;
+exports.recordDeliveryEvidence = deliveryEvidence.recordDeliveryEvidence;
+exports.submitDeliveryEvidence = deliveryEvidence.submitDeliveryEvidence;
 exports.updateDeliveryLiveLocation =
   deliveryTracking.updateDeliveryLiveLocation;
 exports.reconcilePendingDeliverySettlements =
@@ -226,6 +231,7 @@ exports.adminCreateBusinessInvoice =
   businessPayments.adminCreateBusinessInvoice;
 exports.createBusinessInvoiceCheckout =
   businessPayments.createBusinessInvoiceCheckout(stripe);
+exports.cancelBusinessInvoiceCheckout = businessPayments.cancelBusinessInvoiceCheckout(stripe);
 exports.createBusinessAccount = businessAccess.createBusinessAccount;
 exports.ensureBusinessCompanyCode = businessAccess.ensureBusinessCompanyCode;
 exports.lookupBusinessByCompanyCode =
@@ -700,3 +706,5 @@ exports.endTrip = functions.https.onRequest(async (req, res) => {
     message: "Use updateDeliveryTrackingStatus for backend-authoritative delivery completion.",
   });
 });
+
+exports.reconcileBusinessInvoiceCheckouts = businessPayments.reconcileBusinessInvoiceCheckouts(stripe);

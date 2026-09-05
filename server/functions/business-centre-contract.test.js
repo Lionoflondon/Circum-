@@ -137,17 +137,14 @@ test("Business owners can read their own workspace but cannot write it directly"
   assert.match(rulesSource, /match \/businessMemberships\/\{membershipId\}/);
   assert.match(rulesSource, /match \/businessInvoices\/\{invoiceId\}/);
   assert.match(rulesSource, /match \/businessAuditLogs\/\{logId\}/);
-  assert.match(rulesSource, /canReadBusinessId\(resource\.data\.businessId\) \|\|[\s\S]*?isAvailableRiderJob\(\)/);
+  assert.match(rulesSource, /canReadBusinessId\(resource\.data\.businessId\)/);
+  assert.doesNotMatch(rulesSource, /isAvailableRiderJob/);
 });
 
-test("Business invoice payment supports partial Roth plus remaining card payment", () => {
-  assert.match(businessPaymentsSource, /calculateWalletCheckout\(\{[\s\S]*?orderTotalGbp: paymentAmount,[\s\S]*?walletBalanceGbp: walletBalance,[\s\S]*?selectedCurrency: "gbp"/);
-  assert.match(businessPaymentsSource, /const rothAmount = split\.walletContributionGbp;/);
-  assert.match(businessPaymentsSource, /const cardAmount = split\.remainingGbp;/);
-  assert.match(businessPaymentsSource, /unit_amount: Math\.round\(cardAmount \* 100\)/);
-  assert.match(businessPaymentsSource, /cardAmountGbp: `\$\{cardAmount\}`/);
-  assert.match(businessPaymentsSource, /rothAmountGbp: `\$\{rothAmount\}`/);
-  assert.match(businessPaymentsSource, /method: rothAmount > 0 \? `roth_\$\{requestedMethod\}` : requestedMethod/);
+test("Business invoice checkout delegates to the transactional reservation authority", () => {
+  assert.match(businessPaymentsSource, /checkoutReservations\.checkout/);
+  assert.match(businessPaymentsSource, /checkoutReservations\.settle/);
+  assert.match(indexSource, /exports\.cancelBusinessInvoiceCheckout/);
 });
 
 test("Business invoice finalizer verifies Stripe paid amount against server payment record", () => {
@@ -174,16 +171,6 @@ test("Business Roth invoice payment debits and marks invoice paid atomically", (
       businessPaymentsSource.indexOf("exports._private ="),
   );
   assert.doesNotMatch(invoiceFinalizer, /debitBusinessRoth\(/);
-});
-
-test("Business invoice Stripe payment without Roth charges the full balance by card", () => {
-  assert.match(businessPaymentsSource, /const useRoth = data\.useRoth === true;/);
-  assert.match(businessPaymentsSource, /const walletBalance = useRoth && `\$\{wallet\.status \|\| "active"\}` === "active" \? money\(wallet\.balance \|\| wallet\.availableBalance\) : 0;/);
-  assert.match(businessPaymentsSource, /const cardAmount = split\.remainingGbp;/);
-  assert.match(businessPaymentsSource, /unit_amount: Math\.round\(cardAmount \* 100\)/);
-  assert.match(businessPaymentsSource, /rothAmountGbp: `\$\{rothAmount\}`/);
-  assert.match(businessPaymentsSource, /method: rothAmount > 0 \? `roth_\$\{requestedMethod\}` : requestedMethod/);
-  assert.match(businessPaymentsSource, /const requestedMethod = \["apple_pay", "google_pay", "saved_card", "card"\]\.includes\(`\$\{data\.paymentMethod \|\| ""\}`\) \? `\$\{data\.paymentMethod\}` : "card";/);
 });
 
 test("Business invoices expose printable PDF records without client-side invoice generation", () => {

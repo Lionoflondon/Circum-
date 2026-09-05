@@ -1,3 +1,4 @@
+const {verifyDeliveryEvidence} = require("./delivery-evidence-authority");
 /* eslint-disable max-len, require-jsdoc */
 const functions = require("firebase-functions/v1");
 const {getFirestore} = require("firebase-admin/firestore");
@@ -22,6 +23,7 @@ const stripe = new Proxy({}, {
 });
 const iris = require("./iris-core");
 const {
+  verifiedAdjustmentPayment,
   DISCREPANCY_REASONS,
   buildAdjustment,
   isMaterialDiscrepancy,
@@ -65,6 +67,10 @@ exports.reportLoadDiscrepancy = functions.https.onCall(async (data, context) => 
   const riderId = context.auth.uid;
   if (![booking.riderId, booking.driverId, booking.assignedDriverId].includes(riderId)) throw new functions.https.HttpsError("permission-denied", "Only the assigned rider can report this discrepancy.");
   if (booking.status === "awaiting_sender_adjustment") throw new functions.https.HttpsError("failed-precondition", "This booking already has a pending adjustment.");
+
+  for (const photoUrl of evidencePhotos) {
+    await verifyDeliveryEvidence({photoUrl, deliveryId: requestRef.id, riderId, stage: "discrepancy"});
+  }
 
   const originalWeightKg = Number(booking.finalWeightUsed || booking.finalChargeableWeight || booking.confirmedWeightKg || booking.weightKg || 0);
   const description = observedDescription || booking.packageDescription || booking.description || "Parcel";
@@ -220,6 +226,12 @@ exports.cancelAdjustedCollection = functions.https.onCall(async (data, context) 
   if (!adjustment.exists || adjustment.data().senderId !== context.auth.uid) throw new functions.https.HttpsError("permission-denied", "Only the sender can cancel this collection.");
   const bookingRef = db.collection("deliveryRequests").doc(adjustment.data().bookingId);
   await db.runTransaction(async (transaction) => {
+    const latest = await transaction.get(adjustmentRef);
+    const booking = await transaction.get(bookingRef);
+    if (!booking.exists || !["awaiting_sender_adjustment", "awaiting_adjustment_review"].includes(booking.data().status) ||
+        !["awaiting_sender_payment", "awaiting_admin_review"].includes(latest.data().status)) {
+      throw new functions.https.HttpsError("failed-precondition", "This collection is no longer awaiting an adjustment decision.");
+    }
     transaction.update(adjustmentRef, {status: "cancelled_by_sender", senderDecision: "cancelled", updatedAt: Date.now()});
     transaction.update(bookingRef, {"status": "cancelled_verified_discrepancy", "cancellationReason": "verified_load_discrepancy", "loadDiscrepancy.senderDecision": "cancelled", "updatedAt": Date.now()});
   });
@@ -260,6 +272,11 @@ exports.finalizeDeliveryAdjustmentPayment = senderPaymentCallable(async (data, c
     const latest = await transaction.get(adjustmentRef);
     const booking = await transaction.get(bookingRef);
     if (latest.data().status === "paid") return;
+    if (latest.data().status !== "awaiting_sender_payment" || latest.data().adminDecision !== "approve" ||
+        !verifiedAdjustmentPayment(intent, latest.data(), latest.id) ||
+        booking.data().status !== "awaiting_sender_adjustment") {
+      throw new functions.https.HttpsError("failed-precondition", "Adjustment payment does not match the approved collection.");
+    }
     const riderAdjustmentAmount = Number(latest.data().additionalAmount) || 0;
     transaction.update(adjustmentRef, {status: "paid", paymentStatus: "succeeded", senderDecision: "approved_and_paid", paidAt: Date.now(), updatedAt: Date.now()});
     transaction.update(bookingRef, {"status": booking.data().preAdjustmentStatus || "accepted", "price": latest.data().revisedQuote, "paidAmount": latest.data().revisedQuote, "adjustmentResolvedBy": "sender_payment", "loadDiscrepancy.senderDecision": "approved_and_paid", "riderAdjustment": riderAdjustmentAmount, "updatedAt": Date.now()});
