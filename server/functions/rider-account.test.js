@@ -204,9 +204,10 @@ test("nested vehicle input cannot carry approval authority", () => {
 });
 
 test("profile edits retain reviewed vehicle authority; changing the vehicle requires review", () => {
-  const existing = {vehicleType: "car", vehicleRegistration: "AB12 CDE", vehicle: {type: "car", registration: "AB12 CDE", status: "approved", approved: true}};
+  const existing = {driverStatus: "suspended", vehicleType: "car", vehicleRegistration: "AB12 CDE", vehicle: {type: "car", registration: "AB12 CDE", status: "approved", approved: true}};
   const unchanged = riderAccount._test.profilePatch({fullName: "Updated Name"}, {uid: "rider"}, existing);
   assert.equal(unchanged.vehicle.status, "approved");
+  assert.equal(unchanged.driverStatus, "suspended");
   const changed = riderAccount._test.profilePatch({vehicleRegistration: "NEW123"}, {uid: "rider"}, existing);
   assert.equal(changed.vehicle.status, "pending");
   assert.equal(changed.vehicleApproved, false);

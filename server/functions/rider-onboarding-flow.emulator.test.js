@@ -38,8 +38,9 @@ test("full Auth/application/PDF/image/review flow preserves zero wallet and appr
   assert.ok(process.env.FIREBASE_AUTH_EMULATOR_HOST && process.env.FIRESTORE_EMULATOR_HOST && process.env.FIREBASE_STORAGE_EMULATOR_HOST, "emulators required");
   const user = await admin.auth().createUser({email: "flow@example.test", password: "Emulator-only-123!"});
   const ctx = context(user.uid);
-  await account.verifyRiderAccountAccess.run({}, ctx);
+  assert.equal((await account.verifyRiderAccountAccess.run({}, ctx)).profileExists, false);
   await account.updateRiderProfile.run(profile, ctx);
+  assert.equal((await account.verifyRiderAccountAccess.run({}, ctx)).profileExists, true);
   await account.ensureRiderRothWallet.run({}, ctx);
   assert.equal((await db.collection("riderRothWallets").doc(user.uid).get()).data().balance, 0);
   const request = {idempotencyKey: "onboarding-flow"};
@@ -87,6 +88,8 @@ test("wrong surface denied, shared idempotency keys cannot leak another Rider ap
     await assert.rejects(account.verifyRiderAccountAccess.run({}, context(uid)), (e) => e.code === "permission-denied");
   }
   await assert.rejects(account.verifyRiderAccountAccess.run({}, {auth: {uid: "admin-claim", token: {adminRole: "operations_admin"}}}), (e) => e.code === "permission-denied");
+  await db.collection("riderProfiles").doc("legacy-sender").set({name: "Old client-forged shell"});
+  await assert.rejects(account.verifyRiderAccountAccess.run({}, context("legacy-sender")), (e) => e.code === "permission-denied");
   await db.collection("riderProfiles").doc("legacy-rider").set({approvalStatus: "pending"});
   await account.verifyRiderAccountAccess.run({}, context("legacy-rider"));
   const a = await account.submitRiderApplication.run({...profile, idempotencyKey: "shared-key"}, context("rider-a"));

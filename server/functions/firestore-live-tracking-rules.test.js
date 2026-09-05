@@ -253,20 +253,13 @@ test("Rider earnings reconciliation audit records are admin readable and never c
   }));
 });
 
-test("Rider profile self-writes are explicitly allowlisted", async () => {
+test("Existing Rider profile self-updates remain allowlisted after backend creation", async () => {
+  await testEnv.withSecurityRulesDisabled(async (context) => {
+    await setDoc(doc(context.firestore(), "riders", "rider-1"), {name: "Rider One", role: "delivery"});
+  });
   const riderDb = testEnv.authenticatedContext("rider-1").firestore();
   await assertSucceeds(setDoc(doc(riderDb, "riders", "rider-1"), {
-    uid: "rider-1",
-    name: "Rider One",
-    email: "rider@example.com",
-    phone: "+447700900000",
-    updatedAt: serverTimestamp(),
-  }));
-  await assertSucceeds(setDoc(doc(riderDb, "riders", "rider-1"), {
-    photoURL: "https://example.com/rider.jpg",
-    username: "riderone",
-    vehicleType: "bike",
-    updatedAt: serverTimestamp(),
+    photoURL: "https://example.com/rider.jpg", username: "riderone", updatedAt: serverTimestamp(),
   }, {merge: true}));
 });
 
@@ -342,7 +335,6 @@ test("Rider cannot self-write admin authority on riderProfiles", async () => {
   }
   await assertSucceeds(setDoc(doc(riderDb, "riderProfiles", "rider-1"), {
     phone: "+447700900001",
-    vehicleType: "bike",
     updatedAt: serverTimestamp(),
   }, {merge: true}));
 });
@@ -525,4 +517,25 @@ test("Vanguard PIN authority private documents are not client readable or writab
   await assertFails(setDoc(doc(riderDb, "deliveryRequestsPrivate", deliveryId), {
     deliveryPinAttemptCount: 0,
   }, {merge: true}));
+});
+
+test("Rider onboarding profile creation and nested vehicle approval require backend authority", async () => {
+  const client = testEnv.authenticatedContext("onboarding-client").firestore();
+  for (const collection of ["riders", "riderProfiles"]) {
+    const ref = doc(client, collection, "onboarding-client");
+    await assertFails(setDoc(ref, {name: "Client-created Rider"}));
+    await testEnv.withSecurityRulesDisabled(async (context) => {
+      await setDoc(doc(context.firestore(), collection, "onboarding-client"), {
+        name: "Backend-created Rider", vehicleType: "car", approvalStatus: "pending",
+      });
+    });
+    for (const patch of [
+      {vehicle: {type: "car", registration: "AB12 CDE", approved: true, status: "approved"}},
+      {vehicles: [{type: "car", approved: true, dispatchEligible: true}]},
+      {vehicleType: "van"}, {vehicleRegistration: "FORGED"},
+      {dispatchEligible: true}, {vehicleApproved: true}, {vehicleVerified: true},
+    ]) await assertFails(setDoc(ref, patch, {merge: true}));
+    await assertSucceeds(getDoc(ref));
+    await assertSucceeds(setDoc(ref, {fcmToken: "test-device", photoURL: "https://example.test/photo.jpg"}, {merge: true}));
+  }
 });

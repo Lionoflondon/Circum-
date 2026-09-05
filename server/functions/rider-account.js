@@ -85,16 +85,22 @@ async function assertRiderSurface(rider) {
     ...(Array.isArray(record.roles) ? record.roles :
       Object.entries(record.roles || {}).filter(([, enabled]) => enabled === true).map(([role]) => role)),
   ]).map((role) => lower(role, 80));
-  const riderRole = snapshots[1].exists || snapshots[2].exists || rider.claims?.founderRider === true || roles.some((role) => ["rider", "delivery", "driver"].includes(role));
+  const legacyRider = snapshots.slice(1, 3).some((snapshot) => {
+    const storedProfile = snapshot.data() || {};
+    return [storedProfile.approvalStatus, storedProfile.verificationStatus].some((status) =>
+      ["pending", "approved", "verified", "rejected", "needs_information", "suspended"].includes(status));
+  });
+  const riderRole = legacyRider || rider.claims?.founderRider === true || roles.some((role) => ["rider", "delivery", "driver"].includes(role));
   if (!riderRole && (snapshots[0].exists || snapshots[3].exists || roles.some((role) => role && role !== "user"))) {
     throw new functions.https.HttpsError("permission-denied", "This account belongs to another Circum app. Sign in with a Rider account.");
   }
+  return {profileExists: snapshots[2].exists};
 }
 
 exports.verifyRiderAccountAccess = riderCallable(async (_data, context) => {
   const rider = requireRider(context);
-  await assertRiderSurface(rider);
-  return {ok: true, riderId: rider.uid};
+  const access = await assertRiderSurface(rider);
+  return {ok: true, riderId: rider.uid, ...access};
 });
 
 function text(value, max = 500) {
@@ -258,7 +264,7 @@ function profilePatch(data, rider, existing = {}) {
     verificationStatus: existing.verificationStatus || "pending",
     riderRank: existing.riderRank || "agent",
     trustPoints: Number.isFinite(Number(existing.trustPoints)) ? Number(existing.trustPoints) : 0,
-    driverStatus: "active",
+    driverStatus: existing.driverStatus || "active",
     role: "rider",
     roles: ["rider"],
     source: "cloud-functions",

@@ -77,7 +77,7 @@ test("riderProfiles mirrors riders admin-only authority fields", () => {
   assert.match(rules, /function riderAdminOnlyFields\(\)/);
   assert.match(
       rules,
-      /match \/riderProfiles\/\{driverId\}[\s\S]*allow create: if isDriverManager\(\) \|\| isSafeRiderSelfCreate\(driverId\);[\s\S]*allow update: if isDriverManager\(\) \|\| isSafeRiderSelfUpdate\(driverId\);/,
+      /match \/riderProfiles\/\{driverId\}[\s\S]*allow create: if isDriverManager\(\);[\s\S]*allow update: if isDriverManager\(\) \|\| isSafeRiderSelfUpdate\(driverId\);/,
   );
   for (const field of [
     "approvalStatus",
@@ -215,7 +215,7 @@ test("rider self updates are field allowlisted and cannot alter admin authority"
   }
   assert.match(
       rules,
-      /match \/riders\/\{driverId\}[\s\S]*allow create: if isDriverManager\(\) \|\| isSafeRiderSelfCreate\(driverId\);[\s\S]*allow update: if isDriverManager\(\) \|\| isSafeRiderSelfUpdate\(driverId\);/,
+      /match \/riders\/\{driverId\}[\s\S]*allow create: if isDriverManager\(\);[\s\S]*allow update: if isDriverManager\(\) \|\| isSafeRiderSelfUpdate\(driverId\);/,
   );
 });
 
