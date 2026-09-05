@@ -65,7 +65,8 @@ function cancellationSettlement({
   const values = [grossDeliveryTotal, stripePaid, rothPaid, cancellationFee, riderCompensation];
   if (circumRetained != null) values.push(circumRetained);
   if (values.some((value) => typeof value !== "number" || !Number.isFinite(value) ||
-      !Number.isSafeInteger(Math.round(value * 100)))) {
+      !Number.isSafeInteger(Math.round(value * 100)) ||
+      Math.abs(value * 100 - Math.round(value * 100)) > 0.000001)) {
     throw new Error("Cancellation financial values must be finite monetary amounts.");
   }
   const gross = money(grossDeliveryTotal);

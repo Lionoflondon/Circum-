@@ -390,3 +390,18 @@ test("invalid monetary authority is rejected rather than coerced to zero", () =>
     assert.throws(() => policy.cancellationSettlement({grossDeliveryTotal, stripePaid: 13, rothPaid: 7, cancellationFee: 3}), /finite/);
   }
 });
+
+
+test("penny-level allocations conserve value across small contributions and all fee boundaries", () => {
+  for (let stripePence = 0; stripePence <= 25; stripePence++) {
+    for (let rothPence = 0; rothPence <= 25; rothPence++) {
+      for (let feePence = 0; feePence <= stripePence + rothPence; feePence++) {
+        const result = policy.cancellationSettlement({grossDeliveryTotal: (stripePence + rothPence) / 100,
+          stripePaid: stripePence / 100, rothPaid: rothPence / 100, cancellationFee: feePence / 100});
+        assert.equal(Math.round(result.stripeRefund * 100), Math.max(0, stripePence - feePence));
+        assert.equal(Math.round(result.rothRestoration * 100), rothPence - Math.max(0, feePence - stripePence));
+        assert.equal(Math.round(result.totalRefundValue * 100), stripePence + rothPence - feePence);
+      }
+    }
+  }
+});
