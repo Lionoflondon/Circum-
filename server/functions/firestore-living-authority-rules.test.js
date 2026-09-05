@@ -77,7 +77,7 @@ test("owner cannot change payout, safety, dispatch, adjustment or evidence autho
 });
 test("canonical available jobs remain private even to an approved online Rider", async () => {
   const c = env.authenticatedContext("stranger").firestore();
-  await assertSucceeds(
+  await assertFails(
     setDoc(doc(c, "riderProfiles/stranger"), {name: "Unapproved"}),
   );
   await assertFails(getDoc(doc(c, "deliveryRequests/job")));

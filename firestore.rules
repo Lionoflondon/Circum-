@@ -451,22 +451,8 @@ service cloud.firestore {
         'photoUpdatedAt',
         'profilePhotoUpdatedAt',
         'profilePhotoUploadedAt',
-        'vehicle',
-        'vehicles',
-        'vehicleType',
-        'vehicleMakeModel',
-        'vehicleColour',
-        'vehicleRegistration',
-        'plateNumber',
-        'typeOfVehicle',
         'updatedAt'
       ];
-    }
-
-    function isSafeRiderSelfCreate(driverId) {
-      return signedIn() && request.auth.uid == driverId &&
-        !request.resource.data.keys().hasAny(riderAdminOnlyFields()) &&
-        request.resource.data.keys().hasOnly(riderSelfWritableFields());
     }
 
     function isSafeRiderSelfUpdate(driverId) {
@@ -875,14 +861,14 @@ service cloud.firestore {
 
     match /riderProfiles/{driverId} {
       allow read: if isAdmin() || (signedIn() && request.auth.uid == driverId);
-      allow create: if isDriverManager() || isSafeRiderSelfCreate(driverId);
+      allow create: if isDriverManager();
       allow update: if isDriverManager() || isSafeRiderSelfUpdate(driverId);
       allow delete: if hasRole('super_admin');
     }
 
     match /riders/{driverId} {
       allow read: if isAdmin() || (signedIn() && request.auth.uid == driverId);
-      allow create: if isDriverManager() || isSafeRiderSelfCreate(driverId);
+      allow create: if isDriverManager();
       allow update: if isDriverManager() || isSafeRiderSelfUpdate(driverId);
       allow delete: if hasRole('super_admin');
     }

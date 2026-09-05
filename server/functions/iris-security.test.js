@@ -78,7 +78,7 @@ test("delivery dispatch is idempotent after broadcast or acceptance", () => {
 test("Firestore rules reserve rider authority changes for driver managers", () => {
   assert.match(
       rules,
-      /match \/riderProfiles\/\{driverId\}[\s\S]*allow create: if isDriverManager\(\) \|\| isSafeRiderSelfCreate\(driverId\);[\s\S]*allow update: if isDriverManager\(\) \|\| isSafeRiderSelfUpdate\(driverId\);/,
+      /match \/riderProfiles\/\{driverId\}[\s\S]*allow create: if isDriverManager\(\);[\s\S]*allow update: if isDriverManager\(\) \|\| isSafeRiderSelfUpdate\(driverId\);/,
   );
   assert.match(
       rules,
