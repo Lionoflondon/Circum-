@@ -24,6 +24,7 @@ import 'package:sign_in_with_apple/sign_in_with_apple.dart';
 import '../../sender_mobile/sender_profile_authority.dart';
 import '../../../helper/location_helper.dart';
 import '../../../extension/email_validation.dart';
+import '../phone_verification_deadline.dart';
 // import '../../onboarding/view/onboarding.dart';
 
 part 'auth_event.dart';
@@ -183,8 +184,8 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
         emit(state.copyWith(currentState: AppState.unauthenticated));
         return;
       }
-      final phone = await _hydrateSenderSessionRecoverably(
-          user, 'auth.restore.profile');
+      final phone =
+          await _hydrateSenderSessionRecoverably(user, 'auth.restore.profile');
       emit(state.copyWith(
         currentState: AppState.authenticated,
         username: user.displayName,
@@ -300,8 +301,7 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
       ).timeout(_authOperationTimeout);
 
       final oauthCredential = OAuthProvider("apple.com").credential(
-          idToken: appleCredential.identityToken,
-          rawNonce: rawNonce);
+          idToken: appleCredential.identityToken, rawNonce: rawNonce);
 
       UserCredential userCredential = await auth
           .signInWithCredential(oauthCredential)
@@ -326,8 +326,8 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
         await user.updateDisplayName(fullName).timeout(_authOperationTimeout);
         await _updateSenderProfile(displayName: fullName);
       }
-      final phone = await _hydrateSenderSessionRecoverably(
-          user, 'auth.apple.profile');
+      final phone =
+          await _hydrateSenderSessionRecoverably(user, 'auth.apple.profile');
 
       emit(state.copyWith(
           username: user.displayName ?? fullName,
@@ -357,24 +357,27 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
 
     try {
       emit(state.copyWith(status: Status.loading));
-      await auth.verifyPhoneNumber(
-        phoneNumber: state.phoneNumber,
-        verificationCompleted: (_) {},
-        verificationFailed: (error) {
-          if (!completer.isCompleted) completer.completeError(error);
-        },
-        codeSent: (String verificationId, int? resendToken) async {
-          verificationIdValue = verificationId;
-          resendTokenValue = resendToken;
-          if (!completer.isCompleted) completer.complete(true);
-        },
-        codeAutoRetrievalTimeout: (_) {
-          if (!completer.isCompleted) {
-            completer.completeError(TimeoutException('phone_otp_request'));
-          }
-        },
+      await awaitPhoneVerification(
+        start: () => auth.verifyPhoneNumber(
+          phoneNumber: state.phoneNumber,
+          verificationCompleted: (_) {},
+          verificationFailed: (error) {
+            if (!completer.isCompleted) completer.completeError(error);
+          },
+          codeSent: (String verificationId, int? resendToken) async {
+            verificationIdValue = verificationId;
+            resendTokenValue = resendToken;
+            if (!completer.isCompleted) completer.complete(true);
+          },
+          codeAutoRetrievalTimeout: (_) {
+            if (!completer.isCompleted) {
+              completer.completeError(TimeoutException('phone_otp_request'));
+            }
+          },
+        ),
+        completion: completer.future,
+        timeout: _authOperationTimeout,
       );
-      await completer.future.timeout(_authOperationTimeout);
 
       emit(state.copyWith(
           verificationId: verificationIdValue,
@@ -429,8 +432,8 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
       if (displayName != null && displayName.isNotEmpty) {
         await _updateSenderProfile(displayName: displayName);
       }
-      final phone = await _hydrateSenderSessionRecoverably(
-          user, 'auth.google.profile');
+      final phone =
+          await _hydrateSenderSessionRecoverably(user, 'auth.google.profile');
 
       emit(state.copyWith(
           username: user.displayName,
@@ -478,8 +481,8 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
         ));
         return;
       }
-      final phone = await _hydrateSenderSessionRecoverably(
-          user, 'auth.phone.profile');
+      final phone =
+          await _hydrateSenderSessionRecoverably(user, 'auth.phone.profile');
       final isIncomplete = user.displayName == null;
       emit(state.copyWith(
         status: isIncomplete ? Status.initial : Status.success,
@@ -582,8 +585,8 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
               : 'Your verification email could not be sent. Please retry.',
         ));
       } else {
-        final phone = await _hydrateSenderSessionRecoverably(
-            user, 'auth.email.profile');
+        final phone =
+            await _hydrateSenderSessionRecoverably(user, 'auth.email.profile');
         if (user.displayName == null) {
           emit(state.copyWith(
               authenticatedStatus: AuthenticatedStatus.incompleteData,

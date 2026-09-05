@@ -99,8 +99,9 @@ void main() {
     expect(handler, contains('if (!completer.isCompleted)'));
     expect(handler, contains('completer.completeError(error)'));
     expect(handler, contains("TimeoutException('phone_otp_request')"));
-    expect(
-        handler, contains('completer.future.timeout(_authOperationTimeout)'));
+    expect(handler, contains('await awaitPhoneVerification('));
+    expect(handler, contains('completion: completer.future'));
+    expect(handler, contains('timeout: _authOperationTimeout'));
     expect(handler, isNot(contains("throw 'Verification failed'")));
     expect(handler, isNot(contains("throw 'Code timed out'")));
   });
@@ -149,7 +150,9 @@ void main() {
     expect(phone, contains('codeSent'));
     expect(phone, contains('codeAutoRetrievalTimeout'));
     expect(phone, contains('if (!completer.isCompleted)'));
-    expect(phone, contains('completer.future.timeout(_authOperationTimeout)'));
+    expect(phone, contains('await awaitPhoneVerification('));
+    expect(phone, contains('completion: completer.future'));
+    expect(phone, contains('timeout: _authOperationTimeout'));
   });
 
   test('Sender verification and account-exit operations are bounded', () {
