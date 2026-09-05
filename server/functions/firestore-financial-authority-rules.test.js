@@ -169,24 +169,26 @@ test("notifications are backend or admin authored only", () => {
 test("rider self updates are field allowlisted and cannot alter admin authority", () => {
   assert.match(rules, /function riderAdminOnlyFields\(\)/);
   assert.match(rules, /function riderSelfWritableFields\(\)/);
-  assert.match(rules, /function isSafeRiderSelfCreate\(driverId\)/);
+  assert.doesNotMatch(rules, /function isSafeRiderSelfCreate\(driverId\)/);
   assert.match(rules, /function isSafeRiderSelfUpdate\(driverId\)/);
   const selfWritableStart = rules.indexOf("function riderSelfWritableFields()");
-  const selfWritableEnd = rules.indexOf("function isSafeRiderSelfCreate", selfWritableStart);
+  const selfWritableEnd = rules.indexOf("function isSafeRiderSelfUpdate", selfWritableStart);
   const selfWritable = rules.slice(selfWritableStart, selfWritableEnd);
   for (const field of [
     "name",
     "fullName",
     "homeAddress",
     "phoneNumber",
-    "vehicleType",
-    "vehicleRegistration",
     "fcmToken",
     "updatedAt",
   ]) {
     assert.match(selfWritable, new RegExp(`'${field}'`));
   }
   for (const field of [
+    "vehicle",
+    "vehicles",
+    "vehicleType",
+    "vehicleRegistration",
     "status",
     "availabilityStatus",
     "vehicleRegistrationDocument",
