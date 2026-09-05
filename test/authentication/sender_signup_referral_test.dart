@@ -2,7 +2,7 @@ import 'dart:async';
 import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:cloud_functions/cloud_functions.dart';
-import '../../lib/app/authentication/sender_signup_referral.dart';
+import 'package:circum/app/authentication/sender_signup_referral.dart';
 
 void main() {
   test(
