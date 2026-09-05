@@ -14,6 +14,7 @@ import 'package:circum/website/shared/policies/driver_performance.dart';
 import 'package:circum/website/shared/policies/gift_request_policy.dart';
 import 'package:circum/website/shared/policies/rider_onboarding_policy.dart';
 import 'package:circum/website/shared/policies/role_access.dart';
+import 'package:circum/website/shared/policies/sender_bootstrap.dart';
 import 'package:circum/website/shared/policies/sender_profile.dart';
 import 'package:circum/website/shared/policies/vanguard_protection.dart';
 import 'package:circum/env/env.dart';
@@ -9345,10 +9346,17 @@ class _CustomerPortalState extends State<_CustomerPortal> {
 
   Future<void> _loadSenderRothBalance() async {
     try {
-      await _ensureFirebaseReady();
+      await _ensureFirebaseReady().timeout(_senderAuthOperationTimeout);
+      final user = _senderUser ?? FirebaseAuth.instance.currentUser;
+      if (user == null || !await _allowSenderUser(user)) {
+        throw FirebaseAuthException(code: 'sender-account-not-allowed');
+      }
       final result = await FirebaseFunctions.instanceFor(
         region: 'us-central1',
-      ).httpsCallable('getSenderRothBalance').call<Map<String, dynamic>>();
+      )
+          .httpsCallable('getSenderRothBalance')
+          .call<Map<String, dynamic>>()
+          .timeout(_senderAuthOperationTimeout);
       final data = Map<String, dynamic>.from(result.data);
       if (!mounted) return;
       setState(() {
@@ -9741,6 +9749,10 @@ class _CustomerPortalState extends State<_CustomerPortal> {
           )
           .timeout(_senderAuthOperationTimeout);
       final user = credential.user!;
+      if (!await _allowSenderUser(user)) {
+        await FirebaseAuth.instance.signOut();
+        throw FirebaseAuthException(code: 'sender-account-not-allowed');
+      }
       await FirebaseFunctions.instanceFor(
         region: 'us-central1',
       ).httpsCallable('updateSenderProfile').call({
@@ -9910,22 +9922,25 @@ class _CustomerPortalState extends State<_CustomerPortal> {
   }
 
   Future<bool> _allowSenderUser(User user) async {
-    final roles = await _rolesForSenderUser(user);
+    final roles =
+        await _rolesForSenderUser(user).timeout(_senderAuthOperationTimeout);
     if (!mounted) return false;
-    setState(() => _availableRoles = roles);
-    if (RoleAccessPolicy.rolesCanAccessSender(roles)) return true;
-    if (!roles.contains(CircumRole.rider) &&
-        !roles.contains(CircumRole.admin)) {
-      final result = await FirebaseFunctions.instanceFor(
-        region: 'us-central1',
-      ).httpsCallable('ensureSenderAccount').call();
-      final data = Map<String, dynamic>.from(result.data as Map);
-      if (data['allowed'] == true) {
-        setState(() => _availableRoles = {CircumRole.sender});
-        return true;
-      }
-    }
-    return false;
+    final allowed = await ensureWebSenderBootstrap(
+      roles: roles,
+      ensureAccount: () async {
+        final result = await FirebaseFunctions.instanceFor(
+          region: 'us-central1',
+        ).httpsCallable('ensureSenderAccount').call<Map<String, dynamic>>()
+            .timeout(_senderAuthOperationTimeout);
+        return result.data;
+      },
+    );
+    if (!mounted || !allowed) return false;
+    setState(() => _availableRoles = {
+          ...roles.where((role) => role != CircumRole.unknown),
+          CircumRole.sender,
+        });
+    return true;
   }
 
   Future<Set<CircumRole>> _rolesForSenderUser(User user) async {
