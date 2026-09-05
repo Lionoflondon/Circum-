@@ -1,5 +1,7 @@
 "use strict";
 
+const settleConcurrent = require("./test-helpers/settle-concurrent");
+
 const assert = require("assert");
 const {test, before, after} = require("node:test");
 const {initializeApp, getApps, deleteApp} = require("firebase-admin/app");
@@ -40,7 +42,7 @@ test("campaign grant is atomic and duplicate/concurrent settlement is one econom
     relatedEntityId: campaignId,
     metadata: {source: "roth_grant_campaign", sourceType: "roth_grant_campaign", campaignId},
   };
-  await Promise.all([recordRothMovement(args), recordRothMovement(args), recordRothMovement(args)]);
+  await settleConcurrent([recordRothMovement(args), recordRothMovement(args), recordRothMovement(args)]);
   const wallet = await db.collection("wallets").doc(uid).get();
   const ledger = await db.collection("walletTransactions").doc(args.transactionId).get();
   const idempotency = await db.collection("rothMovementIdempotency").where("idempotencyKey", "==", args.idempotencyKey).get();
@@ -74,7 +76,7 @@ test("individual grant idempotency is one wallet mutation and one ledger event",
     relatedEntityId: grantId,
     metadata: {source: "admin_individual_grant", sourceType: "admin_roth_grant", grantId},
   };
-  await Promise.all([recordRothMovement(args), recordRothMovement(args)]);
+  await settleConcurrent([recordRothMovement(args), recordRothMovement(args)]);
   const wallet = await db.collection("wallets").doc(uid).get();
   const ledger = await db.collection("walletTransactions").doc(args.transactionId).get();
   const idempotency = await db.collection("rothMovementIdempotency").where("idempotencyKey", "==", args.idempotencyKey).get();
@@ -91,8 +93,8 @@ test("high contention identical and distinct individual grants preserve every ec
     transactionId: "roth_admin_grant_contention_same", idempotencyKey: "admin_roth_grant:contention:same", relatedEntityId: "contention-same",
     metadata: {source: "admin_individual_grant", grantId: "contention-same"},
   };
-  await Promise.all(Array.from({length: 20}, () => recordRothMovement(duplicate)));
-  await Promise.all(Array.from({length: 5}, (_, index) => recordRothMovement({
+  await settleConcurrent(Array.from({length: 20}, () => recordRothMovement(duplicate)));
+  await settleConcurrent(Array.from({length: 5}, (_, index) => recordRothMovement({
     ...duplicate, amount: 2, transactionId: `roth_admin_grant_contention_${index}`, idempotencyKey: `admin_roth_grant:contention:${index}`, relatedEntityId: `contention-${index}`,
     metadata: {source: "admin_individual_grant", grantId: `contention-${index}`},
   })));
@@ -113,7 +115,7 @@ test("conflicting idempotency payload fails closed and campaign plus individual 
   };
   await recordRothMovement(base);
   await assert.rejects(() => recordRothMovement({...base, amount: 8}));
-  await Promise.all([
+  await settleConcurrent([
     recordRothMovement({...base, amount: 5, transactionId: "roth_campaign_race_campaign_race-user", idempotencyKey: "roth_campaign:race:race-user", relatedEntityId: "race", metadata: {source: "roth_grant_campaign", campaignId: "race"}}),
     recordRothMovement({...base, amount: 4, transactionId: "roth_admin_grant_race-two", idempotencyKey: "admin_roth_grant:race:two", relatedEntityId: "race-two", metadata: {source: "admin_individual_grant", grantId: "race-two"}}),
   ]);
