@@ -1053,6 +1053,11 @@ service cloud.firestore {
       allow create, update, delete: if false;
     }
 
+    match /riderRothWallets/{riderId} {
+      allow read: if isAdmin() || (signedIn() && request.auth.uid == riderId);
+      allow create, update, delete: if false;
+    }
+
     match /referrals/{referredUid} {
       allow read: if isAdmin() || (signedIn() && (
         referredUid == request.auth.uid ||

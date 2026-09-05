@@ -5,6 +5,7 @@ const {getFirestore, FieldValue} = require("firebase-admin/firestore");
 const {getStorage} = require("firebase-admin/storage");
 const {canonicalDocumentId, DOCUMENT_MATRIX} = require("./rider-certification-policy");
 const {riderCallable} = require("./rider-app-check");
+const {assertAccountSurface} = require("./account-surface");
 
 const ALLOWED_DOCUMENT_TYPES = new Set(Object.values(DOCUMENT_MATRIX).flat());
 const ALLOWED_CONTENT_TYPES = new Set([
@@ -305,6 +306,7 @@ exports.advanceRiderOnboarding = riderCallable(async (data, context) => {
   let result;
 
   await db.runTransaction(async (transaction) => {
+    await assertAccountSurface(db, transaction, context, "rider");
     const [riderSnap, profileSnap] = await Promise.all([
       transaction.get(riderRef),
       transaction.get(profileRef),
@@ -400,6 +402,7 @@ exports.updateRiderProfile = riderCallable(async (data, context) => {
   const eventRef = db.collection("riderOnboardingEvents").doc();
 
   await db.runTransaction(async (transaction) => {
+    await assertAccountSurface(db, transaction, context, "rider");
     const [profileSnap, riderSnap, applicationSnap, metricsSnap] = await Promise.all([
       transaction.get(profileRef),
       transaction.get(riderRef),
@@ -611,6 +614,7 @@ exports.ensureRiderRothWallet = riderCallable(async (data, context) => {
   const riderRef = db.collection("riders").doc(rider.uid);
   const walletRef = db.collection("riderRothWallets").doc(rider.uid);
   const result = await db.runTransaction(async (transaction) => {
+    await assertAccountSurface(db, transaction, context, "rider");
     const wallet = await transaction.get(walletRef);
     const now = FieldValue.serverTimestamp();
     if (wallet.exists) {
@@ -714,6 +718,7 @@ exports.submitRiderApplication = riderCallable(async (data, context) => {
   const eventRef = db.collection("riderOnboardingEvents").doc();
 
   const result = await db.runTransaction(async (transaction) => {
+    await assertAccountSurface(db, transaction, context, "rider");
     const replay = await transaction.get(idempotencyRef);
     if (replay.exists) return {...replay.data(), idempotent: true};
     const [riderSnap, profileSnap, applicationSnap] = await Promise.all([

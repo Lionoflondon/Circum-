@@ -3,6 +3,7 @@ const functions = require("firebase-functions/v1");
 const {getFirestore, FieldValue} = require("firebase-admin/firestore");
 const crypto = require("crypto");
 const rothLedger = require("./roth-ledger");
+const {assertAccountSurface} = require("./account-surface");
 
 function requireSender(context) {
   if (!context.auth) {
@@ -105,23 +106,27 @@ exports.updateSenderProfile = functions.https.onCall(async (data, context) => {
   const db = getFirestore();
   const ref = db.collection("users").doc(uid);
   senderProfileLog("update_profile_begin", {uid, path: ref.path});
-  const existing = await ref.get();
-  const existingData = existing.exists ? existing.data() || {} : {};
-  const {patch, changedFields} = cleanSenderProfilePatch(data || {}, context);
-  const creatingProfile = !existing.exists;
-  const starterRothRequired = creatingProfile || starterRothPending(existingData);
-  if (creatingProfile) {
-    patch.createdAt = FieldValue.serverTimestamp();
-    patch.starterRothGrantStatus = "pending";
-    patch.starterRothAmount = rothLedger.SENDER_WELCOME_ROTH_AMOUNT;
-  }
-  await ref.set(patch, {merge: true});
-  await db.collection("senderProfileEvents").doc().set({
-    uid,
-    action: "sender_profile_updated",
-    source: "updateSenderProfile",
-    changedFields,
-    createdAt: FieldValue.serverTimestamp(),
+  const {existing, changedFields, starterRothRequired} = await db.runTransaction(async (transaction) => {
+    await assertAccountSurface(db, transaction, context, "sender");
+    const existing = await transaction.get(ref);
+    const existingData = existing.exists ? existing.data() || {} : {};
+    const {patch, changedFields} = cleanSenderProfilePatch(data || {}, context);
+    const creatingProfile = !existing.exists;
+    const starterRothRequired = creatingProfile || starterRothPending(existingData);
+    if (creatingProfile) {
+      patch.createdAt = FieldValue.serverTimestamp();
+      patch.starterRothGrantStatus = "pending";
+      patch.starterRothAmount = rothLedger.SENDER_WELCOME_ROTH_AMOUNT;
+    }
+    transaction.set(ref, patch, {merge: true});
+    transaction.set(db.collection("senderProfileEvents").doc(), {
+      uid,
+      action: "sender_profile_updated",
+      source: "updateSenderProfile",
+      changedFields,
+      createdAt: FieldValue.serverTimestamp(),
+  });
+  return {existing, changedFields, starterRothRequired};
   });
   senderProfileLog("update_profile_complete", {
     uid,
@@ -151,15 +156,17 @@ exports.ensureSenderAccount = functions.https.onCall(async (data, context) => {
   const db = getFirestore();
   const userRef = db.collection("users").doc(uid);
   const riderRef = db.collection("riderProfiles").doc(uid);
+  const legacyRiderRef = db.collection("riders").doc(uid);
   const adminRef = db.collection("adminUsers").doc(uid);
   const now = FieldValue.serverTimestamp();
   senderProfileLog("ensure_begin", {uid, path: userRef.path});
 
   const result = await db.runTransaction(async (transaction) => {
-    const [userSnap, riderSnap, adminSnap] = await Promise.all([
+    const [userSnap, riderSnap, adminSnap, legacyRiderSnap] = await Promise.all([
       transaction.get(userRef),
       transaction.get(riderRef),
       transaction.get(adminRef),
+      transaction.get(legacyRiderRef),
     ]);
     const existing = userSnap.exists ? userSnap.data() || {} : {};
     const roles = new Set([
@@ -176,7 +183,7 @@ exports.ensureSenderAccount = functions.https.onCall(async (data, context) => {
       adminExists: adminSnap.exists,
       roles: Array.from(roles),
     });
-    if (roles.has("admin") || roles.has("rider") || riderSnap.exists || adminSnap.exists) {
+    if (roles.has("admin") || roles.has("rider") || riderSnap.exists || legacyRiderSnap.exists || adminSnap.exists || context.auth.token.admin === true) {
       if (roles.has("sender") || roles.has("user") || roles.has("customer")) {
         return {
           allowed: true,
@@ -382,11 +389,14 @@ exports.updateSenderProfilePhoto = functions.https.onCall(async (data, context) 
   const db = getFirestore();
   const ref = db.collection("users").doc(uid);
   senderProfileLog("update_profile_photo_begin", {uid, path: ref.path});
-  await ref.set({
-    photoURL,
-    accountType: "sender",
-    updatedAt: FieldValue.serverTimestamp(),
-  }, {merge: true});
+  await db.runTransaction(async (transaction) => {
+    await assertAccountSurface(db, transaction, context, "sender");
+    transaction.set(ref, {
+      photoURL,
+      accountType: "sender",
+      updatedAt: FieldValue.serverTimestamp(),
+    }, {merge: true});
+  });
   await db.collection("senderProfileEvents").doc().set({
     uid,
     action: "sender_profile_photo_updated",
