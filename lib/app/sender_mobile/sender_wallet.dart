@@ -1474,7 +1474,7 @@ class _SenderReferralScreenState extends State<SenderReferralScreen> {
               children: [
                 const _WalletGlass(
                   child: Text(
-                    'Earn 5 Roth when someone you invite completes their first successful Circum delivery.',
+                    'Earn 5 Roth when someone you invite completes their first paid delivery.',
                     style: TextStyle(color: Colors.white, height: 1.5),
                   ),
                 ),
