@@ -23,3 +23,20 @@ test("ensureSenderAccount returns explicit outcomes without changing the callabl
   assert.match(source, /action: userSnap\.exists \? "merged_sender_role" : "created_sender_profile"/);
   assert.match(source, /return \{ok: true, \.\.\.result\}/);
 });
+
+test("new Sender profiles mark and grant the 5 Roth starter credit once", () => {
+  assert.match(source, /const rothLedger = require\("\.\/roth-ledger"\);/);
+  assert.match(source, /function starterRothPending\(existing = \{\}\)/);
+  assert.match(source, /async function grantAndMarkSenderStarterRoth/);
+  assert.match(source, /patch\.starterRothGrantStatus = "pending"/);
+  assert.match(source, /patch\.starterRothAmount = rothLedger\.SENDER_WELCOME_ROTH_AMOUNT/);
+  assert.match(source, /starterRothEligible: starterRothPending\(existing\)/);
+  assert.match(source, /starterRothGrantStatus: "pending"/);
+  assert.match(source, /starterRothGranted = true/);
+  assert.match(source, /delete result\.starterRothEligible/);
+});
+
+
+test("existing profiles require a pending grant regardless of legacy Sender role representation", () => {
+  assert.match(source, /const starterRothEligible = !userSnap\.exists \|\| starterRothPending\(existing\);/);
+});

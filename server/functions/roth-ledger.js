@@ -27,6 +27,9 @@ const {
 const communicationEngine = require("./communication-engine");
 const senderTrust = require("./sender-trust");
 
+const SENDER_WELCOME_ROTH_AMOUNT = 5;
+const SENDER_WELCOME_ROTH_REASON = "Welcome Roth credit";
+
 function hasAdminRole(context) {
   const token = context.auth && context.auth.token || {};
   const role = `${token.role || token.adminRole || ""}`.toLowerCase();
@@ -116,8 +119,34 @@ async function requireSenderIdentity(context) {
   });
 }
 
+function hasPendingSenderWelcomeRoth(record = {}) {
+  return `${record.starterRothGrantStatus || ""}`.trim().toLowerCase() === "pending";
+}
+
+async function repairPendingSenderWelcomeRoth(context, source) {
+  const db = getFirestore();
+  const userRef = db.collection("users").doc(context.auth.uid);
+  const userSnap = await userRef.get();
+  const user = userSnap.exists ? userSnap.data() || {} : {};
+  if (!hasPendingSenderWelcomeRoth(user)) return null;
+  const grant = await grantSenderWelcomeRoth({
+    uid: context.auth.uid,
+    email: context.auth.token.email,
+    source,
+  });
+  await userRef.set({
+    starterRothGrantStatus: "granted",
+    starterRothGrantedAt: FieldValue.serverTimestamp(),
+    starterRothAmount: SENDER_WELCOME_ROTH_AMOUNT,
+    starterRothTransactionId: grant.transactionId,
+    updatedAt: FieldValue.serverTimestamp(),
+  }, {merge: true});
+  return grant;
+}
+
 async function initialiseSenderWalletRecord(context) {
   const identity = await requireSenderIdentity(context);
+  const starterRoth = await repairPendingSenderWelcomeRoth(context, "initialiseSenderWallet");
   const db = getFirestore();
   const projectionRef = db.collection("senderWallets").doc(context.auth.uid);
   const legacyRef = db.collection("wallets").doc(identity.walletId);
@@ -159,6 +188,11 @@ async function initialiseSenderWalletRecord(context) {
       currency: "ROTH",
       status: frozen ? "frozen" : "active",
       version: record.version,
+      ...(starterRoth ? {
+        starterRothGranted: true,
+        starterRothAmount: starterRoth.amount,
+        starterRothTransactionId: starterRoth.transactionId,
+      } : {}),
     };
   });
   return result;
@@ -339,6 +373,38 @@ async function safeRecordRothMovement(args) {
 exports.recordRothMovement = recordRothMovement;
 exports.safeRecordRothMovement = safeRecordRothMovement;
 exports.requireTrustedRothAdmin = requireTrustedRothAdmin;
+
+async function grantSenderWelcomeRoth({uid, email = null, source = "sender_account"}) {
+  const cleanUid = `${uid || ""}`.trim();
+  if (!cleanUid) throw new Error("Sender welcome Roth requires uid.");
+  const normalizedEmail = normalizeEmail(email || "");
+  const transactionId = `sender_welcome_roth_${cleanUid}`;
+  const movement = await recordRothMovement({
+    userId: cleanUid,
+    uid: cleanUid,
+    userEmail: normalizedEmail || null,
+    amount: SENDER_WELCOME_ROTH_AMOUNT,
+    balanceType: BALANCE_TYPES.rothCredit,
+    type: TRANSACTION_TYPES.promotionalReward,
+    reason: SENDER_WELCOME_ROTH_REASON,
+    relatedEntityId: cleanUid,
+    transactionId,
+    idempotencyKey: `sender_welcome_roth:${cleanUid}`,
+    metadata: {
+      source: "sender_welcome_roth",
+      trigger: source,
+      starterAmount: SENDER_WELCOME_ROTH_AMOUNT,
+      policy: "new_sender_account_starter_roth",
+    },
+  });
+  return {
+    amount: SENDER_WELCOME_ROTH_AMOUNT,
+    transactionId: movement.transactionId,
+  };
+}
+
+exports.grantSenderWelcomeRoth = grantSenderWelcomeRoth;
+exports.SENDER_WELCOME_ROTH_AMOUNT = SENDER_WELCOME_ROTH_AMOUNT;
 
 async function applyWalletDebit({
   db = getFirestore(),
