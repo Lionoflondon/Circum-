@@ -61,7 +61,7 @@ test("sender quote uses verified server photo analysis without trusting client p
     distanceMiles: 4,
     weightKg: 1,
     parcel: {
-      description: "large TV",
+      description: "laptop",
       weightKg: 1,
     },
     irisPhotoAnalysisId: "client-supplied-id",
@@ -75,7 +75,7 @@ test("sender quote uses verified server photo analysis without trusting client p
     source: "backend_parcel_photo_analysis",
     estimatedWeightKg: 12,
     weightClass: "Large Parcel",
-    inferredItemName: "large TV",
+    inferredItemName: "laptop",
     inferredCategory: "Electronics",
     confidence: "medium",
     confidenceScore: 0.6,

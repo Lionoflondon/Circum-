@@ -260,6 +260,11 @@ const acceptRideRequests = riderCallable(async (data, context) => {
       throw new functions.https.HttpsError("failed-precondition", `Delivery request is not open for acceptance: ${currentStatus}.`);
     }
 
+    for (const collection of ["riders", "riderProfiles", "riderPresence"]) {
+      transaction.set(db.collection(collection).doc(riderId), {activeDeliveryId: found.id, availabilityStatus: "busy", updatedAt: FieldValue.serverTimestamp()}, {merge: true});
+    }
+    transaction.delete(db.doc(`riderOfferProjections/${riderId}/offers/${found.id}`));
+    transaction.delete(db.doc(`riderOfferAuthorizations/${riderId}/jobs/${found.id}`));
     const payload = riderPayload(riderId, rider);
     transaction.set(found.ref, {
       status: "accepted",

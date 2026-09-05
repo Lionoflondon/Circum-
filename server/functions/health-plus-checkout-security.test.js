@@ -62,8 +62,8 @@ test("Health+ receipt stores server-calculated pricing and discrepancies", () =>
 test("Health+ checkout supports client-selected Roth without trusting client totals", () => {
   assert.match(source, /useRoth/);
   assert.match(source, /calculateWalletCheckout\(\{[\s\S]*?orderTotalGbp,[\s\S]*?walletBalanceGbp: walletBalance,[\s\S]*?selectedCurrency: "gbp"/);
-  assert.match(source, /const rothAmount = split\.walletContributionGbp;/);
-  assert.match(source, /const cardAmount = split\.remainingGbp;/);
+  assert.match(source, /let rothAmount = split\.walletContributionGbp;/);
+  assert.match(source, /let cardAmount = split\.remainingGbp;/);
   assert.match(source, /amountPence: recurring \? amountPence : Math\.round\(cardAmount \* 100\)/);
   assert.match(source, /rothLedger\.applyWalletDebit\(\{[\s\S]*?type: "health_payment"/);
   assert.match(source, /transactionId: `wallet_health_plus_\$\{bookingId\}`/);
@@ -89,7 +89,7 @@ test("Health+ checkout finalizes partial Roth only after Stripe confirms", () =>
 });
 
 test("Health+ booking and Sender actions are backend-authoritative callables", () => {
-  assert.match(source, /exports\.createHealthPlusBooking\s*=\s*functions\.https\.onCall/);
+  assert.match(source, /exports\.createHealthPlusBooking\s*=\s*functions\.runWith\([\s\S]*?\.https\.onCall/);
   assert.match(source, /exports\.updateSenderHealthPlusBooking\s*=\s*functions\.https\.onCall/);
   assert.match(indexSource, /exports\.createHealthPlusBooking\s*=\s*healthPlus\.createHealthPlusBooking/);
   assert.match(indexSource, /exports\.updateSenderHealthPlusBooking\s*=\s*healthPlus\.updateSenderHealthPlusBooking/);

@@ -65,13 +65,18 @@ test("Operations Admin writes remain available and usage events remain append-on
   }
 });
 
-test("legitimate create and schedule controls work through backend callables with idempotency and ownership", async () => {
+test("legitimate create and schedule controls work through backend callables with idempotency and ownership", async (t) => {
+  process.env.GOOGLE_MAPS_DIRECTIONS_API_KEY = "emulator-test";
+  t.mock.method(global, "fetch", async () => ({ok: true, json: async () => ({status: "OK", routes: [{legs: [{distance: {value: 3218.688}}]}]})}));
   const context = {auth: {uid: "booking-owner", token: {email: "booking-owner@example.invalid"}}};
   const input = {consentConfirmed: true, fullName: "Sender", phoneNumber: "+447700900001", pharmacyAddress: "Pharmacy", deliveryAddress: "Home", preferredPickupTime: "10:00", frequency: "weekly", subscriptionPlan: "core", pricingInputs: {distanceMiles: 2, medicationWeightKg: 1}, idempotencyKey: "health-authority-booking"};
   const booking = await health.createHealthPlusBooking.run(input, context);
   const replay = await health.createHealthPlusBooking.run(input, context);
   assert.equal(replay.pickupId, booking.pickupId);
   assert.equal(replay.idempotent, true);
+  const forged = await health.createHealthPlusBooking.run({...input, idempotencyKey: "forged-distance", pricingInputs: {distanceMiles: 0.01, medicationWeightKg: 1}}, context);
+  assert.equal((await db.doc(`prescriptionPickups/${forged.pickupId}`).get()).data().amountPence,
+    (await db.doc(`prescriptionPickups/${booking.pickupId}`).get()).data().amountPence);
   await health.updateSenderHealthPlusBooking.run({action: "pause_schedule", scheduleId: booking.scheduleId, idempotencyKey: "owner-pause"}, context);
   assert.equal((await db.doc(`recurringPickupSchedules/${booking.scheduleId}`).get()).data().paused, true);
   await assert.rejects(health.updateSenderHealthPlusBooking.run({action: "resume_schedule", scheduleId: booking.scheduleId, idempotencyKey: "stranger-resume"}, {auth: {uid: "stranger", token: {}}}), /not found/);
