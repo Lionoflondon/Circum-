@@ -137,11 +137,13 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
 
   Future<String?> _hydrateSenderSession(User user, String phase) async {
     final storage = const FlutterSecureStorage();
-    final profile = await SenderProfileAuthority(
+    final authority = SenderProfileAuthority(
       auth: auth,
       firestore: db,
       functions: functions,
-    ).load(phase);
+    );
+    await authority.ensureCanonicalSenderAccount(user, '$phase.ensure');
+    final profile = await authority.load(phase);
     final phone = profile.data['phone'] ?? user.phoneNumber;
     if (phone != null && '$phone'.trim().isNotEmpty) {
       await storage

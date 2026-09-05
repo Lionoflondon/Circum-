@@ -135,10 +135,16 @@ class SenderProfileAuthority {
       event: 'ensure_begin',
     );
     try {
-      await functions
+      final result = await functions
           .httpsCallable('ensureSenderAccount')
-          .call<void>()
+          .call<Map<String, dynamic>>()
           .timeout(senderAccountEnsureTimeout);
+      if (result.data['allowed'] != true) {
+        throw FirebaseFunctionsException(
+          code: 'permission-denied',
+          message: 'This account cannot access Sender.',
+        );
+      }
       logSenderProfileStage(
         uid: user.uid,
         phase: phase,
