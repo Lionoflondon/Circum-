@@ -375,7 +375,7 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
             }
           },
         ),
-        completion: completer.future,
+        completion: completer.future.timeout(_authOperationTimeout),
         timeout: _authOperationTimeout,
       );
 
