@@ -327,6 +327,7 @@ exports.redactLegacyPayoutBankFields =
 exports.syncSenderTrustBaseline = senderTrust.syncSenderTrustBaseline;
 exports.adminUpdateSenderTrust = senderTrust.adminUpdateSenderTrust;
 exports.ensureReferralCode = referrals.ensureReferralCode;
+exports.ensureRiderReferralCode = referrals.ensureRiderReferralCode;
 exports.attachReferralCode = referrals.attachReferralCode;
 exports.activateReferral = referrals.activateReferral;
 exports.activateReferralOnDeliveryCompleted =

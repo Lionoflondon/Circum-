@@ -47,6 +47,12 @@ exports.ensureReferralCode = functions.https.onCall(async (data, context) => {
   const uid = context.auth.uid;
   const userRef = db.collection("users").doc(uid);
   const snap = await userRef.get();
+  const sender = snap.data() || {};
+  const roles = [...(Array.isArray(sender.roles) ? sender.roles : []), sender.role, sender.userType, sender.accountType];
+  const isSender = roles.some((role) => ["sender", "user", "customer"].includes(`${role || ""}`.toLowerCase()));
+  if (!isSender && (await riderReferralProfile(db, uid)).exists) {
+    return ensureRiderReferralCode(data, context);
+  }
   const existing = normalizeCode(snap.data() && snap.data().referralCode);
   if (existing) {
     return {referralCode: existing, referralLink: `https://circumuk.com/join/${existing}`};
@@ -79,6 +85,36 @@ exports.ensureReferralCode = functions.https.onCall(async (data, context) => {
   throw new functions.https.HttpsError("already-exists", "Could not create a unique referral code.");
 });
 
+async function riderReferralProfile(db, uid, transaction = null) {
+  const read = (ref) => transaction ? transaction.get(ref) : ref.get();
+  const [profile, rider] = await Promise.all([read(db.doc(`riderProfiles/${uid}`)), read(db.doc(`riders/${uid}`))]);
+  return {exists: profile.exists || rider.exists, data: {...profile.data(), ...rider.data()}};
+}
+function riderReferralEligible(profile) {
+  const {riderApproved} = require("./rider-presence-core");
+  return riderApproved(profile) && !profile.isSuspended && !profile.isFrozen && !profile.isClosed &&
+    !["suspended", "frozen", "closed", "rejected"].includes(`${profile.riderStatus || ""}`.toLowerCase());
+}
+async function ensureRiderReferralCode(_data, context) {
+  requireAuth(context);
+  const db = getFirestore(); const uid = context.auth.uid;
+  const email = normalizeEmail(context.auth.token.email || await userEmail(uid));
+  const code = `R${require("node:crypto").createHash("sha256").update(uid).digest("hex").slice(0, 23)}`.toUpperCase();
+  return db.runTransaction(async (transaction) => {
+    const profile = await riderReferralProfile(db, uid, transaction);
+    if (!profile.exists || !riderReferralEligible(profile.data)) {
+      throw new functions.https.HttpsError("permission-denied", "Rider approval is required to share a referral code.");
+    }
+    const ref = db.doc(`referralCodes/${code}`); const existing = await transaction.get(ref);
+    if (existing.exists && existing.data().userId !== uid) throw new functions.https.HttpsError("already-exists", "Referral code collision. Contact support.");
+    const link = `https://circumuk.com/rider?referral=${code}`;
+    if (!existing.exists) transaction.set(ref, {code, userId: uid, userEmail: email, program: "rider", createdAt: FieldValue.serverTimestamp()});
+    transaction.set(db.doc(`riderProfiles/${uid}`), {riderReferralCode: code, riderReferralLink: link}, {merge: true});
+    return {referralCode: code, referralLink: link, rewardAmount: 5, rewardCurrency: "ROTH", rewardSource: "Referral"};
+  });
+}
+exports.ensureRiderReferralCode = functions.https.onCall(ensureRiderReferralCode);
+
 exports.attachReferralCode = functions.https.onCall(async (data, context) => {
   requireAuth(context);
   if (!data || typeof data !== "object" || typeof data.referralCode !== "string" || data.referralCode.length > 256) {
@@ -101,6 +137,12 @@ exports.attachReferralCode = functions.https.onCall(async (data, context) => {
     }
     const codeSnap = await transaction.get(codeRef);
     if (!codeSnap.exists) return {status: "not_found"};
+    const riderProgram = codeSnap.data().program === "rider";
+    if (data.program === "rider" && !riderProgram) return {status: "not_found"};
+    if (riderProgram) {
+      const profile = await riderReferralProfile(db, referredUserId, transaction);
+      if (!profile.exists) return {status: "invalid"};
+    }
     const referrerUserId = codeSnap.data().userId;
     if (typeof referrerUserId !== "string" || !referrerUserId) return {status: "invalid"};
     const referrerEmail = normalizeEmail(codeSnap.data().userEmail || (referrerUserId === owner ? fallbackEmail : ""));
@@ -113,6 +155,7 @@ exports.attachReferralCode = functions.https.onCall(async (data, context) => {
       referredUserId,
       referredEmail,
       referralCode: code,
+      ...(riderProgram ? {program: "rider"} : {}),
       status,
       rewardStatus: self ? REFERRAL_STATUSES.rejected : status,
       rewardAmount: self ? 0 : DEFAULT_REWARD,
@@ -183,8 +226,13 @@ async function activateReferralForUser({referredUserId, activityType, activityId
     return {status: snap.exists ? snap.data().status : "none"};
   }
   const referral = snap.data();
+  if (referral.program === "rider" && activityType !== "rider_completed_delivery") return {status: "not_qualifying"};
+  if (activityType === "rider_completed_delivery") {
+    const profile = await riderReferralProfile(db, referredUserId);
+    if (!profile.exists || !riderReferralEligible(profile.data)) return {status: "not_qualifying"};
+  }
   if (referral.referrerUserId === referredUserId) return {status: "rejected"};
-  const reward = Number(referral.rewardAmount || DEFAULT_REWARD);
+  const reward = DEFAULT_REWARD;
   try {
     await db.runTransaction(async (transaction) => {
       const latest = await transaction.get(referralRef);
@@ -246,6 +294,7 @@ async function activateReferralForUser({referredUserId, activityType, activityId
       rewardStatus: REFERRAL_STATUSES.rothAwarded,
       rewardAmount: reward,
       rewardCurrency: "ROTH",
+      rewardSource: "Referral",
       inviterUserId: referral.referrerUserId,
       referredUserId,
       rewardedAt: FieldValue.serverTimestamp(),
