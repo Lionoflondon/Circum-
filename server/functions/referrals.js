@@ -81,34 +81,31 @@ exports.ensureReferralCode = functions.https.onCall(async (data, context) => {
 
 exports.attachReferralCode = functions.https.onCall(async (data, context) => {
   requireAuth(context);
+  if (!data || typeof data !== "object" || typeof data.referralCode !== "string" || data.referralCode.length > 256) {
+    throw new functions.https.HttpsError("invalid-argument", "Supply a referral code string.");
+  }
   const code = normalizeCode(data.referralCode);
-  if (!code) throw new functions.https.HttpsError("invalid-argument", "Referral code is required.");
+  if (!code) return {status: "invalid"};
   const db = getFirestore();
-  const codeSnap = await db.collection("referralCodes").doc(code).get();
-  if (!codeSnap.exists) {
-    throw new functions.https.HttpsError("not-found", "Referral code was not found.");
-  }
-  const referrerUserId = codeSnap.data().userId;
   const referredUserId = context.auth.uid;
-  const referrerEmail = normalizeEmail(codeSnap.data().userEmail || await userEmail(referrerUserId));
   const referredEmail = normalizeEmail(context.auth.token.email || await userEmail(referredUserId));
-  const referralId = referredUserId;
-  if (referrerUserId === referredUserId || (referrerEmail && referrerEmail === referredEmail)) {
-    await db.collection("referrals").doc(referralId).set({
-      referrerUserId,
-      referredUserId,
-      referralCode: code,
-      status: "rejected",
-      rejectionReason: "Self-referral blocked.",
-      createdAt: FieldValue.serverTimestamp(),
-      rejectedAt: FieldValue.serverTimestamp(),
-    }, {merge: true});
-    return {status: "rejected"};
-  }
-  await db.runTransaction(async (transaction) => {
-    const referralRef = db.collection("referrals").doc(referralId);
+  const codeRef = db.collection("referralCodes").doc(code);
+  const preliminary = await codeRef.get();
+  const owner = preliminary.exists && preliminary.data().userId;
+  const fallbackEmail = owner && !preliminary.data().userEmail ? await userEmail(owner) : "";
+  return db.runTransaction(async (transaction) => {
+    const referralRef = db.collection("referrals").doc(referredUserId);
     const existing = await transaction.get(referralRef);
-    if (existing.exists) return;
+    if (existing.exists && !["rejected", "REJECTED"].includes(existing.data().status)) {
+      return {status: "already_attached"};
+    }
+    const codeSnap = await transaction.get(codeRef);
+    if (!codeSnap.exists) return {status: "not_found"};
+    const referrerUserId = codeSnap.data().userId;
+    if (typeof referrerUserId !== "string" || !referrerUserId) return {status: "invalid"};
+    const referrerEmail = normalizeEmail(codeSnap.data().userEmail || (referrerUserId === owner ? fallbackEmail : ""));
+    const self = referrerUserId === referredUserId || (referrerEmail && referrerEmail === referredEmail);
+    const status = self ? "rejected" : REFERRAL_STATUSES.signedUp;
     transaction.set(referralRef, {
       referrerUserId,
       inviterUserId: referrerUserId,
@@ -116,23 +113,25 @@ exports.attachReferralCode = functions.https.onCall(async (data, context) => {
       referredUserId,
       referredEmail,
       referralCode: code,
-      status: REFERRAL_STATUSES.signedUp,
-      rewardStatus: REFERRAL_STATUSES.signedUp,
-      rewardAmount: DEFAULT_REWARD,
+      status,
+      rewardStatus: self ? REFERRAL_STATUSES.rejected : status,
+      rewardAmount: self ? 0 : DEFAULT_REWARD,
       rewardCurrency: "ROTH",
       rewardSource: "Referral",
-      createdAt: FieldValue.serverTimestamp(),
+      createdAt: existing.exists ? existing.data().createdAt || FieldValue.serverTimestamp() : FieldValue.serverTimestamp(),
       signedUpAt: FieldValue.serverTimestamp(),
       updatedAt: FieldValue.serverTimestamp(),
+      ...(self ? {rejectionReason: "Self-referral blocked.", rejectedAt: FieldValue.serverTimestamp()} : {}),
     });
+    if (self) return {status: "rejected_self_referral"};
     transaction.set(db.collection("users").doc(referredUserId), {
       referredBy: referrerUserId,
       referralCodeUsed: code,
       referralProgramStatus: REFERRAL_STATUSES.signedUp,
       updatedAt: FieldValue.serverTimestamp(),
     }, {merge: true});
+    return {status: "applied"};
   });
-  return {status: REFERRAL_STATUSES.signedUp};
 });
 
 exports.activateReferral = functions.https.onCall(async (_, context) => {
@@ -166,6 +165,7 @@ async function loadQualifyingActivity({referredUserId, activityType, activityId}
   const refund = `${activity.refundStatus || ""}`.toLowerCase();
   if (`${ownerId || ""}` !== referredUserId ||
       !QUALIFYING_TERMINAL_STATES.has(status) ||
+      (collection !== "deliveryRequests" && status !== "completed") ||
       !PAID_STATES.has(payment) ||
       ["refunded", "partially_refunded", "failed", "cancelled", "canceled"].includes(refund)) {
     return null;
