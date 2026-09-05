@@ -667,7 +667,7 @@ async function getOrCreateSupportConversation(data, context) {
 }
 
 async function submitWebsiteSupportRequest(data, context) {
-  const message = clean(data.message).slice(0, 4000);
+  const message = maskContactDetails(data.message).slice(0, 4000);
   const email = clean(data.email).slice(0, 180).toLowerCase();
   if (!message || !email || !email.includes("@")) {
     throw new functions.https.HttpsError("invalid-argument", "Contact email and message are required.");

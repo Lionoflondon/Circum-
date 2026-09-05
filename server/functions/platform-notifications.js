@@ -104,8 +104,10 @@ async function notify({recipientId, recipientRole, type, title, body, bookingId,
     });
   }
   const db = getFirestore();
-  const ref = db.collection("notifications").doc();
-  await ref.set({
+  const ref = dedupeKey ?
+    db.collection("notifications").doc(`event_${Buffer.from(dedupeKey).toString("base64url")}`) :
+    db.collection("notifications").doc();
+  const payload = {
     recipientId: recipientId || null,
     recipientRole,
     type,
@@ -116,7 +118,18 @@ async function notify({recipientId, recipientRole, type, title, body, bookingId,
     data,
     read: false,
     createdAt: FieldValue.serverTimestamp(),
-  });
+  };
+  if (dedupeKey) {
+    const created = await db.runTransaction(async (transaction) => {
+      const existing = await transaction.get(ref);
+      if (existing.exists) return false;
+      transaction.set(ref, {...payload, dedupeKey});
+      return true;
+    });
+    if (!created) return ref.id;
+  } else {
+    await ref.set(payload);
+  }
 
   let token = "";
   if (recipientRole === "admin") {
@@ -485,6 +498,7 @@ exports.onGiftCampaignParticipantUpdated = functions.firestore.document("giftCam
 
 exports.onChatMessageCreated = functions.firestore.document("chats/{chatId}/messages/{messageId}").onCreate(async (snapshot, context) => {
   const message = snapshot.data();
+  const messageId = text(context.params.messageId);
   const chat = await getFirestore().collection("chats").doc(context.params.chatId).get();
   if (!chat.exists) return;
   const chatData = chat.data();
@@ -501,8 +515,9 @@ exports.onChatMessageCreated = functions.firestore.document("chats/{chatId}/mess
     body: text(message.messageText || message.message) || "You have a new message.",
     bookingId,
     ticketId,
+    dedupeKey: `${context.params.chatId}:${messageId}:chat:${uid}`,
   })));
-  if (message.initialSupportRequest !== true && text(message.senderRole) !== "admin" && (chatData.type === "support" || participants.includes("circum-support"))) await notify({recipientRole: "admin", type: "admin_response_needed", title: "New support message", body: "A shipper or rider sent a new message.", bookingId, ticketId});
+  if (message.initialSupportRequest !== true && text(message.senderRole) !== "admin" && (chatData.type === "support" || participants.includes("circum-support"))) await notify({recipientRole: "admin", type: "admin_response_needed", title: "New support message", body: "A shipper or rider sent a new message.", bookingId, ticketId, dedupeKey: `${context.params.chatId}:${messageId}:chat:admin`});
 });
 
 exports.onSupportTicketCreated = functions.firestore.document("supportTickets/{ticketId}").onCreate((snapshot) => notify({recipientRole: "admin", type: "support_ticket", title: "New support ticket", body: text(snapshot.data().message) || "A new support request was opened.", ticketId: snapshot.id}));
