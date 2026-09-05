@@ -1117,33 +1117,27 @@ service cloud.firestore {
     }
 
     match /prescriptionPickups/{pickupId} {
-      allow read, update, delete: if isAdmin() ||
+      allow read: if isAdmin() ||
         canReadBusinessId(resource.data.businessId) ||
         (signedIn() && resource.data.senderId == request.auth.uid) ||
         (signedIn() && resource.data.userId == request.auth.uid) ||
         isAssignedRider();
-      allow create: if isAdmin() ||
-        (signedIn() && request.resource.data.senderId == request.auth.uid) ||
-        (signedIn() && request.resource.data.userId == request.auth.uid);
+      allow create, update, delete: if isAdmin();
     }
 
     match /healthPlusProfiles/{profileId} {
-      allow read, update: if isAdmin() ||
+      allow read: if isAdmin() ||
         (signedIn() && resource.data.senderId == request.auth.uid) ||
         (signedIn() && resource.data.userId == request.auth.uid);
-      allow create: if isAdmin() ||
-        (signedIn() && request.resource.data.senderId == request.auth.uid) ||
-        (signedIn() && request.resource.data.userId == request.auth.uid);
+      allow create, update: if isAdmin();
       allow delete: if hasRole('super_admin');
     }
 
     match /recurringPickupSchedules/{scheduleId} {
-      allow read, update: if isAdmin() ||
+      allow read: if isAdmin() ||
         (signedIn() && resource.data.senderId == request.auth.uid) ||
         (signedIn() && resource.data.userId == request.auth.uid);
-      allow create: if isAdmin() ||
-        (signedIn() && request.resource.data.senderId == request.auth.uid) ||
-        (signedIn() && request.resource.data.userId == request.auth.uid);
+      allow create, update: if isAdmin();
       allow delete: if isAdmin();
     }
 
@@ -1151,9 +1145,7 @@ service cloud.firestore {
       allow read: if isAdmin() ||
         (signedIn() && resource.data.senderId == request.auth.uid) ||
         (signedIn() && resource.data.userId == request.auth.uid);
-      allow create: if isAdmin() ||
-        (signedIn() && request.resource.data.senderId == request.auth.uid) ||
-        (signedIn() && request.resource.data.userId == request.auth.uid);
+      allow create: if isAdmin();
       allow update, delete: if isAdmin();
     }
 
@@ -1161,9 +1153,7 @@ service cloud.firestore {
       allow read: if isAdmin() ||
         (signedIn() && resource.data.senderId == request.auth.uid) ||
         (signedIn() && resource.data.userId == request.auth.uid);
-      allow create: if isAdmin() ||
-        (signedIn() && request.resource.data.senderId == request.auth.uid) ||
-        (signedIn() && request.resource.data.userId == request.auth.uid);
+      allow create: if isAdmin();
       allow update, delete: if false;
     }
 
