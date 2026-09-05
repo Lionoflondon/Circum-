@@ -491,9 +491,10 @@ exports.requestSenderCancellation = (stripe) => senderPaymentCallable(async (dat
         "Cancellation is being reconciled safely. Refresh shortly before trying again.",
     );
   }
-});
+}, {secrets: ["STRIPE_SECRET_KEY"]});
 
-exports.reconcilePendingSenderCancellations = (stripe) => functions.pubsub
+exports.reconcilePendingSenderCancellations = (stripe) => functions
+    .runWith({secrets: ["STRIPE_SECRET_KEY"]}).pubsub
     .schedule("every 5 minutes")
     .onRun(async () => {
       const collection = getFirestore().collection("deliveryCancellationSettlements");
