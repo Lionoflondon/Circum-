@@ -138,3 +138,15 @@ test("8 MiB document uses bounded chunks, finalizes once and clears temporary ob
   assert.equal(temporary.length, 0);
   await assert.rejects(account.submitRiderDocument.run({...base, chunk: {...manifest, sizeBytes: bytes.length + 1, index: 0, base64: "AA=="}}, ctx));
 });
+
+
+test("abandoned chunk cleanup removes expired staging without deleting completed documents", async () => {
+  const staging = bucket.file("rider_document_chunks/abandoned/request/primary_test_0");
+  const completed = bucket.file("rider_documents/abandoned/accepted.pdf");
+  await staging.save(Buffer.from("partial"));
+  await completed.save(Buffer.from("%PDF-1.4"));
+  const chunks = require("./rider-document-chunks");
+  await chunks.cleanupExpired({bucket, now: Date.now() + 25 * 60 * 60 * 1000});
+  assert.equal((await staging.exists())[0], false);
+  assert.equal((await completed.exists())[0], true);
+});

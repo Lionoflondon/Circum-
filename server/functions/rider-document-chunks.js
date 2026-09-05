@@ -62,3 +62,31 @@ async function cleanup(uid, key, files) {
   }
 }
 module.exports = {stage, assemble, cleanup, fingerprint};
+
+// Staging is private and disposable: retries re-upload their full manifest.
+// Use generation preconditions so cleanup cannot delete a concurrent replacement.
+async function cleanupExpired({bucket = getStorage().bucket(), now = Date.now()} = {}) {
+  const cutoff = now - 24 * 60 * 60 * 1000;
+  const deadline = Date.now() + 8 * 60 * 1000;
+  let query = {prefix: "rider_document_chunks/", maxResults: 500, autoPaginate: false};
+  let deleted = 0;
+  do {
+    const [files, nextQuery] = await bucket.getFiles(query);
+    for (const file of files) {
+      if (Date.now() >= deadline) return {deleted, incomplete: true};
+      if (!file.name.startsWith("rider_document_chunks/")) continue;
+      const metadata = file.metadata || {};
+      const created = Date.parse(metadata.timeCreated || "");
+      if (!Number.isFinite(created) || created >= cutoff || !metadata.generation) continue;
+      try {
+        await file.delete({ifGenerationMatch: metadata.generation, ignoreNotFound: true});
+        deleted += 1;
+      } catch (error) {
+        if (Number(error.code) !== 412) throw error;
+      }
+    }
+    query = nextQuery ? {...nextQuery, prefix: "rider_document_chunks/", autoPaginate: false} : null;
+  } while (query);
+  return {deleted, incomplete: false};
+}
+module.exports.cleanupExpired = cleanupExpired;

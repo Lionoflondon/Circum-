@@ -1043,4 +1043,7 @@ exports.submitRiderDocument = riderCallable(async (data, context) => {
   return {ok: true, documentId: documentRef.id, storagePath: primary.storagePath, downloadUrl: primary.signedUrl, attachments: Object.fromEntries(uploaded.map((file) => [file.side, {storagePath: file.storagePath, downloadUrl: file.signedUrl}]))};
 });
 
+exports.cleanupRiderDocumentChunks = functions.runWith({timeoutSeconds: 540})
+    .pubsub.schedule("every 24 hours").onRun(() => documentChunks.cleanupExpired());
+
 exports._test = {canonicalDateOfBirth, newPublicRiderId, profilePatch, onboardingVehicle};
