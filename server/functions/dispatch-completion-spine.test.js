@@ -31,7 +31,7 @@ test("cancellation and no-show compensation post one idempotent Rider ledger ent
   assert.match(policy, /function recordRiderCompensation/);
   assert.match(policy, /type: financial\.chargeType === "no_show_fee" \? "no_show_compensation" : "cancellation_compensation"/);
   assert.match(policy, /transaction\.create\(db\.collection\("riderEarningTransactions"\)/);
-  assert.equal((policy.match(/recordRiderCompensation\(transaction, db, financial\)/g) || []).length, 3);
+  assert.equal((policy.match(/recordRiderCompensation\(transaction, db,/g) || []).length, 3);
 });
 
 test("lifecycle callables use protected App Check wrappers", () => {
@@ -39,7 +39,8 @@ test("lifecycle callables use protected App Check wrappers", () => {
   for (const callable of ["recordRiderArrival", "recordArrivalZoneCheck", "reportWaitingContext", "markRiderNoShow"]) {
     assert.match(policy, new RegExp(`exports\\.${callable} = riderCallable`));
   }
-  for (const callable of ["requestSenderCancellation", "previewSenderCancellation", "recordCustomerArrivalResponse"]) {
+  assert.match(policy, /exports\.requestSenderCancellation = \(stripe\) => senderPaymentCallable/);
+  for (const callable of ["previewSenderCancellation", "recordCustomerArrivalResponse"]) {
     assert.match(policy, new RegExp(`exports\\.${callable} = senderPaymentCallable`));
   }
 });
@@ -49,5 +50,5 @@ test("delivery lifecycle notifications use deterministic event keys", () => {
   const engine = source("communication-engine.js");
   assert.match(notifications, /dedupeKey: `\$\{change\.after\.id\}:\$\{status\}:sender:/);
   assert.match(engine, /normalizedDedupeKey/);
-  assert.match(engine, /if \(!created\) return ref\.id/);
+  assert.match(engine, /if \(!created\)[\s\S]*retryExisting[\s\S]*return ref\.id/);
 });

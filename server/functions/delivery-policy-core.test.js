@@ -8,6 +8,66 @@ const pickup = {lat: 51.5155, lng: -0.1419};
 const nearby = {lat: 51.51555, lng: -0.14185, clientRecordedAt: now};
 const farAway = {lat: 51.517, lng: -0.145, clientRecordedAt: now};
 
+test("cancellation settlement applies fees to Stripe before Roth", () => {
+  assert.deepEqual(policy.cancellationSettlement({
+    grossDeliveryTotal: 20, stripePaid: 13, rothPaid: 7,
+    cancellationFee: 3, riderCompensation: 2, circumRetained: 1,
+  }), {
+    grossDeliveryTotal: 20, stripePaid: 13, rothPaid: 7,
+    cancellationFee: 3, riderCompensation: 2, circumRetained: 1,
+    stripeFee: 3, rothFee: 0, stripeRefund: 10, rothRestoration: 7,
+    totalRefundValue: 17, allocationPolicy: "stripe_first",
+  });
+});
+
+test("cancellation settlement uses Roth only after Stripe is exhausted", () => {
+  const result = policy.cancellationSettlement({
+    grossDeliveryTotal: 20, stripePaid: 2, rothPaid: 18,
+    cancellationFee: 5, riderCompensation: 3, circumRetained: 2,
+  });
+  assert.equal(result.stripeRefund, 0);
+  assert.equal(result.rothRestoration, 15);
+  assert.equal(result.totalRefundValue, 15);
+});
+
+test("cancellation settlement rejects payment and fee drift", () => {
+  assert.throws(() => policy.cancellationSettlement({
+    grossDeliveryTotal: 20, stripePaid: 12, rothPaid: 7,
+    cancellationFee: 3, riderCompensation: 2, circumRetained: 1,
+  }), /does not reconcile/);
+  assert.throws(() => policy.cancellationSettlement({
+    grossDeliveryTotal: 20, stripePaid: 13, rothPaid: 7,
+    cancellationFee: 3, riderCompensation: 1, circumRetained: 1,
+  }), /does not reconcile/);
+});
+
+test("Stripe-only, Roth-only and mixed cancellation matrices reconcile", () => {
+  const cases = [
+    {stripePaid: 20, rothPaid: 0, fee: 0, stripeRefund: 20, rothRestoration: 0},
+    {stripePaid: 0, rothPaid: 20, fee: 0, stripeRefund: 0, rothRestoration: 20},
+    {stripePaid: 13, rothPaid: 7, fee: 0, stripeRefund: 13, rothRestoration: 7},
+    {stripePaid: 13, rothPaid: 7, fee: 3, stripeRefund: 10, rothRestoration: 7},
+    {stripePaid: 13, rothPaid: 7, fee: 5, stripeRefund: 8, rothRestoration: 7},
+    {stripePaid: 13, rothPaid: 7, fee: 7, stripeRefund: 6, rothRestoration: 7},
+    {stripePaid: 2, rothPaid: 18, fee: 7, stripeRefund: 0, rothRestoration: 13},
+  ];
+  for (const item of cases) {
+    const riderCompensation = item.fee === 3 ? 2 : item.fee === 5 ? 3 : item.fee === 7 ? 4 : 0;
+    const result = policy.cancellationSettlement({
+      grossDeliveryTotal: 20,
+      stripePaid: item.stripePaid,
+      rothPaid: item.rothPaid,
+      cancellationFee: item.fee,
+      riderCompensation,
+      circumRetained: item.fee - riderCompensation,
+    });
+    assert.equal(result.stripeRefund, item.stripeRefund);
+    assert.equal(result.rothRestoration, item.rothRestoration);
+    assert.equal(result.totalRefundValue, 20 - item.fee);
+    assert.equal(result.riderCompensation + result.circumRetained, item.fee);
+  }
+});
+
 test("cancellation policy is free before rider acceptance", () => {
   for (const state of ["requested", "pending", "unmatched", "finding_rider", "broadcasting", "available", "awaiting_rider"]) {
     const decision = policy.cancellationDecision({state, serverNow: now});
@@ -317,4 +377,31 @@ test("fraud detection creates review signals only", () => {
   });
   assert.ok(signals.length >= 4);
   assert.equal(signals.every((signal) => signal.automaticPenalty === false), true);
+});
+
+
+test("stale state aliases cannot authorize cancellation after collection", () => {
+  for (const status of ["collected", "pickup_verified", "in_transit", "delivered", "cancelled_by_sender"]) {
+    assert.equal(policy.cancellationDecision({state: "accepted", delivery: {state: "accepted", status}, serverNow: now}).canCancel, false);
+  }
+});
+test("invalid monetary authority is rejected rather than coerced to zero", () => {
+  for (const grossDeliveryTotal of [undefined, null, NaN, Infinity, "20"]) {
+    assert.throws(() => policy.cancellationSettlement({grossDeliveryTotal, stripePaid: 13, rothPaid: 7, cancellationFee: 3}), /finite/);
+  }
+});
+
+
+test("penny-level allocations conserve value across small contributions and all fee boundaries", () => {
+  for (let stripePence = 0; stripePence <= 25; stripePence++) {
+    for (let rothPence = 0; rothPence <= 25; rothPence++) {
+      for (let feePence = 0; feePence <= stripePence + rothPence; feePence++) {
+        const result = policy.cancellationSettlement({grossDeliveryTotal: (stripePence + rothPence) / 100,
+          stripePaid: stripePence / 100, rothPaid: rothPence / 100, cancellationFee: feePence / 100});
+        assert.equal(Math.round(result.stripeRefund * 100), Math.max(0, stripePence - feePence));
+        assert.equal(Math.round(result.rothRestoration * 100), rothPence - Math.max(0, feePence - stripePence));
+        assert.equal(Math.round(result.totalRefundValue * 100), stripePence + rothPence - feePence);
+      }
+    }
+  }
 });

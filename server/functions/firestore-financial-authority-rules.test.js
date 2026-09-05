@@ -132,6 +132,13 @@ test("Stripe Connect webhook replay ledger is server-owned only", () => {
   );
 });
 
+test("delivery cancellation settlements are backend-owned only", () => {
+  assert.match(
+      rules,
+      /match \/deliveryCancellationSettlements\/\{deliveryId\} \{[\s\S]*allow read, write: if false;/,
+  );
+});
+
 test("rider applications and documents are backend/admin write-authoritative", () => {
   assert.match(
       rules,

@@ -54,6 +54,59 @@ function money(value) {
   return Math.round((Number(value) || 0) * 100) / 100;
 }
 
+function cancellationSettlement({
+  grossDeliveryTotal,
+  stripePaid,
+  rothPaid,
+  cancellationFee,
+  riderCompensation = 0,
+  circumRetained = null,
+} = {}) {
+  const values = [grossDeliveryTotal, stripePaid, rothPaid, cancellationFee, riderCompensation];
+  if (circumRetained != null) values.push(circumRetained);
+  if (values.some((value) => typeof value !== "number" || !Number.isFinite(value) ||
+      !Number.isSafeInteger(Math.round(value * 100)) ||
+      Math.abs(value * 100 - Math.round(value * 100)) > 0.000001)) {
+    throw new Error("Cancellation financial values must be finite monetary amounts.");
+  }
+  const gross = money(grossDeliveryTotal);
+  const stripe = money(stripePaid);
+  const roth = money(rothPaid);
+  const fee = money(cancellationFee);
+  const rider = money(riderCompensation);
+  const circum = money(circumRetained == null ? fee - rider : circumRetained);
+  if ([gross, stripe, roth, fee, rider, circum].some((value) => value < 0)) {
+    throw new Error("Cancellation financial values cannot be negative.");
+  }
+  if (money(stripe + roth) !== gross) {
+    throw new Error("Cancellation funding does not reconcile to the delivery total.");
+  }
+  if (fee > gross) {
+    throw new Error("Cancellation fee cannot exceed the delivery total.");
+  }
+  if (money(rider + circum) !== fee) {
+    throw new Error("Cancellation fee does not reconcile to compensation and retention.");
+  }
+  const stripeFee = Math.min(stripe, fee);
+  const rothFee = money(fee - stripeFee);
+  const stripeRefund = money(stripe - stripeFee);
+  const rothRestoration = money(roth - rothFee);
+  return Object.freeze({
+    grossDeliveryTotal: gross,
+    stripePaid: stripe,
+    rothPaid: roth,
+    cancellationFee: fee,
+    riderCompensation: rider,
+    circumRetained: circum,
+    stripeFee: money(stripeFee),
+    rothFee,
+    stripeRefund,
+    rothRestoration,
+    totalRefundValue: money(stripeRefund + rothRestoration),
+    allocationPolicy: "stripe_first",
+  });
+}
+
 function minutesToMs(minutes) {
   return Math.round((Number(minutes) || 0) * 60 * 1000);
 }
@@ -77,14 +130,21 @@ function serverNow(input = {}) {
 }
 
 function freeWaitExpired(delivery = {}, serverTime, config = policy()) {
-  const arrivedAt = toMillis(delivery.arrivedAt || delivery.pickupArrivedAt || delivery.dropoffArrivedAt);
+  const arrivedAt = toMillis(delivery.arrivedAt || delivery.pickupArrivedAt || delivery.arrivedAtPickupAt || delivery.dropoffArrivedAt);
   if (!arrivedAt) return false;
   return serverTime >= arrivedAt + minutesToMs(config.freeWaitMinutes);
 }
 
 function cancellationDecision(input = {}) {
   const config = policy(input.policy);
-  const state = normalizeState(input.state || input.delivery && input.delivery.state);
+  const delivery = input.delivery || {};
+  const states = [input.state, delivery.status, delivery.deliveryStatus, delivery.deliveryStage, delivery.state]
+      .filter(Boolean).map(normalizeState);
+  // Older aliases can lag behind the authoritative lifecycle. Never cancel after collection.
+  const state = states.find((value) => ["delivered", "completed", "cancelled", "cancelled_by_sender", "sender_no_show_pickup", "in_transit", "picked_up"].includes(value)) ||
+    states.find((value) => IN_PROGRESS_AFTER_COLLECTION.has(value)) ||
+    states.find((value) => ARRIVED_PICKUP.has(value)) ||
+    states.find((value) => ACTIVE_PRE_COLLECTION.has(value)) || states[0] || "";
   const now = serverNow(input);
   const expired = freeWaitExpired(input.delivery || {}, now, config);
   const base = {
@@ -365,7 +425,7 @@ function noShowDecision(input = {}) {
   const config = policy(input.policy);
   const delivery = input.delivery || {};
   const now = serverNow(input);
-  const arrivedAt = toMillis(delivery.arrivedAt || delivery.pickupArrivedAt || delivery.dropoffArrivedAt);
+  const arrivedAt = toMillis(delivery.arrivedAt || delivery.pickupArrivedAt || delivery.arrivedAtPickupAt || delivery.dropoffArrivedAt);
   const state = normalizeState(delivery.state);
   const active = !["delivered", "cancelled", "sender_no_show_pickup"].includes(state);
   const expired = arrivedAt != null && now >= arrivedAt + minutesToMs(config.freeWaitMinutes);
@@ -446,7 +506,7 @@ function evidencePackage(input = {}) {
     dropoff: delivery.dropoff || delivery.dropoffDetails || null,
     arrivalLocation: input.arrivalLocation || delivery.arrivalLocation || null,
     gpsAccuracyMeters: input.gpsAccuracyMeters || null,
-    arrivalTimestamp: toMillis(delivery.arrivedAt || delivery.pickupArrivedAt || delivery.dropoffArrivedAt),
+    arrivalTimestamp: toMillis(delivery.arrivedAt || delivery.pickupArrivedAt || delivery.arrivedAtPickupAt || delivery.dropoffArrivedAt),
     leftArrivalZoneAt: delivery.leftArrivalZoneAt || null,
     reenteredArrivalZoneAt: delivery.reenteredArrivalZoneAt || null,
     waitStartedAt: delivery.waiting && delivery.waiting.startedAt || null,
@@ -488,6 +548,7 @@ function auditEvent(type, input, now, extra = {}) {
 }
 
 module.exports = {
+  cancellationSettlement,
   DEFAULT_POLICY,
   ACTIVE_PRE_COLLECTION,
   ARRIVED_PICKUP,
