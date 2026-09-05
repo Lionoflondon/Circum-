@@ -1,8 +1,10 @@
 "use strict";
 
+const settleConcurrent = require("./test-helpers/settle-concurrent");
+
 const test = require("node:test");
 const assert = require("node:assert/strict");
-const {initializeApp} = require("firebase-admin/app");
+const {initializeApp, deleteApp} = require("firebase-admin/app");
 const {getFirestore} = require("firebase-admin/firestore");
 const {
   settleEntitlementToRoth,
@@ -12,12 +14,18 @@ const {
 } = require("./scheduled-road-charge-refunds");
 
 const emulator = process.env.FIRESTORE_EMULATOR_HOST;
+let app;
+test.before(() => {
+  if (emulator) app = initializeApp({projectId: "demo-retained-refunds"});
+});
+test.after(async () => {
+  if (app) await deleteApp(app);
+});
 
 test(
   "concurrent scheduled road-charge Roth settlement is exactly once",
   {skip: !emulator},
   async () => {
-    initializeApp({projectId: "demo-retained-refunds"});
     const db = getFirestore();
     const id = `emulator-${Date.now()}`;
     await db
@@ -37,7 +45,7 @@ test(
         refundOwnerType: "sender",
         refundOwnerId: `owner-${id}`,
       });
-    const results = await Promise.all(
+    const results = await settleConcurrent(
       Array.from({length: 8}, () =>
         settleEntitlementToRoth({
           db,
@@ -90,7 +98,7 @@ async function runCashAndRothRace(db, id) {
       status: "open",
     });
   const actor = {authorized: true, uid: "support-agent-1"};
-  const results = await Promise.all([
+  const results = await settleConcurrent([
     ...Array.from({length: 4}, () =>
       settleEntitlementToCash({
         db,
