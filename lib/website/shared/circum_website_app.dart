@@ -10550,11 +10550,59 @@ class _CustomerPortalState extends State<_CustomerPortal> {
         !BookingCancellationPolicy.canSenderCancel(delivery.status)) {
       return;
     }
+    Map<String, dynamic> preview;
+    try {
+      final response =
+          await FirebaseFunctions.instanceFor(region: 'us-central1')
+              .httpsCallable('previewSenderCancellation')
+              .call({'deliveryId': delivery.id})
+              .timeout(const Duration(seconds: 20));
+      preview = Map<String, dynamic>.from(response.data as Map);
+    } on TimeoutException {
+      if (!mounted) return;
+      setState(() {
+        _senderProfileMessage =
+            'Cancellation pricing is taking longer than expected. Please retry.';
+      });
+      return;
+    } on FirebaseFunctionsException catch (error) {
+      if (!mounted) return;
+      setState(() {
+        _senderProfileMessage = _friendlySenderFunctionMessage(
+          error,
+          'We could not retrieve the cancellation terms. Please try again.',
+        );
+      });
+      return;
+    }
+    final decision = preview['decision'] is Map
+        ? Map<String, dynamic>.from(preview['decision'] as Map)
+        : const <String, dynamic>{};
+    if (preview['canCancel'] != true && decision['canCancel'] != true) {
+      if (!mounted) return;
+      setState(() {
+        _senderProfileMessage =
+            '${decision['userFacingMessage'] ?? 'This booking cannot be cancelled.'}';
+      });
+      return;
+    }
+    String money(Object? value) {
+      final amount = value is num ? value.toDouble() : 0;
+      return '£${amount.toStringAsFixed(2)}';
+    }
+
+    if (!mounted) return;
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (dialogContext) => AlertDialog(
         title: const Text('Cancel this booking?'),
-        content: const Text(
+        content: Text(
+          'Cancellation fee: ${money(preview['cancellationFee'])}\n'
+          'Rider compensation: ${money(preview['riderCompensation'])}\n'
+          'Circum retained: ${money(preview['circumRetained'])}\n'
+          'Card refund: ${money(preview['stripeRefund'])}\n'
+          'Roth restored: ${money(preview['rothRestoration'])}\n'
+          'Total returned value: ${money(preview['totalRefundValue'])}\n\n'
           'The booking will remain in your history and Circum admin records.',
         ),
         actions: [
@@ -10572,11 +10620,16 @@ class _CustomerPortalState extends State<_CustomerPortal> {
     if (confirmed != true) return;
 
     try {
-      final response = await FirebaseFunctions.instanceFor(
-        region: 'us-central1',
-      ).httpsCallable('cancelDelivery').call({'deliveryId': delivery.id});
+      final response =
+          await FirebaseFunctions.instanceFor(region: 'us-central1')
+              .httpsCallable('cancelDelivery')
+              .call({
+                'quoteToken': preview['quoteToken'],
+                'deliveryId': delivery.id,
+              })
+              .timeout(const Duration(seconds: 20));
       final data = Map<String, dynamic>.from(response.data as Map);
-      if (data['success'] != true) {
+      if (data['success'] != true || data['status'] != 'settled') {
         final decision = Map<String, dynamic>.from(
           data['decision'] as Map? ?? {},
         );
@@ -10584,11 +10637,19 @@ class _CustomerPortalState extends State<_CustomerPortal> {
           '${decision['userFacingMessage'] ?? 'This delivery requires support review.'}',
         );
       }
-      await _loadSenderDeliveries(user.uid);
+      await _loadSenderDeliveries(
+        user.uid,
+      ).timeout(const Duration(seconds: 20));
       if (!mounted) return;
       setState(() {
         _selectedSenderDelivery = null;
         _senderProfileMessage = 'Booking cancelled.';
+      });
+    } on TimeoutException {
+      if (!mounted) return;
+      setState(() {
+        _senderProfileMessage =
+            'Cancellation is being reconciled safely. Refresh shortly to confirm its status.';
       });
     } on FirebaseFunctionsException catch (error) {
       if (!mounted) return;
