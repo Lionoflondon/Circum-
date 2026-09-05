@@ -446,7 +446,7 @@ exports.createGiftPayment = (stripe) => senderPaymentCallable(async (data, conte
     giftDraftId,
     campaignParticipantId: campaignDraft ? campaignDraft.participantId : data.campaignParticipantId,
   };
-});
+}, {secrets: ["STRIPE_SECRET_KEY"]});
 
 async function finalizeGiftPaymentAuthority({
   giftDraftId,
@@ -681,7 +681,7 @@ exports.finalizeGiftPayment = (stripe) => senderPaymentCallable(async (data, con
     session,
     actorUid: context.auth.uid,
   });
-});
+}, {secrets: ["STRIPE_SECRET_KEY"]});
 
 exports.finalizeGiftPaymentFromCheckoutSession = finalizeGiftPaymentSession;
 exports.handleGiftPaymentIntent = async (stripe, intent, eventId = "") => {

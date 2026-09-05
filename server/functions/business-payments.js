@@ -529,7 +529,7 @@ exports.createBusinessRothCheckout = (stripe) => functions.https.onCall(async (d
   return {checkoutUrl: session.url, sessionId: session.id, purchaseId: purchaseRef.id};
 });
 
-exports.createBusinessInvoiceCheckout = (stripe) => functions.https.onCall(async (data, context) => {
+exports.createBusinessInvoiceCheckout = (stripe) => functions.runWith({secrets: ["STRIPE_SECRET_KEY"]}).https.onCall(async (data, context) => {
   const invoiceId = text(data && data.invoiceId, 160);
   if (!invoiceId) throw new functions.https.HttpsError("invalid-argument", "Choose a valid Business invoice.");
   const db = getFirestore();
@@ -542,7 +542,7 @@ exports.createBusinessInvoiceCheckout = (stripe) => functions.https.onCall(async
   return checkoutReservations.checkout({db, stripe, invoiceId, businessId, uid: context.auth.uid, data});
 });
 
-exports.cancelBusinessInvoiceCheckout = (stripe) => functions.https.onCall(async (data, context) => {
+exports.cancelBusinessInvoiceCheckout = (stripe) => functions.runWith({secrets: ["STRIPE_SECRET_KEY"]}).https.onCall(async (data, context) => {
   const id = text(data && (data.checkoutReservationId || data.paymentId), 160);
   if (!id) throw new functions.https.HttpsError("invalid-argument", "Choose a checkout reservation.");
   const db = getFirestore();
@@ -711,5 +711,5 @@ exports._private = {
   payBusinessInvoiceAtomically,
 };
 
-exports.reconcileBusinessInvoiceCheckouts = (stripe) => functions.pubsub.schedule("every 5 minutes").onRun(() =>
+exports.reconcileBusinessInvoiceCheckouts = (stripe) => functions.runWith({secrets: ["STRIPE_SECRET_KEY"]}).pubsub.schedule("every 5 minutes").onRun(() =>
   checkoutReservations.reconcileExpired({db: getFirestore(), stripe}));

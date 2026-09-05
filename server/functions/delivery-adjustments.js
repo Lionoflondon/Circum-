@@ -256,7 +256,7 @@ exports.createDeliveryAdjustmentPayment = senderPaymentCallable(async (data, con
   }, {idempotencyKey: `delivery-adjustment-${adjustment.id}`});
   await adjustmentRef.update({paymentIntentId: intent.id, paymentStatus: intent.status, updatedAt: Date.now()});
   return {clientSecret: intent.client_secret, paymentIntentId: intent.id, amount};
-});
+}, {secrets: ["STRIPE_SECRET_KEY"]});
 
 exports.finalizeDeliveryAdjustmentPayment = senderPaymentCallable(async (data, context) => {
   if (!context.auth) throw new functions.https.HttpsError("unauthenticated", "Authentication required.");
@@ -283,4 +283,4 @@ exports.finalizeDeliveryAdjustmentPayment = senderPaymentCallable(async (data, c
   });
   await notifyUser(adjustment.data().riderId, "Booking adjustment paid", "The sender paid the revised quote. You may continue the collection.", {type: "delivery_adjustment_paid", adjustmentId: adjustment.id});
   return {success: true};
-});
+}, {secrets: ["STRIPE_SECRET_KEY"]});

@@ -120,7 +120,7 @@ test("Sender clients do not hardcode Stripe runtime keys", () => {
 });
 
 test("Sender payment callable responses exclude Firestore sentinel fields", () => {
-  const paymentSource = senderBookingSource.match(/exports\.createSenderPaymentSession[\s\S]*?\n\}\);/)[0];
+  const paymentSource = senderBookingSource.match(/exports\.createSenderPaymentSession[\s\S]*?\n\}, \{secrets: \["STRIPE_SECRET_KEY"\]\}\);/)[0];
   assert.match(paymentSource, /const sessionBase = \{/);
   assert.doesNotMatch(paymentSource, /return \{\s*\.\.\.sessionBase/);
   assert.doesNotMatch(paymentSource, /return \{\s*\.\.\.existingSession/);

@@ -82,7 +82,7 @@ test("booking quote pricing receives only provider-computed distance", () => {
 });
 
 test("every payment mode persists complete delivery payload before confirmation", () => {
-  const payment = source.match(/exports\.createSenderPaymentSession[\s\S]*?\n\}\);\n\nasync function updateSenderPaymentIntentStatus/)[0];
+  const payment = source.match(/exports\.createSenderPaymentSession[\s\S]*?\n\}, \{secrets: \["STRIPE_SECRET_KEY"\]\}\);\n\nasync function updateSenderPaymentIntentStatus/)[0];
   assert.match(payment, /assertDeliveryMatchesQuote\(deliveryPayload, quote\)/);
   assert.match(payment, /paymentSessionKey: requestedSessionKey,\n\s+deliveryPayload,/);
 });

@@ -81,7 +81,7 @@ exports.listSenderPaymentMethods = (stripe) => senderPaymentCallable(async (_, c
     applePaySupported: true,
     googlePaySupported: true,
   };
-});
+}, {secrets: ["STRIPE_SECRET_KEY"]});
 
 exports.createSenderSetupIntent = (stripe) => senderPaymentCallable(async (_, context) => {
   const sender = requireSender(context);
@@ -101,7 +101,7 @@ exports.createSenderSetupIntent = (stripe) => senderPaymentCallable(async (_, co
     ephemeralKeySecret: ephemeralKey.secret,
     setupIntentClientSecret: setupIntent.client_secret,
   };
-});
+}, {secrets: ["STRIPE_SECRET_KEY"]});
 
 exports.detachSenderPaymentMethod = (stripe) => senderPaymentCallable(async (data, context) => {
   const sender = requireSender(context);
@@ -137,7 +137,7 @@ exports.detachSenderPaymentMethod = (stripe) => senderPaymentCallable(async (dat
     createdAt: FieldValue.serverTimestamp(),
   });
   return {ok: true};
-});
+}, {secrets: ["STRIPE_SECRET_KEY"]});
 
 exports.setDefaultSenderPaymentMethod = (stripe) => senderPaymentCallable(async (data, context) => {
   const sender = requireSender(context);
@@ -158,7 +158,7 @@ exports.setDefaultSenderPaymentMethod = (stripe) => senderPaymentCallable(async 
     updatedAt: FieldValue.serverTimestamp(),
   }, {merge: true});
   return {ok: true};
-});
+}, {secrets: ["STRIPE_SECRET_KEY"]});
 
 exports.saveSenderCheckoutPreference = senderPaymentCallable(async (data, context) => {
   const sender = requireSender(context);
