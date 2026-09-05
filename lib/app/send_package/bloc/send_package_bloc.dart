@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:math' as math;
 import 'dart:ui' show Size;
 
+import 'package:circum/app/delivery/cancellation_contract.dart';
 import 'package:circum/app/iris/iris_learning_bridge.dart';
 import 'package:circum/app/iris/iris_weight_estimator.dart';
 import 'package:circum/app/send_package/models/place_coordinates.m.dart';
@@ -2030,21 +2031,62 @@ class SendPackageBloc extends Bloc<SendPackageEvent, SendPackageState> {
 
   void _handleCancelRequestEvent(CancelRequest event, Emitter emit) async {
     final prefs = await SharedPreferences.getInstance();
-    final activeRequest = prefs.getString('activeRequest') ??
+    final activeRequest =
+        prefs.getString('activeRequest') ??
         '${state.activeDeliveryData['id'] ?? ''}';
+    if (activeRequest.trim().isEmpty) {
+      emit(
+        state.copyWith(
+          senderDeliveryError: 'Unable to identify the active delivery.',
+        ),
+      );
+      return;
+    }
     if (activeRequest.trim().isNotEmpty) {
       try {
-        await FirebaseFunctions.instanceFor(
-          region: 'us-central1',
-        ).httpsCallable('requestSenderCancellation').call({
-          'deliveryId': activeRequest,
-          'idempotencyKey': '$activeRequest:legacy_sender_cancel',
-        });
+        final response =
+            await FirebaseFunctions.instanceFor(region: 'us-central1')
+                .httpsCallable('requestSenderCancellation')
+                .call({
+                  'deliveryId': activeRequest,
+                  'idempotencyKey': '$activeRequest:legacy_sender_cancel',
+                  'quoteToken': event.quoteToken,
+                })
+                .timeout(const Duration(seconds: 20));
+        final data = Map<String, dynamic>.from(response.data as Map);
+        if (!cancellationConfirmed(data)) {
+          final decision = data['decision'] is Map
+              ? Map<String, dynamic>.from(data['decision'] as Map)
+              : const <String, dynamic>{};
+          emit(
+            state.copyWith(
+              senderDeliveryError:
+                  '${decision['userFacingMessage'] ?? 'Cancellation could not be completed. Your delivery remains active.'}',
+            ),
+          );
+          return;
+        }
+      } on TimeoutException {
+        emit(
+          state.copyWith(
+            senderDeliveryError:
+                'Cancellation is taking longer than expected. Refresh shortly to confirm its status.',
+          ),
+        );
+        return;
       } on FirebaseFunctionsException catch (error) {
         emit(
           state.copyWith(
             senderDeliveryError:
                 error.message ?? 'Cancellation could not be completed.',
+          ),
+        );
+        return;
+      } catch (_) {
+        emit(
+          state.copyWith(
+            senderDeliveryError:
+                'Unable to confirm cancellation. Please refresh and retry.',
           ),
         );
         return;
