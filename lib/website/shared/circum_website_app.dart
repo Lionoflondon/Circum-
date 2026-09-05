@@ -1,3 +1,7 @@
+import 'rider_onboarding/application_policy.dart';
+import 'rider_onboarding/file_picker.dart';
+import 'rider_onboarding/document_transport.dart';
+import 'package:crypto/crypto.dart' as crypto;
 import 'policies/signup_referral.dart';
 import 'dart:async';
 import 'dart:convert';
@@ -3259,22 +3263,23 @@ class _RiderEnrollmentPortal extends StatefulWidget {
 }
 
 class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
-  final _fullName = TextEditingController(text: 'Alex Rider');
-  final _phone = TextEditingController(text: '+44 7700 900456');
-  final _email = TextEditingController(text: 'rider@circum.app');
+  final _fullName = TextEditingController();
+  final _phone = TextEditingController();
+  final _email = TextEditingController();
   final _password = TextEditingController();
   final _currentPassword = TextEditingController();
   final _newPassword = TextEditingController();
   final _confirmNewPassword = TextEditingController();
   final _newEmail = TextEditingController();
   final _emailChangePassword = TextEditingController();
-  final _postcode = TextEditingController(text: 'E1 6AN');
-  final _vehicle = TextEditingController(text: 'Motorbike');
-  final _vehicleMakeModel = TextEditingController(text: 'Honda PCX');
-  final _vehicleColour = TextEditingController(text: 'Blue');
-  final _plateNumber = TextEditingController(text: 'CIR 24K');
-  final _availability = TextEditingController(text: 'Weekdays, evenings');
-  final _notes = TextEditingController(text: 'Experienced London courier.');
+  final _postcode = TextEditingController();
+  final _homeAddress = TextEditingController();
+  final _vehicle = TextEditingController();
+  final _vehicleMakeModel = TextEditingController();
+  final _vehicleColour = TextEditingController();
+  final _plateNumber = TextEditingController();
+  final _availability = TextEditingController();
+  final _notes = TextEditingController();
   final _withdrawAmount = TextEditingController();
   final _bankName = TextEditingController();
   final _sortCode = TextEditingController();
@@ -3313,6 +3318,11 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
   List<Map<String, dynamic>> _acceptedJobs = const [];
   List<Map<String, dynamic>> _completedJobs = const [];
   Map<String, dynamic>? _riderProfile;
+  Map<String, dynamic>? _onboardingDocuments;
+  StreamSubscription<DocumentSnapshot<Map<String, dynamic>>>?
+      _onboardingProfileSub;
+  StreamSubscription<QuerySnapshot<Map<String, dynamic>>>?
+      _onboardingDocumentsSub;
   Set<CircumRole> _availableRoles = const {};
   bool _superAdminRiderBypass = false;
   late _RiderPortalTab _riderTab = _initialRiderTab();
@@ -3358,6 +3368,8 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
   @override
   void dispose() {
     _earningsSub?.cancel();
+    _onboardingProfileSub?.cancel();
+    _onboardingDocumentsSub?.cancel();
     _performanceSub?.cancel();
     _ratingSub?.cancel();
     _availableJobsSub?.cancel();
@@ -3375,6 +3387,7 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
     _newEmail.dispose();
     _emailChangePassword.dispose();
     _postcode.dispose();
+    _homeAddress.dispose();
     _vehicle.dispose();
     _vehicleMakeModel.dispose();
     _vehicleColour.dispose();
@@ -3404,7 +3417,7 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
       await _ensureCircumFirebaseReady();
       final user = FirebaseAuth.instance.currentUser;
       if (user == null || !mounted) return;
-      if (!await _allowRiderUser(user)) {
+      if (!await _allowRiderUser(user).timeout(const Duration(seconds: 25))) {
         await FirebaseAuth.instance.signOut();
         if (!mounted) return;
         setState(
@@ -3420,6 +3433,7 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
         _email.text = user.email ?? _email.text;
         _roleChoiceConfirmed = false;
       });
+      _listenToRiderOnboarding(user.uid);
       _listenToRiderEarnings(user.uid);
       _listenToRiderPerformance(user.uid);
       if (RiderOnboardingPolicy.canViewJobs(
@@ -3432,7 +3446,8 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
       }
     } catch (_) {
       if (!mounted) return;
-      setState(() => _authMessage = 'Sign in to manage rider earnings.');
+      setState(() => _authMessage =
+          'Could not restore your Rider session. Sign in to retry.');
     }
   }
 
@@ -3459,21 +3474,28 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
       await _ensureCircumFirebaseReady();
       final auth = FirebaseAuth.instance;
       final credential = _signupMode
-          ? await auth.createUserWithEmailAndPassword(
-              email: email,
-              password: password,
-            )
-          : await auth.signInWithEmailAndPassword(
-              email: email,
-              password: password,
-            );
+          ? await auth
+              .createUserWithEmailAndPassword(
+                email: email,
+                password: password,
+              )
+              .timeout(const Duration(seconds: 25))
+          : await auth
+              .signInWithEmailAndPassword(
+                email: email,
+                password: password,
+              )
+              .timeout(const Duration(seconds: 25));
       final user = credential.user!;
       if (_signupMode) {
-        await user.updateDisplayName(_fullName.text.trim());
+        await user
+            .updateDisplayName(_fullName.text.trim())
+            .timeout(const Duration(seconds: 20));
         await _saveRiderProfile(user);
         _riderProfile = await _loadRiderProfile(user.uid);
         _availableRoles = {CircumRole.rider};
-      } else if (!await _allowRiderUser(user)) {
+      } else if (!await _allowRiderUser(user)
+          .timeout(const Duration(seconds: 25))) {
         await FirebaseAuth.instance.signOut();
         if (!mounted) return;
         setState(
@@ -3484,6 +3506,7 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
       } else {
         _riderProfile = await _loadRiderProfile(user.uid);
       }
+      _listenToRiderOnboarding(user.uid);
       _listenToRiderEarnings(user.uid);
       _listenToRiderPerformance(user.uid);
       if (RiderOnboardingPolicy.canViewJobs(
@@ -3648,7 +3671,19 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
     final roles = await _rolesForUser(user);
     if (!mounted) return false;
     setState(() => _availableRoles = roles);
-    return RoleAccessPolicy.rolesCanAccessRider(roles);
+    if (RoleAccessPolicy.rolesCanAccessRider(roles)) return true;
+    if (roles.length == 1 && roles.contains(CircumRole.unknown)) {
+      // Recover an Auth account whose initial Rider profile save was interrupted.
+      await FirebaseFunctions.instanceFor(region: 'us-central1')
+          .httpsCallable('verifyRiderAccountAccess')
+          .call({}).timeout(const Duration(seconds: 20));
+      await FirebaseFunctions.instanceFor(region: 'us-central1')
+          .httpsCallable('updateRiderProfile')
+          .call({}).timeout(const Duration(seconds: 20));
+      if (mounted) setState(() => _availableRoles = {CircumRole.rider});
+      return true;
+    }
+    return false;
   }
 
   Future<Set<CircumRole>> _rolesForUser(User user) async {
@@ -3675,9 +3710,28 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
     final snapshot = await FirebaseFirestore.instance
         .collection('riderProfiles')
         .doc(uid)
-        .get();
+        .get()
+        .timeout(const Duration(seconds: 20));
     if (!snapshot.exists) return null;
-    return {'id': snapshot.id, ...?snapshot.data()};
+    final record = snapshot.data()!;
+    for (final entry in <TextEditingController, Object?>{
+      _fullName: record['fullName'],
+      _phone: record['phoneNumber'],
+      _postcode: record['postcode'],
+      _homeAddress: record['homeAddress'] ?? record['address'],
+      _plateNumber: record['vehicleRegistration']
+    }.entries) {
+      final value = '${entry.value ?? ''}'.trim();
+      if (value.isNotEmpty) entry.key.text = value;
+    }
+    final vehicle = '${record['vehicleType'] ?? ''}'.trim().toLowerCase();
+    _vehicle.text = const {
+          'motorbike': 'Motorbike',
+          'car': 'Car',
+          'van': 'Van'
+        }[vehicle] ??
+        '';
+    return {'id': snapshot.id, ...record};
   }
 
   String _riderApprovalStatus() {
@@ -3695,13 +3749,65 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
       'phoneNumber': _phone.text.trim(),
       'email': user.email ?? _email.text.trim(),
       'postcode': _postcode.text.trim(),
-      'vehicleType': _vehicle.text.trim(),
+      'homeAddress': _homeAddress.text.trim(),
+      'vehicleType': _vehicle.text.trim().toLowerCase(),
       'vehicleMakeModel': _vehicleMakeModel.text.trim(),
       'vehicleColour': _vehicleColour.text.trim(),
       'plateNumber': _plateNumber.text.trim(),
       'vehicleRegistration': _plateNumber.text.trim(),
       'availability': _availability.text.trim(),
-    });
+    }).timeout(const Duration(seconds: 25));
+  }
+
+  void _listenToRiderOnboarding(String uid) {
+    _onboardingProfileSub?.cancel();
+    _onboardingDocumentsSub?.cancel();
+    _onboardingDocuments = null;
+    void showRefreshError(Object error) {
+      if (mounted) {
+        setState(() => _documentMessage =
+            'Could not refresh document progress. Sign in again to retry.');
+      }
+    }
+
+    _onboardingProfileSub = FirebaseFirestore.instance
+        .collection('riderProfiles')
+        .doc(uid)
+        .snapshots()
+        .listen((snapshot) {
+      if (mounted) {
+        setState(() => _riderProfile = {
+              ...?snapshot.data(),
+              if (_onboardingDocuments != null)
+                'verificationDocuments': _onboardingDocuments,
+            });
+      }
+    }, onError: showRefreshError);
+    _onboardingDocumentsSub = FirebaseFirestore.instance
+        .collection('riderDocuments')
+        .where('riderId', isEqualTo: uid)
+        .snapshots()
+        .listen((snapshot) {
+      final records = snapshot.docs.map((doc) => doc.data()).toList()
+        ..sort((a, b) {
+          int millis(Map<String, dynamic> value) =>
+              value['uploadedAt'] is Timestamp
+                  ? (value['uploadedAt'] as Timestamp).millisecondsSinceEpoch
+                  : 0;
+          return millis(a).compareTo(millis(b));
+        });
+      _onboardingDocuments = {
+        for (final record in records)
+          riderDocumentKey('${record['type'] ?? record['documentType'] ?? ''}'):
+              record,
+      };
+      if (mounted) {
+        setState(() => _riderProfile = {
+              ...?_riderProfile,
+              'verificationDocuments': _onboardingDocuments,
+            });
+      }
+    }, onError: showRefreshError);
   }
 
   void _listenToRiderEarnings(String riderId) {
@@ -4963,6 +5069,8 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
 
   Future<void> _signOutRider() async {
     await _earningsSub?.cancel();
+    await _onboardingProfileSub?.cancel();
+    await _onboardingDocumentsSub?.cancel();
     await _performanceSub?.cancel();
     await _ratingSub?.cancel();
     await _availableJobsSub?.cancel();
@@ -5052,42 +5160,47 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
 
   Future<void> _uploadRiderDocument() async {
     final user = _riderUser;
-    if (_documentSubmitting || user == null) {
-      setState(() => _documentMessage = 'Sign in before uploading documents.');
-      return;
-    }
-
+    if (_documentSubmitting || user == null) return;
+    setState(() {
+      _documentSubmitting = true;
+      _documentMessage = 'Choose a PDF or image document.';
+    });
     try {
-      final picked = await ImagePicker().pickImage(source: ImageSource.gallery);
+      final picked = await pickRiderDocument();
       if (picked == null) return;
-
-      setState(() {
-        _documentSubmitting = true;
-        _documentMessage = 'Uploading document...';
-      });
-
-      await _ensureCircumFirebaseReady();
-      final bytes = await picked.readAsBytes();
+      if (mounted) setState(() => _documentMessage = 'Uploading document...');
       final documentType = _riderDocumentType(_documentType.text);
-      final contentType = picked.mimeType ?? 'image/jpeg';
-      await FirebaseFunctions.instanceFor(
-        region: 'us-central1',
-      ).httpsCallable('submitRiderDocument').call({
-        'documentType': documentType,
-        'notes': _documentNotes.text.trim(),
-        'fileName': picked.name,
-        'contentType': contentType,
-        'fileBase64': base64Encode(bytes),
-      });
+      final key = crypto.sha256.convert([
+        ...utf8.encode('${user.uid}:$documentType:'),
+        ...picked.bytes
+      ]).toString();
+      await submitRiderDocumentTransport(
+          request: {
+            'documentType': documentType,
+            'idempotencyKey': key,
+            'notes': _documentNotes.text.trim(),
+            'fileName': picked.name,
+            'contentType': picked.contentType,
+            'fileBase64': base64Encode(picked.bytes),
+          },
+          call: (payload) async {
+            await FirebaseFunctions.instanceFor(region: 'us-central1')
+                .httpsCallable('submitRiderDocument')
+                .call(payload);
+          });
       _riderProfile = await _loadRiderProfile(user.uid);
-      if (!mounted) return;
-      setState(
-        () => _documentMessage =
-            'Document uploaded. Circum will review it before approval.',
-      );
-    } catch (_) {
-      if (!mounted) return;
-      setState(() => _documentMessage = 'Upload failed. Please try again.');
+      if (mounted) {
+        setState(() =>
+            _documentMessage = 'Document uploaded. Documents under review.');
+      }
+    } catch (error) {
+      if (mounted) {
+        setState(() => _documentMessage = error is FirebaseFunctionsException
+            ? (error.message ?? 'Upload failed. Please retry.')
+            : error is StateError
+                ? error.message
+                : 'Upload failed or timed out. Please retry.');
+      }
     } finally {
       if (mounted) setState(() => _documentSubmitting = false);
     }
@@ -5098,8 +5211,14 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
     if (normalized.contains('licence') || normalized.contains('license')) {
       return 'driving_licence';
     }
-    if (normalized.contains('address')) return 'proof_of_address';
-    if (normalized.contains('insurance')) return 'vehicle_insurance';
+    if (normalized.contains('passport') || normalized.contains('identity')) {
+      return 'identity';
+    }
+    if (normalized.contains('v5c') || normalized.contains('registration')) {
+      return 'registration_v5c';
+    }
+    if (normalized == 'mot') return 'mot';
+    if (normalized.contains('insurance')) return 'insurance';
     if (normalized.contains('right') && normalized.contains('work')) {
       return 'right_to_work';
     }
@@ -5121,23 +5240,23 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
 
   Future<void> _submit() async {
     if (_submitting) return;
-    if (_fullName.text.trim().isEmpty ||
-        _phone.text.trim().isEmpty ||
-        _vehicle.text.trim().isEmpty ||
-        _plateNumber.text.trim().isEmpty) {
-      setState(() {
-        _message = 'Add your name, phone, vehicle type, and registration.';
-      });
+    final validation = riderApplicationError({
+      'fullName': _fullName.text,
+      'phoneNumber': _phone.text,
+      'postcode': _postcode.text,
+      'homeAddress': _homeAddress.text,
+      'vehicleType': _vehicle.text,
+      'vehicleRegistration': _plateNumber.text
+    });
+    if (validation != null) {
+      setState(() => _message = validation);
       return;
     }
     if (!_rightToWork || !_sealedPackageConsent) {
-      setState(() {
-        _message =
-            'Accept the rider terms and confirm your details are accurate.';
-      });
+      setState(() => _message =
+          'Accept the rider terms and confirm your details are accurate.');
       return;
     }
-
     setState(() {
       _submitting = true;
       _message = 'Sending your Circum Rider application...';
@@ -5152,14 +5271,15 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
         'phoneNumber': _phone.text.trim(),
         'email': _email.text.trim(),
         'postcode': _postcode.text.trim(),
-        'vehicleType': _vehicle.text.trim(),
+        'homeAddress': _homeAddress.text.trim(),
+        'vehicleType': _vehicle.text.trim().toLowerCase(),
         'vehicleRegistration': _plateNumber.text.trim(),
         'availability': _availability.text.trim(),
         'notes': _notes.text.trim(),
         'rightToWorkConfirmed': _rightToWork,
         'sealedPackageConsent': _sealedPackageConsent,
         'idempotencyKey': 'web-rider-application:${_riderUser?.uid}',
-      });
+      }).timeout(const Duration(seconds: 25));
       final applicationId = '${result.data['applicationId'] ?? ''}'.trim();
       if (_riderUser != null) {
         _riderProfile = await _loadRiderProfile(_riderUser!.uid);
@@ -5170,6 +5290,16 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
         _message =
             'Thanks. Your Circum Rider application has been sent to the Circum team.';
       });
+    } on FirebaseFunctionsException catch (error) {
+      if (mounted) {
+        setState(() => _message =
+            error.message ?? 'Application could not be submitted. Try again.');
+      }
+    } on TimeoutException {
+      if (mounted) {
+        setState(() => _message =
+            'The connection timed out. Your details are kept; try again.');
+      }
     } catch (_) {
       if (!mounted) return;
       setState(() {
@@ -5205,6 +5335,7 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
       phone: _phone,
       email: _email,
       postcode: _postcode,
+      homeAddress: _homeAddress,
       vehicle: _vehicle,
       vehicleMakeModel: _vehicleMakeModel,
       vehicleColour: _vehicleColour,
@@ -5670,12 +5801,13 @@ class _RiderApprovalStatusPanel extends StatelessWidget {
   Widget build(BuildContext context) {
     final normalized = status.toLowerCase();
     final title = switch (normalized) {
-      'rejected' => 'Application needs attention',
+      'rejected' || 'needs_information' => 'More information needed',
       'suspended' => 'Rider account suspended',
       _ => 'Application pending',
     };
     final body = switch (normalized) {
-      'rejected' =>
+      'rejected' ||
+      'needs_information' =>
         'Circum could not approve this rider profile yet. Check the note below and contact support if you need help.',
       'suspended' =>
         'This Circum Rider account cannot accept jobs right now. Contact Circum support for the next step.',
@@ -5777,6 +5909,7 @@ class _RiderEnrollmentForm extends StatelessWidget {
   final TextEditingController phone;
   final TextEditingController email;
   final TextEditingController postcode;
+  final TextEditingController homeAddress;
   final TextEditingController vehicle;
   final TextEditingController vehicleMakeModel;
   final TextEditingController vehicleColour;
@@ -5798,6 +5931,7 @@ class _RiderEnrollmentForm extends StatelessWidget {
     required this.phone,
     required this.email,
     required this.postcode,
+    required this.homeAddress,
     required this.vehicle,
     required this.vehicleMakeModel,
     required this.vehicleColour,
@@ -5875,6 +6009,9 @@ class _RiderEnrollmentForm extends StatelessWidget {
               _InputBox(colors: colors, controller: email, hint: 'Email'),
               const SizedBox(height: 10),
               _InputBox(colors: colors, controller: postcode, hint: 'Postcode'),
+              const SizedBox(height: 10),
+              _InputBox(
+                  colors: colors, controller: homeAddress, hint: 'Address'),
               const SizedBox(height: 10),
               _CompactSelectBox(
                 colors: colors,
@@ -6511,8 +6648,8 @@ class _RiderDocumentStatusList extends StatelessWidget {
   static const documentTypes = [
     'Driving licence',
     'Insurance',
-    'Proof of address',
-    'Vehicle documents',
+    'Identity',
+    'V5C',
     'Profile photo',
     'Right to work',
   ];
@@ -6530,84 +6667,94 @@ class _RiderDocumentStatusList extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Column(
-      children: documentTypes.map((type) {
-        final status = _statusFor(type);
-        final rejected = status == 'rejected';
-        return Container(
-          margin: const EdgeInsets.only(bottom: 8),
-          padding: const EdgeInsets.all(12),
-          decoration: BoxDecoration(
-            color: const Color(0xff0f172a),
-            borderRadius: BorderRadius.circular(18),
-            border: Border.all(color: const Color(0xff26334d)),
-          ),
-          child: Row(
-            children: [
-              Icon(
-                _statusIcon(status),
-                color: rejected
-                    ? const Color(0xfff97316)
-                    : status == 'approved'
-                        ? const Color(0xff22c55e)
-                        : status == 'missing'
-                            ? const Color(0xff60a5fa)
-                            : const Color(0xfff59e0b),
-              ),
-              const SizedBox(width: 10),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      type,
-                      style: TextStyle(
-                        color: colors.text,
-                        fontWeight: FontWeight.w900,
+      children: [
+        Text('Documents submitted: ${documentTypes.where((type) => const {
+              "pending",
+              "under_review",
+              "uploaded",
+              "submitted",
+              "approved"
+            }.contains(_statusFor(type))).length}/${documentTypes.length}'),
+        ...documentTypes.map((type) {
+          final status = _statusFor(type);
+          final rejected =
+              status == 'rejected' || status == 'needs_information';
+          return Container(
+            margin: const EdgeInsets.only(bottom: 8),
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: const Color(0xff0f172a),
+              borderRadius: BorderRadius.circular(18),
+              border: Border.all(color: const Color(0xff26334d)),
+            ),
+            child: Row(
+              children: [
+                Icon(
+                  _statusIcon(status),
+                  color: rejected
+                      ? const Color(0xfff97316)
+                      : status == 'approved'
+                          ? const Color(0xff22c55e)
+                          : status == 'missing'
+                              ? const Color(0xff60a5fa)
+                              : const Color(0xfff59e0b),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        type,
+                        style: TextStyle(
+                          color: colors.text,
+                          fontWeight: FontWeight.w900,
+                        ),
                       ),
-                    ),
-                    const SizedBox(height: 2),
-                    Text(
-                      _friendlyStatus(status),
-                      style: TextStyle(
-                        color: colors.mutedText,
-                        fontSize: 12,
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
-                    if (rejected && _rejectionReason(type).isNotEmpty) ...[
                       const SizedBox(height: 2),
                       Text(
-                        _rejectionReason(type),
-                        style: const TextStyle(
-                          color: Color(0xffdc2626),
+                        _friendlyStatus(status),
+                        style: TextStyle(
+                          color: colors.mutedText,
                           fontSize: 12,
                           fontWeight: FontWeight.w700,
                         ),
                       ),
+                      if (rejected && _rejectionReason(type).isNotEmpty) ...[
+                        const SizedBox(height: 2),
+                        Text(
+                          _rejectionReason(type),
+                          style: const TextStyle(
+                            color: Color(0xffdc2626),
+                            fontSize: 12,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                      ],
                     ],
-                  ],
-                ),
-              ),
-              TextButton(
-                onPressed: () => onSelectType(type),
-                style: TextButton.styleFrom(
-                  foregroundColor: const Color(0xff60a5fa),
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 14,
-                    vertical: 12,
                   ),
                 ),
-                child: Text(status == 'missing' ? 'Upload' : 'Replace'),
-              ),
-            ],
-          ),
-        );
-      }).toList(),
+                TextButton(
+                  onPressed: () => onSelectType(type),
+                  style: TextButton.styleFrom(
+                    foregroundColor: const Color(0xff60a5fa),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 14,
+                      vertical: 12,
+                    ),
+                  ),
+                  child: Text(status == 'missing' ? 'Upload' : 'Replace'),
+                ),
+              ],
+            ),
+          );
+        }),
+      ],
     );
   }
 
   String _statusFor(String type) {
-    final key = type.toLowerCase().replaceAll(RegExp(r'[^a-z0-9]+'), '_');
+    final key = riderDocumentKey(type);
     final documents =
         (profile?['verificationDocuments'] as Map?)?.cast<String, dynamic>() ??
             (profile?['documents'] as Map?)?.cast<String, dynamic>() ??
@@ -6627,7 +6774,7 @@ class _RiderDocumentStatusList extends StatelessWidget {
   }
 
   String _rejectionReason(String type) {
-    final key = type.toLowerCase().replaceAll(RegExp(r'[^a-z0-9]+'), '_');
+    final key = riderDocumentKey(type);
     final documents =
         (profile?['verificationDocuments'] as Map?)?.cast<String, dynamic>() ??
             (profile?['documents'] as Map?)?.cast<String, dynamic>() ??
@@ -6644,7 +6791,7 @@ class _RiderDocumentStatusList extends StatelessWidget {
     return switch (status) {
       'approved' => Icons.verified,
       'uploaded' || 'under_review' => Icons.hourglass_top,
-      'rejected' => Icons.error_outline,
+      'rejected' || 'needs_information' => Icons.error_outline,
       _ => Icons.upload_file,
     };
   }
@@ -6652,9 +6799,9 @@ class _RiderDocumentStatusList extends StatelessWidget {
   static String _friendlyStatus(String status) {
     return switch (status) {
       'approved' => 'Approved',
-      'uploaded' => 'Uploaded',
+      'uploaded' || 'submitted' => 'Uploaded',
       'under_review' || 'pending' => 'Under review',
-      'rejected' => 'Rejected',
+      'rejected' || 'needs_information' => 'More information needed',
       _ => 'Missing',
     };
   }
