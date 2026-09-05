@@ -1,3 +1,5 @@
+import 'rider_referral.dart';
+import 'rider_referral_view.dart';
 import 'policies/signup_referral.dart';
 import 'dart:async';
 import 'dart:convert';
@@ -3165,78 +3167,15 @@ class _RiderEarningsTab extends StatelessWidget {
 }
 
 class _RiderReferralsTab extends StatelessWidget {
-  final _CircumColors colors;
-
   const _RiderReferralsTab({required this.colors});
-
+  final _CircumColors colors;
   @override
-  Widget build(BuildContext context) {
-    return ListView(
-      padding: const EdgeInsets.fromLTRB(18, 18, 18, 34),
-      children: [
-        _GlassPanel(
-          colors: colors,
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              _SectionTitle(colors: colors, title: 'Referrals'),
-              const SizedBox(height: 10),
-              Text(
-                'Earn £10 for every verified rider you refer.',
-                style: TextStyle(
-                  color: colors.text,
-                  fontSize: 21,
-                  height: 1.45,
-                  fontWeight: FontWeight.w900,
-                ),
-              ),
-              const SizedBox(height: 14),
-              Container(
-                width: double.infinity,
-                padding: const EdgeInsets.all(18),
-                decoration: BoxDecoration(
-                  color: const Color(0xff0b1730),
-                  borderRadius: BorderRadius.circular(20),
-                  border: Border.all(color: const Color(0xff2563eb)),
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'YOUR REFERRAL CODE',
-                      style: TextStyle(
-                        color: colors.mutedText,
-                        fontSize: 11,
-                        fontWeight: FontWeight.w900,
-                      ),
-                    ),
-                    const SizedBox(height: 8),
-                    Text(
-                      'Available after rider verification',
-                      style: TextStyle(
-                        color: colors.text,
-                        fontSize: 18,
-                        fontWeight: FontWeight.w900,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(height: 14),
-              Text(
-                'Referral sharing becomes available after rider verification.',
-                style: TextStyle(
-                  color: colors.mutedText,
-                  height: 1.35,
-                  fontWeight: FontWeight.w700,
-                ),
-              ),
-            ],
-          ),
-        ),
-      ],
-    );
-  }
+  Widget build(BuildContext context) => ListView(
+        padding: const EdgeInsets.all(24),
+        children: [
+          _GlassPanel(colors: colors, child: const RiderReferralPanel())
+        ],
+      );
 }
 
 class _RiderEnrollmentPortal extends StatefulWidget {
@@ -3283,6 +3222,8 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
   final _documentNotes = TextEditingController();
   bool _rightToWork = false;
   bool _sealedPackageConsent = false;
+  final _riderReferralCode =
+      TextEditingController(text: Uri.base.queryParameters['referral'] ?? '');
   bool _signupMode = true;
   bool _authSubmitting = false;
   bool _securitySubmitting = false;
@@ -3369,6 +3310,7 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
     _phone.dispose();
     _email.dispose();
     _password.dispose();
+    _riderReferralCode.dispose();
     _currentPassword.dispose();
     _newPassword.dispose();
     _confirmNewPassword.dispose();
@@ -3401,11 +3343,13 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
 
   Future<void> _restoreRiderSession() async {
     try {
-      await _ensureCircumFirebaseReady();
+      await _ensureCircumFirebaseReady().timeout(const Duration(seconds: 20));
       final user = FirebaseAuth.instance.currentUser;
       if (user == null || !mounted) return;
-      if (!await _allowRiderUser(user)) {
-        await FirebaseAuth.instance.signOut();
+      if (!await _allowRiderUser(user).timeout(const Duration(seconds: 45))) {
+        await FirebaseAuth.instance
+            .signOut()
+            .timeout(const Duration(seconds: 20));
         if (!mounted) return;
         setState(
           () => _authMessage =
@@ -3413,7 +3357,8 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
         );
         return;
       }
-      final riderProfile = await _loadRiderProfile(user.uid);
+      final riderProfile = await _loadRiderProfile(user.uid)
+          .timeout(const Duration(seconds: 20));
       setState(() {
         _riderUser = user;
         _riderProfile = riderProfile;
@@ -3439,7 +3384,9 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
   Future<void> _submitAuth() async {
     if (_authSubmitting) return;
     final email = _email.text.trim();
-    final password = _password.text.trim();
+    final password = _password.text;
+    final creating = _signupMode;
+    String? referralMessage;
     if (email.isEmpty || password.length < 6) {
       setState(
         () => _authMessage =
@@ -3450,31 +3397,50 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
 
     setState(() {
       _authSubmitting = true;
-      _authMessage = _signupMode
+      _authMessage = creating
           ? 'Creating your Circum Rider account...'
           : 'Signing you in...';
     });
 
     try {
-      await _ensureCircumFirebaseReady();
+      await _ensureCircumFirebaseReady().timeout(const Duration(seconds: 20));
       final auth = FirebaseAuth.instance;
-      final credential = _signupMode
-          ? await auth.createUserWithEmailAndPassword(
-              email: email,
-              password: password,
-            )
-          : await auth.signInWithEmailAndPassword(
-              email: email,
-              password: password,
-            );
+      final credential = creating
+          ? await auth
+              .createUserWithEmailAndPassword(
+                email: email,
+                password: password,
+              )
+              .timeout(const Duration(seconds: 20))
+          : await auth
+              .signInWithEmailAndPassword(
+                email: email,
+                password: password,
+              )
+              .timeout(const Duration(seconds: 20));
       final user = credential.user!;
-      if (_signupMode) {
-        await user.updateDisplayName(_fullName.text.trim());
-        await _saveRiderProfile(user);
-        _riderProfile = await _loadRiderProfile(user.uid);
+      if (creating) {
+        await user
+            .updateDisplayName(_fullName.text.trim())
+            .timeout(const Duration(seconds: 20));
+        await _saveRiderProfile(user).timeout(const Duration(seconds: 20));
+        referralMessage = await applyRiderReferral(
+            code: _riderReferralCode.text,
+            attach: (code) async {
+              final result =
+                  await FirebaseFunctions.instanceFor(region: 'us-central1')
+                      .httpsCallable('attachReferralCode')
+                      .call({'referralCode': code, 'program': 'rider'});
+              return '${(result.data as Map)["status"]}';
+            });
+        _riderProfile = await _loadRiderProfile(user.uid)
+            .timeout(const Duration(seconds: 20));
         _availableRoles = {CircumRole.rider};
-      } else if (!await _allowRiderUser(user)) {
-        await FirebaseAuth.instance.signOut();
+      } else if (!await _allowRiderUser(user)
+          .timeout(const Duration(seconds: 20))) {
+        await FirebaseAuth.instance
+            .signOut()
+            .timeout(const Duration(seconds: 20));
         if (!mounted) return;
         setState(
           () => _authMessage =
@@ -3482,7 +3448,8 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
         );
         return;
       } else {
-        _riderProfile = await _loadRiderProfile(user.uid);
+        _riderProfile = await _loadRiderProfile(user.uid)
+            .timeout(const Duration(seconds: 20));
       }
       _listenToRiderEarnings(user.uid);
       _listenToRiderPerformance(user.uid);
@@ -3498,13 +3465,16 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
       setState(() {
         _riderUser = user;
         _roleChoiceConfirmed = _availableRoles.length <= 1;
-        _authMessage = _signupMode
-            ? 'Your Circum Rider account is ready.'
-            : 'You are signed in.';
+        _authMessage = creating ? referralMessage : 'You are signed in.';
       });
     } on FirebaseAuthException catch (error) {
       if (!mounted) return;
       setState(() => _authMessage = _friendlyAuthMessage(error));
+    } on TimeoutException {
+      if (mounted) {
+        setState(() => _authMessage =
+            'Account setup timed out. Sign in again to continue.');
+      }
     } catch (_) {
       if (!mounted) return;
       setState(() => _authMessage = 'We could not continue. Please try again.');
@@ -3645,7 +3615,13 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
   }
 
   Future<bool> _allowRiderUser(User user) async {
-    final roles = await _rolesForUser(user);
+    var roles = await _rolesForUser(user).timeout(const Duration(seconds: 20));
+    if (roles.isEmpty) {
+      await FirebaseFunctions.instanceFor(region: 'us-central1')
+          .httpsCallable('updateRiderProfile')
+          .call({}).timeout(const Duration(seconds: 20));
+      roles = await _rolesForUser(user).timeout(const Duration(seconds: 20));
+    }
     if (!mounted) return false;
     setState(() => _availableRoles = roles);
     return RoleAccessPolicy.rolesCanAccessRider(roles);
@@ -5186,6 +5162,7 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
       colors: colors,
       email: _email,
       password: _password,
+      referralCode: _riderReferralCode,
       signupMode: _signupMode,
       submitting: _authSubmitting,
       user: _riderUser,
@@ -5419,6 +5396,7 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
                                 colors: colors,
                                 email: _email,
                                 password: _password,
+                                referralCode: _riderReferralCode,
                                 signupMode: _signupMode,
                                 submitting: _authSubmitting,
                                 user: _riderUser,
@@ -5538,6 +5516,7 @@ class _RiderAccessPanel extends StatelessWidget {
   final _CircumColors colors;
   final TextEditingController email;
   final TextEditingController password;
+  final TextEditingController referralCode;
   final bool signupMode;
   final bool submitting;
   final User? user;
@@ -5551,6 +5530,7 @@ class _RiderAccessPanel extends StatelessWidget {
     required this.colors,
     required this.email,
     required this.password,
+    required this.referralCode,
     required this.signupMode,
     required this.submitting,
     required this.user,
@@ -5594,6 +5574,14 @@ class _RiderAccessPanel extends StatelessWidget {
               hint: 'Password',
               obscureText: true,
             ),
+            if (signupMode) ...[
+              _InputBox(
+                  colors: colors,
+                  controller: referralCode,
+                  hint: 'REFERRAL CODE (OPTIONAL)'),
+              Text(riderReferralHelper,
+                  style: TextStyle(color: colors.mutedText)),
+            ],
             Align(
               alignment: Alignment.centerRight,
               child: TextButton(
