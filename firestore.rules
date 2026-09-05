@@ -352,6 +352,10 @@ service cloud.firestore {
 
     function userAdminOnlyRoleFields() {
       return [
+        'starterRothGrantStatus',
+        'starterRothGrantedAt',
+        'starterRothAmount',
+        'starterRothTransactionId',
         'roles',
         'adminRole',
         'isAdmin',
