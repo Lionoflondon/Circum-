@@ -1,3 +1,4 @@
+import 'policies/signup_referral.dart';
 import 'dart:async';
 import 'dart:convert';
 import 'dart:math' as math;
@@ -8010,7 +8011,8 @@ class _CustomerPortalState extends State<_CustomerPortal> {
   void initState() {
     super.initState();
     if (widget.referralCode != null) {
-      _senderReferralCode.text = widget.referralCode!;
+      _senderReferralCode.text = normalizeSignupReferral(widget.referralCode!);
+      _senderSignupMode = true;
     }
     _weight.addListener(_handleWeightChanged);
     _senderName.addListener(_handleContactDetailsChanged);
@@ -9647,22 +9649,25 @@ class _CustomerPortalState extends State<_CustomerPortal> {
         'displayName': _senderName.text.trim(),
         'phone': _senderPhone.text.trim(),
       }).timeout(_senderAuthOperationTimeout);
-      final referralCode = _senderReferralCode.text.trim();
-      if (referralCode.isNotEmpty) {
-        try {
-          await FirebaseFunctions.instanceFor(region: 'us-central1')
-              .httpsCallable('attachReferralCode')
-              .call({'referralCode': referralCode}).timeout(
-                  _senderAuthOperationTimeout);
-        } catch (error) {
-          debugPrint('Web referral attach failed: $error');
-        }
+      final referralMessage =
+          await applySignupReferral(_senderReferralCode.text, (code) async {
+        final result =
+            await FirebaseFunctions.instanceFor(region: 'us-central1')
+                .httpsCallable('attachReferralCode')
+                .call({'referralCode': code});
+        return result.data;
+      }, timeout: _senderAuthOperationTimeout);
+      if (mounted) {
+        setState(() => _senderProfileMessage = referralMessage);
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+            content: Text(referralMessage),
+            duration: const Duration(seconds: 12)));
       }
       _availableRoles = {CircumRole.sender};
       _attachSender(user);
       await _loadSenderDeliveries(user.uid)
           .timeout(_senderAuthOperationTimeout);
-      setState(() => _senderProfileMessage = 'Your Circum profile is ready.');
+      if (mounted) setState(() => _senderProfileMessage = referralMessage);
     } on FirebaseAuthException catch (error) {
       setState(() => _senderProfileMessage = _friendlySenderAuthMessage(error));
     } on TimeoutException {
@@ -13539,8 +13544,10 @@ class _SenderAccessGate extends StatelessWidget {
                 _InputBox(
                   colors: colors,
                   controller: referralCode,
-                  hint: 'Referral code',
+                  hint: 'REFERRAL CODE (OPTIONAL)',
                 ),
+                const Text(
+                    'Use a friend’s code. Rewards unlock after your first completed paid delivery.'),
               ],
               Align(
                 alignment: Alignment.centerRight,
@@ -17004,8 +17011,10 @@ class _SenderProfileStep extends StatelessWidget {
             _InputBox(
               colors: colors,
               controller: referralCode,
-              hint: 'Referral code',
+              hint: 'REFERRAL CODE (OPTIONAL)',
             ),
+            const Text(
+                'Use a friend’s code. Rewards unlock after your first completed paid delivery.'),
             Align(
               alignment: Alignment.centerRight,
               child: TextButton(
