@@ -155,21 +155,30 @@ async function fetchSenderRoute({origin, destination, apiKey, fetchImpl = fetch}
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), ROUTE_REQUEST_TIMEOUT_MS);
   try {
-    const url = new URL("https://maps.googleapis.com/maps/api/directions/json");
-    url.searchParams.set("origin", `${origin.latitude},${origin.longitude}`);
-    url.searchParams.set("destination", `${destination.latitude},${destination.longitude}`);
-    url.searchParams.set("mode", "driving");
-    url.searchParams.set("key", apiKey);
-    const response = await fetchImpl(url, {signal: controller.signal});
-    if (!response.ok) throw new Error(`directions_http_${response.status}`);
+    const response = await fetchImpl("https://routes.googleapis.com/directions/v2:computeRoutes", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "X-Goog-Api-Key": apiKey,
+        "X-Goog-FieldMask": "routes.duration,routes.distanceMeters,routes.polyline.encodedPolyline",
+      },
+      body: JSON.stringify({
+        origin: {location: {latLng: origin}},
+        destination: {location: {latLng: destination}},
+        travelMode: "DRIVE",
+        routingPreference: "TRAFFIC_UNAWARE",
+      }),
+      signal: controller.signal,
+    });
+    if (!response.ok) throw new Error(`routes_http_${response.status}`);
     const payload = await response.json();
     const route = payload && Array.isArray(payload.routes) ? payload.routes[0] : null;
-    const leg = route && Array.isArray(route.legs) ? route.legs[0] : null;
-    const encodedPolyline = text(route && route.overview_polyline && route.overview_polyline.points);
-    const distanceMetres = Number(leg && leg.distance && leg.distance.value);
-    const durationSeconds = Number(leg && leg.duration && leg.duration.value);
-    if (!encodedPolyline || !Number.isFinite(distanceMetres)) {
-      throw new Error("directions_route_missing");
+    const encodedPolyline = text(route && route.polyline && route.polyline.encodedPolyline);
+    const distanceMetres = Number(route && route.distanceMeters);
+    const durationSeconds = Number.parseFloat(route && route.duration);
+    if (!encodedPolyline || !route || route.distanceMeters == null ||
+        !Number.isFinite(distanceMetres) || distanceMetres < 0) {
+      throw new Error("routes_route_missing");
     }
     return {
       encodedPolyline,

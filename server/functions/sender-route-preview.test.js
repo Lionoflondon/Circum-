@@ -27,13 +27,19 @@ test("route provider result is authoritative and includes duration", async () =>
     origin: {latitude: 51.5, longitude: -0.1},
     destination: {latitude: 51.6, longitude: -0.2},
     apiKey: "redacted",
-    fetchImpl: async () => {
+    fetchImpl: async (url, options) => {
+      assert.equal(url, "https://routes.googleapis.com/directions/v2:computeRoutes");
+      assert.equal(options.method, "POST");
+      assert.equal(options.headers["X-Goog-Api-Key"], "redacted");
+      assert.equal(options.headers["X-Goog-FieldMask"], "routes.duration,routes.distanceMeters,routes.polyline.encodedPolyline");
+      assert.deepEqual(JSON.parse(options.body).origin, {location: {latLng: {latitude: 51.5, longitude: -0.1}}});
+      assert.ok(options.signal instanceof AbortSignal);
       calls += 1;
       return {
         ok: true,
         json: async () => ({routes: [{
-          overview_polyline: {points: "encoded"},
-          legs: [{distance: {value: 3218}, duration: {value: 600}}],
+          polyline: {encodedPolyline: "encoded"},
+          distanceMeters: 3218, duration: "600s",
         }]}),
       };
     },
@@ -85,4 +91,16 @@ test("every payment mode persists complete delivery payload before confirmation"
   const payment = source.match(/exports\.createSenderPaymentSession[\s\S]*?\n\}, \{secrets: \["STRIPE_SECRET_KEY"\]\}\);\n\nasync function updateSenderPaymentIntentStatus/)[0];
   assert.match(payment, /assertDeliveryMatchesQuote\(deliveryPayload, quote\)/);
   assert.match(payment, /paymentSessionKey: requestedSessionKey,\n\s+deliveryPayload,/);
+});
+
+
+test("Routes API failures and missing route metrics fail closed", async () => {
+  const input = {origin: {latitude: 51.5, longitude: -0.1}, destination: {latitude: 51.6, longitude: -0.2}, apiKey: "not-exposed"};
+  for (const response of [
+    {ok: false, status: 403},
+    {ok: true, json: async () => ({routes: []})},
+    {ok: true, json: async () => ({routes: [{polyline: {encodedPolyline: "encoded"}}]})},
+  ]) {
+    await assert.rejects(_private.fetchSenderRoute({...input, fetchImpl: async () => response}), (error) => !error.message.includes(input.apiKey));
+  }
 });

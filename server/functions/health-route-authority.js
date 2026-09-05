@@ -18,24 +18,27 @@ async function healthRouteDistance({
       "Complete the pharmacy and delivery addresses before pricing.",
     );
   }
-  const url = new URL("https://maps.googleapis.com/maps/api/directions/json");
-  url.searchParams.set("origin", pharmacyAddress);
-  url.searchParams.set("destination", deliveryAddress);
-  url.searchParams.set("mode", "driving");
-  url.searchParams.set("key", apiKey);
   try {
-    const response = await fetchImpl(url, {
+    const response = await fetchImpl("https://routes.googleapis.com/directions/v2:computeRoutes", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "X-Goog-Api-Key": apiKey,
+        "X-Goog-FieldMask": "routes.distanceMeters",
+      },
+      body: JSON.stringify({
+        origin: {address: pharmacyAddress},
+        destination: {address: deliveryAddress},
+        travelMode: "DRIVE",
+        routingPreference: "TRAFFIC_UNAWARE",
+      }),
       signal: AbortSignal.timeout(10000),
     });
     if (!response.ok) throw new Error("route_http");
     const body = await response.json();
-    const leg =
-      body.routes &&
-      body.routes[0] &&
-      body.routes[0].legs &&
-      body.routes[0].legs[0];
-    const metres = Number(leg && leg.distance && leg.distance.value);
-    if (body.status !== "OK" || !Number.isFinite(metres) || metres <= 0) {
+    const route = body.routes && body.routes[0];
+    const metres = Number(route && route.distanceMeters);
+    if (!Number.isFinite(metres) || metres <= 0) {
       throw new Error("route_missing");
     }
     return metres / 1609.344;
