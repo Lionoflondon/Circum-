@@ -55,6 +55,7 @@ class _GiftVoiceNoteViewState extends State<GiftVoiceNoteView> {
 
   @override
   void dispose() {
+    _recordingGeneration++;
     _timer?.cancel();
     _playbackTimer?.cancel();
     _playback.dispose();
@@ -123,7 +124,11 @@ class _GiftVoiceNoteViewState extends State<GiftVoiceNoteView> {
     );
   }
 
+  bool _recordingOperationPending = false;
+  int _recordingGeneration = 0;
+
   Future<void> _startRecording() async {
+    if (_recordingOperationPending) return;
     if (!_recorder.isSupported) {
       setState(() {
         _state = GiftVoiceNoteState.uploadFailed;
@@ -132,8 +137,11 @@ class _GiftVoiceNoteViewState extends State<GiftVoiceNoteView> {
       });
       return;
     }
+    _recordingOperationPending = true;
+    final generation = _recordingGeneration;
     try {
       await _recorder.start();
+      if (!mounted || generation != _recordingGeneration) return;
       setState(() {
         _state = GiftVoiceNoteState.recording;
         _statusMessage = null;
@@ -151,20 +159,28 @@ class _GiftVoiceNoteViewState extends State<GiftVoiceNoteView> {
         setState(() => _seconds += 1);
       });
     } catch (_) {
+      if (!mounted || generation != _recordingGeneration) return;
       setState(() {
         _state = GiftVoiceNoteState.permissionDenied;
         _statusMessage =
             'Microphone access is blocked. Enable it in your device settings, or skip this step.';
       });
+    } finally {
+      _recordingOperationPending = false;
     }
   }
 
   Future<void> _stopRecording() async {
+    if (_recordingOperationPending) return;
     _timer?.cancel();
     final duration = _seconds.clamp(1, _maxDurationSeconds);
+    _recordingOperationPending = true;
+    final generation = _recordingGeneration;
     try {
       final audio = await _recorder.stop();
+      if (!mounted || generation != _recordingGeneration) return;
       final uploaded = await _mediaStorage.uploadGiftVoiceNote(audio);
+      if (!mounted || generation != _recordingGeneration) return;
       final uploadedAt = DateTime.now();
       setState(() {
         _state = GiftVoiceNoteState.recorded;
@@ -187,15 +203,19 @@ class _GiftVoiceNoteViewState extends State<GiftVoiceNoteView> {
         );
       });
     } catch (_) {
+      if (!mounted || generation != _recordingGeneration) return;
       setState(() {
         _state = GiftVoiceNoteState.uploadFailed;
         _statusMessage =
             'We could not upload that recording. Please try again or skip this step.';
       });
+    } finally {
+      _recordingOperationPending = false;
     }
   }
 
   void _cancelRecording() {
+    _recordingGeneration++;
     _timer?.cancel();
     _recorder.cancel();
     setState(() {
