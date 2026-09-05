@@ -2,8 +2,8 @@ import 'dart:async';
 import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:cloud_functions/cloud_functions.dart';
-import '../lib/website/shared/policies/signup_referral.dart';
-import '../lib/web_platform_routing.dart';
+import 'package:circum/website/shared/policies/signup_referral.dart';
+import 'package:circum/web_platform_routing.dart';
 
 void main() {
   test('join link resolves to signup with normalized prefill', () {
