@@ -30,9 +30,15 @@ void main() {
     expect(home, contains('_senderAuthRestoreTimeout'));
     expect(home, contains('setPersistence(Persistence.LOCAL)'));
     expect(home, contains('authStateChanges()'));
-    expect(home, contains('createUserWithEmailAndPassword'));
-    expect(home, contains('signInWithEmailAndPassword'));
-    expect(home, contains("httpsCallable('ensureSenderAccount')"));
+    final emailAuthFile = File('lib/app/authentication/sender_email_auth.dart');
+    final emailAuth =
+        emailAuthFile.existsSync() ? emailAuthFile.readAsStringSync() : home;
+    expect(emailAuth, contains('createUserWithEmailAndPassword'));
+    expect(emailAuth, contains('signInWithEmailAndPassword'));
+    final authority =
+        File('lib/app/sender_mobile/sender_profile_authority.dart')
+            .readAsStringSync();
+    expect('$home$authority', contains("httpsCallable('ensureSenderAccount')"));
     expect(home, contains(".load('sender_mobile.auth.profile')"));
     expect(home, contains('getIdToken(true)'));
     expect(home, contains('.timeout('));
@@ -217,5 +223,26 @@ void main() {
         handler,
         contains(
             "'Email verification could not be confirmed. Please try again.'"));
+  });
+  test(
+      'web signup, restore and wallet refresh converge on checked account bootstrap',
+      () {
+    final signup = website.substring(
+        website.indexOf('Future<void> _signUpSender()'),
+        website.indexOf('Future<void> _sendSenderPasswordReset()'));
+    expect(signup.indexOf('_allowSenderUser(user)'),
+        lessThan(signup.indexOf("httpsCallable('updateSenderProfile')")));
+    expect(signup.indexOf("httpsCallable('updateSenderProfile')"),
+        lessThan(signup.indexOf("httpsCallable('attachReferralCode')")));
+    final access = website.substring(
+        website.indexOf('Future<bool> _allowSenderUser('),
+        website.indexOf('Future<Set<CircumRole>> _rolesForSenderUser('));
+    expect(access, contains('ensureWebSenderBootstrap'));
+    expect(access, contains("httpsCallable('ensureSenderAccount')"));
+    final balance = website.substring(
+        website.indexOf('Future<void> _loadSenderRothBalance()'),
+        website.indexOf('Future<void> _showLegendCelebration('));
+    expect(balance.indexOf('_allowSenderUser(user)'),
+        lessThan(balance.indexOf("httpsCallable('getSenderRothBalance')")));
   });
 }
