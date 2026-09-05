@@ -110,3 +110,36 @@ test("legacy clients without an upload request key remain compatible", async () 
   assert.equal(documents.size, 1);
   assert.equal(documents.docs[0].data().idempotencyKey, undefined);
 });
+
+test("legacy document section acknowledgements derive from uploads without writing review authority", async () => {
+  const uid = "legacy-section-evidence";
+  const context = {auth: {uid, token: {email: "legacy-section@example.test"}}};
+  const acknowledge = (section, extra = {}) => functions.updateRiderApplicationSection.run({section, status: "submitted", ...extra}, context);
+  await assert.rejects(acknowledge("identity_verification"), {code: "failed-precondition"});
+  for (const [type, section, mime] of [["passport", "identity_verification", "application/pdf"], ["right_to_work", "right_to_work", "image/jpeg"], ["insurance", "vehicle_documents", "application/pdf"]]) {
+    await functions.submitRiderDocument.run({documentType: type, idempotencyKey: `legacy-section-${type}`, fileBase64: Buffer.from("synthetic evidence").toString("base64"), contentType: mime, fileName: "evidence"}, context);
+    const before = (await db.collection("riderProfiles").doc(uid).get()).data();
+    assert.equal((await acknowledge(section)).derivedFromDocuments, true);
+    assert.equal((await acknowledge(section)).status, "submitted");
+    assert.deepEqual((await db.collection("riderProfiles").doc(uid).get()).data(), before);
+    assert.equal((await db.collection("riderApplications").doc(uid).get()).exists, false);
+    await assert.rejects(acknowledge(section, {status: "approved"}), {code: "permission-denied"});
+    await assert.rejects(acknowledge(section, {verificationStatus: "verified"}), {code: "permission-denied"});
+    await assert.rejects(functions.updateRiderApplicationSection.run({section, status: "submitted"}, {auth: {uid: "wrong-section-rider", token: {}}}), {code: "failed-precondition"});
+  }
+  await assert.rejects(functions.updateRiderApplicationSection.run({section: "identity_verification", status: "submitted"}, {}), {code: "unauthenticated"});
+  const docs = await db.collection("riderDocuments").where("riderId", "==", uid).get();
+  await Promise.all(docs.docs.map((doc) => doc.ref.update({status: "rejected"})));
+  await assert.rejects(acknowledge("identity_verification"), {code: "failed-precondition"});
+});
+
+test("legacy multipart section acknowledgement preserves backend review and application state", async () => {
+  const uid = "legacy-multipart-section";
+  const context = {auth: {uid, token: {}}};
+  await functions.submitRiderDocument.run({documentType: "driving_licence", files: [file("front", "front"), file("back", "back")], idempotencyKey: "legacy-multipart-section"}, context);
+  await db.collection("riderApplications").doc(uid).set({status: "under_review", sectionStatus: {identity_verification: "needs_attention"}});
+  const before = (await db.collection("riderApplications").doc(uid).get()).data();
+  const result = await functions.updateRiderApplicationSection.run({section: "identity_verification", status: "submitted"}, context);
+  assert.equal(result.derivedFromDocuments, true);
+  assert.deepEqual((await db.collection("riderApplications").doc(uid).get()).data(), before);
+});
