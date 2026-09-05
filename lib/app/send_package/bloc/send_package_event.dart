@@ -281,6 +281,9 @@ class MessageRider extends SendPackageEvent {
 
 class DeleteCompletedDelivery extends SendPackageEvent {}
 
-class CancelRequest extends SendPackageEvent {}
+class CancelRequest extends SendPackageEvent {
+  final String? quoteToken;
+  CancelRequest({this.quoteToken});
+}
 
 class BackButtonPressed extends SendPackageEvent {}
