@@ -1,3 +1,4 @@
+import 'policies/web_auth_terminal.dart';
 import 'rider_onboarding/application_policy.dart';
 import 'rider_onboarding/file_picker.dart';
 import 'rider_onboarding/document_transport.dart';
@@ -74,7 +75,8 @@ const _analyticsConsentStorageKey = 'circum_public_optional_analytics_consent';
 
 Future<void> _ensureCircumFirebaseReady() async {
   if (Firebase.apps.isEmpty) {
-    await Firebase.initializeApp(options: DefaultFirebaseOptions.web);
+    await Firebase.initializeApp(options: DefaultFirebaseOptions.web)
+        .timeout(webAuthOperationTimeout);
   }
 }
 
@@ -3418,7 +3420,7 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
       final user = FirebaseAuth.instance.currentUser;
       if (user == null || !mounted) return;
       if (!await _allowRiderUser(user).timeout(const Duration(seconds: 25))) {
-        await FirebaseAuth.instance.signOut();
+        await FirebaseAuth.instance.signOut().timeout(webAuthOperationTimeout);
         if (!mounted) return;
         setState(
           () => _authMessage =
@@ -3496,7 +3498,7 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
         _availableRoles = {CircumRole.rider};
       } else if (!await _allowRiderUser(user)
           .timeout(const Duration(seconds: 25))) {
-        await FirebaseAuth.instance.signOut();
+        await FirebaseAuth.instance.signOut().timeout(webAuthOperationTimeout);
         if (!mounted) return;
         setState(
           () => _authMessage =
@@ -3537,6 +3539,7 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
   }
 
   Future<void> _sendRiderPasswordReset() async {
+    if (_authSubmitting) return;
     final email = _email.text.trim();
     if (email.isEmpty) {
       setState(() => _authMessage = 'Enter your email address first.');
@@ -3547,8 +3550,10 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
       _authMessage = 'Sending password reset email...';
     });
     try {
-      await _ensureCircumFirebaseReady();
-      await FirebaseAuth.instance.sendPasswordResetEmail(email: email);
+      await _ensureCircumFirebaseReady().timeout(webAuthOperationTimeout);
+      await FirebaseAuth.instance
+          .sendPasswordResetEmail(email: email)
+          .timeout(webAuthOperationTimeout);
       if (!mounted) return;
       setState(
         () => _authMessage =
@@ -3564,6 +3569,14 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
             'We could not send the reset email. Check the address and try again.',
         },
       );
+    } on TimeoutException {
+      if (!mounted) return;
+      setState(() => _authMessage =
+          'Password reset took too long. Check your email before trying again.');
+    } catch (_) {
+      if (!mounted) return;
+      setState(() => _authMessage =
+          'We could not send the reset email. Please try again.');
     } finally {
       if (mounted) setState(() => _authSubmitting = false);
     }
@@ -3582,7 +3595,9 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
       email: email,
       password: password,
     );
-    return user.reauthenticateWithCredential(credential);
+    return user
+        .reauthenticateWithCredential(credential)
+        .timeout(webAuthOperationTimeout);
   }
 
   Future<void> _changeRiderPassword() async {
@@ -3602,11 +3617,13 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
       _securityMessage = 'Updating password...';
     });
     try {
-      await _ensureCircumFirebaseReady();
+      await _ensureCircumFirebaseReady().timeout(webAuthOperationTimeout);
       await _reauthenticateRider(current);
-      await (_riderUser ?? FirebaseAuth.instance.currentUser)?.updatePassword(
-        next,
-      );
+      final user = _riderUser ?? FirebaseAuth.instance.currentUser;
+      if (user == null) {
+        throw FirebaseAuthException(code: 'requires-recent-login');
+      }
+      await user.updatePassword(next).timeout(webAuthOperationTimeout);
       _currentPassword.clear();
       _newPassword.clear();
       _confirmNewPassword.clear();
@@ -3639,13 +3656,15 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
       _securityMessage = 'Updating email...';
     });
     try {
-      await _ensureCircumFirebaseReady();
+      await _ensureCircumFirebaseReady().timeout(webAuthOperationTimeout);
       await _reauthenticateRider(password);
       final user = _riderUser ?? FirebaseAuth.instance.currentUser;
       if (user == null) {
         throw FirebaseAuthException(code: 'requires-recent-login');
       }
-      await user.verifyBeforeUpdateEmail(nextEmail);
+      await user
+          .verifyBeforeUpdateEmail(nextEmail)
+          .timeout(webAuthOperationTimeout);
       await FirebaseFunctions.instanceFor(region: 'us-central1')
           .httpsCallable('requestRiderEmailChange')
           .call({'pendingEmail': nextEmail});
@@ -5068,33 +5087,49 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
   }
 
   Future<void> _signOutRider() async {
-    await _earningsSub?.cancel();
-    await _onboardingProfileSub?.cancel();
-    await _onboardingDocumentsSub?.cancel();
-    await _performanceSub?.cancel();
-    await _ratingSub?.cancel();
-    await _availableJobsSub?.cancel();
-    await _acceptedJobsSub?.cancel();
-    await _completedJobsSub?.cancel();
-    await _riderChatSub?.cancel();
-    await FirebaseAuth.instance.signOut();
-    if (!mounted) return;
-    setState(() {
-      _riderUser = null;
-      _riderProfile = null;
-      _earnings = _RiderEarningsSnapshot.empty();
-      _performance = DriverPerformanceMetric.empty('web-rider');
-      _recentRatings = const [];
-      _availableJobs = const [];
-      _acceptedJobs = const [];
-      _completedJobs = const [];
-      _availableRoles = const {};
-      _roleChoiceConfirmed = false;
-      _authMessage = 'Signed out.';
-      _riderChatOpen = false;
-      _activeRiderChatJob = null;
-      _riderChatMessages.clear();
-    });
+    if (_authSubmitting) return;
+    setState(() => _authSubmitting = true);
+    try {
+      final signedOut = await finishWebSignOut(
+        signOut: () => FirebaseAuth.instance.signOut(),
+        cancelSubscriptions: () => Future.wait<void>([
+          if (_earningsSub != null) _earningsSub!.cancel(),
+          if (_onboardingProfileSub != null) _onboardingProfileSub!.cancel(),
+          if (_onboardingDocumentsSub != null)
+            _onboardingDocumentsSub!.cancel(),
+          if (_performanceSub != null) _performanceSub!.cancel(),
+          if (_ratingSub != null) _ratingSub!.cancel(),
+          if (_availableJobsSub != null) _availableJobsSub!.cancel(),
+          if (_acceptedJobsSub != null) _acceptedJobsSub!.cancel(),
+          if (_completedJobsSub != null) _completedJobsSub!.cancel(),
+          if (_riderChatSub != null) _riderChatSub!.cancel(),
+        ]),
+      );
+      if (!mounted) return;
+      if (!signedOut) {
+        setState(() => _authMessage =
+            'Sign out could not be confirmed. Please try again.');
+        return;
+      }
+      setState(() {
+        _riderUser = null;
+        _riderProfile = null;
+        _earnings = _RiderEarningsSnapshot.empty();
+        _performance = DriverPerformanceMetric.empty('web-rider');
+        _recentRatings = const [];
+        _availableJobs = const [];
+        _acceptedJobs = const [];
+        _completedJobs = const [];
+        _availableRoles = const {};
+        _roleChoiceConfirmed = false;
+        _authMessage = 'Signed out.';
+        _riderChatOpen = false;
+        _activeRiderChatJob = null;
+        _riderChatMessages.clear();
+      });
+    } finally {
+      if (mounted) setState(() => _authSubmitting = false);
+    }
   }
 
   Future<void> _requestWithdrawal() async {
@@ -9216,7 +9251,7 @@ class _CustomerPortalState extends State<_CustomerPortal> {
         },
       );
       if (!senderAllowed) {
-        await FirebaseAuth.instance.signOut();
+        await FirebaseAuth.instance.signOut().timeout(webAuthOperationTimeout);
         if (!mounted) return;
         setState(() {
           _senderAuthLoading = false;
@@ -9747,7 +9782,7 @@ class _CustomerPortalState extends State<_CustomerPortal> {
           .timeout(_senderAuthOperationTimeout);
       final user = credential.user!;
       if (!await _allowSenderUser(user)) {
-        await FirebaseAuth.instance.signOut();
+        await FirebaseAuth.instance.signOut().timeout(webAuthOperationTimeout);
         setState(
           () => _senderProfileMessage =
               'This account is not a Circum account. Use the Circum Rider or admin sign-in instead.',
@@ -9787,7 +9822,7 @@ class _CustomerPortalState extends State<_CustomerPortal> {
           .timeout(_senderAuthOperationTimeout);
       final user = credential.user!;
       if (!await _allowSenderUser(user)) {
-        await FirebaseAuth.instance.signOut();
+        await FirebaseAuth.instance.signOut().timeout(webAuthOperationTimeout);
         throw FirebaseAuthException(code: 'sender-account-not-allowed');
       }
       await FirebaseFunctions.instanceFor(
@@ -9829,6 +9864,7 @@ class _CustomerPortalState extends State<_CustomerPortal> {
   }
 
   Future<void> _sendSenderPasswordReset() async {
+    if (_senderAuthBusy) return;
     final email = _senderEmail.text.trim();
     if (email.isEmpty) {
       setState(() => _senderProfileMessage = 'Enter your email address first.');
@@ -9839,8 +9875,10 @@ class _CustomerPortalState extends State<_CustomerPortal> {
       _senderProfileMessage = 'Sending password reset email...';
     });
     try {
-      await _ensureFirebaseReady();
-      await FirebaseAuth.instance.sendPasswordResetEmail(email: email);
+      await _ensureFirebaseReady().timeout(webAuthOperationTimeout);
+      await FirebaseAuth.instance
+          .sendPasswordResetEmail(email: email)
+          .timeout(webAuthOperationTimeout);
       if (!mounted) return;
       setState(
         () => _senderProfileMessage =
@@ -9856,6 +9894,14 @@ class _CustomerPortalState extends State<_CustomerPortal> {
             'We could not send the reset email. Check the address and try again.',
         },
       );
+    } on TimeoutException {
+      if (!mounted) return;
+      setState(() => _senderProfileMessage =
+          'Password reset took too long. Check your email before trying again.');
+    } catch (_) {
+      if (!mounted) return;
+      setState(() => _senderProfileMessage =
+          'We could not send the reset email. Please try again.');
     } finally {
       if (mounted) setState(() => _senderAuthBusy = false);
     }
@@ -9870,9 +9916,11 @@ class _CustomerPortalState extends State<_CustomerPortal> {
         message: 'Sign in again before changing account security settings.',
       );
     }
-    return user.reauthenticateWithCredential(
-      EmailAuthProvider.credential(email: email, password: password),
-    );
+    return user
+        .reauthenticateWithCredential(
+          EmailAuthProvider.credential(email: email, password: password),
+        )
+        .timeout(webAuthOperationTimeout);
   }
 
   Future<void> _changeSenderPassword() async {
@@ -9892,11 +9940,13 @@ class _CustomerPortalState extends State<_CustomerPortal> {
       _senderSecurityMessage = 'Updating password...';
     });
     try {
-      await _ensureFirebaseReady();
+      await _ensureFirebaseReady().timeout(webAuthOperationTimeout);
       await _reauthenticateSender(current);
-      await (_senderUser ?? FirebaseAuth.instance.currentUser)?.updatePassword(
-        next,
-      );
+      final user = _senderUser ?? FirebaseAuth.instance.currentUser;
+      if (user == null) {
+        throw FirebaseAuthException(code: 'requires-recent-login');
+      }
+      await user.updatePassword(next).timeout(webAuthOperationTimeout);
       _senderCurrentPassword.clear();
       _senderNewPassword.clear();
       _senderConfirmNewPassword.clear();
@@ -9931,13 +9981,15 @@ class _CustomerPortalState extends State<_CustomerPortal> {
       _senderSecurityMessage = 'Updating email...';
     });
     try {
-      await _ensureFirebaseReady();
+      await _ensureFirebaseReady().timeout(webAuthOperationTimeout);
       await _reauthenticateSender(password);
       final user = _senderUser ?? FirebaseAuth.instance.currentUser;
       if (user == null) {
         throw FirebaseAuthException(code: 'requires-recent-login');
       }
-      await user.verifyBeforeUpdateEmail(nextEmail);
+      await user
+          .verifyBeforeUpdateEmail(nextEmail)
+          .timeout(webAuthOperationTimeout);
       await FirebaseFunctions.instanceFor(region: 'us-central1')
           .httpsCallable('requestSenderEmailChange')
           .call({'pendingEmail': nextEmail});
@@ -10021,21 +10073,36 @@ class _CustomerPortalState extends State<_CustomerPortal> {
   }
 
   Future<void> _signOutSender() async {
-    await FirebaseAuth.instance.signOut();
-    await _senderSub?.cancel();
-    await _deliveryAdjustmentSub?.cancel();
-    if (!mounted) return;
-    setState(() {
-      _senderUser = null;
-      _senderProfile = null;
-      _senderDeliveries = const [];
-      _selectedSenderDelivery = null;
-      _senderDeliveryLoadError = null;
-      _availableRoles = const {};
-      _roleChoiceConfirmed = false;
-      _step = _SenderStep.dashboard;
-      _senderProfileMessage = 'Signed out.';
-    });
+    if (_senderAuthBusy) return;
+    setState(() => _senderAuthBusy = true);
+    try {
+      final signedOut = await finishWebSignOut(
+        signOut: () => FirebaseAuth.instance.signOut(),
+        cancelSubscriptions: () => Future.wait<void>([
+          if (_senderSub != null) _senderSub!.cancel(),
+          if (_deliveryAdjustmentSub != null) _deliveryAdjustmentSub!.cancel(),
+        ]),
+      );
+      if (!mounted) return;
+      if (!signedOut) {
+        setState(() => _senderProfileMessage =
+            'Sign out could not be confirmed. Please try again.');
+        return;
+      }
+      setState(() {
+        _senderUser = null;
+        _senderProfile = null;
+        _senderDeliveries = const [];
+        _selectedSenderDelivery = null;
+        _senderDeliveryLoadError = null;
+        _availableRoles = const {};
+        _roleChoiceConfirmed = false;
+        _step = _SenderStep.dashboard;
+        _senderProfileMessage = 'Signed out.';
+      });
+    } finally {
+      if (mounted) setState(() => _senderAuthBusy = false);
+    }
   }
 
   Future<void> _saveSenderProfile() async {
