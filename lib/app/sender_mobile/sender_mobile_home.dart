@@ -16,6 +16,7 @@ import '../sender_profile/sender_profile.dart';
 import '../authentication/sender_auth_commit_sequence.dart';
 import '../authentication/sender_auth_error_message.dart';
 import '../authentication/sender_email_auth.dart';
+import '../authentication/sender_signup_referral.dart';
 import '../send_package/bloc/send_package_bloc.dart';
 import '../send_package/view/ride_chats.dart';
 import 'design_system/sender_design_system.dart';
@@ -185,6 +186,8 @@ class _SenderMobileHomeState extends State<SenderMobileHome> {
       case _SenderEntryScreen.auth:
         return _SenderAuthEntry(
           mode: _authMode,
+          initialReferralCode: signupReferralFromRoute(
+              widget.initialRouteName ?? Uri.base.toString()),
           senderAuthEnabled: widget.senderAuthEnabled,
           onBack: () => setState(() => _entry = _SenderEntryScreen.landing),
           onAuthenticated: () =>
@@ -622,6 +625,7 @@ class _SenderPreAuthLanding extends StatelessWidget {
 
 class _SenderAuthEntry extends StatefulWidget {
   final _SenderAuthMode mode;
+  final String initialReferralCode;
   final bool senderAuthEnabled;
   final VoidCallback onBack;
   final VoidCallback onAuthenticated;
@@ -629,6 +633,7 @@ class _SenderAuthEntry extends StatefulWidget {
 
   const _SenderAuthEntry({
     required this.mode,
+    required this.initialReferralCode,
     required this.senderAuthEnabled,
     required this.onBack,
     required this.onAuthenticated,
@@ -648,6 +653,13 @@ class _SenderAuthEntryState extends State<_SenderAuthEntry> {
   var _busy = false;
   var _showPassword = false;
   String? _authMessage;
+  String? _signupReferralMessage;
+
+  @override
+  void initState() {
+    super.initState();
+    _referralCode.text = widget.initialReferralCode;
+  }
 
   bool get _isSignIn => widget.mode == _SenderAuthMode.signIn;
 
@@ -771,6 +783,8 @@ class _SenderAuthEntryState extends State<_SenderAuthEntry> {
                 hint: 'e.g. JASON1234',
                 onChanged: (_) => setState(() {}),
               ),
+              const Text(
+                  'Use a friend’s code. Rewards unlock after your first completed paid delivery.'),
             ],
             const SizedBox(height: 14),
             _SenderPrimaryAction(
@@ -825,6 +839,7 @@ class _SenderAuthEntryState extends State<_SenderAuthEntry> {
     setState(() {
       _showErrors = true;
       _authMessage = null;
+      _signupReferralMessage = null;
     });
     if (!validFirstName ||
         !validIdentity ||
@@ -840,6 +855,7 @@ class _SenderAuthEntryState extends State<_SenderAuthEntry> {
       return;
     }
     setState(() => _busy = true);
+    final messenger = ScaffoldMessenger.of(context);
     try {
       final bootstrap = await _authenticateSender(
         email: _identity.text.trim().toLowerCase(),
@@ -847,6 +863,11 @@ class _SenderAuthEntryState extends State<_SenderAuthEntry> {
         createAccount: !_isSignIn,
         firstName: firstName,
       );
+      if (_signupReferralMessage != null && messenger.mounted) {
+        messenger.showSnackBar(SnackBar(
+            content: Text(_signupReferralMessage!),
+            duration: const Duration(seconds: 12)));
+      }
       if (!bootstrap.succeeded) {
         debugPrint(
           'Sender auth bootstrap deferred: stage=${bootstrap.failedStage?.name} '
@@ -858,7 +879,7 @@ class _SenderAuthEntryState extends State<_SenderAuthEntry> {
         widget.onModeChanged(_SenderAuthMode.signIn);
         return;
       }
-      widget.onAuthenticated();
+      if (mounted) widget.onAuthenticated();
     } catch (error) {
       debugPrint('Sender Mobile auth failed: ${error.runtimeType}');
       if (!mounted) return;
@@ -929,18 +950,14 @@ class _SenderAuthEntryState extends State<_SenderAuthEntry> {
         await user.getIdToken(true).timeout(_senderAuthOperationTimeout);
       },
     );
-    if (accountCreated) {
-      final referralCode = _referralCode.text.trim();
-      if (referralCode.isNotEmpty) {
-        try {
-          await FirebaseFunctions.instanceFor(region: 'us-central1')
-              .httpsCallable('attachReferralCode')
-              .call({'referralCode': referralCode}).timeout(
-                  _senderAuthOperationTimeout);
-        } catch (error) {
-          debugPrint('Referral code attach failed: ${error.runtimeType}');
-        }
-      }
+    if (accountCreated && bootstrap.succeeded) {
+      _signupReferralMessage =
+          await applySignupReferral(_referralCode.text, (code) async {
+        final result = await functions
+            .httpsCallable('attachReferralCode')
+            .call({'referralCode': code});
+        return result.data;
+      }, timeout: _senderAuthOperationTimeout);
     }
     return bootstrap;
   }
