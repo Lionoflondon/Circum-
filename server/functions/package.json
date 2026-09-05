@@ -16,7 +16,7 @@
     "start": "npm run shell",
     "deploy": "firebase deploy --only functions",
     "logs": "firebase functions:log",
-    "test:integration": "cd ../.. && firebase emulators:exec --only firestore,storage \"node --test --test-concurrency=1 server/functions/*.emulator.test.js server/functions/rider-document-emulator-integration.test.js\""
+    "test:integration": "cd ../.. && firebase emulators:exec --only auth,firestore,storage \"node --test --test-concurrency=1 server/functions/*.emulator.test.js server/functions/rider-document-emulator-integration.test.js\""
   },
   "engines": {
     "node": "22"

@@ -31,6 +31,8 @@ async function assertClientUploadDenied(context, storagePath) {
 test("Rider cannot directly upload protected document binaries", async () => {
   const rider = testEnv.authenticatedContext("rider-a");
   await assertClientUploadDenied(rider, "riderDocuments/rider-a/front.jpg");
+  await assertClientUploadDenied(rider, "rider_document_chunks/rider-a/upload-key/primary_hash_0");
+  await assertClientUploadDenied(rider, "rider_documents/rider-a/forged.pdf");
   await assertClientUploadDenied(rider, "riders/rider-a/documents/back.jpg");
   await assertClientUploadDenied(rider, "vehicleDocuments/rider-a/logbook.pdf");
 });

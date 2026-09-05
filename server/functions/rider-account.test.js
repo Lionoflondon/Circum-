@@ -188,3 +188,27 @@ test("Rider Web routes operational self-service mutations through callables", ()
     assert.doesNotMatch(body, /collection\('riders'\)[\s\S]{0,160}\.(?:set|update|delete)\(/);
   }
 });
+
+test("onboarding vehicle values are exact, aliases normalize and unknown values require a choice", () => {
+  for (const type of ["motorbike", "car", "van"]) assert.equal(riderAccount._test.onboardingVehicle(type.toUpperCase()), type);
+  assert.equal(riderAccount._test.onboardingVehicle("Motorcycle"), "motorbike");
+  for (const type of ["bicycle", "electric_bike", "unknown", "caravan"]) assert.throws(() => riderAccount._test.onboardingVehicle(type), /Choose Motorbike, Car or Van/);
+});
+
+test("nested vehicle input cannot carry approval authority", () => {
+  const patch = riderAccount._test.profilePatch({vehicleType: "Car", vehicles: [{type: "Car", approvalStatus: "approved", dispatchEligible: true, registration: "AB12 CDE"}]}, {uid: "rider"});
+  assert.equal(patch.vehicleType, "car");
+  assert.equal(patch.vehicles[0].type, "car");
+  assert.equal(patch.vehicles[0].approvalStatus, undefined);
+  assert.equal(patch.vehicles[0].dispatchEligible, undefined);
+});
+
+test("profile edits retain reviewed vehicle authority; changing the vehicle requires review", () => {
+  const existing = {vehicleType: "car", vehicleRegistration: "AB12 CDE", vehicle: {type: "car", registration: "AB12 CDE", status: "approved", approved: true}};
+  const unchanged = riderAccount._test.profilePatch({fullName: "Updated Name"}, {uid: "rider"}, existing);
+  assert.equal(unchanged.vehicle.status, "approved");
+  const changed = riderAccount._test.profilePatch({vehicleRegistration: "NEW123"}, {uid: "rider"}, existing);
+  assert.equal(changed.vehicle.status, "pending");
+  assert.equal(changed.vehicleApproved, false);
+  assert.equal(changed.vehicleVerified, false);
+});

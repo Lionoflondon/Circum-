@@ -5,6 +5,7 @@ const {getFirestore, FieldValue} = require("firebase-admin/firestore");
 const {getStorage} = require("firebase-admin/storage");
 const {canonicalDocumentId, DOCUMENT_MATRIX} = require("./rider-certification-policy");
 const {riderCallable} = require("./rider-app-check");
+const documentChunks = require("./rider-document-chunks");
 
 const ALLOWED_DOCUMENT_TYPES = new Set(Object.values(DOCUMENT_MATRIX).flat());
 const ALLOWED_CONTENT_TYPES = new Set([
@@ -56,8 +57,45 @@ function requireRider(context) {
     uid: context.auth.uid,
     email: context.auth.token.email || null,
     name: context.auth.token.name || null,
+    claims: context.auth.token,
   };
 }
+
+
+function onboardingVehicle(value) {
+  const token = lower(value, 80).replace(/[ -]+/g, "_");
+  const aliases = {motorcycle: "motorbike", motor_bike: "motorbike", motor_cycle: "motorbike"};
+  const canonical = aliases[token] || token;
+  if (canonical && !["motorbike", "car", "van"].includes(canonical)) {
+    throw new functions.https.HttpsError("invalid-argument", "Choose Motorbike, Car or Van.");
+  }
+  return canonical;
+}
+
+async function assertRiderSurface(rider) {
+  const db = getFirestore();
+  const snapshots = await Promise.all([
+    db.collection("users").doc(rider.uid).get(),
+    db.collection("riders").doc(rider.uid).get(),
+    db.collection("riderProfiles").doc(rider.uid).get(),
+    db.collection("adminUsers").doc(rider.uid).get(),
+  ]);
+  const records = [rider.claims || {}, ...snapshots.map((snapshot) => snapshot.data() || {})];
+  const roles = records.flatMap((record) => [record.role, record.adminRole, ...(record.admin === true || record.super_admin === true ? ["admin"] : []),
+    ...(Array.isArray(record.roles) ? record.roles :
+      Object.entries(record.roles || {}).filter(([, enabled]) => enabled === true).map(([role]) => role)),
+  ]).map((role) => lower(role, 80));
+  const riderRole = snapshots[1].exists || snapshots[2].exists || rider.claims?.founderRider === true || roles.some((role) => ["rider", "delivery", "driver"].includes(role));
+  if (!riderRole && (snapshots[0].exists || snapshots[3].exists || roles.some((role) => role && role !== "user"))) {
+    throw new functions.https.HttpsError("permission-denied", "This account belongs to another Circum app. Sign in with a Rider account.");
+  }
+}
+
+exports.verifyRiderAccountAccess = riderCallable(async (_data, context) => {
+  const rider = requireRider(context);
+  await assertRiderSurface(rider);
+  return {ok: true, riderId: rider.uid};
+});
 
 function text(value, max = 500) {
   return `${value || ""}`.trim().slice(0, max);
@@ -166,9 +204,15 @@ function profilePatch(data, rider, existing = {}) {
       data.fullName || [legalFirstName, legalSurname].filter(Boolean).join(" ") ||
       existing.fullName || existing.name || rider.name, 160);
   const phoneNumber = text(data.phoneNumber || data.phone || existing.phoneNumber || existing.phone, 60);
-  const vehicleType = lower(data.vehicleType || existing.vehicleType || existing.typeOfVehicle || vehicleExisting.type, 80);
+  const vehicleType = data.vehicleType !== undefined ? onboardingVehicle(data.vehicleType) :
+    text(existing.vehicleType || existing.typeOfVehicle || vehicleExisting.type, 80);
   const vehicleRegistration = text(data.vehicleRegistration || data.plateNumber || existing.vehicleRegistration || existing.plateNumber || vehicleExisting.registration || vehicleExisting.plateNumber, 40);
+  const vehicleChanged = Boolean(existing.vehicleType || vehicleExisting.type || existing.vehicleRegistration || vehicleExisting.registration) &&
+    (vehicleType !== text(existing.vehicleType || existing.typeOfVehicle || vehicleExisting.type, 80) ||
+     vehicleRegistration !== text(existing.vehicleRegistration || existing.plateNumber || vehicleExisting.registration || vehicleExisting.plateNumber, 40));
   const vehicle = {
+    ...vehicleExisting,
+    ...(vehicleChanged ? {status: "pending", approved: false} : {}),
     type: vehicleType,
     makeModel: text(data.vehicleMakeModel || existing.vehicleMakeModel || vehicleExisting.makeModel, 120),
     colour: text(data.vehicleColour || existing.vehicleColour || vehicleExisting.colour, 80),
@@ -176,7 +220,11 @@ function profilePatch(data, rider, existing = {}) {
   };
   const dateOfBirth = canonicalDateOfBirth(
       data.dateOfBirth || existing.dateOfBirth);
-  const vehicles = Array.isArray(data.vehicles) ? data.vehicles.slice(0, 2) : existing.vehicles;
+  const vehicles = Array.isArray(data.vehicles) ? data.vehicles.slice(0, 2).map((vehicle) => ({
+    type: onboardingVehicle(vehicle.type),
+    ...Object.fromEntries(["make", "model", "colour", "registration", "year", "ownershipStatus"].map((key) => [key, text(vehicle[key], 120)])),
+    primary: vehicle.primary === true,
+  })) : existing.vehicles;
   return {
     uid: rider.uid,
     riderId: rider.uid,
@@ -197,6 +245,7 @@ function profilePatch(data, rider, existing = {}) {
     emergencyContactPhone: text(data.emergencyContactPhone || existing.emergencyContactPhone, 60),
     accessibilityNeeds: text(data.accessibilityNeeds || existing.accessibilityNeeds, 1000),
     vehicleType,
+    ...(vehicleChanged ? {vehicleStatus: "pending", vehicleApproved: false, vehicleVerified: false} : {}),
     vehicleMakeModel: vehicle.makeModel,
     vehicleColour: vehicle.colour,
     plateNumber: vehicleRegistration,
@@ -246,7 +295,11 @@ function canonicalDateOfBirth(value) {
 }
 
 function riderPatch(data, rider, existing = {}) {
-  const vehicles = Array.isArray(data.vehicles) ? data.vehicles.slice(0, 2) : existing.vehicles;
+  const vehicles = Array.isArray(data.vehicles) ? data.vehicles.slice(0, 2).map((vehicle) => ({
+    type: onboardingVehicle(vehicle.type),
+    ...Object.fromEntries(["make", "model", "colour", "registration", "year", "ownershipStatus"].map((key) => [key, text(vehicle[key], 120)])),
+    primary: vehicle.primary === true,
+  })) : existing.vehicles;
   return {
     name: text(data.fullName || existing.fullName || existing.name || rider.name, 160),
     legalFirstName: text(data.legalFirstName || existing.legalFirstName, 80),
@@ -297,6 +350,7 @@ function nextOnboardingStatus(current, requested) {
 
 exports.advanceRiderOnboarding = riderCallable(async (data, context) => {
   const rider = requireRider(context);
+  await assertRiderSurface(rider);
   const requestedStage = lower(data && data.stage, 80);
   const db = getFirestore();
   const riderRef = db.collection("riders").doc(rider.uid);
@@ -392,6 +446,7 @@ function applicationPatchFromProfile(data, rider, profile) {
 
 exports.updateRiderProfile = riderCallable(async (data, context) => {
   const rider = requireRider(context);
+  await assertRiderSurface(rider);
   const db = getFirestore();
   const profileRef = db.collection("riderProfiles").doc(rider.uid);
   const riderRef = db.collection("riders").doc(rider.uid);
@@ -705,9 +760,11 @@ exports.createWeightAdjustedNotification = riderCallable(async (data, context) =
 
 exports.submitRiderApplication = riderCallable(async (data, context) => {
   const rider = requireRider(context);
+  await assertRiderSurface(rider);
   const db = getFirestore();
   const idempotencyKey = text(data.idempotencyKey, 180) || `rider_application_${rider.uid}`;
-  const idempotencyRef = db.collection("riderApplicationIdempotency").doc(idempotencyKey.replace(/[/.#[\]]/g, "_"));
+  const idempotencyRef = db.collection("riderApplicationIdempotency").doc(
+      crypto.createHash("sha256").update(`${rider.uid}:${idempotencyKey}`).digest("hex"));
   const applicationRef = db.collection("riderApplications").doc(rider.uid);
   const riderRef = db.collection("riders").doc(rider.uid);
   const profileRef = db.collection("riderProfiles").doc(rider.uid);
@@ -715,7 +772,7 @@ exports.submitRiderApplication = riderCallable(async (data, context) => {
 
   const result = await db.runTransaction(async (transaction) => {
     const replay = await transaction.get(idempotencyRef);
-    if (replay.exists) return {...replay.data(), idempotent: true};
+
     const [riderSnap, profileSnap, applicationSnap] = await Promise.all([
       transaction.get(riderRef),
       transaction.get(profileRef),
@@ -724,6 +781,12 @@ exports.submitRiderApplication = riderCallable(async (data, context) => {
     const riderData = riderSnap.data() || {};
     const profileData = profileSnap.data() || {};
     const applicationData = applicationSnap.data() || {};
+    if (replay.exists && !["needs_information", "rejected"].includes(applicationData.status)) {
+      return {applicationId: applicationRef.id, status: applicationData.status || "submitted", idempotent: true};
+    }
+    if (["approved", "suspended", "archived", "under_review", "submitted", "resubmitted"].includes(applicationData.status)) {
+      return {applicationId: applicationRef.id, status: applicationData.status, idempotent: true};
+    }
     const existing = {...riderData, ...profileData, ...applicationData};
     const vehicle = existing.vehicle && typeof existing.vehicle === "object" ? existing.vehicle : {};
 
@@ -741,7 +804,7 @@ exports.submitRiderApplication = riderCallable(async (data, context) => {
       emergencyContactName: text(data.emergencyContactName || existing.emergencyContactName, 160),
       emergencyContactPhone: text(data.emergencyContactPhone || existing.emergencyContactPhone, 60),
       accessibilityNeeds: text(data.accessibilityNeeds || existing.accessibilityNeeds, 1000),
-      vehicleType: lower(data.vehicleType || existing.vehicleType || vehicle.type, 80),
+      vehicleType: onboardingVehicle(data.vehicleType || existing.vehicleType || vehicle.type),
       vehicleRegistration: text(data.vehicleRegistration || data.plateNumber || existing.vehicleRegistration || existing.plateNumber || vehicle.registration, 40),
       vehicle,
       availability: text(data.availability || existing.availability, 240),
@@ -754,6 +817,15 @@ exports.submitRiderApplication = riderCallable(async (data, context) => {
       source: "cloud-functions",
       updatedAt: now,
     };
+    for (const [field, message] of [
+      ["fullName", "Enter your full name."], ["phoneNumber", "Enter your phone number."],
+      ["postcode", "Enter your postcode."], ["homeAddress", "Enter your address."],
+      ["vehicleType", "Choose Motorbike, Car or Van."],
+      ["vehicleRegistration", "Enter your vehicle registration."],
+    ]) {
+      if (!application[field]) throw new functions.https.HttpsError("invalid-argument", message);
+    }
+    application.status = ["needs_information", "rejected"].includes(applicationData.status) ? "resubmitted" : "submitted";
     transaction.set(applicationRef, {
       ...application,
       ...(existing.sectionStatus ? {sectionStatus: existing.sectionStatus} : {}),
@@ -766,10 +838,7 @@ exports.submitRiderApplication = riderCallable(async (data, context) => {
       vehicleType: application.vehicleType,
       vehicleRegistration: text(data.vehicleRegistration || data.plateNumber || existing.vehicleRegistration || existing.plateNumber || vehicle.registration, 40),
       onboardingStatus: "pending_review",
-      approvalStatus: "pending",
-      verificationStatus: "pending",
-      riderRank: "agent",
-      trustPoints: 0,
+      ...(profileSnap.exists ? {} : {approvalStatus: "pending", verificationStatus: "pending", riderRank: "agent", trustPoints: 0}),
       onboardingSubmittedAt: now,
       termsAcceptedAt: now,
       updatedAt: now,
@@ -784,7 +853,7 @@ exports.submitRiderApplication = riderCallable(async (data, context) => {
       status: "submitted",
       createdAt: now,
     }, {merge: true});
-    return {applicationId: applicationRef.id, status: "submitted", idempotent: false};
+    return {applicationId: applicationRef.id, status: application.status, idempotent: false};
   });
 
   return result;
@@ -792,8 +861,13 @@ exports.submitRiderApplication = riderCallable(async (data, context) => {
 
 exports.updateRiderApplicationSection = riderCallable(async (data, context) => {
   const rider = requireRider(context);
+  await assertRiderSurface(rider);
   const section = cleanApplicationSection(data.section);
   const status = cleanSectionStatus(data.status || "in_progress");
+  if (!["not_started", "in_progress", "submitted"].includes(status) ||
+      ["review_status", "identity_verification", "right_to_work", "vehicle_documents"].includes(section)) {
+    throw new functions.https.HttpsError("permission-denied", "Document and review status are managed by Circum.");
+  }
   const db = getFirestore();
   const applicationRef = db.collection("riderApplications").doc(rider.uid);
   const eventRef = db.collection("riderOnboardingEvents").doc();
@@ -825,8 +899,38 @@ exports.updateRiderApplicationSection = riderCallable(async (data, context) => {
 
 exports.submitRiderDocument = riderCallable(async (data, context) => {
   const rider = requireRider(context);
+  await assertRiderSurface(rider);
   const documentType = cleanDocumentType(data.documentType || data.type);
+  const uploadKey = text(data.idempotencyKey, 120);
+  if (data.chunk) return documentChunks.stage(rider.uid, uploadKey, data.chunk);
+  const stagedFiles = data.stagedFiles;
+  const stagedFingerprint = stagedFiles ? documentChunks.fingerprint(stagedFiles) : null;
+  const stagedReplay = async () => {
+    if (!stagedFiles) return null;
+    const ref = getFirestore().collection("riderDocuments").doc(crypto.createHash("sha256").update(`${rider.uid}:${uploadKey}`).digest("hex"));
+    const snap = await ref.get();
+    if (!snap.exists) return null;
+    const record = snap.data();
+    if (record.stagedFingerprint !== stagedFingerprint || record.type !== documentType) {
+      throw new functions.https.HttpsError("already-exists", "This upload request key is already in use.");
+    }
+    return {ok: true, documentId: ref.id, storagePath: record.storagePath, downloadUrl: record.downloadUrl, attachments: record.attachments, idempotentReplay: true};
+  };
+  if (stagedFiles) {
+    const replay = await stagedReplay();
+    if (replay) return replay;
+    try {
+      data = {...data, files: await documentChunks.assemble(rider.uid, uploadKey, stagedFiles)};
+    } catch (error) {
+      const replayAfterRace = await stagedReplay();
+      if (replayAfterRace) return replayAfterRace;
+      throw new functions.https.HttpsError("failed-precondition", "Document upload is incomplete. Please retry.");
+    }
+  }
   const files = normalizeRiderDocumentFiles(data, documentType);
+  const contentHash = crypto.createHash("sha256").update(documentType).update(
+      Buffer.concat(files.flatMap((file) => [Buffer.from(`${file.side}:${file.contentType}:`), file.bytes])),
+  ).digest("hex");
   const idempotencyKey = text(data.idempotencyKey, 120);
   if (idempotencyKey && !/^[A-Za-z0-9_-]{8,120}$/.test(idempotencyKey)) {
     throw new functions.https.HttpsError("invalid-argument", "A valid upload request key is required.");
@@ -839,7 +943,7 @@ exports.submitRiderDocument = riderCallable(async (data, context) => {
   const existing = idempotencyKey ? await documentRef.get() : null;
   if (existing && existing.exists) {
     const record = existing.data() || {};
-    if (record.riderId !== rider.uid || record.type !== documentType) {
+    if (record.riderId !== rider.uid || record.type !== documentType || (record.contentHash && record.contentHash !== contentHash)) {
       throw new functions.https.HttpsError("already-exists", "This upload request key is already in use.");
     }
     return {
@@ -852,9 +956,10 @@ exports.submitRiderDocument = riderCallable(async (data, context) => {
     };
   }
   const uploaded = [];
+  let replayRecord = null;
   try {
     for (const attachment of files) {
-      const storagePath = `rider_documents/${rider.uid}/${Date.now()}_${documentRef.id}_${attachment.side}_${attachment.fileName}`;
+      const storagePath = `rider_documents/${rider.uid}/${crypto.randomUUID()}_${documentRef.id}_${attachment.side}_${attachment.fileName}`;
       const file = getStorage().bucket().file(storagePath);
       await file.save(attachment.bytes, {
         metadata: {
@@ -863,8 +968,10 @@ exports.submitRiderDocument = riderCallable(async (data, context) => {
         },
         resumable: false,
       });
+      const upload = {...attachment, storagePath};
+      uploaded.push(upload);
       const [signedUrl] = await file.getSignedUrl({action: "read", expires: Date.now() + 1000 * 60 * 60 * 24 * 7});
-      uploaded.push({...attachment, storagePath, signedUrl});
+      upload.signedUrl = signedUrl;
     }
 
     const primary = uploaded.find((file) => file.side === "primary") || uploaded[0];
@@ -877,7 +984,18 @@ exports.submitRiderDocument = riderCallable(async (data, context) => {
     }]));
     const now = FieldValue.serverTimestamp();
     await db.runTransaction(async (transaction) => {
+      const existingDocument = await transaction.get(documentRef);
+      if (existingDocument.exists) {
+        const record = existingDocument.data();
+        if (record.contentHash !== contentHash || record.riderId !== rider.uid) {
+          throw new functions.https.HttpsError("already-exists", "This upload request key is already in use.");
+        }
+        replayRecord = record;
+        return;
+      }
       transaction.set(documentRef, {
+        contentHash,
+        ...(stagedFingerprint ? {stagedFingerprint} : {}),
         documentId: documentRef.id,
         ...(idempotencyKey ? {idempotencyKey} : {}),
         riderId: rider.uid,
@@ -907,8 +1025,13 @@ exports.submitRiderDocument = riderCallable(async (data, context) => {
     await Promise.all(uploaded.map((file) => getStorage().bucket().file(file.storagePath).delete().catch(() => null)));
     throw error;
   }
+  if (stagedFiles) await documentChunks.cleanup(rider.uid, uploadKey, stagedFiles);
+  if (replayRecord) {
+    await Promise.all(uploaded.map((file) => getStorage().bucket().file(file.storagePath).delete().catch(() => null)));
+    return {ok: true, documentId: documentRef.id, storagePath: replayRecord.storagePath, downloadUrl: replayRecord.downloadUrl, attachments: replayRecord.attachments || {}, idempotentReplay: true};
+  }
   const primary = uploaded.find((file) => file.side === "primary") || uploaded[0];
   return {ok: true, documentId: documentRef.id, storagePath: primary.storagePath, downloadUrl: primary.signedUrl, attachments: Object.fromEntries(uploaded.map((file) => [file.side, {storagePath: file.storagePath, downloadUrl: file.signedUrl}]))};
 });
 
-exports._test = {canonicalDateOfBirth, newPublicRiderId, profilePatch};
+exports._test = {canonicalDateOfBirth, newPublicRiderId, profilePatch, onboardingVehicle};
