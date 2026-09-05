@@ -38,7 +38,7 @@ async function deliverySnapshot(transaction, deliveryId) {
   if (!snapshot.exists) {
     throw new functions.https.HttpsError("not-found", "Delivery not found.");
   }
-  const delivery = {id: snapshot.id, ...snapshot.data()};
+  const delivery = {...snapshot.data(), id: snapshot.id};
   if (delivery.cancellationSettlementStatus) {
     throw new functions.https.HttpsError("failed-precondition", "Cancellation is being reconciled. Delivery actions are paused.");
   }
@@ -528,7 +528,7 @@ exports.previewSenderCancellation = senderPaymentCallable(async (data, context) 
   const preview = await db.runTransaction(async (transaction) => {
     const snapshot = await transaction.get(ref);
     if (!snapshot.exists) throw new functions.https.HttpsError("not-found", "Delivery not found.");
-    const delivery = {id: snapshot.id, ...snapshot.data()};
+    const delivery = {...snapshot.data(), id: snapshot.id};
     assertSender(uid, delivery);
     const decision = core.cancellationDecision({delivery, state: delivery.state || delivery.status, serverNow: Date.now()});
     if (!decision.canCancel) return {decision, breakdown: null};
