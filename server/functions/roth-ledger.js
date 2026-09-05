@@ -153,9 +153,9 @@ async function initialiseSenderWalletRecord(context) {
   const roleRef = db.collection("users").doc(context.auth.uid).collection("wallets").doc("sender");
   let result;
   await db.runTransaction(async (transaction) => {
-    const [projectionSnap, legacySnap, roleSnap] = await Promise.all([
-      transaction.get(projectionRef), transaction.get(legacyRef), transaction.get(roleRef),
-    ]);
+    const [projectionSnap, legacySnap, roleSnap] = await transaction.getAll(
+        projectionRef, legacyRef, roleRef,
+    );
     const projection = projectionSnap.exists ? projectionSnap.data() : {};
     const legacy = legacySnap.exists ? legacySnap.data() : {};
     const role = roleSnap.exists ? roleSnap.data() : {};
@@ -233,12 +233,10 @@ async function recordRothMovement({
   const idempotencyRef = db.collection("rothMovementIdempotency").doc(operationKeyId);
   const senderWalletRef = identity.uid ? db.collection("senderWallets").doc(identity.uid) : null;
   await db.runTransaction(async (transaction) => {
-    const [existingLedger, existingIdempotency, wallet, senderWalletSnap] = await Promise.all([
-      transaction.get(ledgerRef),
-      transaction.get(idempotencyRef),
-      transaction.get(walletRef),
-      senderWalletRef ? transaction.get(senderWalletRef) : Promise.resolve(null),
-    ]);
+    // One read operation cannot leave sibling reads using an aborted attempt.
+    const [existingLedger, existingIdempotency, wallet, senderWalletSnap] = await transaction.getAll(
+        ledgerRef, idempotencyRef, walletRef, ...(senderWalletRef ? [senderWalletRef] : []),
+    );
     const signature = {
       walletId: identity.walletId,
       uid: identity.uid || null,

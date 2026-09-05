@@ -122,3 +122,34 @@ test("conflicting idempotency payload fails closed and campaign plus individual 
   assert.equal(wallet.data().balance, 16);
   assert.equal(ledger.docs.reduce((total, doc) => total + Number(doc.data().amount), 0), 16);
 });
+
+test("ledger read abort retries as one batch before any economic write", {skip: !emulatorAvailable}, async () => {
+  let reads = 0;
+  const wrapped = {
+    collection: db.collection.bind(db),
+    runTransaction: (callback) => db.runTransaction((tx) => callback(new Proxy(tx, {
+      get(target, property) {
+        if (property === "get") {
+return () => {
+ throw new Error("Do not fan out transaction reads.");
+};
+}
+        if (property === "getAll") {
+return async (...refs) => {
+          reads++;
+          if (reads === 1) throw Object.assign(new Error("Injected read abort"), {code: 10});
+          return target.getAll(...refs);
+        };
+}
+        const value = target[property];
+        return typeof value === "function" ? value.bind(target) : value;
+      },
+    }))),
+  };
+  await recordRothMovement({db: wrapped, userId: "batch-read-retry", uid: "batch-read-retry", amount: 2,
+    balanceType: BALANCE_TYPES.rothCredit, type: TRANSACTION_TYPES.adminCredit,
+    reason: "Read abort retry", transactionId: "batch-read-retry", idempotencyKey: "batch-read-retry"});
+  assert.equal(reads, 2);
+  assert.equal((await db.doc("wallets/batch-read-retry").get()).data().balance, 2);
+  assert.equal((await db.collection("walletTransactions").where("uid", "==", "batch-read-retry").get()).size, 1);
+});
