@@ -737,7 +737,7 @@ exports.createHealthPlusCheckoutSession = functions.runWith({secrets: [healthDir
     });
     let rothAmount = split.walletContributionGbp;
     let cardAmount = split.remainingGbp;
-    const checkoutAuthority = await healthCheckoutAuthority.reserve({db, paymentRef, candidate: {amountPence, orderTotalGbp, recurring, rothAmount, cardAmount, authoritative}});
+    const checkoutAuthority = await healthCheckoutAuthority.reserve({db, paymentRef, booking, candidate: {amountPence, orderTotalGbp, recurring, rothAmount, cardAmount, authoritative}});
     ({amountPence, orderTotalGbp, recurring, rothAmount, cardAmount, authoritative} = checkoutAuthority);
 
     if (!recurring && cardAmount <= 0) {
@@ -819,7 +819,7 @@ exports.createHealthPlusCheckoutSession = functions.runWith({secrets: [healthDir
     params.client_reference_id = sender.uid;
 
     params.expires_at = checkoutAuthority.expiresAt;
-    const session = await healthCheckoutAuthority.create({db, stripe, paymentRef, params, record: {
+    const session = await healthCheckoutAuthority.create({db, stripe, paymentRef, booking, params, record: {
       bookingId,
       profileId,
       senderId: sender.uid,

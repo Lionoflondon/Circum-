@@ -1,5 +1,6 @@
 "use strict";
 
+const traceTransactions = require("./test-helpers/trace-transactions");
 const settleConcurrent = require("./test-helpers/settle-concurrent");
 
 const test = require("node:test");
@@ -26,7 +27,7 @@ test(
   "concurrent scheduled road-charge Roth settlement is exactly once",
   {skip: !emulator},
   async () => {
-    const db = getFirestore();
+    const db = traceTransactions(getFirestore());
     const id = `emulator-${Date.now()}`;
     await db
       .collection("roadChargeRefundEntitlements")
@@ -139,7 +140,7 @@ test(
   "support cash exception is exactly once and cannot race Roth",
   {skip: !emulator},
   async () => {
-    const db = getFirestore();
+    const db = traceTransactions(getFirestore());
     for (let attempt = 0; attempt < 3; attempt += 1) {
       await runCashAndRothRace(db, `cash-emulator-${Date.now()}-${attempt}`);
     }

@@ -136,10 +136,13 @@ test(
   {skip: !enabled},
   async () => {
     const paymentRef = db.doc("healthPlusPayments/fresh");
+    const booking = {routeAuthorityVersion: 2, senderId: "sender", profileId: "profile", pharmacyAddress: "Pharmacy", deliveryAddress: "Home", status: "scheduled", pricingInputs: {distanceMiles: 2, medicationWeightKg: 1}};
+    await db.doc("prescriptionPickups/fresh").set(booking);
     const stripe = provider();
     const authorities = await Promise.all(
       [1, 2, 3].map((n) =>
         health.reserve({
+          booking,
           db,
           paymentRef,
           candidate: {amountPence: n * 1000, rothAmount: n, cardAmount: n * 9},
@@ -157,6 +160,7 @@ test(
     stripe.failNext();
     await assert.rejects(
       health.create({
+        booking,
         db,
         stripe,
         paymentRef,
@@ -168,6 +172,7 @@ test(
     const result = await Promise.all(
       [1, 2, 3].map((n) =>
         health.create({
+          booking,
           db,
           stripe,
           paymentRef,
