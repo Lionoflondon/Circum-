@@ -137,6 +137,7 @@ exports.escalateUnclaimedDeliveries =
 exports.awardLegendOnCompletion = legends.awardLegendOnCompletion;
 exports.createGiftPayment = giftsPayment.createGiftPayment(stripe);
 exports.finalizeGiftPayment = giftsPayment.finalizeGiftPayment(stripe);
+exports.cancelGiftPayment = giftsPayment.cancelGiftPayment(stripe);
 exports.cleanupExpiredGiftVoiceDrafts =
   giftsPayment.cleanupExpiredGiftVoiceDrafts;
 exports.onGiftRequestVoiceMediaDeleted =
@@ -495,6 +496,11 @@ exports.StripeWebhook = functions
         return res
             .status(400)
             .send({error: "Invalid Stripe webhook signature"});
+      }
+
+      if (event.type === "checkout.session.expired") {
+        const giftExpiry = await giftsPayment.handleGiftCheckoutExpired(stripe, event.data.object);
+        if (giftExpiry.handled) return res.send({success: true, gift: giftExpiry});
       }
 
       console.log("💰 Webhook working!");

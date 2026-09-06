@@ -3,6 +3,7 @@ const functions = require("firebase-functions/v1");
 const crypto = require("node:crypto");
 const {getFirestore, FieldValue} = require("firebase-admin/firestore");
 const {getStorage} = require("firebase-admin/storage");
+const giftReservations = require("./gift-checkout-reservations");
 const giftVoiceMedia = require("./gift-voice-media");
 const vanguardProtocol = require("./vanguard-protocol-core");
 const {senderPaymentCallable} = require("./sender-app-check");
@@ -44,7 +45,7 @@ function clientGiftPayload(value) {
     "assignedAdminId", "adminDecision", "internalNotes", "paymentStatus", "giftStatus", "status",
     "paymentMethod", "applyRoth", "rothApplied", "cardAmount", "walletContributionGbp",
     "remainingStripeAmountGbp", "stripePaymentIntentId", "stripeCheckoutSessionId", "stripeCustomerId",
-    "paymentKey", "paidAt", "dispatchEligible", "riderId", "assignedRiderId", "readyForCollection",
+    "giftCheckoutProtocol", "giftCheckoutReservationId", "checkoutGeneration", "checkoutAuthority", "providerIdempotencyKey", "paymentKey", "paidAt", "dispatchEligible", "riderId", "assignedRiderId", "readyForCollection",
   ];
   for (const field of authorityFields) delete payload[field];
   return payload;
@@ -94,9 +95,8 @@ async function ensureGiftStripeCustomer(stripe, gift) {
   }
   const customer = await stripe.customers.create({
     email: gift.senderEmail || undefined,
-    name: gift.senderName || undefined,
     metadata: {userId: gift.senderId, source: "gift_payment"},
-  });
+  }, {idempotencyKey: `gift_customer_${gift.senderId}`});
   await userRef.set({
     stripeCustomerId: customer.id,
     customerId: customer.id,
@@ -140,8 +140,10 @@ async function createCampaignPaymentDraft({data, context}) {
   if (!campaignId || !campaignName) {
     throw new functions.https.HttpsError("invalid-argument", "Campaign details are required.");
   }
-  const participantRef = db.collection("giftCampaignParticipants").doc();
-  const draftRef = db.collection("giftPaymentDrafts").doc();
+  // Existing clients omit a request key: one active participation per sender/campaign.
+  const scope = crypto.createHash("sha256").update(JSON.stringify([context.auth.uid, campaignId, text(data.giftDraftId)])).digest("hex");
+  const participantRef = db.collection("giftCampaignParticipants").doc(`campaign_${scope}`);
+  const draftRef = db.collection("giftPaymentDrafts").doc(`campaign_${scope}`);
   const senderEmail = text(context.auth.token && context.auth.token.email);
   const now = FieldValue.serverTimestamp();
   const participant = {
@@ -167,6 +169,7 @@ async function createCampaignPaymentDraft({data, context}) {
     senderId: context.auth.uid,
     senderEmail: senderEmail || text(participantPayload.email),
     campaignFlow: "anonymous",
+    giftCheckoutProtocol: giftReservations.VERSION,
     giftStatus: "campaign_participation",
     selectedBudgetGbp: gross,
     grossBudget: gross,
@@ -175,8 +178,15 @@ async function createCampaignPaymentDraft({data, context}) {
     returnOrigin: text(data.returnOrigin),
   };
   await db.runTransaction(async (transaction) => {
+    const [existing, origin] = await transaction.getAll(draftRef, db.doc(`giftCheckoutOrigins/${draftRef.id}`));
+    if (existing.exists) {
+      if (existing.data().senderId !== context.auth.uid || Number(existing.data().grossGiftBudget) !== gross) throw new functions.https.HttpsError("failed-precondition", "Campaign checkout details changed. Resume the existing checkout.");
+      return;
+    }
+    if (origin.exists) throw new functions.https.HttpsError("failed-precondition", "This campaign checkout has already ended.");
     transaction.set(participantRef, participant, {merge: false});
     transaction.set(draftRef, draft, {merge: false});
+    transaction.create(db.doc(`giftCheckoutOrigins/${draftRef.id}`), {senderId: context.auth.uid, giftDraftId: draftRef.id, createdAt: now});
     transaction.set(db.collection("giftCampaignParticipantEvents").doc(), {
       participantId: participantRef.id,
       giftDraftId: draftRef.id,
@@ -187,7 +197,7 @@ async function createCampaignPaymentDraft({data, context}) {
       createdAt: now,
     }, {merge: false});
   });
-  return {giftDraftId: draftRef.id, participantId: participantRef.id, gift: draft};
+  return {giftDraftId: draftRef.id, participantId: participantRef.id, gift: (await draftRef.get()).data()};
 }
 
 async function createStandardPaymentDraft({data, context}) {
@@ -196,7 +206,7 @@ async function createStandardPaymentDraft({data, context}) {
   const requestedId = text(data.giftDraftId || payload.giftDraftId).replace(/[/.#[\]]/g, "_");
   const draftRef = requestedId ?
     db.collection("giftPaymentDrafts").doc(requestedId) :
-    db.collection("giftPaymentDrafts").doc();
+    db.collection("giftPaymentDrafts").doc(`request_${crypto.createHash("sha256").update(JSON.stringify([context.auth.uid, giftDraftFingerprint(payload)])).digest("hex")}`);
   const gross = authoritativeGiftBudget(
       payload.grossGiftBudget || payload.grossBudget || payload.budget || 0,
   );
@@ -219,6 +229,7 @@ async function createStandardPaymentDraft({data, context}) {
     giftStatus: text(payload.giftStatus || "draft"),
     status: text(payload.status || "draft"),
     source: "createGiftPayment",
+    giftCheckoutProtocol: giftReservations.VERSION,
     authoritativeQuoteId: quoteId,
     draftFingerprint,
     createdAt: now,
@@ -237,6 +248,7 @@ async function createStandardPaymentDraft({data, context}) {
       return;
     }
     transaction.set(draftRef, draft, {merge: false});
+    transaction.create(db.doc(`giftCheckoutOrigins/${draftRef.id}`), {senderId: context.auth.uid, giftDraftId: draftRef.id, createdAt: now});
     transaction.set(db.collection("giftPaymentEvents").doc(), {
       giftDraftId: draftRef.id,
       actorUid: context.auth.uid,
@@ -279,26 +291,20 @@ exports.createGiftPayment = (stripe) => senderPaymentCallable(async (data, conte
     frozen: false,
     balance: 0,
   };
-  const split = calculateWalletCheckout({
+  let split = calculateWalletCheckout({
     orderTotalGbp: gross,
     walletBalanceGbp: data.applyRoth === true && !wallet.frozen ? wallet.balance : 0,
     selectedCurrency: "gbp",
   });
-  const requestedMethod = giftPaymentMethodFromSplit(split, data.paymentMethod);
+  let requestedMethod = giftPaymentMethodFromSplit(split, data.paymentMethod);
   const nativePayment = text(data.checkoutMode) === "payment_intent";
-  const paymentKey = `gift_${giftDraftId}_${requestedMethod}_${split.stripeAmountMinor}`;
-  const existingIntentId = text(gift.paymentKey) === paymentKey ?
-    text(gift.stripePaymentIntentId) : "";
-  await ref.set({
-    paymentStatus: "payment_pending",
-    paymentMethod: requestedMethod,
-    walletContributionGbp: split.walletContributionGbp,
-    remainingStripeAmountGbp: split.remainingGbp,
-    rothApplied: split.walletContributionGbp,
-    cardAmount: split.remainingGbp,
-    paymentKey,
-    updatedAt: FieldValue.serverTimestamp(),
-  }, {merge: true});
+  await giftReservations.legacyGate({db: getFirestore(), stripe, giftRef: ref, gift});
+  const reservation = await giftReservations.reserve({db: getFirestore(), giftRef: ref, uid: context.auth.uid, split, paymentMethod: requestedMethod, nativePayment});
+  split = {...split, walletContributionGbp: reservation.rothAmount / 100, remainingGbp: reservation.externalAmount / 100, stripeAmountMinor: reservation.externalAmount, stripeRequired: reservation.externalAmount > 0};
+  requestedMethod = reservation.paymentMethod;
+  const paymentKey = reservation.providerIdempotencyKey;
+  const existingIntentId = nativePayment ? reservation.providerId : null;
+  await giftReservations.fund({db: getFirestore(), reservation});
 
   if (!split.stripeRequired) {
     const verifiedVoiceNote = await giftVoiceMedia.verifyGiftVoiceStorageObject({
@@ -337,7 +343,7 @@ exports.createGiftPayment = (stripe) => senderPaymentCallable(async (data, conte
         throw new functions.https.HttpsError("permission-denied", "Gift payment ownership mismatch.");
       }
     } else {
-      intent = await stripe.paymentIntents.create({
+      const params = await giftReservations.freezeParams({db: getFirestore(), reservation, params: {
         amount: split.stripeAmountMinor,
         currency: "gbp",
         customer: customerId,
@@ -346,6 +352,7 @@ exports.createGiftPayment = (stripe) => senderPaymentCallable(async (data, conte
         description: `Gifts by Circum for ${gift.recipientName || "recipient"}`,
         metadata: {
           type: "gift_payment_intent",
+          checkoutReservationId: reservation.checkoutReservationId,
           giftDraftId,
           senderId: context.auth.uid,
           paymentMethod: requestedMethod,
@@ -354,24 +361,14 @@ exports.createGiftPayment = (stripe) => senderPaymentCallable(async (data, conte
           remainingStripeAmountGbp: `${split.remainingGbp}`,
           paymentKey,
         },
-      }, {idempotencyKey: paymentKey});
+      }});
+      intent = await stripe.paymentIntents.create(params, {idempotencyKey: paymentKey});
     }
+    await giftReservations.recordProvider({db: getFirestore(), reservation, provider: intent, nativePayment: true});
     const ephemeralKey = await stripe.ephemeralKeys.create(
         {customer: customerId},
         {apiVersion: "2020-08-27"},
     );
-    await ref.set({
-      paymentStatus: "payment_pending",
-      paymentMethod: requestedMethod,
-      walletContributionGbp: split.walletContributionGbp,
-      remainingStripeAmountGbp: split.remainingGbp,
-      rothApplied: split.walletContributionGbp,
-      cardAmount: split.remainingGbp,
-      stripePaymentIntentId: intent.id,
-      stripeCustomerId: customerId,
-      paymentKey,
-      updatedAt: FieldValue.serverTimestamp(),
-    }, {merge: true});
     return {
       giftDraftId,
       paymentIntentId: intent.id,
@@ -392,8 +389,9 @@ exports.createGiftPayment = (stripe) => senderPaymentCallable(async (data, conte
   const cancelUrl = `${baseUrl}&gift_payment=cancelled&giftDraftId=${giftDraftId}`;
   let session;
   try {
-    session = await stripe.checkout.sessions.create({
+    const params = await giftReservations.freezeParams({db: getFirestore(), reservation, params: {
       mode: "payment",
+      expires_at: Math.floor(reservation.expiresAt / 1000),
       customer_email: gift.senderEmail,
       line_items: [{
         quantity: 1,
@@ -412,29 +410,21 @@ exports.createGiftPayment = (stripe) => senderPaymentCallable(async (data, conte
         giftDraftId,
         senderId: context.auth.uid,
         type: "gift_experience",
+        checkoutReservationId: reservation.checkoutReservationId,
         paymentMethod: requestedMethod,
         grossGiftBudget: `${gross}`,
         rothAppliedAmount: `${split.walletContributionGbp}`,
         remainingStripeAmountGbp: `${split.remainingGbp}`,
       },
-    });
+    }});
+    session = reservation.providerId ? await stripe.checkout.sessions.retrieve(reservation.providerId) : await stripe.checkout.sessions.create(params, {idempotencyKey: paymentKey});
+    await giftReservations.recordProvider({db: getFirestore(), reservation, provider: session, nativePayment: false});
   } catch (error) {
     console.error("createGiftPayment Stripe Checkout error", error);
     throw new functions.https.HttpsError("internal", "Could not start Stripe Checkout. Please try again.");
   }
-  await ref.update({
-    paymentStatus: "payment_pending",
-    paymentMethod: requestedMethod,
-    walletContributionGbp: split.walletContributionGbp,
-    remainingStripeAmountGbp: split.remainingGbp,
-    rothApplied: split.walletContributionGbp,
-    cardAmount: split.remainingGbp,
-    stripeCheckoutSessionId: session.id,
-    updatedAt: FieldValue.serverTimestamp(),
-  });
   if (campaignDraft && campaignDraft.participantId) {
     await getFirestore().collection("giftCampaignParticipants").doc(campaignDraft.participantId).set({
-      paymentStatus: "checkout_pending",
       stripeCheckoutSessionId: session.id,
       paymentDraftId: giftDraftId,
       updatedAt: FieldValue.serverTimestamp(),
@@ -470,12 +460,18 @@ async function finalizeGiftPaymentAuthority({
     }) :
     null;
   const preflightGift = preflightDraft.exists ? preflightDraft.data() || {} : {};
+  if (preflightGift.giftCheckoutReservationId && payment.provider !== "roth") {
+    await giftReservations.recordProvider({db, reservation: {checkoutReservationId: preflightGift.giftCheckoutReservationId}, provider: {id: payment.providerId, amount_total: payment.amountPence, amount: payment.amountPence, currency: payment.currency, metadata: payment.metadata}, nativePayment: payment.provider === "payment_intent"});
+  }
   const walletContribution = roundMoney(preflightGift.walletContributionGbp || 0);
   const walletId = normalizeEmail(preflightGift.senderEmail) || preflightGift.senderId;
   const walletRef = db.collection("wallets").doc(walletId || "missing");
   const senderWalletRef = db.collection("senderWallets").doc(preflightGift.senderId || "missing");
   const walletTransactionRef = db.collection("walletTransactions").doc(`gift_roth_${giftDraftId}`);
+  const reservationRef = preflightGift.giftCheckoutReservationId ? db.doc(`giftCheckoutReservations/${preflightGift.giftCheckoutReservationId}`) : null;
   return db.runTransaction(async (transaction) => {
+    const reservationSnap = reservationRef ? await transaction.get(reservationRef) : null;
+    if (reservationSnap && ["released", "cancelled", "expired"].includes(reservationSnap.data()?.status)) throw new functions.https.HttpsError("failed-precondition", "Gift checkout has ended.");
     const reads = await Promise.all([
       transaction.get(draftRef),
       transaction.get(giftRef),
@@ -569,6 +565,7 @@ async function finalizeGiftPaymentAuthority({
         createdAt: now,
       }, {merge: false});
     }
+    if (reservationRef) transaction.update(reservationRef, {status: "paid", paidAt: FieldValue.serverTimestamp()});
     transaction.set(giftRef, {
       ...gift,
       ...(checkedVoiceNote ? {voiceNote: checkedVoiceNote} : {}),
@@ -687,11 +684,24 @@ exports.finalizeGiftPaymentFromCheckoutSession = finalizeGiftPaymentSession;
 exports.handleGiftPaymentIntent = async (stripe, intent, eventId = "") => {
   const metadata = intent && intent.metadata || {};
   if (metadata.type !== "gift_payment_intent") return {handled: false};
+  if (text(intent.status) === "canceled" && metadata.checkoutReservationId) {
+    const db = getFirestore();
+    await giftReservations.recordProvider({db, reservation: {checkoutReservationId: metadata.checkoutReservationId}, provider: intent, nativePayment: true});
+    return {handled: true, ...await giftReservations.release({db, stripe, giftId: text(metadata.giftDraftId), uid: text(metadata.senderId)})};
+  }
   if (text(intent.status) !== "succeeded") {
-    await getFirestore().collection("giftPaymentDrafts").doc(text(metadata.giftDraftId)).set({
-      paymentStatus: text(intent.status) || "payment_pending",
-      updatedAt: FieldValue.serverTimestamp(),
-    }, {merge: true});
+    const db = getFirestore();
+    const draftRef = db.collection("giftPaymentDrafts").doc(text(metadata.giftDraftId));
+    await db.runTransaction(async (transaction) => {
+      const draft = await transaction.get(draftRef);
+      // A successful finalizer deletes the draft. Late failure events cannot resurrect it.
+      if (!draft.exists || draft.data().paymentStatus === "paid") return;
+      if (draft.data().senderId !== text(metadata.senderId) || draft.data().stripePaymentIntentId !== intent.id) return;
+      transaction.update(draftRef, {
+        paymentStatus: text(intent.status) || "payment_pending",
+        updatedAt: FieldValue.serverTimestamp(),
+      });
+    });
     return {handled: true, paymentStatus: text(intent.status)};
   }
   const result = await finalizeGiftPaymentAuthority({
@@ -712,3 +722,16 @@ exports.handleGiftPaymentIntent = async (stripe, intent, eventId = "") => {
 exports._private = {finalizeGiftPaymentAuthority};
 exports.cleanupExpiredGiftVoiceDrafts = giftVoiceMedia.cleanupExpiredGiftVoiceDrafts;
 exports.onGiftRequestVoiceMediaDeleted = giftVoiceMedia.onGiftRequestVoiceMediaDeleted;
+
+exports.cancelGiftPayment = (stripe) => senderPaymentCallable(async (data, context) => {
+  requireAuth(context);
+  return giftReservations.release({db: getFirestore(), stripe, giftId: text(data.giftDraftId), uid: context.auth.uid});
+}, {secrets: ["STRIPE_SECRET_KEY"]});
+
+exports.handleGiftCheckoutExpired = async (stripe, session) => {
+  const metadata = session.metadata || {};
+  if (metadata.type !== "gift_experience" || !metadata.checkoutReservationId) return {handled: false};
+  const db = getFirestore();
+  await giftReservations.recordProvider({db, reservation: {checkoutReservationId: metadata.checkoutReservationId}, provider: session, nativePayment: false});
+  return {handled: true, ...await giftReservations.release({db, stripe, giftId: text(metadata.giftDraftId), uid: text(metadata.senderId)})};
+};
