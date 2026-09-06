@@ -73,4 +73,66 @@ function providerForFixture({stripe, registry, fixtureId, secret, now = Date.now
   }
   return {checkout: {sessions: {create, retrieve, expire}}, cleanup};
 }
-module.exports = {providerForFixture, ROUTING_TYPE};
+
+function paymentProviderForFixture({stripe, qa, fixture, secret}) {
+  if (!secret || !secret.startsWith("sk_test_") || !fixture || fixture.isSyntheticQa !== true) reject("TEST payment configuration required");
+  const registry = qa.collection("qaProviderObjects");
+  const assertIntent = (intent) => {
+    if (!intent || intent.livemode !== false || intent.currency !== "gbp" || intent.status !== "succeeded" || intent.amount_received !== intent.amount || !intent.metadata || intent.metadata.qaFixtureId !== fixture.id || intent.metadata.isSyntheticQa !== "true") reject("unverified TEST payment intent");
+    return intent;
+  };
+  const find = async (providerId) => {
+    const rows = await registry.where("providerId", "==", providerId).get();
+    if (rows.size !== 1 || rows.docs[0].data().providerKind !== "payment_intent") reject("unregistered TEST payment intent");
+    return rows.docs[0];
+  };
+  const paymentIntents = {
+    create: async (input, options = {}) => {
+      if (!options.idempotencyKey || !Number.isSafeInteger(input.amount) || input.amount < 1 || input.amount > 10000 || input.currency !== "gbp" || input.confirm !== true || input.payment_method !== "pm_card_visa") reject("invalid bounded TEST payment request");
+      if (!input.metadata || input.metadata.qaFixtureId !== fixture.id || input.metadata.isSyntheticQa !== "true") reject("payment scope mismatch");
+      const delivery = await qa.collection("deliveryRequests").doc(input.metadata.deliveryId).get();
+      if (!delivery.exists || delivery.data().closing || delivery.data().status === "cancelled") reject("payment delivery unavailable");
+      const id = `actual_pi_${hash(options.idempotencyKey)}`; const ref = registry.doc(id);
+      const binding = hash(JSON.stringify({amount: input.amount, currency: input.currency, metadata: input.metadata}));
+      try {
+        await ref.create({providerKind: "payment_intent", binding, metadata: input.metadata, createdAt: Date.now()});
+      } catch (error) {
+        if (error.code !== 6 && error.code !== "already-exists") throw error;
+      }
+      const record = (await ref.get()).data();
+      if (record.binding !== binding) reject("payment request changed under one identity");
+      const intent = record.providerId ? await stripe.paymentIntents.retrieve(record.providerId) : await stripe.paymentIntents.create({...input, metadata: {...input.metadata, type: ROUTING_TYPE}}, {idempotencyKey: `qa_actual_${fixture.id}_${hash(options.idempotencyKey)}`});
+      assertIntent(intent);
+      await ref.set({providerId: intent.id, terminalStatus: null}, {merge: true});
+      return intent;
+    },
+    retrieve: async (providerId) => {
+      await find(providerId);
+      return assertIntent(await stripe.paymentIntents.retrieve(providerId));
+    },
+  };
+  const refunds = {create: async (input, options = {}) => {
+    if (!options.idempotencyKey || !Number.isSafeInteger(input.amount) || input.amount < 1) reject("invalid TEST refund");
+    const record = await find(input.payment_intent); const intent = assertIntent(await stripe.paymentIntents.retrieve(input.payment_intent));
+    if (input.amount > intent.amount_received) reject("refund exceeds TEST payment");
+    const refund = await stripe.refunds.create(input, {idempotencyKey: `qa_actual_refund_${fixture.id}_${hash(options.idempotencyKey)}`});
+    if (refund.livemode !== false || refund.status !== "succeeded" || refund.payment_intent !== intent.id) reject("TEST refund unconfirmed");
+    await record.ref.set({terminalStatus: "refunded", refundId: refund.id}, {merge: true});
+    return refund;
+  }};
+  const cleanup = async () => {
+    const rows = await registry.where("providerKind", "==", "payment_intent").get();
+    for (const row of rows.docs) {
+      const record = row.data(); if (!record.providerId || record.terminalStatus === "refunded") continue;
+      const intent = assertIntent(await stripe.paymentIntents.retrieve(record.providerId));
+      const prior = await stripe.refunds.list({payment_intent: intent.id, limit: 100});
+      const refunded = prior.data.filter((r) => r.status === "succeeded").reduce((sum, r) => sum + r.amount, 0);
+      if (refunded < intent.amount_received) await refunds.create({payment_intent: intent.id, amount: intent.amount_received - refunded, metadata: {qaFixtureId: fixture.id}}, {idempotencyKey: `cleanup_${intent.id}`});
+      else await row.ref.set({terminalStatus: "refunded"}, {merge: true});
+    }
+    return {refunded: rows.size};
+  };
+  return {paymentIntents, refunds, cleanup};
+}
+
+module.exports = {providerForFixture, paymentProviderForFixture, ROUTING_TYPE};
