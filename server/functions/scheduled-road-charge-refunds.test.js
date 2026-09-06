@@ -94,6 +94,9 @@ test("Roth settlement is deterministic and idempotent", async () => {
             data: () => store.get(`${target.collection}/${target.id}`),
           };
         },
+        async getAll(...targets) {
+          return Promise.all(targets.map((target) => this.get(target)));
+        },
         set(target, value, options = {}) {
           const key = `${target.collection}/${target.id}`;
           store.set(
@@ -195,3 +198,56 @@ test("legacy or malformed entitlements fail closed", () => {
   );
   assert.equal(refunds.reserveRoth(legacy, evidence).rothCreditedPence, 0);
 });
+
+for (const ownerType of ["sender", "business"]) {
+  test(`${ownerType} refund read abort leaves no reads outside its callback`, async () => {
+    const pending = new Set();
+    let pendingAtExit = -1;
+    let batchReads = 0;
+    const failure = Object.assign(new Error("injected read abort"), {code: 10});
+    const ref = (path) => ({
+      path, id: path.split("/").pop(),
+      collection: (name) => ({doc: (id) => ref(`${path}/${name}/${id}`)}),
+    });
+    const entitlement = {
+      state: refunds.STATES.eligible,
+      policyVersion: refunds.REFUND_POLICY_VERSION,
+      deliveryId: "delivery", quoteId: "quote", chargeId: "charge",
+      refundablePence: 250, entitlementPence: 250,
+      refundOwnerType: ownerType, refundOwnerId: "owner",
+    };
+    const db = {
+      collection: (name) => ({doc: (id) => ref(`${name}/${id}`)}),
+      async runTransaction(callback) {
+        let individualReads = 0;
+        try {
+          return await callback({
+            get(target) {
+              if (target.path.startsWith("roadChargeRefundEntitlements/")) {
+                return Promise.resolve({exists: true, data: () => entitlement});
+              }
+              individualReads += 1;
+              if (individualReads === 1) return Promise.reject(failure);
+              return new Promise((resolve) => pending.add(resolve));
+            },
+            async getAll(...refs) {
+              batchReads += 1;
+              assert.equal(refs.length, ownerType === "sender" ? 3 : 2);
+              throw failure;
+            },
+          });
+        } finally {
+          pendingAtExit = pending.size;
+          // Drain injected reads after measuring callback exit, even on failure.
+          for (const resolve of pending) resolve({exists: false});
+          pending.clear();
+        }
+      },
+    };
+    await assert.rejects(refunds.settleEntitlementToRoth({
+      db, entitlementId: "abort-probe", owner: {type: ownerType, id: "owner"},
+    }), (error) => error === failure);
+    assert.equal(pendingAtExit, 0, "rollback must not outlive sibling reads");
+    assert.equal(batchReads, 1);
+  });
+}

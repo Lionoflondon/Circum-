@@ -134,10 +134,7 @@ async function settleEntitlementToRoth({
         .collection("transactions")
         .doc(`road_charge_refund_${id}`);
       const accountRef = db.collection("businessAccounts").doc(businessId);
-      const [walletSnapshot, txSnapshot] = await Promise.all([
-        transaction.get(walletRef),
-        transaction.get(txRef),
-      ]);
+      const [walletSnapshot, txSnapshot] = await transaction.getAll(walletRef, txRef);
       if (txSnapshot.exists) {
         return {settled: false, duplicate: true, entitlementId: id};
       }
@@ -209,11 +206,9 @@ async function settleEntitlementToRoth({
         .collection("walletTransactions")
         .doc(`road_charge_refund_${id}`);
       const senderRef = db.collection("senderWallets").doc(uid);
-      const [walletSnapshot, txSnapshot, senderSnapshot] = await Promise.all([
-        transaction.get(walletRef),
-        transaction.get(txRef),
-        transaction.get(senderRef),
-      ]);
+      const [walletSnapshot, txSnapshot, senderSnapshot] = await transaction.getAll(
+        walletRef, txRef, senderRef,
+      );
       if (txSnapshot.exists) {
         return {settled: false, duplicate: true, entitlementId: id};
       }
