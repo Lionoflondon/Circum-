@@ -32,6 +32,7 @@ class GiftPaymentView extends StatefulWidget {
 class _GiftPaymentViewState extends State<GiftPaymentView> {
   late String _giftDraftId;
   var _submitting = false;
+  var _paymentComplete = false;
   var _rothLoading = true;
   var _rothUnavailable = false;
   String? _message;
@@ -310,7 +311,7 @@ class _GiftPaymentViewState extends State<GiftPaymentView> {
             label: _submitting
                 ? 'Preparing checkout...'
                 : 'Continue to Secure Payment',
-            onTap: _submitting || _paymentMethod == null
+            onTap: _submitting || _paymentComplete || _paymentMethod == null
                 ? null
                 : _submitForAdminReview,
           ),
@@ -327,7 +328,7 @@ class _GiftPaymentViewState extends State<GiftPaymentView> {
       });
       return;
     }
-    if (_submitting) return;
+    if (_submitting || _paymentComplete) return;
     final confirmed = await confirmSenderPaymentIfRequired(
       context,
       paymentMethod: _verifiedPaymentMethod == 'roth'
@@ -350,6 +351,7 @@ class _GiftPaymentViewState extends State<GiftPaymentView> {
           candidate: _giftDraftId,
         ).timeout(_backendTimeout);
         if (FirebaseAuth.instance.currentUser?.uid != user.uid) return;
+        if (await _recoverExistingNativeGift(user)) return;
       }
       final modeResult = await FirebaseFunctions.instance
           .httpsCallable('getSenderPaymentMode')
@@ -473,6 +475,56 @@ class _GiftPaymentViewState extends State<GiftPaymentView> {
     } finally {
       if (mounted) setState(() => _submitting = false);
     }
+  }
+
+  Future<bool> _recoverExistingNativeGift(User user) async {
+    final db = FirebaseFirestore.instance;
+    Future<QuerySnapshot<Map<String, dynamic>>> owned(String collection) => db
+        .collection(collection)
+        .where('senderId', isEqualTo: user.uid)
+        .where(FieldPath.documentId, isEqualTo: _giftDraftId)
+        .limit(1)
+        .get(const GetOptions(source: Source.server))
+        .timeout(_backendTimeout);
+    final completed = await owned('giftRequests');
+    if (FirebaseAuth.instance.currentUser?.uid != user.uid) return true;
+    var paid = completed.docs.isNotEmpty &&
+        completed.docs.single.data()['paymentStatus'] == 'paid';
+    if (!paid) {
+      final drafts = await owned(senderGiftPaymentDraftCollectionName);
+      if (FirebaseAuth.instance.currentUser?.uid != user.uid) return true;
+      if (drafts.docs.isNotEmpty) {
+        final stored = drafts.docs.single.data();
+        final intent = '${stored['stripePaymentIntentId'] ?? ''}';
+        if (intent.isNotEmpty) {
+          try {
+            final result = await FirebaseFunctions.instance
+                .httpsCallable('finalizeGiftPayment')
+                .call({
+              'giftDraftId': _giftDraftId,
+              'paymentIntentId': intent,
+            }).timeout(_backendTimeout);
+            paid = (result.data as Map)['paymentStatus'] == 'paid';
+          } on FirebaseFunctionsException catch (error) {
+            if (error.code != 'failed-precondition') rethrow;
+          }
+        }
+      }
+    }
+    if (!paid) return false;
+    await NativePaymentIdentity.resolve(
+      uid: user.uid,
+      flow: 'gift',
+      expected: _giftDraftId,
+    ).timeout(_backendTimeout);
+    if (mounted && FirebaseAuth.instance.currentUser?.uid == user.uid) {
+      setState(() {
+        _paymentComplete = true;
+        _message =
+            'Your saved Gift payment is confirmed. No further payment is needed.';
+      });
+    }
+    return true;
   }
 
   Future<void> _confirmNativeGiftPayment(

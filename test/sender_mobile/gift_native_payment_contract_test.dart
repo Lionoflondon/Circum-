@@ -37,4 +37,15 @@ void main() {
     expect(source, contains("'giftDraftId': _giftDraftId"));
     expect(source, isNot(contains('await draftRef.set(')));
   });
+  test(
+      'native retry checks authoritative prior completion before creating payment',
+      () {
+    expect(source, contains('_recoverExistingNativeGift(user)'));
+    expect(source, contains('GetOptions(source: Source.server)'));
+    expect(source, contains(".where('senderId', isEqualTo: user.uid)"));
+    expect(source,
+        contains('where(FieldPath.documentId, isEqualTo: _giftDraftId)'));
+    expect(source, contains('No further payment is needed.'));
+    expect(source, contains('_paymentComplete || _paymentMethod == null'));
+  });
 }
