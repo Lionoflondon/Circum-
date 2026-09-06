@@ -70,7 +70,7 @@ test("Health+ checkout supports client-selected Roth without trusting client tot
 });
 
 test("Health+ subscriptions apply Roth to the first invoice without changing renewal pricing", () => {
-  assert.match(source, /stripe\.coupons\.create\(\{[\s\S]*?duration: "once"/);
+  assert.match(source, /provider\.coupons\.create\(\{[\s\S]*?duration: "once"/);
   assert.match(source, /rothAppliesTo: recurring \? "first_subscription_invoice" : "checkout"/);
   assert.match(source, /amountPence: recurring \? amountPence : Math\.round\(cardAmount \* 100\)/);
   assert.match(source, /discounts = \[\{coupon: coupon\.id\}\]/);

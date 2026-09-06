@@ -35,26 +35,28 @@ function authorize(context, lists) {
   if (![...lists.operators, ...lists.senders, ...lists.riders].includes(uid)) fail("QA access is not permitted.", "permission-denied");
   return uid;
 }
-function scopedDatabase(db, fixture, allowClosing = false) {
+function scopedDatabase(db, fixture, allowClosing = false, rootName = ROOT, extraCollections = []) {
+  if (![ROOT, "qaSpecialFlowFixtures"].includes(rootName)) fail("Invalid QA root.");
+  const collections = new Set([...COLLECTIONS, ...extraCollections]);
   if (!id(fixture.id) || fixture.isSyntheticQa !== true) fail("Invalid QA scope.");
-  const prefix = `${ROOT}/${fixture.id}/`;
+  const prefix = `${rootName}/${fixture.id}/`;
   const markers = {isSyntheticQa: true, qaFixtureId: fixture.id, qaCreatedBy: fixture.qaCreatedBy, qaCreatedAt: fixture.qaCreatedAt};
   function guard(ref) {
     const path = ref.path;
     if (typeof path !== "string" || !path.startsWith(prefix)) fail("Cross-fixture access denied.", "permission-denied");
     const parts = path.slice(prefix.length).split("/");
-    if (parts.length !== 2 || !COLLECTIONS.has(parts[0]) || !id(parts[1])) fail("Invalid QA record path.", "permission-denied");
+    if (parts.length !== 2 || !collections.has(parts[0]) || !id(parts[1])) fail("Invalid QA record path.", "permission-denied");
   }
   return {
     collection(name) {
- if (!COLLECTIONS.has(name)) fail("Invalid QA collection."); return db.collection(prefix + name);
+ if (!collections.has(name)) fail("Invalid QA collection."); return db.collection(prefix + name);
 },
     doc(path) {
  const ref = db.doc(path.startsWith(prefix) ? path : prefix + path); guard(ref); return ref;
 },
     runTransaction(callback) {
       return db.runTransaction(async (tx) => {
-        const root = await tx.get(db.collection(ROOT).doc(fixture.id));
+        const root = await tx.get(db.collection(rootName).doc(fixture.id));
         if (!root.exists || root.data().isSyntheticQa !== true || (!allowClosing && (root.data().closing || root.data().archived || root.data().expiresAt.toMillis() <= Date.now()))) fail("QA scope has closed.");
         return callback({
         get: (ref) => {

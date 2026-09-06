@@ -729,3 +729,7 @@ exports.reconcileBusinessInvoiceCheckouts = businessPayments.reconcileBusinessIn
 const qaLifecycle = require("./qa-lifecycle");
 exports.qaLifecycleFixture = qaLifecycle.callable();
 exports.expireQaLifecycleFixtures = qaLifecycle.scheduled();
+
+const qaSpecialFlow = require("./qa-special-flow");
+exports.qaSpecialFlowFixture = qaSpecialFlow.callable();
+exports.expireQaSpecialFlowFixtures = qaSpecialFlow.scheduled();
