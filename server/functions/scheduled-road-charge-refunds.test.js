@@ -251,3 +251,58 @@ for (const ownerType of ["sender", "business"]) {
     assert.equal(batchReads, 1);
   });
 }
+
+test("cash settlement preserves support binding and retry idempotency", async () => {
+  const records = new Map([
+    ["roadChargeRefundEntitlements/cash-retry", {
+      state: refunds.STATES.eligible,
+      policyVersion: refunds.REFUND_POLICY_VERSION,
+      deliveryId: "delivery", quoteId: "quote", chargeId: "charge",
+      refundablePence: 900, entitlementPence: 900,
+    }],
+    ["supportTickets/case-1", {deliveryId: "another-delivery"}],
+  ]);
+  let writes = 0;
+  let cashRecords = 0;
+  const snapshot = (ref) => ({
+    exists: records.has(ref.path), data: () => records.get(ref.path),
+  });
+  const db = {
+    collection: (name) => ({doc: (id) => ({path: `${name}/${id}`, id})}),
+    async runTransaction(callback) {
+      return callback({
+        async get(ref) {
+          return snapshot(ref);
+        },
+        async getAll(...refs) {
+          return refs.map(snapshot);
+        },
+        create(ref, data) {
+          assert.equal(records.has(ref.path), false);
+          records.set(ref.path, data);
+          writes += 1;
+          cashRecords += 1;
+        },
+        update(ref, data) {
+          records.set(ref.path, {...records.get(ref.path), ...data});
+          writes += 1;
+        },
+      });
+    },
+  };
+  const args = {
+    db, entitlementId: "cash-retry", actor: {authorized: true, uid: "support"},
+    customerRequestReference: "case-1", cashRefundReference: "refund-1",
+  };
+  const denied = await refunds.settleEntitlementToCash(args);
+  assert.equal(denied.reason, "support_request_delivery_mismatch");
+  assert.equal(writes, 0);
+  records.set("supportTickets/case-1", {deliveryId: "delivery"});
+  const first = await refunds.settleEntitlementToCash(args);
+  assert.equal(first.settled, true);
+  assert.equal(first.amountPence, 900);
+  const retry = await refunds.settleEntitlementToCash(args);
+  assert.equal(retry.duplicate, true);
+  assert.equal(cashRecords, 1);
+  assert.equal(writes, 2);
+});

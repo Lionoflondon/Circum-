@@ -327,7 +327,8 @@ async function settleEntitlementToCash({
     .collection("roadChargeCashRefunds")
     .doc(`road_charge_cash_refund_${id}`);
   return db.runTransaction(async (transaction) => {
-    const entitlementSnapshot = await transaction.get(entitlementRef);
+    const [entitlementSnapshot, supportRequestSnapshot, cashSnapshot] =
+      await transaction.getAll(entitlementRef, supportRequestRef, cashRef);
     if (!entitlementSnapshot.exists) {
       return {
         settled: false,
@@ -335,7 +336,6 @@ async function settleEntitlementToCash({
         entitlementId: id,
       };
     }
-    const supportRequestSnapshot = await transaction.get(supportRequestRef);
     if (!supportRequestSnapshot.exists) {
       return {
         settled: false,
@@ -386,7 +386,6 @@ async function settleEntitlementToCash({
         entitlementId: id,
       };
     }
-    const cashSnapshot = await transaction.get(cashRef);
     if (cashSnapshot.exists) {
       return {settled: false, duplicate: true, entitlementId: id};
     }
