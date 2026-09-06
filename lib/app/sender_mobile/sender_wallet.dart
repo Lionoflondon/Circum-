@@ -1,3 +1,4 @@
+import 'package:circum/app/sender_mobile/native_payment_return.dart';
 import 'dart:async';
 import 'dart:convert';
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -632,6 +633,7 @@ class _SenderWalletViewState extends State<SenderWalletView> {
       await Stripe.instance
           .initPaymentSheet(
             paymentSheetParameters: SetupPaymentSheetParameters(
+              returnURL: nativePaymentReturnUrl,
               merchantDisplayName: 'Circum',
               customerId: setup.customerId,
               customerEphemeralKeySecret: setup.ephemeralKeySecret,
@@ -1146,6 +1148,7 @@ class _ManagePaymentsScreenState extends State<_ManagePaymentsScreen> {
       await Stripe.instance
           .initPaymentSheet(
             paymentSheetParameters: SetupPaymentSheetParameters(
+              returnURL: nativePaymentReturnUrl,
               merchantDisplayName: 'Circum',
               customerId: setup.customerId,
               customerEphemeralKeySecret: setup.ephemeralKeySecret,

@@ -1,3 +1,4 @@
+import 'package:circum/app/sender_mobile/native_payment_return.dart';
 import 'dart:async';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -702,6 +703,7 @@ class _RatingsViewState extends State<RatingsView> {
           await Stripe.instance
               .initPaymentSheet(
                 paymentSheetParameters: SetupPaymentSheetParameters(
+                  returnURL: nativePaymentReturnUrl,
                   paymentIntentClientSecret: secret,
                   customerId: _text(result['customerId']),
                   customerEphemeralKeySecret:
