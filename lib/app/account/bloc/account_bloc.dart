@@ -1,3 +1,4 @@
+import 'package:circum/app/sender_mobile/native_payment_return.dart';
 import 'dart:async';
 
 import 'package:equatable/equatable.dart';
@@ -152,6 +153,7 @@ class AccountBloc extends Bloc<AccountEvent, AccountState> {
       await Stripe.instance
           .initPaymentSheet(
             paymentSheetParameters: SetupPaymentSheetParameters(
+              returnURL: nativePaymentReturnUrl,
               paymentIntentClientSecret: clientIntentSecret,
               customerId: customerId,
               customerEphemeralKeySecret: ephemeralKeySecret,

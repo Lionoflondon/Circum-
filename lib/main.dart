@@ -9,6 +9,7 @@ import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:flutter_stripe/flutter_stripe.dart';
 
 import 'app.dart';
+import 'app/sender_mobile/native_payment_return.dart';
 import 'app/account/bloc/account_bloc.dart';
 import 'app/security/circum_app_check.dart';
 import 'app/sender_mobile/sender_notification_routing.dart';
@@ -65,6 +66,7 @@ Future<void> _configureStripe() async {
   Stripe.publishableKey = key;
   if (!kIsWeb) {
     Stripe.merchantIdentifier = 'merchant.com.circum.app';
+    Stripe.urlScheme = circumPaymentUrlScheme;
   }
   await Stripe.instance.applySettings();
 }

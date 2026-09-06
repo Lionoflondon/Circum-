@@ -1,3 +1,4 @@
+import 'package:circum/app/sender_mobile/native_payment_return.dart';
 import 'dart:async';
 import 'dart:convert';
 import 'dart:math' as math;
@@ -5182,6 +5183,7 @@ class _PaymentPanelState extends State<_PaymentPanel> {
       await Stripe.instance
           .initPaymentSheet(
             paymentSheetParameters: SetupPaymentSheetParameters(
+              returnURL: nativePaymentReturnUrl,
               paymentIntentClientSecret: clientSecret,
               merchantDisplayName: 'Circum',
               customerId: engine.senderPaymentCustomerId,
