@@ -32,7 +32,8 @@ void main() {
 
   test('Gift draft is submitted to backend without client authority write', () {
     expect(source, contains("'giftDraft': payload"));
-    expect(source, contains('late final String _giftDraftId'));
+    expect(source, contains('NativePaymentIdentity.reserve('));
+    expect(source, contains('NativePaymentIdentity.resolve('));
     expect(source, contains("'giftDraftId': _giftDraftId"));
     expect(source, isNot(contains('await draftRef.set(')));
   });
