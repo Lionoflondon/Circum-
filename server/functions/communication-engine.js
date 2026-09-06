@@ -802,11 +802,11 @@ exports.closeDeliveryConversation = async (deliveryId, status) => {
     updatedAt: FieldValue.serverTimestamp(),
   }, {merge: true});
 };
-exports.appendSystemMessage = async (deliveryId, message) => {
+exports.appendSystemMessage = async (deliveryId, message, eventId = "") => {
   const chatRef = getFirestore().collection("chats").doc(clean(deliveryId));
   const chat = await chatRef.get();
   if (!chat.exists) return;
-  await chatRef.collection("messages").add({
+  const payload = {
     senderId: "circum-system",
     senderRole: "system",
     messageText: clean(message),
@@ -816,5 +816,14 @@ exports.appendSystemMessage = async (deliveryId, message) => {
     createdAt: FieldValue.serverTimestamp(),
     status: "sent",
     audited: true,
+  };
+  if (!eventId) {
+    await chatRef.collection("messages").add(payload);
+    return;
+  }
+  const ref = chatRef.collection("messages").doc(`system_${Buffer.from(clean(eventId)).toString("base64url")}`);
+  await getFirestore().runTransaction(async (tx) => {
+    if ((await tx.get(ref)).exists) return;
+    tx.create(ref, payload);
   });
 };

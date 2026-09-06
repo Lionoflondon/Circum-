@@ -2,7 +2,7 @@
 const functions = require("firebase-functions/v1");
 const {riderCallable} = require("./rider-app-check");
 const {senderPaymentCallable} = require("./sender-app-check");
-const {getFirestore, FieldValue} = require("firebase-admin/firestore");
+const {getFirestore, FieldValue, Timestamp} = require("firebase-admin/firestore");
 const core = require("./delivery-policy-core");
 const communicationEngine = require("./communication-engine");
 const rothLedger = require("./roth-ledger");
@@ -620,8 +620,9 @@ exports.recordRiderArrival = riderCallable(async (data, context) => {
         status: decision.state,
         deliveryStatus: decision.state,
         deliveryStage: decision.state,
-        arrivedAt: FieldValue.serverTimestamp(),
-        [field]: FieldValue.serverTimestamp(),
+        // Persist the same server-owned instant used by waiting/no-show deadlines.
+        arrivedAt: Timestamp.fromMillis(decision.arrivedAt),
+        [field]: Timestamp.fromMillis(decision.arrivedAt),
         arrivalLocation: decision.arrivalLocation || null,
         arrivalDistanceMeters: decision.distanceMeters || null,
         arrivalGpsAccuracyMeters: decision.gpsAccuracyMeters || null,
