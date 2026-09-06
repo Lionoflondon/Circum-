@@ -4,7 +4,7 @@
   "scripts": {
     "lint": "eslint .",
     "test": "node --test $(find . -maxdepth 1 -name '*.test.js' ! -name 'firestore-*-rules.test.js' ! -name 'storage-*-rules.test.js' ! -name '*.emulator.test.js' ! -name 'rider-document-emulator-integration.test.js' -print)",
-    "test:rules": "cd ../.. && firebase emulators:exec --only firestore \"node --test --test-concurrency=1 server/functions/firestore-*-rules.test.js server/functions/delivery-cancellation.emulator.test.js server/functions/tips-authority.emulator.test.js server/functions/rider-payout-allocation.emulator.test.js server/functions/newcomer-roth-cap.emulator.test.js\"",
+    "test:rules": "cd ../.. && firebase emulators:exec --only firestore \"node --test --test-concurrency=1 server/functions/firestore-*-rules.test.js server/functions/delivery-cancellation.emulator.test.js server/functions/tips-authority.emulator.test.js server/functions/rider-payout-allocation.emulator.test.js server/functions/newcomer-roth-cap.emulator.test.js server/functions/qa-lifecycle.emulator.test.js\"",
     "test:storage-rules": "cd ../.. && firebase emulators:exec --only firestore,storage \"node --test server/functions/storage-rider-document-rules.test.js server/functions/storage-delivery-evidence-rules.test.js\"",
     "test:document-integration": "cd ../.. && firebase emulators:exec --only firestore,storage \"node --test server/functions/rider-document-emulator-integration.test.js\"",
     "test:lifecycle": "cd ../.. && firebase emulators:exec --only firestore,storage \"node --test server/functions/delivery-lifecycle.emulator.test.js\"",
