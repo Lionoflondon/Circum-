@@ -49,7 +49,7 @@ test("lifecycle callables use protected App Check wrappers", () => {
 test("delivery lifecycle notifications use deterministic event keys", () => {
   const notifications = source("platform-notifications.js");
   const engine = source("communication-engine.js");
-  assert.match(notifications, /dedupeKey: `\$\{change\.after\.id\}:\$\{status\}:sender:/);
+  assert.match(notifications, /dedupeKey: `\$\{change\.after\.id\}:\$\{senderEvent\}:sender:/);
   assert.match(engine, /normalizedDedupeKey/);
   assert.match(engine, /if \(!created\)[\s\S]*retryExisting[\s\S]*return ref\.id/);
 });

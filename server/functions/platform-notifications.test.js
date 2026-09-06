@@ -157,3 +157,12 @@ test("chat message notification identity includes message and recipient", () => 
   assert.ok(chat.includes("dedupeKey: `${context.params.chatId}:${messageId}:chat:${uid}`"));
   assert.ok(chat.includes("dedupeKey: `${context.params.chatId}:${messageId}:chat:admin`"));
 });
+
+
+test("arrival notification uses persisted phase clock without inventing a timestamp", () => {
+  const context = _private.arrivalNotificationContext;
+  assert.deepEqual(context({pickupArrivedAt: {toMillis: () => 1234}, waiting: {phase: "pickup", startedAt: 9999}}, "arrived"), {phase: "pickup", data: {arrivedAt: 1234, arrivalPhase: "pickup"}});
+  assert.deepEqual(context({waiting: {phase: "dropoff", startedAt: 5678}}, "arrived_at_dropoff"), {phase: "dropoff", data: {arrivedAt: 5678, arrivalPhase: "dropoff"}});
+  assert.deepEqual(context({waiting: {phase: "pickup", startedAt: 1234}}, "arrived_at_dropoff"), {phase: "dropoff", data: {arrivalPhase: "dropoff"}});
+  assert.equal(context({}, "completed"), null);
+});
