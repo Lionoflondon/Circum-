@@ -94,6 +94,9 @@ test("Roth settlement is deterministic and idempotent", async () => {
             data: () => store.get(`${target.collection}/${target.id}`),
           };
         },
+        async getAll(...targets) {
+          return Promise.all(targets.map((target) => this.get(target)));
+        },
         set(target, value, options = {}) {
           const key = `${target.collection}/${target.id}`;
           store.set(
@@ -194,4 +197,112 @@ test("legacy or malformed entitlements fail closed", () => {
     "unsupported_policy_version",
   );
   assert.equal(refunds.reserveRoth(legacy, evidence).rothCreditedPence, 0);
+});
+
+for (const ownerType of ["sender", "business"]) {
+  test(`${ownerType} refund read abort leaves no reads outside its callback`, async () => {
+    const pending = new Set();
+    let pendingAtExit = -1;
+    let batchReads = 0;
+    const failure = Object.assign(new Error("injected read abort"), {code: 10});
+    const ref = (path) => ({
+      path, id: path.split("/").pop(),
+      collection: (name) => ({doc: (id) => ref(`${path}/${name}/${id}`)}),
+    });
+    const entitlement = {
+      state: refunds.STATES.eligible,
+      policyVersion: refunds.REFUND_POLICY_VERSION,
+      deliveryId: "delivery", quoteId: "quote", chargeId: "charge",
+      refundablePence: 250, entitlementPence: 250,
+      refundOwnerType: ownerType, refundOwnerId: "owner",
+    };
+    const db = {
+      collection: (name) => ({doc: (id) => ref(`${name}/${id}`)}),
+      async runTransaction(callback) {
+        let individualReads = 0;
+        try {
+          return await callback({
+            get(target) {
+              if (target.path.startsWith("roadChargeRefundEntitlements/")) {
+                return Promise.resolve({exists: true, data: () => entitlement});
+              }
+              individualReads += 1;
+              if (individualReads === 1) return Promise.reject(failure);
+              return new Promise((resolve) => pending.add(resolve));
+            },
+            async getAll(...refs) {
+              batchReads += 1;
+              assert.equal(refs.length, ownerType === "sender" ? 3 : 2);
+              throw failure;
+            },
+          });
+        } finally {
+          pendingAtExit = pending.size;
+          // Drain injected reads after measuring callback exit, even on failure.
+          for (const resolve of pending) resolve({exists: false});
+          pending.clear();
+        }
+      },
+    };
+    await assert.rejects(refunds.settleEntitlementToRoth({
+      db, entitlementId: "abort-probe", owner: {type: ownerType, id: "owner"},
+    }), (error) => error === failure);
+    assert.equal(pendingAtExit, 0, "rollback must not outlive sibling reads");
+    assert.equal(batchReads, 1);
+  });
+}
+
+test("cash settlement preserves support binding and retry idempotency", async () => {
+  const records = new Map([
+    ["roadChargeRefundEntitlements/cash-retry", {
+      state: refunds.STATES.eligible,
+      policyVersion: refunds.REFUND_POLICY_VERSION,
+      deliveryId: "delivery", quoteId: "quote", chargeId: "charge",
+      refundablePence: 900, entitlementPence: 900,
+    }],
+    ["supportTickets/case-1", {deliveryId: "another-delivery"}],
+  ]);
+  let writes = 0;
+  let cashRecords = 0;
+  const snapshot = (ref) => ({
+    exists: records.has(ref.path), data: () => records.get(ref.path),
+  });
+  const db = {
+    collection: (name) => ({doc: (id) => ({path: `${name}/${id}`, id})}),
+    async runTransaction(callback) {
+      return callback({
+        async get(ref) {
+          return snapshot(ref);
+        },
+        async getAll(...refs) {
+          return refs.map(snapshot);
+        },
+        create(ref, data) {
+          assert.equal(records.has(ref.path), false);
+          records.set(ref.path, data);
+          writes += 1;
+          cashRecords += 1;
+        },
+        update(ref, data) {
+          records.set(ref.path, {...records.get(ref.path), ...data});
+          writes += 1;
+        },
+      });
+    },
+  };
+  const args = {
+    db, entitlementId: "cash-retry", actor: {authorized: true, uid: "support"},
+    customerRequestReference: "case-1", cashRefundReference: "refund-1",
+  };
+  const denied = await refunds.settleEntitlementToCash(args);
+  assert.equal(denied.reason, "support_request_delivery_mismatch");
+  assert.equal(writes, 0);
+  records.set("supportTickets/case-1", {deliveryId: "delivery"});
+  const first = await refunds.settleEntitlementToCash(args);
+  assert.equal(first.settled, true);
+  assert.equal(first.amountPence, 900);
+  const retry = await refunds.settleEntitlementToCash(args);
+  assert.equal(retry.duplicate, true);
+  assert.equal(cashRecords, 1);
+  assert.equal(writes, 2);
 });
