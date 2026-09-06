@@ -718,3 +718,8 @@ exports.endTrip = functions.https.onRequest(async (req, res) => {
 });
 
 exports.reconcileBusinessInvoiceCheckouts = businessPayments.reconcileBusinessInvoiceCheckouts(stripe);
+
+// Private QA namespace only; no Stripe SDK, dispatch or notification side effects.
+const qaLifecycle = require("./qa-lifecycle");
+exports.qaLifecycleFixture = qaLifecycle.callable();
+exports.expireQaLifecycleFixtures = qaLifecycle.scheduled();
