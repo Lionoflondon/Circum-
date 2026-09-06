@@ -397,7 +397,8 @@ class _GiftPaymentViewState extends State<GiftPaymentView> {
       }).timeout(_backendTimeout);
       if (FirebaseAuth.instance.currentUser?.uid != user.uid) return;
       final paymentData = Map<String, dynamic>.from(payment.data as Map);
-      if (paymentData['walletPaidInFull'] == true) {
+      if (paymentData['walletPaidInFull'] == true ||
+          (!kIsWeb && paymentData['paymentStatus'] == 'paid')) {
         if (!kIsWeb) {
           await NativePaymentIdentity.resolve(
             uid: user.uid,

@@ -46,6 +46,8 @@ void main() {
     expect(source,
         contains('where(FieldPath.documentId, isEqualTo: _giftDraftId)'));
     expect(source, contains('No further payment is needed.'));
+    expect(
+        source, contains("!kIsWeb && paymentData['paymentStatus'] == 'paid'"));
     expect(source, contains('_paymentComplete || _paymentMethod == null'));
   });
 }
