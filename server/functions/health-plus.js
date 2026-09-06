@@ -156,9 +156,9 @@ function money(value) {
   return Math.round(amount * 100) / 100;
 }
 
-async function walletBalanceForSender(sender) {
+async function walletBalanceForSender(sender, db = getFirestore()) {
   const walletId = `${sender.email || sender.uid}`.trim().toLowerCase();
-  const snap = await getFirestore().collection("wallets").doc(walletId).get();
+  const snap = await db.collection("wallets").doc(walletId).get();
   const wallet = snap.exists ? snap.data() || {} : {};
   if (wallet.isFrozen === true) return 0;
   return money(wallet.balance == null ? wallet.rothCredit : wallet.balance);
@@ -306,7 +306,7 @@ function healthPlusVanguardFields() {
   };
 }
 
-exports.createHealthPlusBooking = functions.runWith({secrets: [healthDirectionsKey, "STRIPE_SECRET_KEY"]}).https.onCall(async (data, context) => {
+async function createHealthPlusBookingHandler(data, context, dependencies = {}) {
   const sender = requireCallableSender(context);
   if (data.consentConfirmed !== true) {
     throw new functions.https.HttpsError("failed-precondition", "Prescription consent is required.");
@@ -339,7 +339,7 @@ exports.createHealthPlusBooking = functions.runWith({secrets: [healthDirectionsK
     throw new functions.https.HttpsError("failed-precondition", "Health+ booking requires route distance and medication weight before checkout.");
   }
 
-  const db = getFirestore();
+  const db = dependencies.db || getFirestore();
   const idempotencyKey = safeDocId(data.idempotencyKey) ||
     safeDocId(`healthplus_booking_${sender.uid}_${frequency}_${preferredPickupTime}`);
   const idempotencyRef = db.collection("healthPlusBookingIdempotency").doc(idempotencyKey);
@@ -559,7 +559,8 @@ exports.createHealthPlusBooking = functions.runWith({secrets: [healthDirectionsK
   });
 
   return result;
-});
+}
+exports.createHealthPlusBooking = functions.runWith({secrets: [healthDirectionsKey, "STRIPE_SECRET_KEY"]}).https.onCall((data, context) => createHealthPlusBookingHandler(data, context));
 
 exports.updateSenderHealthPlusBooking = functions.https.onCall(async (data, context) => {
   const sender = requireCallableSender(context);
@@ -637,7 +638,8 @@ exports.updateSenderHealthPlusBooking = functions.https.onCall(async (data, cont
   return result;
 });
 
-exports.createHealthPlusCheckoutSession = functions.runWith({secrets: [healthDirectionsKey, "STRIPE_SECRET_KEY"]}).https.onRequest(async (req, res) => {
+async function createHealthPlusCheckoutHandler(req, res, dependencies = {}) {
+  const provider = dependencies.stripe || stripe;
   allowCors(res);
   if (req.method === "OPTIONS") return res.status(204).send("");
   if (req.method !== "POST") return res.status(405).send({error: "POST required"});
@@ -658,7 +660,7 @@ exports.createHealthPlusCheckoutSession = functions.runWith({secrets: [healthDir
       return res.status(400).send({error: "bookingId and profileId are required"});
     }
 
-    const db = getFirestore();
+    const db = dependencies.db || getFirestore();
     const bookingRef = db.collection("prescriptionPickups").doc(bookingId);
     const profileRef = db.collection("healthPlusProfiles").doc(profileId);
     const paymentRef = db.collection("healthPlusPayments").doc(bookingId);
@@ -685,9 +687,9 @@ exports.createHealthPlusCheckoutSession = functions.runWith({secrets: [healthDir
     if (["paid", "succeeded", "checkout_completed"].includes(`${existingPayment.status || ""}`)) {
       throw new functions.https.HttpsError("failed-precondition", "This Health+ booking has already been paid.");
     }
-    await healthCheckoutAuthority.legacyGate({stripe, db, bookingId, booking, payment: existingPayment});
+    await healthCheckoutAuthority.legacyGate({stripe: provider, db, bookingId, booking, payment: existingPayment});
     if (existingPayment.checkoutSessionId && existingPayment.checkoutUrl) {
-      const previous = await stripe.checkout.sessions.retrieve(existingPayment.checkoutSessionId);
+      const previous = await provider.checkout.sessions.retrieve(existingPayment.checkoutSessionId);
       if (previous.status !== "open" || previous.payment_status === "paid") {
         throw new functions.https.HttpsError("failed-precondition", "This checkout is closed. Reconcile any completed payment or create a fresh booking.");
       }
@@ -729,7 +731,7 @@ exports.createHealthPlusCheckoutSession = functions.runWith({secrets: [healthDir
     const submittedPence = submittedAmountPence(priceBreakdown || {});
     const discrepancyPence = submittedPence == null ? null : submittedPence - amountPence;
     const rothRequested = useRoth === true;
-    const walletBalance = rothRequested ? await walletBalanceForSender(sender) : 0;
+    const walletBalance = rothRequested ? await walletBalanceForSender(sender, db) : 0;
     const split = calculateWalletCheckout({
       orderTotalGbp,
       walletBalanceGbp: walletBalance,
@@ -743,6 +745,7 @@ exports.createHealthPlusCheckoutSession = functions.runWith({secrets: [healthDir
     if (!recurring && cardAmount <= 0) {
       await rothLedger.applyWalletDebit({
         userId: sender.uid,
+        db,
         userEmail: sender.email,
         amount: rothAmount,
         type: "health_payment",
@@ -779,7 +782,7 @@ exports.createHealthPlusCheckoutSession = functions.runWith({secrets: [healthDir
 
     let discounts = null;
     if (recurring && rothAmount > 0) {
-      const coupon = await stripe.coupons.create({
+      const coupon = await provider.coupons.create({
         amount_off: Math.round(rothAmount * 100),
         currency: "gbp",
         duration: "once",
@@ -819,7 +822,7 @@ exports.createHealthPlusCheckoutSession = functions.runWith({secrets: [healthDir
     params.client_reference_id = sender.uid;
 
     params.expires_at = checkoutAuthority.expiresAt;
-    const session = await healthCheckoutAuthority.create({db, stripe, paymentRef, booking, params, record: {
+    const session = await healthCheckoutAuthority.create({db, stripe: provider, paymentRef, booking, params, record: {
       bookingId,
       profileId,
       senderId: sender.uid,
@@ -891,7 +894,8 @@ exports.createHealthPlusCheckoutSession = functions.runWith({secrets: [healthDir
     console.error("Health+ checkout session error", error);
     return res.status(500).send({error: "health_plus_checkout_unavailable"});
   }
-});
+}
+exports.createHealthPlusCheckoutSession = functions.runWith({secrets: [healthDirectionsKey, "STRIPE_SECRET_KEY"]}).https.onRequest((req, res) => createHealthPlusCheckoutHandler(req, res));
 
 exports.handleHealthPlusCheckoutSession = async (sessionData, eventId = null) => {
   const metadata = sessionData.metadata || {};
@@ -994,3 +998,6 @@ exports.updateHealthPlusPickupStatus = functions.https.onRequest(async (req, res
     return res.status(500).send({error: "health_plus_status_update_unavailable"});
   }
 });
+
+// Explicit dependencies are used only by the allowlisted private QA callable.
+exports._qaHandlers = {createHealthPlusBookingHandler, createHealthPlusCheckoutHandler};

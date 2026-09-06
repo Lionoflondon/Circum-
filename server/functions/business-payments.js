@@ -46,11 +46,11 @@ function isMember(account, context) {
   return account.ownerUid === uid || account.createdByUserId === uid || members.includes(`${uid}`.toLowerCase()) || (email && members.includes(email));
 }
 
-async function requireBusinessMember(businessId, context) {
+async function requireBusinessMember(businessId, context, db = getFirestore()) {
   if (!context.auth) {
     throw new functions.https.HttpsError("unauthenticated", "Sign in to continue.");
   }
-  const snap = await getFirestore().collection("businessAccounts").doc(businessId).get();
+  const snap = await db.collection("businessAccounts").doc(businessId).get();
   if (!snap.exists) {
     throw new functions.https.HttpsError("not-found", "Business account not found.");
   }
@@ -529,29 +529,31 @@ exports.createBusinessRothCheckout = (stripe) => functions.https.onCall(async (d
   return {checkoutUrl: session.url, sessionId: session.id, purchaseId: purchaseRef.id};
 });
 
-exports.createBusinessInvoiceCheckout = (stripe) => functions.runWith({secrets: ["STRIPE_SECRET_KEY"]}).https.onCall(async (data, context) => {
+async function createBusinessInvoiceCheckoutHandler(stripe, data, context, dependencies = {}) {
   const invoiceId = text(data && data.invoiceId, 160);
   if (!invoiceId) throw new functions.https.HttpsError("invalid-argument", "Choose a valid Business invoice.");
-  const db = getFirestore();
+  const db = dependencies.db || getFirestore();
   const snap = await db.collection("businessInvoices").doc(invoiceId).get();
   if (!snap.exists) throw new functions.https.HttpsError("not-found", "Business invoice not found.");
   const businessId = snap.data().businessId;
   if (data.businessId && data.businessId !== businessId) throw new functions.https.HttpsError("permission-denied", "This invoice does not belong to this Business account.");
-  await requireBusinessMember(businessId, context);
+  await requireBusinessMember(businessId, context, db);
   checkoutReservations.remaining(snap.data());
   return checkoutReservations.checkout({db, stripe, invoiceId, businessId, uid: context.auth.uid, data});
-});
+}
+exports.createBusinessInvoiceCheckout = (stripe) => functions.runWith({secrets: ["STRIPE_SECRET_KEY"]}).https.onCall((data, context) => createBusinessInvoiceCheckoutHandler(stripe, data, context));
 
-exports.cancelBusinessInvoiceCheckout = (stripe) => functions.runWith({secrets: ["STRIPE_SECRET_KEY"]}).https.onCall(async (data, context) => {
+async function cancelBusinessInvoiceCheckoutHandler(stripe, data, context, dependencies = {}) {
   const id = text(data && (data.checkoutReservationId || data.paymentId), 160);
   if (!id) throw new functions.https.HttpsError("invalid-argument", "Choose a checkout reservation.");
-  const db = getFirestore();
+  const db = dependencies.db || getFirestore();
   const snap = await db.collection("businessCheckoutReservations").doc(id).get();
   if (!snap.exists) throw new functions.https.HttpsError("not-found", "Checkout reservation not found.");
-  await requireBusinessMember(snap.data().businessId, context);
+  await requireBusinessMember(snap.data().businessId, context, db);
   if (["cancelled", "expired", "failed"].includes(snap.data().status)) return {cancelled: true, idempotent: true};
   return checkoutReservations.terminate({db, stripe, reservation: snap.data()});
-});
+}
+exports.cancelBusinessInvoiceCheckout = (stripe) => functions.runWith({secrets: ["STRIPE_SECRET_KEY"]}).https.onCall((data, context) => cancelBusinessInvoiceCheckoutHandler(stripe, data, context));
 
 exports.handleBusinessCheckoutSession = async (sessionData, eventId = null) => {
   const metadata = sessionData.metadata || {};
@@ -713,3 +715,5 @@ exports._private = {
 
 exports.reconcileBusinessInvoiceCheckouts = (stripe) => functions.runWith({secrets: ["STRIPE_SECRET_KEY"]}).pubsub.schedule("every 5 minutes").onRun(() =>
   checkoutReservations.reconcileExpired({db: getFirestore(), stripe}));
+
+exports._qaHandlers = {createBusinessInvoiceCheckoutHandler, cancelBusinessInvoiceCheckoutHandler};
