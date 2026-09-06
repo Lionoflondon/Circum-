@@ -116,7 +116,7 @@ function paymentProviderForFixture({stripe, qa, fixture, secret}) {
     const record = await find(input.payment_intent); const intent = assertIntent(await stripe.paymentIntents.retrieve(input.payment_intent));
     if (input.amount > intent.amount_received) reject("refund exceeds TEST payment");
     const refund = await stripe.refunds.create(input, {idempotencyKey: `qa_actual_refund_${fixture.id}_${hash(options.idempotencyKey)}`});
-    if (refund.livemode !== false || refund.status !== "succeeded" || refund.payment_intent !== intent.id) reject("TEST refund unconfirmed");
+    if (refund.status !== "succeeded" || refund.payment_intent !== intent.id) reject("TEST refund unconfirmed");
     await record.ref.set({terminalStatus: "refunded", refundId: refund.id}, {merge: true});
     return refund;
   }};
