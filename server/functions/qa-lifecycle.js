@@ -11,7 +11,7 @@ const payout = require("./rider-payout-allocation");
 const refunds = require("./tip-refunds");
 const tipAuthority = require("./ratings-tipping")._test;
 const ROOT = "qaLifecycleFixtures";
-const COLLECTIONS = new Set(["deliveryRequests", "deliveryEvidence", "riderProfiles", "riders", "driverRatings", "ratingPrivateFeedback", "publishedDriverRatings", "driverPerformanceMetrics", "deliveryTips", "riderEarnings", "riderWalletTransactions", "riderEarningTransactions", "walletTransactions", "riderPayoutAllocations", "payoutRequests", "tipRecoveries", "supportCases", "offers", "chats", "audit", "qaProviderObjects"]);
+const COLLECTIONS = new Set(["deliveryRequests", "deliveryEvidence", "riderProfiles", "riders", "driverRatings", "ratingPrivateFeedback", "publishedDriverRatings", "driverPerformanceMetrics", "deliveryTips", "riderEarnings", "riderWalletTransactions", "riderEarningTransactions", "walletTransactions", "riderPayoutAllocations", "payoutRequests", "tipRecoveries", "supportCases", "offers", "chats", "notifications", "audit", "qaProviderObjects"]);
 const id = (value) => typeof value === "string" && /^[A-Za-z0-9_-]{1,128}$/.test(value);
 const fail = (message, code = "failed-precondition") => {
  throw new functions.https.HttpsError(code, message);
@@ -41,6 +41,11 @@ function scopedDatabase(db, fixture, allowClosing = false, rootName = ROOT, extr
   if (!id(fixture.id) || fixture.isSyntheticQa !== true) fail("Invalid QA scope.");
   const prefix = `${rootName}/${fixture.id}/`;
   const markers = {isSyntheticQa: true, qaFixtureId: fixture.id, qaCreatedBy: fixture.qaCreatedBy, qaCreatedAt: fixture.qaCreatedAt};
+  const clean = (value) => {
+    if (Array.isArray(value)) return value.map(clean);
+    if (value && Object.getPrototypeOf(value) === Object.prototype) return Object.fromEntries(Object.entries(value).filter(([, v]) => v !== undefined).map(([k, v]) => [k, clean(v)]));
+    return value;
+  };
   function guard(ref) {
     const path = ref.path;
     if (typeof path !== "string" || !path.startsWith(prefix)) fail("Cross-fixture access denied.", "permission-denied");
@@ -66,13 +71,13 @@ function scopedDatabase(db, fixture, allowClosing = false, rootName = ROOT, extr
  refs.forEach(guard); return tx.getAll(...refs);
 },
         set: (ref, data, options) => {
- guard(ref); return options ? tx.set(ref, {...data, ...markers}, options) : tx.set(ref, {...data, ...markers});
+ guard(ref); const row = clean({...data, ...markers}); return options ? tx.set(ref, row, options) : tx.set(ref, row);
 },
         create: (ref, data) => {
- guard(ref); return tx.create(ref, {...data, ...markers});
+ guard(ref); return tx.create(ref, clean({...data, ...markers}));
 },
         update: (ref, data) => {
- guard(ref); return tx.update(ref, {...data, ...markers});
+ guard(ref); return tx.update(ref, clean({...data, ...markers}));
 },
         delete: (ref) => {
  guard(ref); if (!["offers", "deliveryEvidence"].includes(ref.parent.id)) fail("QA audit and finance records are immutable."); return tx.delete(ref);
@@ -93,7 +98,7 @@ function requireActor(fixture, uid, role) {
 function assertProvider(object, fixture, deliveryId, amount) {
   if (!object || object.livemode !== false || object.status !== "succeeded" || object.amount !== amount || object.amount_received !== amount || object.currency !== "gbp" || object.metadata.qaFixtureId !== fixture.id || object.metadata.deliveryId !== deliveryId) fail("A matching successful TEST payment is required.");
 }
-function factory({db, env = process.env}) {
+function factory({db, env = process.env, providerFactory = simulatedProvider}) {
   async function handle(data, context) {
     const lists = config(env); const uid = authorize(context, lists);
     if (!data || typeof data !== "object") fail("QA action is required.");
@@ -120,10 +125,10 @@ function factory({db, env = process.env}) {
     const root = db.collection(ROOT).doc(data.fixtureId); const snapshot = await root.get(); const fixture = snapshot.data();
     assertFixture(fixture, lists, uid, Date.now(), ["cleanup", "read"].includes(action));
     const qa = scopedDatabase(db, fixture);
-    const stripe = simulatedProvider(qa, fixture);
+    const stripe = providerFactory(qa, fixture);
     if (action === "read") {
       const result = {};
-      const names = uid === fixture.riderId ? ["publishedDriverRatings", "driverPerformanceMetrics", "riderEarnings", "riderWalletTransactions", "riderPayoutAllocations"] : ["deliveryRequests", "driverRatings", "publishedDriverRatings", "driverPerformanceMetrics", "deliveryTips", "walletTransactions", "riderPayoutAllocations", "supportCases", "audit"];
+      const names = uid === fixture.riderId ? ["deliveryRequests", "chats", "notifications", "publishedDriverRatings", "driverPerformanceMetrics", "riderEarnings", "riderWalletTransactions", "riderPayoutAllocations"] : ["deliveryRequests", "chats", "notifications", "driverRatings", "publishedDriverRatings", "driverPerformanceMetrics", "deliveryTips", "walletTransactions", "riderPayoutAllocations", "supportCases", "audit"];
       for (const name of names) {
 result[name] = (await qa.collection(name).limit(100).get()).docs.map((d) => {
         const row = {id: d.id, ...d.data()};
@@ -139,13 +144,22 @@ result[name] = (await qa.collection(name).limit(100).get()).docs.map((d) => {
       requireActor(fixture, uid, "qaCreatedBy");
       return cleanup(fixture);
     }
-    if (!["a", "b", "c"].includes(data.delivery)) fail("Only three bounded QA deliveries are allowed.");
+    if (!["a", "b", "c", "d"].includes(data.delivery)) fail("Only four bounded QA deliveries are allowed.");
     const deliveryId = `qa_${fixture.id}_${data.delivery}`; const ref = qa.collection("deliveryRequests").doc(deliveryId);
     if (action === "book") {
       requireActor(fixture, uid, "senderId");
+      const profiles = {
+        standard: {serviceType: "standard", trustPointsAwarded: 1},
+        health: {serviceType: "health_plus", sourceModule: "health_plus", isHealthPlus: true, requiresVanguard: true, trustPointsAwarded: 6},
+        business: {serviceType: "business", sourceModule: "business", isBusiness: true, businessMode: true, trustPointsAwarded: 3},
+        scheduled: {serviceType: "scheduled", isScheduled: true, scheduledAt: Date.now() + Math.max(1000, Math.min(60000, Number(data.scheduledOffsetMs || 5000))), trustPointsAwarded: 5},
+        vanguard: {serviceType: "vanguard", requiresVanguard: true, vanguardProtocolEnabled: true, trustPointsAwarded: 4},
+      };
+      const profile = profiles[data.profile || "standard"];
+      if (!profile) fail("Unknown bounded QA delivery profile.", "invalid-argument");
       await qa.runTransaction(async (tx) => {
         const old = await tx.get(ref); if (old.exists) return;
-        tx.create(ref, {deliveryId, senderId: fixture.senderId, status: "booked", currency: "GBP", amountPence: 2000, riderEligibleFare: 20, riderPayoutCalculationVersion: "65_35_v1", paymentStatus: "unpaid", serviceType: "standard", verificationRequired: true, deliveryPhotoRequired: true, collectionPin: "2468", deliveryPin: "8642", createdAt: FieldValue.serverTimestamp()});
+        tx.create(ref, {deliveryId, senderId: fixture.senderId, status: "booked", currency: "GBP", amountPence: 2000, riderEligibleFare: 20, riderPayoutCalculationVersion: "65_35_v1", paymentStatus: "unpaid", verificationRequired: true, deliveryPhotoRequired: true, collectionPin: "2468", deliveryPin: "8642", pickupAddress: "Synthetic QA pickup", dropoffAddress: "Synthetic QA dropoff", routeDistanceMetres: 2400, routeDurationSeconds: 720, irisHandlingInstructions: profile.requiresVanguard ? "Verify sealed handover" : null, ...profile, createdAt: FieldValue.serverTimestamp()});
         tx.set(qa.collection("riderProfiles").doc(fixture.riderId), {approvalStatus: "approved", verificationStatus: "verified", approvalScope: "isolated_qa_only", dispatchEligible: false}, {merge: true});
         tx.create(qa.collection("audit").doc(`book_${data.delivery}`), {action: "book", actorId: uid, deliveryId, at: FieldValue.serverTimestamp()});
       });
@@ -165,7 +179,7 @@ result[name] = (await qa.collection(name).limit(100).get()).docs.map((d) => {
         tx.set(ref, {status: "requested", paymentStatus: "paid", stripePaymentIntentId: intent.id}, {merge: true});
         tx.set(qa.collection("offers").doc(deliveryId), {deliveryId, riderId: fixture.riderId, senderId: fixture.senderId, status: "offered", realDispatch: false});
         tx.create(qa.collection("audit").doc(`pay_${data.delivery}`), {action: "provider_payment_confirmed", providerId: intent.id, deliveryId, at: FieldValue.serverTimestamp()});
-      }); return {paid: true};
+      }); return {paid: true, providerId: intent.id, providerSimulation: intent.providerSimulation === true};
     }
     if (action === "capture_tip") {
       requireActor(fixture, uid, "senderId"); const d = (await ref.get()).data(); if (!d || d.closing || d.paymentStatus !== "paid" || !d.riderId || d.status === "cancelled") fail("A paid assigned QA delivery is required.");
@@ -184,7 +198,20 @@ result[name] = (await qa.collection(name).limit(100).get()).docs.map((d) => {
  const fresh = await tx.get(ref); const existing = await tx.get(qa.collection("deliveryTips").doc(deliveryId)); if (fresh.data().closing || fresh.data().status === "cancelled") fail("Delivery was cancelled."); if (!existing.exists) tx.create(qa.collection("deliveryTips").doc(deliveryId), {...tip, createdAt: FieldValue.serverTimestamp()});
 });
       await earnTip(qa, fixture, deliveryId);
-      return {status: (await qa.collection("deliveryTips").doc(deliveryId).get()).data().status, amountPence: 300, providerSimulation: true};
+      return {status: (await qa.collection("deliveryTips").doc(deliveryId).get()).data().status, amountPence: 300, providerSimulation: intent.providerSimulation === true};
+    }
+    if (action === "send_message") {
+      if (![fixture.senderId, fixture.riderId].includes(uid)) fail("QA chat membership required.", "permission-denied");
+      const message = `${data.message || ""}`.trim();
+      if (!message || message.length > 500) fail("Invalid QA message.", "invalid-argument");
+      return qa.runTransaction(async (tx) => {
+        const chat = await tx.get(qa.collection("chats").doc(deliveryId));
+        if (!chat.exists || !chat.data().members.includes(uid)) fail("QA chat membership required.", "permission-denied");
+        const messages = Array.isArray(chat.data().messages) ? chat.data().messages : [];
+        const messageId = hash(`${uid}:${message}`); if (messages.some((m) => m.id === messageId)) return {idempotent: true};
+        tx.set(chat.ref, {messages: [...messages, {id: messageId, senderId: uid, text: message}], updatedAt: FieldValue.serverTimestamp()}, {merge: true});
+        return {idempotent: false};
+      });
     }
     if (action === "cancel") {
  requireActor(fixture, uid, "senderId"); return cancel(qa, fixture, deliveryId, "cancel");
@@ -248,8 +275,10 @@ result[name] = (await qa.collection(name).limit(100).get()).docs.map((d) => {
         const next = action === "accept" ? "accepted" : tracking.RIDER_ACTION_TO_STATUS[action];
         if (d.status === next || (d.status === "completed" && next === "delivered")) return;
         if (!tracking.canTransitionDeliveryStatus(d.status, next)) fail("Invalid lifecycle transition.");
+        const scheduleDecision = lifecycle.scheduledOperationalTransitionAllowed(d, next);
+        if (!scheduleDecision.allowed) fail("This scheduled QA delivery is not ready for pickup yet.");
         if (action !== "accept") lifecycle.assertRiderOwnsDelivery(d, uid);
-        const patch = {status: next, deliveryState: next, riderId: uid, driverId: uid};
+        const patch = {...lifecycle.patchForTransition({action, nextStatus: next, riderId: uid}), deliveryState: next, riderId: uid, driverId: uid};
         if (["verify_collection_pin", "verify_receiver_pin"].includes(action)) {
           const pickup = action === "verify_collection_pin"; if (data.pin !== (pickup ? d.collectionPin : d.deliveryPin)) fail("QA PIN is incorrect.");
           const stage = pickup ? "pickup" : "dropoff";
@@ -275,7 +304,10 @@ result[name] = (await qa.collection(name).limit(100).get()).docs.map((d) => {
           tx.set(qa.collection("riderEarnings").doc(uid), {availableBalance: available / 100, availableEarnings: available / 100}, {merge: true});
         }
         tx.set(ref, patch, {merge: true});
-        if (action === "accept") tx.set(qa.collection("chats").doc(deliveryId), {members: [fixture.senderId, uid], deliveryId, noExternalNotification: true});
+        if (action === "accept") tx.set(qa.collection("chats").doc(deliveryId), {members: [fixture.senderId, uid], deliveryId, messages: [], noExternalNotification: true});
+        const notificationRef = qa.collection("notifications").doc(`${data.delivery}_${next}`);
+        const occurredAt = patch.arrivedAtPickupAt || patch.arrivedAtDropoffAt || patch.updatedAt || FieldValue.serverTimestamp();
+        tx.create(notificationRef, {recipientId: fixture.senderId, deliveryId, type: `delivery_${next}`, occurredAt, displayAt: occurredAt, noExternalDelivery: true});
         tx.create(qa.collection("audit").doc(`${data.delivery}_${action}`), {action, actorId: uid, deliveryId, next: patch.status, at: FieldValue.serverTimestamp()});
       });
       await earnTip(qa, fixture, deliveryId); return {advanced: true};
@@ -294,7 +326,7 @@ result[name] = (await qa.collection(name).limit(100).get()).docs.map((d) => {
     });
   }
   async function refundProvider(qa, fixture, deliveryId, intentId, amount, purpose) {
-    const stripe = simulatedProvider(qa, fixture);
+    const stripe = providerFactory(qa, fixture);
     const intent = await stripe.paymentIntents.retrieve(intentId); assertProvider(intent, fixture, deliveryId, amount);
     const result = await stripe.refunds.create({payment_intent: intentId, amount, metadata: {isSyntheticQa: "true", qaFixtureId: fixture.id, purpose}}, {idempotencyKey: `qa_refund_${intentId}`});
     if (result.status !== "succeeded" || result.amount !== amount || result.payment_intent !== intentId) fail("TEST refund is not confirmed.");
@@ -315,13 +347,13 @@ result[name] = (await qa.collection(name).limit(100).get()).docs.map((d) => {
       return row;
     });
     // Reconcile all persisted simulation captures, including interrupted capture bookkeeping.
-    const provider = simulatedProvider(qa, fixture);
-    for (const kind of ["base", "tip"]) {
-      const intentId = `qa_pi_${hash(`qa_${kind}_${deliveryId}`)}`;
-      const object = await qa.collection("qaProviderObjects").doc(intentId).get();
-      if (!object.exists) continue;
+    const provider = providerFactory(qa, fixture);
+    const objects = await qa.collection("qaProviderObjects").where("metadata.deliveryId", "==", deliveryId).get();
+    for (const object of objects.docs) {
+      const intentId = object.data().providerId || object.id;
       const intent = await provider.paymentIntents.retrieve(intentId);
-      if (kind === "base") await refundProvider(qa, fixture, deliveryId, intentId, 2000, "cancel");
+      const kind = intent.metadata.paymentType === "delivery_tip" ? "tip" : "base";
+      if (kind === "base") await refundProvider(qa, fixture, deliveryId, intentId, intent.amount, "cancel");
       else {
 await qa.runTransaction(async (tx) => {
         const tipRef = qa.collection("deliveryTips").doc(deliveryId); const tip = await tx.get(tipRef);
@@ -341,7 +373,9 @@ await qa.runTransaction(async (tx) => {
     await db.runTransaction(async (tx) => {
  const row = await tx.get(root); if (!row.exists || row.data().isSyntheticQa !== true) fail("Invalid cleanup scope."); tx.update(root, {closing: true});
 });
-    for (const doc of (await qa.collection("deliveryRequests").limit(3).get()).docs) if (!["completed", "cancelled"].includes(doc.data().status)) await cancel(qa, fixture, doc.id, "cleanup");
+    for (const doc of (await qa.collection("deliveryRequests").limit(4).get()).docs) if (!["completed", "cancelled"].includes(doc.data().status)) await cancel(qa, fixture, doc.id, "cleanup");
+    const paymentProvider = providerFactory(qa, fixture);
+    if (paymentProvider.cleanup) await paymentProvider.cleanup();
     for (const name of ["offers", "deliveryEvidence"]) {
       const docs = await qa.collection(name).limit(50).get();
       await qa.runTransaction(async (tx) => {

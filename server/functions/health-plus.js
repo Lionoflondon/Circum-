@@ -897,7 +897,7 @@ async function createHealthPlusCheckoutHandler(req, res, dependencies = {}) {
 }
 exports.createHealthPlusCheckoutSession = functions.runWith({secrets: [healthDirectionsKey, "STRIPE_SECRET_KEY"]}).https.onRequest((req, res) => createHealthPlusCheckoutHandler(req, res));
 
-exports.handleHealthPlusCheckoutSession = async (sessionData, eventId = null) => {
+async function handleHealthPlusCheckoutSessionHandler(sessionData, eventId = null, dependencies = {}) {
   const metadata = sessionData.metadata || {};
   const bookingId = `${metadata.bookingId || ""}`.trim();
   const profileId = `${metadata.profileId || ""}`.trim();
@@ -905,7 +905,7 @@ exports.handleHealthPlusCheckoutSession = async (sessionData, eventId = null) =>
   if (!bookingId || !profileId || !senderId) {
     throw new Error("Health+ checkout finalizer missing booking metadata.");
   }
-  const db = getFirestore();
+  const db = dependencies.db || getFirestore();
   const paymentRef = db.collection("healthPlusPayments").doc(bookingId);
   const paymentSnap = await paymentRef.get();
   if (!paymentSnap.exists) {
@@ -957,7 +957,8 @@ exports.handleHealthPlusCheckoutSession = async (sessionData, eventId = null) =>
     frequency: payment.frequency || null,
     recurring: payment.recurring === true,
   });
-};
+}
+exports.handleHealthPlusCheckoutSession = async (sessionData, eventId = null) => handleHealthPlusCheckoutSessionHandler(sessionData, eventId);
 
 exports.updateHealthPlusPickupStatus = functions.https.onRequest(async (req, res) => {
   allowCors(res);
@@ -1000,4 +1001,4 @@ exports.updateHealthPlusPickupStatus = functions.https.onRequest(async (req, res
 });
 
 // Explicit dependencies are used only by the allowlisted private QA callable.
-exports._qaHandlers = {createHealthPlusBookingHandler, createHealthPlusCheckoutHandler};
+exports._qaHandlers = {createHealthPlusBookingHandler, createHealthPlusCheckoutHandler, handleHealthPlusCheckoutSessionHandler};
