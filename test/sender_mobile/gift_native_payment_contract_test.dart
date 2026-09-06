@@ -43,8 +43,7 @@ void main() {
     expect(source, contains('_recoverExistingNativeGift(user)'));
     expect(source, contains('GetOptions(source: Source.server)'));
     expect(source, contains(".where('senderId', isEqualTo: user.uid)"));
-    expect(source,
-        contains('where(FieldPath.documentId, isEqualTo: _giftDraftId)'));
+    expect(source, contains("where('giftDraftId', isEqualTo: _giftDraftId)"));
     expect(source, contains('No further payment is needed.'));
     expect(
         source, contains("!kIsWeb && paymentData['paymentStatus'] == 'paid'"));

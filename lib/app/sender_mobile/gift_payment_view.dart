@@ -483,7 +483,7 @@ class _GiftPaymentViewState extends State<GiftPaymentView> {
     Future<QuerySnapshot<Map<String, dynamic>>> owned(String collection) => db
         .collection(collection)
         .where('senderId', isEqualTo: user.uid)
-        .where(FieldPath.documentId, isEqualTo: _giftDraftId)
+        .where('giftDraftId', isEqualTo: _giftDraftId)
         .limit(1)
         .get(const GetOptions(source: Source.server))
         .timeout(_backendTimeout);
