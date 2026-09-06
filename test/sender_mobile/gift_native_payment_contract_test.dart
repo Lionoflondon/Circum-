@@ -32,8 +32,21 @@ void main() {
 
   test('Gift draft is submitted to backend without client authority write', () {
     expect(source, contains("'giftDraft': payload"));
-    expect(source, contains('late final String _giftDraftId'));
+    expect(source, contains('NativePaymentIdentity.reserve('));
+    expect(source, contains('NativePaymentIdentity.resolve('));
     expect(source, contains("'giftDraftId': _giftDraftId"));
     expect(source, isNot(contains('await draftRef.set(')));
+  });
+  test(
+      'native retry checks authoritative prior completion before creating payment',
+      () {
+    expect(source, contains('_recoverExistingNativeGift(user)'));
+    expect(source, contains('GetOptions(source: Source.server)'));
+    expect(source, contains(".where('senderId', isEqualTo: user.uid)"));
+    expect(source, contains("where('giftDraftId', isEqualTo: _giftDraftId)"));
+    expect(source, contains('No further payment is needed.'));
+    expect(
+        source, contains("!kIsWeb && paymentData['paymentStatus'] == 'paid'"));
+    expect(source, contains('_paymentComplete || _paymentMethod == null'));
   });
 }

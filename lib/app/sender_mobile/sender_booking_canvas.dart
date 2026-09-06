@@ -1,4 +1,5 @@
 import 'package:circum/app/sender_mobile/native_payment_return.dart';
+import 'native_payment_identity.dart';
 import 'dart:async';
 import 'dart:convert';
 import 'dart:math' as math;
@@ -257,6 +258,27 @@ class _SenderBookingCanvasState extends State<SenderBookingCanvas> {
       return;
     }
     try {
+      if (!kIsWeb) {
+        final owner = _uid!;
+        final saved = await NativePaymentIdentity.deliverySnapshot(owner)
+            .timeout(_localDraftRestoreTimeout);
+        if (!mounted || _uid != owner) return;
+        if (saved != null) {
+          _draftId = saved['draftId'] as String?;
+          _hydrateRestoredDraft(SenderBookingDraft.fromBackendDraft(
+            Map<String, dynamic>.from(saved['draft'] as Map),
+          ).copyWith(
+              step: SenderBookingStep.payment,
+              paymentStatus: SenderPaymentStatus.failed,
+              cardConfirmationStarted: false));
+          context.read<SendPackageBloc>().add(RestoreNativePaymentQuote(saved));
+          setState(() {
+            _draftLoading = false;
+            _syncStatus = 'Saved payment — verify or retry';
+          });
+          return;
+        }
+      }
       final restoredLocally =
           await _restoreQueuedLocalDraft().timeout(_localDraftRestoreTimeout);
       if (!mounted) return;
@@ -5141,6 +5163,20 @@ class _PaymentPanelState extends State<_PaymentPanel> {
             idempotencyKey:
                 'sender-${senderUid ?? 'anonymous'}-${draftId ?? 'draft'}-${engine.senderQuoteId ?? 'quote'}',
             deliveryPayload: _bookingPayload(engine),
+            nativeDraftSnapshot: kIsWeb
+                ? const {}
+                : draft
+                    .copyWith(
+                      pickupLat:
+                          engine.pickupCoordinate?.lat ?? draft.pickupLat,
+                      pickupLng:
+                          engine.pickupCoordinate?.lng ?? draft.pickupLng,
+                      dropoffLat:
+                          engine.desinationCoordinate?.lat ?? draft.dropoffLat,
+                      dropoffLng:
+                          engine.desinationCoordinate?.lng ?? draft.dropoffLng,
+                    )
+                    .toBackendDraftPayload(),
           ),
         );
   }
