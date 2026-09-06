@@ -78,7 +78,7 @@ service cloud.firestore {
     }
 
     function changesLegendFields() {
-      return request.resource.data.diff(resource.data).affectedKeys().hasAny([
+      return request.resource.data.diff(resource.data).changedKeys().hasAny([
         'isLegend',
         'legendNumber',
         'legendAwardedAt',
@@ -104,10 +104,17 @@ service cloud.firestore {
 
     function isAssignedRider() {
       return signedIn() && (
-        resource.data.get('riderId', '') == request.auth.uid ||
-        resource.data.get('driverId', '') == request.auth.uid ||
-        resource.data.get('assignedRiderId', '') == request.auth.uid ||
-        resource.data.get('assignedDriverId', '') == request.auth.uid
+        resource.data.riderId == request.auth.uid ||
+        resource.data.driverId == request.auth.uid ||
+        resource.data.assignedDriverId == request.auth.uid
+      );
+    }
+
+    function isAvailableRiderJob() {
+      return isRiderAccount() && (
+        resource.data.status == 'requested' ||
+        resource.data.dispatchStatus == 'requested' ||
+        resource.data.matchingStatus == 'available'
       );
     }
 
@@ -145,33 +152,6 @@ service cloud.firestore {
         'refundStatus',
         'refundAmount',
         'refundReviewStatus',
-        'state',
-        'senderId',
-        'userId',
-        'senderEmail',
-        'riderId',
-        'assignedRiderId',
-        'price',
-        'total',
-        'amount',
-        'payment',
-        'rothAppliedAmount',
-        'remainingAmount',
-        'cancellationSettlementStatus',
-        'cancellationRequestedAt',
-        'cancellationRequestedBy',
-        'cancellationPolicy',
-        'cancellationFinancial',
-        'cancellationSettlement',
-        'broadcastBlocked',
-        'broadcastBlockReason',
-        'matchingStatus',
-        'dispatchStatus',
-        'arrivedAt',
-        'pickupArrivedAt',
-        'arrivedAtPickupAt',
-        'dropoffArrivedAt',
-        'waiting',
         'cancellationFee',
         'cancellationCharge',
         'cancellationChargeStatus',
@@ -293,10 +273,7 @@ service cloud.firestore {
       return isOwnDelivery('') &&
         !request.resource.data.diff(resource.data).affectedKeys().hasAny(['iris']) &&
         publicDeliveryHasNoDirectContact(request.resource.data) &&
-        !request.resource.data.diff(resource.data).affectedKeys().hasAny(protectedDeliveryFields()) &&
-        request.resource.data.diff(resource.data).affectedKeys().hasOnly([
-          'recipientNotes', 'senderNote', 'updatedAt'
-        ]);
+        !request.resource.data.diff(resource.data).affectedKeys().hasAny(protectedDeliveryFields());
     }
 
     function isAssignedRiderUpdate() {
@@ -451,8 +428,22 @@ service cloud.firestore {
         'photoUpdatedAt',
         'profilePhotoUpdatedAt',
         'profilePhotoUploadedAt',
+        'vehicle',
+        'vehicles',
+        'vehicleType',
+        'vehicleMakeModel',
+        'vehicleColour',
+        'vehicleRegistration',
+        'plateNumber',
+        'typeOfVehicle',
         'updatedAt'
       ];
+    }
+
+    function isSafeRiderSelfCreate(driverId) {
+      return signedIn() && request.auth.uid == driverId &&
+        !request.resource.data.keys().hasAny(riderAdminOnlyFields()) &&
+        request.resource.data.keys().hasOnly(riderSelfWritableFields());
     }
 
     function isSafeRiderSelfUpdate(driverId) {
@@ -631,6 +622,50 @@ service cloud.firestore {
         );
     }
 
+    function isAssignedRiderPrivateCreate() {
+      return signedIn() &&
+        request.resource.data.deliveryDocId is string &&
+        (
+          get(/databases/$(database)/documents/deliveryRequests/$(request.resource.data.deliveryDocId)).data.riderId == request.auth.uid ||
+          get(/databases/$(database)/documents/deliveryRequests/$(request.resource.data.deliveryDocId)).data.driverId == request.auth.uid ||
+          get(/databases/$(database)/documents/deliveryRequests/$(request.resource.data.deliveryDocId)).data.assignedDriverId == request.auth.uid
+        ) &&
+        request.resource.data.keys().hasOnly(['requestId', 'deliveryDocId', 'verification', 'updatedAt']) &&
+        request.resource.data.verification is map &&
+        request.resource.data.verification.keys().hasOnly(['rider']);
+    }
+
+    function isSenderPrivateCreate() {
+      return signedIn() &&
+        request.resource.data.senderId == request.auth.uid &&
+        request.resource.data.keys().hasOnly([
+          'version',
+          'requestId',
+          'senderId',
+          'internal',
+          'verification',
+          'updatedAt',
+          'createdAt'
+        ]) &&
+        request.resource.data.verification is map &&
+        request.resource.data.verification.keys().hasOnly(['rider', 'adjudication']) &&
+        request.resource.data.verification.rider == null &&
+        request.resource.data.verification.adjudication == null;
+    }
+
+    function isAssignedRiderPrivateUpdate() {
+      return signedIn() &&
+        resource.data.deliveryDocId is string &&
+        (
+          get(/databases/$(database)/documents/deliveryRequests/$(resource.data.deliveryDocId)).data.riderId == request.auth.uid ||
+          get(/databases/$(database)/documents/deliveryRequests/$(resource.data.deliveryDocId)).data.driverId == request.auth.uid ||
+          get(/databases/$(database)/documents/deliveryRequests/$(resource.data.deliveryDocId)).data.assignedDriverId == request.auth.uid
+        ) &&
+        request.resource.data.diff(resource.data).changedKeys().hasOnly(['verification', 'updatedAt']) &&
+        request.resource.data.verification is map &&
+        request.resource.data.verification.keys().hasOnly(['rider']);
+    }
+
     function isParticipant() {
       return signedIn() &&
         resource.data.participants is list &&
@@ -679,9 +714,8 @@ service cloud.firestore {
     }
 
     match /notifications/{notificationId} {
-      allow read: if isAdmin() ||
+      allow read, update: if isAdmin() ||
         (signedIn() && resource.data.recipientId == request.auth.uid);
-      allow update: if isAdmin();
       allow create: if isAdmin();
       allow delete: if hasRole('super_admin');
     }
@@ -854,21 +888,16 @@ service cloud.firestore {
       allow write: if isFinanceAdmin();
     }
 
-    match /riderPresence/{riderId} {
-      allow read: if isAdmin() || (signedIn() && request.auth.uid == riderId);
-      allow write: if false;
-    }
-
     match /riderProfiles/{driverId} {
       allow read: if isAdmin() || (signedIn() && request.auth.uid == driverId);
-      allow create: if isDriverManager();
+      allow create: if isDriverManager() || isSafeRiderSelfCreate(driverId);
       allow update: if isDriverManager() || isSafeRiderSelfUpdate(driverId);
       allow delete: if hasRole('super_admin');
     }
 
     match /riders/{driverId} {
       allow read: if isAdmin() || (signedIn() && request.auth.uid == driverId);
-      allow create: if isDriverManager();
+      allow create: if isDriverManager() || isSafeRiderSelfCreate(driverId);
       allow update: if isDriverManager() || isSafeRiderSelfUpdate(driverId);
       allow delete: if hasRole('super_admin');
     }
@@ -920,30 +949,12 @@ service cloud.firestore {
       allow delete: if hasRole('super_admin');
     }
 
-    match /riderOfferAuthorizations/{riderId}/{nested=**} {
-      allow read, write: if false;
-    }
-    function offerIrisUnchanged(riderId, deliveryId) {
-      let authority = get(/databases/$(database)/documents/riderOfferAuthorizations/$(riderId)/jobs/$(deliveryId)).data;
-      let path = /databases/$(database)/documents/irisPrivate/$(authority.irisDocumentId);
-      return authority.irisPrivate == null ? !exists(path) : exists(path) && get(path).data == authority.irisPrivate;
-    }
-    match /riderOfferProjections/{riderId}/offers/{deliveryId} {
-      allow get: if signedIn() && request.auth.uid == riderId &&
-        resource.data.expiresAt > request.time && offerIrisUnchanged(riderId, deliveryId) &&
-        get(/databases/$(database)/documents/riderOfferAuthorizations/$(riderId)/jobs/$(deliveryId)).data.expiresAt > request.time &&
-        get(/databases/$(database)/documents/riderProfiles/$(riderId)).data == get(/databases/$(database)/documents/riderOfferAuthorizations/$(riderId)/jobs/$(deliveryId)).data.profile &&
-        get(/databases/$(database)/documents/riders/$(riderId)).data == get(/databases/$(database)/documents/riderOfferAuthorizations/$(riderId)/jobs/$(deliveryId)).data.rider &&
-        get(/databases/$(database)/documents/riderPresence/$(riderId)).data == get(/databases/$(database)/documents/riderOfferAuthorizations/$(riderId)/jobs/$(deliveryId)).data.presence &&
-        get(/databases/$(database)/documents/deliveryRequests/$(deliveryId)).data == get(/databases/$(database)/documents/riderOfferAuthorizations/$(riderId)/jobs/$(deliveryId)).data.delivery;
-      allow list, write: if false;
-    }
-
     match /deliveryRequests/{deliveryId} {
       allow read: if isAdmin() ||
         isOwnDelivery(deliveryId) ||
         isAssignedRider() ||
-        canReadBusinessId(resource.data.businessId);
+        canReadBusinessId(resource.data.businessId) ||
+        isAvailableRiderJob();
       allow create: if isAdmin();
       allow update: if isAdmin() ||
         isOwnDeliveryUpdate() ||
@@ -969,18 +980,25 @@ service cloud.firestore {
     }
 
     match /webSenderRequests/{requestId} {
-      allow read: if isAdmin() || (signedIn() && resource.data.senderId == request.auth.uid);
-      allow create: if isAdmin() || (isCreatingOwnDelivery() &&
-        !request.resource.data.keys().hasAny(['iris']) &&
-        request.resource.data.keys().hasOnly(['senderId', 'userId', 'packageDescription', 'createdAt', 'updatedAt']));
-      allow update: if isAdmin() || (signedIn() && resource.data.senderId == request.auth.uid &&
-        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['packageDescription', 'updatedAt']));
+      allow read, update: if isAdmin() ||
+        (
+          signedIn() &&
+          resource.data.senderId == request.auth.uid &&
+          !request.resource.data.diff(resource.data).changedKeys().hasAny(['iris'])
+        );
+      allow create: if isAdmin() || (
+        isCreatingOwnDelivery() &&
+        !request.resource.data.keys().hasAny(['iris'])
+      );
       allow delete: if hasRole('super_admin');
     }
 
     match /irisPrivate/{requestId} {
       allow read: if isAdmin();
-      allow create, update: if isAdmin();
+      allow create: if isAdmin() ||
+        isSenderPrivateCreate() ||
+        isAssignedRiderPrivateCreate();
+      allow update: if isAdmin() || isAssignedRiderPrivateUpdate();
       allow delete: if hasRole('super_admin');
     }
 
@@ -1180,10 +1198,6 @@ service cloud.firestore {
     }
 
     match /stripeConnectWebhookEvents/{eventId} {
-      allow read, write: if false;
-    }
-
-    match /deliveryCancellationSettlements/{deliveryId} {
       allow read, write: if false;
     }
 

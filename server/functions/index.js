@@ -155,7 +155,9 @@ exports.updateDeliveryLiveLocation =
 exports.reconcilePendingDeliverySettlements =
   deliveryTracking.reconcilePendingDeliverySettlements;
 exports.submitDeliveryRating = ratingsTipping.submitDeliveryRating;
+exports.repairRiderRatingFeedback = ratingsTipping.repairRiderRatingFeedback;
 exports.submitDeliveryTip = ratingsTipping.submitDeliveryTip(stripe);
+exports.refundDeliveryTip = ratingsTipping.refundDeliveryTip(stripe);
 
 exports.getRiderEarningsSummary =
   riderEarningsSummary.getRiderEarningsSummary();
@@ -498,7 +500,13 @@ exports.StripeWebhook = functions
       console.log("💰 Webhook working!");
       console.log(`Event: ${event.type}`);
 
+      if (event.type.startsWith("charge.dispute.")) {
+        const tipDispute = await ratingsTipping.processStripeTipDispute(stripe, event);
+        if (tipDispute.handled) return res.send({success: true, tipDispute});
+      }
       if (event.type === "charge.refunded") {
+        const tipRefund = await ratingsTipping.processStripeTipRefund(stripe, event);
+        if (tipRefund.handled) return res.send({success: true, tipRefund});
         const refundResult = await stripeRefunds.syncChargeRefund({
           db: getFirestore(),
           event,

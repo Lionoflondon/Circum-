@@ -1,0 +1,6 @@
+{
+  "baseRuleset": "projects/circum-2797c/rulesets/55587362-0493-44cb-bd22-f4ce56e6c8b8",
+  "baseSourceSha256": "59f0fe7dbe547a5a25a2f68323e65b9e2b7978e0095e9a21bd33dfbb4dbcb0cc",
+  "candidateSourceSha256": "6f73f17230edee4a3cdb0e6f25b1585adcc775eef26b97846bb0cb072b166d17",
+  "scope": "Tips and ratings delta only; retain other live native compatibility rules. Deploy only if base ruleset is still current."
+}
