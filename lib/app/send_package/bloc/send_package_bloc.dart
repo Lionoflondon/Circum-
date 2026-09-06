@@ -1316,6 +1316,14 @@ class SendPackageBloc extends Bloc<SendPackageEvent, SendPackageState> {
             senderPaymentError: 'Sign in again to continue payment.'));
         return;
       }
+      final savedPayment = !kIsWeb && paymentUid != null
+          ? await NativePaymentIdentity.deliverySnapshot(paymentUid)
+              .timeout(_senderCallableTimeout)
+          : null;
+      final stablePayload = savedPayment != null &&
+              savedPayment['quoteId'] == paymentQuoteId
+          ? Map<String, dynamic>.from(savedPayment['deliveryPayload'] as Map)
+          : event.deliveryPayload;
       final data = await _callableMap('createSenderPaymentSession', {
         'quoteId': paymentQuoteId,
         'rothEnabled': event.rothEnabled,
@@ -1326,8 +1334,7 @@ class SendPackageBloc extends Bloc<SendPackageEvent, SendPackageState> {
         if (event.draftId.isNotEmpty) 'draftId': event.draftId,
         if (event.idempotencyKey.isNotEmpty)
           'idempotencyKey': event.idempotencyKey,
-        if (event.deliveryPayload.isNotEmpty)
-          'deliveryPayload': event.deliveryPayload,
+        if (stablePayload.isNotEmpty) 'deliveryPayload': stablePayload,
       });
       if (auth.currentUser?.uid != paymentUid) {
         emit(state.copyWith(
@@ -1431,8 +1438,17 @@ class SendPackageBloc extends Bloc<SendPackageEvent, SendPackageState> {
       state.copyWith(isSenderDeliveryCreating: true, senderDeliveryError: ''),
     );
     try {
+      final owner = auth.currentUser?.uid;
+      final saved = !kIsWeb && owner != null
+          ? await NativePaymentIdentity.deliverySnapshot(owner)
+              .timeout(_senderCallableTimeout)
+          : null;
+      final stablePayload =
+          saved != null && saved['quoteId'] == state.senderQuoteId
+              ? Map<String, dynamic>.from(saved['deliveryPayload'] as Map)
+              : event.bookingPayload;
       final payload = {
-        ...event.bookingPayload,
+        ...stablePayload,
         'quoteId': state.senderQuoteId,
         'paymentSessionId': state.senderPaymentSessionId,
       };
