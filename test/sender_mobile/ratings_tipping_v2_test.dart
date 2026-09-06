@@ -5,6 +5,24 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
+  test('feedback UI requires completed paid assigned delivery', () {
+    final valid = <String, dynamic>{
+      'status': 'completed',
+      'paymentStatus': 'paid',
+      'riderId': 'rider'
+    };
+    expect(ratingDeliveryReady(valid), isTrue);
+    for (final patch in [
+      <String, dynamic>{'status': 'cancelled'},
+      {'paymentStatus': 'unpaid'},
+      {'riderId': ''},
+      {'deliveryStatus': 'failed'},
+      {'isTest': true}
+    ]) {
+      expect(ratingDeliveryReady({...valid, ...patch}), isFalse);
+    }
+  });
+
   test('rating titles follow the five canonical levels', () {
     expect(deliveryRatingTitle(5), 'Outstanding Delivery');
     expect(deliveryRatingTitle(4), 'Great Delivery');
@@ -28,6 +46,10 @@ void main() {
       'Fast',
       'Excellent Communication',
       'Careful Handling',
+      'Late',
+      'Hard to find',
+      'Damaged item',
+      'Safety concern',
     ]);
   });
 

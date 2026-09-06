@@ -17,6 +17,10 @@ const ratingFeedbackChoices = <String>[
   'Fast',
   'Excellent Communication',
   'Careful Handling',
+  'Late',
+  'Hard to find',
+  'Damaged item',
+  'Safety concern',
 ];
 
 String deliveryRatingTitle(int stars) => switch (stars) {
@@ -32,6 +36,33 @@ bool ratingMethodVisible(String method, TargetPlatform platform) {
   if (method == 'apple_pay') return platform == TargetPlatform.iOS;
   if (method == 'google_pay') return platform == TargetPlatform.android;
   return true;
+}
+
+bool ratingDeliveryReady(Map<String, dynamic> delivery) {
+  final statuses = [
+    delivery['status'],
+    delivery['deliveryStatus'],
+    delivery['deliveryState']
+  ].whereType<String>().map((value) => value.toLowerCase()).toList();
+  if (statuses.any((value) => {
+        'cancelled',
+        'canceled',
+        'failed',
+        'rejected',
+        'refunded',
+        'voided'
+      }.contains(value))) {
+    return false;
+  }
+  return statuses
+          .any((value) => value == 'completed' || value == 'delivered') &&
+      {'paid', 'succeeded', 'success'}
+          .contains('${delivery['paymentStatus']}'.toLowerCase()) &&
+      [delivery['riderId'], delivery['driverId'], delivery['assignedRiderId']]
+          .any((value) => value is String && value.trim().isNotEmpty) &&
+      delivery['refunded'] != true &&
+      delivery['isTest'] != true &&
+      delivery['testData'] != true;
 }
 
 class DeliveryAppreciationService {
@@ -52,7 +83,7 @@ class DeliveryAppreciationService {
       'stars': stars,
       'feedback': feedback,
       'feedbackTags': feedbackTags,
-    });
+    }).timeout(const Duration(seconds: 20));
     return Map<String, dynamic>.from(result.data as Map);
   }
 
@@ -69,7 +100,7 @@ class DeliveryAppreciationService {
       'paymentMethod': paymentMethod,
       if (paymentIntentId != null) 'paymentIntentId': paymentIntentId,
       if (paymentMethodId != null) 'paymentMethodId': paymentMethodId,
-    });
+    }).timeout(const Duration(seconds: 20));
     return Map<String, dynamic>.from(result.data as Map);
   }
 }
@@ -80,11 +111,13 @@ class RatingsView extends StatefulWidget {
     required this.deliveryId,
     this.initialDelivery = const {},
     this.service,
+    this.deliveryStream,
   });
 
   final String deliveryId;
   final Map<String, dynamic> initialDelivery;
   final DeliveryAppreciationService? service;
+  final Stream<DocumentSnapshot<Map<String, dynamic>>>? deliveryStream;
 
   @override
   State<RatingsView> createState() => _RatingsViewState();
@@ -129,15 +162,37 @@ class _RatingsViewState extends State<RatingsView> {
       backgroundColor: _bg,
       body: SafeArea(
         child: StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
-          stream: FirebaseFirestore.instance
-              .collection('deliveryRequests')
-              .doc(widget.deliveryId)
-              .snapshots(),
+          stream: widget.deliveryStream ??
+              FirebaseFirestore.instance
+                  .collection('deliveryRequests')
+                  .doc(widget.deliveryId)
+                  .snapshots(),
           builder: (context, snapshot) {
             final delivery = <String, dynamic>{
               ...widget.initialDelivery,
               ...?snapshot.data?.data(),
             };
+            if (!ratingDeliveryReady(delivery)) {
+              return Center(
+                  child: Padding(
+                padding: const EdgeInsets.all(24),
+                child: Column(mainAxisSize: MainAxisSize.min, children: [
+                  const Icon(Icons.rate_review_outlined,
+                      color: Colors.white70, size: 40),
+                  const SizedBox(height: 16),
+                  Text(
+                      snapshot.hasError
+                          ? 'Delivery details could not be loaded. Please reopen feedback to try again.'
+                          : 'Feedback and optional tips are available after your paid delivery is completed.',
+                      textAlign: TextAlign.center,
+                      style: const TextStyle(color: Colors.white)),
+                  const SizedBox(height: 16),
+                  TextButton(
+                      onPressed: () => Navigator.of(context).maybePop(),
+                      child: const Text('Back')),
+                ]),
+              ));
+            }
             return CustomScrollView(
               slivers: [
                 SliverAppBar(
@@ -171,7 +226,10 @@ class _RatingsViewState extends State<RatingsView> {
                     SizedBox(
                       height: 54,
                       child: FilledButton(
-                        onPressed: _stars == 0 || _submitting ? null : _submit,
+                        onPressed:
+                            (_stars == 0 && _tipPence == 0) || _submitting
+                                ? null
+                                : _submit,
                         style: FilledButton.styleFrom(
                           backgroundColor: _blue,
                           disabledBackgroundColor: _panel2,
@@ -196,6 +254,14 @@ class _RatingsViewState extends State<RatingsView> {
                                 ),
                         ),
                       ),
+                    ),
+                    TextButton(
+                      onPressed: _submitting
+                          ? null
+                          : () => Navigator.of(context).maybePop(),
+                      style:
+                          TextButton.styleFrom(foregroundColor: Colors.white70),
+                      child: const Text('Not now'),
                     ),
                   ]),
                 ),
@@ -255,9 +321,12 @@ class _RatingsViewState extends State<RatingsView> {
         data['driverPlateNumber'] ??
         data['plateNumber']);
     final rank = _text(data['riderRank'] ?? rider['rank']);
-    final rating = data['riderAverageRating'] ??
-        data['riderRating'] ??
-        rider['averageRating'];
+    final ratingCount = data['riderTotalRatings'] ?? rider['totalRatings'] ?? 0;
+    final rating = (ratingCount is num && ratingCount > 0)
+        ? (data['riderAverageRating'] ??
+            data['riderRating'] ??
+            rider['averageRating'])
+        : null;
     final pickup =
         _address(data['pickup'] ?? data['pickupData'] ?? data['pickupAddress']);
     final destination = _address(
@@ -292,7 +361,7 @@ class _RatingsViewState extends State<RatingsView> {
                           fontWeight: FontWeight.w600)),
               ])),
           if (rating is num)
-            Text('★ ${rating.toStringAsFixed(1)}',
+            Text('★ ${rating.toStringAsFixed(1)} · $ratingCount ratings',
                 style: const TextStyle(
                     color: _amber, fontWeight: FontWeight.w700)),
         ]),
@@ -316,12 +385,25 @@ class _RatingsViewState extends State<RatingsView> {
               _text(data['deliveryDurationLabel'] ?? data['duration'],
                   fallback: '—')),
           _metric(
-              'Delivery fee',
+              'Delivery total',
               _money(
                   data['finalTotal'] ?? data['price'] ?? data['deliveryFee'])),
           _metric(
               'Roth earned', _money(data['rothAwarded'] ?? data['rothEarned'])),
         ]),
+        if (data['rothAppliedAmount'] is num &&
+            data['remainingAmount'] is num) ...[
+          const SizedBox(height: 12),
+          Wrap(spacing: 8, runSpacing: 8, children: [
+            _metric('Paid with Roth', _money(data['rothAppliedAmount'])),
+            _metric('Paid by card', _money(data['remainingAmount'])),
+          ]),
+          const SizedBox(height: 8),
+          const Align(
+              alignment: Alignment.centerLeft,
+              child: Text('Any tip is separate from this delivery payment.',
+                  style: TextStyle(color: Colors.white70, height: 1.4))),
+        ],
         const SizedBox(height: 12),
         Row(children: [
           Expanded(
@@ -353,7 +435,7 @@ class _RatingsViewState extends State<RatingsView> {
                 fontSize: 18,
                 fontWeight: FontWeight.w700)),
         const SizedBox(height: 6),
-        Text('How was your Circum Rider?',
+        Text('How was your delivery?',
             style: TextStyle(color: Colors.white.withValues(alpha: .55))),
         const SizedBox(height: 14),
         Row(
@@ -362,9 +444,12 @@ class _RatingsViewState extends State<RatingsView> {
               final selected = index < _stars;
               return Semantics(
                 button: true,
+                selected: _stars == index + 1,
                 label: '${index + 1} star',
                 child: IconButton(
-                  onPressed: () => setState(() => _stars = index + 1),
+                  onPressed: _submitting
+                      ? null
+                      : () => setState(() => _stars = index + 1),
                   iconSize: 38,
                   splashRadius: 26,
                   icon: AnimatedScale(
@@ -385,7 +470,7 @@ class _RatingsViewState extends State<RatingsView> {
 
   Widget _feedbackPanel() =>
       Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        const Text('Optional feedback',
+        const Text('Optional feedback — shared with your Rider',
             style: TextStyle(
                 color: Colors.white,
                 fontWeight: FontWeight.w700,
@@ -398,16 +483,20 @@ class _RatingsViewState extends State<RatingsView> {
               final selected = _tags.contains(choice);
               return FilterChip(
                 selected: selected,
-                onSelected: (value) => setState(() {
-                  value ? _tags.add(choice) : _tags.remove(choice);
-                  _feedback.text = _tags.join('. ');
-                  _feedback.selection =
-                      TextSelection.collapsed(offset: _feedback.text.length);
-                }),
+                materialTapTargetSize: MaterialTapTargetSize.padded,
+                onSelected: _submitting
+                    ? null
+                    : (value) => setState(() {
+                          value ? _tags.add(choice) : _tags.remove(choice);
+                        }),
                 label: Text(choice),
                 backgroundColor: _panel2,
-                selectedColor: _blue.withValues(alpha: .22),
-                checkmarkColor: _blue,
+                selectedColor: const Color(0xFF183D70),
+                color: WidgetStateProperty.resolveWith((states) =>
+                    states.contains(WidgetState.selected)
+                        ? const Color(0xFF183D70)
+                        : _panel2),
+                checkmarkColor: const Color(0xFFAACFFF),
                 side: BorderSide(
                     color: selected
                         ? _blue.withValues(alpha: .6)
@@ -418,9 +507,23 @@ class _RatingsViewState extends State<RatingsView> {
                         : Colors.white.withValues(alpha: .66)),
               );
             }).toList()),
+        if (_tags.contains('Safety concern') ||
+            _tags.contains('Damaged item')) ...[
+          const SizedBox(height: 12),
+          const Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Icon(Icons.support_agent_rounded,
+                color: Color(0xFFAACFFF), size: 22),
+            SizedBox(width: 10),
+            Expanded(
+                child: Text(
+                    'Submitting this rating also sends your feedback to Circum Support.',
+                    style: TextStyle(color: Color(0xFFAACFFF), height: 1.4))),
+          ]),
+        ],
         const SizedBox(height: 12),
         TextField(
           controller: _feedback,
+          enabled: !_submitting,
           maxLength: 500,
           maxLines: 3,
           style: const TextStyle(color: Colors.white),
@@ -430,7 +533,7 @@ class _RatingsViewState extends State<RatingsView> {
 
   Widget _tipPanel() =>
       Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        const Text('Leave a tip',
+        const Text('Leave a tip (optional)',
             style: TextStyle(
                 color: Colors.white,
                 fontWeight: FontWeight.w700,
@@ -455,10 +558,12 @@ class _RatingsViewState extends State<RatingsView> {
           ].map((item) {
             final selected = _tipPence == item.$1;
             return InkWell(
-              onTap: () => setState(() {
-                _tipPence = item.$1;
-                _customTip.clear();
-              }),
+              onTap: _submitting
+                  ? null
+                  : () => setState(() {
+                        _tipPence = item.$1;
+                        _customTip.clear();
+                      }),
               borderRadius: BorderRadius.circular(12),
               child: AnimatedContainer(
                 duration: const Duration(milliseconds: 280),
@@ -495,6 +600,7 @@ class _RatingsViewState extends State<RatingsView> {
           Expanded(
               child: TextField(
             controller: _customTip,
+            enabled: !_submitting,
             keyboardType: const TextInputType.numberWithOptions(decimal: true),
             style: const TextStyle(color: Colors.white),
             decoration: _input('Custom amount'),
@@ -506,10 +612,12 @@ class _RatingsViewState extends State<RatingsView> {
           )),
           const SizedBox(width: 10),
           TextButton(
-              onPressed: () => setState(() {
-                    _tipPence = 0;
-                    _customTip.clear();
-                  }),
+              onPressed: _submitting
+                  ? null
+                  : () => setState(() {
+                        _tipPence = 0;
+                        _customTip.clear();
+                      }),
               child: const Text('No tip')),
         ]),
       ]);
@@ -529,7 +637,9 @@ class _RatingsViewState extends State<RatingsView> {
         ...options.map((item) {
           final selected = _paymentMethod == item.$1;
           return InkWell(
-            onTap: () => setState(() => _paymentMethod = item.$1),
+            onTap: _submitting
+                ? null
+                : () => setState(() => _paymentMethod = item.$1),
             borderRadius: BorderRadius.circular(12),
             child: AnimatedContainer(
               duration: const Duration(milliseconds: 280),
@@ -564,20 +674,19 @@ class _RatingsViewState extends State<RatingsView> {
   }
 
   Future<void> _submit() async {
+    if (_submitting) return;
     setState(() {
       _submitting = true;
       _error = null;
     });
     try {
-      try {
+      if (_stars > 0) {
         await _service.submitRating(
           deliveryId: widget.deliveryId,
           stars: _stars,
           feedback: _feedback.text.trim(),
           feedbackTags: _tags.toList(),
         );
-      } on FirebaseFunctionsException catch (error) {
-        if (error.code != 'already-exists') rethrow;
       }
       if (_tipPence > 0) {
         if (_tipPence < 100 || _tipPence > 10000) {
@@ -683,7 +792,14 @@ class _RatingsViewState extends State<RatingsView> {
                         fontSize: 30,
                         fontWeight: FontWeight.w700)),
                 const SizedBox(height: 9),
-                Text('Your Circum Rider has received your appreciation.',
+                Text(
+                    _stars == 0
+                        ? 'Your tip has been sent to your Rider.'
+                        : _tags.any((tag) =>
+                                tag == 'Safety concern' ||
+                                tag == 'Damaged item')
+                            ? 'Your rating is saved. Your feedback has been sent to Circum Support.'
+                            : 'Your rating and feedback have been shared with your Rider.',
                     textAlign: TextAlign.center,
                     style: TextStyle(
                         color: Colors.white.withValues(alpha: .62),
