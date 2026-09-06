@@ -17,6 +17,7 @@ import 'package:circum/website/shared/health_plus/recurring_pickup_schedule.dart
 import 'package:circum/website/shared/iris/iris_weight_estimator.dart';
 import 'package:circum/website/shared/policies/booking_cancellation.dart';
 import 'package:circum/website/shared/policies/driver_performance.dart';
+import 'package:circum/website/shared/rating_feedback_card.dart';
 import 'package:circum/website/shared/policies/gift_request_policy.dart';
 import 'package:circum/website/shared/policies/rider_onboarding_policy.dart';
 import 'package:circum/website/shared/policies/role_access.dart';
@@ -3351,6 +3352,27 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
     _restoreRiderSession();
   }
 
+  Future<void> _repairRiderFeedback(String riderId) async {
+    try {
+      var cursors = <String, dynamic>{};
+      var hasMore = true;
+      while (mounted && _riderUser?.uid == riderId && hasMore) {
+        final result = await FirebaseFunctions.instanceFor(
+                region: 'us-central1')
+            .httpsCallable('repairRiderRatingFeedback')
+            .call({'cursors': cursors}).timeout(const Duration(seconds: 20));
+        final data = Map<String, dynamic>.from(result.data as Map);
+        cursors = Map<String, dynamic>.from(data['cursors'] as Map);
+        hasMore = data['hasMore'] == true;
+      }
+    } catch (_) {
+      if (mounted) {
+        setState(() => _message =
+            'Older feedback could not be loaded. Please try again later.');
+      }
+    }
+  }
+
   void _refreshWithdrawalForm() {
     if (mounted) setState(() {});
   }
@@ -3861,8 +3883,9 @@ class _RiderEnrollmentPortalState extends State<_RiderEnrollmentPortal> {
         );
       });
     });
+    unawaited(_repairRiderFeedback(riderId));
     _ratingSub = FirebaseFirestore.instance
-        .collection('driverRatings')
+        .collection('publishedDriverRatings')
         .where('driverId', isEqualTo: riderId)
         .limit(8)
         .snapshots()
@@ -7740,65 +7763,52 @@ class _DriverPerformancePanel extends StatelessWidget {
   }
 }
 
+Future<void> _reportWebRatingFeedback(
+    BuildContext context, String ratingId) async {
+  final reason = await showDialog<String>(
+      context: context,
+      builder: (dialogContext) => SimpleDialog(
+            title: const Text('Report feedback'),
+            children: [
+              'Abusive or threatening',
+              'Discriminatory',
+              'Private information',
+              'Other policy violation'
+            ]
+                .map((reason) => SimpleDialogOption(
+                    onPressed: () => Navigator.pop(dialogContext, reason),
+                    child: Text(reason)))
+                .toList(),
+          ));
+  if (reason == null || !context.mounted) return;
+  try {
+    await FirebaseFunctions.instanceFor(region: 'us-central1')
+        .httpsCallable('reportRating')
+        .call({'ratingId': ratingId, 'reason': reason}).timeout(
+            const Duration(seconds: 20));
+    if (context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+          content: Text('Feedback sent to Circum Support for review.')));
+    }
+  } catch (_) {
+    if (context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+          content: Text('Could not send your report. Please try again.')));
+    }
+  }
+}
+
 class _RatingFeedbackRow extends StatelessWidget {
   final _CircumColors colors;
   final DriverRating rating;
-
   const _RatingFeedbackRow({required this.colors, required this.rating});
-
   @override
-  Widget build(BuildContext context) {
-    final feedback = rating.hiddenByAdmin
-        ? 'Written feedback hidden by Circum.'
-        : rating.feedbackText.trim().isNotEmpty
-            ? rating.feedbackText.trim()
-            : rating.feedbackTags.isNotEmpty
-                ? rating.feedbackTags.join(', ')
-                : 'No written feedback';
-    return Container(
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: colors.field,
-        borderRadius: BorderRadius.circular(14),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Text(
-                '★' * rating.starRating.clamp(0, 5),
-                style: const TextStyle(
-                  color: Color(0xffffb020),
-                  fontWeight: FontWeight.w900,
-                ),
-              ),
-              const Spacer(),
-              Text(
-                rating.deliveryId.isEmpty
-                    ? 'Delivery'
-                    : 'Ref ${rating.deliveryId}',
-                style: TextStyle(
-                  color: colors.mutedText,
-                  fontSize: 12,
-                  fontWeight: FontWeight.w700,
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 8),
-          Text(
-            feedback,
-            style: TextStyle(
-              color: colors.mutedText,
-              height: 1.35,
-              fontWeight: FontWeight.w700,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
+  Widget build(BuildContext context) => RiderWebRatingFeedback(
+        background: colors.field,
+        mutedText: colors.mutedText,
+        rating: rating,
+        onReport: () => _reportWebRatingFeedback(context, rating.ratingId),
+      );
 }
 
 class _RiderEarningsSnapshot {
@@ -12861,8 +12871,9 @@ class _CustomerPortalState extends State<_CustomerPortal> {
       });
     });
     _assignedDriverRatingsSub = FirebaseFirestore.instance
-        .collection('driverRatings')
+        .collection('publishedDriverRatings')
         .where('driverId', isEqualTo: driverId)
+        .where('customerId', isEqualTo: _senderUser?.uid)
         .limit(6)
         .snapshots()
         .listen((snapshot) {
@@ -12915,17 +12926,15 @@ class _CustomerPortalState extends State<_CustomerPortal> {
     final requestId = _activeRequestDocId;
     final customerId = _senderUser?.uid;
     if (requestId == null || customerId == null) return;
-    final ratingDoc = await FirebaseFirestore.instance
-        .collection('driverRatings')
-        .doc(
-          DriverRating.documentId(
-            deliveryId: requestId,
-            customerId: customerId,
-          ),
-        )
-        .get();
-    if (!mounted || !ratingDoc.exists) return;
-    final rating = DriverRating.fromMap(ratingDoc.data()!);
+    final snapshot = await FirebaseFirestore.instance
+        .collection('publishedDriverRatings')
+        .where('customerId', isEqualTo: customerId)
+        .where('deliveryId', isEqualTo: requestId)
+        .limit(1)
+        .get()
+        .timeout(const Duration(seconds: 20));
+    if (!mounted || snapshot.docs.isEmpty) return;
+    final rating = DriverRating.fromMap(snapshot.docs.first.data());
     setState(() {
       _selectedRating = rating.starRating;
       _ratingFeedback.text = rating.feedbackText;
@@ -12978,33 +12987,36 @@ class _CustomerPortalState extends State<_CustomerPortal> {
         'stars': _selectedRating,
         'feedback': _ratingFeedback.text.trim(),
         'feedbackTags': _selectedRatingTags.toList(),
-      });
+      }).timeout(const Duration(seconds: 20));
       if (_selectedTipAmount > 0) {
-        await functions.httpsCallable('submitDeliveryTip').call({
+        final tipResult =
+            await functions.httpsCallable('submitDeliveryTip').call({
           'deliveryId': requestId,
           'amountPence': (_selectedTipAmount * 100).round(),
           'paymentMethod': 'roth',
-        });
+        }).timeout(const Duration(seconds: 20));
+        if (tipResult.data is! Map || tipResult.data['status'] != 'succeeded') {
+          throw StateError('Tip confirmation is pending.');
+        }
       }
       if (!mounted) return;
       setState(() {
         _ratingSubmitted = true;
-        _ratingMessage = 'Thanks. Your rating has been saved.';
+        _ratingMessage = _selectedRatingTags
+                .any((tag) => tag == 'safety_concern' || tag == 'damaged_item')
+            ? 'Your rating is saved. Your feedback has been sent to Circum Support.'
+            : 'Thanks. Your rating has been saved.';
       });
-    } on FirebaseFunctionsException catch (error) {
+    } on FirebaseFunctionsException {
       if (!mounted) return;
-      final alreadyRated = error.code == 'already-exists';
-      setState(() {
-        _ratingSubmitted = alreadyRated;
-        _ratingMessage = alreadyRated
-            ? 'This delivery has already been rated.'
-            : (error.message ?? 'We could not save the rating. Try again.');
-      });
+      setState(() => _ratingMessage = _selectedTipAmount > 0
+          ? 'Your rating or tip could not be confirmed. Retry with the same tip amount.'
+          : 'We could not save your rating. Please try again.');
     } catch (_) {
       if (!mounted) return;
-      setState(
-        () => _ratingMessage = 'We could not save the rating. Try again.',
-      );
+      setState(() => _ratingMessage = _selectedTipAmount > 0
+          ? 'Confirmation is pending. Retry with the same tip amount to avoid another payment.'
+          : 'We could not save your rating. Please try again.');
     } finally {
       if (mounted) setState(() => _ratingSubmitting = false);
     }
@@ -25230,6 +25242,28 @@ class _RiderRankPresentation extends StatelessWidget {
   }
 }
 
+Widget senderWebRatingPromptPreview(
+        {required TextEditingController feedback,
+        required int stars,
+        Set<String> selectedTags = const {},
+        bool submitted = false,
+        String? message}) =>
+    _DriverRatingPrompt(
+      colors: const _CircumColors(true),
+      driver: null,
+      stars: stars,
+      feedback: feedback,
+      selectedTags: selectedTags,
+      selectedTipAmount: 0,
+      submitting: false,
+      submitted: submitted,
+      message: message,
+      onRatingChanged: (_) {},
+      onTag: (_) {},
+      onTipChanged: (_) {},
+      onSubmit: () {},
+    );
+
 class _DriverRatingPrompt extends StatelessWidget {
   static const _tags = [
     ('on_time', 'On time'),
@@ -25238,6 +25272,8 @@ class _DriverRatingPrompt extends StatelessWidget {
     ('good_communication', 'Good communication'),
     ('late', 'Late'),
     ('poor_communication', 'Poor communication'),
+    ('damaged_item', 'Damaged item'),
+    ('safety_concern', 'Safety concern'),
   ];
 
   static String labelForTag(String key) {
@@ -25304,7 +25340,9 @@ class _DriverRatingPrompt extends StatelessWidget {
               final value = index + 1;
               return IconButton(
                 tooltip: '$value star',
-                onPressed: submitted ? null : () => onRatingChanged(value),
+                onPressed: submitting || submitted
+                    ? null
+                    : () => onRatingChanged(value),
                 icon: Icon(
                   value <= stars ? Icons.star : Icons.star_border,
                   color: const Color(0xffffb000),
@@ -25321,7 +25359,8 @@ class _DriverRatingPrompt extends StatelessWidget {
               final selected = selectedTags.contains(tag.$1);
               return FilterChip(
                 selected: selected,
-                onSelected: submitted ? null : (_) => onTag(tag.$1),
+                onSelected:
+                    submitting || submitted ? null : (_) => onTag(tag.$1),
                 label: Text(tag.$2),
                 selectedColor: colors.text,
                 checkmarkColor: colors.inverseText,
@@ -25334,17 +25373,24 @@ class _DriverRatingPrompt extends StatelessWidget {
               );
             }).toList(),
           ),
+          if (selectedTags.contains('safety_concern') ||
+              selectedTags.contains('damaged_item')) ...[
+            const SizedBox(height: 12),
+            Text(
+                'Submitting this rating also sends your feedback to Circum Support.',
+                style: TextStyle(color: colors.text, height: 1.4)),
+          ],
           const SizedBox(height: 12),
           _InputBox(
             colors: colors,
             controller: feedback,
             hint: 'Optional feedback',
             maxLines: 3,
-            enabled: !submitted,
+            enabled: !submitted && !submitting,
           ),
           const SizedBox(height: 12),
           Text(
-            'Add a tip',
+            'Optional tip — paid from your Roth balance',
             style: TextStyle(color: colors.text, fontWeight: FontWeight.w900),
           ),
           const SizedBox(height: 8),
@@ -25355,7 +25401,9 @@ class _DriverRatingPrompt extends StatelessWidget {
               final selected = selectedTipAmount == amount;
               return ChoiceChip(
                 selected: selected,
-                onSelected: submitted ? null : (_) => onTipChanged(amount),
+                onSelected: submitting || submitted
+                    ? null
+                    : (_) => onTipChanged(amount),
                 label: Text(
                   amount == 0 ? 'No tip' : '+£${amount.toStringAsFixed(0)}',
                 ),

@@ -1,3 +1,5 @@
+import 'package:cloud_firestore/cloud_firestore.dart' show Timestamp;
+
 class DriverVehicle {
   final String type;
   final String makeModel;
@@ -165,6 +167,9 @@ class DriverRating {
   final int starRating;
   final String feedbackText;
   final List<String> feedbackTags;
+  final String ratingId;
+  final List<String> deliveryCategories;
+  final DateTime? createdAt;
   final bool hiddenByAdmin;
 
   const DriverRating({
@@ -174,6 +179,9 @@ class DriverRating {
     required this.starRating,
     this.feedbackText = '',
     this.feedbackTags = const [],
+    this.ratingId = '',
+    this.deliveryCategories = const [],
+    this.createdAt,
     this.hiddenByAdmin = false,
   });
 
@@ -189,6 +197,13 @@ class DriverRating {
       feedbackTags: (data['feedbackTags'] as List<dynamic>? ?? const [])
           .map((tag) => '$tag')
           .toList(),
+      ratingId: '${data['ratingId'] ?? data['deliveryId'] ?? ''}',
+      deliveryCategories: (data['deliveryCategories'] as List? ?? const [])
+          .whereType<String>()
+          .toList(),
+      createdAt: data['createdAt'] is Timestamp
+          ? (data['createdAt'] as Timestamp).toDate()
+          : null,
       hiddenByAdmin: data['hiddenByAdmin'] == true,
     );
   }
