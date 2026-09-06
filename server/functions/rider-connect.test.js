@@ -120,7 +120,7 @@ test("Stripe Connect webhook money events are replay-safe", () => {
   assert.match(source, /transaction\.create\(eventRef/);
   assert.match(source, /event\.type === "payout\.created"[\s\S]*event\.type === "payout\.paid"[\s\S]*event\.type === "payout\.failed"[\s\S]*event\.type === "payout\.canceled"[\s\S]*processStripeConnectEventOnce/);
   assert.match(source, /event\.type === "transfer\.created" \|\| event\.type === "transfer\.failed"[\s\S]*processStripeConnectEventOnce/);
-  assert.match(source, /const active = \["processing", "pending", "requested"\]\.includes\(currentStatus\)/);
+  assert.match(source, /const active = \["reserved", "processing", "pending", "requested"\]\.includes\(currentStatus\)/);
   assert.match(source, /event\.type === "transfer\.failed" && active && riderId && amount > 0/);
 });
 
@@ -257,6 +257,6 @@ test("Stripe Connect webhook covers payout cancellation and external account upd
   assert.match(source, /stripe\.accounts\.retrieve\(accountId\)/);
   assert.match(source, /stripe_external_account_updated/);
   assert.match(source, /event\.type === "payout\.canceled"/);
-  assert.match(source, /const releaseBalance = status === "failed" \|\| status === "canceled"/);
+  assert.match(source, /const releaseBalance = false/);
   assert.match(source, /availableBalance: releaseBalance \? FieldValue\.increment\(amount\) : FieldValue\.increment\(0\)/);
 });

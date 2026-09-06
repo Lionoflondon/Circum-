@@ -878,20 +878,40 @@ service cloud.firestore {
       allow write: if false;
     }
 
+    match /publishedDriverRatings/{ratingId} {
+      allow read: if isAdmin() || (signedIn() &&
+        (resource.data.customerId == request.auth.uid || resource.data.driverId == request.auth.uid));
+      allow write: if false;
+    }
+    match /ratingPrivateFeedback/{ratingId} {
+      allow read: if isAdmin();
+      allow write: if false;
+    }
+    function ratingHasCompletedDelivery() {
+      let delivery = get(/databases/$(database)/documents/deliveryRequests/$(resource.data.deliveryId)).data;
+      return delivery.get('deliveryState', delivery.get('status', '')) in ['completed', 'complete', 'delivered'] &&
+        delivery.get('paymentStatus', '') in ['paid', 'succeeded', 'success'] &&
+        delivery.get('senderId', delivery.get('userId', delivery.get('customerId', ''))) == resource.data.customerId &&
+        delivery.get('riderId', delivery.get('driverId', delivery.get('assignedRiderId', delivery.get('assignedDriverId', '')))) == resource.data.driverId &&
+        !delivery.get('isTest', false) && !delivery.get('testData', false);
+    }
     match /driverRatings/{ratingId} {
       allow read: if isAdmin() ||
-        (signedIn() && resource.data.customerId == request.auth.uid) ||
-        (signedIn() && resource.data.driverId == request.auth.uid);
-      allow create: if signedIn() &&
-        request.resource.data.customerId == request.auth.uid;
-      allow update: if isAdmin() &&
-        !request.resource.data.diff(resource.data).changedKeys().hasAny(['starRating']);
-      allow delete: if false;
+        (signedIn() && ratingHasCompletedDelivery() &&
+          (resource.data.customerId == request.auth.uid || resource.data.driverId == request.auth.uid));
+      // Ratings and moderation are authored by backend callables.
+      allow create, update, delete: if false;
+    }
+
+    match /deliveryTips/{tipId} {
+      allow read: if isAdmin() || (signedIn() &&
+        (resource.data.senderId == request.auth.uid || resource.data.riderId == request.auth.uid));
+      allow write: if false;
     }
 
     match /driverPerformanceMetrics/{metricId} {
       allow read: if isAdmin() || (signedIn() && metricId == request.auth.uid);
-      allow write: if isAdmin();
+      allow write: if false;
     }
 
     match /dispatchInspections/{inspectionId} {
@@ -1145,12 +1165,18 @@ service cloud.firestore {
       allow delete: if hasRole('super_admin');
     }
 
+    match /riderPayoutAllocations/{allocationId} {
+      allow read: if isAdmin() || (signedIn() && resource.data.riderId == request.auth.uid);
+      allow write: if false;
+    }
+    match /tipRecoveries/{recoveryId} {
+      allow read: if isAdmin() || (signedIn() && resource.data.riderId == request.auth.uid);
+      allow write: if false;
+    }
     match /payoutRequests/{requestId} {
       allow read: if isAdmin() ||
         (signedIn() && resource.data.riderId == request.auth.uid);
-      allow create: if isAdmin();
-      allow update: if isAdmin();
-      allow delete: if hasRole('super_admin');
+      allow create, update, delete: if false;
     }
 
     match /stripeConnectWebhookEvents/{eventId} {

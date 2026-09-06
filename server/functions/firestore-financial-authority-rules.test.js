@@ -113,7 +113,7 @@ test("rider earnings, wallet ledger, payout requests, and bank data are not clie
   );
   assert.match(
       rules,
-      /match \/payoutRequests\/\{requestId\}[\s\S]*allow create: if isAdmin\(\);/,
+      /match \/payoutRequests\/\{requestId\}[^}]*allow create, update, delete: if false;/,
   );
   assert.match(
       rules,

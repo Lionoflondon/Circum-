@@ -1,4 +1,5 @@
 /* eslint-disable max-len, require-jsdoc */
+const payoutAllocation = require("./rider-payout-allocation");
 const functions = require("firebase-functions/v1");
 const {getFirestore, FieldValue} = require("firebase-admin/firestore");
 const {payoutReadiness} = require("./rider-certification-policy");
@@ -642,9 +643,10 @@ function createRiderTransferOrPayout(stripeOrFactory) {
     const requestId = text(data && data.requestId);
     const deliveryId = text(data && (data.deliveryId || data.bookingId || data.orderId));
     await assertActor(context, riderId, {adminOnly: true});
-    if (!riderId || amount <= 0) {
-      throw new functions.https.HttpsError("invalid-argument", "Rider and amount are required.");
+    if (!riderId || !requestId || !Number.isFinite(amount) || amount <= 0) {
+      throw new functions.https.HttpsError("invalid-argument", "Rider, amount and a stable payout request are required.");
     }
+    payoutAllocation.minor(amount);
     if (hasRawBankFields(data)) {
       throw new functions.https.HttpsError("invalid-argument", "Raw bank details are not accepted.");
     }
@@ -662,13 +664,16 @@ function createRiderTransferOrPayout(stripeOrFactory) {
       const existingRequest = await transaction.get(requestRef);
       const walletData = wallet.data() || {};
       const requestData = existingRequest.exists ? existingRequest.data() || {} : {};
+      if (existingRequest.exists && (text(requestData.riderId) !== riderId || payoutAllocation.minor(requestData.amount) !== payoutAllocation.minor(amount))) {
+        throw new functions.https.HttpsError("failed-precondition", "Payout request identity or amount changed.");
+      }
       const payoutInput = {
         ...requestData,
         ...data,
         amount,
         riderGrossShare: requestData.riderGrossShare || data.riderGrossShare || amount,
       };
-      const breakdown = resolveRiderPayoutBreakdown(payoutInput);
+      let breakdown = resolveRiderPayoutBreakdown(payoutInput);
       const existingStatus = text(requestData.status || requestData.payoutStatus).toLowerCase();
       const existingTransferId = text(requestData.stripeTransferId);
       if (existingRequest.exists &&
@@ -685,6 +690,34 @@ function createRiderTransferOrPayout(stripeOrFactory) {
       }
       if (existingRequest.exists && existingTransferId && existingStatus === "failed") {
         throw new functions.https.HttpsError("failed-precondition", "This payout transfer failed and must be retried with a new request.");
+      }
+      const available = Number(walletData.availableBalance || 0);
+      const pendingDelta = requestData.fundsReserved === true ? 0 : breakdown.riderGrossShare;
+      if (pendingDelta > 0 && available < breakdown.riderGrossShare) {
+        throw new functions.https.HttpsError("failed-precondition", "Withdrawal exceeds available balance.");
+      }
+      const deliveryDocId = deliveryId || text(requestData.deliveryId || requestData.bookingId || requestData.orderId);
+      const deliveryRefs = deliveryDocId ? [
+        db.collection("deliveryRequests").doc(deliveryDocId),
+        db.collection("bookings").doc(deliveryDocId),
+        db.collection("deliveries").doc(deliveryDocId),
+        db.collection("deliveryRecords").doc(deliveryDocId),
+      ] : [];
+      const deliveryDocs = [];
+      for (const ref of deliveryRefs) {
+        deliveryDocs.push(await transaction.get(ref));
+      }
+      const plan = await payoutAllocation.readAllocationPlan(transaction, db, riderId, requestRef.id, payoutAllocation.minor(breakdown.riderGrossShare));
+      const allocations = plan.allocations;
+      const tipPence = allocations.filter((row) => row.type === "tip").reduce((sum, row) => sum + row.amountPence, 0);
+      const feePence = Math.min(payoutAllocation.minor(breakdown.estimatedStripeFees), payoutAllocation.minor(breakdown.riderGrossShare) - tipPence);
+      breakdown = {...breakdown, stripeFeeDeductedFromRider: feePence / 100,
+        riderNetPayout: (payoutAllocation.minor(breakdown.riderGrossShare) - feePence) / 100, tipAmountPence: tipPence};
+      let remainingFee = feePence;
+      for (const allocation of allocations) {
+        allocation.processorFeePence = allocation.type === "tip" ? 0 : Math.min(remainingFee, allocation.amountPence);
+        allocation.netAmountPence = allocation.amountPence - allocation.processorFeePence;
+        remainingFee -= allocation.processorFeePence;
       }
       if (breakdown.riderNetPayout <= 0) {
         transaction.set(requestRef, {
@@ -711,23 +744,19 @@ function createRiderTransferOrPayout(stripeOrFactory) {
           ...breakdown,
         };
       }
-      const available = Number(walletData.availableBalance || 0);
-      const pendingDelta = requestData.fundsReserved === true ? 0 : breakdown.riderGrossShare;
-      if (pendingDelta > 0 && available < breakdown.riderGrossShare) {
-        throw new functions.https.HttpsError("failed-precondition", "Withdrawal exceeds available balance.");
+      for (const recovery of plan.recoveries) {
+        payoutAllocation.reserveAllocations(transaction, db, riderId, `recovery_${recovery.id}`, recovery.allocations, "paid", "tip_recovery");
+        transaction.set(recovery.ref, {unallocatedPence: 0, earningAllocations: recovery.allocations, allocatedAt: FieldValue.serverTimestamp()}, {merge: true});
       }
-      const deliveryDocId = deliveryId || text(requestData.deliveryId || requestData.bookingId || requestData.orderId);
-      const deliveryRefs = deliveryDocId ? [
-        db.collection("deliveryRequests").doc(deliveryDocId),
-        db.collection("bookings").doc(deliveryDocId),
-        db.collection("deliveries").doc(deliveryDocId),
-        db.collection("deliveryRecords").doc(deliveryDocId),
-      ] : [];
-      const deliveryDocs = [];
-      for (const ref of deliveryRefs) {
-        deliveryDocs.push(await transaction.get(ref));
-      }
+      payoutAllocation.reserveAllocations(transaction, db, riderId, requestRef.id, allocations);
+      const reservationVersion = Number(requestData.reservationVersion || 0) + (pendingDelta > 0 ? 1 : 0);
+      if (pendingDelta > 0) {
+payoutAllocation.writePayoutLedger(transaction, db, {requestId: requestRef.id, version: reservationVersion, riderId,
+        amountPence: payoutAllocation.minor(pendingDelta), phase: "reserved", balanceBeforePence: payoutAllocation.minor(available), balanceAfterPence: payoutAllocation.minor(available - pendingDelta)});
+}
       const payoutPatch = {
+        reservationVersion,
+        allocationVersion: 1, earningAllocations: allocations,
         totalCustomerPaid: breakdown.totalCustomerPaid,
         circumPlatformCommission: breakdown.circumPlatformCommission,
         riderGrossShare: breakdown.riderGrossShare,
@@ -765,7 +794,7 @@ function createRiderTransferOrPayout(stripeOrFactory) {
         }, {merge: true});
       });
       transaction.set(walletRef, {
-        availableBalance: FieldValue.increment(-breakdown.riderGrossShare),
+        availableBalance: FieldValue.increment(-pendingDelta),
         pendingWithdrawal: FieldValue.increment(pendingDelta),
         updatedAt: FieldValue.serverTimestamp(),
       }, {merge: true});
@@ -775,6 +804,7 @@ function createRiderTransferOrPayout(stripeOrFactory) {
         deliveryId: deliveryDocId || null,
         stripeAccountId,
         breakdown,
+        reservationVersion,
         deliveryRefs: deliveryDocs.filter((doc) => doc.exists).map((doc) => doc.ref.path),
       };
     });
@@ -810,6 +840,15 @@ function createRiderTransferOrPayout(stripeOrFactory) {
       };
     }
     let transfer;
+    await db.runTransaction(async (transaction) => {
+      const request = await transaction.get(requestRef);
+      if (request.data().tipRefundBlocked === true) throw new functions.https.HttpsError("failed-precondition", "This payout was adjusted by a tip refund. Please create a new request.");
+      const priorAttempt = request.data().transferAttemptStartedAt;
+      if (priorAttempt && Date.now() - priorAttempt.toMillis() > 23 * 60 * 60 * 1000 && !request.data().stripeTransferId) {
+        throw new functions.https.HttpsError("failed-precondition", "This transfer needs provider reconciliation before retry.");
+      }
+      transaction.set(requestRef, {transferDispatching: true, transferAttemptStartedAt: priorAttempt || FieldValue.serverTimestamp()}, {merge: true});
+    });
     try {
       transfer = await stripe.transfers.create({
         amount: Math.round(reservation.breakdown.riderNetPayout * 100),
@@ -828,15 +867,23 @@ function createRiderTransferOrPayout(stripeOrFactory) {
         idempotencyKey: stripeTransferIdempotencyKey(reservation.requestId),
       });
     } catch (error) {
+      if (!error || error.type !== "StripeInvalidRequestError") {
+        throw new functions.https.HttpsError("unavailable", "Transfer confirmation is pending. Retry this same payout request.");
+      }
       await db.runTransaction(async (transaction) => {
         const requestDoc = await transaction.get(requestRef);
         const requestData = requestDoc.data() || {};
         const status = text(requestData.status || requestData.payoutStatus).toLowerCase();
         if (status !== "reserved") return;
+        const allocations = await payoutAllocation.readRequestAllocations(transaction, db, requestRef.id);
+        const wallet = await transaction.get(walletRef);
+        payoutAllocation.writePayoutLedger(transaction, db, {requestId: requestRef.id, version: reservation.reservationVersion, riderId, amountPence: payoutAllocation.minor(reservation.breakdown.riderGrossShare), phase: "released", balanceBeforePence: payoutAllocation.minor(wallet.data().availableBalance || 0), balanceAfterPence: payoutAllocation.minor((wallet.data().availableBalance || 0) + reservation.breakdown.riderGrossShare)});
+        payoutAllocation.setAllocationState(transaction, allocations, "released");
         transaction.set(requestRef, {
           status: "failed",
           payoutStatus: "failed",
           payoutFailureStage: "stripe_transfer",
+          transferDispatching: false,
           failureReason: error && (error.message || error.code) || "Stripe transfer failed.",
           fundsReserved: false,
           failedAt: FieldValue.serverTimestamp(),
@@ -853,18 +900,23 @@ function createRiderTransferOrPayout(stripeOrFactory) {
     await db.runTransaction(async (transaction) => {
       const requestDoc = await transaction.get(requestRef);
       const requestData = requestDoc.data() || {};
+      const allocationDocs = await payoutAllocation.readRequestAllocations(transaction, db, requestRef.id);
       const existingTransferId = text(requestData.stripeTransferId);
       if (existingTransferId && existingTransferId !== transfer.id) {
-        return;
+        throw new Error("Payout transfer identity mismatch");
       }
+      if (existingTransferId && ["paid", "failed", "cancelled", "canceled"].includes(requestData.status)) return;
       const payoutPatch = {
         payoutStatus: "processing",
         status: "processing",
         stripeTransferId: transfer.id,
+        transferDispatching: false,
+        destinationPaymentId: typeof transfer.destination_payment === "string" ? transfer.destination_payment : transfer.destination_payment && transfer.destination_payment.id || null,
         payoutCreatedAt: FieldValue.serverTimestamp(),
         processedAt: FieldValue.serverTimestamp(),
         updatedAt: FieldValue.serverTimestamp(),
       };
+      for (const doc of allocationDocs) transaction.set(doc.ref, {stripeTransferId: transfer.id}, {merge: true});
       transaction.set(requestRef, payoutPatch, {merge: true});
       reservation.deliveryRefs.forEach((path) => {
         transaction.set(db.doc(path), {
@@ -877,7 +929,7 @@ function createRiderTransferOrPayout(stripeOrFactory) {
         riderId,
         deliveryId: reservation.deliveryId || null,
         withdrawalRequestId: reservation.requestId,
-        type: "withdrawal",
+        type: "payout_completed",
         amount: -reservation.breakdown.riderGrossShare,
         grossDeliveryEarning: reservation.breakdown.riderGrossShare,
         stripePaymentFee: reservation.breakdown.stripeFeeDeductedFromRider,
@@ -1223,26 +1275,35 @@ function handleStripeConnectWebhook(stripeOrFactory) {
         event.type === "payout.paid" ||
         event.type === "payout.failed" ||
         event.type === "payout.canceled") {
-        const accountId = text(object.destination || object.account || event.account);
+        const accountId = text(event.account || object.account || object.destination);
         const status = event.type === "payout.paid" ? "paid" :
           event.type === "payout.created" ? "scheduled" :
           event.type === "payout.canceled" ? "canceled" :
           "failed";
-        const releaseBalance = status === "failed" || status === "canceled";
+        const releaseBalance = false; // A failed bank payout leaves funds in the connected account.
+        const payoutRequestId = text(object.metadata && object.metadata.payoutRequestId);
+        let paidSources = new Set();
+        if (object.automatic === true) {
+          const rows = await stripe.balanceTransactions.list({payout: object.id, limit: 100}, {stripeAccount: accountId}).autoPagingToArray({limit: 10000});
+          paidSources = new Set(rows.map((row) => typeof row.source === "string" ? row.source : row.source && row.source.id).filter(Boolean));
+        }
         await processStripeConnectEventOnce(db, event, async (transaction) => {
           const query = await transaction.get(db.collection("payoutRequests")
               .where("stripeAccountId", "==", accountId)
-              .where("status", "in", ["processing", "pending", "requested", "scheduled"])
-              .limit(10));
+              .where("status", "in", ["processing", "pending", "requested", "scheduled"]));
+          const matchedDocs = query.docs.filter((doc) => doc.id === payoutRequestId || (doc.data().destinationPaymentId && paidSources.has(doc.data().destinationPaymentId)));
+          const allocationDocs = new Map();
+          for (const doc of matchedDocs) allocationDocs.set(doc.id, await payoutAllocation.readRequestAllocations(transaction, db, doc.id));
           let matched = 0;
-          query.docs.forEach((doc) => {
+          matchedDocs.forEach((doc) => {
             const payout = doc.data() || {};
             const riderId = text(payout.riderId);
             const amount = Number(payout.amount || 0);
             const reserved = payout.fundsReserved === true;
             matched += 1;
+            if (status === "paid" || releaseBalance) payoutAllocation.setAllocationState(transaction, allocationDocs.get(doc.id), status === "paid" ? "paid" : "released", object.id);
             transaction.set(doc.ref, {
-              status,
+              status: ["failed", "canceled"].includes(status) ? "processing" : status,
               payoutStatus: status,
               stripePayoutId: object.id,
               failureReason: object.failure_message || object.failure_code || null,
@@ -1252,7 +1313,7 @@ function handleStripeConnectWebhook(stripeOrFactory) {
               canceledAt: status === "canceled" ? FieldValue.serverTimestamp() : null,
               updatedAt: FieldValue.serverTimestamp(),
             }, {merge: true});
-            if (riderId && amount > 0 && status !== "scheduled") {
+            if (riderId && amount > 0 && status === "paid") {
               transaction.set(db.collection("riderEarnings").doc(riderId), {
                 pendingWithdrawal: reserved ? FieldValue.increment(-amount) : FieldValue.increment(0),
                 totalWithdrawn: status === "paid" ? FieldValue.increment(amount) : FieldValue.increment(0),
@@ -1262,7 +1323,8 @@ function handleStripeConnectWebhook(stripeOrFactory) {
               }, {merge: true});
             }
           });
-          return {status, matched};
+          if (!matched) transaction.set(db.collection("riderPayoutAudit").doc(`unmatched_${event.id}`), {action: "payout_lineage_review_required", stripePayoutId: object.id, accountId, status, createdAt: FieldValue.serverTimestamp()});
+          return {status, matched, reviewRequired: matched === 0};
         });
       }
       if (event.type === "transfer.created" || event.type === "transfer.failed") {
@@ -1276,10 +1338,24 @@ function handleStripeConnectWebhook(stripeOrFactory) {
             const amount = Number(requestData.amount || object.amount / 100 || 0);
             const reserved = requestData.fundsReserved === true;
             const currentStatus = text(requestData.status || requestData.payoutStatus).toLowerCase();
-            const active = ["processing", "pending", "requested"].includes(currentStatus);
+            const active = ["reserved", "processing", "pending", "requested"].includes(currentStatus);
+            if (!active) return {requestId, active, status: currentStatus};
+            if ((requestData.stripeTransferId && requestData.stripeTransferId !== object.id) ||
+                (object.currency && object.currency !== "gbp") || (object.amount && object.amount !== Math.round(requestData.riderNetPayout * 100))) throw new Error("Transfer identity mismatch");
+            const allocations = await payoutAllocation.readRequestAllocations(transaction, db, requestId);
+            const walletRef = db.collection("riderEarnings").doc(riderId);
+            const wallet = await transaction.get(walletRef);
+            if (event.type === "transfer.failed" && reserved) {
+              payoutAllocation.setAllocationState(transaction, allocations, "released", object.id);
+              payoutAllocation.writePayoutLedger(transaction, db, {requestId, version: requestData.reservationVersion || 0, riderId, amountPence: payoutAllocation.minor(amount), phase: "released",
+                balanceBeforePence: payoutAllocation.minor(wallet.data().availableBalance || 0), balanceAfterPence: payoutAllocation.minor((wallet.data().availableBalance || 0) + amount)});
+            }
             transaction.set(requestRef, {
               status: event.type === "transfer.failed" ? "failed" : "processing",
               stripeTransferId: object.id,
+              transferDispatching: false,
+              fundsReserved: event.type === "transfer.failed" ? false : reserved,
+              destinationPaymentId: typeof object.destination_payment === "string" ? object.destination_payment : requestData.destinationPaymentId || null,
               failureReason: object.failure_message || object.failure_code || null,
               updatedAt: FieldValue.serverTimestamp(),
             }, {merge: true});

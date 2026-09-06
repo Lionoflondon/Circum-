@@ -232,11 +232,23 @@ async function recordRothMovement({
   const operationKeyId = crypto.createHash("sha256").update(operationKey).digest("hex");
   const idempotencyRef = db.collection("rothMovementIdempotency").doc(operationKeyId);
   const senderWalletRef = identity.uid ? db.collection("senderWallets").doc(identity.uid) : null;
+  const acquisitionUid = identity.uid || (typeof userId === "string" && !userId.includes("@") ? userId : null);
+  const acquisitionReward = acquisitionUid && (type === TRANSACTION_TYPES.referralWelcomeReward ||
+    (type === TRANSACTION_TYPES.promotionalReward && transactionId === `sender_welcome_roth_${acquisitionUid}`));
+  const acquisitionRefs = acquisitionReward ? [
+    db.collection("walletTransactions").doc(`sender_welcome_roth_${acquisitionUid}`),
+    db.collection("walletTransactions").doc(`referral_reward_${acquisitionUid}_referred`),
+  ] : [];
+  let creditedTransactionId = ledgerRef.id;
   await db.runTransaction(async (transaction) => {
+    creditedTransactionId = ledgerRef.id;
     // One read operation cannot leave sibling reads using an aborted attempt.
-    const [existingLedger, existingIdempotency, wallet, senderWalletSnap] = await transaction.getAll(
-        ledgerRef, idempotencyRef, walletRef, ...(senderWalletRef ? [senderWalletRef] : []),
+    const snapshots = await transaction.getAll(
+        ledgerRef, idempotencyRef, walletRef, ...(senderWalletRef ? [senderWalletRef] : []), ...acquisitionRefs,
     );
+    const [existingLedger, existingIdempotency, wallet] = snapshots;
+    const senderWalletSnap = senderWalletRef ? snapshots[3] : null;
+    const acquisitionSnapshots = acquisitionReward ? snapshots.slice(senderWalletRef ? 4 : 3) : [];
     const signature = {
       walletId: identity.walletId,
       uid: identity.uid || null,
@@ -251,7 +263,27 @@ async function recordRothMovement({
       const fieldsMatch = ["walletId", "uid", "amount", "balanceType", "type", "reason"]
         .every((field) => existingSignature[field] === signature[field]);
       if (!fieldsMatch) throw new Error("Roth idempotency key conflict.");
+      creditedTransactionId = existingSignature.transactionId || ledgerRef.id;
       return;
+    }
+    let movementAmount = roundedAmount;
+    if (acquisitionReward) {
+      if (balanceType !== BALANCE_TYPES.rothCredit || roundedAmount <= 0 || ledgerOnly) throw new Error("Invalid newcomer reward");
+      let previouslyGranted = 0;
+      for (const snapshot of acquisitionSnapshots) {
+        if (!snapshot.exists) continue;
+        const prior = snapshot.data();
+        if (!Number.isFinite(prior.amount) || prior.amount < 0 || (prior.uid && prior.uid !== acquisitionUid)) throw new Error("Newcomer reward history requires reconciliation");
+        previouslyGranted += prior.amount;
+      }
+      movementAmount = roundMoney(Math.min(roundedAmount, Math.max(0, SENDER_WELCOME_ROTH_AMOUNT - previouslyGranted)));
+      if (movementAmount === 0) {
+        creditedTransactionId = acquisitionSnapshots.find((snapshot) => snapshot.exists).id;
+        transaction.create(idempotencyRef, {...signature, idempotencyKey: operationKey,
+          transactionId: creditedTransactionId, creditedAmount: 0, acquisitionCap: SENDER_WELCOME_ROTH_AMOUNT,
+          status: "covered_by_existing_acquisition_reward", createdAt: FieldValue.serverTimestamp()});
+        return;
+      }
     }
     const walletData = wallet.exists ? wallet.data() : {};
     const senderWallet = senderWalletSnap && senderWalletSnap.exists ? senderWalletSnap.data() : {};
@@ -261,7 +293,7 @@ async function recordRothMovement({
     const balanceBefore = roundMoney(rawBalance || 0);
     const balanceAfter = ledgerOnly ? balanceBefore : nextBalance({
       balanceBefore,
-      amount: roundedAmount,
+      amount: movementAmount,
       allowNegative,
       type,
     });
@@ -303,8 +335,8 @@ async function recordRothMovement({
       userEmail: identity.userEmail,
       normalizedEmail: identity.userEmail,
       walletId: identity.walletId,
-      amount: roundedAmount,
-      direction: roundedAmount < 0 ? "debit" : "credit",
+      amount: movementAmount,
+      direction: movementAmount < 0 ? "debit" : "credit",
       walletType: "sender",
       balanceType,
       type,
@@ -336,7 +368,7 @@ async function recordRothMovement({
       createdAt: now,
     });
   });
-  return {transactionId: ledgerRef.id};
+  return {transactionId: creditedTransactionId};
 }
 
 async function safeRecordRothMovement(args) {
@@ -426,11 +458,10 @@ async function applyWalletDebit({
     db.collection("walletTransactions").doc();
   const senderWalletRef = identity.uid ? db.collection("senderWallets").doc(identity.uid) : null;
   await db.runTransaction(async (transaction) => {
-    const [walletSnap, existingTx, senderWalletSnap] = await Promise.all([
-      transaction.get(walletRef),
-      transaction.get(txRef),
-      senderWalletRef ? transaction.get(senderWalletRef) : Promise.resolve(null),
-    ]);
+    // A single read operation prevents sibling reads retaining an aborted attempt.
+    const [walletSnap, existingTx, senderWalletSnap] = await transaction.getAll(
+        walletRef, txRef, ...(senderWalletRef ? [senderWalletRef] : []),
+    );
     if (existingTx.exists) return;
     const wallet = walletSnap.exists ? walletSnap.data() : {};
     if (wallet.isFrozen === true) throw new Error("Wallet is frozen.");

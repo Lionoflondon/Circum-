@@ -113,8 +113,8 @@ test("wallet transaction views preserve auditable balance fields", () => {
 
 test("sender Roth writers use signed amounts and store before/after balances", () => {
   const source = read("roth-ledger.js");
-  assert.match(source, /balanceAfter = ledgerOnly \? balanceBefore : nextBalance\(\{\s*balanceBefore,\s*amount: roundedAmount,/s);
-  assert.match(source, /direction: roundedAmount < 0 \? "debit" : "credit"/);
+  assert.match(source, /balanceAfter = ledgerOnly \? balanceBefore : nextBalance\(\{\s*balanceBefore,\s*amount: movementAmount,/s);
+  assert.match(source, /direction: movementAmount < 0 \? "debit" : "credit"/);
   assert.match(source, /const after = roundWalletMoney\(before - debit\);/);
   assert.match(source, /amount: -debit,\s*direction: "debit",/s);
   assert.match(source, /balanceBefore: before,\s*balanceAfter: after,/s);
