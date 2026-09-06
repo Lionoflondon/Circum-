@@ -57,4 +57,34 @@ void main() {
             uid: 'a', flow: 'gift', candidate: 'new'),
         'new');
   });
+  test(
+      'normal cold return restores the original draft, quote and finalization input',
+      () async {
+    final snapshot = <String, dynamic>{
+      'quoteId': 'quote-original',
+      'total': 12.5,
+      'lineItems': <Object>[],
+      'draft': <String, dynamic>{'pickupAddress': 'saved pickup'},
+      'deliveryPayload': <String, dynamic>{'draftId': 'draft-original'},
+    };
+    await NativePaymentIdentity.saveDeliverySnapshot('sender', snapshot);
+    final restored = await NativePaymentIdentity.deliverySnapshot('sender');
+    expect(restored?['quoteId'], 'quote-original');
+    expect(restored?['draft'], snapshot['draft']);
+    expect(restored?['deliveryPayload'], snapshot['deliveryPayload']);
+    expect(await NativePaymentIdentity.deliverySnapshot('other'), isNull);
+    expect(restored?.containsKey('clientSecret'), isFalse);
+    expect(restored?.containsKey('paid'), isFalse);
+    await expectLater(
+        NativePaymentIdentity.saveDeliverySnapshot('sender', {
+          ...snapshot,
+          'quoteId': 'replacement',
+        }),
+        throwsStateError);
+    await NativePaymentIdentity.resolveDeliverySnapshot('sender', 'stale');
+    expect(await NativePaymentIdentity.deliverySnapshot('sender'), isNotNull);
+    await NativePaymentIdentity.resolveDeliverySnapshot(
+        'sender', 'quote-original');
+    expect(await NativePaymentIdentity.deliverySnapshot('sender'), isNull);
+  });
 }

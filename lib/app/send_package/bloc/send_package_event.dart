@@ -159,6 +159,11 @@ class LoadSenderRothBalance extends SendPackageEvent {
   const LoadSenderRothBalance();
 }
 
+class RestoreNativePaymentQuote extends SendPackageEvent {
+  final Map<String, dynamic> snapshot;
+  const RestoreNativePaymentQuote(this.snapshot);
+}
+
 class StartSenderPaymentSession extends SendPackageEvent {
   final bool rothEnabled;
   final String fallbackMethod;
@@ -168,6 +173,7 @@ class StartSenderPaymentSession extends SendPackageEvent {
   final String draftId;
   final String idempotencyKey;
   final Map<String, dynamic> deliveryPayload;
+  final Map<String, dynamic> nativeDraftSnapshot;
 
   const StartSenderPaymentSession({
     required this.rothEnabled,
@@ -178,6 +184,7 @@ class StartSenderPaymentSession extends SendPackageEvent {
     this.draftId = '',
     this.idempotencyKey = '',
     this.deliveryPayload = const {},
+    this.nativeDraftSnapshot = const {},
   });
 }
 

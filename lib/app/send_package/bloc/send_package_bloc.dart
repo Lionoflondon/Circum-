@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'package:circum/app/sender_mobile/native_payment_identity.dart';
 import 'dart:math' as math;
 import 'dart:ui' show Size;
 
@@ -137,6 +138,53 @@ class SendPackageBloc extends Bloc<SendPackageEvent, SendPackageState> {
     on<RequestCanonicalIrisEstimate>(_handleRequestCanonicalIrisEstimate);
     on<RequestSenderBookingQuote>(_handleRequestSenderBookingQuote);
     on<LoadSenderRothBalance>(_handleLoadSenderRothBalance);
+    on<RestoreNativePaymentQuote>((event, emit) async {
+      if (kIsWeb || event.snapshot['uid'] != auth.currentUser?.uid) return;
+      final uid = auth.currentUser!.uid;
+      try {
+        final restored = await _callableMap('createSenderPaidDelivery', {
+          ...Map<String, dynamic>.from(
+              event.snapshot['deliveryPayload'] as Map),
+          'quoteId': event.snapshot['quoteId'],
+          'paymentSessionId': event.snapshot['quoteId'],
+        });
+        if (auth.currentUser?.uid != uid || emit.isDone) return;
+        final requestId =
+            '${restored['requestId'] ?? restored['deliveryId'] ?? ''}';
+        if (requestId.isNotEmpty) {
+          await _dispatchPaidDelivery(requestId, 'native payment recovery');
+          final prefs = await SharedPreferences.getInstance();
+          await prefs.setString('activeRequest', requestId);
+          await NativePaymentIdentity.resolveDeliverySnapshot(
+                  uid, event.snapshot['quoteId'] as String)
+              .timeout(_senderCallableTimeout);
+          if (auth.currentUser?.uid != uid || emit.isDone) return;
+          add(WatchActiveDelivery(requestId: requestId));
+          emit(state.copyWith(
+              senderCreatedRequestId: requestId,
+              senderPaymentStatus: 'succeeded',
+              isSenderPaymentLoading: false,
+              deliveryStatus: DeliveryStatus.deliveryConfirmed,
+              deliveryRequestStatus: 'requested',
+              senderPaymentError: ''));
+          return;
+        }
+      } catch (_) {
+        // A local record or return callback never declares a payment successful.
+        // Preserve the same quote for an explicit retry after backend rejection.
+      }
+      if (auth.currentUser?.uid != uid || emit.isDone) return;
+      emit(state.copyWith(
+        senderQuoteId: event.snapshot['quoteId'] as String,
+        senderQuoteTotal: (event.snapshot['total'] as num).toDouble(),
+        senderQuoteLineItems: (event.snapshot['lineItems'] as List)
+            .map((item) => Map<String, dynamic>.from(item as Map))
+            .toList(),
+        senderPaymentStatus: 'recovery_required',
+        isSenderPaymentLoading: false,
+        senderPaymentError: 'Your saved payment is ready to verify or retry.',
+      ));
+    });
     on<StartSenderPaymentSession>(_handleStartSenderPaymentSession);
     on<CreatePaidSenderDelivery>(_handleCreatePaidSenderDelivery);
     on<FinalizeSenderWebCheckout>(_handleFinalizeSenderWebCheckout);
@@ -1205,6 +1253,9 @@ class SendPackageBloc extends Bloc<SendPackageEvent, SendPackageState> {
     StartSenderPaymentSession event,
     Emitter<SendPackageState> emit,
   ) async {
+    if (state.isSenderPaymentLoading) return;
+    final paymentUid = auth.currentUser?.uid;
+    final paymentQuoteId = state.senderQuoteId;
     if (state.senderQuoteId == null || state.senderQuoteId!.isEmpty) {
       emit(
         state.copyWith(
@@ -1228,6 +1279,25 @@ class SendPackageBloc extends Bloc<SendPackageEvent, SendPackageState> {
       ),
     );
     try {
+      if (!kIsWeb && event.nativeDraftSnapshot.isNotEmpty) {
+        if (paymentUid == null) {
+          throw StateError('Sign in to continue payment.');
+        }
+        await NativePaymentIdentity.saveDeliverySnapshot(paymentUid, {
+          'quoteId': paymentQuoteId,
+          'total': state.senderQuoteTotal,
+          'lineItems': state.senderQuoteLineItems,
+          'draftId': event.draftId,
+          'draft': event.nativeDraftSnapshot,
+          'deliveryPayload': event.deliveryPayload,
+        }).timeout(_senderCallableTimeout);
+      }
+      if (auth.currentUser?.uid != paymentUid) {
+        emit(state.copyWith(
+            isSenderPaymentLoading: false,
+            senderPaymentError: 'Sign in again to continue payment.'));
+        return;
+      }
       final mode = await _callableMap('getSenderPaymentMode', const {});
       if (!Env.paymentModeMatchesBackend('${mode['mode'] ?? ''}')) {
         emit(
@@ -1240,8 +1310,14 @@ class SendPackageBloc extends Bloc<SendPackageEvent, SendPackageState> {
         );
         return;
       }
+      if (auth.currentUser?.uid != paymentUid) {
+        emit(state.copyWith(
+            isSenderPaymentLoading: false,
+            senderPaymentError: 'Sign in again to continue payment.'));
+        return;
+      }
       final data = await _callableMap('createSenderPaymentSession', {
-        'quoteId': state.senderQuoteId,
+        'quoteId': paymentQuoteId,
         'rothEnabled': event.rothEnabled,
         'fallbackMethod': event.fallbackMethod,
         'paymentMethodId': event.paymentMethodId,
@@ -1253,12 +1329,23 @@ class SendPackageBloc extends Bloc<SendPackageEvent, SendPackageState> {
         if (event.deliveryPayload.isNotEmpty)
           'deliveryPayload': event.deliveryPayload,
       });
+      if (auth.currentUser?.uid != paymentUid) {
+        emit(state.copyWith(
+            isSenderPaymentLoading: false,
+            senderPaymentError: 'Sign in again to continue payment.'));
+        return;
+      }
       final requestId = '${data['requestId'] ?? data['deliveryId'] ?? ''}';
       if (requestId.isNotEmpty) {
         await _dispatchPaidDelivery(requestId, 'direct paid delivery');
         final prefs = await SharedPreferences.getInstance();
         await prefs.setString('activeRequest', requestId);
         add(WatchActiveDelivery(requestId: requestId));
+        if (!kIsWeb && paymentUid != null && paymentQuoteId != null) {
+          await NativePaymentIdentity.resolveDeliverySnapshot(
+                  paymentUid, paymentQuoteId)
+              .timeout(_senderCallableTimeout);
+        }
       }
       emit(
         state.copyWith(
@@ -1356,6 +1443,12 @@ class SendPackageBloc extends Bloc<SendPackageEvent, SendPackageState> {
         final prefs = await SharedPreferences.getInstance();
         await prefs.setString('activeRequest', requestId);
         add(WatchActiveDelivery(requestId: requestId));
+        final uid = auth.currentUser?.uid;
+        if (!kIsWeb && uid != null) {
+          await NativePaymentIdentity.resolveDeliverySnapshot(
+                  uid, '${payload['quoteId']}')
+              .timeout(_senderCallableTimeout);
+        }
       }
       emit(
         state.copyWith(
@@ -2031,8 +2124,7 @@ class SendPackageBloc extends Bloc<SendPackageEvent, SendPackageState> {
 
   void _handleCancelRequestEvent(CancelRequest event, Emitter emit) async {
     final prefs = await SharedPreferences.getInstance();
-    final activeRequest =
-        prefs.getString('activeRequest') ??
+    final activeRequest = prefs.getString('activeRequest') ??
         '${state.activeDeliveryData['id'] ?? ''}';
     if (activeRequest.trim().isEmpty) {
       emit(
@@ -2048,11 +2140,10 @@ class SendPackageBloc extends Bloc<SendPackageEvent, SendPackageState> {
             await FirebaseFunctions.instanceFor(region: 'us-central1')
                 .httpsCallable('requestSenderCancellation')
                 .call({
-                  'deliveryId': activeRequest,
-                  'idempotencyKey': '$activeRequest:legacy_sender_cancel',
-                  'quoteToken': event.quoteToken,
-                })
-                .timeout(const Duration(seconds: 20));
+          'deliveryId': activeRequest,
+          'idempotencyKey': '$activeRequest:legacy_sender_cancel',
+          'quoteToken': event.quoteToken,
+        }).timeout(const Duration(seconds: 20));
         final data = Map<String, dynamic>.from(response.data as Map);
         if (!cancellationConfirmed(data)) {
           final decision = data['decision'] is Map

@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -50,6 +51,55 @@ class NativePaymentIdentity {
         final key = _key(uid, flow);
         if (prefs.getString(key) == expected && !await prefs.remove(key)) {
           throw StateError('Could not clear completed payment identity.');
+        }
+      });
+  static Future<Map<String, dynamic>?> deliverySnapshot(String uid) =>
+      _serial(() async {
+        final prefs = await SharedPreferences.getInstance();
+        final raw = prefs.getString('${_key(uid, 'delivery')}.snapshot');
+        if (raw == null) return null;
+        final value = jsonDecode(raw);
+        if (value is! Map ||
+            value['uid'] != uid ||
+            value['quoteId'] is! String ||
+            value['draft'] is! Map ||
+            value['deliveryPayload'] is! Map ||
+            value['total'] is! num ||
+            !(value['total'] as num).isFinite ||
+            value['lineItems'] is! List) {
+          throw StateError('Saved payment needs review.');
+        }
+        return Map<String, dynamic>.from(value);
+      });
+
+  static Future<void> saveDeliverySnapshot(
+    String uid,
+    Map<String, dynamic> snapshot,
+  ) =>
+      _serial(() async {
+        final prefs = await SharedPreferences.getInstance();
+        final key = '${_key(uid, 'delivery')}.snapshot';
+        final old = prefs.getString(key);
+        if (old != null && jsonDecode(old)['quoteId'] != snapshot['quoteId']) {
+          throw StateError(
+              'Resume the saved payment before starting another booking.');
+        }
+        if (old == null &&
+            !await prefs.setString(
+                key, jsonEncode({...snapshot, 'uid': uid}))) {
+          throw StateError('Could not save payment recovery state.');
+        }
+      });
+
+  static Future<void> resolveDeliverySnapshot(String uid, String quoteId) =>
+      _serial(() async {
+        final prefs = await SharedPreferences.getInstance();
+        final key = '${_key(uid, 'delivery')}.snapshot';
+        final raw = prefs.getString(key);
+        if (raw != null && jsonDecode(raw)['quoteId'] == quoteId) {
+          if (!await prefs.remove(key)) {
+            throw StateError('Could not clear payment recovery state.');
+          }
         }
       });
 }
