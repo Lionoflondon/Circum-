@@ -13,3 +13,12 @@ test("tip confirmation binds money, intent, customer and all participants", () =
     assert.throws(() => assertTipIntent(tip, {...intent, metadata: {...intent.metadata, [field]: "other"}}));
   }
 });
+
+test("captured tip mode must match configured Stripe mode without a live cutover", () => {
+  const captured = {...intent, status: "succeeded", amount_received: 500};
+  for (const mode of ["test", "live"]) {
+    assert.doesNotThrow(() => assertTipIntent(tip, {...captured, livemode: mode === "live"}, mode));
+    assert.throws(() => assertTipIntent(tip, {...captured, livemode: mode !== "live"}, mode));
+    assert.throws(() => assertTipIntent(tip, {...captured, livemode: mode === "live", amount_received: 499}, mode));
+  }
+});

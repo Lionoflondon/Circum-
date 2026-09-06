@@ -190,10 +190,13 @@ async function ensureStripeCustomer(stripe, db, sender) {
   return customer.id;
 }
 
-function assertTipIntent(tip, intent) {
+function assertTipIntent(tip, intent, configuredMode) {
   const metadata = intent.metadata || {};
-  if (intent.status === "succeeded" && (intent.amount_received !== tip.amountPence || (!process.env.FIRESTORE_EMULATOR_HOST && intent.livemode !== true))) {
-    throw new functions.https.HttpsError("failed-precondition", "A live captured tip payment is required.");
+  if (intent.status === "succeeded") {
+    const mode = configuredMode || (process.env.FIRESTORE_EMULATOR_HOST ? (intent.livemode ? "live" : "test") : null);
+    if (intent.amount_received !== tip.amountPence || !["test", "live"].includes(mode) || typeof intent.livemode !== "boolean" || intent.livemode !== (mode === "live")) {
+      throw new functions.https.HttpsError("failed-precondition", "A captured tip payment in the configured payment mode is required.");
+    }
   }
   if (intent.id !== tip.stripePaymentIntentId || intent.amount !== tip.amountPence ||
       text(intent.currency).toUpperCase() !== "GBP" || metadata.paymentType !== "delivery_tip" ||
@@ -370,7 +373,7 @@ function submitTip(stripe) {
       const suppliedIntentId = text(data.paymentIntentId);
       if (suppliedIntentId) {
         const intent = await stripe.paymentIntents.retrieve(suppliedIntentId);
-        assertTipIntent(base, intent);
+        assertTipIntent(base, intent, stripe._circumStripeMode);
         if (intent.status !== "succeeded") {
           return {ok: true, status: intent.status, tipId: tipRef.id, paymentIntentId: intent.id};
         }
@@ -490,7 +493,7 @@ async function processStripeTipIntent(stripe, intent) {
   const tipRef = db.collection("deliveryTips").doc(metadata.tipId);
   const tipSnap = await tipRef.get();
   if (!tipSnap.exists) return {handled: false, reason: "tip_missing"};
-  assertTipIntent(tipSnap.data(), intent);
+  assertTipIntent(tipSnap.data(), intent, stripe._circumStripeMode);
   if (intent.status === "succeeded") {
     const tip = tipSnap.data();
     const delivery = await db.collection("deliveryRequests").doc(tip.deliveryId).get();
@@ -531,7 +534,7 @@ async function processStripeTipRefund(stripe, event) {
   const db = getFirestore();
   const tip = await db.collection("deliveryTips").doc(intent.metadata.tipId).get();
   if (!tip.exists) throw new Error("Tip refund record missing");
-  assertTipIntent(tip.data(), intent);
+  assertTipIntent(tip.data(), intent, stripe._circumStripeMode);
   if (text(charge.currency).toUpperCase() !== "GBP" || charge.amount !== tip.data().amountPence) throw new Error("Tip refund currency/amount mismatch");
   const amountPence = await tipReversalTarget(db, tip.id, tip.data().amountPence, charge.amount_refunded);
   await tipRefunds.returnUnpaidTipAllocations({db, stripe, tipId: tip.id, amountPence});
@@ -553,7 +556,7 @@ async function processStripeTipDispute(stripe, event) {
   const db = getFirestore();
   const tip = await db.collection("deliveryTips").doc(intent.metadata.tipId).get();
   if (!tip.exists) throw new Error("Tip dispute record missing");
-  assertTipIntent(tip.data(), intent);
+  assertTipIntent(tip.data(), intent, stripe._circumStripeMode);
   if (text(dispute.currency).toUpperCase() !== "GBP" || !Number.isSafeInteger(dispute.amount) || dispute.amount <= 0 || dispute.amount > tip.data().amountPence || charge.amount !== tip.data().amountPence) throw new Error("Tip dispute amount mismatch");
   const auditRef = db.collection("tipDisputes").doc(dispute.id);
   await auditRef.set({tipId: tip.id, riderId: tip.data().riderId, paymentIntentId: intent.id, chargeId,

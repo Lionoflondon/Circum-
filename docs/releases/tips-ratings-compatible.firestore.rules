@@ -1,0 +1,1222 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    function hasRole(role) {
+      return signedIn() && (
+        request.auth.token.adminRole == role ||
+        request.auth.token.role == role ||
+        (request.auth.token.roles is list && role in request.auth.token.roles)
+      );
+    }
+
+    function isAdmin() {
+      return hasRole('super_admin') ||
+        hasRole('operations_admin') ||
+        hasRole('support_agent') ||
+        hasRole('finance_admin') ||
+        hasRole('driver_manager');
+    }
+
+    function isFinanceAdmin() {
+      return hasRole('super_admin') || hasRole('finance_admin');
+    }
+
+    function isDriverManager() {
+      return hasRole('super_admin') || hasRole('driver_manager');
+    }
+
+    function ownsSenderRecord(userId) {
+      return signedIn() && request.auth.uid == userId;
+    }
+
+    function canReadSenderTrustEvent() {
+      return isAdmin() ||
+        (signedIn() && resource.data.userId == request.auth.uid);
+    }
+
+    function authEmail() {
+      return signedIn() && request.auth.token.email is string
+        ? request.auth.token.email
+        : '';
+    }
+
+    function isBusinessMemberRecord() {
+      return signedIn() && (
+        resource.data.ownerUid == request.auth.uid ||
+        resource.data.createdByUserId == request.auth.uid ||
+        (
+          resource.data.teamMemberIds is list &&
+          (
+            request.auth.uid in resource.data.teamMemberIds ||
+            authEmail() in resource.data.teamMemberIds
+          )
+        )
+      );
+    }
+
+    function canReadBusinessId(businessId) {
+      return signedIn() &&
+        businessId is string &&
+        businessId.size() > 0 &&
+        exists(/databases/$(database)/documents/businessAccounts/$(businessId)) &&
+        (
+          get(/databases/$(database)/documents/businessAccounts/$(businessId)).data.ownerUid == request.auth.uid ||
+          get(/databases/$(database)/documents/businessAccounts/$(businessId)).data.createdByUserId == request.auth.uid ||
+          (
+            get(/databases/$(database)/documents/businessAccounts/$(businessId)).data.teamMemberIds is list &&
+            (
+              request.auth.uid in get(/databases/$(database)/documents/businessAccounts/$(businessId)).data.teamMemberIds ||
+              authEmail() in get(/databases/$(database)/documents/businessAccounts/$(businessId)).data.teamMemberIds
+            )
+          )
+        );
+    }
+
+    function changesLegendFields() {
+      return request.resource.data.diff(resource.data).changedKeys().hasAny([
+        'isLegend',
+        'legendNumber',
+        'legendAwardedAt',
+        'legendSource',
+        'legendDeliveryId'
+      ]);
+    }
+
+    function isRiderAccount() {
+      return signedIn() && (
+        hasRole('super_admin') ||
+        exists(/databases/$(database)/documents/riderProfiles/$(request.auth.uid))
+      );
+    }
+
+    function isOwnDelivery(deliveryId) {
+      return signedIn() && (
+        deliveryId == request.auth.uid ||
+        resource.data.senderId == request.auth.uid ||
+        resource.data.userId == request.auth.uid
+      );
+    }
+
+    function isAssignedRider() {
+      return signedIn() && (
+        resource.data.riderId == request.auth.uid ||
+        resource.data.driverId == request.auth.uid ||
+        resource.data.assignedDriverId == request.auth.uid
+      );
+    }
+
+    function isAvailableRiderJob() {
+      return isRiderAccount() && (
+        resource.data.status == 'requested' ||
+        resource.data.dispatchStatus == 'requested' ||
+        resource.data.matchingStatus == 'available'
+      );
+    }
+
+    function isCreatingOwnDelivery() {
+      return signedIn() && (
+        request.resource.data.senderId == request.auth.uid ||
+        request.resource.data.userId == request.auth.uid
+      );
+    }
+
+    function protectedDeliveryFields() {
+      return [
+        'status',
+        'deliveryStatus',
+        'deliveryStage',
+        'paymentStatus',
+        'paidAmount',
+        'amountPaid',
+        'pricePaid',
+        'paymentIntentId',
+        'stripePaymentIntentId',
+        'stripeCheckoutSessionId',
+        'stripeSessionId',
+        'paymentSessionId',
+        'paymentCompletedAt',
+        'paidAt',
+        'finalAmount',
+        'finalChargeAmount',
+        'finalChargeableAmount',
+        'quotedAmount',
+        'quotedPrice',
+        'authoritativeQuote',
+        'pricingSnapshot',
+        'priceBreakdown',
+        'refundStatus',
+        'refundAmount',
+        'refundReviewStatus',
+        'cancellationFee',
+        'cancellationCharge',
+        'cancellationChargeStatus',
+        'riderEarnings',
+        'driverPayout',
+        'payoutStatus',
+        'ledgerRef',
+        'ledgerReferences',
+        'trustScore',
+        'trustAwards',
+        'trustPointsAwarded',
+        'rank',
+        'riderRank',
+        'weightKg',
+        'finalWeightKg',
+        'confirmedWeightKg',
+        'completionState',
+        'completedAt',
+        'pinVerified',
+        'collectionPinVerified',
+        'deliveryPinVerified',
+        'arrivalState',
+        'noShowState',
+        'adminInvestigation',
+        'adminReview',
+        'serverAudit',
+        'auditTrail'
+      ];
+    }
+
+    function protectedFinancialCreateFields() {
+      return [
+        'status',
+        'deliveryStatus',
+        'deliveryStage',
+        'paymentStatus',
+        'paidAmount',
+        'amountPaid',
+        'pricePaid',
+        'paymentIntentId',
+        'stripePaymentIntentId',
+        'stripeCheckoutSessionId',
+        'stripeSessionId',
+        'paymentSessionId',
+        'paymentCompletedAt',
+        'paidAt',
+        'refundStatus',
+        'refundAmount',
+        'refundReviewStatus',
+        'cancellationFee',
+        'cancellationCharge',
+        'cancellationChargeStatus',
+        'riderEarnings',
+        'driverPayout',
+        'payoutStatus',
+        'ledgerRef',
+        'ledgerReferences',
+        'trustScore',
+        'trustAwards',
+        'rank',
+        'riderRank',
+        'completionState',
+        'completedAt',
+        'pinVerified',
+        'collectionPinVerified',
+        'deliveryPinVerified',
+        'arrivalState',
+        'noShowState',
+        'adminInvestigation',
+        'adminReview',
+        'serverAudit',
+        'auditTrail',
+        'quotedPrice',
+        'authoritativeQuote',
+        'pricingSnapshot',
+        'priceBreakdown',
+        'paymentRecordId',
+        'stripeCustomerId'
+      ];
+    }
+
+    function directContactFields() {
+      return [
+        'phone',
+        'phoneNumber',
+        'mobile',
+        'contactNumber',
+        'tel',
+        'userPhone',
+        'riderPhone',
+        'senderPhone',
+        'driverPhone',
+        'courierPhone',
+        'receiverPhone'
+      ];
+    }
+
+    function publicDeliveryHasNoDirectContact(data) {
+      return !data.keys().hasAny(directContactFields()) &&
+        (!data.keys().hasAny(['pickupDetails']) ||
+          !(data.pickupDetails is map) ||
+          !data.pickupDetails.keys().hasAny(directContactFields())) &&
+        (!data.keys().hasAny(['dropoffDetails']) ||
+          !(data.dropoffDetails is map) ||
+          !data.dropoffDetails.keys().hasAny(directContactFields())) &&
+        (!data.keys().hasAny(['recipient']) ||
+          !(data.recipient is map) ||
+          !data.recipient.keys().hasAny(directContactFields()));
+    }
+
+    function isSafeDeliveryCreate() {
+      return isCreatingOwnDelivery() &&
+        !request.resource.data.keys().hasAny(['iris']) &&
+        publicDeliveryHasNoDirectContact(request.resource.data) &&
+        !request.resource.data.keys().hasAny(protectedFinancialCreateFields());
+    }
+
+    function isOwnDeliveryUpdate() {
+      return isOwnDelivery('') &&
+        !request.resource.data.diff(resource.data).affectedKeys().hasAny(['iris']) &&
+        publicDeliveryHasNoDirectContact(request.resource.data) &&
+        !request.resource.data.diff(resource.data).affectedKeys().hasAny(protectedDeliveryFields());
+    }
+
+    function isAssignedRiderUpdate() {
+      return isAssignedRider() &&
+        request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+          'rejectedByRiders',
+          'ignoredByRiders',
+          'rejectedAt',
+          'ignoredAt',
+          'updatedAt'
+        ]);
+    }
+
+    function riderAdminOnlyFields() {
+      return [
+        'approvalStatus',
+        'verificationStatus',
+        'adminApprovalStatus',
+        'adminReviewStatus',
+        'approvedAt',
+        'approvedBy',
+        'rejectedAt',
+        'rejectedBy',
+        'rejectionReason',
+        'driverStatus',
+        'role',
+        'roles',
+        'rank',
+        'riderRank',
+        'trustPoints',
+        'trustScore',
+        'rating',
+        'averageRating',
+        'completedDeliveries',
+        'availableBalance',
+        'lifetimeEarnings',
+        'totalAmountEarned',
+        'stripeConnectAccountId',
+        'stripeAccountId',
+        'stripePayoutsEnabled',
+        'payoutPaused',
+        'internalAccess',
+        'founderRider',
+        'isAdmin',
+        'admin',
+        'publicRiderId'
+      ];
+    }
+
+    function userAdminOnlyRoleFields() {
+      return [
+        'starterRothGrantStatus',
+        'starterRothGrantedAt',
+        'starterRothAmount',
+        'starterRothTransactionId',
+        'roles',
+        'adminRole',
+        'isAdmin',
+        'admin'
+      ];
+    }
+
+    function isSafeSenderRoleValue(value) {
+      return value in ['sender', 'customer', 'user', 'client', 'member'];
+    }
+
+    function hasUnsafeSelfUserRoleCreate() {
+      return request.resource.data.keys().hasAny(['role']) &&
+        !isSafeSenderRoleValue(request.resource.data.role);
+    }
+
+    function hasUnsafeSelfUserTypeCreate() {
+      return request.resource.data.keys().hasAny(['userType']) &&
+        !isSafeSenderRoleValue(request.resource.data.userType);
+    }
+
+    function hasUnsafeSelfUserRoleUpdate() {
+      return request.resource.data.diff(resource.data).affectedKeys().hasAny(['role']) &&
+        !isSafeSenderRoleValue(request.resource.data.role);
+    }
+
+    function hasUnsafeSelfUserTypeUpdate() {
+      return request.resource.data.diff(resource.data).affectedKeys().hasAny(['userType']) &&
+        !isSafeSenderRoleValue(request.resource.data.userType);
+    }
+
+    function senderPrivilegedFields() {
+      return [
+        'role',
+        'roles',
+        'adminRole',
+        'isAdmin',
+        'admin',
+        'verificationStatus',
+        'approvalStatus',
+        'dispatchEligible',
+        'accountStatus',
+        'permissions',
+        'claims',
+        'customClaims',
+        'financialAuthority',
+        'paymentAuthority',
+        'reviewStatus',
+        'adminReviewStatus'
+      ];
+    }
+
+    function isSafeSenderSelfCreate(senderId) {
+      return ownsSenderRecord(senderId) &&
+        !request.resource.data.keys().hasAny(senderPrivilegedFields()) &&
+        !hasUnsafeSelfUserTypeCreate();
+    }
+
+    function isSafeSenderSelfUpdate(senderId) {
+      return ownsSenderRecord(senderId) &&
+        !request.resource.data.diff(resource.data).affectedKeys().hasAny(senderPrivilegedFields()) &&
+        !hasUnsafeSelfUserTypeUpdate();
+    }
+
+    function riderSelfWritableFields() {
+      return [
+        'name',
+        'uid',
+        'email',
+        'emailVerified',
+        'emailVerifiedAt',
+        'fullName',
+        'firstName',
+        'lastName',
+        'handle',
+        'username',
+        'dateOfBirth',
+        'gender',
+        'homeAddress',
+        'phone',
+        'phoneNumber',
+        'phoneVerified',
+        'phoneVerifiedAt',
+        'locationEnabled',
+        'position',
+        'fcmToken',
+        'photoURL',
+        'photoUrl',
+        'photoPath',
+        'profilePhoto',
+        'profilePhotoUrl',
+        'profileThumbnailUrl',
+        'profilePhotoPath',
+        'profileThumbnailPath',
+        'profilePhotoVersion',
+        'profilePhotoMetadata',
+        'photoUpdatedAt',
+        'profilePhotoUpdatedAt',
+        'profilePhotoUploadedAt',
+        'vehicle',
+        'vehicles',
+        'vehicleType',
+        'vehicleMakeModel',
+        'vehicleColour',
+        'vehicleRegistration',
+        'plateNumber',
+        'typeOfVehicle',
+        'updatedAt'
+      ];
+    }
+
+    function isSafeRiderSelfCreate(driverId) {
+      return signedIn() && request.auth.uid == driverId &&
+        !request.resource.data.keys().hasAny(riderAdminOnlyFields()) &&
+        request.resource.data.keys().hasOnly(riderSelfWritableFields());
+    }
+
+    function isSafeRiderSelfUpdate(driverId) {
+      return signedIn() && request.auth.uid == driverId &&
+        !request.resource.data.diff(resource.data).affectedKeys().hasAny(riderAdminOnlyFields()) &&
+        request.resource.data.diff(resource.data).affectedKeys().hasOnly(riderSelfWritableFields());
+    }
+
+    function deliveryFor(deliveryId) {
+      return get(/databases/$(database)/documents/deliveryRequests/$(deliveryId)).data;
+    }
+
+    function canReadDeliveryTracking(deliveryId) {
+      return signedIn() && (
+        isAdmin() ||
+        deliveryFor(deliveryId).senderId == request.auth.uid ||
+        deliveryFor(deliveryId).userId == request.auth.uid ||
+        deliveryFor(deliveryId).riderId == request.auth.uid ||
+        deliveryFor(deliveryId).driverId == request.auth.uid ||
+        deliveryFor(deliveryId).assignedDriverId == request.auth.uid
+      );
+    }
+
+    function assignedRiderForDelivery(deliveryId) {
+      return signedIn() && (
+        deliveryFor(deliveryId).riderId == request.auth.uid ||
+        deliveryFor(deliveryId).driverId == request.auth.uid ||
+        deliveryFor(deliveryId).assignedDriverId == request.auth.uid
+      );
+    }
+
+    function isTrackableDelivery(deliveryId) {
+      return !([
+        'completed',
+        'delivered',
+        'cancelled',
+        'canceled',
+        'expired',
+        'archived',
+        'archived_stale'
+      ].hasAny([
+        deliveryFor(deliveryId).status,
+        deliveryFor(deliveryId).deliveryStatus,
+        deliveryFor(deliveryId).deliveryStage
+      ]));
+    }
+
+    function validRiderLiveLocationMap() {
+      return request.resource.data.riderLiveLocation is map &&
+        request.resource.data.riderLiveLocation.keys().hasOnly([
+          'geopoint',
+          'latitude',
+          'longitude',
+          'accuracy',
+          'heading',
+          'speed',
+          'freshness',
+          'deliveryState',
+          'updatedAt'
+        ]) &&
+        request.resource.data.riderLiveLocation.geopoint is latlng &&
+        request.resource.data.riderLiveLocation.latitude is number &&
+        request.resource.data.riderLiveLocation.longitude is number &&
+        request.resource.data.riderLiveLocation.accuracy is number &&
+        request.resource.data.riderLiveLocation.heading is number &&
+        request.resource.data.riderLiveLocation.speed is number &&
+        request.resource.data.riderLiveLocation.freshness is string &&
+        request.resource.data.riderLiveLocation.deliveryState is string &&
+        request.resource.data.riderLiveLocation.updatedAt is timestamp;
+    }
+
+    function validLiveTrackingPayload(deliveryId) {
+      return request.resource.data.riderId == request.auth.uid &&
+        request.resource.data.activeDeliveryId == deliveryId &&
+        request.resource.data.deliveryId == deliveryId &&
+        request.resource.data.latitude is number &&
+        request.resource.data.longitude is number &&
+        request.resource.data.accuracy is number &&
+        request.resource.data.heading is number &&
+        request.resource.data.speed is number &&
+        request.resource.data.status is string &&
+        request.resource.data.trackingStatus == 'live' &&
+        request.resource.data.deliveryState is string &&
+        request.resource.data.freshness == 'fresh' &&
+        request.resource.data.clientRecordedAt is timestamp &&
+        request.resource.data.updatedAt is timestamp &&
+        request.resource.data.freshnessUpdatedAt is timestamp &&
+        validRiderLiveLocationMap() &&
+        request.resource.data.keys().hasOnly([
+          'riderId',
+          'activeDeliveryId',
+          'deliveryId',
+          'latitude',
+          'longitude',
+          'accuracy',
+          'heading',
+          'speed',
+          'status',
+          'trackingStatus',
+          'deliveryState',
+          'freshness',
+          'clientRecordedAt',
+          'updatedAt',
+          'freshnessUpdatedAt',
+          'riderLiveLocation'
+        ]);
+    }
+
+    function validStoppedTrackingPayload(deliveryId) {
+      return request.resource.data.riderId == request.auth.uid &&
+        request.resource.data.activeDeliveryId == deliveryId &&
+        request.resource.data.deliveryId == deliveryId &&
+        request.resource.data.trackingStatus == 'stopped' &&
+        request.resource.data.status is string &&
+        request.resource.data.deliveryState is string &&
+        request.resource.data.freshness == 'stopped' &&
+        request.resource.data.updatedAt is timestamp &&
+        request.resource.data.freshnessUpdatedAt is timestamp &&
+        request.resource.data.keys().hasOnly([
+          'riderId',
+          'activeDeliveryId',
+          'deliveryId',
+          'trackingStatus',
+          'status',
+          'deliveryState',
+          'freshness',
+          'updatedAt',
+          'freshnessUpdatedAt'
+        ]);
+    }
+
+    function validActiveDeliveryLivePayload(deliveryId) {
+      return request.resource.data.deliveryId == deliveryId &&
+        request.resource.data.riderId == request.auth.uid &&
+        request.resource.data.status is string &&
+        request.resource.data.deliveryState is string &&
+        request.resource.data.trackingStatus == 'live' &&
+        request.resource.data.freshness == 'fresh' &&
+        request.resource.data.updatedAt is timestamp &&
+        request.resource.data.freshnessUpdatedAt is timestamp &&
+        validRiderLiveLocationMap() &&
+        request.resource.data.keys().hasOnly([
+          'deliveryId',
+          'riderId',
+          'status',
+          'deliveryState',
+          'trackingStatus',
+          'freshness',
+          'riderLiveLocation',
+          'updatedAt',
+          'freshnessUpdatedAt'
+        ]);
+    }
+
+    function validActiveDeliveryStoppedPayload(deliveryId) {
+      return validStoppedTrackingPayload(deliveryId);
+    }
+
+    function canWriteOwnLiveLocation(deliveryId) {
+      return signedIn() &&
+        assignedRiderForDelivery(deliveryId) &&
+        isTrackableDelivery(deliveryId) &&
+        (
+          validLiveTrackingPayload(deliveryId) ||
+          validStoppedTrackingPayload(deliveryId)
+        );
+    }
+
+    function canWriteActiveDelivery(deliveryId) {
+      return signedIn() &&
+        assignedRiderForDelivery(deliveryId) &&
+        isTrackableDelivery(deliveryId) &&
+        (
+          validActiveDeliveryLivePayload(deliveryId) ||
+          validActiveDeliveryStoppedPayload(deliveryId)
+        );
+    }
+
+    function isAssignedRiderPrivateCreate() {
+      return signedIn() &&
+        request.resource.data.deliveryDocId is string &&
+        (
+          get(/databases/$(database)/documents/deliveryRequests/$(request.resource.data.deliveryDocId)).data.riderId == request.auth.uid ||
+          get(/databases/$(database)/documents/deliveryRequests/$(request.resource.data.deliveryDocId)).data.driverId == request.auth.uid ||
+          get(/databases/$(database)/documents/deliveryRequests/$(request.resource.data.deliveryDocId)).data.assignedDriverId == request.auth.uid
+        ) &&
+        request.resource.data.keys().hasOnly(['requestId', 'deliveryDocId', 'verification', 'updatedAt']) &&
+        request.resource.data.verification is map &&
+        request.resource.data.verification.keys().hasOnly(['rider']);
+    }
+
+    function isSenderPrivateCreate() {
+      return signedIn() &&
+        request.resource.data.senderId == request.auth.uid &&
+        request.resource.data.keys().hasOnly([
+          'version',
+          'requestId',
+          'senderId',
+          'internal',
+          'verification',
+          'updatedAt',
+          'createdAt'
+        ]) &&
+        request.resource.data.verification is map &&
+        request.resource.data.verification.keys().hasOnly(['rider', 'adjudication']) &&
+        request.resource.data.verification.rider == null &&
+        request.resource.data.verification.adjudication == null;
+    }
+
+    function isAssignedRiderPrivateUpdate() {
+      return signedIn() &&
+        resource.data.deliveryDocId is string &&
+        (
+          get(/databases/$(database)/documents/deliveryRequests/$(resource.data.deliveryDocId)).data.riderId == request.auth.uid ||
+          get(/databases/$(database)/documents/deliveryRequests/$(resource.data.deliveryDocId)).data.driverId == request.auth.uid ||
+          get(/databases/$(database)/documents/deliveryRequests/$(resource.data.deliveryDocId)).data.assignedDriverId == request.auth.uid
+        ) &&
+        request.resource.data.diff(resource.data).changedKeys().hasOnly(['verification', 'updatedAt']) &&
+        request.resource.data.verification is map &&
+        request.resource.data.verification.keys().hasOnly(['rider']);
+    }
+
+    function isParticipant() {
+      return signedIn() &&
+        resource.data.participants is list &&
+        request.auth.uid in resource.data.participants;
+    }
+
+    match /adminUsers/{userId} {
+      allow read: if signedIn() && (request.auth.uid == userId || isAdmin());
+      allow write: if hasRole('super_admin');
+    }
+
+    match /adminAuditLogs/{logId} {
+      allow read, create: if isAdmin();
+      allow update, delete: if false;
+    }
+
+    match /adminNotes/{noteId} {
+      allow read, create: if isAdmin();
+      allow update: if isAdmin();
+      allow delete: if hasRole('super_admin');
+    }
+
+    match /supportTickets/{ticketId} {
+      allow read, write: if isAdmin();
+      allow create: if request.resource.data.channel == 'web_live_chat' &&
+        request.resource.data.keys().hasOnly([
+          'channel',
+          'status',
+          'priority',
+          'name',
+          'email',
+          'message',
+          'lastMessage',
+          'lastMessageAt',
+          'adminUnreadCount',
+          'pageUrl',
+          'chatId',
+          'userId',
+          'createdAt',
+          'updatedAt'
+        ]) &&
+        (!request.resource.data.keys().hasAny(['chatId']) ||
+          request.resource.data.chatId is string) &&
+        (!request.resource.data.keys().hasAny(['userId']) ||
+          (signedIn() && request.resource.data.userId == request.auth.uid));
+    }
+
+    match /notifications/{notificationId} {
+      allow read, update: if isAdmin() ||
+        (signedIn() && resource.data.recipientId == request.auth.uid);
+      allow create: if isAdmin();
+      allow delete: if hasRole('super_admin');
+    }
+
+    match /businessAccounts/{businessId} {
+      allow read: if isAdmin() || isBusinessMemberRecord();
+      allow write: if isAdmin();
+    }
+
+    match /businessWorkspaces/{businessId} {
+      allow read: if isAdmin() || canReadBusinessId(businessId);
+      allow write: if isAdmin();
+    }
+
+    match /businessSettings/{businessId} {
+      allow read: if isAdmin() || canReadBusinessId(businessId);
+      allow write: if isAdmin();
+    }
+
+    match /businessAnalytics/{businessId} {
+      allow read: if isAdmin() || canReadBusinessId(businessId);
+      allow write: if isAdmin();
+    }
+
+    match /business_wallets/{businessId} {
+      allow read: if isAdmin() || canReadBusinessId(businessId);
+      allow write: if isAdmin();
+    }
+
+    match /businessMemberships/{membershipId} {
+      allow read: if isAdmin() ||
+        (signedIn() && resource.data.userId == request.auth.uid) ||
+        canReadBusinessId(resource.data.businessId);
+      allow write: if isAdmin();
+    }
+
+    match /businessJoinRequests/{requestId} {
+      allow read: if isAdmin() ||
+        (signedIn() && resource.data.userId == request.auth.uid) ||
+        canReadBusinessId(resource.data.businessId);
+      allow write: if isAdmin();
+    }
+
+    match /businessInvoices/{invoiceId} {
+      allow read: if isAdmin() || canReadBusinessId(resource.data.businessId);
+      allow write: if isAdmin();
+    }
+
+    match /businessAuditLogs/{logId} {
+      allow read: if isAdmin() || canReadBusinessId(resource.data.businessId);
+      allow write: if isAdmin();
+    }
+
+    match /giftsWaitlist/{entryId} {
+      allow create: if request.resource.data.source == 'gifts-coming-soon' &&
+        request.resource.data.name is string &&
+        request.resource.data.name.size() > 0 &&
+        request.resource.data.name.size() <= 120 &&
+        request.resource.data.email is string &&
+        request.resource.data.email.size() > 3 &&
+        request.resource.data.email.size() <= 254 &&
+        request.resource.data.keys().hasOnly([
+          'name',
+          'email',
+          'source',
+          'createdAt'
+        ]);
+      allow read, update, delete: if isAdmin();
+    }
+
+    match /giftRequests/{giftRequestId} {
+      allow create: if isAdmin();
+      allow read: if isAdmin() ||
+        canReadBusinessId(resource.data.businessId) ||
+        (signedIn() && resource.data.senderId == request.auth.uid);
+      allow update: if isAdmin();
+      allow delete: if hasRole('super_admin');
+    }
+
+    match /giftPaymentDrafts/{giftDraftId} {
+      allow create: if signedIn() &&
+        request.resource.data.senderId == request.auth.uid &&
+        request.resource.data.status == 'draft' &&
+        request.resource.data.paymentStatus == 'payment_pending' &&
+        request.resource.data.grossBudget is number &&
+        request.resource.data.grossBudget >= 50;
+      allow read: if isAdmin() ||
+        (signedIn() && resource.data.senderId == request.auth.uid);
+      allow update, delete: if isAdmin();
+    }
+
+    match /giftBrands/{brandId} {
+      allow read, create, update: if isAdmin();
+      allow delete: if hasRole('super_admin');
+    }
+
+    match /giftCampaignParticipants/{participantId} {
+      allow create: if signedIn() &&
+        request.resource.data.userId == request.auth.uid;
+      allow read: if isAdmin() ||
+        (signedIn() && resource.data.userId == request.auth.uid);
+      allow update: if isAdmin() ||
+        (signedIn() && resource.data.userId == request.auth.uid &&
+          !request.resource.data.diff(resource.data).changedKeys().hasAny([
+            'matchedParticipantId',
+            'matchScore',
+            'matchReason',
+            'matchStatus',
+            'matchLockedAt',
+            'matchApprovedBy'
+          ]));
+      allow delete: if hasRole('super_admin');
+    }
+
+    match /giftCampaignMatches/{matchId} {
+      allow read, create, update: if isAdmin();
+      allow delete: if hasRole('super_admin');
+    }
+
+    match /irisLearningOutliers/{outlierId} {
+      allow create: if signedIn() &&
+        request.resource.data.senderId == request.auth.uid &&
+        request.resource.data.status == 'pending_review';
+      allow read, update, delete: if isAdmin();
+    }
+
+    match /irisLearningCases/{caseId} {
+      allow read, create, update: if isAdmin();
+      allow delete: if hasRole('super_admin');
+    }
+
+    match /iris_learning_review_candidates/{candidateId} {
+      allow read, update: if isAdmin();
+      allow create: if false;
+      allow delete: if hasRole('super_admin');
+    }
+
+    match /irisCanonicalObjects/{objectId} {
+      allow read, create, update: if isAdmin();
+      allow delete: if hasRole('super_admin');
+    }
+
+    match /irisEvidence/{evidenceId} {
+      allow read, create, update: if isAdmin();
+      allow delete: if hasRole('super_admin');
+    }
+
+    match /irisPolicies/{policyId} {
+      allow read, create, update: if isAdmin();
+      allow delete: if hasRole('super_admin');
+    }
+
+    match /deliveryAdjustments/{adjustmentId} {
+      allow read: if isAdmin() ||
+        (signedIn() && resource.data.senderId == request.auth.uid) ||
+        (signedIn() && resource.data.riderId == request.auth.uid);
+      allow write: if isAdmin();
+    }
+
+    match /payments/{paymentId} {
+      allow read: if isFinanceAdmin();
+      allow write: if isFinanceAdmin();
+    }
+
+    match /healthPlusPayments/{paymentId} {
+      allow read: if isFinanceAdmin() ||
+        hasRole('operations_admin') ||
+        (signedIn() && resource.data.senderId == request.auth.uid) ||
+        (signedIn() && resource.data.userId == request.auth.uid);
+      allow write: if isFinanceAdmin();
+    }
+
+    match /riderProfiles/{driverId} {
+      allow read: if isAdmin() || (signedIn() && request.auth.uid == driverId);
+      allow create: if isDriverManager() || isSafeRiderSelfCreate(driverId);
+      allow update: if isDriverManager() || isSafeRiderSelfUpdate(driverId);
+      allow delete: if hasRole('super_admin');
+    }
+
+    match /riders/{driverId} {
+      allow read: if isAdmin() || (signedIn() && request.auth.uid == driverId);
+      allow create: if isDriverManager() || isSafeRiderSelfCreate(driverId);
+      allow update: if isDriverManager() || isSafeRiderSelfUpdate(driverId);
+      allow delete: if hasRole('super_admin');
+    }
+
+    match /publicRiderIds/{publicRiderId} {
+      allow read: if isAdmin();
+      allow write: if false;
+    }
+
+    match /publishedDriverRatings/{ratingId} {
+      allow read: if isAdmin() || (signedIn() &&
+        (resource.data.customerId == request.auth.uid || resource.data.driverId == request.auth.uid));
+      allow write: if false;
+    }
+    match /ratingPrivateFeedback/{ratingId} {
+      allow read: if isAdmin();
+      allow write: if false;
+    }
+    function ratingHasCompletedDelivery() {
+      let delivery = get(/databases/$(database)/documents/deliveryRequests/$(resource.data.deliveryId)).data;
+      return delivery.get('deliveryState', delivery.get('status', '')) in ['completed', 'complete', 'delivered'] &&
+        delivery.get('paymentStatus', '') in ['paid', 'succeeded', 'success'] &&
+        delivery.get('senderId', delivery.get('userId', delivery.get('customerId', ''))) == resource.data.customerId &&
+        delivery.get('riderId', delivery.get('driverId', delivery.get('assignedRiderId', delivery.get('assignedDriverId', '')))) == resource.data.driverId &&
+        !delivery.get('isTest', false) && !delivery.get('testData', false);
+    }
+    match /driverRatings/{ratingId} {
+      allow read: if isAdmin() ||
+        (signedIn() && ratingHasCompletedDelivery() &&
+          (resource.data.customerId == request.auth.uid || resource.data.driverId == request.auth.uid));
+      // Ratings and moderation are authored by backend callables.
+      allow create, update, delete: if false;
+    }
+
+    match /deliveryTips/{tipId} {
+      allow read: if isAdmin() || (signedIn() &&
+        (resource.data.senderId == request.auth.uid || resource.data.riderId == request.auth.uid));
+      allow write: if false;
+    }
+
+    match /driverPerformanceMetrics/{metricId} {
+      allow read: if isAdmin() || (signedIn() && metricId == request.auth.uid);
+      allow write: if false;
+    }
+
+    match /dispatchInspections/{inspectionId} {
+      allow read: if isAdmin();
+      allow write: if isAdmin();
+      allow delete: if hasRole('super_admin');
+    }
+
+    match /deliveryRequests/{deliveryId} {
+      allow read: if isAdmin() ||
+        isOwnDelivery(deliveryId) ||
+        isAssignedRider() ||
+        canReadBusinessId(resource.data.businessId) ||
+        isAvailableRiderJob();
+      allow create: if isAdmin();
+      allow update: if isAdmin() ||
+        isOwnDeliveryUpdate() ||
+        isAssignedRiderUpdate();
+      allow delete: if hasRole('super_admin');
+
+      match /tracking/{trackingId} {
+        allow read: if canReadDeliveryTracking(deliveryId);
+        allow create, update: if trackingId == 'liveLocation' &&
+          canWriteOwnLiveLocation(deliveryId);
+        allow delete: if isAdmin();
+      }
+    }
+
+    match /deliveryRequestsPrivate/{deliveryId} {
+      allow read, write: if false;
+    }
+
+    match /activeDeliveries/{deliveryId} {
+      allow read: if canReadDeliveryTracking(deliveryId);
+      allow create, update: if canWriteActiveDelivery(deliveryId);
+      allow delete: if isAdmin();
+    }
+
+    match /webSenderRequests/{requestId} {
+      allow read, update: if isAdmin() ||
+        (
+          signedIn() &&
+          resource.data.senderId == request.auth.uid &&
+          !request.resource.data.diff(resource.data).changedKeys().hasAny(['iris'])
+        );
+      allow create: if isAdmin() || (
+        isCreatingOwnDelivery() &&
+        !request.resource.data.keys().hasAny(['iris'])
+      );
+      allow delete: if hasRole('super_admin');
+    }
+
+    match /irisPrivate/{requestId} {
+      allow read: if isAdmin();
+      allow create: if isAdmin() ||
+        isSenderPrivateCreate() ||
+        isAssignedRiderPrivateCreate();
+      allow update: if isAdmin() || isAssignedRiderPrivateUpdate();
+      allow delete: if hasRole('super_admin');
+    }
+
+    match /irisReferrals/{referralId} {
+      allow read, write: if isAdmin();
+      allow delete: if hasRole('super_admin');
+    }
+
+    match /chats/{chatId} {
+      allow read: if isAdmin() || isParticipant();
+      allow create, update: if isAdmin();
+      allow delete: if hasRole('super_admin');
+
+      match /messages/{messageId} {
+        allow read: if isAdmin() ||
+          (signedIn() && request.auth.uid in get(/databases/$(database)/documents/chats/$(chatId)).data.participants);
+        allow create: if false;
+        allow update, delete: if false;
+      }
+    }
+
+    match /users/{userId} {
+      allow read: if isAdmin() || ownsSenderRecord(userId);
+      allow create: if (isAdmin() || ownsSenderRecord(userId)) &&
+        !request.resource.data.keys().hasAny([
+          'isLegend',
+          'legendNumber',
+          'legendAwardedAt',
+          'legendSource',
+          'legendDeliveryId'
+        ]) &&
+        (isAdmin() || (
+          !request.resource.data.keys().hasAny(userAdminOnlyRoleFields()) &&
+          !hasUnsafeSelfUserRoleCreate() &&
+          !hasUnsafeSelfUserTypeCreate()
+        ));
+      allow update: if hasRole('super_admin') ||
+        ((isAdmin() || ownsSenderRecord(userId)) &&
+          !changesLegendFields() &&
+          (isAdmin() || (
+            !request.resource.data.diff(resource.data).affectedKeys().hasAny(userAdminOnlyRoleFields()) &&
+            !hasUnsafeSelfUserRoleUpdate() &&
+            !hasUnsafeSelfUserTypeUpdate()
+          )));
+      allow delete: if hasRole('super_admin');
+
+      match /giftStories/{giftStoryId} {
+        allow read: if isAdmin() || ownsSenderRecord(userId);
+        allow create, update, delete: if false;
+      }
+    }
+
+    match /senderTrustEvents/{eventId} {
+      allow read: if canReadSenderTrustEvent();
+      allow create, update, delete: if false;
+    }
+
+    match /{path=**}/senderTrustEvents/{eventId} {
+      allow read: if canReadSenderTrustEvent();
+      allow create, update, delete: if false;
+    }
+
+    match /platformStats/legends {
+      allow read: if isAdmin();
+      allow write: if hasRole('super_admin');
+    }
+
+    match /senders/{senderId} {
+      allow read: if isAdmin() || ownsSenderRecord(senderId);
+      allow create: if isAdmin() || isSafeSenderSelfCreate(senderId);
+      allow update: if isAdmin() || isSafeSenderSelfUpdate(senderId);
+      allow delete: if hasRole('super_admin');
+    }
+
+    match /senderWallets/{walletId} {
+      allow read: if isAdmin() || ownsSenderRecord(walletId);
+      allow create, update, delete: if false;
+    }
+
+    match /referrals/{referredUid} {
+      allow read: if isAdmin() || (signedIn() && (
+        referredUid == request.auth.uid ||
+        resource.data.referrerUserId == request.auth.uid
+      ));
+      allow create, update, delete: if false;
+    }
+
+    match /wallets/{walletId} {
+      allow read: if isAdmin() || (signedIn() && (
+        resource.data.uid == request.auth.uid ||
+        resource.data.userId == request.auth.uid ||
+        walletId == request.auth.uid
+      ));
+      allow create, update, delete: if false;
+    }
+
+    match /walletTransactions/{transactionId} {
+      allow read: if isAdmin() || (signedIn() && (
+        resource.data.uid == request.auth.uid ||
+        resource.data.userId == request.auth.uid
+      ));
+      allow create, update, delete: if false;
+    }
+
+    match /history/{historyId} {
+      allow read: if isAdmin() || isOwnDelivery(historyId) || isAssignedRider();
+      allow create, update: if isAdmin();
+      allow delete: if hasRole('super_admin');
+    }
+
+    match /prescriptionPickups/{pickupId} {
+      allow read: if isAdmin() ||
+        canReadBusinessId(resource.data.businessId) ||
+        (signedIn() && resource.data.senderId == request.auth.uid) ||
+        (signedIn() && resource.data.userId == request.auth.uid) ||
+        isAssignedRider();
+      allow create, update, delete: if isAdmin();
+    }
+
+    match /healthPlusProfiles/{profileId} {
+      allow read: if isAdmin() ||
+        (signedIn() && resource.data.senderId == request.auth.uid) ||
+        (signedIn() && resource.data.userId == request.auth.uid);
+      allow create, update: if isAdmin();
+      allow delete: if hasRole('super_admin');
+    }
+
+    match /recurringPickupSchedules/{scheduleId} {
+      allow read: if isAdmin() ||
+        (signedIn() && resource.data.senderId == request.auth.uid) ||
+        (signedIn() && resource.data.userId == request.auth.uid);
+      allow create, update: if isAdmin();
+      allow delete: if isAdmin();
+    }
+
+    match /healthPlusNotifications/{notificationId} {
+      allow read: if isAdmin() ||
+        (signedIn() && resource.data.senderId == request.auth.uid) ||
+        (signedIn() && resource.data.userId == request.auth.uid);
+      allow create: if isAdmin();
+      allow update, delete: if isAdmin();
+    }
+
+    match /healthPlusUsageEvents/{eventId} {
+      allow read: if isAdmin() ||
+        (signedIn() && resource.data.senderId == request.auth.uid) ||
+        (signedIn() && resource.data.userId == request.auth.uid);
+      allow create: if isAdmin();
+      allow update, delete: if false;
+    }
+
+    match /riderApplications/{applicationId} {
+      allow read: if isAdmin() ||
+        (signedIn() && applicationId == request.auth.uid) ||
+        (signedIn() && resource.data.riderId == request.auth.uid);
+      allow create, update: if isAdmin();
+      allow delete: if hasRole('super_admin');
+    }
+
+    match /riderOnboardingEvents/{eventId} {
+      allow read: if isAdmin();
+      allow create: if isAdmin();
+      allow update, delete: if false;
+    }
+
+    match /riderEarnings/{riderId} {
+      allow read: if isAdmin() || (signedIn() && riderId == request.auth.uid);
+      allow create, update: if isAdmin();
+      allow delete: if hasRole('super_admin');
+    }
+
+    match /riderEarningsReconciliations/{reconciliationId} {
+      allow read: if isFinanceAdmin();
+      allow write: if false;
+    }
+
+    match /riderWalletTransactions/{transactionId} {
+      allow read: if isAdmin() ||
+        (signedIn() && resource.data.riderId == request.auth.uid);
+      allow create: if isAdmin();
+      allow update: if isAdmin();
+      allow delete: if hasRole('super_admin');
+    }
+
+    match /riderPayoutAllocations/{allocationId} {
+      allow read: if isAdmin() || (signedIn() && resource.data.riderId == request.auth.uid);
+      allow write: if false;
+    }
+    match /tipRecoveries/{recoveryId} {
+      allow read: if isAdmin() || (signedIn() && resource.data.riderId == request.auth.uid);
+      allow write: if false;
+    }
+    match /payoutRequests/{requestId} {
+      allow read: if isAdmin() ||
+        (signedIn() && resource.data.riderId == request.auth.uid);
+      allow create, update, delete: if false;
+    }
+
+    match /stripeConnectWebhookEvents/{eventId} {
+      allow read, write: if false;
+    }
+
+    match /riderBankAccounts/{riderId} {
+      allow read: if isAdmin();
+      allow create, update: if isAdmin();
+      allow delete: if hasRole('super_admin');
+    }
+
+    match /riderDocuments/{documentId} {
+      allow read: if isAdmin() ||
+        (signedIn() && resource.data.riderId == request.auth.uid);
+      allow create, update: if isAdmin();
+      allow delete: if hasRole('super_admin');
+    }
+
+    match /{document=**} {
+      allow read: if isAdmin();
+      allow write: if hasRole('super_admin');
+    }
+  }
+}
