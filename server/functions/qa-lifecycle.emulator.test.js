@@ -44,6 +44,8 @@ test("canonical lifecycle, rating, tip, FIFO and reversals remain isolated and i
   await Promise.all(Array.from({length: 4}, () => run("rate", "sender", "a", {stars: 5, feedback: "Careful and professional", feedbackTags: []})));
   assert.equal((await root.collection("driverRatings").get()).size, 1);
   const view = await run("read", "rider"); assert.equal(view.records.publishedDriverRatings[0].feedbackText, "Careful and professional");
+  assert.equal(view.records.publishedDriverRatings[0].qaCreatedBy, undefined);
+  assert.equal(view.records.publishedDriverRatings[0].senderId, undefined);
   await assert.rejects(run("rate", "rider", "a", {stars: 5}));
   await run("refund_delivery", "operator");
   assert.equal((await root.collection("riderEarnings").doc("rider").get()).data().availableBalance, 16);

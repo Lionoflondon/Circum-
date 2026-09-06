@@ -122,7 +122,15 @@ function factory({db, env = process.env}) {
     if (action === "read") {
       const result = {};
       const names = uid === fixture.riderId ? ["publishedDriverRatings", "driverPerformanceMetrics", "riderEarnings", "riderWalletTransactions", "riderPayoutAllocations"] : ["deliveryRequests", "driverRatings", "publishedDriverRatings", "driverPerformanceMetrics", "deliveryTips", "walletTransactions", "riderPayoutAllocations", "supportCases", "audit"];
-      for (const name of names) result[name] = (await qa.collection(name).limit(100).get()).docs.map((d) => ({id: d.id, ...d.data()}));
+      for (const name of names) {
+result[name] = (await qa.collection(name).limit(100).get()).docs.map((d) => {
+        const row = {id: d.id, ...d.data()};
+        if (uid === fixture.riderId) {
+ delete row.qaCreatedBy; delete row.senderId;
+}
+        return row;
+      });
+}
       return {isSyntheticQa: true, archived: fixture.archived, records: result};
     }
     if (action === "cleanup") {
