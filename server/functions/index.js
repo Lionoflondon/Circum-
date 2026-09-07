@@ -230,6 +230,8 @@ exports.deleteIrisReferenceImage =
 exports.closeCircumAccount = accountClosure.closeAccount;
 exports.createBusinessRothCheckout =
   businessPayments.createBusinessRothCheckout(stripe);
+exports.listBusinessRothTransactions =
+  businessPayments.listBusinessRothTransactions;
 exports.adminCreateBusinessInvoice =
   businessPayments.adminCreateBusinessInvoice;
 exports.createBusinessInvoiceCheckout =

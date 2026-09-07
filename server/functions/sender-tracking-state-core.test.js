@@ -79,6 +79,7 @@ test("rider actions resolve to canonical backend statuses", () => {
   assert.equal(tracking.statusForRiderAction("start_delivery"), "navigating_to_dropoff");
   assert.equal(tracking.statusForRiderAction("near_dropoff"), "arrived_at_dropoff");
   assert.equal(tracking.statusForRiderAction("verify_receiver_pin"), "delivered");
+  assert.equal(tracking.statusForRiderAction("complete_delivery"), "delivered");
   assert.equal(tracking.statusForRiderAction("report_issue"), "issue_reported");
   assert.equal(tracking.statusForRiderAction("unknown"), "");
 });
@@ -93,5 +94,35 @@ test("standard (non-Vanguard) delivery: confirm_collected is reachable from arri
   assert.equal(
       tracking.canTransitionDeliveryStatus("waiting", collectedStatus),
       true,
+    );
+});
+
+test("tracking and completion policy share one canonical transition table", () => {
+  const completion = require("./delivery-completion-policy");
+  assert.equal(completion.ALLOWED_TRANSITIONS, tracking.ALLOWED_TRANSITIONS);
+  const cases = [
+    ["waiting", "collected", true],
+    ["arrived_at_pickup", "collected", true],
+    ["collected", "navigating_to_dropoff", true],
+    ["in_transit", "arrived_at_dropoff", true],
+    ["arrived_at_dropoff", "delivered", true],
+    ["delivered", "accepted", false],
+    ["cancelled", "accepted", false],
+  ];
+  for (const [from, to, expected] of cases) {
+    assert.equal(tracking.canTransitionDeliveryStatus(from, to), expected);
+    assert.equal(completion.canTransitionDeliveryStatus(from, to), expected);
+  }
+});
+
+test("verification policy blocks collection from waiting until verified", () => {
+  const completion = require("./delivery-completion-policy");
+  assert.equal(
+    completion.canTransitionDeliveryStatusForPolicy({pickupPinRequired: true}, "waiting", "collected"),
+    false,
+  );
+  assert.equal(
+    completion.canTransitionDeliveryStatusForPolicy({}, "waiting", "collected"),
+    true,
   );
 });
