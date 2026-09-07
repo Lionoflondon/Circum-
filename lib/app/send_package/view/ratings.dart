@@ -708,7 +708,7 @@ class _RatingsViewState extends State<RatingsView> {
                   customerId: _text(result['customerId']),
                   customerEphemeralKeySecret:
                       _text(result['ephemeralKeySecret']),
-                  merchantDisplayName: 'Circum',
+                  merchantDisplayName: 'Circum Technologies',
                   applePay: !kIsWeb &&
                           defaultTargetPlatform == TargetPlatform.iOS
                       ? const PaymentSheetApplePay(merchantCountryCode: 'GB')

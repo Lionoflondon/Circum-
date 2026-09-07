@@ -80,6 +80,6 @@ void main() {
     expect(authenticate, isNot(contains("email-already-in-use")));
     expect(authenticate, contains("httpsCallable('attachReferralCode')"));
     expect(
-        authenticate, contains('if (accountCreated && bootstrap.succeeded)'));
+        home, contains('if (accountCreated) _queueSignupReferral(messenger)'));
   });
 }

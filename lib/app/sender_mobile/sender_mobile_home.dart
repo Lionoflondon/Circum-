@@ -61,8 +61,8 @@ const senderMobileAuthFinePrint =
     "By continuing, you agree to Circum's Terms and Privacy Policy.";
 const senderMobileAuthEnabledContract =
     'Sender opens with secure sign-in before booking.';
-const _senderAuthOperationTimeout = Duration(seconds: 20);
-const _senderAuthRestoreTimeout = Duration(seconds: 12);
+const _senderAuthOperationTimeout = Duration(seconds: 35);
+const _senderAuthRestoreTimeout = Duration(seconds: 8);
 
 enum _SenderEntryScreen { landing, auth, app }
 
@@ -104,6 +104,7 @@ class _SenderMobileHomeState extends State<SenderMobileHome> {
   var _authMode = _SenderAuthMode.createAccount;
   var _authRestoring = false;
   var _authRestoreGeneration = 0;
+  String? _lastAppliedAuthUid;
   SendPackageBloc? _standaloneSendPackageBloc;
   StreamSubscription<User?>? _authSubscription;
 
@@ -322,36 +323,29 @@ class _SenderMobileHomeState extends State<SenderMobileHome> {
   Future<void> _restoreAuthenticatedSenderSession() async {
     if (!widget.senderAuthEnabled) return;
     setState(() => _authRestoring = true);
+    var handledInitialAuthEvent = false;
     try {
       if (kIsWeb) {
-        await FirebaseAuth.instance
-            .setPersistence(Persistence.LOCAL)
-            .timeout(_senderAuthOperationTimeout);
+        try {
+          await FirebaseAuth.instance
+              .setPersistence(Persistence.LOCAL)
+              .timeout(_senderAuthOperationTimeout);
+        } catch (error, stackTrace) {
+          _reportUnexpectedAuthRestoreError(
+            error,
+            stackTrace,
+            'configuring Sender session persistence',
+          );
+        }
       }
-      final firstUser = await FirebaseAuth.instance
-          .authStateChanges()
-          .first
-          .timeout(_senderAuthRestoreTimeout);
+      final cachedUser = FirebaseAuth.instance.currentUser;
+      final firstUser = cachedUser ??
+          await FirebaseAuth.instance
+              .authStateChanges()
+              .first
+              .timeout(_senderAuthRestoreTimeout);
+      handledInitialAuthEvent = true;
       await _applyRestoredSenderSession(firstUser);
-      if (!mounted) return;
-      _authSubscription =
-          FirebaseAuth.instance.authStateChanges().listen((user) {
-        if (!mounted) return;
-        // The interactive form commits its own profile and referral work.
-        if (user != null && _entry == _SenderEntryScreen.auth) return;
-        unawaited(_applyRestoredSenderSession(user));
-      }, onError: (Object error, StackTrace stackTrace) {
-        _reportUnexpectedAuthRestoreError(
-          error,
-          stackTrace,
-          'restoring Sender session',
-        );
-        if (!mounted) return;
-        setState(() {
-          _authRestoring = false;
-          _entry = _SenderEntryScreen.landing;
-        });
-      });
     } on TimeoutException catch (error, stackTrace) {
       _reportUnexpectedAuthRestoreError(
         error,
@@ -374,7 +368,44 @@ class _SenderMobileHomeState extends State<SenderMobileHome> {
         _authRestoring = false;
         _entry = _SenderEntryScreen.landing;
       });
+    } finally {
+      if (mounted) {
+        _startSenderAuthSubscription(
+          skipInitialEvent: handledInitialAuthEvent,
+        );
+      }
     }
+  }
+
+  void _startSenderAuthSubscription({required bool skipInitialEvent}) {
+    _authSubscription?.cancel();
+    Stream<User?> changes = FirebaseAuth.instance.authStateChanges();
+    if (skipInitialEvent) changes = changes.skip(1);
+    _authSubscription = changes.listen((user) {
+      if (!mounted) return;
+      // The interactive form commits its own profile and referral work.
+      if (user != null && _entry == _SenderEntryScreen.auth) return;
+      final uid = user?.uid;
+      final targetEntry =
+          user == null ? _SenderEntryScreen.landing : _SenderEntryScreen.app;
+      if (uid == _lastAppliedAuthUid &&
+          _entry == targetEntry &&
+          !_authRestoring) {
+        return;
+      }
+      unawaited(_applyRestoredSenderSession(user));
+    }, onError: (Object error, StackTrace stackTrace) {
+      _reportUnexpectedAuthRestoreError(
+        error,
+        stackTrace,
+        'restoring Sender session',
+      );
+      if (!mounted) return;
+      setState(() {
+        _authRestoring = false;
+        _entry = _SenderEntryScreen.landing;
+      });
+    });
   }
 
   Future<void> _applyRestoredSenderSession(User? user) async {
@@ -394,13 +425,23 @@ class _SenderMobileHomeState extends State<SenderMobileHome> {
           FirebaseAuth.instance.currentUser?.uid != user?.uid) {
         return;
       }
+      _lastAppliedAuthUid = user?.uid;
       setState(() => _entry =
           user == null ? _SenderEntryScreen.landing : _SenderEntryScreen.app);
     } catch (error, stackTrace) {
       _reportUnexpectedAuthRestoreError(
           error, stackTrace, 'bootstrapping Sender session');
       if (mounted && generation == _authRestoreGeneration) {
-        setState(() => _entry = _SenderEntryScreen.landing);
+        final currentUid = FirebaseAuth.instance.currentUser?.uid;
+        if (user != null &&
+            currentUid == user.uid &&
+            _isWeakNetworkSenderAuthFailure(error)) {
+          _lastAppliedAuthUid = user.uid;
+          setState(() => _entry = _SenderEntryScreen.app);
+        } else {
+          _lastAppliedAuthUid = null;
+          setState(() => _entry = _SenderEntryScreen.landing);
+        }
       }
     } finally {
       if (mounted && generation == _authRestoreGeneration) {
@@ -467,6 +508,43 @@ class _SenderMobileHomeState extends State<SenderMobileHome> {
         message.contains('auth/operation-not-supported-in-this-environment') ||
         message.contains('auth/web-storage-unsupported');
   }
+}
+
+bool _isWeakNetworkSenderAuthFailure(Object error) {
+  if (error is TimeoutException) return true;
+  if (error is SenderProfileAuthorityException) {
+    return const {
+      SenderProfileDiagnosticCode.authUnavailable,
+      SenderProfileDiagnosticCode.startupRace,
+    }.contains(error.code);
+  }
+  if (error is FirebaseFunctionsException) {
+    return const {
+      'aborted',
+      'cancelled',
+      'deadline-exceeded',
+      'internal',
+      'resource-exhausted',
+      'unavailable',
+      'unknown',
+    }.contains(error.code);
+  }
+  if (error is FirebaseException) {
+    return const {
+      'deadline-exceeded',
+      'network-request-failed',
+      'timeout',
+      'unavailable',
+      'web-storage-unsupported',
+    }.contains(error.code);
+  }
+  final message = error.toString().toLowerCase();
+  return message.contains('deadline') ||
+      message.contains('network') ||
+      message.contains('offline') ||
+      message.contains('timed out') ||
+      message.contains('timeout') ||
+      message.contains('unavailable');
 }
 
 class _SenderAuthRestoringSplash extends StatelessWidget {
@@ -653,7 +731,6 @@ class _SenderAuthEntryState extends State<_SenderAuthEntry> {
   var _busy = false;
   var _showPassword = false;
   String? _authMessage;
-  String? _signupReferralMessage;
 
   @override
   void initState() {
@@ -700,10 +777,7 @@ class _SenderAuthEntryState extends State<_SenderAuthEntry> {
             const SizedBox(height: 36),
             _AuthSegmentedControl(
               mode: widget.mode,
-              onChanged: (mode) {
-                setState(() => _showErrors = false);
-                widget.onModeChanged(mode);
-              },
+              onChanged: _changeMode,
             ),
             const SizedBox(height: 26),
             Text(
@@ -783,13 +857,16 @@ class _SenderAuthEntryState extends State<_SenderAuthEntry> {
                 hint: 'e.g. JASON1234',
                 onChanged: (_) => setState(() {}),
               ),
-              const Text(
-                  'Use a friend’s code. Rewards unlock after your first completed paid delivery.'),
+              const _AuthHelperText(
+                "Use a friend's code. Rewards unlock after your first completed paid delivery.",
+              ),
             ],
             const SizedBox(height: 14),
             _SenderPrimaryAction(
               label: _busy
-                  ? 'Preparing account...'
+                  ? _isSignIn
+                      ? 'Signing in...'
+                      : 'Creating account...'
                   : _isSignIn
                       ? 'Sign in'
                       : 'Create account',
@@ -811,14 +888,11 @@ class _SenderAuthEntryState extends State<_SenderAuthEntry> {
             const SizedBox(height: 28),
             _AuthSwitchLine(
               isSignIn: _isSignIn,
-              onTap: () {
-                setState(() => _showErrors = false);
-                widget.onModeChanged(
-                  _isSignIn
-                      ? _SenderAuthMode.createAccount
-                      : _SenderAuthMode.signIn,
-                );
-              },
+              onTap: () => _changeMode(
+                _isSignIn
+                    ? _SenderAuthMode.createAccount
+                    : _SenderAuthMode.signIn,
+              ),
             ),
             const SizedBox(height: 22),
             const _AuthFinePrint(),
@@ -826,6 +900,14 @@ class _SenderAuthEntryState extends State<_SenderAuthEntry> {
         ),
       ],
     );
+  }
+
+  void _changeMode(_SenderAuthMode mode) {
+    setState(() {
+      _showErrors = false;
+      _authMessage = null;
+    });
+    widget.onModeChanged(mode);
   }
 
   Future<void> _submit() async {
@@ -839,7 +921,6 @@ class _SenderAuthEntryState extends State<_SenderAuthEntry> {
     setState(() {
       _showErrors = true;
       _authMessage = null;
-      _signupReferralMessage = null;
     });
     if (!validFirstName ||
         !validIdentity ||
@@ -856,29 +937,37 @@ class _SenderAuthEntryState extends State<_SenderAuthEntry> {
     }
     setState(() => _busy = true);
     final messenger = ScaffoldMessenger.of(context);
+    final accountCreated = !_isSignIn;
     try {
       final bootstrap = await _authenticateSender(
         email: _identity.text.trim().toLowerCase(),
         password: _password.text,
-        createAccount: !_isSignIn,
+        createAccount: accountCreated,
         firstName: firstName,
       );
-      if (_signupReferralMessage != null && messenger.mounted) {
-        messenger.showSnackBar(SnackBar(
-            content: Text(_signupReferralMessage!),
-            duration: const Duration(seconds: 12)));
-      }
       if (!bootstrap.succeeded) {
         debugPrint(
           'Sender auth bootstrap deferred: stage=${bootstrap.failedStage?.name} '
           'error=${bootstrap.error.runtimeType}',
         );
         if (!mounted) return;
+        if (_canContinueAfterWeakNetworkBootstrap(bootstrap.error)) {
+          _showAuthSnackBar(
+            messenger,
+            accountCreated
+                ? 'Account created. Some setup will finish when your connection improves.'
+                : 'Signed in. Some details will refresh when your connection improves.',
+          );
+          if (accountCreated) _queueSignupReferral(messenger);
+          widget.onAuthenticated();
+          return;
+        }
         setState(() => _authMessage =
             'Account setup did not finish. Sign in to continue setup.');
         widget.onModeChanged(_SenderAuthMode.signIn);
         return;
       }
+      if (accountCreated) _queueSignupReferral(messenger);
       if (mounted) widget.onAuthenticated();
     } catch (error) {
       debugPrint('Sender Mobile auth failed: ${error.runtimeType}');
@@ -905,9 +994,13 @@ class _SenderAuthEntryState extends State<_SenderAuthEntry> {
   }) async {
     final auth = FirebaseAuth.instance;
     if (kIsWeb) {
-      await auth
-          .setPersistence(Persistence.LOCAL)
-          .timeout(_senderAuthOperationTimeout);
+      try {
+        await auth
+            .setPersistence(Persistence.LOCAL)
+            .timeout(_senderAuthOperationTimeout);
+      } catch (error) {
+        debugPrint('Sender auth persistence fallback: ${error.runtimeType}');
+      }
     }
     final credential = await authenticateSenderEmail(
       auth: auth,
@@ -916,7 +1009,6 @@ class _SenderAuthEntryState extends State<_SenderAuthEntry> {
       createAccount: createAccount,
       timeout: _senderAuthOperationTimeout,
     );
-    final accountCreated = createAccount;
     final user = credential.user;
     if (user == null) {
       throw FirebaseAuthException(code: 'sender-no-user');
@@ -950,16 +1042,39 @@ class _SenderAuthEntryState extends State<_SenderAuthEntry> {
         await user.getIdToken(true).timeout(_senderAuthOperationTimeout);
       },
     );
-    if (accountCreated && bootstrap.succeeded) {
-      _signupReferralMessage =
-          await applySignupReferral(_referralCode.text, (code) async {
+    return bootstrap;
+  }
+
+  bool _canContinueAfterWeakNetworkBootstrap(Object? error) {
+    if (error == null || FirebaseAuth.instance.currentUser == null) {
+      return false;
+    }
+    return _isWeakNetworkSenderAuthFailure(error);
+  }
+
+  void _queueSignupReferral(ScaffoldMessengerState messenger) {
+    final referralCode = normalizeSignupReferral(_referralCode.text);
+    if (referralCode.isEmpty) return;
+    final functions = FirebaseFunctions.instanceFor(region: 'us-central1');
+    unawaited(() async {
+      final message = await applySignupReferral(referralCode, (code) async {
         final result = await functions
             .httpsCallable('attachReferralCode')
             .call({'referralCode': code});
         return result.data;
       }, timeout: _senderAuthOperationTimeout);
-    }
-    return bootstrap;
+      _showAuthSnackBar(messenger, message);
+    }());
+  }
+
+  void _showAuthSnackBar(ScaffoldMessengerState messenger, String message) {
+    if (!messenger.mounted || message.trim().isEmpty) return;
+    messenger.showSnackBar(
+      SnackBar(
+        content: Text(message),
+        duration: const Duration(seconds: 12),
+      ),
+    );
   }
 }
 
@@ -1659,6 +1774,30 @@ class _AuthField extends StatelessWidget {
   }
 }
 
+class _AuthHelperText extends StatelessWidget {
+  final String text;
+
+  const _AuthHelperText(this.text);
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 10, 16, 0),
+      child: Text(
+        text,
+        maxLines: 2,
+        overflow: TextOverflow.ellipsis,
+        style: GoogleFonts.inter(
+          color: _SenderTokens.muted,
+          fontSize: 11.5,
+          height: 1.35,
+          fontWeight: FontWeight.w600,
+        ),
+      ),
+    );
+  }
+}
+
 class _AuthSwitchLine extends StatelessWidget {
   final bool isSignIn;
   final VoidCallback onTap;
@@ -2255,7 +2394,8 @@ class _CanonicalSenderHomeState extends State<_CanonicalSenderHome> {
       ),
       children: [
         _RebuiltSenderHomeHeader(
-          firstName: _firstName == 'there' ? 'Ayo' : _firstName,
+          greetingLabel: senderGreetingForLocalTime(DateTime.now()),
+          firstName: _firstName,
           unreadCount: _unreadCount,
           hasNotificationError: _notificationsError != null,
           onOpenNotifications: widget.onOpenNotifications,
@@ -2341,12 +2481,14 @@ class _CanonicalSenderHomeState extends State<_CanonicalSenderHome> {
 }
 
 class _RebuiltSenderHomeHeader extends StatelessWidget {
+  final String greetingLabel;
   final String firstName;
   final int unreadCount;
   final bool hasNotificationError;
   final VoidCallback onOpenNotifications;
 
   const _RebuiltSenderHomeHeader({
+    required this.greetingLabel,
     required this.firstName,
     required this.unreadCount,
     required this.hasNotificationError,
@@ -2373,9 +2515,9 @@ class _RebuiltSenderHomeHeader extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Text(
-                  'Good morning,',
-                  style: TextStyle(
+                Text(
+                  '$greetingLabel,',
+                  style: const TextStyle(
                     color: Color(0xB3FFFFFF),
                     fontSize: 18,
                     fontWeight: FontWeight.w500,

@@ -8,8 +8,8 @@ String senderAuthErrorMessage(SenderAuthAction action, Object error) {
   final creating = action == SenderAuthAction.createAccount;
   if (error is TimeoutException) {
     return creating
-        ? 'Account creation timed out. Please try again.'
-        : 'Sign in timed out. Please try again.';
+        ? 'Connection is slow. Account creation could not finish. Try again when your network improves.'
+        : 'Connection is slow. Sign in could not finish. Try again when your network improves.';
   }
   if (error is! FirebaseAuthException) {
     return creating
@@ -30,7 +30,9 @@ String senderAuthErrorMessage(SenderAuthAction action, Object error) {
           ? 'An account already exists for this email. Sign in to continue.'
           : 'Sign in failed. Check the email and password.';
     case 'network-request-failed':
-      return 'Check your connection and try again.';
+      return creating
+          ? 'Connection is slow. Account creation could not finish. Try again when your network improves.'
+          : 'Connection is slow. Sign in could not finish. Try again when your network improves.';
     case 'too-many-requests':
       return 'Too many attempts. Please wait and try again.';
     case 'operation-not-allowed':

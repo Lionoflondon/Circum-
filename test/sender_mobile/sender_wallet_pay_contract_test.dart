@@ -112,12 +112,95 @@ void main() {
     );
     expect(entitlements, contains('merchant.com.circum.app'));
     expect(
+      wallet,
+      contains(
+          "const _senderWalletMerchantDisplayName = 'Circum Technologies'"),
+    );
+    expect(wallet, contains('label: _senderWalletMerchantDisplayName'));
+    expect(wallet, contains('merchantName: _senderWalletMerchantDisplayName'));
+    expect(
+      RegExp(r'merchantDisplayName: _senderWalletMerchantDisplayName')
+          .allMatches(wallet),
+      hasLength(2),
+    );
+    expect(wallet, isNot(contains('Circum payment method')));
+    expect(
       RegExp(r'testEnv: Env.googlePayTestEnvironment').allMatches(wallet),
       hasLength(3),
     );
     expect(wallet, contains('confirmPlatformPaySetupIntent('));
     expect(wallet, contains('PlatformPayConfirmParams.applePay('));
     expect(checkout, contains('testEnv: Env.googlePayTestEnvironment'));
+  });
+
+  test('wallet payment controls use branded non-empty action surfaces', () {
+    final wallet = File(
+      'lib/app/sender_mobile/sender_wallet.dart',
+    ).readAsStringSync();
+
+    expect(wallet, contains('class _WalletNotice'));
+    expect(wallet, contains('SnackBarBehavior.floating'));
+    expect(wallet, contains('AppGlassContainer'));
+    expect(wallet, contains('class _PaymentMethodActionSheet'));
+    expect(wallet, contains('class _PaymentMethodMenuButton'));
+    expect(wallet, contains('Set as default'));
+    expect(wallet, contains('Remove card'));
+    expect(wallet, contains('class _RedeemRothCardDialog'));
+    expect(wallet, contains('_confirmRemovePaymentMethod'));
+    expect(wallet, isNot(contains('PopupMenuButton<String>')));
+    expect(wallet, isNot(contains('Custom card names are not available yet')));
+    expect(
+      wallet,
+      isNot(contains('setup was cancelled or could not be completed')),
+    );
+  });
+
+  test('payment sheets present the legal company display name', () {
+    final paymentSources = [
+      File('lib/app/sender_mobile/sender_wallet.dart').readAsStringSync(),
+      File('lib/app/sender_mobile/sender_booking_canvas.dart')
+          .readAsStringSync(),
+      File('lib/app/sender_mobile/gift_payment_view.dart').readAsStringSync(),
+      File('lib/app/send_package/view/ratings.dart').readAsStringSync(),
+      File('lib/app/account/bloc/account_bloc.dart').readAsStringSync(),
+    ].join('\n');
+
+    expect(paymentSources, contains('Circum Technologies'));
+    expect(paymentSources, isNot(contains("merchantDisplayName: 'Circum'")));
+    expect(paymentSources, isNot(contains("merchantName: 'Circum'")));
+    expect(paymentSources, isNot(contains("label: 'Circum Gift'")));
+  });
+
+  test('Sender checkout submits Roth and selected payment rail together', () {
+    final canvas = File(
+      'lib/app/sender_mobile/sender_booking_canvas.dart',
+    ).readAsStringSync();
+    final paymentStart = canvas.substring(
+      canvas.indexOf('void _setRoth('),
+      canvas.indexOf('Future<void> _openStripeCheckout'),
+    );
+
+    expect(paymentStart, contains('SenderPaymentSplit.calculate('));
+    expect(paymentStart, contains('rothEnabled: split.rothEnabled'));
+    expect(
+        paymentStart, contains('rothAppliedAmount: split.rothAppliedAmount'));
+    expect(paymentStart, contains('remainingAmount: split.remainingAmount'));
+    expect(paymentStart, contains('paymentSplitSummary: split.splitSummary'));
+    expect(
+      paymentStart,
+      contains("fallbackMethod: split.fallbackMethod == null"),
+    );
+    expect(paymentStart, contains("? 'roth'"));
+    expect(paymentStart, contains("? 'saved_card'"));
+    expect(
+      paymentStart,
+      contains('_stripeFallbackMethodValue(split.fallbackMethod!)'),
+    );
+    expect(
+      paymentStart,
+      contains('paymentMethodId: draft.selectedPaymentMethodId'),
+    );
+    expect(paymentStart, contains('StartSenderPaymentSession('));
   });
 
   test('Google Pay mode follows the Stripe publishable key', () {
