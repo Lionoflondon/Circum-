@@ -32,14 +32,14 @@ void main() {
         SenderAuthAction.createAccount,
         TimeoutException('create'),
       ),
-      startsWith('Account creation timed out'),
+      'Connection is slow. Account creation could not finish. Try again when your network improves.',
     );
     expect(
       senderAuthErrorMessage(
         SenderAuthAction.signIn,
         TimeoutException('sign-in'),
       ),
-      startsWith('Sign in timed out'),
+      'Connection is slow. Sign in could not finish. Try again when your network improves.',
     );
   });
 
@@ -49,7 +49,7 @@ void main() {
         SenderAuthAction.createAccount,
         FirebaseAuthException(code: 'network-request-failed'),
       ),
-      'Check your connection and try again.',
+      'Connection is slow. Account creation could not finish. Try again when your network improves.',
     );
     expect(
       senderAuthErrorMessage(

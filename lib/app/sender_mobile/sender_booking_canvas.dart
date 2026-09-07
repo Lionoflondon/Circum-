@@ -5221,7 +5221,7 @@ class _PaymentPanelState extends State<_PaymentPanel> {
             paymentSheetParameters: SetupPaymentSheetParameters(
               returnURL: nativePaymentReturnUrl,
               paymentIntentClientSecret: clientSecret,
-              merchantDisplayName: 'Circum',
+              merchantDisplayName: 'Circum Technologies',
               customerId: engine.senderPaymentCustomerId,
               customerEphemeralKeySecret:
                   engine.senderPaymentEphemeralKeySecret,

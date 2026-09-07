@@ -169,7 +169,9 @@ class SenderProfileAuthority {
     } on FirebaseFunctionsException catch (error, stack) {
       final code = error.code == 'permission-denied'
           ? SenderProfileDiagnosticCode.permissionDenied
-          : SenderProfileDiagnosticCode.repositoryFailure;
+          : _isTransientFunctionsFailure(error.code)
+              ? SenderProfileDiagnosticCode.startupRace
+              : SenderProfileDiagnosticCode.repositoryFailure;
       logSenderProfileDiagnostic(
         code: code,
         uid: user.uid,
@@ -400,6 +402,18 @@ class SenderProfileAuthority {
       documentId: user.uid,
     );
   }
+}
+
+bool _isTransientFunctionsFailure(String code) {
+  return const {
+    'aborted',
+    'cancelled',
+    'deadline-exceeded',
+    'internal',
+    'resource-exhausted',
+    'unavailable',
+    'unknown',
+  }.contains(code);
 }
 
 String profileMessageFor(SenderProfileDiagnosticCode code) {

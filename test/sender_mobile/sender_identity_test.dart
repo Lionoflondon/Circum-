@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:circum/app/sender_mobile/sender_identity.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -55,6 +57,26 @@ void main() {
           firstName: ' Jason ',
         ),
         'Good evening, Jason',
+      );
+    });
+
+    test('rebuilt Sender home header uses local greeting and never Ayo fallback',
+        () {
+      final source = File('lib/app/sender_mobile/sender_mobile_home.dart')
+          .readAsStringSync();
+      final header = source.substring(
+        source.indexOf('class _RebuiltSenderHomeHeader'),
+        source.indexOf('class _RebuiltSenderHomeHero'),
+      );
+
+      expect(source, contains('senderGreetingForLocalTime(DateTime.now())'));
+      expect(header, contains('greetingLabel'));
+      expect(header, isNot(contains("'Good morning,'")));
+      expect(
+        source,
+        isNot(
+          contains("firstName: _firstName == 'there' ? 'Ayo' : _firstName"),
+        ),
       );
     });
   });

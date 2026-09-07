@@ -66,15 +66,20 @@ void main() {
     expect(
         source,
         contains(
-            'Use a friend’s code. Rewards unlock after your first completed paid delivery.'));
+            "Use a friend's code. Rewards unlock after your first completed paid delivery."));
+    expect(source, contains('class _AuthHelperText'));
+    expect(source, contains('EdgeInsets.fromLTRB(16, 10, 16, 0)'));
+    expect(source, contains('maxLines: 2'));
+    expect(source, contains('overflow: TextOverflow.ellipsis'));
     expect(source, contains('if (!_isSignIn) ...['));
     final sequence = source.substring(
         source.indexOf('Future<SenderAuthCommitResult> _authenticateSender'));
     expect(sequence.indexOf('authenticateSenderEmail('),
         lessThan(sequence.indexOf('ensureCanonicalSenderAccount')));
-    expect(sequence.indexOf('ensureCanonicalSenderAccount'),
-        lessThan(sequence.indexOf('applySignupReferral(')));
-    expect(sequence, contains('accountCreated && bootstrap.succeeded'));
+    expect(
+        source.indexOf('if (accountCreated) _queueSignupReferral(messenger)'),
+        greaterThan(source.indexOf('if (!bootstrap.succeeded)')));
+    expect(source, contains('void _queueSignupReferral'));
     expect(source, contains('messenger.showSnackBar'));
     expect(source, contains('if (mounted) widget.onAuthenticated()'));
     expect(source, contains('applySignupReferral('));

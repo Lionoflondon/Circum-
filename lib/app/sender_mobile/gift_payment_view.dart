@@ -546,7 +546,7 @@ class _GiftPaymentViewState extends State<GiftPaymentView> {
                 currencyCode: 'GBP',
                 cartItems: [
                   ApplePayCartSummaryItem.immediate(
-                    label: 'Circum Gift',
+                    label: 'Circum Technologies',
                     amount: amount.toStringAsFixed(2),
                   ),
                 ],
@@ -564,7 +564,7 @@ class _GiftPaymentViewState extends State<GiftPaymentView> {
               googlePay: GooglePayParams(
                 merchantCountryCode: 'GB',
                 currencyCode: 'GBP',
-                merchantName: 'Circum',
+                merchantName: 'Circum Technologies',
                 testEnv: Env.googlePayTestEnvironment,
               ),
             ),
@@ -577,7 +577,7 @@ class _GiftPaymentViewState extends State<GiftPaymentView> {
           paymentSheetParameters: SetupPaymentSheetParameters(
             returnURL: nativePaymentReturnUrl,
             paymentIntentClientSecret: clientSecret,
-            merchantDisplayName: 'Circum',
+            merchantDisplayName: 'Circum Technologies',
             customerId: '${paymentData['customerId'] ?? ''}',
             customerEphemeralKeySecret:
                 '${paymentData['ephemeralKeySecret'] ?? ''}',

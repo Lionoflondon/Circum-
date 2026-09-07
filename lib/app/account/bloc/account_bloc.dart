@@ -158,7 +158,7 @@ class AccountBloc extends Bloc<AccountEvent, AccountState> {
               customerId: customerId,
               customerEphemeralKeySecret: ephemeralKeySecret,
               style: ThemeMode.dark,
-              merchantDisplayName: 'Circum',
+              merchantDisplayName: 'Circum Technologies',
 
               // savePaymentMethodOptions: PaymentSheetSavePaymentMethodOptions(
               //   backgroundColor: Colors.grey[800],
